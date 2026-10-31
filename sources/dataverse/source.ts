@@ -401,11 +401,17 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     try {
       const userId = config.mySystemUserId;
       if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) return null;
-      const workers = await getAll<{ _coop_account_value: string | null }>(
+      const workers = await getAll<{ _coop_account_value: string | null; coop_devopsemail?: string | null }>(
         "accountworkers",
-        `coop_accountworkers?$select=_coop_account_value&$filter=${encodeURIComponent(`_coop_user_value eq ${userId} and statecode eq 0`)}`,
+        `coop_accountworkers?$select=_coop_account_value,coop_devopsemail&$filter=${encodeURIComponent(`_coop_user_value eq ${userId} and statecode eq 0`)}`,
       );
       const ids = [...new Set(workers.map((w) => w._coop_account_value?.toLowerCase()).filter((id): id is string => !!id && /^[0-9a-f-]{36}$/.test(id)))];
+      const emailOf = new Map<string, string>();
+      for (const w of workers) {
+        const id = w._coop_account_value?.toLowerCase();
+        const e = w.coop_devopsemail?.trim();
+        if (id && e && !emailOf.has(id)) emailOf.set(id, e);
+      }
       if (ids.length === 0) return (myClientsMemo = { at: t, clients: [] }).clients;
       const rows = await getAll<AccountRow & { coop_devopsorg: string | null }>(
         "my_accounts",
@@ -414,7 +420,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
       const clients: MyClient[] = [];
       for (const row of rows) {
         const key = clientKeyOf(row);
-        if (key && !clients.some((c) => c.clientKey === key)) clients.push({ clientKey: key, clientName: key, devops: !!row.coop_devopsorg?.trim() });
+        if (key && !clients.some((c) => c.clientKey === key)) clients.push({ clientKey: key, clientName: key, devops: !!row.coop_devopsorg?.trim(), devopsEmail: emailOf.get(row.accountid.toLowerCase()) ?? null });
       }
       clients.sort((a, b) => a.clientName.localeCompare(b.clientName));
       return (myClientsMemo = { at: t, clients }).clients;
@@ -519,6 +525,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
   return { load, resolveUserId, devopsTargets, myClients, pto };
 }
 
-export type MyClient = { clientKey: string; clientName: string; devops: boolean };
+/** One of my clients. `devopsEmail` is my DevOps identity there (Account Worker), shown read-only in Settings. */
+export type MyClient = { clientKey: string; clientName: string; devops: boolean; devopsEmail: string | null };
 
 export type DataverseSource = ReturnType<typeof createDataverseSource>;

@@ -55,6 +55,33 @@ export async function setSecret(account: RefreshTokenAccount, value: string, run
   if (r.code !== 0) throw failure(r);
 }
 
+/**
+ * Stores an app client secret entered in Settings (step 6b): only the two app secret accounts, through stdin, never
+ * argv. Replaces the entry when it exists (Settings asks to confirm first). The value is never returned or logged.
+ */
+export async function setAppSecret(account: AppSecretAccount, value: string, run: Runner = runSecretTool): Promise<void> {
+  if (account !== "dataverse-client-secret" && account !== "google-client-secret") throw new Error("Not an app secret account");
+  if (!value || value.length > 1024 || /[\r\n]/.test(value)) throw new Error("A secret is one line of 1 to 1024 characters");
+  let r: RunResult;
+  try {
+    r = await run(["store", `--label=Coopilot ${account}`, "service", KEYRING_SERVICE, "account", account], value);
+  } catch {
+    throw new SecretError("unavailable");
+  }
+  if (r.code !== 0) throw failure(r);
+}
+
+/** Whether an account has an entry, without keeping its value: "set", "missing", or why the keyring can't say. */
+export async function secretState(account: SecretAccount, run: Runner = runSecretTool): Promise<"set" | "missing" | "locked" | "unavailable"> {
+  try {
+    await getSecret(account, run);
+    return "set";
+  } catch (e) {
+    if (e instanceof SecretError) return e.kind === "not_found" ? "missing" : e.kind;
+    return "unavailable";
+  }
+}
+
 export async function deleteSecret(account: RefreshTokenAccount, run: Runner = runSecretTool): Promise<void> {
   if (!WRITABLE.includes(account)) throw new Error("This keyring account is read-only for Coopilot");
   let r: RunResult;

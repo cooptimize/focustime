@@ -1,11 +1,16 @@
 // The UI's only way to get data or act: named actions on the local server (same origin, token cookie).
-import type { ActionResponse, WeekLoadData } from "../actions/types.ts";
+import type { ActionResponse, FieldProblem, WeekLoadData } from "../actions/types.ts";
 import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
 
 export class SessionError extends Error {}
 /** A refusal from an action, with its HTTP status (422: the day can't be planned, 409: not allowed now). */
 export class ActionRefusal extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+    /** Per-field problems (Settings). */
+    readonly fields: FieldProblem[] = [],
+  ) {
     super(message);
   }
 }
@@ -19,7 +24,7 @@ export async function call<T>(action: string, input: unknown): Promise<T> {
   });
   if (res.status === 401 || res.status === 403) throw new SessionError("Session expired");
   const body = (await res.json()) as ActionResponse<T>;
-  if (!body.ok) throw new ActionRefusal(body.error, body.status);
+  if (!body.ok) throw new ActionRefusal(body.error, body.status, body.fields ?? []);
   return body.data;
 }
 

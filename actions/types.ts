@@ -1,8 +1,9 @@
 // Action response shapes shared by the server and the UI. Types only, no runtime imports.
-import type { FieldError, UiConfig } from "../config/schema.ts";
+import type { AppConfig, ClientSetting, FieldError, UiConfig } from "../config/schema.ts";
+import type { EdgeProfile } from "../links/edge.ts";
 import type { TodayTarget } from "../week/dates.ts";
 import type { PlanWeek } from "../plan/types.ts";
-import type { ClientWork, IsoDate, RiskThresholds, SourceResult, Week } from "../week/types.ts";
+import type { ClientWork, IsoDate, RiskThresholds, SourceResult, StandingBlock, Week } from "../week/types.ts";
 import type { TimeModel } from "../week/hours.ts";
 
 export type SourceSummary = Omit<SourceResult<unknown>, "items"> & { itemCount: number };
@@ -32,4 +33,46 @@ export type WeekLoadData = {
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
 };
 
-export type ActionResponse<T = unknown> = { ok: true; data: T } | { ok: false; status: number; error: string };
+/** A value problem on one config field (Settings shows it next to the field). */
+export type FieldProblem = { field: string; message: string };
+export type ActionResponse<T = unknown> = { ok: true; data: T } | { ok: false; status: number; error: string; fields?: FieldProblem[] };
+
+// ---- Settings (step 6b): what settings.load returns. Never a secret value. ----
+export type AppSecret = "dataverse-client-secret" | "google-client-secret";
+export type SecretPresence = "set" | "missing" | "locked" | "unavailable";
+
+export type SettingsClient = {
+  key: string;
+  /** From Dataverse (reporting nickname); null when Dataverse couldn't be read. */
+  dataverseName: string | null;
+  /** My DevOps identity there (Account Worker), read-only. */
+  devopsEmail: string | null;
+  devops: boolean;
+  setting: ClientSetting;
+  /** The profile links use now (a legacy [edge.profiles] entry counts for Edge). */
+  profile: string | null;
+  /** The color as CSS (hex or palette token). */
+  css: string | null;
+};
+
+export type BrowserInfo = { found: boolean; profiles: EdgeProfile[] };
+
+export type SettingsData = {
+  configPath: string;
+  /** Per-field problems when the file doesn't validate (Settings shows them and saves nothing else). */
+  problems: FieldProblem[];
+  you: { email: string; systemUserId: string | null; environmentUrl: string; timeZone: string } | null;
+  hours: TimeModel | null;
+  standingBlocks: StandingBlock[];
+  risk: RiskThresholds | null;
+  planning: { pickablePortfolioTypes: string[] };
+  clients: SettingsClient[];
+  /** Whether Dataverse answered for the client list; when not, Dataverse-owned values are unknown, not empty. */
+  dataverseReached: boolean;
+  palette: readonly string[];
+  browsers: { edge: BrowserInfo; chromium: BrowserInfo };
+  secrets: { account: AppSecret; label: string; state: SecretPresence; expires: string | null }[];
+  display: AppConfig["ui"] | null;
+  data: { planStore: boolean };
+};
+

@@ -1,6 +1,6 @@
 // Opening work item links in the client's Edge profile (step 5.5). Pure apart from detectEdge's file reads.
 // Edge's Local State is read for profile directory and display name only, never anything else.
-import type { EdgeConfig } from "../config/schema.ts";
+import type { ClientSetting, EdgeConfig } from "../config/schema.ts";
 
 export type EdgeInstall = { install: "native" | "flatpak"; command: string[]; profilesDir: string; desktopFile: string };
 export type EdgeProfile = { directory: string; name: string };
@@ -75,9 +75,28 @@ export function checkDevOpsUrl(url: unknown, org: string | null): { ok: true; ur
 
 export type LaunchPlan = { argv: string[]; profile: string | null; notice: string | null };
 
-/** The argument array to run: Edge with the client's profile, or the default browser with a notice. */
-export function launchPlan(edge: EdgeConfig, clientKey: string, clientName: string, url: string): LaunchPlan {
-  const profile = Object.hasOwn(edge.profiles, clientKey) ? edge.profiles[clientKey]! : null;
+/**
+ * The argument array to run: the client's browser (Edge, or Chromium from Settings, step 6b) with its profile, or
+ * the default browser with a notice. An Edge client without a profile in [clients] uses [edge.profiles].
+ */
+export function launchPlan(edge: EdgeConfig, clientKey: string, clientName: string, url: string, opts: { setting?: ClientSetting | undefined; chromium?: string[] } = {}): LaunchPlan {
+  const s = opts.setting;
+  if (s?.browser === "chromium") {
+    const cmd = opts.chromium ?? [];
+    if (s.profile && cmd.length) return { argv: [...cmd, `--profile-directory=${s.profile}`, url], profile: s.profile, notice: null };
+    return { argv: [...edge.fallbackCommand, url], profile: null, notice: cmd.length ? `No Chromium profile set for ${clientName}` : "Chromium is not set up for client links" };
+  }
+  const profile = s?.profile ?? (Object.hasOwn(edge.profiles, clientKey) ? edge.profiles[clientKey]! : null);
   if (profile && edge.command.length) return { argv: [...edge.command, `--profile-directory=${profile}`, url], profile, notice: null };
   return { argv: [...edge.fallbackCommand, url], profile: null, notice: `No Edge profile set for ${clientName}` };
+}
+
+/** Chromium's install: its command (from the .desktop entry) and where its Local State is. Read-only. */
+export function detectChromium(readText: (path: string) => string | null, home: string): { command: string[]; profilesDir: string } | null {
+  for (const dir of [`${home}/.local/share/applications`, "/usr/share/applications"]) {
+    const exec = readText(`${dir}/chromium.desktop`)?.match(/^Exec=(.*)$/m)?.[1];
+    const bin = exec?.trim().split(/\s+/)[0];
+    if (bin && /(^|\/)chromium(-browser)?$/.test(bin)) return { command: [bin], profilesDir: `${home}/.config/chromium` };
+  }
+  return null;
 }

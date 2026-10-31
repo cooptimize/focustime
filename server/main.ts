@@ -9,7 +9,12 @@ import { cacheRoot, configPath, loadConfigFile, planDbPath, saveSystemUserId } f
 import { writeConfig } from "../config/edit.ts";
 import type { DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
 import { stderrLogger } from "../log/logger.ts";
-import { deleteSecret, getSecret, setSecret } from "../secrets/keyring.ts";
+import { deleteSecret, getSecret, secretState, setAppSecret, setSecret } from "../secrets/keyring.ts";
+import { readFileSync } from "node:fs";
+import { chmod } from "node:fs/promises";
+import { dirname } from "node:path";
+import { homedir } from "node:os";
+import { exportPath } from "../actions/settings-actions.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import { createDataverseSource, type DataverseSource } from "../sources/dataverse/source.ts";
 import { createGoogleSource } from "../sources/google/source.ts";
@@ -68,7 +73,7 @@ const makeDevOps = (cfg: DataverseConfig, timeZone: string) => {
   let s = devopsSources.get(key);
   if (!s) {
     const dv = makeDataverse(cfg, timeZone);
-    s = createDevOpsSource({ fetch, log, cacheDir: cacheRoot(), timeZone, targets: (keys) => dv.devopsTargets(keys), pickableTypes: () => pickableTypes });
+    s = createDevOpsSource({ fetch, log, cacheDir: cacheRoot(), timeZone, targets: (keys) => dv.devopsTargets(keys), pickableTypes: () => pickableTypes, openStates: (k) => openStates[k] ?? [] });
     devopsSources.set(key, s);
   }
   return s;
@@ -78,11 +83,13 @@ const makeDevOps = (cfg: DataverseConfig, timeZone: string) => {
 // the week view still works and the plan actions say the store is unavailable.
 let timeZone = "America/New_York";
 let pickableTypes: string[] = [];
+let openStates: Record<string, string[]> = {};
 const loadConfig = async () => {
   const r = await loadConfigFile(cfgPath);
   if (r.parsed.ok) {
     timeZone = r.parsed.config.week.hours.timeZone;
     pickableTypes = r.parsed.config.plan.pickablePortfolioTypes;
+    openStates = Object.fromEntries(Object.entries(r.parsed.config.clientSettings).map(([k, v]) => [k, v.openStates]));
   }
   return r;
 };
@@ -117,6 +124,23 @@ const server = createApp({
     now: () => Temporal.Now.instant().toString(),
     ...(plan ? { plan } : {}),
     launch: launchDetached,
+    secrets: { state: (a) => secretState(a), set: (a, v) => setAppSecret(a, v) },
+    // Browser .desktop entries and Local State only; profile names are all that is kept.
+    readText: (path) => {
+      try {
+        return readFileSync(path, "utf8");
+      } catch {
+        return null;
+      }
+    },
+    home: homedir(),
+    exportPlan: async (json) => {
+      const out = exportPath(dirname(planDbPath()), new Date().toISOString());
+      await mkdir(dirname(out), { recursive: true, mode: 0o700 });
+      await writeFile(out, json, { mode: 0o600 });
+      await chmod(out, 0o600);
+      return out;
+    },
   },
 });
 

@@ -63,6 +63,16 @@ export function levelOf(type: string, levels: BacklogLevels): WorkItem["level"] 
   return "other";
 }
 
+/**
+ * A client's "treat as open" states (Settings, step 6b): states DevOps files as Completed or Removed that this client
+ * still works in. They are given an open category, so both the query and the normalizer keep them.
+ */
+export function withOpenStates(categories: StateCategories, openStates: readonly string[]): StateCategories {
+  if (!openStates.length) return categories;
+  const wanted = new Set(openStates.map((s) => s.toLowerCase()));
+  return new Map([...categories].map(([type, states]) => [type, new Map([...states].map(([name, cat]) => [name, wanted.has(name.toLowerCase()) && DONE_CATEGORIES.has(cat) ? "InProgress" : cat]))]));
+}
+
 const wiqlString = (v: string) => `'${v.replace(/'/g, "''")}'`;
 
 /**

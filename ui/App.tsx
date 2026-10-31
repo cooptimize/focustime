@@ -19,6 +19,7 @@ import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
 import { cardHalves, slotOf, validHalf } from "./halves.ts";
+import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
 import { SampleSources, weekLabel } from "./labels.ts";
 import { SAMPLE_WEEK } from "../fixtures/sample-week.ts";
 import { useLayout } from "./viewport.ts";
@@ -51,6 +52,8 @@ export function App() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
+  /** Settings (step 6b): the section shown, or null when closed. It takes the week's place. */
+  const [settingsAt, setSettingsAt] = useState<SettingsSectionId | null>(null);
   // The element focused in each region, so F6 returns to it; and the work item focused when the command menu opened.
   const lastInRegion = useRef(new Map<Region, HTMLElement>());
   const focusedItem = useRef<{ clientKey: string; url: string } | null>(null);
@@ -362,7 +365,12 @@ export function App() {
       if (v === "week") {
         closePlanDay();
         setDetailsOpen(false);
-      } else void openPlanDay();
+        setSettingsAt(null);
+      } else if (v === "settings") setSettingsAt("you");
+      else {
+        setSettingsAt(null);
+        void openPlanDay();
+      }
     },
     [closePlanDay, openPlanDay],
   );
@@ -467,7 +475,23 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey) return;
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
+      if (settingsAt !== null && e.key === "Escape" && !(e.target as HTMLElement | null)?.closest?.(".popup-menu")) {
+        e.preventDefault();
+        setSettingsAt(null);
+      } else if (settingsAt === null && e.key === "," && !typing && !pd && !detailsOpen) {
+        e.preventDefault();
+        setSettingsAt("you");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [settingsAt, cmdOpen, keysOpen, pd, detailsOpen]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (settingsAt !== null || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (e.target instanceof HTMLInputElement) return;
       if ((e.target as HTMLElement | null)?.closest?.(".popup-menu")) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
@@ -511,7 +535,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
 
@@ -564,6 +588,16 @@ export function App() {
       setViewRange: (r) => void setViewRange(r),
       hours: data.hours,
       runTime,
+      openSettings: (section) => {
+        closePlanDay();
+        setDetailsOpen(false);
+        setSettingsAt(SETTINGS_SECTIONS.some(([id]) => id === section) ? (section as SettingsSectionId) : "you");
+      },
+      exportPlan: () =>
+        void call<{ path: string }>("data.export", {}).then(
+          (r) => setNotice(`Plan exported to ${r.path}`),
+          (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
+        ),
     };
   }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -587,7 +621,7 @@ export function App() {
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
   const today = week.days.some((d) => d.date === localToday) ? localToday : "";
   const weekendNote = Temporal.PlainDate.from(localToday).dayOfWeek >= 6 && data.weekStart === data.today.weekStart ? `Today is ${shortDay(localToday)} · showing next week` : null;
-  const view: View = pd ? "planday" : "week";
+  const view: View = settingsAt !== null ? "settings" : pd ? "planday" : "week";
 
   const samples = new Set(data.sources.filter((s) => s.sample).map((s) => s.source));
 
@@ -606,7 +640,7 @@ export function App() {
           <button type="button" className="view-tab" aria-current={view === "week" ? "page" : undefined} onClick={() => setView("week")} title="Week (Esc closes other views)">
             Week
           </button>
-          <button type="button" className="view-tab" aria-current={view === "planday" ? "page" : undefined} onClick={() => void openPlanDay()} title={`Plan ${shortDay(target.date)} (P)`}>
+          <button type="button" className="view-tab" aria-current={view === "planday" ? "page" : undefined} onClick={() => setView("planday")} title={`Plan ${shortDay(target.date)} (P)`}>
             Plan the day <kbd>P</kbd>
           </button>
           {["Plan the week", "Check-in", "Close out"].map((v) => (
@@ -636,8 +670,8 @@ export function App() {
           <button type="button" className="top-btn cmd-btn" onClick={openCommands} title="Every command, with its shortcut">
             Commands <kbd>Ctrl K</kbd>
           </button>
-          <button type="button" className="top-btn" disabled title="Settings: coming soon">
-            Settings
+          <button type="button" className="top-btn" aria-current={view === "settings" ? "page" : undefined} onClick={() => (settingsAt === null ? setSettingsAt("you") : setSettingsAt(null))} title="Settings (,)">
+            Settings <kbd>,</kbd>
           </button>
         </div>
       </header>
@@ -656,6 +690,25 @@ export function App() {
         </div>
       )}
 
+      {settingsAt !== null ? (
+        <Settings
+          section={settingsAt}
+          onSection={setSettingsAt}
+          onClose={() => setSettingsAt(null)}
+          onSaved={reloadQuiet}
+          sources={data.sources}
+          busy={busy}
+          loading={loading}
+          onRefresh={() => auto.trigger("button")}
+          onConnect={(src) => void connect(src)}
+          onDisconnect={(src) => void disconnect(src)}
+          theme={theme}
+          setTheme={(t) => void setTheme(t)}
+          viewRange={data.week.range.mode}
+          setViewRange={(r) => void setViewRange(r)}
+          runTime={runTime}
+        />
+      ) : (
       <WeekGrid
         week={week}
         colors={data.clients}
@@ -702,6 +755,7 @@ export function App() {
           setDetailsOpen(true);
         }}
       />
+      )}
 
       <StatusBar
         sources={data.sources}

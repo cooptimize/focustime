@@ -23,8 +23,14 @@ export type AppConfig = {
   /** null until google.client_id is filled in. */
   google: GoogleConfig | null;
   week: WeekConfig;
-  /** Client colors keyed by reporting nickname (or account name when there is none). */
+  /** Client colors keyed by reporting nickname (or account name when there is none): a hex or a palette slot's CSS variable. */
   clients: Record<string, string>;
+  /** Per-client settings from [clients] (step 6b, Settings): display name, color, link browser and profile, open states. */
+  clientSettings: Record<string, ClientSetting>;
+  /** Chromium for client links (step 6b). Empty: not set up. */
+  chromium: { command: string[] };
+  /** Expiry dates Tanner entered for keyring secrets (the keyring doesn't know them). */
+  secretExpiry: Partial<Record<"dataverse-client-secret" | "google-client-secret", string>>;
   /** Plan settings (step 5). */
   plan: PlanConfig;
   /** Where work item links open (step 5.5). */
@@ -38,6 +44,27 @@ export type Theme = (typeof THEMES)[number];
 export const THEME_NAMES: Record<Theme, string> = { "cooptimize-dark": "Cooptimize Dark", "cooptimize-light": "Cooptimize Light", neutral: "Neutral" };
 export type UiConfig = { theme: Theme; viewRange: ViewRange };
 export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business" };
+
+/** The style guide's client palette (tokens --client-<slot> in every theme). */
+export const CLIENT_SLOTS = ["teal", "violet", "ochre", "blue", "rose", "earth", "green", "slate"] as const;
+export type ClientSlot = (typeof CLIENT_SLOTS)[number];
+export const BROWSERS = ["edge", "chromium"] as const;
+export type Browser = (typeof BROWSERS)[number];
+
+export type ClientSetting = {
+  /** "#rrggbb" or a palette slot. */
+  color: string | null;
+  /** Shown instead of the Dataverse nickname; null keeps the nickname. */
+  name: string | null;
+  browser: Browser;
+  /** Profile directory in that browser ("Default", "Profile 3"); null: none set here (Edge falls back to [edge.profiles]). */
+  profile: string | null;
+  /** DevOps states treated as open although DevOps files them as Completed or Removed. */
+  openStates: string[];
+};
+
+/** A color setting as CSS: a hex as is, a slot as its token. */
+export const colorCss = (c: string) => ((CLIENT_SLOTS as readonly string[]).includes(c) ? `var(--client-${c})` : c);
 
 export type EdgeConfig = {
   /** Edge's launch command as an argument array, e.g. ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]. Empty: no Edge. */
@@ -116,7 +143,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -169,7 +196,7 @@ export function parseConfig(text: string): ParseResult {
   const watch = int(rk, "risk", "meeting_watch_minutes");
   const atRisk = int(rk, "risk", "meeting_at_risk_minutes");
   const window = int(rk, "risk", "min_focus_window_minutes");
-  if (watch && atRisk && atRisk < watch) err("risk.meeting_at_risk_minutes", "Must be at least meeting_watch_minutes");
+  if (watch && atRisk && atRisk < watch) err("risk.meeting_at_risk_minutes", "Must be at least the Watch value (meeting_watch_minutes)");
 
   // [[standing_blocks]] (optional)
   const standingBlocks: StandingBlock[] = [];
@@ -192,15 +219,77 @@ export function parseConfig(text: string): ParseResult {
     });
   }
 
-  // [clients] (optional)
+  // [clients] (optional): "#hex" (the step 4 form) or an inline table with the Settings fields.
   const clients: Record<string, string> = {};
+  const clientSettings: Record<string, ClientSetting> = {};
   const cl = raw.clients;
   if (cl !== undefined && !isTable(cl)) err("clients", "Must be a [clients] table");
   if (isTable(cl)) {
+    const colorOk = (v: unknown) => typeof v === "string" && (HEX.test(v) || (CLIENT_SLOTS as readonly string[]).includes(v));
     for (const [k, v] of Object.entries(cl)) {
-      if (typeof v !== "string" || !HEX.test(v)) err(`clients.${k}`, 'Must be a color like "#1f9e8f"');
-      else clients[k] = v;
+      if (typeof v === "string") {
+        if (!HEX.test(v)) err(`clients.${k}`, 'Must be a color like "#1f9e8f" or a table');
+        else (clients[k] = v), (clientSettings[k] = { color: v, name: null, browser: "edge", profile: null, openStates: [] });
+        continue;
+      }
+      if (!isTable(v)) {
+        err(`clients.${k}`, 'Must be a color like "#1f9e8f" or a table like { color = "teal" }');
+        continue;
+      }
+      const f = `clients.${k}`;
+      for (const x of Object.keys(v)) if (!["color", "name", "browser", "profile", "open_states"].includes(x)) err(`${f}.${x}`, "Unknown field");
+      const c: ClientSetting = { color: null, name: null, browser: "edge", profile: null, openStates: [] };
+      if (v.color !== undefined) {
+        if (!colorOk(v.color)) err(`${f}.color`, `Must be a palette color (${CLIENT_SLOTS.join(", ")}) or "#rrggbb"`);
+        else c.color = v.color as string;
+      }
+      if (v.name !== undefined) {
+        if (typeof v.name !== "string" || !v.name.trim() || v.name.length > 60) err(`${f}.name`, "Must be 1 to 60 characters");
+        else c.name = v.name.trim();
+      }
+      if (v.browser !== undefined) {
+        if (typeof v.browser !== "string" || !(BROWSERS as readonly string[]).includes(v.browser)) err(`${f}.browser`, 'Must be "edge" or "chromium"');
+        else c.browser = v.browser as Browser;
+      }
+      if (v.profile !== undefined) {
+        if (typeof v.profile !== "string" || !PROFILE_DIR.test(v.profile)) err(`${f}.profile`, 'Must be a profile directory, e.g. "Default" or "Profile 3"');
+        else c.profile = v.profile;
+      }
+      if (v.open_states !== undefined) {
+        if (!Array.isArray(v.open_states) || v.open_states.some((s) => typeof s !== "string" || !s.trim() || s.length > 60)) err(`${f}.open_states`, 'Must be a list of DevOps state names, e.g. ["Resolved"]');
+        else c.openStates = (v.open_states as string[]).map((s) => s.trim());
+      }
+      clientSettings[k] = c;
+      if (c.color) clients[k] = colorCss(c.color);
     }
+  }
+
+  // [chromium] (optional): launch command for clients whose links open in Chromium.
+  const chromium = { command: [] as string[] };
+  if (raw.chromium !== undefined) {
+    const t = isTable(raw.chromium) ? raw.chromium : (err("chromium", "Must be a [chromium] table"), null);
+    if (t) for (const k of Object.keys(t)) if (k !== "command") err(`chromium.${k}`, "Unknown field");
+    const v = t?.command;
+    if (v !== undefined) {
+      if (!Array.isArray(v) || !v.length || v.some((w) => typeof w !== "string" || !w.trim() || w.length > 300)) err("chromium.command", 'Must be a non-empty list of words, e.g. ["uwsm-app", "--", "/usr/bin/chromium"]');
+      else chromium.command = v as string[];
+    }
+  }
+
+  // [secrets] (optional): expiry dates only. Never secret values.
+  const secretExpiry: AppConfig["secretExpiry"] = {};
+  if (raw.secrets !== undefined) {
+    const t = isTable(raw.secrets) ? raw.secrets : (err("secrets", "Must be a [secrets] table"), null);
+    const names = { dataverse_client_secret_expires: "dataverse-client-secret", google_client_secret_expires: "google-client-secret" } as const;
+    if (t)
+      for (const [k, v] of Object.entries(t)) {
+        if (!Object.hasOwn(names, k)) {
+          err(`secrets.${k}`, "Unknown field (only expiry dates belong here; secrets go in the keyring)");
+          continue;
+        }
+        if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) err(`secrets.${k}`, 'Must be a date like "2027-03-01"');
+        else secretExpiry[names[k as keyof typeof names]] = v;
+      }
   }
 
   // [plan] (optional)
@@ -300,6 +389,9 @@ export function parseConfig(text: string): ParseResult {
         standingBlocks,
       },
       clients,
+      clientSettings,
+      chromium,
+      secretExpiry,
       plan: { pickablePortfolioTypes },
       edge,
       ui,

@@ -44,6 +44,8 @@ function env(over: Partial<MenuEnv> = {}) {
     setViewRange: (r) => calls.push(["range", r]),
     hours: legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" }),
     runTime: async (a, i) => (calls.push([a, i]), true),
+    openSettings: (x) => calls.push(["settings", x]),
+    exportPlan: () => calls.push(["export"]),
     ...over,
   };
   return { e, calls };

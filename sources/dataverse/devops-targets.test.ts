@@ -90,9 +90,9 @@ describe("my clients for Open half-days (Q21)", () => {
     const src = createDataverseSource({ config: dvConfig, timeZone: "America/New_York", getSecret: async () => FAKE_SECRET, fetch, cacheDir: mkdtempSync(join(tmpdir(), "c-")), log: () => {} });
     const mine = await src.myClients();
     expect(mine).toEqual([
-      { clientKey: "CSC", clientName: "CSC", devops: true },
-      { clientKey: "HM Electronics", clientName: "HM Electronics", devops: true },
-      { clientKey: "W&C", clientName: "W&C", devops: true },
+      { clientKey: "CSC", clientName: "CSC", devops: true, devopsEmail: "t.spaulding@cscsteel.example" },
+      { clientKey: "HM Electronics", clientName: "HM Electronics", devops: true, devopsEmail: "c.someone@hme.example" },
+      { clientKey: "W&C", clientName: "W&C", devops: true, devopsEmail: null },
     ]);
     const urls = calls.map((c) => decodeURIComponent(c.url));
     expect(urls.some((u) => u.includes("coop_accountworkers") && u.includes(`_coop_user_value eq ${dvConfig.mySystemUserId}`))).toBe(true);

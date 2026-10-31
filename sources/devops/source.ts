@@ -7,7 +7,7 @@ import { readSnapshot, writeSnapshot } from "../../cache/snapshots.ts";
 import type { Logger } from "../../log/logger.ts";
 import type { ClientWork, ClientWorkStatus, FailureCause, WorkItem } from "../../week/types.ts";
 import { formatFetchedAt } from "../when.ts";
-import { allowPortfolio, backlogLevels, batchFields, buildChildrenWiql, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, type BacklogLevels, type StateCategories } from "./normalize.ts";
+import { withOpenStates, allowPortfolio, backlogLevels, batchFields, buildChildrenWiql, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, type BacklogLevels, type StateCategories } from "./normalize.ts";
 import type { Pat } from "./pat.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
 
@@ -34,6 +34,8 @@ export type DevOpsDeps = {
   metadataTtlMs?: number;
   /** Portfolio types that can still be picked (config [plan], Q20). Read at each fetch. */
   pickableTypes?: () => readonly string[];
+  /** A client's "treat as open" states (config [clients], step 6b). Read at each fetch. */
+  openStates?: (clientKey: string) => readonly string[];
 };
 
 export type ClientRef = { clientKey: string; clientName: string };
@@ -156,7 +158,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const ctx: Ctx = { client: ref.clientName, org, base: `https://dev.azure.com/${encodeURIComponent(org)}`, projectName: target.projectName ?? target.project!, pat: target.pat! };
     const project = target.project!;
     const raw = await loadMetadata(ctx, project);
-    const meta = { ...raw, levels: allowPortfolio(raw.levels, d.pickableTypes?.() ?? []) };
+    const meta = { ...raw, categories: withOpenStates(raw.categories, d.openStates?.(ref.clientKey) ?? []), levels: allowPortfolio(raw.levels, d.pickableTypes?.() ?? []) };
     const items = await fetchItems(ctx, project, meta, buildWiql(target.email!, meta.categories, meta.orderField));
     log("items", { count: items.length });
     // Epics and features can't be picked: read their open children (any assignee), up to two levels down, read-only.

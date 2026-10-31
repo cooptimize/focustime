@@ -16,6 +16,7 @@ import type { PlanStore } from "../store/plan-store.ts";
 import { checkDevOpsUrl, launchPlan } from "../links/edge.ts";
 import { hasHoursOn, planAction } from "./plan-actions.ts";
 import { timeAction } from "./time-actions.ts";
+import { settingsAction, type SettingsContext } from "./settings-actions.ts";
 import { isActionName, type ActionName } from "./registry.ts";
 import type { ActionResponse, SourceSummary, WeekLoadData } from "./types.ts";
 
@@ -35,6 +36,11 @@ export type ActionContext = {
   writeConfig?: (edit: (text: string) => string) => Promise<WriteResult>;
   /** Start a program from an argument array, never a shell (link.open). Rejects when it can't start. */
   launch?: (argv: string[]) => Promise<void>;
+  /** Settings (step 6b): keyring presence and app secret writes, local file reads for browser profiles, plan export. */
+  secrets?: SettingsContext["secrets"];
+  readText?: (path: string) => string | null;
+  home?: string;
+  exportPlan?: (json: string) => Promise<string>;
 };
 
 export type ActionRequest = { action: unknown; input: unknown };
@@ -291,7 +297,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       const checked = checkDevOpsUrl(input.url, org);
       if (!checked.ok) return { ok: false, status: 422, error: checked.error };
       if (!ctx.launch) return { ok: false, status: 503, error: "Opening links is not available here" };
-      const plan = launchPlan(cfg.edge, key, key, checked.url);
+      const plan = launchPlan(cfg.edge, key, cfg.clientSettings[key]?.name ?? key, checked.url, { setting: cfg.clientSettings[key], chromium: cfg.chromium.command });
       try {
         await ctx.launch(plan.argv);
       } catch {
@@ -313,6 +319,24 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }
+    case "settings.load":
+    case "settings.save":
+    case "secret.set":
+    case "data.export":
+      return settingsAction(
+        {
+          loadConfig: ctx.loadConfig,
+          makeDataverse: ctx.makeDataverse,
+          ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}),
+          ...(ctx.plan ? { plan: ctx.plan } : {}),
+          ...(ctx.secrets ? { secrets: ctx.secrets } : {}),
+          ...(ctx.readText ? { readText: ctx.readText } : {}),
+          ...(ctx.home ? { home: ctx.home } : {}),
+          ...(ctx.exportPlan ? { exportPlan: ctx.exportPlan } : {}),
+        },
+        action,
+        req.input,
+      );
     case "ui.set_view_range":
     case "hours.set_day":
     case "hours.clear_day":

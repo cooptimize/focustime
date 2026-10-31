@@ -56,7 +56,7 @@ export type FormField = {
   options?: { value: string; label: string }[];
 };
 
-export type View = "week" | "planday";
+export type View = "week" | "planday" | "settings";
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
@@ -98,6 +98,9 @@ export type MenuEnv = {
   hours: TimeModel;
   /** Runs a time model action (hours for a day, unavailable time, flex sessions); false with a notice on refusal. */
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
+  /** Opens Settings, at a section when given (step 6b). */
+  openSettings: (section?: string) => void;
+  exportPlan: () => void;
 };
 
 const dayName = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -451,6 +454,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "draft.add_story": return { next: () => chooseItem(env, "Draft a story under which epic or feature?", (i) => i.level === "portfolio", (k, i) => draftPrompt(env, k, i)) };
     case "ui.set_theme": return { next: () => themeStep(env) };
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
+    case "settings.load": return { run: () => env.openSettings() };
+    case "settings.save": return { run: () => env.openSettings() };
+    case "secret.set": return { run: () => env.openSettings("connections") };
+    case "data.export": return { run: env.exportPlan };
     case "hours.set_day": return { next: () => chooseDay(env, "Working hours for which day?", (d) => hoursForm(env, d)) };
     case "hours.clear_day": {
       const days = env.week.days.filter((d) => d.hours.overridden);

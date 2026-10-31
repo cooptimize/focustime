@@ -62,7 +62,7 @@ describe("the keyboard legend and the command menu agree", () => {
   const env: MenuEnv = {
     week, selection: { date: "2026-11-02", half: "AM" }, planWeek: null, planState: null, planTarget: { date: "2026-11-02", isToday: true }, today: "2026-11-02", work: new Map(), calendars: { outlook: false, google: false },
     runPlan: async () => true, openPlanDay: noop, commitPlan: noop, openDetails: noop, openLink: noop, changeWeek: noop, goToday: noop, refresh: noop, showSourceStatus: noop, connect: noop, disconnect: noop, setView: noop,
-    moveRegion: noop, focusedItem: null, showKeys: noop, theme: "cooptimize-dark", setTheme: noop, viewRange: "business", setViewRange: noop, hours: legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" }), runTime: async () => true,
+    moveRegion: noop, focusedItem: null, showKeys: noop, theme: "cooptimize-dark", setTheme: noop, viewRange: "business", setViewRange: noop, hours: legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" }), runTime: async () => true, openSettings: noop, exportPlan: noop,
   };
   const commands = commandList(env);
 

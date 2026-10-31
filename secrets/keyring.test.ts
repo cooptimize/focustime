@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deleteSecret, getSecret, SecretError, setSecret, type RunResult } from "./keyring.ts";
+import { deleteSecret, getSecret, secretState, SecretError, setAppSecret, setSecret, type RunResult } from "./keyring.ts";
 
 const SECRET = "FAKE-SECRET-7f3a9c1e";
 
@@ -75,5 +75,26 @@ describe("keyring writes (refresh tokens only)", () => {
     const err = await setSecret("outlook-refresh-token", TOKEN, recorder({ code: 1, stdout: "", stderr: "Cannot create an item in a locked collection" }).run).catch((e: unknown) => e);
     expect((err as SecretError).kind).toBe("locked");
     expect(String(err)).not.toContain(TOKEN);
+  });
+});
+
+describe("app secrets from Settings (step 6b)", () => {
+  const VALUE = "FAKE-APP-SECRET-91b2";
+  it("stores the Dataverse or Google client secret through stdin only", async () => {
+    const seen: { args: string[]; stdin: string | undefined }[] = [];
+    await setAppSecret("dataverse-client-secret", VALUE, async (args, stdin) => (seen.push({ args, stdin }), { code: 0, stdout: "", stderr: "" }));
+    expect(seen).toEqual([{ args: ["store", "--label=Coopilot dataverse-client-secret", "service", "coopilot", "account", "dataverse-client-secret"], stdin: VALUE }]);
+    expect(seen[0]!.args.join(" ")).not.toContain(VALUE);
+  });
+  it("refuses other accounts and multi-line values, without the value in the error", async () => {
+    const run = async () => ({ code: 0, stdout: "", stderr: "" });
+    await expect(setAppSecret("outlook-refresh-token" as never, VALUE, run)).rejects.toThrow();
+    const e = await setAppSecret("google-client-secret", `${VALUE}\nx`, run).catch((x: unknown) => x);
+    expect(String(e)).not.toContain(VALUE);
+  });
+  it("reports presence without returning the value", async () => {
+    expect(await secretState("dataverse-client-secret", async () => ({ code: 0, stdout: VALUE, stderr: "" }))).toBe("set");
+    expect(await secretState("dataverse-client-secret", async () => ({ code: 1, stdout: "", stderr: "" }))).toBe("missing");
+    expect(await secretState("dataverse-client-secret", async () => ({ code: 1, stdout: "", stderr: "locked collection" }))).toBe("locked");
   });
 });
