@@ -14,14 +14,14 @@ const NOW = Temporal.Instant.from("2026-11-02T13:02:00Z"); // 8:02 AM New York
 
 type Kind = "outlook" | "google";
 
-function setup(kind: Kind, scenario: ApiScenario, opts: { connected?: boolean; calendars?: string[]; cacheDir?: string } = {}) {
+function setup(kind: Kind, scenario: ApiScenario, opts: { connected?: boolean; calendars?: string[]; cacheDir?: string; locked?: boolean } = {}) {
   const cacheDir = opts.cacheDir ?? mkdtempSync(join(tmpdir(), "coopilot-cal-"));
   const logs: LogRecord[] = [];
   const api = fakeApis(scenario);
   const keyring = memoryKeyring({
     "google-client-secret": FAKE_CLIENT_SECRET,
     ...(opts.connected === false ? {} : { "outlook-refresh-token": FAKE_REFRESH, "google-refresh-token": FAKE_REFRESH }),
-  });
+  }, { locked: !!opts.locked });
   const common = { fetch: api.fetch, keyring, openBrowser: async () => {}, cacheDir, log: (r: LogRecord) => logs.push(r), timeZone: NY, now: () => NOW };
   const source =
     kind === "outlook"
@@ -217,5 +217,15 @@ describe("calendar sources never leak tokens or secrets", () => {
     const r = await source.load(WEEK);
     expect(r.status).toBe("error");
     expect(calls.some((c) => c.url.includes("attacker.example.com"))).toBe(false);
+  });
+});
+
+describe("shared root causes (step 6.1)", () => {
+  it.each(["outlook", "google"] as const)("%s: a locked keyring is reported as the keyring, with the cache kept", async (kind) => {
+    const { source, cacheDir } = setup(kind, "ok", { locked: true });
+    seedCache(cacheDir, kind);
+    const r = await source.load(WEEK);
+    expect(r).toMatchObject({ status: "error", fromCache: true, cause: "keyring" });
+    expect(r.fixAction).toBeUndefined();
   });
 });

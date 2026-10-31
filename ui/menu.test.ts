@@ -33,6 +33,9 @@ function env(over: Partial<MenuEnv> = {}) {
     connect: (c) => calls.push(["connect", c]),
     disconnect: (c) => calls.push(["disconnect", c]),
     setView: (v) => calls.push(["view", v]),
+    moveRegion: (d) => calls.push(["region", d]),
+    focusedItem: null,
+    showKeys: () => calls.push(["keys"]),
     ...over,
   };
   return { e, calls };
@@ -54,7 +57,7 @@ describe("command menu (built from the action registry)", () => {
   it("searches by words in any order", () => {
     const list = commandList(env().e);
     expect(filterCommands(list, "pick drop").map((c) => c.action)).toEqual(["pick.remove"]);
-    expect(filterCommands(list, "EDGE open").map((c) => c.action)).toEqual(["link.open"]);
+    expect(filterCommands(list, "EDGE open").map((c) => c.action)).toEqual(["ui.open_focused", "link.open"]);
   });
   it("commit is only available while Plan the day is open", () => {
     expect(commandList(env().e).find((c) => c.action === "planday.commit")?.disabled).toBe("Open Plan the day first");

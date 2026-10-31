@@ -2,6 +2,7 @@
 // show another client's items.
 import { createContext } from "react";
 import type { ClientWork, WorkItem } from "../week/types.ts";
+import { causeWord } from "./status.ts";
 
 export type WorkByClient = ReadonlyMap<string, ClientWork>;
 export const DevOpsWork = createContext<WorkByClient>(new Map());
@@ -31,9 +32,11 @@ const STATUS: Record<ClientWork["status"], string> = {
   error: "error",
 };
 
+/** "live", "cached (keyring locked)", "PAT expired or invalid": a shared root cause wins over the status word. */
 export function workStatusLabel(c: ClientWork): string {
-  if (c.status !== "ok" && c.fromCache) return `cached (${STATUS[c.status]})`;
-  return STATUS[c.status];
+  const why = c.status !== "ok" && c.cause ? causeWord(c.cause) : STATUS[c.status];
+  if (c.status !== "ok" && c.fromCache) return `cached (${why})`;
+  return why;
 }
 
 /** "DevOps 4 of 5 live", or null when DevOps is not in play. */

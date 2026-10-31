@@ -6,7 +6,7 @@ import type { Logger } from "../../log/logger.ts";
 import { SecretError } from "../../secrets/keyring.ts";
 import { formatTime } from "../../week/format.ts";
 import { PTO_DETAIL_COLUMNS, PTO_DETAIL_FILTER_COLUMNS, PTO_TRACKER_COLUMNS, PTO_TRACKER_FILTER_COLUMNS, ptoEntries, type PtoDetailRow, type PtoEntry, type PtoTrackerRow } from "../../week/pto.ts";
-import type { FocusPattern, SourceResult } from "../../week/types.ts";
+import type { FailureCause, FocusPattern, SourceResult } from "../../week/types.ts";
 import { Pat } from "../devops/pat.ts";
 import type { DevOpsTarget, TargetsResult } from "../devops/types.ts";
 import { clientKeyOf, normalizeFocusTimes, type AccountRow, type FocusTimeRow } from "./normalize.ts";
@@ -31,11 +31,14 @@ class SourceFailure extends Error {
   readonly fixAction: SourceResult<unknown>["fixAction"] | undefined;
   /** Dataverse said a table (404) or a column (400, 0x80060888) doesn't exist (D108). */
   schema: "table" | "column" | undefined;
-  constructor(status: Status, message: string, fixAction?: SourceResult<unknown>["fixAction"], schema?: "table" | "column") {
+  /** Shared root cause (keyring, network), so the status bar names it once. */
+  rootCause: FailureCause | undefined;
+  constructor(status: Status, message: string, fixAction?: SourceResult<unknown>["fixAction"], schema?: "table" | "column", cause?: FailureCause) {
     super(message);
     this.status = status;
     this.fixAction = fixAction;
     this.schema = schema;
+    this.rootCause = cause;
   }
 }
 
@@ -73,7 +76,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
   let token: { value: string; expiresAt: number } | null = null;
   const memory = new Map<string, { at: number; result: SourceResult<FocusPattern> }>();
 
-  const unreachable = () => new SourceFailure("unreachable", "Dataverse unreachable");
+  const unreachable = () => new SourceFailure("unreachable", "Dataverse unreachable", undefined, undefined, "network");
   const isNetworkError = (e: unknown) =>
     e instanceof TypeError || (e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError"));
 
@@ -89,7 +92,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
       log({ source: "dataverse", op: "keyring", kind });
       if (kind === "not_found")
         throw new SourceFailure("misconfigured", "No Dataverse client secret in the keyring (service coopilot, account dataverse-client-secret)", "open_settings");
-      throw new SourceFailure("error", "Secret storage unavailable (Secret Service). Unlock the keyring and retry");
+      throw new SourceFailure("error", "Secret storage unavailable (Secret Service). Unlock the keyring and retry", undefined, undefined, "keyring");
     }
 
     const started = performance.now();
@@ -318,6 +321,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
         : `${f.message}. No cached data yet`;
       result = { source: "dataverse", status: f.status, fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [], message };
       if (f.fixAction) result.fixAction = f.fixAction;
+      if (f.rootCause) result.cause = f.rootCause;
     }
     memory.set(weekStart, { at: t, result });
     return result;
@@ -382,7 +386,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     } catch (e) {
       if (!(e instanceof SourceFailure)) log({ source: "dataverse", op: "devops_targets", kind: "unexpected" });
       const f = e instanceof SourceFailure ? e : null;
-      return { ok: false, message: f?.status === "unreachable" ? "Dataverse unreachable" : f?.status === "auth_required" ? "Dataverse access denied" : "Dataverse read failed" };
+      return { ok: false, message: f?.rootCause === "keyring" ? "keyring locked" : f?.status === "unreachable" ? "Dataverse unreachable" : f?.status === "auth_required" ? "Dataverse access denied" : "Dataverse read failed", ...(f?.rootCause ? { cause: f.rootCause } : {}) };
     }
   }
 
@@ -494,6 +498,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
       const snap = await readSnapshot<PtoEntry>(deps.cacheDir, "pto", key);
       const message = snap ? `${plain}. Showing PTO from ${fmtAt(snap.fetchedAt)}` : `${plain}. No cached PTO yet`;
       result = { source: "pto", status: f.status, fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [], message };
+      if (f.rootCause) result.cause = f.rootCause;
     }
     ptoMemory.set(key, { at: t, result });
     return result;

@@ -2,6 +2,8 @@
 // ui/menu.ts: arrow keys move, Enter chooses, Backspace on an empty search or Left goes back, Esc closes.
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { filterCommands, type MenuEnv, type MenuItem, type MenuStep } from "./menu.ts";
+import { ITEM_ATTRS } from "./keys.ts";
+import { useScopedTab } from "./scope.ts";
 
 type Opener = (at: { x: number; y: number }, step: MenuStep) => void;
 export type MenuApi = { env: MenuEnv | null; open: Opener };
@@ -22,10 +24,12 @@ export function useMenu(build: (env: MenuEnv) => MenuStep) {
 }
 
 export function MoreButton({ label, onClick }: { label: string; onClick: (e: ReactMouseEvent) => void }) {
+  const tabIndex = useScopedTab();
   return (
     <button
       type="button"
       className="more-btn"
+      tabIndex={tabIndex}
       aria-label={label}
       aria-haspopup="menu"
       title={label}
@@ -278,10 +282,10 @@ export function MenuHost({ env, children }: { env: MenuEnv | null; children: Rea
 }
 
 /** A list row with a menu: right-click anywhere on it, or the "⋯" button at its end. */
-export function MenuRow({ build, label, className, title, children }: { build: (env: MenuEnv) => MenuStep; label: string; className?: string; title?: string; children: ReactNode }) {
+export function MenuRow({ build, label, className, title, item, children }: { build: (env: MenuEnv) => MenuStep; label: string; className?: string; title?: string; item?: { clientKey: string; url: string | null }; children: ReactNode }) {
   const m = useMenu(build);
   return (
-    <li className={className} title={title} onContextMenu={m.onContextMenu}>
+    <li className={className} title={title} onContextMenu={m.onContextMenu} {...(item ? ITEM_ATTRS(item.clientKey, item.url) : {})}>
       {children}
       {m.button(label)}
     </li>

@@ -14,6 +14,13 @@ export type IsoDateTime = string;
 /** "pto" is the Dataverse Time Off Tracker read (step 6), reported on its own. */
 export type SourceId = "dataverse" | "outlook" | "google" | "pto";
 
+/**
+ * A failure's root cause when it is shared beyond one source, so the status bar can name it once (step 6.1):
+ * "keyring" = the Secret Service is locked or unavailable; "network" = a host could not be reached (offline,
+ * DNS or timeout). Absent for causes that belong to one source (a rejected secret, a missing column, HTTP errors).
+ */
+export type FailureCause = "keyring" | "network";
+
 export type SourceResult<T> = {
   source: SourceId;
   status: "ok" | "auth_required" | "unreachable" | "misconfigured" | "error";
@@ -24,6 +31,7 @@ export type SourceResult<T> = {
   items: T[];
   message?: string;
   fixAction?: "connect_google" | "connect_microsoft" | "open_settings";
+  cause?: FailureCause;
 };
 
 /** A Focus Time row after normalization: a recurring weekly pattern. */
@@ -181,6 +189,7 @@ export type ClientWork = {
   clientName: string;
   status: ClientWorkStatus;
   message?: string;
+  cause?: FailureCause;
   fetchedAt: string | null;
   fromCache: boolean;
   /** Board order, top first. */

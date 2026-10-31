@@ -2,13 +2,14 @@
 // picks come from that client's DevOps items in board order (story level only) or a typed intention, and one
 // key commits. Everything here is local: the actions only write Coopilot's plan store.
 import { useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
-import { blockClient, capacityMinutes, fitOf, isPickable, pickableChildren, plannedMinutes, type Fit } from "../plan/rules.ts";
+import { blockClient, capacityMinutes, fitOf, isPickable, pickableChildren, plannedMinutes } from "../plan/rules.ts";
 import { SIZES, type DraftStory, type PlanDayState, type Pick, type Size } from "../plan/types.ts";
 import type { Day, Half, Slot, WorkItem } from "../week/types.ts";
-import { formatMinutes } from "./planday.ts";
+import { fitLabel, formatMinutes } from "./planday.ts";
 import { clientColor, longDate, shortDate, slotRange, startClock } from "./labels.ts";
 import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
+import { ITEM_ATTRS } from "./keys.ts";
 import { itemMenu, pickMenu } from "./menu.ts";
 import { MenuRow, useMenu } from "./Menus.tsx";
 
@@ -40,6 +41,10 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
   useEffect(() => {
     ref.current?.focus({ preventScroll: true });
   }, []);
+  // Adding a candidate removes its button; keep keyboard focus in the panel instead of dropping it to the page.
+  useEffect(() => {
+    if (!document.activeElement || document.activeElement === document.body) ref.current?.focus({ preventScroll: true });
+  }, [state]);
   const picked = new Set(state.picks.filter(inPlay).map((p) => (p.itemId !== null ? `i${p.clientKey}:${p.itemId}` : p.draftId !== null ? `d${p.draftId}` : "")));
   const committed = state.plan.committedAt;
 
@@ -122,7 +127,7 @@ function CarryOver({ picks, date, act }: { picks: Pick[]; date: string; act: Pla
       <h3>Carry over · unfinished from earlier</h3>
       <ul>
         {picks.map((p) => (
-          <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`Actions for ${p.title}`}>
+          <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`Actions for ${p.title}`} item={{ clientKey: p.clientKey, url: p.itemUrl }}>
             <span className="carry-when">{shortDate(p.date)} {p.half}</span>
             <span className="carry-client">{p.clientKey}</span>
             <span className="pick-title">{p.title}</span>
@@ -159,15 +164,6 @@ type BlockProps = {
   clients: { clientKey: string; clientName: string }[];
   act: PlanDayAct;
 };
-
-function fitLabel(f: Fit): string {
-  switch (f.kind) {
-    case "empty": return "nothing picked";
-    case "fits": return `fits · ${formatMinutes(f.spare)} spare`;
-    case "tight": return f.spare ? `tight · ${formatMinutes(f.spare)} spare` : "tight · full";
-    case "over": return `over by ${formatMinutes(f.by)}`;
-  }
-}
 
 function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, colors, clients, act }: BlockProps) {
   const focus = overflow ? null : slot.focus[0] ?? null;
@@ -209,7 +205,7 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
       {picks.length > 0 && (
         <ol className="pd-picks">
           {picks.map((p) => (
-            <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`Actions for ${p.title}`} className={p.clientKey !== bc.clientKey ? "other-client" : ""}>
+            <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`Actions for ${p.title}`} item={{ clientKey: p.clientKey, url: p.itemUrl }} className={p.clientKey !== bc.clientKey ? "other-client" : ""}>
               <span className="wi-type">{p.kind === "intention" ? "Note" : typeTag(p.itemType ?? "")}</span>
               <span className="pick-title" title={p.title}>
                 {p.kind === "item" && p.itemUrl ? (
@@ -287,7 +283,7 @@ function Candidates({ clientKey, half, date, drafts, picked, act }: { clientKey:
           i.level === "portfolio" ? (
             <Portfolio key={i.id} item={i} clientKey={clientKey} kids={pickableChildren(i.id, work.children).filter(free)} drafts={drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === i.id && !picked.has(`d${d.id}`))} add={add} act={act} />
           ) : (
-            <MenuRow key={i.id} build={(env) => itemMenu(env, clientKey, i)} label={`Actions for ${i.type} ${i.id}`}>
+            <MenuRow key={i.id} build={(env) => itemMenu(env, clientKey, i)} label={`Actions for ${i.type} ${i.id}`} item={{ clientKey, url: i.url }}>
               <button type="button" className="cand" onClick={() => add({ itemId: i.id })} title={`${i.type} ${i.id}: ${i.title} (${i.state})`}>
                 <span className="plus" aria-hidden="true">+</span>
                 <span className="wi-type">{typeTag(i.type)}</span>
@@ -325,7 +321,7 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act }: { item
   const menu = useMenu((env) => itemMenu(env, clientKey, item));
   return (
     <li className="portfolio" onContextMenu={menu.onContextMenu}>
-      <div className="portfolio-row">
+      <div className="portfolio-row" {...ITEM_ATTRS(clientKey, item.url)}>
         <button type="button" className="cand parent" aria-expanded={open} onClick={() => setOpen((o) => !o)} title={`${item.type} ${item.id}: ${item.title}`}>
           <span className="plus" aria-hidden="true">{open ? "▾" : "▸"}</span>
           <span className="wi-type">{typeTag(item.type)}</span>
@@ -338,7 +334,7 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act }: { item
       {open && (
         <ul className="kids-list">
           {children.map((c) => (
-            <MenuRow key={c.id} build={(env) => itemMenu(env, clientKey, c)} label={`Actions for ${c.type} ${c.id}`}>
+            <MenuRow key={c.id} build={(env) => itemMenu(env, clientKey, c)} label={`Actions for ${c.type} ${c.id}`} item={{ clientKey, url: c.url }}>
               <button type="button" className="cand" onClick={() => add({ itemId: c.id })} title={`${c.type} ${c.id}: ${c.title} (${c.state})`}>
                 <span className="plus" aria-hidden="true">+</span>
                 <span className="wi-type">{typeTag(c.type)}</span>

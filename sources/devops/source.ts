@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { readSnapshot, writeSnapshot } from "../../cache/snapshots.ts";
 import type { Logger } from "../../log/logger.ts";
-import type { ClientWork, ClientWorkStatus, WorkItem } from "../../week/types.ts";
+import type { ClientWork, ClientWorkStatus, FailureCause, WorkItem } from "../../week/types.ts";
 import { formatFetchedAt } from "../when.ts";
 import { allowPortfolio, backlogLevels, batchFields, buildChildrenWiql, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, type BacklogLevels, type StateCategories } from "./normalize.ts";
 import type { Pat } from "./pat.ts";
@@ -41,9 +41,12 @@ export type ClientRef = { clientKey: string; clientName: string };
 /** A safe, plain failure. Never carries bodies, headers or PATs. */
 class DevOpsFailure extends Error {
   readonly status: ClientWorkStatus;
-  constructor(status: ClientWorkStatus, message: string) {
+  /** Shared root cause (keyring, network), so the status bar names it once. */
+  readonly rootCause: FailureCause | undefined;
+  constructor(status: ClientWorkStatus, message: string, cause?: FailureCause) {
     super(message);
     this.status = status;
+    this.rootCause = cause;
   }
 }
 
@@ -92,7 +95,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     } catch (e) {
       const notFound = (e as { cause?: { code?: unknown } })?.cause?.code === "ENOTFOUND";
       log(op, { kind: notFound ? "host_not_found" : "network" });
-      throw new DevOpsFailure("unreachable", `DevOps organization ${c.org} unreachable`);
+      throw new DevOpsFailure("unreachable", `DevOps organization ${c.org} unreachable`, "network");
     }
     log(op, { status: res.status, durationMs: performance.now() - started });
     // Azure DevOps answers a bad PAT with 401, or with a 203 or a redirect to a sign-in page.
@@ -186,12 +189,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const useCache = f.status !== "identity_missing" && f.status !== "not_set_up";
     const snap = useCache ? ((await readSnapshot<WorkItem>(d.cacheDir, "devops", cacheKey(ref.clientKey))) as WorkSnapshot | null) : null;
     const message = snap ? `${f.message}. Showing items from ${formatFetchedAt(snap.fetchedAt, d.timeZone, now())}` : useCache ? `${f.message}. No cached items yet` : f.message;
-    return { clientKey: ref.clientKey, clientName: ref.clientName, status: f.status, message, fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: (snap?.items ?? []).map(withLevel), children: Array.isArray(snap?.children) ? snap.children.map(withLevel) : [] };
+    return { clientKey: ref.clientKey, clientName: ref.clientName, status: f.status, message, ...(f.rootCause ? { cause: f.rootCause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: (snap?.items ?? []).map(withLevel), children: Array.isArray(snap?.children) ? snap.children.map(withLevel) : [] };
   }
 
   async function loadOne(ref: ClientRef, targets: TargetsResult): Promise<ClientWork> {
     try {
-      if (!targets.ok) throw new DevOpsFailure("unreachable", `DevOps settings unavailable (${targets.message})`);
+      // The settings come from Dataverse, so its root cause (a locked keyring, no network) is DevOps's too.
+      if (!targets.ok) throw new DevOpsFailure(targets.cause === "keyring" ? "error" : "unreachable", `DevOps settings unavailable (${targets.message})`, targets.cause);
       const target = targets.targets.find((t) => t.clientKey === ref.clientKey);
       // The organization is known from Dataverse even when identity or the PAT is missing.
       if (target?.org && ORG.test(target.org)) orgs.set(ref.clientKey, target.org);

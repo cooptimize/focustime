@@ -4,7 +4,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { readSnapshot, writeSnapshot } from "../../cache/snapshots.ts";
 import type { Logger } from "../../log/logger.ts";
-import type { CalEvent, SourceResult } from "../../week/types.ts";
+import type { CalEvent, FailureCause, SourceResult } from "../../week/types.ts";
 import { AuthFailure, type ConnectResult, type OAuthClient } from "../oauth/oauth.ts";
 import { formatFetchedAt } from "../when.ts";
 import { ForeignLinkError, HttpError, NetworkError, PartialError } from "./http.ts";
@@ -42,13 +42,14 @@ export function createCalendarSource(d: CalendarSourceDeps) {
   const memory = new Map<string, { at: number; result: SourceResult<CalEvent> }>();
   const L = d.label;
 
-  type Mapped = { status: Status; message: string; fixAction?: FixAction; useCache: boolean };
+  type Mapped = { status: Status; message: string; fixAction?: FixAction; useCache: boolean; cause?: FailureCause };
   function map(e: unknown): Mapped {
     if (e instanceof AuthFailure) {
       switch (e.kind) {
         case "not_connected": return { status: "auth_required", message: `${L} is not connected yet`, fixAction: d.connectAction, useCache: false };
         case "expired": return { status: "auth_required", message: `${L} needs reconnecting`, fixAction: d.connectAction, useCache: true };
-        case "network": return { status: "unreachable", message: `${L} unreachable`, useCache: true };
+        case "network": return { status: "unreachable", message: `${L} unreachable`, useCache: true, cause: "network" };
+        case "keyring": return { status: "error", message: e.message, useCache: true, cause: "keyring" };
         case "misconfigured": return { status: "misconfigured", message: e.message, fixAction: "open_settings", useCache: true };
         default: return { status: "error", message: e.message, useCache: true };
       }
@@ -59,7 +60,7 @@ export function createCalendarSource(d: CalendarSourceDeps) {
       if (e.status === 403) return { status: "misconfigured", message: `${L} refused access: check the calendar permission for Coopilot`, fixAction: "open_settings", useCache: true };
       return { status: "error", message: `${L} error (HTTP ${e.status})`, useCache: true };
     }
-    if (e instanceof NetworkError) return { status: "unreachable", message: `${L} unreachable`, useCache: true };
+    if (e instanceof NetworkError) return { status: "unreachable", message: `${L} unreachable`, useCache: true, cause: "network" };
     if (e instanceof PartialError) return { status: "error", message: `${L} returned only part of the results, so none were used`, useCache: true };
     if (e instanceof ForeignLinkError) return { status: "error", message: `${L} returned a next-page link to another host, so it was not followed`, useCache: true };
     d.log({ source: d.id, op: "load", kind: "unexpected" });
@@ -101,6 +102,7 @@ export function createCalendarSource(d: CalendarSourceDeps) {
           : `${m.message}. No cached data yet`;
       result = { source: d.id, status: m.status, fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [], message };
       if (m.fixAction) result.fixAction = m.fixAction;
+      if (m.cause) result.cause = m.cause;
     }
     memory.set(weekStart, { at: t, result });
     return result;

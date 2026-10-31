@@ -12,12 +12,17 @@ import { DevOpsWork, workByClient } from "./work.ts";
 import { afterLoad, createAutoRefresh, type LoadState, type RefreshTrigger } from "./refresh.ts";
 import { Details } from "./Details.tsx";
 import { StatusBar } from "./StatusBar.tsx";
+import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
 import { SampleSources, weekLabel } from "./labels.ts";
 import { SAMPLE_WEEK } from "../fixtures/sample-week.ts";
 import { useLayout } from "./viewport.ts";
 import { commandList, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
+import { KeyLegend } from "./KeyLegend.tsx";
+import { nextRegion, openTarget, regionOf, regionsAvailable, type Region } from "./keys.ts";
+
+const FOCUSABLE = 'button:not(:disabled), a[href], input:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
 /** ?now=ISO pins the clock (used for screenshots and checks). */
 function nowOverride(): string | undefined {
@@ -30,7 +35,6 @@ function nowOverride(): string | undefined {
   }
 }
 
-const SOURCE_NAMES: Record<string, string> = { dataverse: "Dataverse", pto: "PTO", outlook: "Outlook", google: "Google" };
 const dayOfWeekIndex = (d: IsoDate) => Temporal.PlainDate.from(d).dayOfWeek - 1;
 const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
@@ -42,6 +46,15 @@ export function App() {
   const [sel, setSel] = useState<Selection>({ dayIndex: 0, half: "AM" });
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [keysOpen, setKeysOpen] = useState(false);
+  // The element focused in each region, so F6 returns to it; and the work item focused when the command menu opened.
+  const lastInRegion = useRef(new Map<Region, HTMLElement>());
+  const focusedItem = useRef<{ clientKey: string; url: string } | null>(null);
+  const openCommands = useCallback(() => {
+    focusedItem.current = openTarget(document.activeElement);
+    setDetailsOpen(false); // the details dialog is modal and would sit above the menu
+    setCmdOpen(true);
+  }, []);
   const [busy, setBusy] = useState<"outlook" | "google" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Notices from work item links (e.g. "No Edge profile set for W&C"), shown for a few seconds.
@@ -275,25 +288,83 @@ export function App() {
   }, [clock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!detailsOpen && !pd && !cmdOpen) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
-  }, [sel, detailsOpen, data?.weekStart, layout, pd, cmdOpen]);
+    if (!detailsOpen && !pd && !cmdOpen && !keysOpen) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
+  }, [sel, detailsOpen, data?.weekStart, layout, pd, cmdOpen, keysOpen]);
+
+  useEffect(() => {
+    const on = (e: FocusEvent) => {
+      const el = e.target as HTMLElement;
+      const r = regionOf(el);
+      if (r && r !== "grid") lastInRegion.current.set(r, el);
+    };
+    document.addEventListener("focusin", on);
+    return () => document.removeEventListener("focusin", on);
+  }, []);
+
+  /** Focus a region: the selected half-day for the week, else where focus last was there, else its first control. */
+  const focusRegion = useCallback(
+    (r: Region) => {
+      if (r === "grid") return cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus();
+      const root = document.querySelector<HTMLElement>(r === "panel" ? (detailsOpen ? "dialog.details" : ".planday") : r === "top" ? ".topbar" : ".statusbar");
+      if (!root) return;
+      const last = lastInRegion.current.get(r);
+      if (last?.isConnected && root.contains(last) && !last.matches(":disabled")) return last.focus();
+      if (r === "panel" && !detailsOpen) return root.focus();
+      root.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    },
+    [sel, detailsOpen],
+  );
+  const moveRegion = useCallback(
+    (dir: 1 | -1) => focusRegion(nextRegion(regionOf(document.activeElement), regionsAvailable({ planOpen: !!pd, detailsOpen }), dir)),
+    [focusRegion, pd, detailsOpen],
+  );
+
+  // F6, O and ? work everywhere (capture phase: the ⋯ buttons keep other keys to themselves), except while typing
+  // and inside the command menu, the legend and popup menus.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || cmdOpen || !data) return;
+      const t = e.target as HTMLElement | null;
+      const typing = t instanceof HTMLInputElement && t.type !== "checkbox" ? true : t instanceof HTMLTextAreaElement || !!t?.isContentEditable;
+      if (t?.closest?.(".popup-menu")) return;
+      if (e.key === "?" && !typing) {
+        e.preventDefault();
+        setDetailsOpen(false);
+        setKeysOpen((o) => !o);
+        return;
+      }
+      if (keysOpen) return;
+      if (e.key === "F6") {
+        e.preventDefault();
+        moveRegion(e.shiftKey ? -1 : 1);
+      } else if ((e.key === "o" || e.key === "O") && !e.shiftKey && !typing) {
+        e.preventDefault();
+        const target = openTarget(document.activeElement);
+        if (target) void openWorkItem(target.clientKey, target.url);
+        else setNotice("Focus a work item first (Tab to it), then press O");
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [cmdOpen, keysOpen, data, moveRegion]);
 
   // Ctrl+K (or Cmd+K) opens the command menu from anywhere, even while Plan the day or details are open.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
-        setDetailsOpen(false); // the details dialog is modal and would sit above the menu
-        setCmdOpen((o) => !o);
+        setKeysOpen(false);
+        if (cmdOpen) setCmdOpen(false);
+        else openCommands();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
+  }, [cmdOpen, openCommands]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (detailsOpen || pd || cmdOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (e.target instanceof HTMLInputElement) return;
       if ((e.target as HTMLElement | null)?.closest?.(".popup-menu")) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
@@ -326,16 +397,17 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, openPlanDay]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
 
   const env = useMemo<MenuEnv | null>(() => {
     if (!data || !target) return null;
     const day = data.week.days[sel.dayIndex]!;
+    // The command menu offers Disconnect exactly where the status bar does (live calendars only).
     const cal = (src: "outlook" | "google") => {
       const s = data.sources.find((x) => x.source === src);
-      return !!s && !s.sample && s.fixAction !== "connect_microsoft" && s.fixAction !== "connect_google" && (s.status === "ok" || s.fromCache);
+      return !!s && sourceActions(s).includes("disconnect");
     };
     return {
       week: data.week,
@@ -359,12 +431,20 @@ export function App() {
       changeWeek,
       goToday,
       refresh: () => auto.trigger("button"),
-      showSourceStatus: () => setNotice(data.sources.map((s) => `${SOURCE_NAMES[s.source] ?? s.source}: ${s.status === "ok" ? (s.sample ? "sample" : "live") : s.fromCache ? "cached" : s.status.replace("_", " ")}`).join(" · ")),
+      showSourceStatus: () => {
+        const states = data.sources.map((s) => `${SOURCE_NAMES[s.source]}: ${stateOf(s).label}`).join(" · ");
+        const causes = causeLines(data.sources, data.devops).map((l) => l.text).join(". ");
+        setNotice(causes ? `${states}. ${causes}.` : states);
+      },
       connect: (c) => void connect(c),
       disconnect: (c) => void disconnect(c),
       setView,
+      // Run after the command menu has closed and handed focus back.
+      moveRegion: (dir) => setTimeout(() => moveRegion(dir), 0),
+      focusedItem: focusedItem.current,
+      showKeys: () => setKeysOpen(true),
     };
-  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView]);
+  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.kind === "session") {
     return (
@@ -432,7 +512,7 @@ export function App() {
           <button type="button" className="top-btn" onClick={() => auto.trigger("button")} disabled={loading} title="Refresh all sources (R)">
             {loading ? "Loading…" : "Refresh"}
           </button>
-          <button type="button" className="top-btn cmd-btn" onClick={() => { setDetailsOpen(false); setCmdOpen(true); }} title="Every command, with its shortcut">
+          <button type="button" className="top-btn cmd-btn" onClick={openCommands} title="Every command, with its shortcut">
             Commands <kbd>Ctrl K</kbd>
           </button>
           <button type="button" className="top-btn" disabled title="Settings: coming soon">
@@ -518,6 +598,7 @@ export function App() {
 
       <Details open={detailsOpen} day={day} slot={slot} timeZone={week.timeZone} colors={data.clients} now={now ?? new Date(clock).toISOString()} onClose={() => setDetailsOpen(false)} />
       {cmdOpen && <CommandMenu commands={commandList(env)} onClose={() => setCmdOpen(false)} />}
+      {keysOpen && <KeyLegend onClose={() => setKeysOpen(false)} />}
     </div>
     </MenuHost>
     </PlanCtx.Provider>

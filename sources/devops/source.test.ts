@@ -150,6 +150,13 @@ describe("setup problems are stated, never guessed", () => {
     expect(byKey(r, "B")).toMatchObject({ status: "unreachable", fromCache: false, message: "DevOps settings unavailable (Dataverse unreachable). No cached items yet", items: [] });
     expect(s.calls).toHaveLength(0);
   });
+
+  it("Dataverse settings unavailable because the keyring is locked: says so, not unreachable", async () => {
+    const s = setup({ a: "agile" }, { ok: false, message: "keyring locked", cause: "keyring" });
+    const r = byKey(await s.src.load([ref("A")]), "A");
+    expect(r).toMatchObject({ status: "error", cause: "keyring", message: "DevOps settings unavailable (keyring locked). No cached items yet" });
+    expect(s.calls).toHaveLength(0);
+  });
 });
 
 describe("failure states, each with a plain message and the client's own cache", () => {

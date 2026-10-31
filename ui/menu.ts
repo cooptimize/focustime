@@ -49,6 +49,11 @@ export type MenuEnv = {
   connect: (c: "outlook" | "google") => void;
   disconnect: (c: "outlook" | "google") => void;
   setView: (v: View) => void;
+  /** F6 / Shift+F6: the next or previous region of the window. */
+  moveRegion: (dir: 1 | -1) => void;
+  /** The work item that had focus when the menu opened (O opens it), if any. */
+  focusedItem: { clientKey: string; url: string } | null;
+  showKeys: () => void;
 };
 
 const dayName = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -265,6 +270,17 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "week.today", action: "week.today", group: "Week", label: "Go to today", hint: "T", run: env.goToday },
     { id: "ui.details", action: "ui.details", group: "Week", label: "Details of the selected half-day", hint: "Enter", run: () => env.openDetails(env.selection.date, env.selection.half) },
     { id: "ui.settings", action: "ui.settings", group: "Week", label: "Settings", disabled: soon },
+    { id: "ui.region_next", action: "ui.region_next", group: "Keyboard", label: "Next region (top bar, week, panel, status bar)", hint: "F6", run: () => env.moveRegion(1) },
+    { id: "ui.region_prev", action: "ui.region_prev", group: "Keyboard", label: "Previous region", hint: "Shift F6", run: () => env.moveRegion(-1) },
+    {
+      id: "ui.open_focused",
+      action: "ui.open_focused",
+      group: "Keyboard",
+      label: "Open the focused work item in Edge",
+      hint: "O",
+      ...(env.focusedItem ? { run: () => env.openLink(env.focusedItem!.clientKey, env.focusedItem!.url) } : { disabled: "Focus a work item first (Tab to it)" }),
+    },
+    { id: "ui.keys", action: "ui.keys", group: "Keyboard", label: "Keyboard shortcuts", hint: "?", run: env.showKeys },
   ];
 }
 

@@ -1,4 +1,4 @@
-import { useContext, type CSSProperties, type ReactNode } from "react";
+import { useContext, useState, type CSSProperties, type ReactNode } from "react";
 import { formatDuration } from "../week/format.ts";
 import { topRisk, worstSeverity } from "../week/risks.ts";
 import type { CalEvent, Day, Half, PlacedEvent, Slot, Week, WorkItem } from "../week/types.ts";
@@ -8,11 +8,14 @@ import { freeMinutes, longestFree, nowIfUnderway } from "../week/free.ts";
 import { itemMenu, pickMenu, slotMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
 import { hourMarks, layoutEvents } from "./layout.ts";
-import { DevOpsWork, topWork, typeTag, workStatusLabel } from "./work.ts";
+import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
 import { clientColor, eventRange, ruleLabel, SampleSources, severityLabel, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 import type { Layout } from "./viewport.ts";
-import { checklistFor, PlanCtx } from "./planview.ts";
+import { CARD_ITEMS, cardPlan, PlanCtx } from "./planview.ts";
+import { fitLabel } from "./planday.ts";
 import { WorkLink } from "./WorkLink.tsx";
+import { ITEM_ATTRS } from "./keys.ts";
+import { HalfScope, useScopedTab } from "./scope.ts";
 
 export type Selection = { dayIndex: number; half: Half };
 
@@ -203,17 +206,29 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
   const { top, more } = topRisk(slot.risks);
   const allWork = useContext(DevOpsWork);
   const plan = useContext(PlanCtx);
-  const ticks = checklistFor(plan.week, slot.date, slot.half);
-  const checklist = ticks.length > 0 && (
-    <ul className="checklist" aria-label={`Committed plan for ${dayLabel} ${slot.half}`}>
-      {ticks.map((p) => (
-        <PickRow key={p.id} pick={p} toggle={plan.toggle} />
-      ))}
-    </ul>
-  );
+  const [showItems, setShowItems] = useState(false);
   // Only the block's own client; Open half-days and Friday have no client, so nothing from DevOps.
   const work = primary && !overflow ? allWork.get(primary.clientKey) : undefined;
-  const items = topWork(work);
+  // Committed: picks with their fit, the DevOps list without picked items and collapsed (step 6.1).
+  const cp = cardPlan(plan.week, slot, primary?.clientKey ?? null, work?.items ?? [], now);
+  const ticks = cp.picks;
+  const checklist = ticks.length > 0 && (
+    <div className="card-plan">
+      {cp.fit && (
+        <div className="plan-fit" title="Planned picks against this block's free time">
+          <span className="pf-label">Plan</span>
+          <span className={`fit ${cp.fit.kind}`}>{fitLabel(cp.fit)}</span>
+        </div>
+      )}
+      <ul className="checklist" aria-label={`Committed plan for ${dayLabel} ${slot.half}`}>
+        {ticks.map((p) => (
+          <PickRow key={p.id} pick={p} toggle={plan.toggle} />
+        ))}
+      </ul>
+    </div>
+  );
+  const collapsed = cp.collapsed && !showItems;
+  const items = { top: collapsed ? [] : cp.items.slice(0, CARD_ITEMS), more: collapsed ? 0 : Math.max(0, cp.items.length - CARD_ITEMS) };
   const style = { "--c": clientColor(primary?.clientKey, colors), ...(compact ? {} : { flexGrow: minutesOf(slot) }) } as CSSProperties;
   const state = overflow ? "overflow" : slot.open ? "open" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
@@ -224,6 +239,9 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
 
   const workList = work && (
     <>
+      {cp.collapsed && cp.items.length > 0 && (
+        <ItemsToggle open={showItems} count={cp.items.length} onToggle={() => setShowItems((o) => !o)} label={`${primary!.clientName} DevOps items`} />
+      )}
       {items.top.length > 0 && (
         <ul className="work-items" aria-label={`DevOps items assigned to you for ${primary!.clientName}`}>
           {items.top.map((i) => (
@@ -232,7 +250,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
           {items.more > 0 && <li className="wi-more">+{items.more} more</li>}
         </ul>
       )}
-      {items.top.length === 0 && work.status !== "ok" && <div className="work-note">DevOps: {workStatusLabel(work)}</div>}
+      {cp.items.length === 0 && work.status !== "ok" && <div className="work-note">DevOps: {workStatusLabel(work)}</div>}
     </>
   );
   const badge = top && (
@@ -283,6 +301,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
         menu.onContextMenu(e);
       }}
     >
+      <HalfScope.Provider value={selected}>
       {compact ? (
         <CardBody slot={slot} tz={tz} overflow={overflow} who={who} badge={badge} workList={workList} checklist={checklist} summary={summary} more={more_} />
       ) : (
@@ -305,6 +324,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
           <Timeline slot={slot} tz={tz} showGaps={!overflow && !slot.open} minFocusWindow={minFocusWindow} />
         </>
       )}
+      </HalfScope.Provider>
     </div>
   );
 }
@@ -329,7 +349,7 @@ function SlotSummary({ slot, now, ptoOff }: { slot: Slot; now: string; ptoOff: b
 function WorkRow({ clientKey, item }: { clientKey: string; item: WorkItem }) {
   const menu = useMenu((env) => itemMenu(env, clientKey, item));
   return (
-    <li title={`${item.type} ${item.id}: ${item.title} (${item.state})`} onContextMenu={menu.onContextMenu}>
+    <li title={`${item.type} ${item.id}: ${item.title} (${item.state})`} onContextMenu={menu.onContextMenu} {...ITEM_ATTRS(clientKey, item.url)}>
       <span className="wi-type">{typeTag(item.type)}</span>
       <WorkLink clientKey={clientKey} url={item.url} className="wi-title">
         {item.title}
@@ -339,13 +359,24 @@ function WorkRow({ clientKey, item }: { clientKey: string; item: WorkItem }) {
   );
 }
 
+/** Committed cards keep their DevOps items behind "+N more items" (step 6.1). */
+function ItemsToggle({ open, count, onToggle, label }: { open: boolean; count: number; onToggle: () => void; label: string }) {
+  const tabIndex = useScopedTab();
+  return (
+    <button type="button" className="items-toggle" tabIndex={tabIndex} aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} ${count} ${label}`} onClick={onToggle} onDoubleClick={(e) => e.stopPropagation()}>
+      {open ? "Hide items" : `+${count} more ${count === 1 ? "item" : "items"}`}
+    </button>
+  );
+}
+
 /** A committed pick on a card: tick it, or "⋯" / right-click for size, move, drop and more. */
 function PickRow({ pick, toggle }: { pick: Pick; toggle: (id: number, done: boolean) => void }) {
   const menu = useMenu((env) => pickMenu(env, pick));
+  const tabIndex = useScopedTab();
   return (
-    <li className={pick.status} onContextMenu={menu.onContextMenu}>
+    <li className={pick.status} onContextMenu={menu.onContextMenu} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
       <label onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-        <input type="checkbox" checked={pick.status === "done"} onChange={(e) => toggle(pick.id, e.target.checked)} />
+        <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} onChange={(e) => toggle(pick.id, e.target.checked)} />
         <span className="ck-title" title={pick.title}>{pick.title}</span>
         <span className="size-tag">{pick.size}</span>
       </label>

@@ -1,6 +1,7 @@
 // What the Dataverse → DevOps path hands over. Lives in memory for one fetch only; never cached,
 // logged or returned to the UI. The PAT is wrapped so it cannot be serialized by accident.
 import type { Pat } from "./pat.ts";
+import type { FailureCause } from "../../week/types.ts";
 
 export type DevOpsTarget = {
   accountId: string;
@@ -17,4 +18,4 @@ export type DevOpsTarget = {
   problem?: string;
 };
 
-export type TargetsResult = { ok: true; targets: DevOpsTarget[] } | { ok: false; message: string };
+export type TargetsResult = { ok: true; targets: DevOpsTarget[] } | { ok: false; message: string; cause?: FailureCause };

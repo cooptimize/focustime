@@ -3,6 +3,8 @@
 import type { MouseEvent, ReactNode } from "react";
 import { call } from "./api.ts";
 import { isDevOpsUrl } from "./work.ts";
+import { ITEM_ATTRS } from "./keys.ts";
+import { useScopedTab } from "./scope.ts";
 
 export const NOTICE_EVENT = "coopilot:notice";
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
@@ -17,6 +19,7 @@ export async function openWorkItem(clientKey: string, url: string): Promise<void
 }
 
 export function WorkLink({ clientKey, url, className, title, children }: { clientKey: string; url: string | null | undefined; className?: string; title?: string; children: ReactNode }) {
+  const tabIndex = useScopedTab();
   if (!url || !isDevOpsUrl(url)) return <span className={className}>{children}</span>;
   const open = (e: MouseEvent) => {
     e.preventDefault();
@@ -24,7 +27,7 @@ export function WorkLink({ clientKey, url, className, title, children }: { clien
     void openWorkItem(clientKey, url);
   };
   return (
-    <a href={url} className={className} title={title} onClick={open} onAuxClick={open} onDoubleClick={(e) => e.stopPropagation()}>
+    <a href={url} className={className} title={title} tabIndex={tabIndex} {...ITEM_ATTRS(clientKey, url)} onClick={open} onAuxClick={open} onDoubleClick={(e) => e.stopPropagation()}>
       {children}
     </a>
   );

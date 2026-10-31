@@ -1,5 +1,6 @@
 // When Plan the day opens by itself, and how to notice a new day while the window stays open for days.
 import type { WeekLoadData } from "../actions/types.ts";
+import type { Fit } from "../plan/rules.ts";
 
 /** Plan the day opens by itself after this local hour on a workday. */
 export const AUTO_OPEN_HOUR = 5;
@@ -22,3 +23,13 @@ export const formatMinutes = (m: number) => {
   const r = Math.round(m % 60);
   return h && r ? `${h}h ${r}m` : h ? `${h}h` : `${r}m`;
 };
+
+/** The fit in a few words, the same in Plan the day and on committed cards. */
+export function fitLabel(f: Fit): string {
+  switch (f.kind) {
+    case "empty": return "nothing picked";
+    case "fits": return `fits · ${formatMinutes(f.spare)} spare`;
+    case "tight": return f.spare ? `tight · ${formatMinutes(f.spare)} spare` : "tight · full";
+    case "over": return `over by ${formatMinutes(f.by)}`;
+  }
+}

@@ -1,11 +1,12 @@
 import { formatRange, toZoned } from "../week/format.ts";
 import type { CalEvent, Half, Risk, RiskRule, Slot } from "../week/types.ts";
 
-// Calm fallbacks for clients without a configured color, picked stably from the key.
-const FALLBACK = ["#1f9e8f", "#7b68ee", "#d2892a", "#4a7fd4", "#b5527a", "#5a9a3c", "#8a6fb0", "#c06a3a"];
+// Calm fallbacks for clients without a configured color, picked stably from the key. Domain tokens
+// (ui/styles.css), so a theme can change them; a configured color is used as is.
+const FALLBACK = Array.from({ length: 8 }, (_, i) => `var(--client-fallback-${i + 1})`);
 
 export function clientColor(key: string | undefined, colors: Record<string, string>): string {
-  if (!key) return "#8a8f98";
+  if (!key) return "var(--client-none)";
   const set = colors[key];
   if (set) return set;
   let h = 0;

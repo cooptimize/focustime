@@ -94,7 +94,7 @@ export function Details({ open, day, slot, timeZone, colors, now, onClose }: Pro
           {w.items.length > 0 && (
             <ol className="work-list">
               {w.items.map((i) => (
-                <MenuRow key={i.id} build={(env) => itemMenu(env, w.clientKey, i)} label={`Actions for ${i.type} ${i.id}`}>
+                <MenuRow key={i.id} build={(env) => itemMenu(env, w.clientKey, i)} label={`Actions for ${i.type} ${i.id}`} item={{ clientKey: w.clientKey, url: i.url }}>
                   <WorkLink clientKey={w.clientKey} url={i.url} className="wi-link">
                     <span className="wi-type">{i.type}</span>
                     <span className="wi-id">{i.id}</span>

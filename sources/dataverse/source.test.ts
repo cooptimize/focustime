@@ -174,6 +174,8 @@ describe("Dataverse source: failure states (spec section 9)", () => {
     const r = await source.load(WEEK);
     expect(r.status).toBe("error");
     expect(r.message).toMatch(/^Secret storage unavailable \(Secret Service/);
+    // The shared root cause, so the status bar names it once for every source it stops (step 6.1).
+    expect(r.cause).toBe("keyring");
   });
 
   it("does not retry the network inside the memory TTL after an error, unless refreshed", async () => {

@@ -66,14 +66,14 @@ describe("Dataverse → DevOps settings", () => {
     expect(r.targets.filter((t) => t.clientKey === "CSC").every((t) => t.pat === null && t.problem === "More than one account is named CSC in Dataverse")).toBe(true);
   });
 
-  it.each<[Scenario, string]>([
-    ["network_down", "Dataverse unreachable"],
-    ["dv_403", "Dataverse access denied"],
-    ["dv_503", "Dataverse read failed"],
-  ])("%s: a plain failure with no body, secret or token", async (scenario, message) => {
+  it.each<[Scenario, string, "network" | undefined]>([
+    ["network_down", "Dataverse unreachable", "network"],
+    ["dv_403", "Dataverse access denied", undefined],
+    ["dv_503", "Dataverse read failed", undefined],
+  ])("%s: a plain failure with no body, secret or token", async (scenario, message, cause) => {
     const s = setup(scenario);
     const r = await s.source.devopsTargets(["CSC"]);
-    expect(r).toEqual({ ok: false, message });
+    expect(r).toEqual({ ok: false, message, ...(cause ? { cause } : {}) });
     expect(JSON.stringify(s.logs)).not.toMatch(/FAKE-/);
   });
 
