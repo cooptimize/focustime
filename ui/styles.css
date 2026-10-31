@@ -1215,3 +1215,25 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .set-row.secret input[type="password"] { flex: 1; min-width: 220px; }
 .top-btn[aria-current="page"] { color: var(--text); border-color: var(--accent); }
 @media (max-width: 900px) { .settings { grid-template-columns: 1fr; } .set-nav { flex-direction: row; flex-wrap: wrap; } }
+
+/* Now strip (step 6b slice 4): one line under the top bar; clicking selects the current half-day. */
+.app > .nowstrip { flex: none; }
+.nowstrip {
+  display: flex; align-items: center; gap: 0; min-width: 0; margin: 0 24px 8px; padding: 5px 12px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-muted);
+  font: inherit; font-size: 13px; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden;
+}
+.nowstrip:hover { border-color: var(--border-strong); }
+.now-tag {
+  flex: none; margin-right: 10px; padding: 0 7px; border-radius: 99px; line-height: 18px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--on-action); background: var(--action);
+}
+.nowstrip.off .now-tag, .nowstrip.pto .now-tag, .nowstrip.after .now-tag, .nowstrip.away .now-tag { color: var(--text-muted); background: var(--sunken); }
+.now-title { color: var(--text); font-weight: 600; flex: none; }
+.now-part { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.now-part::before { content: "·"; margin: 0 8px; color: var(--text-faint); }
+.now-part.now-until::before { content: ""; margin: 0 0 0 5px; }
+.now-event strong { color: var(--text); font-weight: 600; }
+.now-over { color: var(--risk); font-weight: 600; }
+.now-pick { color: var(--text); }
+.app.medium > .nowstrip, .app.narrow > .nowstrip { margin: 0 16px 8px; }

@@ -18,6 +18,8 @@ import { Details } from "./Details.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
+import { NowStrip } from "./NowStrip.tsx";
+import { nowStrip } from "../plan/now.ts";
 import { cardHalves, slotOf, validHalf } from "./halves.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
 import { SampleSources, weekLabel } from "./labels.ts";
@@ -226,6 +228,24 @@ export function App() {
     return planTarget(now, dayEndOf(data.hours, now.toPlainDate().toString()) ?? "24:00", pto, hasHours);
   }, [data, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** The Now strip (slice 4): from the loaded week and today's picks, recomputed on the 30 s clock. */
+  const strip = useMemo(() => {
+    if (!data || !target) return null;
+    const now = zonedNow(data.hours.timeZone);
+    const date = now.toPlainDate().toString();
+    const names = new Map(data.planClients.map((c) => [c.clientKey, c.clientName]));
+    return nowStrip({
+      now,
+      day: data.week.days.find((d) => d.date === date) ?? null,
+      picks: data.plan?.[date]?.picks ?? [],
+      committed: !!data.plan?.[date]?.committedAt,
+      pto: data.ptoAhead.includes(date),
+      nextWorkday: target.date !== date ? target.date : null,
+      clientName: (k) => names.get(k) ?? k,
+      noHoursToday: !hasHours(date),
+    });
+  }, [data, target, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /**
    * Opens Plan the day for a date (default: today or the next workday). Moves to that date's week when it isn't
    * on screen. The automatic open is for today only, once per day.
@@ -374,6 +394,15 @@ export function App() {
     },
     [closePlanDay, openPlanDay],
   );
+
+  /** Clicking the Now strip: back to the week with the current half-day selected (today's week if another is shown). */
+  const selectNow = useCallback(() => {
+    if (!data || !strip) return;
+    setView("week");
+    const i = data.week.days.findIndex((d) => d.date === data.planDay.date);
+    if (i >= 0 && strip.half) setSel({ dayIndex: i, half: strip.half });
+    else goToday();
+  }, [data, strip, setView, goToday]);
 
   // First focus of a workday after 05:00 opens Plan the day once (the server remembers it was offered).
   const tryAuto = useCallback(() => {
@@ -675,6 +704,7 @@ export function App() {
           </button>
         </div>
       </header>
+      {strip && <NowStrip strip={strip} onSelect={selectNow} />}
 
       {!data.config.ok && (
         <div className="config-banner" role="alert">
