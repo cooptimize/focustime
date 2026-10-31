@@ -69,4 +69,3 @@ Raised in step 6b (not blocking):
 - Q38. ~~Draft picks in the Now strip~~ Answered: shown dimmed and labeled draft (D137). Was: The Now strip counts and suggests picks for today only, and only once the day is committed. Should it nudge to plan ("Not planned yet, P") on an uncommitted workday?
 - Q39. Focused time is recorded per pick (D140) but not shown yet. Show it on the pick (e.g. "35m focused") now, or wait for Close out?
 - Q40. Timer warnings use meetings known at the last week load (D139). Should the server refresh today's calendar on its own while a timer runs, or is the auto refresh enough?
-- Q41. Loops opened before the server-clock fix (D141) for sessions still ahead may exist in the live store; close them by hand in Loops, or should Coopilot remove loops whose session hasn't ended?

@@ -399,8 +399,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .brand .name { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
 .brand .sub { color: var(--text-faint); font-size: 14px; }
 
-.weeknav { display: flex; align-items: center; gap: 10px; justify-self: center; }
-.weeknav h1 { font-size: 20px; font-weight: 650; margin: 0 6px; letter-spacing: -0.01em; min-width: 260px; text-align: center; }
+.weeknav { display: flex; align-items: center; gap: 10px; justify-self: center; min-width: 0; }
+.weeknav h1 { font-size: 20px; font-weight: 650; margin: 0 6px; letter-spacing: -0.01em; min-width: 260px; text-align: center; white-space: nowrap; }
 .weeknav button { padding: 4px 8px; }
 .weeknav button kbd { margin: 0; border: 0; background: none; padding: 0 2px; }
 .today-btn { margin-left: 8px; display: inline-flex; gap: 4px; align-items: center; }
@@ -993,7 +993,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .view-tab kbd { margin: 0; padding: 1px 5px; font-size: 11px; }
 .view-tab.soon { color: var(--text-faint); cursor: default; }
 .soon-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--border-strong); border-radius: 99px; padding: 0 5px; line-height: 15px; }
-.weekend-note { font-size: 13px; color: var(--text-muted); border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--border)); background: color-mix(in oklab, var(--accent) 9%, var(--surface)); border-radius: 99px; padding: 3px 11px; white-space: nowrap; }
+.weekend-note { font-size: 13px; color: var(--text-muted); border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--border)); background: color-mix(in oklab, var(--accent) 9%, var(--surface)); border-radius: 99px; padding: 3px 11px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .top-actions { display: flex; gap: 8px; justify-self: end; }
 .top-btn { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 .top-btn kbd { margin: 0; padding: 1px 5px; font-size: 11px; }
