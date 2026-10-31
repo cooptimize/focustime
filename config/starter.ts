@@ -16,6 +16,20 @@ my_email = ""
 # Filled in automatically from my_email on first run. Never matched by name.
 my_systemuserid = ""
 
+# Outlook (Microsoft Graph), read-only, signed in as you. Client ID of the
+# "Coopilot Desktop" public app registration. Leave client_id empty to skip Outlook.
+[outlook]
+tenant_id = "abf29d42-2ea9-422b-b0af-ed7cb5595b7e"
+client_id = ""
+
+# Google Calendar, read-only, signed in as you. Client ID of the Desktop OAuth client.
+# Its client secret goes in the keyring (service "coopilot", account "google-client-secret").
+# calendars: "primary" is your main calendar; add other calendar IDs
+# (Google Calendar > Settings > the calendar > Integrate calendar > Calendar ID).
+[google]
+client_id = ""
+calendars = ["primary"]
+
 # Soft day shape: only used to place events into AM or PM and estimate capacity.
 [day_shape]
 start = "09:00"

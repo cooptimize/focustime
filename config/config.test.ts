@@ -123,3 +123,47 @@ describe("setSystemUserIdInText", () => {
     expect(() => setSystemUserIdInText('my_systemuserid = ""\n', 'x" \n evil = "1')).toThrow();
   });
 });
+
+describe("calendar sections", () => {
+  const withCal = `${valid}
+[outlook]
+tenant_id = "11111111-1111-4111-8111-111111111111"
+client_id = "44444444-4444-4444-8444-444444444444"
+
+[google]
+client_id = "123456-abc.apps.googleusercontent.com"
+calendars = ["primary", "family123@group.calendar.google.com"]
+`;
+
+  it("are optional: without them Outlook and Google are not configured", () => {
+    const r = parseConfig(valid);
+    expect(r.ok && [r.config.outlook, r.config.google]).toEqual([null, null]);
+  });
+
+  it("parse client IDs and the calendar list", () => {
+    const r = parseConfig(withCal);
+    expect(r.ok && r.config.outlook).toEqual({ tenantId: "11111111-1111-4111-8111-111111111111", clientId: "44444444-4444-4444-8444-444444444444" });
+    expect(r.ok && r.config.google).toEqual({ clientId: "123456-abc.apps.googleusercontent.com", calendars: ["primary", "family123@group.calendar.google.com"] });
+  });
+
+  it("treat an empty client_id as not set up yet", () => {
+    const r = parseConfig(withCal.replace('client_id = "44444444-4444-4444-8444-444444444444"', 'client_id = ""').replace('client_id = "123456-abc.apps.googleusercontent.com"', 'client_id = ""'));
+    expect(r.ok && [r.config.outlook, r.config.google]).toEqual([null, null]);
+  });
+
+  it.each([
+    ["outlook.client_id", 'client_id = "44444444-4444-4444-8444-444444444444"', 'client_id = "nope"'],
+    ["google.client_id", 'client_id = "123456-abc.apps.googleusercontent.com"', 'client_id = "123456"'],
+    ["google.calendars", 'calendars = ["primary", "family123@group.calendar.google.com"]', "calendars = []"],
+    ["google.calendars[0]", 'calendars = ["primary", "family123@group.calendar.google.com"]', 'calendars = ["has space"]'],
+  ])("name %s when invalid", (field, from, to) => {
+    expect(fields(withCal.replace(from, to))).toContain(field);
+  });
+
+  it("the starter file has both sections, not yet set up", () => {
+    const r = parseConfig(STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'));
+    expect(r.ok && [r.config.outlook, r.config.google]).toEqual([null, null]);
+    expect(STARTER_TOML).toContain("[outlook]");
+    expect(STARTER_TOML).toContain('calendars = ["primary"]');
+  });
+});

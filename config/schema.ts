@@ -11,8 +11,15 @@ export type DataverseConfig = {
   mySystemUserId: string | null;
 };
 
+export type OutlookConfig = { tenantId: string; clientId: string };
+export type GoogleConfig = { clientId: string; calendars: string[] };
+
 export type AppConfig = {
   dataverse: DataverseConfig;
+  /** null until outlook.client_id is filled in. */
+  outlook: OutlookConfig | null;
+  /** null until google.client_id is filled in. */
+  google: GoogleConfig | null;
   week: WeekConfig;
   /** Client colors keyed by reporting nickname (or account name when there is none). */
   clients: Record<string, string>;
@@ -78,7 +85,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -158,11 +165,39 @@ export function parseConfig(text: string): ParseResult {
     }
   }
 
+  // [outlook] and [google] (optional; empty client_id means not set up yet)
+  let outlook: OutlookConfig | null = null;
+  if (raw.outlook !== undefined) {
+    const t = isTable(raw.outlook) ? raw.outlook : (err("outlook", "Must be an [outlook] table"), null);
+    if (t) for (const k of Object.keys(t)) if (!["tenant_id", "client_id"].includes(k)) err(`outlook.${k}`, "Unknown field");
+    const oClient = str(t, "outlook", "client_id", guid, true);
+    const oTenant = str(t, "outlook", "tenant_id", guid);
+    if (oClient && GUID.test(oClient) && GUID.test(oTenant)) outlook = { tenantId: oTenant, clientId: oClient };
+  }
+  let google: GoogleConfig | null = null;
+  if (raw.google !== undefined) {
+    const t = isTable(raw.google) ? raw.google : (err("google", "Must be a [google] table"), null);
+    if (t) for (const k of Object.keys(t)) if (!["client_id", "calendars"].includes(k)) err(`google.${k}`, "Unknown field");
+    const gClient = str(t, "google", "client_id", (v) => (/^[\w.-]+\.apps\.googleusercontent\.com$/.test(v) ? null : "Must end in .apps.googleusercontent.com"), true);
+    const calendars: string[] = [];
+    const cal = t?.calendars;
+    if (cal === undefined) calendars.push("primary");
+    else if (!Array.isArray(cal) || cal.length === 0) err("google.calendars", 'Must be a non-empty list, e.g. ["primary"]');
+    else
+      cal.forEach((c, i) => {
+        if (typeof c !== "string" || !/^[^\s"'/]{1,254}$/.test(c)) err(`google.calendars[${i}]`, 'Must be "primary" or a calendar ID');
+        else calendars.push(c);
+      });
+    if (gClient) google = { clientId: gClient, calendars };
+  }
+
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
     config: {
       dataverse: { environmentUrl: envUrl.replace(/\/+$/, ""), tenantId, clientId, myEmail, mySystemUserId: sysId === "" ? null : sysId },
+      outlook,
+      google,
       week: {
         dayShape: { start, split, end, timeZone },
         thresholds: { meetingWatchMinutes: watch, meetingAtRiskMinutes: atRisk, minFocusWindowMinutes: window },

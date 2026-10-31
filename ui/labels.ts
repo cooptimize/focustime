@@ -16,6 +16,8 @@ export function clientColor(key: string | undefined, colors: Record<string, stri
 export const ruleLabel: Record<RiskRule, string> = {
   meeting_load: "Meetings",
   personal_conflict: "Personal",
+  out_of_office: "Out of office",
+  all_day_busy: "All-day event",
   no_focus_window: "No focus window",
   double_booked_block: "Double-booked",
 };

@@ -1,12 +1,13 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
-import type { DataverseConfig, ParseResult } from "../config/schema.ts";
+import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig, ParseResult } from "../config/schema.ts";
+import type { CalendarSource } from "../sources/calendar/source.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
 import { loadSampleSources } from "../sources/sample.ts";
 import { buildWeek } from "../week/build.ts";
 import { defaultWeekStart, localToday, todayTarget } from "../week/dates.ts";
-import type { FocusPattern, SourceResult } from "../week/types.ts";
+import type { CalEvent, FocusPattern, SourceResult } from "../week/types.ts";
 import type { ActionResponse, SourceSummary, WeekLoadData } from "./types.ts";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
@@ -14,6 +15,8 @@ export type { ActionResponse, SourceSummary, WeekLoadData };
 export type ActionContext = {
   loadConfig: () => Promise<{ path: string; parsed: ParseResult; created?: boolean }>;
   makeDataverse: (cfg: DataverseConfig, timeZone: string) => DataverseSource;
+  makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource;
+  makeGoogle: (cfg: GoogleConfig, timeZone: string) => CalendarSource;
   saveSystemUserId: (id: string) => Promise<void>;
   now: () => string;
 };
@@ -69,6 +72,12 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const now = input.now ?? ctx.now();
   const weekStart = input.weekStart ?? defaultWeekStart(localToday(now, shape.timeZone));
 
+  const sample = loadSampleSources();
+  const refresh = input.refresh ? { refresh: true } : {};
+  // Sample meetings stay only for a calendar source that is not configured at all.
+  const outlookP: Promise<SourceResult<CalEvent>> = cfg?.outlook ? ctx.makeOutlook(cfg.outlook, shape.timeZone).load(weekStart, refresh) : Promise.resolve(sample.outlook);
+  const googleP: Promise<SourceResult<CalEvent>> = cfg?.google ? ctx.makeGoogle(cfg.google, shape.timeZone).load(weekStart, refresh) : Promise.resolve(sample.google);
+
   let dataverse: SourceResult<FocusPattern>;
   if (!cfg) {
     const n = parsed.ok ? 0 : parsed.errors.length;
@@ -93,18 +102,18 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     }
     dataverse = resolveError
       ? { source: "dataverse", status: "misconfigured", fetchedAt: null, fromCache: false, items: [], message: resolveError, fixAction: "open_settings" }
-      : await ctx.makeDataverse(dv, shape.timeZone).load(weekStart, input.refresh ? { refresh: true } : {});
+      : await ctx.makeDataverse(dv, shape.timeZone).load(weekStart, refresh);
   }
 
-  const sample = loadSampleSources();
-  const week = buildWeek({ weekStart, patterns: dataverse.items, events: [...sample.outlook.items, ...sample.google.items], config: weekConfig });
+  const [outlook, google] = await Promise.all([outlookP, googleP]);
+  const week = buildWeek({ weekStart, patterns: dataverse.items, events: [...outlook.items, ...google.items], config: weekConfig });
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
 
   return {
     weekStart,
     week,
     today: todayTarget(now, shape),
-    sources: [dataverse, sample.outlook, sample.google].map(summarize),
+    sources: [dataverse, outlook, google].map(summarize),
     clients: clientColors,
     dayShape: shape,
     thresholds: weekConfig.thresholds,
@@ -112,8 +121,41 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   };
 }
 
+const noInput = (input: unknown) => input === undefined || (typeof input === "object" && input !== null && !Array.isArray(input) && Object.keys(input).length === 0);
+
+async function configured(ctx: ActionContext): Promise<AppConfig | null> {
+  const loaded = await ctx.loadConfig();
+  return loaded.parsed.ok ? loaded.parsed.config : null;
+}
+
+async function connect(ctx: ActionContext, which: "outlook" | "google") {
+  const cfg = await configured(ctx);
+  if (!cfg) return { status: "failed", message: "Fix the config first" };
+  const tz = cfg.week.dayShape.timeZone;
+  if (which === "outlook") return cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).connect() : { status: "failed", message: "Add outlook.client_id to config first" };
+  return cfg.google ? ctx.makeGoogle(cfg.google, tz).connect() : { status: "failed", message: "Add google.client_id to config first" };
+}
+
 export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<ActionResponse> {
   switch (req.action) {
+    case "auth.connect_microsoft":
+    case "auth.connect_google": {
+      if (!noInput(req.input)) return bad(`${req.action} takes no input`);
+      return { ok: true, data: await connect(ctx, req.action === "auth.connect_microsoft" ? "outlook" : "google") };
+    }
+    case "auth.disconnect": {
+      const input = req.input as { source?: unknown } | undefined;
+      if (typeof input !== "object" || input === null || Object.keys(input).length !== 1) return bad("auth.disconnect takes { source }");
+      if (input.source === "dataverse") return bad("Dataverse uses an app secret set up outside Coopilot; remove it with secret-tool if needed");
+      if (input.source !== "outlook" && input.source !== "google") return bad("source must be outlook or google");
+      const cfg = await configured(ctx);
+      const tz = cfg?.week.dayShape.timeZone ?? "UTC";
+      const section = input.source === "outlook" ? cfg?.outlook : cfg?.google;
+      if (!section) return { ok: true, data: { status: "not_configured" } };
+      const src = input.source === "outlook" ? ctx.makeOutlook(section as OutlookConfig, tz) : ctx.makeGoogle(section as GoogleConfig, tz);
+      await src.disconnect();
+      return { ok: true, data: { status: "disconnected" } };
+    }
     case "week.load": {
       const input = validateWeekLoad(req.input ?? {});
       if (typeof input === "string") return bad(input);

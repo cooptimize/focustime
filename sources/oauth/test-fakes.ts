@@ -1,0 +1,83 @@
+// Fake OAuth provider and fake browser for tests. Error bodies echo secrets on purpose.
+import { request } from "node:http";
+import type { SecretAccount } from "../../secrets/keyring.ts";
+import { SecretError } from "../../secrets/keyring.ts";
+
+export const FAKE_AUTH_CODE = "FAKE-AUTHCODE-c0de11";
+export const FAKE_REFRESH = "FAKE-REFRESH-5e5e77";
+export const FAKE_REFRESH_ROTATED = "FAKE-REFRESH-ROTATED-6f6f88";
+export const FAKE_ACCESS = "FAKE-ACCESS-aa99bb";
+export const FAKE_CLIENT_SECRET = "FAKE-GCLIENTSECRET-1234";
+
+export function memoryKeyring(initial: Partial<Record<SecretAccount, string>> = {}, opts: { locked?: boolean } = {}) {
+  const store = new Map<string, string>(Object.entries(initial));
+  return {
+    store,
+    get: async (a: SecretAccount) => {
+      if (opts.locked) throw new SecretError("locked");
+      const v = store.get(a);
+      if (v === undefined) throw new SecretError("not_found");
+      return v;
+    },
+    set: async (a: SecretAccount, v: string) => {
+      if (opts.locked) throw new SecretError("locked");
+      store.set(a, v);
+    },
+    delete: async (a: SecretAccount) => {
+      store.delete(a);
+    },
+  };
+}
+
+export type TokenBehavior = "ok" | "ok_rotate" | "invalid_grant" | "invalid_client" | "network" | "no_refresh_token";
+
+export function fakeTokenEndpoint(tokenUrl: string, behavior: { exchange?: TokenBehavior; refresh?: TokenBehavior } = {}) {
+  const calls: { url: string; body: URLSearchParams }[] = [];
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  const fetchFn = async (input: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
+    const url = String(input);
+    if (url !== tokenUrl) throw new Error(`unexpected fetch ${url}`);
+    const body = new URLSearchParams(String(init.body));
+    calls.push({ url, body });
+    const b = body.get("grant_type") === "authorization_code" ? (behavior.exchange ?? "ok") : (behavior.refresh ?? "ok");
+    if (b === "network") throw new TypeError("fetch failed");
+    if (b === "invalid_grant") return json(400, { error: "invalid_grant", error_description: `Token has been expired or revoked: ${FAKE_REFRESH} ${FAKE_CLIENT_SECRET}` });
+    if (b === "invalid_client") return json(401, { error: "invalid_client", error_description: `bad secret ${FAKE_CLIENT_SECRET}` });
+    const out: Record<string, unknown> = { access_token: FAKE_ACCESS, expires_in: 3599, token_type: "Bearer" };
+    if (b === "ok" && body.get("grant_type") === "authorization_code") out.refresh_token = FAKE_REFRESH;
+    if (b === "ok_rotate") out.refresh_token = FAKE_REFRESH_ROTATED;
+    return json(200, out);
+  };
+  return { fetch: fetchFn as typeof fetch, calls };
+}
+
+/** Plays the browser: reads the authorize URL and hits the loopback redirect like a real browser would. */
+export function fakeBrowser(mode: { kind: "approve" } | { kind: "deny" } | { kind: "wrong_state_then_approve" } | { kind: "foreign_host" } | { kind: "ignore" }) {
+  const seen: URL[] = [];
+  const hits: number[] = [];
+  const open = async (authUrl: string) => {
+    const u = new URL(authUrl);
+    seen.push(u);
+    if (mode.kind === "ignore") return;
+    const redirect = new URL(u.searchParams.get("redirect_uri")!);
+    const state = u.searchParams.get("state")!;
+    const hit = (query: string, host = redirect.host) =>
+      new Promise<number>((resolve, reject) => {
+        const req = request({ host: "127.0.0.1", port: Number(redirect.port), path: `${redirect.pathname}?${query}`, headers: { host } }, (res) => {
+          res.resume();
+          res.on("end", () => resolve(res.statusCode ?? 0));
+        });
+        req.on("error", reject);
+        req.end();
+      });
+    setTimeout(async () => {
+      if (mode.kind === "deny") hits.push(await hit(`error=access_denied&state=${state}`));
+      else if (mode.kind === "foreign_host") hits.push(await hit(`code=${FAKE_AUTH_CODE}&state=${state}`, "evil.example"));
+      else {
+        if (mode.kind === "wrong_state_then_approve") hits.push(await hit(`code=${FAKE_AUTH_CODE}&state=wrong`));
+        hits.push(await hit(`code=${FAKE_AUTH_CODE}&state=${state}`));
+      }
+    }, 5);
+  };
+  return { open, seen, hits };
+}

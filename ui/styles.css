@@ -427,6 +427,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .state.live { color: var(--ok); background: color-mix(in oklab, var(--ok) 13%, var(--surface)); }
 .state.cached { color: var(--watch); background: color-mix(in oklab, var(--watch) 14%, var(--surface)); }
 .state.error { color: var(--risk); background: color-mix(in oklab, var(--risk) 12%, var(--surface)); }
+.source.signin .dot { color: var(--risk); }
+.state.signin { color: var(--risk); background: color-mix(in oklab, var(--risk) 12%, var(--surface)); }
+.mini { padding: 1px 8px; font-size: 12px; border-radius: 6px; margin-left: 2px; }
+.mini.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.mini.quiet { border-color: transparent; color: var(--ink-3); background: transparent; }
+.mini.quiet:hover { border-color: var(--line-2); color: var(--ink-2); }
 .state.sample { color: var(--sample); background: color-mix(in oklab, var(--sample) 13%, var(--surface)); }
 .dv-message { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
 .dv-message.problem { color: var(--risk); font-weight: 600; }

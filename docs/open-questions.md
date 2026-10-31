@@ -8,7 +8,7 @@ Blocking this slice:
 - Q1b. ~~Open vs Internal~~ Open.
 - Q2. ~~Half-day hours~~ Soft day shape, see section 6.
 - Q3. ~~Machine inventory~~ Done, see section 0.
-- Q4. Agree to D21 auth approach. Dataverse part is done and working (step 2); Outlook and Google remain for step 3.
+- Q4. Agree to D21 auth approach. Dataverse part is done and working (step 2); Outlook and Google are built (step 3, D48) and wait on real sign-in.
 - Q5. ~~Stack~~ Option A.
 
 Schema confirmation without installing anything: while signed into the Cooptimize Dynamics environment in Chromium, open
@@ -23,10 +23,10 @@ Not blocking this slice:
 
 Raised in step 1 (not blocking):
 - Q6. Which client is on which pattern? The sample guesses Mon AM Quiddity, Mon PM + Tue PM CSC, Tue AM Internal, Wed All Day + Thu AM Woodard & Curran. Real data replaces this in step 2.
-- Q7. Should all-day or out-of-office Outlook events (holidays, OOO) raise a risk? The v1 rules only look at personal all-day events.
-- Q8. Should personal events during an Open half-day or on Friday be flagged at all? Currently they are shown but never flagged.
+- Q7. ~~All-day and OOO Outlook events~~ Resolved in step 3 (D54): out of office puts covered half-days at risk; other all-day Outlook events are a watch only if busy.
+- Q8. ~~Personal events on Open half-days~~ Resolved in step 3 (D54): shown, never flagged.
 - Q9. The kickoff folder and zip (`coopilot-kickoff/`, `coopilot-kickoff.zip`) are still in the repo folder and git-ignored. Their docs were copied to the repo root. Delete them when you're happy.
 
 Raised in step 2 (not blocking):
 - Q10. The internal account's nickname is "Cooptimize", and that is what the grid shows. Should it show as "Internal" (the glossary word) instead?
-- Q11. Sample meetings now sit on top of your real focus blocks, so some risk badges this week come from sample meetings. Keep that until step 3 (as now, labeled sample), or hide sample meetings once Dataverse is live?
+- Q11. ~~Sample meetings over real blocks~~ Resolved in step 3 (D53): sample meetings show only for a calendar with no config section. Sample meetings now sit on top of your real focus blocks, so some risk badges this week come from sample meetings. Keep that until step 3 (as now, labeled sample), or hide sample meetings once Dataverse is live?

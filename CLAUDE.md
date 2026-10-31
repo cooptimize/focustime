@@ -24,13 +24,13 @@ Milestones 1–2: read model + week view. Only the work in `docs/spec.md` is aut
 ui/        week grid, source status, settings
 actions/   named, validated actions; UI and chat both call these
 week/      pure: normalize, slots, risk rules (no I/O, no tokens)
-sources/   dataverse | graph | google adapters → SourceResult
+sources/   dataverse | graph | google adapters → SourceResult; oauth/ (PKCE loopback), calendar/ (shared fetch, cache, status)
 secrets/   keyring access only
 config/    ~/.config/coopilot/config.toml, validated
 cache/     ~/.cache/coopilot, last good snapshot per source
 server/    127.0.0.1 host: launch token, Host/Origin guard, /api/action, UI
 log/       structured logger with a closed set of fields (no headers or bodies)
-fixtures/  sample data (Outlook and Google until step 3)
+fixtures/  sample data (tests, and calendars with no config section)
 ```
 
 Run: `npm start` (build + server + Chromium app window), `npm run dev` (Vite in the server, no HMR), `npm test`, `npm run typecheck`, `npm run screenshot` (needs a running server).

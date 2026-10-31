@@ -79,7 +79,13 @@ export type PlacedEvent = {
 
 export type FreeGap = { start: IsoDateTime; end: IsoDateTime; minutes: number };
 
-export type RiskRule = "meeting_load" | "personal_conflict" | "no_focus_window" | "double_booked_block";
+export type RiskRule =
+  | "meeting_load"
+  | "personal_conflict"
+  | "out_of_office"
+  | "all_day_busy"
+  | "no_focus_window"
+  | "double_booked_block";
 export type Severity = "watch" | "at_risk";
 
 export type Risk = { rule: RiskRule; severity: Severity; reason: string };

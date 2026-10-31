@@ -1,0 +1,33 @@
+{
+  "nextPageToken": "FAKEPAGETOKEN2",
+  "items": [
+    {
+      "id": "fake0001",
+      "status": "confirmed",
+      "summary": "Preschool drop-off",
+      "start": { "dateTime": "2026-11-02T08:30:00-05:00", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-11-02T08:50:00-05:00", "timeZone": "America/New_York" }
+    },
+    {
+      "id": "fakerec01_20261103T133000Z",
+      "status": "confirmed",
+      "summary": "Preschool drop-off",
+      "start": { "dateTime": "2026-11-03T08:30:00-05:00", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-11-03T08:50:00-05:00", "timeZone": "America/New_York" }
+    },
+    {
+      "id": "fake0002",
+      "status": "confirmed",
+      "summary": "Call with Grandma",
+      "start": { "dateTime": "2026-11-03T10:00:00-08:00", "timeZone": "America/Los_Angeles" },
+      "end": { "dateTime": "2026-11-03T10:30:00-08:00", "timeZone": "America/Los_Angeles" }
+    },
+    {
+      "id": "fake0003",
+      "status": "confirmed",
+      "summary": "Early release day",
+      "start": { "date": "2026-11-05" },
+      "end": { "date": "2026-11-06" }
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('00000000-0000-4000-8000-0000000000aa')/calendarView(subject,start,end,isAllDay,showAs,responseStatus,isCancelled)",
+  "value": [
+    {
+      "@odata.etag": "W/\"DwAAABYAAAB1\"",
+      "id": "AAMkAGFAKE006",
+      "subject": "Canceled: CSC sync",
+      "isAllDay": false,
+      "isCancelled": true,
+      "showAs": "free",
+      "responseStatus": { "response": "notResponded", "time": "0001-01-01T00:00:00Z" },
+      "start": { "dateTime": "2026-11-05T10:00:00.0000000", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-11-05T10:30:00.0000000", "timeZone": "America/New_York" }
+    },
+    {
+      "@odata.etag": "W/\"DwAAABYAAAB2\"",
+      "id": "AAMkAGFAKE007",
+      "subject": "Out of office",
+      "isAllDay": true,
+      "isCancelled": false,
+      "showAs": "oof",
+      "responseStatus": { "response": "organizer", "time": "0001-01-01T00:00:00Z" },
+      "start": { "dateTime": "2026-11-06T00:00:00.0000000", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-11-07T00:00:00.0000000", "timeZone": "America/New_York" }
+    },
+    {
+      "@odata.etag": "W/\"DwAAABYAAAB3\"",
+      "id": "AAMkAGFAKE008",
+      "subject": "Working from client site",
+      "isAllDay": true,
+      "isCancelled": false,
+      "showAs": "workingElsewhere",
+      "responseStatus": { "response": "organizer", "time": "0001-01-01T00:00:00Z" },
+      "start": { "dateTime": "2026-11-04T00:00:00.0000000", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-11-05T00:00:00.0000000", "timeZone": "America/New_York" }
+    },
+    {
+      "@odata.etag": "W/\"DwAAABYAAAB4\"",
+      "id": "AAMkAGFAKE009",
+      "subject": "Quiddity stakeholder sync",
+      "isAllDay": false,
+      "isCancelled": false,
+      "showAs": "busy",
+      "responseStatus": { "response": "notResponded", "time": "0001-01-01T00:00:00Z" },
+      "start": { "dateTime": "2026-11-03T20:45:00.0000000", "timeZone": "UTC" },
+      "end": { "dateTime": "2026-11-03T21:30:00.0000000", "timeZone": "UTC" }
+    }
+  ]
+}

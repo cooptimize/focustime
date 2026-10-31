@@ -131,3 +131,38 @@ describe("rule 3: no focus window", () => {
     expect(risks([meeting(T("10:00"), T("11:00"), { showAs: "free" }), meeting(T("11:30"), T("12:00"), { showAs: "free" })], "AM")).toEqual([]);
   });
 });
+
+describe("Outlook out of office and all-day events (Q7)", () => {
+  const allDayOutlook = (title: string, showAs: NonNullable<CalEvent["showAs"]>, start = "2026-11-03", end = "2026-11-04"): CalEvent => ({
+    id: `ad-${title}`, source: "outlook", title, start, end, allDay: true, showAs, isPersonal: false,
+  });
+
+  it("puts both halves at risk for an all-day out-of-office event", () => {
+    const evs = [allDayOutlook("Vacation", "oof")];
+    expect(summary(risks(evs, "AM"))).toEqual(["out_of_office:at_risk"]);
+    expect(summary(risks(evs, "PM"))).toEqual(["out_of_office:at_risk"]);
+    expect(risks(evs, "AM")[0]?.reason).toBe("Out of office (Vacation) covers the CSC block");
+  });
+
+  it("puts only the overlapped half at risk for a timed out-of-office event", () => {
+    const evs = [meeting(T("13:00"), T("14:00"), { title: "Doctor", showAs: "oof" })];
+    expect(summary(risks(evs, "AM"))).toEqual([]);
+    expect(summary(risks(evs, "PM"))).toContain("out_of_office:at_risk");
+    expect(risks(evs, "PM").find((r) => r.rule === "out_of_office")?.reason).toBe("Out of office (Doctor) 1:00–2:00 PM overlaps the CSC block");
+  });
+
+  it("flags an all-day busy Outlook event as watch", () => {
+    const evs = [allDayOutlook("Offsite", "busy")];
+    expect(summary(risks(evs, "AM"))).toEqual(["all_day_busy:watch"]);
+    expect(risks(evs, "AM")[0]?.reason).toBe("All-day busy event: Offsite");
+  });
+
+  it.each(["free", "tentative"] as const)("does not flag an all-day %s Outlook event", (showAs) => {
+    expect(risks([allDayOutlook("Holiday", showAs)], "AM")).toEqual([]);
+  });
+
+  it("does not flag out-of-office on an Open half-day or on Friday", () => {
+    const w = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [allDayOutlook("Vacation", "oof", "2026-11-02", "2026-11-07")], config: noStanding });
+    expect(w.days.flatMap((d) => [...d.am.risks, ...d.pm.risks])).toEqual([]);
+  });
+});

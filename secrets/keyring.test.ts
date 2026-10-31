@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getSecret, SecretError, type RunResult } from "./keyring.ts";
+import { deleteSecret, getSecret, SecretError, setSecret, type RunResult } from "./keyring.ts";
 
 const SECRET = "FAKE-SECRET-7f3a9c1e";
 
@@ -36,5 +36,44 @@ describe("keyring", () => {
     expect(err).toBeInstanceOf(SecretError);
     expect((err as SecretError).kind).toBe(kind);
     expect(String(err)).not.toContain(SECRET);
+  });
+});
+
+describe("keyring writes (refresh tokens only)", () => {
+  const TOKEN = "FAKE-REFRESH-0aa1";
+
+  function recorder(result: RunResult = { code: 0, stdout: "", stderr: "" }) {
+    const seen: { args: string[]; stdin: string | undefined }[] = [];
+    const run = async (args: string[], stdin?: string) => {
+      seen.push({ args, stdin });
+      return result;
+    };
+    return { run, seen };
+  }
+
+  it("stores a refresh token through stdin, never argv", async () => {
+    const r = recorder();
+    await setSecret("outlook-refresh-token", TOKEN, r.run);
+    expect(r.seen).toEqual([{ args: ["store", "--label=Coopilot outlook-refresh-token", "service", "coopilot", "account", "outlook-refresh-token"], stdin: TOKEN }]);
+    expect(r.seen[0]!.args.join(" ")).not.toContain(TOKEN);
+  });
+
+  it("clears one account", async () => {
+    const r = recorder();
+    await deleteSecret("google-refresh-token", r.run);
+    expect(r.seen).toEqual([{ args: ["clear", "service", "coopilot", "account", "google-refresh-token"], stdin: undefined }]);
+  });
+
+  it.each(["dataverse-client-secret", "google-client-secret"] as const)("refuses to write or clear %s", async (account) => {
+    const r = recorder();
+    await expect(setSecret(account as never, TOKEN, r.run)).rejects.toThrow();
+    await expect(deleteSecret(account as never, r.run)).rejects.toThrow();
+    expect(r.seen).toEqual([]);
+  });
+
+  it("reports a failed store as unavailable without the token in the error", async () => {
+    const err = await setSecret("outlook-refresh-token", TOKEN, recorder({ code: 1, stdout: "", stderr: "Cannot create an item in a locked collection" }).run).catch((e: unknown) => e);
+    expect((err as SecretError).kind).toBe("locked");
+    expect(String(err)).not.toContain(TOKEN);
   });
 });

@@ -1,0 +1,41 @@
+{
+  "items": [
+    {
+      "id": "fake0004",
+      "status": "confirmed",
+      "summary": "Trash day reminder",
+      "transparency": "transparent",
+      "start": { "dateTime": "2026-11-04T07:00:00-05:00" },
+      "end": { "dateTime": "2026-11-04T07:15:00-05:00" }
+    },
+    {
+      "id": "fake0005",
+      "status": "confirmed",
+      "summary": "Neighborhood meeting",
+      "attendees": [{ "self": true, "responseStatus": "declined" }, { "responseStatus": "accepted" }],
+      "start": { "dateTime": "2026-11-05T19:00:00-05:00" },
+      "end": { "dateTime": "2026-11-05T20:00:00-05:00" }
+    },
+    {
+      "id": "fake0006",
+      "status": "confirmed",
+      "summary": "Dentist (maybe)",
+      "attendees": [{ "self": true, "responseStatus": "tentative" }],
+      "start": { "dateTime": "2026-11-04T15:30:00-05:00" },
+      "end": { "dateTime": "2026-11-04T16:00:00-05:00" }
+    },
+    {
+      "id": "fake0007",
+      "status": "cancelled",
+      "summary": "Moved playdate",
+      "start": { "dateTime": "2026-11-06T16:00:00-05:00" },
+      "end": { "dateTime": "2026-11-06T17:00:00-05:00" }
+    },
+    {
+      "id": "fake0008",
+      "status": "confirmed",
+      "start": { "dateTime": "2026-11-05T18:30:00-05:00" },
+      "end": { "dateTime": "2026-11-05T20:00:00-05:00" }
+    }
+  ]
+}

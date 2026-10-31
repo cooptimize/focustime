@@ -86,6 +86,16 @@ export function evaluateRisks(input: RiskInput, t: RiskThresholds): RiskResult {
     risks.push({ rule: "personal_conflict", severity: "watch", reason: `All-day personal event: ${e.title}` });
   }
 
+  // Q7: out of office puts covered half-days at risk; other all-day Outlook events flag only when busy.
+  for (const p of busy.filter((x) => !x.event.isPersonal && x.event.showAs === "oof" && x.minutesInside > 0)) {
+    const range = formatRange(toZoned(p.event.start, input.timeZone), toZoned(p.event.end, input.timeZone));
+    risks.push({ rule: "out_of_office", severity: "at_risk", reason: `Out of office (${p.event.title}) ${range} overlaps ${block}` });
+  }
+  for (const e of input.allDay.filter((x) => !x.isPersonal)) {
+    if (e.showAs === "oof") risks.push({ rule: "out_of_office", severity: "at_risk", reason: `Out of office (${e.title}) covers ${block}` });
+    else if (e.showAs === "busy" || e.showAs === undefined) risks.push({ rule: "all_day_busy", severity: "watch", reason: `All-day busy event: ${e.title}` });
+  }
+
   // 3. No focus window
   if (longestFreeMinutes < t.minFocusWindowMinutes) {
     risks.push({

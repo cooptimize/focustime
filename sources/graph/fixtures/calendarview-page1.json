@@ -1,0 +1,61 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('00000000-0000-4000-8000-0000000000aa')/calendarView(subject,start,end,isAllDay,showAs,responseStatus,isCancelled)",
+  "value": [
+    {
+      "@odata.etag": "W/\"DwAAABYAAAA1\"",
+      "id": "AAMkAGFAKE001",
+      "subject": "WC weekly status",
+      "isAllDay": false,
+      "isCancelled": false,
+      "showAs": "busy",
+      "responseStatus": { "response": "accepted", "time": "2026-10-20T14:00:00Z" },
+      "start": { "dateTime": "2026-11-04T09:00:00.0000000", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-11-04T10:00:00.0000000", "timeZone": "America/New_York" }
+    },
+    {
+      "@odata.etag": "W/\"DwAAABYAAAA2\"",
+      "id": "AAMkAGFAKE002",
+      "subject": "Team standup",
+      "isAllDay": false,
+      "isCancelled": false,
+      "showAs": "busy",
+      "responseStatus": { "response": "organizer", "time": "0001-01-01T00:00:00Z" },
+      "start": { "dateTime": "2026-11-02T09:00:00.0000000", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-11-02T09:15:00.0000000", "timeZone": "America/New_York" }
+    },
+    {
+      "@odata.etag": "W/\"DwAAABYAAAA3\"",
+      "id": "AAMkAGFAKE003",
+      "subject": "Team standup",
+      "isAllDay": false,
+      "isCancelled": false,
+      "showAs": "busy",
+      "responseStatus": { "response": "organizer", "time": "0001-01-01T00:00:00Z" },
+      "start": { "dateTime": "2026-11-03T09:00:00.0000000", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-11-03T09:15:00.0000000", "timeZone": "America/New_York" }
+    },
+    {
+      "@odata.etag": "W/\"DwAAABYAAAA4\"",
+      "id": "AAMkAGFAKE004",
+      "subject": "Backlog refinement",
+      "isAllDay": false,
+      "isCancelled": false,
+      "showAs": "tentative",
+      "responseStatus": { "response": "tentativelyAccepted", "time": "2026-10-28T12:00:00Z" },
+      "start": { "dateTime": "2026-11-03T14:30:00.0000000", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-11-03T15:30:00.0000000", "timeZone": "America/New_York" }
+    },
+    {
+      "@odata.etag": "W/\"DwAAABYAAAA5\"",
+      "id": "AAMkAGFAKE005",
+      "subject": "Vendor webinar",
+      "isAllDay": false,
+      "isCancelled": false,
+      "showAs": "free",
+      "responseStatus": { "response": "declined", "time": "2026-10-29T12:00:00Z" },
+      "start": { "dateTime": "2026-11-05T14:00:00.0000000", "timeZone": "America/New_York" },
+      "end": { "dateTime": "2026-11-05T15:00:00.0000000", "timeZone": "America/New_York" }
+    }
+  ],
+  "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=2026-11-02T00%3a00%3a00-05%3a00&endDateTime=2026-11-07T00%3a00%3a00-05%3a00&%24select=subject%2cstart%2cend%2cisAllDay%2cshowAs%2cresponseStatus%2cisCancelled&%24top=5&%24skip=5"
+}

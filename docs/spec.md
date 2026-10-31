@@ -247,7 +247,7 @@ Blocking this slice:
 - Q1b. ~~Open vs Internal~~ Open.
 - Q2. ~~Half-day hours~~ Soft day shape, see section 6.
 - Q3. ~~Machine inventory~~ Done, see section 0.
-- Q4. Agree to D21 auth approach. Dataverse part is done and working (step 2); Outlook and Google remain for step 3.
+- Q4. Agree to D21 auth approach. Dataverse part is done and working (step 2); Outlook and Google are built (step 3, D48) and wait on real sign-in.
 - Q5. ~~Stack~~ Option A.
 
 Schema confirmation without installing anything: while signed into the Cooptimize Dynamics environment in Chromium, open
@@ -262,13 +262,13 @@ Not blocking this slice:
 
 Raised in step 1 (not blocking):
 - Q6. Which client is on which pattern? The sample guesses Mon AM Quiddity, Mon PM + Tue PM CSC, Tue AM Internal, Wed All Day + Thu AM Woodard & Curran. Real data replaces this in step 2.
-- Q7. Should all-day or out-of-office Outlook events (holidays, OOO) raise a risk? The v1 rules only look at personal all-day events.
-- Q8. Should personal events during an Open half-day or on Friday be flagged at all? Currently they are shown but never flagged.
+- Q7. ~~All-day and OOO Outlook events~~ Resolved in step 3 (D54): out of office puts covered half-days at risk; other all-day Outlook events are a watch only if busy.
+- Q8. ~~Personal events on Open half-days~~ Resolved in step 3 (D54): shown, never flagged.
 - Q9. The kickoff folder and zip (`coopilot-kickoff/`, `coopilot-kickoff.zip`) are still in the repo folder and git-ignored. Their docs were copied to the repo root. Delete them when you're happy.
 
 Raised in step 2 (not blocking):
 - Q10. The internal account's nickname is "Cooptimize", and that is what the grid shows. Should it show as "Internal" (the glossary word) instead?
-- Q11. Sample meetings now sit on top of your real focus blocks, so some risk badges this week come from sample meetings. Keep that until step 3 (as now, labeled sample), or hide sample meetings once Dataverse is live?
+- Q11. ~~Sample meetings over real blocks~~ Resolved in step 3 (D53): sample meetings show only for a calendar with no config section. Sample meetings now sit on top of your real focus blocks, so some risk badges this week come from sample meetings. Keep that until step 3 (as now, labeled sample), or hide sample meetings once Dataverse is live?
 
 ## 17. Decisions proposed this round
 
@@ -287,3 +287,11 @@ Raised in step 2 (not blocking):
 | D27 | Confirmed | Focus Time rows are recurring weekly patterns expanded per week |
 | D25 | In place, amending | Application user "Coopilot Dataverse Reader" with role Coopilot Reader: Read (Org) on Focus Time, Account, User; adding Account Worker. Token, connect and read verified Oct 31 |
 | D31 | Done | Application user moved to its own business unit with no team roles; Contacts refused, only Coopilot Reader access (verified Oct 31) |
+| D48 | Done | Outlook and Google sign-in is authorization code + PKCE (S256) through a one-shot listener on 127.0.0.1 with a random port, written with built-in `fetch`, `crypto` and `http`. No MSAL or Google client library. Redirects: `http://localhost` for Microsoft (registered under Mobile and desktop, any port matches) and `http://127.0.0.1:<port>/` for Google. The listener checks Host and `state`, then closes |
+| D49 | Done | Refresh tokens live only in the keyring (`outlook-refresh-token`, `google-refresh-token`); access tokens only in memory. Microsoft rotates refresh tokens, so a new one replaces the old on every refresh. The Google desktop client secret is read from the keyring (`google-client-secret`) and Coopilot never writes or deletes it |
+| D50 | Done | Scopes: Microsoft `offline_access Calendars.ReadBasic` (no body, attachments or attendees); Google `calendar.events.readonly`. Requests select only the fields used: Outlook `subject,start,end,isAllDay,showAs,responseStatus,isCancelled`; Google `id,status,summary,transparency,start,end,attendees(self,responseStatus)` (the self entry only matters, to detect my declines) |
+| D51 | Done | Normalization: cancelled events and ones I declined are dropped. Outlook `workingElsewhere` counts as free, `tentativelyAccepted` and `tentative` as tentative. Google `transparent` counts as free. Outlook is fetched with `Prefer: outlook.timezone` set to the day shape zone; Google uses `singleEvents=true` over Mon 00:00 to Sat 00:00 local. Paging links are followed only when they stay on the provider API; a failed later page fails the whole fetch, so a partial week is never cached |
+| D52 | Done | `auth.disconnect(outlook or google)` is local only: it forgets that source's refresh token, its in-memory token and its cached snapshots. It does not revoke the grant at the provider (revoking is a write; remove access in the account settings if wanted). Dataverse cannot be disconnected from the UI |
+| D53 | Done | Sample meetings are used only for a calendar whose config section is missing or has an empty `client_id`. Once configured, that source is real (live, cached or needs sign-in) and never falls back to samples. The fixture stays for tests |
+| D54 | Done | Q7 and Q8: an Outlook out-of-office event puts the half-days it covers at risk (timed: if it overlaps; all-day: the whole day). Other all-day Outlook events are a watch ("All-day event") only if busy or showAs is missing; free and tentative are ignored. Personal events on Open half-days and Friday show but never flag |
+| D55 | Done | Status bar per calendar: LIVE, CACHED (with the snapshot time), NEEDS SIGN-IN with Connect or Reconnect, and Disconnect behind a confirm. While sign-in runs, the bar says to finish in the browser; it gives up after 5 minutes |

@@ -6,10 +6,14 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { cacheRoot, configPath, loadConfigFile, saveSystemUserId } from "../config/load.ts";
-import type { DataverseConfig } from "../config/schema.ts";
+import type { DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
 import { stderrLogger } from "../log/logger.ts";
-import { getSecret } from "../secrets/keyring.ts";
+import { deleteSecret, getSecret, setSecret } from "../secrets/keyring.ts";
+import type { CalendarSource } from "../sources/calendar/source.ts";
 import { createDataverseSource, type DataverseSource } from "../sources/dataverse/source.ts";
+import { createGoogleSource } from "../sources/google/source.ts";
+import { createOutlookSource } from "../sources/graph/source.ts";
+import type { Keyring } from "../sources/oauth/oauth.ts";
 import { createApp } from "./app.ts";
 
 const args = process.argv.slice(2);
@@ -36,6 +40,23 @@ const makeDataverse = (cfg: DataverseConfig, timeZone: string) => {
   return s;
 };
 
+// Calendar sources: one instance per config so access tokens and results stay in memory.
+const keyring: Keyring = { get: (a) => getSecret(a), set: (a, v) => setSecret(a, v), delete: (a) => deleteSecret(a) };
+/** Opens the sign-in page in the default browser. The URL holds no secret (client ID, PKCE challenge, state). */
+const openBrowser = async (url: string) => {
+  spawn("xdg-open", [url], { detached: true, stdio: "ignore" }).unref();
+};
+const calendars = new Map<string, CalendarSource>();
+function memo(kind: "outlook" | "google", cfg: OutlookConfig | GoogleConfig, timeZone: string, make: () => CalendarSource) {
+  const key = JSON.stringify([kind, cfg, timeZone]);
+  let s = calendars.get(key);
+  if (!s) calendars.set(key, (s = make()));
+  return s;
+}
+const calendarDeps = (timeZone: string) => ({ fetch, keyring, openBrowser, cacheDir: cacheRoot(), log, timeZone });
+const makeOutlook = (cfg: OutlookConfig, timeZone: string) => memo("outlook", cfg, timeZone, () => createOutlookSource({ ...calendarDeps(timeZone), config: cfg }));
+const makeGoogle = (cfg: GoogleConfig, timeZone: string) => memo("google", cfg, timeZone, () => createGoogleSource({ ...calendarDeps(timeZone), config: cfg }));
+
 let devMiddleware: Parameters<typeof createApp>[0]["devMiddleware"];
 if (dev) {
   const { createServer } = await import("vite");
@@ -51,6 +72,8 @@ const server = createApp({
   ctx: {
     loadConfig: () => loadConfigFile(cfgPath),
     makeDataverse,
+    makeOutlook,
+    makeGoogle,
     saveSystemUserId: (id) => saveSystemUserId(cfgPath, id),
     now: () => Temporal.Now.instant().toString(),
   },
@@ -59,6 +82,13 @@ const server = createApp({
 const runtimeDir = join(process.env.XDG_RUNTIME_DIR || tmpdir(), "coopilot");
 const launchFile = join(runtimeDir, "launch.json");
 
+server.on("error", (e: NodeJS.ErrnoException) => {
+  if (e.code === "EADDRINUSE") {
+    console.error(`Coopilot is already running on port ${port}. Use that window, or stop the other copy first.`);
+    process.exit(1);
+  }
+  throw e;
+});
 server.listen(port, "127.0.0.1", async () => {
   const url = `http://127.0.0.1:${port}/?token=${token}`;
   await mkdir(runtimeDir, { recursive: true, mode: 0o700 });

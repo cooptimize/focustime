@@ -2,13 +2,18 @@ import type { SourceSummary } from "../actions/types.ts";
 import type { DayShape } from "../week/types.ts";
 import { shortDate } from "./labels.ts";
 
+type Calendar = "outlook" | "google";
 type Props = {
   sources: SourceSummary[];
   sampleWeek: string;
   isSampleWeek: boolean;
   shape: DayShape;
   loading: boolean;
+  busy: Calendar | null;
+  notice: string | null;
   onRefresh: () => void;
+  onConnect: (s: Calendar) => void;
+  onDisconnect: (s: Calendar) => void;
 };
 
 const names = { dataverse: "Dataverse", outlook: "Outlook", google: "Google" } as const;
@@ -23,21 +28,23 @@ function when(iso: string, tz: string): string {
 function stateOf(s: SourceSummary): { cls: string; label: string } {
   if (s.sample) return { cls: "sample", label: "sample" };
   if (s.status === "ok") return { cls: "live", label: "live" };
+  if (s.status === "auth_required") return { cls: "signin", label: "needs sign-in" };
   if (s.fromCache) return { cls: "cached", label: "cached" };
   return { cls: "error", label: s.status.replace("_", " ") };
 }
 
-export function StatusBar({ sources, sampleWeek, isSampleWeek, shape, loading, onRefresh }: Props) {
-  const dv = sources.find((s) => s.source === "dataverse");
+export function StatusBar({ sources, sampleWeek, isSampleWeek, shape, loading, busy, notice, onRefresh, onConnect, onDisconnect }: Props) {
   const samples = sources.filter((s) => s.sample);
+  const notConnected = (s: SourceSummary) => s.status === "auth_required" && !s.fromCache && !!s.message?.includes("not connected");
+  const problems = sources.filter((s) => s.message && !s.sample && s.status !== "ok" && !notConnected(s));
   return (
     <footer className="statusbar" aria-label="Source status">
       {sources.map((s) => {
         const st = stateOf(s);
-        const detail =
-          s.source === "dataverse"
-            ? `${s.itemCount} ${s.itemCount === 1 ? "pattern" : "patterns"}`
-            : "";
+        const cal = s.source === "outlook" || s.source === "google" ? (s.source as Calendar) : null;
+        const detail = s.source === "dataverse" ? `${s.itemCount} ${s.itemCount === 1 ? "pattern" : "patterns"}` : s.sample || notConnected(s) ? "" : `${s.itemCount} events`;
+        const canConnect = cal && (s.fixAction === "connect_microsoft" || s.fixAction === "connect_google");
+        const connected = cal && !s.sample && !canConnect && (s.status === "ok" || s.fromCache);
         return (
           <span key={s.source} className={`source ${st.cls}`} title={s.message ?? ""}>
             <span className="dot" aria-hidden="true" />
@@ -45,22 +52,35 @@ export function StatusBar({ sources, sampleWeek, isSampleWeek, shape, loading, o
             <span className={`state ${st.cls}`}>{st.label}</span>
             {s.fetchedAt && <span className="muted">{s.fromCache ? "from" : "fetched"} {when(s.fetchedAt, shape.timeZone)}</span>}
             {detail && <span className="muted">{detail}</span>}
+            {canConnect && (
+              <button type="button" className="mini primary" disabled={busy !== null} onClick={() => onConnect(cal)}>
+                {busy === cal ? "Waiting for sign-in…" : notConnected(s) ? "Connect" : "Reconnect"}
+              </button>
+            )}
+            {connected && (
+              <button type="button" className="mini quiet" disabled={busy !== null} onClick={() => onDisconnect(cal)} aria-label={`Disconnect ${names[s.source]}`}>
+                Disconnect
+              </button>
+            )}
           </span>
         );
       })}
-      {dv?.message && <span className={`dv-message ${dv.status === "ok" ? "" : "problem"}`}>{dv.message}</span>}
+      {notice && <span className="dv-message">{notice}</span>}
+      {!notice && problems.map((s) => (
+        <span key={s.source} className="dv-message problem">{s.message}</span>
+      ))}
       {samples.length > 0 && (
         <span className="sample-note">
           <span className="sample-pill">Sample meetings</span>
           <span className="muted">
-            Outlook and Google are not connected yet{isSampleWeek ? "" : `; sample meetings exist only for the week of ${shortDate(sampleWeek)}`}
+            {samples.map((s) => names[s.source]).join(" and ")} not set up yet{isSampleWeek ? "" : `; sample meetings exist only for the week of ${shortDate(sampleWeek)}`}
           </span>
         </span>
       )}
       <span className="muted shape">
         {shape.start} · split {shape.split} · usual end {shape.end} · {shape.timeZone}
       </span>
-      <button type="button" className="refresh" onClick={onRefresh} disabled={loading} aria-label="Refresh Dataverse">
+      <button type="button" className="refresh" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources">
         {loading ? "Loading…" : "Refresh"}
       </button>
     </footer>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import { addWeeks } from "../week/dates.ts";
 import type { Half } from "../week/types.ts";
-import { SessionError, weekLoad } from "./api.ts";
+import { connectSource, disconnectSource, SessionError, weekLoad } from "./api.ts";
 import { Details } from "./Details.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
@@ -28,6 +28,8 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<Selection>({ dayIndex: 0, half: "AM" });
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [busy, setBusy] = useState<"outlook" | "google" | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const cellRefs = useRef(new Map<string, HTMLDivElement>());
   const data = state.kind === "ready" ? state.data : null;
 
@@ -170,7 +172,28 @@ export function App() {
         isSampleWeek={data.weekStart === SAMPLE_WEEK}
         shape={data.dayShape}
         loading={loading}
+        busy={busy}
+        notice={notice}
         onRefresh={() => void load({ weekStart: data.weekStart, refresh: true })}
+        onConnect={async (src) => {
+          setBusy(src);
+          setNotice(`Finish signing in to ${src === "outlook" ? "Microsoft" : "Google"} in your browser`);
+          try {
+            const r = await connectSource(src);
+            setNotice(r.status === "connected" ? null : (r.message ?? "Sign-in did not finish"));
+          } catch {
+            setNotice("Sign-in did not finish");
+          } finally {
+            setBusy(null);
+            void load({ weekStart: data.weekStart, refresh: true });
+          }
+        }}
+        onDisconnect={async (src) => {
+          const name = src === "outlook" ? "Outlook" : "Google";
+          if (!window.confirm(`Disconnect ${name}? Coopilot forgets its sign-in and cached ${name} events. Nothing changes in ${name}.`)) return;
+          await disconnectSource(src).catch(() => setNotice(`Could not disconnect ${name}`));
+          void load({ weekStart: data.weekStart, refresh: true });
+        }}
       />
 
       <Details open={detailsOpen} day={day} slot={slot} timeZone={week.timeZone} colors={data.clients} onClose={() => setDetailsOpen(false)} />
