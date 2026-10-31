@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildWeek } from "./build";
-import { allDayPersonal, config, meeting, noStanding, pattern, personal } from "./test-helpers";
-import type { Day, Slot } from "./types";
+import { buildWeek } from "./build.ts";
+import { allDayPersonal, config, meeting, noStanding, pattern, personal } from "./test-helpers.ts";
+import type { Day, Slot } from "./types.ts";
 
 const WEEK = "2026-11-02"; // Mon Nov 2, 2026, first week after DST ends (EST, -05:00)
 

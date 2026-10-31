@@ -1,4 +1,4 @@
-import type { CalEvent, FocusPattern, WeekConfig } from "./types";
+import type { CalEvent, FocusPattern, WeekConfig } from "./types.ts";
 
 export const NY = "America/New_York";
 

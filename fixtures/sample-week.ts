@@ -1,6 +1,6 @@
 // Sample data for step 1. Mirrors the shape of the real data; no real accounts, names or meetings.
 // Week of Mon Nov 2, 2026 (first week of EST after fall back on Nov 1), America/New_York (-05:00).
-import type { CalEvent, FocusPattern } from "../week/types";
+import type { CalEvent, FocusPattern } from "../week/types.ts";
 
 export const SAMPLE_WEEK = "2026-11-02";
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { defaultWeekStart, mondayOf, todayTarget, weekDates } from "./dates";
-import { config } from "./test-helpers";
+import { defaultWeekStart, mondayOf, todayTarget, weekDates } from "./dates.ts";
+import { config } from "./test-helpers.ts";
 
 describe("week dates", () => {
   it("lists Mon to Fri for a Monday", () => {

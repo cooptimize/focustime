@@ -1,4 +1,4 @@
-import type { DayShape, Half, IsoDate, IsoDateTime, Weekday } from "./types";
+import type { DayShape, Half, IsoDate, IsoDateTime, Weekday } from "./types.ts";
 
 export const WEEKDAYS: readonly Weekday[] = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 

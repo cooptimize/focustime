@@ -1,15 +1,16 @@
-import type { CSSProperties } from "react";
-import { weekConfig } from "../config/defaults";
-import { formatDuration } from "../week/format";
-import { worstSeverity } from "../week/risks";
-import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types";
-import { hourMarks, layoutEvents } from "./layout";
-import { clientColor, eventRange, ruleLabel, severityLabel, shortDate, slotRange, sourceName, startClock } from "./labels";
+import { useContext, type CSSProperties } from "react";
+import { formatDuration } from "../week/format.ts";
+import { worstSeverity } from "../week/risks.ts";
+import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
+import { hourMarks, layoutEvents } from "./layout.ts";
+import { clientColor, eventRange, ruleLabel, SampleSources, severityLabel, shortDate, slotRange, sourceName, startClock } from "./labels.ts";
 
 export type Selection = { dayIndex: number; half: Half };
 
 type Props = {
   week: Week;
+  colors: Record<string, string>;
+  minFocusWindow: number;
   today: string;
   selection: Selection;
   cellRefs: Map<string, HTMLDivElement>;
@@ -17,7 +18,7 @@ type Props = {
   onOpen: (s: Selection) => void;
 };
 
-export function WeekGrid({ week, today, selection, cellRefs, onSelect, onOpen }: Props) {
+export function WeekGrid({ week, colors, minFocusWindow, today, selection, cellRefs, onSelect, onOpen }: Props) {
   return (
     <main className="grid" role="group" aria-label="Week grid. Arrow keys move between half-days, Enter opens details.">
       {week.days.map((day, i) => (
@@ -26,6 +27,8 @@ export function WeekGrid({ week, today, selection, cellRefs, onSelect, onOpen }:
           day={day}
           dayIndex={i}
           tz={week.timeZone}
+          colors={colors}
+          minFocusWindow={minFocusWindow}
           isToday={day.date === today}
           selection={selection}
           cellRefs={cellRefs}
@@ -38,6 +41,7 @@ export function WeekGrid({ week, today, selection, cellRefs, onSelect, onOpen }:
 }
 
 function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boolean } & Omit<Props, "week" | "today">) {
+  const { colors, minFocusWindow } = props;
   const { day, dayIndex, tz, isToday } = props;
   const overflow = day.kind === "overflow";
   const risks = [...day.am.risks, ...day.pm.risks];
@@ -67,6 +71,8 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
           slot={half === "AM" ? day.am : day.pm}
           overflow={overflow}
           tz={tz}
+          colors={colors}
+          minFocusWindow={minFocusWindow}
           selected={props.selection.dayIndex === dayIndex && props.selection.half === half}
           refFn={(el) => {
             const k = `${dayIndex}${half}`;
@@ -85,11 +91,12 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
 }
 
 function Strip({ kind, label, items }: { kind: string; label: string; items: { key: string; e: CalEvent; time: string }[] }) {
+  const samples = useContext(SampleSources);
   return (
     <div className={`strip ${kind} ${items.length ? "" : "empty"}`}>
       <span className="strip-label">{label}</span>
       {items.map(({ key, e, time }) => (
-        <span key={key} className={`chip ${e.isPersonal ? "personal" : "meeting"}`} title={`${e.title} · ${sourceName(e)}`}>
+        <span key={key} className={`chip ${e.isPersonal ? "personal" : "meeting"}`} title={`${e.title} · ${sourceName(e, samples)}`}>
           {time && <span className="chip-time">{time}</span>}
           {e.title}
         </span>
@@ -100,6 +107,8 @@ function Strip({ kind, label, items }: { kind: string; label: string; items: { k
 
 type HalfProps = {
   slot: Slot;
+  colors: Record<string, string>;
+  minFocusWindow: number;
   overflow: boolean;
   tz: string;
   selected: boolean;
@@ -109,10 +118,10 @@ type HalfProps = {
   onOpen: () => void;
 };
 
-function HalfDay({ slot, overflow, tz, selected, dayLabel, refFn, onSelect, onOpen }: HalfProps) {
+function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabel, refFn, onSelect, onOpen }: HalfProps) {
   const primary = slot.focus[0];
   const sev = worstSeverity(slot.risks);
-  const style = { "--c": clientColor(primary?.clientKey), flexGrow: minutesOf(slot) } as CSSProperties;
+  const style = { "--c": clientColor(primary?.clientKey, colors), flexGrow: minutesOf(slot) } as CSSProperties;
   const state = overflow ? "overflow" : slot.open ? "open" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
   const label = `${dayLabel} ${slot.half}, ${primary ? primary.clientName : overflow ? "overflow" : "Open"}${sev ? `, ${sev === "at_risk" ? "at risk" : "watch"}` : ""}`;
@@ -141,9 +150,11 @@ function HalfDay({ slot, overflow, tz, selected, dayLabel, refFn, onSelect, onOp
                 <span className="swatch" />
                 {primary.clientName}
               </div>
-              <div className="src">{primary.source === "dataverse" ? "Dataverse focus block" : "Standing block · Coopilot config"}</div>
+              <div className="src" title={primary.clientFullName ?? primary.clientName}>
+                {primary.source === "dataverse" ? `Dataverse focus block${primary.clientFullName ? ` · ${primary.clientFullName}` : ""}` : "Standing block · Coopilot config"}
+              </div>
               {slot.focus.slice(1).map((b) => (
-                <div key={b.id} className="also" style={{ "--c2": clientColor(b.clientKey) } as CSSProperties}>
+                <div key={b.id} className="also" style={{ "--c2": clientColor(b.clientKey, colors) } as CSSProperties}>
                   <span className="swatch small" />
                   Also booked: {b.clientName}
                   <span className="src"> · {b.source === "dataverse" ? "Dataverse" : "Coopilot config"}</span>
@@ -178,7 +189,7 @@ function HalfDay({ slot, overflow, tz, selected, dayLabel, refFn, onSelect, onOp
         </aside>
       )}
 
-      <Timeline slot={slot} tz={tz} showGaps={!overflow && !slot.open} />
+      <Timeline slot={slot} tz={tz} showGaps={!overflow && !slot.open} minFocusWindow={minFocusWindow} />
     </div>
   );
 }
@@ -187,10 +198,10 @@ function minutesOf(slot: Slot): number {
   return (Temporal.Instant.from(slot.end).epochMilliseconds - Temporal.Instant.from(slot.start).epochMilliseconds) / 60000;
 }
 
-function Timeline({ slot, tz, showGaps }: { slot: Slot; tz: string; showGaps: boolean }) {
+function Timeline({ slot, tz, showGaps, minFocusWindow }: { slot: Slot; tz: string; showGaps: boolean; minFocusWindow: number }) {
   const marks = hourMarks(slot.start, slot.end, tz);
   const laid = layoutEvents(slot.events, slot.start, slot.end);
-  const min = weekConfig.thresholds.minFocusWindowMinutes;
+  const min = minFocusWindow;
   const pos = (s: string) =>
     (Temporal.Instant.from(s).epochMilliseconds - Temporal.Instant.from(slot.start).epochMilliseconds) /
     (Temporal.Instant.from(slot.end).epochMilliseconds - Temporal.Instant.from(slot.start).epochMilliseconds);
@@ -221,20 +232,21 @@ function Timeline({ slot, tz, showGaps }: { slot: Slot; tz: string; showGaps: bo
 
 function EventCard({ placed, tz, style }: { placed: PlacedEvent; tz: string; style: CSSProperties }) {
   const e = placed.event;
+  const samples = useContext(SampleSources);
   const kind = e.isPersonal ? "personal" : "meeting";
   const show = e.showAs ?? "busy";
   return (
     <div
       className={`event ${kind} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
       style={style}
-      title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e)} · ${show}`}
+      title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${show}`}
     >
       <span className="ev-line">
         <span className="ev-time">{eventRange(e, tz)}</span>
         <span className="ev-title">{e.title}</span>
       </span>
       <span className="ev-meta">
-        {sourceName(e)}
+        {sourceName(e, samples)}
         {show !== "busy" ? ` · ${show}` : ""}
       </span>
     </div>

@@ -2,16 +2,24 @@
   "compilerOptions": {
     "target": "esnext",
     "lib": ["esnext", "dom"],
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "resolveJsonModule": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "allowJs": true,
     "checkJs": true,
     "noEmit": true
   },
-  "include": ["vite.config.ts", "scripts"]
+  "include": ["server", "secrets", "sources", "config", "actions", "fixtures", "cache", "log", "week", "scripts", "vite.config.ts"]
 }

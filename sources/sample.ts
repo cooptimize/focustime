@@ -1,7 +1,7 @@
 // The sample source: serves the bundled fixture as if it came from each real source.
 // No network, no accounts, no keyring.
-import { sampleGoogle, sampleOutlook, samplePatterns } from "../fixtures/sample-week";
-import type { CalEvent, FocusPattern, SourceResult } from "../week/types";
+import { sampleGoogle, sampleOutlook, samplePatterns } from "../fixtures/sample-week.ts";
+import type { CalEvent, FocusPattern, SourceResult } from "../week/types.ts";
 
 const base = { status: "ok", fetchedAt: null, fromCache: false, sample: true, message: "Sample data" } as const;
 

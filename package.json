@@ -7,16 +7,19 @@
     "node": ">=26"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "node server/main.ts --dev",
     "build": "npm run typecheck && vite build",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "screenshot": "node scripts/screenshot.mjs"
+    "screenshot": "node scripts/screenshot.mjs",
+    "start": "vite build && node server/main.ts",
+    "serve": "node server/main.ts"
   },
   "dependencies": {
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "smol-toml": "1.9.1"
   },
   "devDependencies": {
     "@types/node": "26.6.6",

@@ -1,12 +1,13 @@
-import { useEffect, useRef, type CSSProperties } from "react";
-import { formatDuration } from "../week/format";
-import type { Day, Slot } from "../week/types";
-import { clientColor, eventRange, halfName, longDate, ruleLabel, severityLabel, showAsLabel, slotRange, sourceName, startClock } from "./labels";
+import { useContext, useEffect, useRef, type CSSProperties } from "react";
+import { formatDuration } from "../week/format.ts";
+import type { Day, Slot } from "../week/types.ts";
+import { clientColor, eventRange, halfName, longDate, ruleLabel, SampleSources, severityLabel, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 
-type Props = { open: boolean; day: Day; slot: Slot; timeZone: string; onClose: () => void };
+type Props = { open: boolean; day: Day; slot: Slot; timeZone: string; colors: Record<string, string>; onClose: () => void };
 
-export function Details({ open, day, slot, timeZone, onClose }: Props) {
+export function Details({ open, day, slot, timeZone, colors, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
+  const samples = useContext(SampleSources);
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
@@ -23,7 +24,7 @@ export function Details({ open, day, slot, timeZone, onClose }: Props) {
             {longDate(day.date)} · {halfName(slot.half)}
           </h2>
           <p className="muted">
-            {slot.half} {slotRange(slot, tz)} · {day.kind === "overflow" ? "Overflow day, no focus blocks" : "Times in New York"}
+            {slot.half} {slotRange(slot, tz)} · {day.kind === "overflow" ? "Overflow day, no focus blocks" : `Times in ${timeZone}`}
           </p>
         </div>
         <button type="button" className="close" onClick={onClose} aria-label="Close details">
@@ -36,11 +37,11 @@ export function Details({ open, day, slot, timeZone, onClose }: Props) {
           <h3>Focus</h3>
           {slot.focus.length === 0 && <p className="open-note">Open. Free for client or internal work.</p>}
           {slot.focus.map((b, i) => (
-            <div key={b.id} className="focus-row" style={{ "--c": clientColor(b.clientKey) } as CSSProperties}>
+            <div key={b.id} className="focus-row" style={{ "--c": clientColor(b.clientKey, colors) } as CSSProperties}>
               <span className="swatch" />
               <strong>{b.clientName}</strong>
               <span className="muted">
-                {b.source === "dataverse" ? `Dataverse Focus Time pattern ${b.patternId ?? ""}` : "Standing block from Coopilot config"}
+                {b.source === "dataverse" ? `${b.clientFullName ? `${b.clientFullName} · ` : ""}Dataverse Focus Time` : "Standing block from Coopilot config"}
                 {i === 0 && slot.focus.length > 1 ? " · shown" : ""}
               </span>
             </div>
@@ -86,7 +87,7 @@ export function Details({ open, day, slot, timeZone, onClose }: Props) {
               <span className="when">{eventRange(p.event, tz)}</span>
               <span className="what">{p.event.title}</span>
               <span className="muted">
-                {sourceName(p.event)} · {p.event.isPersonal ? "personal" : "meeting"} · {showAsLabel(p.event)} · {formatDuration(p.minutesInside)} inside
+                {sourceName(p.event, samples)} · {p.event.isPersonal ? "personal" : "meeting"} · {showAsLabel(p.event)} · {formatDuration(p.minutesInside)} inside
               </span>
             </li>
           ))}
@@ -101,7 +102,7 @@ export function Details({ open, day, slot, timeZone, onClose }: Props) {
               <li key={id} className={e.isPersonal ? "personal" : "meeting"}>
                 <span className="when">{eventRange(e, tz)}</span>
                 <span className="what">{e.title}</span>
-                <span className="muted">{sourceName(e)}</span>
+                <span className="muted">{sourceName(e, samples)}</span>
               </li>
             ))}
           </ul>

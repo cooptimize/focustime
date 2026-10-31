@@ -1,0 +1,96 @@
+{
+  "@odata.context": "https://example.crm.dynamics.com/api/data/v9.2/$metadata#coop_focustimes(coop_focustimeid,_coop_account_value,_coop_systemuser_value,_coop_accountworker_value,coop_startdate,coop_enddate,coop_mondaydaypart,coop_tuesdaydaypart,coop_wednesdaydaypart,coop_thursdaydaypart,statecode,coop_AccountWorker(_coop_user_value,_coop_account_value,coop_accountworkerid))",
+  "value": [
+    {
+      "@odata.etag": "W/\"1000001\"",
+      "coop_focustimeid": "f0000000-0000-4000-8000-000000000001",
+      "_coop_account_value": null,
+      "_coop_systemuser_value": null,
+      "_coop_accountworker_value": "a0000000-0000-4000-8000-000000000001",
+      "coop_startdate": "2026-03-02",
+      "coop_enddate": null,
+      "coop_mondaydaypart": 1,
+      "coop_tuesdaydaypart": null,
+      "coop_wednesdaydaypart": null,
+      "coop_thursdaydaypart": null,
+      "statecode": 0,
+      "coop_AccountWorker": {
+        "_coop_user_value": "d0000000-0000-4000-8000-00000000000a",
+        "_coop_account_value": "c0000000-0000-4000-8000-000000000001",
+        "coop_accountworkerid": "a0000000-0000-4000-8000-000000000001"
+      }
+    },
+    {
+      "@odata.etag": "W/\"1000002\"",
+      "coop_focustimeid": "f0000000-0000-4000-8000-000000000002",
+      "_coop_account_value": null,
+      "_coop_systemuser_value": "d0000000-0000-4000-8000-00000000000a",
+      "_coop_accountworker_value": "a0000000-0000-4000-8000-000000000002",
+      "coop_startdate": "2026-01-05",
+      "coop_enddate": null,
+      "coop_mondaydaypart": 2,
+      "coop_tuesdaydaypart": 2,
+      "coop_wednesdaydaypart": null,
+      "coop_thursdaydaypart": null,
+      "statecode": 0,
+      "coop_AccountWorker": {
+        "_coop_user_value": "d0000000-0000-4000-8000-00000000000a",
+        "_coop_account_value": "c0000000-0000-4000-8000-000000000002",
+        "coop_accountworkerid": "a0000000-0000-4000-8000-000000000002"
+      }
+    },
+    {
+      "@odata.etag": "W/\"1000003\"",
+      "coop_focustimeid": "f0000000-0000-4000-8000-000000000003",
+      "_coop_account_value": null,
+      "_coop_systemuser_value": null,
+      "_coop_accountworker_value": "a0000000-0000-4000-8000-000000000003",
+      "coop_startdate": "2026-06-01",
+      "coop_enddate": null,
+      "coop_mondaydaypart": null,
+      "coop_tuesdaydaypart": 1,
+      "coop_wednesdaydaypart": null,
+      "coop_thursdaydaypart": null,
+      "statecode": 0,
+      "coop_AccountWorker": {
+        "_coop_user_value": "d0000000-0000-4000-8000-00000000000a",
+        "_coop_account_value": "c0000000-0000-4000-8000-000000000003",
+        "coop_accountworkerid": "a0000000-0000-4000-8000-000000000003"
+      }
+    },
+    {
+      "@odata.etag": "W/\"1000004\"",
+      "coop_focustimeid": "f0000000-0000-4000-8000-000000000004",
+      "_coop_account_value": "c0000000-0000-4000-8000-000000000004",
+      "_coop_systemuser_value": "d0000000-0000-4000-8000-00000000000a",
+      "_coop_accountworker_value": null,
+      "coop_startdate": "2025-09-08",
+      "coop_enddate": null,
+      "coop_mondaydaypart": null,
+      "coop_tuesdaydaypart": null,
+      "coop_wednesdaydaypart": 3,
+      "coop_thursdaydaypart": 1,
+      "statecode": 0,
+      "coop_AccountWorker": null
+    },
+    {
+      "@odata.etag": "W/\"1000005\"",
+      "coop_focustimeid": "f0000000-0000-4000-8000-000000000005",
+      "_coop_account_value": null,
+      "_coop_systemuser_value": "d0000000-0000-4000-8000-00000000000a",
+      "_coop_accountworker_value": "a0000000-0000-4000-8000-000000000005",
+      "coop_startdate": "2025-01-06",
+      "coop_enddate": "2026-12-31",
+      "coop_mondaydaypart": null,
+      "coop_tuesdaydaypart": null,
+      "coop_wednesdaydaypart": null,
+      "coop_thursdaydaypart": 2,
+      "statecode": 0,
+      "coop_AccountWorker": {
+        "_coop_user_value": "d0000000-0000-4000-8000-00000000000b",
+        "_coop_account_value": "c0000000-0000-4000-8000-000000000002",
+        "coop_accountworkerid": "a0000000-0000-4000-8000-000000000005"
+      }
+    }
+  ]
+}

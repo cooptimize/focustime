@@ -1,6 +1,6 @@
 // Default, non-secret settings. Later these are loaded and validated from
 // ~/.config/coopilot/config.toml; for step 1 they are compiled in.
-import type { WeekConfig } from "../week/types";
+import type { WeekConfig } from "../week/types.ts";
 
 export type ClientStyle = { key: string; name: string; shortName: string; color: string };
 

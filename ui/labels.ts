@@ -1,9 +1,16 @@
-import { clients, fallbackClientColor } from "../config/defaults";
-import { formatRange, toZoned } from "../week/format";
-import type { CalEvent, Half, Risk, RiskRule, Slot } from "../week/types";
+import { formatRange, toZoned } from "../week/format.ts";
+import type { CalEvent, Half, Risk, RiskRule, Slot } from "../week/types.ts";
 
-export function clientColor(key: string | undefined): string {
-  return (key && clients[key]?.color) || fallbackClientColor;
+// Calm fallbacks for clients without a configured color, picked stably from the key.
+const FALLBACK = ["#1f9e8f", "#7b68ee", "#d2892a", "#4a7fd4", "#b5527a", "#5a9a3c", "#8a6fb0", "#c06a3a"];
+
+export function clientColor(key: string | undefined, colors: Record<string, string>): string {
+  if (!key) return "#8a8f98";
+  const set = colors[key];
+  if (set) return set;
+  let h = 0;
+  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return FALLBACK[h % FALLBACK.length]!;
 }
 
 export const ruleLabel: Record<RiskRule, string> = {
@@ -46,8 +53,14 @@ export function weekLabel(monday: string, friday: string): string {
   return `${md.format(utc(monday))} – ${mdy.format(utc(friday))}`;
 }
 
-export function sourceName(e: CalEvent): string {
-  return e.source === "outlook" ? "Outlook" : "Google";
+import { createContext } from "react";
+
+/** Sources currently served from the bundled sample, so their events can be labeled as sample. */
+export const SampleSources = createContext<ReadonlySet<string>>(new Set());
+
+export function sourceName(e: CalEvent, samples: ReadonlySet<string>): string {
+  const name = e.source === "outlook" ? "Outlook" : "Google";
+  return samples.has(e.source) ? `${name} sample` : name;
 }
 
 export function showAsLabel(e: CalEvent): string {

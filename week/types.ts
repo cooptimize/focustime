@@ -29,6 +29,8 @@ export type FocusPattern = {
   id: string;
   clientKey: string;
   clientName: string;
+  /** Full account name when it differs from the short name shown. */
+  clientFullName?: string;
   startDate: IsoDate;
   /** null means ongoing. Inclusive (Dataverse Date Only). */
   endDate: IsoDate | null;
@@ -40,6 +42,7 @@ export type FocusBlock = {
   id: string;
   clientKey: string;
   clientName: string;
+  clientFullName?: string;
   date: IsoDate;
   half: Half;
   /** "dataverse" for Focus Time patterns, "config" for standing blocks. */

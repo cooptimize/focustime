@@ -243,11 +243,11 @@ Both keep the same `actions/`, `week/` and UI, so moving from A to B later means
 ## 16. Open questions
 
 Blocking this slice:
-- Q1. ~~Dataverse schema~~ Resolved, see 0b. Only verification left: check `coop_systemuser` against real rows.
+- Q1. ~~Dataverse schema~~ Resolved, see 0b. Verified Oct 31 (step 2): all 9 of my rows have an Account Worker with user and account, while only 2 have `coop_systemuser` filled in, so the Account Worker link is the right source.
 - Q1b. ~~Open vs Internal~~ Open.
 - Q2. ~~Half-day hours~~ Soft day shape, see section 6.
 - Q3. ~~Machine inventory~~ Done, see section 0.
-- Q4. Agree to D21 auth approach.
+- Q4. Agree to D21 auth approach. Dataverse part is done and working (step 2); Outlook and Google remain for step 3.
 - Q5. ~~Stack~~ Option A.
 
 Schema confirmation without installing anything: while signed into the Cooptimize Dynamics environment in Chromium, open
@@ -265,6 +265,10 @@ Raised in step 1 (not blocking):
 - Q7. Should all-day or out-of-office Outlook events (holidays, OOO) raise a risk? The v1 rules only look at personal all-day events.
 - Q8. Should personal events during an Open half-day or on Friday be flagged at all? Currently they are shown but never flagged.
 - Q9. The kickoff folder and zip (`coopilot-kickoff/`, `coopilot-kickoff.zip`) are still in the repo folder and git-ignored. Their docs were copied to the repo root. Delete them when you're happy.
+
+Raised in step 2 (not blocking):
+- Q10. The internal account's nickname is "Cooptimize", and that is what the grid shows. Should it show as "Internal" (the glossary word) instead?
+- Q11. Sample meetings now sit on top of your real focus blocks, so some risk badges this week come from sample meetings. Keep that until step 3 (as now, labeled sample), or hide sample meetings once Dataverse is live?
 
 ## 17. Decisions proposed this round
 

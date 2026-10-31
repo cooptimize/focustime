@@ -6,6 +6,8 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "types": ["vite/client"],
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
@@ -19,5 +21,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["week", "ui", "sources", "config", "fixtures", "actions"]
+  "include": ["ui", "week"],
+  "exclude": ["**/*.test.ts", "week/test-helpers.ts"]
 }

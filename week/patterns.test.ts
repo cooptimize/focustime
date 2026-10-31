@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { expandPatterns } from "./patterns";
-import { pattern } from "./test-helpers";
+import { expandPatterns } from "./patterns.ts";
+import { pattern } from "./test-helpers.ts";
 
 const slots = (blocks: { date: string; half: string }[]) => blocks.map((b) => `${b.date} ${b.half}`);
 

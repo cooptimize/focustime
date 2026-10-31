@@ -1,8 +1,8 @@
-import { dayBounds, iso, WEEKDAYS, weekDates } from "./dates";
-import { expandPatterns, mergeFocus, standingBlocksFor } from "./patterns";
-import { placeEvents } from "./placement";
-import { evaluateRisks } from "./risks";
-import type { CalEvent, Day, FocusPattern, Half, IsoDate, PlacedEvent, Slot, Week, WeekConfig } from "./types";
+import { dayBounds, iso, WEEKDAYS, weekDates } from "./dates.ts";
+import { expandPatterns, mergeFocus, standingBlocksFor } from "./patterns.ts";
+import { placeEvents } from "./placement.ts";
+import { evaluateRisks } from "./risks.ts";
+import type { CalEvent, Day, FocusPattern, Half, IsoDate, PlacedEvent, Slot, Week, WeekConfig } from "./types.ts";
 
 export type BuildWeekInput = {
   weekStart: IsoDate;

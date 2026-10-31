@@ -1,41 +1,68 @@
-import type { DayShape, SourceResult, Week } from "../week/types";
-import { shortDate } from "./labels";
+import type { SourceSummary } from "../actions/types.ts";
+import type { DayShape } from "../week/types.ts";
+import { shortDate } from "./labels.ts";
 
-type Props = { sources: SourceResult<unknown>[]; week: Week; isSampleWeek: boolean; sampleWeek: string; shape: DayShape };
+type Props = {
+  sources: SourceSummary[];
+  sampleWeek: string;
+  isSampleWeek: boolean;
+  shape: DayShape;
+  loading: boolean;
+  onRefresh: () => void;
+};
 
 const names = { dataverse: "Dataverse", outlook: "Outlook", google: "Google" } as const;
 
-export function StatusBar({ sources, week, isSampleWeek, sampleWeek, shape }: Props) {
-  const placedIds = (source: "outlook" | "google") => {
-    const ids = new Set<string>();
-    for (const d of week.days) {
-      for (const e of d.allDay) if (e.source === source) ids.add(e.id);
-      for (const p of [...d.early, ...d.am.events, ...d.pm.events, ...d.evening]) if (p.event.source === source) ids.add(p.event.id);
-    }
-    return ids.size;
-  };
-  const blocks = week.days.reduce((n, d) => n + d.am.focus.filter((f) => f.source === "dataverse").length + d.pm.focus.filter((f) => f.source === "dataverse").length, 0);
+function when(iso: string, tz: string): string {
+  const z = Temporal.Instant.from(iso).toZonedDateTimeISO(tz);
+  const today = Temporal.Now.plainDateISO(tz);
+  const t = `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")} ${z.hour < 12 ? "AM" : "PM"}`;
+  return z.toPlainDate().equals(today) ? t : `${shortDate(z.toPlainDate().toString())} ${t}`;
+}
 
+function stateOf(s: SourceSummary): { cls: string; label: string } {
+  if (s.sample) return { cls: "sample", label: "sample" };
+  if (s.status === "ok") return { cls: "live", label: "live" };
+  if (s.fromCache) return { cls: "cached", label: "cached" };
+  return { cls: "error", label: s.status.replace("_", " ") };
+}
+
+export function StatusBar({ sources, sampleWeek, isSampleWeek, shape, loading, onRefresh }: Props) {
+  const dv = sources.find((s) => s.source === "dataverse");
+  const samples = sources.filter((s) => s.sample);
   return (
     <footer className="statusbar" aria-label="Source status">
-      <span className="sample-pill">Sample data</span>
-      <span className="muted">
-        No accounts connected. Built-in sample{isSampleWeek ? "" : `; sample meetings exist only for the week of ${shortDate(sampleWeek)}`}.
-      </span>
-      <span className="sources">
-        {sources.map((s) => (
-          <span key={s.source} className={`source ${s.status}`}>
+      {sources.map((s) => {
+        const st = stateOf(s);
+        const detail =
+          s.source === "dataverse"
+            ? `${s.itemCount} ${s.itemCount === 1 ? "pattern" : "patterns"}`
+            : "";
+        return (
+          <span key={s.source} className={`source ${st.cls}`} title={s.message ?? ""}>
             <span className="dot" aria-hidden="true" />
             {names[s.source]}
-            <span className="muted">
-              {s.source === "dataverse" ? `${blocks} focus blocks` : `${placedIds(s.source)} events`} · {s.sample ? "sample" : s.fetchedAt ? `fetched ${s.fetchedAt}` : s.status}
-            </span>
+            <span className={`state ${st.cls}`}>{st.label}</span>
+            {s.fetchedAt && <span className="muted">{s.fromCache ? "from" : "fetched"} {when(s.fetchedAt, shape.timeZone)}</span>}
+            {detail && <span className="muted">{detail}</span>}
           </span>
-        ))}
-      </span>
+        );
+      })}
+      {dv?.message && <span className={`dv-message ${dv.status === "ok" ? "" : "problem"}`}>{dv.message}</span>}
+      {samples.length > 0 && (
+        <span className="sample-note">
+          <span className="sample-pill">Sample meetings</span>
+          <span className="muted">
+            Outlook and Google are not connected yet{isSampleWeek ? "" : `; sample meetings exist only for the week of ${shortDate(sampleWeek)}`}
+          </span>
+        </span>
+      )}
       <span className="muted shape">
-        Day shape {shape.start} · split {shape.split} · usual end {shape.end} · {shape.timeZone}
+        {shape.start} · split {shape.split} · usual end {shape.end} · {shape.timeZone}
       </span>
+      <button type="button" className="refresh" onClick={onRefresh} disabled={loading} aria-label="Refresh Dataverse">
+        {loading ? "Loading…" : "Refresh"}
+      </button>
     </footer>
   );
 }

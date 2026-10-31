@@ -28,7 +28,12 @@ sources/   dataverse | graph | google adapters → SourceResult
 secrets/   keyring access only
 config/    ~/.config/coopilot/config.toml, validated
 cache/     ~/.cache/coopilot, last good snapshot per source
+server/    127.0.0.1 host: launch token, Host/Origin guard, /api/action, UI
+log/       structured logger with a closed set of fields (no headers or bodies)
+fixtures/  sample data (Outlook and Google until step 3)
 ```
+
+Run: `npm start` (build + server + Chromium app window), `npm run dev` (Vite in the server, no HMR), `npm test`, `npm run typecheck`, `npm run screenshot` (needs a running server).
 
 ## Glossary (use these words in code, UI and chat)
 

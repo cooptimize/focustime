@@ -1,4 +1,4 @@
-import type { PlacedEvent } from "../week/types";
+import type { PlacedEvent } from "../week/types.ts";
 
 export type Positioned = { placed: PlacedEvent; top: number; height: number; lane: number; lanes: number };
 

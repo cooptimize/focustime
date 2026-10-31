@@ -1,6 +1,6 @@
-import { iso } from "./dates";
-import { formatDuration, formatRange, toZoned } from "./format";
-import type { CalEvent, FocusBlock, FreeGap, PlacedEvent, Risk, RiskThresholds, Severity } from "./types";
+import { iso } from "./dates.ts";
+import { formatDuration, formatRange, toZoned } from "./format.ts";
+import type { CalEvent, FocusBlock, FreeGap, PlacedEvent, Risk, RiskThresholds, Severity } from "./types.ts";
 
 export type RiskInput = {
   focus: readonly FocusBlock[];

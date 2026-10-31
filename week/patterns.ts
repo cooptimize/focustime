@@ -1,5 +1,5 @@
-import { weekDates } from "./dates";
-import type { DayPart, FocusBlock, FocusPattern, Half, IsoDate, StandingBlock, WorkWeekday } from "./types";
+import { weekDates } from "./dates.ts";
+import type { DayPart, FocusBlock, FocusPattern, Half, IsoDate, StandingBlock, WorkWeekday } from "./types.ts";
 
 const WORK_DAYS: readonly WorkWeekday[] = ["Mon", "Tue", "Wed", "Thu"];
 
@@ -28,7 +28,9 @@ export function expandPatterns(patterns: readonly FocusPattern[], weekStart: Iso
       const date = dates[i]!;
       if (!part || !inRange(date, p.startDate, p.endDate)) return;
       for (const half of halvesOf(part)) {
-        out.push({ id: `${p.id}:${date}:${half}`, clientKey: p.clientKey, clientName: p.clientName, date, half, source: "dataverse", patternId: p.id });
+        const block: FocusBlock = { id: `${p.id}:${date}:${half}`, clientKey: p.clientKey, clientName: p.clientName, date, half, source: "dataverse", patternId: p.id };
+        if (p.clientFullName) block.clientFullName = p.clientFullName;
+        out.push(block);
       }
     });
   }

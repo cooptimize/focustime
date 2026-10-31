@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { weekLoad } from "../actions/week-load";
-import { SAMPLE_WEEK } from "./sample-week";
+import { weekConfig } from "../config/defaults.ts";
+import { buildWeek } from "../week/build.ts";
+import { SAMPLE_WEEK, sampleGoogle, sampleOutlook, samplePatterns } from "./sample-week.ts";
 
 // Guards the fixture's purpose: it must keep demonstrating each state the grid shows.
 describe("sample week fixture", () => {
-  const { week } = weekLoad(SAMPLE_WEEK);
+  const week = buildWeek({ weekStart: SAMPLE_WEEK, patterns: samplePatterns, events: [...sampleOutlook, ...sampleGoogle], config: weekConfig });
   const slots = week.days.flatMap((d) => [d.am, d.pm]);
   const rules = (date: string, half: "AM" | "PM") =>
     slots.find((s) => s.date === date && s.half === half)!.risks.map((r) => `${r.rule}:${r.severity}`);

@@ -1,5 +1,5 @@
-import { dayBounds, iso, weekDates } from "./dates";
-import type { CalEvent, DayShape, IsoDate, PlacedEvent } from "./types";
+import { dayBounds, iso, weekDates } from "./dates.ts";
+import type { CalEvent, DayShape, IsoDate, PlacedEvent } from "./types.ts";
 
 export type DayBuckets = {
   allDay: CalEvent[];

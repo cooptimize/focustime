@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildWeek } from "./build";
-import { allDayPersonal, meeting, noStanding, pattern, personal } from "./test-helpers";
-import type { CalEvent, Risk } from "./types";
+import { buildWeek } from "./build.ts";
+import { allDayPersonal, meeting, noStanding, pattern, personal } from "./test-helpers.ts";
+import type { CalEvent, Risk } from "./types.ts";
 
 // Tue Nov 3, 2026: CSC all day. AM is 09:00-12:30 (210 min), PM is 12:30-17:00 (270 min).
 const csc = pattern({ clientKey: "csc", clientName: "CSC", days: { Tue: "AllDay" } });
