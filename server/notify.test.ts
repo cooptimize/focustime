@@ -45,4 +45,12 @@ describe("Plan the day reminder", () => {
   it("sends nothing without a usable config", async () => {
     expect(await checkReminder({ now: () => at("2026-11-02T10:00:00-05:00"), shape: async () => null, committed: () => false, once: () => true, send: () => { throw new Error("no"); } })).toBe(false);
   });
+
+  it("sends nothing on a PTO day, and a failed PTO check doesn't block it (D106)", async () => {
+    const base = { now: () => at("2026-11-05T09:10:00-05:00"), shape: async () => shape, committed: () => false, once: () => true };
+    const sent: string[] = [];
+    expect(await checkReminder({ ...base, off: async (d) => d === "2026-11-05", send: (_t, b) => sent.push(b) })).toBe(false);
+    expect(await checkReminder({ ...base, off: async () => { throw new Error("offline"); }, send: (_t, b) => sent.push(b) })).toBe(true);
+    expect(sent).toEqual(["Today isn't planned yet. Open Coopilot and press P to plan the day."]);
+  });
 });

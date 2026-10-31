@@ -109,8 +109,8 @@ export type Slot = {
   /** Every gap with no busy item, in order. */
   freeGaps: FreeGap[];
   busyMeetingMinutes: number;
-  /** PTO minutes taken from this half-day (step 6): all of it on a full PTO day, else afternoon first. */
-  ptoMinutes: number;
+  /** The day is a PTO day (D105): the whole half-day is off, so it has no free time and raises no risks. */
+  pto: boolean;
 };
 
 export type Day = {

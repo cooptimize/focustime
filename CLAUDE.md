@@ -53,7 +53,7 @@ Run: `coopilot-open` (starts the service if needed, then opens or focuses the wi
 | Plan layer | Coopilot's local plan: day plans and picks in the plan store (step 5) |
 | Plan the day | The planning panel: a day's capacity (today, or the next workday) into committed picks per block. Formerly "ignition"; `i` stays as an alias key |
 | Plan the week, Check-in, Close out | Reserved names for future views (shown as "coming soon"). Not built |
-| PTO | Time off from Dataverse Time Off Tracker rows (mine only). A full PTO day is off: no risks, no picks. Partial PTO reduces capacity |
+| PTO | Time off from Dataverse Time Off Tracker rows (mine only). Every PTO day is a whole day off: no risks, no picks, skipped as a planning target. Hours are not used |
 | Command menu | Ctrl+K: every action from the action registry with its shortcut; the base for the chat panel |
 | Pick | One planned piece of work in a block: a DevOps item, a draft story or an intention, sized S/M/L |
 | Source | Dataverse, Outlook or Google; each reports its own status |

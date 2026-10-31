@@ -18,6 +18,8 @@ export type ReminderDeps = {
   now: () => Temporal.ZonedDateTime;
   shape: () => Promise<DayShape | null>;
   committed: (date: string) => boolean;
+  /** Whether a date is a PTO day (D106): no reminder then. Asked only when a reminder would otherwise be due. */
+  off?: (date: string) => Promise<boolean>;
   /** True the first time for a date (the store's markOnce). */
   once: (date: string) => boolean;
   send: (title: string, body: string) => void;
@@ -30,8 +32,9 @@ export async function checkReminder(d: ReminderDeps): Promise<boolean> {
   const now = d.now().withTimeZone(shape.timeZone);
   const date = now.toPlainDate().toString();
   if (!reminderDue(now, shape, d.committed(date))) return false;
+  if (d.off && (await d.off(date).catch(() => false))) return false;
   if (!d.once(date)) return false;
-  d.send("Coopilot", "Today isn't planned yet. Open Coopilot and press i to plan your blocks.");
+  d.send("Coopilot", "Today isn't planned yet. Open Coopilot and press P to plan the day.");
   return true;
 }
 

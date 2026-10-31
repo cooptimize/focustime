@@ -357,7 +357,8 @@ Purpose: in about two minutes, turn today's real capacity into a short, committe
 - **Menus (D102):** "⋯" and right-click on every block card, pick and work item. Anything a key does to an item, a menu does.
 - **Command menu (D101):** Ctrl+K or the top-bar button; searchable; each entry shows its shortcut. Built from `actions/registry.ts`, the same list the dispatcher accepts, plus view and navigation commands.
 - **Rename (D94):** ignition is Plan the day. `p` opens it, `i` is an alias.
-- **Next workday (D97):** today on a workday before the usual end, else the next workday (Mon–Thu). The panel names the day and whether it is today or the next workday.
-- **PTO (D98, D99):** my Time Off Tracker rows and their detail rows from Dataverse, read-only. Full PTO day: off style, "PTO · title", blocks dimmed, no risks, no picks. Partial: "PTO 4h", less capacity. Source "PTO" in the status bar with cache and plain errors.
+- **Next workday (D97, D106, D107):** today on a workday before the usual end, else the next workday (Mon–Thu), skipping PTO days. Friday is not a target for now. The panel names the day and whether it is today or the next workday. No automatic open or reminder on a PTO day.
+- **PTO (D98, D99, D105, D109):** my Time Off Tracker rows and their detail rows from Dataverse, read-only, dates only. Every PTO day is a whole day off: off style, "PTO · title", blocks dimmed, no risks, no picks. Detail rows give the days; a tracker without them covers every weekday from start to end. Source "PTO" in the status bar with cache and plain errors.
+- **Schema errors (D108):** a missing or renamed Dataverse table or column (PTO, focus blocks, clients) shows as a named message in the status bar, found with read-only probes on my own rows.
 - **Show-as and time (D100, D103):** busy, tentative, free, out of office and working elsewhere look different without relying on color; legend in details. Every card: "2h meetings · 2h 15m free · longest 1h"; Plan the day uses the same free number.
 - **Rollback:** code only, plus store migration 2 (marker rename, harmless to keep). Revert the commit; no files outside the repo changed in this step.

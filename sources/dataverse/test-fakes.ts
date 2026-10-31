@@ -60,16 +60,16 @@ export const devopsAccounts = {
   ],
 };
 
-/** PTO (step 6): Thu Nov 5 full day with a detail row; Tue Nov 3 4 h with no detail rows. */
+/** PTO (step 6): Thu Nov 5 with a detail row; Mon Nov 16 to Tue Nov 17 with no detail rows (both days off, D109). */
 export const PTO_TRACKERS = {
   value: [
-    { coop_timeofftrackerid: "aaaaaaaa-0000-4000-8000-000000000005", coop_timeoffstartdate: "2026-11-05", coop_enddate: "2026-11-05", coop_timeoffhours: 8, coop_title: "Watch Kids" },
-    { coop_timeofftrackerid: "aaaaaaaa-0000-4000-8000-000000000003", coop_timeoffstartdate: "2026-11-03", coop_enddate: "2026-11-03", coop_timeoffhours: 4, coop_title: "Dentist" },
+    { coop_timeofftrackerid: "aaaaaaaa-0000-4000-8000-000000000005", coop_timeoffstartdate: "2026-11-05", coop_enddate: "2026-11-05", coop_title: "Watch Kids" },
+    { coop_timeofftrackerid: "aaaaaaaa-0000-4000-8000-000000000016", coop_timeoffstartdate: "2026-11-16", coop_enddate: "2026-11-17", coop_title: "Trip" },
   ],
 };
-export const PTO_DETAILS = { value: [{ _coop_timeofftracker_value: "aaaaaaaa-0000-4000-8000-000000000005", coop_date: "2026-11-05", coop_hours: "8" }] };
+export const PTO_DETAILS = { value: [{ _coop_timeofftracker_value: "aaaaaaaa-0000-4000-8000-000000000005", coop_date: "2026-11-05" }] };
 
-export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devopsAccounts?: unknown; pto?: "ok" | "none" | "forbidden" } = {}) {
+export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devopsAccounts?: unknown; pto?: "ok" | "none" | "forbidden"; missing?: string } = {}) {
   const calls: Call[] = [];
   const fn = async (input: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
     const url = String(input);
@@ -94,7 +94,9 @@ export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devops
     if (scenario === "dv_401") return leakyError(401, "0x80072560");
     if (scenario === "dv_403") return leakyError(403, "0x80040220");
     if (scenario === "table_missing") return leakyError(404, "0x8006088a");
-    if (scenario === "column_missing") return leakyError(400, "0x80060888");
+    // A renamed column: any query naming it in $select or $filter gets 400 (as the real environment does).
+    const missing = scenario === "column_missing" ? "coop_mondaydaypart" : extra.missing;
+    if (missing && new RegExp(`[=,( ]${missing}[,&) ]`).test(`${decodeURIComponent(url)} `)) return leakyError(400, "0x80060888");
     if (scenario === "dv_503") return leakyError(503, "0x80040216");
 
     const path = url.slice(`${ENV}/api/data/v9.2/`.length);

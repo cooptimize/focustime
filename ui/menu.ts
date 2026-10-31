@@ -57,7 +57,7 @@ const live = (p: Pick) => p.status === "planned" || p.status === "done";
 /** Full PTO days take no picks. */
 function ptoReason(env: MenuEnv, date: IsoDate): string | undefined {
   const d = env.week.days.find((x) => x.date === date);
-  return d?.pto?.full ? `PTO day (${d.pto.titles.join(", ")})` : undefined;
+  return d?.pto ? `PTO day (${d.pto.titles.join(", ")})` : undefined;
 }
 
 /** Half-days of the week on screen, as places to put a pick. */
@@ -222,7 +222,7 @@ function planDayStep(env: MenuEnv): MenuStep {
   const t = env.planTarget;
   const seen = new Set<string>([t.date]);
   const items: MenuItem[] = [{ id: "target", label: `${dayName(t.date)} (${t.isToday ? "today" : "next workday"})`, ...(ptoReason(env, t.date) ? { hint: ptoReason(env, t.date)! } : {}), run: () => env.openPlanDay(t.date) }];
-  for (const d of env.week.days) if (!seen.has(d.date)) items.push({ id: d.date, label: dayName(d.date), ...(d.pto?.full ? { hint: "PTO" } : {}), run: () => env.openPlanDay(d.date) });
+  for (const d of env.week.days) if (!seen.has(d.date)) items.push({ id: d.date, label: dayName(d.date), ...(d.pto ? { hint: "PTO" } : {}), run: () => env.openPlanDay(d.date) });
   return { title: "Plan which day?", items };
 }
 

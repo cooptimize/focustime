@@ -36,9 +36,8 @@ describe("capacity", () => {
     expect(capacityMinutes(slot, at("12:30"))).toBe(0);
     expect(capacityMinutes({ ...frame, freeGaps: [] }, at("07:00"))).toBe(0);
   });
-  it("is lowered by PTO taken from that half-day", () => {
-    expect(capacityMinutes({ ...slot, ptoMinutes: 150 }, at("07:30"))).toBe(60);
-    expect(capacityMinutes({ ...slot, ptoMinutes: 210 }, at("07:30"))).toBe(0);
+  it("is zero on a PTO day", () => {
+    expect(capacityMinutes({ ...slot, pto: true }, at("07:30"))).toBe(0);
   });
 });
 

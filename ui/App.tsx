@@ -132,7 +132,12 @@ export function App() {
     [now],
   );
   /** Default day to plan: today on a workday before the usual end, else the next workday (D97). */
-  const target = useMemo(() => (data ? planTarget(zonedNow(data.dayShape.timeZone), data.dayShape.end) : null), [data, zonedNow, clock]); // eslint-disable-line react-hooks/exhaustive-deps
+  // PTO days are skipped (D106): the ones ahead of today from the server, plus any on the week shown.
+  const target = useMemo(() => {
+    if (!data) return null;
+    const pto = new Set([...data.ptoAhead, ...data.week.days.filter((d) => d.pto).map((d) => d.date)]);
+    return planTarget(zonedNow(data.dayShape.timeZone), data.dayShape.end, pto);
+  }, [data, zonedNow, clock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Opens Plan the day for a date (default: today or the next workday). Moves to that date's week when it isn't

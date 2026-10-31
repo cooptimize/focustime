@@ -5,7 +5,7 @@ import type { DataverseConfig } from "../../config/schema.ts";
 import type { Logger } from "../../log/logger.ts";
 import { SecretError } from "../../secrets/keyring.ts";
 import { formatTime } from "../../week/format.ts";
-import { ptoEntries, type PtoDetailRow, type PtoEntry, type PtoTrackerRow } from "../../week/pto.ts";
+import { PTO_DETAIL_COLUMNS, PTO_DETAIL_FILTER_COLUMNS, PTO_TRACKER_COLUMNS, PTO_TRACKER_FILTER_COLUMNS, ptoEntries, type PtoDetailRow, type PtoEntry, type PtoTrackerRow } from "../../week/pto.ts";
 import type { FocusPattern, SourceResult } from "../../week/types.ts";
 import { Pat } from "../devops/pat.ts";
 import type { DevOpsTarget, TargetsResult } from "../devops/types.ts";
@@ -29,14 +29,38 @@ type Status = SourceResult<unknown>["status"];
 class SourceFailure extends Error {
   readonly status: Status;
   readonly fixAction: SourceResult<unknown>["fixAction"] | undefined;
-  constructor(status: Status, message: string, fixAction?: SourceResult<unknown>["fixAction"]) {
+  /** Dataverse said a table (404) or a column (400, 0x80060888) doesn't exist (D108). */
+  schema: "table" | "column" | undefined;
+  constructor(status: Status, message: string, fixAction?: SourceResult<unknown>["fixAction"], schema?: "table" | "column") {
     super(message);
     this.status = status;
     this.fixAction = fixAction;
+    this.schema = schema;
   }
 }
 
+/** The tables and columns one query reads, so a missing one can be named (D108). */
+type SchemaUse = {
+  /** Plain name for messages: "PTO", "Focus block". */
+  label: string;
+  table: string;
+  /** Primary key: always there while the table is. */
+  key: string;
+  /** A filter limiting probes to my own rows, and the column it uses (probed first). */
+  scope: string;
+  scopeColumn: string;
+  /** Every other column selected or filtered on. */
+  columns: readonly string[];
+};
+
 const API = "/api/data/v9.2/";
+
+/** Focus Time columns read (selected; the filter uses some of them too). */
+const FOCUS_COLUMNS = [
+  "coop_focustimeid", "_coop_account_value", "_coop_systemuser_value", "_coop_accountworker_value",
+  "coop_startdate", "coop_enddate", "coop_mondaydaypart", "coop_tuesdaydaypart",
+  "coop_wednesdaydaypart", "coop_thursdaydaypart", "statecode",
+] as const;
 const KEYRING_HINT = "keyring entry coopilot / dataverse-client-secret";
 
 export function createDataverseSource(deps: DataverseSourceDeps) {
@@ -167,19 +191,53 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
 
   function mapHttpError(status: number, code: string | null): SourceFailure {
     if (status === 401 || status === 403) return new SourceFailure("auth_required", "Dataverse access denied: check app user role", "open_settings");
-    if (status === 404 || code === "0x8006088a" || code === "0x80060888")
-      return new SourceFailure("misconfigured", "Focus block table not found: check config", "open_settings");
+    // Checked against the real environment: an unknown table is 404, an unknown column ($select or $filter) is
+    // 400, both with 0x80060888 (D108).
+    if (status === 404 || code === "0x8006088a") return new SourceFailure("misconfigured", "Focus block table not found: check config", "open_settings", "table");
+    if (code === "0x80060888") return new SourceFailure("misconfigured", "A focus block column was not found: check config", "open_settings", "column");
     return new SourceFailure("error", `Dataverse error (HTTP ${status})`);
+  }
+
+  /**
+   * Which table or column of a query is missing, found with small read-only probes limited to my own rows
+   * (only the error code is read, never the message). The result is a plain, named message.
+   */
+  async function schemaMessage(use: SchemaUse, kind: "table" | "column"): Promise<string> {
+    const probe = async (column: string, filter: string): Promise<"ok" | "table" | "column" | "other"> => {
+      try {
+        await getAll("schema_probe", `${use.table}?$select=${column}&$filter=${encodeURIComponent(filter)}&$top=1`);
+        return "ok";
+      } catch (e) {
+        return e instanceof SourceFailure && e.schema ? e.schema : "other";
+      }
+    };
+    const tableGone = `${use.label} table ${use.table} not found in Dataverse (renamed or removed?)`;
+    const columnGone = (c: string) => `${use.label} column ${c} not found in ${use.table} (renamed or removed?)`;
+    const first = await probe(use.key, use.scope);
+    if (first === "table") return tableGone;
+    if (first === "column") return columnGone(use.scopeColumn);
+    if (first === "ok") {
+      for (const c of use.columns) {
+        const r = await probe(c, use.scope);
+        if (r === "column") return columnGone(c);
+        if (r !== "ok") break;
+      }
+    }
+    return kind === "table" ? tableGone : `A ${use.label} column was not found in ${use.table} (renamed or removed?)`;
+  }
+
+  /** Rows must carry every selected column; a missing key means a schema change, never a silent blank (D108). */
+  function checkColumns(use: SchemaUse, rows: readonly object[], selected: readonly string[]) {
+    const row = rows[0];
+    if (!row) return;
+    const gone = selected.find((c) => !(c in row));
+    if (gone) throw new SourceFailure("misconfigured", `${use.label} column ${gone} not found in ${use.table} (renamed or removed?)`, "open_settings", "column");
   }
 
   function focusTimesPath(weekStart: string, userId: string): string {
     const mon = Temporal.PlainDate.from(weekStart);
     const thu = mon.add({ days: 3 });
-    const select = [
-      "coop_focustimeid", "_coop_account_value", "_coop_systemuser_value", "_coop_accountworker_value",
-      "coop_startdate", "coop_enddate", "coop_mondaydaypart", "coop_tuesdaydaypart",
-      "coop_wednesdaydaypart", "coop_thursdaydaypart", "statecode",
-    ].join(",");
+    const select = FOCUS_COLUMNS.join(",");
     const filter =
       `statecode eq 0 and coop_startdate le ${thu} and (coop_enddate eq null or coop_enddate ge ${mon})` +
       ` and (_coop_systemuser_value eq ${userId} or coop_AccountWorker/_coop_user_value eq ${userId})`;
@@ -205,9 +263,30 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     if (!userId) throw new SourceFailure("misconfigured", "Your Dataverse user id is not resolved yet: check my_email in config", "open_settings");
     if (!/^[0-9a-f-]{36}$/i.test(userId)) throw new SourceFailure("misconfigured", "my_systemuserid is not a GUID", "open_settings");
 
-    const rows = await getAll<FocusTimeRow>("focustimes", focusTimesPath(weekStart, userId));
+    // A missing table or column is named (D108). The expanded Account Worker isn't probed; it falls to the general message.
+    const named = async <T,>(use: SchemaUse, run: () => Promise<T>): Promise<T> => {
+      try {
+        return await run();
+      } catch (e) {
+        if (e instanceof SourceFailure && e.schema) throw new SourceFailure("misconfigured", `${await schemaMessage(use, e.schema)}: check config`, "open_settings", e.schema);
+        throw e;
+      }
+    };
+    const focusUse: SchemaUse = { label: "Focus block", table: "coop_focustimes", key: "coop_focustimeid", scope: `_coop_systemuser_value eq ${userId}`, scopeColumn: "_coop_systemuser_value", columns: FOCUS_COLUMNS.filter((c) => c !== "coop_focustimeid" && c !== "_coop_systemuser_value") };
+    const rows = await named(focusUse, async () => {
+      const r = await getAll<FocusTimeRow>("focustimes", focusTimesPath(weekStart, userId));
+      checkColumns(focusUse, r, FOCUS_COLUMNS);
+      return r;
+    });
     const accountIds = [...new Set(rows.flatMap((r) => [r.coop_AccountWorker?._coop_account_value, r._coop_account_value]).filter((x): x is string => !!x && /^[0-9a-f-]{36}$/i.test(x)))];
-    const accounts = accountIds.length ? await getAll<AccountRow>("accounts", accountsPath(accountIds)) : [];
+    const accountUse: SchemaUse = { label: "Client", table: "accounts", key: "accountid", scope: `accountid eq ${accountIds[0] ?? userId}`, scopeColumn: "accountid", columns: ["name", "coop_reportingnickname"] };
+    const accounts = accountIds.length
+      ? await named(accountUse, async () => {
+          const r = await getAll<AccountRow>("accounts", accountsPath(accountIds));
+          checkColumns(accountUse, r, ["accountid", "name", "coop_reportingnickname"]);
+          return r;
+        })
+      : [];
     const { patterns, skipped } = normalizeFocusTimes(rows, accounts, userId);
     if (skipped.length) log({ source: "dataverse", op: "normalize", kind: "skipped", count: skipped.length });
 
@@ -342,50 +421,77 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
   }
 
   /**
-   * My PTO for one week (step 6): Time Off Tracker rows for me (coop_employee = my systemuserid) that overlap
-   * Mon to Fri, and every detail row of those trackers. Only the fields listed are selected: never
+   * My PTO between two dates (step 6): Time Off Tracker rows for me (coop_employee = my systemuserid) that overlap
+   * them, and every detail row of those trackers. Only the dates are read, never hours (D105); never
    * coop_outofofficemessage, and the accrual table (coop_timeofffact) is never read. Normalized to PTO entries
-   * for the week's dates, cached per week as the last good result, and never thrown: failures fall back to it.
+   * for weekdays in the range, cached per range as the last good result, and never thrown: failures fall back
+   * to it. A missing table or column is named in the message (D108).
    */
   const ptoMemory = new Map<string, { at: number; result: SourceResult<PtoEntry> }>();
-  async function pto(weekStart: string, dayMinutes: number, opts: { refresh?: boolean } = {}): Promise<SourceResult<PtoEntry>> {
+  async function pto(from: string, to: string, opts: { refresh?: boolean } = {}): Promise<SourceResult<PtoEntry>> {
     const t = now().epochMilliseconds;
-    const key = `${weekStart}:${dayMinutes}`;
+    const key = `${from}-to-${to}`; // a valid snapshot key (letters, digits, dashes)
     const hit = ptoMemory.get(key);
     if (hit && !opts.refresh && t - hit.at < ttl) return hit.result;
     let result: SourceResult<PtoEntry>;
+    const userId = config.mySystemUserId ?? "";
+    const trackerUse: SchemaUse = {
+      label: "PTO",
+      table: "coop_timeofftrackers",
+      key: "coop_timeofftrackerid",
+      scope: `_coop_employee_value eq ${userId}`,
+      scopeColumn: "_coop_employee_value",
+      columns: [...PTO_TRACKER_COLUMNS.filter((c) => c !== "coop_timeofftrackerid"), ...PTO_TRACKER_FILTER_COLUMNS.filter((c) => c !== "_coop_employee_value")],
+    };
+    let detailUse: SchemaUse | null = null;
     try {
-      const userId = config.mySystemUserId;
-      if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) throw new SourceFailure("misconfigured", "Your Dataverse user id is not resolved yet", "open_settings");
-      const mon = Temporal.PlainDate.from(weekStart);
-      const fri = mon.add({ days: 4 });
-      const filter = `_coop_employee_value eq ${userId} and statecode eq 0 and coop_timeoffstartdate le ${fri} and (coop_enddate eq null or coop_enddate ge ${mon})`;
-      const trackers = await getAll<PtoTrackerRow>(
-        "pto_trackers",
-        `coop_timeofftrackers?$select=coop_timeofftrackerid,coop_timeoffstartdate,coop_enddate,coop_timeoffhours,coop_title&$filter=${encodeURIComponent(filter)}`,
-      );
+      if (!/^[0-9a-f-]{36}$/i.test(userId)) throw new SourceFailure("misconfigured", "Your Dataverse user id is not resolved yet", "open_settings");
+      const start = Temporal.PlainDate.from(from);
+      const end = Temporal.PlainDate.from(to);
+      const filter = `_coop_employee_value eq ${userId} and statecode eq 0 and coop_timeoffstartdate le ${end} and (coop_enddate eq null or coop_enddate ge ${start})`;
+      let trackers: PtoTrackerRow[];
+      try {
+        trackers = await getAll<PtoTrackerRow>("pto_trackers", `coop_timeofftrackers?$select=${PTO_TRACKER_COLUMNS.join(",")}&$filter=${encodeURIComponent(filter)}`);
+        checkColumns(trackerUse, trackers, PTO_TRACKER_COLUMNS);
+      } catch (e) {
+        if (e instanceof SourceFailure && e.schema) throw new SourceFailure("misconfigured", await schemaMessage(trackerUse, e.schema), "open_settings", e.schema);
+        throw e;
+      }
       const ids = trackers.map((r) => r.coop_timeofftrackerid?.toLowerCase()).filter((id): id is string => !!id && /^[0-9a-f-]{36}$/.test(id));
-      // All detail rows of these trackers, not only this week's: a tracker with details elsewhere must not be spread here.
-      const details = ids.length
-        ? await getAll<PtoDetailRow>(
+      // All detail rows of these trackers, not only this range's: a tracker with details elsewhere must not be spread here.
+      let details: PtoDetailRow[] = [];
+      if (ids.length) {
+        detailUse = {
+          label: "PTO",
+          table: "coop_timeofftrackerdetails",
+          key: "coop_timeofftrackerdetailid",
+          scope: `_coop_timeofftracker_value eq ${ids[0]}`,
+          scopeColumn: "_coop_timeofftracker_value",
+          columns: [...PTO_DETAIL_COLUMNS.filter((c) => c !== "_coop_timeofftracker_value"), ...PTO_DETAIL_FILTER_COLUMNS],
+        };
+        try {
+          details = await getAll<PtoDetailRow>(
             "pto_details",
-            `coop_timeofftrackerdetails?$select=_coop_timeofftracker_value,coop_date,coop_hours&$filter=${encodeURIComponent(`statecode eq 0 and (${ids.map((id) => `_coop_timeofftracker_value eq ${id}`).join(" or ")})`)}`,
-          )
-        : [];
-      const dates = new Set([0, 1, 2, 3, 4].map((i) => mon.add({ days: i }).toString()));
-      const { entries, skipped } = ptoEntries(trackers, details, dayMinutes);
-      const items = entries.filter((e) => dates.has(e.date));
+            `coop_timeofftrackerdetails?$select=${PTO_DETAIL_COLUMNS.join(",")}&$filter=${encodeURIComponent(`statecode eq 0 and (${ids.map((id) => `_coop_timeofftracker_value eq ${id}`).join(" or ")})`)}`,
+          );
+          checkColumns(detailUse, details, PTO_DETAIL_COLUMNS);
+        } catch (e) {
+          if (e instanceof SourceFailure && e.schema) throw new SourceFailure("misconfigured", await schemaMessage(detailUse, e.schema), "open_settings", e.schema);
+          throw e;
+        }
+      }
+      const { entries, skipped } = ptoEntries(trackers, details);
+      const items = entries.filter((e) => e.date >= from && e.date <= to);
       if (skipped) log({ source: "dataverse", op: "pto_normalize", kind: "skipped", count: skipped });
       const fetchedAt = now().toZonedDateTimeISO(deps.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
-      await writeSnapshot(deps.cacheDir, "pto", key.replace(":", "-"), { fetchedAt, items }).catch(() => log({ source: "dataverse", op: "cache_write", kind: "failed" }));
+      await writeSnapshot(deps.cacheDir, "pto", key, { fetchedAt, items }).catch(() => log({ source: "dataverse", op: "cache_write", kind: "failed" }));
       result = { source: "pto", status: "ok", fetchedAt, fromCache: false, items };
-      if (skipped) result.message = `${skipped} PTO ${skipped === 1 ? "row" : "rows"} skipped (unreadable dates or hours)`;
+      if (skipped) result.message = `${skipped} PTO ${skipped === 1 ? "row" : "rows"} skipped (unreadable dates)`;
     } catch (e) {
       const f = e instanceof SourceFailure ? e : new SourceFailure("error", "PTO load failed");
       if (!(e instanceof SourceFailure)) log({ source: "dataverse", op: "pto", kind: "unexpected" });
-      const plain =
-        f.status === "auth_required" ? "PTO not readable: check the Coopilot role in Dataverse" : f.status === "misconfigured" && /table not found/.test(f.message) ? "PTO tables not found in Dataverse" : f.message;
-      const snap = await readSnapshot<PtoEntry>(deps.cacheDir, "pto", key.replace(":", "-"));
+      const plain = f.status === "auth_required" ? "PTO not readable: check the Coopilot role in Dataverse" : f.message;
+      const snap = await readSnapshot<PtoEntry>(deps.cacheDir, "pto", key);
       const message = snap ? `${plain}. Showing PTO from ${fmtAt(snap.fetchedAt)}` : `${plain}. No cached PTO yet`;
       result = { source: "pto", status: f.status, fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [], message };
     }

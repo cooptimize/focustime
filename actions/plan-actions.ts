@@ -27,7 +27,7 @@ async function ptoRefusal(ctx: PlanContext, d: IsoDate): Promise<string | null> 
   const cfg = await ctx.config();
   if (!cfg) return null;
   const off = await ctx.pto(cfg, d).catch(() => null);
-  return off?.full ? `${Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })} is a PTO day (${off.titles.join(", ")}). Nothing can be planned on it` : null;
+  return off ? `${Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })} is a PTO day (${off.titles.join(", ")}). Nothing can be planned on it` : null;
 }
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });

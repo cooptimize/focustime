@@ -21,4 +21,18 @@ describe("next workday targeting", () => {
     expect(nextWorkday("2026-12-31")).toBe("2027-01-04");
     expect(nextWorkday("2026-11-30")).toBe("2026-12-01");
   });
+  it("skips PTO days (D106)", () => {
+    const pto = new Set(["2026-11-05"]);
+    // Wednesday evening: Thursday is PTO, Friday isn't a target, so Monday.
+    expect(planTarget(at("2026-11-04T18:00"), "17:00", pto)).toEqual({ date: "2026-11-09", isToday: false });
+    // On the PTO day itself, even in the morning: the next workday.
+    expect(planTarget(at("2026-11-05T08:00"), "17:00", pto)).toEqual({ date: "2026-11-09", isToday: false });
+    // A whole PTO week after the weekend.
+    expect(planTarget(at("2026-10-31T12:00"), "17:00", new Set(["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05"])).date).toBe("2026-11-09");
+    // A PTO day elsewhere changes nothing.
+    expect(planTarget(at("2026-11-03T08:00"), "17:00", pto)).toEqual({ date: "2026-11-03", isToday: true });
+  });
+  it("never targets Friday (D107)", () => {
+    expect(nextWorkday("2026-11-05")).toBe("2026-11-09");
+  });
 });

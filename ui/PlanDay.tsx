@@ -35,7 +35,7 @@ type Props = {
 const inPlay = (p: Pick) => p.status === "planned" || p.status === "done";
 
 export function PlanDay({ day, state, which, friday, now, tz, colors, clients, error, act, onCommit, onClose }: Props) {
-  const off = day.pto?.full ? day.pto : null;
+  const off = day.pto;
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     ref.current?.focus({ preventScroll: true });
@@ -88,11 +88,6 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
       {off && (
         <p className="pd-pto full" role="note">
           <strong>PTO</strong> · {off.titles.join(", ")}. This day is off, so nothing can be planned on it.
-        </p>
-      )}
-      {day.pto && !day.pto.full && (
-        <p className="pd-pto part" role="note">
-          <strong>PTO {formatMinutes(day.pto.minutes)}</strong> · {day.pto.titles.join(", ")}. Taken from the afternoon first, so free time below is lower.
         </p>
       )}
 

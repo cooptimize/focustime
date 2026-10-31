@@ -223,21 +223,15 @@ describe("PTO in the week (step 6)", () => {
     expect(slot(w.days, 3, "AM").risks.length + slot(w.days, 3, "PM").risks.length).toBeGreaterThan(0);
   });
 
-  it("a full PTO day keeps its focus blocks but raises no risks and takes both halves", () => {
-    const w = buildWeek({ ...thu, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
+  it("a PTO day keeps its focus blocks but raises no risks and is off in both halves", () => {
+    const w = buildWeek({ ...thu, pto: { "2026-11-05": { date: "2026-11-05", titles: ["Watch Kids"] } } });
     const d = w.days[3]!;
-    expect(d.pto).toMatchObject({ full: true, titles: ["Watch Kids"] });
+    expect(d.pto).toEqual({ date: "2026-11-05", titles: ["Watch Kids"] });
     expect([d.am.risks, d.pm.risks]).toEqual([[], []]);
     expect(d.am.focus).toHaveLength(1);
-    expect([d.am.ptoMinutes, d.pm.ptoMinutes]).toEqual([210, 270]);
+    expect([d.am.pto, d.pm.pto]).toEqual([true, true]);
     expect(w.days[2]!.pto).toBeNull();
-  });
-
-  it("a partial PTO day keeps its risks and takes the afternoon first", () => {
-    const w = buildWeek({ ...thu, pto: { "2026-11-05": { date: "2026-11-05", minutes: 240, full: false, titles: ["Dentist"] } } });
-    const d = w.days[3]!;
-    expect(d.am.risks.length + d.pm.risks.length).toBeGreaterThan(0);
-    expect([d.am.ptoMinutes, d.pm.ptoMinutes]).toEqual([0, 240]);
+    expect(w.days[2]!.am.pto).toBe(false);
   });
 
   it("working elsewhere takes no time, like free", () => {

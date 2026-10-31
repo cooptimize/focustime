@@ -199,23 +199,34 @@ describe("Plan the day actions", () => {
 });
 
 describe("PTO and Plan the day (step 6)", () => {
-  it("the week shows Thu Nov 5 as a full PTO day with no risks, and Tue as 4 h", async () => {
+  it("the week shows Thu Nov 5 as a PTO day with no risks; PTO ahead is sent for the planning target", async () => {
     const t = setup();
     const w = await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02" });
     const thu = w.week.days[3]!;
-    expect(thu.pto).toMatchObject({ full: true, titles: ["Watch Kids"] });
+    expect(thu.pto).toEqual({ date: "2026-11-05", titles: ["Watch Kids"] });
     expect([...thu.am.risks, ...thu.pm.risks]).toEqual([]);
-    expect(w.week.days[1]!.pto).toMatchObject({ minutes: 240, full: false });
-    expect(w.sources.find((s) => s.source === "pto")).toMatchObject({ status: "ok", itemCount: 2 });
+    expect([thu.am.pto, thu.pm.pto]).toEqual([true, true]);
+    expect(w.week.days[1]!.pto).toBeNull();
+    expect(w.sources.find((s) => s.source === "pto")).toMatchObject({ status: "ok", itemCount: 1 });
+    // The tracker with no detail rows (Nov 16 to 17) counts on every weekday (D109).
+    expect(w.ptoAhead).toEqual(["2026-11-05", "2026-11-16", "2026-11-17"]);
   });
 
-  it("picks are refused on a full PTO day, by add or by move; a partial day still takes them", async () => {
+  it("today on a PTO day is not a planning workday, so Plan the day doesn't open by itself (D106)", async () => {
+    const t = setup();
+    const thu = await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02", now: "2026-11-05T14:00:00Z" });
+    expect(thu.planDay).toMatchObject({ date: "2026-11-05", workday: false });
+    const wed = await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02", now: "2026-11-04T14:00:00Z" });
+    expect(wed.planDay).toMatchObject({ date: "2026-11-04", workday: true });
+  });
+
+  it("picks are refused on a PTO day, by add or by move; other days still take them", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
     const r = await t.fail("pick.add", { date: "2026-11-05", half: "AM", clientKey: "CSC", intention: "x" });
     expect(r).toMatchObject({ status: 422 });
     expect(r.ok ? "" : r.error).toBe("Thu, Nov 5 is a PTO day (Watch Kids). Nothing can be planned on it");
-    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-03", half: "AM", clientKey: "CSC", intention: "fine on a partial day" });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-03", half: "AM", clientKey: "CSC", intention: "fine on a normal day" });
     expect((await t.fail("pick.move", { id: pick.id, date: "2026-11-05", half: "PM" })).status).toBe(422);
   });
 

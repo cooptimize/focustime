@@ -7,9 +7,9 @@ import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { loadSampleSources } from "../sources/sample.ts";
 import { buildWeek } from "../week/build.ts";
-import { dayBounds, defaultWeekStart, localToday, mondayOf, todayTarget, weekDates } from "../week/dates.ts";
+import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates } from "../week/dates.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
-import type { CalEvent, ClientWork, DayShape, FocusPattern, SourceResult, Week } from "../week/types.ts";
+import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { checkDevOpsUrl, launchPlan } from "../links/edge.ts";
 import { planAction } from "./plan-actions.ts";
@@ -68,19 +68,20 @@ function validateWeekLoad(input: unknown): WeekLoadInput | string {
   return out;
 }
 
-/** Minutes from the day shape start to the usual end: a full PTO day. */
-export function dayLength(shape: DayShape): number {
-  const b = dayBounds("2026-01-05", shape);
-  return b.start.until(b.end).total("minutes");
-}
+/** Mon to Fri of a date's week: the range PTO is read in for the week view and pick checks (shared memo). */
+const weekRange = (date: string): [string, string] => {
+  const mon = mondayOf(date);
+  return [mon, Temporal.PlainDate.from(mon).add({ days: 4 }).toString()];
+};
+/** How far ahead PTO is read for Plan the day's target (D106): this week plus four more. */
+const AHEAD_DAYS = 7 * 5 - 3;
 
 /** PTO for one date, for the server-side pick check. Null when there is none or Dataverse can't say. */
 async function ptoOn(ctx: ActionContext, cfg: AppConfig, date: string): Promise<PtoDay | null> {
   const shape = cfg.week.dayShape;
   if (!cfg.dataverse.mySystemUserId) return null;
-  const minutes = dayLength(shape);
-  const r = await ctx.makeDataverse(cfg.dataverse, shape.timeZone).pto(mondayOf(date), minutes).catch(() => null);
-  return ptoByDate(r?.items ?? [], [date], minutes)[date] ?? null;
+  const r = await ctx.makeDataverse(cfg.dataverse, shape.timeZone).pto(...weekRange(date)).catch(() => null);
+  return ptoByDate(r?.items ?? [], [date])[date] ?? null;
 }
 
 const summarize = (s: SourceResult<unknown>): SourceSummary => {
@@ -119,7 +120,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
 
   let dataverse: SourceResult<FocusPattern>;
   let ptoP: Promise<SourceResult<PtoEntry> | null> = Promise.resolve(null);
-  const dayMinutes = dayLength(shape);
+  let aheadP: Promise<SourceResult<PtoEntry> | null> = Promise.resolve(null);
+  const todayDate = localToday(now, shape.timeZone);
   let devopsP: Promise<ClientWork[] | null> = Promise.resolve(null);
   let planClients: ClientRef[] = [];
   if (!cfg) {
@@ -148,7 +150,11 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       : await ctx.makeDataverse(dv, shape.timeZone).load(weekStart, refresh);
     if (!resolveError) {
       // PTO (step 6) alongside everything else; a failure falls back to its cache inside the source.
-      ptoP = ctx.makeDataverse(dv, shape.timeZone).pto(weekStart, dayMinutes, refresh).catch(() => null);
+      const ptoSource = ctx.makeDataverse(dv, shape.timeZone);
+      ptoP = ptoSource.pto(...weekRange(weekStart), refresh).catch(() => null);
+      // Ahead of today for the planning target; its failure only means the target can't skip PTO.
+      const aheadFrom = mondayOf(todayDate);
+      aheadP = ptoSource.pto(aheadFrom, Temporal.PlainDate.from(aheadFrom).add({ days: AHEAD_DAYS }).toString(), refresh).catch(() => null);
       // Start DevOps as soon as the week's clients are known, alongside the calendars. Each client is isolated
       // inside the source; anything unexpected here only drops DevOps, never the week.
       // Plus every client I'm an Account Worker on (Q21), so Open half-days can take their work. Only those
@@ -163,20 +169,22 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     }
   }
 
-  const [outlook, google, devops, ptoResult] = await Promise.all([outlookP, googleP, devopsP, ptoP]);
-  const pto = ptoByDate(ptoResult?.items ?? [], weekDates(weekStart), dayMinutes);
+  const [outlook, google, devops, ptoResult, ahead] = await Promise.all([outlookP, googleP, devopsP, ptoP, aheadP]);
+  const pto = ptoByDate(ptoResult?.items ?? [], weekDates(weekStart));
+  const ptoAhead = [...new Set((ahead?.items ?? []).map((e) => e.date))].sort();
   const week = buildWeek({ weekStart, patterns: dataverse.items, events: [...outlook.items, ...google.items], config: weekConfig, pto });
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
 
-  const todayDate = localToday(now, shape.timeZone);
   const todayPlan = ctx.plan?.day(todayDate) ?? null;
+  const todayOff = ptoAhead.includes(todayDate) || !!pto[todayDate];
   return {
     weekStart,
     week,
     today: todayTarget(now, shape),
     plan: ctx.plan ? ctx.plan.week(week.days.map((d) => d.date)) : null,
     planClients,
-    planDay: { date: todayDate, workday: Temporal.PlainDate.from(todayDate).dayOfWeek <= 4, committed: !!todayPlan?.committedAt, available: !!ctx.plan },
+    planDay: { date: todayDate, workday: Temporal.PlainDate.from(todayDate).dayOfWeek <= 4 && !todayOff, committed: !!todayPlan?.committedAt, available: !!ctx.plan },
+    ptoAhead,
     sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google].map(summarize),
     devops,
     clients: clientColors,

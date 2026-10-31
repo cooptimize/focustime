@@ -115,21 +115,21 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
   const watch = [day.am, day.pm].filter((s) => worstSeverity(s.risks) === "watch").length;
 
   return (
-    <section className={`day ${overflow ? "overflow" : "work"} ${isToday ? "today" : ""} ${day.pto ? (day.pto.full ? "pto-full" : "pto-part") : ""}`} aria-label={`${day.weekday} ${shortDate(day.date)}${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}>
+    <section className={`day ${overflow ? "overflow" : "work"} ${isToday ? "today" : ""} ${day.pto ? "pto-full" : ""}`} aria-label={`${day.weekday} ${shortDate(day.date)}${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}>
       <header className="day-head">
         <span className="dow">{day.weekday}</span>
         <span className="date">{shortDate(day.date)}</span>
         {isToday && <span className="today-pill">Today</span>}
         {overflow && !day.pto && <span className="overflow-pill">Overflow · catch-up</span>}
         {day.pto && (
-          <span className={`pto-pill ${day.pto.full ? "full" : "part"}`} title={day.pto.titles.join(", ")}>
+          <span className="pto-pill full" title={day.pto.titles.join(", ")}>
             {ptoLabel(day.pto)}
           </span>
         )}
         <span className="day-sum">
           {atRisk > 0 && <span className="sum at_risk">{atRisk} at risk</span>}
           {watch > 0 && <span className="sum watch">{watch} watch</span>}
-          {!overflow && !day.pto?.full && risks.length === 0 && <span className="sum ok">Clear</span>}
+          {!overflow && !day.pto && risks.length === 0 && <span className="sum ok">Clear</span>}
         </span>
       </header>
 
@@ -155,7 +155,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
           dayLabel={`${day.weekday} ${shortDate(day.date)}`}
           compact={compact}
           now={props.now}
-          ptoOff={!!day.pto?.full}
+          ptoOff={!!day.pto}
         />
       ))}
 
@@ -321,7 +321,6 @@ function SlotSummary({ slot, now, ptoOff }: { slot: Slot; now: string; ptoOff: b
         {formatDuration(free)} free{at ? " left" : ""}
       </span>
       <span>longest {formatDuration(longestFree(slot, at))}</span>
-      {slot.ptoMinutes > 0 && <span className="pto-tag">PTO {formatDuration(slot.ptoMinutes)}</span>}
     </div>
   );
 }
@@ -356,7 +355,7 @@ function PickRow({ pick, toggle }: { pick: Pick; toggle: (id: number, done: bool
 }
 
 export function ptoLabel(p: PtoDay): string {
-  return `${p.full ? "PTO" : `PTO ${formatDuration(p.minutes)}`} · ${p.titles.join(", ")}`;
+  return `PTO · ${p.titles.join(", ")}`;
 }
 
 const MAX_MEETINGS = 4;

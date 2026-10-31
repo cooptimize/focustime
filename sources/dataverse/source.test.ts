@@ -111,8 +111,8 @@ describe("Dataverse source: failure states (spec section 9)", () => {
   it.each<[Scenario, string, string, string | undefined]>([
     ["dv_401", "auth_required", "Dataverse access denied: check app user role", "open_settings"],
     ["dv_403", "auth_required", "Dataverse access denied: check app user role", "open_settings"],
-    ["table_missing", "misconfigured", "Focus block table not found: check config", "open_settings"],
-    ["column_missing", "misconfigured", "Focus block table not found: check config", "open_settings"],
+    ["table_missing", "misconfigured", "Focus block table coop_focustimes not found in Dataverse (renamed or removed?): check config", "open_settings"],
+    ["column_missing", "misconfigured", "Focus block column coop_mondaydaypart not found in coop_focustimes (renamed or removed?): check config", "open_settings"],
     ["token_invalid_client", "auth_required", "Dataverse sign-in failed: the client secret was rejected. Update keyring entry coopilot / dataverse-client-secret", "open_settings"],
     ["token_bad_tenant", "misconfigured", "Dataverse sign-in failed: check tenant_id and client_id in config", "open_settings"],
     ["token_bad_scope", "misconfigured", "Dataverse sign-in failed: check environment_url in config", "open_settings"],

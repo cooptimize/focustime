@@ -44,12 +44,9 @@ export function Details({ open, day, slot, timeZone, colors, now, onClose }: Pro
       </header>
 
       {day.pto && (
-        <section className={`pto-note ${day.pto.full ? "full" : "part"}`}>
+        <section className="pto-note full">
           <h3>PTO</h3>
-          <p>
-            {day.pto.full ? "Whole day off" : `${formatDuration(day.pto.minutes)} off, taken from the afternoon first`} · {day.pto.titles.join(", ")}
-            {day.pto.full ? ". No risks are raised and nothing can be planned." : ""}
-          </p>
+          <p>Whole day off · {day.pto.titles.join(", ")}. No risks are raised and nothing can be planned.</p>
         </section>
       )}
 
@@ -115,7 +112,6 @@ export function Details({ open, day, slot, timeZone, colors, now, onClose }: Pro
         <h3>Time</h3>
         <p>
           {formatDuration(slot.busyMeetingMinutes)} meetings · {formatDuration(freeMinutes(slot, at))} free{at ? " from now" : ""} · longest {formatDuration(longestFree(slot, at))}
-          {slot.ptoMinutes > 0 ? ` · PTO ${formatDuration(slot.ptoMinutes)}` : ""}
         </p>
         {slot.freeGaps.length > 0 && (
           <p className="muted">

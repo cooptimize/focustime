@@ -143,6 +143,12 @@ if (plan) {
         return r.parsed.ok ? r.parsed.config.week.dayShape : null;
       },
       committed: (d) => !!store.day(d)?.committedAt,
+      off: async (d) => {
+        const r = await loadConfig();
+        if (!r.parsed.ok || !r.parsed.config.dataverse.mySystemUserId) return false;
+        const pto = await makeDataverse(r.parsed.config.dataverse, r.parsed.config.week.dayShape.timeZone).pto(d, d);
+        return pto.items.some((e) => e.date === d);
+      },
       once: (d) => store.markOnce("reminder", d),
       send: (title, body) => {
         notifySend(title, body);

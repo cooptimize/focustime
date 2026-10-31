@@ -54,8 +54,8 @@ Raised in step 5 (not blocking):
 - Q27. Cooptimize's "Ongoing" type is also on a portfolio backlog and stays unpickable. Add it to `pickable_portfolio_types` too?
 
 Raised in step 6 (not blocking):
-- Q28. Partial PTO has no time of day in Dataverse (only hours), so Coopilot takes it from the afternoon first (D99). If the detail rows or another field ever carry a time, use it; or say if mornings should go first.
-- Q29. Should the next workday (D97) skip a full PTO day? Today it doesn't: on Wednesday evening it targets Thursday Nov 5 even though it is PTO, and the panel says nothing can be planned there.
-- Q30. Should Plan the day ever target Friday (the overflow day)? Today only Mon–Thu are targets; Friday can still take picks by moving them there.
-- Q31. The Coopilot app user gets 403 on Dataverse metadata (EntityDefinitions), so the PTO table names were confirmed by reading data, not metadata. Fine as long as the names stay; grant metadata read if schema checks are wanted.
-- Q32. Some trackers have fewer detail rows than their hours (Boston trip 9/2–9/6, 16 h, details only on 9/2 and 9/3), and one detail day is duplicated (3/5). Coopilot trusts detail rows when present and counts a duplicate once. Is that how the tracker is meant to be read?
+- Q28. (Answered, D105: no partial PTO; every PTO day is a whole day off.) Partial PTO has no time of day in Dataverse (only hours), so Coopilot takes it from the afternoon first (D99). If the detail rows or another field ever carry a time, use it; or say if mornings should go first.
+- Q29. (Answered, D106: yes, PTO days are skipped.) Should the next workday (D97) skip a full PTO day? Today it doesn't: on Wednesday evening it targets Thursday Nov 5 even though it is PTO, and the panel says nothing can be planned there.
+- Q30. (Answered, D107: not for now; revisit when Friday has working hours.) Should Plan the day ever target Friday (the overflow day)? Today only Mon–Thu are targets; Friday can still take picks by moving them there.
+- Q31. (Answered, D108: keep the names; a missing table or column is a named error.) The Coopilot app user gets 403 on Dataverse metadata (EntityDefinitions), so the PTO table names were confirmed by reading data, not metadata. Fine as long as the names stay; grant metadata read if schema checks are wanted.
+- Q32. (Answered, D109: with detail rows, those dates; with none, every weekday from start to end.) Some trackers have fewer detail rows than their hours (Boston trip 9/2–9/6, 16 h, details only on 9/2 and 9/3), and one detail day is duplicated (3/5). Coopilot trusts detail rows when present and counts a duplicate once. Is that how the tracker is meant to be read?

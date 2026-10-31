@@ -23,16 +23,10 @@ describe("free time math (one number for cards, details and Plan the day)", () =
     expect(freeMinutes(slot, "2026-11-03T14:40:00Z")).toBe(20 + 45 + 30); // 9:40 New York
     expect(freeMinutes(slot, "2026-11-03T18:00:00Z")).toBe(0); // after the half-day
   });
-  it("partial PTO caps the total; full PTO leaves nothing", () => {
-    expect(freeMinutes({ ...slot, ptoMinutes: 120 })).toBe(90); // 210 - 120
-    expect(longestFree({ ...slot, ptoMinutes: 180 })).toBe(30);
-    expect(freeMinutes({ ...slot, ptoMinutes: 210 })).toBe(0);
-  });
-  it("PTO that an out-of-office event already blocks isn't counted twice", () => {
-    const blocked = { ...slot, freeGaps: [], longestFreeMinutes: 0, ptoMinutes: 210 };
-    expect(freeMinutes(blocked)).toBe(0);
-    const pm = { start: T("12:30"), end: T("17:00"), freeGaps: [{ start: T("12:30"), end: T("13:00"), minutes: 30 }], longestFreeMinutes: 30, ptoMinutes: 240 };
-    expect(freeMinutes(pm)).toBe(30); // OOO covers 13:00 to 17:00, 4 h PTO: still 30 m, not negative
+  it("a PTO day has no free time at all (D105)", () => {
+    expect(freeMinutes({ ...slot, pto: true })).toBe(0);
+    expect(longestFree({ ...slot, pto: true })).toBe(0);
+    expect(freeMinutes({ ...slot, pto: false })).toBe(freeMinutes(slot));
   });
   it("now only counts while the half-day is under way", () => {
     expect(nowIfUnderway(slot, "2026-11-03T13:00:00Z")).toBeUndefined(); // 8:00, before
