@@ -22,6 +22,7 @@ function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | Targ
   const targetCalls: string[][] = [];
   const src = createDevOpsSource({
     fetch: api.fetch,
+    retryDelayMs: 0,
     log: (r) => logs.push(r),
     cacheDir,
     timeZone: NY,
@@ -107,6 +108,18 @@ describe("client isolation", () => {
     const r = await s.src.load([ref("A"), ref("B")]);
     expect(byKey(r, "A").status).toBe("unreachable");
     expect(byKey(r, "B").status).toBe("ok");
+  });
+
+  it("retries a request once after a network blip (live run, step 6c), but not a host that doesn't exist", async () => {
+    const s = setup({ a: "flaky", b: "host_not_found" }, [target("A", "a"), target("B", "b")]);
+    const r = await s.src.load([ref("A"), ref("B")]);
+    expect(byKey(r, "A").status).toBe("ok");
+    expect(byKey(r, "A").items.length).toBeGreaterThan(0);
+    expect(byKey(r, "B").status).toBe("unreachable");
+    // Host not found: each request is tried once (no repeats of the same URL).
+    const b = s.calls.filter((c) => c.url.includes("/b/")).map((c) => c.url);
+    expect(b.length).toBeGreaterThan(0);
+    expect(new Set(b).size).toBe(b.length);
   });
 
   it("refuses two accounts that share a client key rather than mixing them", async () => {

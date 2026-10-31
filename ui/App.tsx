@@ -727,6 +727,7 @@ export function App() {
           onClose={() => setSettingsAt(null)}
           onSaved={reloadQuiet}
           sources={data.sources}
+          devops={data.devops}
           busy={busy}
           loading={loading}
           onRefresh={() => auto.trigger("button")}

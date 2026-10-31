@@ -18,7 +18,8 @@ export type OrgScenario =
   | "host_not_found" // ENOTFOUND
   | "server_error" // 500
   | "batch_fails" // metadata and WIQL work, the batch call fails
-  | "portfolio"; // agile process; I own a feature with children, an epic with a feature and a story below it, and a feature with none
+  | "portfolio"
+  | "flaky"; // agile, but the first try of every request fails at the network level (a blip) // agile process; I own a feature with children, an epic with a feature and a story below it, and a feature with none
 
 /** Work items for the "portfolio" scenario: id → [type, state, parent, title]. */
 export const PORTFOLIO: Record<number, [string, string, number | null, string]> = {
@@ -42,6 +43,7 @@ export const fakePat = (label: string) => `FAKEPAT${label.toUpperCase().replace(
 
 export function fakeDevOps(orgs: Record<string, OrgScenario>, opts: { ids?: number } = {}) {
   const calls: Call[] = [];
+  const flakySeen = new Set<string>();
   const json = (body: string, status = 200) => new Response(body, { status, headers: { "content-type": "application/json; charset=utf-8" } });
   const fn = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -50,8 +52,16 @@ export function fakeDevOps(orgs: Record<string, OrgScenario>, opts: { ids?: numb
     if (url.hostname !== "dev.azure.com") throw new TypeError("unexpected host");
     const [org, , ...rest] = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
     const path = rest.join("/");
-    const scenario = orgs[org ?? ""];
+    let scenario = orgs[org ?? ""];
     if (!scenario) return new Response("", { status: 404 });
+    if (scenario === "flaky") {
+      const key = `${init?.method ?? "GET"} ${url}`;
+      if (!flakySeen.has(key)) {
+        flakySeen.add(key);
+        throw new TypeError("fetch failed");
+      }
+      scenario = "agile";
+    }
     // Every reply below is HTML or JSON that must never be read into a message.
     switch (scenario) {
       case "offline":

@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { FieldProblem, SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
 import { THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
+import type { ClientWork } from "../week/types.ts";
 import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS, type ViewRange } from "../week/hours.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar } from "./status.ts";
@@ -29,6 +30,8 @@ type Props = {
   /** Called after any save, so the week reloads with the new settings. */
   onSaved: () => void;
   sources: SourceSummary[];
+  /** DevOps per client from the week (step 6c): a client's own PAT or project problem shows here too. */
+  devops: ClientWork[] | null;
   busy: Calendar | null;
   loading: boolean;
   onRefresh: () => void;
@@ -41,6 +44,8 @@ type Props = {
   /** Clears an override (hours.clear_day) and reloads. */
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
 };
+
+const DEVOPS_STATE: Record<ClientWork["status"], string> = { ok: "Live", identity_missing: "No identity", not_set_up: "Not set up", auth_failed: "PAT problem", no_access: "No access", unreachable: "Unreachable", error: "Error" };
 
 const DAY_NAMES = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" } as const;
 
@@ -490,7 +495,7 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
               <span className="dot" aria-hidden="true" />
               <strong>{SOURCE_NAMES[s.source]}</strong>
               <span className={`state ${st.cls}`}>{st.label}</span>
-              <span className="muted">{s.message ?? (s.sample || notConnected(s) ? "" : `${s.itemCount} items`)}</span>
+              <span className="muted">{s.message ?? (s.sample || notConnected(s) ? "" : `${s.itemCount} ${s.itemCount === 1 ? "item" : "items"}`)}</span>
               <span className="row-actions">
                 <button type="button" className="mini" disabled={p.loading} onClick={p.onRefresh}>
                   {p.loading ? "Retrying…" : "Retry"}
@@ -510,6 +515,34 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
           );
         })}
       </ul>
+      {p.devops && p.devops.length > 0 && (
+        <>
+          <h3>DevOps per client</h3>
+          <p className="muted">PATs live on each client's DevOps settings in Dataverse. Coopilot reads them only when it fetches, and never shows them.</p>
+          <ul className="set-list sources">
+            {p.devops.map((c) => {
+              const ok = c.status === "ok";
+              const cls = ok ? (c.fromCache ? "cached" : "live") : "error";
+              return (
+                <li key={c.clientKey} className={`source ${cls}`}>
+                  <span className="dot" aria-hidden="true" />
+                  <strong>{c.clientName}</strong>
+                  <span className={`state ${cls}`}>{ok ? (c.fromCache ? "Cached" : "Live") : DEVOPS_STATE[c.status]}</span>
+                  <span className="muted">
+                    {ok ? `${c.items.length} ${c.items.length === 1 ? "item" : "items"} assigned` : c.message}
+                    {c.status === "auth_failed" || c.status === "not_set_up" || c.status === "identity_missing" ? ". Change it in Dataverse" : ""}
+                  </span>
+                  <span className="row-actions">
+                    <button type="button" className="mini" disabled={p.loading} onClick={p.onRefresh}>
+                      {p.loading ? "Retrying…" : "Retry"}
+                    </button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
       <h3>Client secrets</h3>
       <p className="muted">Entered here, they go straight to the keyring (service coopilot). Coopilot never shows them again.</p>
       {p.data.secrets.map((s) => (

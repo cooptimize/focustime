@@ -26,6 +26,8 @@ export type DevOpsDeps = {
   targets: (clientKeys: string[]) => Promise<TargetsResult>;
   now?: () => Temporal.Instant;
   timeoutMs?: number;
+  /** Pause before the one retry after a network error (tests use 0). */
+  retryDelayMs?: number;
   /** A normal load (e.g. changing weeks) reuses results this fresh. */
   memoryTtlMs?: number;
   /** A forced refresh refetches a client at most this often. */
@@ -70,6 +72,7 @@ export function cacheKey(clientKey: string): string {
 export function createDevOpsSource(d: DevOpsDeps) {
   const now = d.now ?? (() => Temporal.Now.instant());
   const timeoutMs = d.timeoutMs ?? 15_000;
+  const retryDelayMs = d.retryDelayMs ?? 500;
   const ttl = d.memoryTtlMs ?? 5 * 60_000;
   const minRefresh = d.minRefreshMs ?? 60_000;
   const metaTtl = d.metadataTtlMs ?? 60 * 60_000;
@@ -85,19 +88,24 @@ export function createDevOpsSource(d: DevOpsDeps) {
   async function call<T>(c: Ctx, op: string, path: string, body?: unknown): Promise<T> {
     const url = `${c.base}/${path}${path.includes("?") ? "&" : "?"}api-version=${API_VERSION}`;
     const started = performance.now();
-    let res: Response;
-    try {
-      res = await d.fetch(url, {
-        method: body === undefined ? "GET" : "POST",
-        headers: { accept: "application/json", authorization: c.pat.basicAuth(), ...(body === undefined ? {} : { "content-type": "application/json" }) },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        redirect: "manual",
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch (e) {
-      const notFound = (e as { cause?: { code?: unknown } })?.cause?.code === "ENOTFOUND";
-      log(op, { kind: notFound ? "host_not_found" : "network" });
-      throw new DevOpsFailure("unreachable", `DevOps organization ${c.org} unreachable`, "network");
+    let res: Response | null = null;
+    // Every call is a read, so one retry after a network blip is safe (step 6c live run: one failed request
+    // made a whole client "unreachable"). A host that doesn't exist is not retried.
+    for (let attempt = 1; !res; attempt++) {
+      try {
+        res = await d.fetch(url, {
+          method: body === undefined ? "GET" : "POST",
+          headers: { accept: "application/json", authorization: c.pat.basicAuth(), ...(body === undefined ? {} : { "content-type": "application/json" }) },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          redirect: "manual",
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch (e) {
+        const notFound = (e as { cause?: { code?: unknown } })?.cause?.code === "ENOTFOUND";
+        log(op, { kind: notFound ? "host_not_found" : attempt === 1 ? "network_retry" : "network" });
+        if (notFound || attempt >= 2) throw new DevOpsFailure("unreachable", `DevOps organization ${c.org} unreachable`, "network");
+        await new Promise((ok) => setTimeout(ok, retryDelayMs));
+      }
     }
     log(op, { status: res.status, durationMs: performance.now() - started });
     // Azure DevOps answers a bad PAT with 401, or with a 203 or a redirect to a sign-in page.
