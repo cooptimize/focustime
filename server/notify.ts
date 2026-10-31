@@ -10,11 +10,12 @@ export const REMINDER_WINDOW_MINUTES = 90;
  * Whether the reminder is due now: on a day with working hours, from the start of its main span until 90 minutes
  * after it, today not committed (step 6b: the time model, not Mon–Thu).
  */
-export function reminderDue(now: Temporal.ZonedDateTime, model: TimeModel, committed: boolean): boolean {
+export function reminderDue(now: Temporal.ZonedDateTime, model: TimeModel, committed: boolean, offsetMinutes = 0): boolean {
   if (committed) return false;
   const main = hoursOn(model, now.toPlainDate().toString()).main;
   if (!main) return false;
-  const start = now.withPlainTime(Temporal.PlainTime.from(main.start));
+  // Settings > Planning (step 6c): the reminder can start later than the day does.
+  const start = now.withPlainTime(Temporal.PlainTime.from(main.start)).add({ minutes: offsetMinutes });
   const end = start.add({ minutes: REMINDER_WINDOW_MINUTES });
   return Temporal.ZonedDateTime.compare(now, start) >= 0 && Temporal.ZonedDateTime.compare(now, end) < 0;
 }
@@ -22,6 +23,8 @@ export function reminderDue(now: Temporal.ZonedDateTime, model: TimeModel, commi
 export type ReminderDeps = {
   now: () => Temporal.ZonedDateTime;
   hours: () => Promise<TimeModel | null>;
+  /** Minutes after the day's start the reminder may first fire ([plan] reminder_offset_minutes). */
+  offsetMinutes?: () => Promise<number>;
   committed: (date: string) => boolean;
   /** Whether a date is a PTO day (D106): no reminder then. Asked only when a reminder would otherwise be due. */
   off?: (date: string) => Promise<boolean>;
@@ -36,7 +39,8 @@ export async function checkReminder(d: ReminderDeps): Promise<boolean> {
   if (!model) return false;
   const now = d.now().withTimeZone(model.timeZone);
   const date = now.toPlainDate().toString();
-  if (!reminderDue(now, model, d.committed(date))) return false;
+  const offset = d.offsetMinutes ? await d.offsetMinutes().catch(() => 0) : 0;
+  if (!reminderDue(now, model, d.committed(date), offset)) return false;
   if (d.off && (await d.off(date).catch(() => false))) return false;
   if (!d.once(date)) return false;
   d.send("Coopilot", "Today isn't planned yet. Open Coopilot and press P to plan the day.");

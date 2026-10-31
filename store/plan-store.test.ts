@@ -192,3 +192,50 @@ describe("plan store", () => {
     clock = Temporal.ZonedDateTime.from(`2026-11-02T08:01:00-05:00[${NY}]`);
   });
 });
+
+describe("step 6c: loops, timer state, focused time and reset", () => {
+  it("closes a loop by hand with a note, once", () => {
+    const { store } = fresh();
+    const f = store.addFlex({ date: "2026-11-07", clientKey: "CSC", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z" });
+    const [loop] = store.openFlexLoops(Temporal.Instant.from("2026-11-07T18:00:00Z"));
+    expect(loop?.sourceId).toBe(f.id);
+    const closed = store.closeLoop(loop!.id, "Posted in Teams");
+    expect(closed).toMatchObject({ closeNote: "Posted in Teams" });
+    expect(closed.closedAt).not.toBeNull();
+    expect(store.openLoops()).toEqual([]);
+    expect(store.allLoops()).toHaveLength(1);
+    expect(() => store.closeLoop(loop!.id, null)).toThrow(/already closed/);
+    expect(() => store.closeLoop(999, null)).toThrow(/No loop/);
+  });
+
+  it("keeps small state and focused time across a reopen", () => {
+    const { path, store } = fresh();
+    const p = store.addPick({ date: "2026-11-02", ...item });
+    store.setState("timer", { kind: "focus", pickId: p.id });
+    store.addFocus({ pickId: p.id, label: "Story", startedAt: "2026-11-02T14:00:00Z", endedAt: "2026-11-02T14:25:00Z", seconds: 1500 });
+    store.addFocus({ pickId: p.id, label: "Story", startedAt: "2026-11-02T15:00:00Z", endedAt: "2026-11-02T15:10:00Z", seconds: 600 });
+    store.close();
+    const again = createPlanStore({ path, now });
+    expect(again.getState("timer")).toEqual({ kind: "focus", pickId: p.id });
+    expect(again.focusedSeconds([p.id, 999])).toEqual({ [p.id]: 2100 });
+    again.setState("timer", null);
+    expect(again.getState("timer")).toBeNull();
+    again.close();
+  });
+
+  it("reset empties every plan table after a private full backup, and keeps the once-a-day markers (Q37)", () => {
+    const { path, store } = fresh();
+    store.addPick({ date: "2026-11-02", ...item });
+    store.markOnce("reminder", "2026-11-02");
+    const bak = store.reset();
+    expect(bak).toMatch(/plan\.db\.bak-reset-\d+T\d+Z$/);
+    expect(statSync(bak!).mode & 0o777).toBe(0o600);
+    expect(store.picksFor("2026-11-02")).toEqual([]);
+    expect(store.markOnce("reminder", "2026-11-02")).toBe(false);
+    // The backup still has the pick.
+    const copy = new DatabaseSync(bak!);
+    expect((copy.prepare("SELECT COUNT(*) AS n FROM picks").get() as { n: number }).n).toBe(1);
+    copy.close();
+    expect(readdirSync(join(path, "..")).some((f) => f.includes("bak-reset"))).toBe(true);
+  });
+});

@@ -236,7 +236,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
   const work = primary && !overflow ? allWork.get(primary.clientKey) : undefined;
   const eve = slot.half === "EVE";
   // Committed: picks with their fit, the DevOps list without picked items and collapsed (step 6.1).
-  const cp = cardPlan(plan.week, slot, primary?.clientKey ?? null, work?.items ?? [], now);
+  const cp = cardPlan(plan.week, slot, primary?.clientKey ?? null, work?.items ?? [], now, plan.sizes);
   const ticks = cp.picks;
   const checklist = ticks.length > 0 && (
     <div className="card-plan">
@@ -269,6 +269,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
           <span className="flex-tag">Flex</span>
           <span className="flex-time">{startClock(f.start, tz)}–{startClock(f.end, tz)}</span>
           <span className="flex-what">{f.clientKey}{f.itemTitle ? ` · ${f.itemTitle}` : f.note ? ` · ${f.note}` : ""}</span>
+          {!!f.overlapMinutes && <span className="flex-overlap">{formatDuration(f.overlapMinutes)} inside working hours, not counted</span>}
         </li>
       ))}
     </ul>

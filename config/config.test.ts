@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { migrateDayShapeText } from "./edit.ts";
-import { legacyHours, parseConfig, setSystemUserIdInText } from "./schema.ts";
+import { DEFAULT_PLAN, legacyHours, parseConfig, setSystemUserIdInText } from "./schema.ts";
 import { STARTER_TOML } from "./starter.ts";
 
 const valid = `
@@ -172,7 +172,7 @@ calendars = ["primary", "family123@group.calendar.google.com"]
 describe("[plan] pickable portfolio types (Q20)", () => {
   it("is optional and empty by default", () => {
     const r = parseConfig(valid);
-    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [] });
+    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], ...DEFAULT_PLAN });
   });
   it("reads a list of type names", () => {
     const r = parseConfig(`${valid}\n[plan]\npickable_portfolio_types = ["Recurring", " Ongoing "]\n`);
@@ -182,6 +182,18 @@ describe("[plan] pickable portfolio types (Q20)", () => {
     expect(fields(`${valid}\n[plan]\npickable_portfolio_types = "Recurring"\n`)).toEqual(["plan.pickable_portfolio_types"]);
     expect(fields(`${valid}\n[plan]\npickable_portfolio_types = ["", 3]\n`)).toEqual(["plan.pickable_portfolio_types[0]", "plan.pickable_portfolio_types[1]"]);
     expect(fields(`${valid}\n[plan]\ntypes = []\n`)).toEqual(["plan.types"]);
+  });
+});
+
+describe("[plan] planning settings (step 6c, Q36)", () => {
+  it("reads sizes, carry-over days, the reminder offset and timer defaults", () => {
+    const r = parseConfig(`${valid}\n[plan]\nsize_s = 45\nsize_m = 90\nsize_l = 180\ncarry_days = 0\nreminder_offset_minutes = 30\nfocus_minutes = 25\nbreak_minutes = 5\nend_sound = true\n`);
+    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], sizes: { S: 45, M: 90, L: 180 }, carryDays: 0, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true });
+  });
+  it("refuses sizes out of order or off the 5-minute steps, per field", () => {
+    expect(fields(`${valid}\n[plan]\nsize_s = 47\n`)).toEqual(["plan.size_s"]);
+    expect(fields(`${valid}\n[plan]\nsize_m = 50\n`)).toEqual(["plan.size_m"]);
+    expect(fields(`${valid}\n[plan]\ncarry_days = 31\nfocus_minutes = 0\nend_sound = "yes"\n`)).toEqual(["plan.carry_days", "plan.focus_minutes", "plan.end_sound"]);
   });
 });
 

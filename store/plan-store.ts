@@ -121,12 +121,27 @@ export const MIGRATIONS: readonly string[] = [
      close_note TEXT,
      UNIQUE (source_kind, source_id)
    );`,
+  // 4 (step 6c): small state that must survive restarts (the focus timer, its warning points), and focused time.
+  `CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
+   CREATE TABLE focus_log (
+     id INTEGER PRIMARY KEY,
+     pick_id INTEGER,
+     label TEXT NOT NULL,
+     started_at TEXT NOT NULL,
+     ended_at TEXT NOT NULL,
+     seconds INTEGER NOT NULL CHECK (seconds >= 0)
+   );
+   CREATE INDEX focus_pick ON focus_log(pick_id);`,
 ];
+
+/** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
+const RESET_TABLES = ["focus_log", "kv", "loops", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
+export type FocusSegment = { pickId: number | null; label: string; startedAt: string; endedAt: string; seconds: number };
 
 export type NewUnavailable = { date: IsoDate; title: string; start: string; end: string; note?: string | null };
 export type NewFlex = { date: IsoDate; clientKey: string; start: string; end: string; itemId?: number | null; itemTitle?: string | null; itemUrl?: string | null; note?: string | null };
 /** Something owed to someone (D92). Stored now, shown with the loops UI later. */
-export type Loop = { id: number; kind: string; clientKey: string | null; what: string; channel: string | null; due: string | null; sourceKind: string | null; sourceId: number | null; openedAt: string; closedAt: string | null };
+export type Loop = { id: number; kind: string; clientKey: string | null; what: string; channel: string | null; due: string | null; sourceKind: string | null; sourceId: number | null; openedAt: string; closedAt: string | null; closeNote: string | null };
 
 export type NewPick = {
   date: IsoDate;
@@ -188,6 +203,7 @@ const toLoop = (r: Row): Loop => ({
   sourceId: (r.source_id as number | null) ?? null,
   openedAt: r.opened_at as string,
   closedAt: (r.closed_at as string | null) ?? null,
+  closeNote: (r.close_note as string | null) ?? null,
 });
 
 const PICK_SELECT = `SELECT p.*, o.date AS carried_from_date FROM picks p LEFT JOIN picks o ON o.id = p.carried_from`;
@@ -257,9 +273,9 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     getPick,
     picksFor: (date: IsoDate) => picksBetween(date, date),
     picksBetween,
-    carryOverFor(today: IsoDate): Pick[] {
-      const from = Temporal.PlainDate.from(today).subtract({ days: 14 }).toString();
-      return carryOver(picksBetween(from, today), today);
+    carryOverFor(today: IsoDate, days?: number): Pick[] {
+      const from = Temporal.PlainDate.from(today).subtract({ days: Math.max(14, days ?? 0) }).toString();
+      return carryOver(picksBetween(from, today), today, days);
     },
     addPick: (p: NewPick): Pick => tx(() => insertPick(p)),
     /** Before the day is committed a pick is simply removed; after, it is kept as dropped. */
@@ -396,6 +412,54 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       });
     },
     openLoops: (): Loop[] => (db.prepare("SELECT * FROM loops WHERE closed_at IS NULL ORDER BY opened_at, id").all() as Row[]).map(toLoop),
+    /** Every loop, open first (step 6c loops list). */
+    allLoops: (): Loop[] => (db.prepare("SELECT * FROM loops ORDER BY closed_at IS NOT NULL, opened_at, id").all() as Row[]).map(toLoop),
+    /** Closes an open loop by hand with an optional note. */
+    closeLoop(id: number, note: string | null): Loop {
+      return tx(() => {
+        const r = db.prepare("SELECT * FROM loops WHERE id = ?").get(id) as Row | undefined;
+        if (!r) throw new PlanError(`No loop ${id}`);
+        if (r.closed_at) throw new PlanError("That loop is already closed");
+        db.prepare("UPDATE loops SET closed_at = ?, close_note = ? WHERE id = ?").run(stamp(), note, id);
+        return toLoop(db.prepare("SELECT * FROM loops WHERE id = ?").get(id) as Row);
+      });
+    },
+    /** Small JSON state that survives restarts (the focus timer). null removes it. */
+    getState<T>(key: string): T | null {
+      const r = db.prepare("SELECT value FROM kv WHERE key = ?").get(key) as Row | undefined;
+      return r ? (JSON.parse(r.value as string) as T) : null;
+    },
+    setState(key: string, value: unknown): void {
+      if (value === null) db.prepare("DELETE FROM kv WHERE key = ?").run(key);
+      else db.prepare("INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").run(key, JSON.stringify(value), stamp());
+    },
+    /** Records focused time (step 6c); pickId null for a plain timer. */
+    addFocus(s: FocusSegment): void {
+      if (s.seconds <= 0) return;
+      db.prepare("INSERT INTO focus_log (pick_id, label, started_at, ended_at, seconds) VALUES (?, ?, ?, ?, ?)").run(s.pickId, s.label, s.startedAt, s.endedAt, Math.round(s.seconds));
+    },
+    /** Focused seconds per pick for these picks. */
+    focusedSeconds(pickIds: readonly number[]): Record<number, number> {
+      if (!pickIds.length) return {};
+      const rows = db.prepare(`SELECT pick_id, SUM(seconds) AS s FROM focus_log WHERE pick_id IN (${pickIds.map(() => "?").join(",")}) GROUP BY pick_id`).all(...pickIds) as Row[];
+      return Object.fromEntries(rows.map((r) => [r.pick_id as number, r.s as number]));
+    },
+    /**
+     * Reset local plan (Q37): a full copy first (plan.db.bak-reset-<stamp>, 0600), then every plan table emptied in one
+     * transaction. Returns the backup path. Not available for an in-memory store's backup (tests get null).
+     */
+    reset(): string | null {
+      let bak: string | null = null;
+      if (opts.path !== ":memory:") {
+        bak = `${opts.path}.bak-reset-${opts.now().toInstant().toString().replace(/[^0-9TZ]/g, "")}`;
+        db.prepare("VACUUM INTO ?").run(bak);
+        chmodSync(bak, 0o600);
+      }
+      tx(() => {
+        for (const t of RESET_TABLES) db.exec(`DELETE FROM ${t}`);
+      });
+      return bak;
+    },
     /** True the first time (kind, date) is marked, false after: "only once a day" across restarts. */
     markOnce(kind: string, date: IsoDate): boolean {
       const r = db.prepare("INSERT INTO markers (kind, date, at) VALUES (?, ?, ?) ON CONFLICT(kind, date) DO NOTHING").run(kind, date, stamp());

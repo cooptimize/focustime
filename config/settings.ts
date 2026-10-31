@@ -90,9 +90,23 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
       return (text) => setValue(setValue(setValue(text, "risk", "meeting_watch_minutes", watch), "risk", "meeting_at_risk_minutes", atRisk), "risk", "min_focus_window_minutes", window);
     }
     case "planning": {
-      only(v, ["pickablePortfolioTypes"], "plan");
-      const types = strList(v.pickablePortfolioTypes, "plan.pickable_portfolio_types").filter(Boolean);
-      return (text) => setValue(text, "plan", "pickable_portfolio_types", types);
+      const keys = ["pickablePortfolioTypes", "sizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound"];
+      only(v, keys, "plan");
+      const types = strList(v.pickablePortfolioTypes ?? [], "plan.pickable_portfolio_types").filter(Boolean);
+      // Each value is written as given; parseConfig checks ranges and order per field (plan.size_m etc.).
+      const values: [string, TomlValue][] = [["pickable_portfolio_types", types]];
+      if (v.sizes !== undefined) {
+        const sz = obj(v.sizes, "plan.sizes");
+        only(sz, ["S", "M", "L"], "plan.sizes");
+        for (const k of ["S", "M", "L"] as const) if (sz[k] !== undefined) values.push([`size_${k.toLowerCase()}`, int(sz[k], `plan.size_${k.toLowerCase()}`)]);
+      }
+      const num: [string, string][] = [["carryDays", "carry_days"], ["reminderOffsetMinutes", "reminder_offset_minutes"], ["focusMinutes", "focus_minutes"], ["breakMinutes", "break_minutes"]];
+      for (const [k, toml] of num) if (v[k] !== undefined) values.push([toml, int(v[k], `plan.${toml}`)]);
+      if (v.endSound !== undefined) {
+        if (typeof v.endSound !== "boolean") throw new SettingsInputError("plan.end_sound", "Must be true or false");
+        values.push(["end_sound", v.endSound]);
+      }
+      return (text) => values.reduce((t, [k, val]) => setValue(t, "plan", k, val), text);
     }
     case "display": {
       only(v, ["theme", "viewRange"], "ui");

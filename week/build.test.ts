@@ -240,3 +240,14 @@ describe("PTO in the week (step 6)", () => {
     expect(slot(w.days, 1, "AM").longestFreeMinutes).toBe(210);
   });
 });
+
+describe("flex sessions overlapping working hours (step 6c, Q34)", () => {
+  it("counts only the part outside working hours and notes the overlap", () => {
+    const f = { id: 1, clientKey: "csc", start: "2026-11-02T16:00:00-05:00", end: "2026-11-02T18:30:00-05:00", itemId: null, itemTitle: null, itemUrl: null, note: null };
+    const w = buildWeek({ weekStart: WEEK, patterns: [], events: [], config: noStanding, flex: [f] });
+    const mon = w.days[0]!;
+    expect(mon.flexMinutes).toBe(90);
+    expect(mon.pm.flex[0]?.overlapMinutes).toBe(60);
+    expect(mon.eve?.windows).toEqual([{ start: "2026-11-02T17:00:00-05:00", end: "2026-11-02T18:30:00-05:00" }]);
+  });
+});

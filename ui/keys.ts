@@ -76,6 +76,8 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["R"], does: "Refresh all sources", command: "week.load" },
   { keys: ["H"], does: "Change the view range: business hours, 12 hours, 24 hours", command: "ui.set_view_range" },
   { keys: ["Ctrl K"], does: "Command menu" },
+  { keys: ["F"], does: "Focus timer: start one, or pause, +15, done, next pick or stop", command: "timer.start" },
+  { keys: ["L"], does: "Loops: what you owe people (Esc goes back to the week)", command: "loops.list" },
   { keys: [","], does: "Settings (Esc goes back to the week)", command: "settings.load" },
   { keys: ["?"], does: "This list of keys", command: "ui.keys" },
   { keys: ["Esc"], does: "Close the menu, dialog or panel on top" },

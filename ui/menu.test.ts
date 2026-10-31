@@ -5,7 +5,7 @@ import type { Pick } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
-import { commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
+import { timerStep, commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -39,6 +39,7 @@ function env(over: Partial<MenuEnv> = {}) {
     focusedItem: null,
     showKeys: () => calls.push(["keys"]),
     theme: "cooptimize-dark",
+    planning: { sizes: { S: 60, M: 120, L: 210 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false },
     setTheme: (t) => calls.push(["theme", t]),
     viewRange: "business",
     setViewRange: (r) => calls.push(["range", r]),
@@ -46,6 +47,10 @@ function env(over: Partial<MenuEnv> = {}) {
     runTime: async (a, i) => (calls.push([a, i]), true),
     openSettings: (x) => calls.push(["settings", x]),
     exportPlan: () => calls.push(["export"]),
+    timer: null,
+    runTimer: async (a, i) => (calls.push([a, i ?? {}]), true),
+    openLoops: () => calls.push(["loops"]),
+    resetPlan: () => calls.push(["reset"]),
     ...over,
   };
   return { e, calls };
@@ -82,10 +87,10 @@ describe("command menu (built from the action registry)", () => {
 });
 
 describe("⋯ menus", () => {
-  it("a pick: open in Edge, size, move, done, drop", async () => {
+  it("a pick: open in Edge, size, move, start focus, done, drop", async () => {
     const t = env();
     const m = pickMenu(t.e, pick);
-    expect(items(m).map((i) => i.label)).toEqual(["Open in Edge", "Set size", "Move", "Mark done", "Drop"]);
+    expect(items(m).map((i) => i.label)).toEqual(["Open in Edge", "Set size", "Move", "Start focus", "Mark done", "Drop"]);
     await find(m, "Open in Edge").run!();
     await find(find(m, "Set size").next!(), "S").run!();
     expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
@@ -172,5 +177,29 @@ describe("time model menus (step 6b)", () => {
     if (!("fields" in f)) throw new Error("expected a form");
     expect(f.fields.find((x) => x.key === "clientKey")!.value).toBe("internal");
     expect(f.fields.find((x) => x.key === "start")!.value).toBe("17:00");
+  });
+});
+
+describe("focus timer menus (step 6c)", () => {
+  it("timeboxes a pick with its size suggested first, presets in 5-minute steps and Custom", async () => {
+    const t = env();
+    const focus = find(pickMenu(t.e, { ...pick, date: t.e.today }), "Start focus");
+    expect(focus.disabled).toBeUndefined();
+    const lengths = focus.next!();
+    expect(items(lengths).map((i) => i.label).slice(0, 4)).toEqual(["120 min (suggested)", "5 min", "10 min", "15 min"]);
+    expect(items(lengths).at(-1)!.label).toBe("Custom…");
+    await items(lengths)[0]!.run!();
+    expect(t.calls).toEqual([["timer.start", { pickId: 7, minutes: 120 }]]);
+    // Not today: not offered.
+    expect(find(pickMenu(t.e, { ...pick, date: "2026-11-05" }), "Start focus").disabled).toBe("Only today's picks");
+  });
+
+  it("F offers focus, break and a pick with no timer; controls when one runs; Done/+15/Next when it ended", () => {
+    const none = timerStep(env().e);
+    expect(items(none).map((i) => i.label)).toEqual(["Focus", "Break", "Timebox a pick…"]);
+    const running = timerStep(env({ timer: { kind: "focus", pickId: 7, label: "Story", plannedMinutes: 25, remainingMs: 60_000, running: true, ended: false, endsAt: null } }).e);
+    expect(items(running).map((i) => i.label)).toEqual(["Pause", "+15 min", "Done (tick the pick)", "Next pick", "Stop"]);
+    const ended = timerStep(env({ timer: { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 25, remainingMs: 0, running: false, ended: true, endsAt: null } }).e);
+    expect(items(ended).map((i) => i.label)).toEqual(["+15 min", "Done", "Next pick", "Stop"]);
   });
 });

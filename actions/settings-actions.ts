@@ -1,7 +1,7 @@
 // Settings actions (step 6b): load everything Settings shows, save one section, store an app secret in the keyring,
 // export the plan store. Secrets are never returned: only whether they are set and an expiry date Tanner entered.
 import { join } from "node:path";
-import { CLIENT_SLOTS, colorCss, type AppConfig, type ParseResult } from "../config/schema.ts";
+import { CLIENT_SLOTS, colorCss, DEFAULT_PLAN, type AppConfig, type ParseResult } from "../config/schema.ts";
 import { secretExpiryEdit, settingsEdit, SETTINGS_SECTIONS, SettingsInputError, type SettingsSection } from "../config/settings.ts";
 import type { WriteResult } from "../config/edit.ts";
 import { detectChromium, detectEdge, profilesFromLocalState } from "../links/edge.ts";
@@ -52,7 +52,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
   );
   const base = { configPath: loaded.path, palette: CLIENT_SLOTS, browsers: browsers(ctx), secrets, data: { planStore: !!ctx.plan } };
   if (!loaded.parsed.ok)
-    return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [] }, clients: [], display: null };
+    return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, clients: [], display: null };
   const cfg = loaded.parsed.config;
   const tz = cfg.week.hours.timeZone;
   const fetched: MyClient[] | null = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, tz).myClients().catch(() => null) : null;
@@ -72,7 +72,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
     hours: cfg.week.hours,
     standingBlocks: cfg.week.standingBlocks,
     risk: cfg.week.thresholds,
-    planning: { pickablePortfolioTypes: cfg.plan.pickablePortfolioTypes },
+    planning: cfg.plan,
     clients,
     display: cfg.ui,
   };

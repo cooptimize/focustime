@@ -350,24 +350,54 @@ function StandingForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
 }
 
 function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
-  const [types, setTypes] = useState(p.data.planning.pickablePortfolioTypes.join(", "));
+  const pl = p.data.planning;
+  const [types, setTypes] = useState(pl.pickablePortfolioTypes.join(", "));
+  const [v, setV] = useState({ S: pl.sizes.S, M: pl.sizes.M, L: pl.sizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes, focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound });
   const { problems, status, save } = useSave(p.onSavedData);
+  const num = (k: Exclude<keyof typeof v, "endSound">, label: string, field: string, hint: string, step = 5, max = 480) => (
+    <Field label={label} hint={hint}>
+      <input type="number" min={0} max={max} step={step} value={v[k]} onChange={(e) => setV({ ...v, [k]: Number(e.target.value) })} />
+      <Problems all={problems} field={field} />
+    </Field>
+  );
   return (
     <form
       className="set-form"
       onSubmit={(e) => {
         e.preventDefault();
-        void save("planning", { pickablePortfolioTypes: types.split(",").map((x) => x.trim()).filter(Boolean) });
+        void save("planning", {
+          pickablePortfolioTypes: types.split(",").map((x) => x.trim()).filter(Boolean),
+          sizes: { S: v.S, M: v.M, L: v.L },
+          carryDays: v.carryDays,
+          reminderOffsetMinutes: v.reminderOffsetMinutes,
+          focusMinutes: v.focusMinutes,
+          breakMinutes: v.breakMinutes,
+          endSound: v.endSound,
+        });
       }}
     >
+      <h3>Picks</h3>
       <div className="set-grid">
+        {num("S", "Size S (minutes)", "plan.size_s", "A small pick. In steps of 5.")}
+        {num("M", "Size M (minutes)", "plan.size_m", "More than S.")}
+        {num("L", "Size L (minutes)", "plan.size_l", "More than M. Nothing above L: split it first.")}
         <Field label="Portfolio types that can be picked" hint='Work item types above story level that you still pick directly, like "Recurring".'>
           <input value={types} onChange={(e) => setTypes(e.target.value)} />
           <Problems all={problems} field="plan.pickable_portfolio_types" />
         </Field>
-        <ReadOnly label="Sizes" value="S about 1 h · M about 2 h · L a whole block" where="Fixed for now" />
-        <ReadOnly label="Carry-over" value="Offered on the first upcoming day not committed yet" where="Fixed for now" />
-        <ReadOnly label="Reminder" value="From the day's start for 90 minutes, if today isn't committed" where="Fixed for now" />
+        {num("carryDays", "Carry-over (days back)", "plan.carry_days", "Unfinished picks from this many days back are offered on the first upcoming day not committed yet. 0 turns it off.", 1, 30)}
+        {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "plan.reminder_offset_minutes", "When today isn't committed, one reminder from this time, for 90 minutes.", 5, 240)}
+      </div>
+      <h3>Focus timer</h3>
+      <div className="set-grid">
+        {num("focusMinutes", "Focus length (minutes)", "plan.focus_minutes", "The default for a plain timer. A pick suggests its size instead.", 5, 240)}
+        {num("breakMinutes", "Break length (minutes)", "plan.break_minutes", "Offered when a session ends. 0 for none.", 5, 60)}
+        <Field label="End sound" hint="A short sound with the desktop notification when a session ends.">
+          <label className="set-check">
+            <input type="checkbox" checked={v.endSound} onChange={(e) => setV({ ...v, endSound: e.target.checked })} /> Play a sound
+          </label>
+          <Problems all={problems} field="plan.end_sound" />
+        </Field>
       </div>
       <SaveRow status={status} />
     </form>
@@ -605,6 +635,48 @@ function SecretForm({ secret: s, onDone }: { secret: SettingsData["secrets"][num
   );
 }
 
+/** Reset local plan (Q37): type "reset" to confirm; the server backs the store up first. */
+function ResetPlan({ disabled, onDone }: { disabled: boolean; onDone: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
+  return (
+    <div className="set-field">
+      <span className="set-label">Reset local plan</span>
+      {asking ? (
+        <form
+          className="set-inline"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            try {
+              const r = await call<{ backup: string | null }>("plan.reset", { confirm: typed.trim() });
+              setStatus(`Done. The plan store was backed up first${r.backup ? ` (${r.backup})` : ""}.`);
+              setAsking(false);
+              setTyped("");
+              onDone();
+            } catch (err) {
+              setStatus(err instanceof Error ? err.message : "Not reset");
+            }
+          }}
+        >
+          <input autoFocus value={typed} placeholder='Type "reset"' aria-label='Type "reset" to confirm' onChange={(e) => setTyped(e.target.value)} />
+          <button type="submit" className="mini danger" disabled={typed.trim() !== "reset"}>
+            Reset
+          </button>
+          <button type="button" className="mini" onClick={() => setAsking(false)}>
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <button type="button" className="mini" disabled={disabled} onClick={() => { setAsking(true); setStatus(null); }}>
+          Reset…
+        </button>
+      )}
+      <span className="set-hint">{status ?? "Empties picks, drafts, unavailable time, flex sessions, loops, the timer and focused time. A full backup of the plan store is made first. Settings and calendars are not touched."}</span>
+    </div>
+  );
+}
+
 function DataSection(p: Props & { data: SettingsData }) {
   const [status, setStatus] = useState<string | null>(null);
   return (
@@ -630,8 +702,8 @@ function DataSection(p: Props & { data: SettingsData }) {
           <span className="set-hint">{status ?? "Picks, drafts, unavailable time, flex sessions and loops. Local only."}</span>
         </div>
         <ReadOnly label="Config file" value={p.data.configPath} where="Backups are kept next to it in backups/ (the last 30)" />
-        <ReadOnly label="Audit log" value="Not built yet" where="Coming with a later step" />
-        <ReadOnly label="Reset the local plan" value="Not built yet" where="Coming with a later step (it will ask to confirm and export first)" />
+        <ReadOnly label="Audit log" value="Not built yet" where="Waits for the write framework" />
+        <ResetPlan disabled={!p.data.data.planStore} onDone={p.onSaved} />
       </div>
     </div>
   );

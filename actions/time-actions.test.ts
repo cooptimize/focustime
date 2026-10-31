@@ -72,9 +72,12 @@ describe("time model actions (step 6b)", () => {
     expect(await t.run("unavailable.remove", { id: u.id })).toMatchObject({ ok: false, status: 404 });
   });
 
-  it("adds a flex session outside working hours only, names its DevOps item, and keeps it once it has ended", async () => {
+  it("adds a flex session, names its DevOps item, and keeps it once it has ended", async () => {
     const t = setup();
-    expect(await t.run("flex.add", { date: "2026-11-02", clientKey: "CSC", start: "16:00", end: "18:00" })).toMatchObject({ ok: false, status: 422, error: expect.stringMatching(/overlaps working hours/) });
+    // Q34 (step 6c): an overlap with working hours is allowed and reported; a session all inside them is not flex.
+    const over = await t.run("flex.add", { date: "2026-11-02", clientKey: "CSC", start: "16:00", end: "18:00" });
+    expect(over).toMatchObject({ ok: true, data: { overlapMinutes: 60 } });
+    expect(await t.run("flex.add", { date: "2026-11-02", clientKey: "CSC", start: "10:00", end: "11:00" })).toMatchObject({ ok: false, status: 422, error: expect.stringMatching(/inside working hours/) });
     expect(await t.run("flex.add", { date: "2026-11-07", clientKey: "CSC", start: "10:00", end: "12:00", itemId: 999 })).toMatchObject({ ok: false, status: 409 });
     const r = await t.run("flex.add", { date: "2026-11-07", clientKey: "CSC", start: "10:00", end: "12:00", itemId: 101, note: "Finish the import" });
     expect(r.ok).toBe(true);

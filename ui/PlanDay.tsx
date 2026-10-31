@@ -10,6 +10,7 @@ import { fitLabel, formatMinutes } from "./planday.ts";
 import { clientColor, halfTag, longDate, shortDate, slotRange, startClock } from "./labels.ts";
 import { cardHalves, slotOf } from "./halves.ts";
 import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
+import { PlanCtx } from "./planview.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { itemMenu, pickMenu } from "./menu.ts";
@@ -249,7 +250,7 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
   const [chosen, setChosen] = useState<string | null>(null);
   const source = focus?.clientKey ?? chosen ?? bc.clientKey ?? clients[0]?.clientKey ?? null;
   const capacity = capacityMinutes(slot, now);
-  const fit = fitOf(plannedMinutes(picks), capacity);
+  const fit = fitOf(plannedMinutes(picks, useContext(PlanCtx).sizes), capacity);
   const started = Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.start)) > 0;
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? k ?? "";
   const style = { "--c": clientColor(bc.clientKey ?? undefined, colors) } as CSSProperties;

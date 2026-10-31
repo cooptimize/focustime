@@ -405,3 +405,15 @@ describe("Plan any day", () => {
     });
   });
 });
+
+describe("flex loops open by the server's clock (step 6c)", () => {
+  it("a week read with a later ?now does not open a loop for a session that hasn't ended yet", async () => {
+    const t = setup();
+    t.plan.addFlex({ date: "2026-11-03", clientKey: "CSC", start: "2026-11-03T23:00:00Z", end: "2026-11-04T01:00:00Z" });
+    await t.run("week.load", { weekStart: "2026-11-02", now: "2026-11-05T14:00:00Z" });
+    expect(t.plan.openLoops()).toEqual([]);
+    t.at("2026-11-04T02:00:00Z");
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    expect(t.plan.openLoops()).toHaveLength(1);
+  });
+});

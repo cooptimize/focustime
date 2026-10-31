@@ -1,7 +1,7 @@
 // Plan the day rules: capacity, fit, carry-over, block client and story level. Pure, no I/O.
 import { freeMinutes } from "../week/free.ts";
 import type { IsoDate, WorkItem } from "../week/types.ts";
-import { SIZE_MINUTES, type Pick } from "./types.ts";
+import { SIZE_MINUTES, type Pick, type Size } from "./types.ts";
 
 
 /**
@@ -13,8 +13,8 @@ export function capacityMinutes(slot: Parameters<typeof freeMinutes>[0], now: st
 }
 
 /** Planned minutes of the picks still to do (planned); done, moved and dropped don't use capacity. */
-export function plannedMinutes(picks: readonly Pick[]): number {
-  return picks.filter((p) => p.status === "planned").reduce((sum, p) => sum + SIZE_MINUTES[p.size], 0);
+export function plannedMinutes(picks: readonly Pick[], sizes: Readonly<Record<Size, number>> = SIZE_MINUTES): number {
+  return picks.filter((p) => p.status === "planned").reduce((sum, p) => sum + sizes[p.size], 0);
 }
 
 export type Fit = { kind: "empty" } | { kind: "fits"; spare: number } | { kind: "tight"; spare: number } | { kind: "over"; by: number };
@@ -37,9 +37,10 @@ export const CARRY_DAYS = 7;
  * the original "moved", and done or dropped picks are settled, so each unfinished pick shows once until
  * it is carried, done or dropped. Newest day first, then block and position.
  */
-export function carryOver(picks: readonly Pick[], today: IsoDate): Pick[] {
+export function carryOver(picks: readonly Pick[], today: IsoDate, days = CARRY_DAYS): Pick[] {
+  if (days <= 0) return [];
   const t = Temporal.PlainDate.from(today);
-  const from = t.subtract({ days: CARRY_DAYS });
+  const from = t.subtract({ days });
   return picks
     .filter((p) => p.status === "planned")
     .filter((p) => {

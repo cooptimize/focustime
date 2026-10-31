@@ -17,6 +17,13 @@ describe("Plan the day reminder", () => {
     expect(reminderDue(at("2026-11-07T09:00:00-05:00"), shape, false)).toBe(false);
   });
 
+  it("starts the window later with an offset from Settings > Planning (step 6c)", () => {
+    expect(reminderDue(at("2026-11-02T09:10:00-05:00"), shape, false, 30)).toBe(false);
+    expect(reminderDue(at("2026-11-02T09:30:00-05:00"), shape, false, 30)).toBe(true);
+    expect(reminderDue(at("2026-11-02T10:59:00-05:00"), shape, false, 30)).toBe(true);
+    expect(reminderDue(at("2026-11-02T11:00:00-05:00"), shape, false, 30)).toBe(false);
+  });
+
   it("sends once per day, never repeating, and again on the next workday", async () => {
     const sent: string[] = [];
     const marks = new Set<string>();

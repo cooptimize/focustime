@@ -64,8 +64,10 @@ describe("Now strip", () => {
     expect(later.overBy).toBeNull();
   });
 
-  it("before commit there are no pick counts", () => {
-    expect(nowStrip(input("2026-11-02T09:40", { picks: [pick("AM", "Draft")] })).picks).toBeNull();
+  it("before commit the picks are drafts (Q38, step 6c)", () => {
+    const s = nowStrip(input("2026-11-02T09:40", { picks: [pick("AM", "Draft")] }));
+    expect(s).toMatchObject({ picks: { done: 0, total: 1 }, draft: true, nextPick: "Draft", overBy: null });
+    expect(nowStrip(input("2026-11-02T09:40", { picks: [pick("AM", "Draft")], committed: true })).draft).toBe(false);
   });
 
   it("handles before work, lunch and the end of the day", () => {

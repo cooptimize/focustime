@@ -1,7 +1,7 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
-import { DEFAULT_UI, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
+import { DEFAULT_PLAN, DEFAULT_UI, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
 import { setValue, type WriteResult } from "../config/edit.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
@@ -16,9 +16,11 @@ import type { PlanStore } from "../store/plan-store.ts";
 import { checkDevOpsUrl, launchPlan } from "../links/edge.ts";
 import { hasHoursOn, planAction } from "./plan-actions.ts";
 import { timeAction } from "./time-actions.ts";
+import { TIMER_KEY, timerAction, timerView } from "./timer-actions.ts";
+import { warnPoints, type TimerState } from "../plan/timer.ts";
 import { settingsAction, type SettingsContext } from "./settings-actions.ts";
 import { isActionName, type ActionName } from "./registry.ts";
-import type { ActionResponse, SourceSummary, WeekLoadData } from "./types.ts";
+import type { ActionResponse, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
@@ -111,6 +113,13 @@ function columnOf(t: ReturnType<typeof todayTarget>, week: Week): ReturnType<typ
   return i < 0 ? t : { ...t, dayIndex: i };
 }
 
+/** Settings > Planning as the UI uses it (defaults when the config is invalid). */
+export function planningOf(cfg: AppConfig | null): PlanningSettings {
+  if (!cfg) return { ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } };
+  const { pickablePortfolioTypes: _ignored, ...rest } = cfg.plan;
+  return rest;
+}
+
 const hasHoursFor = (ctx: Pick<ActionContext, "plan">, model: TimeModel, date: string) => hasHoursOn(ctx.plan, model, date);
 
 /** Anything planned on a date: working hours, a flex session, unavailable time or picks. */
@@ -148,8 +157,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const tz = model.timeZone;
   const now = input.now ?? ctx.now();
   const todayDate = localToday(now, tz);
-  // A flex session that has ended opens its update loop (D126), on any read.
-  ctx.plan?.openFlexLoops(Temporal.Instant.from(now));
+  // A flex session that has ended opens its update loop (D126), on any read. By the server's clock, never the UI's
+  // ?now (a check could otherwise open loops for sessions still ahead; step 6c, like D118).
+  ctx.plan?.openFlexLoops(Temporal.Instant.from(ctx.now()));
   const todayPlans = hasPlansOn(ctx, model, todayDate);
   const weekStart = input.weekStart ?? defaultWeekStart(todayDate, todayPlans);
 
@@ -221,6 +231,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
 
   const todayPlan = ctx.plan?.day(todayDate) ?? null;
+  // The focus timer warns 5 minutes before meetings and block ends (server/timer.ts); keep today's points fresh.
+  if (ctx.plan && todayDay) ctx.plan.setState("warn_points", { date: todayDate, points: warnPoints(todayDay, tz) });
   const todayOff = ptoAhead.includes(todayDate) || !!pto[todayDate];
   return {
     weekStart,
@@ -235,6 +247,10 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     clients: clientColors,
     hours: model,
     thresholds: weekConfig.thresholds,
+    planning: planningOf(cfg),
+    timer: timerView(ctx.plan?.getState<TimerState>(TIMER_KEY) ?? null, Temporal.Instant.from(ctx.now())),
+    openLoops: ctx.plan?.openLoops().length ?? 0,
+    focused: ctx.plan ? ctx.plan.focusedSeconds(Object.values(ctx.plan.week(week.days.map((d) => d.date))).flatMap((d) => d.picks.map((p) => p.id))) : {},
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
   };
@@ -349,6 +365,17 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         action,
         req.input,
       );
+    case "timer.start":
+    case "timer.pause":
+    case "timer.resume":
+    case "timer.stop":
+    case "timer.extend":
+    case "timer.done":
+    case "timer.next":
+    case "loops.list":
+    case "loop.close":
+    case "plan.reset":
+      return timerAction({ plan: ctx.plan, config: () => configured(ctx), now: ctx.now }, action, req.input);
     case "planday.start":
     case "planday.commit":
     case "pick.add":

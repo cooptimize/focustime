@@ -18,7 +18,10 @@ import { Details } from "./Details.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
-import { NowStrip } from "./NowStrip.tsx";
+import { NowStrip, countdown, timerLeft } from "./NowStrip.tsx";
+import { Loops } from "./Loops.tsx";
+import { PopupMenu } from "./Menus.tsx";
+import { timerStep } from "./menu.ts";
 import { nowStrip } from "../plan/now.ts";
 import { cardHalves, slotOf, validHalf } from "./halves.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
@@ -56,6 +59,12 @@ export function App() {
   const [keysOpen, setKeysOpen] = useState(false);
   /** Settings (step 6b): the section shown, or null when closed. It takes the week's place. */
   const [settingsAt, setSettingsAt] = useState<SettingsSectionId | null>(null);
+  /** The Loops view (step 6c) takes the week's place too. */
+  const [loopsOpen, setLoopsOpen] = useState(false);
+  /** The focus timer menu (F or the top bar Focus button), anchored where it was opened. */
+  const [timerMenuAt, setTimerMenuAt] = useState<{ x: number; y: number } | null>(null);
+  /** A per-second clock while a timer runs, for its countdown. */
+  const [secondMs, setSecondMs] = useState(() => Date.now());
   // The element focused in each region, so F6 returns to it; and the work item focused when the command menu opened.
   const lastInRegion = useRef(new Map<Region, HTMLElement>());
   const focusedItem = useRef<{ clientKey: string; url: string } | null>(null);
@@ -136,6 +145,18 @@ export function App() {
     }
   }, []);
   const reloadRef = useRef<() => void>(() => {});
+  /** Timer actions (step 6c): the server keeps the state; reload to show it. */
+  const runTimer = useCallback(async (action: string, input: Record<string, unknown> = {}): Promise<boolean> => {
+    try {
+      const r = await call<{ notice?: string }>(action, input);
+      if (r?.notice) setNotice(r.notice);
+      reloadRef.current();
+      return true;
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "That didn't work");
+      return false;
+    }
+  }, []);
 
   /** Loads a week. Data on screen stays put until the new data arrives; a failure keeps it (afterLoad). */
   const load = useCallback(
@@ -243,6 +264,7 @@ export function App() {
       nextWorkday: target.date !== date ? target.date : null,
       clientName: (k) => names.get(k) ?? k,
       noHoursToday: !hasHours(date),
+      sizes: data.planning.sizes,
     });
   }, [data, target, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -386,14 +408,39 @@ export function App() {
         closePlanDay();
         setDetailsOpen(false);
         setSettingsAt(null);
-      } else if (v === "settings") setSettingsAt("you");
-      else {
+        setLoopsOpen(false);
+      } else if (v === "settings") {
+        setLoopsOpen(false);
+        setSettingsAt("you");
+      } else if (v === "loops") {
+        closePlanDay();
+        setDetailsOpen(false);
         setSettingsAt(null);
+        setLoopsOpen(true);
+      } else {
+        setSettingsAt(null);
+        setLoopsOpen(false);
         void openPlanDay();
       }
     },
     [closePlanDay, openPlanDay],
   );
+
+  // A per-second tick only while a timer runs; when it reaches zero locally, reload shortly after so the server's end shows.
+  const timerRunning = !!data?.timer?.running;
+  useEffect(() => {
+    if (!timerRunning) return;
+    setSecondMs(Date.now());
+    const id = setInterval(() => setSecondMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [timerRunning]);
+  const timerEndsAt = data?.timer?.running ? data.timer.endsAt : null;
+  useEffect(() => {
+    if (!timerEndsAt) return;
+    const wait = Date.parse(timerEndsAt) - Date.now() + 6000;
+    const id = setTimeout(() => reloadRef.current(), Math.max(1000, wait));
+    return () => clearTimeout(id);
+  }, [timerEndsAt]);
 
   /** Clicking the Now strip: back to the week with the current half-day selected (today's week if another is shown). */
   const selectNow = useCallback(() => {
@@ -506,21 +553,32 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if (cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey) return;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
-      if (settingsAt !== null && e.key === "Escape" && !(e.target as HTMLElement | null)?.closest?.(".popup-menu")) {
+      const inMenu = !!(e.target as HTMLElement | null)?.closest?.(".popup-menu");
+      if ((settingsAt !== null || loopsOpen) && e.key === "Escape" && !inMenu) {
         e.preventDefault();
         setSettingsAt(null);
+        setLoopsOpen(false);
       } else if (settingsAt === null && e.key === "," && !typing && !pd && !detailsOpen) {
         e.preventDefault();
+        setLoopsOpen(false);
         setSettingsAt("you");
+      } else if ((e.key === "l" || e.key === "L") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
+        e.preventDefault();
+        setLoopsOpen((o) => !o);
+      } else if ((e.key === "f" || e.key === "F") && !typing && !detailsOpen && !inMenu) {
+        e.preventDefault();
+        // Under the Focus button when it is on screen (it hides on narrow widths).
+        const r = document.querySelector(".top-btn.timer-btn")?.getBoundingClientRect();
+        setTimerMenuAt(r && r.width ? { x: r.right, y: r.bottom + 4 } : { x: Math.round(window.innerWidth / 2) + 160, y: 96 });
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settingsAt, cmdOpen, keysOpen, pd, detailsOpen]);
+  }, [settingsAt, loopsOpen, cmdOpen, keysOpen, pd, detailsOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (settingsAt !== null || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (settingsAt !== null || loopsOpen || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (e.target instanceof HTMLInputElement) return;
       if ((e.target as HTMLElement | null)?.closest?.(".popup-menu")) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
@@ -564,7 +622,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, loopsOpen]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
 
@@ -617,9 +675,24 @@ export function App() {
       setViewRange: (r) => void setViewRange(r),
       hours: data.hours,
       runTime,
+      planning: data.planning,
+      timer: data.timer,
+      runTimer,
+      openLoops: () => {
+        closePlanDay();
+        setDetailsOpen(false);
+        setSettingsAt(null);
+        setLoopsOpen(true);
+      },
+      resetPlan: () => {
+        setLoopsOpen(false);
+        closePlanDay();
+        setSettingsAt("data");
+      },
       openSettings: (section) => {
         closePlanDay();
         setDetailsOpen(false);
+        setLoopsOpen(false);
         setSettingsAt(SETTINGS_SECTIONS.some(([id]) => id === section) ? (section as SettingsSectionId) : "you");
       },
       exportPlan: () =>
@@ -628,7 +701,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.kind === "session") {
     return (
@@ -650,14 +723,14 @@ export function App() {
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
   const today = week.days.some((d) => d.date === localToday) ? localToday : "";
   const weekendNote = Temporal.PlainDate.from(localToday).dayOfWeek >= 6 && data.weekStart === data.today.weekStart ? `Today is ${shortDay(localToday)} · showing next week` : null;
-  const view: View = settingsAt !== null ? "settings" : pd ? "planday" : "week";
+  const view: View = settingsAt !== null ? "settings" : loopsOpen ? "loops" : pd ? "planday" : "week";
 
   const samples = new Set(data.sources.filter((s) => s.sample).map((s) => s.source));
 
   return (
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={work}>
-    <PlanCtx.Provider value={{ week: data.plan, toggle }}>
+    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes }}>
     <MenuHost env={env}>
     <div className={`app ${layout}${compact ? " compact" : ""}`}>
       <header className="topbar">
@@ -671,6 +744,9 @@ export function App() {
           </button>
           <button type="button" className="view-tab" aria-current={view === "planday" ? "page" : undefined} onClick={() => setView("planday")} title={`Plan ${shortDay(target.date)} (P)`}>
             Plan the day <kbd>P</kbd>
+          </button>
+          <button type="button" className="view-tab" aria-current={view === "loops" ? "page" : undefined} onClick={() => setView(view === "loops" ? "week" : "loops")} title="What you owe people (L)">
+            Loops{data.openLoops > 0 && <span className="count">{data.openLoops}</span>} <kbd>L</kbd>
           </button>
           {["Plan the week", "Check-in", "Close out"].map((v) => (
             <button key={v} type="button" className="view-tab soon" disabled title="Coming soon">
@@ -693,6 +769,17 @@ export function App() {
           {weekendNote && <span className="weekend-note">{weekendNote}</span>}
         </nav>
         <div className="top-actions">
+          <button
+            type="button"
+            className={`top-btn timer-btn${data.timer ? " timer-on" : ""}`}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setTimerMenuAt({ x: r.right, y: r.bottom + 4 });
+            }}
+            title="Focus timer (F)"
+          >
+            {data.timer ? (data.timer.ended ? "Time's up" : countdown(timerLeft(data.timer, secondMs))) : "Focus"} <kbd>F</kbd>
+          </button>
           <button type="button" className="top-btn" onClick={() => auto.trigger("button")} disabled={loading} title="Refresh all sources (R)">
             {loading ? "Loading…" : "Refresh"}
           </button>
@@ -704,7 +791,7 @@ export function App() {
           </button>
         </div>
       </header>
-      {strip && <NowStrip strip={strip} onSelect={selectNow} />}
+      {strip && <NowStrip strip={strip} onSelect={selectNow} timer={data.timer} nowMs={secondMs} onTimer={(a) => void runTimer(a)} />}
 
       {!data.config.ok && (
         <div className="config-banner" role="alert">
@@ -720,7 +807,14 @@ export function App() {
         </div>
       )}
 
-      {settingsAt !== null ? (
+      {loopsOpen && settingsAt === null ? (
+        <Loops
+          clientName={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k}
+          timeZone={data.hours.timeZone}
+          onClose={() => setLoopsOpen(false)}
+          onChanged={reloadQuiet}
+        />
+      ) : settingsAt !== null ? (
         <Settings
           section={settingsAt}
           onSection={setSettingsAt}
@@ -807,6 +901,7 @@ export function App() {
 
       <Details open={detailsOpen} day={day} slot={slot} timeZone={week.timeZone} colors={data.clients} now={now ?? new Date(clock).toISOString()} onClose={() => setDetailsOpen(false)} />
       {cmdOpen && <CommandMenu commands={commandList(env)} onClose={() => setCmdOpen(false)} />}
+      {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}
       {keysOpen && <KeyLegend onClose={() => setKeysOpen(false)} />}
     </div>
     </MenuHost>

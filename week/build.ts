@@ -78,7 +78,12 @@ export function buildWeek({ weekStart, patterns, events, config, pto = {}, unava
     const kind = i < 4 ? "work" : i === 4 ? "overflow" : "weekend";
     const h = hours.get(date)!;
     const off = pto[date] ?? null;
-    const dayFlex = flexOn(date);
+    // Q34 (step 6c): a session may overlap working hours; that part is already working time, so it is noted, not counted.
+    const dayFlex = flexOn(date).map((f) => {
+      const sp = spanOn(date, f.start, f.end, tz);
+      const overlapMinutes = sp ? h.segments.reduce((n, w) => n + Math.max(0, Math.min(toMin(sp.end), toMin(w.end)) - Math.max(toMin(sp.start), toMin(w.start))), 0) : 0;
+      return { ...f, overlapMinutes };
+    });
     const flexSpans = mergeSpans(dayFlex.map((f) => spanOn(date, f.start, f.end, tz)).filter((s): s is Span => !!s));
 
     // Working windows per slot: early flex joins the morning, evening spans and late flex form EVE (D122).
@@ -172,7 +177,7 @@ export function buildWeek({ weekStart, patterns, events, config, pto = {}, unava
       eve,
       evening: placed.get("evening")!,
       hours: h,
-      flexMinutes: dayFlex.reduce((n, f) => n + Math.max(0, (Temporal.Instant.from(f.end).epochMilliseconds - Temporal.Instant.from(f.start).epochMilliseconds) / 60000), 0),
+      flexMinutes: dayFlex.reduce((n, f) => n + Math.max(0, (Temporal.Instant.from(f.end).epochMilliseconds - Temporal.Instant.from(f.start).epochMilliseconds) / 60000 - f.overlapMinutes), 0),
       pto: off,
     };
   });

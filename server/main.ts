@@ -23,6 +23,8 @@ import { createDevOpsSource, type DevOpsSource } from "../sources/devops/source.
 import type { Keyring } from "../sources/oauth/oauth.ts";
 import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
 import { createApp } from "./app.ts";
+import { checkTimer, notifyWithActions, playEndSound } from "./timer.ts";
+import { timerAction } from "../actions/timer-actions.ts";
 import { checkReminder, notifySend } from "./notify.ts";
 
 const args = process.argv.slice(2);
@@ -168,6 +170,10 @@ if (plan) {
         const r = await loadConfig();
         return r.parsed.ok ? r.parsed.config.week.hours : null;
       },
+      offsetMinutes: async () => {
+        const r = await loadConfig();
+        return r.parsed.ok ? r.parsed.config.plan.reminderOffsetMinutes : 0;
+      },
       committed: (d) => !!store.day(d)?.committedAt,
       off: async (d) => {
         const r = await loadConfig();
@@ -183,6 +189,25 @@ if (plan) {
     }).catch(() => log({ source: "plan", op: "reminder", kind: "failed" }));
   setInterval(tick, 30_000).unref();
   void tick();
+
+  // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.
+  const configOrNull = async () => {
+    const r = await loadConfig();
+    return r.parsed.ok ? r.parsed.config : null;
+  };
+  const timerTick = () =>
+    checkTimer({
+      plan: store,
+      now: () => Temporal.Now.instant(),
+      endSound: async () => (await configOrNull())?.plan.endSound ?? false,
+      notify: notifyWithActions,
+      sound: playEndSound,
+      act: (action) => timerAction({ plan: store, config: configOrNull, now: () => Temporal.Now.instant().toString() }, action, {}),
+    })
+      .then((did) => did && log({ source: "plan", op: "timer", kind: did }))
+      .catch(() => log({ source: "plan", op: "timer", kind: "failed" }));
+  setInterval(timerTick, 5_000).unref();
+  void timerTick();
 }
 
 const runtimeDir = join(process.env.XDG_RUNTIME_DIR || tmpdir(), "coopilot");

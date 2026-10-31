@@ -1216,14 +1216,24 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .top-btn[aria-current="page"] { color: var(--text); border-color: var(--accent); }
 @media (max-width: 900px) { .settings { grid-template-columns: 1fr; } .set-nav { flex-direction: row; flex-wrap: wrap; } }
 
-/* Now strip (step 6b slice 4): one line under the top bar; clicking selects the current half-day. */
+/* Now strip (step 6b slice 4): one line under the top bar; clicking selects the current half-day. Step 6c adds the timer. */
 .app > .nowstrip { flex: none; }
 .nowstrip {
-  display: flex; align-items: center; gap: 0; min-width: 0; margin: 0 24px 8px; padding: 5px 12px;
-  border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-muted);
-  font: inherit; font-size: 13px; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden;
+  display: flex; align-items: center; gap: 12px; min-width: 0; margin: 0 24px 8px; padding: 0 6px 0 0;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-muted); font-size: 13px;
 }
 .nowstrip:hover { border-color: var(--border-strong); }
+.now-select {
+  display: flex; align-items: center; flex: 1; min-width: 0; padding: 5px 12px; border: 0; background: transparent; color: inherit;
+  font: inherit; font-size: 13px; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden;
+}
+.now-timer { flex: none; display: flex; align-items: center; gap: 8px; padding: 3px 0 3px 12px; border-left: 1px solid var(--border); white-space: nowrap; }
+.now-timer-tag { padding: 0 7px; border-radius: 99px; line-height: 18px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--on-action); background: var(--action); }
+.now-timer.break .now-timer-tag { color: var(--text); background: var(--sunken); }
+.now-timer.ended .now-timer-tag { color: var(--on-action); background: var(--accent); }
+.now-count { font-variant-numeric: tabular-nums; color: var(--text); font-size: 14px; min-width: 44px; }
+.now-timer.paused .now-count { color: var(--text-muted); }
+.now-timer-label { max-width: 320px; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .now-tag {
   flex: none; margin-right: 10px; padding: 0 7px; border-radius: 99px; line-height: 18px; font-size: 11px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.05em; color: var(--on-action); background: var(--action);
@@ -1268,3 +1278,29 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .sg-week { height: 900px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .sg-week > .grid { flex: 1; }
 .sg-status { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.set-check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); }
+.flex-overlap { display: block; font-size: 12px; color: var(--text-muted); }
+.now-draft, .now-pick.now-draft { color: var(--text-muted); font-style: italic; }
+.draft-tag { margin-left: 6px; padding: 0 5px; border: 1px dashed var(--border-strong); border-radius: 99px; font-size: 10px; font-style: normal; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.set-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.set-inline input { max-width: 180px; }
+.mini.danger { color: var(--risk); border-color: color-mix(in oklab, var(--risk) 45%, var(--border)); }
+
+/* Loops (step 6c) */
+.loops { flex: 1; overflow: auto; padding: 8px 24px 24px; }
+.loops-head { display: flex; align-items: center; gap: 16px; }
+.loops-head h2 { margin: 0; font-size: 22px; }
+.loops-head h2:focus { outline: none; }
+.loops-head .top-btn { margin-left: auto; }
+.loops-note { margin: 6px 0 14px; font-size: 13px; }
+.loops-empty { color: var(--text-muted); }
+.loop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 1100px; }
+.loop { display: flex; align-items: center; gap: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.loop.closed .loop-who, .loop.closed .loop-what { color: var(--text-muted); }
+.loop-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; flex: 1; min-width: 0; }
+.loop-who { font-weight: 600; color: var(--text); }
+.loop-what { color: var(--text); }
+.loop-when { font-size: 12px; flex-basis: 100%; }
+.loop-close { display: flex; gap: 8px; align-items: center; }
+.loop-close input { width: 280px; }
+.view-tab .count { margin-left: 6px; padding: 0 6px; border-radius: 99px; font-size: 11px; line-height: 16px; background: var(--sunken); color: var(--text); }

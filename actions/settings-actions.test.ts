@@ -92,13 +92,16 @@ describe("Settings (step 6b)", () => {
     expect((await t.run("settings.save", { section: "hours", values: { timeZone: "America/Chicago", lunch: "12:00-12:30", weekdays: { mon: ["08:00-16:00"], tue: ["08:00-16:00"], wed: ["08:00-16:00"], thu: ["08:00-16:00", "20:00-21:00"], fri: ["09:00-12:00"], sat: [], sun: [] } } })).ok).toBe(true);
     expect((await t.run("settings.save", { section: "standing", values: { blocks: [{ day: "Tue", half: "PM", client: "Internal" }] } })).ok).toBe(true);
     expect((await t.run("settings.save", { section: "planning", values: { pickablePortfolioTypes: ["Recurring", "Chore"] } })).ok).toBe(true);
+    expect((await t.run("settings.save", { section: "planning", values: { pickablePortfolioTypes: ["Recurring", "Chore"], sizes: { S: 45, M: 90, L: 180 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true } })).ok).toBe(true);
+    const bad = await t.run("settings.save", { section: "planning", values: { sizes: { S: 60, M: 50, L: 180 } } });
+    expect(bad).toMatchObject({ ok: false, status: 422, fields: [{ field: "plan.size_m" }] });
     expect((await t.run("settings.save", { section: "display", values: { theme: "neutral", viewRange: "12h" } })).ok).toBe(true);
     const cfg = parseConfig(readFileSync(t.path, "utf8"));
     if (!cfg.ok) throw new Error(JSON.stringify(cfg.errors));
     expect(cfg.config.week.hours.timeZone).toBe("America/Chicago");
     expect(cfg.config.week.hours.weekdays.thu).toHaveLength(2);
     expect(cfg.config.week.standingBlocks).toEqual([{ day: "Tue", half: "PM", clientKey: "Internal", clientName: "Internal" }]);
-    expect(cfg.config.plan.pickablePortfolioTypes).toEqual(["Recurring", "Chore"]);
+    expect(cfg.config.plan).toEqual({ pickablePortfolioTypes: ["Recurring", "Chore"], sizes: { S: 45, M: 90, L: 180 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true });
     expect(cfg.config.ui).toEqual({ theme: "neutral", viewRange: "12h" });
     expect(readFileSync(t.path, "utf8")).toContain("# my own note at the top");
   });

@@ -3,9 +3,9 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { legacyHours, THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
 import { samplePatterns, sampleOutlook, sampleGoogle, SAMPLE_WEEK } from "../fixtures/sample-week.ts";
-import type { SourceSummary } from "../actions/types.ts";
+import type { SourceSummary, TimerView } from "../actions/types.ts";
 import type { NowStrip as Strip } from "../plan/now.ts";
-import type { Pick, PlanWeek } from "../plan/types.ts";
+import { SIZE_MINUTES, type Pick, type PlanWeek } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import type { FlexSession } from "../week/types.ts";
 import { KEYS } from "./keys.ts";
@@ -51,14 +51,22 @@ const sources: SourceSummary[] = [
   { source: "google", status: "unreachable", fetchedAt: "2026-11-02T08:00:00-05:00", fromCache: true, itemCount: 3, sample: true, message: "Could not reach Google. Showing data from 8:00 AM", cause: "network" },
 ];
 
-const base: Strip = { kind: "slot", half: "AM", title: "Quiddity focus", until: "12:00", untilMinutes: 110, event: { title: "Design review", at: "11:00", minutes: 50, now: false }, picks: { done: 1, total: 3 }, overBy: 95, nextPick: "Draft the release notes", next: null, flex: false };
+const base: Strip = { kind: "slot", half: "AM", title: "Quiddity focus", until: "12:00", untilMinutes: 110, event: { title: "Design review", at: "11:00", minutes: 50, now: false }, picks: { done: 1, total: 3 }, overBy: 95, nextPick: "Draft the release notes", next: null, flex: false, draft: false };
 const strips: [string, Strip][] = [
   ["In a block, over by", base],
   ["Before work", { ...base, kind: "before", title: "Work starts", until: "09:00", untilMinutes: 30, overBy: null, event: null }],
+  ["Not committed yet", { ...base, draft: true, overBy: null, picks: { done: 0, total: 3 } }],
   ["In a meeting", { ...base, event: { title: "Standup", at: "10:30", minutes: 20, now: true }, overBy: null }],
   ["Flex session", { ...base, half: "EVE", title: "Flex session: CSC", until: "21:00", flex: true, event: null, overBy: null, nextPick: "Finish the import mapping" }],
   ["PTO", { ...base, kind: "pto", half: null, title: "PTO today", until: null, event: null, picks: null, overBy: null, nextPick: null, next: "2026-11-09" }],
   ["No work today", { ...base, kind: "off", half: null, title: "No work today", until: null, event: null, picks: null, overBy: null, nextPick: null, next: "2026-11-09" }],
+];
+
+const timers: [string, TimerView][] = [
+  ["Focus running", { kind: "focus", pickId: 2, label: "Draft the release notes", plannedMinutes: 50, remainingMs: 23 * 60_000 + 14_000, running: true, ended: false, endsAt: new Date(Date.parse(NOW) + 23 * 60_000 + 14_000).toISOString() }],
+  ["Focus paused", { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 25, remainingMs: 9 * 60_000, running: false, ended: false, endsAt: null }],
+  ["Time's up", { kind: "focus", pickId: 2, label: "Draft the release notes", plannedMinutes: 50, remainingMs: 0, running: false, ended: true, endsAt: null }],
+  ["Break", { kind: "break", pickId: null, label: "Break", plannedMinutes: 10, remainingMs: 4 * 60_000, running: true, ended: false, endsAt: new Date(Date.parse(NOW) + 4 * 60_000).toISOString() }],
 ];
 
 // Machado et al. 2009, severity 1 (the matrices used in docs/design/style-guide.md).
@@ -271,6 +279,12 @@ export function StyleGuide() {
               <NowStrip strip={s} onSelect={noop} />
             </div>
           ))}
+          {timers.map(([label, t]) => (
+            <div key={label} className="sg-strip">
+              <span className="muted">{label}</span>
+              <NowStrip strip={base} onSelect={noop} timer={t} nowMs={Date.parse(NOW)} />
+            </div>
+          ))}
         </div>
       </section>
 
@@ -278,7 +292,7 @@ export function StyleGuide() {
         <h2>Week</h2>
         <p className="muted">Sample week at Mon 10:10 AM: a committed plan over its free time, a split day with an evening, unavailable time, a flex session, a PTO day.</p>
         <div className="sg-week">
-          <PlanCtx.Provider value={{ week: plan, toggle: noop }}>
+          <PlanCtx.Provider value={{ week: plan, toggle: noop, sizes: SIZE_MINUTES }}>
             <WeekGrid week={week} colors={colors} minFocusWindow={90} today={SAMPLE_WEEK} now={NOW} selection={{ dayIndex: 0, half: "AM" }} cellRefs={cellRefs} onSelect={noop} onOpen={noop} layout={layout} compact={compact} />
           </PlanCtx.Provider>
         </div>

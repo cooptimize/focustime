@@ -45,6 +45,8 @@ describe("size fit", () => {
   it("S, M and L are about 1 h, 2 h and a whole block; only planned picks use capacity", () => {
     expect(plannedMinutes([pick({ size: "S" }), pick({ size: "M" }), pick({ size: "L" })])).toBe(60 + 120 + 210);
     expect(plannedMinutes([pick({ status: "done" }), pick({ status: "moved" }), pick({ status: "dropped" })])).toBe(0);
+    // Sizes from Settings > Planning (step 6c).
+    expect(plannedMinutes([pick({ size: "S" }), pick({ size: "L" })], { S: 45, M: 90, L: 180 })).toBe(225);
   });
   it("fits with room to spare, tight under 30 minutes of slack, over by the excess", () => {
     expect(fitOf(0, 120)).toEqual({ kind: "empty" });
@@ -64,6 +66,12 @@ describe("carry-over", () => {
     const fri = pick({ date: "2026-10-30" });
     const out = carryOver([thu, fri, pick({ date: "2026-10-29", status: "done" }), pick({ date: "2026-10-29", status: "dropped" })], "2026-11-02");
     expect(out.map((p) => p.id)).toEqual([fri.id, thu.id]);
+  });
+  it("uses the carry-over days from Settings > Planning; 0 turns it off (step 6c)", () => {
+    const thu = pick({ date: "2026-10-29" });
+    const fri = pick({ date: "2026-10-30" });
+    expect(carryOver([thu, fri], "2026-11-02", 3).map((p) => p.id)).toEqual([fri.id]);
+    expect(carryOver([thu, fri], "2026-11-02", 0)).toEqual([]);
   });
   it("a moved pick shows only where it was moved to, so nothing is offered twice", () => {
     const original = pick({ date: "2026-10-29", status: "moved" });

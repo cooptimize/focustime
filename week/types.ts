@@ -97,6 +97,8 @@ export type FlexSession = {
   itemTitle: string | null;
   itemUrl: string | null;
   note: string | null;
+  /** Set by the week build (step 6c, Q34): minutes of the session inside working hours. Only the rest counts as flex. */
+  overlapMinutes?: number;
 };
 
 /** An event as it falls inside one bucket of one day, clipped to that bucket. */

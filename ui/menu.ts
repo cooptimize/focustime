@@ -8,6 +8,9 @@ import { dayRule } from "../plan/days.ts";
 import { isPickable } from "../plan/rules.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek } from "../plan/types.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
+import type { PlanningSettings, TimerView } from "../actions/types.ts";
+import { PRESETS, suggestMinutes } from "../plan/timer.ts";
+import { sizeNote } from "./planview.ts";
 
 export type MenuItem = {
   id: string;
@@ -56,7 +59,7 @@ export type FormField = {
   options?: { value: string; label: string }[];
 };
 
-export type View = "week" | "planday" | "settings";
+export type View = "week" | "planday" | "settings" | "loops";
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
@@ -91,6 +94,8 @@ export type MenuEnv = {
   showKeys: () => void;
   /** The active theme and how to change it (saved in config, applied live). */
   theme: Theme;
+  /** Settings > Planning (step 6c): size minutes and focus timer defaults. */
+  planning: PlanningSettings;
   setTheme: (t: Theme) => void;
   /** The view range (saved in config) and the usual working hours. */
   viewRange: ViewRange;
@@ -101,6 +106,13 @@ export type MenuEnv = {
   /** Opens Settings, at a section when given (step 6b). */
   openSettings: (section?: string) => void;
   exportPlan: () => void;
+  /** The focus timer (step 6c) and its actions (timer.*); false with a notice on refusal. */
+  timer: TimerView | null;
+  runTimer: (action: string, input?: Record<string, unknown>) => Promise<boolean>;
+  /** The Loops view (step 6c). */
+  openLoops: () => void;
+  /** Reset local plan, after a typed confirmation. */
+  resetPlan: () => void;
 };
 
 const dayName = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -154,8 +166,7 @@ export function moveStep(env: MenuEnv, p: Pick): MenuStep {
 }
 
 export function sizeStep(env: MenuEnv, p: Pick): MenuStep {
-  const note = { S: "about 1 h", M: "about 2 h", L: "a whole block" } as const;
-  return { title: `Size of "${p.title}"`, items: SIZES.map((s) => ({ id: `size-${s}`, label: s, hint: note[s], checked: p.size === s, action: "pick.set_size", run: () => env.runPlan("pick.set_size", { id: p.id, size: s }) })) };
+  return { title: `Size of "${p.title}"`, items: SIZES.map((s) => ({ id: `size-${s}`, label: s, hint: sizeNote(env.planning.sizes[s]), checked: p.size === s, action: "pick.set_size", run: () => env.runPlan("pick.set_size", { id: p.id, size: s }) })) };
 }
 
 /** The "⋯" menu of a pick. */
@@ -167,6 +178,14 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
       { id: "open", label: "Open in Edge", action: "link.open", ...(p.itemUrl ? {} : { disabled: p.kind === "intention" ? "An intention has no work item" : "A draft story isn't in DevOps yet" }), run: () => { if (p.itemUrl) env.openLink(p.clientKey, p.itemUrl); } },
       { id: "size", label: "Set size", hint: p.size, action: "pick.set_size", ...(past ? { disabled: PAST } : {}), next: () => sizeStep(env, p) },
       { id: "move", label: "Move", hint: past ? "to today or later" : "AM, PM, another day, Friday", action: "pick.move", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be moved" } : {}), next: () => moveStep(env, p) },
+      {
+        id: "focus",
+        label: env.timer?.pickId === p.id ? "Focus timer running" : "Start focus",
+        hint: `${suggestMinutes(p.size, env.planning.sizes)} min`,
+        action: "timer.start",
+        ...(p.status !== "planned" ? { disabled: "Only a planned pick can be timeboxed" } : p.date !== env.today ? { disabled: "Only today's picks" } : env.timer?.pickId === p.id ? { disabled: "Already timing this pick" } : {}),
+        next: () => lengthStep(`Focus on "${p.title}"`, suggestMinutes(p.size, env.planning.sizes), (m) => env.runTimer("timer.start", { pickId: p.id, minutes: m })),
+      },
       { id: "done", label: p.status === "done" ? "Mark not done" : "Mark done", action: "pick.mark_done", run: () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" }) },
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned pick can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
     ],
@@ -427,6 +446,50 @@ function planDayStep(env: MenuEnv): MenuStep {
   return { title: "Plan which day?", items };
 }
 
+// ---------- focus timer (step 6c) ----------
+
+/** Lengths in 5-minute steps, the suggested one first, then Custom. */
+export function lengthStep(title: string, suggested: number, start: (minutes: number) => Promise<boolean>): MenuStep {
+  const all = [suggested, ...PRESETS.filter((m) => m !== suggested)];
+  return {
+    title,
+    items: [
+      ...all.map<MenuItem>((m, i) => ({ id: `len-${m}`, label: `${m} min${i === 0 ? " (suggested)" : ""}`, action: "timer.start", run: () => start(m) })),
+      {
+        id: "len-custom",
+        label: "Custom…",
+        action: "timer.start",
+        next: () => ({ title, prompt: "Minutes (1 to 240)", placeholder: String(suggested), button: "Start", submit: (t) => start(Number(t.trim())) }),
+      },
+    ],
+  };
+}
+
+/** F: start a plain timer or a break, or control the one running. */
+export function timerStep(env: MenuEnv): MenuStep {
+  const t = env.timer;
+  const p = env.planning;
+  if (!t)
+    return {
+      title: "Focus timer",
+      items: [
+        { id: "focus", label: "Focus", hint: `${p.focusMinutes} min`, action: "timer.start", next: () => lengthStep("Focus for", p.focusMinutes, (m) => env.runTimer("timer.start", { minutes: m })) },
+        { id: "break", label: "Break", hint: p.breakMinutes ? `${p.breakMinutes} min` : "off", action: "timer.start", ...(p.breakMinutes ? {} : { disabled: "Breaks are set to 0 minutes in Settings > Planning" }), run: () => env.runTimer("timer.start", { kind: "break" }) },
+        { id: "pick", label: "Timebox a pick…", action: "timer.start", next: () => choosePick(env, "Focus on which pick?", (pk) => () => env.runTimer("timer.start", { pickId: pk.id })) },
+      ],
+    };
+  return {
+    title: t.pickId ? `Focus: ${t.label}` : t.kind === "break" ? "Break timer" : "Focus timer",
+    items: [
+      ...(t.ended ? [] : [t.running ? { id: "pause", label: "Pause", action: "timer.pause", run: () => env.runTimer("timer.pause") } : { id: "resume", label: "Resume", action: "timer.resume", run: () => env.runTimer("timer.resume") }]),
+      { id: "extend", label: "+15 min", action: "timer.extend", run: () => env.runTimer("timer.extend") },
+      { id: "done", label: t.pickId ? "Done (tick the pick)" : "Done", action: "timer.done", run: () => env.runTimer("timer.done") },
+      { id: "next", label: "Next pick", action: "timer.next", run: () => env.runTimer("timer.next") },
+      { id: "stop", label: "Stop", danger: true, action: "timer.stop", run: () => env.runTimer("timer.stop") },
+    ],
+  };
+}
+
 export function themeStep(env: MenuEnv): MenuStep {
   return { title: "Theme", items: THEMES.map((t) => ({ id: t, label: THEME_NAMES[t], checked: env.theme === t, action: "ui.set_theme", run: () => env.setTheme(t) })) };
 }
@@ -478,6 +541,16 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       if (!uniq.length) return { disabled: "No flex session this week" };
       return { next: () => ({ title: "Remove which flex session?", items: uniq.map(({ d, f }) => ({ id: `f${f.id}`, label: `${dayName(d.date)}: ${f.clientKey}${f.itemTitle ? ` · ${f.itemTitle}` : ""}`, danger: true, run: () => env.runTime("flex.remove", { id: f.id }) })) }) };
     }
+    case "timer.start": return { next: () => timerStep(env) };
+    case "timer.pause": return env.timer?.running ? { run: () => env.runTimer("timer.pause") } : { disabled: "No timer is running" };
+    case "timer.resume": return env.timer && !env.timer.running && !env.timer.ended ? { run: () => env.runTimer("timer.resume") } : { disabled: "No paused timer" };
+    case "timer.stop": return env.timer ? { run: () => env.runTimer("timer.stop") } : { disabled: "No timer" };
+    case "timer.extend": return env.timer ? { run: () => env.runTimer("timer.extend") } : { disabled: "No timer" };
+    case "timer.done": return env.timer ? { run: () => env.runTimer("timer.done") } : { disabled: "No timer" };
+    case "timer.next": return env.timer ? { run: () => env.runTimer("timer.next") } : { disabled: "No timer" };
+    case "loops.list": return { run: env.openLoops };
+    case "loop.close": return { run: env.openLoops };
+    case "plan.reset": return { run: env.resetPlan };
     case "link.open": return { next: () => chooseItem(env, "Open which work item?", () => true, (k, i) => () => env.openLink(k, i.url)) };
   }
 }

@@ -28,6 +28,14 @@ export type WeekLoadData = {
   /** The time model (step 6b): working hours per weekday, lunch, one-day overrides and the zone. */
   hours: TimeModel;
   thresholds: RiskThresholds;
+  /** Settings > Planning (step 6c): pick size minutes, carry-over days, reminder offset and focus timer defaults. */
+  planning: PlanningSettings;
+  /** The focus timer (step 6c), or null. */
+  timer: TimerView | null;
+  /** Open loops, for the Loops count in the top bar (step 6c). */
+  openLoops: number;
+  /** Focused seconds per pick on the week shown (focus log, step 6c). */
+  focused: Record<number, number>;
   /** Display settings from [ui] (step 6b): the theme. Defaults when the config is invalid. */
   ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
@@ -65,7 +73,7 @@ export type SettingsData = {
   hours: TimeModel | null;
   standingBlocks: StandingBlock[];
   risk: RiskThresholds | null;
-  planning: { pickablePortfolioTypes: string[] };
+  planning: AppConfig["plan"];
   clients: SettingsClient[];
   /** Whether Dataverse answered for the client list; when not, Dataverse-owned values are unknown, not empty. */
   dataverseReached: boolean;
@@ -75,4 +83,24 @@ export type SettingsData = {
   display: AppConfig["ui"] | null;
   data: { planStore: boolean };
 };
+
+/** [plan] values the UI uses (step 6c). */
+export type PlanningSettings = Omit<AppConfig["plan"], "pickablePortfolioTypes">;
+
+/** The focus timer as the UI sees it (step 6c). `endsAt` is set while running, for a local countdown. */
+export type TimerView = {
+  kind: "focus" | "break";
+  pickId: number | null;
+  label: string;
+  plannedMinutes: number;
+  remainingMs: number;
+  running: boolean;
+  ended: boolean;
+  endsAt: string | null;
+};
+
+/** A loop in the Loops view (step 6c): who (client), what, when. */
+export type LoopView = { id: number; kind: string; clientKey: string | null; what: string; channel: string | null; due: string | null; openedAt: string; closedAt: string | null; closeNote: string | null;
+  /** The flex session a flex loop came from (its when), or null. */
+  session: { start: string; end: string } | null };
 

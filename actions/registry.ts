@@ -14,13 +14,14 @@ export type ActionTarget =
   | "theme" // one of the themes
   | "range" // one of the view ranges
   | "unavailable" // one unavailable time
-  | "flex"; // one flex session
+  | "flex" // one flex session
+  | "loop"; // one loop
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the day" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings";
+  readonly group: "Week" | "Plan the day" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -52,6 +53,16 @@ export const ACTIONS = [
   { name: "settings.load", title: "Open Settings", group: "Settings", target: "none", shortcut: ",", summary: "Working hours, clients, connections, display and data" },
   { name: "settings.save", title: "Change a setting", group: "Settings", target: "none", summary: "Saved to the config file with a backup; applies at once" },
   { name: "secret.set", title: "Set a client secret", group: "Settings", target: "none", summary: "Masked entry straight to the keyring; never shown again" },
+  { name: "plan.reset", title: "Reset local plan", group: "Settings", target: "none", summary: "Empties picks, drafts, time entries and loops after a backup; asks you to confirm" },
+  { name: "timer.start", title: "Start focus timer", group: "Focus", target: "none", shortcut: "F", summary: "A plain timer, a break, or a pick from its ⋯ menu; lengths in 5-minute steps" },
+  { name: "timer.pause", title: "Pause the timer", group: "Focus", target: "none", summary: "Focused time so far is kept" },
+  { name: "timer.resume", title: "Resume the timer", group: "Focus", target: "none", summary: "Carry on from where it paused" },
+  { name: "timer.stop", title: "Stop the timer", group: "Focus", target: "none", summary: "End the session without ticking the pick" },
+  { name: "timer.extend", title: "Add 15 minutes", group: "Focus", target: "none", summary: "Keep going; after the end it runs again from now" },
+  { name: "timer.done", title: "Done with this session", group: "Focus", target: "none", summary: "End the session and tick its pick done" },
+  { name: "timer.next", title: "Next pick", group: "Focus", target: "none", summary: "End the session and timebox today's next planned pick" },
+  { name: "loops.list", title: "Show loops", group: "Loops", target: "none", shortcut: "L", summary: "What you owe people: open loops, closed ones on request" },
+  { name: "loop.close", title: "Close a loop", group: "Loops", target: "loop", summary: "By hand, with an optional note" },
   { name: "data.export", title: "Export the plan", group: "Settings", target: "none", summary: "Picks, drafts and time entries as JSON in ~/.local/share/coopilot/exports" },
   { name: "link.open", title: "Open in Edge", group: "Work items", target: "item", summary: "Open a work item in that client's Edge profile" },
 ] as const satisfies readonly ActionSpec[];

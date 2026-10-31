@@ -80,7 +80,21 @@ export const DEFAULT_FALLBACK_COMMAND = ["omarchy-launch-browser"];
 export type PlanConfig = {
   /** Portfolio-level work item types that can still be picked (Q20), matched without regard to case. */
   pickablePortfolioTypes: string[];
+  /** Minutes per pick size (step 6c, Q36). */
+  sizes: { S: number; M: number; L: number };
+  /** How many days back unfinished picks are offered again; 0 turns carry-over off. */
+  carryDays: number;
+  /** The "not planned yet" reminder: minutes after the day's start it can first fire. */
+  reminderOffsetMinutes: number;
+  /** Focus timer defaults (step 6c). */
+  focusMinutes: number;
+  breakMinutes: number;
+  /** Play a sound when a focus session ends (default off). */
+  endSound: boolean;
 };
+
+export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes"> = { sizes: { S: 60, M: 120, L: 210 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false };
+const PLAN_KEYS = ["pickable_portfolio_types", "size_s", "size_m", "size_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound"];
 
 export type FieldError = { field: string; message: string };
 /** `legacyDayShape`: the file still has the old [day_shape] section (read as hours; migrated on load, D124). */
@@ -294,9 +308,38 @@ export function parseConfig(text: string): ParseResult {
 
   // [plan] (optional)
   const pickablePortfolioTypes: string[] = [];
+  const planOpts = { ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } };
   if (raw.plan !== undefined) {
     const t = isTable(raw.plan) ? raw.plan : (err("plan", "Must be a [plan] table"), null);
-    if (t) for (const k of Object.keys(t)) if (!["pickable_portfolio_types"].includes(k)) err(`plan.${k}`, "Unknown field");
+    if (t) for (const k of Object.keys(t)) if (!PLAN_KEYS.includes(k)) err(`plan.${k}`, "Unknown field");
+    /** Whole minutes in 5-minute steps between min and max. */
+    const minutes = (key: string, min: number, max: number, step = 5): number | undefined => {
+      const v = t?.[key];
+      if (v === undefined) return undefined;
+      if (typeof v !== "number" || !Number.isInteger(v) || v < min || v > max || v % step !== 0) {
+        err(`plan.${key}`, `Must be ${min} to ${max}${step > 1 ? ` in steps of ${step}` : ""}`);
+        return undefined;
+      }
+      return v;
+    };
+    const sS = minutes("size_s", 5, 480), sM = minutes("size_m", 5, 480), sL = minutes("size_l", 5, 480);
+    if (sS !== undefined) planOpts.sizes.S = sS;
+    if (sM !== undefined) planOpts.sizes.M = sM;
+    if (sL !== undefined) planOpts.sizes.L = sL;
+    if (planOpts.sizes.M <= planOpts.sizes.S) err("plan.size_m", "Must be more than S");
+    if (planOpts.sizes.L <= planOpts.sizes.M) err("plan.size_l", "Must be more than M");
+    const cd = minutes("carry_days", 0, 30, 1);
+    if (cd !== undefined) planOpts.carryDays = cd;
+    const ro = minutes("reminder_offset_minutes", 0, 240);
+    if (ro !== undefined) planOpts.reminderOffsetMinutes = ro;
+    const fm = minutes("focus_minutes", 5, 240);
+    if (fm !== undefined) planOpts.focusMinutes = fm;
+    const bm = minutes("break_minutes", 0, 60);
+    if (bm !== undefined) planOpts.breakMinutes = bm;
+    if (t?.end_sound !== undefined) {
+      if (typeof t.end_sound !== "boolean") err("plan.end_sound", "Must be true or false");
+      else planOpts.endSound = t.end_sound;
+    }
     const list = t?.pickable_portfolio_types;
     if (list !== undefined && !Array.isArray(list)) err("plan.pickable_portfolio_types", 'Must be a list of work item type names, e.g. ["Recurring"]');
     else if (Array.isArray(list))
@@ -392,7 +435,7 @@ export function parseConfig(text: string): ParseResult {
       clientSettings,
       chromium,
       secretExpiry,
-      plan: { pickablePortfolioTypes },
+      plan: { pickablePortfolioTypes, ...planOpts },
       edge,
       ui,
     },

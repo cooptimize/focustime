@@ -129,9 +129,9 @@ export async function timeAction(ctx: TimeContext, action: TimeAction, input: un
         const o = fields(input, ["date", "clientKey", "start", "end"], ["itemId", "note"]);
         const d = date(o.date);
         const s = span(o.start, o.end);
-        // A flex session is time outside working hours; inside them it would be counted twice.
-        const inside = hoursOn(cfg.week.hours, d).segments.find((w) => toMin(s.start) < toMin(w.end) && toMin(s.end) > toMin(w.start));
-        if (inside) return bad(`That overlaps working hours (${inside.start} to ${inside.end}). A flex session is time outside them`, 422);
+        // Q34 (step 6c): overlapping working hours is allowed; only the part outside them counts as flex (week/build.ts).
+        const overlapMinutes = hoursOn(cfg.week.hours, d).segments.reduce((n, w) => n + Math.max(0, Math.min(toMin(s.end), toMin(w.end)) - Math.max(toMin(s.start), toMin(w.start))), 0);
+        if (overlapMinutes >= toMin(s.end) - toMin(s.start)) return bad("That is all inside working hours, so it isn't flex time. Add a pick to that block instead", 422);
         const clientKey = text(o.clientKey, "clientKey", 100);
         const itemId = o.itemId === undefined || o.itemId === null ? null : id(o.itemId, "itemId");
         let item: { title: string; url: string } | null = null;
@@ -149,7 +149,7 @@ export async function timeAction(ctx: TimeContext, action: TimeAction, input: un
           itemUrl: item && item.url.startsWith("https://dev.azure.com/") ? item.url : null,
           note: note(o.note),
         });
-        return { ok: true, data: { flex } };
+        return { ok: true, data: { flex, overlapMinutes } };
       }
       case "unavailable.remove":
       case "flex.remove": {

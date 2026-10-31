@@ -122,11 +122,11 @@ async function carryDay(ctx: PlanContext, plan: PlanStore): Promise<{ target: Is
 }
 
 async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = true): Promise<PlanDayState> {
-  const { today } = await clock(ctx);
+  const { today, cfg } = await clock(ctx);
   const day = plan.start(d);
   const carry = await carryDay(ctx, plan);
   // Unfinished picks from before the first upcoming day, offered only on the carry-over day.
-  const carryOver = carry.target === d ? plan.carryOverFor(carry.upcoming) : [];
+  const carryOver = carry.target === d ? plan.carryOverFor(carry.upcoming, cfg?.plan.carryDays) : [];
   return { date: d, plan: day, picks: plan.picksFor(d), carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: plan.drafts(), opened };
 }
 
