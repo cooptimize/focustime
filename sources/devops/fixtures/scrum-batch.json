@@ -1,0 +1,32 @@
+{
+ "count": 2,
+ "value": [
+  {
+   "id": 201,
+   "rev": 3,
+   "fields": {
+    "System.Id": 201,
+    "System.Title": "Semantic model refresh",
+    "System.WorkItemType": "Product Backlog Item",
+    "System.State": "Committed",
+    "System.ChangedDate": "2026-10-29T15:04:05.123Z",
+    "Microsoft.VSTS.Common.BacklogPriority": 5.0
+   },
+   "url": "https://dev.azure.com/fabrikam/_apis/wit/workItems/201"
+  },
+  {
+   "id": 202,
+   "rev": 3,
+   "fields": {
+    "System.Id": 202,
+    "System.Title": "Gateway setup",
+    "System.WorkItemType": "Task",
+    "System.State": "To Do",
+    "System.ChangedDate": "2026-10-29T15:04:05.123Z",
+    "Microsoft.VSTS.Common.BacklogPriority": 2.0,
+    "System.Parent": 201
+   },
+   "url": "https://dev.azure.com/fabrikam/_apis/wit/workItems/202"
+  }
+ ]
+}

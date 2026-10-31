@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks } from "../week/dates.ts";
 import type { Half } from "../week/types.ts";
 import { connectSource, disconnectSource, SessionError, weekLoad } from "./api.ts";
+import { DevOpsWork, workByClient } from "./work.ts";
 import { afterLoad, createAutoRefresh, type LoadState, type RefreshTrigger } from "./refresh.ts";
 import { Details } from "./Details.tsx";
 import { StatusBar } from "./StatusBar.tsx";
@@ -147,6 +148,7 @@ export function App() {
 
   return (
     <SampleSources.Provider value={samples}>
+    <DevOpsWork.Provider value={workByClient(data.devops)}>
     <div className="app">
       <header className="topbar">
         <div className="brand">
@@ -205,6 +207,7 @@ export function App() {
 
       <StatusBar
         sources={data.sources}
+        devops={data.devops}
         sampleWeek={SAMPLE_WEEK}
         isSampleWeek={data.weekStart === SAMPLE_WEEK}
         shape={data.dayShape}
@@ -236,6 +239,7 @@ export function App() {
 
       <Details open={detailsOpen} day={day} slot={slot} timeZone={week.timeZone} colors={data.clients} onClose={() => setDetailsOpen(false)} />
     </div>
+    </DevOpsWork.Provider>
     </SampleSources.Provider>
   );
 }

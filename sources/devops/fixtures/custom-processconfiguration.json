@@ -1,0 +1,7 @@
+{
+ "typeFields": {
+  "Team": {
+   "referenceName": "System.AreaPath"
+  }
+ }
+}

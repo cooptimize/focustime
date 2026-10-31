@@ -1,0 +1,29 @@
+{
+ "count": 2,
+ "value": [
+  {
+   "id": 301,
+   "rev": 3,
+   "fields": {
+    "System.Id": 301,
+    "System.Title": "Pipeline alerts",
+    "System.WorkItemType": "Issue",
+    "System.State": "Doing",
+    "System.ChangedDate": "2026-10-29T15:04:05.123Z"
+   },
+   "url": "https://dev.azure.com/fabrikam/_apis/wit/workItems/301"
+  },
+  {
+   "id": 302,
+   "rev": 3,
+   "fields": {
+    "System.Id": 302,
+    "System.Title": "Peer review of mappings",
+    "System.WorkItemType": "Review",
+    "System.State": "Done",
+    "System.ChangedDate": "2026-10-29T15:04:05.123Z"
+   },
+   "url": "https://dev.azure.com/fabrikam/_apis/wit/workItems/302"
+  }
+ ]
+}

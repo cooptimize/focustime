@@ -1,0 +1,14 @@
+{
+ "queryType": "flat",
+ "queryResultType": "workItem",
+ "workItems": [
+  {
+   "id": 9001,
+   "url": "https://dev.azure.com/sanitized/_apis/wit/workItems/9001"
+  },
+  {
+   "id": 9002,
+   "url": "https://dev.azure.com/sanitized/_apis/wit/workItems/9002"
+  }
+ ]
+}

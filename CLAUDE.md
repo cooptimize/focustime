@@ -6,13 +6,13 @@ Read before changing code: this file, `docs/spec.md` (current slice), `docs/deci
 
 ## Current milestone
 
-Milestones 1–2: read model + week view. Only the work in `docs/spec.md` is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
+Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks, authorized Oct 31). Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
 
 ## Hard rules
 
 - All external systems are read-only. No writes to Dataverse, Outlook, Google, DevOps, Teams.
 - Secrets live only in the OS keyring (service `coopilot`). Access tokens in memory only. Never log, cache, export or print tokens, secrets, Authorization headers or raw HTTP bodies.
-- No DevOps PAT access in this milestone.
+- DevOps PATs: read from Dataverse only at DevOps fetch time (`devopsTargets`), wrapped in `Pat` (prints as `[PAT]`), used only for the Authorization header to `https://dev.azure.com/<org>/`. Never logged, cached, returned to the UI or exported. No other PAT access.
 - Core views work with no AI provider. AI never executes anything; it only suggests via allowlisted actions.
 - Localhost server (if any): bind 127.0.0.1, check Host and Origin, per-launch token.
 - Do not touch Hyprland, Omarchy, browser profiles, Remmina or existing keyring entries.
@@ -24,7 +24,7 @@ Milestones 1–2: read model + week view. Only the work in `docs/spec.md` is aut
 ui/        week grid, source status, settings
 actions/   named, validated actions; UI and chat both call these
 week/      pure: normalize, slots, risk rules (no I/O, no tokens)
-sources/   dataverse | graph | google adapters → SourceResult; oauth/ (PKCE loopback), calendar/ (shared fetch, cache, status)
+sources/   dataverse | graph | google | devops adapters; oauth/ (PKCE loopback), calendar/ (shared fetch, cache, status), devops/ (per-client work items, Pat)
 secrets/   keyring access only
 config/    ~/.config/coopilot/config.toml, validated
 cache/     ~/.cache/coopilot, last good snapshot per source

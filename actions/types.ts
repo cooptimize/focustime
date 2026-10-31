@@ -1,7 +1,7 @@
 // Action response shapes shared by the server and the UI. Types only, no runtime imports.
 import type { FieldError } from "../config/schema.ts";
 import type { TodayTarget } from "../week/dates.ts";
-import type { DayShape, RiskThresholds, SourceResult, Week } from "../week/types.ts";
+import type { ClientWork, DayShape, RiskThresholds, SourceResult, Week } from "../week/types.ts";
 
 export type SourceSummary = Omit<SourceResult<unknown>, "items"> & { itemCount: number };
 
@@ -10,6 +10,8 @@ export type WeekLoadData = {
   week: Week;
   today: TodayTarget;
   sources: SourceSummary[];
+  /** Assigned DevOps work per client with a block this week; null when Dataverse is not usable. */
+  devops: ClientWork[] | null;
   clients: Record<string, string>;
   dayShape: DayShape;
   thresholds: RiskThresholds;

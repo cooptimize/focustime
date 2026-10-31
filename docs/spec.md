@@ -62,7 +62,7 @@ On Monday morning I open Coopilot and see this week as a grid of half-days. Each
 
 - No plan layer, dragging, ignition, triage, recap, capture or drafts (Milestones 3 and 4).
 - No AI provider calls. The whole slice works without AI.
-- No DevOps reads and no PAT access. The Dataverse role must not be able to read PAT columns yet.
+- ~~No DevOps reads and no PAT access.~~ Superseded by step 4 (Oct 31): read-only DevOps work items assigned to me, PATs read per fetch (D59–D66). Still no DevOps writes.
 - No writes to Dataverse, Outlook, Google or anywhere else.
 - No teammate focus blocks on screen (fetch only Tanner's rows).
 - No Remmina, Azure VM, Teams or Coop integration.
@@ -156,7 +156,8 @@ Events marked free are ignored. Declined Outlook events are excluded. Rules are 
 | Tenant ID, client IDs, environment URL, table/column names, half-day hours, colors | `~/.config/coopilot/config.toml` | Not secret, but not committed to a public repo |
 | Dataverse app credential (prefer certificate) | Keyring (Secret Service) | Never on disk in plain text |
 | Microsoft and Google refresh tokens | Keyring | Access tokens in memory only |
-| DevOps PATs | Not accessed in this slice | Column security should block the role from reading them |
+| DevOps PATs | Memory only, for one DevOps fetch | Read from Dataverse by `devopsTargets` only, wrapped in `Pat`; never logged, cached or returned (D60) |
+| DevOps work items (assigned to me) | Memory + cache per client | Id, title, type, state, state category, board order, parent id, changed date, URL. No PAT, no identity email |
 
 Never logged: tokens, secrets, Authorization headers, raw HTTP bodies. Logs record source, status code, duration, item count. A test asserts that a fake token passed through every code path never appears in logs, cache or error messages.
 
@@ -274,6 +275,14 @@ Raised in step 3 (not blocking):
 - Q12. Google publishing status. Google requires a homepage and privacy policy URL to switch an External app to production, so Coopilot stays in Testing for now. In Testing, Google ends the sign-in after 7 days and the status bar asks to reconnect. Option: two small public pages (for example on GitHub Pages) to unlock production. Decide after living with weekly reconnects.
 - Q13. Ranking of double-booked block and all-day event in the single badge (D58) was my placement, not requested. Confirm or reorder.
 
+Raised in step 4 (not blocking):
+- Q14. W&C has no DevOps email on my Account Worker row, so W&C shows "DevOps identity missing". Fill in `coop_devopsemail` in Dataverse to see W&C items.
+- Q15. CSC's `coop_devopsprojectid` in Dataverse does not match the real project ID (the name works, so Coopilot uses names first). W&C and Quiddity have no project ID. Correct them in Dataverse if IDs are wanted.
+- Q16. PAT column security (D24) matters more now that Coopilot reads PATs: any identity with read on Accounts can read every client's PAT. Consider securing `coop_devopstoken` and granting the Coopilot app user read on it only.
+- Q17. Microsoft retires global PATs on December 1, 2026. Any client PAT created as a global PAT stops working then; recreate as organization-scoped PATs before that date.
+- Q18. Some client processes put Blocked states in the Removed category (Quiddity: Task "10-Blocked", User Story "07-Blocked"), so blocked items are hidden, as the metadata says. Keep that, or treat Blocked as open?
+- Q19. Cooptimize items show because the Monday AM standing block is Cooptimize. If that block is removed, Cooptimize work only shows in weeks with a Cooptimize focus block. Always include it?
+
 ## 17. Decisions proposed this round
 
 | ID | Status | Entry |
@@ -282,7 +291,7 @@ Raised in step 3 (not blocking):
 | D21 | Proposed | Dataverse via app user with read-only custom role; Outlook via delegated `Calendars.ReadBasic`; Google via desktop OAuth `calendar.events.readonly` |
 | D22 | Proposed | Stack option A for first slice, with a host layer thin enough to move to Tauri later |
 | D23 | Proposed | Cache last good snapshot as files; SQLite arrives with the plan layer in Milestone 3 |
-| D24 | Deferred by Tanner | PAT column security not a priority now (tokens are read-only). Coopilot still never requests the PAT column in Milestones 1–5. Revisit before Milestone 6 (DevOps reads) |
+| D24 | Superseded by D60 | PAT column security not a priority now (tokens are read-only). Coopilot now reads PATs for DevOps (step 4). Column security is still off, so any identity with read on Accounts can read every PAT (Q16) |
 | D22 | Accepted | Stack option A (local TypeScript app in a Chromium app window) |
 | D28 | Confirmed | Unassigned Mon–Thu half-days display as "Open" (client or internal) |
 | D30 | Proposed | Monday AM is a standing Internal block from Coopilot config; Dataverse client blocks take precedence and raise a double-booked flag |
@@ -302,3 +311,17 @@ Raised in step 3 (not blocking):
 | D56 | Done | Freshness (step 3.5): the window refetches all sources when it regains focus (at most once per 60 s), quietly every 5 minutes while visible (a manual or focus refresh resets that clock), and on "r" or Refresh. Only one refresh runs at a time. Focus and background refreshes do not show "Loading" |
 | D57 | Done | A refresh never blanks the grid: the data on screen stays until new data arrives. If the server cannot be reached, the last good week stays with "Could not reach the Coopilot server. Showing what was loaded earlier"; if a source fails, the server already returns its snapshot with the CACHED or error state. A slower older response never overwrites a newer one. The status bar shows "updated N min ago" per source (the exact time is in the tooltip) |
 | D58 | Done | One badge per half-day card: the most serious risk, then "+N more". Order: at risk before watch; within a level out of office, personal conflict, double-booked block, no focus window, all-day event, meetings. Double-booked and all-day event were not in the requested order; they sit where shown. The details panel lists every reason in the same order |
+| D59 | Done | The week view shows personal assigned work: DevOps work items assigned to me, open (state category not Completed or Removed), any type, no sprint filter, in each client's focus blocks. Ownership (epics and features I own, contributors' progress, target dates) is a separate future area, not this view |
+| D60 | Done | PATs: Dataverse `devopsTargets(clientKeys)` is the only query that selects `coop_devopstoken`. It runs at DevOps fetch time, only for clients with a block this week, only for accounts I am an active Account Worker on, and wraps each PAT in `Pat` at once (String, JSON and inspect show `[PAT]`). The cached focus block path never selects it. The PAT is used only to build `Authorization: Basic base64(":" + PAT)` for `https://dev.azure.com/<org>/`, with redirects not followed. Not kept between fetches |
+| D61 | Done | Identity per client = my Account Worker `coop_devopsemail`, used as `[System.AssignedTo] = '<email>'` in WIQL. Blank means "DevOps identity missing for <client>" and no call. Verified Oct 31: matches in the Cooptimize, Quiddity and CSC orgs |
+| D62 | Done | Open = per work item type, states whose category (from that project's `workitemtypes` metadata) is not Completed or Removed. WIQL has one clause per type, since state names differ per type ("Ready for Go-live" is Completed for Bug but Resolved for Issue in one real project). Items are re-checked after the batch |
+| D63 | Done | Board order = `typeFields.Order.referenceName` from the project's process configuration (StackRank or BacklogPriority), detected per project. No order field: sorted by last change. Unranked items go last. Type, state and order metadata are kept in memory for 1 hour |
+| D64 | Done | API: api-version 7.1. WIQL (`$top=1000`, ids only) then `workitemsbatch` (200 ids per call, documented maximum) for System.Id, Title, WorkItemType, State, Parent, ChangedDate and the order field, `errorPolicy: omit`. The item link is built as `https://dev.azure.com/<org>/<project name>/_workitems/edit/<id>`. Project paths use the project name first, then the ID: CSC's stored ID is wrong and two accounts have none (Q15) |
+| D65 | Done | Isolation: each client is fetched in its own try/catch and cached in its own file (`devops/<slug>-<hash>.json`, items only). Results are keyed by exact client key, the same key focus blocks use (`clientKeyOf`: nickname, else name); two accounts with one key are refused, not merged. A block shows only its own client's items; Open half-days and Friday show none. If DevOps fails as a whole, the week still loads |
+| D66 | Done | Failure messages: "DevOps PAT expired or invalid for X" (401, 203, redirect or non-JSON), "No access to DevOps project P for X" (403, 404), "DevOps organization O unreachable" (network), "DevOps identity missing for X", "DevOps not set up for X (missing ...)", "No Account Worker for X in Dataverse", "DevOps settings unavailable (Dataverse ...)". Failures fall back to the client's last good items with their time |
+| D67 | Done | Refresh: DevOps follows the step 3.5 triggers, throttled more because items do not depend on the week: a normal load (changing weeks) reuses results up to 5 minutes old; a forced refresh refetches a client at most once a minute; metadata is cached for 1 hour. That keeps a refresh to about 2 DevOps calls per client and avoids refetching on every week change |
+| D68 | Done | UI: each block shows its client's top 3 items by board order and "+N more"; the details panel lists all, each a link that opens in a new browser tab (only `https://dev.azure.com/` links). The status bar has one "DevOps N of M live" entry; hover or click for each client's status and message |
+
+## 18. Backlog (not built)
+
+- **Ownership area** (future, separate from the week view, see D59): epics and features I own, progress of the people contributing to them, and risk against target dates. Would need its own read model, likely per-client WIQL on ownership fields, and its own view. Not in the Look-ahead.

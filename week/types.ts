@@ -148,3 +148,32 @@ export type WeekConfig = {
   thresholds: RiskThresholds;
   standingBlocks: StandingBlock[];
 };
+
+/** An Azure DevOps work item assigned to me, normalized. Never carries a PAT or identity. */
+export type WorkItem = {
+  id: number;
+  title: string;
+  type: string;
+  state: string;
+  /** Proposed, InProgress or Resolved (Completed and Removed are never shown). */
+  stateCategory: string;
+  /** Board order from the project's process (StackRank or BacklogPriority); null when unset. */
+  order: number | null;
+  parentId: number | null;
+  changedAt: string;
+  url: string;
+};
+
+export type ClientWorkStatus = "ok" | "identity_missing" | "not_set_up" | "auth_failed" | "no_access" | "unreachable" | "error";
+
+/** One client's DevOps result. Each client is fetched and fails on its own. */
+export type ClientWork = {
+  clientKey: string;
+  clientName: string;
+  status: ClientWorkStatus;
+  message?: string;
+  fetchedAt: string | null;
+  fromCache: boolean;
+  /** Board order, top first. */
+  items: WorkItem[];
+};

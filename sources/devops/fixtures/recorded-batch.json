@@ -1,0 +1,33 @@
+{
+ "count": 2,
+ "value": [
+  {
+   "id": 9001,
+   "rev": 3,
+   "fields": {
+    "System.Id": 9001,
+    "System.WorkItemType": "User Story",
+    "System.State": "01-New",
+    "System.ChangedDate": "2025-04-12T13:53:32.57Z",
+    "System.Parent": 8000,
+    "System.Title": "Sanitized title 1",
+    "Microsoft.VSTS.Common.StackRank": 399962500
+   },
+   "url": "https://dev.azure.com/sanitized/_apis/wit/workItems/9001"
+  },
+  {
+   "id": 9002,
+   "rev": 4,
+   "fields": {
+    "System.Id": 9002,
+    "System.WorkItemType": "User Story",
+    "System.State": "01-New",
+    "System.ChangedDate": "2025-07-22T14:44:28.597Z",
+    "System.Parent": 8001,
+    "System.Title": "Sanitized title 2",
+    "Microsoft.VSTS.Common.StackRank": 399963750
+   },
+   "url": "https://dev.azure.com/sanitized/_apis/wit/workItems/9002"
+  }
+ ]
+}

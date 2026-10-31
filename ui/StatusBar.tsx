@@ -1,4 +1,7 @@
+import { useState } from "react";
 import type { SourceSummary } from "../actions/types.ts";
+import type { ClientWork } from "../week/types.ts";
+import { devopsSummary, workStatusLabel } from "./work.ts";
 import type { DayShape } from "../week/types.ts";
 import { shortDate } from "./labels.ts";
 import { updatedAgo } from "./refresh.ts";
@@ -6,6 +9,7 @@ import { updatedAgo } from "./refresh.ts";
 type Calendar = "outlook" | "google";
 type Props = {
   sources: SourceSummary[];
+  devops: ClientWork[] | null;
   sampleWeek: string;
   isSampleWeek: boolean;
   shape: DayShape;
@@ -36,7 +40,7 @@ function stateOf(s: SourceSummary): { cls: string; label: string } {
   return { cls: "error", label: s.status.replace("_", " ") };
 }
 
-export function StatusBar({ sources, sampleWeek, isSampleWeek, shape, loading, busy, notice, clock, onRefresh, onConnect, onDisconnect }: Props) {
+export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, shape, loading, busy, notice, clock, onRefresh, onConnect, onDisconnect }: Props) {
   const samples = sources.filter((s) => s.sample);
   const notConnected = (s: SourceSummary) => s.status === "auth_required" && !s.fromCache && !!s.message?.includes("not connected");
   const problems = sources.filter((s) => s.message && !s.sample && s.status !== "ok" && !notConnected(s));
@@ -72,6 +76,7 @@ export function StatusBar({ sources, sampleWeek, isSampleWeek, shape, loading, b
           </span>
         );
       })}
+      <DevOpsEntry devops={devops} clock={clock} timeZone={shape.timeZone} />
       {notice && <span className="dv-message">{notice}</span>}
       {!notice && problems.map((s) => (
         <span key={s.source} className="dv-message problem">{s.message}</span>
@@ -91,5 +96,36 @@ export function StatusBar({ sources, sampleWeek, isSampleWeek, shape, loading, b
         {loading ? "Loading…" : "Refresh"}
       </button>
     </footer>
+  );
+}
+
+/** One entry for all clients: "DevOps 4 of 5 live". Hover for a summary, click for each client's status. */
+function DevOpsEntry({ devops, clock, timeZone }: { devops: ClientWork[] | null; clock: number; timeZone: string }) {
+  const [open, setOpen] = useState(false);
+  const sum = devopsSummary(devops);
+  if (!sum || !devops) return null;
+  const cls = sum.level === "live" ? "live" : sum.level === "partial" ? "cached" : "error";
+  const lines = devops.map((c) => `${c.clientName}: ${c.message ?? workStatusLabel(c)}`).join("\n");
+  return (
+    <span className={`source devops ${cls}`}>
+      <button type="button" className="devops-toggle" aria-expanded={open} aria-controls="devops-status" title={lines} onClick={() => setOpen((o) => !o)}>
+        <span className="dot" aria-hidden="true" />
+        DevOps
+        <span className={`state ${cls}`}>{sum.label}</span>
+      </button>
+      {open && (
+        <div className="devops-pop" id="devops-status" role="region" aria-label="DevOps status per client">
+          <ul>
+            {devops.map((c) => (
+              <li key={c.clientKey} className={c.status === "ok" ? "ok" : "problem"}>
+                <strong>{c.clientName}</strong>
+                <span className="muted"> · {workStatusLabel(c)} · {c.items.length} open{c.fetchedAt ? ` · ${updatedAgo(c.fetchedAt, clock, timeZone)}` : ""}</span>
+                {c.message && <div className="msg">{c.message}</div>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </span>
   );
 }

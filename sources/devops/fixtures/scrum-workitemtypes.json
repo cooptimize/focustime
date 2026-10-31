@@ -1,0 +1,13 @@
+{
+ "count": 2,
+ "value": [
+  {
+   "name": "Product Backlog Item",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.ProductBacklogItem"
+  },
+  {
+   "name": "Task",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.Task"
+  }
+ ]
+}

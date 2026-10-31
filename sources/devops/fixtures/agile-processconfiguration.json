@@ -1,0 +1,19 @@
+{
+ "typeFields": {
+  "Effort": {
+   "referenceName": "Microsoft.VSTS.Scheduling.StoryPoints",
+   "name": "Story Points"
+  },
+  "Order": {
+   "referenceName": "Microsoft.VSTS.Common.StackRank",
+   "name": "Stack Rank"
+  },
+  "RemainingWork": {
+   "referenceName": "Microsoft.VSTS.Scheduling.RemainingWork"
+  },
+  "Team": {
+   "referenceName": "System.AreaPath"
+  }
+ },
+ "url": "https://dev.azure.com/fabrikam/_apis/work/processconfiguration"
+}

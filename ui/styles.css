@@ -481,3 +481,29 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .event-list .when { font-weight: 600; color: var(--ink-2); grid-row: span 2; }
 .event-list .what { font-weight: 600; }
 .event-list .muted { font-size: 13px; }
+
+/* DevOps work on a block: top items in board order */
+.work { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; min-width: 0; }
+.work li { display: flex; gap: 6px; align-items: baseline; min-width: 0; color: var(--ink-2); }
+.wi-type { flex: none; font-size: 11px; font-weight: 600; color: var(--ink-3); min-width: 50px; }
+.work .wi-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.work .wi-more { color: var(--ink-3); font-size: 12px; padding-left: 56px; }
+.work-note { margin-top: 10px; font-size: 12px; color: var(--ink-3); }
+
+/* Details panel: all items, each opens in the browser */
+.work-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.work-list a { display: grid; grid-template-columns: 150px 64px 1fr auto; gap: 10px; align-items: baseline; padding: 5px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; }
+.work-list a:hover, .work-list a:focus-visible { background: var(--surface-2, color-mix(in oklab, var(--ink) 6%, transparent)); }
+.work-list .wi-type { font-size: 12px; }
+.work-list .wi-id { font-variant-numeric: tabular-nums; color: var(--ink-3); font-size: 12px; }
+.work-list .wi-state { font-size: 12px; color: var(--ink-3); }
+
+/* Status bar: DevOps summary with a per-client popover */
+.source.devops { position: relative; }
+.devops-toggle { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; padding: 0; font: inherit; font-weight: 600; color: inherit; cursor: pointer; }
+.source.cached .dot { color: var(--watch, #b7791f); }
+.state.cached { color: var(--watch, #b7791f); background: color-mix(in oklab, var(--watch, #b7791f) 12%, var(--surface)); }
+.devops-pop { position: absolute; bottom: calc(100% + 10px); left: 0; z-index: 20; min-width: 420px; max-width: 640px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); font-weight: 400; }
+.devops-pop ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.devops-pop .msg { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+.devops-pop li.problem .msg { color: var(--risk); }

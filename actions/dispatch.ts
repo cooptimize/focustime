@@ -4,10 +4,11 @@ import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../c
 import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig, ParseResult } from "../config/schema.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
+import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { loadSampleSources } from "../sources/sample.ts";
 import { buildWeek } from "../week/build.ts";
 import { defaultWeekStart, localToday, todayTarget } from "../week/dates.ts";
-import type { CalEvent, FocusPattern, SourceResult } from "../week/types.ts";
+import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../week/types.ts";
 import type { ActionResponse, SourceSummary, WeekLoadData } from "./types.ts";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
@@ -17,6 +18,7 @@ export type ActionContext = {
   makeDataverse: (cfg: DataverseConfig, timeZone: string) => DataverseSource;
   makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource;
   makeGoogle: (cfg: GoogleConfig, timeZone: string) => CalendarSource;
+  makeDevOps: (cfg: DataverseConfig, timeZone: string) => DevOpsSource;
   saveSystemUserId: (id: string) => Promise<void>;
   now: () => string;
 };
@@ -62,6 +64,14 @@ const summarize = (s: SourceResult<unknown>): SourceSummary => {
   return { ...rest, itemCount: items.length };
 };
 
+/** Clients with a focus block Mon–Thu this week (Dataverse or standing), first appearance first. */
+export function weekClients(week: Week): ClientRef[] {
+  const seen = new Map<string, ClientRef>();
+  for (const day of week.days.slice(0, 4))
+    for (const slot of [day.am, day.pm]) for (const b of slot.focus) if (!seen.has(b.clientKey)) seen.set(b.clientKey, { clientKey: b.clientKey, clientName: b.clientName });
+  return [...seen.values()];
+}
+
 async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekLoadData> {
   const loaded = await ctx.loadConfig();
   const parsed = loaded.parsed;
@@ -79,6 +89,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const googleP: Promise<SourceResult<CalEvent>> = cfg?.google ? ctx.makeGoogle(cfg.google, shape.timeZone).load(weekStart, refresh) : Promise.resolve(sample.google);
 
   let dataverse: SourceResult<FocusPattern>;
+  let devopsP: Promise<ClientWork[] | null> = Promise.resolve(null);
   if (!cfg) {
     const n = parsed.ok ? 0 : parsed.errors.length;
     dataverse = {
@@ -103,9 +114,15 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     dataverse = resolveError
       ? { source: "dataverse", status: "misconfigured", fetchedAt: null, fromCache: false, items: [], message: resolveError, fixAction: "open_settings" }
       : await ctx.makeDataverse(dv, shape.timeZone).load(weekStart, refresh);
+    if (!resolveError) {
+      // Start DevOps as soon as the week's clients are known, alongside the calendars. Each client is isolated
+      // inside the source; anything unexpected here only drops DevOps, never the week.
+      const clients = weekClients(buildWeek({ weekStart, patterns: dataverse.items, events: [], config: weekConfig }));
+      devopsP = ctx.makeDevOps(dv, shape.timeZone).load(clients, refresh).catch(() => null);
+    }
   }
 
-  const [outlook, google] = await Promise.all([outlookP, googleP]);
+  const [outlook, google, devops] = await Promise.all([outlookP, googleP, devopsP]);
   const week = buildWeek({ weekStart, patterns: dataverse.items, events: [...outlook.items, ...google.items], config: weekConfig });
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
 
@@ -114,6 +131,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     week,
     today: todayTarget(now, shape),
     sources: [dataverse, outlook, google].map(summarize),
+    devops,
     clients: clientColors,
     dayShape: shape,
     thresholds: weekConfig.thresholds,

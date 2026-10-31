@@ -46,6 +46,11 @@ export function clientOf(row: FocusTimeRow): string | null {
   return row.coop_AccountWorker?._coop_account_value ?? row._coop_account_value ?? null;
 }
 
+/** The client key everything matches on: the account's reporting nickname, else its name. */
+export function clientKeyOf(account: { name: string | null; coop_reportingnickname: string | null }): string | null {
+  return account.coop_reportingnickname?.trim() || account.name?.trim() || null;
+}
+
 export function normalizeFocusTimes(
   rows: readonly FocusTimeRow[],
   accounts: readonly AccountRow[],
@@ -68,9 +73,8 @@ export function normalizeFocusTimes(
       continue;
     }
     const account = byId.get(accountId.toLowerCase());
-    const nickname = account?.coop_reportingnickname?.trim() || null;
     const fullName = account?.name?.trim() || null;
-    const display = nickname ?? fullName ?? "Unknown client";
+    const display = account ? clientKeyOf(account) ?? "Unknown client" : "Unknown client";
 
     const days: FocusPattern["days"] = {};
     for (const [day, col] of DAY_COLUMNS) {

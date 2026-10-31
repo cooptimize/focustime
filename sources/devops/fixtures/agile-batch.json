@@ -1,0 +1,71 @@
+{
+ "count": 5,
+ "value": [
+  {
+   "id": 101,
+   "rev": 3,
+   "fields": {
+    "System.Id": 101,
+    "System.Title": "Load customer dimension",
+    "System.WorkItemType": "User Story",
+    "System.State": "Active",
+    "System.ChangedDate": "2026-10-29T15:04:05.123Z",
+    "Microsoft.VSTS.Common.StackRank": 2000.5,
+    "System.Parent": 90
+   },
+   "url": "https://dev.azure.com/fabrikam/_apis/wit/workItems/101"
+  },
+  {
+   "id": 102,
+   "rev": 3,
+   "fields": {
+    "System.Id": 102,
+    "System.Title": "Fix null dates in invoice feed",
+    "System.WorkItemType": "Bug",
+    "System.State": "New",
+    "System.ChangedDate": "2026-10-29T15:04:05.123Z",
+    "Microsoft.VSTS.Common.StackRank": 1000.25
+   },
+   "url": "https://dev.azure.com/fabrikam/_apis/wit/workItems/102"
+  },
+  {
+   "id": 103,
+   "rev": 3,
+   "fields": {
+    "System.Id": 103,
+    "System.Title": "Write merge script",
+    "System.WorkItemType": "Task",
+    "System.State": "Blocked",
+    "System.ChangedDate": "2026-10-29T15:04:05.123Z",
+    "System.Parent": 101
+   },
+   "url": "https://dev.azure.com/fabrikam/_apis/wit/workItems/103"
+  },
+  {
+   "id": 104,
+   "rev": 3,
+   "fields": {
+    "System.Id": 104,
+    "System.Title": "Old closed story",
+    "System.WorkItemType": "User Story",
+    "System.State": "Closed",
+    "System.ChangedDate": "2026-10-29T15:04:05.123Z",
+    "Microsoft.VSTS.Common.StackRank": 10.0
+   },
+   "url": "https://dev.azure.com/fabrikam/_apis/wit/workItems/104"
+  },
+  {
+   "id": 105,
+   "rev": 3,
+   "fields": {
+    "System.Id": 105,
+    "System.Title": "Review model with client",
+    "System.WorkItemType": "User Story",
+    "System.State": "Resolved",
+    "System.ChangedDate": "2026-10-29T15:04:05.123Z",
+    "Microsoft.VSTS.Common.StackRank": 3000.0
+   },
+   "url": "https://dev.azure.com/fabrikam/_apis/wit/workItems/105"
+  }
+ ]
+}

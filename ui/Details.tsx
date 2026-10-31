@@ -2,6 +2,8 @@ import { useContext, useEffect, useRef, type CSSProperties } from "react";
 import { formatDuration } from "../week/format.ts";
 import { rankRisks } from "../week/risks.ts";
 import type { Day, Slot } from "../week/types.ts";
+import { DevOpsWork, isDevOpsUrl, workStatusLabel } from "./work.ts";
+import { updatedAgo } from "./refresh.ts";
 import { clientColor, eventRange, halfName, longDate, ruleLabel, SampleSources, severityLabel, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 
 type Props = { open: boolean; day: Day; slot: Slot; timeZone: string; colors: Record<string, string>; onClose: () => void };
@@ -9,6 +11,9 @@ type Props = { open: boolean; day: Day; slot: Slot; timeZone: string; colors: Re
 export function Details({ open, day, slot, timeZone, colors, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const samples = useContext(SampleSources);
+  const allWork = useContext(DevOpsWork);
+  // One list per client booked in this half-day, each with only that client's items.
+  const works = day.kind === "overflow" ? [] : slot.focus.map((b) => allWork.get(b.clientKey)).filter((w) => w !== undefined);
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
@@ -66,6 +71,34 @@ export function Details({ open, day, slot, timeZone, colors, onClose }: Props) {
           </ul>
         </section>
       )}
+
+      {works.map((w) => (
+        <section key={w.clientKey} className="work-section">
+          <h3>
+            Assigned to you in DevOps · {w.clientName}
+            <span className="muted"> · {w.items.length} open{w.status === "ok" ? "" : ` · ${workStatusLabel(w)}`}{w.fetchedAt ? ` · ${updatedAgo(w.fetchedAt, Date.now(), tz)}` : ""}</span>
+          </h3>
+          {w.message && <p className="muted">{w.message}</p>}
+          {w.items.length > 0 && (
+            <ol className="work-list">
+              {w.items.map((i) => (
+                <li key={i.id}>
+                  {isDevOpsUrl(i.url) ? (
+                    <a href={i.url} target="_blank" rel="noopener noreferrer">
+                      <span className="wi-type">{i.type}</span>
+                      <span className="wi-id">{i.id}</span>
+                      <span className="wi-title">{i.title}</span>
+                      <span className="wi-state">{i.state}</span>
+                    </a>
+                  ) : (
+                    <span>{i.title}</span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      ))}
 
       <section>
         <h3>Time</h3>

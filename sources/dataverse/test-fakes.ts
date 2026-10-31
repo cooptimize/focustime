@@ -42,7 +42,25 @@ const json = (status: number, body: unknown) =>
 const leakyError = (status: number, code: string) =>
   json(status, { error: { code, message: `Echo: Authorization: Bearer ${FAKE_TOKEN} secret=${FAKE_SECRET}` } });
 
-export function fakeFetch(scenario: Scenario, extra: { users?: unknown[] } = {}) {
+export const FAKE_PAT_CSC = "FAKE-DV-PAT-CSC-0d9e";
+export const FAKE_PAT_WC = "FAKE-DV-PAT-WC-41aa";
+export const ACCT = { csc: "a0000000-0000-4000-8000-00000000c5c0", wc: "a0000000-0000-4000-8000-0000000000dc", hme: "a0000000-0000-4000-8000-000000000e1e" };
+export const accountWorkers = {
+  value: [
+    { _coop_account_value: ACCT.csc, coop_devopsemail: "t.spaulding@cscsteel.example" },
+    { _coop_account_value: ACCT.wc, coop_devopsemail: null },
+    { _coop_account_value: ACCT.hme, coop_devopsemail: "c.someone@hme.example" },
+  ],
+};
+export const devopsAccounts = {
+  value: [
+    { accountid: ACCT.csc, name: "CSC Steel Corporation", coop_reportingnickname: "CSC", coop_devopsorg: "cscsteel", coop_devopsprojectid: "11111111-2222-4333-8444-555555555555", coop_devopsprojectname: "Project Ada", coop_devopstoken: FAKE_PAT_CSC },
+    { accountid: ACCT.wc, name: "Woodard and Curran", coop_reportingnickname: "W&C", coop_devopsorg: "cooptimize", coop_devopsprojectid: null, coop_devopsprojectname: "Woodard Curran", coop_devopstoken: FAKE_PAT_WC },
+    { accountid: ACCT.hme, name: "HM Electronics", coop_reportingnickname: null, coop_devopsorg: "hme", coop_devopsprojectid: null, coop_devopsprojectname: "DW", coop_devopstoken: "FAKE-DV-PAT-HME-UNNEEDED" },
+  ],
+};
+
+export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devopsAccounts?: unknown } = {}) {
   const calls: Call[] = [];
   const fn = async (input: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
     const url = String(input);
@@ -72,6 +90,8 @@ export function fakeFetch(scenario: Scenario, extra: { users?: unknown[] } = {})
 
     const path = url.slice(`${ENV}/api/data/v9.2/`.length);
     if (path.startsWith("systemusers")) return json(200, { value: extra.users ?? [{ systemuserid: ME }] });
+    if (path.startsWith("coop_accountworkers")) return json(200, accountWorkers);
+    if (path.startsWith("accounts") && path.includes("coop_devopstoken")) return json(200, extra.devopsAccounts ?? devopsAccounts);
     if (path.startsWith("accounts")) return json(200, accounts);
     if (path.startsWith("coop_focustimes")) {
       const paged = scenario === "paged" || scenario === "paged_foreign_next" || scenario === "page_fails";

@@ -1,0 +1,713 @@
+{
+ "count": 19,
+ "value": [
+  {
+   "name": "Bug",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.Bug",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "01-Not Started",
+     "color": "D5D5D5",
+     "category": "Proposed"
+    },
+    {
+     "name": "02-In Progress",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "03-Fixed",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "04-Unit Tested",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "05-Ready For Functional Testing",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "06-Test complete",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "07-In CRP",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "08-In UAT",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "09-In Prod",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "90-On Hold",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "Resolved",
+     "color": "ff9d00",
+     "category": "Resolved"
+    },
+    {
+     "name": "Ready for Go-live",
+     "color": "4E9D5D",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "Code Review Request",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.CodeReviewRequest",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "Requested",
+     "color": "b2b2b2",
+     "category": "Proposed"
+    },
+    {
+     "name": "Closed",
+     "color": "339933",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "Code Review Response",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.CodeReviewResponse",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "Requested",
+     "color": "b2b2b2",
+     "category": "Proposed"
+    },
+    {
+     "name": "Accepted",
+     "color": "007acc",
+     "category": "InProgress"
+    },
+    {
+     "name": "Closed",
+     "color": "339933",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "Epic",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.Epic",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "01-New",
+     "color": "51399f",
+     "category": "Proposed"
+    },
+    {
+     "name": "02-Active",
+     "color": "fbbc3d",
+     "category": "InProgress"
+    },
+    {
+     "name": "03-In Draft",
+     "color": "f9b978",
+     "category": "InProgress"
+    },
+    {
+     "name": "04-Review",
+     "color": "1b478b",
+     "category": "InProgress"
+    },
+    {
+     "name": "05-Revise",
+     "color": "7fbce5",
+     "category": "InProgress"
+    },
+    {
+     "name": "06-Re-Review",
+     "color": "0d60ab",
+     "category": "InProgress"
+    },
+    {
+     "name": "07-Approved",
+     "color": "00643a",
+     "category": "InProgress"
+    },
+    {
+     "name": "90-On Hold",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "Closed",
+     "color": "339933",
+     "category": "Completed"
+    },
+    {
+     "name": "Removed",
+     "color": "ffffff",
+     "category": "Removed"
+    }
+   ]
+  },
+  {
+   "name": "Feature",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.Feature",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "01-Proposed",
+     "color": "D5D5D5",
+     "category": "Proposed"
+    },
+    {
+     "name": "02-In Progress",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "03-Not Approved",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "04-Approved",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "05-Active Unassigned",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "06-Active Development",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "07-Active Testing",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "08-Active Testing CRP",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "09-Active Testing UAT",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "90-On Hold",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "10-Completed",
+     "color": "FF9D00",
+     "category": "Resolved"
+    },
+    {
+     "name": "Closed",
+     "color": "339933",
+     "category": "Completed"
+    },
+    {
+     "name": "Removed",
+     "color": "ffffff",
+     "category": "Removed"
+    },
+    {
+     "name": "99-Not Applicable",
+     "color": "f599a2",
+     "category": "Removed"
+    },
+    {
+     "name": "11-Cancelled",
+     "color": "FFFFFF",
+     "category": "Removed"
+    }
+   ]
+  },
+  {
+   "name": "Feedback Request",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.FeedbackRequest",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "Active",
+     "color": "007acc",
+     "category": "InProgress"
+    },
+    {
+     "name": "Closed",
+     "color": "339933",
+     "category": "Completed"
+    },
+    {
+     "name": "Removed",
+     "color": "ffffff",
+     "category": "Removed"
+    }
+   ]
+  },
+  {
+   "name": "Feedback Response",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.FeedbackResponse",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "Active",
+     "color": "007acc",
+     "category": "InProgress"
+    },
+    {
+     "name": "Closed",
+     "color": "339933",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "Shared Steps",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.SharedStep",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "Active",
+     "color": "007acc",
+     "category": "InProgress"
+    },
+    {
+     "name": "Closed",
+     "color": "339933",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "Task",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.Task",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "Unclassified",
+     "color": "D5D5D5",
+     "category": "Proposed"
+    },
+    {
+     "name": "00 - Ideas",
+     "color": "8dc54b",
+     "category": "Proposed"
+    },
+    {
+     "name": "01.5 - Create Requirements",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "02-In Progress",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "05-Ready For Functional Testing",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "06-Test complete",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "09-Ready for Prod",
+     "color": "339947",
+     "category": "InProgress"
+    },
+    {
+     "name": "90-On Hold",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "Released",
+     "color": "4E9D5D",
+     "category": "Completed"
+    },
+    {
+     "name": "Removed",
+     "color": "ffffff",
+     "category": "Removed"
+    },
+    {
+     "name": "10-Blocked",
+     "color": "FFFFFF",
+     "category": "Removed"
+    },
+    {
+     "name": "NA",
+     "color": "FFFFFF",
+     "category": "Removed"
+    }
+   ]
+  },
+  {
+   "name": "Test Case",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.TestCase",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "Design",
+     "color": "b2b2b2",
+     "category": "Proposed"
+    },
+    {
+     "name": "Ready",
+     "color": "007acc",
+     "category": "InProgress"
+    },
+    {
+     "name": "Closed",
+     "color": "339933",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "Test Plan",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.TestPlan",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "Active",
+     "color": "007acc",
+     "category": "InProgress"
+    },
+    {
+     "name": "Inactive",
+     "color": "339933",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "Test Suite",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.TestSuite",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "In Planning",
+     "color": "007acc",
+     "category": "InProgress"
+    },
+    {
+     "name": "In Progress",
+     "color": "007acc",
+     "category": "InProgress"
+    },
+    {
+     "name": "Completed",
+     "color": "339933",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "User Story",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.UserStory",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "01-New",
+     "color": "D5D5D5",
+     "category": "Proposed"
+    },
+    {
+     "name": "02-In Progress",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "04-In CRP",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "05-In UAT",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "06-In Prod",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "90-On Hold",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "Ready for Review",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "Configured",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "Approved - Waiting for PO Integration",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "03-Resolved",
+     "color": "FF9D00",
+     "category": "Resolved"
+    },
+    {
+     "name": "Approved - Ready for CRP",
+     "color": "4E9D5D",
+     "category": "Completed"
+    },
+    {
+     "name": "Removed",
+     "color": "ffffff",
+     "category": "Removed"
+    },
+    {
+     "name": "07-Blocked",
+     "color": "FFFFFF",
+     "category": "Removed"
+    }
+   ]
+  },
+  {
+   "name": "Issue",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.Issue",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "01-Proposed",
+     "color": "D5D5D5",
+     "category": "Proposed"
+    },
+    {
+     "name": "02-In Progress",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "03-Not Approved",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "04-Approved",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "05-Active Unassigned",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "06-Active Development",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "07-Active Testing",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "90-On Hold",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "08-Waiting for ETL",
+     "color": "fbfd52",
+     "category": "InProgress"
+    },
+    {
+     "name": "09-Excel test",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "10-Completed",
+     "color": "FF9D00",
+     "category": "Resolved"
+    },
+    {
+     "name": "Ready for Go-live",
+     "color": "339947",
+     "category": "Resolved"
+    },
+    {
+     "name": "Closed",
+     "color": "339933",
+     "category": "Completed"
+    },
+    {
+     "name": "99-Not Applicable",
+     "color": "f599a2",
+     "category": "Removed"
+    },
+    {
+     "name": "11-Cancelled",
+     "color": "FFFFFF",
+     "category": "Removed"
+    }
+   ]
+  },
+  {
+   "name": "Shared Parameter",
+   "referenceName": "Microsoft.VSTS.WorkItemTypes.SharedParameter",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "Active",
+     "color": "007acc",
+     "category": "InProgress"
+    },
+    {
+     "name": "Inactive",
+     "color": "339933",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "Best Practice",
+   "referenceName": "JCAECAgile.QBestPractice",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "New Idea",
+     "color": "f58b1f",
+     "category": "Proposed"
+    },
+    {
+     "name": "Under Development",
+     "color": "86cdde",
+     "category": "InProgress"
+    },
+    {
+     "name": "Published",
+     "color": "4E9D5D",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "Risk",
+   "referenceName": "ACCelerate-01-version3.Risk",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "01-Not Started",
+     "color": "D5D5D5",
+     "category": "Proposed"
+    },
+    {
+     "name": "02-In Progress",
+     "color": "5688E0",
+     "category": "InProgress"
+    },
+    {
+     "name": "03-Resolved",
+     "color": "FF9D00",
+     "category": "Resolved"
+    },
+    {
+     "name": "Closed",
+     "color": "339933",
+     "category": "Completed"
+    },
+    {
+     "name": "Removed",
+     "color": "ffffff",
+     "category": "Removed"
+    }
+   ]
+  },
+  {
+   "name": "Business Process",
+   "referenceName": "JCAECAgile.QBusinessProcess",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "New",
+     "color": "b2b2b2",
+     "category": "Proposed"
+    },
+    {
+     "name": "Active",
+     "color": "007acc",
+     "category": "InProgress"
+    },
+    {
+     "name": "Closed",
+     "color": "339933",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "ERP Support Ticket",
+   "referenceName": "JCAECAgile.ERPSupportTicket",
+   "isDisabled": false,
+   "states": [
+    {
+     "name": "New",
+     "color": "b2b2b2",
+     "category": "Proposed"
+    },
+    {
+     "name": "Active",
+     "color": "007acc",
+     "category": "InProgress"
+    },
+    {
+     "name": "Ready to Close",
+     "color": "db552c",
+     "category": "InProgress"
+    },
+    {
+     "name": "On Hold",
+     "color": "f58b1f",
+     "category": "InProgress"
+    },
+    {
+     "name": "Closed",
+     "color": "4E9D5D",
+     "category": "Completed"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "typeFields": {
+  "Effort": {
+   "referenceName": "Microsoft.VSTS.Scheduling.Effort"
+  },
+  "Order": {
+   "referenceName": "Microsoft.VSTS.Common.BacklogPriority",
+   "name": "Backlog Priority"
+  }
+ }
+}

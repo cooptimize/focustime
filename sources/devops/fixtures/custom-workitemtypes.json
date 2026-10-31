@@ -1,0 +1,45 @@
+{
+ "count": 2,
+ "value": [
+  {
+   "name": "Issue",
+   "states": [
+    {
+     "name": "To Do",
+     "color": "b2b2b2",
+     "category": "Proposed"
+    },
+    {
+     "name": "Doing",
+     "color": "b2b2b2",
+     "category": "InProgress"
+    },
+    {
+     "name": "Done",
+     "color": "b2b2b2",
+     "category": "Completed"
+    }
+   ]
+  },
+  {
+   "name": "Review",
+   "states": [
+    {
+     "name": "Open",
+     "color": "b2b2b2",
+     "category": "Proposed"
+    },
+    {
+     "name": "Done",
+     "color": "b2b2b2",
+     "category": "InProgress"
+    },
+    {
+     "name": "Signed Off",
+     "color": "b2b2b2",
+     "category": "Completed"
+    }
+   ]
+  }
+ ]
+}

@@ -3,6 +3,7 @@ import { formatDuration } from "../week/format.ts";
 import { topRisk, worstSeverity } from "../week/risks.ts";
 import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
 import { hourMarks, layoutEvents } from "./layout.ts";
+import { DevOpsWork, topWork, typeTag, workStatusLabel } from "./work.ts";
 import { clientColor, eventRange, ruleLabel, SampleSources, severityLabel, shortDate, slotRange, sourceName, startClock } from "./labels.ts";
 
 export type Selection = { dayIndex: number; half: Half };
@@ -122,6 +123,10 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
   const primary = slot.focus[0];
   const sev = worstSeverity(slot.risks);
   const { top, more } = topRisk(slot.risks);
+  const allWork = useContext(DevOpsWork);
+  // Only the block's own client; Open half-days and Friday have no client, so nothing from DevOps.
+  const work = primary && !overflow ? allWork.get(primary.clientKey) : undefined;
+  const items = topWork(work);
   const style = { "--c": clientColor(primary?.clientKey, colors), flexGrow: minutesOf(slot) } as CSSProperties;
   const state = overflow ? "overflow" : slot.open ? "open" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
@@ -173,6 +178,19 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
             <span>{formatDuration(slot.busyMeetingMinutes)} meetings</span>
             <span>{formatDuration(slot.longestFreeMinutes)} longest free</span>
           </div>
+
+          {work && items.top.length > 0 && (
+            <ul className="work" aria-label={`DevOps items assigned to you for ${primary!.clientName}`}>
+              {items.top.map((i) => (
+                <li key={i.id} title={`${i.type} ${i.id}: ${i.title} (${i.state})`}>
+                  <span className="wi-type">{typeTag(i.type)}</span>
+                  <span className="wi-title">{i.title}</span>
+                </li>
+              ))}
+              {items.more > 0 && <li className="wi-more">+{items.more} more</li>}
+            </ul>
+          )}
+          {work && items.top.length === 0 && work.status !== "ok" && <div className="work-note">DevOps: {workStatusLabel(work)}</div>}
 
           {top && (
             <div className="badges" id={reasonsId}>

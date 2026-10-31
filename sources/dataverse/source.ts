@@ -6,7 +6,9 @@ import type { Logger } from "../../log/logger.ts";
 import { SecretError } from "../../secrets/keyring.ts";
 import { formatTime } from "../../week/format.ts";
 import type { FocusPattern, SourceResult } from "../../week/types.ts";
-import { normalizeFocusTimes, type AccountRow, type FocusTimeRow } from "./normalize.ts";
+import { Pat } from "../devops/pat.ts";
+import type { DevOpsTarget, TargetsResult } from "../devops/types.ts";
+import { clientKeyOf, normalizeFocusTimes, type AccountRow, type FocusTimeRow } from "./normalize.ts";
 
 export type DataverseSourceDeps = {
   config: DataverseConfig;
@@ -241,6 +243,69 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     return result;
   }
 
+  /**
+   * DevOps settings for the given clients, read live for one DevOps fetch. This is the only query that
+   * selects coop_devopstoken. Nothing here is cached, memoized or logged beyond counts, and each PAT is
+   * wrapped in Pat as soon as it is read. Only accounts I am an active Account Worker on are considered.
+   */
+  async function devopsTargets(clientKeys: string[]): Promise<TargetsResult> {
+    try {
+      const userId = config.mySystemUserId;
+      if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) return { ok: false, message: "Your Dataverse user id is not resolved yet" };
+      if (clientKeys.length === 0) return { ok: true, targets: [] };
+      const workers = await getAll<{ _coop_account_value: string | null; coop_devopsemail: string | null }>(
+        "accountworkers",
+        `coop_accountworkers?$select=_coop_account_value,coop_devopsemail&$filter=${encodeURIComponent(`_coop_user_value eq ${userId} and statecode eq 0`)}`,
+      );
+      const emailByAccount = new Map<string, string | null>();
+      for (const w of workers) {
+        const id = w._coop_account_value?.toLowerCase();
+        if (!id || !/^[0-9a-f-]{36}$/.test(id)) continue;
+        const email = w.coop_devopsemail?.trim() || null;
+        if (!emailByAccount.get(id)) emailByAccount.set(id, email);
+      }
+      if (emailByAccount.size === 0) return { ok: true, targets: [] };
+      const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
+      const idFilter = [...emailByAccount.keys()].map((id) => `accountid eq ${id}`).join(" or ");
+      const keyFilter = clientKeys.flatMap((k) => [`coop_reportingnickname eq ${q(k)}`, `name eq ${q(k)}`]).join(" or ");
+      const select = "accountid,name,coop_reportingnickname,coop_devopsorg,coop_devopsprojectid,coop_devopsprojectname,coop_devopstoken";
+      const rows = await getAll<AccountRow & { coop_devopsorg: string | null; coop_devopsprojectid: string | null; coop_devopsprojectname: string | null; coop_devopstoken?: string | null }>(
+        "devops_accounts",
+        `accounts?$select=${select}&$filter=${encodeURIComponent(`(${idFilter}) and (${keyFilter})`)}`,
+      );
+      const targets: DevOpsTarget[] = [];
+      for (const row of rows) {
+        const token = row.coop_devopstoken?.trim() || null;
+        delete row.coop_devopstoken;
+        const key = clientKeyOf(row);
+        if (!key || !clientKeys.includes(key)) continue;
+        targets.push({
+          accountId: row.accountid.toLowerCase(),
+          clientKey: key,
+          clientName: key,
+          org: row.coop_devopsorg?.trim() || null,
+          // Name first: it is set on every account, while some stored project IDs are blank or stale (CSC's is wrong).
+          project: row.coop_devopsprojectname?.trim() || row.coop_devopsprojectid?.trim() || null,
+          projectName: row.coop_devopsprojectname?.trim() || null,
+          email: emailByAccount.get(row.accountid.toLowerCase()) ?? null,
+          pat: token ? new Pat(token) : null,
+        });
+      }
+      // Two accounts with one client key would mix clients: refuse both rather than guess.
+      for (const t of targets) {
+        if (targets.filter((o) => o.clientKey === t.clientKey).length > 1) {
+          t.pat = null;
+          t.problem = `More than one account is named ${t.clientKey} in Dataverse`;
+        }
+      }
+      return { ok: true, targets };
+    } catch (e) {
+      if (!(e instanceof SourceFailure)) log({ source: "dataverse", op: "devops_targets", kind: "unexpected" });
+      const f = e instanceof SourceFailure ? e : null;
+      return { ok: false, message: f?.status === "unreachable" ? "Dataverse unreachable" : f?.status === "auth_required" ? "Dataverse access denied" : "Dataverse read failed" };
+    }
+  }
+
   /** Find my systemuserid from my work email. Exactly one match or a plain error. */
   async function resolveUserId(email: string): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
     try {
@@ -253,7 +318,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
-  return { load, resolveUserId };
+  return { load, resolveUserId, devopsTargets };
 }
 
 export type DataverseSource = ReturnType<typeof createDataverseSource>;

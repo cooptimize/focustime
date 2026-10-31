@@ -4,10 +4,11 @@ import { join } from "node:path";
 
 export type Snapshot<T> = { fetchedAt: string; items: T[] };
 
-const WEEK = /^\d{4}-\d{2}-\d{2}$/;
+// A week (calendars, Dataverse) or a short slug (DevOps, one file per client).
+const KEY = /^(\d{4}-\d{2}-\d{2}|[a-z0-9][a-z0-9-]{0,79})$/;
 
 function file(root: string, source: string, weekStart: string): string {
-  if (!WEEK.test(weekStart) || !/^[a-z]+$/.test(source)) throw new Error("Bad snapshot key");
+  if (!KEY.test(weekStart) || !/^[a-z]+$/.test(source)) throw new Error("Bad snapshot key");
   return join(root, source, `${weekStart}.json`);
 }
 

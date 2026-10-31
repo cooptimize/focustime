@@ -1,0 +1,24 @@
+{
+ "typeFields": {
+  "Effort": {
+   "referenceName": "Microsoft.VSTS.Scheduling.StoryPoints",
+   "name": "Story Points"
+  },
+  "Order": {
+   "referenceName": "Microsoft.VSTS.Common.StackRank",
+   "name": "Stack Rank"
+  },
+  "RemainingWork": {
+   "referenceName": "Microsoft.VSTS.Scheduling.RemainingWork",
+   "name": "Remaining Work"
+  },
+  "Team": {
+   "referenceName": "System.AreaPath",
+   "name": "Area Path"
+  },
+  "Activity": {
+   "referenceName": "Microsoft.VSTS.Common.Activity",
+   "name": "Activity"
+  }
+ }
+}

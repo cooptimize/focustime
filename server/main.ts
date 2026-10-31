@@ -13,6 +13,7 @@ import type { CalendarSource } from "../sources/calendar/source.ts";
 import { createDataverseSource, type DataverseSource } from "../sources/dataverse/source.ts";
 import { createGoogleSource } from "../sources/google/source.ts";
 import { createOutlookSource } from "../sources/graph/source.ts";
+import { createDevOpsSource, type DevOpsSource } from "../sources/devops/source.ts";
 import type { Keyring } from "../sources/oauth/oauth.ts";
 import { createApp } from "./app.ts";
 
@@ -57,6 +58,19 @@ const calendarDeps = (timeZone: string) => ({ fetch, keyring, openBrowser, cache
 const makeOutlook = (cfg: OutlookConfig, timeZone: string) => memo("outlook", cfg, timeZone, () => createOutlookSource({ ...calendarDeps(timeZone), config: cfg }));
 const makeGoogle = (cfg: GoogleConfig, timeZone: string) => memo("google", cfg, timeZone, () => createGoogleSource({ ...calendarDeps(timeZone), config: cfg }));
 
+// DevOps: one source per Dataverse config. PATs come from Dataverse per fetch (devopsTargets) and are not kept.
+const devopsSources = new Map<string, DevOpsSource>();
+const makeDevOps = (cfg: DataverseConfig, timeZone: string) => {
+  const key = JSON.stringify([cfg, timeZone]);
+  let s = devopsSources.get(key);
+  if (!s) {
+    const dv = makeDataverse(cfg, timeZone);
+    s = createDevOpsSource({ fetch, log, cacheDir: cacheRoot(), timeZone, targets: (keys) => dv.devopsTargets(keys) });
+    devopsSources.set(key, s);
+  }
+  return s;
+};
+
 let devMiddleware: Parameters<typeof createApp>[0]["devMiddleware"];
 if (dev) {
   const { createServer } = await import("vite");
@@ -74,6 +88,7 @@ const server = createApp({
     makeDataverse,
     makeOutlook,
     makeGoogle,
+    makeDevOps,
     saveSystemUserId: (id) => saveSystemUserId(cfgPath, id),
     now: () => Temporal.Now.instant().toString(),
   },
