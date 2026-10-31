@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks, mondayOf } from "../week/dates.ts";
 import type { Half, IsoDate } from "../week/types.ts";
-import { ActionRefusal, connectSource, disconnectSource, planAction, SessionError, setThemeAction, weekLoad } from "./api.ts";
+import { ActionRefusal, call, connectSource, disconnectSource, planAction, SessionError, setThemeAction, weekLoad } from "./api.ts";
+import { dayEndOf, hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type ViewRange } from "../week/hours.ts";
 import { applyTheme, initialTheme } from "./theme.ts";
 import type { Theme } from "../config/schema.ts";
 import { NOTICE_EVENT, openWorkItem } from "./WorkLink.tsx";
@@ -17,6 +18,7 @@ import { Details } from "./Details.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
+import { cardHalves, slotOf, validHalf } from "./halves.ts";
 import { SampleSources, weekLabel } from "./labels.ts";
 import { SAMPLE_WEEK } from "../fixtures/sample-week.ts";
 import { useLayout } from "./viewport.ts";
@@ -38,7 +40,6 @@ function nowOverride(): string | undefined {
   }
 }
 
-const dayOfWeekIndex = (d: IsoDate) => Temporal.PlainDate.from(d).dayOfWeek - 1;
 const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 export function App() {
@@ -105,6 +106,32 @@ export function App() {
     [theme],
   );
 
+  /** The view range is saved in config; the week is rebuilt with it (the server widens it around planned time). */
+  const setViewRange = useCallback(
+    async (r: ViewRange) => {
+      try {
+        await call("ui.set_view_range", { range: r });
+        setNotice(`Timelines: ${VIEW_RANGE_NAMES[r]}`);
+        reloadRef.current();
+      } catch (e) {
+        setNotice(`View range not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+      }
+    },
+    [],
+  );
+  /** Time model actions (hours for a day, unavailable time, flex sessions): run, then reload the week quietly. */
+  const runTime = useCallback(async (action: string, input: Record<string, unknown>): Promise<boolean> => {
+    try {
+      await call(action, input);
+      reloadRef.current();
+      return true;
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "That didn't work");
+      return false;
+    }
+  }, []);
+  const reloadRef = useRef<() => void>(() => {});
+
   /** Loads a week. Data on screen stays put until the new data arrives; a failure keeps it (afterLoad). */
   const load = useCallback(
     async (input: { weekStart?: string; refresh?: boolean }, opts: { selectToday?: boolean; quiet?: boolean } = {}) => {
@@ -113,13 +140,15 @@ export function App() {
       if (!opts.quiet) setLoading(true);
       try {
         const d = await weekLoad({ ...input, ...(now ? { now } : {}) });
-        if (id !== seq.current) return;
+        if (id !== seq.current) return undefined;
         weekRef.current = d.weekStart;
         setState((prev) => afterLoad(prev, { kind: "ok", data: d }));
         if (opts.selectToday) setSel({ dayIndex: d.today.dayIndex, half: d.today.half });
+        return d;
       } catch (e) {
-        if (id !== seq.current) return;
+        if (id !== seq.current) return undefined;
         setState((prev) => afterLoad(prev, e instanceof SessionError ? { kind: "session" } : { kind: "error" }));
+        return undefined;
       } finally {
         if (id === seq.current) setLoading(false);
       }
@@ -127,6 +156,15 @@ export function App() {
     [now],
   );
   const reloadQuiet = useCallback(() => void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}) }, { quiet: true }), [load]);
+  reloadRef.current = reloadQuiet;
+  // The week can lose a column (a weekend day emptied) or a slot (an evening removed): keep the selection valid.
+  useEffect(() => {
+    if (!data) return;
+    const days = data.week.days;
+    const i = Math.min(sel.dayIndex, days.length - 1);
+    const half = validHalf(days[i]!, sel.half);
+    if (i !== sel.dayIndex || half !== sel.half) setSel({ dayIndex: i, half });
+  }, [data, sel]);
 
   useEffect(() => {
     void load({}, { selectToday: true });
@@ -137,7 +175,7 @@ export function App() {
     () =>
       createAutoRefresh({
         isHidden: () => document.hidden,
-        refresh: (t: RefreshTrigger) => load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true }, { quiet: t === "focus" || t === "interval" }),
+        refresh: async (t: RefreshTrigger) => void (await load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true }, { quiet: t === "focus" || t === "interval" })),
       }),
     [load],
   );
@@ -163,18 +201,27 @@ export function App() {
     else void load({ weekStart: data.today.weekStart }, { selectToday: true });
   }, [data, load]);
 
-  /** The clock in the day shape's zone (pinned by ?now= for checks). */
+  /** The clock in the configured zone (pinned by ?now= for checks). */
   const zonedNow = useCallback(
     (tz: string) => (now ? Temporal.Instant.from(now).toZonedDateTimeISO(tz) : Temporal.Now.zonedDateTimeISO(tz)),
     [now],
   );
-  /** Default day to plan: today on a workday before the usual end, else the next workday (D97). */
+  /**
+   * Days with working hours (the time model) or a flex session on the week shown (D127). A flex-only day in another
+   * week is found by the server, which refuses or opens it; the stepper below tries the next one on a refusal.
+   */
+  const hasHours = useCallback(
+    (d: IsoDate) => !!data && (hoursOn(data.hours, d).segments.length > 0 || data.week.days.some((x) => x.date === d && x.flexMinutes > 0)),
+    [data],
+  );
+  /** Default day to plan: today on a day with hours before its end, else the next such day (D97, D127). */
   // PTO days are skipped (D106): the ones ahead of today from the server, plus any on the week shown.
   const target = useMemo(() => {
     if (!data) return null;
     const pto = new Set([...data.ptoAhead, ...data.week.days.filter((d) => d.pto).map((d) => d.date)]);
-    return planTarget(zonedNow(data.dayShape.timeZone), data.dayShape.end, pto);
-  }, [data, zonedNow, clock]); // eslint-disable-line react-hooks/exhaustive-deps
+    const now = zonedNow(data.hours.timeZone);
+    return planTarget(now, dayEndOf(data.hours, now.toPlainDate().toString()) ?? "24:00", pto, hasHours);
+  }, [data, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Opens Plan the day for a date (default: today or the next workday). Moves to that date's week when it isn't
@@ -186,9 +233,11 @@ export function App() {
       setPdError(null);
       setDetailsOpen(false);
       const monday = mondayOf(st.date);
-      if (monday !== data.weekStart) await load({ weekStart: monday });
-      const dayIndex = dayOfWeekIndex(st.date);
-      setSel((s) => ({ dayIndex, half: s.dayIndex === dayIndex ? s.half : "AM" }));
+      const w = monday !== data.weekStart ? ((await load({ weekStart: monday })) ?? null) : data;
+      const dayIndex = Math.max(0, (w ?? data).week.days.findIndex((d) => d.date === st.date));
+      const first = (w ?? data).week.days[dayIndex];
+      const firstHalf: Half = first ? cardHalves(first)[0]! : "AM";
+      setSel((s) => ({ dayIndex, half: s.dayIndex === dayIndex ? s.half : firstHalf }));
       setPd(st);
     },
     [data, load],
@@ -218,7 +267,7 @@ export function App() {
       const pto = new Set([...data.ptoAhead, ...data.week.days.filter((d) => d.pto).map((d) => d.date)]);
       let from = pd.date;
       for (let tries = 0; tries < 5; tries++) {
-        const next = stepDay(from, dir, pto);
+        const next = stepDay(from, dir, pto, hasHours);
         if (!next) return setPdError(`No day to plan ${dir > 0 ? "after" : "before"} ${shortDay(from)} within a month`);
         try {
           return await showPlanDay(await planAction("planday.start", { date: next }));
@@ -228,7 +277,7 @@ export function App() {
         }
       }
     },
-    [data, pd, showPlanDay],
+    [data, pd, showPlanDay, hasHours],
   );
 
   /**
@@ -321,7 +370,7 @@ export function App() {
   // First focus of a workday after 05:00 opens Plan the day once (the server remembers it was offered).
   const tryAuto = useCallback(() => {
     if (!data || pd || detailsOpen || cmdOpen || !document.hasFocus()) return;
-    if (!autoOpenDue(zonedNow(data.dayShape.timeZone), data.planDay)) return;
+    if (!autoOpenDue(zonedNow(data.hours.timeZone), data.planDay)) return;
     if (autoTried.current === data.planDay.date) return;
     autoTried.current = data.planDay.date;
     void openPlanDay(undefined, true);
@@ -335,7 +384,7 @@ export function App() {
   // Running for days: on a new local day, move to it (when showing the week that was current) and re-check Plan the day.
   useEffect(() => {
     if (!data) return;
-    if (dayRolledOver(zonedNow(data.dayShape.timeZone), data.planDay.date)) {
+    if (dayRolledOver(zonedNow(data.hours.timeZone), data.planDay.date)) {
       const onTodaysWeek = data.today.weekStart === data.weekStart;
       void load(onTodaysWeek ? {} : { weekStart: data.weekStart }, { selectToday: onTodaysWeek, quiet: true });
     } else tryAuto();
@@ -422,15 +471,26 @@ export function App() {
       if (e.target instanceof HTMLInputElement) return;
       if ((e.target as HTMLElement | null)?.closest?.(".popup-menu")) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
+      const days = data.week.days;
+      const halvesOf = (i: number): Half[] => (days[i] ? cardHalves(days[i]) : ["AM", "PM"]);
       const move = (dayIndex: number, half: Half) => {
         e.preventDefault();
-        setSel({ dayIndex: Math.max(0, Math.min(4, dayIndex)), half });
+        const i = Math.max(0, Math.min(days.length - 1, dayIndex));
+        setSel({ dayIndex: i, half: validHalf(days[i]!, half) });
+      };
+      const step = (dir: 1 | -1) => {
+        const hs = halvesOf(sel.dayIndex);
+        return move(sel.dayIndex, hs[Math.max(0, Math.min(hs.length - 1, hs.indexOf(sel.half) + dir))]!);
       };
       switch (e.key) {
         case "ArrowLeft": return move(sel.dayIndex - 1, sel.half);
         case "ArrowRight": return move(sel.dayIndex + 1, sel.half);
-        case "ArrowUp": return move(sel.dayIndex, "AM");
-        case "ArrowDown": return move(sel.dayIndex, "PM");
+        case "ArrowUp": return step(-1);
+        case "ArrowDown": return step(1);
+        case "h":
+          e.preventDefault();
+          void setViewRange(VIEW_RANGES[(VIEW_RANGES.indexOf(data.week.range.mode) + 1) % VIEW_RANGES.length]!);
+          return;
         case "Enter":
         case " ":
           e.preventDefault();
@@ -451,13 +511,13 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
 
   const env = useMemo<MenuEnv | null>(() => {
     if (!data || !target) return null;
-    const day = data.week.days[sel.dayIndex]!;
+    const day = data.week.days[Math.min(sel.dayIndex, data.week.days.length - 1)]!;
     // The command menu offers Disconnect exactly where the status bar does (live calendars only).
     const cal = (src: "outlook" | "google") => {
       const s = data.sources.find((x) => x.source === src);
@@ -500,8 +560,12 @@ export function App() {
       showKeys: () => setKeysOpen(true),
       theme,
       setTheme: (t) => void setTheme(t),
+      viewRange: data.week.range.mode,
+      setViewRange: (r) => void setViewRange(r),
+      hours: data.hours,
+      runTime,
     };
-  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.kind === "session") {
     return (
@@ -516,8 +580,8 @@ export function App() {
   }
 
   const { week } = data;
-  const day = week.days[sel.dayIndex]!;
-  const slot = sel.half === "AM" ? day.am : day.pm;
+  const day = week.days[Math.min(sel.dayIndex, week.days.length - 1)]!;
+  const slot = slotOf(day, validHalf(day, sel.half)) ?? day.am;
   // Weekend: "Today" shows the coming week (D36), so say so.
   const localToday = data.planDay.date;
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
@@ -644,7 +708,9 @@ export function App() {
         devops={data.devops}
         sampleWeek={SAMPLE_WEEK}
         isSampleWeek={data.weekStart === SAMPLE_WEEK}
-        shape={data.dayShape}
+        hours={data.hours}
+        range={data.week.range}
+        onRange={(r) => void setViewRange(r)}
         loading={loading}
         busy={busy}
         notice={notice ?? (state.kind === "ready" ? state.refreshError ?? null : null)}

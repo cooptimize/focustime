@@ -26,7 +26,7 @@ describe("week dates", () => {
 });
 
 describe("today target", () => {
-  const shape = config.dayShape;
+  const shape = config.hours;
   it("picks AM before the split and PM from the split on", () => {
     expect(todayTarget("2026-11-03T12:29:00-05:00", shape)).toEqual({ weekStart: "2026-11-02", dayIndex: 1, half: "AM" });
     expect(todayTarget("2026-11-03T12:30:00-05:00", shape)).toEqual({ weekStart: "2026-11-02", dayIndex: 1, half: "PM" });
@@ -39,5 +39,15 @@ describe("today target", () => {
 
   it("jumps to the coming Monday AM on a weekend", () => {
     expect(todayTarget("2026-10-31T15:00:00-04:00", shape)).toEqual({ weekStart: "2026-11-02", dayIndex: 0, half: "AM" });
+  });
+
+  it("stays on a weekend day that has something planned, and lands on its evening slot", () => {
+    expect(todayTarget("2026-10-31T15:00:00-04:00", shape, { todayHasPlans: true, hasEve: true })).toEqual({ weekStart: "2026-10-26", dayIndex: 5, half: "EVE" });
+  });
+
+  it("goes to the evening slot after the main span on a split day", () => {
+    const split = { ...shape, overrides: [{ date: "2026-11-03", segments: [{ start: "09:00", end: "16:00" }, { start: "20:00", end: "22:00" }] }] };
+    expect(todayTarget("2026-11-03T15:59:00-05:00", split, { hasEve: true }).half).toBe("PM");
+    expect(todayTarget("2026-11-03T16:00:00-05:00", split, { hasEve: true }).half).toBe("EVE");
   });
 });

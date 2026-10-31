@@ -3,6 +3,7 @@
 // or opens the next step. The command menu is built from the action registry, so every action appears.
 import { ACTIONS, type ActionName, type ActionSpec } from "../actions/registry.ts";
 import { THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
+import { hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { dayRule } from "../plan/days.ts";
 import { isPickable } from "../plan/rules.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek } from "../plan/types.ts";
@@ -35,7 +36,25 @@ export type MenuStep =
       /** The submit button's label (default "Add"). */
       button?: string;
       submit: (text: string) => void | Promise<unknown>;
+    }
+  | {
+      title: string;
+      /** A small form (step 6b: hours for a day, unavailable time, flex sessions). */
+      fields: FormField[];
+      button?: string;
+      /** Resolves false to keep the form open (the reason is shown as a notice). */
+      save: (values: Record<string, string>) => void | Promise<unknown>;
     };
+
+export type FormField = {
+  key: string;
+  label: string;
+  type: "text" | "time" | "select";
+  value?: string;
+  optional?: boolean;
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+};
 
 export type View = "week" | "planday";
 
@@ -49,7 +68,7 @@ export type MenuEnv = {
   planState: PlanDayState | null;
   /** Default day for Plan the day (today, or the next workday). */
   planTarget: { date: IsoDate; isToday: boolean };
-  /** Today in the day shape's zone. Earlier days are past: only done and drop. */
+  /** Today in the configured zone. Earlier days are past: only done and drop. */
   today: IsoDate;
   work: ReadonlyMap<string, ClientWork>;
   calendars: { outlook: boolean; google: boolean };
@@ -73,6 +92,12 @@ export type MenuEnv = {
   /** The active theme and how to change it (saved in config, applied live). */
   theme: Theme;
   setTheme: (t: Theme) => void;
+  /** The view range (saved in config) and the usual working hours. */
+  viewRange: ViewRange;
+  setViewRange: (r: ViewRange) => void;
+  hours: TimeModel;
+  /** Runs a time model action (hours for a day, unavailable time, flex sessions); false with a notice on refusal. */
+  runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
 };
 
 const dayName = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -92,17 +117,21 @@ const closedReason = (env: MenuEnv, date: IsoDate) => ptoReason(env, date) ?? (i
 /** Why Plan the day can't open a date (PTO, no working hours), or undefined when it can. */
 export function planDayRefusal(env: MenuEnv, date: IsoDate): string | undefined {
   const d = env.week.days.find((x) => x.date === date);
-  const r = dayRule(date, env.today, d?.pto ?? null);
+  const has = hoursOn(env.hours, date).segments.length > 0 || (d?.flexMinutes ?? 0) > 0;
+  const r = dayRule(date, env.today, d?.pto ?? null, has);
   if (r.ok) return undefined;
-  return r.kind === "pto" ? ptoReason(env, date) : "No working hours: Fridays and weekends can't be planned yet";
+  return r.kind === "pto" ? ptoReason(env, date) : "No working hours: give the day hours or a flex session from its menu";
 }
 
-/** Half-days of the week on screen, as places to put a pick. */
+/** "AM", "PM" or "Evening" in labels. */
+export const halfLabel = (h: Half) => (h === "EVE" ? "Evening" : h);
+
+/** Half-days (and evening slots) of the week on screen with working time, as places to put a pick. */
 function halfDays(env: MenuEnv, skip?: { date: IsoDate; half: Half }): { date: IsoDate; half: Half; label: string; disabled?: string }[] {
   return env.week.days.flatMap((d) =>
-    (["AM", "PM"] as const)
-      .filter((h) => !(skip && skip.date === d.date && skip.half === h))
-      .map((half) => ({ date: d.date, half, label: `${dayName(d.date)} ${half}${d.kind === "overflow" ? " (Friday catch-up)" : ""}`, ...(closedReason(env, d.date) ? { disabled: closedReason(env, d.date)! } : {}) })),
+    ([d.am, d.pm, ...(d.eve ? [d.eve] : [])] as const)
+      .filter((s) => (!s.off || d.kind === "overflow") && !(skip && skip.date === d.date && skip.half === s.half))
+      .map(({ half }) => ({ date: d.date, half, label: `${dayName(d.date)} ${halfLabel(half)}${d.kind === "overflow" ? " (Friday catch-up)" : ""}`, ...(closedReason(env, d.date) ? { disabled: closedReason(env, d.date)! } : {}) })),
   );
 }
 
@@ -110,9 +139,9 @@ function halfDays(env: MenuEnv, skip?: { date: IsoDate; half: Half }): { date: I
 
 export function moveStep(env: MenuEnv, p: Pick): MenuStep {
   const other: Half = p.half === "AM" ? "PM" : "AM";
-  const fri = env.week.days[4]!.date;
+  const fri = env.week.days.find((d) => d.kind === "overflow")?.date ?? env.week.days[4]!.date;
   const quick: MenuItem[] = [
-    { id: "to-other", label: `To ${other} the same day`, action: "pick.move", ...(closedReason(env, p.date) ? { disabled: closedReason(env, p.date)! } : {}), run: () => env.runPlan("pick.move", { id: p.id, date: p.date, half: other }) },
+    { id: "to-other", label: `To ${halfLabel(other)} the same day`, action: "pick.move", ...(closedReason(env, p.date) ? { disabled: closedReason(env, p.date)! } : {}), run: () => env.runPlan("pick.move", { id: p.id, date: p.date, half: other }) },
     ...(p.date !== fri && !isPast(env, fri) ? [{ id: "to-fri", label: "To Friday (catch-up)", action: "pick.move", run: () => env.runPlan("pick.move", { id: p.id, date: fri, half: "AM" }) } as MenuItem] : []),
   ];
   const days = halfDays(env, { date: p.date, half: p.half })
@@ -218,13 +247,119 @@ export function slotMenu(env: MenuEnv, date: IsoDate, half: Half, clientKey: str
 /** The "⋯" menu of a day header. */
 export function dayMenu(env: MenuEnv, date: IsoDate): MenuStep {
   const refused = planDayRefusal(env, date);
+  const day = env.week.days.find((d) => d.date === date);
   return {
     title: dayName(date),
     items: [
       { id: "plan", label: isPast(env, date) && !refused ? "Plan this day (past: done and drop only)" : "Plan this day", action: "planday.start", ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(date) },
       { id: "am", label: "Details of AM", action: "ui.details", run: () => env.openDetails(date, "AM") },
       { id: "pm", label: "Details of PM", action: "ui.details", run: () => env.openDetails(date, "PM") },
+      ...(day?.eve ? [{ id: "eve", label: "Details of the evening", action: "ui.details", run: () => env.openDetails(date, "EVE") } as MenuItem] : []),
+      ...timeItems(env, date),
     ],
+  };
+}
+
+// ---------- time model (step 6b) ----------
+
+const fmtSpan = (s: { start: string; end: string }) => `${s.start}–${s.end}`;
+const localHm = (iso: string, tz: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(tz).toPlainTime().toString({ smallestUnit: "minute" });
+
+/** Day menu items for the time model: this day's hours, unavailable time and flex sessions. */
+function timeItems(env: MenuEnv, date: IsoDate): MenuItem[] {
+  const day = env.week.days.find((d) => d.date === date);
+  const h = hoursOn(env.hours, date);
+  const pto = day?.pto ? ptoReason(env, date) : undefined;
+  const tz = env.week.timeZone;
+  const slots = day ? [day.am, day.pm, ...(day.eve ? [day.eve] : [])] : [];
+  const blocked = slots.flatMap((s) => s.events.filter((e) => e.event.unavailable)).filter((e, i, all) => all.findIndex((x) => x.event.id === e.event.id) === i);
+  const flex = slots.flatMap((s) => s.flex).filter((f, i, all) => all.findIndex((x) => x.id === f.id) === i);
+  const items: MenuItem[] = [
+    { id: "hours", label: "Working hours for this day…", hint: h.segments.length ? h.segments.map(fmtSpan).join(" + ") : "none", action: "hours.set_day", ...(pto ? { disabled: pto } : {}), next: () => hoursForm(env, date) },
+  ];
+  if (h.overridden) items.push({ id: "hours-clear", label: "Use the usual hours", action: "hours.clear_day", run: () => env.runTime("hours.clear_day", { date }) });
+  items.push({ id: "unavailable", label: "Block time as unavailable…", action: "unavailable.add", ...(pto ? { disabled: pto } : {}), next: () => unavailableForm(env, date) });
+  items.push({ id: "flex", label: "Add a flex session…", hint: "outside working hours", action: "flex.add", ...(pto ? { disabled: pto } : {}), next: () => flexForm(env, date) });
+  for (const b of blocked)
+    items.push({ id: `u${b.event.unavailable!.id}`, label: `Remove unavailable: ${b.event.title}`, hint: `${localHm(b.event.start, tz)}–${localHm(b.event.end, tz)}`, danger: true, action: "unavailable.remove", run: () => env.runTime("unavailable.remove", { id: b.event.unavailable!.id }) });
+  for (const f of flex) {
+    const ended = Temporal.Instant.compare(Temporal.Instant.from(f.end), Temporal.Now.instant()) <= 0;
+    items.push({ id: `f${f.id}`, label: `Remove flex session: ${f.clientKey}`, hint: `${localHm(f.start, tz)}–${localHm(f.end, tz)}`, danger: true, action: "flex.remove", ...(ended ? { disabled: "It has ended and its update is owed, so it stays on record" } : {}), run: () => env.runTime("flex.remove", { id: f.id }) });
+  }
+  return items;
+}
+
+/** The day's hours: a main span, an optional lunch and an optional evening span (a split day). */
+export function hoursForm(env: MenuEnv, date: IsoDate): MenuStep {
+  const h = hoursOn(env.hours, date);
+  const main = h.main;
+  const eve = h.extra[0];
+  return {
+    title: `Working hours for ${dayName(date)}`,
+    button: "Save",
+    fields: [
+      { key: "start", label: "Start", type: "time", value: main?.start ?? "09:00", optional: true },
+      { key: "end", label: "End", type: "time", value: main?.end ?? "17:00", optional: true },
+      { key: "lunchStart", label: "Lunch from", type: "time", value: h.lunch?.start ?? "", optional: true },
+      { key: "lunchEnd", label: "Lunch to", type: "time", value: h.lunch?.end ?? "", optional: true },
+      { key: "eveStart", label: "Evening from", type: "time", value: eve?.start ?? "", optional: true },
+      { key: "eveEnd", label: "Evening to", type: "time", value: eve?.end ?? "", optional: true },
+    ],
+    save: (v) => {
+      const segments = [v.start && v.end ? `${v.start}-${v.end}` : null, v.eveStart && v.eveEnd ? `${v.eveStart}-${v.eveEnd}` : null].filter((x): x is string => !!x);
+      return env.runTime("hours.set_day", { date, segments, lunch: v.lunchStart && v.lunchEnd ? `${v.lunchStart}-${v.lunchEnd}` : "" });
+    },
+  };
+}
+
+export function unavailableForm(env: MenuEnv, date: IsoDate): MenuStep {
+  return {
+    title: `Unavailable on ${dayName(date)}`,
+    button: "Block",
+    fields: [
+      { key: "title", label: "What", type: "text", placeholder: "Dentist" },
+      { key: "start", label: "From", type: "time" },
+      { key: "end", label: "To", type: "time" },
+      { key: "note", label: "Note", type: "text", optional: true },
+    ],
+    save: (v) => env.runTime("unavailable.add", { date, title: v.title, start: v.start, end: v.end, ...(v.note ? { note: v.note } : {}) }),
+  };
+}
+
+export function flexForm(env: MenuEnv, date: IsoDate): MenuStep {
+  const clients = [...env.work.values()].map((c) => ({ value: c.clientKey, label: c.clientName }));
+  const day = env.week.days.find((d) => d.date === date);
+  const block = day ? [...day.am.focus, ...day.pm.focus][0] : undefined;
+  const h = hoursOn(env.hours, date);
+  return {
+    title: `Flex session on ${dayName(date)}`,
+    button: "Add",
+    fields: [
+      { key: "clientKey", label: "Client", type: "select", options: clients, value: block?.clientKey ?? clients[0]?.value ?? "" },
+      { key: "start", label: "From", type: "time", value: h.segments.at(-1)?.end ?? "" },
+      { key: "end", label: "To", type: "time" },
+      { key: "itemId", label: "DevOps item number", type: "text", optional: true, placeholder: "e.g. 1234" },
+      { key: "note", label: "Note", type: "text", optional: true },
+    ],
+    save: (v) =>
+      env.runTime("flex.add", { date, clientKey: v.clientKey, start: v.start, end: v.end, ...(v.itemId ? { itemId: Number(v.itemId) } : {}), ...(v.note ? { note: v.note } : {}) }),
+  };
+}
+
+export function viewRangeStep(env: MenuEnv): MenuStep {
+  return { title: "View range", items: VIEW_RANGES.map((r) => ({ id: r, label: VIEW_RANGE_NAMES[r], checked: env.viewRange === r, action: "ui.set_view_range", run: () => env.setViewRange(r) })) };
+}
+
+/** Days of the week on screen, for actions that ask for a day (selected day first). */
+function chooseDay(env: MenuEnv, title: string, then: (date: IsoDate) => MenuStep | (() => unknown)): MenuStep {
+  const sel = env.selection.date;
+  const days = [...env.week.days].sort((a, b) => (a.date === sel ? -1 : b.date === sel ? 1 : 0));
+  return {
+    title,
+    items: days.map((d) => {
+      const r = then(d.date);
+      return { id: d.date, label: `${dayName(d.date)}${d.date === sel ? " (selected)" : ""}`, ...(typeof r === "function" ? { run: r as () => void } : { next: () => r }) };
+    }),
   };
 }
 
@@ -315,6 +450,27 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.remove": return { next: () => choosePick(env, "Drop which pick?", (p) => () => env.runPlan("pick.remove", { id: p.id })) };
     case "draft.add_story": return { next: () => chooseItem(env, "Draft a story under which epic or feature?", (i) => i.level === "portfolio", (k, i) => draftPrompt(env, k, i)) };
     case "ui.set_theme": return { next: () => themeStep(env) };
+    case "ui.set_view_range": return { next: () => viewRangeStep(env) };
+    case "hours.set_day": return { next: () => chooseDay(env, "Working hours for which day?", (d) => hoursForm(env, d)) };
+    case "hours.clear_day": {
+      const days = env.week.days.filter((d) => d.hours.overridden);
+      if (!days.length) return { disabled: "No day this week has its own hours" };
+      return { next: () => ({ title: "Use the usual hours on which day?", items: days.map((d) => ({ id: d.date, label: dayName(d.date), run: () => env.runTime("hours.clear_day", { date: d.date }) })) }) };
+    }
+    case "unavailable.add": return { next: () => chooseDay(env, "Block time on which day?", (d) => unavailableForm(env, d)) };
+    case "flex.add": return { next: () => chooseDay(env, "Flex session on which day?", (d) => flexForm(env, d)) };
+    case "unavailable.remove": {
+      const all = env.week.days.flatMap((d) => [d.am, d.pm, ...(d.eve ? [d.eve] : [])].flatMap((s) => s.events.filter((e) => e.event.unavailable).map((e) => ({ d, e }))));
+      const uniq = all.filter((x, i) => all.findIndex((y) => y.e.event.id === x.e.event.id) === i);
+      if (!uniq.length) return { disabled: "No unavailable time this week" };
+      return { next: () => ({ title: "Remove which unavailable time?", items: uniq.map(({ d, e }) => ({ id: e.event.id, label: `${dayName(d.date)}: ${e.event.title}`, danger: true, run: () => env.runTime("unavailable.remove", { id: e.event.unavailable!.id }) })) }) };
+    }
+    case "flex.remove": {
+      const all = env.week.days.flatMap((d) => [d.am, d.pm, ...(d.eve ? [d.eve] : [])].flatMap((s) => s.flex.map((f) => ({ d, f }))));
+      const uniq = all.filter((x, i) => all.findIndex((y) => y.f.id === x.f.id) === i);
+      if (!uniq.length) return { disabled: "No flex session this week" };
+      return { next: () => ({ title: "Remove which flex session?", items: uniq.map(({ d, f }) => ({ id: `f${f.id}`, label: `${dayName(d.date)}: ${f.clientKey}${f.itemTitle ? ` · ${f.itemTitle}` : ""}`, danger: true, run: () => env.runTime("flex.remove", { id: f.id }) })) }) };
+    }
     case "link.open": return { next: () => chooseItem(env, "Open which work item?", () => true, (k, i) => () => env.openLink(k, i.url)) };
   }
 }

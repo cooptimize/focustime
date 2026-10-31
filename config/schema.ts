@@ -1,7 +1,8 @@
 // Parse and validate ~/.config/coopilot/config.toml. Pure: text in, config or per-field errors out.
 import { parse, TomlError } from "smol-toml";
 import { PROFILE_DIR } from "../links/edge.ts";
-import type { Half, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
+import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
+import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
 
 export type DataverseConfig = {
   environmentUrl: string;
@@ -35,8 +36,8 @@ export type AppConfig = {
 export const THEMES = ["cooptimize-dark", "cooptimize-light", "neutral"] as const;
 export type Theme = (typeof THEMES)[number];
 export const THEME_NAMES: Record<Theme, string> = { "cooptimize-dark": "Cooptimize Dark", "cooptimize-light": "Cooptimize Light", neutral: "Neutral" };
-export type UiConfig = { theme: Theme };
-export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark" };
+export type UiConfig = { theme: Theme; viewRange: ViewRange };
+export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business" };
 
 export type EdgeConfig = {
   /** Edge's launch command as an argument array, e.g. ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]. Empty: no Edge. */
@@ -55,7 +56,8 @@ export type PlanConfig = {
 };
 
 export type FieldError = { field: string; message: string };
-export type ParseResult = { ok: true; config: AppConfig } | { ok: false; errors: FieldError[] };
+/** `legacyDayShape`: the file still has the old [day_shape] section (read as hours; migrated on load, D124). */
+export type ParseResult = { ok: true; config: AppConfig; legacyDayShape?: boolean } | { ok: false; errors: FieldError[] };
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -114,7 +116,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -136,25 +138,32 @@ export function parseConfig(text: string): ParseResult {
   const myEmail = str(dv, "dataverse", "my_email", (s) => (EMAIL.test(s) ? null : s === "" ? "Fill in your work email" : "Not a valid email address"));
   const sysId = str(dv, "dataverse", "my_systemuserid", guid, true);
 
-  // [day_shape]
-  const ds = section("day_shape", ["start", "split", "end", "time_zone"]);
-  const time = (s: string) => (HHMM.test(s) ? null : 'Use 24-hour "HH:MM"');
-  const start = str(ds, "day_shape", "start", time);
-  const split = str(ds, "day_shape", "split", time);
-  const end = str(ds, "day_shape", "end", time);
-  const timeZone = str(ds, "day_shape", "time_zone", (s) => {
+  // [hours] (step 6b, D122), or the old [day_shape] read as Mon–Thu hours with the split as lunch (D124).
+  const time = (v: string) => (HHMM.test(v) ? null : 'Use 24-hour "HH:MM"');
+  const zone = (v: string) => {
     try {
-      Temporal.Now.zonedDateTimeISO(s);
+      Temporal.Now.zonedDateTimeISO(v);
       return null;
     } catch {
       return "Unknown time zone; use an IANA name like America/New_York";
     }
-  });
-  if (HHMM.test(start) && HHMM.test(split) && HHMM.test(end)) {
-    if (!(start < split)) err("day_shape.split", "Must be after start");
-    else if (!(split < end)) err("day_shape.end", "Must be after split");
+  };
+  let hours: TimeModel;
+  if (raw.hours !== undefined && raw.day_shape !== undefined) err("day_shape", "Replaced by [hours]; remove [day_shape]");
+  if (raw.hours === undefined && raw.day_shape !== undefined) {
+    const ds = section("day_shape", ["start", "split", "end", "time_zone"]);
+    const start = str(ds, "day_shape", "start", time);
+    const split = str(ds, "day_shape", "split", time);
+    const end = str(ds, "day_shape", "end", time);
+    const timeZone = str(ds, "day_shape", "time_zone", zone);
+    if (HHMM.test(start) && HHMM.test(split) && HHMM.test(end)) {
+      if (!(start < split)) err("day_shape.split", "Must be after start");
+      else if (!(split < end)) err("day_shape.end", "Must be after split");
+    }
+    hours = legacyHours({ start, split, end, timeZone });
+  } else {
+    hours = parseHours(raw.hours, err, zone);
   }
-
   // [risk]
   const rk = section("risk", ["meeting_watch_minutes", "meeting_at_risk_minutes", "min_focus_window_minutes"]);
   const watch = int(rk, "risk", "meeting_watch_minutes");
@@ -179,7 +188,7 @@ export function parseConfig(text: string): ParseResult {
       if (typeof day !== "string" || !WORK_DAYS.includes(day as WorkWeekday)) (ok = false), err(`${f}.day`, "Must be Mon, Tue, Wed or Thu");
       if (half !== "AM" && half !== "PM") (ok = false), err(`${f}.half`, "Must be AM or PM");
       if (typeof client !== "string" || client.trim() === "") (ok = false), err(`${f}.client`, "Must name a client nickname");
-      if (ok) standingBlocks.push({ day: day as WorkWeekday, half: half as Half, clientKey: client as string, clientName: client as string });
+      if (ok) standingBlocks.push({ day: day as WorkWeekday, half: half as MainHalf, clientKey: client as string, clientName: client as string });
     });
   }
 
@@ -238,7 +247,12 @@ export function parseConfig(text: string): ParseResult {
   const ui: UiConfig = { ...DEFAULT_UI };
   if (raw.ui !== undefined) {
     const t = isTable(raw.ui) ? raw.ui : (err("ui", "Must be a [ui] table"), null);
-    if (t) for (const k of Object.keys(t)) if (!["theme"].includes(k)) err(`ui.${k}`, "Unknown field");
+    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range"].includes(k)) err(`ui.${k}`, "Unknown field");
+    const vr = t?.view_range;
+    if (vr !== undefined) {
+      if (typeof vr !== "string" || !(VIEW_RANGES as readonly string[]).includes(vr)) err("ui.view_range", `Must be one of ${VIEW_RANGES.map((x) => `"${x}"`).join(", ")}`);
+      else ui.viewRange = vr as ViewRange;
+    }
     const th = t?.theme;
     if (th !== undefined) {
       if (typeof th !== "string" || !(THEMES as readonly string[]).includes(th)) err("ui.theme", `Must be one of ${THEMES.map((x) => `"${x}"`).join(", ")}`);
@@ -275,12 +289,13 @@ export function parseConfig(text: string): ParseResult {
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
+    ...(raw.hours === undefined && raw.day_shape !== undefined ? { legacyDayShape: true } : {}),
     config: {
       dataverse: { environmentUrl: envUrl.replace(/\/+$/, ""), tenantId, clientId, myEmail, mySystemUserId: sysId === "" ? null : sysId },
       outlook,
       google,
       week: {
-        dayShape: { start, split, end, timeZone },
+        hours,
         thresholds: { meetingWatchMinutes: watch, meetingAtRiskMinutes: atRisk, minFocusWindowMinutes: window },
         standingBlocks,
       },
@@ -298,4 +313,86 @@ export function setSystemUserIdInText(text: string, id: string): string {
   const re = /^(\s*my_systemuserid\s*=\s*)"[^"\n]*"/m;
   if (!re.test(text)) throw new Error("my_systemuserid line not found in config");
   return text.replace(re, `$1"${id}"`);
+}
+
+/** The old soft day shape as a time model: Mon–Thu start to end, Fri and the weekend off, the split as a lunch with no break. */
+export function legacyHours(ds: { start: string; split: string; end: string; timeZone: string }): TimeModel {
+  const day = [{ start: ds.start, end: ds.end }];
+  return { timeZone: ds.timeZone, weekdays: { mon: day, tue: day, wed: day, thu: day, fri: [], sat: [], sun: [] }, lunch: { start: ds.split, end: ds.split }, overrides: [] };
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const SPAN_HINT = 'Use "HH:MM-HH:MM", e.g. "09:00-17:00"';
+
+/** Parses [hours]: time_zone, lunch, mon..sun span lists and [[hours.override]] tables. */
+function parseHours(v: unknown, err: (field: string, message: string) => void, zone: (s: string) => string | null): TimeModel {
+  const model: TimeModel = { timeZone: "UTC", weekdays: { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] }, lunch: null, overrides: [] };
+  if (!isTable(v)) {
+    err("hours", v === undefined ? "Missing [hours] section" : "Must be an [hours] table");
+    return model;
+  }
+  for (const k of Object.keys(v)) if (!["time_zone", "lunch", "override", ...WEEKDAY_KEYS].includes(k)) err(`hours.${k}`, "Unknown field");
+  if (typeof v.time_zone !== "string") err("hours.time_zone", v.time_zone === undefined ? "Missing" : "Must be a quoted string");
+  else {
+    const z = zone(v.time_zone);
+    if (z) err("hours.time_zone", z);
+    else model.timeZone = v.time_zone;
+  }
+  const spans = (val: unknown, field: string): Span[] | null => {
+    if (!Array.isArray(val)) {
+      err(field, `Must be a list of spans, e.g. ["09:00-17:00"], or [] for a day off`);
+      return null;
+    }
+    const out: Span[] = [];
+    val.forEach((x, i) => {
+      const sp = typeof x === "string" ? parseSpan(x) : null;
+      if (!sp) err(`${field}[${i}]`, SPAN_HINT);
+      else out.push(sp);
+    });
+    // Overlaps would double count capacity: refuse them.
+    const sorted = [...out].sort((a, b) => a.start.localeCompare(b.start));
+    for (let i = 1; i < sorted.length; i++) if (sorted[i]!.start < sorted[i - 1]!.end) err(field, "Spans overlap");
+    return out;
+  };
+  const lunch = (val: unknown, field: string): Span | null | undefined => {
+    if (val === undefined) return undefined;
+    if (val === "") return null;
+    const sp = typeof val === "string" ? parseSpan(val) : null;
+    if (!sp) err(field, `${SPAN_HINT}, or "" for no lunch`);
+    return sp;
+  };
+  for (const k of WEEKDAY_KEYS) {
+    if (v[k] === undefined) continue;
+    const s = spans(v[k], `hours.${k}`);
+    if (s) model.weekdays[k as WeekdayKey] = s;
+  }
+  model.lunch = lunch(v.lunch, "hours.lunch") ?? null;
+  const ov = v.override;
+  if (ov !== undefined && !Array.isArray(ov)) err("hours.override", "Must be a list of [[hours.override]] tables");
+  if (Array.isArray(ov)) {
+    const seen = new Set<string>();
+    ov.forEach((o, i) => {
+      const f = `hours.override[${i}]`;
+      if (!isTable(o)) return err(f, "Must be a table");
+      for (const k of Object.keys(o)) if (!["date", "segments", "lunch"].includes(k)) err(`${f}.${k}`, "Unknown field");
+      let date = "";
+      try {
+        if (typeof o.date === "string" && DATE.test(o.date)) date = Temporal.PlainDate.from(o.date, { overflow: "reject" }).toString();
+      } catch {
+        date = "";
+      }
+      if (!date) return err(`${f}.date`, 'Must be a date like "2026-11-05"');
+      if (seen.has(date)) return err(`${f}.date`, "Another override has this date");
+      seen.add(date);
+      const d: DayOverride = { date };
+      if (o.segments !== undefined) {
+        const s = spans(o.segments, `${f}.segments`);
+        if (s) d.segments = s;
+      }
+      const l = lunch(o.lunch, `${f}.lunch`);
+      if (l !== undefined) d.lunch = l;
+      model.overrides.push(d);
+    });
+  }
+  return model;
 }

@@ -1,9 +1,10 @@
+import { legacyHours } from "../config/schema.ts";
 import type { CalEvent, FocusPattern, WeekConfig } from "./types.ts";
 
 export const NY = "America/New_York";
 
 export const config: WeekConfig = {
-  dayShape: { start: "09:00", split: "12:30", end: "17:00", timeZone: NY },
+  hours: legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: NY }),
   thresholds: { meetingWatchMinutes: 90, meetingAtRiskMinutes: 150, minFocusWindowMinutes: 90 },
   standingBlocks: [{ day: "Mon", half: "AM", clientKey: "internal", clientName: "Internal" }],
 };

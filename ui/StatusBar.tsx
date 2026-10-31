@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { SourceSummary } from "../actions/types.ts";
-import type { ClientWork, DayShape } from "../week/types.ts";
+import type { ClientWork } from "../week/types.ts";
+import { hoursSummary, VIEW_RANGE_NAMES, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { devopsSummary, workStatusLabel } from "./work.ts";
 import { causeLines, notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar, type Fix } from "./status.ts";
 import { shortDate } from "./labels.ts";
@@ -11,7 +12,10 @@ type Props = {
   devops: ClientWork[] | null;
   sampleWeek: string;
   isSampleWeek: boolean;
-  shape: DayShape;
+  hours: TimeModel;
+  /** The week's timeline range, and whether it was widened to show planned time outside it. */
+  range: { mode: ViewRange; start: string; end: string; expanded: boolean };
+  onRange: (r: ViewRange) => void;
   loading: boolean;
   busy: Calendar | null;
   notice: string | null;
@@ -29,8 +33,10 @@ function when(iso: string, tz: string): string {
   return z.toPlainDate().equals(today) ? t : `${shortDate(z.toPlainDate().toString())} ${t}`;
 }
 
-export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, shape, loading, busy, notice, clock, onRefresh, onConnect, onDisconnect }: Props) {
+export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, range, onRange, loading, busy, notice, clock, onRefresh, onConnect, onDisconnect }: Props) {
   const samples = sources.filter((s) => s.sample);
+  const shape = { timeZone: hours.timeZone };
+  const nextRange = VIEW_RANGES[(VIEW_RANGES.indexOf(range.mode) + 1) % VIEW_RANGES.length]!;
   const lines = causeLines(sources, devops);
   const fixButton = (f: Fix, key: string) =>
     f.kind === "retry" ? (
@@ -83,9 +89,19 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, shape, lo
             </span>
           </span>
         )}
-        <span className="muted shape">
-          {shape.start} · split {shape.split} · usual end {shape.end} · {shape.timeZone}
+        <span className="muted shape" title={`Working hours. Change them in Settings or a day's menu. Times in ${hours.timeZone}`}>
+          {hoursSummary(hours)}
         </span>
+        <button
+          type="button"
+          className="mini quiet range-toggle"
+          onClick={() => onRange(nextRange)}
+          title={`Timelines show ${range.start}–${range.end}${range.expanded ? ", widened to show planned time" : ""}. Click for ${VIEW_RANGE_NAMES[nextRange]} (H)`}
+          aria-label={`View range: ${VIEW_RANGE_NAMES[range.mode]}. Change to ${VIEW_RANGE_NAMES[nextRange]}`}
+        >
+          {VIEW_RANGE_NAMES[range.mode]}
+          {range.expanded && <span className="muted"> +</span>}
+        </button>
         <button type="button" className="refresh" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources">
           {loading ? "Loading…" : "Refresh"}
         </button>

@@ -1,22 +1,27 @@
-// One desktop reminder per workday when today isn't committed yet (step 5), only near the day start (Q23). Never repeats: the store keeps a
-// marker per date, so a restart or a second check the same day sends nothing.
+// One desktop reminder per day with working hours when today isn't committed yet (step 5), only near the day start (Q23). Never
+// repeats: the store keeps a marker per date, so a restart or a second check the same day sends nothing.
 import { spawn } from "node:child_process";
-import type { DayShape } from "../week/types.ts";
+import { hoursOn, type TimeModel } from "../week/hours.ts";
 
-/** The reminder can fire only this long after the day shape start (Q23). */
+/** The reminder can fire only this long after the day's start (Q23). */
 export const REMINDER_WINDOW_MINUTES = 90;
 
-/** Whether the reminder is due now: Mon–Thu, from the day shape start until 90 minutes after it, today not committed. */
-export function reminderDue(now: Temporal.ZonedDateTime, shape: DayShape, committed: boolean): boolean {
-  if (committed || now.dayOfWeek > 4) return false;
-  const start = now.withPlainTime(Temporal.PlainTime.from(shape.start));
+/**
+ * Whether the reminder is due now: on a day with working hours, from the start of its main span until 90 minutes
+ * after it, today not committed (step 6b: the time model, not Mon–Thu).
+ */
+export function reminderDue(now: Temporal.ZonedDateTime, model: TimeModel, committed: boolean): boolean {
+  if (committed) return false;
+  const main = hoursOn(model, now.toPlainDate().toString()).main;
+  if (!main) return false;
+  const start = now.withPlainTime(Temporal.PlainTime.from(main.start));
   const end = start.add({ minutes: REMINDER_WINDOW_MINUTES });
   return Temporal.ZonedDateTime.compare(now, start) >= 0 && Temporal.ZonedDateTime.compare(now, end) < 0;
 }
 
 export type ReminderDeps = {
   now: () => Temporal.ZonedDateTime;
-  shape: () => Promise<DayShape | null>;
+  hours: () => Promise<TimeModel | null>;
   committed: (date: string) => boolean;
   /** Whether a date is a PTO day (D106): no reminder then. Asked only when a reminder would otherwise be due. */
   off?: (date: string) => Promise<boolean>;
@@ -27,11 +32,11 @@ export type ReminderDeps = {
 
 /** One check; returns true when a reminder was sent. */
 export async function checkReminder(d: ReminderDeps): Promise<boolean> {
-  const shape = await d.shape();
-  if (!shape) return false;
-  const now = d.now().withTimeZone(shape.timeZone);
+  const model = await d.hours();
+  if (!model) return false;
+  const now = d.now().withTimeZone(model.timeZone);
   const date = now.toPlainDate().toString();
-  if (!reminderDue(now, shape, d.committed(date))) return false;
+  if (!reminderDue(now, model, d.committed(date))) return false;
   if (d.off && (await d.off(date).catch(() => false))) return false;
   if (!d.once(date)) return false;
   d.send("Coopilot", "Today isn't planned yet. Open Coopilot and press P to plan the day.");

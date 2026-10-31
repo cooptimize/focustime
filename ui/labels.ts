@@ -39,7 +39,9 @@ export function slotRange(slot: Slot, tz: string): string {
   return formatRange(toZoned(slot.start, tz), toZoned(slot.end, tz));
 }
 
-export const halfName = (h: Half) => (h === "AM" ? "Morning" : "Afternoon");
+export const halfName = (h: Half) => (h === "AM" ? "Morning" : h === "PM" ? "Afternoon" : "Evening");
+/** The short tag on a card: AM, PM or EVE shown as "Eve". */
+export const halfTag = (h: Half) => (h === "EVE" ? "Eve" : h);
 
 const md = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const mdy = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -62,6 +64,7 @@ import { createContext } from "react";
 export const SampleSources = createContext<ReadonlySet<string>>(new Set());
 
 export function sourceName(e: CalEvent, samples: ReadonlySet<string>): string {
+  if (e.source === "coopilot") return "Coopilot (unavailable)";
   const name = e.source === "outlook" ? "Outlook" : "Google";
   return samples.has(e.source) ? `${name} sample` : name;
 }

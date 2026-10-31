@@ -1,6 +1,7 @@
 // Default, non-secret settings. Later these are loaded and validated from
 // ~/.config/coopilot/config.toml; for step 1 they are compiled in.
 import type { WeekConfig } from "../week/types.ts";
+import { legacyHours } from "./schema.ts";
 
 export type ClientStyle = { key: string; name: string; shortName: string; color: string };
 
@@ -15,7 +16,7 @@ export const clients: Record<string, ClientStyle> = {
 export const fallbackClientColor = "#8a8f98";
 
 export const weekConfig: WeekConfig = {
-  dayShape: { start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" },
+  hours: legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" }),
   thresholds: { meetingWatchMinutes: 90, meetingAtRiskMinutes: 150, minFocusWindowMinutes: 90 },
   standingBlocks: [{ day: "Mon", half: "AM", clientKey: "internal", clientName: "Internal" }],
 };

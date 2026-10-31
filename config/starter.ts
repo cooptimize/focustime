@@ -30,12 +30,19 @@ client_id = ""
 client_id = ""
 calendars = ["primary"]
 
-# Soft day shape: only used to place events into AM or PM and estimate capacity.
-[day_shape]
-start = "09:00"
-split = "12:30"
-end = "17:00"
+# Working hours (step 6b). Used for capacity, risks, planning and the view range.
+[hours]
 time_zone = "America/New_York"
+# The lunch is where the morning ends and the afternoon starts. "" for none (the day splits in the middle).
+lunch = "12:30-12:30"
+# Working spans per weekday; [] is a day off. A second span (e.g. an evening) forms its own slot.
+mon = ["09:00-17:00"]
+tue = ["09:00-17:00"]
+wed = ["09:00-17:00"]
+thu = ["09:00-17:00"]
+fri = []
+sat = []
+sun = []
 
 # Risk thresholds in minutes (docs/spec.md section 6).
 [risk]

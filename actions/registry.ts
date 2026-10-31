@@ -11,13 +11,16 @@ export type ActionTarget =
   | "item" // one DevOps work item of a client
   | "portfolio" // an epic or feature with no children yet
   | "calendar" // Outlook or Google
-  | "theme"; // one of the themes
+  | "theme" // one of the themes
+  | "range" // one of the view ranges
+  | "unavailable" // one unavailable time
+  | "flex"; // one flex session
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the day" | "Picks" | "Work items" | "Sources" | "Display";
+  readonly group: "Week" | "Plan the day" | "Picks" | "Work items" | "Sources" | "Display" | "Time";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -39,6 +42,13 @@ export const ACTIONS = [
   { name: "pick.remove", title: "Drop pick", group: "Picks", target: "pick", summary: "Remove a pick from the plan" },
   { name: "draft.add_story", title: "Add a draft story", group: "Work items", target: "portfolio", summary: "A local story under an epic or feature with no children" },
   { name: "ui.set_theme", title: "Change theme", group: "Display", target: "theme", summary: "Cooptimize Dark, Cooptimize Light or Neutral; saved in config" },
+  { name: "ui.set_view_range", title: "Change view range", group: "Display", target: "range", shortcut: "H", summary: "Business hours, 12 hours or 24 hours; saved in config" },
+  { name: "hours.set_day", title: "Set working hours for a day", group: "Time", target: "day", summary: "Other hours for one day, a split day or a lunch change" },
+  { name: "hours.clear_day", title: "Use usual hours for a day", group: "Time", target: "day", summary: "Remove a day's own working hours" },
+  { name: "unavailable.add", title: "Block time as unavailable", group: "Time", target: "day", summary: "Time taken from capacity like a meeting (local only)" },
+  { name: "unavailable.remove", title: "Remove unavailable time", group: "Time", target: "unavailable", summary: "Give the time back" },
+  { name: "flex.add", title: "Add a flex session", group: "Time", target: "day", summary: "Planned client work outside working hours (local only, no calendar write)" },
+  { name: "flex.remove", title: "Remove a flex session", group: "Time", target: "flex", summary: "Only before it has ended" },
   { name: "link.open", title: "Open in Edge", group: "Work items", target: "item", summary: "Open a work item in that client's Edge profile" },
 ] as const satisfies readonly ActionSpec[];
 

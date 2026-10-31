@@ -3,6 +3,7 @@ import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseConfig, setSystemUserIdInText, type ParseResult } from "./schema.ts";
+import { migrateDayShapeText, writeConfig } from "./edit.ts";
 import { STARTER_TOML } from "./starter.ts";
 
 export function configPath(env = process.env): string {
@@ -32,7 +33,14 @@ export async function loadConfigFile(path: string): Promise<LoadedConfig> {
     text = STARTER_TOML;
     created = true;
   }
-  return { path, parsed: parseConfig(text), created };
+  let parsed = parseConfig(text);
+  // The old [day_shape] becomes [hours] once, with a backup (D124). A failed write leaves the file as it was.
+  if (parsed.ok && parsed.legacyDayShape) {
+    const model = parsed.config.week.hours;
+    const r = await writeConfig(path, (t) => migrateDayShapeText(t, model) ?? t).catch(() => null);
+    if (r?.ok) parsed = r.parsed;
+  }
+  return { path, parsed, created };
 }
 
 export async function saveSystemUserId(path: string, id: string): Promise<void> {

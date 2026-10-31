@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { checkReminder, reminderDue } from "./notify.ts";
 
-const shape = { start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" };
+import { legacyHours } from "../config/schema.ts";
+const shape = legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" });
 const at = (s: string) => Temporal.ZonedDateTime.from(`${s}[America/New_York]`);
 
 describe("Plan the day reminder", () => {
@@ -22,7 +23,7 @@ describe("Plan the day reminder", () => {
     let now = at("2026-11-02T09:00:30-05:00");
     const deps = {
       now: () => now,
-      shape: async () => shape,
+      hours: async () => shape,
       committed: () => false,
       once: (d: string) => (marks.has(d) ? false : (marks.add(d), true)),
       send: (_t: string, b: string) => sent.push(b),
@@ -36,18 +37,18 @@ describe("Plan the day reminder", () => {
     expect(sent[0]).not.toMatch(/—/);
   });
 
-  it("uses the day shape's time zone, not the machine's", async () => {
+  it("uses the time model's zone, not the machine's", async () => {
     const sent: string[] = [];
     const utc = Temporal.ZonedDateTime.from("2026-11-02T14:05:00+00:00[UTC]"); // 9:05 New York
-    expect(await checkReminder({ now: () => utc, shape: async () => shape, committed: () => false, once: () => true, send: (t) => sent.push(t) })).toBe(true);
+    expect(await checkReminder({ now: () => utc, hours: async () => shape, committed: () => false, once: () => true, send: (t) => sent.push(t) })).toBe(true);
   });
 
   it("sends nothing without a usable config", async () => {
-    expect(await checkReminder({ now: () => at("2026-11-02T10:00:00-05:00"), shape: async () => null, committed: () => false, once: () => true, send: () => { throw new Error("no"); } })).toBe(false);
+    expect(await checkReminder({ now: () => at("2026-11-02T10:00:00-05:00"), hours: async () => null, committed: () => false, once: () => true, send: () => { throw new Error("no"); } })).toBe(false);
   });
 
   it("sends nothing on a PTO day, and a failed PTO check doesn't block it (D106)", async () => {
-    const base = { now: () => at("2026-11-05T09:10:00-05:00"), shape: async () => shape, committed: () => false, once: () => true };
+    const base = { now: () => at("2026-11-05T09:10:00-05:00"), hours: async () => shape, committed: () => false, once: () => true };
     const sent: string[] = [];
     expect(await checkReminder({ ...base, off: async (d) => d === "2026-11-05", send: (_t, b) => sent.push(b) })).toBe(false);
     expect(await checkReminder({ ...base, off: async () => { throw new Error("offline"); }, send: (_t, b) => sent.push(b) })).toBe(true);

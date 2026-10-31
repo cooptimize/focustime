@@ -1,4 +1,4 @@
-import { mkdtempSync, statSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -25,6 +25,60 @@ describe("plan store", () => {
     const again = createPlanStore({ path, now });
     expect(again.schemaVersion()).toBe(MIGRATIONS.length);
     again.close();
+  });
+
+  it("migrates a step 6 store to the time model with a private backup first, keeping every pick (D125)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const path = join(dir, "plan.db");
+    mkdirSync(dir, { recursive: true });
+    const old = new DatabaseSync(path);
+    old.exec("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+    old.exec(MIGRATIONS[0]!);
+    old.exec(MIGRATIONS[1]!);
+    old.exec("INSERT INTO schema_migrations VALUES (1, 'x'), (2, 'x')");
+    old.exec("INSERT INTO day_plans VALUES ('2026-10-29', '2026-10-29T08:00:00-04:00[America/New_York]', 'x', 'x')");
+    old.exec(`INSERT INTO picks (id, date, half, client_key, kind, item_id, title, size, status, position, created_at, updated_at)
+              VALUES (1, '2026-10-29', 'AM', 'CSC', 'item', 101, 'Story', 'M', 'done', 0, 'x', 'x'),
+                     (2, '2026-10-29', 'PM', 'CSC', 'intention', NULL, 'Review', 'S', 'planned', 0, 'x', 'x')`);
+    old.exec("UPDATE picks SET carried_from = 1 WHERE id = 2");
+    old.close();
+
+    const store = createPlanStore({ path, now });
+    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
+    expect(store.picksFor("2026-10-29").map((p) => [p.id, p.half, p.status, p.carriedFrom])).toEqual([
+      [1, "AM", "done", null],
+      [2, "PM", "planned", 1],
+    ]);
+    store.start("2026-11-02");
+    expect(store.addPick({ ...item, date: "2026-11-02", half: "EVE" }).half).toBe("EVE");
+    const backups = readdirSync(dir).filter((f) => f.startsWith("plan.db.bak-v2-"));
+    expect(backups).toHaveLength(1);
+    expect(statSync(join(dir, backups[0]!)).mode & 0o777).toBe(0o600);
+    const bak = new DatabaseSync(join(dir, backups[0]!), { readOnly: true });
+    expect((bak.prepare("SELECT COUNT(*) AS n FROM picks").get() as { n: number }).n).toBe(2);
+    bak.close();
+    store.close();
+    // Opening again makes no second backup.
+    createPlanStore({ path, now }).close();
+    expect(readdirSync(dir).filter((f) => f.startsWith("plan.db.bak-"))).toHaveLength(1);
+  });
+
+  it("stores unavailable time and flex sessions; a flex session opens its update loop once it has ended", () => {
+    const { store } = fresh();
+    const u = store.addUnavailable({ date: "2026-11-03", title: "Dentist", start: "2026-11-03T19:00:00Z", end: "2026-11-03T20:00:00Z" });
+    expect(store.unavailableBetween("2026-11-02", "2026-11-08").map((x) => x.id)).toEqual([u.id]);
+    const f = store.addFlex({ date: "2026-11-07", clientKey: "CSC", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z", itemId: 101 });
+    expect(store.flexBetween("2026-11-07", "2026-11-07").map((x) => x.itemId)).toEqual([101]);
+    store.openFlexLoops(Temporal.Instant.from("2026-11-07T16:00:00Z"));
+    expect(store.openLoops()).toEqual([]);
+    store.openFlexLoops(Temporal.Instant.from("2026-11-07T17:00:00Z"));
+    store.openFlexLoops(Temporal.Instant.from("2026-11-07T18:00:00Z"));
+    const loops = store.openLoops();
+    expect(loops).toHaveLength(1);
+    expect(loops[0]).toMatchObject({ clientKey: "CSC", sourceKind: "flex", sourceId: f.id });
+    expect(loops[0]!.what).toMatch(/update to CSC/);
+    expect(() => store.removeFlex(f.id)).toThrow();
+    expect(store.removeUnavailable(u.id)).toBe(true);
   });
 
   it("refuses a store from a newer Coopilot instead of guessing", () => {

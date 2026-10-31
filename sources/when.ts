@@ -9,9 +9,10 @@ export function formatFetchedAt(iso: string, timeZone: string, now: Temporal.Ins
   return `${z.toPlainDate().toLocaleString("en-US", { month: "short", day: "numeric" })} ${time}`;
 }
 
-/** Mon 00:00 to Sat 00:00 of the week, in the given time zone (covers Friday evening). */
+/** Mon 00:00 to the next Mon 00:00 of the week, in the given time zone. */
 export function weekRange(weekStart: string, timeZone: string): { start: string; end: string } {
   const mon = Temporal.PlainDate.from(weekStart).toZonedDateTime({ timeZone });
   const opts = { timeZoneName: "never", smallestUnit: "second" } as const;
-  return { start: mon.toString(opts), end: mon.add({ days: 5 }).toString(opts) };
+  // The whole week, Saturday and Sunday too: weekend columns show when something is planned on them (step 6b).
+  return { start: mon.toString(opts), end: mon.add({ days: 7 }).toString(opts) };
 }

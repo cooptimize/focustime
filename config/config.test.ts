@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseConfig, setSystemUserIdInText } from "./schema.ts";
+import { migrateDayShapeText } from "./edit.ts";
+import { legacyHours, parseConfig, setSystemUserIdInText } from "./schema.ts";
 import { STARTER_TOML } from "./starter.ts";
 
 const valid = `
@@ -49,7 +50,7 @@ describe("parseConfig", () => {
       mySystemUserId: "33333333-3333-4333-8333-333333333333",
     });
     expect(r.config.week.standingBlocks).toEqual([{ day: "Mon", half: "AM", clientKey: "Internal", clientName: "Internal" }]);
-    expect(r.config.week.dayShape).toEqual({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" });
+    expect(r.config.week.hours).toEqual(legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" }));
     expect(r.config.clients).toEqual({ WC: "#1f9e8f", Internal: "#4a7fd4" });
   });
 
@@ -203,5 +204,97 @@ describe("[edge] link profiles (step 5.5)", () => {
     const r = parseConfig(STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'));
     expect(r.ok && r.config.edge.command).toEqual([]);
     expect(STARTER_TOML).toContain("# [edge]");
+  });
+});
+
+describe("working hours (step 6b)", () => {
+  const hoursToml = (extra = "") =>
+    valid.replace(/\[day_shape\][^[]*/, `[hours]
+time_zone = "America/New_York"
+lunch = "12:00-13:00"
+mon = ["09:00-17:00"]
+tue = ["09:00-17:00"]
+wed = ["09:00-17:00"]
+thu = ["09:00-17:00"]
+fri = []
+sat = []
+sun = []
+${extra}
+`);
+
+  it("reads per-weekday spans, the lunch and a split-day override", () => {
+    const r = parseConfig(hoursToml(`[[hours.override]]
+date = "2026-11-05"
+segments = ["09:00-16:00", "20:00-22:00"]
+lunch = ""
+`));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.legacyDayShape).toBeUndefined();
+    expect(r.config.week.hours.lunch).toEqual({ start: "12:00", end: "13:00" });
+    expect(r.config.week.hours.weekdays.fri).toEqual([]);
+    expect(r.config.week.hours.overrides).toEqual([{ date: "2026-11-05", segments: [{ start: "09:00", end: "16:00" }, { start: "20:00", end: "22:00" }], lunch: null }]);
+  });
+
+  it("refuses overlapping spans, bad spans, duplicate override dates and both sections at once", () => {
+    const fields = (t: string) => {
+      const r = parseConfig(t);
+      return r.ok ? [] : r.errors.map((e) => e.field);
+    };
+    expect(fields(hoursToml().replace('mon = ["09:00-17:00"]', 'mon = ["09:00-13:00", "12:00-17:00"]'))).toContain("hours.mon");
+    expect(fields(hoursToml().replace('tue = ["09:00-17:00"]', 'tue = ["9-5"]'))).toContain("hours.tue[0]");
+    expect(fields(hoursToml(`[[hours.override]]
+date = "2026-11-05"
+[[hours.override]]
+date = "2026-11-05"
+`))).toContain("hours.override[1].date");
+    expect(fields(`${hoursToml()}\n[day_shape]\nstart = "09:00"\nsplit = "12:30"\nend = "17:00"\ntime_zone = "America/New_York"\n`)).toContain("day_shape");
+  });
+
+  it("migrates the old day shape to the same hours, keeping comments and other sections", () => {
+    const r = parseConfig(valid);
+    expect(r.ok && r.legacyDayShape).toBe(true);
+    if (!r.ok) return;
+    const text = `# my note\n${valid}`;
+    const next = migrateDayShapeText(text, r.config.week.hours)!;
+    expect(next).toContain("# my note");
+    expect(next).not.toContain("[day_shape]");
+    expect(next).toContain('mon = ["09:00-17:00"]');
+    expect(next).toContain("fri = []");
+    const again = parseConfig(next);
+    expect(again.ok).toBe(true);
+    if (!again.ok) return;
+    expect(again.legacyDayShape).toBeUndefined();
+    expect(again.config.week.hours).toEqual(r.config.week.hours);
+    expect({ ...again.config, week: null }).toEqual({ ...r.config, week: null });
+    expect(migrateDayShapeText(next, again.config.week.hours)).toBeNull();
+  });
+
+  it("starts new configs with [hours]", () => {
+    const r = parseConfig(STARTER_TOML);
+    expect(r.ok && r.legacyDayShape).toBeFalsy();
+    expect(STARTER_TOML).not.toContain("[day_shape]");
+  });
+});
+
+describe("loading a config with the old day shape", () => {
+  it("rewrites it as [hours] once, with a backup of the old file", async () => {
+    const { mkdtemp, readFile, readdir, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { loadConfigFile } = await import("./load.ts");
+    const dir = await mkdtemp(join(tmpdir(), "coopilot-cfg-"));
+    const path = join(dir, "config.toml");
+    await writeFile(path, valid, { mode: 0o600 });
+    const r = await loadConfigFile(path);
+    expect(r.parsed.ok).toBe(true);
+    const text = await readFile(path, "utf8");
+    expect(text).toContain("[hours]");
+    expect(text).not.toContain("[day_shape]");
+    const backups = await readdir(join(dir, "backups"));
+    expect(backups).toHaveLength(1);
+    expect(await readFile(join(dir, "backups", backups[0]!), "utf8")).toBe(valid);
+    await loadConfigFile(path);
+    expect(await readdir(join(dir, "backups"))).toHaveLength(1);
   });
 });

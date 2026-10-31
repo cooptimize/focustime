@@ -61,14 +61,55 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList }: {
   useEffect(() => {
     setActive(Math.max(0, shown.findIndex((i) => !i.disabled)));
   }, [step, query]); // eslint-disable-line react-hooks/exhaustive-deps
+  const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if ("prompt" in step) inputRef.current?.focus();
+    else if ("fields" in step) formRef.current?.querySelector<HTMLElement>("input, select")?.focus();
     else if (autoFocusList) listRef.current?.focus();
   }, [step, autoFocusList]);
   // Block bodies: an effect must return nothing or a cleanup (scrollIntoView returns a Promise in current Chromium).
   useEffect(() => {
     void listRef.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" });
   }, [active]);
+
+  if ("fields" in step) {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && (e.preventDefault(), canBack ? back() : onDone());
+    return (
+      <form
+        ref={formRef}
+        className="menu-prompt menu-form"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const data = new FormData(e.currentTarget);
+          const values = Object.fromEntries(step.fields.map((f) => [f.key, String(data.get(f.key) ?? "").trim()]));
+          if (step.fields.some((f) => !f.optional && !values[f.key])) return;
+          const r = await step.save(values);
+          if (r !== false) onDone();
+        }}
+      >
+        {step.fields.map((f) => (
+          <label key={f.key} className={`field ${f.type}`}>
+            <span>
+              {f.label}
+              {f.optional && <span className="muted"> (optional)</span>}
+            </span>
+            {f.type === "select" ? (
+              <select name={f.key} defaultValue={f.value ?? ""} required={!f.optional} onKeyDown={esc}>
+                {(f.options ?? []).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input name={f.key} type={f.type} defaultValue={f.value ?? ""} required={!f.optional} placeholder={f.placeholder ?? ""} maxLength={f.type === "text" ? 200 : undefined} onKeyDown={esc} />
+            )}
+          </label>
+        ))}
+        <button type="submit" className="mini primary">{step.button ?? "Save"}</button>
+      </form>
+    );
+  }
 
   if ("prompt" in step) {
     return (

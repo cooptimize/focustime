@@ -1,9 +1,13 @@
 // Core week model types. Pure data, no I/O. See docs/spec.md section 4.
 import type { PtoDay } from "./pto.ts";
+import type { DayHours, Span, TimeModel, ViewRange } from "./hours.ts";
 
-export type Half = "AM" | "PM";
+/** Morning, afternoon, and the third slot (step 6b): evening working time and flex sessions. */
+export type Half = "AM" | "PM" | "EVE";
+/** The two halves of the normal workday (focus blocks and standing blocks live here). */
+export type MainHalf = "AM" | "PM";
 export type WorkWeekday = "Mon" | "Tue" | "Wed" | "Thu";
-export type Weekday = WorkWeekday | "Fri";
+export type Weekday = WorkWeekday | "Fri" | "Sat" | "Sun";
 export type DayPart = "AM" | "PM" | "AllDay";
 
 /** ISO calendar date, e.g. "2026-11-02". */
@@ -54,7 +58,7 @@ export type FocusBlock = {
   clientName: string;
   clientFullName?: string;
   date: IsoDate;
-  half: Half;
+  half: MainHalf;
   /** "dataverse" for Focus Time patterns, "config" for standing blocks. */
   source: "dataverse" | "config";
   patternId?: string;
@@ -65,7 +69,8 @@ export type ShowAs = "free" | "tentative" | "busy" | "oof" | "workingElsewhere" 
 
 export type CalEvent = {
   id: string;
-  source: "outlook" | "google";
+  /** "coopilot": unavailable time blocked in Coopilot (step 6b), busy like a meeting but not a meeting. */
+  source: "outlook" | "google" | "coopilot";
   title: string;
   /** Timed: ISO date-time with offset. All-day: ISO date. */
   start: string;
@@ -75,6 +80,23 @@ export type CalEvent = {
   showAs?: ShowAs;
   isPersonal: boolean;
   responseStatus?: "none" | "organizer" | "accepted" | "tentative" | "declined" | "notResponded";
+  /** Set on unavailable time (source "coopilot"): its plan store id and note. */
+  unavailable?: { id: number; note: string | null };
+};
+
+/** Time blocked in Coopilot for things on no calendar (step 6b). Counts against capacity like a meeting. */
+export type Unavailable = { id: number; title: string; start: IsoDateTime; end: IsoDateTime; note: string | null };
+
+/** Planned work outside working hours (step 6b): local only, never written to a calendar. */
+export type FlexSession = {
+  id: number;
+  clientKey: string;
+  start: IsoDateTime;
+  end: IsoDateTime;
+  itemId: number | null;
+  itemTitle: string | null;
+  itemUrl: string | null;
+  note: string | null;
 };
 
 /** An event as it falls inside one bucket of one day, clipped to that bucket. */
@@ -104,11 +126,20 @@ export type Risk = { rule: RiskRule; severity: Severity; reason: string };
 export type Slot = {
   date: IsoDate;
   half: Half;
+  /** Working bounds (nominal hours on a day without any, so cards keep their shape). */
   start: IsoDateTime;
   end: IsoDateTime;
+  /** What the card's timeline shows: the working bounds widened by the week's view range (D123). */
+  view: { start: IsoDateTime; end: IsoDateTime };
+  /** Working time inside the slot (lunch excluded; evening spans and flex sessions in EVE). Capacity counts only this. */
+  windows: { start: IsoDateTime; end: IsoDateTime }[];
+  /** No working time in this slot (a day off, or a weekend day with only a flex session in EVE). */
+  off: boolean;
+  /** Flex sessions that start in this slot. */
+  flex: FlexSession[];
   /** Ordered: Dataverse blocks first, then standing blocks. focus[0] is the one shown. */
   focus: FocusBlock[];
-  /** True on Mon–Thu when there is no focus block. Never true on Friday. */
+  /** True on Mon–Thu when there is no focus block and the slot has working time. Never true on Friday, weekends or EVE. */
   open: boolean;
   events: PlacedEvent[];
   risks: Risk[];
@@ -124,14 +155,20 @@ export type Slot = {
 export type Day = {
   date: IsoDate;
   weekday: Weekday;
-  kind: "work" | "overflow";
+  kind: "work" | "overflow" | "weekend";
   allDay: CalEvent[];
-  /** Events between midnight and the day shape start. */
+  /** Events before the first card's timeline starts. */
   early: PlacedEvent[];
   am: Slot;
   pm: Slot;
-  /** Events after the usual end, kept visible. */
+  /** The third slot: evening working time and flex sessions outside the normal day (step 6b); null when none. */
+  eve: Slot | null;
+  /** Events after the last card's timeline ends, kept visible. */
   evening: PlacedEvent[];
+  /** Working hours of the day after any override (step 6b). */
+  hours: DayHours;
+  /** Minutes of flex sessions on this day. */
+  flexMinutes: number;
   /** PTO from Dataverse (step 6); null when none. A full PTO day has no risks. */
   pto: PtoDay | null;
 };
@@ -139,18 +176,13 @@ export type Day = {
 export type Week = {
   weekStart: IsoDate;
   timeZone: string;
+  /** Mon to Fri, plus Saturday and Sunday only when something is on them (step 6b). */
   days: Day[];
+  /** The hours the timelines show (D123): the mode from config and the range after widening. */
+  range: { mode: ViewRange; start: Span["start"]; end: Span["end"]; expanded: boolean };
 };
 
-export type StandingBlock = { day: WorkWeekday; half: Half; clientKey: string; clientName: string };
-
-export type DayShape = {
-  /** "HH:MM" local time. */
-  start: string;
-  split: string;
-  end: string;
-  timeZone: string;
-};
+export type StandingBlock = { day: WorkWeekday; half: MainHalf; clientKey: string; clientName: string };
 
 export type RiskThresholds = {
   meetingWatchMinutes: number;
@@ -159,7 +191,8 @@ export type RiskThresholds = {
 };
 
 export type WeekConfig = {
-  dayShape: DayShape;
+  /** The time model (step 6b): working hours, lunch, overrides. Replaces the soft day shape. */
+  hours: TimeModel;
   thresholds: RiskThresholds;
   standingBlocks: StandingBlock[];
 };

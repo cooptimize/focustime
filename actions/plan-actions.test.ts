@@ -19,7 +19,7 @@ const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
 
 const NOW = "2026-11-03T14:00:00Z"; // Tue 9:00 New York
 
-function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden" } = {}) {
+function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string } = {}) {
   let clock = NOW;
   const dir = mkdtempSync(join(tmpdir(), "c-plan-"));
   const dv = fakeFetch("ok", { pto: opts.pto ?? "ok" });
@@ -28,7 +28,7 @@ function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden" } = {}) {
   const devopsByKey = new Map<string, ReturnType<typeof createDevOpsSource>>();
   const plan = createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
   const c: ActionContext = {
-    loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(text) }),
+    loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(opts.text ?? text) }),
     makeDataverse,
     makeOutlook: () => { throw new Error("n/a"); },
     makeGoogle: () => { throw new Error("n/a"); },
@@ -120,7 +120,7 @@ describe("Plan the day actions", () => {
       return r.ok ? "" : r.error;
     };
     expect(await err({ date: D, half: "AM", clientKey: "CSC", intention: "x", size: "XL" })).toMatch(/split it first/);
-    expect(await err({ date: D, half: "EVE", clientKey: "CSC", intention: "x" })).toMatch(/AM or PM/);
+    expect(await err({ date: D, half: "NIGHT", clientKey: "CSC", intention: "x" })).toMatch(/AM, PM or EVE/);
     expect(await err({ date: "2026-02-30", half: "AM", clientKey: "CSC", intention: "x" })).toMatch(/real date/);
     expect(await err({ date: D, half: "AM", clientKey: "CSC" })).toMatch(/exactly one/);
     expect(await err({ date: D, half: "AM", clientKey: "CSC", intention: "x", itemId: 101 })).toMatch(/exactly one/);
@@ -289,14 +289,24 @@ describe("Plan any day", () => {
       expect((await t.fail("planday.start", { date: "2026-11-17" })).status).toBe(422);
     });
 
-    it("Fridays and weekends are refused until they can have working hours (step 6b)", async () => {
+    it("days without working hours or a flex session are refused (by default Fridays and weekends)", async () => {
       const t = setup();
       for (const d of ["2026-11-06", "2026-11-07", "2026-11-08"]) {
         const r = await t.fail("planday.start", { date: d });
         expect(r.status, d).toBe(422);
-        expect(r.ok ? "" : r.error, d).toMatch(/has no working hours.*working hours or a flex session/);
+        expect(r.ok ? "" : r.error, d).toMatch(/has no working hours.*add a flex session/);
       }
       expect((await t.fail("planday.commit", { date: "2026-11-06" })).status).toBe(422);
+    });
+
+    it("a Friday with working hours and a weekend day with a flex session become plannable (D127)", async () => {
+      const t = setup({ text: text.replace("fri = []", 'fri = ["09:00-12:00"]') });
+      expect((await t.run<PlanDayState>("planday.start", { date: "2026-11-06" })).access).toBe("plan");
+      expect((await t.fail("planday.start", { date: "2026-11-07" })).status).toBe(422);
+      t.plan.addFlex({ date: "2026-11-07", clientKey: "CSC", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z" });
+      expect((await t.run<PlanDayState>("planday.start", { date: "2026-11-07" })).access).toBe("plan");
+      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-07", half: "EVE", clientKey: "CSC", intention: "Saturday catch-up" });
+      expect(pick.half).toBe("EVE");
     });
 
     it("today and earlier days open; earlier days are past", async () => {

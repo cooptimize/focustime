@@ -1,10 +1,11 @@
+import { legacyHours } from "../config/schema.ts";
 import { describe, expect, it } from "vitest";
 import { ACTION_NAMES } from "../actions/registry.ts";
 import type { Pick } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
-import { commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep } from "./menu.ts";
+import { commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -39,6 +40,10 @@ function env(over: Partial<MenuEnv> = {}) {
     showKeys: () => calls.push(["keys"]),
     theme: "cooptimize-dark",
     setTheme: (t) => calls.push(["theme", t]),
+    viewRange: "business",
+    setViewRange: (r) => calls.push(["range", r]),
+    hours: legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" }),
+    runTime: async (a, i) => (calls.push([a, i]), true),
     ...over,
   };
   return { e, calls };
@@ -119,7 +124,7 @@ describe("Plan any day (menus)", () => {
     void plan("2026-11-04").run!();
     expect(t.calls).toEqual([["openPlanDay", "2026-11-04"]]);
     expect(find(dayMenu(t.e, "2026-11-05"), "Plan this day").disabled).toBe("PTO day (Watch Kids)");
-    expect(find(dayMenu(t.e, "2026-11-06"), "Plan this day").disabled).toBe("No working hours: Fridays and weekends can't be planned yet");
+    expect(find(dayMenu(t.e, "2026-11-06"), "Plan this day").disabled).toBe("No working hours: give the day hours or a flex session from its menu");
     expect(items(dayMenu(t.e, "2026-11-02"))[0]!.label).toBe("Plan this day (past: done and drop only)");
   });
 
@@ -142,5 +147,28 @@ describe("Plan any day (menus)", () => {
     expect(move.find((i) => i.id === "to-other")!.disabled).toMatch(/^Past day/);
     expect(move.filter((i) => i.label.startsWith("To Mon, Nov 2")).every((i) => i.disabled?.startsWith("Past day"))).toBe(true);
     expect(move.find((i) => i.label === "To Tue, Nov 3 AM")!.disabled).toBeUndefined();
+  });
+});
+
+describe("time model menus (step 6b)", () => {
+  it("a day header offers hours for the day, unavailable time and a flex session; PTO days say why not", () => {
+    const t = env();
+    const m = dayMenu(t.e, "2026-11-03");
+    expect(items(m).map((i) => i.action)).toEqual(expect.arrayContaining(["hours.set_day", "unavailable.add", "flex.add"]));
+    expect(find(m, "Working hours for this day…").hint).toBe("09:00–17:00");
+    expect(find(dayMenu(t.e, "2026-11-05"), "Block time as unavailable…").disabled).toBe("PTO day (Watch Kids)");
+  });
+  it("the hours form sends a split day (main span, lunch, evening) as one hours.set_day", async () => {
+    const t = env();
+    const f = hoursForm(t.e, "2026-11-03");
+    if (!("fields" in f)) throw new Error("expected a form");
+    await f.save({ start: "09:00", end: "16:00", lunchStart: "12:00", lunchEnd: "12:30", eveStart: "20:00", eveEnd: "22:00" });
+    expect(t.calls).toEqual([["hours.set_day", { date: "2026-11-03", segments: ["09:00-16:00", "20:00-22:00"], lunch: "12:00-12:30" }]]);
+  });
+  it("the flex form defaults to the client of the day's block and starts at the end of the day", () => {
+    const f = flexForm(env().e, "2026-11-02");
+    if (!("fields" in f)) throw new Error("expected a form");
+    expect(f.fields.find((x) => x.key === "clientKey")!.value).toBe("internal");
+    expect(f.fields.find((x) => x.key === "start")!.value).toBe("17:00");
   });
 });

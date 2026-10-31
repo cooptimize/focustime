@@ -10,6 +10,8 @@ export type RiskInput = {
   allDay: readonly CalEvent[];
   start: string;
   end: string;
+  /** Working time inside the slot (step 6b). Free time, meeting load and conflicts count only here. Default: start to end. */
+  windows?: readonly { start: string; end: string }[];
   timeZone: string;
 };
 
@@ -56,12 +58,16 @@ function sourceLabel(b: FocusBlock): string {
  * Returned in rule order: meeting load, personal conflict, no focus window, double-booked.
  */
 export function evaluateRisks(input: RiskInput, t: RiskThresholds): RiskResult {
-  const start = ms(input.start);
-  const end = ms(input.end);
+  const windows = union((input.windows ?? [{ start: input.start, end: input.end }]).map((w): Interval => [ms(w.start), ms(w.end)]));
+  /** The parts of an interval inside working time. */
+  const inWork = ([a, b]: Interval): Interval[] => windows.map(([x, y]): Interval => [Math.max(a, x), Math.min(b, y)]).filter(([x, y]) => y > x);
+  const workMinutes = (iv: Interval) => inWork(iv).reduce((n, [x, y]) => n + (y - x), 0) / 60000;
   const busy = input.events.filter((p) => isBusy(p.event));
-  const meetingIvs = busy.filter((p) => !p.event.isPersonal).map((p): Interval => [ms(p.clipStart), ms(p.clipEnd)]);
+  // Unavailable time is busy (it takes free time) but it is not a meeting.
+  const meetingIvs = busy.filter((p) => !p.event.isPersonal && !p.event.unavailable).flatMap((p) => inWork([ms(p.clipStart), ms(p.clipEnd)]));
   const busyMeetingMinutes = minutes(union(meetingIvs).reduce((sum, [a, b]) => sum + (b - a), 0));
-  const gapIvs = gaps(busy.map((p): Interval => [ms(p.clipStart), ms(p.clipEnd)]), start, end);
+  const busyIvs = busy.map((p): Interval => [ms(p.clipStart), ms(p.clipEnd)]);
+  const gapIvs = windows.flatMap(([a, b]) => gaps(busyIvs, a, b));
   const longestFreeMinutes = gapIvs.reduce((best, [a, b]) => Math.max(best, minutes(b - a)), 0);
   const toIso = (x: number) => iso(Temporal.Instant.fromEpochMilliseconds(x).toZonedDateTimeISO(input.timeZone));
   const freeGaps = gapIvs.map(([a, b]) => ({ start: toIso(a), end: toIso(b), minutes: minutes(b - a) }));
@@ -78,7 +84,8 @@ export function evaluateRisks(input: RiskInput, t: RiskThresholds): RiskResult {
   }
 
   // 2. Personal conflict: timed events overlapping (at risk), all-day events on the day (watch)
-  for (const p of busy.filter((x) => x.event.isPersonal && x.minutesInside > 0)) {
+  const overlapsWork = (p: PlacedEvent) => workMinutes([ms(p.clipStart), ms(p.clipEnd)]) > 0;
+  for (const p of busy.filter((x) => x.event.isPersonal && overlapsWork(x))) {
     const range = formatRange(toZoned(p.event.start, input.timeZone), toZoned(p.event.end, input.timeZone));
     risks.push({ rule: "personal_conflict", severity: "at_risk", reason: `${p.event.title} ${range} overlaps ${block}` });
   }
@@ -87,7 +94,7 @@ export function evaluateRisks(input: RiskInput, t: RiskThresholds): RiskResult {
   }
 
   // Q7: out of office puts covered half-days at risk; other all-day Outlook events flag only when busy.
-  for (const p of busy.filter((x) => !x.event.isPersonal && x.event.showAs === "oof" && x.minutesInside > 0)) {
+  for (const p of busy.filter((x) => !x.event.isPersonal && x.event.showAs === "oof" && overlapsWork(x))) {
     const range = formatRange(toZoned(p.event.start, input.timeZone), toZoned(p.event.end, input.timeZone));
     risks.push({ rule: "out_of_office", severity: "at_risk", reason: `Out of office (${p.event.title}) ${range} overlaps ${block}` });
   }

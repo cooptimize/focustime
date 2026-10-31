@@ -81,7 +81,7 @@ let pickableTypes: string[] = [];
 const loadConfig = async () => {
   const r = await loadConfigFile(cfgPath);
   if (r.parsed.ok) {
-    timeZone = r.parsed.config.week.dayShape.timeZone;
+    timeZone = r.parsed.config.week.hours.timeZone;
     pickableTypes = r.parsed.config.plan.pickablePortfolioTypes;
   }
   return r;
@@ -140,15 +140,15 @@ if (plan) {
   const tick = () =>
     checkReminder({
       now: () => Temporal.Now.zonedDateTimeISO(timeZone),
-      shape: async () => {
+      hours: async () => {
         const r = await loadConfig();
-        return r.parsed.ok ? r.parsed.config.week.dayShape : null;
+        return r.parsed.ok ? r.parsed.config.week.hours : null;
       },
       committed: (d) => !!store.day(d)?.committedAt,
       off: async (d) => {
         const r = await loadConfig();
         if (!r.parsed.ok || !r.parsed.config.dataverse.mySystemUserId) return false;
-        const pto = await makeDataverse(r.parsed.config.dataverse, r.parsed.config.week.dayShape.timeZone).pto(d, d);
+        const pto = await makeDataverse(r.parsed.config.dataverse, r.parsed.config.week.hours.timeZone).pto(d, d);
         return pto.items.some((e) => e.date === d);
       },
       once: (d) => store.markOnce("reminder", d),

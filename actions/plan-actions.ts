@@ -2,11 +2,12 @@
 // and write only to the local plan store. Nothing here calls DevOps, Outlook, Google or Dataverse.
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { carryTarget, dayLabel, dayRule, upcomingStart, type DayRule } from "../plan/days.ts";
+import { carryTarget, dayLabel, dayRule, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
 import { unpickableReason } from "../plan/rules.ts";
 import { DEFAULT_SIZE, SIZES, type PlanDayState, type Size } from "../plan/types.ts";
 import { PlanError, type NewPick, type PlanStore } from "../store/plan-store.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
+import { dayEndOf, hoursOn, type TimeModel } from "../week/hours.ts";
 import type { PtoDay } from "../week/pto.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
@@ -27,12 +28,19 @@ export type PlanContext = {
   now: () => string;
 };
 
-/** Today and the first upcoming day, in the configured zone. */
-async function clock(ctx: PlanContext): Promise<{ cfg: AppConfig | null; today: IsoDate; upcoming: IsoDate }> {
+/** Whether a date has working hours or a flex session (D127): the one plannability rule, from the time model. */
+export function hasHoursOn(plan: PlanStore | undefined, model: TimeModel, date: IsoDate): boolean {
+  return hoursOn(model, date).segments.length > 0 || (plan?.flexBetween(date, date).length ?? 0) > 0;
+}
+
+/** Today, the first upcoming day and the plannability rule, in the configured zone. */
+async function clock(ctx: PlanContext): Promise<{ cfg: AppConfig | null; today: IsoDate; upcoming: IsoDate; model: TimeModel; hasHours: HasHours }> {
   const cfg = await ctx.config();
-  const shape = cfg?.week.dayShape ?? defaultWeekConfig.dayShape;
-  const now = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(shape.timeZone);
-  return { cfg, today: now.toPlainDate().toString(), upcoming: upcomingStart(now, shape.end) };
+  const model = cfg?.week.hours ?? defaultWeekConfig.hours;
+  const now = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(model.timeZone);
+  const today = now.toPlainDate().toString();
+  const hasHours: HasHours = (d) => hasHoursOn(ctx.plan, model, d);
+  return { cfg, today, upcoming: upcomingStart(now, dayEndOf(model, today) ?? "24:00"), model, hasHours };
 }
 
 async function ptoOf(ctx: PlanContext, cfg: AppConfig | null, d: IsoDate): Promise<PtoDay | null> {
@@ -41,14 +49,14 @@ async function ptoOf(ctx: PlanContext, cfg: AppConfig | null, d: IsoDate): Promi
 
 /** The day rule for a date: PTO and days without working hours are refused; earlier days are past. */
 async function ruleFor(ctx: PlanContext, d: IsoDate): Promise<DayRule> {
-  const { cfg, today } = await clock(ctx);
-  return dayRule(d, today, await ptoOf(ctx, cfg, d));
+  const { cfg, today, hasHours } = await clock(ctx);
+  return dayRule(d, today, await ptoOf(ctx, cfg, d), hasHours(d));
 }
 
 /** Refuses a full PTO day with a plain reason; null when the day can take picks. */
 async function ptoRefusal(ctx: PlanContext, d: IsoDate): Promise<string | null> {
-  const { cfg, today } = await clock(ctx);
-  const r = dayRule(d, today, await ptoOf(ctx, cfg, d));
+  const { cfg, today, hasHours } = await clock(ctx);
+  const r = dayRule(d, today, await ptoOf(ctx, cfg, d), hasHours(d));
   return !r.ok && r.kind === "pto" ? r.reason : null;
 }
 
@@ -80,7 +88,7 @@ function date(v: unknown, name = "date"): IsoDate {
   }
 }
 function half(v: unknown): Half {
-  if (v !== "AM" && v !== "PM") throw new Invalid("half must be AM or PM");
+  if (v !== "AM" && v !== "PM" && v !== "EVE") throw new Invalid("half must be AM, PM or EVE");
   return v;
 }
 function id(v: unknown, name = "id"): number {
@@ -107,10 +115,10 @@ const bool = (v: unknown, name: string) => {
 
 /** The carry-over day: the earliest upcoming, plannable, uncommitted day (plan/days.ts). */
 async function carryDay(ctx: PlanContext, plan: PlanStore): Promise<{ target: IsoDate | null; upcoming: IsoDate }> {
-  const { cfg, upcoming } = await clock(ctx);
+  const { cfg, upcoming, hasHours } = await clock(ctx);
   const monday = Temporal.PlainDate.from(upcoming).subtract({ days: Temporal.PlainDate.from(upcoming).dayOfWeek - 1 }).toString();
   const pto = ctx.ptoAhead && cfg ? await ctx.ptoAhead(cfg, monday).catch(() => new Set<IsoDate>()) : new Set<IsoDate>();
-  return { target: carryTarget(upcoming, (d) => !!plan.day(d)?.committedAt, pto), upcoming };
+  return { target: carryTarget(upcoming, (d) => !!plan.day(d)?.committedAt, pto, hasHours), upcoming };
 }
 
 async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = true): Promise<PlanDayState> {

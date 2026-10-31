@@ -1,9 +1,9 @@
 import { weekDates } from "./dates.ts";
-import type { DayPart, FocusBlock, FocusPattern, Half, IsoDate, StandingBlock, WorkWeekday } from "./types.ts";
+import type { DayPart, FocusBlock, FocusPattern, IsoDate, MainHalf, StandingBlock, WorkWeekday } from "./types.ts";
 
 const WORK_DAYS: readonly WorkWeekday[] = ["Mon", "Tue", "Wed", "Thu"];
 
-function halvesOf(part: DayPart): Half[] {
+function halvesOf(part: DayPart): MainHalf[] {
   return part === "AllDay" ? ["AM", "PM"] : [part];
 }
 

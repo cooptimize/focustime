@@ -8,12 +8,14 @@ import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { loadSampleSources } from "../sources/sample.ts";
 import { buildWeek } from "../week/build.ts";
-import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates } from "../week/dates.ts";
+import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
+import type { TimeModel } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
 import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { checkDevOpsUrl, launchPlan } from "../links/edge.ts";
-import { planAction } from "./plan-actions.ts";
+import { hasHoursOn, planAction } from "./plan-actions.ts";
+import { timeAction } from "./time-actions.ts";
 import { isActionName, type ActionName } from "./registry.ts";
 import type { ActionResponse, SourceSummary, WeekLoadData } from "./types.ts";
 
@@ -81,9 +83,8 @@ const AHEAD_DAYS = 7 * 5 - 3;
 
 /** PTO for one date, for the server-side pick check. Null when there is none or Dataverse can't say. */
 async function ptoOn(ctx: ActionContext, cfg: AppConfig, date: string): Promise<PtoDay | null> {
-  const shape = cfg.week.dayShape;
   if (!cfg.dataverse.mySystemUserId) return null;
-  const r = await ctx.makeDataverse(cfg.dataverse, shape.timeZone).pto(...weekRange(date)).catch(() => null);
+  const r = await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).pto(...weekRange(date)).catch(() => null);
   return ptoByDate(r?.items ?? [], [date])[date] ?? null;
 }
 
@@ -91,8 +92,26 @@ async function ptoOn(ctx: ActionContext, cfg: AppConfig, date: string): Promise<
 async function ptoAheadOf(ctx: ActionContext, cfg: AppConfig, monday: string): Promise<ReadonlySet<string>> {
   if (!cfg.dataverse.mySystemUserId) return new Set();
   const to = Temporal.PlainDate.from(monday).add({ days: AHEAD_DAYS }).toString();
-  const r = await ctx.makeDataverse(cfg.dataverse, cfg.week.dayShape.timeZone).pto(monday, to).catch(() => null);
+  const r = await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).pto(monday, to).catch(() => null);
   return new Set((r?.items ?? []).map((e) => e.date));
+}
+
+/** Working hours or a flex session on a date: the day can be planned (step 6b, D127). */
+/** On the loaded week, today's dayIndex is its column (weekend columns show only when they have something on them). */
+function columnOf(t: ReturnType<typeof todayTarget>, week: Week): ReturnType<typeof todayTarget> {
+  if (t.weekStart !== week.weekStart) return t;
+  const date = Temporal.PlainDate.from(t.weekStart).add({ days: t.dayIndex }).toString();
+  const i = week.days.findIndex((d) => d.date === date);
+  return i < 0 ? t : { ...t, dayIndex: i };
+}
+
+const hasHoursFor = (ctx: Pick<ActionContext, "plan">, model: TimeModel, date: string) => hasHoursOn(ctx.plan, model, date);
+
+/** Anything planned on a date: working hours, a flex session, unavailable time or picks. */
+function hasPlansOn(ctx: Pick<ActionContext, "plan">, model: TimeModel, date: string): boolean {
+  if (hasHoursFor(ctx, model, date)) return true;
+  if (!ctx.plan) return false;
+  return ctx.plan.unavailableBetween(date, date).length > 0 || ctx.plan.picksFor(date).some((p) => p.status === "planned" || p.status === "done");
 }
 
 const summarize = (s: SourceResult<unknown>): SourceSummary => {
@@ -119,20 +138,24 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const cfg = parsed.ok ? parsed.config : null;
   // With an invalid config nothing is guessed: no standing blocks either.
   const weekConfig = cfg?.week ?? { ...defaultWeekConfig, standingBlocks: [] };
-  const shape = weekConfig.dayShape;
+  const model = weekConfig.hours;
+  const tz = model.timeZone;
   const now = input.now ?? ctx.now();
-  const weekStart = input.weekStart ?? defaultWeekStart(localToday(now, shape.timeZone));
+  const todayDate = localToday(now, tz);
+  // A flex session that has ended opens its update loop (D126), on any read.
+  ctx.plan?.openFlexLoops(Temporal.Instant.from(now));
+  const todayPlans = hasPlansOn(ctx, model, todayDate);
+  const weekStart = input.weekStart ?? defaultWeekStart(todayDate, todayPlans);
 
   const sample = loadSampleSources();
   const refresh = input.refresh ? { refresh: true } : {};
   // Sample meetings stay only for a calendar source that is not configured at all.
-  const outlookP: Promise<SourceResult<CalEvent>> = cfg?.outlook ? ctx.makeOutlook(cfg.outlook, shape.timeZone).load(weekStart, refresh) : Promise.resolve(sample.outlook);
-  const googleP: Promise<SourceResult<CalEvent>> = cfg?.google ? ctx.makeGoogle(cfg.google, shape.timeZone).load(weekStart, refresh) : Promise.resolve(sample.google);
+  const outlookP: Promise<SourceResult<CalEvent>> = cfg?.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(weekStart, refresh) : Promise.resolve(sample.outlook);
+  const googleP: Promise<SourceResult<CalEvent>> = cfg?.google ? ctx.makeGoogle(cfg.google, tz).load(weekStart, refresh) : Promise.resolve(sample.google);
 
   let dataverse: SourceResult<FocusPattern>;
   let ptoP: Promise<SourceResult<PtoEntry> | null> = Promise.resolve(null);
   let aheadP: Promise<SourceResult<PtoEntry> | null> = Promise.resolve(null);
-  const todayDate = localToday(now, shape.timeZone);
   let devopsP: Promise<ClientWork[] | null> = Promise.resolve(null);
   let planClients: ClientRef[] = [];
   if (!cfg) {
@@ -150,7 +173,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     let dv = cfg.dataverse;
     let resolveError: string | null = null;
     if (!dv.mySystemUserId) {
-      const r = await ctx.makeDataverse(dv, shape.timeZone).resolveUserId(dv.myEmail);
+      const r = await ctx.makeDataverse(dv, tz).resolveUserId(dv.myEmail);
       if (r.ok) {
         await ctx.saveSystemUserId(r.id);
         dv = { ...dv, mySystemUserId: r.id };
@@ -158,10 +181,10 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     }
     dataverse = resolveError
       ? { source: "dataverse", status: "misconfigured", fetchedAt: null, fromCache: false, items: [], message: resolveError, fixAction: "open_settings" }
-      : await ctx.makeDataverse(dv, shape.timeZone).load(weekStart, refresh);
+      : await ctx.makeDataverse(dv, tz).load(weekStart, refresh);
     if (!resolveError) {
       // PTO (step 6) alongside everything else; a failure falls back to its cache inside the source.
-      const ptoSource = ctx.makeDataverse(dv, shape.timeZone);
+      const ptoSource = ctx.makeDataverse(dv, tz);
       ptoP = ptoSource.pto(...weekRange(weekStart), refresh).catch(() => null);
       // Ahead of today for the planning target; its failure only means the target can't skip PTO.
       const aheadFrom = mondayOf(todayDate);
@@ -170,20 +193,25 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       // inside the source; anything unexpected here only drops DevOps, never the week.
       // Plus every client I'm an Account Worker on (Q21), so Open half-days can take their work. Only those
       // with DevOps set up are fetched; the rest can still take a typed intention.
-      const dvSource = ctx.makeDataverse(dv, shape.timeZone);
+      const dvSource = ctx.makeDataverse(dv, tz);
       const mine = (await dvSource.myClients?.().catch(() => null)) ?? [];
       const clients = weekClients(buildWeek({ weekStart, patterns: dataverse.items, events: [], config: weekConfig }), weekConfig.standingBlocks);
       planClients = [...clients];
       for (const c of mine) if (!planClients.some((p) => p.clientKey === c.clientKey)) planClients.push({ clientKey: c.clientKey, clientName: c.clientName });
       const fetch = [...clients, ...mine.filter((c) => c.devops && !clients.some((w) => w.clientKey === c.clientKey)).map(({ clientKey, clientName }) => ({ clientKey, clientName }))];
-      devopsP = ctx.makeDevOps(dv, shape.timeZone).load(fetch, refresh).catch(() => null);
+      devopsP = ctx.makeDevOps(dv, tz).load(fetch, refresh).catch(() => null);
     }
   }
 
   const [outlook, google, devops, ptoResult, ahead] = await Promise.all([outlookP, googleP, devopsP, ptoP, aheadP]);
-  const pto = ptoByDate(ptoResult?.items ?? [], weekDates(weekStart));
+  const pto = ptoByDate(ptoResult?.items ?? [], weekDates7(weekStart));
   const ptoAhead = [...new Set((ahead?.items ?? []).map((e) => e.date))].sort();
-  const week = buildWeek({ weekStart, patterns: dataverse.items, events: [...outlook.items, ...google.items], config: weekConfig, pto });
+  const sunday = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
+  const unavailable = ctx.plan?.unavailableBetween(weekStart, sunday) ?? [];
+  const flex = ctx.plan?.flexBetween(weekStart, sunday) ?? [];
+  const weekendPlanned = new Set(weekDates7(weekStart).slice(5).filter((d) => (ctx.plan?.picksFor(d) ?? []).some((p) => p.status === "planned" || p.status === "done")));
+  const week = buildWeek({ weekStart, patterns: dataverse.items, events: [...outlook.items, ...google.items], config: weekConfig, pto, unavailable, flex, viewRange: cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
+  const todayDay = week.days.find((d) => d.date === todayDate);
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
 
   const todayPlan = ctx.plan?.day(todayDate) ?? null;
@@ -191,15 +219,15 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   return {
     weekStart,
     week,
-    today: todayTarget(now, shape),
+    today: columnOf(todayTarget(now, model, { todayHasPlans: todayPlans, hasEve: !!todayDay?.eve }), week),
     plan: ctx.plan ? ctx.plan.week(week.days.map((d) => d.date)) : null,
     planClients,
-    planDay: { date: todayDate, workday: Temporal.PlainDate.from(todayDate).dayOfWeek <= 4 && !todayOff, committed: !!todayPlan?.committedAt, available: !!ctx.plan },
+    planDay: { date: todayDate, workday: hasHoursFor(ctx, model, todayDate) && !todayOff, committed: !!todayPlan?.committedAt, available: !!ctx.plan },
     ptoAhead,
     sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google].map(summarize),
     devops,
     clients: clientColors,
-    dayShape: shape,
+    hours: model,
     thresholds: weekConfig.thresholds,
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
@@ -216,7 +244,7 @@ async function configured(ctx: ActionContext): Promise<AppConfig | null> {
 async function connect(ctx: ActionContext, which: "outlook" | "google") {
   const cfg = await configured(ctx);
   if (!cfg) return { status: "failed", message: "Fix the config first" };
-  const tz = cfg.week.dayShape.timeZone;
+  const tz = cfg.week.hours.timeZone;
   if (which === "outlook") return cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).connect() : { status: "failed", message: "Add outlook.client_id to config first" };
   return cfg.google ? ctx.makeGoogle(cfg.google, tz).connect() : { status: "failed", message: "Add google.client_id to config first" };
 }
@@ -238,7 +266,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (input.source === "dataverse") return bad("Dataverse uses an app secret set up outside Coopilot; remove it with secret-tool if needed");
       if (input.source !== "outlook" && input.source !== "google") return bad("source must be outlook or google");
       const cfg = await configured(ctx);
-      const tz = cfg?.week.dayShape.timeZone ?? "UTC";
+      const tz = cfg?.week.hours.timeZone ?? "UTC";
       const section = input.source === "outlook" ? cfg?.outlook : cfg?.google;
       if (!section) return { ok: true, data: { status: "not_configured" } };
       const src = input.source === "outlook" ? ctx.makeOutlook(section as OutlookConfig, tz) : ctx.makeGoogle(section as GoogleConfig, tz);
@@ -259,7 +287,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       const key = input.clientKey;
       const cfg = await configured(ctx);
       if (!cfg) return { ok: false, status: 409, error: "Fix the config first" };
-      const org = ctx.makeDevOps(cfg.dataverse, cfg.week.dayShape.timeZone).orgOf(key);
+      const org = ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone).orgOf(key);
       const checked = checkDevOpsUrl(input.url, org);
       if (!checked.ok) return { ok: false, status: 422, error: checked.error };
       if (!ctx.launch) return { ok: false, status: 503, error: "Opening links is not available here" };
@@ -285,6 +313,18 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }
+    case "ui.set_view_range":
+    case "hours.set_day":
+    case "hours.clear_day":
+    case "unavailable.add":
+    case "unavailable.remove":
+    case "flex.add":
+    case "flex.remove":
+      return timeAction(
+        { plan: ctx.plan, config: () => configured(ctx), ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}), devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone) },
+        action,
+        req.input,
+      );
     case "planday.start":
     case "planday.commit":
     case "pick.add":
@@ -297,7 +337,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         {
           plan: ctx.plan,
           config: () => configured(ctx),
-          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.dayShape.timeZone),
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
           pto: (cfg, date) => ptoOn(ctx, cfg, date),
           ptoAhead: (cfg, monday) => ptoAheadOf(ctx, cfg, monday),
           now: ctx.now,

@@ -2,6 +2,7 @@
 // stay as they are. Pure text functions here; writeConfig does the safe write (validate, back up, atomic rename).
 import { chmod, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { spanText, WEEKDAY_KEYS, type DayOverride, type TimeModel } from "../week/hours.ts";
 import { parseConfig, type ParseResult } from "./schema.ts";
 
 /** A TOML value written by Coopilot: strings are quoted and escaped, lists and inline tables nest. */
@@ -105,6 +106,42 @@ export function replaceArrayTables(text: string, section: string, tables: string
   }
   lines.splice(starts[0]!, 0, ...rendered);
   return lines.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+/** The [hours] body for a time model (overrides are written separately, as [[hours.override]] tables). */
+export function hoursBody(m: TimeModel): string[] {
+  return [
+    `time_zone = ${tomlValue(m.timeZone)}`,
+    "# The lunch is where the morning ends and the afternoon starts. \"\" for none (the day splits in the middle).",
+    `lunch = ${tomlValue(m.lunch ? spanText(m.lunch) : "")}`,
+    "# Working spans per weekday; [] is a day off. A second span (e.g. an evening) forms its own slot.",
+    ...WEEKDAY_KEYS.map((k) => `${k} = ${tomlValue(m.weekdays[k].map(spanText))}`),
+  ];
+}
+
+/** One [[hours.override]] table body. */
+export function overrideBody(o: DayOverride): string[] {
+  return [
+    `date = ${tomlValue(o.date)}`,
+    ...(o.segments ? [`segments = ${tomlValue(o.segments.map(spanText))}`] : []),
+    ...(o.lunch !== undefined ? [`lunch = ${tomlValue(o.lunch ? spanText(o.lunch) : "")}`] : []),
+  ];
+}
+
+const HOURS_COMMENT = "# Working hours (step 6b). Used for capacity, risks, planning and the view range.";
+
+/**
+ * Rewrites the old [day_shape] section as [hours] with the same meaning (D124): the comment line right above it and
+ * the section are replaced; everything else stays. Returns null when there is nothing to migrate.
+ */
+export function migrateDayShapeText(text: string, model: TimeModel): string | null {
+  const lines = text.split("\n");
+  const header = lines.findIndex((l) => HEADER.test(l) && headerName(l) === "day_shape");
+  if (header < 0 || lines.some((l) => HEADER.test(l) && headerName(l) === "hours")) return null;
+  const body = sectionBody(lines, "day_shape")!;
+  const from = header > 0 && /^\s*#\s*Soft day shape/.test(lines[header - 1]!) ? header - 1 : header;
+  lines.splice(from, body.to - from, HOURS_COMMENT, "[hours]", ...hoursBody(model));
+  return lines.join("\n");
 }
 
 /** How many backups are kept (oldest removed first). */

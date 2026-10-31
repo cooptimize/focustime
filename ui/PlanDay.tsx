@@ -7,7 +7,8 @@ import { dayLabel } from "../plan/days.ts";
 import { SIZES, type DraftStory, type PlanDayState, type Pick, type Size } from "../plan/types.ts";
 import type { Day, Half, Slot, WorkItem } from "../week/types.ts";
 import { fitLabel, formatMinutes } from "./planday.ts";
-import { clientColor, longDate, shortDate, slotRange, startClock } from "./labels.ts";
+import { clientColor, halfTag, longDate, shortDate, slotRange, startClock } from "./labels.ts";
+import { cardHalves, slotOf } from "./halves.ts";
 import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
@@ -124,18 +125,20 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
         <p className="muted pd-note">Unfinished picks from earlier days are offered on {dayLabel(state.carryTarget)}, the first day not committed yet.</p>
       )}
 
-      {!off && past && <PastDay picks={state.picks.filter((p) => p.date === day.date && p.status !== "moved")} act={act} />}
+      {!off && past && <PastDay halves={[...new Set<Half>(["AM", "PM", ...state.picks.filter((p) => p.date === day.date && p.half === "EVE").map((p) => p.half)])]} picks={state.picks.filter((p) => p.date === day.date && p.status !== "moved")} act={act} />}
 
       {!off && !past && <div className="pd-blocks">
-        {(["AM", "PM"] as const).map((half) => (
+        {cardHalves(day)
+          .filter((half) => !slotOf(day, half)!.off || day.kind === "overflow" || state.picks.some((p) => p.half === half && p.date === day.date && inPlay(p)))
+          .map((half) => (
           <Block
             key={half}
-            slot={half === "AM" ? day.am : day.pm}
-            overflow={day.kind === "overflow"}
+            slot={slotOf(day, half)!}
+            overflow={day.kind !== "work" && half !== "EVE"}
             picks={state.picks.filter((p) => p.half === half && p.date === day.date && inPlay(p))}
             drafts={state.drafts}
             picked={picked}
-            other={half === "AM" ? "PM" : "AM"}
+            other={half === "AM" ? "PM" : half === "PM" ? "AM" : day.pm.off ? "AM" : "PM"}
             friday={friday}
             now={now}
             tz={tz}
@@ -150,16 +153,16 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
 }
 
 /** A past day: its picks per block, tick done or drop. No sizes, moves, candidates or commit (server enforces it too). */
-function PastDay({ picks, act }: { picks: Pick[]; act: PlanDayAct }) {
+function PastDay({ halves, picks, act }: { halves: Half[]; picks: Pick[]; act: PlanDayAct }) {
   return (
     <div className="pd-blocks past">
-      {(["AM", "PM"] as const).map((half) => {
+      {halves.map((half) => {
         const mine = picks.filter((p) => p.half === half);
         return (
           <section key={half} className="pd-block past" aria-label={`${half} block`}>
             <header className="pd-block-head">
               <div className="pd-title">
-                <span className="half-tag">{half}</span>
+                <span className="half-tag">{halfTag(half)}</span>
               </div>
             </header>
             {mine.length === 0 ? (
@@ -255,11 +258,11 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
     <section className={`pd-block fit-${fit.kind} ${focus ? "focus" : "open"}`} style={style} aria-label={`${slot.half} block`}>
       <header className="pd-block-head">
         <div className="pd-title">
-          <span className="half-tag">{slot.half}</span>
+          <span className="half-tag">{halfTag(slot.half)}</span>
           <span className="muted">{slotRange(slot, tz)}</span>
           <span className="pd-client">
             <span className="swatch" />
-            {focus ? focus.clientName : overflow ? "Overflow" : bc.clientKey ? `Open · ${name(bc.clientKey)}` : "Open"}
+            {focus ? focus.clientName : overflow ? "Overflow" : slot.half === "EVE" ? (slot.flex.length ? `Flex · ${slot.flex.map((f) => name(f.clientKey)).join(", ")}` : bc.clientKey ? `Evening · ${name(bc.clientKey)}` : "Evening") : bc.clientKey ? `Open · ${name(bc.clientKey)}` : "Open"}
           </span>
         </div>
         <div className="pd-capacity">
@@ -272,7 +275,7 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
       {bc.mixed && <p className="pd-flag">Mixed clients in one block: {bc.clients.map(name).join(", ")}</p>}
       {fit.kind === "over" && (
         <p className="pd-flag over">
-          Over by {formatMinutes(fit.by)}. Drop a pick, make one smaller, or move one to {other}
+          Over by {formatMinutes(fit.by)}. Drop a pick, make one smaller, or move one to {halfTag(other)}
           {friday ? " or to Friday" : ""}.
         </p>
       )}
@@ -301,8 +304,8 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
                 ))}
               </span>
               <span className="row-actions">
-                <button type="button" className="mini" onClick={() => act("pick.move", { id: p.id, date: p.date, half: other })} aria-label={`Move to ${other}`}>
-                  To {other}
+                <button type="button" className="mini" onClick={() => act("pick.move", { id: p.id, date: p.date, half: other })} aria-label={`Move to ${halfTag(other)}`}>
+                  To {halfTag(other)}
                 </button>
                 {friday && (
                   <button type="button" className="mini" onClick={() => act("pick.move", { id: p.id, date: friday, half: "AM" })} aria-label="Move to Friday">

@@ -9,7 +9,8 @@ import { dayMenu, itemMenu, pickMenu, slotMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
 import { hourMarks, layoutEvents } from "./layout.ts";
 import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
-import { clientColor, eventRange, ruleLabel, SampleSources, severityLabel, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
+import { clientColor, eventRange, halfTag, ruleLabel, SampleSources, severityLabel, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
+import { cardHalves, eveOnly, slotOf } from "./halves.ts";
 import type { Layout } from "./viewport.ts";
 import { CARD_ITEMS, cardPlan, PlanCtx } from "./planview.ts";
 import { fitLabel } from "./planday.ts";
@@ -50,6 +51,7 @@ export function WeekGrid({ week, colors, minFocusWindow, today, now, selection, 
       day={day}
       dayIndex={i}
       tz={week.timeZone}
+      hasEve={week.days.some((d) => d.eve)}
       colors={colors}
       minFocusWindow={minFocusWindow}
       isToday={day.date === today}
@@ -93,14 +95,15 @@ export function WeekGrid({ week, colors, minFocusWindow, today, now, selection, 
       </main>
     );
   }
-  // While planning, the planned day's track widens and the other days stay visible behind a dim.
-  const tracks = planDay
-    ? week.days.map((_, i) => (i === planDay.dayIndex ? "minmax(0, 2.6fr)" : i === 4 ? (layout === "medium" ? "minmax(150px, 0.6fr)" : "minmax(0, 0.6fr)") : "minmax(0, 1fr)")).join(" ")
-    : undefined;
+  // Work days are full width, Friday and weekend days lighter. While planning, the planned day's track widens and
+  // the other days stay visible behind a dim.
+  const light = layout === "medium" ? (planDay ? "minmax(150px, 0.6fr)" : "minmax(190px, 0.6fr)") : "minmax(0, 0.6fr)";
+  const tracks = week.days.map((d, i) => (planDay?.dayIndex === i ? "minmax(0, 2.6fr)" : d.kind === "work" ? "minmax(0, 1fr)" : light)).join(" ");
+  const hasEve = week.days.some((d) => d.eve);
   return (
     <main
-      className={`grid ${layout} ${planDay ? "planning" : ""}`}
-      style={tracks ? { gridTemplateColumns: tracks } : undefined}
+      className={`grid ${layout} ${planDay ? "planning" : ""} ${hasEve ? "has-eve" : ""}`}
+      style={{ gridTemplateColumns: tracks }}
       role="group"
       aria-label="Week grid. Arrow keys move between half-days, Enter opens details."
     >
@@ -109,22 +112,31 @@ export function WeekGrid({ week, colors, minFocusWindow, today, now, selection, 
   );
 }
 
-function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boolean } & Omit<Props, "week" | "today">) {
+function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boolean; hasEve: boolean } & Omit<Props, "week" | "today">) {
   const { colors, minFocusWindow, compact } = props;
   const { day, dayIndex, tz, isToday } = props;
   const overflow = day.kind === "overflow";
-  const risks = [...day.am.risks, ...day.pm.risks];
-  const atRisk = [day.am, day.pm].filter((s) => worstSeverity(s.risks) === "at_risk").length;
-  const watch = [day.am, day.pm].filter((s) => worstSeverity(s.risks) === "watch").length;
+  const offDay = day.kind !== "work" && day.am.off && day.pm.off;
+  const slots = [day.am, day.pm, ...(day.eve ? [day.eve] : [])];
+  const risks = slots.flatMap((s) => s.risks);
+  const atRisk = slots.filter((s) => worstSeverity(s.risks) === "at_risk").length;
+  const watch = slots.filter((s) => worstSeverity(s.risks) === "watch").length;
   const menu = useMenu((env) => dayMenu(env, day.date));
+  const halves = cardHalves(day);
+  // Medium layout shares rows across days: a day without a card in a row keeps an empty cell there.
+  // An evening-only day (a weekend flex session) gets one card spanning the three rows.
+  const rows: (typeof halves[number] | null)[] = props.layout === "medium" && props.hasEve && !eveOnly(day) && !day.eve ? [...halves, null] : halves;
+  const firstView = (day.eve && eveOnly(day) ? day.eve : day.am).view.start;
+  const lastView = (day.eve ?? day.pm).view.end;
 
   return (
-    <section className={`day ${overflow ? "overflow" : "work"} ${isToday ? "today" : ""} ${day.pto ? "pto-full" : ""}`} aria-label={`${day.weekday} ${shortDate(day.date)}${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}>
+    <section className={`day ${overflow ? "overflow" : day.kind === "weekend" ? "weekend overflow" : "work"} ${isToday ? "today" : ""} ${day.pto ? "pto-full" : ""}`} aria-label={`${day.weekday} ${shortDate(day.date)}${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}>
       <header className="day-head" onContextMenu={menu.onContextMenu}>
         <span className="dow">{day.weekday}</span>
         <span className="date">{shortDate(day.date)}</span>
         {isToday && <span className="today-pill">Today</span>}
-        {overflow && !day.pto && <span className="overflow-pill">Overflow · catch-up</span>}
+        {overflow && !day.pto && <span className="overflow-pill">{offDay ? "Overflow · catch-up" : "Working hours"}</span>}
+        {day.kind === "weekend" && !day.pto && <span className="overflow-pill">{day.flexMinutes > 0 ? "Flex" : "Weekend"}</span>}
         {day.pto && (
           <span className="pto-pill full" title={day.pto.titles.join(", ")}>
             {ptoLabel(day.pto)}
@@ -133,20 +145,25 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
         <span className="day-sum">
           {atRisk > 0 && <span className="sum at_risk">{atRisk} at risk</span>}
           {watch > 0 && <span className="sum watch">{watch} watch</span>}
-          {!overflow && !day.pto && risks.length === 0 && <span className="sum ok">Clear</span>}
+          {day.kind === "work" && !day.pto && risks.length === 0 && <span className="sum ok">Clear</span>}
         </span>
         {/* In the Tab order only for the selected day (Shift+Tab from its half-day reaches it). */}
         <HalfScope.Provider value={props.selection.dayIndex === dayIndex}>{menu.button(`Actions for ${day.weekday} ${shortDate(day.date)}`)}</HalfScope.Provider>
       </header>
 
       <Strip kind="allday" label="All day" items={day.allDay.map((e) => ({ key: e.id, e, time: "" }))} />
-      <Strip kind="early" label="Before 9" items={day.early.map((p) => ({ key: p.event.id, e: p.event, time: startClock(p.event.start, tz) }))} />
+      <Strip kind="early" label={hourLabel(firstView, tz) === "midnight" ? "" : `Before ${hourLabel(firstView, tz)}`} items={day.early.map((p) => ({ key: p.event.id, e: p.event, time: startClock(p.event.start, tz) }))} />
 
-      {(["AM", "PM"] as const).map((half) => (
+      {rows.map((half, k) =>
+        half === null ? (
+          <div key={`gap-${k}`} className="half-gap" aria-hidden="true" />
+        ) : (
         <HalfDay
           key={half}
-          slot={half === "AM" ? day.am : day.pm}
-          overflow={overflow}
+          slot={slotOf(day, half)!}
+          overflow={overflow || day.kind === "weekend"}
+          offDay={offDay}
+          tag={eveOnly(day) ? (day.flexMinutes > 0 ? "Flex" : "Hours") : undefined}
           tz={tz}
           colors={colors}
           minFocusWindow={minFocusWindow}
@@ -163,9 +180,10 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
           now={props.now}
           ptoOff={!!day.pto}
         />
-      ))}
+        ),
+      )}
 
-      <Strip kind="evening" label="After 5" items={day.evening.map((p) => ({ key: p.event.id, e: p.event, time: startClock(p.event.start, tz) }))} />
+      <Strip kind="evening" label={hourLabel(lastView, tz) === "midnight" ? "" : `After ${hourLabel(lastView, tz)}`} items={day.evening.map((p) => ({ key: p.event.id, e: p.event, time: startClock(p.event.start, tz) }))} />
     </section>
   );
 }
@@ -176,7 +194,7 @@ function Strip({ kind, label, items }: { kind: string; label: string; items: { k
     <div className={`strip ${kind} ${items.length ? "" : "empty"}`}>
       <span className="strip-label">{label}</span>
       {items.map(({ key, e, time }) => (
-        <span key={key} className={`chip ${e.isPersonal ? "personal" : "meeting"}`} title={`${e.title} · ${sourceName(e, samples)}`}>
+        <span key={key} className={`chip ${e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting"}`} title={`${e.title} · ${sourceName(e, samples)}`}>
           {time && <span className="chip-time">{time}</span>}
           {e.title}
         </span>
@@ -190,6 +208,10 @@ type HalfProps = {
   colors: Record<string, string>;
   minFocusWindow: number;
   overflow: boolean;
+  /** Friday or a weekend day with no working hours (only catch-up or a flex session). */
+  offDay: boolean;
+  /** Replaces the AM/PM/Eve tag (an evening-only day says Flex). */
+  tag?: string | undefined;
   tz: string;
   selected: boolean;
   dayLabel: string;
@@ -203,7 +225,7 @@ type HalfProps = {
   ptoOff: boolean;
 };
 
-function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, ptoOff }: HalfProps) {
+function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, ptoOff }: HalfProps) {
   const primary = slot.focus[0];
   const sev = worstSeverity(slot.risks);
   const { top, more } = topRisk(slot.risks);
@@ -212,6 +234,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
   const [showItems, setShowItems] = useState(false);
   // Only the block's own client; Open half-days and Friday have no client, so nothing from DevOps.
   const work = primary && !overflow ? allWork.get(primary.clientKey) : undefined;
+  const eve = slot.half === "EVE";
   // Committed: picks with their fit, the DevOps list without picked items and collapsed (step 6.1).
   const cp = cardPlan(plan.week, slot, primary?.clientKey ?? null, work?.items ?? [], now);
   const ticks = cp.picks;
@@ -233,12 +256,23 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
   const collapsed = cp.collapsed && !showItems;
   const items = { top: collapsed ? [] : cp.items.slice(0, CARD_ITEMS), more: collapsed ? 0 : Math.max(0, cp.items.length - CARD_ITEMS) };
   const style = { "--c": clientColor(primary?.clientKey, colors), ...(compact ? {} : { flexGrow: minutesOf(slot) }) } as CSSProperties;
-  const state = overflow ? "overflow" : slot.open ? "open" : "focus";
+  const state = eve ? "eve" : overflow ? "overflow" : slot.open ? "open" : slot.off ? "off" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
-  const label = `${dayLabel} ${slot.half}, ${primary ? primary.clientName : overflow ? "overflow" : "Open"}${ptoOff ? ", PTO" : ""}${sev ? `, ${sev === "at_risk" ? "at risk" : "watch"}` : ""}`;
+  const label = `${dayLabel} ${eve ? "evening" : slot.half}, ${primary ? primary.clientName : eve ? (slot.flex.length ? "flex session" : "evening hours") : overflow ? "overflow" : slot.off ? "no working hours" : "Open"}${ptoOff ? ", PTO" : ""}${sev ? `, ${sev === "at_risk" ? "at risk" : "watch"}` : ""}`;
   const menu = useMenu((env) => slotMenu(env, slot.date, slot.half, primary?.clientKey ?? null, primary?.clientName ?? null));
   const more_ = menu.button(`Actions for ${dayLabel} ${slot.half}`);
-  const summary = <SlotSummary slot={slot} now={now} ptoOff={ptoOff} />;
+  const summary = <SlotSummary slot={slot} now={now} ptoOff={ptoOff} offDay={offDay} />;
+  const flexList = slot.flex.length > 0 && (
+    <ul className="flex-list" aria-label="Flex sessions">
+      {slot.flex.map((f) => (
+        <li key={f.id} title={f.note ?? ""}>
+          <span className="flex-tag">Flex</span>
+          <span className="flex-time">{startClock(f.start, tz)}–{startClock(f.end, tz)}</span>
+          <span className="flex-what">{f.clientKey}{f.itemTitle ? ` · ${f.itemTitle}` : f.note ? ` · ${f.note}` : ""}</span>
+        </li>
+      ))}
+    </ul>
+  );
 
   const workList = work && (
     <>
@@ -281,6 +315,8 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
         </div>
       ))}
     </>
+  ) : eve ? null : slot.off ? (
+    <div className="client open-label off-label">{overflow ? "Catch-up" : "No working hours"}</div>
   ) : (
     <>
       <div className="client open-label">Open</div>
@@ -290,7 +326,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
   return (
     <div
       ref={refFn}
-      className={`half ${state} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""} ${ptoOff ? "pto-off" : ""}`}
+      className={`half ${state} ${tag ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""} ${ptoOff ? "pto-off" : ""}`}
       style={style}
       tabIndex={selected ? 0 : -1}
       role="button"
@@ -306,17 +342,18 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
     >
       <HalfScope.Provider value={selected}>
       {compact ? (
-        <CardBody slot={slot} tz={tz} overflow={overflow} who={who} badge={badge} workList={workList} checklist={checklist} summary={summary} more={more_} />
+        <CardBody tag={tag} slot={slot} tz={tz} overflow={overflow && !eve} who={who} badge={badge} workList={workList} checklist={checklist} summary={summary} more={more_} flex={flexList} />
       ) : (
         <>
-      {!overflow && (
+      {(!overflow || eve) && (
         <aside className="rail">
           <div className="half-label">
-            <span className="half-tag">{slot.half}</span> {slotRange(slot, tz)}
+            <span className="half-tag">{tag ?? halfTag(slot.half)}</span> {slotRange(slot, tz)}
             {more_}
           </div>
           {who}
           {summary}
+          {flexList}
 
           {checklist}
           {workList}
@@ -324,7 +361,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
         </aside>
       )}
 
-          <Timeline slot={slot} tz={tz} showGaps={!overflow && !slot.open} minFocusWindow={minFocusWindow} />
+          <Timeline slot={slot} tz={tz} showGaps={(!overflow || eve) && !slot.open} minFocusWindow={minFocusWindow} />
         </>
       )}
       </HalfScope.Provider>
@@ -333,8 +370,9 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
 }
 
 /** "2h meetings · 2h 15m free · longest 1h" in every layout (D100); the PTO instead on a full PTO day. */
-function SlotSummary({ slot, now, ptoOff }: { slot: Slot; now: string; ptoOff: boolean }) {
+function SlotSummary({ slot, now, ptoOff, offDay }: { slot: Slot; now: string; ptoOff: boolean; offDay: boolean }) {
   if (ptoOff) return <div className="stats pto">PTO · nothing planned</div>;
+  if (slot.off) return <div className="stats off">{offDay && slot.half !== "EVE" ? "Not a working day" : "No working hours"}</div>;
   const at = nowIfUnderway(slot, now);
   const free = freeMinutes(slot, at);
   return (
@@ -396,17 +434,18 @@ const MAX_MEETINGS = 4;
 const MAX_PERSONAL = 3;
 
 /** Compact half-day: client, free time, one badge, meetings and personal events as short lists, top DevOps items. */
-function CardBody({ slot, tz, overflow, who, badge, workList, checklist, summary, more }: { slot: Slot; tz: string; overflow: boolean; who: ReactNode; badge: ReactNode; workList: ReactNode; checklist: ReactNode; summary: ReactNode; more: ReactNode }) {
+function CardBody({ tag, slot, tz, overflow, who, badge, workList, checklist, summary, more, flex }: { slot: Slot; tz: string; overflow: boolean; who: ReactNode; badge: ReactNode; workList: ReactNode; checklist: ReactNode; summary: ReactNode; more: ReactNode; flex: ReactNode; tag?: string | undefined }) {
   const meetings = slot.events.filter((p) => !p.event.isPersonal);
   const personal = slot.events.filter((p) => p.event.isPersonal);
   return (
     <div className="card-body">
       <div className="half-label">
-        <span className="half-tag">{slot.half}</span> {slotRange(slot, tz)}
+        <span className="half-tag">{tag ?? halfTag(slot.half)}</span> {slotRange(slot, tz)}
         {more}
       </div>
       {!overflow && who}
       {summary}
+      {flex}
       {!overflow && badge}
       {checklist}
       <EventList kind="meeting" label="Meetings" events={meetings} max={MAX_MEETINGS} tz={tz} />
@@ -437,20 +476,44 @@ function EventList({ kind, label, events, max, tz }: { kind: "meeting" | "person
   );
 }
 
+/** Card height follows the minutes its timeline shows (the view range), so cards line up across days. */
 function minutesOf(slot: Slot): number {
-  return (Temporal.Instant.from(slot.end).epochMilliseconds - Temporal.Instant.from(slot.start).epochMilliseconds) / 60000;
+  return Math.max(30, (Temporal.Instant.from(slot.view.end).epochMilliseconds - Temporal.Instant.from(slot.view.start).epochMilliseconds) / 60000);
+}
+
+const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
+
+/** The parts of the view outside working windows (before and after hours, lunch), shaded on the timeline. */
+function offHours(slot: Slot): { start: number; end: number }[] {
+  const [a, b] = [ms(slot.view.start), ms(slot.view.end)];
+  const out: { start: number; end: number }[] = [];
+  let t = a;
+  for (const w of [...slot.windows].sort((x, y) => ms(x.start) - ms(y.start))) {
+    const [ws, we] = [Math.max(a, ms(w.start)), Math.min(b, ms(w.end))];
+    if (ws > t) out.push({ start: t, end: ws });
+    t = Math.max(t, we);
+  }
+  if (t < b) out.push({ start: t, end: b });
+  return out;
 }
 
 function Timeline({ slot, tz, showGaps, minFocusWindow }: { slot: Slot; tz: string; showGaps: boolean; minFocusWindow: number }) {
-  const marks = hourMarks(slot.start, slot.end, tz);
-  const laid = layoutEvents(slot.events, slot.start, slot.end);
+  const { start, end } = slot.view;
+  const marks = hourMarks(start, end, tz);
+  const laid = layoutEvents(slot.events, start, end);
   const min = minFocusWindow;
-  const pos = (s: string) =>
-    (Temporal.Instant.from(s).epochMilliseconds - Temporal.Instant.from(slot.start).epochMilliseconds) /
-    (Temporal.Instant.from(slot.end).epochMilliseconds - Temporal.Instant.from(slot.start).epochMilliseconds);
+  const span = Math.max(1, ms(end) - ms(start));
+  const posMs = (n: number) => (n - ms(start)) / span;
+  const pos = (s: string) => posMs(ms(s));
 
   return (
     <div className="timeline">
+      {offHours(slot).map((o) => (
+        <div key={o.start} className="offhours" style={{ top: pct(posMs(o.start)), height: pct(posMs(o.end) - posMs(o.start)) }} aria-hidden="true" />
+      ))}
+      {slot.flex.map((f) => (
+        <div key={`flex-${f.id}`} className="flexband" style={{ top: pct(pos(f.start)), height: pct(pos(f.end) - pos(f.start)) }} title={`Flex session · ${f.clientKey}`} aria-hidden="true" />
+      ))}
       {marks.map((m) => (
         <div key={m.label} className="hour" style={{ top: pct(m.at) }}>
           <span>{m.label}</span>
@@ -480,7 +543,7 @@ function EventCard({ placed, tz, style }: { placed: PlacedEvent; tz: string; sty
   const show = e.showAs ?? "busy";
   return (
     <div
-      className={`event ${kind} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
+      className={`event ${e.unavailable ? "unavailable" : kind} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
       style={style}
       title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}`}
     >
@@ -489,11 +552,18 @@ function EventCard({ placed, tz, style }: { placed: PlacedEvent; tz: string; sty
         <span className="ev-title">{e.title}</span>
       </span>
       <span className="ev-meta">
-        {sourceName(e, samples)}
+        {e.unavailable ? "Unavailable" : sourceName(e, samples)}
         {show !== "busy" && show !== "unknown" ? ` · ${showAsLabel(e)}` : ""}
       </span>
     </div>
   );
+}
+
+/** "9 AM", "5:30 PM": strip labels around the timelines. */
+function hourLabel(iso: string, tz: string): string {
+  const z = Temporal.Instant.from(iso).toZonedDateTimeISO(tz);
+  if (z.hour === 0 && z.minute === 0) return "midnight";
+  return `${z.hour % 12 || 12}${z.minute ? `:${String(z.minute).padStart(2, "0")}` : ""} ${z.hour < 12 ? "AM" : "PM"}`;
 }
 
 const pct = (f: number) => `${(f * 100).toFixed(3)}%`;

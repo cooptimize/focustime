@@ -800,7 +800,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   padding: 2px 16px 10px;
   overflow-y: auto;
 }
-.grid.medium .day { display: grid; grid-row: span 6; grid-template-rows: subgrid; gap: 6px; }
+.grid.medium .day { display: grid; grid-row: span 6; grid-template-rows: subgrid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .grid.medium .day-head { gap: 8px; align-items: center; }
 .grid.medium .dow { font-size: 17px; }
 .grid.medium .date { font-size: 14px; }
@@ -881,6 +881,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Plan the day: the planned day's column widens into the planning panel, the rest of the week dims */
 .grid.planning > .day { opacity: 0.4; filter: saturate(0.6); pointer-events: none; transition: opacity 120ms; }
 .grid.medium .pd-cell { grid-row: span 6; min-height: 0; }
+.grid.medium.has-eve .pd-cell { grid-row: span 7; }
 .pd-cell { min-width: 0; min-height: 0; display: flex; }
 .grid.narrow .pd-cell { flex: 1 0 auto; }
 .planday {
@@ -1039,6 +1040,10 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .menu-empty { padding: 10px; color: var(--text-faint); font-size: 14px; }
 .menu-prompt { display: flex; gap: 8px; align-items: end; padding: 6px 8px 8px; }
 .menu-prompt label { flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); }
+.menu-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 10px; align-items: end; min-width: 300px; }
+.menu-form .field.text, .menu-form .field.select { grid-column: 1 / -1; }
+.menu-form button[type="submit"] { grid-column: 2; justify-self: end; }
+.menu-form select { font: inherit; color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 9px; }
 .menu-prompt input, .command-head input { font: inherit; color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 9px; }
 .command-backdrop { position: fixed; inset: 0; z-index: 60; background: var(--backdrop-command); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
 .command-menu { width: min(640px, calc(100vw - 32px)); max-height: 66vh; display: flex; flex-direction: column; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: var(--shadow-command); overflow: hidden; }
@@ -1122,3 +1127,42 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 }
 .items-toggle:hover { color: var(--text); border-color: var(--text-faint); }
 .half.card .items-toggle { margin-top: 6px; }
+
+/* Time model (step 6b): evening cards, time outside working hours, flex sessions, unavailable time */
+.half-gap { min-height: 0; }
+.grid.medium.has-eve { grid-template-rows: auto auto auto minmax(min-content, 1fr) minmax(min-content, 1fr) auto auto; }
+.grid.medium.has-eve .half.span-all { grid-row: span 3; }
+.grid.medium.has-eve .day { grid-row: span 7; }
+.half.eve { border-style: solid; }
+.half.eve .timeline { background: color-mix(in oklab, var(--accent) 6%, var(--surface)); }
+.day.overflow .half.eve { background: var(--surface); border-style: solid; box-shadow: var(--shadow-1); }
+.half.off .timeline { background: var(--sunken); }
+.off-label { color: var(--text-muted); }
+.stats.off { color: var(--text-muted); }
+.offhours {
+  position: absolute; left: 0; right: 0;
+  background:
+    repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in oklab, var(--text-faint) 12%, transparent) 8px 9px),
+    color-mix(in oklab, var(--sunken) 70%, transparent);
+  pointer-events: none;
+}
+.flexband {
+  position: absolute; left: 0; width: 5px;
+  background: var(--accent);
+  border-radius: 0 3px 3px 0;
+  pointer-events: none;
+}
+.flex-list { list-style: none; margin: 2px 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.flex-list li { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.flex-tag { font-size: 11px; font-weight: 700; color: var(--accent); border: 1px solid color-mix(in oklab, var(--accent) 55%, transparent); border-radius: 99px; padding: 0 6px; flex: none; }
+.flex-time { color: var(--text-muted); font-variant-numeric: tabular-nums; flex: none; }
+.flex-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event.unavailable {
+  border-left-color: var(--text-muted);
+  border-style: solid;
+  background:
+    repeating-linear-gradient(45deg, transparent 0 6px, color-mix(in oklab, var(--text-muted) 14%, transparent) 6px 8px),
+    var(--event-surface);
+}
+.chip.unavailable { border-style: dashed; }
+.range-toggle { white-space: nowrap; }

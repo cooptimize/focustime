@@ -48,3 +48,25 @@ describe("the carry-over day", () => {
     expect(carryTarget("2026-11-07", () => false)).toBe("2026-11-09");
   });
 });
+
+describe("plannability from the time model (step 6b, D127)", () => {
+  // A Friday with working hours and a Saturday with a flex session.
+  const has = (d: string) => !["2026-11-08"].includes(d) && Temporal.PlainDate.from(d).dayOfWeek !== 7 && d !== "2026-11-14" && d !== "2026-11-15";
+  it("a Friday or weekend day with hours or a flex session can be stepped to, planned and carried over to", () => {
+    expect(stepDay("2026-11-05", 1, new Set(), has)).toBe("2026-11-06");
+    expect(stepDay("2026-11-06", 1, new Set(), has)).toBe("2026-11-07");
+    expect(stepDay("2026-11-07", 1, new Set(), has)).toBe("2026-11-09");
+    expect(carryTarget("2026-11-06", (d) => d === "2026-11-06", new Set(), has)).toBe("2026-11-07");
+    expect(dayRule("2026-11-07", "2026-11-03", null, true)).toEqual({ ok: true, access: "plan" });
+    expect(dayRule("2026-11-08", "2026-11-03", null, false)).toMatchObject({ ok: false, kind: "no_hours" });
+    expect(dayRule("2026-11-07", "2026-11-03", { titles: [] }, true)).toMatchObject({ ok: false, kind: "pto" });
+  });
+  it("planTarget moves to a Friday with hours instead of the next Monday", () => {
+    const thuEvening = Temporal.ZonedDateTime.from("2026-11-05T18:00:00-05:00[America/New_York]");
+    expect(planTarget(thuEvening, "17:00", new Set(), has).date).toBe("2026-11-06");
+    expect(planTarget(thuEvening, "17:00").date).toBe("2026-11-09");
+  });
+  it("a day ending at midnight is still today until midnight", () => {
+    expect(upcomingStart(Temporal.ZonedDateTime.from("2026-11-05T23:30:00-05:00[America/New_York]"), "24:00")).toBe("2026-11-05");
+  });
+});
