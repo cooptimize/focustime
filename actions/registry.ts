@@ -10,13 +10,14 @@ export type ActionTarget =
   | "pick" // one pick
   | "item" // one DevOps work item of a client
   | "portfolio" // an epic or feature with no children yet
-  | "calendar"; // Outlook or Google
+  | "calendar" // Outlook or Google
+  | "theme"; // one of the themes
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the day" | "Picks" | "Work items" | "Sources";
+  readonly group: "Week" | "Plan the day" | "Picks" | "Work items" | "Sources" | "Display";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -37,6 +38,7 @@ export const ACTIONS = [
   { name: "pick.mark_done", title: "Mark done or not done", group: "Picks", target: "pick", summary: "Tick a pick (local only)" },
   { name: "pick.remove", title: "Drop pick", group: "Picks", target: "pick", summary: "Remove a pick from the plan" },
   { name: "draft.add_story", title: "Add a draft story", group: "Work items", target: "portfolio", summary: "A local story under an epic or feature with no children" },
+  { name: "ui.set_theme", title: "Change theme", group: "Display", target: "theme", summary: "Cooptimize Dark, Cooptimize Light or Neutral; saved in config" },
   { name: "link.open", title: "Open in Edge", group: "Work items", target: "item", summary: "Open a work item in that client's Edge profile" },
 ] as const satisfies readonly ActionSpec[];
 

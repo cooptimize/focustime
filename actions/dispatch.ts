@@ -1,7 +1,8 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
-import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig, ParseResult } from "../config/schema.ts";
+import { DEFAULT_UI, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
+import { setValue, type WriteResult } from "../config/edit.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
@@ -28,6 +29,8 @@ export type ActionContext = {
   now: () => string;
   /** The local plan store (step 5); absent when it could not be opened. */
   plan?: PlanStore;
+  /** Safe config write (config/edit.ts writeConfig): validate, back up, atomic replace. Absent: settings are read-only. */
+  writeConfig?: (edit: (text: string) => string) => Promise<WriteResult>;
   /** Start a program from an argument array, never a shell (link.open). Rejects when it can't start. */
   launch?: (argv: string[]) => Promise<void>;
 };
@@ -198,6 +201,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     clients: clientColors,
     dayShape: shape,
     thresholds: weekConfig.thresholds,
+    ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
   };
 }
@@ -271,6 +275,15 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("source.status takes no input");
       const d = await weekLoad(ctx, {});
       return { ok: true, data: { sources: d.sources, config: d.config } };
+    }
+    case "ui.set_theme": {
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "theme")) return bad("input must be { theme }");
+      if (typeof i.theme !== "string" || !(THEMES as readonly string[]).includes(i.theme)) return bad(`theme must be one of ${THEMES.join(", ")}`);
+      if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
+      const r = await ctx.writeConfig((text) => setValue(text, "ui", "theme", i.theme as string, "Display (step 6b). Changed from Settings or the command menu."));
+      if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
+      return { ok: true, data: { ui: r.parsed.config.ui } };
     }
     case "planday.start":
     case "planday.commit":

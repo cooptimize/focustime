@@ -2,14 +2,80 @@
    wide (hour timelines, the 3840x1080 ultrawide), medium (compact cards), narrow (one day). */
 
 /* Tokens, three layers (docs/design/style-guide.md section 3).
-   1. Primitives (--p-*): the raw palette. Only the semantic and domain layers below use them.
+   1. Primitives (--p-*): the raw palette of every theme. Only the semantic and domain layers use them.
    2. Semantic tokens: surfaces, text, lines, accent, focus, shadows. Components use these.
-   3. Domain tokens: risk, watch, PTO, show-as, client colors. Components use these.
-   Light and dark follow prefers-color-scheme; named themes arrive with Settings in step 6b.
-   Risk and every other domain color is Coopilot's own, never taken from the Omarchy theme. */
+   3. Domain tokens: risk, watch, PTO, show-as, client slots. Components use these.
+   Themes (step 6b, D120): Cooptimize Dark is the default (:root), Cooptimize Light and Neutral redefine
+   layers 2 and 3 under data-theme on <html>; Neutral follows prefers-color-scheme for light or dark.
+   Every theme assigns the same token names (ui/tokens.test.ts). Risk and every other domain color is
+   Coopilot's own, never taken from the Omarchy theme. */
+
+@font-face {
+  font-family: "Red Hat Display";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 900;
+  src: url("./fonts/red-hat-display-latin-wght-normal.woff2") format("woff2-variations"), url("./fonts/red-hat-display-latin-wght-normal.woff2") format("woff2");
+}
 
 :root {
-  /* 1. Primitives */
+  /* 1. Primitives: Cooptimize (brand, style guide section 3.1) */
+  --p-navy-900: #00416b;
+  --p-navy-300: #6fb0e3;
+  --p-green-brand: #42783c;
+  --p-green-logo: #82aa43;
+  --p-lime-400: #b2d235;
+  --p-ink-950: #0d1318;
+  --p-ink-925: #10171d;
+  --p-ink-900: #141b22;
+  --p-ink-850: #18212a;
+  --p-ink-800: #1a232c;
+  --p-ink-700: #222c36;
+  --p-ink-600: #2e3a46;
+  --p-ice-100: #e8edf1;
+  --p-ice-300: #a9b4be;
+  --p-ice-450: #8f9caa;
+  --p-fog-25: #f7f8fa;
+  --p-fog-50: #f4f5f7;
+  --p-fog-100: #eceef1;
+  --p-fog-200: #e1e5ea;
+  --p-fog-300: #d0d6dd;
+  --p-deep-900: #13202b;
+  --p-deep-700: #4a5663;
+  --p-deep-550: #5b6774;
+  --p-co-red-300: #ff6b57;
+  --p-co-red-700: #b42f1d;
+  --p-co-amber-300: #e8b04a;
+  --p-co-amber-700: #835300;
+  --p-co-green-300: #6cc287;
+  --p-co-green-700: #276e3f;
+  --p-co-sky-300: #7cc4f0;
+  --p-co-sky-700: #1d5f93;
+  --p-co-purple-300: #c79bff;
+  --p-co-purple-700: #7333ad;
+  --p-co-pink-300: #f07aa6;
+  --p-co-pink-700: #a52f5f;
+  --p-co-violet-300: #a58bff;
+  --p-co-violet-700: #6147c6;
+  /* Client slots (style guide 3.4), dark and light values */
+  --p-slot-teal-d: #3fc1ae;
+  --p-slot-violet-d: #b8a2ff;
+  --p-slot-ochre-d: #e3a24a;
+  --p-slot-blue-d: #4f8de8;
+  --p-slot-rose-d: #f0b0e8;
+  --p-slot-earth-d: #efe3c4;
+  --p-slot-green-d: #9acd5a;
+  --p-slot-slate-d: #8fa0b8;
+  --p-slot-teal-l: #0f8576;
+  --p-slot-violet-l: #6b4fd8;
+  --p-slot-ochre-l: #a8620c;
+  --p-slot-blue-l: #1f5fb8;
+  --p-slot-rose-l: #d0457a;
+  --p-slot-earth-l: #5e5040;
+  --p-slot-green-l: #4b8a1f;
+  --p-slot-slate-l: #4e5f78;
+
+  /* 1. Primitives: Neutral (the step 6.1 palette) */
   --p-white: #ffffff;
   --p-paper-25: #f7f7f4;
   --p-paper-50: #f4f4f1;
@@ -46,7 +112,6 @@
   --p-sky-300: #6cb8f5;
   --p-purple-700: #7f3ab7;
   --p-purple-300: #c592ff;
-  /* Client fallback hues (clients without a configured color); also the app mark */
   --p-client-1: #1f9e8f;
   --p-client-2: #7b68ee;
   --p-client-3: #d2892a;
@@ -56,7 +121,119 @@
   --p-client-7: #8a6fb0;
   --p-client-8: #c06a3a;
 
-  /* 2. Semantic tokens (light) */
+  --font-ui: "Red Hat Display", "Noto Sans", system-ui, sans-serif;
+
+  /* 2. Semantic tokens: Cooptimize Dark (default) */
+  --bg: var(--p-ink-950);
+  --surface: var(--p-ink-900);
+  --raised: var(--p-ink-850);
+  --sunken: var(--p-ink-925);
+  --border: var(--p-ink-700);
+  --border-strong: var(--p-ink-600);
+  --text: var(--p-ice-100);
+  --text-muted: var(--p-ice-300);
+  --text-faint: var(--p-ice-450);
+  --accent: var(--p-navy-300);
+  --action: var(--p-green-brand);
+  --on-action: var(--p-white);
+  --focus: var(--p-lime-400);
+  --selected: var(--p-lime-400);
+  --tooltip-bg: var(--p-ice-100);
+  --tooltip-text: var(--p-ink-950);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.45);
+  --shadow-tooltip: 0 6px 18px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 12px 32px rgb(0 0 0 / 0.55);
+  --shadow-menu: 0 12px 32px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.3);
+  --shadow-panel: 0 10px 30px rgb(0 0 0 / 0.35);
+  --shadow-dialog: 0 20px 60px rgb(0 0 0 / 0.55);
+  --shadow-command: 0 24px 60px rgb(0 0 0 / 0.6);
+  --backdrop: rgb(4 8 12 / 0.55);
+  --backdrop-command: rgb(0 0 0 / 0.45);
+
+  /* 3. Domain tokens: Cooptimize Dark */
+  --risk: var(--p-co-red-300);
+  --watch: var(--p-co-amber-300);
+  --ok: var(--p-co-green-300);
+  --personal: var(--p-co-pink-300);
+  --sample: var(--p-co-violet-300);
+  --pto: var(--p-co-sky-300);
+  --oof: var(--p-co-purple-300);
+  --event-surface: var(--p-ink-800);
+  --client-tint: 14%;
+  --client-none: var(--p-ice-450);
+  --client-teal: var(--p-slot-teal-d);
+  --client-violet: var(--p-slot-violet-d);
+  --client-ochre: var(--p-slot-ochre-d);
+  --client-blue: var(--p-slot-blue-d);
+  --client-rose: var(--p-slot-rose-d);
+  --client-earth: var(--p-slot-earth-d);
+  --client-green: var(--p-slot-green-d);
+  --client-slate: var(--p-slot-slate-d);
+  --client-fallback-1: var(--client-teal);
+  --client-fallback-2: var(--client-violet);
+  --client-fallback-3: var(--client-ochre);
+  --client-fallback-4: var(--client-blue);
+  --client-fallback-5: var(--client-rose);
+  --client-fallback-6: var(--client-earth);
+  --client-fallback-7: var(--client-green);
+  --client-fallback-8: var(--client-slate);
+  --brand-mark: radial-gradient(circle at 50% 50%, var(--p-co-red-300) 0 18%, transparent 19%), conic-gradient(from 200deg, var(--p-navy-300), var(--p-green-logo), var(--p-lime-400), var(--p-navy-300));
+  color-scheme: dark;
+}
+
+:root[data-theme="cooptimize-light"] {
+  /* 2. Semantic tokens: Cooptimize Light */
+  --bg: var(--p-fog-50);
+  --surface: var(--p-white);
+  --raised: var(--p-fog-25);
+  --sunken: var(--p-fog-100);
+  --border: var(--p-fog-200);
+  --border-strong: var(--p-fog-300);
+  --text: var(--p-deep-900);
+  --text-muted: var(--p-deep-700);
+  --text-faint: var(--p-deep-550);
+  --accent: var(--p-navy-900);
+  --action: var(--p-green-brand);
+  --on-action: var(--p-white);
+  --focus: var(--p-navy-900);
+  --selected: var(--p-navy-900);
+  --tooltip-bg: var(--p-deep-900);
+  --tooltip-text: var(--p-fog-50);
+  --shadow-1: 0 1px 2px rgb(16 32 43 / 0.08), 0 1px 1px rgb(16 32 43 / 0.05);
+  --shadow-tooltip: 0 6px 18px rgb(16 32 43 / 0.2);
+  --shadow-pop: 0 12px 32px rgb(16 32 43 / 0.18);
+  --shadow-menu: 0 12px 32px rgb(16 32 43 / 0.22), 0 2px 6px rgb(16 32 43 / 0.12);
+  --shadow-panel: 0 10px 30px rgb(16 32 43 / 0.12);
+  --shadow-dialog: 0 20px 60px rgb(16 32 43 / 0.25);
+  --shadow-command: 0 24px 60px rgb(16 32 43 / 0.35);
+  --backdrop: rgb(10 20 30 / 0.35);
+  --backdrop-command: rgb(10 20 30 / 0.28);
+
+  /* 3. Domain tokens: Cooptimize Light */
+  --risk: var(--p-co-red-700);
+  --watch: var(--p-co-amber-700);
+  --ok: var(--p-co-green-700);
+  --personal: var(--p-co-pink-700);
+  --sample: var(--p-co-violet-700);
+  --pto: var(--p-co-sky-700);
+  --oof: var(--p-co-purple-700);
+  --event-surface: var(--p-white);
+  --client-tint: 9%;
+  --client-none: var(--p-deep-550);
+  --client-teal: var(--p-slot-teal-l);
+  --client-violet: var(--p-slot-violet-l);
+  --client-ochre: var(--p-slot-ochre-l);
+  --client-blue: var(--p-slot-blue-l);
+  --client-rose: var(--p-slot-rose-l);
+  --client-earth: var(--p-slot-earth-l);
+  --client-green: var(--p-slot-green-l);
+  --client-slate: var(--p-slot-slate-l);
+  --brand-mark: radial-gradient(circle at 50% 50%, var(--p-co-red-700) 0 18%, transparent 19%), conic-gradient(from 200deg, var(--p-navy-900), var(--p-green-brand), var(--p-green-logo), var(--p-navy-900));
+  color-scheme: light;
+}
+
+:root[data-theme="neutral"] {
+  /* 2. Semantic tokens: Neutral light */
   --bg: var(--p-paper-50);
   --surface: var(--p-white);
   --raised: var(--p-paper-25);
@@ -67,12 +244,12 @@
   --text-muted: var(--p-slate-700);
   --text-faint: var(--p-slate-550);
   --accent: var(--p-blue-700);
-  --action: var(--accent);
-  --on-action: var(--surface);
-  --focus: var(--accent);
-  --selected: var(--text);
-  --tooltip-bg: var(--text);
-  --tooltip-text: var(--bg);
+  --action: var(--p-blue-700);
+  --on-action: var(--p-white);
+  --focus: var(--p-blue-700);
+  --selected: var(--p-slate-900);
+  --tooltip-bg: var(--p-slate-900);
+  --tooltip-text: var(--p-paper-50);
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 1px rgb(0 0 0 / 0.04);
   --shadow-tooltip: 0 6px 18px rgb(0 0 0 / 0.2);
   --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.18);
@@ -83,7 +260,7 @@
   --backdrop: rgb(10 12 16 / 0.35);
   --backdrop-command: rgb(0 0 0 / 0.28);
 
-  /* 3. Domain tokens (light) */
+  /* 3. Domain tokens: Neutral light */
   --risk: var(--p-red-700);
   --watch: var(--p-amber-700);
   --ok: var(--p-green-700);
@@ -94,21 +271,21 @@
   --event-surface: var(--p-white);
   --client-tint: 9%;
   --client-none: var(--p-gray-450);
-  --client-fallback-1: var(--p-client-1);
-  --client-fallback-2: var(--p-client-2);
-  --client-fallback-3: var(--p-client-3);
-  --client-fallback-4: var(--p-client-4);
-  --client-fallback-5: var(--p-client-5);
-  --client-fallback-6: var(--p-client-6);
-  --client-fallback-7: var(--p-client-7);
-  --client-fallback-8: var(--p-client-8);
+  --client-teal: var(--p-client-1);
+  --client-violet: var(--p-client-2);
+  --client-ochre: var(--p-client-3);
+  --client-blue: var(--p-client-4);
+  --client-rose: var(--p-client-5);
+  --client-earth: var(--p-client-8);
+  --client-green: var(--p-client-6);
+  --client-slate: var(--p-client-7);
   --brand-mark: linear-gradient(135deg, var(--p-client-1), var(--p-client-4) 55%, var(--p-client-2));
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    /* 2. Semantic tokens (dark) */
+  :root[data-theme="neutral"] {
+    /* 2. Semantic tokens: Neutral dark */
     --bg: var(--p-graphite-950);
     --surface: var(--p-graphite-900);
     --raised: var(--p-graphite-875);
@@ -119,9 +296,15 @@
     --text-muted: var(--p-mist-300);
     --text-faint: var(--p-mist-450);
     --accent: var(--p-blue-300);
+    --action: var(--p-blue-300);
+    --on-action: var(--p-graphite-950);
+    --focus: var(--p-blue-300);
+    --selected: var(--p-mist-100);
+    --tooltip-bg: var(--p-mist-100);
+    --tooltip-text: var(--p-graphite-950);
     --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
 
-    /* 3. Domain tokens (dark) */
+    /* 3. Domain tokens: Neutral dark */
     --risk: var(--p-red-300);
     --watch: var(--p-amber-300);
     --ok: var(--p-green-300);
@@ -142,7 +325,7 @@ html, body, #root { height: 100%; margin: 0; }
 body {
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.35 "Inter", "Inter Variable", "Noto Sans", system-ui, sans-serif;
+  font: 15px/1.35 var(--font-ui);
   font-feature-settings: "tnum" 1, "cv11" 1;
   -webkit-font-smoothing: antialiased;
 }

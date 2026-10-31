@@ -71,4 +71,8 @@ pickable_portfolio_types = ["Recurring"]
 # command = ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]
 # [edge.profiles]
 # Cooptimize = "Default"
+
+# Display. Theme: "cooptimize-dark" (default), "cooptimize-light" or "neutral". Settings changes it too.
+[ui]
+theme = "cooptimize-dark"
 `;

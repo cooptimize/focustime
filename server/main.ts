@@ -6,6 +6,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { cacheRoot, configPath, loadConfigFile, planDbPath, saveSystemUserId } from "../config/load.ts";
+import { writeConfig } from "../config/edit.ts";
 import type { DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
 import { stderrLogger } from "../log/logger.ts";
 import { deleteSecret, getSecret, setSecret } from "../secrets/keyring.ts";
@@ -112,6 +113,7 @@ const server = createApp({
     makeGoogle,
     makeDevOps,
     saveSystemUserId: (id) => saveSystemUserId(cfgPath, id),
+    writeConfig: (edit) => writeConfig(cfgPath, edit),
     now: () => Temporal.Now.instant().toString(),
     ...(plan ? { plan } : {}),
     launch: launchDetached,

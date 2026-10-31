@@ -33,3 +33,6 @@ export const disconnectSource = (source: "outlook" | "google") => call<{ status:
 export type PlanResult = { pick?: Pick; state?: PlanDayState; draft?: DraftStory; result?: string };
 /** Plan actions (step 5): local only. */
 export const planAction = (action: string, input: unknown) => call<PlanResult & PlanDayState>(action, input);
+
+/** Saves the theme in config (step 6b). */
+export const setThemeAction = (theme: string) => call<{ ui: { theme: string } }>("ui.set_theme", { theme });

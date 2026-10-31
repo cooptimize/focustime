@@ -28,7 +28,15 @@ export type AppConfig = {
   plan: PlanConfig;
   /** Where work item links open (step 5.5). */
   edge: EdgeConfig;
+  /** Display (step 6b). */
+  ui: UiConfig;
 };
+
+export const THEMES = ["cooptimize-dark", "cooptimize-light", "neutral"] as const;
+export type Theme = (typeof THEMES)[number];
+export const THEME_NAMES: Record<Theme, string> = { "cooptimize-dark": "Cooptimize Dark", "cooptimize-light": "Cooptimize Light", neutral: "Neutral" };
+export type UiConfig = { theme: Theme };
+export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark" };
 
 export type EdgeConfig = {
   /** Edge's launch command as an argument array, e.g. ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]. Empty: no Edge. */
@@ -106,7 +114,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -226,6 +234,18 @@ export function parseConfig(text: string): ParseResult {
     if (Object.keys(edge.profiles).length && !edge.command.length) err("edge.command", "Missing (needed for edge.profiles)");
   }
 
+  // [ui] (optional): theme
+  const ui: UiConfig = { ...DEFAULT_UI };
+  if (raw.ui !== undefined) {
+    const t = isTable(raw.ui) ? raw.ui : (err("ui", "Must be a [ui] table"), null);
+    if (t) for (const k of Object.keys(t)) if (!["theme"].includes(k)) err(`ui.${k}`, "Unknown field");
+    const th = t?.theme;
+    if (th !== undefined) {
+      if (typeof th !== "string" || !(THEMES as readonly string[]).includes(th)) err("ui.theme", `Must be one of ${THEMES.map((x) => `"${x}"`).join(", ")}`);
+      else ui.theme = th as Theme;
+    }
+  }
+
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
   if (raw.outlook !== undefined) {
@@ -267,6 +287,7 @@ export function parseConfig(text: string): ParseResult {
       clients,
       plan: { pickablePortfolioTypes },
       edge,
+      ui,
     },
   };
 }

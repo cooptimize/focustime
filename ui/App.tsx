@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks, mondayOf } from "../week/dates.ts";
 import type { Half, IsoDate } from "../week/types.ts";
-import { ActionRefusal, connectSource, disconnectSource, planAction, SessionError, weekLoad } from "./api.ts";
+import { ActionRefusal, connectSource, disconnectSource, planAction, SessionError, setThemeAction, weekLoad } from "./api.ts";
+import { applyTheme, initialTheme } from "./theme.ts";
+import type { Theme } from "../config/schema.ts";
 import { NOTICE_EVENT, openWorkItem } from "./WorkLink.tsx";
 import type { PlanDayState } from "../plan/types.ts";
 import { planTarget } from "../plan/target.ts";
@@ -81,6 +83,27 @@ export function App() {
   const weekRef = useRef<string | undefined>(undefined);
   const seq = useRef(0);
   const data = state.kind === "ready" ? state.data : null;
+
+  // Theme: the config's value once loaded; a change applies at once and is saved, and reverts if saving fails.
+  const [theme, setThemeState] = useState<Theme>(initialTheme);
+  const configTheme = data?.ui.theme;
+  useEffect(() => {
+    if (configTheme) setThemeState(configTheme);
+  }, [configTheme]);
+  useEffect(() => applyTheme(theme), [theme]);
+  const setTheme = useCallback(
+    async (t: Theme) => {
+      const before = theme;
+      setThemeState(t);
+      try {
+        await setThemeAction(t);
+      } catch (e) {
+        setThemeState(before);
+        setNotice(`Theme not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+      }
+    },
+    [theme],
+  );
 
   /** Loads a week. Data on screen stays put until the new data arrives; a failure keeps it (afterLoad). */
   const load = useCallback(
@@ -475,8 +498,10 @@ export function App() {
       moveRegion: (dir) => setTimeout(() => moveRegion(dir), 0),
       focusedItem: focusedItem.current,
       showKeys: () => setKeysOpen(true),
+      theme,
+      setTheme: (t) => void setTheme(t),
     };
-  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.kind === "session") {
     return (

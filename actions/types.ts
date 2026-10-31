@@ -1,5 +1,5 @@
 // Action response shapes shared by the server and the UI. Types only, no runtime imports.
-import type { FieldError } from "../config/schema.ts";
+import type { FieldError, UiConfig } from "../config/schema.ts";
 import type { TodayTarget } from "../week/dates.ts";
 import type { PlanWeek } from "../plan/types.ts";
 import type { ClientWork, DayShape, IsoDate, RiskThresholds, SourceResult, Week } from "../week/types.ts";
@@ -25,6 +25,8 @@ export type WeekLoadData = {
   ptoAhead: IsoDate[];
   dayShape: DayShape;
   thresholds: RiskThresholds;
+  /** Display settings from [ui] (step 6b): the theme. Defaults when the config is invalid. */
+  ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
 };
 

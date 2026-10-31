@@ -1,6 +1,6 @@
 # Coopilot style guide (proposal)
 
-Status: proposal, Oct 31 2026. Step 6.1 built the token layers (section 3) with the step 6 palette, the AA contrast fixes, and parts of section 6 (Tab scope, F6, O, the legend); see D110 to D115. Themes, the Cooptimize palette and fonts remain proposals. It describes the token system, themes and components that Phase 5 would implement, starting with a token layer and theme switcher that changes no layout. Words follow the glossary in `CLAUDE.md` (Plan the day, Check-in, Close out, focus block, Open, PTO).
+Status: proposal, Oct 31 2026. Step 6.1 built the token layers (section 3) with the step 6 palette, the AA contrast fixes, and parts of section 6 (Tab scope, F6, O, the legend); see D110 to D115. Step 6b built the themes (Cooptimize Dark default, Cooptimize Light, Neutral) and self-hosted Red Hat Display (D120); the Omarchy option stays a proposal. It describes the token system, themes and components that Phase 5 would implement, starting with a token layer and theme switcher that changes no layout. Words follow the glossary in `CLAUDE.md` (Plan the day, Check-in, Close out, focus block, Open, PTO).
 
 ## 1. Principles
 

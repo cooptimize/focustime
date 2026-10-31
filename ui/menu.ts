@@ -2,6 +2,7 @@
 // picks and work items. One model: a menu step is a titled list of items, or a text prompt; an item either runs
 // or opens the next step. The command menu is built from the action registry, so every action appears.
 import { ACTIONS, type ActionName, type ActionSpec } from "../actions/registry.ts";
+import { THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
 import { dayRule } from "../plan/days.ts";
 import { isPickable } from "../plan/rules.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek } from "../plan/types.ts";
@@ -69,6 +70,9 @@ export type MenuEnv = {
   /** The work item that had focus when the menu opened (O opens it), if any. */
   focusedItem: { clientKey: string; url: string } | null;
   showKeys: () => void;
+  /** The active theme and how to change it (saved in config, applied live). */
+  theme: Theme;
+  setTheme: (t: Theme) => void;
 };
 
 const dayName = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -285,6 +289,10 @@ function planDayStep(env: MenuEnv): MenuStep {
   return { title: "Plan which day?", items };
 }
 
+export function themeStep(env: MenuEnv): MenuStep {
+  return { title: "Theme", items: THEMES.map((t) => ({ id: t, label: THEME_NAMES[t], checked: env.theme === t, action: "ui.set_theme", run: () => env.setTheme(t) })) };
+}
+
 /** How each registered action runs from the command menu. Every name must be here (checked by type and test). */
 type Runner = { run?: () => void | Promise<unknown>; next?: () => MenuStep; disabled?: string };
 function runnerFor(env: MenuEnv, name: ActionName): Runner {
@@ -306,6 +314,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.mark_done": return { next: () => choosePick(env, "Mark which pick done or not done?", (p) => () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" })) };
     case "pick.remove": return { next: () => choosePick(env, "Drop which pick?", (p) => () => env.runPlan("pick.remove", { id: p.id })) };
     case "draft.add_story": return { next: () => chooseItem(env, "Draft a story under which epic or feature?", (i) => i.level === "portfolio", (k, i) => draftPrompt(env, k, i)) };
+    case "ui.set_theme": return { next: () => themeStep(env) };
     case "link.open": return { next: () => chooseItem(env, "Open which work item?", () => true, (k, i) => () => env.openLink(k, i.url)) };
   }
 }

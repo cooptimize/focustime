@@ -37,6 +37,8 @@ function env(over: Partial<MenuEnv> = {}) {
     moveRegion: (d) => calls.push(["region", d]),
     focusedItem: null,
     showKeys: () => calls.push(["keys"]),
+    theme: "cooptimize-dark",
+    setTheme: (t) => calls.push(["theme", t]),
     ...over,
   };
   return { e, calls };
