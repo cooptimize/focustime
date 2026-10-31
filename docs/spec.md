@@ -8,7 +8,7 @@ October 31, 2026. Status: proposed, not authorized. Reads with Discovery Brief v
 |---|---|---|
 | OS / desktop | Omarchy 4.0.6, Hyprland 0.56.2 (Lua config), Quickshell 0.3.2 | Shell plugins possible later; not for main app |
 | Hardware | 20 threads, 31 GB RAM, Intel UHD (Raptor Lake), 441 GB free | No resource constraints; Intel GPU avoids most WebKitGTK/NVIDIA issues |
-| Display | One 3840x1080 ultrawide at 119 Hz, scale 1 | Design for wide and short: full week fits horizontally, keep vertical density tight |
+| Display | One 3840x1080 ultrawide at 119 Hz, scale 1 (seen at 1920x1080 on Oct 31) | Wide and short by default; since step 4.5 the view also adapts to medium and narrow windows (D69) |
 | Runtimes | Node 26.12 (via mise), npm 11, Deno 2.9, Python 3.14. No Rust, Bun or pnpm | Option A needs nothing new at the system level; Option B would require installing Rust |
 | Browser | Chromium 155, default `omarchy-browser.desktop` | App-window approach and Playwright inspection both available |
 | Secrets | Secret Service on the session bus, `secret-tool` present; gnome-keyring and kwallet both installed | Keyring works; which daemon owns Secret Service still to confirm (not blocking) |

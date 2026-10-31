@@ -1,4 +1,5 @@
-/* Coopilot week grid. Designed for one 3840x1080 ultrawide: wide and short. */
+/* Coopilot week grid. Three layouts picked in ui/viewport.ts from what the content needs:
+   wide (hour timelines, the 3840x1080 ultrawide), medium (compact cards), narrow (one day). */
 
 :root {
   --bg: #f4f4f1;
@@ -483,11 +484,11 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .event-list .muted { font-size: 13px; }
 
 /* DevOps work on a block: top items in board order */
-.work { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; min-width: 0; }
-.work li { display: flex; gap: 6px; align-items: baseline; min-width: 0; color: var(--ink-2); }
+.work-items { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; min-width: 0; }
+.work-items li { display: flex; gap: 6px; align-items: baseline; min-width: 0; color: var(--ink-2); }
 .wi-type { flex: none; font-size: 11px; font-weight: 600; color: var(--ink-3); min-width: 50px; }
-.work .wi-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.work .wi-more { color: var(--ink-3); font-size: 12px; padding-left: 56px; }
+.work-items .wi-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.work-items .wi-more { color: var(--ink-3); font-size: 12px; padding-left: 56px; }
 .work-note { margin-top: 10px; font-size: 12px; color: var(--ink-3); }
 
 /* Details panel: all items, each opens in the browser */
@@ -507,3 +508,89 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .devops-pop ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .devops-pop .msg { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
 .devops-pop li.problem .msg { color: var(--risk); }
+
+/* Medium layout: the whole week as compact cards, no hour timeline.
+   Rows are shared across days (subgrid) so every AM card lines up, and the grid scrolls if a card is long. */
+.grid.medium {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(190px, 0.6fr);
+  grid-template-rows: auto auto auto minmax(min-content, 1fr) minmax(min-content, 1fr) auto;
+  gap: 6px 12px;
+  padding: 2px 16px 10px;
+  overflow-y: auto;
+}
+.grid.medium .day { display: grid; grid-row: span 6; grid-template-rows: subgrid; gap: 6px; }
+.grid.medium .day-head { gap: 8px; align-items: center; }
+.grid.medium .dow { font-size: 17px; }
+.grid.medium .date { font-size: 14px; }
+.grid.medium .day-sum { gap: 6px; }
+.grid.medium .strip { padding: 0 6px; gap: 4px; }
+.grid.medium .strip-label { width: auto; margin-right: 2px; font-size: 10.5px; }
+.grid.medium .overflow-pill { display: none; }
+
+.half.card { flex-direction: column; min-height: 0; }
+.card-body { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; min-width: 0; flex: 1; }
+.half.card.open { background: repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in oklab, var(--line) 50%, transparent) 10px 11px), var(--surface-2); }
+.half.card.focus { background: color-mix(in oklab, var(--c) 5%, var(--surface)); }
+.half.card .client { font-size: 18px; margin-top: 2px; }
+.half.card .also { margin-top: 2px; padding: 2px 6px; font-size: 12.5px; }
+.half.card .stats { margin-top: 2px; flex-wrap: wrap; gap: 0 10px; }
+.half.card .stats span + span::before { margin-right: 10px; }
+.half.card .stats .free { font-weight: 650; color: var(--ink); }
+.half.card .badges { margin: 2px 0 0; padding: 0; }
+.half.card .badge-text { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.half.card .badge .reason { padding-left: 2px; font-size: 12.5px; }
+/* Cards clip overflow, so the reason shows inline on the selected card instead of as a hover tooltip. */
+.half.card:not(.selected):not(:focus) .badge:hover .reason { display: none; }
+.half.card .work-items { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 12.5px; }
+.half.card .wi-type { min-width: 38px; font-size: 10.5px; }
+.half.card .work-items .wi-more { padding-left: 44px; }
+.half.card .work-note { margin-top: 6px; }
+
+.ev-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; min-width: 0; }
+.ev-list li { display: flex; gap: 7px; align-items: baseline; min-width: 0; padding-left: 7px; border-left: 3px solid var(--ink-3); }
+.ev-list.personal li { border-left-color: var(--personal); }
+.ev-list li.show-tentative { border-left-style: dashed; }
+.ev-list li.show-free { border-left-style: dotted; color: var(--ink-3); }
+.ev-list .ev-time { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-3); min-width: 34px; text-align: right; }
+.ev-list .ev-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-list li.ev-more { border-left-color: transparent; padding-left: 51px; font-size: 12px; color: var(--ink-3); }
+
+/* Narrow layout: one day, with a day switcher */
+.grid.narrow { display: flex; flex-direction: column; gap: 8px; padding: 2px 16px 10px; }
+.grid.narrow { overflow-y: auto; }
+.grid.narrow .day { flex: 1 0 auto; }
+.grid.narrow .day-head { align-items: center; }
+.grid.narrow .half.card { flex: 1 0 auto; }
+.daybar { display: flex; align-items: center; gap: 8px; flex: none; }
+.day-step { padding: 4px 8px; }
+.day-step kbd { margin: 0; border: 0; background: none; padding: 0 2px; }
+.day-step:disabled { opacity: 0.35; cursor: default; }
+.day-tabs { flex: 1; display: flex; gap: 4px; justify-content: center; min-width: 0; }
+.day-tab { flex: 1; max-width: 96px; display: inline-flex; justify-content: center; gap: 5px; padding: 4px 6px; font-weight: 600; color: var(--ink-2); }
+.day-tab .tab-date { font-weight: 400; color: var(--ink-3); }
+.day-tab.overflow { border-style: dashed; }
+.day-tab.today { color: var(--accent); }
+.day-tab.current { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.day-tab.current .tab-date { color: inherit; opacity: 0.75; }
+.grid.narrow .rail { width: clamp(190px, 45%, 330px); }
+
+/* Window chrome for smaller layouts */
+.app.medium > .topbar, .app.narrow > .topbar { padding: 0 16px; }
+.app.medium .hints { gap: 12px; font-size: 12px; }
+/* The hints need about 620 px on each side of the centered week title (~460 px), so below
+   about 1730 px they would collide with it; the keys still work, the narrow day bar shows the arrows. */
+@media (max-width: 1730px) { .hints { display: none; } }
+.app.medium .brand .sub { display: none; }
+.app.narrow > .topbar { display: flex; height: auto; padding: 8px 16px; gap: 12px; flex-wrap: wrap; }
+.app.narrow .hints { display: none; }
+.app.narrow .brand .sub { display: none; }
+.app.narrow .weeknav h1 { min-width: 0; font-size: 17px; }
+.app.medium > .statusbar, .app.narrow > .statusbar {
+  height: auto; min-height: 38px; flex-wrap: wrap; row-gap: 4px; padding: 6px 16px; white-space: normal;
+}
+.app.medium .statusbar .source, .app.narrow .statusbar .source { white-space: nowrap; }
+.details { width: min(760px, calc(100vw - 32px)); }
+.app.narrow .details, .app.medium .details { margin: 16px auto; max-height: calc(100vh - 32px); }
+.app.narrow .work-list a { grid-template-columns: 1fr auto; }
+.app.narrow .work-list .wi-type, .app.narrow .work-list .wi-id { display: none; }
+.app.narrow .event-list li { grid-template-columns: 1fr; }

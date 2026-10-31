@@ -36,7 +36,7 @@ Raised in step 3 (not blocking):
 - Q13. Ranking of double-booked block and all-day event in the single badge (D58) was my placement, not requested. Confirm or reorder.
 
 Raised in step 4 (not blocking):
-- Q14. W&C has no DevOps email on my Account Worker row, so W&C shows "DevOps identity missing". Fill in `coop_devopsemail` in Dataverse to see W&C items.
+- Q14. W&C had no DevOps email on my Account Worker row. As of Oct 31 (step 4.5) it is filled in, and W&C now shows "No access to DevOps project Woodard Curran for W&C" (403 or 404): check the W&C PAT scope and the project name in Dataverse.
 - Q15. CSC's `coop_devopsprojectid` in Dataverse does not match the real project ID (the name works, so Coopilot uses names first). W&C and Quiddity have no project ID. Correct them in Dataverse if IDs are wanted.
 - Q16. PAT column security (D24) matters more now that Coopilot reads PATs: any identity with read on Accounts can read every client's PAT. Consider securing `coop_devopstoken` and granting the Coopilot app user read on it only.
 - Q17. Microsoft retires global PATs on December 1, 2026. Any client PAT created as a global PAT stops working then; recreate as organization-scoped PATs before that date.

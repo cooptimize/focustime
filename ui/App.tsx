@@ -9,6 +9,7 @@ import { StatusBar } from "./StatusBar.tsx";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
 import { SampleSources, weekLabel } from "./labels.ts";
 import { SAMPLE_WEEK } from "../fixtures/sample-week.ts";
+import { useLayout } from "./viewport.ts";
 
 /** ?now=ISO pins the clock (used for screenshots and checks). */
 function nowOverride(): string | undefined {
@@ -23,6 +24,7 @@ function nowOverride(): string | undefined {
 
 export function App() {
   const now = useRef(nowOverride()).current;
+  const { layout, compact } = useLayout();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<Selection>({ dayIndex: 0, half: "AM" });
@@ -95,7 +97,7 @@ export function App() {
 
   useEffect(() => {
     if (!detailsOpen) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
-  }, [sel, detailsOpen, data?.weekStart]);
+  }, [sel, detailsOpen, data?.weekStart, layout]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -149,7 +151,7 @@ export function App() {
   return (
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={workByClient(data.devops)}>
-    <div className="app">
+    <div className={`app ${layout}${compact ? " compact" : ""}`}>
       <header className="topbar">
         <div className="brand">
           <span className="logo" aria-hidden="true" />
@@ -169,7 +171,8 @@ export function App() {
           </button>
         </nav>
         <div className="hints" aria-hidden="true">
-          <span><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> move</span>
+          <span><kbd>←</kbd><kbd>→</kbd> {layout === "narrow" ? "day" : "move"}</span>
+          <span><kbd>↑</kbd><kbd>↓</kbd> AM/PM</span>
           <span><kbd>Enter</kbd> details</span>
           <span><kbd>t</kbd> today</span>
           <span><kbd>r</kbd> refresh</span>
@@ -198,6 +201,8 @@ export function App() {
         today={today}
         selection={sel}
         cellRefs={cellRefs.current}
+        layout={layout}
+        compact={compact}
         onSelect={(s) => setSel(s)}
         onOpen={(s) => {
           setSel(s);

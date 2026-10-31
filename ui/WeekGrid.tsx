@@ -1,10 +1,11 @@
-import { useContext, type CSSProperties } from "react";
+import { useContext, type CSSProperties, type ReactNode } from "react";
 import { formatDuration } from "../week/format.ts";
 import { topRisk, worstSeverity } from "../week/risks.ts";
 import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
 import { hourMarks, layoutEvents } from "./layout.ts";
 import { DevOpsWork, topWork, typeTag, workStatusLabel } from "./work.ts";
 import { clientColor, eventRange, ruleLabel, SampleSources, severityLabel, shortDate, slotRange, sourceName, startClock } from "./labels.ts";
+import type { Layout } from "./viewport.ts";
 
 export type Selection = { dayIndex: number; half: Half };
 
@@ -17,32 +18,70 @@ type Props = {
   cellRefs: Map<string, HTMLDivElement>;
   onSelect: (s: Selection) => void;
   onOpen: (s: Selection) => void;
+  /** wide: hour timelines; medium: compact cards; narrow: the selected day only. */
+  layout: Layout;
+  /** Half-days as compact cards (medium, and narrow windows too thin for rail plus timeline). */
+  compact: boolean;
 };
 
-export function WeekGrid({ week, colors, minFocusWindow, today, selection, cellRefs, onSelect, onOpen }: Props) {
+export function WeekGrid({ week, colors, minFocusWindow, today, selection, cellRefs, onSelect, onOpen, layout, compact }: Props) {
+  const column = (day: Day, i: number) => (
+    <DayColumn
+      key={day.date}
+      day={day}
+      dayIndex={i}
+      tz={week.timeZone}
+      colors={colors}
+      minFocusWindow={minFocusWindow}
+      isToday={day.date === today}
+      selection={selection}
+      cellRefs={cellRefs}
+      onSelect={onSelect}
+      onOpen={onOpen}
+      layout={layout}
+      compact={compact}
+    />
+  );
+  if (layout === "narrow") {
+    const i = selection.dayIndex;
+    const go = (d: number) => onSelect({ dayIndex: Math.max(0, Math.min(week.days.length - 1, d)), half: selection.half });
+    return (
+      <main className="grid narrow" role="group" aria-label="Day view. Left and right arrows change the day, up and down pick the half-day, Enter opens details.">
+        <nav className="daybar" aria-label="Day">
+          <button type="button" className="day-step" onClick={() => go(i - 1)} disabled={i === 0} aria-label="Previous day">
+            <kbd>←</kbd>
+          </button>
+          <div className="day-tabs">
+            {week.days.map((d, k) => (
+              <button
+                key={d.date}
+                type="button"
+                className={`day-tab ${k === i ? "current" : ""} ${d.date === today ? "today" : ""} kind-${d.kind}`}
+                aria-current={k === i ? "date" : undefined}
+                onClick={() => go(k)}
+              >
+                {d.weekday.slice(0, 3)}
+                <span className="tab-date">{Temporal.PlainDate.from(d.date).day}</span>
+              </button>
+            ))}
+          </div>
+          <button type="button" className="day-step" onClick={() => go(i + 1)} disabled={i === week.days.length - 1} aria-label="Next day">
+            <kbd>→</kbd>
+          </button>
+        </nav>
+        {column(week.days[i]!, i)}
+      </main>
+    );
+  }
   return (
-    <main className="grid" role="group" aria-label="Week grid. Arrow keys move between half-days, Enter opens details.">
-      {week.days.map((day, i) => (
-        <DayColumn
-          key={day.date}
-          day={day}
-          dayIndex={i}
-          tz={week.timeZone}
-          colors={colors}
-          minFocusWindow={minFocusWindow}
-          isToday={day.date === today}
-          selection={selection}
-          cellRefs={cellRefs}
-          onSelect={onSelect}
-          onOpen={onOpen}
-        />
-      ))}
+    <main className={`grid ${layout}`} role="group" aria-label="Week grid. Arrow keys move between half-days, Enter opens details.">
+      {week.days.map(column)}
     </main>
   );
 }
 
 function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boolean } & Omit<Props, "week" | "today">) {
-  const { colors, minFocusWindow } = props;
+  const { colors, minFocusWindow, compact } = props;
   const { day, dayIndex, tz, isToday } = props;
   const overflow = day.kind === "overflow";
   const risks = [...day.am.risks, ...day.pm.risks];
@@ -83,6 +122,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
           onSelect={() => props.onSelect({ dayIndex, half })}
           onOpen={() => props.onOpen({ dayIndex, half })}
           dayLabel={`${day.weekday} ${shortDate(day.date)}`}
+          compact={compact}
         />
       ))}
 
@@ -117,9 +157,11 @@ type HalfProps = {
   refFn: (el: HTMLDivElement | null) => void;
   onSelect: () => void;
   onOpen: () => void;
+  /** A compact card (no hour timeline) for the medium layout. */
+  compact: boolean;
 };
 
-function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabel, refFn, onSelect, onOpen }: HalfProps) {
+function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabel, refFn, onSelect, onOpen, compact }: HalfProps) {
   const primary = slot.focus[0];
   const sev = worstSeverity(slot.risks);
   const { top, more } = topRisk(slot.risks);
@@ -127,15 +169,69 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
   // Only the block's own client; Open half-days and Friday have no client, so nothing from DevOps.
   const work = primary && !overflow ? allWork.get(primary.clientKey) : undefined;
   const items = topWork(work);
-  const style = { "--c": clientColor(primary?.clientKey, colors), flexGrow: minutesOf(slot) } as CSSProperties;
+  const style = { "--c": clientColor(primary?.clientKey, colors), ...(compact ? {} : { flexGrow: minutesOf(slot) }) } as CSSProperties;
   const state = overflow ? "overflow" : slot.open ? "open" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
   const label = `${dayLabel} ${slot.half}, ${primary ? primary.clientName : overflow ? "overflow" : "Open"}${sev ? `, ${sev === "at_risk" ? "at risk" : "watch"}` : ""}`;
 
+  const workList = work && (
+    <>
+      {items.top.length > 0 && (
+        <ul className="work-items" aria-label={`DevOps items assigned to you for ${primary!.clientName}`}>
+          {items.top.map((i) => (
+            <li key={i.id} title={`${i.type} ${i.id}: ${i.title} (${i.state})`}>
+              <span className="wi-type">{typeTag(i.type)}</span>
+              <span className="wi-title">{i.title}</span>
+            </li>
+          ))}
+          {items.more > 0 && <li className="wi-more">+{items.more} more</li>}
+        </ul>
+      )}
+      {items.top.length === 0 && work.status !== "ok" && <div className="work-note">DevOps: {workStatusLabel(work)}</div>}
+    </>
+  );
+  const badge = top && (
+    <div className="badges" id={reasonsId}>
+      <div className={`badge ${top.severity}`}>
+        <span className="badge-text">
+          <span className="dot" aria-hidden="true" />
+          {severityLabel(top)}: {ruleLabel[top.rule]}
+          {more > 0 && <span className="more">+{more} more</span>}
+        </span>
+        <span className="reason">{top.reason}</span>
+      </div>
+    </div>
+  );
+  const who = primary ? (
+    <>
+      <div className="client">
+        <span className="swatch" />
+        {primary.clientName}
+      </div>
+      {!compact && (
+        <div className="src" title={primary.clientFullName ?? primary.clientName}>
+          {primary.source === "dataverse" ? `Dataverse focus block${primary.clientFullName ? ` · ${primary.clientFullName}` : ""}` : "Standing block · Coopilot config"}
+        </div>
+      )}
+      {slot.focus.slice(1).map((b) => (
+        <div key={b.id} className="also" style={{ "--c2": clientColor(b.clientKey, colors) } as CSSProperties}>
+          <span className="swatch small" />
+          Also booked: {b.clientName}
+          {!compact && <span className="src"> · {b.source === "dataverse" ? "Dataverse" : "Coopilot config"}</span>}
+        </div>
+      ))}
+    </>
+  ) : (
+    <>
+      <div className="client open-label">Open</div>
+      {!compact && <div className="src">Free for client or internal work</div>}
+    </>
+  );
+
   return (
     <div
       ref={refFn}
-      className={`half ${state} ${sev ?? ""} ${selected ? "selected" : ""}`}
+      className={`half ${state} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""}`}
       style={style}
       tabIndex={selected ? 0 : -1}
       role="button"
@@ -145,70 +241,77 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
       onClick={onSelect}
       onDoubleClick={onOpen}
     >
+      {compact ? (
+        <CardBody slot={slot} tz={tz} overflow={overflow} who={who} badge={badge} workList={workList} />
+      ) : (
+        <>
       {!overflow && (
         <aside className="rail">
           <div className="half-label">
             <span className="half-tag">{slot.half}</span> {slotRange(slot, tz)}
           </div>
-          {primary ? (
-            <>
-              <div className="client">
-                <span className="swatch" />
-                {primary.clientName}
-              </div>
-              <div className="src" title={primary.clientFullName ?? primary.clientName}>
-                {primary.source === "dataverse" ? `Dataverse focus block${primary.clientFullName ? ` · ${primary.clientFullName}` : ""}` : "Standing block · Coopilot config"}
-              </div>
-              {slot.focus.slice(1).map((b) => (
-                <div key={b.id} className="also" style={{ "--c2": clientColor(b.clientKey, colors) } as CSSProperties}>
-                  <span className="swatch small" />
-                  Also booked: {b.clientName}
-                  <span className="src"> · {b.source === "dataverse" ? "Dataverse" : "Coopilot config"}</span>
-                </div>
-              ))}
-            </>
-          ) : (
-            <>
-              <div className="client open-label">Open</div>
-              <div className="src">Free for client or internal work</div>
-            </>
-          )}
+          {who}
 
           <div className="stats">
             <span>{formatDuration(slot.busyMeetingMinutes)} meetings</span>
             <span>{formatDuration(slot.longestFreeMinutes)} longest free</span>
           </div>
 
-          {work && items.top.length > 0 && (
-            <ul className="work" aria-label={`DevOps items assigned to you for ${primary!.clientName}`}>
-              {items.top.map((i) => (
-                <li key={i.id} title={`${i.type} ${i.id}: ${i.title} (${i.state})`}>
-                  <span className="wi-type">{typeTag(i.type)}</span>
-                  <span className="wi-title">{i.title}</span>
-                </li>
-              ))}
-              {items.more > 0 && <li className="wi-more">+{items.more} more</li>}
-            </ul>
-          )}
-          {work && items.top.length === 0 && work.status !== "ok" && <div className="work-note">DevOps: {workStatusLabel(work)}</div>}
-
-          {top && (
-            <div className="badges" id={reasonsId}>
-              <div className={`badge ${top.severity}`}>
-                <span className="badge-text">
-                  <span className="dot" aria-hidden="true" />
-                  {severityLabel(top)}: {ruleLabel[top.rule]}
-                  {more > 0 && <span className="more">+{more} more</span>}
-                </span>
-                <span className="reason">{top.reason}</span>
-              </div>
-            </div>
-          )}
+          {workList}
+          {badge}
         </aside>
       )}
 
-      <Timeline slot={slot} tz={tz} showGaps={!overflow && !slot.open} minFocusWindow={minFocusWindow} />
+          <Timeline slot={slot} tz={tz} showGaps={!overflow && !slot.open} minFocusWindow={minFocusWindow} />
+        </>
+      )}
     </div>
+  );
+}
+
+const MAX_MEETINGS = 4;
+const MAX_PERSONAL = 3;
+
+/** Compact half-day: client, free time, one badge, meetings and personal events as short lists, top DevOps items. */
+function CardBody({ slot, tz, overflow, who, badge, workList }: { slot: Slot; tz: string; overflow: boolean; who: ReactNode; badge: ReactNode; workList: ReactNode }) {
+  const meetings = slot.events.filter((p) => !p.event.isPersonal);
+  const personal = slot.events.filter((p) => p.event.isPersonal);
+  return (
+    <div className="card-body">
+      <div className="half-label">
+        <span className="half-tag">{slot.half}</span> {slotRange(slot, tz)}
+      </div>
+      {!overflow && who}
+      <div className="stats">
+        <span className="free">{formatDuration(slot.longestFreeMinutes)} free</span>
+        {slot.busyMeetingMinutes > 0 && <span>{formatDuration(slot.busyMeetingMinutes)} meetings</span>}
+      </div>
+      {!overflow && badge}
+      <EventList kind="meeting" label="Meetings" events={meetings} max={MAX_MEETINGS} tz={tz} />
+      <EventList kind="personal" label="Personal" events={personal} max={MAX_PERSONAL} tz={tz} />
+      {workList}
+    </div>
+  );
+}
+
+function EventList({ kind, label, events, max, tz }: { kind: "meeting" | "personal"; label: string; events: PlacedEvent[]; max: number; tz: string }) {
+  const samples = useContext(SampleSources);
+  if (events.length === 0) return null;
+  const shown = events.slice(0, max);
+  return (
+    <ul className={`ev-list ${kind}`} aria-label={label}>
+      {shown.map((p) => {
+        const e = p.event;
+        const show = e.showAs ?? "busy";
+        return (
+          <li key={e.id} className={`show-${show}`} title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${show}`}>
+            <span className="ev-time">{startClock(e.start, tz)}</span>
+            <span className="ev-title">{e.title}</span>
+          </li>
+        );
+      })}
+      {events.length > max && <li className="ev-more">+{events.length - max} more</li>}
+    </ul>
   );
 }
 

@@ -6,7 +6,7 @@ Read before changing code: this file, `docs/spec.md` (current slice), `docs/deci
 
 ## Current milestone
 
-Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks, authorized Oct 31). Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
+Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks) and step 4.5 (responsive layout: wide, medium, narrow), both authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
 
 ## Hard rules
 
