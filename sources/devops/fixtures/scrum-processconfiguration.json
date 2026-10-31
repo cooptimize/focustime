@@ -7,5 +7,55 @@
    "referenceName": "Microsoft.VSTS.Common.BacklogPriority",
    "name": "Backlog Priority"
   }
- }
+ },
+ "requirementBacklog": {
+  "name": "Backlog items",
+  "referenceName": "Microsoft.RequirementCategory",
+  "workItemTypes": [
+   {
+    "name": "Product Backlog Item"
+   },
+   {
+    "name": "Bug"
+   }
+  ]
+ },
+ "taskBacklog": {
+  "name": "Tasks",
+  "referenceName": "Microsoft.TaskCategory",
+  "workItemTypes": [
+   {
+    "name": "Task"
+   }
+  ]
+ },
+ "bugWorkItems": {
+  "name": "Bugs",
+  "referenceName": "Microsoft.BugCategory",
+  "workItemTypes": [
+   {
+    "name": "Bug"
+   }
+  ]
+ },
+ "portfolioBacklogs": [
+  {
+   "name": "Epics",
+   "referenceName": "Microsoft.EpicCategory",
+   "workItemTypes": [
+    {
+     "name": "Epic"
+    }
+   ]
+  },
+  {
+   "name": "Features",
+   "referenceName": "Microsoft.FeatureCategory",
+   "workItemTypes": [
+    {
+     "name": "Feature"
+    }
+   ]
+  }
+ ]
 }

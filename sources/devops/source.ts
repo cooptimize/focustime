@@ -7,13 +7,15 @@ import { readSnapshot, writeSnapshot } from "../../cache/snapshots.ts";
 import type { Logger } from "../../log/logger.ts";
 import type { ClientWork, ClientWorkStatus, WorkItem } from "../../week/types.ts";
 import { formatFetchedAt } from "../when.ts";
-import { batchFields, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, type StateCategories } from "./normalize.ts";
+import { allowPortfolio, backlogLevels, batchFields, buildChildrenWiql, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, type BacklogLevels, type StateCategories } from "./normalize.ts";
 import type { Pat } from "./pat.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
 
 export const API_VERSION = "7.1";
 const BATCH_MAX = 200; // documented maximum ids per workitemsbatch call
 const WIQL_TOP = 1000;
+const CHILD_DEPTH = 2; // epic → feature → story
+const MAX_PARENTS = 200; // keeps the IN (...) list far under the 32K WIQL limit
 
 export type DevOpsDeps = {
   fetch: typeof fetch;
@@ -30,6 +32,8 @@ export type DevOpsDeps = {
   minRefreshMs?: number;
   /** Work item types, states and the order field change rarely. */
   metadataTtlMs?: number;
+  /** Portfolio types that can still be picked (config [plan], Q20). Read at each fetch. */
+  pickableTypes?: () => readonly string[];
 };
 
 export type ClientRef = { clientKey: string; clientName: string };
@@ -43,7 +47,13 @@ class DevOpsFailure extends Error {
   }
 }
 
-type Metadata = { orderField: string | null; categories: StateCategories };
+type Metadata = { orderField: string | null; categories: StateCategories; levels: BacklogLevels };
+
+/** What the cache file holds per client: normalized items only. */
+type WorkSnapshot = { fetchedAt: string; items: WorkItem[]; children?: WorkItem[] };
+
+/** Items cached before step 5 have no level; treat them as story level so nothing becomes unpickable by accident. */
+const withLevel = (i: WorkItem): WorkItem => (i.level ? i : { ...i, level: "story" });
 
 const ORG = /^[A-Za-z0-9][A-Za-z0-9-]{0,49}$/;
 
@@ -112,18 +122,15 @@ export function createDevOpsSource(d: DevOpsDeps) {
         return { name: x.name, states: s.value ?? [] };
       }),
     );
-    const meta = { orderField: detectOrderField(pc), categories: categoriesFrom(withStates) };
+    const meta = { orderField: detectOrderField(pc), categories: categoriesFrom(withStates), levels: backlogLevels(pc) };
     metadata.set(key, { at: t, meta });
     return meta;
   }
 
-  async function fetchClient(ref: ClientRef, target: DevOpsTarget): Promise<WorkItem[]> {
-    const org = target.org!;
-    const ctx: Ctx = { client: ref.clientName, org, base: `https://dev.azure.com/${encodeURIComponent(org)}`, projectName: target.projectName ?? target.project!, pat: target.pat! };
-    const project = target.project!;
-    const meta = await loadMetadata(ctx, project);
+  /** WIQL for ids, then the batch call in chunks of 200, normalized. */
+  async function fetchItems(ctx: Ctx, project: string, meta: Metadata, query: string): Promise<WorkItem[]> {
     const p = encodeURIComponent(project);
-    const wiql = await call<{ workItems?: { id?: unknown }[] }>(ctx, "wiql", `${p}/_apis/wit/wiql?$top=${WIQL_TOP}`, { query: buildWiql(target.email!, meta.categories, meta.orderField) });
+    const wiql = await call<{ workItems?: { id?: unknown }[] }>(ctx, "wiql", `${p}/_apis/wit/wiql?$top=${WIQL_TOP}`, { query });
     const ids = (wiql.workItems ?? []).map((w) => w.id).filter((id): id is number => typeof id === "number" && Number.isInteger(id));
     const values: unknown[] = [];
     for (let i = 0; i < ids.length; i += BATCH_MAX) {
@@ -134,10 +141,31 @@ export function createDevOpsSource(d: DevOpsDeps) {
       });
       values.push(...(page.value ?? []));
     }
-    const { items, skipped } = normalizeWorkItems(values, { org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories });
+    const { items, skipped } = normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels });
     if (skipped) log("normalize", { kind: "skipped", count: skipped });
-    log("items", { count: items.length });
     return items;
+  }
+
+  async function fetchClient(ref: ClientRef, target: DevOpsTarget): Promise<{ items: WorkItem[]; children: WorkItem[] }> {
+    const org = target.org!;
+    const ctx: Ctx = { client: ref.clientName, org, base: `https://dev.azure.com/${encodeURIComponent(org)}`, projectName: target.projectName ?? target.project!, pat: target.pat! };
+    const project = target.project!;
+    const raw = await loadMetadata(ctx, project);
+    const meta = { ...raw, levels: allowPortfolio(raw.levels, d.pickableTypes?.() ?? []) };
+    const items = await fetchItems(ctx, project, meta, buildWiql(target.email!, meta.categories, meta.orderField));
+    log("items", { count: items.length });
+    // Epics and features can't be picked: read their open children (any assignee), up to two levels down, read-only.
+    const children: WorkItem[] = [];
+    const seen = new Set(items.map((i) => i.id));
+    let parents = items.filter((i) => i.level === "portfolio").map((i) => i.id);
+    for (let depth = 0; depth < CHILD_DEPTH && parents.length; depth++) {
+      const found = (await fetchItems(ctx, project, meta, buildChildrenWiql(parents.slice(0, MAX_PARENTS), meta.categories, meta.orderField))).filter((c) => !seen.has(c.id));
+      for (const c of found) seen.add(c.id);
+      children.push(...found);
+      parents = found.filter((c) => c.level === "portfolio").map((c) => c.id);
+    }
+    if (children.length) log("children", { count: children.length });
+    return { items, children };
   }
 
   /** Check the target is usable. Identity is never guessed. */
@@ -154,9 +182,9 @@ export function createDevOpsSource(d: DevOpsDeps) {
   async function fromCache(ref: ClientRef, f: DevOpsFailure): Promise<ClientWork> {
     // Identity missing or not set up: nothing to fall back to that would be right to show.
     const useCache = f.status !== "identity_missing" && f.status !== "not_set_up";
-    const snap = useCache ? await readSnapshot<WorkItem>(d.cacheDir, "devops", cacheKey(ref.clientKey)) : null;
+    const snap = useCache ? ((await readSnapshot<WorkItem>(d.cacheDir, "devops", cacheKey(ref.clientKey))) as WorkSnapshot | null) : null;
     const message = snap ? `${f.message}. Showing items from ${formatFetchedAt(snap.fetchedAt, d.timeZone, now())}` : useCache ? `${f.message}. No cached items yet` : f.message;
-    return { clientKey: ref.clientKey, clientName: ref.clientName, status: f.status, message, fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [] };
+    return { clientKey: ref.clientKey, clientName: ref.clientName, status: f.status, message, fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: (snap?.items ?? []).map(withLevel), children: Array.isArray(snap?.children) ? snap.children.map(withLevel) : [] };
   }
 
   async function loadOne(ref: ClientRef, targets: TargetsResult): Promise<ClientWork> {
@@ -165,10 +193,11 @@ export function createDevOpsSource(d: DevOpsDeps) {
       const target = targets.targets.find((t) => t.clientKey === ref.clientKey);
       const pre = precheck(ref, target);
       if (pre) throw pre;
-      const items = await fetchClient(ref, target!);
+      const { items, children } = await fetchClient(ref, target!);
       const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
-      await writeSnapshot(d.cacheDir, "devops", cacheKey(ref.clientKey), { fetchedAt, items }).catch(() => log("cache_write", { kind: "failed" }));
-      return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items };
+      const snap: WorkSnapshot = { fetchedAt, items, children };
+      await writeSnapshot(d.cacheDir, "devops", cacheKey(ref.clientKey), snap).catch(() => log("cache_write", { kind: "failed" }));
+      return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, children };
     } catch (e) {
       if (!(e instanceof DevOpsFailure)) log("load", { kind: "unexpected" });
       return fromCache(ref, e instanceof DevOpsFailure ? e : new DevOpsFailure("error", `DevOps load failed for ${ref.clientName}`));
@@ -198,7 +227,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return clients.map((c) => memory.get(c.clientKey)!.result);
   }
 
-  return { load };
+  /** An item from the last result for a client (mine or a child), so picks can be checked on the server. */
+  function lookup(clientKey: string, id: number): WorkItem | null {
+    const r = memory.get(clientKey)?.result;
+    return r?.items.find((i) => i.id === id) ?? r?.children.find((i) => i.id === id) ?? null;
+  }
+
+  return { load, lookup };
 }
 
 export type DevOpsSource = ReturnType<typeof createDevOpsSource>;

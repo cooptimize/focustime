@@ -2,7 +2,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-export type Snapshot<T> = { fetchedAt: string; items: T[] };
+export type Snapshot<T> = { fetchedAt: string; items: T[]; children?: T[] };
 
 // A week (calendars, Dataverse) or a short slug (DevOps, one file per client).
 const KEY = /^(\d{4}-\d{2}-\d{2}|[a-z0-9][a-z0-9-]{0,79})$/;

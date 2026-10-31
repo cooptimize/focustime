@@ -14,7 +14,7 @@ const NY = "America/New_York";
 const T0 = Temporal.Instant.from("2026-11-02T13:02:00Z");
 const ref = (k: string): ClientRef => ({ clientKey: k, clientName: k });
 
-function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | TargetsResult, opts: { ids?: number; cacheDir?: string } = {}) {
+function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | TargetsResult, opts: { ids?: number; cacheDir?: string; pickableTypes?: string[] } = {}) {
   const api = fakeDevOps(orgs, opts);
   const logs: LogRecord[] = [];
   const cacheDir = opts.cacheDir ?? mkdtempSync(join(tmpdir(), "coopilot-devops-"));
@@ -26,6 +26,7 @@ function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | Targ
     cacheDir,
     timeZone: NY,
     now: () => clock,
+    ...(opts.pickableTypes ? { pickableTypes: () => opts.pickableTypes! } : {}),
     targets: async (keys) => {
       targetCalls.push(keys);
       return Array.isArray(targets) ? { ok: true, targets: targets.filter((t) => keys.includes(t.clientKey)) } : targets;
@@ -120,7 +121,7 @@ describe("setup problems are stated, never guessed", () => {
   it("identity missing: says so, makes no DevOps call, shows no cached items", async () => {
     const s = setup({ cooptimize: "agile" }, [target("W&C", "cooptimize", { email: null })]);
     const r = await s.src.load([ref("W&C")]);
-    expect(byKey(r, "W&C")).toEqual({ clientKey: "W&C", clientName: "W&C", status: "identity_missing", message: "DevOps identity missing for W&C", fetchedAt: null, fromCache: false, items: [] });
+    expect(byKey(r, "W&C")).toEqual({ clientKey: "W&C", clientName: "W&C", status: "identity_missing", message: "DevOps identity missing for W&C", fetchedAt: null, fromCache: false, items: [], children: [] });
     expect(s.calls).toHaveLength(0);
   });
 
@@ -281,5 +282,58 @@ describe("cache keys", () => {
     expect(cacheKey("W&C")).toMatch(/^w-c-[0-9a-f]{8}$/);
     expect(cacheKey("W&C")).not.toBe(cacheKey("W C"));
     expect(cacheKey("../../etc")).toMatch(/^etc-[0-9a-f]{8}$/);
+  });
+});
+
+describe("story level: children of epics and features (step 5)", () => {
+  it("levels come from the process backlog categories, and portfolio items bring their open children two levels down", async () => {
+    const s = setup({ cscsteel: "portfolio" }, [target("CSC", "cscsteel")]);
+    const [csc] = await s.src.load([ref("CSC")]);
+    expect(csc!.status).toBe("ok");
+    const level = Object.fromEntries([...csc!.items, ...csc!.children].map((i) => [i.id, i.level]));
+    expect(level).toMatchObject({ 101: "story", 110: "portfolio", 120: "portfolio", 130: "portfolio", 111: "story", 112: "story", 121: "portfolio", 122: "story" });
+    expect(csc!.children.map((c) => c.id).sort()).toEqual([111, 112, 121, 122]);
+    expect(csc!.children.find((c) => c.id === 122)!.parentId).toBe(121);
+  });
+
+  it("children are read with WIQL and the batch call only (no write endpoints), and the parent filter replaces the assignee", async () => {
+    const s = setup({ cscsteel: "portfolio" }, [target("CSC", "cscsteel")]);
+    await s.src.load([ref("CSC")]);
+    for (const c of s.calls) {
+      if (c.method === "POST") expect(c.url).toMatch(/\/_apis\/wit\/(wiql|workitemsbatch)\?/);
+      else expect(c.method).toBe("GET");
+    }
+    const queries = s.calls.filter((c) => c.url.includes("/_apis/wit/wiql")).map((c) => (JSON.parse(c.body!) as { query: string }).query);
+    expect(queries).toHaveLength(3); // mine, children, grandchildren
+    expect(queries[1]).toContain("[System.Parent] IN (110, 120, 130)");
+    expect(queries[1]).not.toContain("[System.AssignedTo]");
+    expect(queries[2]).toContain("[System.Parent] IN (121)");
+  });
+
+  it("lookup finds my items and children for the right client only", async () => {
+    const s = setup({ cscsteel: "portfolio", cooptimize: "agile" }, [target("CSC", "cscsteel"), target("Cooptimize", "cooptimize")]);
+    await s.src.load([ref("CSC"), ref("Cooptimize")]);
+    expect(s.src.lookup("CSC", 122)?.title).toBe("Story two levels down");
+    expect(s.src.lookup("Cooptimize", 122)).toBeNull();
+    expect(s.src.lookup("CSC", 999)).toBeNull();
+  });
+
+  it("children are cached with the items and come back on failure", async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-devops-"));
+    await setup({ cscsteel: "portfolio" }, [target("CSC", "cscsteel")], { cacheDir }).src.load([ref("CSC")]);
+    const [csc] = await setup({ cscsteel: "offline" }, [target("CSC", "cscsteel")], { cacheDir }).src.load([ref("CSC")]);
+    expect(csc!.fromCache).toBe(true);
+    expect(csc!.children.map((c) => c.id).sort()).toEqual([111, 112, 121, 122]);
+  });
+});
+
+describe("pickable portfolio types from config (Q20)", () => {
+  it("a listed portfolio type is pickable and is not opened into children", async () => {
+    const s = setup({ cscsteel: "portfolio" }, [target("CSC", "cscsteel")], { pickableTypes: ["feature"] });
+    const [csc] = await s.src.load([ref("CSC")]);
+    const level = Object.fromEntries(csc!.items.map((i) => [i.id, i.level]));
+    expect(level).toMatchObject({ 110: "story", 130: "story", 120: "portfolio" });
+    const queries = s.calls.filter((c) => c.url.includes("/_apis/wit/wiql")).map((c) => (JSON.parse(c.body!) as { query: string }).query);
+    expect(queries[1]).toContain("[System.Parent] IN (120)");
   });
 });

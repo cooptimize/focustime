@@ -6,6 +6,7 @@ import { hourMarks, layoutEvents } from "./layout.ts";
 import { DevOpsWork, topWork, typeTag, workStatusLabel } from "./work.ts";
 import { clientColor, eventRange, ruleLabel, SampleSources, severityLabel, shortDate, slotRange, sourceName, startClock } from "./labels.ts";
 import type { Layout } from "./viewport.ts";
+import { checklistFor, PlanCtx } from "./planview.ts";
 
 export type Selection = { dayIndex: number; half: Half };
 
@@ -22,10 +23,17 @@ type Props = {
   layout: Layout;
   /** Half-days as compact cards (medium, and narrow windows too thin for rail plus timeline). */
   compact: boolean;
+  /** Morning ignition: this day's column becomes the planning panel; the rest of the week is dimmed. */
+  ignition?: { dayIndex: number; node: ReactNode } | undefined;
 };
 
-export function WeekGrid({ week, colors, minFocusWindow, today, selection, cellRefs, onSelect, onOpen, layout, compact }: Props) {
-  const column = (day: Day, i: number) => (
+export function WeekGrid({ week, colors, minFocusWindow, today, selection, cellRefs, onSelect, onOpen, layout, compact, ignition }: Props) {
+  const column = (day: Day, i: number) =>
+    ignition?.dayIndex === i ? (
+      <div key={day.date} className="ign-cell">
+        {ignition.node}
+      </div>
+    ) : (
     <DayColumn
       key={day.date}
       day={day}
@@ -73,8 +81,17 @@ export function WeekGrid({ week, colors, minFocusWindow, today, selection, cellR
       </main>
     );
   }
+  // While planning, today's track widens and the other days stay visible behind a dim.
+  const tracks = ignition
+    ? week.days.map((_, i) => (i === ignition.dayIndex ? "minmax(0, 2.6fr)" : i === 4 ? (layout === "medium" ? "minmax(150px, 0.6fr)" : "minmax(0, 0.6fr)") : "minmax(0, 1fr)")).join(" ")
+    : undefined;
   return (
-    <main className={`grid ${layout}`} role="group" aria-label="Week grid. Arrow keys move between half-days, Enter opens details.">
+    <main
+      className={`grid ${layout} ${ignition ? "igniting" : ""}`}
+      style={tracks ? { gridTemplateColumns: tracks } : undefined}
+      role="group"
+      aria-label="Week grid. Arrow keys move between half-days, Enter opens details."
+    >
       {week.days.map(column)}
     </main>
   );
@@ -166,6 +183,21 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
   const sev = worstSeverity(slot.risks);
   const { top, more } = topRisk(slot.risks);
   const allWork = useContext(DevOpsWork);
+  const plan = useContext(PlanCtx);
+  const ticks = checklistFor(plan.week, slot.date, slot.half);
+  const checklist = ticks.length > 0 && (
+    <ul className="checklist" aria-label={`Committed plan for ${dayLabel} ${slot.half}`}>
+      {ticks.map((p) => (
+        <li key={p.id} className={p.status}>
+          <label onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+            <input type="checkbox" checked={p.status === "done"} onChange={(e) => plan.toggle(p.id, e.target.checked)} />
+            <span className="ck-title" title={p.title}>{p.title}</span>
+            <span className="size-tag">{p.size}</span>
+          </label>
+        </li>
+      ))}
+    </ul>
+  );
   // Only the block's own client; Open half-days and Friday have no client, so nothing from DevOps.
   const work = primary && !overflow ? allWork.get(primary.clientKey) : undefined;
   const items = topWork(work);
@@ -242,7 +274,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
       onDoubleClick={onOpen}
     >
       {compact ? (
-        <CardBody slot={slot} tz={tz} overflow={overflow} who={who} badge={badge} workList={workList} />
+        <CardBody slot={slot} tz={tz} overflow={overflow} who={who} badge={badge} workList={workList} checklist={checklist} />
       ) : (
         <>
       {!overflow && (
@@ -257,6 +289,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
             <span>{formatDuration(slot.longestFreeMinutes)} longest free</span>
           </div>
 
+          {checklist}
           {workList}
           {badge}
         </aside>
@@ -273,7 +306,7 @@ const MAX_MEETINGS = 4;
 const MAX_PERSONAL = 3;
 
 /** Compact half-day: client, free time, one badge, meetings and personal events as short lists, top DevOps items. */
-function CardBody({ slot, tz, overflow, who, badge, workList }: { slot: Slot; tz: string; overflow: boolean; who: ReactNode; badge: ReactNode; workList: ReactNode }) {
+function CardBody({ slot, tz, overflow, who, badge, workList, checklist }: { slot: Slot; tz: string; overflow: boolean; who: ReactNode; badge: ReactNode; workList: ReactNode; checklist: ReactNode }) {
   const meetings = slot.events.filter((p) => !p.event.isPersonal);
   const personal = slot.events.filter((p) => p.event.isPersonal);
   return (
@@ -287,6 +320,7 @@ function CardBody({ slot, tz, overflow, who, badge, workList }: { slot: Slot; tz
         {slot.busyMeetingMinutes > 0 && <span>{formatDuration(slot.busyMeetingMinutes)} meetings</span>}
       </div>
       {!overflow && badge}
+      {checklist}
       <EventList kind="meeting" label="Meetings" events={meetings} max={MAX_MEETINGS} tz={tz} />
       <EventList kind="personal" label="Personal" events={personal} max={MAX_PERSONAL} tz={tz} />
       {workList}

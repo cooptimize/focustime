@@ -157,6 +157,8 @@ export type WorkItem = {
   state: string;
   /** Proposed, InProgress or Resolved (Completed and Removed are never shown). */
   stateCategory: string;
+  /** From the project's backlog categories: story (requirement, task, bug) can be picked, portfolio can't, other is on no backlog. */
+  level: "story" | "portfolio" | "other";
   /** Board order from the project's process (StackRank or BacklogPriority); null when unset. */
   order: number | null;
   parentId: number | null;
@@ -176,4 +178,6 @@ export type ClientWork = {
   fromCache: boolean;
   /** Board order, top first. */
   items: WorkItem[];
+  /** Open children (any assignee) of my portfolio items, up to two levels down, for picking at story level. */
+  children: WorkItem[];
 };

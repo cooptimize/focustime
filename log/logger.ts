@@ -1,7 +1,7 @@
 // Structured logging with a closed set of fields: source, operation, status, duration, count, kind.
 // There is deliberately no field for headers, bodies, tokens or free-form objects.
 export type LogRecord = {
-  source: "dataverse" | "outlook" | "google" | "devops" | "server" | "config";
+  source: "dataverse" | "outlook" | "google" | "devops" | "server" | "config" | "plan";
   op: string;
   status?: number | string;
   durationMs?: number;

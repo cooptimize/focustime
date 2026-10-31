@@ -58,4 +58,9 @@ client = "Cooptimize"
 Quiddity = "#7b68ee"
 CSC = "#d2892a"
 Cooptimize = "#4a7fd4"
+
+# Morning ignition. Epics, features and other portfolio types can't be picked,
+# except the types listed here (matched without regard to case).
+[plan]
+pickable_portfolio_types = ["Recurring"]
 `;

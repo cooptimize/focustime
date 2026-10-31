@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Coopilot
+Comment=Open the Coopilot week planner window after login
+Exec=/home/tanner/.local/share/mise/shims/node /home/tanner/Code/coopilot/scripts/open-window.ts
+Terminal=false
+NoDisplay=true

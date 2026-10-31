@@ -21,6 +21,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["ui", "week"],
+  "include": ["ui", "week", "plan"],
   "exclude": ["**/*.test.ts", "week/test-helpers.ts"]
 }

@@ -1,9 +1,10 @@
 // The UI's only way to get data or act: named actions on the local server (same origin, token cookie).
 import type { ActionResponse, WeekLoadData } from "../actions/types.ts";
+import type { DraftStory, IgnitionState, Pick } from "../plan/types.ts";
 
 export class SessionError extends Error {}
 
-async function call<T>(action: string, input: unknown): Promise<T> {
+export async function call<T>(action: string, input: unknown): Promise<T> {
   const res = await fetch("/api/action", {
     method: "POST",
     credentials: "same-origin",
@@ -22,3 +23,7 @@ export type ConnectResult = { status: "connected" | "cancelled" | "failed"; mess
 export const connectSource = (source: "outlook" | "google") =>
   call<ConnectResult>(source === "outlook" ? "auth.connect_microsoft" : "auth.connect_google", {});
 export const disconnectSource = (source: "outlook" | "google") => call<{ status: string }>("auth.disconnect", { source });
+
+export type PlanResult = { pick?: Pick; state?: IgnitionState; draft?: DraftStory; result?: string };
+/** Plan actions (step 5): local only. */
+export const planAction = (action: string, input: unknown) => call<PlanResult & IgnitionState>(action, input);

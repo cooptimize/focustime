@@ -26,7 +26,7 @@ function ctx(orgs: Record<string, OrgScenario> = { cscsteel: "agile" }, opts: { 
     makeOutlook: () => { throw new Error("n/a"); },
     makeGoogle: () => { throw new Error("n/a"); },
     makeDevOps: (cfg, tz) => {
-      if (opts.devopsThrows) return { load: async () => { throw new Error("boom"); } };
+      if (opts.devopsThrows) return { load: async () => { throw new Error("boom"); }, lookup: () => null };
       const dv = makeDataverse(cfg, tz);
       return createDevOpsSource({ fetch: ado.fetch, log: () => {}, cacheDir, timeZone: tz, targets: (k) => dv.devopsTargets(k) });
     },
@@ -47,7 +47,9 @@ describe("week.load with DevOps", () => {
     const d = await load(ctx().c);
     const keys = weekClients(d.week).map((c) => c.clientKey);
     expect(keys).toContain("Cooptimize");
-    expect(d.devops!.map((c) => c.clientKey)).toEqual(keys);
+    // This week's clients first, then the other Account Worker clients with DevOps set up (Q21).
+    expect(d.devops!.map((c) => c.clientKey)).toEqual([...keys, "HM Electronics", "W&C"]);
+    expect(d.planClients.map((c) => c.clientKey)).toEqual([...keys, "CSC", "HM Electronics", "W&C"].filter((k, i, a) => a.indexOf(k) === i));
   });
 
   it("CSC shows its own items; clients without DevOps settings say why and show none", async () => {
@@ -55,7 +57,8 @@ describe("week.load with DevOps", () => {
     const csc = d.devops!.find((c) => c.clientKey === "CSC")!;
     expect(csc.status).toBe("ok");
     expect(csc.items.map((i) => i.id)).toEqual([102, 101, 105, 103]);
-    for (const other of d.devops!.filter((c) => c.clientKey !== "CSC")) {
+    const week = weekClients(d.week).map((c) => c.clientKey);
+    for (const other of d.devops!.filter((c) => c.clientKey !== "CSC" && week.includes(c.clientKey))) {
       expect(other.items).toEqual([]);
       expect(other.status).toBe("not_set_up");
     }

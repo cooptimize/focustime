@@ -21,5 +21,5 @@
     "checkJs": true,
     "noEmit": true
   },
-  "include": ["server", "secrets", "sources", "config", "actions", "fixtures", "cache", "log", "week", "scripts", "vite.config.ts"]
+  "include": ["server", "secrets", "sources", "config", "actions", "fixtures", "cache", "log", "week", "plan", "store", "scripts", "vite.config.ts"]
 }

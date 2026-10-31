@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks } from "../week/dates.ts";
 import type { Half } from "../week/types.ts";
-import { connectSource, disconnectSource, SessionError, weekLoad } from "./api.ts";
+import { connectSource, disconnectSource, planAction, SessionError, weekLoad } from "./api.ts";
+import type { IgnitionState } from "../plan/types.ts";
+import { Ignition } from "./Ignition.tsx";
+import { autoOpenDue, dayRolledOver } from "./ignition.ts";
+import { PlanCtx } from "./planview.ts";
 import { DevOpsWork, workByClient } from "./work.ts";
 import { afterLoad, createAutoRefresh, type LoadState, type RefreshTrigger } from "./refresh.ts";
 import { Details } from "./Details.tsx";
@@ -32,6 +36,9 @@ export function App() {
   const [busy, setBusy] = useState<"outlook" | "google" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [clock, setClock] = useState(() => Date.now());
+  const [ign, setIgn] = useState<IgnitionState | null>(null);
+  const [ignError, setIgnError] = useState<string | null>(null);
+  const autoTried = useRef<string | null>(null);
   const cellRefs = useRef(new Map<string, HTMLDivElement>());
   // The week the window is on (or moving to), and a counter so a slow older response never overwrites a newer one.
   const weekRef = useRef<string | undefined>(undefined);
@@ -95,13 +102,112 @@ export function App() {
     else void load({ weekStart: data.today.weekStart }, { selectToday: true });
   }, [data, load]);
 
+  /** The clock in the day shape's zone (pinned by ?now= for checks). */
+  const zonedNow = useCallback(
+    (tz: string) => (now ? Temporal.Instant.from(now).toZonedDateTimeISO(tz) : Temporal.Now.zonedDateTimeISO(tz)),
+    [now],
+  );
+
+  /** Opens ignition for today when it is in the week on screen, else for the selected day (planning ahead). */
+  const openIgnition = useCallback(
+    async (automatic: boolean) => {
+      if (!data || !data.ignition.available) return;
+      const days = data.week.days.map((d) => d.date);
+      const date = automatic || days.includes(data.ignition.date) ? data.ignition.date : days[sel.dayIndex]!;
+      const dayIndex = days.indexOf(date);
+      if (dayIndex < 0) return;
+      try {
+        const st = await planAction("ignition.start", automatic ? { date, auto: true } : { date });
+        if (automatic && !st.opened) return;
+        setIgnError(null);
+        setDetailsOpen(false);
+        setSel((s) => ({ dayIndex, half: s.dayIndex === dayIndex ? s.half : "AM" }));
+        setIgn(st);
+      } catch (e) {
+        setNotice(e instanceof Error ? e.message : "Could not open planning");
+      }
+    },
+    [data, sel.dayIndex],
+  );
+
+  /** Runs a plan action from the panel; the panel shows the returned state. False (with a message) on refusal. */
+  const act = useCallback(
+    async (action: string, input: Record<string, unknown>) => {
+      if (!ign) return false;
+      try {
+        const r = await planAction(action, input);
+        setIgnError(null);
+        // The panel always shows its own day (a move or carry-over answers with the other day's state).
+        setIgn(r.state?.date === ign.date ? r.state : await planAction("ignition.start", { date: ign.date }));
+        return true;
+      } catch (e) {
+        setIgnError(e instanceof Error ? e.message : "That did not work");
+        return false;
+      }
+    },
+    [ign],
+  );
+
+  const closeIgnition = useCallback(() => {
+    setIgn(null);
+    setIgnError(null);
+  }, []);
+
+  const commit = useCallback(async () => {
+    if (!ign) return;
+    try {
+      await planAction("ignition.commit", { date: ign.date });
+      setIgn(null);
+      void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}) }, { quiet: true });
+    } catch (e) {
+      setIgnError(e instanceof Error ? e.message : "Could not commit");
+    }
+  }, [ign, load]);
+
+  /** Tick a committed pick done or not; local status only. Shown at once, put back if the store refuses. */
+  const toggle = useCallback(
+    (id: number, done: boolean) => {
+      setState((prev) => {
+        if (prev.kind !== "ready" || !prev.data.plan) return prev;
+        const plan = Object.fromEntries(Object.entries(prev.data.plan).map(([d, v]) => [d, { ...v, picks: v.picks.map((p) => (p.id === id ? { ...p, status: done ? ("done" as const) : ("planned" as const) } : p)) }]));
+        return { ...prev, data: { ...prev.data, plan } };
+      });
+      planAction("pick.mark_done", { id, done }).catch(() => void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}) }, { quiet: true }));
+    },
+    [load],
+  );
+
+  // First focus of a workday after 05:00 opens ignition once (the server remembers it was offered).
+  const tryAuto = useCallback(() => {
+    if (!data || ign || detailsOpen || !document.hasFocus()) return;
+    if (!autoOpenDue(zonedNow(data.dayShape.timeZone), data.ignition)) return;
+    if (autoTried.current === data.ignition.date) return;
+    autoTried.current = data.ignition.date;
+    void openIgnition(true);
+  }, [data, ign, detailsOpen, zonedNow, openIgnition]);
   useEffect(() => {
-    if (!detailsOpen) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
-  }, [sel, detailsOpen, data?.weekStart, layout]);
+    tryAuto();
+    window.addEventListener("focus", tryAuto);
+    return () => window.removeEventListener("focus", tryAuto);
+  }, [tryAuto]);
+
+  // Running for days: on a new local day, move to it (when showing the week that was current) and re-check ignition.
+  useEffect(() => {
+    if (!data) return;
+    if (dayRolledOver(zonedNow(data.dayShape.timeZone), data.ignition.date)) {
+      const onTodaysWeek = data.today.weekStart === data.weekStart;
+      void load(onTodaysWeek ? {} : { weekStart: data.weekStart }, { selectToday: onTodaysWeek, quiet: true });
+    } else tryAuto();
+  }, [clock]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!detailsOpen && !ign) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
+  }, [sel, detailsOpen, data?.weekStart, layout, ign]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (detailsOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (detailsOpen || ign || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (e.target instanceof HTMLInputElement) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       const move = (dayIndex: number, half: Half) => {
         e.preventDefault();
@@ -117,6 +223,10 @@ export function App() {
           e.preventDefault();
           return setDetailsOpen(true);
         case "t": return goToday();
+        case "i":
+          e.preventDefault();
+          void openIgnition(false);
+          return;
         case "r":
           e.preventDefault();
           auto.trigger("key");
@@ -127,7 +237,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, ign, openIgnition]);
 
   if (state.kind === "session") {
     return (
@@ -151,6 +261,7 @@ export function App() {
   return (
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={workByClient(data.devops)}>
+    <PlanCtx.Provider value={{ week: data.plan, toggle }}>
     <div className={`app ${layout}${compact ? " compact" : ""}`}>
       <header className="topbar">
         <div className="brand">
@@ -174,6 +285,7 @@ export function App() {
           <span><kbd>←</kbd><kbd>→</kbd> {layout === "narrow" ? "day" : "move"}</span>
           <span><kbd>↑</kbd><kbd>↓</kbd> AM/PM</span>
           <span><kbd>Enter</kbd> details</span>
+          <span><kbd>i</kbd> plan</span>
           <span><kbd>t</kbd> today</span>
           <span><kbd>r</kbd> refresh</span>
           <span><kbd>[</kbd><kbd>]</kbd> change week</span>
@@ -203,6 +315,34 @@ export function App() {
         cellRefs={cellRefs.current}
         layout={layout}
         compact={compact}
+        ignition={
+          ign
+            ? (() => {
+                const dayIndex = week.days.findIndex((d) => d.date === ign.date);
+                if (dayIndex < 0) return undefined;
+                const fri = week.days[4]!.date;
+                return {
+                  dayIndex,
+                  node: (
+                    <Ignition
+                      key={ign.date}
+                      day={week.days[dayIndex]!}
+                      state={ign}
+                      friday={fri === ign.date ? null : fri}
+                      now={now ?? new Date(clock).toISOString()}
+                      tz={week.timeZone}
+                      colors={data.clients}
+                      clients={data.planClients}
+                      error={ignError}
+                      act={act}
+                      onCommit={() => void commit()}
+                      onClose={closeIgnition}
+                    />
+                  ),
+                };
+              })()
+            : undefined
+        }
         onSelect={(s) => setSel(s)}
         onOpen={(s) => {
           setSel(s);
@@ -244,6 +384,7 @@ export function App() {
 
       <Details open={detailsOpen} day={day} slot={slot} timeZone={week.timeZone} colors={data.clients} onClose={() => setDetailsOpen(false)} />
     </div>
+    </PlanCtx.Provider>
     </DevOpsWork.Provider>
     </SampleSources.Provider>
   );

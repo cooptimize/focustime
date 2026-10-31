@@ -13,6 +13,11 @@ export function cacheRoot(env = process.env): string {
   return join(env.XDG_CACHE_HOME || join(homedir(), ".cache"), "coopilot");
 }
 
+/** The local plan store lives here (XDG data, not cache: it is Tanner's own data). */
+export function planDbPath(env = process.env): string {
+  return join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "coopilot", "plan.db");
+}
+
 export type LoadedConfig = { path: string; parsed: ParseResult; created?: boolean };
 
 export async function loadConfigFile(path: string): Promise<LoadedConfig> {

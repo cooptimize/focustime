@@ -9,6 +9,8 @@ import { loadSampleSources } from "../sources/sample.ts";
 import { buildWeek } from "../week/build.ts";
 import { defaultWeekStart, localToday, todayTarget } from "../week/dates.ts";
 import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../week/types.ts";
+import type { PlanStore } from "../store/plan-store.ts";
+import { isPlanAction, planAction } from "./plan-actions.ts";
 import type { ActionResponse, SourceSummary, WeekLoadData } from "./types.ts";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
@@ -21,6 +23,8 @@ export type ActionContext = {
   makeDevOps: (cfg: DataverseConfig, timeZone: string) => DevOpsSource;
   saveSystemUserId: (id: string) => Promise<void>;
   now: () => string;
+  /** The local plan store (step 5); absent when it could not be opened. */
+  plan?: PlanStore;
 };
 
 export type ActionRequest = { action: unknown; input: unknown };
@@ -64,11 +68,16 @@ const summarize = (s: SourceResult<unknown>): SourceSummary => {
   return { ...rest, itemCount: items.length };
 };
 
-/** Clients with a focus block Mon–Thu this week (Dataverse or standing), first appearance first. */
-export function weekClients(week: Week): ClientRef[] {
+/**
+ * Clients for DevOps this week: every client with a focus block Mon–Thu (Dataverse or standing), first
+ * appearance first, plus the standing-block clients (Cooptimize) even in a week where their block is missing,
+ * since Open half-days can take Cooptimize work (Q19).
+ */
+export function weekClients(week: Week, standing: readonly { clientKey: string; clientName: string }[] = []): ClientRef[] {
   const seen = new Map<string, ClientRef>();
   for (const day of week.days.slice(0, 4))
     for (const slot of [day.am, day.pm]) for (const b of slot.focus) if (!seen.has(b.clientKey)) seen.set(b.clientKey, { clientKey: b.clientKey, clientName: b.clientName });
+  for (const b of standing) if (!seen.has(b.clientKey)) seen.set(b.clientKey, { clientKey: b.clientKey, clientName: b.clientName });
   return [...seen.values()];
 }
 
@@ -90,6 +99,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
 
   let dataverse: SourceResult<FocusPattern>;
   let devopsP: Promise<ClientWork[] | null> = Promise.resolve(null);
+  let planClients: ClientRef[] = [];
   if (!cfg) {
     const n = parsed.ok ? 0 : parsed.errors.length;
     dataverse = {
@@ -117,8 +127,15 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     if (!resolveError) {
       // Start DevOps as soon as the week's clients are known, alongside the calendars. Each client is isolated
       // inside the source; anything unexpected here only drops DevOps, never the week.
-      const clients = weekClients(buildWeek({ weekStart, patterns: dataverse.items, events: [], config: weekConfig }));
-      devopsP = ctx.makeDevOps(dv, shape.timeZone).load(clients, refresh).catch(() => null);
+      // Plus every client I'm an Account Worker on (Q21), so Open half-days can take their work. Only those
+      // with DevOps set up are fetched; the rest can still take a typed intention.
+      const dvSource = ctx.makeDataverse(dv, shape.timeZone);
+      const mine = (await dvSource.myClients?.().catch(() => null)) ?? [];
+      const clients = weekClients(buildWeek({ weekStart, patterns: dataverse.items, events: [], config: weekConfig }), weekConfig.standingBlocks);
+      planClients = [...clients];
+      for (const c of mine) if (!planClients.some((p) => p.clientKey === c.clientKey)) planClients.push({ clientKey: c.clientKey, clientName: c.clientName });
+      const fetch = [...clients, ...mine.filter((c) => c.devops && !clients.some((w) => w.clientKey === c.clientKey)).map(({ clientKey, clientName }) => ({ clientKey, clientName }))];
+      devopsP = ctx.makeDevOps(dv, shape.timeZone).load(fetch, refresh).catch(() => null);
     }
   }
 
@@ -126,10 +143,15 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const week = buildWeek({ weekStart, patterns: dataverse.items, events: [...outlook.items, ...google.items], config: weekConfig });
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
 
+  const todayDate = localToday(now, shape.timeZone);
+  const todayPlan = ctx.plan?.day(todayDate) ?? null;
   return {
     weekStart,
     week,
     today: todayTarget(now, shape),
+    plan: ctx.plan ? ctx.plan.week(week.days.map((d) => d.date)) : null,
+    planClients,
+    ignition: { date: todayDate, workday: Temporal.PlainDate.from(todayDate).dayOfWeek <= 4, committed: !!todayPlan?.committedAt, available: !!ctx.plan },
     sources: [dataverse, outlook, google].map(summarize),
     devops,
     clients: clientColors,
@@ -185,6 +207,13 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       return { ok: true, data: { sources: d.sources, config: d.config } };
     }
     default:
+      if (isPlanAction(req.action)) {
+        return planAction(
+          { plan: ctx.plan, config: () => configured(ctx), devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.dayShape.timeZone) },
+          req.action,
+          req.input,
+        );
+      }
       return bad("unknown action");
   }
 }

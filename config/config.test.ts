@@ -167,3 +167,19 @@ calendars = ["primary", "family123@group.calendar.google.com"]
     expect(STARTER_TOML).toContain('calendars = ["primary"]');
   });
 });
+
+describe("[plan] pickable portfolio types (Q20)", () => {
+  it("is optional and empty by default", () => {
+    const r = parseConfig(valid);
+    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [] });
+  });
+  it("reads a list of type names", () => {
+    const r = parseConfig(`${valid}\n[plan]\npickable_portfolio_types = ["Recurring", " Ongoing "]\n`);
+    expect(r.ok && r.config.plan.pickablePortfolioTypes).toEqual(["Recurring", "Ongoing"]);
+  });
+  it("names bad values and unknown fields", () => {
+    expect(fields(`${valid}\n[plan]\npickable_portfolio_types = "Recurring"\n`)).toEqual(["plan.pickable_portfolio_types"]);
+    expect(fields(`${valid}\n[plan]\npickable_portfolio_types = ["", 3]\n`)).toEqual(["plan.pickable_portfolio_types[0]", "plan.pickable_portfolio_types[1]"]);
+    expect(fields(`${valid}\n[plan]\ntypes = []\n`)).toEqual(["plan.types"]);
+  });
+});

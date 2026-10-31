@@ -27,6 +27,42 @@ export function detectOrderField(processConfig: unknown): string | null {
   return typeof ref === "string" && /^[A-Za-z][\w.]*$/.test(ref) ? ref : null;
 }
 
+/** Story-level and portfolio types from the project's backlog categories (process configuration), not type names. */
+export type BacklogLevels = { known: boolean; story: ReadonlySet<string>; portfolio: ReadonlySet<string> };
+
+type Category = { workItemTypes?: { name?: unknown }[] } | null | undefined;
+const typesOf = (c: Category): string[] => (Array.isArray(c?.workItemTypes) ? c.workItemTypes.map((t) => t?.name).filter((n): n is string => typeof n === "string") : []);
+
+/**
+ * Pickable (story level) = the requirement category, the task category and the bug category.
+ * Portfolio (epics, features and any custom portfolio level) can't be picked.
+ * When the process configuration has no backlog categories at all, levels are unknown.
+ */
+export function backlogLevels(processConfig: unknown): BacklogLevels {
+  const pc = (processConfig ?? {}) as { requirementBacklog?: Category; taskBacklog?: Category; bugWorkItems?: Category; portfolioBacklogs?: Category[] };
+  const story = new Set([...typesOf(pc.requirementBacklog), ...typesOf(pc.taskBacklog), ...typesOf(pc.bugWorkItems)]);
+  const portfolio = new Set((Array.isArray(pc.portfolioBacklogs) ? pc.portfolioBacklogs : []).flatMap(typesOf));
+  for (const t of story) portfolio.delete(t);
+  return { known: story.size > 0 || portfolio.size > 0, story, portfolio };
+}
+
+/** Portfolio types listed in config (Q20) count as story level, so they can be picked; matched without case. */
+export function allowPortfolio(levels: BacklogLevels, pickable: readonly string[]): BacklogLevels {
+  if (pickable.length === 0) return levels;
+  const allow = new Set(pickable.map((t) => t.toLowerCase()));
+  const moved = [...levels.portfolio].filter((t) => allow.has(t.toLowerCase()));
+  if (moved.length === 0) return levels;
+  return { known: levels.known, story: new Set([...levels.story, ...moved]), portfolio: new Set([...levels.portfolio].filter((t) => !moved.includes(t))) };
+}
+
+/** Unknown levels (no backlog metadata) count as story level, so nothing becomes unpickable by accident. */
+export function levelOf(type: string, levels: BacklogLevels): WorkItem["level"] {
+  if (!levels.known) return "story";
+  if (levels.story.has(type)) return "story";
+  if (levels.portfolio.has(type)) return "portfolio";
+  return "other";
+}
+
 const wiqlString = (v: string) => `'${v.replace(/'/g, "''")}'`;
 
 /**
@@ -46,13 +82,23 @@ export function buildWiql(email: string, categories: StateCategories, orderField
   return `SELECT [System.Id] FROM WorkItems WHERE ${where.join(" AND ")} ORDER BY ${order}`;
 }
 
+/** Open children of the given parents, any assignee, read through the System.Parent field. */
+export function buildChildrenWiql(parentIds: number[], categories: StateCategories, orderField: string | null): string {
+  const ids = parentIds.filter((id) => Number.isInteger(id) && id > 0);
+  const base = buildWiql("x", categories, orderField);
+  // Same open-state clauses as my work, with the parent filter in place of the assignee.
+  return base.replace(`[System.AssignedTo] = 'x'`, `[System.Parent] IN (${ids.join(", ")})`);
+}
+
 export const BASE_FIELDS = ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate"] as const;
 
 export function batchFields(orderField: string | null): string[] {
   return orderField ? [...BASE_FIELDS, orderField] : [...BASE_FIELDS];
 }
 
-export type NormalizeContext = { org: string; projectName: string; orderField: string | null; categories: StateCategories };
+export type NormalizeContext = { org: string; projectName: string; orderField: string | null; categories: StateCategories; levels?: BacklogLevels };
+
+const NO_LEVELS: BacklogLevels = { known: false, story: new Set(), portfolio: new Set() };
 
 /** Board order first (unset last), then id. */
 export function byBoardOrder(a: WorkItem, b: WorkItem): number {
@@ -91,6 +137,7 @@ export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { 
       type,
       state,
       stateCategory: category,
+      level: levelOf(type, ctx.levels ?? NO_LEVELS),
       order: typeof rawOrder === "number" && Number.isFinite(rawOrder) ? rawOrder : null,
       parentId: typeof parent === "number" && Number.isInteger(parent) ? parent : null,
       changedAt: typeof f["System.ChangedDate"] === "string" ? (f["System.ChangedDate"] as string) : "",

@@ -6,11 +6,11 @@ Read before changing code: this file, `docs/spec.md` (current slice), `docs/deci
 
 ## Current milestone
 
-Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks) and step 4.5 (responsive layout: wide, medium, narrow), both authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
+Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks), step 4.5 (responsive layout: wide, medium, narrow) and step 5 (morning ignition: local plan store, picks, commit, checklist, reminder, autostart), all authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
 
 ## Hard rules
 
-- All external systems are read-only. No writes to Dataverse, Outlook, Google, DevOps, Teams.
+- All external systems are read-only. No writes to Dataverse, Outlook, Google, DevOps, Teams. The plan (picks, drafts, done ticks) lives only in the local plan store.
 - Secrets live only in the OS keyring (service `coopilot`). Access tokens in memory only. Never log, cache, export or print tokens, secrets, Authorization headers or raw HTTP bodies.
 - DevOps PATs: read from Dataverse only at DevOps fetch time (`devopsTargets`), wrapped in `Pat` (prints as `[PAT]`), used only for the Authorization header to `https://dev.azure.com/<org>/`. Never logged, cached, returned to the UI or exported. No other PAT access.
 - Core views work with no AI provider. AI never executes anything; it only suggests via allowlisted actions.
@@ -24,6 +24,8 @@ Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work ite
 ui/        week grid, source status, settings
 actions/   named, validated actions; UI and chat both call these
 week/      pure: normalize, slots, risk rules (no I/O, no tokens)
+plan/      pure: plan types, capacity, fit, carry-over, block client, story level
+store/     SQLite plan store (~/.local/share/coopilot/plan.db), migrations, export
 sources/   dataverse | graph | google | devops adapters; oauth/ (PKCE loopback), calendar/ (shared fetch, cache, status), devops/ (per-client work items, Pat)
 secrets/   keyring access only
 config/    ~/.config/coopilot/config.toml, validated
@@ -31,9 +33,10 @@ cache/     ~/.cache/coopilot, last good snapshot per source
 server/    127.0.0.1 host: launch token, Host/Origin guard, /api/action, UI
 log/       structured logger with a closed set of fields (no headers or bodies)
 fixtures/  sample data (tests, and calendars with no config section)
+system/    systemd user service and XDG autostart entry (installed copies in ~/.config)
 ```
 
-Run: `npm start` (build + server + Chromium app window), `npm run dev` (Vite in the server, no HMR), `npm test`, `npm run typecheck`, `npm run screenshot` (needs a running server).
+Run: `systemctl --user start coopilot` (always-on service) and `node scripts/open-window.ts` (window), or `npm start` (build + server + Chromium app window) when the service is stopped, `npm run dev` (Vite in the server, no HMR), `npm test`, `npm run typecheck`, `npm run screenshot` (needs a running server).
 
 ## Glossary (use these words in code, UI and chat)
 
@@ -46,7 +49,9 @@ Run: `npm start` (build + server + Chromium app window), `npm run dev` (Vite in 
 | Half-day / slot | AM or PM of a date; boundaries come from config |
 | Look-ahead | The week view |
 | At-risk block | Focus block threatened by meetings or personal events, with a stated reason |
-| Plan layer | Coopilot's local proposed arrangement (Milestone 3, not yet) |
+| Plan layer | Coopilot's local plan: day plans and picks in the plan store (step 5) |
+| Ignition | The morning planning panel: today's capacity into committed picks per block |
+| Pick | One planned piece of work in a block: a DevOps item, a draft story or an intention, sized S/M/L |
 | Source | Dataverse, Outlook or Google; each reports its own status |
 | Pattern | A Focus Time row: recurring weekly AM/PM/All Day per weekday between start and (optional) end date |
 | Open | A Mon–Thu half-day with no focus block; free for client or internal work |

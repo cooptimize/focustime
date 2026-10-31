@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { cacheRoot, configPath, loadConfigFile, saveSystemUserId } from "../config/load.ts";
+import { cacheRoot, configPath, loadConfigFile, planDbPath, saveSystemUserId } from "../config/load.ts";
 import type { DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
 import { stderrLogger } from "../log/logger.ts";
 import { deleteSecret, getSecret, setSecret } from "../secrets/keyring.ts";
@@ -15,7 +15,9 @@ import { createGoogleSource } from "../sources/google/source.ts";
 import { createOutlookSource } from "../sources/graph/source.ts";
 import { createDevOpsSource, type DevOpsSource } from "../sources/devops/source.ts";
 import type { Keyring } from "../sources/oauth/oauth.ts";
+import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
 import { createApp } from "./app.ts";
+import { checkReminder, notifySend } from "./notify.ts";
 
 const args = process.argv.slice(2);
 const dev = args.includes("--dev");
@@ -65,11 +67,31 @@ const makeDevOps = (cfg: DataverseConfig, timeZone: string) => {
   let s = devopsSources.get(key);
   if (!s) {
     const dv = makeDataverse(cfg, timeZone);
-    s = createDevOpsSource({ fetch, log, cacheDir: cacheRoot(), timeZone, targets: (keys) => dv.devopsTargets(keys) });
+    s = createDevOpsSource({ fetch, log, cacheDir: cacheRoot(), timeZone, targets: (keys) => dv.devopsTargets(keys), pickableTypes: () => pickableTypes });
     devopsSources.set(key, s);
   }
   return s;
 };
+
+// Local plan store (step 5). Its clock follows the configured day shape time zone. If it can't open,
+// the week view still works and the plan actions say the store is unavailable.
+let timeZone = "America/New_York";
+let pickableTypes: string[] = [];
+const loadConfig = async () => {
+  const r = await loadConfigFile(cfgPath);
+  if (r.parsed.ok) {
+    timeZone = r.parsed.config.week.dayShape.timeZone;
+    pickableTypes = r.parsed.config.plan.pickablePortfolioTypes;
+  }
+  return r;
+};
+await loadConfig().catch(() => null);
+let plan: PlanStore | undefined;
+try {
+  plan = createPlanStore({ path: planDbPath(), now: () => Temporal.Now.zonedDateTimeISO(timeZone) });
+} catch {
+  log({ source: "plan", op: "open", kind: "failed" });
+}
 
 let devMiddleware: Parameters<typeof createApp>[0]["devMiddleware"];
 if (dev) {
@@ -84,22 +106,44 @@ const server = createApp({
   log,
   ...(devMiddleware ? { devMiddleware } : { distDir: join(root, "dist") }),
   ctx: {
-    loadConfig: () => loadConfigFile(cfgPath),
+    loadConfig,
     makeDataverse,
     makeOutlook,
     makeGoogle,
     makeDevOps,
     saveSystemUserId: (id) => saveSystemUserId(cfgPath, id),
     now: () => Temporal.Now.instant().toString(),
+    ...(plan ? { plan } : {}),
   },
 });
+
+// The once-a-day reminder. Checked every 30 s, so it also handles day rollover while running for days.
+if (plan) {
+  const store = plan;
+  const tick = () =>
+    checkReminder({
+      now: () => Temporal.Now.zonedDateTimeISO(timeZone),
+      shape: async () => {
+        const r = await loadConfig();
+        return r.parsed.ok ? r.parsed.config.week.dayShape : null;
+      },
+      committed: (d) => !!store.day(d)?.committedAt,
+      once: (d) => store.markOnce("reminder", d),
+      send: (title, body) => {
+        notifySend(title, body);
+        log({ source: "plan", op: "reminder", kind: "sent" });
+      },
+    }).catch(() => log({ source: "plan", op: "reminder", kind: "failed" }));
+  setInterval(tick, 30_000).unref();
+  void tick();
+}
 
 const runtimeDir = join(process.env.XDG_RUNTIME_DIR || tmpdir(), "coopilot");
 const launchFile = join(runtimeDir, "launch.json");
 
 server.on("error", (e: NodeJS.ErrnoException) => {
   if (e.code === "EADDRINUSE") {
-    console.error(`Coopilot is already running on port ${port}. Use that window, or stop the other copy first.`);
+    console.error(`Coopilot is already running on port ${port} (perhaps as the coopilot service). Open its window with: node scripts/open-window.ts`);
     process.exit(1);
   }
   throw e;
@@ -115,6 +159,7 @@ server.listen(port, "127.0.0.1", async () => {
 
 const stop = async () => {
   await rm(launchFile, { force: true });
+  plan?.close();
   process.exit(0);
 };
 process.on("SIGINT", stop);

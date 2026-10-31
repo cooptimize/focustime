@@ -3,5 +3,39 @@
   "Team": {
    "referenceName": "System.AreaPath"
   }
- }
+ },
+ "requirementBacklog": {
+  "name": "Issues",
+  "referenceName": "Microsoft.RequirementCategory",
+  "workItemTypes": [
+   {
+    "name": "Issue"
+   }
+  ]
+ },
+ "taskBacklog": {
+  "name": "Tasks",
+  "referenceName": "Microsoft.TaskCategory",
+  "workItemTypes": [
+   {
+    "name": "Task"
+   }
+  ]
+ },
+ "bugWorkItems": {
+  "name": "Bugs",
+  "referenceName": "Microsoft.BugCategory",
+  "workItemTypes": []
+ },
+ "portfolioBacklogs": [
+  {
+   "name": "Epics",
+   "referenceName": "Microsoft.EpicCategory",
+   "workItemTypes": [
+    {
+     "name": "Epic"
+    }
+   ]
+  }
+ ]
 }

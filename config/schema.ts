@@ -23,6 +23,13 @@ export type AppConfig = {
   week: WeekConfig;
   /** Client colors keyed by reporting nickname (or account name when there is none). */
   clients: Record<string, string>;
+  /** Plan settings (step 5). */
+  plan: PlanConfig;
+};
+
+export type PlanConfig = {
+  /** Portfolio-level work item types that can still be picked (Q20), matched without regard to case. */
+  pickablePortfolioTypes: string[];
 };
 
 export type FieldError = { field: string; message: string };
@@ -85,7 +92,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -165,6 +172,20 @@ export function parseConfig(text: string): ParseResult {
     }
   }
 
+  // [plan] (optional)
+  const pickablePortfolioTypes: string[] = [];
+  if (raw.plan !== undefined) {
+    const t = isTable(raw.plan) ? raw.plan : (err("plan", "Must be a [plan] table"), null);
+    if (t) for (const k of Object.keys(t)) if (!["pickable_portfolio_types"].includes(k)) err(`plan.${k}`, "Unknown field");
+    const list = t?.pickable_portfolio_types;
+    if (list !== undefined && !Array.isArray(list)) err("plan.pickable_portfolio_types", 'Must be a list of work item type names, e.g. ["Recurring"]');
+    else if (Array.isArray(list))
+      list.forEach((v, i) => {
+        if (typeof v !== "string" || !v.trim() || v.length > 100) err(`plan.pickable_portfolio_types[${i}]`, "Must be a work item type name");
+        else pickablePortfolioTypes.push(v.trim());
+      });
+  }
+
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
   if (raw.outlook !== undefined) {
@@ -204,6 +225,7 @@ export function parseConfig(text: string): ParseResult {
         standingBlocks,
       },
       clients,
+      plan: { pickablePortfolioTypes },
     },
   };
 }

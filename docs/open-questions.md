@@ -40,5 +40,15 @@ Raised in step 4 (not blocking):
 - Q15. CSC's `coop_devopsprojectid` in Dataverse does not match the real project ID (the name works, so Coopilot uses names first). W&C and Quiddity have no project ID. Correct them in Dataverse if IDs are wanted.
 - Q16. PAT column security (D24) matters more now that Coopilot reads PATs: any identity with read on Accounts can read every client's PAT. Consider securing `coop_devopstoken` and granting the Coopilot app user read on it only.
 - Q17. Microsoft retires global PATs on December 1, 2026. Any client PAT created as a global PAT stops working then; recreate as organization-scoped PATs before that date.
-- Q18. Some client processes put Blocked states in the Removed category (Quiddity: Task "10-Blocked", User Story "07-Blocked"), so blocked items are hidden, as the metadata says. Keep that, or treat Blocked as open?
-- Q19. Cooptimize items show because the Monday AM standing block is Cooptimize. If that block is removed, Cooptimize work only shows in weeks with a Cooptimize focus block. Always include it?
+- Q18. (Still open; not the cause of Quiddity's 0, D84. A per-project "treat as open" state list is ready to build when wanted.) Some client processes put Blocked states in the Removed category (Quiddity: Task "10-Blocked", User Story "07-Blocked"), so blocked items are hidden, as the metadata says. Keep that, or treat Blocked as open?
+- Q19. (Answered in step 5, D75: standing-block clients are always fetched.) Cooptimize items show because the Monday AM standing block is Cooptimize. If that block is removed, Cooptimize work only shows in weeks with a Cooptimize focus block. Always include it?
+
+Raised in step 5 (not blocking):
+- Q20. (Answered, D80: Recurring pickable through config, Domain not.) Cooptimize's process puts custom types "Domain" and "Recurring" on its portfolio backlogs, so they can't be picked; they open into children or "Needs breakdown". Recurring work may be better as an intention, or the type could move to the requirement backlog in DevOps. Keep as the metadata says?
+- Q21. (Answered, D81: every Account Worker client.) Open half-days offered only this week's DevOps clients (focus clients plus Cooptimize). Should they offer every client you're an Account Worker on (HME, Antigua), at the cost of more DevOps calls?
+- Q22. (Answered, D82: local until the write step.) Draft stories live only in Coopilot. Creating them in DevOps would be a write, which is out of scope; for now copy them by hand when you break the feature down.
+- Q23. (Answered, D83: start to start + 90 minutes.) The reminder fired once between the day start and the usual end, even if the server started late (for example 2 PM). Prefer it only near the start time?
+- Q24. The app window opened by autostart or `scripts/open-window.ts` holds a per-launch token; after the service restarts it shows "needs a fresh launch link". Run `node scripts/open-window.ts` to reopen. A stable local session could remove that step later.
+- Q25. (Explained, D84: the Quiddity DevOps email in Dataverse ends in @quiddity.org, your DevOps identity in @quiddity.com; fix it in Dataverse.) Quiddity returned 0 open items assigned to you (it had 2 in step 4), and W&C is now readable (3 items). Worth a glance that both match your boards.
+- Q26. HM Electronics now shows "DevOps PAT expired or invalid" (fetched since D81). Renew its PAT in Dataverse, or say if HME should be left out.
+- Q27. Cooptimize's "Ongoing" type is also on a portfolio backlog and stays unpickable. Add it to `pickable_portfolio_types` too?

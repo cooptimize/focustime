@@ -306,6 +306,40 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
+  /**
+   * Every client I'm an active Account Worker on (Q21), for Open half-days: key, name and whether DevOps is set up.
+   * Never selects the PAT. Kept in memory for 5 minutes.
+   */
+  let myClientsMemo: { at: number; clients: MyClient[] } | null = null;
+  async function myClients(): Promise<MyClient[] | null> {
+    const t = Date.now();
+    if (myClientsMemo && t - myClientsMemo.at < 5 * 60_000) return myClientsMemo.clients;
+    try {
+      const userId = config.mySystemUserId;
+      if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) return null;
+      const workers = await getAll<{ _coop_account_value: string | null }>(
+        "accountworkers",
+        `coop_accountworkers?$select=_coop_account_value&$filter=${encodeURIComponent(`_coop_user_value eq ${userId} and statecode eq 0`)}`,
+      );
+      const ids = [...new Set(workers.map((w) => w._coop_account_value?.toLowerCase()).filter((id): id is string => !!id && /^[0-9a-f-]{36}$/.test(id)))];
+      if (ids.length === 0) return (myClientsMemo = { at: t, clients: [] }).clients;
+      const rows = await getAll<AccountRow & { coop_devopsorg: string | null }>(
+        "my_accounts",
+        `accounts?$select=accountid,name,coop_reportingnickname,coop_devopsorg&$filter=${encodeURIComponent(ids.map((id) => `accountid eq ${id}`).join(" or "))}`,
+      );
+      const clients: MyClient[] = [];
+      for (const row of rows) {
+        const key = clientKeyOf(row);
+        if (key && !clients.some((c) => c.clientKey === key)) clients.push({ clientKey: key, clientName: key, devops: !!row.coop_devopsorg?.trim() });
+      }
+      clients.sort((a, b) => a.clientName.localeCompare(b.clientName));
+      return (myClientsMemo = { at: t, clients }).clients;
+    } catch (e) {
+      if (!(e instanceof SourceFailure)) log({ source: "dataverse", op: "my_clients", kind: "unexpected" });
+      return null;
+    }
+  }
+
   /** Find my systemuserid from my work email. Exactly one match or a plain error. */
   async function resolveUserId(email: string): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
     try {
@@ -318,7 +352,9 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
-  return { load, resolveUserId, devopsTargets };
+  return { load, resolveUserId, devopsTargets, myClients };
 }
+
+export type MyClient = { clientKey: string; clientName: string; devops: boolean };
 
 export type DataverseSource = ReturnType<typeof createDataverseSource>;

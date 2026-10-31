@@ -60,13 +60,13 @@ On Monday morning I open Coopilot and see this week as a grid of half-days. Each
 
 ## 2. Non-goals for this slice
 
-- No plan layer, dragging, ignition, triage, recap, capture or drafts (Milestones 3 and 4).
+- ~~No plan layer, dragging, ignition, triage, recap, capture or drafts (Milestones 3 and 4).~~ Step 5 (Oct 31) adds the local plan store, morning ignition and local draft stories (section 19). Still no dragging, triage, recap or capture.
 - No AI provider calls. The whole slice works without AI.
 - ~~No DevOps reads and no PAT access.~~ Superseded by step 4 (Oct 31): read-only DevOps work items assigned to me, PATs read per fetch (D59–D66). Still no DevOps writes.
 - No writes to Dataverse, Outlook, Google or anywhere else.
 - No teammate focus blocks on screen (fetch only Tanner's rows).
 - No Remmina, Azure VM, Teams or Coop integration.
-- No Hyprland keybinding, autostart or shell plugin.
+- No Hyprland keybinding or shell plugin. ~~No autostart.~~ Step 5 adds a systemd user service and an XDG autostart entry, with no Hyprland config change (D79).
 
 ## 3. Architecture map
 
@@ -290,7 +290,7 @@ Raised in step 4 (not blocking):
 | D19 | Re-scoped | AI provider choice no longer blocks Milestones 1–2 |
 | D21 | Proposed | Dataverse via app user with read-only custom role; Outlook via delegated `Calendars.ReadBasic`; Google via desktop OAuth `calendar.events.readonly` |
 | D22 | Proposed | Stack option A for first slice, with a host layer thin enough to move to Tauri later |
-| D23 | Proposed | Cache last good snapshot as files; SQLite arrives with the plan layer in Milestone 3 |
+| D23 | Done (step 5) | Cache last good snapshot as files; SQLite arrives with the plan layer (built in step 5, D71) |
 | D24 | Superseded by D60 | PAT column security not a priority now (tokens are read-only). Coopilot now reads PATs for DevOps (step 4). Column security is still off, so any identity with read on Accounts can read every PAT (Q16) |
 | D22 | Accepted | Stack option A (local TypeScript app in a Chromium app window) |
 | D28 | Confirmed | Unassigned Mon–Thu half-days display as "Open" (client or internal) |
@@ -325,3 +325,16 @@ Raised in step 4 (not blocking):
 ## 18. Backlog (not built)
 
 - **Ownership area** (future, separate from the week view, see D59): epics and features I own, progress of the people contributing to them, and risk against target dates. Would need its own read model, likely per-client WIQL on ownership fields, and its own view. Not in the Look-ahead.
+
+## 19. Step 5: morning ignition (authorized Oct 31)
+
+Purpose: in about two minutes, turn today's real capacity into a short, committed plan per block, at story level. All local; no writes to DevOps, Outlook, Google or Dataverse.
+
+- **Store:** SQLite through Node's built-in `node:sqlite` (no new dependency) at `~/.local/share/coopilot/plan.db` (0600, folder 0700). Numbered migrations in `store/plan-store.ts`; timestamps carry offset and zone (`2026-11-03T08:41:00-05:00[America/New_York]`). Tables: `day_plans`, `picks`, `draft_stories`, `markers` (once-a-day flags). Export: `node scripts/plan-export.ts [file]`.
+- **Actions** (validated, shared with the future chat): `ignition.start(date, auto?)`, `ignition.commit(date)`, `pick.add`, `pick.remove`, `pick.set_size`, `pick.move`, `pick.mark_done`, `draft.add_story`.
+- **Flow:** today's column widens into the planning panel and the rest of the week dims. Each half-day shows client and free time from now on (after meetings and personal events), with fits, tight or over by X. Carry-over (unfinished earlier picks) sits at the top. Picks come from that client's DevOps items in board order, or a typed intention. Open half-days pick from any client you're an Account Worker on, plus Cooptimize (D81), and take the first pick's client; mixing clients is allowed but flagged. `c` commits; the picks then show as a checklist on the week view.
+- **Story level:** pickable types come from each project's process backlog categories (requirement, task and bug), not type names. Epics, features and other portfolio levels (except types listed in `[plan] pickable_portfolio_types`, D80) open into their open children (any assignee, up to two levels, read with WIQL and the batch call). None: "Needs breakdown" and local draft stories, which stay local until a write step is authorized (D82).
+- **Sizes:** S about 1 h, M about 2 h (default), L a whole block (about 3.5 h). Nothing above L: split it first.
+- **Triggers:** on Mon–Thu the first window focus after 05:00 opens ignition once if today isn't committed; `i` opens it any time. One desktop notification (`notify-send`) between the day-shape start and 90 minutes after it if today isn't committed, once per day (D83).
+- **Always on:** `~/.config/systemd/user/coopilot.service` (from `system/coopilot.service`, restart on failure) and `~/.config/autostart/coopilot.desktop` (from `system/coopilot.desktop`, runs `scripts/open-window.ts`).
+- **Rollback:** `systemctl --user disable --now coopilot && rm ~/.config/systemd/user/coopilot.service ~/.config/autostart/coopilot.desktop && systemctl --user daemon-reload`. The plan store can be removed with `rm -r ~/.local/share/coopilot` (export first).

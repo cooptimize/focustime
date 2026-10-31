@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { batchFields, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, type StateCategories } from "./normalize.ts";
+import { allowPortfolio, backlogLevels, levelOf, batchFields, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, type StateCategories } from "./normalize.ts";
 
 const fx = (name: string) => JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", `${name}.json`), "utf8"));
 const typesWithStates = (name: string) => fx(`${name}-workitemtypes`).value as { name: string; states: { name: string; category: string }[] }[];
@@ -94,6 +94,7 @@ describe("work item normalization", () => {
       type: "User Story",
       state: "Active",
       stateCategory: "InProgress",
+      level: "story",
       order: 2000.5,
       parentId: 90,
       changedAt: "2026-10-29T15:04:05.123Z",
@@ -157,5 +158,23 @@ describe("sanitized recorded responses (a real client project, custom inherited 
       [9002, "User Story", "01-New", "Proposed", 399963750, 8001],
     ]);
     expect(items[0]!.url).toBe("https://dev.azure.com/sanitized/Sanitized%20Project/_workitems/edit/9001");
+  });
+});
+
+describe("pickable portfolio allowlist (Q20)", () => {
+  // Cooptimize's real backlog categories (read Oct 31): Epic and Domain, then Feature, Recurring and Ongoing.
+  const coop = backlogLevels({
+    requirementBacklog: { workItemTypes: [{ name: "User Story" }] },
+    taskBacklog: { workItemTypes: [{ name: "Task" }] },
+    portfolioBacklogs: [{ workItemTypes: [{ name: "Epic" }, { name: "Domain" }] }, { workItemTypes: [{ name: "Feature" }, { name: "Recurring" }, { name: "Ongoing" }] }],
+  });
+  it("Recurring becomes pickable; Domain, Epic, Feature and Ongoing stay portfolio", () => {
+    const l = allowPortfolio(coop, ["recurring"]);
+    expect(levelOf("Recurring", l)).toBe("story");
+    expect(["Domain", "Epic", "Feature", "Ongoing"].map((t) => levelOf(t, l))).toEqual(["portfolio", "portfolio", "portfolio", "portfolio"]);
+  });
+  it("an empty list, or a type that isn't portfolio, changes nothing", () => {
+    expect(allowPortfolio(coop, [])).toBe(coop);
+    expect(levelOf("Review", allowPortfolio(coop, ["Review"]))).toBe("other");
   });
 });

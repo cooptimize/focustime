@@ -92,6 +92,8 @@ export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devops
     if (path.startsWith("systemusers")) return json(200, { value: extra.users ?? [{ systemuserid: ME }] });
     if (path.startsWith("coop_accountworkers")) return json(200, accountWorkers);
     if (path.startsWith("accounts") && path.includes("coop_devopstoken")) return json(200, extra.devopsAccounts ?? devopsAccounts);
+    // My clients (Q21): same accounts, never with the token.
+    if (path.startsWith("accounts") && path.includes("coop_devopsorg")) return json(200, { value: devopsAccounts.value.map(({ coop_devopstoken: _t, ...rest }) => rest) });
     if (path.startsWith("accounts")) return json(200, accounts);
     if (path.startsWith("coop_focustimes")) {
       const paged = scenario === "paged" || scenario === "paged_foreign_next" || scenario === "page_fails";

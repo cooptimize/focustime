@@ -17,7 +17,21 @@ export type OrgScenario =
   | "offline" // network down
   | "host_not_found" // ENOTFOUND
   | "server_error" // 500
-  | "batch_fails"; // metadata and WIQL work, the batch call fails
+  | "batch_fails" // metadata and WIQL work, the batch call fails
+  | "portfolio"; // agile process; I own a feature with children, an epic with a feature and a story below it, and a feature with none
+
+/** Work items for the "portfolio" scenario: id → [type, state, parent, title]. */
+export const PORTFOLIO: Record<number, [string, string, number | null, string]> = {
+  101: ["User Story", "Active", null, "Story assigned to me"],
+  110: ["Feature", "Active", null, "Feature I own"],
+  111: ["User Story", "New", 110, "Child story of 110"],
+  112: ["Bug", "Active", 110, "Child bug of 110"],
+  120: ["Epic", "New", null, "Epic I own"],
+  121: ["Feature", "New", 120, "Feature under the epic"],
+  122: ["User Story", "New", 121, "Story two levels down"],
+  130: ["Feature", "New", null, "Feature with no children"],
+};
+const MINE = [110, 101, 120, 130];
 
 const fx = (name: string) => readFileSync(join(import.meta.dirname, "fixtures", `${name}.json`), "utf8");
 
@@ -59,7 +73,17 @@ export function fakeDevOps(orgs: Record<string, OrgScenario>, opts: { ids?: numb
       case "server_error":
         return json('{"message":"boom"}', 500);
     }
-    const proc = scenario === "batch_fails" ? "agile" : scenario;
+    const proc = scenario === "batch_fails" || scenario === "portfolio" ? "agile" : scenario;
+    if (scenario === "portfolio" && path === "_apis/wit/wiql") {
+      const q = (JSON.parse(String(init?.body)) as { query: string }).query;
+      const parents = q.match(/\[System\.Parent\] IN \(([\d, ]+)\)/)?.[1]?.split(",").map(Number);
+      const ids = parents ? Object.entries(PORTFOLIO).filter(([, v]) => v[2] !== null && parents.includes(v[2])).map(([k]) => Number(k)) : MINE;
+      return json(JSON.stringify({ workItems: ids.map((id) => ({ id })) }));
+    }
+    if (scenario === "portfolio" && path === "_apis/wit/workitemsbatch") {
+      const ids = (JSON.parse(String(init?.body)) as { ids: number[] }).ids;
+      return json(JSON.stringify({ count: ids.length, value: ids.map((id) => { const [type, state, parent, title] = PORTFOLIO[id]!; return { id, fields: { "System.Id": id, "System.Title": title, "System.WorkItemType": type, "System.State": state, ...(parent ? { "System.Parent": parent } : {}), "Microsoft.VSTS.Common.StackRank": MINE.indexOf(id) + 1 || 50 + id } }; }) }));
+    }
     if (path === "_apis/work/processconfiguration") return json(fx(`${proc}-processconfiguration`));
     if (path === "_apis/wit/workitemtypes") return json(fx(`${proc}-workitemtypes`));
     const states = path.match(/^_apis\/wit\/workitemtypes\/(.+)\/states$/);
