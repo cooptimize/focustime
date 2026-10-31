@@ -362,3 +362,12 @@ Purpose: in about two minutes, turn today's real capacity into a short, committe
 - **Schema errors (D108):** a missing or renamed Dataverse table or column (PTO, focus blocks, clients) shows as a named message in the status bar, found with read-only probes on my own rows.
 - **Show-as and time (D100, D103):** busy, tentative, free, out of office and working elsewhere look different without relying on color; legend in details. Every card: "2h meetings · 2h 15m free · longest 1h"; Plan the day uses the same free number.
 - **Rollback:** code only, plus store migration 2 (marker rename, harmless to keep). Revert the commit; no files outside the repo changed in this step.
+
+## 22. Plan any day (authorized Oct 31)
+
+- **Any date (D116):** Plan the day opens any date. The default target is unchanged (D97, D106). Entry points: "Plan this day" in each day header's ⋯ menu (also right-click on the header), ← → in the panel plus ‹ › buttons, and "Plan a day…" in the command menu (a date picker; also "Another date…" under Plan which day?).
+- **Day rule (D117):** PTO days are refused with the reason. Days without working hours are refused with the reason; until the time model (step 6b) only Mon–Thu have hours, through one hook, `hasWorkingHours` in `plan/days.ts`. Today and later days are fully plannable. Earlier days are past.
+- **Past days (D118):** the panel becomes "Review": picks per block with a done tick and Drop, nothing else (no candidates, sizes, moves into the day, or commit). The server enforces it: `pick.add`, `pick.set_size`, `planday.commit` and moving into a past day are 409; a past pick may move forward to today or later (carrying it); `pick.remove` keeps a past pick as dropped, never deletes it. Past is judged by the server's clock.
+- **Carry-over (D119):** offered only on the earliest upcoming day (today until the usual end, else tomorrow) that can be planned and isn't committed. Other days show where it is offered. Source: picks still planned in the 7 days before that upcoming day.
+- **Contract change:** `PlanDayState` gains `access` ("plan" | "past") and `carryTarget`; `carryOver` is empty except on the carry-over day. `planday.start` and `planday.commit` can now refuse with 422. No new action, source or dependency.
+- **Rollback:** code only; no migration and no files outside the repo.

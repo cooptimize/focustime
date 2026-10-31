@@ -84,9 +84,13 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList }: {
       >
         <label>
           <span>{step.prompt}</span>
-          <input ref={inputRef} placeholder={step.placeholder ?? ""} maxLength={200} onKeyDown={(e) => e.key === "Escape" && (e.preventDefault(), canBack ? back() : onDone())} />
+          <input
+            ref={inputRef}
+            {...(step.input === "date" ? { type: "date", defaultValue: step.value ?? "", required: true } : { placeholder: step.placeholder ?? "", maxLength: 200 })}
+            onKeyDown={(e) => e.key === "Escape" && (e.preventDefault(), canBack ? back() : onDone())}
+          />
         </label>
-        <button type="submit" className="mini primary">Add</button>
+        <button type="submit" className="mini primary">{step.button ?? "Add"}</button>
       </form>
     );
   }

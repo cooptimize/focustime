@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks, mondayOf } from "../week/dates.ts";
 import type { Half, IsoDate } from "../week/types.ts";
-import { connectSource, disconnectSource, planAction, SessionError, weekLoad } from "./api.ts";
+import { ActionRefusal, connectSource, disconnectSource, planAction, SessionError, weekLoad } from "./api.ts";
 import { NOTICE_EVENT, openWorkItem } from "./WorkLink.tsx";
 import type { PlanDayState } from "../plan/types.ts";
 import { planTarget } from "../plan/target.ts";
+import { stepDay } from "../plan/days.ts";
 import { PlanDay } from "./PlanDay.tsx";
 import { autoOpenDue, dayRolledOver } from "./planday.ts";
 import { PlanCtx } from "./planview.ts";
@@ -156,6 +157,19 @@ export function App() {
    * Opens Plan the day for a date (default: today or the next workday). Moves to that date's week when it isn't
    * on screen. The automatic open is for today only, once per day.
    */
+  const showPlanDay = useCallback(
+    async (st: PlanDayState) => {
+      if (!data) return;
+      setPdError(null);
+      setDetailsOpen(false);
+      const monday = mondayOf(st.date);
+      if (monday !== data.weekStart) await load({ weekStart: monday });
+      const dayIndex = dayOfWeekIndex(st.date);
+      setSel((s) => ({ dayIndex, half: s.dayIndex === dayIndex ? s.half : "AM" }));
+      setPd(st);
+    },
+    [data, load],
+  );
   const openPlanDay = useCallback(
     async (date?: IsoDate, automatic = false) => {
       if (!data || !data.planDay.available || !target) return;
@@ -163,18 +177,35 @@ export function App() {
       try {
         const st = await planAction("planday.start", automatic ? { date: day, auto: true } : { date: day });
         if (automatic && !st.opened) return;
-        setPdError(null);
-        setDetailsOpen(false);
-        const monday = mondayOf(day);
-        if (monday !== data.weekStart) await load({ weekStart: monday });
-        const dayIndex = dayOfWeekIndex(day);
-        setSel((s) => ({ dayIndex, half: s.dayIndex === dayIndex ? s.half : "AM" }));
-        setPd(st);
+        await showPlanDay(st);
       } catch (e) {
         setNotice(e instanceof Error ? e.message : "Could not open planning");
       }
     },
-    [data, target, load],
+    [data, target, showPlanDay],
+  );
+
+  /**
+   * ← → in Plan the day: the previous or next day that can be planned. Days without working hours and known PTO
+   * are skipped here; a PTO day only the server knows of is skipped too (it refuses with 422), up to a few times.
+   */
+  const stepPlanDay = useCallback(
+    async (dir: 1 | -1) => {
+      if (!data || !pd) return;
+      const pto = new Set([...data.ptoAhead, ...data.week.days.filter((d) => d.pto).map((d) => d.date)]);
+      let from = pd.date;
+      for (let tries = 0; tries < 5; tries++) {
+        const next = stepDay(from, dir, pto);
+        if (!next) return setPdError(`No day to plan ${dir > 0 ? "after" : "before"} ${shortDay(from)} within a month`);
+        try {
+          return await showPlanDay(await planAction("planday.start", { date: next }));
+        } catch (e) {
+          if (!(e instanceof ActionRefusal && e.status === 422)) return setPdError(e instanceof Error ? e.message : "Could not open that day");
+          from = next;
+        }
+      }
+    },
+    [data, pd, showPlanDay],
   );
 
   /**
@@ -415,6 +446,7 @@ export function App() {
       planWeek: data.plan,
       planState: pd,
       planTarget: target,
+      today: data.planDay.date,
       work,
       calendars: { outlook: cal("outlook"), google: cal("google") },
       runPlan,
@@ -568,6 +600,7 @@ export function App() {
                       act={runPlan}
                       onCommit={() => void commit()}
                       onClose={closePlanDay}
+                      onStep={(dir) => void stepPlanDay(dir)}
                     />
                   ),
                 };

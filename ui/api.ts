@@ -3,6 +3,12 @@ import type { ActionResponse, WeekLoadData } from "../actions/types.ts";
 import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
 
 export class SessionError extends Error {}
+/** A refusal from an action, with its HTTP status (422: the day can't be planned, 409: not allowed now). */
+export class ActionRefusal extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
 
 export async function call<T>(action: string, input: unknown): Promise<T> {
   const res = await fetch("/api/action", {
@@ -13,7 +19,7 @@ export async function call<T>(action: string, input: unknown): Promise<T> {
   });
   if (res.status === 401 || res.status === 403) throw new SessionError("Session expired");
   const body = (await res.json()) as ActionResponse<T>;
-  if (!body.ok) throw new Error(body.error);
+  if (!body.ok) throw new ActionRefusal(body.error, body.status);
   return body.data;
 }
 

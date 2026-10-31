@@ -69,6 +69,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["Shift F10", "Menu"], does: "Actions (⋯) for what has focus" },
   { keys: ["P"], does: "Plan the day (I also works)", command: "view.planday" },
   { keys: ["C"], does: "Commit, in Plan the day", command: "planday.commit" },
+  { keys: ["← →"], does: "Previous or next day, in Plan the day" },
   { keys: ["T"], does: "Go to today", command: "week.today" },
   { keys: ["["], does: "Previous week", command: "week.prev" },
   { keys: ["]"], does: "Next week", command: "week.next" },

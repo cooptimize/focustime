@@ -1,5 +1,6 @@
 // Plan layer types (step 5, Plan the day). Pure data shared by the store, actions and UI.
 import type { Half, IsoDate } from "../week/types.ts";
+import type { DayAccess } from "./days.ts";
 
 export type Size = "S" | "M" | "L";
 export type PickStatus = "planned" | "done" | "moved" | "dropped";
@@ -44,8 +45,12 @@ export type PlanDayState = {
   date: IsoDate;
   plan: DayPlan;
   picks: Pick[];
-  /** Unfinished picks from earlier days, newest first. */
+  /** Unfinished picks from earlier days, newest first. Only on the carry-over day (carryTarget), else empty. */
   carryOver: Pick[];
+  /** The one day carry-over is offered on: the earliest upcoming uncommitted day that can be planned. */
+  carryTarget: IsoDate | null;
+  /** "past": only ticking done and dropping. "plan": everything. */
+  access: DayAccess;
   drafts: DraftStory[];
   /** False when this call was an automatic open and the day had already been offered once. */
   opened: boolean;

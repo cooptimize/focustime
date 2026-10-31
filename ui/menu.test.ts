@@ -4,7 +4,7 @@ import type { Pick } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
-import { commandList, filterCommands, itemMenu, pickMenu, slotMenu, type MenuEnv, type MenuStep } from "./menu.ts";
+import { commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -19,6 +19,7 @@ function env(over: Partial<MenuEnv> = {}) {
     planWeek: { "2026-11-03": { committedAt: "x", picks: [pick] } },
     planState: null,
     planTarget: { date: "2026-11-03", isToday: true },
+    today: "2026-11-03",
     work,
     calendars: { outlook: true, google: false },
     runPlan: async (a, i) => (calls.push([a, i]), true),
@@ -58,6 +59,7 @@ describe("command menu (built from the action registry)", () => {
     const list = commandList(env().e);
     expect(filterCommands(list, "pick drop").map((c) => c.action)).toEqual(["pick.remove"]);
     expect(filterCommands(list, "EDGE open").map((c) => c.action)).toEqual(["ui.open_focused", "link.open"]);
+    expect(filterCommands(list, "plan a day")[0]?.label).toBe("Plan a day…");
   });
   it("commit is only available while Plan the day is open", () => {
     expect(commandList(env().e).find((c) => c.action === "planday.commit")?.disabled).toBe("Open Plan the day first");
@@ -105,5 +107,38 @@ describe("⋯ menus", () => {
     const m = slotMenu(env().e, "2026-11-05", "AM", "internal", "Internal");
     expect(find(m, "Add an intention").disabled).toBe("PTO day (Watch Kids)");
     expect(find(m, "Details").disabled).toBeUndefined();
+  });
+});
+
+describe("Plan any day (menus)", () => {
+  it("every day header's ⋯ has Plan this day; PTO and no-hours days say why it can't open", () => {
+    const t = env();
+    const plan = (d: string) => find(dayMenu(t.e, d), "Plan this day");
+    void plan("2026-11-04").run!();
+    expect(t.calls).toEqual([["openPlanDay", "2026-11-04"]]);
+    expect(find(dayMenu(t.e, "2026-11-05"), "Plan this day").disabled).toBe("PTO day (Watch Kids)");
+    expect(find(dayMenu(t.e, "2026-11-06"), "Plan this day").disabled).toBe("No working hours: Fridays and weekends can't be planned yet");
+    expect(items(dayMenu(t.e, "2026-11-02"))[0]!.label).toBe("Plan this day (past: done and drop only)");
+  });
+
+  it("Plan a day… is a date picker that opens the chosen date", async () => {
+    const t = env();
+    const cmd = commandList(t.e).find((c) => c.label === "Plan a day…")!;
+    const step = cmd.next!();
+    expect(step).toMatchObject({ input: "date", value: "2026-11-03", button: "Plan" });
+    if ("submit" in step) await step.submit("2026-12-01");
+    expect(t.calls).toEqual([["openPlanDay", "2026-12-01"]]);
+  });
+
+  it("a past pick: done and drop only; moving goes to today or later", () => {
+    const old: Pick = { ...pick, id: 9, date: "2026-11-02" };
+    const m = pickMenu(env().e, old);
+    expect(find(m, "Set size").disabled).toMatch(/^Past day/);
+    expect(find(m, "Mark done").disabled).toBeUndefined();
+    expect(find(m, "Drop").disabled).toBeUndefined();
+    const move = items(find(m, "Move").next!());
+    expect(move.find((i) => i.id === "to-other")!.disabled).toMatch(/^Past day/);
+    expect(move.filter((i) => i.label.startsWith("To Mon, Nov 2")).every((i) => i.disabled?.startsWith("Past day"))).toBe(true);
+    expect(move.find((i) => i.label === "To Tue, Nov 3 AM")!.disabled).toBeUndefined();
   });
 });

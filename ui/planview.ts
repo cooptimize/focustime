@@ -40,7 +40,8 @@ export function cardPlan(week: PlanWeek | null, slot: Slot, clientKey: string | 
   return {
     picks,
     // Fit only matters while something is left to do: all done shows no pill (not "nothing picked").
-    fit: picks.some((p) => p.status === "planned") ? fitOf(plannedMinutes(picks), capacityMinutes(slot, now)) : null,
+    // A block that has ended has no time left to fit anything into, so no fit is shown (Plan any day).
+    fit: picks.some((p) => p.status === "planned") && Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.end)) < 0 ? fitOf(plannedMinutes(picks), capacityMinutes(slot, now)) : null,
     items: items.filter((i) => !picked.has(i.id)),
     collapsed: true,
   };

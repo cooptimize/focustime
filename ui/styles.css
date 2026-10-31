@@ -263,6 +263,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .sum.at_risk { color: var(--risk); }
 .sum.watch { color: var(--watch); }
 .sum.ok { color: var(--text-faint); font-weight: 500; }
+.day-head .more-btn { align-self: center; height: 22px; line-height: 16px; }
 
 /* Strips: all day, before 9, after 5 */
 
@@ -882,6 +883,13 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pd-pto { margin: 0 0 10px; padding: 8px 12px; border-radius: 9px; font-size: 14px; border: 1px solid color-mix(in oklab, var(--pto) 45%, var(--border)); background: color-mix(in oklab, var(--pto) 9%, var(--surface)); }
 .pd-pto strong { color: var(--pto); }
 .pd-which { margin-left: 10px; vertical-align: middle; font-size: 12px; font-weight: 650; padding: 2px 9px; border-radius: 99px; border: 1px solid var(--border-strong); color: var(--text-muted); }
+.pd-which.past { border-style: dashed; color: var(--text-muted); }
+.pd-step { display: inline-flex; gap: 2px; }
+.pd-step button { min-width: 30px; font-size: 16px; line-height: 1; padding-inline: 8px; }
+.pd-block.past { min-height: 0; }
+.pd-tick { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; cursor: pointer; }
+.pd-tick .pick-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-picks li.dropped .pick-title { text-decoration: line-through; color: var(--text-muted); }
 .pd-which.next { border-color: color-mix(in oklab, var(--accent) 50%, var(--border)); color: var(--accent); background: color-mix(in oklab, var(--accent) 9%, var(--surface)); }
 .pto-note p { margin: 0; }
 .pto-note h3 { color: var(--pto); }

@@ -47,6 +47,10 @@ describe("a card's plan (step 6.1)", () => {
     expect(cp.fit).toBeNull(); // nothing left to do, so no fit to show
   });
 
+  it("a block that has ended shows no fit (a past day)", () => {
+    expect(cardPlan(plan([pick({ size: "L" }), pick({ itemId: 3, size: "S" })]), slot, "CSC", ITEMS, "2026-11-03T13:00:00Z").fit).toBeNull();
+  });
+
   it("committed with no picks in this half: no fit, the list still collapses", () => {
     const cp = cardPlan(plan([pick({ half: "PM" })]), slot, "CSC", ITEMS, NOW);
     expect(cp).toMatchObject({ picks: [], fit: null, collapsed: true, items: ITEMS });

@@ -84,6 +84,14 @@ async function ptoOn(ctx: ActionContext, cfg: AppConfig, date: string): Promise<
   return ptoByDate(r?.items ?? [], [date])[date] ?? null;
 }
 
+/** PTO dates from a Monday for AHEAD_DAYS: the same read as week.load's look-ahead, so usually a memory hit. */
+async function ptoAheadOf(ctx: ActionContext, cfg: AppConfig, monday: string): Promise<ReadonlySet<string>> {
+  if (!cfg.dataverse.mySystemUserId) return new Set();
+  const to = Temporal.PlainDate.from(monday).add({ days: AHEAD_DAYS }).toString();
+  const r = await ctx.makeDataverse(cfg.dataverse, cfg.week.dayShape.timeZone).pto(monday, to).catch(() => null);
+  return new Set((r?.items ?? []).map((e) => e.date));
+}
+
 const summarize = (s: SourceResult<unknown>): SourceSummary => {
   const { items, ...rest } = s;
   return { ...rest, itemCount: items.length };
@@ -273,7 +281,14 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "pick.mark_done":
     case "draft.add_story":
       return planAction(
-        { plan: ctx.plan, config: () => configured(ctx), devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.dayShape.timeZone), pto: (cfg, date) => ptoOn(ctx, cfg, date) },
+        {
+          plan: ctx.plan,
+          config: () => configured(ctx),
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.dayShape.timeZone),
+          pto: (cfg, date) => ptoOn(ctx, cfg, date),
+          ptoAhead: (cfg, monday) => ptoAheadOf(ctx, cfg, monday),
+          now: ctx.now,
+        },
         action,
         req.input,
       );

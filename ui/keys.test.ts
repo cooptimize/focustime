@@ -59,7 +59,7 @@ describe("the keyboard legend and the command menu agree", () => {
   const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config });
   const noop = () => {};
   const env: MenuEnv = {
-    week, selection: { date: "2026-11-02", half: "AM" }, planWeek: null, planState: null, planTarget: { date: "2026-11-02", isToday: true }, work: new Map(), calendars: { outlook: false, google: false },
+    week, selection: { date: "2026-11-02", half: "AM" }, planWeek: null, planState: null, planTarget: { date: "2026-11-02", isToday: true }, today: "2026-11-02", work: new Map(), calendars: { outlook: false, google: false },
     runPlan: async () => true, openPlanDay: noop, commitPlan: noop, openDetails: noop, openLink: noop, changeWeek: noop, goToday: noop, refresh: noop, showSourceStatus: noop, connect: noop, disconnect: noop, setView: noop,
     moveRegion: noop, focusedItem: null, showKeys: noop,
   };

@@ -2,6 +2,7 @@
 // picks and work items. One model: a menu step is a titled list of items, or a text prompt; an item either runs
 // or opens the next step. The command menu is built from the action registry, so every action appears.
 import { ACTIONS, type ActionName, type ActionSpec } from "../actions/registry.ts";
+import { dayRule } from "../plan/days.ts";
 import { isPickable } from "../plan/rules.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek } from "../plan/types.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
@@ -21,7 +22,19 @@ export type MenuItem = {
   run?: () => void | Promise<unknown>;
   next?: () => MenuStep;
 };
-export type MenuStep = { title: string; items: MenuItem[] } | { title: string; prompt: string; placeholder?: string; submit: (text: string) => void | Promise<unknown> };
+export type MenuStep =
+  | { title: string; items: MenuItem[] }
+  | {
+      title: string;
+      prompt: string;
+      placeholder?: string;
+      /** A date picker instead of a text box (value YYYY-MM-DD). */
+      input?: "date";
+      value?: string;
+      /** The submit button's label (default "Add"). */
+      button?: string;
+      submit: (text: string) => void | Promise<unknown>;
+    };
 
 export type View = "week" | "planday";
 
@@ -35,6 +48,8 @@ export type MenuEnv = {
   planState: PlanDayState | null;
   /** Default day for Plan the day (today, or the next workday). */
   planTarget: { date: IsoDate; isToday: boolean };
+  /** Today in the day shape's zone. Earlier days are past: only done and drop. */
+  today: IsoDate;
   work: ReadonlyMap<string, ClientWork>;
   calendars: { outlook: boolean; google: boolean };
   runPlan: (action: string, input: Record<string, unknown>) => Promise<boolean>;
@@ -65,12 +80,25 @@ function ptoReason(env: MenuEnv, date: IsoDate): string | undefined {
   return d?.pto ? `PTO day (${d.pto.titles.join(", ")})` : undefined;
 }
 
+const PAST = "Past day: its picks can only be ticked done or dropped";
+const isPast = (env: MenuEnv, date: IsoDate) => date < env.today;
+/** Why a day can't take new picks or changes: PTO, or past. */
+const closedReason = (env: MenuEnv, date: IsoDate) => ptoReason(env, date) ?? (isPast(env, date) ? PAST : undefined);
+
+/** Why Plan the day can't open a date (PTO, no working hours), or undefined when it can. */
+export function planDayRefusal(env: MenuEnv, date: IsoDate): string | undefined {
+  const d = env.week.days.find((x) => x.date === date);
+  const r = dayRule(date, env.today, d?.pto ?? null);
+  if (r.ok) return undefined;
+  return r.kind === "pto" ? ptoReason(env, date) : "No working hours: Fridays and weekends can't be planned yet";
+}
+
 /** Half-days of the week on screen, as places to put a pick. */
 function halfDays(env: MenuEnv, skip?: { date: IsoDate; half: Half }): { date: IsoDate; half: Half; label: string; disabled?: string }[] {
   return env.week.days.flatMap((d) =>
     (["AM", "PM"] as const)
       .filter((h) => !(skip && skip.date === d.date && skip.half === h))
-      .map((half) => ({ date: d.date, half, label: `${dayName(d.date)} ${half}${d.kind === "overflow" ? " (Friday catch-up)" : ""}`, ...(ptoReason(env, d.date) ? { disabled: ptoReason(env, d.date)! } : {}) })),
+      .map((half) => ({ date: d.date, half, label: `${dayName(d.date)} ${half}${d.kind === "overflow" ? " (Friday catch-up)" : ""}`, ...(closedReason(env, d.date) ? { disabled: closedReason(env, d.date)! } : {}) })),
   );
 }
 
@@ -80,8 +108,8 @@ export function moveStep(env: MenuEnv, p: Pick): MenuStep {
   const other: Half = p.half === "AM" ? "PM" : "AM";
   const fri = env.week.days[4]!.date;
   const quick: MenuItem[] = [
-    { id: "to-other", label: `To ${other} the same day`, action: "pick.move", ...(ptoReason(env, p.date) ? { disabled: ptoReason(env, p.date)! } : {}), run: () => env.runPlan("pick.move", { id: p.id, date: p.date, half: other }) },
-    ...(p.date !== fri ? [{ id: "to-fri", label: "To Friday (catch-up)", action: "pick.move", run: () => env.runPlan("pick.move", { id: p.id, date: fri, half: "AM" }) } as MenuItem] : []),
+    { id: "to-other", label: `To ${other} the same day`, action: "pick.move", ...(closedReason(env, p.date) ? { disabled: closedReason(env, p.date)! } : {}), run: () => env.runPlan("pick.move", { id: p.id, date: p.date, half: other }) },
+    ...(p.date !== fri && !isPast(env, fri) ? [{ id: "to-fri", label: "To Friday (catch-up)", action: "pick.move", run: () => env.runPlan("pick.move", { id: p.id, date: fri, half: "AM" }) } as MenuItem] : []),
   ];
   const days = halfDays(env, { date: p.date, half: p.half })
     .filter((h) => h.date !== p.date)
@@ -96,14 +124,15 @@ export function sizeStep(env: MenuEnv, p: Pick): MenuStep {
 
 /** The "⋯" menu of a pick. */
 export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
+  const past = isPast(env, p.date);
   return {
     title: p.title,
     items: [
       { id: "open", label: "Open in Edge", action: "link.open", ...(p.itemUrl ? {} : { disabled: p.kind === "intention" ? "An intention has no work item" : "A draft story isn't in DevOps yet" }), run: () => { if (p.itemUrl) env.openLink(p.clientKey, p.itemUrl); } },
-      { id: "size", label: "Set size", hint: p.size, action: "pick.set_size", next: () => sizeStep(env, p) },
-      { id: "move", label: "Move", hint: "AM, PM, another day, Friday", action: "pick.move", next: () => moveStep(env, p) },
+      { id: "size", label: "Set size", hint: p.size, action: "pick.set_size", ...(past ? { disabled: PAST } : {}), next: () => sizeStep(env, p) },
+      { id: "move", label: "Move", hint: past ? "to today or later" : "AM, PM, another day, Friday", action: "pick.move", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be moved" } : {}), next: () => moveStep(env, p) },
       { id: "done", label: p.status === "done" ? "Mark not done" : "Mark done", action: "pick.mark_done", run: () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" }) },
-      { id: "drop", label: "Drop", danger: true, action: "pick.remove", run: () => env.runPlan("pick.remove", { id: p.id }) },
+      { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned pick can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
     ],
   };
 }
@@ -153,15 +182,15 @@ export function itemMenu(env: MenuEnv, clientKey: string, item: WorkItem): MenuS
 
 /** The "⋯" menu of a half-day card. */
 export function slotMenu(env: MenuEnv, date: IsoDate, half: Half, clientKey: string | null, clientName: string | null): MenuStep {
-  const day = env.week.days.find((d) => d.date === date);
-  const off = ptoReason(env, date);
+  const off = closedReason(env, date);
+  const refused = planDayRefusal(env, date);
   const work = clientKey ? env.work.get(clientKey) : undefined;
   const pickable = (work?.items ?? []).filter(isPickable);
   return {
     title: `${dayName(date)} ${half}${clientName ? ` · ${clientName}` : ""}`,
     items: [
       { id: "details", label: "Details", hint: "Enter", action: "ui.details", run: () => env.openDetails(date, half) },
-      { id: "plan", label: "Plan this day", hint: "P", action: "planday.start", ...(day?.kind === "overflow" ? {} : {}), run: () => env.openPlanDay(date) },
+      { id: "plan", label: "Plan this day", action: "planday.start", ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(date) },
       {
         id: "intention",
         label: "Add an intention",
@@ -178,6 +207,26 @@ export function slotMenu(env: MenuEnv, date: IsoDate, half: Half, clientKey: str
       },
     ],
   };
+}
+
+// ---------- day headers ----------
+
+/** The "⋯" menu of a day header. */
+export function dayMenu(env: MenuEnv, date: IsoDate): MenuStep {
+  const refused = planDayRefusal(env, date);
+  return {
+    title: dayName(date),
+    items: [
+      { id: "plan", label: isPast(env, date) && !refused ? "Plan this day (past: done and drop only)" : "Plan this day", action: "planday.start", ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(date) },
+      { id: "am", label: "Details of AM", action: "ui.details", run: () => env.openDetails(date, "AM") },
+      { id: "pm", label: "Details of PM", action: "ui.details", run: () => env.openDetails(date, "PM") },
+    ],
+  };
+}
+
+/** "Plan a day…": a date picker. A refused date says why (PTO, no working hours) instead of opening. */
+export function planDateStep(env: MenuEnv): MenuStep {
+  return { title: "Plan a day", prompt: "Date to plan", input: "date", value: env.planState?.date ?? env.planTarget.date, button: "Plan", submit: (d) => env.openPlanDay(d) };
 }
 
 // ---------- the command menu ----------
@@ -226,8 +275,13 @@ function chooseItem(env: MenuEnv, title: string, filter: (i: WorkItem) => boolea
 function planDayStep(env: MenuEnv): MenuStep {
   const t = env.planTarget;
   const seen = new Set<string>([t.date]);
-  const items: MenuItem[] = [{ id: "target", label: `${dayName(t.date)} (${t.isToday ? "today" : "next workday"})`, ...(ptoReason(env, t.date) ? { hint: ptoReason(env, t.date)! } : {}), run: () => env.openPlanDay(t.date) }];
-  for (const d of env.week.days) if (!seen.has(d.date)) items.push({ id: d.date, label: dayName(d.date), ...(d.pto ? { hint: "PTO" } : {}), run: () => env.openPlanDay(d.date) });
+  const items: MenuItem[] = [{ id: "target", label: `${dayName(t.date)} (${t.isToday ? "today" : "next workday"})`, run: () => env.openPlanDay(t.date) }];
+  for (const d of env.week.days) {
+    if (seen.has(d.date)) continue;
+    const refused = planDayRefusal(env, d.date);
+    items.push({ id: d.date, label: `${dayName(d.date)}${isPast(env, d.date) ? " (past)" : ""}`, ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(d.date) });
+  }
+  items.push({ id: "date", label: "Another date…", hint: "date picker", next: () => planDateStep(env) });
   return { title: "Plan which day?", items };
 }
 
@@ -262,6 +316,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
   return [
     { id: "view.week", action: "view.week", group: "Views", label: "Week", ...(env.planState ? { hint: "Esc" } : {}), run: () => env.setView("week") },
     { id: "view.planday", action: "view.planday", group: "Views", label: "Plan the day", hint: "P", run: () => env.openPlanDay() },
+    { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
     { id: "view.planweek", action: "view.planweek", group: "Views", label: "Plan the week", disabled: soon },
     { id: "view.checkin", action: "view.checkin", group: "Views", label: "Check-in", disabled: soon },
     { id: "view.closeout", action: "view.closeout", group: "Views", label: "Close out", disabled: soon },
@@ -294,8 +349,12 @@ export function commandList(env: MenuEnv): MenuItem[] {
 export function filterCommands(items: MenuItem[], query: string): MenuItem[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return items;
-  return items.filter((i) => {
+  const found = items.filter((i) => {
     const text = `${i.label} ${i.group ?? ""} ${i.hint ?? ""} ${i.action ?? ""}`.toLowerCase();
     return words.every((w) => text.includes(w));
   });
+  // A label that starts with what was typed comes first ("plan a day" finds "Plan a day…" before "Plan the day").
+  const typed = words.join(" ");
+  const starts = (i: MenuItem) => i.label.toLowerCase().startsWith(typed);
+  return [...found.filter(starts), ...found.filter((i) => !starts(i))];
 }

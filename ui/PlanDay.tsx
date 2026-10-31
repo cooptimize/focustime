@@ -3,6 +3,7 @@
 // key commits. Everything here is local: the actions only write Coopilot's plan store.
 import { useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { blockClient, capacityMinutes, fitOf, isPickable, pickableChildren, plannedMinutes } from "../plan/rules.ts";
+import { dayLabel } from "../plan/days.ts";
 import { SIZES, type DraftStory, type PlanDayState, type Pick, type Size } from "../plan/types.ts";
 import type { Day, Half, Slot, WorkItem } from "../week/types.ts";
 import { fitLabel, formatMinutes } from "./planday.ts";
@@ -31,11 +32,14 @@ type Props = {
   act: PlanDayAct;
   onCommit: () => void;
   onClose: () => void;
+  /** ← → and the ‹ › buttons: the previous or next day that can be planned. */
+  onStep: (dir: 1 | -1) => void;
 };
 
 const inPlay = (p: Pick) => p.status === "planned" || p.status === "done";
 
-export function PlanDay({ day, state, which, friday, now, tz, colors, clients, error, act, onCommit, onClose }: Props) {
+export function PlanDay({ day, state, which, friday, now, tz, colors, clients, error, act, onCommit, onClose, onStep }: Props) {
+  const past = state.access === "past";
   const off = day.pto;
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -49,7 +53,7 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
   const committed = state.plan.committedAt;
 
   const onKey = (e: KeyboardEvent) => {
-    const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
+    const typing = (e.target instanceof HTMLInputElement && e.target.type !== "checkbox") || e.target instanceof HTMLSelectElement;
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
@@ -57,28 +61,47 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
       else onClose();
       return;
     }
-    if (!typing && (e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+    if ((e.key === "c" || e.key === "C") && !past) {
       e.preventDefault();
       onCommit();
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      onStep(e.key === "ArrowLeft" ? -1 : 1);
     }
   };
+  const badge = past ? "Past" : which;
 
   return (
     <section ref={ref} className="planday" tabIndex={-1} aria-label={`Plan ${longDate(day.date)}`} onKeyDown={onKey}>
       <header className="pd-head">
         <div>
           <h2>
-            Plan {longDate(day.date)}
-            {which && <span className={`pd-which ${which === "Today" ? "today" : "next"}`}>{which}</span>}
+            {past ? "Review" : "Plan"} {longDate(day.date)}
+            {badge && <span className={`pd-which ${badge === "Today" ? "today" : badge === "Past" ? "past" : "next"}`}>{badge}</span>}
           </h2>
           <p className="muted">
-            {committed ? `Committed at ${startClock(committed.replace(/\[.*\]$/, ""), tz)}. Changes are saved as you go; commit again when done.` : "About two minutes: pick story-level work for each block, then commit."}
+            {past
+              ? `This day is past: tick picks done or drop them. Nothing else changes here.${state.carryTarget ? ` Unfinished picks are offered to carry over on ${dayLabel(state.carryTarget)}.` : ""}`
+              : committed
+                ? `Committed at ${startClock(committed.replace(/\[.*\]$/, ""), tz)}. Changes are saved as you go; commit again when done.`
+                : "About two minutes: pick story-level work for each block, then commit."}
           </p>
         </div>
         <div className="pd-actions">
-          <button type="button" className="commit" onClick={onCommit}>
-            <kbd>c</kbd> {committed ? "Commit again" : "Commit"}
-          </button>
+          <span className="pd-step" role="group" aria-label="Day">
+            <button type="button" onClick={() => onStep(-1)} aria-label="Previous day (←)" title="Previous day (←)">
+              ‹
+            </button>
+            <button type="button" onClick={() => onStep(1)} aria-label="Next day (→)" title="Next day (→)">
+              ›
+            </button>
+          </span>
+          {!past && (
+            <button type="button" className="commit" onClick={onCommit}>
+              <kbd>c</kbd> {committed ? "Commit again" : "Commit"}
+            </button>
+          )}
           <button type="button" onClick={onClose} aria-label="Close planning">
             Esc
           </button>
@@ -96,9 +119,14 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
         </p>
       )}
 
-      {!off && state.carryOver.length > 0 && <CarryOver picks={state.carryOver} date={day.date} act={act} />}
+      {!off && !past && state.carryOver.length > 0 && <CarryOver picks={state.carryOver} date={day.date} act={act} />}
+      {!off && !past && state.carryTarget && state.carryTarget < day.date && (
+        <p className="muted pd-note">Unfinished picks from earlier days are offered on {dayLabel(state.carryTarget)}, the first day not committed yet.</p>
+      )}
 
-      {!off && <div className="pd-blocks">
+      {!off && past && <PastDay picks={state.picks.filter((p) => p.date === day.date && p.status !== "moved")} act={act} />}
+
+      {!off && !past && <div className="pd-blocks">
         {(["AM", "PM"] as const).map((half) => (
           <Block
             key={half}
@@ -118,6 +146,53 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
         ))}
       </div>}
     </section>
+  );
+}
+
+/** A past day: its picks per block, tick done or drop. No sizes, moves, candidates or commit (server enforces it too). */
+function PastDay({ picks, act }: { picks: Pick[]; act: PlanDayAct }) {
+  return (
+    <div className="pd-blocks past">
+      {(["AM", "PM"] as const).map((half) => {
+        const mine = picks.filter((p) => p.half === half);
+        return (
+          <section key={half} className="pd-block past" aria-label={`${half} block`}>
+            <header className="pd-block-head">
+              <div className="pd-title">
+                <span className="half-tag">{half}</span>
+              </div>
+            </header>
+            {mine.length === 0 ? (
+              <p className="muted pd-note">Nothing was planned.</p>
+            ) : (
+              <ol className="pd-picks">
+                {mine.map((p) => (
+                  <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`Actions for ${p.title}`} item={{ clientKey: p.clientKey, url: p.itemUrl }} className={p.status === "dropped" ? "dropped" : ""}>
+                    <label className="pd-tick">
+                      <input type="checkbox" checked={p.status === "done"} disabled={p.status === "dropped"} onChange={(e) => act("pick.mark_done", { id: p.id, done: e.target.checked })} />
+                      <span className="pick-title" title={p.title}>
+                        {p.title}
+                        <span className="muted"> · {p.clientKey}</span>
+                      </span>
+                    </label>
+                    <span className="size-tag">{p.size}</span>
+                    {p.status === "dropped" ? (
+                      <span className="muted">dropped</span>
+                    ) : (
+                      p.status === "planned" && (
+                        <button type="button" className="mini quiet" onClick={() => act("pick.remove", { id: p.id })} aria-label={`Drop ${p.title}`}>
+                          Drop
+                        </button>
+                      )
+                    )}
+                  </MenuRow>
+                ))}
+              </ol>
+            )}
+          </section>
+        );
+      })}
+    </div>
   );
 }
 

@@ -20,6 +20,7 @@ const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
 const NOW = "2026-11-03T14:00:00Z"; // Tue 9:00 New York
 
 function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden" } = {}) {
+  let clock = NOW;
   const dir = mkdtempSync(join(tmpdir(), "c-plan-"));
   const dv = fakeFetch("ok", { pto: opts.pto ?? "ok" });
   const ado = fakeDevOps({ cscsteel: "portfolio", cooptimize: "agile" });
@@ -38,7 +39,7 @@ function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden" } = {}) {
       return s;
     },
     saveSystemUserId: async () => {},
-    now: () => NOW,
+    now: () => clock,
     ...(opts.noPlan ? {} : { plan }),
   };
   const run = async <T = unknown>(action: string, input: unknown): Promise<T> => {
@@ -51,7 +52,9 @@ function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden" } = {}) {
     if (r.ok) throw new Error("expected failure");
     return r;
   };
-  return { c, run, fail, dv, ado, plan };
+  /** Move the real clock (the server's), e.g. to make a day past. */
+  const at = (instant: string) => void (clock = instant);
+  return { c, run, fail, dv, ado, plan, at };
 }
 
 const D = "2026-11-03";
@@ -146,8 +149,11 @@ describe("Plan the day actions", () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
     const mon = "2026-11-02";
+    // Monday was planned on Monday; now it is Tuesday morning.
+    t.at("2026-11-02T14:00:00Z");
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: mon, half: "PM", clientKey: "CSC", itemId: 101 });
     await t.run("planday.commit", { date: mon });
+    t.at(NOW);
     const s = await t.run<PlanDayState>("planday.start", { date: D });
     expect(s.carryOver.map((p) => p.id)).toEqual([pick.id]);
     const moved = await t.run<{ pick: Pick; state: PlanDayState }>("pick.move", { id: pick.id, date: D, half: "AM" });
@@ -248,3 +254,144 @@ describe("PTO and Plan the day (step 6)", () => {
   });
 });
 type PlanDayLike = { date: string; plan: { committedAt: string | null } };
+
+describe("Plan any day", () => {
+  const MON = "2026-11-02";
+  const WED = "2026-11-04";
+  const THU = "2026-11-05"; // PTO in the fakes
+  /** Monday planned and committed on Monday, then the clock moves to Tuesday 9:00. */
+  async function mondayPlanned(t: ReturnType<typeof setup>, n = 3) {
+    t.at("2026-11-02T14:00:00Z");
+    const picks: Pick[] = [];
+    for (let i = 0; i < n; i++) picks.push((await t.run<{ pick: Pick }>("pick.add", { date: MON, half: "AM", clientKey: "CSC", intention: `Monday ${i + 1}` })).pick);
+    await t.run("planday.commit", { date: MON });
+    t.at(NOW);
+    return picks;
+  }
+
+  describe("target selection", () => {
+    it("a future day is fully plannable: pick, size, move within it, commit", async () => {
+      const t = setup();
+      await t.run("week.load", { weekStart: "2026-11-02" });
+      const d = "2026-11-12";
+      const s = await t.run<PlanDayState>("planday.start", { date: d });
+      expect(s.access).toBe("plan");
+      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: d, half: "AM", clientKey: "CSC", itemId: 101 });
+      await t.run("pick.set_size", { id: pick.id, size: "L" });
+      await t.run("pick.move", { id: pick.id, date: d, half: "PM" });
+      expect((await t.run<PlanDayState>("planday.commit", { date: d })).picks).toMatchObject([{ half: "PM", size: "L", status: "planned" }]);
+    });
+
+    it("PTO days are refused with the reason", async () => {
+      const t = setup();
+      const r = await t.fail("planday.start", { date: THU });
+      expect(r).toMatchObject({ status: 422, error: "Thu, Nov 5 is a PTO day (Watch Kids). Nothing can be planned on it" });
+      expect((await t.fail("planday.start", { date: "2026-11-17" })).status).toBe(422);
+    });
+
+    it("Fridays and weekends are refused until they can have working hours (step 6b)", async () => {
+      const t = setup();
+      for (const d of ["2026-11-06", "2026-11-07", "2026-11-08"]) {
+        const r = await t.fail("planday.start", { date: d });
+        expect(r.status, d).toBe(422);
+        expect(r.ok ? "" : r.error, d).toMatch(/has no working hours.*working hours or a flex session/);
+      }
+      expect((await t.fail("planday.commit", { date: "2026-11-06" })).status).toBe(422);
+    });
+
+    it("today and earlier days open; earlier days are past", async () => {
+      const t = setup();
+      expect((await t.run<PlanDayState>("planday.start", { date: D })).access).toBe("plan");
+      expect((await t.run<PlanDayState>("planday.start", { date: MON })).access).toBe("past");
+      expect((await t.run<PlanDayState>("planday.start", { date: "2026-10-26" })).access).toBe("past");
+    });
+  });
+
+  describe("past-day editing rules", () => {
+    it("only done and drop: no new picks, no size change, no commit, nothing moved into it", async () => {
+      const t = setup();
+      const [a, b] = await mondayPlanned(t);
+      const refused = [
+        await t.fail("pick.add", { date: MON, half: "PM", clientKey: "CSC", intention: "late" }),
+        await t.fail("pick.set_size", { id: a!.id, size: "S" }),
+        await t.fail("planday.commit", { date: MON }),
+        await t.fail("pick.move", { id: b!.id, date: MON, half: "PM" }),
+      ];
+      for (const r of refused) expect(r).toMatchObject({ status: 409, error: expect.stringMatching(/^Mon, Nov 2 is past\. Its picks can only be ticked done or dropped/) });
+      const done = await t.run<{ pick: Pick }>("pick.mark_done", { id: a!.id, done: true });
+      expect(done.pick.status).toBe("done");
+      expect((await t.run<{ pick: Pick }>("pick.mark_done", { id: a!.id, done: false })).pick.status).toBe("planned");
+    });
+
+    it("dropping a past pick keeps it as dropped, even on a day that was never committed", async () => {
+      const t = setup();
+      const [, b] = await mondayPlanned(t);
+      const r = await t.run<{ result: string; state: PlanDayState }>("pick.remove", { id: b!.id });
+      expect(r.result).toBe("dropped");
+      expect(r.state.picks.find((p) => p.id === b!.id)?.status).toBe("dropped");
+
+      t.at("2026-10-29T14:00:00Z");
+      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-10-29", half: "AM", clientKey: "CSC", intention: "never committed" });
+      t.at(NOW);
+      expect((await t.run<{ result: string }>("pick.remove", { id: pick.id })).result).toBe("dropped");
+      expect(t.plan.getPick(pick.id)?.status).toBe("dropped");
+    });
+
+    it("a past pick can move forward to today or later (carrying it), never to another past day", async () => {
+      const t = setup();
+      const [, , c] = await mondayPlanned(t);
+      expect((await t.fail("pick.move", { id: c!.id, date: "2026-10-29", half: "AM" })).status).toBe(409);
+      const moved = await t.run<{ pick: Pick }>("pick.move", { id: c!.id, date: WED, half: "PM" });
+      expect(moved.pick).toMatchObject({ date: WED, carriedFromDate: MON });
+      expect(t.plan.getPick(c!.id)?.status).toBe("moved");
+    });
+  });
+
+  describe("carry-over placement across several planned days", () => {
+    it("only the earliest upcoming uncommitted day offers it; committing it moves the offer on", async () => {
+      const t = setup();
+      const [a, b, c] = await mondayPlanned(t);
+      const ids = [a!.id, b!.id, c!.id];
+      // Tuesday, Wednesday and next Monday all opened before anything is committed.
+      const tue = await t.run<PlanDayState>("planday.start", { date: D });
+      const wed = await t.run<PlanDayState>("planday.start", { date: WED });
+      const nextMon = await t.run<PlanDayState>("planday.start", { date: "2026-11-09" });
+      expect(tue.carryOver.map((p) => p.id).sort()).toEqual(ids);
+      expect(wed.carryOver).toEqual([]);
+      expect(nextMon.carryOver).toEqual([]);
+      for (const s of [tue, wed, nextMon]) expect(s.carryTarget).toBe(D);
+      // The past day itself never offers carry-over.
+      expect((await t.run<PlanDayState>("planday.start", { date: MON })).carryOver).toEqual([]);
+
+      // Tuesday is committed without carrying anything: Wednesday is now the carry-over day.
+      await t.run("planday.commit", { date: D });
+      expect((await t.run<PlanDayState>("planday.start", { date: D })).carryOver).toEqual([]);
+      const wed2 = await t.run<PlanDayState>("planday.start", { date: WED });
+      expect(wed2.carryOver.map((p) => p.id).sort()).toEqual(ids);
+
+      // Wednesday committed too, Thursday is PTO and Friday has no hours: next Monday.
+      await t.run("planday.commit", { date: WED });
+      const mon2 = await t.run<PlanDayState>("planday.start", { date: "2026-11-09" });
+      expect(mon2.carryTarget).toBe("2026-11-09");
+      expect(mon2.carryOver.map((p) => p.id).sort()).toEqual(ids);
+    });
+
+    it("a carried pick is offered nowhere else, and a future day's picks are not carry-over", async () => {
+      const t = setup();
+      const [a] = await mondayPlanned(t, 1);
+      await t.run("pick.add", { date: WED, half: "AM", clientKey: "CSC", intention: "planned ahead" });
+      await t.run("pick.move", { id: a!.id, date: D, half: "AM" });
+      for (const d of [D, WED, "2026-11-09"]) expect((await t.run<PlanDayState>("planday.start", { date: d })).carryOver, d).toEqual([]);
+    });
+
+    it("after the usual end of day, today's unfinished picks go to the next day that can be planned", async () => {
+      const t = setup();
+      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "PM", clientKey: "CSC", intention: "Tuesday work" });
+      await t.run("planday.commit", { date: D });
+      t.at("2026-11-03T23:30:00Z"); // Tue 18:30 New York
+      const tue = await t.run<PlanDayState>("planday.start", { date: D });
+      expect(tue).toMatchObject({ access: "plan", carryOver: [], carryTarget: WED });
+      expect((await t.run<PlanDayState>("planday.start", { date: WED })).carryOver.map((p) => p.id)).toEqual([pick.id]);
+    });
+  });
+});

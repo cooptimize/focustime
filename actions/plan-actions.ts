@@ -1,6 +1,8 @@
 // Plan the day actions (step 5). Local only: they read DevOps results already in memory to check a pick,
 // and write only to the local plan store. Nothing here calls DevOps, Outlook, Google or Dataverse.
+import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
+import { carryTarget, dayLabel, dayRule, upcomingStart, type DayRule } from "../plan/days.ts";
 import { unpickableReason } from "../plan/rules.ts";
 import { DEFAULT_SIZE, SIZES, type PlanDayState, type Size } from "../plan/types.ts";
 import { PlanError, type NewPick, type PlanStore } from "../store/plan-store.ts";
@@ -19,15 +21,43 @@ export type PlanContext = {
   devops: (cfg: AppConfig) => Pick<DevOpsSource, "lookup">;
   /** PTO on a date (step 6), or null. A full PTO day takes no picks. */
   pto?: (cfg: AppConfig, date: IsoDate) => Promise<PtoDay | null>;
+  /** PTO dates from a Monday for about five weeks (the same read as week.load's look-ahead), for the carry-over day. */
+  ptoAhead?: (cfg: AppConfig, monday: IsoDate) => Promise<ReadonlySet<IsoDate>>;
+  /** The real clock (ISO instant). Past days and the carry-over day are judged by it, never by the UI. */
+  now: () => string;
 };
+
+/** Today and the first upcoming day, in the configured zone. */
+async function clock(ctx: PlanContext): Promise<{ cfg: AppConfig | null; today: IsoDate; upcoming: IsoDate }> {
+  const cfg = await ctx.config();
+  const shape = cfg?.week.dayShape ?? defaultWeekConfig.dayShape;
+  const now = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(shape.timeZone);
+  return { cfg, today: now.toPlainDate().toString(), upcoming: upcomingStart(now, shape.end) };
+}
+
+async function ptoOf(ctx: PlanContext, cfg: AppConfig | null, d: IsoDate): Promise<PtoDay | null> {
+  return ctx.pto && cfg ? ctx.pto(cfg, d).catch(() => null) : null;
+}
+
+/** The day rule for a date: PTO and days without working hours are refused; earlier days are past. */
+async function ruleFor(ctx: PlanContext, d: IsoDate): Promise<DayRule> {
+  const { cfg, today } = await clock(ctx);
+  return dayRule(d, today, await ptoOf(ctx, cfg, d));
+}
 
 /** Refuses a full PTO day with a plain reason; null when the day can take picks. */
 async function ptoRefusal(ctx: PlanContext, d: IsoDate): Promise<string | null> {
-  if (!ctx.pto) return null;
-  const cfg = await ctx.config();
-  if (!cfg) return null;
-  const off = await ctx.pto(cfg, d).catch(() => null);
-  return off ? `${Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })} is a PTO day (${off.titles.join(", ")}). Nothing can be planned on it` : null;
+  const { cfg, today } = await clock(ctx);
+  const r = dayRule(d, today, await ptoOf(ctx, cfg, d));
+  return !r.ok && r.kind === "pto" ? r.reason : null;
+}
+
+const pastReason = (d: IsoDate) => `${dayLabel(d)} is past. Its picks can only be ticked done or dropped`;
+
+/** Refuses changes to a past day (anything but done and drop), with the reason; null when allowed. */
+async function pastRefusal(ctx: PlanContext, d: IsoDate): Promise<string | null> {
+  const { today } = await clock(ctx);
+  return d < today ? pastReason(d) : null;
 }
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
@@ -75,8 +105,21 @@ const bool = (v: unknown, name: string) => {
   return v;
 };
 
-function state(plan: PlanStore, d: IsoDate, opened = true): PlanDayState {
-  return { date: d, plan: plan.start(d), picks: plan.picksFor(d), carryOver: plan.carryOverFor(d), drafts: plan.drafts(), opened };
+/** The carry-over day: the earliest upcoming, plannable, uncommitted day (plan/days.ts). */
+async function carryDay(ctx: PlanContext, plan: PlanStore): Promise<{ target: IsoDate | null; upcoming: IsoDate }> {
+  const { cfg, upcoming } = await clock(ctx);
+  const monday = Temporal.PlainDate.from(upcoming).subtract({ days: Temporal.PlainDate.from(upcoming).dayOfWeek - 1 }).toString();
+  const pto = ctx.ptoAhead && cfg ? await ctx.ptoAhead(cfg, monday).catch(() => new Set<IsoDate>()) : new Set<IsoDate>();
+  return { target: carryTarget(upcoming, (d) => !!plan.day(d)?.committedAt, pto), upcoming };
+}
+
+async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = true): Promise<PlanDayState> {
+  const { today } = await clock(ctx);
+  const day = plan.start(d);
+  const carry = await carryDay(ctx, plan);
+  // Unfinished picks from before the first upcoming day, offered only on the carry-over day.
+  const carryOver = carry.target === d ? plan.carryOverFor(carry.upcoming) : [];
+  return { date: d, plan: day, picks: plan.picksFor(d), carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: plan.drafts(), opened };
 }
 
 export async function planAction(ctx: PlanContext, action: PlanAction, input: unknown): Promise<ActionResponse> {
@@ -88,14 +131,19 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const o = fields(input, ["date"], ["auto"]);
         const d = date(o.date);
         const auto = o.auto === undefined ? false : bool(o.auto, "auto");
+        const rule = await ruleFor(ctx, d);
+        if (!rule.ok) return bad(rule.reason, 422);
         // An automatic open happens once per day, and never for a day already committed.
         const opened = !auto || (!plan.day(d)?.committedAt && plan.markOnce("plan_day_auto", d));
-        return { ok: true, data: state(plan, d, opened) };
+        return { ok: true, data: await state(ctx, plan, d, opened) };
       }
       case "planday.commit": {
         const d = date(fields(input, ["date"]).date);
+        const rule = await ruleFor(ctx, d);
+        if (!rule.ok) return bad(rule.reason, 422);
+        if (rule.access === "past") return bad(pastReason(d), 409);
         plan.commit(d);
-        return { ok: true, data: state(plan, d) };
+        return { ok: true, data: await state(ctx, plan, d) };
       }
       case "pick.add": {
         const o = fields(input, ["date", "half", "clientKey"], ["size", "itemId", "intention", "draftId"]);
@@ -104,6 +152,8 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (given.length !== 1) throw new Invalid("give exactly one of itemId, intention or draftId");
         const off = await ptoRefusal(ctx, base.date);
         if (off) return bad(off, 422);
+        const past = await pastRefusal(ctx, base.date);
+        if (past) return bad(past, 409);
         let p: NewPick;
         if (o.itemId !== undefined) {
           const itemId = id(o.itemId, "itemId");
@@ -124,19 +174,26 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           p = { ...base, kind: "intention", title: text(o.intention, "intention") };
         }
         const pick = plan.addPick(p);
-        return { ok: true, data: { pick, state: state(plan, pick.date) } };
+        return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
       }
       case "pick.remove": {
         const pid = id(fields(input, ["id"]).id);
         const before = plan.getPick(pid);
         if (!before) return bad(`No pick ${pid}`, 404);
-        const r = plan.removePick(pid);
-        return { ok: true, data: { result: r.result, state: state(plan, before.date) } };
+        // On a past day nothing is deleted: the pick is kept as dropped, so the record of the day stays.
+        const r = (await pastRefusal(ctx, before.date)) ? { result: "dropped" as const, pick: plan.drop(pid) } : plan.removePick(pid);
+        return { ok: true, data: { result: r.result, state: await state(ctx, plan, before.date) } };
       }
       case "pick.set_size": {
         const o = fields(input, ["id", "size"]);
-        const pick = plan.setSize(id(o.id), size(o.size));
-        return { ok: true, data: { pick, state: state(plan, pick.date) } };
+        const pid = id(o.id);
+        const sz = size(o.size);
+        const before = plan.getPick(pid);
+        if (!before) return bad(`No pick ${pid}`, 404);
+        const past = await pastRefusal(ctx, before.date);
+        if (past) return bad(past, 409);
+        const pick = plan.setSize(pid, sz);
+        return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
       }
       case "pick.move": {
         const o = fields(input, ["id", "date", "half"]);
@@ -144,10 +201,14 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const before = plan.getPick(pid);
         if (!before) return bad(`No pick ${pid}`, 404);
         const to = date(o.date);
+        const h = half(o.half);
         const off = await ptoRefusal(ctx, to);
         if (off) return bad(off, 422);
-        const pick = plan.move(pid, to, half(o.half));
-        return { ok: true, data: { pick, state: state(plan, before.date) } };
+        // Into a past day never; out of a past day only forward to today or later (that is carrying it).
+        const past = await pastRefusal(ctx, to);
+        if (past) return bad(`${past}. Move it to today or a later day`, 409);
+        const pick = plan.move(pid, to, h);
+        return { ok: true, data: { pick, state: await state(ctx, plan, before.date) } };
       }
       case "pick.mark_done": {
         const o = fields(input, ["id", "done"]);

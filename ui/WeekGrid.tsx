@@ -5,7 +5,7 @@ import type { CalEvent, Day, Half, PlacedEvent, Slot, Week, WorkItem } from "../
 import type { PtoDay } from "../week/pto.ts";
 import type { Pick } from "../plan/types.ts";
 import { freeMinutes, longestFree, nowIfUnderway } from "../week/free.ts";
-import { itemMenu, pickMenu, slotMenu } from "./menu.ts";
+import { dayMenu, itemMenu, pickMenu, slotMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
 import { hourMarks, layoutEvents } from "./layout.ts";
 import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
@@ -116,10 +116,11 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
   const risks = [...day.am.risks, ...day.pm.risks];
   const atRisk = [day.am, day.pm].filter((s) => worstSeverity(s.risks) === "at_risk").length;
   const watch = [day.am, day.pm].filter((s) => worstSeverity(s.risks) === "watch").length;
+  const menu = useMenu((env) => dayMenu(env, day.date));
 
   return (
     <section className={`day ${overflow ? "overflow" : "work"} ${isToday ? "today" : ""} ${day.pto ? "pto-full" : ""}`} aria-label={`${day.weekday} ${shortDate(day.date)}${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}>
-      <header className="day-head">
+      <header className="day-head" onContextMenu={menu.onContextMenu}>
         <span className="dow">{day.weekday}</span>
         <span className="date">{shortDate(day.date)}</span>
         {isToday && <span className="today-pill">Today</span>}
@@ -134,6 +135,8 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
           {watch > 0 && <span className="sum watch">{watch} watch</span>}
           {!overflow && !day.pto && risks.length === 0 && <span className="sum ok">Clear</span>}
         </span>
+        {/* In the Tab order only for the selected day (Shift+Tab from its half-day reaches it). */}
+        <HalfScope.Provider value={props.selection.dayIndex === dayIndex}>{menu.button(`Actions for ${day.weekday} ${shortDate(day.date)}`)}</HalfScope.Provider>
       </header>
 
       <Strip kind="allday" label="All day" items={day.allDay.map((e) => ({ key: e.id, e, time: "" }))} />

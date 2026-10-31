@@ -6,7 +6,7 @@ Read before changing code: this file, `docs/spec.md` (current slice), `docs/deci
 
 ## Current milestone
 
-Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks), step 4.5 (responsive layout: wide, medium, narrow) and step 5 (morning planning, now "Plan the day": local plan store, picks, commit, checklist, reminder, autostart) and step 5.5 (Omarchy app launcher and key, work item links in the client's Edge profile, card polish, Loop recorded but not built) and step 6 (top bar views, item and command menus from the action registry, the ignition → Plan the day rename, planning the next workday, PTO from Dataverse, Outlook show-as styling and free-time summary), and step 6.1 (UX review fixes on a token foundation: Plan the day styling, three token layers, AA contrast, status bar by root cause, Tab scope, F6 and O, keyboard legend, plan fit on committed cards), all authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
+Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks), step 4.5 (responsive layout: wide, medium, narrow) and step 5 (morning planning, now "Plan the day": local plan store, picks, commit, checklist, reminder, autostart) and step 5.5 (Omarchy app launcher and key, work item links in the client's Edge profile, card polish, Loop recorded but not built) and step 6 (top bar views, item and command menus from the action registry, the ignition → Plan the day rename, planning the next workday, PTO from Dataverse, Outlook show-as styling and free-time summary), and step 6.1 (UX review fixes on a token foundation: Plan the day styling, three token layers, AA contrast, status bar by root cause, Tab scope, F6 and O, keyboard legend, plan fit on committed cards), and Plan any day (any date, day header menu, ← →, date picker, past days settle-only, one carry-over day), all authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
 
 ## Hard rules
 
@@ -24,7 +24,7 @@ Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work ite
 ui/        week grid, top bar, Plan the day, menus (menu.ts builders, Menus.tsx popup and command menu), source status (status.ts: causes and actions), keys.ts (F6, O, legend), styles.css tokens (primitives, semantic, domain)
 actions/   named, validated actions; registry.ts is the one list (dispatcher, command menu, future chat)
 week/      pure: normalize, slots, risk rules, PTO days (pto.ts), free time (free.ts) (no I/O, no tokens)
-plan/      pure: plan types, capacity, fit, carry-over, block client, story level, planning target (target.ts)
+plan/      pure: plan types, capacity, fit, carry-over, block client, story level, planning target (target.ts), day rule, stepping and carry-over day (days.ts)
 store/     SQLite plan store (~/.local/share/coopilot/plan.db), migrations, export
 sources/   dataverse (focus time, PTO) | graph | google | devops adapters; oauth/ (PKCE loopback), calendar/ (shared fetch, cache, status), devops/ (per-client work items, Pat)
 secrets/   keyring access only
@@ -51,7 +51,7 @@ Run: `coopilot-open` (starts the service if needed, then opens or focuses the wi
 | Look-ahead | The week view |
 | At-risk block | Focus block threatened by meetings or personal events, with a stated reason |
 | Plan layer | Coopilot's local plan: day plans and picks in the plan store (step 5) |
-| Plan the day | The planning panel: a day's capacity (today, or the next workday) into committed picks per block. Formerly "ignition"; `i` stays as an alias key |
+| Plan the day | The planning panel: a day's capacity (by default today, or the next workday; any plannable date) into committed picks per block. A past day opens as a review: done and drop only. Formerly "ignition"; `i` stays as an alias key |
 | Plan the week, Check-in, Close out | Reserved names for future views (shown as "coming soon"). Not built |
 | PTO | Time off from Dataverse Time Off Tracker rows (mine only). Every PTO day is a whole day off: no risks, no picks, skipped as a planning target. Hours are not used |
 | Command menu | Ctrl+K: every action from the action registry with its shortcut; the base for the chat panel |

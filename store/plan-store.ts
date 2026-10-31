@@ -187,6 +187,15 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         return { result: "dropped", pick: mustPick(id) };
       });
     },
+    /** Settles a planned pick as dropped and keeps it, whatever the day's commit state (past days). */
+    drop(id: number): Pick {
+      return tx(() => {
+        const p = mustPick(id);
+        if (p.status !== "planned") throw new PlanError("Only a planned pick can be dropped");
+        db.prepare("UPDATE picks SET status = 'dropped', updated_at = ? WHERE id = ?").run(stamp(), id);
+        return mustPick(id);
+      });
+    },
     setSize(id: number, size: Size): Pick {
       return tx(() => {
         mustPick(id);
