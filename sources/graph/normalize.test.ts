@@ -46,8 +46,8 @@ describe("normalizeGraphEvents (sanitized recorded calendarView, two pages)", ()
     expect(byTitle("Out of office")[0]).toMatchObject({ allDay: true, start: "2026-11-06", end: "2026-11-07", showAs: "oof" });
   });
 
-  it("treats working elsewhere as free", () => {
-    expect(byTitle("Working from client site")[0]).toMatchObject({ allDay: true, showAs: "free" });
+  it("keeps working elsewhere as its own show-as (not busy, D103)", () => {
+    expect(byTitle("Working from client site")[0]).toMatchObject({ allDay: true, showAs: "workingElsewhere" });
   });
 
   it("skips an event with an unknown time zone and counts it", () => {

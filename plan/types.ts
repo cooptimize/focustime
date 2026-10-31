@@ -1,4 +1,4 @@
-// Plan layer types (step 5, morning ignition). Pure data shared by the store, actions and UI.
+// Plan layer types (step 5, Plan the day). Pure data shared by the store, actions and UI.
 import type { Half, IsoDate } from "../week/types.ts";
 
 export type Size = "S" | "M" | "L";
@@ -39,8 +39,8 @@ export type Pick = {
 
 export type DraftStory = { id: number; clientKey: string; parentItemId: number; title: string; size: Size; createdAt: ZonedStamp };
 
-/** Everything the ignition panel needs for one date. */
-export type IgnitionState = {
+/** Everything the Plan the day panel needs for one date. */
+export type PlanDayState = {
   date: IsoDate;
   plan: DayPlan;
   picks: Pick[];

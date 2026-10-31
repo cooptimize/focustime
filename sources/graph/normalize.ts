@@ -18,8 +18,8 @@ const SHOW_AS: Record<string, ShowAs> = {
   tentative: "tentative",
   busy: "busy",
   oof: "oof",
-  // Working elsewhere is an availability note, not time taken.
-  workingElsewhere: "free",
+  // Working elsewhere is an availability note, not time taken (treated like free for capacity).
+  workingElsewhere: "workingElsewhere",
   unknown: "unknown",
 };
 

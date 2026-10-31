@@ -53,7 +53,7 @@ const status = (d: WeekLoadData) => Object.fromEntries(d.sources.map((s) => [s.s
 describe("week.load with real calendar sources", () => {
   it("uses real Outlook and Google events and no sample meetings once both are configured", async () => {
     const d = await load(ctx().c);
-    expect(status(d)).toEqual({ dataverse: "ok", outlook: "ok", google: "ok" });
+    expect(status(d)).toEqual({ dataverse: "ok", pto: "ok", outlook: "ok", google: "ok" });
     expect(titles(d)).toContain("WC weekly status");
     expect(titles(d)).toContain("Call with Grandma");
     expect(titles(d)).not.toContain("Cooptimize weekly standup"); // sample fixture
@@ -61,14 +61,14 @@ describe("week.load with real calendar sources", () => {
 
   it("keeps sample meetings only for a source that is not configured at all", async () => {
     const d = await load(ctx({ text: base.replace('client_id = "123-abc.apps.googleusercontent.com"', 'client_id = ""') }).c);
-    expect(status(d)).toEqual({ dataverse: "ok", outlook: "ok", google: "ok:sample" });
+    expect(status(d)).toEqual({ dataverse: "ok", pto: "ok", outlook: "ok", google: "ok:sample" });
     expect(titles(d)).toContain("WC weekly status");
     expect(titles(d)).toContain("School pickup"); // sample Google
   });
 
   it("isolates failures: each source reports its own state and the others still show", async () => {
     const d = await load(ctx({ dv: "dv_503", outlook: "ok", google: "refresh_expired" }).c);
-    expect(status(d)).toEqual({ dataverse: "error", outlook: "ok", google: "auth_required" });
+    expect(status(d)).toEqual({ dataverse: "error", pto: "error", outlook: "ok", google: "auth_required" });
     expect(titles(d)).toContain("WC weekly status");
     expect(d.sources.find((s) => s.source === "google")).toMatchObject({ fixAction: "connect_google" });
   });

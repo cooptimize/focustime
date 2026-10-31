@@ -60,7 +60,16 @@ export const devopsAccounts = {
   ],
 };
 
-export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devopsAccounts?: unknown } = {}) {
+/** PTO (step 6): Thu Nov 5 full day with a detail row; Tue Nov 3 4 h with no detail rows. */
+export const PTO_TRACKERS = {
+  value: [
+    { coop_timeofftrackerid: "aaaaaaaa-0000-4000-8000-000000000005", coop_timeoffstartdate: "2026-11-05", coop_enddate: "2026-11-05", coop_timeoffhours: 8, coop_title: "Watch Kids" },
+    { coop_timeofftrackerid: "aaaaaaaa-0000-4000-8000-000000000003", coop_timeoffstartdate: "2026-11-03", coop_enddate: "2026-11-03", coop_timeoffhours: 4, coop_title: "Dentist" },
+  ],
+};
+export const PTO_DETAILS = { value: [{ _coop_timeofftracker_value: "aaaaaaaa-0000-4000-8000-000000000005", coop_date: "2026-11-05", coop_hours: "8" }] };
+
+export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devopsAccounts?: unknown; pto?: "ok" | "none" | "forbidden" } = {}) {
   const calls: Call[] = [];
   const fn = async (input: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
     const url = String(input);
@@ -95,6 +104,13 @@ export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devops
     // My clients (Q21): same accounts, never with the token.
     if (path.startsWith("accounts") && path.includes("coop_devopsorg")) return json(200, { value: devopsAccounts.value.map(({ coop_devopstoken: _t, ...rest }) => rest) });
     if (path.startsWith("accounts")) return json(200, accounts);
+    if (path.startsWith("coop_timeofftracker")) {
+      if (extra.pto === "forbidden") return leakyError(403, "0x80040220");
+      if (extra.pto === "none") return json(200, { value: [] });
+      // Only my rows: the filter must name my systemuserid.
+      if (path.startsWith("coop_timeofftrackers?")) return json(200, decodeURIComponent(path).includes(`_coop_employee_value eq ${ME}`) ? PTO_TRACKERS : { value: [] });
+      return json(200, PTO_DETAILS);
+    }
     if (path.startsWith("coop_focustimes")) {
       const paged = scenario === "paged" || scenario === "paged_foreign_next" || scenario === "page_fails";
       if (!paged) return json(200, focustimes);

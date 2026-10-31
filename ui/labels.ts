@@ -66,5 +66,11 @@ export function sourceName(e: CalEvent, samples: ReadonlySet<string>): string {
 }
 
 export function showAsLabel(e: CalEvent): string {
-  return e.showAs === "tentative" ? "tentative" : e.showAs === "free" ? "free" : e.showAs === "oof" ? "out of office" : "busy";
+  switch (e.showAs) {
+    case "tentative": return "tentative";
+    case "free": return "free";
+    case "oof": return "out of office";
+    case "workingElsewhere": return "working elsewhere";
+    default: return "busy";
+  }
 }

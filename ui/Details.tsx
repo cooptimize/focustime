@@ -4,12 +4,16 @@ import { rankRisks } from "../week/risks.ts";
 import type { Day, Slot } from "../week/types.ts";
 import { DevOpsWork, workStatusLabel } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
+import { freeMinutes, longestFree, nowIfUnderway } from "../week/free.ts";
+import { itemMenu } from "./menu.ts";
+import { MenuRow } from "./Menus.tsx";
 import { updatedAgo } from "./refresh.ts";
 import { clientColor, eventRange, halfName, longDate, ruleLabel, SampleSources, severityLabel, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 
-type Props = { open: boolean; day: Day; slot: Slot; timeZone: string; colors: Record<string, string>; onClose: () => void };
+type Props = { open: boolean; day: Day; slot: Slot; timeZone: string; colors: Record<string, string>; now: string; onClose: () => void };
 
-export function Details({ open, day, slot, timeZone, colors, onClose }: Props) {
+export function Details({ open, day, slot, timeZone, colors, now, onClose }: Props) {
+  const at = nowIfUnderway(slot, now);
   const ref = useRef<HTMLDialogElement>(null);
   const samples = useContext(SampleSources);
   const allWork = useContext(DevOpsWork);
@@ -38,6 +42,16 @@ export function Details({ open, day, slot, timeZone, colors, onClose }: Props) {
           Esc
         </button>
       </header>
+
+      {day.pto && (
+        <section className={`pto-note ${day.pto.full ? "full" : "part"}`}>
+          <h3>PTO</h3>
+          <p>
+            {day.pto.full ? "Whole day off" : `${formatDuration(day.pto.minutes)} off, taken from the afternoon first`} · {day.pto.titles.join(", ")}
+            {day.pto.full ? ". No risks are raised and nothing can be planned." : ""}
+          </p>
+        </section>
+      )}
 
       {day.kind === "work" && (
         <section>
@@ -83,14 +97,14 @@ export function Details({ open, day, slot, timeZone, colors, onClose }: Props) {
           {w.items.length > 0 && (
             <ol className="work-list">
               {w.items.map((i) => (
-                <li key={i.id}>
+                <MenuRow key={i.id} build={(env) => itemMenu(env, w.clientKey, i)} label={`Actions for ${i.type} ${i.id}`}>
                   <WorkLink clientKey={w.clientKey} url={i.url} className="wi-link">
                     <span className="wi-type">{i.type}</span>
                     <span className="wi-id">{i.id}</span>
                     <span className="wi-title">{i.title}</span>
                     <span className="wi-state">{i.state}</span>
                   </WorkLink>
-                </li>
+                </MenuRow>
               ))}
             </ol>
           )}
@@ -100,7 +114,8 @@ export function Details({ open, day, slot, timeZone, colors, onClose }: Props) {
       <section>
         <h3>Time</h3>
         <p>
-          {formatDuration(slot.busyMeetingMinutes)} of meetings · longest free stretch {formatDuration(slot.longestFreeMinutes)}
+          {formatDuration(slot.busyMeetingMinutes)} meetings · {formatDuration(freeMinutes(slot, at))} free{at ? " from now" : ""} · longest {formatDuration(longestFree(slot, at))}
+          {slot.ptoMinutes > 0 ? ` · PTO ${formatDuration(slot.ptoMinutes)}` : ""}
         </p>
         {slot.freeGaps.length > 0 && (
           <p className="muted">
@@ -112,9 +127,10 @@ export function Details({ open, day, slot, timeZone, colors, onClose }: Props) {
       <section>
         <h3>Events in this half-day</h3>
         {slot.events.length === 0 && <p className="muted">None.</p>}
+        <ShowAsLegend />
         <ul className="event-list">
           {slot.events.map((p) => (
-            <li key={p.event.id} className={p.event.isPersonal ? "personal" : "meeting"}>
+            <li key={p.event.id} className={`${p.event.isPersonal ? "personal" : "meeting"} show-${p.event.showAs ?? "busy"}`}>
               <span className="when">{eventRange(p.event, tz)}</span>
               <span className="what">{p.event.title}</span>
               <span className="muted">
@@ -140,5 +156,26 @@ export function Details({ open, day, slot, timeZone, colors, onClose }: Props) {
         </section>
       )}
     </dialog>
+  );
+}
+
+/** How calendar events are drawn by their Outlook "show as" status (D103): not by color alone. */
+function ShowAsLegend() {
+  const rows: [string, string][] = [
+    ["busy", "Busy"],
+    ["tentative", "Tentative"],
+    ["free", "Free"],
+    ["oof", "Out of office"],
+    ["workingElsewhere", "Working elsewhere"],
+  ];
+  return (
+    <ul className="showas-legend" aria-label="How events are shown">
+      {rows.map(([k, label]) => (
+        <li key={k}>
+          <span className={`legend-swatch show-${k}`} aria-hidden="true" />
+          {label}
+        </li>
+      ))}
+    </ul>
   );
 }

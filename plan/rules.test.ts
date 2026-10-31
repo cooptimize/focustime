@@ -21,7 +21,8 @@ function pick(over: Partial<Pick> = {}): Pick {
 
 describe("capacity", () => {
   // AM 9:00–12:30 with a 10:00–11:00 meeting and a personal 12:00–12:30: free 9–10 and 11–12.
-  const slot = { freeGaps: [gap("09:00", "10:00"), gap("11:00", "12:00")] };
+  const frame = { start: at("09:00"), end: at("12:30"), longestFreeMinutes: 60 };
+  const slot = { ...frame, freeGaps: [gap("09:00", "10:00"), gap("11:00", "12:00")] };
 
   it("is the free time after meetings and personal events", () => {
     expect(capacityMinutes(slot, at("07:30"))).toBe(120);
@@ -33,7 +34,11 @@ describe("capacity", () => {
   });
   it("is zero once the half-day has passed or has no free time", () => {
     expect(capacityMinutes(slot, at("12:30"))).toBe(0);
-    expect(capacityMinutes({ freeGaps: [] }, at("07:00"))).toBe(0);
+    expect(capacityMinutes({ ...frame, freeGaps: [] }, at("07:00"))).toBe(0);
+  });
+  it("is lowered by PTO taken from that half-day", () => {
+    expect(capacityMinutes({ ...slot, ptoMinutes: 150 }, at("07:30"))).toBe(60);
+    expect(capacityMinutes({ ...slot, ptoMinutes: 210 }, at("07:30"))).toBe(0);
   });
 });
 

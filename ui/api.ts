@@ -1,6 +1,6 @@
 // The UI's only way to get data or act: named actions on the local server (same origin, token cookie).
 import type { ActionResponse, WeekLoadData } from "../actions/types.ts";
-import type { DraftStory, IgnitionState, Pick } from "../plan/types.ts";
+import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
 
 export class SessionError extends Error {}
 
@@ -24,6 +24,6 @@ export const connectSource = (source: "outlook" | "google") =>
   call<ConnectResult>(source === "outlook" ? "auth.connect_microsoft" : "auth.connect_google", {});
 export const disconnectSource = (source: "outlook" | "google") => call<{ status: string }>("auth.disconnect", { source });
 
-export type PlanResult = { pick?: Pick; state?: IgnitionState; draft?: DraftStory; result?: string };
+export type PlanResult = { pick?: Pick; state?: PlanDayState; draft?: DraftStory; result?: string };
 /** Plan actions (step 5): local only. */
-export const planAction = (action: string, input: unknown) => call<PlanResult & IgnitionState>(action, input);
+export const planAction = (action: string, input: unknown) => call<PlanResult & PlanDayState>(action, input);

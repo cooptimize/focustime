@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { autoOpenDue, dayRolledOver } from "./ignition.ts";
+import { autoOpenDue, dayRolledOver } from "./planday.ts";
 
 const at = (s: string) => Temporal.ZonedDateTime.from(`${s}[America/New_York]`);
 const ig = (over: Partial<{ date: string; workday: boolean; committed: boolean; available: boolean }> = {}) => ({ date: "2026-11-03", workday: true, committed: false, available: true, ...over });
 
-describe("automatic ignition", () => {
+describe("automatic Plan the day", () => {
   it("is due on a workday from 05:00 when today isn't committed", () => {
     expect(autoOpenDue(at("2026-11-03T04:59:00-05:00"), ig())).toBe(false);
     expect(autoOpenDue(at("2026-11-03T05:00:00-05:00"), ig())).toBe(true);

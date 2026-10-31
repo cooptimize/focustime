@@ -5,6 +5,7 @@ import type { DataverseConfig } from "../../config/schema.ts";
 import type { Logger } from "../../log/logger.ts";
 import { SecretError } from "../../secrets/keyring.ts";
 import { formatTime } from "../../week/format.ts";
+import { ptoEntries, type PtoDetailRow, type PtoEntry, type PtoTrackerRow } from "../../week/pto.ts";
 import type { FocusPattern, SourceResult } from "../../week/types.ts";
 import { Pat } from "../devops/pat.ts";
 import type { DevOpsTarget, TargetsResult } from "../devops/types.ts";
@@ -340,6 +341,58 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
+  /**
+   * My PTO for one week (step 6): Time Off Tracker rows for me (coop_employee = my systemuserid) that overlap
+   * Mon to Fri, and every detail row of those trackers. Only the fields listed are selected: never
+   * coop_outofofficemessage, and the accrual table (coop_timeofffact) is never read. Normalized to PTO entries
+   * for the week's dates, cached per week as the last good result, and never thrown: failures fall back to it.
+   */
+  const ptoMemory = new Map<string, { at: number; result: SourceResult<PtoEntry> }>();
+  async function pto(weekStart: string, dayMinutes: number, opts: { refresh?: boolean } = {}): Promise<SourceResult<PtoEntry>> {
+    const t = now().epochMilliseconds;
+    const key = `${weekStart}:${dayMinutes}`;
+    const hit = ptoMemory.get(key);
+    if (hit && !opts.refresh && t - hit.at < ttl) return hit.result;
+    let result: SourceResult<PtoEntry>;
+    try {
+      const userId = config.mySystemUserId;
+      if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) throw new SourceFailure("misconfigured", "Your Dataverse user id is not resolved yet", "open_settings");
+      const mon = Temporal.PlainDate.from(weekStart);
+      const fri = mon.add({ days: 4 });
+      const filter = `_coop_employee_value eq ${userId} and statecode eq 0 and coop_timeoffstartdate le ${fri} and (coop_enddate eq null or coop_enddate ge ${mon})`;
+      const trackers = await getAll<PtoTrackerRow>(
+        "pto_trackers",
+        `coop_timeofftrackers?$select=coop_timeofftrackerid,coop_timeoffstartdate,coop_enddate,coop_timeoffhours,coop_title&$filter=${encodeURIComponent(filter)}`,
+      );
+      const ids = trackers.map((r) => r.coop_timeofftrackerid?.toLowerCase()).filter((id): id is string => !!id && /^[0-9a-f-]{36}$/.test(id));
+      // All detail rows of these trackers, not only this week's: a tracker with details elsewhere must not be spread here.
+      const details = ids.length
+        ? await getAll<PtoDetailRow>(
+            "pto_details",
+            `coop_timeofftrackerdetails?$select=_coop_timeofftracker_value,coop_date,coop_hours&$filter=${encodeURIComponent(`statecode eq 0 and (${ids.map((id) => `_coop_timeofftracker_value eq ${id}`).join(" or ")})`)}`,
+          )
+        : [];
+      const dates = new Set([0, 1, 2, 3, 4].map((i) => mon.add({ days: i }).toString()));
+      const { entries, skipped } = ptoEntries(trackers, details, dayMinutes);
+      const items = entries.filter((e) => dates.has(e.date));
+      if (skipped) log({ source: "dataverse", op: "pto_normalize", kind: "skipped", count: skipped });
+      const fetchedAt = now().toZonedDateTimeISO(deps.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
+      await writeSnapshot(deps.cacheDir, "pto", key.replace(":", "-"), { fetchedAt, items }).catch(() => log({ source: "dataverse", op: "cache_write", kind: "failed" }));
+      result = { source: "pto", status: "ok", fetchedAt, fromCache: false, items };
+      if (skipped) result.message = `${skipped} PTO ${skipped === 1 ? "row" : "rows"} skipped (unreadable dates or hours)`;
+    } catch (e) {
+      const f = e instanceof SourceFailure ? e : new SourceFailure("error", "PTO load failed");
+      if (!(e instanceof SourceFailure)) log({ source: "dataverse", op: "pto", kind: "unexpected" });
+      const plain =
+        f.status === "auth_required" ? "PTO not readable: check the Coopilot role in Dataverse" : f.status === "misconfigured" && /table not found/.test(f.message) ? "PTO tables not found in Dataverse" : f.message;
+      const snap = await readSnapshot<PtoEntry>(deps.cacheDir, "pto", key.replace(":", "-"));
+      const message = snap ? `${plain}. Showing PTO from ${fmtAt(snap.fetchedAt)}` : `${plain}. No cached PTO yet`;
+      result = { source: "pto", status: f.status, fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [], message };
+    }
+    ptoMemory.set(key, { at: t, result });
+    return result;
+  }
+
   /** Find my systemuserid from my work email. Exactly one match or a plain error. */
   async function resolveUserId(email: string): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
     try {
@@ -352,7 +405,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
-  return { load, resolveUserId, devopsTargets, myClients };
+  return { load, resolveUserId, devopsTargets, myClients, pto };
 }
 
 export type MyClient = { clientKey: string; clientName: string; devops: boolean };

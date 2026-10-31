@@ -18,8 +18,8 @@ export type WeekLoadData = {
   plan: PlanWeek | null;
   /** Clients an Open half-day can take (this week's, standing blocks, and every client I'm an Account Worker on). */
   planClients: { clientKey: string; clientName: string }[];
-  /** Today's ignition status, for the automatic open on the first focus of a workday. */
-  ignition: { date: IsoDate; workday: boolean; committed: boolean; available: boolean };
+  /** Today's Plan the day status, for the automatic open on the first focus of a workday. */
+  planDay: { date: IsoDate; workday: boolean; committed: boolean; available: boolean };
   dayShape: DayShape;
   thresholds: RiskThresholds;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };

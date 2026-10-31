@@ -60,7 +60,7 @@ On Monday morning I open Coopilot and see this week as a grid of half-days. Each
 
 ## 2. Non-goals for this slice
 
-- ~~No plan layer, dragging, ignition, triage, recap, capture or drafts (Milestones 3 and 4).~~ Step 5 (Oct 31) adds the local plan store, morning ignition and local draft stories (section 19). Still no dragging, triage, recap or capture.
+- ~~No plan layer, dragging, ignition, triage, recap, capture or drafts (Milestones 3 and 4).~~ Step 5 (Oct 31) adds the local plan store, morning planning (now Plan the day) and local draft stories (section 19). Still no dragging, triage, recap or capture.
 - No AI provider calls. The whole slice works without AI.
 - ~~No DevOps reads and no PAT access.~~ Superseded by step 4 (Oct 31): read-only DevOps work items assigned to me, PATs read per fetch (D59–D66). Still no DevOps writes.
 - No writes to Dataverse, Outlook, Google or anywhere else.
@@ -329,24 +329,35 @@ Raised in step 4 (not blocking):
 - **AI layer (direction, D93):** interpret Teams, email and DevOps to detect loops and synthesize context, staged as rules, then signals, then AI proposals I confirm, then an orchestrator, always through the same actions and confirmations.
 - **Ownership area** (future, separate from the week view, see D59): epics and features I own, progress of the people contributing to them, and risk against target dates. Would need its own read model, likely per-client WIQL on ownership fields, and its own view. Not in the Look-ahead.
 
-## 19. Step 5: morning ignition (authorized Oct 31)
+## 19. Step 5: morning planning, now Plan the day (authorized Oct 31)
 
 Purpose: in about two minutes, turn today's real capacity into a short, committed plan per block, at story level. All local; no writes to DevOps, Outlook, Google or Dataverse.
 
 - **Store:** SQLite through Node's built-in `node:sqlite` (no new dependency) at `~/.local/share/coopilot/plan.db` (0600, folder 0700). Numbered migrations in `store/plan-store.ts`; timestamps carry offset and zone (`2026-11-03T08:41:00-05:00[America/New_York]`). Tables: `day_plans`, `picks`, `draft_stories`, `markers` (once-a-day flags). Export: `node scripts/plan-export.ts [file]`.
-- **Actions** (validated, shared with the future chat): `ignition.start(date, auto?)`, `ignition.commit(date)`, `pick.add`, `pick.remove`, `pick.set_size`, `pick.move`, `pick.mark_done`, `draft.add_story`.
+- **Actions** (validated, shared with the future chat): `planday.start(date, auto?)`, `planday.commit(date)` (renamed from ignition in step 6), `pick.add`, `pick.remove`, `pick.set_size`, `pick.move`, `pick.mark_done`, `draft.add_story`.
 - **Flow:** today's column widens into the planning panel and the rest of the week dims. Each half-day shows client and free time from now on (after meetings and personal events), with fits, tight or over by X. Carry-over (unfinished earlier picks) sits at the top. Picks come from that client's DevOps items in board order, or a typed intention. Open half-days pick from any client you're an Account Worker on, plus Cooptimize (D81), and take the first pick's client; mixing clients is allowed but flagged. `c` commits; the picks then show as a checklist on the week view.
 - **Story level:** pickable types come from each project's process backlog categories (requirement, task and bug), not type names. Epics, features and other portfolio levels (except types listed in `[plan] pickable_portfolio_types`, D80) open into their open children (any assignee, up to two levels, read with WIQL and the batch call). None: "Needs breakdown" and local draft stories, which stay local until a write step is authorized (D82).
 - **Sizes:** S about 1 h, M about 2 h (default), L a whole block (about 3.5 h). Nothing above L: split it first.
-- **Triggers:** on Mon–Thu the first window focus after 05:00 opens ignition once if today isn't committed; `i` opens it any time. One desktop notification (`notify-send`) between the day-shape start and 90 minutes after it if today isn't committed, once per day (D83).
+- **Triggers:** on Mon–Thu the first window focus after 05:00 opens Plan the day once if today isn't committed; `p` (or `i`) opens it any time. One desktop notification (`notify-send`) between the day-shape start and 90 minutes after it if today isn't committed, once per day (D83).
 - **Always on:** `~/.config/systemd/user/coopilot.service` (from `system/coopilot.service`, restart on failure) and `~/.config/autostart/coopilot.desktop` (from `system/coopilot.desktop`, runs `scripts/open-window.ts`).
 - **Rollback:** `systemctl --user disable --now coopilot && rm ~/.config/systemd/user/coopilot.service ~/.config/autostart/coopilot.desktop && systemctl --user daemon-reload`. The plan store can be removed with `rm -r ~/.local/share/coopilot` (export first).
 
 ## 20. Step 5.5: Omarchy app, Edge profile links, polish (authorized Oct 31)
 
 - **Launch path (D85–D88):** `coopilot-open` starts the service if needed, waits for it, then focuses the Coopilot window or opens it with Omarchy's web-app pattern (own Chromium data directory, class `chrome-127.0.0.1__-Default`). A window from an earlier server run is replaced. Used by the launcher entry "Coopilot", Super + Alt + C and login autostart.
-- **Links (D89, D90):** `link.open(clientKey, url)` checks the link is on that client's DevOps org, then starts Edge with the client's profile (`[edge]` in config) from an argument array. Unmapped clients open in the default browser with "No Edge profile set for <client>". Week cards, details, ignition picks and candidates all use it.
+- **Links (D89, D90):** `link.open(clientKey, url)` checks the link is on that client's DevOps org, then starts Edge with the client's profile (`[edge]` in config) from an argument array. Unmapped clients open in the default browser with "No Edge profile set for <client>". Week cards, details, Plan the day picks and candidates all use it.
 - **Polish (D91):** the source line is gone from cards in every layout; details keep it.
 - **Recorded only:** Loop (D92), the AI direction (D93) and the end-of-day recap as the next step (section 18).
 - **Files installed:** `~/.local/bin/coopilot-open` (link to `system/coopilot-open`), `~/.local/share/applications/Coopilot.desktop`, `~/.local/share/icons/hicolor/256x256/apps/coopilot.png`, one line appended to `~/.config/hypr/bindings.lua`, Exec line of `~/.config/autostart/coopilot.desktop`, `[edge]` appended to `~/.config/coopilot/config.toml`. Created on first open: `~/.local/share/coopilot/browser` and `$XDG_RUNTIME_DIR/coopilot/window-server-pid`.
 - **Rollback:** `cp ~/.config/hypr/bindings.lua.bak-step55 ~/.config/hypr/bindings.lua && hyprctl reload`; `cp ~/.config/autostart/coopilot.desktop.bak-step5 ~/.config/autostart/coopilot.desktop`; `rm ~/.local/bin/coopilot-open ~/.local/share/applications/Coopilot.desktop ~/.local/share/icons/hicolor/256x256/apps/coopilot.png`; `rm -r ~/.local/share/coopilot/browser`; `cp ~/.config/coopilot/config.toml.bak-step55 ~/.config/coopilot/config.toml` (or delete the `[edge]` section).
+
+## 21. Step 6: navigation, menus, Plan the day, PTO, show-as (authorized Oct 31)
+
+- **Top bar (D95):** views Week and Plan the day, with Plan the week, Check-in and Close out disabled ("coming soon"); week arrows, Today, Refresh, Commands (Ctrl K), Settings (disabled). On a weekend: "Today is Sat, Oct 31 · showing next week" (D96).
+- **Menus (D102):** "⋯" and right-click on every block card, pick and work item. Anything a key does to an item, a menu does.
+- **Command menu (D101):** Ctrl+K or the top-bar button; searchable; each entry shows its shortcut. Built from `actions/registry.ts`, the same list the dispatcher accepts, plus view and navigation commands.
+- **Rename (D94):** ignition is Plan the day. `p` opens it, `i` is an alias.
+- **Next workday (D97):** today on a workday before the usual end, else the next workday (Mon–Thu). The panel names the day and whether it is today or the next workday.
+- **PTO (D98, D99):** my Time Off Tracker rows and their detail rows from Dataverse, read-only. Full PTO day: off style, "PTO · title", blocks dimmed, no risks, no picks. Partial: "PTO 4h", less capacity. Source "PTO" in the status bar with cache and plain errors.
+- **Show-as and time (D100, D103):** busy, tentative, free, out of office and working elsewhere look different without relying on color; legend in details. Every card: "2h meetings · 2h 15m free · longest 1h"; Plan the day uses the same free number.
+- **Rollback:** code only, plus store migration 2 (marker rename, harmless to keep). Revert the commit; no files outside the repo changed in this step.

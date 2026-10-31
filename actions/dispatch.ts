@@ -7,11 +7,13 @@ import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { loadSampleSources } from "../sources/sample.ts";
 import { buildWeek } from "../week/build.ts";
-import { defaultWeekStart, localToday, todayTarget } from "../week/dates.ts";
-import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../week/types.ts";
+import { dayBounds, defaultWeekStart, localToday, mondayOf, todayTarget, weekDates } from "../week/dates.ts";
+import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
+import type { CalEvent, ClientWork, DayShape, FocusPattern, SourceResult, Week } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { checkDevOpsUrl, launchPlan } from "../links/edge.ts";
-import { isPlanAction, planAction } from "./plan-actions.ts";
+import { planAction } from "./plan-actions.ts";
+import { isActionName, type ActionName } from "./registry.ts";
 import type { ActionResponse, SourceSummary, WeekLoadData } from "./types.ts";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
@@ -66,6 +68,21 @@ function validateWeekLoad(input: unknown): WeekLoadInput | string {
   return out;
 }
 
+/** Minutes from the day shape start to the usual end: a full PTO day. */
+export function dayLength(shape: DayShape): number {
+  const b = dayBounds("2026-01-05", shape);
+  return b.start.until(b.end).total("minutes");
+}
+
+/** PTO for one date, for the server-side pick check. Null when there is none or Dataverse can't say. */
+async function ptoOn(ctx: ActionContext, cfg: AppConfig, date: string): Promise<PtoDay | null> {
+  const shape = cfg.week.dayShape;
+  if (!cfg.dataverse.mySystemUserId) return null;
+  const minutes = dayLength(shape);
+  const r = await ctx.makeDataverse(cfg.dataverse, shape.timeZone).pto(mondayOf(date), minutes).catch(() => null);
+  return ptoByDate(r?.items ?? [], [date], minutes)[date] ?? null;
+}
+
 const summarize = (s: SourceResult<unknown>): SourceSummary => {
   const { items, ...rest } = s;
   return { ...rest, itemCount: items.length };
@@ -101,6 +118,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const googleP: Promise<SourceResult<CalEvent>> = cfg?.google ? ctx.makeGoogle(cfg.google, shape.timeZone).load(weekStart, refresh) : Promise.resolve(sample.google);
 
   let dataverse: SourceResult<FocusPattern>;
+  let ptoP: Promise<SourceResult<PtoEntry> | null> = Promise.resolve(null);
+  const dayMinutes = dayLength(shape);
   let devopsP: Promise<ClientWork[] | null> = Promise.resolve(null);
   let planClients: ClientRef[] = [];
   if (!cfg) {
@@ -128,6 +147,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       ? { source: "dataverse", status: "misconfigured", fetchedAt: null, fromCache: false, items: [], message: resolveError, fixAction: "open_settings" }
       : await ctx.makeDataverse(dv, shape.timeZone).load(weekStart, refresh);
     if (!resolveError) {
+      // PTO (step 6) alongside everything else; a failure falls back to its cache inside the source.
+      ptoP = ctx.makeDataverse(dv, shape.timeZone).pto(weekStart, dayMinutes, refresh).catch(() => null);
       // Start DevOps as soon as the week's clients are known, alongside the calendars. Each client is isolated
       // inside the source; anything unexpected here only drops DevOps, never the week.
       // Plus every client I'm an Account Worker on (Q21), so Open half-days can take their work. Only those
@@ -142,8 +163,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     }
   }
 
-  const [outlook, google, devops] = await Promise.all([outlookP, googleP, devopsP]);
-  const week = buildWeek({ weekStart, patterns: dataverse.items, events: [...outlook.items, ...google.items], config: weekConfig });
+  const [outlook, google, devops, ptoResult] = await Promise.all([outlookP, googleP, devopsP, ptoP]);
+  const pto = ptoByDate(ptoResult?.items ?? [], weekDates(weekStart), dayMinutes);
+  const week = buildWeek({ weekStart, patterns: dataverse.items, events: [...outlook.items, ...google.items], config: weekConfig, pto });
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
 
   const todayDate = localToday(now, shape.timeZone);
@@ -154,8 +176,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     today: todayTarget(now, shape),
     plan: ctx.plan ? ctx.plan.week(week.days.map((d) => d.date)) : null,
     planClients,
-    ignition: { date: todayDate, workday: Temporal.PlainDate.from(todayDate).dayOfWeek <= 4, committed: !!todayPlan?.committedAt, available: !!ctx.plan },
-    sources: [dataverse, outlook, google].map(summarize),
+    planDay: { date: todayDate, workday: Temporal.PlainDate.from(todayDate).dayOfWeek <= 4, committed: !!todayPlan?.committedAt, available: !!ctx.plan },
+    sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google].map(summarize),
     devops,
     clients: clientColors,
     dayShape: shape,
@@ -180,7 +202,11 @@ async function connect(ctx: ActionContext, which: "outlook" | "google") {
 }
 
 export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<ActionResponse> {
-  switch (req.action) {
+  // Only registered actions (actions/registry.ts). The switch below is exhaustive over them: an action added
+  // to the registry without a case, or a case for a name not in the registry, fails the type check.
+  if (!isActionName(req.action)) return bad("unknown action");
+  const action: ActionName = req.action;
+  switch (action) {
     case "auth.connect_microsoft":
     case "auth.connect_google": {
       if (!noInput(req.input)) return bad(`${req.action} takes no input`);
@@ -230,14 +256,22 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       const d = await weekLoad(ctx, {});
       return { ok: true, data: { sources: d.sources, config: d.config } };
     }
-    default:
-      if (isPlanAction(req.action)) {
-        return planAction(
-          { plan: ctx.plan, config: () => configured(ctx), devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.dayShape.timeZone) },
-          req.action,
-          req.input,
-        );
-      }
-      return bad("unknown action");
+    case "planday.start":
+    case "planday.commit":
+    case "pick.add":
+    case "pick.remove":
+    case "pick.set_size":
+    case "pick.move":
+    case "pick.mark_done":
+    case "draft.add_story":
+      return planAction(
+        { plan: ctx.plan, config: () => configured(ctx), devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.dayShape.timeZone), pto: (cfg, date) => ptoOn(ctx, cfg, date) },
+        action,
+        req.input,
+      );
+    default: {
+      const unhandled: never = action;
+      return bad(`unknown action ${String(unhandled)}`);
+    }
   }
 }

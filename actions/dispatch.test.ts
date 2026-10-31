@@ -43,6 +43,7 @@ describe("action dispatcher", () => {
     expect(data.week.days[0]!.am.focus.map((f) => f.clientName)).toEqual(["Quiddity", "Cooptimize"]);
     expect(data.sources.map((s) => [s.source, s.status, Boolean(s.sample)])).toEqual([
       ["dataverse", "ok", false],
+      ["pto", "ok", false],
       ["outlook", "ok", true],
       ["google", "ok", true],
     ]);

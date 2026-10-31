@@ -15,9 +15,9 @@ export type RiskInput = {
 
 export type RiskResult = { risks: Risk[]; longestFreeMinutes: number; busyMeetingMinutes: number; freeGaps: FreeGap[] };
 
-/** Free events are ignored everywhere. Missing showAs counts as busy. */
+/** Free and working-elsewhere events are ignored everywhere. Missing or unknown showAs counts as busy. */
 export function isBusy(e: CalEvent): boolean {
-  return e.showAs !== "free";
+  return e.showAs !== "free" && e.showAs !== "workingElsewhere";
 }
 
 type Interval = [number, number];

@@ -1,20 +1,24 @@
-// Morning ignition: today's column becomes a short planning panel. Each half-day shows its real capacity,
+// Plan the day: the planned day's column becomes a short planning panel. Each half-day shows its real capacity,
 // picks come from that client's DevOps items in board order (story level only) or a typed intention, and one
 // key commits. Everything here is local: the actions only write Coopilot's plan store.
 import { useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { blockClient, capacityMinutes, fitOf, isPickable, pickableChildren, plannedMinutes, type Fit } from "../plan/rules.ts";
-import { SIZES, type DraftStory, type IgnitionState, type Pick, type Size } from "../plan/types.ts";
+import { SIZES, type DraftStory, type PlanDayState, type Pick, type Size } from "../plan/types.ts";
 import type { Day, Half, Slot, WorkItem } from "../week/types.ts";
-import { formatMinutes } from "./ignition.ts";
+import { formatMinutes } from "./planday.ts";
 import { clientColor, longDate, shortDate, slotRange, startClock } from "./labels.ts";
 import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
+import { itemMenu, pickMenu } from "./menu.ts";
+import { MenuRow, useMenu } from "./Menus.tsx";
 
-export type IgnitionAct = (action: string, input: Record<string, unknown>) => Promise<boolean>;
+export type PlanDayAct = (action: string, input: Record<string, unknown>) => Promise<boolean>;
 
 type Props = {
   day: Day;
-  state: IgnitionState;
+  state: PlanDayState;
+  /** "Today" or "Next workday" when it's one of those, so it's clear which day is planned. */
+  which: string | null;
   /** Friday of the same week, when it is not this day (for "move to Friday"). */
   friday: string | null;
   now: string;
@@ -23,16 +27,19 @@ type Props = {
   /** Clients that can be picked from in an Open half-day (this week's DevOps clients, Cooptimize included). */
   clients: { clientKey: string; clientName: string }[];
   error: string | null;
-  act: IgnitionAct;
+  act: PlanDayAct;
   onCommit: () => void;
   onClose: () => void;
 };
 
 const inPlay = (p: Pick) => p.status === "planned" || p.status === "done";
 
-export function Ignition({ day, state, friday, now, tz, colors, clients, error, act, onCommit, onClose }: Props) {
+export function PlanDay({ day, state, which, friday, now, tz, colors, clients, error, act, onCommit, onClose }: Props) {
+  const off = day.pto?.full ? day.pto : null;
   const ref = useRef<HTMLElement>(null);
-  useEffect(() => ref.current?.focus({ preventScroll: true }), []);
+  useEffect(() => {
+    ref.current?.focus({ preventScroll: true });
+  }, []);
   const picked = new Set(state.picks.filter(inPlay).map((p) => (p.itemId !== null ? `i${p.clientKey}:${p.itemId}` : p.draftId !== null ? `d${p.draftId}` : "")));
   const committed = state.plan.committedAt;
 
@@ -52,15 +59,18 @@ export function Ignition({ day, state, friday, now, tz, colors, clients, error, 
   };
 
   return (
-    <section ref={ref} className="ignition" tabIndex={-1} aria-label={`Plan ${longDate(day.date)}`} onKeyDown={onKey}>
-      <header className="ign-head">
+    <section ref={ref} className="planday" tabIndex={-1} aria-label={`Plan ${longDate(day.date)}`} onKeyDown={onKey}>
+      <header className="pd-head">
         <div>
-          <h2>Plan {longDate(day.date)}</h2>
+          <h2>
+            Plan {longDate(day.date)}
+            {which && <span className={`pd-which ${which === "Today" ? "today" : "next"}`}>{which}</span>}
+          </h2>
           <p className="muted">
             {committed ? `Committed at ${startClock(committed.replace(/\[.*\]$/, ""), tz)}. Changes are saved as you go; commit again when done.` : "About two minutes: pick story-level work for each block, then commit."}
           </p>
         </div>
-        <div className="ign-actions">
+        <div className="pd-actions">
           <button type="button" className="commit" onClick={onCommit}>
             <kbd>c</kbd> {committed ? "Commit again" : "Commit"}
           </button>
@@ -70,14 +80,25 @@ export function Ignition({ day, state, friday, now, tz, colors, clients, error, 
         </div>
       </header>
       {error && (
-        <p className="ign-error" role="alert">
+        <p className="pd-error" role="alert">
           {error}
         </p>
       )}
 
-      {state.carryOver.length > 0 && <CarryOver picks={state.carryOver} date={day.date} act={act} />}
+      {off && (
+        <p className="pd-pto full" role="note">
+          <strong>PTO</strong> · {off.titles.join(", ")}. This day is off, so nothing can be planned on it.
+        </p>
+      )}
+      {day.pto && !day.pto.full && (
+        <p className="pd-pto part" role="note">
+          <strong>PTO {formatMinutes(day.pto.minutes)}</strong> · {day.pto.titles.join(", ")}. Taken from the afternoon first, so free time below is lower.
+        </p>
+      )}
 
-      <div className="ign-blocks">
+      {!off && state.carryOver.length > 0 && <CarryOver picks={state.carryOver} date={day.date} act={act} />}
+
+      {!off && <div className="pd-blocks">
         {(["AM", "PM"] as const).map((half) => (
           <Block
             key={half}
@@ -95,18 +116,18 @@ export function Ignition({ day, state, friday, now, tz, colors, clients, error, 
             act={act}
           />
         ))}
-      </div>
+      </div>}
     </section>
   );
 }
 
-function CarryOver({ picks, date, act }: { picks: Pick[]; date: string; act: IgnitionAct }) {
+function CarryOver({ picks, date, act }: { picks: Pick[]; date: string; act: PlanDayAct }) {
   return (
-    <section className="ign-carry" aria-label="Unfinished from earlier days">
+    <section className="pd-carry" aria-label="Unfinished from earlier days">
       <h3>Carry over · unfinished from earlier</h3>
       <ul>
         {picks.map((p) => (
-          <li key={p.id}>
+          <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`Actions for ${p.title}`}>
             <span className="carry-when">{shortDate(p.date)} {p.half}</span>
             <span className="carry-client">{p.clientKey}</span>
             <span className="pick-title">{p.title}</span>
@@ -122,7 +143,7 @@ function CarryOver({ picks, date, act }: { picks: Pick[]; date: string; act: Ign
                 Drop
               </button>
             </span>
-          </li>
+          </MenuRow>
         ))}
       </ul>
     </section>
@@ -141,7 +162,7 @@ type BlockProps = {
   tz: string;
   colors: Record<string, string>;
   clients: { clientKey: string; clientName: string }[];
-  act: IgnitionAct;
+  act: PlanDayAct;
 };
 
 function fitLabel(f: Fit): string {
@@ -165,35 +186,35 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
   const style = { "--c": clientColor(bc.clientKey ?? undefined, colors) } as CSSProperties;
 
   return (
-    <section className={`ign-block fit-${fit.kind} ${focus ? "focus" : "open"}`} style={style} aria-label={`${slot.half} block`}>
-      <header className="ign-block-head">
-        <div className="ign-title">
+    <section className={`pd-block fit-${fit.kind} ${focus ? "focus" : "open"}`} style={style} aria-label={`${slot.half} block`}>
+      <header className="pd-block-head">
+        <div className="pd-title">
           <span className="half-tag">{slot.half}</span>
           <span className="muted">{slotRange(slot, tz)}</span>
-          <span className="ign-client">
+          <span className="pd-client">
             <span className="swatch" />
             {focus ? focus.clientName : overflow ? "Overflow" : bc.clientKey ? `Open · ${name(bc.clientKey)}` : "Open"}
           </span>
         </div>
-        <div className="ign-capacity">
+        <div className="pd-capacity">
           <span>
             <strong>{formatMinutes(capacity)}</strong> free{started ? " from now" : ""}
           </span>
           <span className={`fit ${fit.kind}`}>{fitLabel(fit)}</span>
         </div>
       </header>
-      {bc.mixed && <p className="ign-flag">Mixed clients in one block: {bc.clients.map(name).join(", ")}</p>}
+      {bc.mixed && <p className="pd-flag">Mixed clients in one block: {bc.clients.map(name).join(", ")}</p>}
       {fit.kind === "over" && (
-        <p className="ign-flag over">
+        <p className="pd-flag over">
           Over by {formatMinutes(fit.by)}. Drop a pick, make one smaller, or move one to {other}
           {friday ? " or to Friday" : ""}.
         </p>
       )}
 
       {picks.length > 0 && (
-        <ol className="ign-picks">
+        <ol className="pd-picks">
           {picks.map((p) => (
-            <li key={p.id} className={p.clientKey !== bc.clientKey ? "other-client" : ""}>
+            <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`Actions for ${p.title}`} className={p.clientKey !== bc.clientKey ? "other-client" : ""}>
               <span className="wi-type">{p.kind === "intention" ? "Note" : typeTag(p.itemType ?? "")}</span>
               <span className="pick-title" title={p.title}>
                 {p.kind === "item" && p.itemUrl ? (
@@ -226,7 +247,7 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
                   Drop
                 </button>
               </span>
-            </li>
+            </MenuRow>
           ))}
         </ol>
       )}
@@ -250,10 +271,10 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
 
 const SHOWN = 6;
 
-function Candidates({ clientKey, half, date, drafts, picked, act }: { clientKey: string; half: Half; date: string; drafts: DraftStory[]; picked: Set<string>; act: IgnitionAct }) {
+function Candidates({ clientKey, half, date, drafts, picked, act }: { clientKey: string; half: Half; date: string; drafts: DraftStory[]; picked: Set<string>; act: PlanDayAct }) {
   const work = useContext(DevOpsWork).get(clientKey);
   const [all, setAll] = useState(false);
-  if (!work) return <p className="muted ign-note">No DevOps items for {clientKey} this week. Type an intention instead.</p>;
+  if (!work) return <p className="muted pd-note">No DevOps items for {clientKey} this week. Type an intention instead.</p>;
   const free = (i: WorkItem) => !picked.has(`i${clientKey}:${i.id}`);
   // Board order: my story-level items, and my epics and features (which open into their children).
   const rows = work.items.filter((i) => (isPickable(i) && free(i)) || i.level === "portfolio");
@@ -265,20 +286,20 @@ function Candidates({ clientKey, half, date, drafts, picked, act }: { clientKey:
         {work.clientName} in board order
         {work.status !== "ok" && <span className="muted"> · {workStatusLabel(work)}</span>}
       </h4>
-      {rows.length === 0 && <p className="muted ign-note">Nothing left to pick for {work.clientName}. Type an intention instead.</p>}
+      {rows.length === 0 && <p className="muted pd-note">Nothing left to pick for {work.clientName}. Type an intention instead.</p>}
       <ul>
         {shown.map((i) =>
           i.level === "portfolio" ? (
             <Portfolio key={i.id} item={i} clientKey={clientKey} kids={pickableChildren(i.id, work.children).filter(free)} drafts={drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === i.id && !picked.has(`d${d.id}`))} add={add} act={act} />
           ) : (
-            <li key={i.id}>
+            <MenuRow key={i.id} build={(env) => itemMenu(env, clientKey, i)} label={`Actions for ${i.type} ${i.id}`}>
               <button type="button" className="cand" onClick={() => add({ itemId: i.id })} title={`${i.type} ${i.id}: ${i.title} (${i.state})`}>
                 <span className="plus" aria-hidden="true">+</span>
                 <span className="wi-type">{typeTag(i.type)}</span>
                 <span className="wi-title">{i.title}</span>
               </button>
               <OpenItem clientKey={clientKey} item={i} />
-            </li>
+            </MenuRow>
           ),
         )}
       </ul>
@@ -301,13 +322,14 @@ function OpenItem({ clientKey, item }: { clientKey: string; item: WorkItem }) {
   );
 }
 
-function Portfolio({ item, clientKey, kids: children, drafts, add, act }: { item: WorkItem; clientKey: string; kids: WorkItem[]; drafts: DraftStory[]; add: (i: Record<string, unknown>) => Promise<boolean>; act: IgnitionAct }) {
+function Portfolio({ item, clientKey, kids: children, drafts, add, act }: { item: WorkItem; clientKey: string; kids: WorkItem[]; drafts: DraftStory[]; add: (i: Record<string, unknown>) => Promise<boolean>; act: PlanDayAct }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [size, setSize] = useState<Size>("M");
   const needs = children.length === 0 && drafts.length === 0;
+  const menu = useMenu((env) => itemMenu(env, clientKey, item));
   return (
-    <li className="portfolio">
+    <li className="portfolio" onContextMenu={menu.onContextMenu}>
       <div className="portfolio-row">
         <button type="button" className="cand parent" aria-expanded={open} onClick={() => setOpen((o) => !o)} title={`${item.type} ${item.id}: ${item.title}`}>
           <span className="plus" aria-hidden="true">{open ? "▾" : "▸"}</span>
@@ -316,18 +338,19 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act }: { item
           <span className={needs ? "needs" : "muted kids"}>{needs ? "Needs breakdown" : `${children.length + drafts.length} to pick`}</span>
         </button>
         <OpenItem clientKey={clientKey} item={item} />
+        {menu.button(`Actions for ${item.type} ${item.id}`)}
       </div>
       {open && (
         <ul className="kids-list">
           {children.map((c) => (
-            <li key={c.id}>
+            <MenuRow key={c.id} build={(env) => itemMenu(env, clientKey, c)} label={`Actions for ${c.type} ${c.id}`}>
               <button type="button" className="cand" onClick={() => add({ itemId: c.id })} title={`${c.type} ${c.id}: ${c.title} (${c.state})`}>
                 <span className="plus" aria-hidden="true">+</span>
                 <span className="wi-type">{typeTag(c.type)}</span>
                 <span className="wi-title">{c.title}</span>
               </button>
               <OpenItem clientKey={clientKey} item={c} />
-            </li>
+            </MenuRow>
           ))}
           {drafts.map((d) => (
             <li key={`d${d.id}`}>
@@ -364,7 +387,7 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act }: { item
   );
 }
 
-function Intention({ clientKey, clientName, half, date, act }: { clientKey: string; clientName: string; half: Half; date: string; act: IgnitionAct }) {
+function Intention({ clientKey, clientName, half, date, act }: { clientKey: string; clientName: string; half: Half; date: string; act: PlanDayAct }) {
   const [text, setText] = useState("");
   return (
     <form

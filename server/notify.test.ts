@@ -4,7 +4,7 @@ import { checkReminder, reminderDue } from "./notify.ts";
 const shape = { start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" };
 const at = (s: string) => Temporal.ZonedDateTime.from(`${s}[America/New_York]`);
 
-describe("ignition reminder", () => {
+describe("Plan the day reminder", () => {
   it("is due on Mon–Thu from the day start until 90 minutes after it, only when today isn't committed (Q23)", () => {
     expect(reminderDue(at("2026-11-02T08:59:00-05:00"), shape, false)).toBe(false);
     expect(reminderDue(at("2026-11-02T09:00:00-05:00"), shape, false)).toBe(true);

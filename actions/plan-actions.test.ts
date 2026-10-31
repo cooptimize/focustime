@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../config/starter.ts";
-import type { IgnitionState, Pick } from "../plan/types.ts";
+import type { PlanDayState, Pick } from "../plan/types.ts";
 import { createDataverseSource } from "../sources/dataverse/source.ts";
 import { dvConfig, FAKE_SECRET, fakeFetch } from "../sources/dataverse/test-fakes.ts";
 import { createDevOpsSource } from "../sources/devops/source.ts";
@@ -19,9 +19,9 @@ const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
 
 const NOW = "2026-11-03T14:00:00Z"; // Tue 9:00 New York
 
-function setup(opts: { noPlan?: boolean } = {}) {
+function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden" } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "c-plan-"));
-  const dv = fakeFetch("ok");
+  const dv = fakeFetch("ok", { pto: opts.pto ?? "ok" });
   const ado = fakeDevOps({ cscsteel: "portfolio", cooptimize: "agile" });
   const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, cacheDir: dir, log: () => {} });
   const devopsByKey = new Map<string, ReturnType<typeof createDevOpsSource>>();
@@ -56,30 +56,30 @@ function setup(opts: { noPlan?: boolean } = {}) {
 
 const D = "2026-11-03";
 
-describe("ignition actions", () => {
+describe("Plan the day actions", () => {
   it("a whole morning: start, pick items and an intention, size, move, commit, tick, all persisted locally", async () => {
     const t = setup();
     const week = await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02" });
-    expect(week.ignition).toEqual({ date: D, workday: true, committed: false, available: true });
+    expect(week.planDay).toEqual({ date: D, workday: true, committed: false, available: true });
 
-    const start = await t.run<IgnitionState>("ignition.start", { date: D });
+    const start = await t.run<PlanDayState>("planday.start", { date: D });
     expect(start.plan.committedAt).toBeNull();
     const a = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
     expect(a.pick).toMatchObject({ kind: "item", title: "Story assigned to me", size: "M", status: "planned" });
     const child = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 122, size: "S" });
     expect(child.pick.title).toBe("Story two levels down");
-    await t.run("pick.add", { date: D, half: "PM", clientKey: "Cooptimize", intention: "  Review the  ignition copy " });
+    await t.run("pick.add", { date: D, half: "PM", clientKey: "Cooptimize", intention: "  Review the  planning copy " });
     await t.run("pick.set_size", { id: a.pick.id, size: "L" });
     await t.run("pick.move", { id: child.pick.id, date: D, half: "PM" });
-    const committed = await t.run<IgnitionState>("ignition.commit", { date: D });
+    const committed = await t.run<PlanDayState>("planday.commit", { date: D });
     expect(committed.plan.committedAt).toMatch(/-05:00\[America\/New_York\]$/);
     await t.run("pick.mark_done", { id: a.pick.id, done: true });
 
     const after = await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02" });
-    expect(after.ignition.committed).toBe(true);
+    expect(after.planDay.committed).toBe(true);
     expect(after.plan![D]!.picks.map((p) => [p.half, p.title, p.size, p.status])).toEqual([
       ["AM", "Story assigned to me", "L", "done"],
-      ["PM", "Review the ignition copy", "M", "planned"],
+      ["PM", "Review the planning copy", "M", "planned"],
       ["PM", "Story two levels down", "S", "planned"],
     ]);
   });
@@ -135,11 +135,11 @@ describe("ignition actions", () => {
 
   it("the automatic open happens once per day and never for a committed day", async () => {
     const t = setup();
-    expect((await t.run<IgnitionState>("ignition.start", { date: D, auto: true })).opened).toBe(true);
-    expect((await t.run<IgnitionState>("ignition.start", { date: D, auto: true })).opened).toBe(false);
-    expect((await t.run<IgnitionState>("ignition.start", { date: D })).opened).toBe(true);
-    await t.run("ignition.commit", { date: "2026-11-04" });
-    expect((await t.run<IgnitionState>("ignition.start", { date: "2026-11-04", auto: true })).opened).toBe(false);
+    expect((await t.run<PlanDayState>("planday.start", { date: D, auto: true })).opened).toBe(true);
+    expect((await t.run<PlanDayState>("planday.start", { date: D, auto: true })).opened).toBe(false);
+    expect((await t.run<PlanDayState>("planday.start", { date: D })).opened).toBe(true);
+    await t.run("planday.commit", { date: "2026-11-04" });
+    expect((await t.run<PlanDayState>("planday.start", { date: "2026-11-04", auto: true })).opened).toBe(false);
   });
 
   it("carry-over moves yesterday's unfinished picks into today", async () => {
@@ -147,37 +147,43 @@ describe("ignition actions", () => {
     await t.run("week.load", { weekStart: "2026-11-02" });
     const mon = "2026-11-02";
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: mon, half: "PM", clientKey: "CSC", itemId: 101 });
-    await t.run("ignition.commit", { date: mon });
-    const s = await t.run<IgnitionState>("ignition.start", { date: D });
+    await t.run("planday.commit", { date: mon });
+    const s = await t.run<PlanDayState>("planday.start", { date: D });
     expect(s.carryOver.map((p) => p.id)).toEqual([pick.id]);
-    const moved = await t.run<{ pick: Pick; state: IgnitionState }>("pick.move", { id: pick.id, date: D, half: "AM" });
+    const moved = await t.run<{ pick: Pick; state: PlanDayState }>("pick.move", { id: pick.id, date: D, half: "AM" });
     expect(moved.pick).toMatchObject({ date: D, carriedFromDate: mon });
-    expect((await t.run<IgnitionState>("ignition.start", { date: D })).carryOver).toEqual([]);
+    expect((await t.run<PlanDayState>("planday.start", { date: D })).carryOver).toEqual([]);
   });
 
   it("without a plan store the actions say so and the week still loads", async () => {
     const t = setup({ noPlan: true });
-    expect((await t.fail("ignition.start", { date: D })).status).toBe(503);
+    expect((await t.fail("planday.start", { date: D })).status).toBe(503);
     const w = await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02" });
     expect(w.plan).toBeNull();
-    expect(w.ignition.available).toBe(false);
+    expect(w.planDay.available).toBe(false);
   });
 
   it("nothing in this step calls a write endpoint: only GETs, plus the token, WIQL and batch reads", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const before = t.dv.calls.length + t.ado.calls.length;
-    // Every plan action, after the week is loaded, makes no external call at all.
-    await t.run("ignition.start", { date: D });
+    const before = t.ado.calls.length;
+    const dvBefore = t.dv.calls.length;
+    // After the week is loaded, plan actions make no DevOps call, and in Dataverse only the PTO reads
+    // that check a day isn't a full PTO day (step 6).
+    await t.run("planday.start", { date: D });
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
     await t.run("pick.set_size", { id: pick.id, size: "S" });
     await t.run("pick.move", { id: pick.id, date: "2026-11-06", half: "AM" });
     const { draft } = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "CSC", parentItemId: 130, title: "Draft" });
     const p2 = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "PM", clientKey: "CSC", draftId: draft.id });
-    await t.run("ignition.commit", { date: D });
+    await t.run("planday.commit", { date: D });
     await t.run("pick.mark_done", { id: p2.pick.id, done: true });
     await t.run("pick.remove", { id: p2.pick.id });
-    expect(t.dv.calls.length + t.ado.calls.length).toBe(before);
+    expect(t.ado.calls.length).toBe(before);
+    for (const c of t.dv.calls.slice(dvBefore)) {
+      if (c.method === "POST") expect(c.url).toMatch(/oauth2\/v2\.0\/token$/);
+      else expect(c.url).toMatch(/\/coop_timeofftracker(s|details)\?/);
+    }
 
     // And the reads that did happen are reads.
     for (const c of t.dv.calls) {
@@ -191,3 +197,43 @@ describe("ignition actions", () => {
     expect([...t.dv.calls, ...t.ado.calls].some((c) => ["PATCH", "PUT", "DELETE"].includes(c.method))).toBe(false);
   });
 });
+
+describe("PTO and Plan the day (step 6)", () => {
+  it("the week shows Thu Nov 5 as a full PTO day with no risks, and Tue as 4 h", async () => {
+    const t = setup();
+    const w = await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02" });
+    const thu = w.week.days[3]!;
+    expect(thu.pto).toMatchObject({ full: true, titles: ["Watch Kids"] });
+    expect([...thu.am.risks, ...thu.pm.risks]).toEqual([]);
+    expect(w.week.days[1]!.pto).toMatchObject({ minutes: 240, full: false });
+    expect(w.sources.find((s) => s.source === "pto")).toMatchObject({ status: "ok", itemCount: 2 });
+  });
+
+  it("picks are refused on a full PTO day, by add or by move; a partial day still takes them", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const r = await t.fail("pick.add", { date: "2026-11-05", half: "AM", clientKey: "CSC", intention: "x" });
+    expect(r).toMatchObject({ status: 422 });
+    expect(r.ok ? "" : r.error).toBe("Thu, Nov 5 is a PTO day (Watch Kids). Nothing can be planned on it");
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-03", half: "AM", clientKey: "CSC", intention: "fine on a partial day" });
+    expect((await t.fail("pick.move", { id: pick.id, date: "2026-11-05", half: "PM" })).status).toBe(422);
+  });
+
+  it("when PTO can't be read the week still loads and picks still work", async () => {
+    const t = setup({ pto: "forbidden" });
+    const w = await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02" });
+    expect(w.sources.find((s) => s.source === "pto")).toMatchObject({ status: "auth_required" });
+    expect(w.week.days[3]!.pto).toBeNull();
+    expect(w.week.days[0]!.am.focus.length).toBeGreaterThan(0);
+    await t.run("pick.add", { date: "2026-11-05", half: "AM", clientKey: "CSC", intention: "PTO unknown, so allowed" });
+  });
+
+  it("Plan the day can target the next workday from the weekend", async () => {
+    const t = setup();
+    const s = await t.run<PlanDayLike>("planday.start", { date: "2026-11-09" });
+    expect(s.date).toBe("2026-11-09");
+    await t.run("pick.add", { date: "2026-11-09", half: "AM", clientKey: "CSC", intention: "Monday first thing" });
+    expect((await t.run<PlanDayLike>("planday.commit", { date: "2026-11-09" })).plan.committedAt).toBeTruthy();
+  });
+});
+type PlanDayLike = { date: string; plan: { committedAt: string | null } };

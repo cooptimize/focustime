@@ -1,4 +1,5 @@
 // Core week model types. Pure data, no I/O. See docs/spec.md section 4.
+import type { PtoDay } from "./pto.ts";
 
 export type Half = "AM" | "PM";
 export type WorkWeekday = "Mon" | "Tue" | "Wed" | "Thu";
@@ -10,7 +11,8 @@ export type IsoDate = string;
 /** ISO 8601 date-time with offset, e.g. "2026-11-02T09:00:00-05:00". */
 export type IsoDateTime = string;
 
-export type SourceId = "dataverse" | "outlook" | "google";
+/** "pto" is the Dataverse Time Off Tracker read (step 6), reported on its own. */
+export type SourceId = "dataverse" | "outlook" | "google" | "pto";
 
 export type SourceResult<T> = {
   source: SourceId;
@@ -50,7 +52,8 @@ export type FocusBlock = {
   patternId?: string;
 };
 
-export type ShowAs = "free" | "tentative" | "busy" | "oof" | "unknown";
+/** Outlook showAs. Free and working elsewhere take no time; the rest do (unknown counts as busy). */
+export type ShowAs = "free" | "tentative" | "busy" | "oof" | "workingElsewhere" | "unknown";
 
 export type CalEvent = {
   id: string;
@@ -106,6 +109,8 @@ export type Slot = {
   /** Every gap with no busy item, in order. */
   freeGaps: FreeGap[];
   busyMeetingMinutes: number;
+  /** PTO minutes taken from this half-day (step 6): all of it on a full PTO day, else afternoon first. */
+  ptoMinutes: number;
 };
 
 export type Day = {
@@ -119,6 +124,8 @@ export type Day = {
   pm: Slot;
   /** Events after the usual end, kept visible. */
   evening: PlacedEvent[];
+  /** PTO from Dataverse (step 6); null when none. A full PTO day has no risks. */
+  pto: PtoDay | null;
 };
 
 export type Week = {

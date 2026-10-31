@@ -40,6 +40,7 @@ describe("rule 1: meeting load", () => {
   it("counts tentative, ignores free and personal events", () => {
     expect(summary(risks([meeting(T("12:30"), T("14:00"), { showAs: "tentative" })], "PM"))).toEqual(["meeting_load:watch"]);
     expect(summary(risks([meeting(T("12:30"), T("14:00"), { showAs: "free" })], "PM"))).toEqual([]);
+    expect(summary(risks([meeting(T("12:30"), T("14:00"), { showAs: "workingElsewhere" })], "PM"))).toEqual([]);
     const personalOnly = summary(risks([personal(T("12:30"), T("14:00"))], "PM"));
     expect(personalOnly).not.toContain("meeting_load:watch");
   });

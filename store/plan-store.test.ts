@@ -47,7 +47,7 @@ describe("plan store", () => {
     const { path, store } = fresh();
     store.start("2026-11-02");
     const a = store.addPick({ date: "2026-11-02", ...item });
-    store.addPick({ date: "2026-11-02", half: "PM", clientKey: "Cooptimize", kind: "intention", title: "Write the ignition doc", size: "S" });
+    store.addPick({ date: "2026-11-02", half: "PM", clientKey: "Cooptimize", kind: "intention", title: "Write the planning doc", size: "S" });
     store.setSize(a.id, "L");
     store.commit("2026-11-02");
     store.setDone(a.id, true);
@@ -58,7 +58,7 @@ describe("plan store", () => {
     const picks = reopened.picksFor("2026-11-02");
     expect(picks.map((p) => [p.half, p.title, p.size, p.status])).toEqual([
       ["AM", "Story", "L", "done"],
-      ["PM", "Write the ignition doc", "S", "planned"],
+      ["PM", "Write the planning doc", "S", "planned"],
     ]);
     reopened.close();
   });

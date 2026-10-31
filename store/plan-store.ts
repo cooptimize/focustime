@@ -53,6 +53,8 @@ export const MIGRATIONS: readonly string[] = [
      at TEXT NOT NULL,
      PRIMARY KEY (kind, date)
    );`,
+  // 2 (step 6): "ignition" became "Plan the day"; keep the once-a-day markers already set.
+  `UPDATE markers SET kind = 'plan_day_auto' WHERE kind = 'ignition_auto';`,
 ];
 
 export type NewPick = {

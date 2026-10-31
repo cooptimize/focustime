@@ -1,14 +1,15 @@
-// Morning ignition actions (step 5). Local only: they read DevOps results already in memory to check a pick,
+// Plan the day actions (step 5). Local only: they read DevOps results already in memory to check a pick,
 // and write only to the local plan store. Nothing here calls DevOps, Outlook, Google or Dataverse.
 import type { AppConfig } from "../config/schema.ts";
 import { unpickableReason } from "../plan/rules.ts";
-import { DEFAULT_SIZE, SIZES, type IgnitionState, type Size } from "../plan/types.ts";
+import { DEFAULT_SIZE, SIZES, type PlanDayState, type Size } from "../plan/types.ts";
 import { PlanError, type NewPick, type PlanStore } from "../store/plan-store.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
+import type { PtoDay } from "../week/pto.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const PLAN_ACTIONS = ["ignition.start", "ignition.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "draft.add_story"] as const;
+export const PLAN_ACTIONS = ["planday.start", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "draft.add_story"] as const;
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
 export const isPlanAction = (a: unknown): a is PlanAction => typeof a === "string" && (PLAN_ACTIONS as readonly string[]).includes(a);
 
@@ -16,7 +17,18 @@ export type PlanContext = {
   plan: PlanStore | undefined;
   config: () => Promise<AppConfig | null>;
   devops: (cfg: AppConfig) => Pick<DevOpsSource, "lookup">;
+  /** PTO on a date (step 6), or null. A full PTO day takes no picks. */
+  pto?: (cfg: AppConfig, date: IsoDate) => Promise<PtoDay | null>;
 };
+
+/** Refuses a full PTO day with a plain reason; null when the day can take picks. */
+async function ptoRefusal(ctx: PlanContext, d: IsoDate): Promise<string | null> {
+  if (!ctx.pto) return null;
+  const cfg = await ctx.config();
+  if (!cfg) return null;
+  const off = await ctx.pto(cfg, d).catch(() => null);
+  return off?.full ? `${Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })} is a PTO day (${off.titles.join(", ")}). Nothing can be planned on it` : null;
+}
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
 class Invalid extends Error {}
@@ -63,7 +75,7 @@ const bool = (v: unknown, name: string) => {
   return v;
 };
 
-function state(plan: PlanStore, d: IsoDate, opened = true): IgnitionState {
+function state(plan: PlanStore, d: IsoDate, opened = true): PlanDayState {
   return { date: d, plan: plan.start(d), picks: plan.picksFor(d), carryOver: plan.carryOverFor(d), drafts: plan.drafts(), opened };
 }
 
@@ -72,15 +84,15 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
   if (!plan) return bad("The local plan store is not available", 503);
   try {
     switch (action) {
-      case "ignition.start": {
+      case "planday.start": {
         const o = fields(input, ["date"], ["auto"]);
         const d = date(o.date);
         const auto = o.auto === undefined ? false : bool(o.auto, "auto");
         // An automatic open happens once per day, and never for a day already committed.
-        const opened = !auto || (!plan.day(d)?.committedAt && plan.markOnce("ignition_auto", d));
+        const opened = !auto || (!plan.day(d)?.committedAt && plan.markOnce("plan_day_auto", d));
         return { ok: true, data: state(plan, d, opened) };
       }
-      case "ignition.commit": {
+      case "planday.commit": {
         const d = date(fields(input, ["date"]).date);
         plan.commit(d);
         return { ok: true, data: state(plan, d) };
@@ -90,6 +102,8 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const base = { date: date(o.date), half: half(o.half), clientKey: clientKey(o.clientKey), size: size(o.size) };
         const given = ["itemId", "intention", "draftId"].filter((k) => o[k] !== undefined);
         if (given.length !== 1) throw new Invalid("give exactly one of itemId, intention or draftId");
+        const off = await ptoRefusal(ctx, base.date);
+        if (off) return bad(off, 422);
         let p: NewPick;
         if (o.itemId !== undefined) {
           const itemId = id(o.itemId, "itemId");
@@ -129,7 +143,10 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const pid = id(o.id);
         const before = plan.getPick(pid);
         if (!before) return bad(`No pick ${pid}`, 404);
-        const pick = plan.move(pid, date(o.date), half(o.half));
+        const to = date(o.date);
+        const off = await ptoRefusal(ctx, to);
+        if (off) return bad(off, 422);
+        const pick = plan.move(pid, to, half(o.half));
         return { ok: true, data: { pick, state: state(plan, before.date) } };
       }
       case "pick.mark_done": {

@@ -6,7 +6,7 @@ Read before changing code: this file, `docs/spec.md` (current slice), `docs/deci
 
 ## Current milestone
 
-Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks), step 4.5 (responsive layout: wide, medium, narrow) and step 5 (morning ignition: local plan store, picks, commit, checklist, reminder, autostart) and step 5.5 (Omarchy app launcher and key, work item links in the client's Edge profile, card polish, Loop recorded but not built), all authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
+Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks), step 4.5 (responsive layout: wide, medium, narrow) and step 5 (morning planning, now "Plan the day": local plan store, picks, commit, checklist, reminder, autostart) and step 5.5 (Omarchy app launcher and key, work item links in the client's Edge profile, card polish, Loop recorded but not built) and step 6 (top bar views, item and command menus from the action registry, the ignition → Plan the day rename, planning the next workday, PTO from Dataverse, Outlook show-as styling and free-time summary), all authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
 
 ## Hard rules
 
@@ -21,12 +21,12 @@ Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work ite
 ## Architecture map
 
 ```
-ui/        week grid, source status, settings
-actions/   named, validated actions; UI and chat both call these
-week/      pure: normalize, slots, risk rules (no I/O, no tokens)
-plan/      pure: plan types, capacity, fit, carry-over, block client, story level
+ui/        week grid, top bar, Plan the day, menus (menu.ts builders, Menus.tsx popup and command menu), source status
+actions/   named, validated actions; registry.ts is the one list (dispatcher, command menu, future chat)
+week/      pure: normalize, slots, risk rules, PTO days (pto.ts), free time (free.ts) (no I/O, no tokens)
+plan/      pure: plan types, capacity, fit, carry-over, block client, story level, planning target (target.ts)
 store/     SQLite plan store (~/.local/share/coopilot/plan.db), migrations, export
-sources/   dataverse | graph | google | devops adapters; oauth/ (PKCE loopback), calendar/ (shared fetch, cache, status), devops/ (per-client work items, Pat)
+sources/   dataverse (focus time, PTO) | graph | google | devops adapters; oauth/ (PKCE loopback), calendar/ (shared fetch, cache, status), devops/ (per-client work items, Pat)
 secrets/   keyring access only
 config/    ~/.config/coopilot/config.toml, validated
 cache/     ~/.cache/coopilot, last good snapshot per source
@@ -51,7 +51,10 @@ Run: `coopilot-open` (starts the service if needed, then opens or focuses the wi
 | Look-ahead | The week view |
 | At-risk block | Focus block threatened by meetings or personal events, with a stated reason |
 | Plan layer | Coopilot's local plan: day plans and picks in the plan store (step 5) |
-| Ignition | The morning planning panel: today's capacity into committed picks per block |
+| Plan the day | The planning panel: a day's capacity (today, or the next workday) into committed picks per block. Formerly "ignition"; `i` stays as an alias key |
+| Plan the week, Check-in, Close out | Reserved names for future views (shown as "coming soon"). Not built |
+| PTO | Time off from Dataverse Time Off Tracker rows (mine only). A full PTO day is off: no risks, no picks. Partial PTO reduces capacity |
+| Command menu | Ctrl+K: every action from the action registry with its shortcut; the base for the chat panel |
 | Pick | One planned piece of work in a block: a DevOps item, a draft story or an intention, sized S/M/L |
 | Source | Dataverse, Outlook or Google; each reports its own status |
 | Pattern | A Focus Time row: recurring weekly AM/PM/All Day per weekday between start and (optional) end date |

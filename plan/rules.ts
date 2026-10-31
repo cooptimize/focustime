@@ -1,22 +1,15 @@
-// Ignition rules: capacity, fit, carry-over, block client and story level. Pure, no I/O.
-import type { IsoDate, Slot, WorkItem } from "../week/types.ts";
+// Plan the day rules: capacity, fit, carry-over, block client and story level. Pure, no I/O.
+import { freeMinutes } from "../week/free.ts";
+import type { IsoDate, WorkItem } from "../week/types.ts";
 import { SIZE_MINUTES, type Pick } from "./types.ts";
 
-const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
 
 /**
- * Real capacity of a half-day: free minutes after meetings and personal events (the slot's free gaps),
- * counting only time from `now` on, so a 9:40 ignition doesn't plan the 9:00 to 9:40 that has passed.
+ * Real capacity of a half-day: the same total free time the week view shows (week/free.ts, D100), counting
+ * only time from `now` on, so planning at 9:40 doesn't plan the 9:00 to 9:40 that has passed. PTO lowers it.
  */
-export function capacityMinutes(slot: { freeGaps: Slot["freeGaps"] }, now: string): number {
-  const t = ms(now);
-  let total = 0;
-  for (const g of slot.freeGaps) {
-    const a = Math.max(ms(g.start), t);
-    const b = ms(g.end);
-    if (b > a) total += (b - a) / 60_000;
-  }
-  return Math.floor(total);
+export function capacityMinutes(slot: Parameters<typeof freeMinutes>[0], now: string): number {
+  return freeMinutes(slot, now);
 }
 
 /** Planned minutes of the picks still to do (planned); done, moved and dropped don't use capacity. */

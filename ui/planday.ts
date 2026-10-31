@@ -1,14 +1,14 @@
-// When ignition opens by itself, and how to notice a new day while the window stays open for days.
+// When Plan the day opens by itself, and how to notice a new day while the window stays open for days.
 import type { WeekLoadData } from "../actions/types.ts";
 
-/** Ignition opens by itself after this local hour on a workday. */
+/** Plan the day opens by itself after this local hour on a workday. */
 export const AUTO_OPEN_HOUR = 5;
 
 /**
  * Due on a workday (Mon–Thu) from 05:00 local when today isn't committed. The server then makes it
- * once per day (ignition.start with auto), so a dismissed panel doesn't come back on the next focus.
+ * once per day (planday.start with auto), so a dismissed panel doesn't come back on the next focus.
  */
-export function autoOpenDue(now: Temporal.ZonedDateTime, ig: WeekLoadData["ignition"]): boolean {
+export function autoOpenDue(now: Temporal.ZonedDateTime, ig: WeekLoadData["planDay"]): boolean {
   return ig.available && ig.workday && !ig.committed && now.toPlainDate().toString() === ig.date && now.hour >= AUTO_OPEN_HOUR;
 }
 

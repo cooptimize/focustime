@@ -23,7 +23,7 @@ type Props = {
   onDisconnect: (s: Calendar) => void;
 };
 
-const names = { dataverse: "Dataverse", outlook: "Outlook", google: "Google" } as const;
+const names = { dataverse: "Dataverse", outlook: "Outlook", google: "Google", pto: "PTO" } as const;
 
 function when(iso: string, tz: string): string {
   const z = Temporal.Instant.from(iso).toZonedDateTimeISO(tz);
@@ -49,7 +49,7 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, shape, lo
       {sources.map((s) => {
         const st = stateOf(s);
         const cal = s.source === "outlook" || s.source === "google" ? (s.source as Calendar) : null;
-        const detail = s.source === "dataverse" ? `${s.itemCount} ${s.itemCount === 1 ? "pattern" : "patterns"}` : s.sample || notConnected(s) ? "" : `${s.itemCount} events`;
+        const detail = s.source === "dataverse" ? `${s.itemCount} ${s.itemCount === 1 ? "pattern" : "patterns"}` : s.source === "pto" ? `${s.itemCount} ${s.itemCount === 1 ? "day" : "days"}` : s.sample || notConnected(s) ? "" : `${s.itemCount} events`;
         const canConnect = cal && (s.fixAction === "connect_microsoft" || s.fixAction === "connect_google");
         const connected = cal && !s.sample && !canConnect && (s.status === "ok" || s.fromCache);
         return (
