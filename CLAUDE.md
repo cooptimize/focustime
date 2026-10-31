@@ -6,7 +6,7 @@ Read before changing code: this file, `docs/spec.md` (current slice), `docs/deci
 
 ## Current milestone
 
-Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks), step 4.5 (responsive layout: wide, medium, narrow) and step 5 (morning planning, now "Plan the day": local plan store, picks, commit, checklist, reminder, autostart) and step 5.5 (Omarchy app launcher and key, work item links in the client's Edge profile, card polish, Loop recorded but not built) and step 6 (top bar views, item and command menus from the action registry, the ignition → Plan the day rename, planning the next workday, PTO from Dataverse, Outlook show-as styling and free-time summary), and step 6.1 (UX review fixes on a token foundation: Plan the day styling, three token layers, AA contrast, status bar by root cause, Tab scope, F6 and O, keyboard legend, plan fit on committed cards), and Plan any day (any date, day header menu, ← →, date picker, past days settle-only, one carry-over day), all authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
+Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks), step 4.5 (responsive layout: wide, medium, narrow) and step 5 (morning planning, now "Plan the day": local plan store, picks, commit, checklist, reminder, autostart) and step 5.5 (Omarchy app launcher and key, work item links in the client's Edge profile, card polish, Loop recorded but not built) and step 6 (top bar views, item and command menus from the action registry, the ignition → Plan the day rename, planning the next workday, PTO from Dataverse, Outlook show-as styling and free-time summary), and step 6.1 (UX review fixes on a token foundation: Plan the day styling, three token layers, AA contrast, status bar by root cause, Tab scope, F6 and O, keyboard legend, plan fit on committed cards), and Plan any day (any date, day header menu, ← →, date picker, past days settle-only, one carry-over day), and step 6b (themes, time model with evening slot, unavailable time and flex sessions, Settings, Now strip, /styleguide), all authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
 
 ## Hard rules
 
@@ -21,14 +21,14 @@ Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work ite
 ## Architecture map
 
 ```
-ui/        week grid, top bar, Plan the day, menus (menu.ts builders, Menus.tsx popup and command menu), source status (status.ts: causes and actions), keys.ts (F6, O, legend), styles.css tokens (primitives, semantic, domain)
+ui/        week grid, top bar, Plan the day, menus (menu.ts builders, Menus.tsx popup and command menu), source status (status.ts: causes and actions), keys.ts (F6, O, legend), styles.css tokens (primitives, semantic, domain) and themes, Settings.tsx, NowStrip.tsx, StyleGuide.tsx (/styleguide)
 actions/   named, validated actions; registry.ts is the one list (dispatcher, command menu, future chat)
 week/      pure: normalize, slots, risk rules, PTO days (pto.ts), free time (free.ts) (no I/O, no tokens)
-plan/      pure: plan types, capacity, fit, carry-over, block client, story level, planning target (target.ts), day rule, stepping and carry-over day (days.ts)
+plan/      pure: plan types, capacity, fit, carry-over, block client, story level, planning target (target.ts), day rule, stepping and carry-over day (days.ts), Now strip (now.ts)
 store/     SQLite plan store (~/.local/share/coopilot/plan.db), migrations, export
 sources/   dataverse (focus time, PTO) | graph | google | devops adapters; oauth/ (PKCE loopback), calendar/ (shared fetch, cache, status), devops/ (per-client work items, Pat)
 secrets/   keyring access only
-config/    ~/.config/coopilot/config.toml, validated
+config/    ~/.config/coopilot/config.toml, validated; text edits that keep comments, backups (edit.ts), Settings sections (settings.ts)
 cache/     ~/.cache/coopilot, last good snapshot per source
 server/    127.0.0.1 host: launch token, Host/Origin guard, /api/action, UI
 log/       structured logger with a closed set of fields (no headers or bodies)
