@@ -14,8 +14,8 @@ const NOW = Temporal.Instant.from("2026-11-02T13:02:00Z"); // 8:02 AM New York
 
 type Kind = "outlook" | "google";
 
-function setup(kind: Kind, scenario: ApiScenario, opts: { connected?: boolean; calendars?: string[] } = {}) {
-  const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-cal-"));
+function setup(kind: Kind, scenario: ApiScenario, opts: { connected?: boolean; calendars?: string[]; cacheDir?: string } = {}) {
+  const cacheDir = opts.cacheDir ?? mkdtempSync(join(tmpdir(), "coopilot-cal-"));
   const logs: LogRecord[] = [];
   const api = fakeApis(scenario);
   const keyring = memoryKeyring({
@@ -126,6 +126,17 @@ describe.each<Kind>(["outlook", "google"])("%s source failure states", (kind) =>
     const { source, cacheDir } = setup(kind, scenario);
     seedCache(cacheDir, kind);
     expect(await source.load(WEEK)).toMatchObject({ status: "unreachable", fromCache: true, message: "Offline, showing data from 8:02 AM" });
+  });
+
+  it("a forced refresh that fails after a live load keeps the same events", async () => {
+    const live = setup(kind, "ok");
+    const good = await live.source.load(WEEK);
+    expect(good.status).toBe("ok");
+    // Same cache folder, network now down: the forced refresh falls back to the snapshot of the live load.
+    const { source } = setup(kind, "api_offline", { cacheDir: live.cacheDir });
+    const r = await source.load(WEEK, { refresh: true });
+    expect(r).toMatchObject({ status: "unreachable", fromCache: true });
+    expect(r.items).toEqual(good.items);
   });
 
   it("offline with no snapshot says so", async () => {

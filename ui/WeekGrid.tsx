@@ -1,6 +1,6 @@
 import { useContext, type CSSProperties } from "react";
 import { formatDuration } from "../week/format.ts";
-import { worstSeverity } from "../week/risks.ts";
+import { topRisk, worstSeverity } from "../week/risks.ts";
 import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
 import { hourMarks, layoutEvents } from "./layout.ts";
 import { clientColor, eventRange, ruleLabel, SampleSources, severityLabel, shortDate, slotRange, sourceName, startClock } from "./labels.ts";
@@ -121,6 +121,7 @@ type HalfProps = {
 function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabel, refFn, onSelect, onOpen }: HalfProps) {
   const primary = slot.focus[0];
   const sev = worstSeverity(slot.risks);
+  const { top, more } = topRisk(slot.risks);
   const style = { "--c": clientColor(primary?.clientKey, colors), flexGrow: minutesOf(slot) } as CSSProperties;
   const state = overflow ? "overflow" : slot.open ? "open" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
@@ -173,18 +174,17 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
             <span>{formatDuration(slot.longestFreeMinutes)} longest free</span>
           </div>
 
-          {slot.risks.length > 0 && (
-            <ul className="badges" id={reasonsId}>
-              {slot.risks.map((r, i) => (
-                <li key={i} className={`badge ${r.severity}`}>
-                  <span className="badge-text">
-                    <span className="dot" aria-hidden="true" />
-                    {severityLabel(r)}: {ruleLabel[r.rule]}
-                  </span>
-                  <span className="reason">{r.reason}</span>
-                </li>
-              ))}
-            </ul>
+          {top && (
+            <div className="badges" id={reasonsId}>
+              <div className={`badge ${top.severity}`}>
+                <span className="badge-text">
+                  <span className="dot" aria-hidden="true" />
+                  {severityLabel(top)}: {ruleLabel[top.rule]}
+                  {more > 0 && <span className="more">+{more} more</span>}
+                </span>
+                <span className="reason">{top.reason}</span>
+              </div>
+            </div>
           )}
         </aside>
       )}

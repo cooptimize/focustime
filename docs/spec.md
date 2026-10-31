@@ -270,6 +270,10 @@ Raised in step 2 (not blocking):
 - Q10. The internal account's nickname is "Cooptimize", and that is what the grid shows. Should it show as "Internal" (the glossary word) instead?
 - Q11. ~~Sample meetings over real blocks~~ Resolved in step 3 (D53): sample meetings show only for a calendar with no config section. Sample meetings now sit on top of your real focus blocks, so some risk badges this week come from sample meetings. Keep that until step 3 (as now, labeled sample), or hide sample meetings once Dataverse is live?
 
+Raised in step 3 (not blocking):
+- Q12. Google publishing status. Google requires a homepage and privacy policy URL to switch an External app to production, so Coopilot stays in Testing for now. In Testing, Google ends the sign-in after 7 days and the status bar asks to reconnect. Option: two small public pages (for example on GitHub Pages) to unlock production. Decide after living with weekly reconnects.
+- Q13. Ranking of double-booked block and all-day event in the single badge (D58) was my placement, not requested. Confirm or reorder.
+
 ## 17. Decisions proposed this round
 
 | ID | Status | Entry |
@@ -295,3 +299,6 @@ Raised in step 2 (not blocking):
 | D53 | Done | Sample meetings are used only for a calendar whose config section is missing or has an empty `client_id`. Once configured, that source is real (live, cached or needs sign-in) and never falls back to samples. The fixture stays for tests |
 | D54 | Done | Q7 and Q8: an Outlook out-of-office event puts the half-days it covers at risk (timed: if it overlaps; all-day: the whole day). Other all-day Outlook events are a watch ("All-day event") only if busy or showAs is missing; free and tentative are ignored. Personal events on Open half-days and Friday show but never flag |
 | D55 | Done | Status bar per calendar: LIVE, CACHED (with the snapshot time), NEEDS SIGN-IN with Connect or Reconnect, and Disconnect behind a confirm. While sign-in runs, the bar says to finish in the browser; it gives up after 5 minutes |
+| D56 | Done | Freshness (step 3.5): the window refetches all sources when it regains focus (at most once per 60 s), quietly every 5 minutes while visible (a manual or focus refresh resets that clock), and on "r" or Refresh. Only one refresh runs at a time. Focus and background refreshes do not show "Loading" |
+| D57 | Done | A refresh never blanks the grid: the data on screen stays until new data arrives. If the server cannot be reached, the last good week stays with "Could not reach the Coopilot server. Showing what was loaded earlier"; if a source fails, the server already returns its snapshot with the CACHED or error state. A slower older response never overwrites a newer one. The status bar shows "updated N min ago" per source (the exact time is in the tooltip) |
+| D58 | Done | One badge per half-day card: the most serious risk, then "+N more". Order: at risk before watch; within a level out of office, personal conflict, double-booked block, no focus window, all-day event, meetings. Double-booked and all-day event were not in the requested order; they sit where shown. The details panel lists every reason in the same order |

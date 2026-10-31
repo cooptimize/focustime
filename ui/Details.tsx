@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, type CSSProperties } from "react";
 import { formatDuration } from "../week/format.ts";
+import { rankRisks } from "../week/risks.ts";
 import type { Day, Slot } from "../week/types.ts";
 import { clientColor, eventRange, halfName, longDate, ruleLabel, SampleSources, severityLabel, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 
@@ -53,7 +54,7 @@ export function Details({ open, day, slot, timeZone, colors, onClose }: Props) {
         <section>
           <h3>Risks</h3>
           <ul className="risk-list">
-            {slot.risks.map((r, i) => (
+            {rankRisks(slot.risks).map((r, i) => (
               <li key={i} className={r.severity}>
                 <span className="badge-text">
                   <span className="dot" aria-hidden="true" />

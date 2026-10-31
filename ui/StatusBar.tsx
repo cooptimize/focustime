@@ -1,6 +1,7 @@
 import type { SourceSummary } from "../actions/types.ts";
 import type { DayShape } from "../week/types.ts";
 import { shortDate } from "./labels.ts";
+import { updatedAgo } from "./refresh.ts";
 
 type Calendar = "outlook" | "google";
 type Props = {
@@ -11,6 +12,8 @@ type Props = {
   loading: boolean;
   busy: Calendar | null;
   notice: string | null;
+  /** Wall clock, ticking every 30 s, for "updated N min ago". */
+  clock: number;
   onRefresh: () => void;
   onConnect: (s: Calendar) => void;
   onDisconnect: (s: Calendar) => void;
@@ -33,7 +36,7 @@ function stateOf(s: SourceSummary): { cls: string; label: string } {
   return { cls: "error", label: s.status.replace("_", " ") };
 }
 
-export function StatusBar({ sources, sampleWeek, isSampleWeek, shape, loading, busy, notice, onRefresh, onConnect, onDisconnect }: Props) {
+export function StatusBar({ sources, sampleWeek, isSampleWeek, shape, loading, busy, notice, clock, onRefresh, onConnect, onDisconnect }: Props) {
   const samples = sources.filter((s) => s.sample);
   const notConnected = (s: SourceSummary) => s.status === "auth_required" && !s.fromCache && !!s.message?.includes("not connected");
   const problems = sources.filter((s) => s.message && !s.sample && s.status !== "ok" && !notConnected(s));
@@ -50,7 +53,11 @@ export function StatusBar({ sources, sampleWeek, isSampleWeek, shape, loading, b
             <span className="dot" aria-hidden="true" />
             {names[s.source]}
             <span className={`state ${st.cls}`}>{st.label}</span>
-            {s.fetchedAt && <span className="muted">{s.fromCache ? "from" : "fetched"} {when(s.fetchedAt, shape.timeZone)}</span>}
+            {s.fetchedAt && (
+              <span className="muted" title={`${s.fromCache ? "Snapshot from" : "Fetched"} ${when(s.fetchedAt, shape.timeZone)}`}>
+                {updatedAgo(s.fetchedAt, clock, shape.timeZone)}
+              </span>
+            )}
             {detail && <span className="muted">{detail}</span>}
             {canConnect && (
               <button type="button" className="mini primary" disabled={busy !== null} onClick={() => onConnect(cal)}>

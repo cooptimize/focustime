@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { WeekLoadData } from "../actions/types.ts";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks } from "../week/dates.ts";
 import type { Half } from "../week/types.ts";
 import { connectSource, disconnectSource, SessionError, weekLoad } from "./api.ts";
+import { afterLoad, createAutoRefresh, type LoadState, type RefreshTrigger } from "./refresh.ts";
 import { Details } from "./Details.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
@@ -20,8 +20,6 @@ function nowOverride(): string | undefined {
   }
 }
 
-type LoadState = { kind: "loading" } | { kind: "ready"; data: WeekLoadData } | { kind: "session" } | { kind: "failed"; message: string };
-
 export function App() {
   const now = useRef(nowOverride()).current;
   const [state, setState] = useState<LoadState>({ kind: "loading" });
@@ -30,34 +28,68 @@ export function App() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [busy, setBusy] = useState<"outlook" | "google" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [clock, setClock] = useState(() => Date.now());
   const cellRefs = useRef(new Map<string, HTMLDivElement>());
+  // The week the window is on (or moving to), and a counter so a slow older response never overwrites a newer one.
+  const weekRef = useRef<string | undefined>(undefined);
+  const seq = useRef(0);
   const data = state.kind === "ready" ? state.data : null;
 
+  /** Loads a week. Data on screen stays put until the new data arrives; a failure keeps it (afterLoad). */
   const load = useCallback(
-    async (input: { weekStart?: string; refresh?: boolean }, selectToday = false) => {
-      setLoading(true);
+    async (input: { weekStart?: string; refresh?: boolean }, opts: { selectToday?: boolean; quiet?: boolean } = {}) => {
+      const id = ++seq.current;
+      if (input.weekStart) weekRef.current = input.weekStart;
+      if (!opts.quiet) setLoading(true);
       try {
         const d = await weekLoad({ ...input, ...(now ? { now } : {}) });
-        setState({ kind: "ready", data: d });
-        if (selectToday) setSel({ dayIndex: d.today.dayIndex, half: d.today.half });
+        if (id !== seq.current) return;
+        weekRef.current = d.weekStart;
+        setState((prev) => afterLoad(prev, { kind: "ok", data: d }));
+        if (opts.selectToday) setSel({ dayIndex: d.today.dayIndex, half: d.today.half });
       } catch (e) {
-        setState(e instanceof SessionError ? { kind: "session" } : { kind: "failed", message: "Could not reach the Coopilot server" });
+        if (id !== seq.current) return;
+        setState((prev) => afterLoad(prev, e instanceof SessionError ? { kind: "session" } : { kind: "error" }));
       } finally {
-        setLoading(false);
+        if (id === seq.current) setLoading(false);
       }
     },
     [now],
   );
 
   useEffect(() => {
-    void load({}, true);
+    void load({}, { selectToday: true });
   }, [load]);
+
+  // Freshness: refetch on window focus (at most once a minute), quietly every 5 minutes, and on "r" or Refresh.
+  const auto = useMemo(
+    () =>
+      createAutoRefresh({
+        isHidden: () => document.hidden,
+        refresh: (t: RefreshTrigger) => load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true }, { quiet: t === "focus" || t === "interval" }),
+      }),
+    [load],
+  );
+  useEffect(() => {
+    auto.start();
+    const onFocus = () => auto.trigger("focus");
+    const onVisible = () => document.visibilityState === "visible" && auto.trigger("focus");
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    const tick = setInterval(() => setClock(Date.now()), 30_000);
+    return () => {
+      auto.stop();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(tick);
+    };
+  }, [auto]);
 
   const changeWeek = useCallback((n: number) => data && void load({ weekStart: addWeeks(data.weekStart, n) }), [data, load]);
   const goToday = useCallback(() => {
     if (!data) return;
     if (data.today.weekStart === data.weekStart) setSel({ dayIndex: data.today.dayIndex, half: data.today.half });
-    else void load({ weekStart: data.today.weekStart }, true);
+    else void load({ weekStart: data.today.weekStart }, { selectToday: true });
   }, [data, load]);
 
   useEffect(() => {
@@ -82,13 +114,17 @@ export function App() {
           e.preventDefault();
           return setDetailsOpen(true);
         case "t": return goToday();
+        case "r":
+          e.preventDefault();
+          auto.trigger("key");
+          return;
         case "[": return changeWeek(-1);
         case "]": return changeWeek(1);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto]);
 
   if (state.kind === "session") {
     return (
@@ -134,6 +170,7 @@ export function App() {
           <span><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> move</span>
           <span><kbd>Enter</kbd> details</span>
           <span><kbd>t</kbd> today</span>
+          <span><kbd>r</kbd> refresh</span>
           <span><kbd>[</kbd><kbd>]</kbd> change week</span>
         </div>
       </header>
@@ -173,8 +210,9 @@ export function App() {
         shape={data.dayShape}
         loading={loading}
         busy={busy}
-        notice={notice}
-        onRefresh={() => void load({ weekStart: data.weekStart, refresh: true })}
+        notice={notice ?? (state.kind === "ready" ? state.refreshError ?? null : null)}
+        clock={clock}
+        onRefresh={() => auto.trigger("button")}
         onConnect={async (src) => {
           setBusy(src);
           setNotice(`Finish signing in to ${src === "outlook" ? "Microsoft" : "Google"} in your browser`);

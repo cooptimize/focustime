@@ -285,6 +285,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 
 /* Reason: shown on hover of the badge (as a tooltip), and inline when the half-day is selected or focused */
+.badge .more { margin-left: 8px; font-weight: 500; color: var(--ink-3); text-transform: none; letter-spacing: 0; }
 .badge .reason {
   display: none;
   font-size: 13px;

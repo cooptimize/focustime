@@ -1,6 +1,6 @@
 import { iso } from "./dates.ts";
 import { formatDuration, formatRange, toZoned } from "./format.ts";
-import type { CalEvent, FocusBlock, FreeGap, PlacedEvent, Risk, RiskThresholds, Severity } from "./types.ts";
+import type { CalEvent, FocusBlock, FreeGap, PlacedEvent, Risk, RiskRule, RiskThresholds, Severity } from "./types.ts";
 
 export type RiskInput = {
   focus: readonly FocusBlock[];
@@ -117,4 +117,21 @@ export function evaluateRisks(input: RiskInput, t: RiskThresholds): RiskResult {
 export function worstSeverity(risks: readonly Risk[]): Severity | null {
   if (risks.some((r) => r.severity === "at_risk")) return "at_risk";
   return risks.length ? "watch" : null;
+}
+
+/**
+ * Most serious first: at risk before watch; within a level, out of office, personal conflict,
+ * double-booked block, no focus window, all-day event, meetings. Stable for equal ranks.
+ */
+const RULE_ORDER: readonly RiskRule[] = ["out_of_office", "personal_conflict", "double_booked_block", "no_focus_window", "all_day_busy", "meeting_load"];
+
+export function rankRisks(risks: readonly Risk[]): Risk[] {
+  const sev = (r: Risk) => (r.severity === "at_risk" ? 0 : 1);
+  return [...risks].sort((a, b) => sev(a) - sev(b) || RULE_ORDER.indexOf(a.rule) - RULE_ORDER.indexOf(b.rule));
+}
+
+/** The one badge a card shows, and how many others the details panel lists. */
+export function topRisk(risks: readonly Risk[]): { top: Risk | null; more: number } {
+  const ranked = rankRisks(risks);
+  return { top: ranked[0] ?? null, more: Math.max(0, ranked.length - 1) };
 }
