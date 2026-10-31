@@ -1,0 +1,51 @@
+import type { PlacedEvent } from "../week/types";
+
+export type Positioned = { placed: PlacedEvent; top: number; height: number; lane: number; lanes: number };
+
+const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
+
+/** Vertical position (fractions of the slot) and side-by-side lanes for overlapping events. */
+export function layoutEvents(events: readonly PlacedEvent[], slotStart: string, slotEnd: string): Positioned[] {
+  const s0 = ms(slotStart);
+  const span = ms(slotEnd) - s0;
+  const items = events.map((placed) => ({ placed, a: ms(placed.clipStart), b: Math.max(ms(placed.clipEnd), ms(placed.clipStart) + 10 * 60000) }));
+  items.sort((x, y) => x.a - y.a || y.b - x.b);
+
+  const out: Positioned[] = [];
+  let cluster: { item: (typeof items)[number]; lane: number }[] = [];
+  let laneEnds: number[] = [];
+  let clusterEnd = -Infinity;
+  const flush = () => {
+    for (const c of cluster) {
+      out.push({ placed: c.item.placed, top: (c.item.a - s0) / span, height: (c.item.b - c.item.a) / span, lane: c.lane, lanes: laneEnds.length });
+    }
+    cluster = [];
+    laneEnds = [];
+  };
+  for (const item of items) {
+    if (item.a >= clusterEnd) flush();
+    let lane = laneEnds.findIndex((end) => end <= item.a);
+    if (lane === -1) lane = laneEnds.push(item.b) - 1;
+    else laneEnds[lane] = item.b;
+    cluster.push({ item, lane });
+    clusterEnd = Math.max(clusterEnd, item.b);
+  }
+  flush();
+  return out;
+}
+
+/** Full hours strictly inside the slot, as fractions, for gridlines. */
+export function hourMarks(slotStart: string, slotEnd: string, timeZone: string): { at: number; label: string }[] {
+  const a = Temporal.Instant.from(slotStart).toZonedDateTimeISO(timeZone);
+  const b = Temporal.Instant.from(slotEnd).toZonedDateTimeISO(timeZone);
+  const span = b.epochMilliseconds - a.epochMilliseconds;
+  const marks: { at: number; label: string }[] = [];
+  let t = a.round({ smallestUnit: "hour", roundingMode: "ceil" });
+  if (Temporal.ZonedDateTime.compare(t, a) === 0) t = t.add({ hours: 1 });
+  while (Temporal.ZonedDateTime.compare(t, b) < 0) {
+    const h = t.hour % 12 || 12;
+    marks.push({ at: (t.epochMilliseconds - a.epochMilliseconds) / span, label: `${h} ${t.hour < 12 ? "AM" : "PM"}` });
+    t = t.add({ hours: 1 });
+  }
+  return marks;
+}
