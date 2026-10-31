@@ -183,3 +183,25 @@ describe("[plan] pickable portfolio types (Q20)", () => {
     expect(fields(`${valid}\n[plan]\ntypes = []\n`)).toEqual(["plan.types"]);
   });
 });
+
+describe("[edge] link profiles (step 5.5)", () => {
+  it("is optional: no Edge, links fall back to the default browser", () => {
+    const r = parseConfig(valid);
+    expect(r.ok && r.config.edge).toEqual({ command: [], profiles: {}, fallbackCommand: ["omarchy-launch-browser"] });
+  });
+  it("reads the launch command and client profiles", () => {
+    const r = parseConfig(`${valid}\n[edge]\ncommand = ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]\n[edge.profiles]\nCSC = "Profile 3"\n"W&C" = "Default"\n`);
+    expect(r.ok && r.config.edge).toEqual({ command: ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"], profiles: { CSC: "Profile 3", "W&C": "Default" }, fallbackCommand: ["omarchy-launch-browser"] });
+  });
+  it("names bad values: a shell string, a flag as a profile, profiles with no command", () => {
+    expect(fields(`${valid}\n[edge]\ncommand = "microsoft-edge-stable --x"\n`)).toEqual(["edge.command"]);
+    expect(fields(`${valid}\n[edge]\ncommand = ["edge"]\n[edge.profiles]\nCSC = "--user-data-dir=/tmp"\n`)).toEqual(["edge.profiles.CSC"]);
+    expect(fields(`${valid}\n[edge.profiles]\nCSC = "Default"\n`)).toEqual(["edge.command"]);
+    expect(fields(`${valid}\n[edge]\nbrowser = "x"\n`)).toEqual(["edge.browser"]);
+  });
+  it("the starter file mentions it, commented out", () => {
+    const r = parseConfig(STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'));
+    expect(r.ok && r.config.edge.command).toEqual([]);
+    expect(STARTER_TOML).toContain("# [edge]");
+  });
+});

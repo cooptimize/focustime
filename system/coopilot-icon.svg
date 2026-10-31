@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Placeholder icon until the real logo: a week grid of half-day blocks. -->
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#1f2a3a"/>
+  <g fill="#4a7fd4">
+    <rect x="44" y="64" width="34" height="56" rx="8"/><rect x="88" y="64" width="34" height="56" rx="8"/>
+    <rect x="132" y="64" width="34" height="56" rx="8" fill="#d2892a"/><rect x="176" y="64" width="34" height="56" rx="8" fill="#5c6b80"/>
+    <rect x="44" y="136" width="34" height="56" rx="8" fill="#1f9e8f"/><rect x="88" y="136" width="34" height="56" rx="8" fill="#7b68ee"/>
+    <rect x="132" y="136" width="34" height="56" rx="8"/><rect x="176" y="136" width="34" height="56" rx="8" fill="#5c6b80"/>
+  </g>
+</svg>

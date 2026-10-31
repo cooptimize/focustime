@@ -324,6 +324,9 @@ Raised in step 4 (not blocking):
 
 ## 18. Backlog (not built)
 
+- **End-of-day recap (next step):** built around closing loops (D92). It lists the loops opened today and what would close each, from the day's picks, slipped or moved blocks and blocked items, and lets me close one with an optional note. Proposal only; to be specified and authorized.
+- **Waiting-on loops:** things others owe me, the mirror of D92's loops. Later.
+- **AI layer (direction, D93):** interpret Teams, email and DevOps to detect loops and synthesize context, staged as rules, then signals, then AI proposals I confirm, then an orchestrator, always through the same actions and confirmations.
 - **Ownership area** (future, separate from the week view, see D59): epics and features I own, progress of the people contributing to them, and risk against target dates. Would need its own read model, likely per-client WIQL on ownership fields, and its own view. Not in the Look-ahead.
 
 ## 19. Step 5: morning ignition (authorized Oct 31)
@@ -338,3 +341,12 @@ Purpose: in about two minutes, turn today's real capacity into a short, committe
 - **Triggers:** on Mon–Thu the first window focus after 05:00 opens ignition once if today isn't committed; `i` opens it any time. One desktop notification (`notify-send`) between the day-shape start and 90 minutes after it if today isn't committed, once per day (D83).
 - **Always on:** `~/.config/systemd/user/coopilot.service` (from `system/coopilot.service`, restart on failure) and `~/.config/autostart/coopilot.desktop` (from `system/coopilot.desktop`, runs `scripts/open-window.ts`).
 - **Rollback:** `systemctl --user disable --now coopilot && rm ~/.config/systemd/user/coopilot.service ~/.config/autostart/coopilot.desktop && systemctl --user daemon-reload`. The plan store can be removed with `rm -r ~/.local/share/coopilot` (export first).
+
+## 20. Step 5.5: Omarchy app, Edge profile links, polish (authorized Oct 31)
+
+- **Launch path (D85–D88):** `coopilot-open` starts the service if needed, waits for it, then focuses the Coopilot window or opens it with Omarchy's web-app pattern (own Chromium data directory, class `chrome-127.0.0.1__-Default`). A window from an earlier server run is replaced. Used by the launcher entry "Coopilot", Super + Alt + C and login autostart.
+- **Links (D89, D90):** `link.open(clientKey, url)` checks the link is on that client's DevOps org, then starts Edge with the client's profile (`[edge]` in config) from an argument array. Unmapped clients open in the default browser with "No Edge profile set for <client>". Week cards, details, ignition picks and candidates all use it.
+- **Polish (D91):** the source line is gone from cards in every layout; details keep it.
+- **Recorded only:** Loop (D92), the AI direction (D93) and the end-of-day recap as the next step (section 18).
+- **Files installed:** `~/.local/bin/coopilot-open` (link to `system/coopilot-open`), `~/.local/share/applications/Coopilot.desktop`, `~/.local/share/icons/hicolor/256x256/apps/coopilot.png`, one line appended to `~/.config/hypr/bindings.lua`, Exec line of `~/.config/autostart/coopilot.desktop`, `[edge]` appended to `~/.config/coopilot/config.toml`. Created on first open: `~/.local/share/coopilot/browser` and `$XDG_RUNTIME_DIR/coopilot/window-server-pid`.
+- **Rollback:** `cp ~/.config/hypr/bindings.lua.bak-step55 ~/.config/hypr/bindings.lua && hyprctl reload`; `cp ~/.config/autostart/coopilot.desktop.bak-step5 ~/.config/autostart/coopilot.desktop`; `rm ~/.local/bin/coopilot-open ~/.local/share/applications/Coopilot.desktop ~/.local/share/icons/hicolor/256x256/apps/coopilot.png`; `rm -r ~/.local/share/coopilot/browser`; `cp ~/.config/coopilot/config.toml.bak-step55 ~/.config/coopilot/config.toml` (or delete the `[edge]` section).

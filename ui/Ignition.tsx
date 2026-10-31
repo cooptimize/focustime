@@ -8,6 +8,7 @@ import type { Day, Half, Slot, WorkItem } from "../week/types.ts";
 import { formatMinutes } from "./ignition.ts";
 import { clientColor, longDate, shortDate, slotRange, startClock } from "./labels.ts";
 import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
+import { WorkLink } from "./WorkLink.tsx";
 
 export type IgnitionAct = (action: string, input: Record<string, unknown>) => Promise<boolean>;
 
@@ -195,7 +196,13 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
             <li key={p.id} className={p.clientKey !== bc.clientKey ? "other-client" : ""}>
               <span className="wi-type">{p.kind === "intention" ? "Note" : typeTag(p.itemType ?? "")}</span>
               <span className="pick-title" title={p.title}>
-                {p.title}
+                {p.kind === "item" && p.itemUrl ? (
+                  <WorkLink clientKey={p.clientKey} url={p.itemUrl} className="pick-link">
+                    {p.title}
+                  </WorkLink>
+                ) : (
+                  p.title
+                )}
                 {p.clientKey !== bc.clientKey && <span className="muted"> · {name(p.clientKey)}</span>}
                 {p.carriedFromDate && <span className="muted"> · from {shortDate(p.carriedFromDate)}</span>}
               </span>
@@ -270,6 +277,7 @@ function Candidates({ clientKey, half, date, drafts, picked, act }: { clientKey:
                 <span className="wi-type">{typeTag(i.type)}</span>
                 <span className="wi-title">{i.title}</span>
               </button>
+              <OpenItem clientKey={clientKey} item={i} />
             </li>
           ),
         )}
@@ -283,6 +291,16 @@ function Candidates({ clientKey, half, date, drafts, picked, act }: { clientKey:
   );
 }
 
+/** A small open link next to a candidate, so the row itself still adds the pick. */
+function OpenItem({ clientKey, item }: { clientKey: string; item: WorkItem }) {
+  return (
+    <WorkLink clientKey={clientKey} url={item.url} className="open-item" title={`Open ${item.type} ${item.id} in DevOps`}>
+      <span aria-hidden="true">↗</span>
+      <span className="sr-only">Open {item.id} in DevOps</span>
+    </WorkLink>
+  );
+}
+
 function Portfolio({ item, clientKey, kids: children, drafts, add, act }: { item: WorkItem; clientKey: string; kids: WorkItem[]; drafts: DraftStory[]; add: (i: Record<string, unknown>) => Promise<boolean>; act: IgnitionAct }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -290,12 +308,15 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act }: { item
   const needs = children.length === 0 && drafts.length === 0;
   return (
     <li className="portfolio">
-      <button type="button" className="cand parent" aria-expanded={open} onClick={() => setOpen((o) => !o)} title={`${item.type} ${item.id}: ${item.title}`}>
-        <span className="plus" aria-hidden="true">{open ? "▾" : "▸"}</span>
-        <span className="wi-type">{typeTag(item.type)}</span>
-        <span className="wi-title">{item.title}</span>
-        <span className={needs ? "needs" : "muted kids"}>{needs ? "Needs breakdown" : `${children.length + drafts.length} to pick`}</span>
-      </button>
+      <div className="portfolio-row">
+        <button type="button" className="cand parent" aria-expanded={open} onClick={() => setOpen((o) => !o)} title={`${item.type} ${item.id}: ${item.title}`}>
+          <span className="plus" aria-hidden="true">{open ? "▾" : "▸"}</span>
+          <span className="wi-type">{typeTag(item.type)}</span>
+          <span className="wi-title">{item.title}</span>
+          <span className={needs ? "needs" : "muted kids"}>{needs ? "Needs breakdown" : `${children.length + drafts.length} to pick`}</span>
+        </button>
+        <OpenItem clientKey={clientKey} item={item} />
+      </div>
       {open && (
         <ul className="kids-list">
           {children.map((c) => (
@@ -305,6 +326,7 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act }: { item
                 <span className="wi-type">{typeTag(c.type)}</span>
                 <span className="wi-title">{c.title}</span>
               </button>
+              <OpenItem clientKey={clientKey} item={c} />
             </li>
           ))}
           {drafts.map((d) => (

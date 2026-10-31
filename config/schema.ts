@@ -1,5 +1,6 @@
 // Parse and validate ~/.config/coopilot/config.toml. Pure: text in, config or per-field errors out.
 import { parse, TomlError } from "smol-toml";
+import { PROFILE_DIR } from "../links/edge.ts";
 import type { Half, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
 
 export type DataverseConfig = {
@@ -25,7 +26,20 @@ export type AppConfig = {
   clients: Record<string, string>;
   /** Plan settings (step 5). */
   plan: PlanConfig;
+  /** Where work item links open (step 5.5). */
+  edge: EdgeConfig;
 };
+
+export type EdgeConfig = {
+  /** Edge's launch command as an argument array, e.g. ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]. Empty: no Edge. */
+  command: string[];
+  /** clientKey → Edge profile directory ("Default", "Profile 3"). */
+  profiles: Record<string, string>;
+  /** Runs with the link for clients with no profile. */
+  fallbackCommand: string[];
+};
+
+export const DEFAULT_FALLBACK_COMMAND = ["omarchy-launch-browser"];
 
 export type PlanConfig = {
   /** Portfolio-level work item types that can still be picked (Q20), matched without regard to case. */
@@ -92,7 +106,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -186,6 +200,32 @@ export function parseConfig(text: string): ParseResult {
       });
   }
 
+  // [edge] (optional): launch command and clientKey → profile directory
+  const edge: EdgeConfig = { command: [], profiles: {}, fallbackCommand: DEFAULT_FALLBACK_COMMAND };
+  if (raw.edge !== undefined) {
+    const t = isTable(raw.edge) ? raw.edge : (err("edge", "Must be an [edge] table"), null);
+    if (t) for (const k of Object.keys(t)) if (!["command", "fallback_command", "profiles"].includes(k)) err(`edge.${k}`, "Unknown field");
+    const argv = (key: string): string[] | null => {
+      const v = t?.[key];
+      if (v === undefined) return null;
+      if (!Array.isArray(v) || !v.length || v.some((w) => typeof w !== "string" || !w.trim() || w.length > 300)) {
+        err(`edge.${key}`, 'Must be a non-empty list of words, e.g. ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]');
+        return null;
+      }
+      return v as string[];
+    };
+    edge.command = argv("command") ?? [];
+    edge.fallbackCommand = argv("fallback_command") ?? DEFAULT_FALLBACK_COMMAND;
+    const prof = t?.profiles;
+    if (prof !== undefined && !isTable(prof)) err("edge.profiles", "Must be an [edge.profiles] table");
+    else if (prof)
+      for (const [k, v] of Object.entries(prof)) {
+        if (typeof v !== "string" || !PROFILE_DIR.test(v)) err(`edge.profiles.${k}`, 'Must be an Edge profile directory, e.g. "Default" or "Profile 3"');
+        else edge.profiles[k] = v;
+      }
+    if (Object.keys(edge.profiles).length && !edge.command.length) err("edge.command", "Missing (needed for edge.profiles)");
+  }
+
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
   if (raw.outlook !== undefined) {
@@ -226,6 +266,7 @@ export function parseConfig(text: string): ParseResult {
       },
       clients,
       plan: { pickablePortfolioTypes },
+      edge,
     },
   };
 }

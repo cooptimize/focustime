@@ -114,8 +114,23 @@ const server = createApp({
     saveSystemUserId: (id) => saveSystemUserId(cfgPath, id),
     now: () => Temporal.Now.instant().toString(),
     ...(plan ? { plan } : {}),
+    launch: launchDetached,
   },
 });
+
+/** link.open: start a browser from an argument array (no shell), detached, with no output kept. */
+function launchDetached(argv: string[]): Promise<void> {
+  return new Promise((ok, fail) => {
+    const [cmd, ...args] = argv;
+    if (!cmd) return fail(new Error("empty command"));
+    const child = spawn(cmd, args, { detached: true, stdio: "ignore", shell: false });
+    child.once("error", () => fail(new Error("could not start")));
+    child.once("spawn", () => {
+      child.unref();
+      ok();
+    });
+  });
+}
 
 // The once-a-day reminder. Checked every 30 s, so it also handles day rollover while running for days.
 if (plan) {

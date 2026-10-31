@@ -10,6 +10,7 @@ import { buildWeek } from "../week/build.ts";
 import { defaultWeekStart, localToday, todayTarget } from "../week/dates.ts";
 import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
+import { checkDevOpsUrl, launchPlan } from "../links/edge.ts";
 import { isPlanAction, planAction } from "./plan-actions.ts";
 import type { ActionResponse, SourceSummary, WeekLoadData } from "./types.ts";
 
@@ -25,6 +26,8 @@ export type ActionContext = {
   now: () => string;
   /** The local plan store (step 5); absent when it could not be opened. */
   plan?: PlanStore;
+  /** Start a program from an argument array, never a shell (link.open). Rejects when it can't start. */
+  launch?: (argv: string[]) => Promise<void>;
 };
 
 export type ActionRequest = { action: unknown; input: unknown };
@@ -200,6 +203,27 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       const input = validateWeekLoad(req.input ?? {});
       if (typeof input === "string") return bad(input);
       return { ok: true, data: await weekLoad(ctx, input) };
+    }
+    case "link.open": {
+      // Open a work item link in that client's Edge profile. The link must be on the client's own DevOps org.
+      const input = req.input as { clientKey?: unknown; url?: unknown } | undefined;
+      if (typeof input !== "object" || input === null || Array.isArray(input)) return bad("link.open takes { clientKey, url }");
+      for (const k of Object.keys(input)) if (k !== "clientKey" && k !== "url") return bad(`unknown input field ${k}`);
+      if (typeof input.clientKey !== "string" || !input.clientKey.trim() || input.clientKey.length > 100) return bad("clientKey must be text");
+      const key = input.clientKey;
+      const cfg = await configured(ctx);
+      if (!cfg) return { ok: false, status: 409, error: "Fix the config first" };
+      const org = ctx.makeDevOps(cfg.dataverse, cfg.week.dayShape.timeZone).orgOf(key);
+      const checked = checkDevOpsUrl(input.url, org);
+      if (!checked.ok) return { ok: false, status: 422, error: checked.error };
+      if (!ctx.launch) return { ok: false, status: 503, error: "Opening links is not available here" };
+      const plan = launchPlan(cfg.edge, key, key, checked.url);
+      try {
+        await ctx.launch(plan.argv);
+      } catch {
+        return { ok: false, status: 500, error: plan.profile ? "Could not start Edge. Check [edge] command in config" : "Could not start the default browser" };
+      }
+      return { ok: true, data: { opened: plan.profile ? "edge" : "default", notice: plan.notice } };
     }
     case "source.status": {
       if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("source.status takes no input");

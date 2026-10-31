@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Coopilot
+Comment=Week planner and focus blocks
+Exec=/home/tanner/.local/bin/coopilot-open
+Icon=coopilot
+Terminal=false
+StartupNotify=true
+StartupWMClass=chrome-127.0.0.1__-Default
+Categories=Office;

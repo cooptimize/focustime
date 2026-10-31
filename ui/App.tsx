@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks } from "../week/dates.ts";
 import type { Half } from "../week/types.ts";
 import { connectSource, disconnectSource, planAction, SessionError, weekLoad } from "./api.ts";
+import { NOTICE_EVENT } from "./WorkLink.tsx";
 import type { IgnitionState } from "../plan/types.ts";
 import { Ignition } from "./Ignition.tsx";
 import { autoOpenDue, dayRolledOver } from "./ignition.ts";
@@ -35,6 +36,20 @@ export function App() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [busy, setBusy] = useState<"outlook" | "google" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Notices from work item links (e.g. "No Edge profile set for W&C"), shown for a few seconds.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const on = (e: Event) => {
+      setNotice((e as CustomEvent<string>).detail);
+      clearTimeout(timer);
+      timer = setTimeout(() => setNotice(null), 6000);
+    };
+    window.addEventListener(NOTICE_EVENT, on);
+    return () => {
+      window.removeEventListener(NOTICE_EVENT, on);
+      clearTimeout(timer);
+    };
+  }, []);
   const [clock, setClock] = useState(() => Date.now());
   const [ign, setIgn] = useState<IgnitionState | null>(null);
   const [ignError, setIgnError] = useState<string | null>(null);
@@ -243,7 +258,7 @@ export function App() {
     return (
       <div className="center-note">
         <h1>Coopilot needs a fresh launch link</h1>
-        <p>The server was restarted, so this window's access token is no longer valid. Start Coopilot again with <code>npm start</code>.</p>
+        <p>The server was restarted, so this window's access token is no longer valid. Open Coopilot again from the launcher or with Super + Alt + C. It replaces this window.</p>
       </div>
     );
   }

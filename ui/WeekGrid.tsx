@@ -7,6 +7,7 @@ import { DevOpsWork, topWork, typeTag, workStatusLabel } from "./work.ts";
 import { clientColor, eventRange, ruleLabel, SampleSources, severityLabel, shortDate, slotRange, sourceName, startClock } from "./labels.ts";
 import type { Layout } from "./viewport.ts";
 import { checklistFor, PlanCtx } from "./planview.ts";
+import { WorkLink } from "./WorkLink.tsx";
 
 export type Selection = { dayIndex: number; half: Half };
 
@@ -213,7 +214,9 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
           {items.top.map((i) => (
             <li key={i.id} title={`${i.type} ${i.id}: ${i.title} (${i.state})`}>
               <span className="wi-type">{typeTag(i.type)}</span>
-              <span className="wi-title">{i.title}</span>
+              <WorkLink clientKey={primary!.clientKey} url={i.url} className="wi-title">
+                {i.title}
+              </WorkLink>
             </li>
           ))}
           {items.more > 0 && <li className="wi-more">+{items.more} more</li>}
@@ -240,23 +243,16 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, tz, selected, dayLabe
         <span className="swatch" />
         {primary.clientName}
       </div>
-      {!compact && (
-        <div className="src" title={primary.clientFullName ?? primary.clientName}>
-          {primary.source === "dataverse" ? `Dataverse focus block${primary.clientFullName ? ` · ${primary.clientFullName}` : ""}` : "Standing block · Coopilot config"}
-        </div>
-      )}
       {slot.focus.slice(1).map((b) => (
         <div key={b.id} className="also" style={{ "--c2": clientColor(b.clientKey, colors) } as CSSProperties}>
           <span className="swatch small" />
           Also booked: {b.clientName}
-          {!compact && <span className="src"> · {b.source === "dataverse" ? "Dataverse" : "Coopilot config"}</span>}
         </div>
       ))}
     </>
   ) : (
     <>
       <div className="client open-label">Open</div>
-      {!compact && <div className="src">Free for client or internal work</div>}
     </>
   );
 

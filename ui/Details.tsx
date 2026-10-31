@@ -2,7 +2,8 @@ import { useContext, useEffect, useRef, type CSSProperties } from "react";
 import { formatDuration } from "../week/format.ts";
 import { rankRisks } from "../week/risks.ts";
 import type { Day, Slot } from "../week/types.ts";
-import { DevOpsWork, isDevOpsUrl, workStatusLabel } from "./work.ts";
+import { DevOpsWork, workStatusLabel } from "./work.ts";
+import { WorkLink } from "./WorkLink.tsx";
 import { updatedAgo } from "./refresh.ts";
 import { clientColor, eventRange, halfName, longDate, ruleLabel, SampleSources, severityLabel, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 
@@ -83,16 +84,12 @@ export function Details({ open, day, slot, timeZone, colors, onClose }: Props) {
             <ol className="work-list">
               {w.items.map((i) => (
                 <li key={i.id}>
-                  {isDevOpsUrl(i.url) ? (
-                    <a href={i.url} target="_blank" rel="noopener noreferrer">
-                      <span className="wi-type">{i.type}</span>
-                      <span className="wi-id">{i.id}</span>
-                      <span className="wi-title">{i.title}</span>
-                      <span className="wi-state">{i.state}</span>
-                    </a>
-                  ) : (
-                    <span>{i.title}</span>
-                  )}
+                  <WorkLink clientKey={w.clientKey} url={i.url} className="wi-link">
+                    <span className="wi-type">{i.type}</span>
+                    <span className="wi-id">{i.id}</span>
+                    <span className="wi-title">{i.title}</span>
+                    <span className="wi-state">{i.state}</span>
+                  </WorkLink>
                 </li>
               ))}
             </ol>

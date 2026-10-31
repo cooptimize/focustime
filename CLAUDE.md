@@ -6,7 +6,7 @@ Read before changing code: this file, `docs/spec.md` (current slice), `docs/deci
 
 ## Current milestone
 
-Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks), step 4.5 (responsive layout: wide, medium, narrow) and step 5 (morning ignition: local plan store, picks, commit, checklist, reminder, autostart), all authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
+Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks), step 4.5 (responsive layout: wide, medium, narrow) and step 5 (morning ignition: local plan store, picks, commit, checklist, reminder, autostart) and step 5.5 (Omarchy app launcher and key, work item links in the client's Edge profile, card polish, Loop recorded but not built), all authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
 
 ## Hard rules
 
@@ -33,10 +33,11 @@ cache/     ~/.cache/coopilot, last good snapshot per source
 server/    127.0.0.1 host: launch token, Host/Origin guard, /api/action, UI
 log/       structured logger with a closed set of fields (no headers or bodies)
 fixtures/  sample data (tests, and calendars with no config section)
-system/    systemd user service and XDG autostart entry (installed copies in ~/.config)
+links/     pure: Edge install detection, profile list, link validation, launch arguments
+system/    systemd user service, coopilot-open, launcher entry and icon, XDG autostart entry (installed copies in ~/.config and ~/.local)
 ```
 
-Run: `systemctl --user start coopilot` (always-on service) and `node scripts/open-window.ts` (window), or `npm start` (build + server + Chromium app window) when the service is stopped, `npm run dev` (Vite in the server, no HMR), `npm test`, `npm run typecheck`, `npm run screenshot` (needs a running server).
+Run: `coopilot-open` (starts the service if needed, then opens or focuses the window; also the launcher entry, Super + Alt + C and autostart), or `npm start` (build + server + Chromium app window) when the service is stopped, `npm run dev` (Vite in the server, no HMR), `npm test`, `npm run typecheck`, `npm run screenshot` (needs a running server).
 
 ## Glossary (use these words in code, UI and chat)
 
@@ -59,6 +60,7 @@ Run: `systemctl --user start coopilot` (always-on service) and `node scripts/ope
 | Overflow day | Friday: not scheduled, available for catch-up |
 | Day shape | Soft start/split/end times used only to place events into AM or PM and estimate capacity |
 | Borrowed time | Slipped focus made up later (evening, another day, Friday). Milestone 3, not yet |
+| Loop | Something I owe someone (an update, an answer or a follow-through): who, what, channel, optional due date; open until closed. Opened by a rule or by hand, closed by a signal that proves it or by me. Recorded (D92), not built |
 
 ## Working style
 

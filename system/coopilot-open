@@ -1,0 +1,86 @@
+#!/bin/bash
+# Open Coopilot, or focus its window if one is already open. One launch path for the launcher,
+# the key binding and login autostart.
+#
+#   coopilot-open           start the service if needed, wait for it, then launch or focus the window
+#   coopilot-open --window  (used by the step above) launch the app window
+#
+# The launch link holds the per-launch token. It is read from the server's private file
+# ($XDG_RUNTIME_DIR/coopilot/launch.json, mode 0600) and handed straight to the browser.
+# It is never printed, logged or passed through eval.
+set -euo pipefail
+
+LAUNCH_FILE="${XDG_RUNTIME_DIR:-/tmp}/coopilot/launch.json"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/coopilot/browser"
+# Chromium names an --app window after its host and profile, and ignores --class for it. The
+# dedicated data directory always uses profile "Default", so the class is stable: chrome-127.0.0.1__-Default.
+WINDOW_PATTERN='^(coopilot|chrome-127\.0\.0\.1__-default)$'
+WAIT_SECONDS=60
+# Which server the open window was launched for. After a service restart the window's token is stale,
+# so that window is replaced instead of focused.
+WINDOW_FILE="${XDG_RUNTIME_DIR:-/tmp}/coopilot/window-server-pid"
+
+fail() {
+  echo "coopilot-open: $1" >&2
+  command -v notify-send >/dev/null && notify-send -a Coopilot "Coopilot" "$1" || true
+  exit 1
+}
+
+# Prints the launch link only into a variable of the caller. Succeeds when the server named in
+# the launch file is alive and answers on 127.0.0.1.
+read_link() {
+  local url pid port code
+  [[ -r $LAUNCH_FILE ]] || return 1
+  url=$(jq -r '.url // empty' "$LAUNCH_FILE" 2>/dev/null) || return 1
+  pid=$(jq -r '.pid // empty' "$LAUNCH_FILE" 2>/dev/null) || return 1
+  [[ $pid =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null || return 1
+  [[ $url =~ ^http://127\.0\.0\.1:([0-9]+)/ ]] || return 1
+  port=${BASH_REMATCH[1]}
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:$port/" 2>/dev/null) || return 1
+  ((code > 0 && code < 500)) || return 1
+  LINK=$url
+  SERVER_PID=$pid
+}
+
+wait_for_link() {
+  local deadline=$((SECONDS + WAIT_SECONDS))
+  until read_link; do
+    ((SECONDS < deadline)) || fail "Coopilot did not start. Check: systemctl --user status coopilot"
+    sleep 1
+  done
+}
+
+if [[ ${1:-} == "--window" ]]; then
+  LINK=""
+  wait_for_link
+  printf '%s\n' "$SERVER_PID" >"$WINDOW_FILE"
+  # Omarchy's web-app pattern, in a data directory of its own: a stable window class, and the
+  # window stays apart from browsing profiles.
+  exec omarchy-launch-webapp "$LINK" --user-data-dir="$DATA_DIR" --no-first-run --no-default-browser-check
+fi
+
+if ! systemctl --user is-active --quiet coopilot.service; then
+  systemctl --user start coopilot.service || fail "Could not start the Coopilot service. Check: systemctl --user status coopilot"
+fi
+LINK=""
+wait_for_link
+unset LINK
+
+window_address() {
+  hyprctl clients -j | jq -r --arg p "$WINDOW_PATTERN" '.[]|select((.class|test("\\b" + $p + "\\b";"i")) or (.title|test("\\b" + $p + "\\b";"i")))|.address' | head -n1
+}
+
+# A window opened for an earlier server run can't talk to this one: close it so a fresh one opens.
+address=$(window_address)
+if [[ -n $address && $(cat "$WINDOW_FILE" 2>/dev/null) != "$SERVER_PID" ]]; then
+  hyprctl dispatch "hl.dsp.window.close({ window = \"address:$address\" })" >/dev/null 2>&1 || hyprctl dispatch closewindow "address:$address" >/dev/null 2>&1 || true
+  for _ in $(seq 1 20); do
+    [[ -z $(window_address) ]] && break
+    sleep 0.25
+  done
+fi
+
+# Focus the window titled exactly "Coopilot" or with that class, or launch it. (A plain "coopilot"
+# would also match a terminal titled after the project.) The launch command is a fixed
+# string, so nothing from the launch file reaches eval inside omarchy-launch-or-focus.
+exec omarchy-launch-or-focus "$WINDOW_PATTERN" "$(printf '%q' "$(readlink -f "$0")") --window"

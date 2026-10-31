@@ -70,6 +70,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
   const metaTtl = d.metadataTtlMs ?? 60 * 60_000;
   const memory = new Map<string, { at: number; result: ClientWork }>();
   const metadata = new Map<string, { at: number; meta: Metadata }>();
+  /** Each client's DevOps organization name (not secret), from its last Dataverse settings. */
+  const orgs = new Map<string, string>();
   const log = (op: string, extra: { status?: number; durationMs?: number; count?: number; kind?: string } = {}) => d.log({ source: "devops", op, ...extra });
 
   type Ctx = { client: string; org: string; base: string; projectName: string; pat: Pat };
@@ -191,6 +193,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
     try {
       if (!targets.ok) throw new DevOpsFailure("unreachable", `DevOps settings unavailable (${targets.message})`);
       const target = targets.targets.find((t) => t.clientKey === ref.clientKey);
+      // The organization is known from Dataverse even when identity or the PAT is missing.
+      if (target?.org && ORG.test(target.org)) orgs.set(ref.clientKey, target.org);
       const pre = precheck(ref, target);
       if (pre) throw pre;
       const { items, children } = await fetchClient(ref, target!);
@@ -233,7 +237,16 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return r?.items.find((i) => i.id === id) ?? r?.children.find((i) => i.id === id) ?? null;
   }
 
-  return { load, lookup };
+  /** The client's DevOps organization, so a link can be checked against it. From cached items when the fetch failed. */
+  function orgOf(clientKey: string): string | null {
+    const known = orgs.get(clientKey);
+    if (known) return known;
+    const r = memory.get(clientKey)?.result;
+    const found = new Set([...(r?.items ?? []), ...(r?.children ?? [])].map((i) => i.url.match(/^https:\/\/dev\.azure\.com\/([^/]+)\//)?.[1]?.toLowerCase()).filter(Boolean));
+    return found.size === 1 ? decodeURIComponent([...found][0]!) : null;
+  }
+
+  return { load, lookup, orgOf };
 }
 
 export type DevOpsSource = ReturnType<typeof createDevOpsSource>;
