@@ -9,7 +9,7 @@ import { SIZE_MINUTES, type Pick, type PlanWeek } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import type { FlexSession } from "../week/types.ts";
 import { KEYS } from "./keys.ts";
-import { NowStrip } from "./NowStrip.tsx";
+import { NowStrip, TopTimer } from "./NowStrip.tsx";
 import { PlanCtx } from "./planview.ts";
 import { StatusBar } from "./StatusBar.tsx";
 import { isTheme } from "./theme.ts";
@@ -285,7 +285,7 @@ export function StyleGuide() {
           {timers.map(([label, t]) => (
             <div key={label} className="sg-strip">
               <span className="muted">{label}</span>
-              <NowStrip strip={base} onSelect={noop} timer={t} nowMs={Date.parse(NOW)} />
+              <TopTimer t={t} nowMs={Date.parse(NOW)} color="var(--accent)" client="W&C" onClick={noop} />
             </div>
           ))}
         </div>

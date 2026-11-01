@@ -1,7 +1,4 @@
 // The Now strip (step 6b slice 4): a line under the top bar about right now. Clicking it selects the current half-day.
-import { useContext } from "react";
-import { focusLabel } from "../plan/focus.ts";
-import { PlanCtx, useFocused } from "./planview.ts";
 import type { TimerView } from "../actions/types.ts";
 import type { NowStrip as Strip } from "../plan/now.ts";
 import { formatDuration } from "../week/format.ts";
@@ -24,18 +21,23 @@ export const countdown = (ms: number) => {
 /** What's left on the timer at `nowMs`: from its end while running, else as stored. */
 export const timerLeft = (t: TimerView, nowMs: number) => (t.running && t.endsAt ? Math.max(0, Date.parse(t.endsAt) - nowMs) : t.remainingMs);
 
-type Props = { strip: Strip; onSelect: () => void; timer?: TimerView | null; nowMs?: number; onTimer?: (action: string) => void; borrowed?: { unpaid: number; minutes: number } | null };
+// Step 10: the running timer lives in the top bar (TopTimer) and on the focus screen; the strip offers Start focus.
+type Props = { strip: Strip; onSelect: () => void; onStartFocus?: (() => void) | null; borrowed?: { unpaid: number; minutes: number } | null };
 
-export function NowStrip({ strip, onSelect, timer = null, nowMs = Date.now(), onTimer, borrowed = null }: Props) {
+export function NowStrip({ strip, onSelect, onStartFocus = null, borrowed = null }: Props) {
   return (
-    <div className={`nowstrip ${strip.kind}${timer ? " has-timer" : ""}`}>
+    <div className={`nowstrip ${strip.kind}`}>
       <StripLine strip={strip} onSelect={onSelect} />
       {borrowed && (
         <span className="now-borrowed" title="Borrowed time still to make up (step 7)">
           Borrowed {formatDuration(borrowed.minutes)} to make up{borrowed.unpaid > 1 ? ` (${borrowed.unpaid})` : ""}
         </span>
       )}
-      {timer && <TimerBox t={timer} nowMs={nowMs} onTimer={onTimer ?? (() => {})} />}
+      {onStartFocus && (
+        <button type="button" className="mini now-start" onClick={onStartFocus} title="Start focus on the next planned pick">
+          Start focus
+        </button>
+      )}
     </div>
   );
 }
@@ -50,31 +52,6 @@ export function TopTimer({ t, nowMs, color, client, onClick }: { t: TimerView; n
       {!t.running && !t.ended && <span className="top-timer-state">paused</span>}
       <span className="top-timer-label">{t.kind === "break" ? "Break" : t.label}</span>
     </button>
-  );
-}
-
-function TimerBox({ t, nowMs, onTimer }: { t: TimerView; nowMs: number; onTimer: (action: string) => void }) {
-  const left = timerLeft(t, nowMs);
-  // The pick's focused time so far, this session included (step 6d), when the pick is in the week shown.
-  const view = useContext(PlanCtx);
-  const focused = useFocused();
-  const pick = t.pickId === null ? undefined : Object.values(view.week ?? {}).flatMap((d) => d.picks).find((p) => p.id === t.pickId);
-  const note = pick ? focusLabel(focused(pick.id), pick.size) : null;
-  const b = (action: string, label: string, primary = false) => (
-    <button key={action} type="button" className={primary ? "mini primary" : "mini"} onClick={() => onTimer(action)}>
-      {label}
-    </button>
-  );
-  return (
-    <div className={`now-timer ${t.kind}${t.ended ? " ended" : ""}${t.running ? "" : " paused"}`} role="timer" aria-label={`${t.kind === "break" ? "Break" : "Focus"} timer`}>
-      <span className="now-timer-tag">{t.kind === "break" ? "Break" : "Focus"}</span>
-      {t.ended ? <strong>Time's up</strong> : <strong className="now-count">{countdown(left)}</strong>}
-      {!t.running && !t.ended && <span className="muted">paused</span>}
-      <span className="now-timer-label">{t.label}</span>
-      {note && <span className="now-timer-focus">{note}</span>}
-      {t.ended ? [b("timer.done", t.pickId ? "Done" : "Finish", true), b("timer.extend", "+15 min"), b("timer.next", "Next pick")] : [t.running ? b("timer.pause", "Pause") : b("timer.resume", "Resume"), b("timer.extend", "+15")]}
-      {b("timer.stop", "Stop")}
-    </div>
   );
 }
 

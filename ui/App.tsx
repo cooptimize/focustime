@@ -19,6 +19,8 @@ import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
 import { NowStrip, TopTimer } from "./NowStrip.tsx";
+import { FocusScreen } from "./FocusScreen.tsx";
+import { focusPick } from "../plan/today.ts";
 import { Inbox } from "./Inbox.tsx";
 import { Today } from "./Today.tsx";
 import { ritualFor, RITUAL_NAMES, type Ritual } from "../plan/ritual.ts";
@@ -88,7 +90,9 @@ export function App() {
   /** The focus timer menu (F or the top bar Focus button), anchored where it was opened. */
   const [timerMenuAt, setTimerMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** A per-second clock while a timer runs, for its countdown. */
-  const [secondMs, setSecondMs] = useState(() => Date.now());
+  // With ?now= pinned (screenshots, verification), the countdown follows the pinned clock too.
+  const skew = useRef(now ? Date.parse(now) - Date.now() : 0).current;
+  const [secondMs, setSecondMs] = useState(() => Date.now() + skew);
   // The element focused in each region, so F6 returns to it; and the work item focused when the command menu opened.
   const lastInRegion = useRef(new Map<Region, HTMLElement>());
   const focusedItem = useRef<{ clientKey: string; url: string } | null>(null);
@@ -169,11 +173,14 @@ export function App() {
     }
   }, []);
   const reloadRef = useRef<() => void>(() => {});
+  const openFocusRef = useRef<() => void>(() => {});
   /** Timer actions (step 6c): the server keeps the state; reload to show it. */
   const runTimer = useCallback(async (action: string, input: Record<string, unknown> = {}): Promise<boolean> => {
     try {
       const r = await call<{ notice?: string }>(action, input);
       if (r?.notice) setNotice(r.notice);
+      // Step 10: starting focus (or the next pick) switches to the focus screen, from wherever it was started.
+      if ((action === "timer.start" && input.kind !== "break") || action === "timer.next") openFocusRef.current();
       reloadRef.current();
       return true;
     } catch (e) {
@@ -511,22 +518,23 @@ export function App() {
     }).ritual;
   }, [data, zonedNow]);
   const openRitual = useCallback((r: Ritual = ritualNow()) => setView(r), [ritualNow, setView]);
+  openFocusRef.current = () => setView("focus");
 
   // A per-second tick only while a timer runs; when it reaches zero locally, reload shortly after so the server's end shows.
   const timerRunning = !!data?.timer?.running;
   useEffect(() => {
     if (!timerRunning) return;
-    setSecondMs(Date.now());
-    const id = setInterval(() => setSecondMs(Date.now()), 1000);
+    setSecondMs(Date.now() + skew);
+    const id = setInterval(() => setSecondMs(Date.now() + skew), 1000);
     return () => clearInterval(id);
-  }, [timerRunning]);
+  }, [timerRunning, skew]);
   const timerEndsAt = data?.timer?.running ? data.timer.endsAt : null;
   useEffect(() => {
     if (!timerEndsAt) return;
-    const wait = Date.parse(timerEndsAt) - Date.now() + 6000;
+    const wait = Date.parse(timerEndsAt) - (Date.now() + skew) + 6000;
     const id = setTimeout(() => reloadRef.current(), Math.max(1000, wait));
     return () => clearTimeout(id);
-  }, [timerEndsAt]);
+  }, [timerEndsAt, skew]);
 
   // Step 9: coopilot-open --capture leaves a request; take it on load, when the window gains focus, and every few
   // seconds while it has focus (the global key may be pressed while Coopilot is already in front).
@@ -658,6 +666,7 @@ export function App() {
       const inMenu = !!(e.target as HTMLElement | null)?.closest?.(".popup-menu");
       if ((settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || focusOpen) && e.key === "Escape" && !inMenu && !captureOpen) {
         e.preventDefault();
+        if (focusOpen) setBase("today");
         setPlanWeekAt(null);
         setFocusOpen(false);
         setSettingsAt(null);
@@ -974,10 +983,7 @@ export function App() {
               nowMs={secondMs}
               color={timerColor}
               client={timerClient}
-              onClick={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                setTimerMenuAt({ x: r.right, y: r.bottom + 4 });
-              }}
+              onClick={() => setView("focus")}
             />
           )}
           <button type="button" className="top-btn capture-btn" onClick={() => setCaptureOpen(true)} title="Quick capture: one line, saved at once (N)">
@@ -991,7 +997,7 @@ export function App() {
           </button>
         </div>
       </header>
-      {strip && view !== "today" && view !== "focus" && <NowStrip strip={strip} onSelect={selectNow} timer={null} nowMs={secondMs} onTimer={(a) => void runTimer(a)} borrowed={borrowWeek.unpaid ? { unpaid: borrowWeek.unpaid, minutes: borrowWeek.unpaidMinutes } : null} />}
+      {strip && view !== "today" && view !== "focus" && <NowStrip strip={strip} onSelect={selectNow} onStartFocus={!data.timer && (strip.kind === "slot" || strip.kind === "before" || strip.kind === "lunch") ? () => startFocus(focusPick(data.plan?.[data.planDay.date]?.picks ?? [], strip.half ?? null)) : null} borrowed={borrowWeek.unpaid ? { unpaid: borrowWeek.unpaid, minutes: borrowWeek.unpaidMinutes } : null} />}
 
       {!data.config.ok && (
         <div className="config-banner" role="alert">
@@ -1018,7 +1024,19 @@ export function App() {
         </nav>
       )}
 
-      {planWeekAt !== null && settingsAt === null ? (
+      {focusOpen && settingsAt === null ? (
+        <FocusScreen
+          t={data.timer}
+          nowMs={secondMs}
+          pick={timerPick}
+          client={timerClient}
+          color={timerColor}
+          event={strip?.event ?? null}
+          onTimer={(a) => void runTimer(a)}
+          onStart={() => startFocus(focusPick(data.plan?.[data.planDay.date]?.picks ?? [], strip?.half ?? null))}
+          onClose={() => setView("today")}
+        />
+      ) : planWeekAt !== null && settingsAt === null ? (
         <PlanWeek weekStart={planWeekAt} data={data} version={planWeekVersion} onWeek={openPlanWeek} onClose={() => setPlanWeekAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : loopsOpen && settingsAt === null ? (
         <Inbox data={data} version={captureVersion} onClose={() => setLoopsOpen(false)} onChanged={reloadQuiet} />
