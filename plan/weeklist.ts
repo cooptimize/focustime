@@ -160,7 +160,7 @@ export function onTrack(p: Pick<Progress, "musts" | "left" | "leftBlocks">, rema
 }
 
 /**
- * A heads-up loop is offered when a must is dropped (made nice to have or taken off) after the week was committed
+ * A heads-up follow-up is offered when a must is dropped (made nice to have or taken off) after the week was committed
  * with it on the list. Nothing else is asked.
  */
 export function offersHeadsUp(i: Pick<ListItem, "tier" | "createdAt">, committedAt: string | null): boolean {
@@ -171,7 +171,7 @@ export function offersHeadsUp(i: Pick<ListItem, "tier" | "createdAt">, committed
 /** A pin's label: "Tue PM". */
 export const pinLabel = (p: Pin) => `${Temporal.PlainDate.from(p.date).toLocaleString("en-US", { weekday: "short" })} ${p.half}`;
 
-/** One heads-up loop per dropped must and week (the slip rule's kind, step 7). */
+/** One heads-up follow-up per dropped must and week (the slip rule's kind, step 7). */
 export const headsUpKey = (weekStart: IsoDate, clientKey: string, itemId: number) => `slip:week:${weekStart}:${clientKey}:${itemId}`;
 /** The plain-text heads-up for a must dropped from a committed week. No AI, a template. */
 export function weekHeadsUpDraft(clientName: string, weekStart: IsoDate, item: { itemId: number; title: string }): string {

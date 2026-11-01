@@ -12,7 +12,7 @@ import { createDevOpsSource } from "../sources/devops/source.ts";
 import { fakeDevOps } from "../sources/devops/test-fakes.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
-import type { LoopView, WeekLoadData, WeekPlanState, WeekPlanView } from "./types.ts";
+import type { FollowUpView, WeekLoadData, WeekPlanState, WeekPlanView } from "./types.ts";
 
 const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"')
   .replace('my_systemuserid = ""', `my_systemuserid = "${dvConfig.mySystemUserId}"`)
@@ -165,17 +165,17 @@ describe("Plan the week actions (step 8)", () => {
     expect(t.ado.calls.slice(before).filter((c) => c.body?.includes("System.Description"))).toHaveLength(1);
   });
 
-  it("marks a feature as being broken down, and creates the 'ask about priorities' loop once per client and week", async () => {
+  it("marks a feature as being broken down, and creates the 'ask about priorities' follow-up once per client and week", async () => {
     const t = setup();
     await t.run("feature.mark_breakdown", { clientKey: "CSC", itemId: 240, on: true });
     expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT })).marks).toEqual([expect.objectContaining({ clientKey: "CSC", itemId: 240 })]);
-    const l = await t.run<{ loop: LoopView; created: boolean }>("loop.ask_priorities", { weekStart: NEXT, clientKey: "CSC" });
+    const l = await t.run<{ followUp: FollowUpView; created: boolean }>("followup.ask_priorities", { weekStart: NEXT, clientKey: "CSC" });
     expect(l.created).toBe(true);
-    expect(l.loop).toMatchObject({ kind: "priorities", clientKey: "CSC" });
-    expect(l.loop.what).toMatch(/^Ask .+ about priorities for the week of Mon, Nov 9$/);
-    expect(l.loop.draft).toContain("Nothing open is assigned to me in DevOps right now.");
-    expect((await t.run<{ created: boolean }>("loop.ask_priorities", { weekStart: NEXT, clientKey: "CSC" })).created).toBe(false);
-    expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT })).loops).toHaveLength(1);
+    expect(l.followUp).toMatchObject({ kind: "priorities", clientKey: "CSC" });
+    expect(l.followUp.what).toMatch(/^Ask .+ about priorities for the week of Mon, Nov 9$/);
+    expect(l.followUp.draft).toContain("Nothing open is assigned to me in DevOps right now.");
+    expect((await t.run<{ created: boolean }>("followup.ask_priorities", { weekStart: NEXT, clientKey: "CSC" })).created).toBe(false);
+    expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT })).followUps).toHaveLength(1);
   });
 
   it("week.load raises the Plan the week badge after Thursday's nudge until next week is committed", async () => {
@@ -230,7 +230,7 @@ describe("week plan by client (step 11)", () => {
     for (const call of t.ado.calls) if (call.method === "POST") expect(call.url).toMatch(/\/_apis\/wit\/(wiql|workitemsbatch)\?/);
   });
 
-  it("dropping a must the week was committed with offers the heads-up loop (once); a must added after the commit doesn't", async () => {
+  it("dropping a must the week was committed with offers the heads-up follow-up (once); a must added after the commit doesn't", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: NEXT });
     await t.run("weekplan.load", { weekStart: NEXT });
@@ -241,11 +241,13 @@ describe("week plan by client (step 11)", () => {
     const id = (n: number) => t.plan.weekPlan(NEXT).features.find((f) => f.itemId === n)!.id;
     expect((await t.run<Res>("weekplan.remove", { id: id(240) })).headsUp).toBeNull();
     const d = await t.run<Res>("weekplan.set_tier", { id: id(210), tier: "nice" });
-    expect(d.headsUp).toEqual({ weekStart: NEXT, clientKey: "CSC", itemId: 210, title: "Dana's feature" });
-    const l = await t.run<{ loop: LoopView; created: boolean }>("weekplan.headsup", d.headsUp!);
+    expect(d.headsUp).toEqual({ weekStart: NEXT, clientKey: "CSC", itemId: 210, title: "Dana's feature", trigger: "demoted" });
+    const l = await t.run<{ followUp: FollowUpView; created: boolean }>("weekplan.headsup", d.headsUp!);
     expect(l.created).toBe(true);
-    expect(l.loop).toMatchObject({ kind: "slip", clientKey: "CSC" });
-    expect(l.loop.draft).toContain("#210 Dana's feature won't be finished the week of Mon, Nov 9");
+    expect(l.followUp).toMatchObject({ kind: "slip", clientKey: "CSC" });
+    // Step 13.5: it says where it came from.
+    expect(l.followUp.origin).toEqual({ trigger: "A committed must was made a nice to have", items: [{ itemId: 210, title: "Dana's feature" }], at: "2026-11-05T19:45:00Z" });
+    expect(l.followUp.draft).toContain("#210 Dana's feature won't be finished the week of Mon, Nov 9");
     expect((await t.run<{ created: boolean }>("weekplan.headsup", d.headsUp!)).created).toBe(false);
     // A nice to have dropped: nothing offered.
     expect((await t.run<Res>("weekplan.remove", { id: id(210) })).headsUp).toBeNull();

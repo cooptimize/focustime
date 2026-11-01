@@ -10,7 +10,7 @@ import { eventMenu, timerStep, commandList, dayMenu, filterCommands, itemMenu, p
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
 const work = new Map<string, ClientWork>([["internal", { clientKey: "internal", clientName: "Internal", status: "ok", fetchedAt: null, fromCache: false, items: [item(1), item(2, "portfolio")], children: [] }]]);
-const pick: Pick = { id: 7, date: "2026-11-03", half: "AM", clientKey: "internal", kind: "item", itemId: 1, draftId: null, title: "Item 1", itemType: "User Story", itemUrl: "https://dev.azure.com/org/P/_workitems/edit/1", size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, notes: null, position: 1, createdAt: "", updatedAt: "" };
+const pick: Pick = { id: 7, date: "2026-11-03", half: "AM", clientKey: "internal", kind: "item", itemId: 1, draftId: null, title: "Item 1", itemType: "User Story", itemUrl: "https://dev.azure.com/org/P/_workitems/edit/1", size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, followUpId: null, notes: null, position: 1, createdAt: "", updatedAt: "" };
 
 function env(over: Partial<MenuEnv> = {}) {
   const calls: unknown[][] = [];
@@ -51,7 +51,7 @@ function env(over: Partial<MenuEnv> = {}) {
     exportPlan: () => calls.push(["export"]),
     timer: null,
     runTimer: async (a, i) => (calls.push([a, i ?? {}]), true),
-    openLoops: () => calls.push(["loops"]),
+    openFollowUps: () => calls.push(["follow_ups"]),
     resetPlan: () => calls.push(["reset"]),
     openCloseOut: (d) => calls.push(["closeout", d]),
     openCheckIn: () => calls.push(["checkin"]),
@@ -64,7 +64,7 @@ function env(over: Partial<MenuEnv> = {}) {
     closeOutDate: null,
     commitCloseOut: () => calls.push(["closeoutCommit"]),
     makeUp: async (id, i) => (calls.push(["pick.make_up", id, i]), true),
-    runLoops: async (a, i) => (calls.push([a, i]), true),
+    runFollowUps: async (a, i) => (calls.push([a, i]), true),
     borrowed: [],
     eventEdit: {},
     canWrite: true,

@@ -6,7 +6,7 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { carryOver } from "../plan/rules.ts";
 import { DEFAULT_BLOCKS, validBlocks, type ItemLevel, type Tier } from "../plan/weeklist.ts";
-import type { Capture, DayPlan, DraftStory, Note, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
+import type { Capture, DayPlan, DraftStory, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
 export type { WriteEntry, WriteStatus } from "../plan/timebox.ts";
@@ -343,16 +343,55 @@ export const MIGRATIONS: readonly string[] = [
      updated_at TEXT NOT NULL
    );
    CREATE INDEX invites_start ON invites (start_at);`,
+  // 11 (step 13.5): loops become follow-ups, with how they ended (closed the loop or not needed), how I told them,
+  // a snooze, and where a rule's follow-up came from. Notes are removed: each note with a client joins that client's
+  // "where I left off" history on its day (appended when that day already has one); a note with no client goes back
+  // to the inbox as an unsorted capture (its own capture, un-sorted, when it came from one). Captures sort into follow-ups, draft stories and draft features. Draft
+  // stories gain a level: a draft feature sits under an epic the way a draft story sits under a feature.
+  `${FK_OFF}
+   ALTER TABLE loops RENAME TO follow_ups;
+   DROP INDEX loops_rule;
+   CREATE UNIQUE INDEX follow_ups_rule ON follow_ups(rule_key);
+   ALTER TABLE follow_ups ADD COLUMN outcome TEXT CHECK (outcome IN ('done', 'not_needed'));
+   ALTER TABLE follow_ups ADD COLUMN close_how TEXT CHECK (close_how IN ('teams', 'email', 'devops', 'call'));
+   ALTER TABLE follow_ups ADD COLUMN snoozed_until TEXT CHECK (snoozed_until IS NULL OR snoozed_until GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]');
+   ALTER TABLE follow_ups ADD COLUMN origin TEXT;
+   UPDATE follow_ups SET outcome = 'done' WHERE closed_at IS NOT NULL;
+   ALTER TABLE invites RENAME COLUMN loop_id TO follow_up_id;
+   INSERT INTO resume_notes (client_key, date, note, created_at, updated_at)
+     SELECT client_key, substr(created_at, 1, 10), text, created_at, updated_at FROM notes WHERE client_key IS NOT NULL ORDER BY id
+     ON CONFLICT(client_key, date) DO UPDATE SET note = resume_notes.note || ' · ' || excluded.note, updated_at = excluded.updated_at;
+   CREATE TABLE captures_v11 (
+     id INTEGER PRIMARY KEY,
+     text TEXT NOT NULL CHECK (length(text) BETWEEN 1 AND 1000),
+     client_key TEXT,
+     created_at TEXT NOT NULL,
+     routed_at TEXT,
+     routed_as TEXT CHECK (routed_as IN ('follow_up', 'draft', 'draft_feature', 'left_off', 'dismissed')),
+     routed_id INTEGER,
+     CHECK ((routed_at IS NULL) = (routed_as IS NULL))
+   );
+   INSERT INTO captures_v11 SELECT id, text, client_key, created_at, routed_at,
+     CASE routed_as WHEN 'loop' THEN 'follow_up' WHEN 'note' THEN 'left_off' ELSE routed_as END, routed_id FROM captures ORDER BY id;
+   UPDATE captures_v11 SET routed_at = NULL, routed_as = NULL, routed_id = NULL
+     WHERE id IN (SELECT capture_id FROM notes WHERE client_key IS NULL AND capture_id IS NOT NULL);
+   INSERT INTO captures_v11 (text, client_key, created_at) SELECT substr(text, 1, 1000), NULL, created_at FROM notes WHERE client_key IS NULL AND capture_id IS NULL ORDER BY id;
+   DROP TABLE notes;
+   DROP TABLE captures;
+   ALTER TABLE captures_v11 RENAME TO captures;
+   ALTER TABLE draft_stories ADD COLUMN level TEXT NOT NULL DEFAULT 'story' CHECK (level IN ('story', 'feature'));`,
+  // 12 (step 13.5): a follow-up picked into a block is an intention pick tied to its follow-up (size S by default).
+  `ALTER TABLE picks ADD COLUMN follow_up_id INTEGER REFERENCES follow_ups(id);`,
 ];
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
-const RESET_TABLES = ["timeboxes", "notes", "captures", "week_feature_slots", "week_features", "week_plans", "breakdown_marks", "borrowed", "resume_notes", "focus_log", "kv", "loops", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
+const RESET_TABLES = ["timeboxes", "captures", "week_feature_slots", "week_features", "week_plans", "breakdown_marks", "borrowed", "resume_notes", "focus_log", "kv", "follow_ups", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
 export type FocusSegment = { pickId: number | null; label: string; startedAt: string; endedAt: string; seconds: number };
 
 export type NewUnavailable = { date: IsoDate; title: string; start: string; end: string; note?: string | null };
 export type NewFlex = { date: IsoDate; clientKey: string; start: string; end: string; itemId?: number | null; itemTitle?: string | null; itemUrl?: string | null; note?: string | null };
-/** Something owed to someone (D92). Opened by a rule (step 7, plan/loops.ts), a flex session or by hand. */
-export type Loop = {
+/** Something owed to someone (D92). Opened by a rule (step 7, plan/followups.ts), a flex session or by hand. */
+export type FollowUp = {
   id: number;
   kind: string;
   clientKey: string | null;
@@ -365,21 +404,31 @@ export type Loop = {
   sourceId: number | null;
   /** The DevOps item it is about, if any. */
   itemId: number | null;
-  /** One loop per rule and thing ("devops_update:<pick>", "slip:<client>:<date>:<n>", "blocked:<client>:<item>"). */
+  /** One follow-up per rule and thing ("devops_update:<pick>", "slip:<client>:<date>:<n>", "blocked:<client>:<item>"). */
   ruleKey: string | null;
   /** What a later DevOps change is compared with (when the pick was ticked done). */
   refAt: string | null;
-  /** A copyable plain-text heads-up (slip loops). */
+  /** A copyable plain-text heads-up (slip follow-ups). */
   draft: string | null;
-  /** Rule details: the pick ids a slip loop covers. */
+  /** Rule details: the pick ids a slip follow-up covers. */
   detail: { picks?: number[] } | null;
   openedAt: string;
   closedAt: string | null;
   closeNote: string | null;
   /** "me" (by hand) or "signal" (a DevOps change proved it). */
   closedBy: "me" | "signal" | null;
+  /** Step 13.5: how it ended (closed the loop, or not needed), how I told them, a snooze, and a rule's origin. */
+  outcome: "done" | "not_needed" | null;
+  closeHow: CloseHow | null;
+  snoozedUntil: IsoDate | null;
+  origin: FollowUpOrigin | null;
+  /** Added by me (by hand or from a capture): only these can be deleted. */
+  byHand: boolean;
 };
-export type NewRuleLoop = { kind: string; ruleKey: string; clientKey: string | null; who: string; what: string; itemId?: number | null; refAt?: string | null; draft?: string | null; detail?: { picks?: number[] } | null };
+import { CLOSE_HOW, type CloseHow, type FollowUpOrigin } from "../plan/types.ts";
+export { CLOSE_HOW, type CloseHow, type FollowUpOrigin };
+export type FollowUpFields = { clientKey: string | null; who: string | null; what: string; channel: string | null; due: IsoDate | null };
+export type NewRuleFollowUp = { kind: string; ruleKey: string; clientKey: string | null; who: string; what: string; itemId?: number | null; refAt?: string | null; draft?: string | null; detail?: { picks?: number[] } | null; origin?: FollowUpOrigin | null };
 export type ResumeNote = { id: number; clientKey: string; date: IsoDate; note: string; updatedAt: string };
 /** Borrowed time (step 7): planned focus that slipped, to be made up on a payback day. */
 export type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
@@ -421,6 +470,8 @@ export type NewPick = {
   itemType?: string | null;
   itemUrl?: string | null;
   size: Size;
+  /** Step 13.5: a follow-up picked into a block (an intention pick tied to it). */
+  followUpId?: number | null;
 };
 
 type Row = Record<string, string | number | null>;
@@ -432,11 +483,11 @@ const toTimebox = (r: Row): Timebox => ({
   removedAt: (r.removed_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
 });
 /** A help invite Coopilot sent (step 13). Attendees are Cooptimize staff (name and work email). */
-export type Invite = { id: number; uid: string; clientKey: string; itemId: number | null; pickId: number | null; timeboxId: number | null; title: string; url: string | null; start: string; end: string; attendees: Attendee[]; teams: boolean; note: string | null; eventId: string | null; status: "pending" | "sent" | "cancelled"; loopId: number | null; createdAt: string; updatedAt: string };
+export type Invite = { id: number; uid: string; clientKey: string; itemId: number | null; pickId: number | null; timeboxId: number | null; title: string; url: string | null; start: string; end: string; attendees: Attendee[]; teams: boolean; note: string | null; eventId: string | null; status: "pending" | "sent" | "cancelled"; followUpId: number | null; createdAt: string; updatedAt: string };
 const toInvite = (r: Row): Invite => ({
   id: r.id as number, uid: r.uid as string, clientKey: r.client_key as string, itemId: (r.item_id as number | null) ?? null, pickId: (r.pick_id as number | null) ?? null, timeboxId: (r.timebox_id as number | null) ?? null,
   title: r.title as string, url: (r.url as string | null) ?? null, start: r.start_at as string, end: r.end_at as string, attendees: json<Attendee[]>(r.attendees) ?? [], teams: r.teams === 1, note: (r.note as string | null) ?? null,
-  eventId: (r.event_id as string | null) ?? null, status: r.status as Invite["status"], loopId: (r.loop_id as number | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+  eventId: (r.event_id as string | null) ?? null, status: r.status as Invite["status"], followUpId: (r.follow_up_id as number | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
 });
 const json = <T>(v: unknown): T | null => (typeof v === "string" ? (JSON.parse(v) as T) : null);
 const toOwn = (r: Row): OwnEvent => ({ uid: r.uid as string, timeboxId: (r.timebox_id as number | null) ?? null, eventId: r.event_id as string, fields: json<Fields>(r.fields)!, deletedAt: (r.deleted_at as string | null) ?? null });
@@ -465,12 +516,13 @@ const toPick = (r: Row): Pick => ({
   carriedFrom: (r.carried_from as number | null) ?? null,
   carriedFromDate: (r.carried_from_date as string | null) ?? null,
   notes: (r.notes as string | null) ?? null,
+  followUpId: (r.follow_up_id as number | null) ?? null,
   position: r.position as number,
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string,
 });
 const toPlan = (r: Row): DayPlan => ({ date: r.date as string, committedAt: (r.committed_at as string | null) ?? null, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
-const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, createdAt: r.created_at as string });
+const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string });
 
 const toCapture = (r: Row): Capture => ({
   id: r.id as number,
@@ -481,13 +533,12 @@ const toCapture = (r: Row): Capture => ({
   routedAs: (r.routed_as as Capture["routedAs"]) ?? null,
   routedId: (r.routed_id as number | null) ?? null,
 });
-const toNoteRow = (r: Row): Note => ({ id: r.id as number, clientKey: (r.client_key as string | null) ?? null, text: r.text as string, captureId: (r.capture_id as number | null) ?? null, createdAt: r.created_at as string });
 
 /** How a capture is sorted (step 9). */
 export type CaptureRoute =
-  | { as: "loop"; clientKey: string | null; who: string; what: string; due: IsoDate | null }
+  | { as: "follow_up"; clientKey: string | null; who: string; what: string; due: IsoDate | null; channel?: string | null }
   | { as: "draft"; clientKey: string; parentItemId: number | null; title: string; size: Size }
-  | { as: "note"; clientKey: string | null; text: string }
+  | { as: "draft_feature"; clientKey: string; parentItemId: number | null; title: string }
   | { as: "dismissed" };
 export const MAX_CAPTURE = 1000;
 
@@ -502,7 +553,7 @@ const toFlex = (r: Row): FlexSession => ({
   itemUrl: (r.item_url as string | null) ?? null,
   note: (r.note as string | null) ?? null,
 });
-const toLoop = (r: Row): Loop => ({
+const toFollowUp = (r: Row): FollowUp => ({
   id: r.id as number,
   kind: r.kind as string,
   clientKey: (r.client_key as string | null) ?? null,
@@ -516,11 +567,16 @@ const toLoop = (r: Row): Loop => ({
   ruleKey: (r.rule_key as string | null) ?? null,
   refAt: (r.ref_at as string | null) ?? null,
   draft: (r.draft as string | null) ?? null,
-  detail: r.detail ? (JSON.parse(r.detail as string) as Loop["detail"]) : null,
+  detail: r.detail ? (JSON.parse(r.detail as string) as FollowUp["detail"]) : null,
   openedAt: r.opened_at as string,
   closedAt: (r.closed_at as string | null) ?? null,
   closeNote: (r.close_note as string | null) ?? null,
-  closedBy: (r.closed_by as Loop["closedBy"]) ?? null,
+  closedBy: (r.closed_by as FollowUp["closedBy"]) ?? null,
+  outcome: (r.outcome as FollowUp["outcome"]) ?? null,
+  closeHow: (r.close_how as CloseHow | null) ?? null,
+  snoozedUntil: (r.snoozed_until as string | null) ?? null,
+  origin: r.origin ? (JSON.parse(r.origin as string) as FollowUpOrigin) : null,
+  byHand: r.kind === "manual" || r.kind === "capture",
 });
 const toNote = (r: Row): ResumeNote => ({ id: r.id as number, clientKey: r.client_key as string, date: r.date as string, note: r.note as string, updatedAt: r.updated_at as string });
 const toBorrowed = (r: Row): Borrowed => ({
@@ -603,10 +659,10 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     const at = stamp();
     const r = db
       .prepare(
-        `INSERT INTO picks (date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, NULL, ?, ?, ?)`,
+        `INSERT INTO picks (date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, NULL, ?, ?, ?, ?)`,
       )
-      .run(p.date, p.half, p.clientKey, p.kind, p.itemId ?? null, p.draftId ?? null, p.title, p.itemType ?? null, p.itemUrl ?? null, p.size, carriedFrom, nextPosition(p.date, p.half), at, at);
+      .run(p.date, p.half, p.clientKey, p.kind, p.itemId ?? null, p.draftId ?? null, p.title, p.itemType ?? null, p.itemUrl ?? null, p.size, carriedFrom, nextPosition(p.date, p.half), at, at, p.followUpId ?? null);
     return getPick(Number(r.lastInsertRowid))!;
   }
 
@@ -675,6 +731,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         const base: NewPick = { date, half, clientKey: p.clientKey, kind: p.kind, title: p.title, itemType: p.itemType, itemUrl: p.itemUrl, size: p.size };
         if (p.itemId !== null) base.itemId = p.itemId;
         if (p.draftId !== null) base.draftId = p.draftId;
+        if (p.followUpId !== null) base.followUpId = p.followUpId;
         return insertPick(base, p.id);
       });
     },
@@ -691,13 +748,16 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         const p = mustPick(id);
         if (p.status !== "planned" && p.status !== "done") throw new PlanError("Only a planned or done pick can be ticked");
         db.prepare("UPDATE picks SET status = ?, updated_at = ? WHERE id = ?").run(done ? "done" : "planned", stamp(), id);
+        // Step 13.5: ticking a follow-up pick done closes the loop.
+        const fu = (db.prepare("SELECT follow_up_id FROM picks WHERE id = ?").get(id) as Row).follow_up_id as number | null;
+        if (done && fu !== null) db.prepare("UPDATE follow_ups SET closed_at = ?, closed_by = 'me', outcome = 'done', close_note = COALESCE(close_note, 'Done as a pick'), snoozed_until = NULL WHERE id = ? AND closed_at IS NULL").run(stamp(), fu);
         return mustPick(id);
       });
     },
-    addDraft(d: { clientKey: string; parentItemId: number | null; title: string; size: Size }): DraftStory {
+    addDraft(d: { clientKey: string; parentItemId: number | null; title: string; size: Size; level?: "story" | "feature" }): DraftStory {
       return tx(() => {
         const at = stamp();
-        const r = db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(d.clientKey, d.parentItemId, d.title, d.size, at, at);
+        const r = db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, level, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(d.clientKey, d.parentItemId, d.title, d.size, d.level ?? "story", at, at);
         return toDraft(db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
       });
     },
@@ -734,59 +794,92 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       const r = db.prepare("SELECT * FROM flex_sessions WHERE id = ?").get(id) as Row | undefined;
       return r ? toFlex(r) : null;
     },
-    /** Removes a flex session that hasn't ended; an ended one has opened its loop and stays. */
+    /** Removes a flex session that hasn't ended; an ended one has opened its follow-up and stays. */
     removeFlex(id: number): boolean {
       return tx(() => {
-        if (db.prepare("SELECT 1 FROM loops WHERE source_kind = 'flex' AND source_id = ?").get(id)) throw new PlanError("This flex session has ended and opened its update loop; it stays");
+        if (db.prepare("SELECT 1 FROM follow_ups WHERE source_kind = 'flex' AND source_id = ?").get(id)) throw new PlanError("This flex session has ended and opened its update follow-up; it stays");
         return Number(db.prepare("DELETE FROM flex_sessions WHERE id = ?").run(id).changes) === 1;
       });
     },
     /**
-     * After a flex session ends, a "post the update to <client>" loop opens once (D126). Called on reads; returns
-     * the loops it opened. The loops UI comes later; the rows are kept until then.
+     * After a flex session ends, a "post the update to <client>" follow-up opens once (D126). Called on reads; returns
+     * the follow-ups it opened. The follow-ups UI comes later; the rows are kept until then.
      */
-    openFlexLoops(now: Temporal.Instant): Loop[] {
+    openFlexFollowUps(now: Temporal.Instant): FollowUp[] {
       return tx(() => {
-        const rows = db.prepare("SELECT f.* FROM flex_sessions f LEFT JOIN loops l ON l.source_kind = 'flex' AND l.source_id = f.id WHERE l.id IS NULL").all() as Row[];
-        const opened: Loop[] = [];
+        const rows = db.prepare("SELECT f.* FROM flex_sessions f LEFT JOIN follow_ups l ON l.source_kind = 'flex' AND l.source_id = f.id WHERE l.id IS NULL").all() as Row[];
+        const opened: FollowUp[] = [];
         for (const f of rows.map(toFlex)) {
           if (Temporal.Instant.compare(Temporal.Instant.from(f.end), now) > 0) continue;
           const what = `Post the update to ${f.clientKey}${f.itemTitle ? ` on ${f.itemTitle}` : ""} after the flex session`;
-          const r = db.prepare("INSERT INTO loops (kind, client_key, what, source_kind, source_id, opened_at) VALUES ('flex_update', ?, ?, 'flex', ?, ?)").run(f.clientKey, what, f.id, stamp());
-          opened.push(toLoop(db.prepare("SELECT * FROM loops WHERE id = ?").get(Number(r.lastInsertRowid)) as Row));
+          const r = db.prepare("INSERT INTO follow_ups (kind, client_key, what, source_kind, source_id, opened_at) VALUES ('flex_update', ?, ?, 'flex', ?, ?)").run(f.clientKey, what, f.id, stamp());
+          opened.push(toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(Number(r.lastInsertRowid)) as Row));
         }
         return opened;
       });
     },
-    openLoops: (): Loop[] => (db.prepare("SELECT * FROM loops WHERE closed_at IS NULL ORDER BY opened_at, id").all() as Row[]).map(toLoop),
-    /** Every loop, open first (step 6c loops list). */
-    allLoops: (): Loop[] => (db.prepare("SELECT * FROM loops ORDER BY closed_at IS NOT NULL, opened_at, id").all() as Row[]).map(toLoop),
-    /** Closes an open loop, by hand ("mark as told") with an optional note, or by a signal with its reason. */
-    closeLoop(id: number, note: string | null, by: "me" | "signal" = "me"): Loop {
+    openFollowUps: (): FollowUp[] => (db.prepare("SELECT * FROM follow_ups WHERE closed_at IS NULL ORDER BY opened_at, id").all() as Row[]).map(toFollowUp),
+    /** Every follow-up, open first (step 6c follow-ups list). */
+    allFollowUps: (): FollowUp[] => (db.prepare("SELECT * FROM follow_ups ORDER BY closed_at IS NOT NULL, opened_at, id").all() as Row[]).map(toFollowUp),
+    /**
+     * Closes an open follow-up: "Close the loop" by hand (optional how and note), by a signal with its reason, or
+     * "Not needed" (closed quietly, not counted as done).
+     */
+    closeFollowUp(id: number, note: string | null, by: "me" | "signal" = "me", o: { how?: CloseHow | null; outcome?: "done" | "not_needed" } = {}): FollowUp {
       return tx(() => {
-        const r = db.prepare("SELECT * FROM loops WHERE id = ?").get(id) as Row | undefined;
-        if (!r) throw new PlanError(`No loop ${id}`);
-        if (r.closed_at) throw new PlanError("That loop is already closed");
-        db.prepare("UPDATE loops SET closed_at = ?, close_note = ?, closed_by = ? WHERE id = ?").run(stamp(), note, by, id);
-        return toLoop(db.prepare("SELECT * FROM loops WHERE id = ?").get(id) as Row);
+        const r = db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row | undefined;
+        if (!r) throw new PlanError(`No follow-up ${id}`);
+        if (r.closed_at) throw new PlanError("That follow-up is already closed");
+        db.prepare("UPDATE follow_ups SET closed_at = ?, close_note = ?, closed_by = ?, outcome = ?, close_how = ?, snoozed_until = NULL WHERE id = ?").run(stamp(), note, by, o.outcome ?? "done", o.how ?? null, id);
+        return toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row);
       });
     },
-    getLoop(id: number): Loop | null {
-      const r = db.prepare("SELECT * FROM loops WHERE id = ?").get(id) as Row | undefined;
-      return r ? toLoop(r) : null;
+    /** Hidden from lists until that day (null wakes it now). */
+    snoozeFollowUp(id: number, until: IsoDate | null): FollowUp {
+      const r = db.prepare("UPDATE follow_ups SET snoozed_until = ? WHERE id = ? AND closed_at IS NULL").run(until, id);
+      if (!Number(r.changes)) throw new PlanError(db.prepare("SELECT 1 FROM follow_ups WHERE id = ?").get(id) ? "That follow-up is already closed" : `No follow-up ${id}`);
+      return toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row);
     },
-    /** Opens a rule's loop once per rule key (step 7). Null when that key already has a loop, open or closed. */
-    openRuleLoop(l: NewRuleLoop): Loop | null {
+    /** Only follow-ups I added (by hand or from a capture); a rule's follow-up is closed as Not needed instead. */
+    deleteFollowUp(id: number): void {
+      tx(() => {
+        const r = db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row | undefined;
+        if (!r) throw new PlanError(`No follow-up ${id}`);
+        if (!toFollowUp(r).byHand) throw new PlanError("Coopilot opened this one; use Not needed instead");
+        db.prepare("UPDATE picks SET follow_up_id = NULL WHERE follow_up_id = ?").run(id);
+        db.prepare("UPDATE captures SET routed_id = NULL WHERE routed_as = 'follow_up' AND routed_id = ?").run(id);
+        db.prepare("DELETE FROM follow_ups WHERE id = ?").run(id);
+      });
+    },
+    /** Edits client, who, what, channel and due of an open follow-up. */
+    editFollowUp(id: number, patch: Partial<FollowUpFields>): FollowUp {
+      return tx(() => {
+        const r = db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row | undefined;
+        if (!r) throw new PlanError(`No follow-up ${id}`);
+        const f = toFollowUp(r);
+        if (f.closedAt) throw new PlanError("That follow-up is already closed");
+        const n = { clientKey: f.clientKey, who: f.who, what: f.what, channel: f.channel, due: f.due, ...patch };
+        if (!n.what.trim()) throw new PlanError("Say what you owe");
+        db.prepare("UPDATE follow_ups SET client_key = ?, who = ?, what = ?, channel = ?, due = ? WHERE id = ?").run(n.clientKey, n.who, n.what, n.channel, n.due, id);
+        return toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row);
+      });
+    },
+    getFollowUp(id: number): FollowUp | null {
+      const r = db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row | undefined;
+      return r ? toFollowUp(r) : null;
+    },
+    /** Opens a rule's follow-up once per rule key (step 7). Null when that key already has a follow-up, open or closed. */
+    openRuleFollowUp(l: NewRuleFollowUp): FollowUp | null {
       const r = db
-        .prepare("INSERT INTO loops (kind, client_key, who, what, item_id, rule_key, ref_at, draft, detail, opened_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(rule_key) DO NOTHING")
-        .run(l.kind, l.clientKey, l.who, l.what, l.itemId ?? null, l.ruleKey, l.refAt ?? null, l.draft ?? null, l.detail ? JSON.stringify(l.detail) : null, stamp());
-      return Number(r.changes) === 1 ? toLoop(db.prepare("SELECT * FROM loops WHERE id = ?").get(Number(r.lastInsertRowid)) as Row) : null;
+        .prepare("INSERT INTO follow_ups (kind, client_key, who, what, item_id, rule_key, ref_at, draft, detail, origin, opened_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(rule_key) DO NOTHING")
+        .run(l.kind, l.clientKey, l.who, l.what, l.itemId ?? null, l.ruleKey, l.refAt ?? null, l.draft ?? null, l.detail ? JSON.stringify(l.detail) : null, l.origin ? JSON.stringify(l.origin) : null, stamp());
+      return Number(r.changes) === 1 ? toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(Number(r.lastInsertRowid)) as Row) : null;
     },
-    /** A slip loop that is still open takes more slipped picks: its draft and the picks it covers. */
-    updateLoopDraft(id: number, what: string, draft: string, detail: { picks: number[] }): void {
-      db.prepare("UPDATE loops SET what = ?, draft = ?, detail = ? WHERE id = ? AND closed_at IS NULL").run(what, draft, JSON.stringify(detail), id);
+    /** A slip follow-up that is still open takes more slipped picks: its draft and the picks it covers. */
+    updateFollowUpDraft(id: number, what: string, draft: string, detail: { picks: number[] }, origin?: FollowUpOrigin | null): void {
+      db.prepare("UPDATE follow_ups SET what = ?, draft = ?, detail = ?, origin = COALESCE(?, origin) WHERE id = ? AND closed_at IS NULL").run(what, draft, JSON.stringify(detail), origin ? JSON.stringify(origin) : null, id);
     },
-    /** A loop added by hand: who, what, optional due date. */
+    /** A follow-up added by hand: who, what, optional due date. */
     // ---- quick capture (step 9) ----
     /** Saves a capture to the inbox: the plan store only, so it works with every source offline. */
     addCapture(c: { text: string; clientKey: string | null }): Capture {
@@ -803,7 +896,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     /** Captures not routed yet, newest first. */
     inbox: (): Capture[] => (db.prepare("SELECT * FROM captures WHERE routed_at IS NULL ORDER BY id DESC").all() as Row[]).map(toCapture),
     inboxCount: (): number => (db.prepare("SELECT COUNT(*) AS n FROM captures WHERE routed_at IS NULL").get() as Row).n as number,
-    /** Routes a capture once: makes the loop, draft story or note and marks the capture, in one transaction. */
+    /** Routes a capture once: makes the follow-up, draft story or note and marks the capture, in one transaction. */
     routeCapture(id: number, r: CaptureRoute): Capture {
       return tx(() => {
         const c = db.prepare("SELECT * FROM captures WHERE id = ?").get(id) as Row | undefined;
@@ -811,38 +904,23 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         if (c.routed_at) throw new PlanError("That capture is already sorted");
         const at = stamp();
         let routedId: number | null = null;
-        if (r.as === "loop") {
-          if (!r.what.trim()) throw new PlanError("A loop needs what you owe");
-          routedId = Number(db.prepare("INSERT INTO loops (kind, client_key, who, what, due, opened_at) VALUES ('capture', ?, ?, ?, ?, ?)").run(r.clientKey, r.who.trim(), r.what.trim(), r.due, at).lastInsertRowid);
+        if (r.as === "follow_up") {
+          if (!r.what.trim()) throw new PlanError("A follow-up needs what you owe");
+          routedId = Number(db.prepare("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, opened_at) VALUES ('capture', ?, ?, ?, ?, ?, ?)").run(r.clientKey, r.who.trim() || null, r.what.trim(), r.due, r.channel ?? null, at).lastInsertRowid);
         } else if (r.as === "draft") {
           if (!r.title.trim()) throw new PlanError("A draft story needs a title");
           routedId = Number(db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(r.clientKey, r.parentItemId, r.title.trim(), r.size, at, at).lastInsertRowid);
-        } else if (r.as === "note") {
-          if (!r.text.trim()) throw new PlanError("A note needs text");
-          routedId = Number(db.prepare("INSERT INTO notes (client_key, text, capture_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(r.clientKey, r.text.trim(), id, at, at).lastInsertRowid);
+        } else if (r.as === "draft_feature") {
+          if (!r.title.trim()) throw new PlanError("A draft feature needs a title");
+          routedId = Number(db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, level, created_at, updated_at) VALUES (?, ?, ?, 'M', 'feature', ?, ?)").run(r.clientKey, r.parentItemId, r.title.trim(), at, at).lastInsertRowid);
         }
         db.prepare("UPDATE captures SET routed_at = ?, routed_as = ?, routed_id = ? WHERE id = ?").run(at, r.as, routedId, id);
         return toCapture(db.prepare("SELECT * FROM captures WHERE id = ?").get(id) as Row);
       });
     },
-    /** Notes, newest first; by client ("" for notes with none) and words in the text, any case. */
-    notes(f: { clientKey?: string | null; query?: string } = {}): Note[] {
-      const where: string[] = [];
-      const args: (string | null)[] = [];
-      if (f.clientKey === null) where.push("client_key IS NULL");
-      else if (f.clientKey !== undefined) (where.push("client_key = ?"), args.push(f.clientKey));
-      for (const w of (f.query ?? "").trim().split(/\s+/).filter(Boolean)) {
-        where.push("text LIKE ? ESCAPE '\\'");
-        args.push(`%${w.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`);
-      }
-      return (db.prepare(`SELECT * FROM notes${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY id DESC`).all(...args) as Row[]).map(toNoteRow);
-    },
-    deleteNote(id: number): boolean {
-      return Number(db.prepare("DELETE FROM notes WHERE id = ?").run(id).changes) > 0;
-    },
-    addLoop(l: { who: string; what: string; due: IsoDate | null; clientKey?: string | null }): Loop {
-      const r = db.prepare("INSERT INTO loops (kind, client_key, who, what, due, opened_at) VALUES ('manual', ?, ?, ?, ?, ?)").run(l.clientKey ?? null, l.who, l.what, l.due, stamp());
-      return toLoop(db.prepare("SELECT * FROM loops WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
+    addFollowUp(l: { who: string | null; what: string; due: IsoDate | null; clientKey?: string | null; channel?: string | null }): FollowUp {
+      const r = db.prepare("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, opened_at) VALUES ('manual', ?, ?, ?, ?, ?, ?)").run(l.clientKey ?? null, l.who || null, l.what, l.due, l.channel ?? null, stamp());
+      return toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
     },
     // ---- Close out, resume notes and borrowed time (step 7) ----
     /** Marks Close out done for a day (creating the day plan if there is none). */
@@ -889,6 +967,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
           const base: NewPick = { date: to.date, half: to.half, clientKey: p.clientKey, kind: p.kind, title: p.title, itemType: p.itemType, itemUrl: p.itemUrl, size: p.size };
           if (p.itemId !== null) base.itemId = p.itemId;
           if (p.draftId !== null) base.draftId = p.draftId;
+          if (p.followUpId !== null) base.followUpId = p.followUpId;
           moved = insertPick(base, p.id);
         }
         const r = db
@@ -1219,10 +1298,10 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     },
     // ---- Help invites (step 13) ----
     /** A help invite about to be sent: pending until Outlook confirms it (then sent, with its event id). */
-    addInvite(i: Omit<Invite, "id" | "createdAt" | "updatedAt" | "status" | "loopId" | "eventId">): Invite {
+    addInvite(i: Omit<Invite, "id" | "createdAt" | "updatedAt" | "status" | "followUpId" | "eventId">): Invite {
       const at = stamp();
       db.prepare(
-        `INSERT INTO invites (uid, client_key, item_id, pick_id, timebox_id, title, url, start_at, end_at, attendees, teams, note, event_id, status, loop_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL, ?, ?)
+        `INSERT INTO invites (uid, client_key, item_id, pick_id, timebox_id, title, url, start_at, end_at, attendees, teams, note, event_id, status, follow_up_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL, ?, ?)
          ON CONFLICT(uid) DO NOTHING`,
       ).run(i.uid, i.clientKey, i.itemId, i.pickId, i.timeboxId, i.title, i.url, i.start, i.end, JSON.stringify(i.attendees), i.teams ? 1 : 0, i.note, at, at);
       return this.invite(i.uid)!;
@@ -1235,16 +1314,16 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     invitesFrom(from: string): Invite[] {
       return (db.prepare("SELECT * FROM invites WHERE start_at >= ? ORDER BY start_at, id").all(from) as Row[]).map(toInvite);
     },
-    setInvite(uid: string, patch: { status?: Invite["status"]; loopId?: number | null; eventId?: string | null }): void {
+    setInvite(uid: string, patch: { status?: Invite["status"]; followUpId?: number | null; eventId?: string | null }): void {
       const i = this.invite(uid);
       if (!i) return;
-      db.prepare("UPDATE invites SET status = ?, loop_id = ?, event_id = ?, updated_at = ? WHERE uid = ?").run(patch.status ?? i.status, patch.loopId === undefined ? i.loopId : patch.loopId, patch.eventId === undefined ? i.eventId : patch.eventId, stamp(), uid);
+      db.prepare("UPDATE invites SET status = ?, follow_up_id = ?, event_id = ?, updated_at = ? WHERE uid = ?").run(patch.status ?? i.status, patch.followUpId === undefined ? i.followUpId : patch.followUpId, patch.eventId === undefined ? i.eventId : patch.eventId, stamp(), uid);
     },
-    /** Help session loops close once the meeting has ended (step 13). */
-    closeHelpLoops(now: Temporal.Instant): number {
-      const open = (db.prepare("SELECT * FROM loops WHERE kind = 'help' AND closed_at IS NULL AND ref_at IS NOT NULL").all() as Row[]).map(toLoop);
+    /** Help session follow-ups close once the meeting has ended (step 13). */
+    closeHelpFollowUps(now: Temporal.Instant): number {
+      const open = (db.prepare("SELECT * FROM follow_ups WHERE kind = 'help' AND closed_at IS NULL AND ref_at IS NOT NULL").all() as Row[]).map(toFollowUp);
       let n = 0;
-      for (const l of open) if (Temporal.Instant.compare(Temporal.Instant.from(l.refAt!), now) <= 0) (this.closeLoop(l.id, "The help session time has passed", "signal"), n++);
+      for (const l of open) if (Temporal.Instant.compare(Temporal.Instant.from(l.refAt!), now) <= 0) (this.closeFollowUp(l.id, "The help session time has passed", "signal"), n++);
       return n;
     },
     /** The audit log, newest first. */
@@ -1261,14 +1340,13 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         draftStories: (db.prepare("SELECT * FROM draft_stories ORDER BY id").all() as Row[]).map(toDraft),
         unavailable: (db.prepare("SELECT * FROM unavailable ORDER BY date, start_at, id").all() as Row[]).map(toUnavailable),
         flexSessions: (db.prepare("SELECT * FROM flex_sessions ORDER BY date, start_at, id").all() as Row[]).map(toFlex),
-        loops: (db.prepare("SELECT * FROM loops ORDER BY id").all() as Row[]).map(toLoop),
+        followUps: (db.prepare("SELECT * FROM follow_ups ORDER BY id").all() as Row[]).map(toFollowUp),
         resumeNotes: (db.prepare("SELECT * FROM resume_notes ORDER BY date, client_key").all() as Row[]).map(toNote),
         borrowed: (db.prepare("SELECT * FROM borrowed ORDER BY id").all() as Row[]).map(toBorrowed),
         weekPlans: db.prepare("SELECT * FROM week_plans ORDER BY week_start").all() as Row[],
         weekFeatures: (db.prepare("SELECT DISTINCT week_start FROM week_features ORDER BY week_start").all() as Row[]).flatMap((r) => this.weekPlan(r.week_start as string).features),
         breakdownMarks: this.breakdownMarks(),
         captures: (db.prepare("SELECT * FROM captures ORDER BY id").all() as Row[]).map(toCapture),
-        notes: (db.prepare("SELECT * FROM notes ORDER BY id").all() as Row[]).map(toNoteRow),
         timeboxes: (db.prepare("SELECT * FROM timeboxes ORDER BY date, start_at, id").all() as Row[]).map(toTimebox),
         outlookEvents: (db.prepare("SELECT * FROM outlook_events ORDER BY created_at, uid").all() as Row[]).map(toOwn),
         writeLog: (db.prepare("SELECT * FROM write_log ORDER BY id").all() as Row[]).map(toWrite),

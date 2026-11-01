@@ -42,12 +42,21 @@ export function patternCovers(p: Pick<TeamPattern, "startDate" | "endDate" | "da
  * Candidates for help on a client over some dates, best first: tier 1 days on the client, else tier 2, else 3; then
  * more tier 1 days; then name. Me, people without an allowed email, and duplicates are left out.
  */
-export function rankCandidates(o: { team: readonly Teammate[]; meId: string; meEmail: string; patterns: readonly TeamPattern[]; workers: ReadonlySet<string>; away: readonly { userId: string; date: IsoDate }[]; dates: readonly IsoDate[]; domains: readonly string[] }): Candidate[] {
+/** People to exclude (step 13.5): a listed name or address matches, any case. Excluded people are never suggested. */
+export function isExcluded(p: { name: string; email: string }, list: readonly string[]): boolean {
+  const name = p.name.trim().toLowerCase(), email = p.email.trim().toLowerCase();
+  return list.some((x) => {
+    const v = x.trim().toLowerCase();
+    return !!v && (v === name || v === email);
+  });
+}
+
+export function rankCandidates(o: { team: readonly Teammate[]; meId: string; meEmail: string; patterns: readonly TeamPattern[]; workers: ReadonlySet<string>; away: readonly { userId: string; date: IsoDate }[]; dates: readonly IsoDate[]; domains: readonly string[]; exclude?: readonly string[] }): Candidate[] {
   const seen = new Set<string>();
   const out: Candidate[] = [];
   for (const t of o.team) {
     const email = lower(t.email);
-    if (lower(t.id) === lower(o.meId) || email === lower(o.meEmail) || !domainAllowed(email, o.domains) || seen.has(email)) continue;
+    if (lower(t.id) === lower(o.meId) || email === lower(o.meEmail) || !domainAllowed(email, o.domains) || seen.has(email) || isExcluded(t, o.exclude ?? [])) continue;
     seen.add(email);
     const mine = o.patterns.filter((p) => lower(p.userId) === lower(t.id));
     const away = o.dates.filter((d) => o.away.some((a) => lower(a.userId) === lower(t.id) && a.date === d));
@@ -71,6 +80,8 @@ export type Availability = {
   /** The range the availability string covers. */
   covers: [number, number];
   workingHours: WorkingHours | null;
+  /** Step 13.5: no working hours were shared, so 9:00 to 5:00 in my zone is assumed. */
+  hoursUnknown: boolean;
   /** Why this person can't be checked ("no free/busy", "time zone not recognized"). */
   problem: string | null;
 };
@@ -83,7 +94,7 @@ const TIME = /^(\d\d):(\d\d)(?::(\d\d))?/;
  * getSchedule's answer as availability per person. Reads only scheduleId, availabilityView, workingHours and error;
  * everything else (scheduleItems with subjects and locations) is ignored and not copied anywhere.
  */
-export function parseSchedule(raw: unknown, rangeStart: string, rangeEnd: string, intervalMin: number): Availability[] {
+export function parseSchedule(raw: unknown, rangeStart: string, rangeEnd: string, intervalMin: number, myZone = "UTC"): Availability[] {
   const list = Array.isArray((raw as { value?: unknown })?.value) ? ((raw as { value: unknown[] }).value) : [];
   const t0 = Temporal.Instant.from(rangeStart).epochMilliseconds;
   const t1 = Temporal.Instant.from(rangeEnd).epochMilliseconds;
@@ -95,7 +106,7 @@ export function parseSchedule(raw: unknown, rangeStart: string, rangeEnd: string
     const email = o.scheduleId.trim().toLowerCase();
     const view = typeof o.availabilityView === "string" && /^[0-9]*$/.test(o.availabilityView) ? o.availabilityView : null;
     if (o.error || view === null || !view.length) {
-      out.push({ email, busy: [], covers: [t0, t0], workingHours: null, problem: "no free/busy shared" });
+      out.push({ email, busy: [], covers: [t0, t0], workingHours: null, hoursUnknown: false, problem: "no free/busy shared" });
       continue;
     }
     const busy: [number, number][] = [];
@@ -110,12 +121,17 @@ export function parseSchedule(raw: unknown, rangeStart: string, rangeEnd: string
     const w = o.workingHours;
     let wh: WorkingHours | null = null;
     let problem: string | null = null;
+    let hoursUnknown = false;
     if (w && Array.isArray(w.daysOfWeek) && typeof w.startTime === "string" && typeof w.endTime === "string" && TIME.test(w.startTime) && TIME.test(w.endTime)) {
       const zone = zoneOf(w.timeZone);
       if (zone) wh = { days: w.daysOfWeek.filter((d): d is string => typeof d === "string").map(lower), start: TIME.exec(w.startTime)![0]!.slice(0, 5), end: TIME.exec(w.endTime)![0]!.slice(0, 5), zone };
       else problem = "time zone not recognized";
-    } else problem = "no working hours shared";
-    out.push({ email, busy, covers, workingHours: wh, problem });
+    } else {
+      // Step 13.5: assume 9:00 to 5:00, Monday to Friday, in my zone, and say so.
+      wh = { days: ["monday", "tuesday", "wednesday", "thursday", "friday"], start: "09:00", end: "17:00", zone: myZone };
+      hoursUnknown = true;
+    }
+    out.push({ email, busy, covers, workingHours: wh, hoursUnknown, problem });
   }
   return out;
 }
@@ -150,12 +166,14 @@ export type Slot = {
   start: string;
   end: string;
   date: IsoDate;
-  people: { email: string; name: string; tier: CandidateTier }[];
+  people: { email: string; name: string; tier: CandidateTier; hoursUnknown?: boolean }[];
   /** Others of the best tier also free then (auto mode). */
   alsoFree: string[];
   tier: CandidateTier;
   /** Minutes over my own timeboxes (avoided where possible). */
   overTimebox: number;
+  /** Step 13.5: inside one of my focus blocks for this client (ranked first). */
+  inFocus: boolean;
 };
 
 export type SuggestInput = {
@@ -166,6 +184,8 @@ export type SuggestInput = {
   myBusy: readonly [number, number][];
   /** My timeboxes: soft. */
   myBoxes: readonly [number, number][];
+  /** Step 13.5: my focus blocks for this client; slots inside them rank first. */
+  focus?: readonly [number, number][];
   candidates: readonly Candidate[];
   availability: readonly Availability[];
   /** Chosen people (emails), or null for "let Coopilot choose the top tier". */
@@ -210,11 +230,12 @@ export function suggestSlots(o: SuggestInput): Slot[] {
       }
       const tier = Math.max(...people.map((c) => c.tierByDate[w.date] ?? 3)) as CandidateTier;
       const iso = (t: number) => Temporal.Instant.fromEpochMilliseconds(t).toZonedDateTimeISO(o.tz).toString({ timeZoneName: "never", smallestUnit: "second" });
-      all.push({ start: iso(a), end: iso(b), date: w.date, people: people.map((c) => ({ email: c.email, name: c.name, tier: c.tierByDate[w.date] ?? 3 })), alsoFree, tier, overTimebox: Math.round(overlapMinutes(a, b, o.myBoxes)) });
+      const inFocus = (o.focus ?? []).some(([s, e]) => a >= s && b <= e);
+      all.push({ start: iso(a), end: iso(b), date: w.date, people: people.map((c) => ({ email: c.email, name: c.name, tier: c.tierByDate[w.date] ?? 3, ...(byEmail.get(c.email)?.hoursUnknown ? { hoursUnknown: true } : {}) })), alsoFree, tier, overTimebox: Math.round(overlapMinutes(a, b, o.myBoxes)), inFocus });
     }
   }
   const t = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
-  all.sort((x, y) => x.tier - y.tier || x.overTimebox - y.overTimebox || t(x.start) - t(y.start));
+  all.sort((x, y) => Number(y.inFocus) - Number(x.inFocus) || x.tier - y.tier || x.overTimebox - y.overTimebox || t(x.start) - t(y.start));
   const picked: Slot[] = [];
   const take = (limit: number) => {
     for (const s of all) {
@@ -227,7 +248,7 @@ export function suggestSlots(o: SuggestInput): Slot[] {
   };
   take(perDay);
   if (picked.length < max) take(Infinity);
-  return picked.sort((x, y) => x.tier - y.tier || x.overTimebox - y.overTimebox || t(x.start) - t(y.start));
+  return picked.sort((x, y) => Number(y.inFocus) - Number(x.inFocus) || x.tier - y.tier || x.overTimebox - y.overTimebox || t(x.start) - t(y.start));
 }
 
 // ---------- the invite ----------
@@ -258,7 +279,7 @@ export function defaultRange(today: IsoDate, pinned: IsoDate | null, isWorkday: 
 }
 
 /** "Help session with Ana and Ben on #4512 Import mapping". */
-export function helpLoopText(names: readonly string[], itemTitle: string): string {
+export function helpFollowUpText(names: readonly string[], itemTitle: string): string {
   const who = names.length <= 1 ? names[0] ?? "a teammate" : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
   return `Help session with ${who} on ${itemTitle}`;
 }

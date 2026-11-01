@@ -29,7 +29,7 @@ const day = (date: string): Day => week.days.find((d) => d.date === date)!;
 let id = 0;
 const pick = (half: Pick["half"], title: string, over: Partial<Pick> = {}): Pick => ({
   id: ++id, date: "2026-11-02", half, clientKey: "csc", kind: "intention", itemId: null, draftId: null, title, itemType: null, itemUrl: null,
-  size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, notes: null, position: id, createdAt: "", updatedAt: "", ...over,
+  size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, followUpId: null, notes: null, position: id, createdAt: "", updatedAt: "", ...over,
 });
 
 const at = (local: string) => Temporal.PlainDateTime.from(local).toZonedDateTime(NY);

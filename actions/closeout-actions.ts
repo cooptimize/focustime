@@ -1,6 +1,7 @@
 // Close out (step 7, end of day) and the actions it shares with Check-in: make up a pick (borrowed time), resume
-// notes, add a loop, pay borrowed time. Local only: they write to the plan store and read DevOps results already in
+// notes, add a follow-up, pay borrowed time. Local only: they write to the plan store and read DevOps results already in
 // memory. Nothing here calls or writes DevOps, Outlook, Google or Dataverse.
+import { dueOrder } from "../plan/due.ts";
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { borrowMinutes, flexOffer, paybackSlot, PAYBACKS, type Payback } from "../plan/borrow.ts";
@@ -9,15 +10,15 @@ import type { ClientWork, Half, IsoDate } from "../week/types.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
 import { PlanError, type Borrowed, type PlanStore, type ResumeNote } from "../store/plan-store.ts";
 import { hasHoursOn } from "./plan-actions.ts";
-import { applyLoopRules, internalClients, loopView, nameOf, newestFirst, workdayOf } from "./loop-rules.ts";
+import { applyFollowUpRules, internalClients, followUpView, nameOf, newestFirst, workdayOf } from "./followup-rules.ts";
 import type { ActionResponse, BorrowedView, CloseOutState, ResumeNoteView } from "./types.ts";
 
-export type CloseoutAction = "closeout.load" | "closeout.commit" | "pick.make_up" | "note.set" | "loop.add" | "borrow.pay";
+export type CloseoutAction = "closeout.load" | "closeout.commit" | "pick.make_up" | "note.set" | "borrow.pay";
 
 export type CloseoutContext = {
   plan: PlanStore | undefined;
   config: () => Promise<AppConfig | null>;
-  /** DevOps results already in memory (never a fetch here), for the loop rules. */
+  /** DevOps results already in memory (never a fetch here), for the follow-up rules. */
   devops: (cfg: AppConfig) => Pick<DevOpsSource, "last">;
   /** PTO dates from a Monday for about five weeks, so "Carry over" and make-up days skip PTO. */
   ptoAhead?: (cfg: AppConfig, monday: IsoDate) => Promise<ReadonlySet<IsoDate>>;
@@ -76,11 +77,11 @@ async function ptoSet(ctx: CloseoutContext, cfg: AppConfig | null, from: IsoDate
   return ctx.ptoAhead(cfg, d.subtract({ days: d.dayOfWeek - 1 }).toString()).catch(() => new Set<IsoDate>());
 }
 
-/** DevOps as last fetched, for the clients in play (picks and open loops), without fetching. */
+/** DevOps as last fetched, for the clients in play (picks and open follow-ups), without fetching. */
 function workInMemory(ctx: CloseoutContext, cfg: AppConfig | null, plan: PlanStore, today: IsoDate): ClientWork[] | null {
   if (!cfg) return null;
   const t = Temporal.PlainDate.from(today);
-  const keys = new Set([...plan.picksBetween(t.subtract({ days: 14 }).toString(), today).map((p) => p.clientKey), ...plan.openLoops().map((l) => l.clientKey).filter((k): k is string => !!k)]);
+  const keys = new Set([...plan.picksBetween(t.subtract({ days: 14 }).toString(), today).map((p) => p.clientKey), ...plan.openFollowUps().map((l) => l.clientKey).filter((k): k is string => !!k)]);
   const dv = ctx.devops(cfg);
   return [...keys].map((k) => dv.last(k)).filter((w): w is NonNullable<typeof w> => !!w);
 }
@@ -90,9 +91,9 @@ export async function closeOutState(ctx: CloseoutContext, plan: PlanStore, d: Is
   const work = workInMemory(ctx, cfg, plan, today);
   const known = new Map((work ?? []).map((w) => [w.clientKey, w.clientName]));
   const clientName = nameOf(cfg, (k) => known.get(k));
-  // The rules run here too, so ticks and moves made in Close out open their loops at once.
-  plan.openFlexLoops(Temporal.Instant.from(ctx.now()));
-  applyLoopRules(plan, { today, work, internal: internalClients(cfg), clientName, isWorkday: workdayOf(cfg) });
+  // The rules run here too, so ticks and moves made in Close out open their follow-ups at once.
+  plan.openFlexFollowUps(Temporal.Instant.from(ctx.now()));
+  applyFollowUpRules(plan, { today, work, internal: internalClients(cfg), clientName, isWorkday: workdayOf(cfg) });
   plan.settleBorrowed();
   const picks = plan.picksFor(d);
   const focused = plan.focusedSeconds(picks.map((p) => p.id));
@@ -121,7 +122,8 @@ export async function closeOutState(ctx: CloseoutContext, plan: PlanStore, d: Is
     worked: [...worked].map(([clientKey, name]) => ({ clientKey, clientName: name })),
     notes: Object.fromEntries(plan.notesOn(d).map((n) => [n.clientKey, noteView(n)])),
     previous: Object.fromEntries(Object.entries(plan.latestNotes(prevDay)).map(([k, n]) => [k, noteView(n)])),
-    loops: plan.openLoops().sort(newestFirst).map((l) => loopView(plan, l, today, clientName)),
+    // Step 13.5: what is due by the day being closed comes first; snoozed ones stay hidden until their day.
+    followUps: dueOrder(plan.openFollowUps().filter((l) => !l.snoozedUntil || l.snoozedUntil <= today).sort(newestFirst), d, (l) => l.due, (l) => l.openedAt).map((l) => followUpView(plan, l, today, clientName)),
     borrowed: plan.borrowedFor(d, d).map(borrowedView),
     captures: plan.inboxCount(),
   };
@@ -172,13 +174,6 @@ export async function closeoutAction(ctx: CloseoutContext, action: CloseoutActio
         if (future) return bad(future, 422);
         const n = plan.setResumeNote(key, d, text(o.note, "note", 200, true));
         return { ok: true, data: { note: n ? noteView(n) : null } };
-      }
-      case "loop.add": {
-        const o = fields(input, ["who", "what"], ["due", "clientKey"]);
-        const due = o.due === undefined || o.due === null || o.due === "" ? null : date(o.due, "due");
-        const clientKey = o.clientKey === undefined || o.clientKey === null ? null : text(o.clientKey, "clientKey", 100);
-        const l = plan.addLoop({ who: text(o.who, "who", 100), what: text(o.what, "what", 200), due, clientKey });
-        return { ok: true, data: { loop: loopView(plan, l, today, nameOf(cfg, () => undefined)) } };
       }
       case "borrow.pay": {
         const b = plan.payBorrowed(id(fields(input, ["id"]).id));

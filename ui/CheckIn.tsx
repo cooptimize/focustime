@@ -80,7 +80,7 @@ export function CheckIn({ data, now, onClose, onChanged }: Props) {
 
   return (
     <main className="closeout checkin" aria-label="Check-in">
-      <div className="loops-head">
+      <div className="follow-ups-head">
         <h2 tabIndex={-1}>
           Check-in <span className="muted">{dayName(today)}, {time(now, tz)}</span>
         </h2>

@@ -36,7 +36,7 @@ const colors = { quiddity: "var(--client-violet)", csc: "var(--client-ochre)", i
 let n = 0;
 const pick = (half: Pick["half"], clientKey: string, title: string, size: Pick["size"], status: Pick["status"] = "planned"): Pick => ({
   id: ++n, date: SAMPLE_WEEK, half, clientKey, kind: "intention", itemId: null, draftId: null, title, itemType: null, itemUrl: null,
-  size, status, carriedFrom: null, carriedFromDate: null, notes: null, position: n, createdAt: "", updatedAt: "",
+  size, status, carriedFrom: null, carriedFromDate: null, followUpId: null, notes: null, position: n, createdAt: "", updatedAt: "",
 });
 const plan: PlanWeek = {
   [SAMPLE_WEEK]: {

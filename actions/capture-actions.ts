@@ -1,6 +1,6 @@
 // Quick capture (step 9): save first, sort later. A capture is written to the local plan store only, so it works
-// with every source offline; routing makes a loop, a draft story or a note, also local. The only DevOps read is the
-// list of a client's open features (for "under a feature"), read-only and optional. No AI.
+// with every source offline; routing makes a follow-up, a draft story or (step 13.5) a draft feature, also local.
+// The only DevOps read is a client's open features and epics (to put a draft under), read-only and optional. No AI.
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { Size } from "../plan/types.ts";
@@ -11,7 +11,7 @@ import type { IsoDate } from "../week/types.ts";
 import type { ActionResponse, CaptureFeatures, CaptureState } from "./types.ts";
 export type { CaptureFeatures, CaptureState } from "./types.ts";
 
-export const CAPTURE_ACTIONS = ["capture.add", "capture.load", "capture.route", "capture.features", "note.delete"] as const;
+export const CAPTURE_ACTIONS = ["capture.add", "capture.load", "capture.route", "capture.features", "draft.add_feature"] as const;
 export type CaptureAction = (typeof CAPTURE_ACTIONS)[number];
 
 export type CaptureContext = {
@@ -73,17 +73,28 @@ async function todayOf(ctx: CaptureContext, cfg: AppConfig | null): Promise<IsoD
 
 /** A client's open features (feature tier), from the Plan the week read. Never blocks: DevOps down means none to pick. */
 async function featuresOf(ctx: CaptureContext, cfg: AppConfig | null, key: string): Promise<CaptureFeatures> {
-  if (!cfg) return { clientKey: key, status: "unavailable", message: "Fix the config to see features", features: [] };
+  if (!cfg) return { clientKey: key, status: "unavailable", message: "Fix the config to see features", features: [], epics: [] };
   try {
     const refs = await ctx.clients(cfg, mondayOf(await todayOf(ctx, cfg)));
     const ref = refs.find((r) => r.clientKey === key);
-    if (!ref) return { clientKey: key, status: "unavailable", message: `No DevOps for ${key}`, features: [] };
+    if (!ref) return { clientKey: key, status: "unavailable", message: `No DevOps for ${key}`, features: [], epics: [] };
     const [p] = await ctx.devops(cfg).portfolio([ref]);
-    if (!p || p.status !== "ok") return { clientKey: key, status: "unavailable", message: p?.message ?? `DevOps unavailable for ${key}`, features: (p?.items ?? []).filter((i) => i.tier === "feature").map((i) => ({ id: i.id, title: i.title, state: i.state })) };
-    return { clientKey: key, status: "ok", features: p.items.filter((i) => i.tier === "feature").map((i) => ({ id: i.id, title: i.title, state: i.state })) };
+    const of = (tier: "feature" | "epic") => (p?.items ?? []).filter((i) => i.tier === tier).map((i) => ({ id: i.id, title: i.title, state: i.state }));
+    if (!p || p.status !== "ok") return { clientKey: key, status: "unavailable", message: p?.message ?? `DevOps unavailable for ${key}`, features: of("feature"), epics: of("epic") };
+    return { clientKey: key, status: "ok", features: of("feature"), epics: of("epic") };
   } catch {
-    return { clientKey: key, status: "unavailable", message: `DevOps unavailable for ${key}`, features: [] };
+    return { clientKey: key, status: "unavailable", message: `DevOps unavailable for ${key}`, features: [], epics: [] };
   }
+}
+
+/** An epic to put a draft feature under: one of the client's open epics as DevOps lists them now, or none. */
+async function epicOf(ctx: CaptureContext, key: string, v: unknown): Promise<number | null | ActionResponse> {
+  if (v === undefined || v === null) return null;
+  const epicId = id(v, "parentItemId");
+  const f = await featuresOf(ctx, await ctx.config().catch(() => null), key);
+  if (f.status !== "ok") return bad(`${f.message ?? "DevOps unavailable"}. Save the draft feature without an epic for now`, 409);
+  if (!f.epics.some((x) => x.id === epicId)) return bad(`#${epicId} isn't one of ${key}'s open epics`, 422);
+  return epicId;
 }
 
 export async function captureAction(ctx: CaptureContext, action: CaptureAction, input: unknown): Promise<ActionResponse> {
@@ -100,11 +111,9 @@ export async function captureAction(ctx: CaptureContext, action: CaptureAction, 
         return { ok: true, data: { capture, inboxCount: plan.inboxCount() } };
       }
       case "capture.load": {
-        const o = fields(input ?? {}, [], ["query", "clientKey"]);
-        const query = o.query === undefined ? "" : text(o.query, "query", 200);
-        const filter = o.clientKey === undefined ? {} : { clientKey: o.clientKey === "" ? null : optClient(o.clientKey) };
+        fields(input ?? {}, []);
         const cfg = await ctx.config().catch(() => null);
-        const state: CaptureState = { today: await todayOf(ctx, cfg), inbox: plan.inbox(), notes: plan.notes({ ...filter, query }), inboxCount: plan.inboxCount() };
+        const state: CaptureState = { today: await todayOf(ctx, cfg), inbox: plan.inbox(), inboxCount: plan.inboxCount() };
         return { ok: true, data: state };
       }
       case "capture.features": {
@@ -114,12 +123,12 @@ export async function captureAction(ctx: CaptureContext, action: CaptureAction, 
         return { ok: true, data: await featuresOf(ctx, await ctx.config().catch(() => null), key) };
       }
       case "capture.route": {
-        const o = fields(input, ["id", "as"], ["clientKey", "who", "what", "due", "title", "size", "parentItemId", "text"]);
+        const o = fields(input, ["id", "as"], ["clientKey", "who", "what", "due", "title", "size", "parentItemId", "channel"]);
         const capId = id(o.id, "id");
         let route: CaptureRoute;
         switch (o.as) {
-          case "loop":
-            route = { as: "loop", clientKey: optClient(o.clientKey), who: text(o.who ?? "", "who", 100), what: text(o.what, "what", 200), due: date(o.due) };
+          case "follow_up":
+            route = { as: "follow_up", clientKey: optClient(o.clientKey), who: text(o.who ?? "", "who", 100), what: text(o.what, "what", 200), due: date(o.due), channel: o.channel === undefined || o.channel === null || o.channel === "" ? null : (["teams", "email", "devops", "call"].includes(String(o.channel)) ? String(o.channel) : (() => { throw new Invalid("channel must be teams, email, devops or call"); })()) };
             break;
           case "draft": {
             const key = optClient(o.clientKey);
@@ -134,22 +143,33 @@ export async function captureAction(ctx: CaptureContext, action: CaptureAction, 
             route = { as: "draft", clientKey: key, parentItemId, title: text(o.title, "title", 200), size: size(o.size) };
             break;
           }
-          case "note":
-            route = { as: "note", clientKey: optClient(o.clientKey), text: text(o.text, "text", MAX_CAPTURE) };
+          case "draft_feature": {
+            const key = optClient(o.clientKey);
+            if (!key) throw new Invalid("A draft feature needs a client");
+            const parentItemId = await epicOf(ctx, key, o.parentItemId);
+            if (typeof parentItemId === "object" && parentItemId !== null) return parentItemId;
+            route = { as: "draft_feature", clientKey: key, parentItemId, title: text(o.title, "title", 200) };
             break;
+          }
           case "dismissed":
             route = { as: "dismissed" };
             break;
           default:
-            throw new Invalid("as must be loop, draft, note or dismissed");
+            throw new Invalid("as must be follow_up, draft, draft_feature or dismissed");
         }
         const capture = plan.routeCapture(capId, route);
         return { ok: true, data: { capture, inboxCount: plan.inboxCount() } };
       }
-      case "note.delete": {
-        const o = fields(input, ["id"]);
-        if (!plan.deleteNote(id(o.id, "id"))) return bad("No such note", 404);
-        return { ok: true, data: { deleted: true } };
+      case "draft.add_feature": {
+        // Plan the week's "Epic with no features: Draft a feature". Local only, until it is added in DevOps.
+        const o = fields(input, ["clientKey", "title"], ["parentItemId"]);
+        const key = optClient(o.clientKey);
+        if (!key) throw new Invalid("clientKey is required");
+        const parentItemId = await epicOf(ctx, key, o.parentItemId);
+        if (typeof parentItemId === "object" && parentItemId !== null) return parentItemId;
+        const title = text(o.title, "title", 200);
+        if (!title) throw new Invalid("A draft feature needs a title");
+        return { ok: true, data: { draft: plan.addDraft({ clientKey: key, parentItemId, title, size: "M", level: "feature" }) } };
       }
     }
   } catch (e) {

@@ -129,19 +129,12 @@ describe("focus timer on the server (step 6c)", () => {
     expect(await t.run("plan.reset", { confirm: "yes" })).toMatchObject({ ok: false, status: 422 });
   });
 
-  it("lists open loops and closes one with a note; reset needs the typed confirmation", async () => {
+  it("reset needs the typed confirmation and clears follow-ups too", async () => {
     const t = setup();
-    t.plan.addFlex({ date: "2026-11-01", clientKey: "CSC", start: "2026-11-01T15:00:00Z", end: "2026-11-01T16:00:00Z" });
-    const list = await t.run("loops.list", {});
-    const loops = (list as { data: { loops: { id: number; what: string; session: unknown }[] } }).data.loops;
-    expect(loops).toHaveLength(1);
-    // Its when is the session it came from.
-    expect(loops[0]!.session).toEqual({ start: "2026-11-01T15:00:00Z", end: "2026-11-01T16:00:00Z" });
-    expect(await t.run("loop.close", { id: loops[0]!.id, note: "Posted" })).toMatchObject({ ok: true, data: { loop: { closeNote: "Posted" } } });
-    expect((await t.run("loops.list", {}) as { data: { loops: unknown[] } }).data.loops).toEqual([]);
-    expect((await t.run("loops.list", { includeClosed: true }) as { data: { loops: unknown[] } }).data.loops).toHaveLength(1);
+    t.plan.addFollowUp({ who: "Dana", what: "Send it", due: null, clientKey: null, channel: null });
+    expect(await t.run("plan.reset", { confirm: "yes" })).toMatchObject({ ok: false, status: 422 });
     expect(await t.run("plan.reset", { confirm: "reset" })).toMatchObject({ ok: true });
-    expect((await t.run("loops.list", { includeClosed: true }) as { data: { loops: unknown[] } }).data.loops).toEqual([]);
+    expect(t.plan.allFollowUps()).toEqual([]);
   });
 });
 

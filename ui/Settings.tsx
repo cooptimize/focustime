@@ -481,7 +481,8 @@ function TimeboxForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
 /** Settings > Planning > Help sessions (step 13): length, Teams, how many workdays "Needs help from…" searches. */
 function CollabForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
   const c = p.data.collab;
-  const [v, setV] = useState({ meetingMinutes: c.meetingMinutes, teams: c.teams, daysAhead: c.daysAhead });
+  const [v, setV] = useState({ meetingMinutes: c.meetingMinutes, teams: c.teams, daysAhead: c.daysAhead, exclude: [...c.exclude] });
+  const [adding, setAdding] = useState("");
   const { problems, status, save } = useSave(p.onSavedData);
   return (
     <form
@@ -510,6 +511,27 @@ function CollabForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
         <Field label="Days to search" hint="Workdays from today, when the item isn't pinned to a day.">
           <input type="number" min={1} max={10} step={1} value={v.daysAhead} onChange={(e) => setV({ ...v, daysAhead: Number(e.target.value) })} />
           <Problems all={problems} field="collab.days_ahead" />
+        </Field>
+        <Field label="People to exclude" hint="Never suggested in Needs help from… or as Who on a follow-up, e.g. accounts that aren't people. Matched by name or email.">
+          <ul className="set-list">
+            {v.exclude.map((x, i) => (
+              <li key={`${x}:${i}`}>
+                <span>{x}</span>
+                <button type="button" className="mini quiet" aria-label={`Remove ${x}`} onClick={() => setV({ ...v, exclude: v.exclude.filter((_, j) => j !== i) })}>Remove</button>
+              </li>
+            ))}
+          </ul>
+          <span className="set-inline">
+            <input value={adding} maxLength={200} placeholder="Name or email" aria-label="Add a person to exclude" onChange={(e) => setAdding(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (adding.trim()) setV({ ...v, exclude: [...v.exclude, adding.trim()] }), setAdding("");
+                }
+              }} />
+            <button type="button" className="mini" disabled={!adding.trim()} onClick={() => { setV({ ...v, exclude: [...v.exclude, adding.trim()] }); setAdding(""); }}>Add</button>
+          </span>
+          <Problems all={problems} field="collab.exclude" />
         </Field>
         <ReadOnly label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where="Cooptimize addresses. Set in config.toml ([collab] domains); default is your work email's domain" />
       </div>
@@ -919,7 +941,7 @@ function ResetPlan({ disabled, onDone }: { disabled: boolean; onDone: () => void
           Reset…
         </button>
       )}
-      <span className="set-hint">{status ?? "Empties picks, drafts, unavailable time, flex sessions, loops, the timer and focused time. A full backup of the plan store is made first. Settings and calendars are not touched."}</span>
+      <span className="set-hint">{status ?? "Empties picks, drafts, unavailable time, flex sessions, follow-ups, the timer and focused time. A full backup of the plan store is made first. Settings and calendars are not touched."}</span>
     </div>
   );
 }
@@ -947,7 +969,7 @@ function DataSection(p: Props & { data: SettingsData }) {
           >
             Export as JSON
           </button>
-          <span className="set-hint">{status ?? "Picks, drafts, unavailable time, flex sessions and loops. Local only."}</span>
+          <span className="set-hint">{status ?? "Picks, drafts, unavailable time, flex sessions and follow-ups. Local only."}</span>
         </div>
         <ReadOnly label="Config file" value={p.data.configPath} where="Backups are kept next to it in backups/ (the last 30)" />
         <ResetPlan disabled={!p.data.data.planStore} onDone={p.onSaved} />

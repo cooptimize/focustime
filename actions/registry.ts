@@ -15,12 +15,12 @@ export type ActionTarget =
   | "range" // one of the view ranges
   | "unavailable" // one unavailable time
   | "flex" // one flex session
-  | "loop" // one loop
+  | "follow_up" // one follow-up
   | "borrowed" // one borrowed time record
   | "feature" // a feature on Plan the week
   | "week" // a week (its Monday)
   | "capture" // one capture in the inbox
-  | "note" // one note
+  | "note" // one resume note ("where I left off")
   | "timebox" // one timebox
   | "write" // one entry in the write log
   | "event"; // one calendar event (step 13)
@@ -29,7 +29,7 @@ export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops" | "Capture" | "Timebox" | "Calendar" | "Help";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -51,14 +51,14 @@ export const ACTIONS = [
   { name: "weekplan.reorder", title: "Reorder the week list", group: "Plan the week", target: "feature", summary: "Change the local order of a client's musts or nice to haves, or go back to DevOps order (never written to DevOps)" },
   { name: "weekplan.remove", title: "Take off the week", group: "Plan the week", target: "feature", summary: "Take an item off its client's week list" },
   { name: "weekplan.mark_done", title: "Mark done for the week", group: "Plan the week", target: "feature", summary: "Count a week item as done here (DevOps state counts too)" },
-  { name: "weekplan.headsup", title: "Heads-up: a must moves out", group: "Plan the week", target: "feature", summary: "Open a heads-up loop for a must dropped from a committed week" },
+  { name: "weekplan.headsup", title: "Heads-up: a must moves out", group: "Plan the week", target: "feature", summary: "Open a heads-up follow-up for a must dropped from a committed week" },
   { name: "weekplan.commit", title: "Commit the week", group: "Plan the week", target: "week", summary: "Commit the week's features; it stays editable and can be committed again" },
   { name: "feature.brief", title: "Copy Coop brief", group: "Plan the week", target: "feature", summary: "Markdown for Coop to propose user stories: DevOps fields only" },
   { name: "feature.mark_breakdown", title: "Mark as being broken down", group: "Plan the week", target: "feature", summary: "Local note that a feature is with Coop or the team for stories" },
-  { name: "loop.ask_priorities", title: "Create loop: ask about priorities", group: "Plan the week", target: "week", summary: "For a client block next week with no open work assigned to you" },
+  { name: "followup.ask_priorities", title: "Create follow-up: ask about priorities", group: "Plan the week", target: "week", summary: "For a client block next week with no open work assigned to you" },
   { name: "planday.start", title: "Plan the day", group: "Plan the day", target: "day", shortcut: "P", summary: "Turn a day's free time into committed picks (I also works)" },
   { name: "planday.commit", title: "Commit the plan", group: "Plan the day", target: "plan", shortcut: "C", summary: "Commit the day being planned" },
-  { name: "closeout.load", title: "Close out", group: "Close out", target: "day", shortcut: "E", summary: "End of day: picks done or not, resume notes, loops (about 3 minutes)" },
+  { name: "closeout.load", title: "Close out", group: "Close out", target: "day", shortcut: "E", summary: "End of day: picks done or not, resume notes, follow-ups (about 3 minutes)" },
   { name: "closeout.commit", title: "Commit Close out", group: "Close out", target: "day", summary: "Mark the day closed out; it can also be done later for a past day" },
   { name: "pick.make_up", title: "I'll make it up", group: "Picks", target: "pick", summary: "Move a pick to tonight, Friday or another day and record the borrowed time" },
   { name: "note.set", title: "Write a resume note", group: "Close out", target: "none", summary: "Where you left off with a client; shown on its next block and in Plan the day" },
@@ -68,6 +68,7 @@ export const ACTIONS = [
   { name: "pick.move", title: "Move pick", group: "Picks", target: "pick", summary: "To AM, PM, another day or Friday" },
   { name: "pick.mark_done", title: "Mark done or not done", group: "Picks", target: "pick", summary: "Tick a pick (local only)" },
   { name: "pick.remove", title: "Drop pick", group: "Picks", target: "pick", summary: "Remove a pick from the plan" },
+  { name: "draft.add_feature", title: "Draft a feature", group: "Work items", target: "portfolio", summary: "A local feature under an epic (Plan the week), to add in DevOps" },
   { name: "draft.add_story", title: "Add a draft story", group: "Work items", target: "portfolio", summary: "A local story under an epic or feature, or under none yet" },
   { name: "ui.set_theme", title: "Change theme", group: "Display", target: "theme", summary: "Cooptimize Dark, Cooptimize Light or Neutral; saved in config" },
   { name: "ui.set_view_range", title: "Change view range", group: "Display", target: "range", shortcut: "H", summary: "Business hours, 12 hours or 24 hours; saved in config" },
@@ -80,7 +81,7 @@ export const ACTIONS = [
   { name: "settings.load", title: "Open Settings", group: "Settings", target: "none", shortcut: ",", summary: "Working hours, clients, connections, display and data" },
   { name: "settings.save", title: "Change a setting", group: "Settings", target: "none", summary: "Saved to the config file with a backup; applies at once" },
   { name: "secret.set", title: "Set a client secret", group: "Settings", target: "none", summary: "Masked entry straight to the keyring; never shown again" },
-  { name: "plan.reset", title: "Reset local plan", group: "Settings", target: "none", summary: "Empties picks, drafts, time entries and loops after a backup; asks you to confirm" },
+  { name: "plan.reset", title: "Reset local plan", group: "Settings", target: "none", summary: "Empties picks, drafts, time entries and follow-ups after a backup; asks you to confirm" },
   { name: "timer.start", title: "Start focus timer", group: "Focus", target: "none", shortcut: "F", summary: "A plain timer, a break, or a pick from its ⋯ menu; lengths in 5-minute steps" },
   { name: "timer.pause", title: "Pause the timer", group: "Focus", target: "none", summary: "Focused time so far is kept" },
   { name: "timer.resume", title: "Resume the timer", group: "Focus", target: "none", summary: "Carry on from where it paused" },
@@ -90,14 +91,19 @@ export const ACTIONS = [
   { name: "timer.next", title: "Next pick", group: "Focus", target: "none", summary: "End the session and timebox today's next planned pick" },
   { name: "playlist.open", title: "Open a focus playlist", group: "Focus", target: "none", summary: "One of your saved Spotify or YouTube playlists (Settings > Focus)" },
   { name: "media.status", title: "Check media control", group: "Focus", target: "none", summary: "Whether playerctl (pause and resume music) and the Spotify app are on this computer; read-only" },
-  { name: "capture.add", title: "Quick capture", group: "Capture", target: "none", shortcut: "N", summary: "One line, saved at once (works offline); sort it into a loop, a draft story or a note" },
-  { name: "capture.load", title: "Show captures and notes", group: "Capture", target: "none", summary: "The inbox of captures to sort, and notes per client (searchable)" },
-  { name: "capture.route", title: "Sort a capture", group: "Capture", target: "capture", summary: "Make it a loop, a draft story or a note, or dismiss it (rules suggest one)" },
-  { name: "capture.features", title: "List a client's features", group: "Capture", target: "none", summary: "Open features to put a draft story under (read-only DevOps)" },
-  { name: "note.delete", title: "Delete a note", group: "Capture", target: "note", summary: "Remove one note (local only)" },
-  { name: "loops.list", title: "Show loops", group: "Loops", target: "none", shortcut: "L", summary: "What you owe people: open loops, closed ones on request" },
-  { name: "loop.add", title: "Add a loop", group: "Loops", target: "none", summary: "Something you owe someone: who, what, optional due date" },
-  { name: "loop.close", title: "Close a loop", group: "Loops", target: "loop", summary: "Mark as told, with an optional note" },
+  { name: "capture.add", title: "Quick capture", group: "Capture", target: "none", shortcut: "N", summary: "One line, saved at once (works offline); sort it into a follow-up, a draft story or a draft feature" },
+  { name: "capture.load", title: "Show captures", group: "Capture", target: "none", summary: "The inbox of captures to sort into follow-ups, draft stories and draft features" },
+  { name: "capture.route", title: "Sort a capture", group: "Capture", target: "capture", summary: "Make it a follow-up, a draft story or a draft feature, or dismiss it (rules suggest one)" },
+  { name: "capture.features", title: "List a client's features and epics", group: "Capture", target: "none", summary: "Open features for a draft story, open epics for a draft feature (read-only DevOps)" },
+  { name: "followups.list", title: "Show follow-ups", group: "Follow-ups", target: "none", shortcut: "L", summary: "What you owe people: overdue and due soon first; closed ones on request" },
+  { name: "followup.add", title: "Add a follow-up", group: "Follow-ups", target: "none", summary: "Something you owe someone: client, who, what, channel, optional due date" },
+  { name: "followup.edit", title: "Edit a follow-up", group: "Follow-ups", target: "follow_up", summary: "Change its client, who, what, channel or due date" },
+  { name: "followup.close", title: "Close the loop", group: "Follow-ups", target: "follow_up", summary: "Done: say how (Teams, email, DevOps, call) and add a note if you like" },
+  { name: "followup.not_needed", title: "Not needed", group: "Follow-ups", target: "follow_up", summary: "Close it quietly; recorded as not needed, not counted as done" },
+  { name: "followup.snooze", title: "Snooze a follow-up", group: "Follow-ups", target: "follow_up", summary: "Hide it until a day you choose" },
+  { name: "followup.delete", title: "Delete a follow-up", group: "Follow-ups", target: "follow_up", summary: "Only for ones you added; Coopilot's own use Not needed" },
+  { name: "followup.people", title: "Suggest who", group: "Follow-ups", target: "none", summary: "Cooptimizers, then people from your meetings with that client (read-only)" },
+  { name: "followups.review", title: "Review heads-ups", group: "Follow-ups", target: "none", summary: "Open heads-ups the new rule wouldn't open; nothing is closed for you" },
   { name: "data.export", title: "Export the plan", group: "Settings", target: "none", summary: "Picks, drafts and time entries as JSON in ~/.local/share/coopilot/exports" },
   { name: "auth.connect_outlook_write", title: "Reconnect Outlook with calendar changes", group: "Sources", target: "none", summary: "Sign in again and allow Coopilot to create and change its own Outlook events (timeboxes)" },
   { name: "timebox.add", title: "Timebox…", group: "Timebox", target: "pick", summary: "Give a pick or item a start and length on the day's timeline (local; Outlook optional)" },

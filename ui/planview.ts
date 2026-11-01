@@ -1,4 +1,5 @@
 // The committed plan as the week view sees it: picks per day, and ticking one done (local status only).
+import type { FollowUpView } from "../actions/types.ts";
 import { createContext, useContext } from "react";
 import { liveFocused } from "../plan/focus.ts";
 import { SIZE_MINUTES, type Pick, type PlanWeek, type Size, type WeekFeature } from "../plan/types.ts";
@@ -25,6 +26,9 @@ export type PlanView = {
   weekFeatures?: readonly WeekFeature[];
   /** Timeboxes on the week (step 12): they count as planned time in fit. */
   timeboxes?: readonly TimeboxLike[];
+  /** Open follow-ups (step 13.5), for the week's cards, and today's date for their due badges. */
+  followUps?: readonly FollowUpView[];
+  today?: IsoDate;
 };
 type TimeboxLike = { date: IsoDate; pickId: number | null; start: string; end: string; removedAt: string | null };
 export type ResumeNote = { clientKey: string; date: IsoDate; note: string };

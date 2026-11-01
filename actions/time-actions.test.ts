@@ -85,7 +85,7 @@ describe("time model actions (step 6b)", () => {
     expect(f.itemTitle).toBe("Story 101");
     const evening = await t.run("flex.add", { date: "2026-11-02", clientKey: "CSC", start: "19:00", end: "20:00" });
     const e = (evening as { data: { flex: { id: number } } }).data.flex;
-    t.plan.openFlexLoops(Temporal.Instant.from("2026-11-03T02:00:00Z"));
+    t.plan.openFlexFollowUps(Temporal.Instant.from("2026-11-03T02:00:00Z"));
     expect(await t.run("flex.remove", { id: e.id })).toMatchObject({ ok: false, status: 409 });
     expect((await t.run("flex.remove", { id: f.id })).ok).toBe(true);
   });

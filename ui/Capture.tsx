@@ -1,16 +1,17 @@
 // Quick capture (step 9): one text box, Enter saves at once to the local store (works offline). Rules (no AI)
-// suggest a loop, a draft story or a note; one click confirms, or change it first. Unsorted captures wait in the
-// Capture view's inbox, next to the notes per client.
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
-import type { CaptureFeatures, CaptureState, WeekLoadData } from "../actions/types.ts";
+// suggest a follow-up, a draft story or a draft feature (step 13.5); one click confirms, or change it first. Unsorted
+// captures wait in the Inbox.
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import type { CaptureFeatures, WeekLoadData } from "../actions/types.ts";
 import { parseTag, suggest, tagCompletions, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
-import type { Capture, Note, Size } from "../plan/types.ts";
+import { CLOSE_HOW, type Capture, type Size } from "../plan/types.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
+import { Fading, formClients, HOW_LABEL, WhoInput } from "./FollowUps.tsx";
 import { clientColor } from "./labels.ts";
 
-const KIND_NAME: Record<CaptureKind, string> = { loop: "Loop", draft: "Draft story", note: "Note" };
-const SAVE_AS: Record<CaptureKind, string> = { loop: "Save as loop", draft: "Save as draft story", note: "Save as note" };
+const KIND_NAME: Record<CaptureKind, string> = { follow_up: "Follow-up", draft: "Draft story", draft_feature: "Draft feature" };
+const SAVE_AS: Record<CaptureKind, string> = { follow_up: "Save as follow-up", draft: "Save as draft story", draft_feature: "Save as draft feature" };
 const plainDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 const when = (z: string, tz: string) => {
   const t = Temporal.ZonedDateTime.from(z).withTimeZone(tz);
@@ -50,19 +51,21 @@ export function SortCapture({ capture, clients, today, onDone, startOpen = false
   const [due, setDue] = useState(s.due ?? "");
   const [title, setTitle] = useState(s.title);
   const [size, setSize] = useState<Size>("M");
-  const [text, setText] = useState(s.text);
+  const [channel, setChannel] = useState("");
   const [feature, setFeature] = useState<number | null>(null);
   const [features, setFeatures] = useState<CaptureFeatures | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // A draft's features come from DevOps (read-only) for the chosen client; none to pick when DevOps can't say.
+  const whoId = useRef(`cap-who-${capture.id}`);
+  // A draft's features (or a draft feature's epics) come from DevOps (read-only) for the chosen client; none to pick
+  // when DevOps can't say.
   useEffect(() => {
     setFeature(null);
     setFeatures(null);
-    if (kind !== "draft" || !client) return;
+    if (kind === "follow_up" || !client) return;
     let live = true;
-    call<CaptureFeatures>("capture.features", { clientKey: client }).then((f) => live && setFeatures(f), () => live && setFeatures({ clientKey: client, status: "unavailable", features: [] }));
+    call<CaptureFeatures>("capture.features", { clientKey: client }).then((f) => live && setFeatures(f), () => live && setFeatures({ clientKey: client, status: "unavailable", features: [], epics: [] }));
     return () => {
       live = false;
     };
@@ -73,27 +76,30 @@ export function SortCapture({ capture, clients, today, onDone, startOpen = false
     setError(null);
     try {
       const input =
-        as === "loop" ? { who, what, ...(due ? { due } : {}), clientKey: client } :
+        as === "follow_up" ? { who, what, ...(due ? { due } : {}), clientKey: client, ...(channel ? { channel } : {}) } :
         as === "draft" ? { clientKey: client, title, size, ...(feature ? { parentItemId: feature } : {}) } :
-        as === "note" ? { clientKey: client, text } : {};
+        as === "draft_feature" ? { clientKey: client, title, ...(feature ? { parentItemId: feature } : {}) } : {};
       await call("capture.route", { id: capture.id, as, ...input });
-      onDone(as === "dismissed" ? "Dismissed" : as === "loop" ? `Loop saved${who ? `: owed to ${who}` : ""}${due ? `, due ${plainDay(due)}` : ""}` : as === "draft" ? `Draft story saved for ${clients.find((c) => c.clientKey === client)?.clientName ?? client}` : "Note saved");
+      const cname = clients.find((c) => c.clientKey === client)?.clientName ?? client;
+      onDone(as === "dismissed" ? "Dismissed" : as === "follow_up" ? `Follow-up saved${who ? `: owed to ${who}` : ""}${due ? `, due ${plainDay(due)}` : ""}` : as === "draft" ? `Draft story saved for ${cname}` : `Draft feature saved for ${cname}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
     } finally {
       setBusy(false);
     }
   };
-  const blocked = kind === "draft" && !client ? "Choose a client for the draft story" : kind === "loop" && !what.trim() ? "Say what you owe" : null;
+  const blocked = kind !== "follow_up" && !client ? `Choose a client for the ${KIND_NAME[kind].toLowerCase()}` : kind === "follow_up" && !what.trim() ? "Say what you owe" : null;
+  const cn = client ? `${clients.find((c) => c.clientKey === client)?.clientName ?? client}: ` : "Client to choose: ";
   const summary =
-    kind === "loop" ? `${who ? `Owed to ${who}: ` : ""}${what}${due ? ` · due ${plainDay(due)}` : ""}` :
-    kind === "draft" ? `${client ? `${clients.find((c) => c.clientKey === client)?.clientName ?? client}: ` : "Client to choose: "}${title} · ${size}` :
-    `${client ? `${clients.find((c) => c.clientKey === client)?.clientName ?? client}: ` : ""}${text}`;
+    kind === "follow_up" ? `${who ? `Owed to ${who}: ` : ""}${what}${due ? ` · due ${plainDay(due)}` : ""}` :
+    kind === "draft" ? `${cn}${title} · ${size}` : `${cn}${title}`;
+  const parents = kind === "draft" ? features?.features : features?.epics;
+  const parentWord = kind === "draft" ? "feature" : "epic";
 
   return (
     <div className="cap-sort">
       <div className="cap-kinds" role="group" aria-label="Sort as">
-        {(["loop", "draft", "note"] as const).map((k) => (
+        {(["follow_up", "draft", "draft_feature"] as const).map((k) => (
           <button key={k} type="button" className="chip-btn" aria-pressed={kind === k} onClick={() => setKind(k)} title={k === s.kind ? "Suggested by the rules" : undefined}>
             {KIND_NAME[k]}
             {k === s.kind && <span className="cap-suggested">suggested</span>}
@@ -106,38 +112,41 @@ export function SortCapture({ capture, clients, today, onDone, startOpen = false
       {!edit && <p className="cap-summary">{summary}</p>}
       {edit && (
         <div className="cap-fields">
-          {kind === "loop" && (
+          {kind === "follow_up" && (
             <>
-              <label>Who <input value={who} onChange={(e) => setWho(e.target.value)} maxLength={100} placeholder="Name (optional)" /></label>
+              <label>Client <ClientSelect label="Client" value={client} clients={formClients(clients)} onChange={setClient} /></label>
+              <label>Who <WhoInput value={who} onChange={setWho} clientKey={client} id={whoId.current} /></label>
               <label className="wide">What <input value={what} onChange={(e) => setWhat(e.target.value)} maxLength={200} /></label>
+              <label>
+                Channel{" "}
+                <select aria-label="Channel" value={channel} onChange={(e) => setChannel(e.target.value)}>
+                  <option value="">Any</option>
+                  {CLOSE_HOW.map((h) => <option key={h} value={h}>{HOW_LABEL[h]}</option>)}
+                </select>
+              </label>
               <label>Due <input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
-              <label>Client <ClientSelect label="Client" value={client} clients={clients} onChange={setClient} /></label>
             </>
           )}
-          {kind === "draft" && (
+          {kind !== "follow_up" && (
             <>
               <label>Client <ClientSelect label="Client" value={client} clients={clients} onChange={setClient} required /></label>
               <label className="wide">Title <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} /></label>
-              <span className="cap-size" role="group" aria-label="Size">
-                {(["S", "M", "L"] as const).map((z) => (
-                  <button key={z} type="button" className="mini" aria-pressed={size === z} onClick={() => setSize(z)}>{z}</button>
-                ))}
-              </span>
+              {kind === "draft" && (
+                <span className="cap-size" role="group" aria-label="Size">
+                  {(["S", "M", "L"] as const).map((z) => (
+                    <button key={z} type="button" className="mini" aria-pressed={size === z} onClick={() => setSize(z)}>{z}</button>
+                  ))}
+                </span>
+              )}
               {client && (
                 <label className="wide">
-                  Under feature{" "}
-                  <select aria-label="Under feature" value={feature ?? ""} onChange={(e) => setFeature(e.target.value ? Number(e.target.value) : null)} disabled={!features || features.status !== "ok"}>
-                    <option value="">{!features ? "Loading features…" : features.status !== "ok" ? "No feature (DevOps unavailable)" : "No feature"}</option>
-                    {features?.status === "ok" && features.features.map((f) => <option key={f.id} value={f.id}>#{f.id} {f.title}</option>)}
+                  Under {parentWord}{" "}
+                  <select aria-label={`Under ${parentWord}`} value={feature ?? ""} onChange={(e) => setFeature(e.target.value ? Number(e.target.value) : null)} disabled={!features || features.status !== "ok"}>
+                    <option value="">{!features ? `Loading ${parentWord}s…` : features.status !== "ok" ? `No ${parentWord} (DevOps unavailable)` : `No ${parentWord}`}</option>
+                    {features?.status === "ok" && parents?.map((f) => <option key={f.id} value={f.id}>#{f.id} {f.title}</option>)}
                   </select>
                 </label>
               )}
-            </>
-          )}
-          {kind === "note" && (
-            <>
-              <label>Client <ClientSelect label="Client" value={client} clients={clients} onChange={setClient} /></label>
-              <label className="wide">Text <input value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} /></label>
             </>
           )}
         </div>
@@ -166,6 +175,7 @@ export function CaptureBox({ data, onChanged, autoFocus }: { data: WeekLoadData;
   const [pick, setPick] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const done = useMemo(() => tagCompletions(text, clients), [text, clients]);
+  const clearNotice = useMemo(() => () => setNotice(null), []);
   useEffect(() => {
     if (autoFocus) input.current?.focus();
   }, [autoFocus]);
@@ -242,7 +252,7 @@ export function CaptureBox({ data, onChanged, autoFocus }: { data: WeekLoadData;
           <SortCapture key={saved.id} capture={saved} clients={clients} today={data.planDay.date} onDone={(m) => { setSaved(null); setNotice(m); onChanged(); input.current?.focus(); }} />
         </div>
       )}
-      {!saved && notice && notice !== "Saved to the inbox" && <p className="co-notice" role="status">{notice}</p>}
+      {!saved && notice !== "Saved to the inbox" && <Fading text={notice} onGone={clearNotice} />}
     </div>
   );
 }
@@ -255,6 +265,7 @@ export function CaptureDialog({ data, onClose, onChanged, onOpenView }: { data: 
     <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         className="cap-dialog"
+        data-overlay="modal"
         role="dialog"
         aria-modal="true"
         aria-label="Quick capture"
@@ -268,70 +279,15 @@ export function CaptureDialog({ data, onClose, onChanged, onOpenView }: { data: 
       >
         <div className="cap-dialog-head">
           <h2>Quick capture</h2>
-          <span className="muted">Saved at once, even offline. Sort it now, or later in Capture.</span>
-          <button type="button" className="mini quiet" onClick={onOpenView} title="The inbox and notes per client">
-            Open Capture{data.captures > 0 ? ` (${data.captures} to sort)` : ""}
+          <span className="muted">Saved at once, even offline. Sort it now, or later in the Inbox.</span>
+          <button type="button" className="mini quiet" onClick={onOpenView} title="Captures to sort and follow-ups">
+            Open Inbox{data.captures > 0 ? ` (${data.captures} to sort)` : ""}
           </button>
           <button type="button" className="mini quiet" onClick={onClose} aria-label="Close">Esc</button>
         </div>
         <CaptureBox data={data} onChanged={onChanged} autoFocus />
       </div>
     </div>
-  );
-}
-
-/** Notes per client (step 9), searchable and deletable; in the Inbox (step 10), folded until opened. */
-export function NotesSection({ data, version }: { data: WeekLoadData; version: number }) {
-  const clients = useMemo(() => captureClients(data), [data]);
-  const [notes, setNotes] = useState<Note[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<string>("*");
-  const tz = data.hours.timeZone;
-  const load = useCallback(async () => {
-    try {
-      setNotes((await call<CaptureState>("capture.load", { ...(query.trim() ? { query } : {}), ...(filter === "*" ? {} : { clientKey: filter === "-" ? "" : filter }) })).notes);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load notes");
-    }
-  }, [query, filter]);
-  useEffect(() => {
-    const id = setTimeout(() => void load(), 150);
-    return () => clearTimeout(id);
-  }, [load, version]);
-  const name = (k: string | null) => (k ? (clients.find((c) => c.clientKey === k)?.clientName ?? k) : null);
-  const del = async (n: Note) => {
-    try {
-      await call("note.delete", { id: n.id });
-      void load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete");
-    }
-  };
-  return (
-    <>
-      <div className="cap-filter">
-        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes" aria-label="Search notes" />
-        <select aria-label="Notes for" value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="*">All clients</option>
-          <option value="-">No client</option>
-          {clients.map((c) => <option key={c.clientKey} value={c.clientKey}>{c.clientName}</option>)}
-        </select>
-      </div>
-      {error && <p className="set-problem" role="alert">{error}</p>}
-      {notes && !notes.length && <p className="muted">{query || filter !== "*" ? "No notes match." : "No notes yet."}</p>}
-      <ul className="cap-notes">
-        {notes?.map((n) => (
-          <li key={n.id} style={{ "--c": clientColor(n.clientKey ?? undefined, data.clients) } as CSSProperties}>
-            <span className="cap-note-client">{name(n.clientKey) ?? "No client"}</span>
-            <span className="cap-note-text">{n.text}</span>
-            <span className="muted">{when(n.createdAt, tz)}</span>
-            <button type="button" className="mini quiet" onClick={() => void del(n)} aria-label={`Delete note: ${n.text}`}>Delete</button>
-          </li>
-        ))}
-      </ul>
-    </>
   );
 }
 

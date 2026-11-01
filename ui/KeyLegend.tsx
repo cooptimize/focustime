@@ -11,6 +11,7 @@ export function KeyLegend({ onClose }: { onClose: () => void }) {
     <div className="command-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         className="command-menu key-legend"
+        data-overlay="modal"
         role="dialog"
         aria-label="Keyboard shortcuts"
         onKeyDown={(e) => {

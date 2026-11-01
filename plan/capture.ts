@@ -1,9 +1,9 @@
 // Quick capture (step 9): pure rules, no AI. A client tag (@nickname), a due date read from plain words, and a
-// routing suggestion (loop, draft story or note) that I confirm or change. Nothing here does I/O.
+// routing suggestion (follow-up, draft story or draft feature) that I confirm or change. Nothing here does I/O.
 import type { IsoDate } from "../week/types.ts";
 
 export type CaptureClient = { clientKey: string; clientName: string };
-export type CaptureKind = "loop" | "draft" | "note";
+export type CaptureKind = "follow_up" | "draft" | "draft_feature";
 
 const WEEKDAYS: Record<string, number> = { mon: 1, monday: 1, tue: 2, tues: 2, tuesday: 2, wed: 3, weds: 3, wednesday: 3, thu: 4, thur: 4, thurs: 4, thursday: 4, fri: 5, friday: 5, sat: 6, saturday: 6, sun: 7, sunday: 7 };
 const MONTHS: Record<string, number> = { jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12 };
@@ -102,8 +102,7 @@ export function tagCompletions(text: string, clients: readonly CaptureClient[]):
 }
 
 const PROMISE = /\b(?:i'?ll|i will|i'?d|i would|i'm going to|told\s+\S+|promised)\b/i;
-const NOTE_MARK = /^\s*(?:fyi|note|idea|thought|remember)\b[:\s-]*/i;
-const WORK = /\b(?:stor(?:y|ies)|todo|to-do|need to|needs to)\b/i;
+const FEATURE = /^\s*(?:(?:new\s+)?feature|epic needs)\b(?:\s+(?:for|to))?[:\s-]*/i;
 const WORK_LEAD = /^\s*(?:(?:user\s+)?story|todo|to-do|(?:i\s+)?needs?\s+to)\b[:\s-]*/i;
 const WHO = /\b(?:[Tt]old|[Pp]romised|[Oo]we|[Aa]sked)\s+([A-Z][\w'-]*(?:\s+(?!I\b|I')[A-Z][\w'-]*)?)/;
 const LEADS = /^\s*(?:(?:told|promised)\s+\S+(?:\s+[A-Z][\w'-]*)?\s*)?(?:(?:that\s+)?(?:i'?ll|i will|i'?d|i would|i'm going to)\s+)?/i;
@@ -114,33 +113,30 @@ const clean = (s: string) => cap(squash(s.replace(/^[\s:,-]+|[\s:,.-]+$/g, "")))
 export type CaptureSuggestion = {
   kind: CaptureKind;
   clientKey: string | null;
-  /** Loop: who it's owed to (a name after "told"/"promised", else the client's name, else empty). */
+  /** Follow-up: who it's owed to (a name after "told"/"promised", else the client's name, else empty). */
   who: string;
-  /** Loop: what was promised, without the lead-in or the due phrase. */
+  /** Follow-up: what was promised, without the lead-in or the due phrase. */
   what: string;
   due: IsoDate | null;
   /** Draft story: a title without "story:", "todo" or "need to". */
   title: string;
-  /** Note: the text as typed (tag taken out; a leading "fyi:" or "note:" too). */
-  text: string;
   /** The other two kinds, offered as one-click alternatives. */
   others: CaptureKind[];
 };
 
 /**
  * Routing by rules, first match wins: a promise or commitment (I'll, told <name>, promised, or a due date after
- * "by"/"due") is a loop; work for a client (story, todo, need to, or tagged with a client) is a draft story; anything
- * else is a note. A leading "fyi", "note" or "idea" always reads as a note.
+ * "by"/"due") is a follow-up; a leading "feature", "new feature" or "epic needs" is a draft feature; anything else is
+ * a draft story (step 13.5: notes are gone).
  */
 export function suggest(text: string, clientKey: string | null, today: IsoDate, clients: readonly CaptureClient[]): CaptureSuggestion {
   const due = parseDue(text, today);
   const name = clientKey ? (clients.find((c) => c.clientKey === clientKey)?.clientName ?? clientKey) : "";
-  const noted = NOTE_MARK.test(text);
-  const promise = !noted && (PROMISE.test(text) || (!!due && /^(?:by|due|before|until)\b/i.test(due.phrase)));
-  const work = !noted && !promise && (WORK.test(text) || !!clientKey);
-  const kind: CaptureKind = promise ? "loop" : work ? "draft" : "note";
+  const promise = PROMISE.test(text) || (!!due && /^(?:by|due|before|until)\b/i.test(due.phrase));
+  const feature = !promise && FEATURE.test(text);
+  const kind: CaptureKind = promise ? "follow_up" : feature ? "draft_feature" : "draft";
   const who = WHO.exec(text)?.[1] ?? name;
   const what = clean((due ? text.replace(due.phrase, " ") : text).replace(LEADS, ""));
-  const title = clean(text.replace(WORK_LEAD, "").replace(LEADS, ""));
-  return { kind, clientKey, who, what, due: due?.date ?? null, title, text: noted ? clean(text.replace(NOTE_MARK, "")) : squash(text), others: (["loop", "draft", "note"] as const).filter((k) => k !== kind) };
+  const title = clean(feature ? text.replace(FEATURE, "") : text.replace(WORK_LEAD, "").replace(LEADS, ""));
+  return { kind, clientKey, who, what, due: due?.date ?? null, title, others: (["follow_up", "draft", "draft_feature"] as const).filter((k) => k !== kind) };
 }

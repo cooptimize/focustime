@@ -39,7 +39,7 @@ function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | Targ
 const byKey = (r: ClientWork[], k: string) => r.find((c) => c.clientKey === k)!;
 const ids = (c: ClientWork) => c.items.map((i) => i.id);
 
-describe("items read by id for open loops (step 7)", () => {
+describe("items read by id for open follow-ups (step 7)", () => {
   it("reads only watched ids that aren't among my open items, completed ones kept, with the same fields", async () => {
     const s = setup({ cscsteel: "agile" }, [target("CSC", "cscsteel")]);
     const r = await s.src.load([ref("CSC")], { watch: { CSC: [104, 101] } });

@@ -6,7 +6,7 @@
 import type { AppConfig } from "../config/schema.ts";
 import type { EditFacts } from "../plan/caltier.ts";
 import { TIMEBOX_MARKER } from "../plan/caltier.ts";
-import { rebuildFrom, syncDecision, timeboxFrom, type SeenEvent } from "../plan/outlooksync.ts";
+import { rebuildFrom, REMOVED_IN_OUTLOOK, syncDecision, timeboxFrom, type SeenEvent } from "../plan/outlooksync.ts";
 import { outlookFields, type Timebox } from "../plan/timebox.ts";
 import type { OutlookWrite } from "../sources/graph/source.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -96,10 +96,11 @@ function apply(o: { plan: PlanStore; cfg: AppConfig; now: () => string }, tb: Ti
     if (tb.conflict) plan.updateTimebox(tb.id, { conflict: null });
     return 0;
   }
-  if (d.kind === "adopt_delete") {
-    const next = plan.updateTimebox(tb.id, { removedAt: o.now(), outlookNote: "Deleted in Outlook", conflict: null });
+  if (d.kind === "removed_in_outlook") {
+    // Step 13.5 (D236): kept locally with Put on Outlook off, so nothing re-creates it; Keep or Remove is my choice.
+    const next = plan.updateTimebox(tb.id, { outlook: false, outlookNote: REMOVED_IN_OUTLOOK, conflict: null });
     plan.markOwnDeleted(tb.uid);
-    log(tb, "delete", "From Outlook: deleted there, so the timebox was removed", tb, next, own.eventId, last, null);
+    log(tb, "delete", "From Outlook: deleted there; the timebox is kept with Put on Outlook off", tb, next, own.eventId, last, null);
     return 1;
   }
   if (d.kind === "adopt") {

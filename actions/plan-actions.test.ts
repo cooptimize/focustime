@@ -161,6 +161,19 @@ describe("Plan the day actions", () => {
     expect((await t.run<PlanDayState>("planday.start", { date: D })).carryOver).toEqual([]);
   });
 
+  it("moving a pick to a day with no working hours asks first; Move anyway moves it (step 13.5)", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
+    const r = await t.fail("pick.move", { id: pick.id, date: "2026-11-06", half: "AM" });
+    expect(r).toMatchObject({ status: 409, code: "no_hours", error: "Friday has no working hours. Add hours for that day?" });
+    expect(t.plan.getPick(pick.id)!.date).toBe(D);
+    const fri = (await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: "2026-11-06", half: "AM", anyway: true })).pick;
+    expect(fri.date).toBe("2026-11-06");
+    // A day with hours never asks.
+    expect((await t.run<{ pick: Pick }>("pick.move", { id: fri.id, date: "2026-11-04", half: "PM" })).pick.date).toBe("2026-11-04");
+  });
+
   it("a pick being made up tonight isn't offered as carry-over until its evening session has ended (Q45)", async () => {
     const t = setup();
     const mon = "2026-11-02";
@@ -194,7 +207,7 @@ describe("Plan the day actions", () => {
     await t.run("planday.start", { date: D });
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
     await t.run("pick.set_size", { id: pick.id, size: "S" });
-    await t.run("pick.move", { id: pick.id, date: "2026-11-06", half: "AM" });
+    await t.run("pick.move", { id: pick.id, date: "2026-11-06", half: "AM", anyway: true });
     const { draft } = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "CSC", parentItemId: 130, title: "Draft" });
     const p2 = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "PM", clientKey: "CSC", draftId: draft.id });
     await t.run("planday.commit", { date: D });
@@ -421,15 +434,15 @@ describe("Plan any day", () => {
   });
 });
 
-describe("flex loops open by the server's clock (step 6c)", () => {
-  it("a week read with a later ?now does not open a loop for a session that hasn't ended yet", async () => {
+describe("flex follow-ups open by the server's clock (step 6c)", () => {
+  it("a week read with a later ?now does not open a follow-up for a session that hasn't ended yet", async () => {
     const t = setup();
     t.plan.addFlex({ date: "2026-11-03", clientKey: "CSC", start: "2026-11-03T23:00:00Z", end: "2026-11-04T01:00:00Z" });
     await t.run("week.load", { weekStart: "2026-11-02", now: "2026-11-05T14:00:00Z" });
-    expect(t.plan.openLoops()).toEqual([]);
+    expect(t.plan.openFollowUps()).toEqual([]);
     t.at("2026-11-04T02:00:00Z");
     await t.run("week.load", { weekStart: "2026-11-02" });
-    expect(t.plan.openLoops()).toHaveLength(1);
+    expect(t.plan.openFollowUps()).toHaveLength(1);
   });
 });
 

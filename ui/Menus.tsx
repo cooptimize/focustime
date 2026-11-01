@@ -229,6 +229,7 @@ export function PopupMenu({ at, step: first, onClose }: { at: { x: number; y: nu
     <div
       ref={ref}
       className="popup-menu"
+      data-overlay="modal"
       popover="manual"
       style={{ left: pos.x, top: pos.y }}
       onKeyDown={(e) => {
@@ -268,6 +269,7 @@ export function CommandMenu({ commands, onClose }: { commands: MenuItem[]; onClo
     <div className="command-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         className="command-menu"
+        data-overlay="modal"
         role="dialog"
         aria-label="Command menu"
         onKeyDown={(e) => {

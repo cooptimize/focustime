@@ -50,8 +50,9 @@ import { SAMPLE_WEEK } from "../fixtures/sample-week.ts";
 import { useLayout } from "./viewport.ts";
 import { commandList, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
+import { NoHoursPrompt } from "./NoHoursPrompt.tsx";
 import { KeyLegend } from "./KeyLegend.tsx";
-import { nextRegion, openTarget, regionOf, regionsAvailable, type Region } from "./keys.ts";
+import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 
 const FOCUSABLE = 'button:not(:disabled), a[href], input:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
@@ -81,8 +82,8 @@ export function App() {
   const [settingsAt, setSettingsAt] = useState<SettingsSectionId | null>(null);
   /** The base view (step 10): Today (the default) or the Week. Other views sit on top and Esc returns here. */
   const [base, setBase] = useState<"today" | "week">("today");
-  /** The Inbox (step 10): open loops and unsorted captures, in the base view's place. Replaces Loops and Capture. */
-  const [loopsOpen, setLoopsOpen] = useState(false);
+  /** The Inbox (step 10): open follow-ups and unsorted captures, in the base view's place. Replaces Follow-ups and Capture. */
+  const [followUpsOpen, setFollowUpsOpen] = useState(false);
   /** Close out (step 7) for a day, and Check-in for today, take the week's place too. */
   const [closeOutAt, setCloseOutAt] = useState<IsoDate | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
@@ -479,7 +480,7 @@ export function App() {
       closePlanDay();
       setDetailsOpen(false);
       setSettingsAt(null);
-      setLoopsOpen(false);
+      setFollowUpsOpen(false);
       setCloseOutAt(null);
       setCheckInOpen(false);
       setPlanWeekAt(w);
@@ -494,11 +495,11 @@ export function App() {
       setCheckInOpen(false);
       setPlanWeekAt(null);
       setFocusOpen(false);
-      if (v === "inbox" || v === "loops" || v === "capture") {
+      if (v === "inbox" || v === "follow_ups" || v === "capture") {
         closePlanDay();
         setDetailsOpen(false);
         setSettingsAt(null);
-        setLoopsOpen(true);
+        setFollowUpsOpen(true);
       } else if (v === "planweek") {
         // The week a nudge asked for, else next week.
         if (data) openPlanWeek(data.weekNudge.badge ?? addWeeks(mondayOf(data.planDay.date), 1));
@@ -506,7 +507,7 @@ export function App() {
         closePlanDay();
         setDetailsOpen(false);
         setSettingsAt(null);
-        setLoopsOpen(false);
+        setFollowUpsOpen(false);
         setBase(v);
         // Both start on today's week, the Week view with the current half-day selected.
         if (data && data.weekStart !== data.today.weekStart) void load({ weekStart: data.today.weekStart }, { selectToday: true });
@@ -515,16 +516,16 @@ export function App() {
         closePlanDay();
         setDetailsOpen(false);
         setSettingsAt(null);
-        setLoopsOpen(false);
+        setFollowUpsOpen(false);
         setFocusOpen(true);
       } else if (v === "settings") {
-        setLoopsOpen(false);
+        setFollowUpsOpen(false);
         setSettingsAt("you");
       } else if (v === "closeout" || v === "checkin") {
         closePlanDay();
         setDetailsOpen(false);
         setSettingsAt(null);
-        setLoopsOpen(false);
+        setFollowUpsOpen(false);
         if (v === "closeout") setCloseOutAt(data?.planDay.date ?? null);
         if (v === "checkin") {
           setCheckInOpen(true);
@@ -534,7 +535,7 @@ export function App() {
         }
       } else {
         setSettingsAt(null);
-        setLoopsOpen(false);
+        setFollowUpsOpen(false);
         void openPlanDay();
       }
     },
@@ -678,10 +679,11 @@ export function App() {
   // and inside the command menu, the legend and popup menus.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || cmdOpen || !data) return;
+      if (cmdOpen || !data) return;
       const t = e.target as HTMLElement | null;
-      const typing = t instanceof HTMLInputElement && t.type !== "checkbox" ? true : t instanceof HTMLTextAreaElement || !!t?.isContentEditable;
-      if (t?.closest?.(".popup-menu")) return;
+      // Step 13.5: nothing while typing (but F6), nothing behind a dialog or menu (only F6 behind the details).
+      if (!globalKeyAllowed(e, t, topOverlay(document))) return;
+      const typing = isTypingTarget(t);
       if (e.key === "?" && !typing) {
         e.preventDefault();
         setDetailsOpen(false);
@@ -707,6 +709,7 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K")) {
+        if (!commandKeyAllowed(topOverlay(document), cmdOpen)) return;
         e.preventDefault();
         setKeysOpen(false);
         if (cmdOpen) setCmdOpen(false);
@@ -719,54 +722,54 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey) return;
-      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
-      const inMenu = !!(e.target as HTMLElement | null)?.closest?.(".popup-menu");
-      if ((settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || focusOpen) && e.key === "Escape" && !inMenu && !captureOpen) {
+      if (cmdOpen || keysOpen) return;
+      if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document))) return;
+      const typing = isTypingTarget(e.target as HTMLElement | null);
+      if ((settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || focusOpen) && e.key === "Escape" && !captureOpen) {
         e.preventDefault();
         if (focusOpen) setBase("today");
         setPlanWeekAt(null);
         setFocusOpen(false);
         setSettingsAt(null);
-        setLoopsOpen(false);
+        setFollowUpsOpen(false);
         setCloseOutAt(null);
         setCheckInOpen(false);
       } else if (settingsAt === null && e.key === "," && !typing && !pd && !detailsOpen) {
         e.preventDefault();
-        setLoopsOpen(false);
+        setFollowUpsOpen(false);
         setCloseOutAt(null);
         setCheckInOpen(false);
         setPlanWeekAt(null);
         setSettingsAt("you");
-      } else if (["1", "2", "3", "4", "t", "T"].includes(e.key) && !typing && !detailsOpen && !inMenu && !captureOpen) {
+      } else if (["1", "2", "3", "4", "t", "T"].includes(e.key) && !typing && !detailsOpen && !captureOpen) {
         // Step 10: the four places in the top bar. T keeps going to Today.
         e.preventDefault();
         if (e.key === "1" || e.key === "t" || e.key === "T") setView("today");
         else if (e.key === "2") setView("week");
         else if (e.key === "3") openRitual();
-        else setView(loopsOpen ? base : "inbox");
-      } else if ((e.key === "p" || e.key === "P" || e.key === "i" || e.key === "I") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu && !captureOpen) {
+        else setView(followUpsOpen ? base : "inbox");
+      } else if ((e.key === "p" || e.key === "P" || e.key === "i" || e.key === "I") && !typing && !pd && !detailsOpen && settingsAt === null && !captureOpen) {
         e.preventDefault();
         setView("planday");
-      } else if ((e.key === "l" || e.key === "L") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
+      } else if ((e.key === "l" || e.key === "L") && !typing && !pd && !detailsOpen && settingsAt === null) {
         e.preventDefault();
-        setView(loopsOpen ? base : "inbox");
-      } else if ((e.key === "n" || e.key === "N") && !typing && !detailsOpen && !inMenu && !captureOpen) {
+        setView(followUpsOpen ? base : "inbox");
+      } else if ((e.key === "n" || e.key === "N") && !typing && !detailsOpen && !captureOpen) {
         e.preventDefault();
         setCaptureOpen(true);
-      } else if ((e.key === "w" || e.key === "W") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
+      } else if ((e.key === "w" || e.key === "W") && !typing && !pd && !detailsOpen && settingsAt === null) {
         e.preventDefault();
         if (planWeekAt !== null) setPlanWeekAt(null);
         else setView("planweek");
-      } else if ((e.key === "e" || e.key === "E") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
+      } else if ((e.key === "e" || e.key === "E") && !typing && !pd && !detailsOpen && settingsAt === null) {
         e.preventDefault();
         if (closeOutAt !== null) setCloseOutAt(null);
         else setView("closeout");
-      } else if ((e.key === "m" || e.key === "M") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
+      } else if ((e.key === "m" || e.key === "M") && !typing && !pd && !detailsOpen && settingsAt === null) {
         e.preventDefault();
         if (checkInOpen) setCheckInOpen(false);
         else setView("checkin");
-      } else if ((e.key === "f" || e.key === "F") && !typing && !detailsOpen && !inMenu) {
+      } else if ((e.key === "f" || e.key === "F") && !typing && !detailsOpen) {
         e.preventDefault();
         // Under the Focus button when it is on screen (it hides on narrow widths).
         const r = document.querySelector(".top-btn.timer-btn")?.getBoundingClientRect();
@@ -775,13 +778,12 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, captureOpen, cmdOpen, keysOpen, pd, detailsOpen, setView, openRitual, base]);
+  }, [settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, captureOpen, cmdOpen, keysOpen, pd, detailsOpen, setView, openRitual, base]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (base !== "week" || focusOpen || settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
-      if (e.target instanceof HTMLInputElement) return;
-      if ((e.target as HTMLElement | null)?.closest?.(".popup-menu")) return;
+      if (base !== "week" || focusOpen || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       const days = data.week.days;
       const halvesOf = (i: number): Half[] => (days[i] ? cardHalves(days[i]) : ["AM", "PM"]);
@@ -817,7 +819,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, base, captureOpen]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, base, captureOpen]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
 
@@ -831,7 +833,7 @@ export function App() {
     };
     return {
       week: data.week,
-      selection: { date: day.date, half: sel.half },
+      selection: { date: day.date, half: sel.half, clientKey: (sel.half === "AM" ? day.am : sel.half === "PM" ? day.pm : day.eve)?.focus[0]?.clientKey ?? null },
       planWeek: data.plan,
       planState: pd,
       planTarget: target,
@@ -873,7 +875,7 @@ export function App() {
       planning: data.planning,
       timer: data.timer,
       runTimer,
-      openLoops: () => setView("inbox"),
+      openFollowUps: () => setView("inbox"),
       openCloseOut: (d) => {
         setView("closeout");
         if (d) setCloseOutAt(d);
@@ -910,7 +912,7 @@ export function App() {
           return false;
         }
       },
-      runLoops: async (action, input) => {
+      runFollowUps: async (action, input) => {
         try {
           await call(action, input);
           reloadQuiet();
@@ -922,7 +924,7 @@ export function App() {
       },
       borrowed: data.borrowed,
       resetPlan: () => {
-        setLoopsOpen(false);
+        setFollowUpsOpen(false);
         setCloseOutAt(null);
         setCheckInOpen(false);
         closePlanDay();
@@ -931,7 +933,7 @@ export function App() {
       openSettings: (section) => {
         closePlanDay();
         setDetailsOpen(false);
-        setLoopsOpen(false);
+        setFollowUpsOpen(false);
         setCloseOutAt(null);
         setCheckInOpen(false);
         setSettingsAt(SETTINGS_SECTIONS.some(([id]) => id === section) ? (section as SettingsSectionId) : "you");
@@ -982,10 +984,10 @@ export function App() {
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
   const today = week.days.some((d) => d.date === localToday) ? localToday : "";
   const weekendNote = Temporal.PlainDate.from(localToday).dayOfWeek >= 6 && data.weekStart === data.today.weekStart ? `Today is ${shortDay(localToday)} · showing next week` : null;
-  const view: View = settingsAt !== null ? "settings" : focusOpen ? "focus" : planWeekAt !== null ? "planweek" : loopsOpen ? "inbox" : closeOutAt !== null ? "closeout" : checkInOpen ? "checkin" : pd ? "planday" : base;
+  const view: View = settingsAt !== null ? "settings" : focusOpen ? "focus" : planWeekAt !== null ? "planweek" : followUpsOpen ? "inbox" : closeOutAt !== null ? "closeout" : checkInOpen ? "checkin" : pd ? "planday" : base;
   const ritualOpen: Ritual | null = view === "planday" || view === "checkin" || view === "closeout" || view === "planweek" ? view : null;
   const suggested = ritualNow();
-  const inboxCount = data.openLoops + data.captures;
+  const inboxCount = data.openFollowUps + data.captures;
   const showWeekNav = view === "week" || view === "planday";
   const borrowWeek = borrowedSummary(data.borrowed, week.days[0]!.date, week.days.at(-1)!.date);
   // The running timer's pick and client, for the top bar timer and the focus screen (client color).
@@ -1016,7 +1018,7 @@ export function App() {
   return (
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={work}>
-    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes }}>
+    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date }}>
     <TimeboxCtx.Provider value={tbEnv}>
     <MenuHost env={env}>
     <div className={`app ${layout}${compact ? " compact" : ""}`}>
@@ -1035,7 +1037,7 @@ export function App() {
           <button type="button" className={`view-tab${ritualOpen ? "" : " plan-tab"}`} aria-current={ritualOpen ? "page" : undefined} onClick={() => openRitual()} title={`Plan: ${RITUAL_NAMES[suggested]} now (3)`}>
             Plan{!ritualOpen && <span className="plan-now">{RITUAL_NAMES[suggested]}</span>}
           </button>
-          <button type="button" className="view-tab" aria-current={view === "inbox" ? "page" : undefined} onClick={() => setView(view === "inbox" ? base : "inbox")} title="Loops you owe and captures to sort (4 or L)">
+          <button type="button" className="view-tab" aria-current={view === "inbox" ? "page" : undefined} onClick={() => setView(view === "inbox" ? base : "inbox")} title="Follow-ups you owe and captures to sort (4 or L)">
             Inbox{inboxCount > 0 && <span className="count" aria-label={`${inboxCount} waiting`}>{inboxCount}</span>}
           </button>
         </nav>
@@ -1152,8 +1154,8 @@ export function App() {
         />
       ) : planWeekAt !== null && settingsAt === null ? (
         <PlanWeek weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => setPlanWeekAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
-      ) : loopsOpen && settingsAt === null ? (
-        <Inbox data={data} version={captureVersion} onClose={() => setLoopsOpen(false)} onChanged={reloadQuiet} />
+      ) : followUpsOpen && settingsAt === null ? (
+        <Inbox data={data} version={captureVersion} onClose={() => setFollowUpsOpen(false)} onChanged={reloadQuiet} />
       ) : closeOutAt !== null && settingsAt === null ? (
         <CloseOut key={closeOutAt} date={closeOutAt} data={data} onDate={setCloseOutAt} onClose={() => setCloseOutAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : checkInOpen && settingsAt === null ? (
@@ -1265,6 +1267,16 @@ export function App() {
       {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}
       {borrowMenuAt && <PopupMenu at={borrowMenuAt} step={borrowStep(env, data.borrowed)} onClose={() => setBorrowMenuAt(null)} />}
       {keysOpen && <KeyLegend onClose={() => setKeysOpen(false)} />}
+      <NoHoursPrompt
+        onAddHours={() => {
+          closePlanDay();
+          setDetailsOpen(false);
+          setFollowUpsOpen(false);
+          setCloseOutAt(null);
+          setCheckInOpen(false);
+          setSettingsAt("hours");
+        }}
+      />
       {tbTarget && (() => {
         const pick = "pickId" in tbTarget ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).concat(pd?.picks ?? []).find((p) => p.id === tbTarget.pickId) : null;
         return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "Pick"} defaultMinutes={pick ? data.planning.sizes[pick.size] : 60} onClose={() => setTbTarget(null)} />;

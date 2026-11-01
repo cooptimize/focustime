@@ -7,7 +7,7 @@ import { sessionEnd, unpickableReason } from "../plan/rules.ts";
 import { DEFAULT_SIZE, SIZES, type Pick as PlanPick, type PlanDayState, type Size } from "../plan/types.ts";
 import { PlanError, type NewPick, type PlanStore } from "../store/plan-store.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
-import { dayEndOf, hoursOn, type TimeModel } from "../week/hours.ts";
+import { dayEndOf, hoursOn, noHoursPrompt, type TimeModel } from "../week/hours.ts";
 import type { PtoDay } from "../week/pto.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
@@ -180,10 +180,11 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         return { ok: true, data: await state(ctx, plan, d) };
       }
       case "pick.add": {
-        const o = fields(input, ["date", "half", "clientKey"], ["size", "itemId", "intention", "draftId"]);
-        const base = { date: date(o.date), half: half(o.half), clientKey: clientKey(o.clientKey), size: size(o.size) };
-        const given = ["itemId", "intention", "draftId"].filter((k) => o[k] !== undefined);
-        if (given.length !== 1) throw new Invalid("give exactly one of itemId, intention or draftId");
+        const o = fields(input, ["date", "half", "clientKey"], ["size", "itemId", "intention", "draftId", "followUpId"]);
+        // Step 13.5: a follow-up picked into a block is size S unless sized.
+        const base = { date: date(o.date), half: half(o.half), clientKey: clientKey(o.clientKey), size: o.size === undefined && o.followUpId !== undefined ? ("S" as const) : size(o.size) };
+        const given = ["itemId", "intention", "draftId", "followUpId"].filter((k) => o[k] !== undefined);
+        if (given.length !== 1) throw new Invalid("give exactly one of itemId, intention, draftId or followUpId");
         const off = await ptoRefusal(ctx, base.date);
         if (off) return bad(off, 422);
         const past = await pastRefusal(ctx, base.date);
@@ -204,6 +205,13 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           const draft = plan.getDraft(id(o.draftId, "draftId"));
           if (!draft || draft.clientKey !== base.clientKey) return bad("No such draft story for this client", 404);
           p = { ...base, kind: "draft", draftId: draft.id, title: draft.title, itemType: "Draft story" };
+        } else if (o.followUpId !== undefined) {
+          const f = plan.getFollowUp(id(o.followUpId, "followUpId"));
+          if (!f) return bad("No such follow-up", 404);
+          if (f.closedAt) return bad("That follow-up is already closed", 409);
+          const dup = plan.picksFor(base.date).find((x) => x.followUpId === f.id && (x.status === "planned" || x.status === "done"));
+          if (dup) return bad(`That follow-up is already picked for ${dup.half} that day`, 409);
+          p = { ...base, kind: "intention", title: f.what.slice(0, 200), itemType: "Follow-up", followUpId: f.id };
         } else {
           p = { ...base, kind: "intention", title: text(o.intention, "intention") };
         }
@@ -230,17 +238,22 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
       }
       case "pick.move": {
-        const o = fields(input, ["id", "date", "half"]);
+        const o = fields(input, ["id", "date", "half"], ["anyway"]);
         const pid = id(o.id);
         const before = plan.getPick(pid);
         if (!before) return bad(`No pick ${pid}`, 404);
         const to = date(o.date);
+        if (o.anyway !== undefined && typeof o.anyway !== "boolean") throw new Invalid("anyway must be true or false");
         const h = half(o.half);
         const off = await ptoRefusal(ctx, to);
         if (off) return bad(off, 422);
         // Into a past day never; out of a past day only forward to today or later (that is carrying it).
         const past = await pastRefusal(ctx, to);
         if (past) return bad(`${past}. Move it to today or a later day`, 409);
+        // Step 13.5: a day with no working hours asks first (Add hours, or Move anyway).
+        const cfgNow = await ctx.config().catch(() => null);
+        const ask = o.anyway === true || !cfgNow ? null : noHoursPrompt(cfgNow.week.hours, to, Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(cfgNow.week.hours.timeZone).toPlainDate().toString());
+        if (ask) return { ok: false, status: 409, error: ask, code: "no_hours" };
         const pick = plan.move(pid, to, h);
         return { ok: true, data: { pick, state: await state(ctx, plan, before.date) } };
       }

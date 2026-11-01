@@ -29,7 +29,7 @@ export function Details({ open, day, slot, timeZone, colors, now, onClose }: Pro
 
   const tz = timeZone;
   return (
-    <dialog ref={ref} className="details" onClose={onClose} onClick={(e) => e.target === ref.current && onClose()} aria-labelledby="details-title">
+    <dialog ref={ref} className="details" data-overlay={open ? "details" : undefined} onClose={onClose} onClick={(e) => e.target === ref.current && onClose()} aria-labelledby="details-title">
       <header>
         <div>
           <h2 id="details-title">

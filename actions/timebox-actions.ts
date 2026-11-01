@@ -10,8 +10,8 @@ import {
   dayTimeboxes, isShowAs, outlookFields, SHOW_AS_LABEL, syncNeed, timeboxProblem, undoOf,
   type Fields, type LocalState, type OutlookShowAs, type SyncOp, type Timebox, type WriteEntry, type WriteKind,
 } from "../plan/timebox.ts";
-import { domainAllowed, helpLoopText } from "../plan/collab.ts";
-import { timeboxFrom } from "../plan/outlooksync.ts";
+import { domainAllowed, helpFollowUpText } from "../plan/collab.ts";
+import { REMOVED_IN_OUTLOOK, timeboxFrom } from "../plan/outlooksync.ts";
 import { HttpError, NetworkError } from "../sources/calendar/http.ts";
 import type { OutlookWrite } from "../sources/graph/source.ts";
 import { DomainError, editableMine, GoneError, inviteMatches, matches, NotMineError, OwnershipError, sameInstant, type OutlookEvent } from "../sources/graph/write.ts";
@@ -213,7 +213,15 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
       // Step 13: both sides changed since the last sync. Keep Coopilot's (then the usual preview puts it on Outlook)
       // or use Outlook's (the timebox follows it, nothing is written).
       const o = fields(input, ["id", "keep"]);
-      if (o.keep !== "coopilot" && o.keep !== "outlook") throw new Invalid("keep must be coopilot or outlook");
+      if (o.keep !== "coopilot" && o.keep !== "outlook" && o.keep !== "local" && o.keep !== "remove") throw new Invalid("keep must be coopilot, outlook, local or remove");
+      if (o.keep === "local" || o.keep === "remove") {
+        // Step 13.5: its event was deleted in Outlook. Keep it here only, or remove it; nothing is written either way.
+        const gone = plan.timebox(posId(o.id, "id"));
+        if (!gone || gone.removedAt || gone.outlookNote !== REMOVED_IN_OUTLOOK) throw new PlanError("This timebox wasn't removed in Outlook");
+        if (o.keep === "local") return out(plan.updateTimebox(gone.id, { outlookNote: null }));
+        plan.updateTimebox(gone.id, { removedAt: ctx.now(), outlookNote: null });
+        return { ok: true, data: { timebox: null, uid: gone.uid, sync: null } };
+      }
       const tb = plan.timebox(posId(o.id, "id"));
       if (!tb || !tb.conflict) throw new PlanError("Nothing to choose for this timebox");
       const own = plan.ownEvent(tb.uid);
@@ -311,8 +319,13 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
           // Read the event now: preview shows what is really there, and an event deleted in Outlook isn't "changed".
           current = await ow.writer.get(own.eventId).catch((e: unknown) => { throw e instanceof NetworkError ? new PlanError("Outlook unreachable") : e; });
           if (!current) {
+            // Step 13.5: already gone from Outlook. Done for a delete; for a change, the timebox is kept here with Put
+            // on Outlook off (never re-created on its own). Logged as "already gone", not an error.
             plan.markOwnDeleted(uid);
-            op = syncNeed(tb, plan.ownEvent(uid), w);
+            const localBefore = tb ? localOf(tb) : null;
+            if (tb && !tb.removedAt && op !== "delete") plan.updateTimebox(tb.id, { outlook: false, outlookNote: REMOVED_IN_OUTLOOK, conflict: null });
+            plan.logWrite({ op, kind: "timebox", status: "confirmed", message: op === "delete" ? "Already gone from Outlook; nothing to remove" : "Already gone from Outlook; the timebox is kept here with Put on Outlook off", uid, eventId: own.eventId, account: null, calendar: null, before: own.fields, after: null, localBefore, localAfter: tb ? localOf(plan.timebox(tb.id)!) : null, auto: true });
+            return { ok: true, data: { nothing: true, alreadyGone: true } };
           } else if (current.marker !== uid) return bad(new OwnershipError().message, 409);
         }
         if (!op) return { ok: true, data: { nothing: true } };
@@ -415,6 +428,14 @@ async function attempt(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, ret
     }
   }
   const tb = plan.timeboxByUid(entry.uid);
+  // Step 13.5: the event is already gone from Outlook (deleted there, or a 404). A delete is done; an update has
+  // nothing to change, so the timebox is kept with Put on Outlook off, as a sync would. Logged, never an error.
+  const alreadyGone = (): WriteResult => {
+    plan.markOwnDeleted(entry.uid);
+    if (entry.op === "update" && tb && !tb.removedAt) plan.updateTimebox(tb.id, { outlook: false, outlookNote: REMOVED_IN_OUTLOOK, conflict: null });
+    if (entry.undoOf !== null) plan.markUndone(entry.undoOf, entry.id);
+    return settle("confirmed", entry.op === "delete" ? "Already gone from Outlook; nothing to remove" : "Already gone from Outlook; the timebox is kept here with Put on Outlook off");
+  };
   try {
     let eventId = entry.eventId;
     if (entry.op === "create") {
@@ -427,8 +448,8 @@ async function attempt(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, ret
       const was = await ow.writer.update(eventId!, entry.uid, entry.after!, entry.before?.body !== entry.after!.body);
       // The prior values are what was really there just before the change.
       if (!retry) plan.settleWrite(entry.id, { status: "pending", before: { ...(entry.before ?? entry.after!), subject: was.subject, start: was.start, end: was.end } });
-    } else {
-      await ow.writer.remove(eventId!, entry.uid);
+    } else if ((await ow.writer.remove(eventId!, entry.uid)) === "already_gone") {
+      return alreadyGone();
     }
     // Read back before reporting success.
     const back = await ow.writer.get(eventId!);
@@ -447,6 +468,7 @@ async function attempt(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, ret
     }
     return settle("confirmed", entry.undoOf !== null ? "Undone on Outlook" : entry.op === "create" ? "On Outlook" : entry.op === "update" ? "Outlook updated" : "Removed from Outlook", { eventId });
   } catch (e) {
+    if (e instanceof GoneError && (entry.op === "update" || entry.op === "delete")) return alreadyGone();
     return failed(e, settle);
   }
 }
@@ -475,7 +497,7 @@ async function attemptOwn(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, 
 
 /**
  * A help invite (step 13). Create: domains checked again in the writer, idempotent by marker, read back with its
- * attendees; then the invite is kept on the item and its loop opens. Undo cancels it (attendees get a
+ * attendees; then the invite is kept on the item and its follow-up opens. Undo cancels it (attendees get a
  * cancellation) and it is read back as gone from the calendar.
  */
 async function attemptInvite(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, settle: Settle, env: { domains: readonly string[]; now: () => string }): Promise<WriteResult> {
@@ -488,8 +510,8 @@ async function attemptInvite(plan: PlanStore, ow: OutlookWrite, entry: WriteEntr
     const m = inviteMatches(back, f, entry.uid);
     if (!m.ok) return settle("unconfirmed", `Outlook didn't show the invite as sent yet (${m.differs.join(", ")}). Retry checks first and won't send a second one`, { eventId: r.id });
     if (inv) {
-      const loop = plan.openRuleLoop({ kind: "help", ruleKey: `help:${entry.uid}`, clientKey: inv.clientKey, who: inv.attendees.map((a) => a.name).join(", "), what: helpLoopText(inv.attendees.map((a) => a.name), inv.title), itemId: inv.itemId, refAt: Temporal.Instant.from(f.end).toString() });
-      plan.setInvite(entry.uid, { status: "sent", eventId: r.id, ...(loop ? { loopId: loop.id } : {}) });
+      const followUp = plan.openRuleFollowUp({ kind: "help", ruleKey: `help:${entry.uid}`, clientKey: inv.clientKey, who: inv.attendees.map((a) => a.name).join(", "), what: helpFollowUpText(inv.attendees.map((a) => a.name), inv.title), itemId: inv.itemId, refAt: Temporal.Instant.from(f.end).toString() });
+      plan.setInvite(entry.uid, { status: "sent", eventId: r.id, ...(followUp ? { followUpId: followUp.id } : {}) });
     }
     return settle("confirmed", `Invite sent to ${(f.attendees ?? []).map((a) => a.name).join(", ")}`, { eventId: r.id });
   }
@@ -501,9 +523,9 @@ async function attemptInvite(plan: PlanStore, ow: OutlookWrite, entry: WriteEntr
   if (still) return settle("unconfirmed", "Outlook still shows the meeting. Retry to cancel it again");
   if (inv) {
     plan.setInvite(entry.uid, { status: "cancelled" });
-    if (inv.loopId) {
-      const l = plan.getLoop(inv.loopId);
-      if (l && !l.closedAt) plan.closeLoop(inv.loopId, "Invite cancelled", "signal");
+    if (inv.followUpId) {
+      const l = plan.getFollowUp(inv.followUpId);
+      if (l && !l.closedAt) plan.closeFollowUp(inv.followUpId, "Invite cancelled", "signal");
     }
   }
   if (entry.undoOf !== null) plan.markUndone(entry.undoOf, entry.id);

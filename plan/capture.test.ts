@@ -58,13 +58,13 @@ describe("client tags", () => {
 });
 
 describe("routing suggestions (rules, no AI)", () => {
-  it("a promise becomes a loop with who, what and a due date", () => {
-    expect(suggest("Told Dana I'd send the export by Thursday", null, WED, clients)).toMatchObject({ kind: "loop", who: "Dana", what: "Send the export", due: "2026-11-05" });
-    expect(suggest("I'll review Mark's PR tomorrow", null, WED, clients)).toMatchObject({ kind: "loop", due: "2026-11-05", what: "Review Mark's PR" });
-    expect(suggest("promised Priya the numbers", "CSC", WED, clients)).toMatchObject({ kind: "loop", who: "Priya", clientKey: "CSC" });
+  it("a promise becomes a follow-up with who, what and a due date", () => {
+    expect(suggest("Told Dana I'd send the export by Thursday", null, WED, clients)).toMatchObject({ kind: "follow_up", who: "Dana", what: "Send the export", due: "2026-11-05" });
+    expect(suggest("I'll review Mark's PR tomorrow", null, WED, clients)).toMatchObject({ kind: "follow_up", due: "2026-11-05", what: "Review Mark's PR" });
+    expect(suggest("promised Priya the numbers", "CSC", WED, clients)).toMatchObject({ kind: "follow_up", who: "Priya", clientKey: "CSC" });
     // A due date alone ("by Friday") reads as a commitment; who falls back to the tagged client.
-    expect(suggest("status update by Friday", "W&C", WED, clients)).toMatchObject({ kind: "loop", who: "Woodard & Curran", due: "2026-11-06" });
-    expect(suggest("I will call the vendor", null, WED, clients)).toMatchObject({ kind: "loop", who: "", due: null });
+    expect(suggest("status update by Friday", "W&C", WED, clients)).toMatchObject({ kind: "follow_up", who: "Woodard & Curran", due: "2026-11-06" });
+    expect(suggest("I will call the vendor", null, WED, clients)).toMatchObject({ kind: "follow_up", who: "", due: null });
   });
   it("work to do for a client becomes a draft story", () => {
     expect(suggest("need to add paging to the resource API", "W&C", WED, clients)).toMatchObject({ kind: "draft", clientKey: "W&C", title: "Add paging to the resource API" });
@@ -76,15 +76,18 @@ describe("routing suggestions (rules, no AI)", () => {
     expect(suggest("need to fix the build", null, WED, clients)).toMatchObject({ kind: "draft", clientKey: null });
   });
   it("a promise wins over work words", () => {
-    expect(suggest("I'll need to fix the build by Monday", "CSC", WED, clients)).toMatchObject({ kind: "loop", due: "2026-11-09" });
+    expect(suggest("I'll need to fix the build by Monday", "CSC", WED, clients)).toMatchObject({ kind: "follow_up", due: "2026-11-09" });
   });
-  it("anything else is a personal note, tagged when a client was", () => {
-    expect(suggest("interesting idea about caching", null, WED, clients)).toMatchObject({ kind: "note", clientKey: null, text: "interesting idea about caching" });
-    expect(suggest("their CFO prefers email", "Quiddity", WED, clients)).toMatchObject({ kind: "draft" });
-    expect(suggest("fyi: their CFO prefers email", "Quiddity", WED, clients)).toMatchObject({ kind: "note", clientKey: "Quiddity", text: "Their CFO prefers email" });
+  it("feature words read as a draft feature (step 13.5)", () => {
+    expect(suggest("feature: self-service onboarding", "W&C", WED, clients)).toMatchObject({ kind: "draft_feature", title: "Self-service onboarding" });
+    expect(suggest("new feature for bulk export", "CSC", WED, clients)).toMatchObject({ kind: "draft_feature", title: "Bulk export" });
+  });
+  it("there are no notes any more: anything else is a draft story (step 13.5)", () => {
+    expect(suggest("interesting idea about caching", null, WED, clients)).toMatchObject({ kind: "draft", clientKey: null, title: "Interesting idea about caching" });
+    expect(suggest("fyi: their CFO prefers email", "Quiddity", WED, clients)).toMatchObject({ kind: "draft" });
   });
   it("offers the other two kinds as alternatives, every time", () => {
-    expect(suggest("Told Dana I'd send it", null, WED, clients).others).toEqual(["draft", "note"]);
-    expect(suggest("just a thought", null, WED, clients).others).toEqual(["loop", "draft"]);
+    expect(suggest("Told Dana I'd send it", null, WED, clients).others).toEqual(["draft", "draft_feature"]);
+    expect(suggest("just a thought", null, WED, clients).others).toEqual(["follow_up", "draft_feature"]);
   });
 });

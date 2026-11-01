@@ -216,7 +216,7 @@ export type WorkItem = {
   url: string;
   /** DevOps tags (step 7); missing on items cached before it. */
   tags?: string[];
-  /** Blocked by its state or a tag (step 7, plan/loops.ts isBlocked). */
+  /** Blocked by its state or a tag (step 7, plan/followups.ts isBlocked). */
   blocked?: boolean;
   /** The last change was made by my DevOps identity for this client (System.ChangedBy, Q42). Nobody else's identity is kept. */
   changedByMe?: boolean;
@@ -281,7 +281,7 @@ export type ClientWork = {
   items: WorkItem[];
   /** Open children (any assignee) of my portfolio items, up to two levels down, for picking at story level. */
   children: WorkItem[];
-  /** Items read by id because an open loop is about them, completed ones included (step 7). */
+  /** Items read by id because an open follow-up is about them, completed ones included (step 7). */
   watched?: WorkItem[];
   /** Features committed to a week that aren't assigned to me, read by id (open ones) for Plan the day (step 8). */
   committed?: WorkItem[];

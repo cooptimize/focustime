@@ -13,7 +13,7 @@ const NOW = "2026-11-02T13:00:00Z"; // 8:00 New York
 const item = (id: number): WorkItem => ({ id, title: `Item ${id}`, type: "User Story", state: "New", stateCategory: "Proposed", level: "story", order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
 const ITEMS = [1, 2, 3, 4, 5].map(item);
 let nextId = 1;
-const pick = (over: Partial<Pick> & { size?: Size } = {}): Pick => ({ id: nextId++, date: "2026-11-02", half: "AM", clientKey: "CSC", kind: "item", itemId: 1, draftId: null, title: "Item 1", itemType: "User Story", itemUrl: null, size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, notes: null, position: 1, createdAt: "", updatedAt: "", ...over });
+const pick = (over: Partial<Pick> & { size?: Size } = {}): Pick => ({ id: nextId++, date: "2026-11-02", half: "AM", clientKey: "CSC", kind: "item", itemId: 1, draftId: null, title: "Item 1", itemType: "User Story", itemUrl: null, size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, followUpId: null, notes: null, position: 1, createdAt: "", updatedAt: "", ...over });
 const plan = (picks: Pick[], committed = true): PlanWeek => ({ "2026-11-02": { committedAt: committed ? "2026-11-02T08:10:00-05:00[America/New_York]" : null, picks } });
 
 describe("a card's plan (step 6.1)", () => {

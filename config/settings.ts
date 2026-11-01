@@ -123,8 +123,9 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
     }
     case "collab": {
       // Step 13: help session length, Teams, days to search. Domains are edited in the file only.
-      only(v, ["meetingMinutes", "teams", "daysAhead"], "collab");
-      const values: [string, number | boolean][] = [];
+      only(v, ["meetingMinutes", "teams", "daysAhead", "exclude"], "collab");
+      const values: [string, TomlValue][] = [];
+      if (v.exclude !== undefined) values.push(["exclude", strList(v.exclude, "collab.exclude").filter(Boolean)]);
       if (v.meetingMinutes !== undefined) {
         if (typeof v.meetingMinutes !== "number") throw new SettingsInputError("collab.meeting_minutes", "Must be a number");
         values.push(["meeting_minutes", v.meetingMinutes]);

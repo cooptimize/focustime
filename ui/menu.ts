@@ -62,13 +62,13 @@ export type FormField = {
   options?: { value: string; label: string }[];
 };
 
-export type View = "today" | "week" | "inbox" | "focus" | "capture" | "planday" | "planweek" | "settings" | "loops" | "checkin" | "closeout";
+export type View = "today" | "week" | "inbox" | "focus" | "capture" | "planday" | "planweek" | "settings" | "follow_ups" | "checkin" | "closeout";
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
   week: Week;
   /** The day the selection is on, and its half. */
-  selection: { date: IsoDate; half: Half };
+  selection: { date: IsoDate; half: Half; clientKey?: string | null };
   planWeek: PlanWeek | null;
   /** The Plan the day panel's state when it's open. */
   planState: PlanDayState | null;
@@ -112,8 +112,8 @@ export type MenuEnv = {
   /** The focus timer (step 6c) and its actions (timer.*); false with a notice on refusal. */
   timer: TimerView | null;
   runTimer: (action: string, input?: Record<string, unknown>) => Promise<boolean>;
-  /** The Loops view (step 6c). */
-  openLoops: () => void;
+  /** The Follow-ups view (step 6c). */
+  openFollowUps: () => void;
   /** Reset local plan, after a typed confirmation. */
   resetPlan: () => void;
   /** Close out and Check-in (step 7). */
@@ -124,8 +124,8 @@ export type MenuEnv = {
   commitCloseOut: () => void;
   /** "I'll make it up": moves the pick and records borrowed time; offers a flex session for tonight or a weekend. */
   makeUp: (pickId: number, input: { when: "tonight" | "friday" | "day"; date?: IsoDate; half?: Half }) => Promise<boolean>;
-  /** loop.add and borrow.pay; false with a notice on refusal. */
-  runLoops: (action: string, input: Record<string, unknown>) => Promise<boolean>;
+  /** follow-up.add and borrow.pay; false with a notice on refusal. */
+  runFollowUps: (action: string, input: Record<string, unknown>) => Promise<boolean>;
   /** Borrowed time on the week shown plus every unpaid record. */
   borrowed: readonly BorrowedView[];
   /** Plan the week (step 8): open it (next week by default), and the week it is open on. */
@@ -279,23 +279,23 @@ export function borrowStep(env: MenuEnv, list: readonly BorrowedView[]): MenuSte
           hint: b.paidAt ? (b.paidBy === "picks" ? "paid: pick done" : "paid") : `make up ${when(b)} · mark paid`,
           action: "borrow.pay",
           ...(b.paidAt ? { disabled: "Already paid" } : {}),
-          run: () => env.runLoops("borrow.pay", { id: b.id }),
+          run: () => env.runFollowUps("borrow.pay", { id: b.id }),
         }))
       : [{ id: "none", label: "No borrowed time", disabled: "Nothing to make up" }],
   };
 }
 
-/** "Add a loop" (step 7): who, what, optional due date. */
-export function loopForm(env: MenuEnv): MenuStep {
+/** "Add a follow-up" (step 7, step 13.5): what, optional who and due date, for the selected block's client. */
+export function followUpForm(env: MenuEnv): MenuStep {
   return {
-    title: "Add a loop",
+    title: "Add a follow-up",
     button: "Add",
     fields: [
-      { key: "who", label: "Who", type: "text", placeholder: "e.g. CSC, or a person" },
       { key: "what", label: "What I owe", type: "text", placeholder: "e.g. Send the mapping notes" },
+      { key: "who", label: "Who", type: "text", placeholder: "A person (optional)", optional: true },
       { key: "due", label: "Due", type: "date", optional: true },
     ],
-    save: (v) => env.runLoops("loop.add", { who: v.who, what: v.what, ...(v.due ? { due: v.due } : {}) }),
+    save: (v) => env.runFollowUps("followup.add", { what: v.what, ...(v.who ? { who: v.who } : {}), ...(v.due ? { due: v.due } : {}), ...(env.selection.clientKey ? { clientKey: env.selection.clientKey } : {}) }),
   };
 }
 
@@ -739,14 +739,22 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "closeout.commit": return env.closeOutDate ? { run: env.commitCloseOut } : { disabled: "Open Close out first" };
     case "pick.make_up": return { next: () => choosePick(env, "Make up which pick?", (p) => makeUpStep(env, p)) };
     case "note.set": return { run: () => env.openCloseOut() };
-    case "loop.add": return { next: () => loopForm(env) };
+    case "followup.add": return { next: () => followUpForm(env) };
     case "borrow.pay": {
       const unpaid = env.borrowed.filter((b) => !b.paidAt);
       if (!unpaid.length) return { disabled: "No unpaid borrowed time" };
-      return { next: () => ({ title: "Mark which borrowed time paid?", items: unpaid.map((b) => ({ id: `b${b.id}`, label: b.title, hint: `${b.minutes} min from ${dayName(b.date)}`, run: () => env.runLoops("borrow.pay", { id: b.id }) })) }) };
+      return { next: () => ({ title: "Mark which borrowed time paid?", items: unpaid.map((b) => ({ id: `b${b.id}`, label: b.title, hint: `${b.minutes} min from ${dayName(b.date)}`, run: () => env.runFollowUps("borrow.pay", { id: b.id }) })) }) };
     }
-    case "loops.list": return { run: env.openLoops };
-    case "loop.close": return { run: env.openLoops };
+    case "followups.list": return { run: env.openFollowUps };
+    // Closing, not needed, snooze, edit, delete, who suggestions and the heads-up review are on each row in the Inbox.
+    case "followup.close":
+    case "followup.edit":
+    case "followup.not_needed":
+    case "followup.snooze":
+    case "followup.delete":
+    case "followup.people":
+    case "followups.review":
+      return { run: env.openFollowUps };
     case "plan.reset": return { run: env.resetPlan };
     case "link.open": return { next: () => chooseItem(env, "Open which work item?", () => true, (k, i) => () => env.openLink(k, i.url)) };
     case "weekplan.load": return { run: () => env.openPlanWeek() };
@@ -763,7 +771,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "weekplan.headsup":
     case "feature.brief":
     case "feature.mark_breakdown":
-    case "loop.ask_priorities":
+    case "followup.ask_priorities":
+    case "draft.add_feature":
       return { run: () => env.openPlanWeek(env.planWeekOpen ?? undefined) };
     case "auth.connect_outlook_write": return { run: env.connectWrite };
     case "timebox.resolve": return { run: () => env.openPlanDay() };
@@ -786,11 +795,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "write.log":
       return { run: () => env.openSettings("data") };
     case "capture.add": return { run: env.openCapture };
-    // Sorting, a client's features and notes are handled in the Inbox.
+    // Sorting and a client's features and epics are handled in the Inbox.
     case "capture.load":
     case "capture.route":
     case "capture.features":
-    case "note.delete":
       return { run: env.openCaptures };
   }
 }
@@ -802,11 +810,11 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.today", action: "view.today", group: "Views", label: "Today", hint: "1", run: () => env.setView("today") },
     { id: "view.week", action: "view.week", group: "Views", label: "Week", hint: "2", run: () => env.setView("week") },
     { id: "view.plan", action: "view.plan", group: "Views", label: "Plan (the ritual for now)", hint: "3", run: env.openRitual },
-    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: loops and captures", hint: "4", run: () => env.setView("inbox") },
+    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: follow-ups and captures", hint: "4", run: () => env.setView("inbox") },
     { id: "view.planday", action: "view.planday", group: "Views", label: "Plan the day", hint: "P", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
     { id: "view.planweek", action: "view.planweek", group: "Views", label: "Plan the week", hint: "W", run: () => env.openPlanWeek() },
-    { id: "view.capture", action: "view.capture", group: "Views", label: "Notes and captures (Inbox)", run: env.openCaptures },
+    { id: "view.capture", action: "view.capture", group: "Views", label: "Captures to sort (Inbox)", run: env.openCaptures },
     { id: "view.checkin", action: "view.checkin", group: "Views", label: "Check-in", hint: "M", run: env.openCheckIn },
     { id: "view.closeout", action: "view.closeout", group: "Views", label: "Close out", hint: "E", run: () => env.openCloseOut() },
     { id: "week.prev", action: "week.prev", group: "Week", label: "Previous week", hint: "[", run: () => env.changeWeek(-1) },

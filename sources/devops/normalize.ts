@@ -1,5 +1,5 @@
 // Pure: Azure DevOps responses → WorkItem. No I/O, no PATs.
-import { isBlocked } from "../../plan/loops.ts";
+import { isBlocked } from "../../plan/followups.ts";
 import type { WorkItem } from "../../week/types.ts";
 
 /** type → (lowercased state name → state category). From each project's work item type metadata. */
@@ -172,7 +172,7 @@ export function buildChildrenWiql(parentIds: number[], categories: StateCategori
   return base.replace(`[System.AssignedTo] = 'x'`, `[System.Parent] IN (${ids.join(", ")})`);
 }
 
-// System.Tags (step 7): a "Blocked" tag opens a loop (plan/loops.ts). System.ChangedBy (step 8, Q42): reduced to
+// System.Tags (step 7): a "Blocked" tag opens a follow-up (plan/followups.ts). System.ChangedBy (step 8, Q42): reduced to
 // changedByMe at once; nobody's identity is kept.
 export const BASE_FIELDS = ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "System.ChangedBy"] as const;
 
@@ -200,7 +200,7 @@ export type NormalizeContext = {
   orderField: string | null;
   categories: StateCategories;
   levels?: BacklogLevels;
-  /** Keep completed and removed items (items read by id for a loop, step 7). */
+  /** Keep completed and removed items (items read by id for a follow-up, step 7). */
   keepDone?: boolean;
   /** My DevOps identity (email) for this client, to tell my own changes (Q42). */
   me?: string | null;

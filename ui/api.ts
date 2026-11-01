@@ -10,12 +10,33 @@ export class ActionRefusal extends Error {
     readonly status: number,
     /** Per-field problems (Settings). */
     readonly fields: FieldProblem[] = [],
+    /** A refusal the UI can answer (step 13.5: "no_hours"). */
+    readonly code?: string,
   ) {
     super(message);
   }
 }
 
+/** Step 13.5: what to do when a pick would move to a day with no working hours. Set by the App's prompt. */
+export type NoHoursChoice = "add" | "anyway" | "cancel";
+let askNoHours: ((question: string, date: string) => Promise<NoHoursChoice>) | null = null;
+export const setNoHoursPrompt = (f: typeof askNoHours) => void (askNoHours = f);
+
 export async function call<T>(action: string, input: unknown): Promise<T> {
+  try {
+    return await send<T>(action, input);
+  } catch (e) {
+    // Any Move (menus, Plan the day, Check-in, Close out) asks the same question: Add hours, or Move anyway.
+    if (e instanceof ActionRefusal && e.code === "no_hours" && action === "pick.move" && askNoHours && typeof input === "object" && input) {
+      const choice = await askNoHours(e.message, String((input as { date?: unknown }).date ?? ""));
+      if (choice === "anyway") return send<T>(action, { ...(input as object), anyway: true });
+      throw new ActionRefusal(choice === "add" ? "Not moved yet: add hours for that day in Settings, then move it" : "Not moved", 409, [], "cancelled");
+    }
+    throw e;
+  }
+}
+
+async function send<T>(action: string, input: unknown): Promise<T> {
   const res = await fetch("/api/action", {
     method: "POST",
     credentials: "same-origin",
@@ -24,7 +45,7 @@ export async function call<T>(action: string, input: unknown): Promise<T> {
   });
   if (res.status === 401 || res.status === 403) throw new SessionError("Session expired");
   const body = (await res.json()) as ActionResponse<T>;
-  if (!body.ok) throw new ActionRefusal(body.error, body.status, body.fields ?? []);
+  if (!body.ok) throw new ActionRefusal(body.error, body.status, body.fields ?? [], body.code);
   return body.data;
 }
 

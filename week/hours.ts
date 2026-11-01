@@ -159,3 +159,15 @@ export function hoursSummary(model: TimeModel): string {
 }
 
 export const VIEW_RANGE_NAMES: Record<ViewRange, string> = { business: "Business hours", "12h": "12 hours", "24h": "24 hours" };
+
+/**
+ * Step 13.5: moving a pick to a day without working hours asks first. The question, or null when the day has hours.
+ * The weekday alone within a week of `today`; with the date beyond that.
+ */
+export function noHoursPrompt(model: TimeModel, date: IsoDate, today?: IsoDate): string | null {
+  if (hoursOn(model, date).segments.length) return null;
+  const d = Temporal.PlainDate.from(date);
+  const near = !today || Math.abs(Temporal.PlainDate.from(today).until(d, { largestUnit: "days" }).days) < 7;
+  const name = near ? d.toLocaleString("en-US", { weekday: "long" }) : d.toLocaleString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  return `${name} has no working hours. Add hours for that day?`;
+}

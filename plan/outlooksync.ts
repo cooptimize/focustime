@@ -11,10 +11,13 @@ export type SyncDecision =
   | { kind: "none" }
   /** Outlook changed, Coopilot didn't: the timebox follows Outlook. */
   | { kind: "adopt"; fields: Fields; changed: string[] }
-  /** Deleted in Outlook, unchanged in Coopilot: the timebox is removed. */
-  | { kind: "adopt_delete" }
+  /** Deleted in Outlook while the timebox still wants it (step 13.5): keep the timebox, turn Put on Outlook off, ask. */
+  | { kind: "removed_in_outlook" }
   /** Both changed since the last sync: nothing is overwritten; the person chooses. */
   | { kind: "conflict"; outlook: Fields | null; changed: string[] };
+
+/** The note on a timebox whose event was deleted in Outlook (step 13.5). */
+export const REMOVED_IN_OUTLOOK = "Removed in Outlook";
 
 const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
 const SHOW: readonly OutlookShowAs[] = ["free", "tentative", "busy", "oof", "workingElsewhere"];
@@ -34,11 +37,13 @@ export const seenFields = (seen: SeenEvent, last: Fields): Fields => ({ ...last,
 
 /**
  * One marked event. `seen` null means Outlook no longer has it (confirmed by a read by id). `want` null means the
- * timebox no longer wants an event (removed, or Put on Outlook off). Outlook changed only → adopt; both → conflict.
+ * timebox no longer wants an event (removed, or Put on Outlook off). Outlook changed only → adopt; both → conflict;
+ * gone from Outlook → removed_in_outlook.
  */
 export function syncDecision(last: Fields, seen: SeenEvent | null, want: Fields | null): SyncDecision {
   const localChanged = !want || differences(last, want).length > 0;
-  if (!seen) return localChanged && want ? { kind: "conflict", outlook: null, changed: ["deleted in Outlook"] } : localChanged ? { kind: "none" } : { kind: "adopt_delete" };
+  // Step 13.5: never re-created and never removed for me; the timebox stays and asks Keep or Remove.
+  if (!seen) return want ? { kind: "removed_in_outlook" } : { kind: "none" };
   const changed = differences(last, seen as unknown as Fields);
   if (!changed.length) return { kind: "none" };
   const fields = seenFields(seen, last);

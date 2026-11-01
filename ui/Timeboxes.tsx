@@ -6,6 +6,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import type { InviteView, TimeboxView, WritePreview, WriteResult, WriteState } from "../actions/types.ts";
 import { minutesOf, SHOW_AS_LABEL, SHOW_AS_VALUES, snap, TIMEBOX_MAX, TIMEBOX_MIN, TIMEBOX_SNAP, type OutlookShowAs } from "../plan/timebox.ts";
+import { REMOVED_IN_OUTLOOK } from "../plan/outlooksync.ts";
 import { useMenu } from "./Menus.tsx";
 import { timeboxMenu, type HelpTarget } from "./menu.ts";
 import type { Day, IsoDate, Slot } from "../week/types.ts";
@@ -94,7 +95,11 @@ export function useWriteFlow(onDone: () => void) {
   const begin = useCallback(
     async (input: { uid: string } | { undo: number } | { event: { id: string; start?: string; end?: string; showAs?: string } }) => {
       try {
-        const r = await call<{ preview?: WritePreview; nothing?: true }>("write.preview", input);
+        const r = await call<{ preview?: WritePreview; nothing?: true; alreadyGone?: true }>("write.preview", input);
+        if (r.alreadyGone) {
+          onDone();
+          return void notify("Already gone from Outlook");
+        }
         if (!r.preview) return;
         if (r.preview.auto) return void (await confirm(r.preview));
         setFlow({ preview: r.preview, result: null, busy: false, error: null });
@@ -149,6 +154,7 @@ function WriteDialog({ flow, onConfirm, onRetry, onClose }: { flow: Flow; onConf
     <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div
         className="cap-dialog write-dialog"
+        data-overlay="modal"
         role="dialog"
         aria-modal="true"
         aria-label={p.summary}
@@ -270,6 +276,7 @@ export function TimeboxDialog({ target, defaultMinutes, title, env, onClose }: {
     <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <form
         className="cap-dialog tb-dialog"
+        data-overlay="modal"
         role="dialog"
         aria-modal="true"
         aria-label={`Timebox ${title}`}
@@ -549,7 +556,8 @@ function TimeboxDetails({ tb, env, clientName, today, onRemoved }: { tb: Timebox
         </button>
       )}
       {tb.onOutlook && !tb.sync && !tb.conflict && <span className="muted">On Outlook</span>}
-      {tb.outlookNote && !tb.conflict && <span className="tb-note">{tb.outlookNote}</span>}
+      {tb.outlookNote && !tb.conflict && tb.outlookNote !== REMOVED_IN_OUTLOOK && <span className="tb-note">{tb.outlookNote}</span>}
+      {tb.outlookNote === REMOVED_IN_OUTLOOK && !tb.conflict && <RemovedChoice tb={tb} env={env} onRemoved={onRemoved} />}
       {tb.conflict && <ConflictChoice tb={tb} env={env} clientName={clientName} />}
       {tb.sync && env.access && !canWrite && (
         <span className="tb-explain">
@@ -571,6 +579,29 @@ function TimeboxDetails({ tb, env, clientName, today, onRemoved }: { tb: Timebox
       >
         Remove
       </button>
+    </div>
+  );
+}
+
+/** Its event was deleted in Outlook (step 13.5): the timebox stays here with Put on Outlook off; Keep or Remove it. */
+function RemovedChoice({ tb, env, onRemoved }: { tb: TimeboxView; env: TimeboxEnv; onRemoved: () => void }) {
+  const choose = async (keep: "local" | "remove") => {
+    try {
+      if (keep === "remove") onRemoved();
+      await call("timebox.resolve", { id: tb.id, keep });
+      env.changed();
+      notify(keep === "local" ? "Kept in Coopilot only" : "Timebox removed");
+    } catch (e) {
+      notify(errText(e));
+    }
+  };
+  return (
+    <div className="tb-conflict" role="group" aria-label="Removed in Outlook">
+      <p>
+        <strong>Removed in Outlook</strong> <span className="muted">Kept here with Put on Outlook off. It won't be put back on its own.</span>
+      </p>
+      <button type="button" className="mini" onClick={() => void choose("local")}>Keep</button>
+      <button type="button" className="mini" onClick={() => void choose("remove")}>Remove</button>
     </div>
   );
 }

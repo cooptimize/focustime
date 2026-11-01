@@ -13,7 +13,7 @@ import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import { hoursOn } from "../week/hours.ts";
 import { localToday, mondayOf } from "../week/dates.ts";
-import type { CalEvent, IsoDate } from "../week/types.ts";
+import type { Week, CalEvent, IsoDate } from "../week/types.ts";
 import { hold, type InviteMeta } from "./timebox-actions.ts";
 import type { ActionResponse, CandidatesData, CandidateView, SuggestData } from "./types.ts";
 
@@ -26,6 +26,8 @@ export type CollabContext = {
   dataverse: (cfg: AppConfig) => DataverseSource;
   outlook: (cfg: AppConfig) => { write: OutlookWrite | null; schedule: ScheduleReader | null; source: CalendarSource } | null;
   google: (cfg: AppConfig) => CalendarSource | null;
+  /** Step 13.5: my week's focus blocks (patterns and standing blocks only), to rank slots inside a client's blocks first. */
+  blocks?: (cfg: AppConfig, weekStart: IsoDate) => Promise<Week | null>;
   now: () => string;
 };
 
@@ -106,7 +108,7 @@ async function candidatesFor(ctx: CollabContext, cfg: AppConfig, clientKey: stri
   const candidates = rankCandidates({
     team: team.people, meId: me, meEmail: cfg.dataverse.myEmail, domains: inviteDomains(cfg),
     patterns: crew.ok ? crew.patterns : [], workers: new Set(crew.ok ? crew.workers : []),
-    away: pto.ok ? pto.away : [], dates: datesOf(from, to),
+    away: pto.ok ? pto.away : [], dates: datesOf(from, to), exclude: cfg.collab.exclude,
   });
   return { candidates, problems };
 }
@@ -195,13 +197,19 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
       const endIso = Temporal.Instant.fromEpochMilliseconds(Math.max(...windows.map((w) => w.end))).toString();
       let availability: Availability[];
       try {
-        availability = await ol.schedule.schedule(ask, startIso, endIso);
+        availability = await ol.schedule.schedule(ask, startIso, endIso, tz);
       } catch (e) {
         if (e instanceof NetworkError) return bad("Outlook unreachable, so free/busy can't be checked", 503);
         return bad("Outlook didn't return free/busy. Try again, or reconnect Outlook in Settings > Connections", 502);
       }
       for (const a of availability) if (a.problem) problems.push(`${c.candidates.find((x) => x.email === a.email)?.name ?? a.email}: ${a.problem}`);
-      const slots = suggestSlots({ minutes: o.minutes, myWindows: windows, myBusy, myBoxes, candidates: c.candidates.filter((x) => ask.includes(x.email)), availability, chosen, now: Temporal.Instant.from(ctx.now()).epochMilliseconds, tz });
+      // My focus blocks for this client in the range: slots inside them rank first (step 13.5).
+      const focus: [number, number][] = [];
+      for (const w of weeks) {
+        const wk = ctx.blocks ? await ctx.blocks(cfg, w).catch(() => null) : null;
+        for (const d of wk?.days ?? []) for (const sl of [d.am, d.pm, d.eve]) if (sl && dates.includes(d.date) && sl.focus[0]?.clientKey === clientKey) for (const win of sl.windows) focus.push([ms(win.start), ms(win.end)]);
+      }
+      const slots = suggestSlots({ minutes: o.minutes, myWindows: windows, myBusy, myBoxes, focus, candidates: c.candidates.filter((x) => ask.includes(x.email)), availability, chosen, now: Temporal.Instant.from(ctx.now()).epochMilliseconds, tz });
       return { ok: true, data: { slots, checked: availability.length, problems } satisfies SuggestData };
     }
     case "collab.preview_invite": {

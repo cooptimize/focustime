@@ -75,9 +75,9 @@ describe("Graph writer", () => {
   it("delete of an already deleted event counts as done", async () => {
     const { g, w } = setup();
     const { id } = await w.create(F, "tb-1", "tb-1:1");
-    await w.remove(id, "tb-1");
+    await expect(w.remove(id, "tb-1")).resolves.toBe("deleted");
     expect(g.events.size).toBe(0);
-    await expect(w.remove(id, "tb-1")).resolves.toBeUndefined();
+    await expect(w.remove(id, "tb-1")).resolves.toBe("already_gone");
   });
 
   it("retries once after a 401 with a fresh token; a 403 is an HttpError with the status only", async () => {

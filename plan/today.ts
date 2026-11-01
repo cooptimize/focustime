@@ -1,4 +1,4 @@
-// The Today view (step 10): which pick "Start focus" starts, and which loops count as urgent. Pure.
+// The Today view (step 10): which pick "Start focus" starts, and which follow-ups count as urgent. Pure.
 import type { Half, IsoDate } from "../week/types.ts";
 import type { Pick } from "./types.ts";
 
@@ -19,7 +19,7 @@ export function focusPick(picks: readonly Pick[], current: Half | null): Pick | 
   return planned[0]!;
 }
 
-/** Loops due today or earlier (open ones only), oldest due first. */
-export function urgentLoops<T extends { due: IsoDate | null; closedAt?: string | null }>(loops: readonly T[], today: IsoDate): T[] {
-  return loops.filter((l) => !l.closedAt && l.due !== null && l.due <= today).sort((a, b) => (a.due ?? "").localeCompare(b.due ?? ""));
+/** Follow-ups due today or earlier (open ones only), oldest due first. */
+export function urgentFollowUps<T extends { due: IsoDate | null; closedAt?: string | null }>(followUps: readonly T[], today: IsoDate): T[] {
+  return followUps.filter((l) => !l.closedAt && l.due !== null && l.due <= today).sort((a, b) => (a.due ?? "").localeCompare(b.due ?? ""));
 }

@@ -1,15 +1,15 @@
 // Today (step 10): the default view. What's now and next, today's picks by block with the week's committed
 // features as context, one large Start focus, and anything urgent. Everything else is a click away.
-import { useCallback, useContext, useEffect, useState } from "react";
-import type { LoopView, WeekLoadData } from "../actions/types.ts";
+import { DueBadge } from "./FollowUps.tsx";
+import { useContext, useState } from "react";
+import type { FollowUpView, WeekLoadData } from "../actions/types.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import type { NowStrip } from "../plan/now.ts";
 import { capacityMinutes, fitOf } from "../plan/rules.ts";
 import { slotPlanned } from "../plan/timebox.ts";
-import { focusPick, urgentLoops } from "../plan/today.ts";
+import { focusPick, urgentFollowUps } from "../plan/today.ts";
 import type { Pick } from "../plan/types.ts";
 import type { Day, Half, Slot } from "../week/types.ts";
-import { call } from "./api.ts";
 import { clientColor, halfName, longDate, slotRange } from "./labels.ts";
 import { countdown, timerLeft } from "./NowStrip.tsx";
 import { featuresOn, PlanCtx } from "./planview.ts";
@@ -47,11 +47,8 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
   const committed = !!plan?.committedAt;
   const names = new Map(data.planClients.map((c) => [c.clientKey, c.clientName]));
   const nameOf = (k: string) => names.get(k) ?? k;
-  const [loops, setLoops] = useState<LoopView[]>([]);
-  const loadLoops = useCallback(() => void call<{ loops: LoopView[] }>("loops.list", {}).then((r) => setLoops(r.loops), () => setLoops([])), []);
-  useEffect(loadLoops, [loadLoops, data.openLoops]);
-
-  const due = urgentLoops(loops, date);
+  // Step 13.5: due today and overdue follow-ups at the top, with the same badge words as everywhere.
+  const due: FollowUpView[] = urgentFollowUps(data.followUps, date);
   const down = causeLines(data.sources, data.devops);
   const pick = focusPick(picks, strip?.half ?? null);
   const t = data.timer;
@@ -69,9 +66,9 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
         <section className="today-urgent" aria-label="Needs attention">
           {due.map((l) => (
             <button key={`l${l.id}`} type="button" className="today-alert" onClick={onInbox}>
-              <span className="today-alert-tag">{l.due! < date ? "Overdue" : "Due today"}</span>
+              <DueBadge l={l} />
               <span>
-                {l.who ? `${l.who}: ` : ""}
+                {l.hasWho ? `${l.who}: ` : ""}
                 {l.what}
               </span>
             </button>

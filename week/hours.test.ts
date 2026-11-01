@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { capacityMinutes } from "../plan/rules.ts";
 import { buildWeek } from "./build.ts";
-import { hoursOn, viewRange, workingMinutes, type TimeModel } from "./hours.ts";
+import { hoursOn, noHoursPrompt, viewRange, workingMinutes, type TimeModel } from "./hours.ts";
 import { config, meeting, NY } from "./test-helpers.ts";
 import type { FlexSession, Unavailable, WeekConfig } from "./types.ts";
 
@@ -158,5 +158,16 @@ describe("view range", () => {
     const same = (a: string, b: string) => Temporal.Instant.compare(Temporal.Instant.from(a), Temporal.Instant.from(b)) === 0;
     expect(same(mon.eve!.view.end, at("2026-11-02T21:00"))).toBe(true);
     expect(same(mon.eve!.view.start, at("2026-11-02T17:00"))).toBe(true);
+  });
+});
+
+describe("moving a pick to a day with no working hours (step 13.5)", () => {
+  it("asks on a day with no hours, by its weekday name; never on a day with hours", () => {
+    expect(noHoursPrompt(model(), "2026-11-06")).toBe("Friday has no working hours. Add hours for that day?");
+    expect(noHoursPrompt(model(), "2026-11-05")).toBeNull();
+    // A one-day override with hours counts.
+    expect(noHoursPrompt(model({ overrides: [{ date: "2026-11-06", segments: [{ start: "09:00", end: "12:00" }] }] }), "2026-11-06")).toBeNull();
+    // Further than a week out, the date says which Friday.
+    expect(noHoursPrompt(model(), "2026-11-20", "2026-11-02")).toBe("Friday, Nov 20 has no working hours. Add hours for that day?");
   });
 });

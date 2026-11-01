@@ -11,7 +11,7 @@ import { fakeDevOps } from "../sources/devops/test-fakes.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import type { CaptureFeatures, CaptureState } from "./capture-actions.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
-import type { CloseOutState, LoopView, WeekPlanState } from "./types.ts";
+import type { CloseOutState, FollowUpView, WeekPlanState } from "./types.ts";
 
 const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"')
   .replace('my_systemuserid = ""', `my_systemuserid = "${dvConfig.mySystemUserId}"`)
@@ -50,16 +50,16 @@ function setup(o: { offline?: boolean } = {}) {
 }
 
 describe("quick capture actions (step 9)", () => {
-  it("saves at once with every source offline, and lists the inbox and notes without any source", async () => {
+  it("saves at once with every source offline, and lists the inbox without any source", async () => {
     const t = setup({ offline: true });
     const r = await t.run<{ capture: { id: number; text: string; clientKey: string | null }; inboxCount: number }>("capture.add", { text: "Told Dana I'd send the export by Thursday", clientKey: "CSC" });
     expect(r).toMatchObject({ capture: { text: "Told Dana I'd send the export by Thursday", clientKey: "CSC" }, inboxCount: 1 });
     const s = await t.run<CaptureState>("capture.load", {});
     expect(s.inbox.map((c) => c.id)).toEqual([r.capture.id]);
     expect(s.today).toBe("2026-11-05");
-    // Routing to a loop or a note needs nothing outside the store either.
-    await t.run("capture.route", { id: r.capture.id, as: "loop", clientKey: "CSC", who: "Dana", what: "Send the export", due: "2026-11-05" });
-    expect(t.plan.openLoops()).toEqual([expect.objectContaining({ kind: "capture", who: "Dana", due: "2026-11-05" })]);
+    // Routing to a follow-up needs nothing outside the store either.
+    await t.run("capture.route", { id: r.capture.id, as: "follow_up", clientKey: "CSC", who: "Dana", what: "Send the export", due: "2026-11-05" });
+    expect(t.plan.openFollowUps()).toEqual([expect.objectContaining({ kind: "capture", who: "Dana", due: "2026-11-05" })]);
     // Nothing was sent anywhere: no DevOps call, and no Dataverse call for capture.add or capture.load.
     expect(t.ado.calls).toEqual([]);
   });
@@ -71,7 +71,7 @@ describe("quick capture actions (step 9)", () => {
     expect((await t.fail("capture.add", { text: "ok", extra: 1 })).status).toBe(400);
     const { capture } = await t.run<{ capture: { id: number } }>("capture.add", { text: "need to add paging" });
     expect((await t.fail("capture.route", { id: capture.id, as: "draft", title: "Add paging" })).status).toBe(400); // a draft needs a client
-    expect((await t.fail("capture.route", { id: capture.id, as: "loop", what: "x", due: "Thursday" })).status).toBe(400);
+    expect((await t.fail("capture.route", { id: capture.id, as: "follow_up", what: "x", due: "Thursday" })).status).toBe(400);
     expect((await t.fail("capture.route", { id: capture.id, as: "elsewhere" })).status).toBe(400);
   });
 
@@ -96,18 +96,21 @@ describe("quick capture actions (step 9)", () => {
     expect((await t.run<{ inboxCount: number }>("capture.route", { id: a.capture.id, as: "draft", clientKey: "CSC", title: "Export" })).inboxCount).toBe(0);
   });
 
-  it("notes per client, searchable; deleted by id", async () => {
+  it("a draft feature goes under one of the client's open epics, or under none; there are no notes (step 13.5)", async () => {
     const t = setup();
-    for (const [k, x] of [["CSC", "Schema manager wants Git support"], ["W&C", "Approvals go to Mark"], [null, "Read about caching"]] as const) {
-      const { capture } = await t.run<{ capture: { id: number } }>("capture.add", { text: x, ...(k ? { clientKey: k } : {}) });
-      await t.run("capture.route", { id: capture.id, as: "note", text: x, clientKey: k });
-    }
-    expect((await t.run<CaptureState>("capture.load", { clientKey: "CSC" })).notes.map((n) => n.text)).toEqual(["Schema manager wants Git support"]);
-    expect((await t.run<CaptureState>("capture.load", { clientKey: "" })).notes.map((n) => n.text)).toEqual(["Read about caching"]);
-    const found = (await t.run<CaptureState>("capture.load", { query: "mark approvals" })).notes;
-    expect(found.map((n) => n.clientKey)).toEqual(["W&C"]);
-    await t.run("note.delete", { id: found[0]!.id });
-    expect((await t.fail("note.delete", { id: found[0]!.id })).status).toBe(404);
+    const f = await t.run<CaptureFeatures>("capture.features", { clientKey: "CSC" });
+    expect(f.epics.map((x) => x.id)).toContain(250);
+    expect(f.epics.map((x) => x.id)).not.toContain(240);
+    const a = await t.run<{ capture: { id: number } }>("capture.add", { text: "feature: onboarding", clientKey: "CSC" });
+    expect((await t.fail("capture.route", { id: a.capture.id, as: "draft_feature", clientKey: "CSC", title: "Onboarding", parentItemId: 240 })).status).toBe(422); // a feature, not an epic
+    expect((await t.fail("capture.route", { id: a.capture.id, as: "note", clientKey: "CSC", text: "x" })).status).toBe(400);
+    const r = await t.run<{ capture: { routedId: number } }>("capture.route", { id: a.capture.id, as: "draft_feature", clientKey: "CSC", title: "Onboarding", parentItemId: 250 });
+    expect(t.plan.getDraft(r.capture.routedId)).toMatchObject({ level: "feature", parentItemId: 250, title: "Onboarding" });
+    // Plan the week's "Draft a feature" under an epic, the same check.
+    const d = await t.run<{ draft: { level: string; parentItemId: number | null } }>("draft.add_feature", { clientKey: "CSC", parentItemId: 250, title: "Self-service export" });
+    expect(d.draft).toMatchObject({ level: "feature", parentItemId: 250 });
+    expect((await t.fail("draft.add_feature", { clientKey: "CSC", title: " " })).status).toBe(400);
+    expect((await t.fail("note.delete", { id: 1 })).status).toBe(400);
   });
 
   it("Close out says how many captures are unprocessed", async () => {
@@ -128,11 +131,11 @@ describe("quick capture actions (step 9)", () => {
     expect(s.captures).toBe(1);
   });
 
-  it("a capture loop shows in the Loops list as captured", async () => {
+  it("a capture follow-up shows in the Follow-ups list as captured", async () => {
     const t = setup();
     const { capture } = await t.run<{ capture: { id: number } }>("capture.add", { text: "I'll call the vendor" });
-    await t.run("capture.route", { id: capture.id, as: "loop", who: "", what: "Call the vendor" });
-    const loops = await t.run<{ loops: LoopView[] }>("loops.list", {});
-    expect(loops.loops).toEqual([expect.objectContaining({ kind: "capture", what: "Call the vendor", due: null })]);
+    await t.run("capture.route", { id: capture.id, as: "follow_up", who: "", what: "Call the vendor" });
+    const followUps = await t.run<{ followUps: FollowUpView[] }>("followups.list", {});
+    expect(followUps.followUps).toEqual([expect.objectContaining({ kind: "capture", what: "Call the vendor", due: null })]);
   });
 });

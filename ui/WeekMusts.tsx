@@ -11,7 +11,7 @@ import { clientColor } from "./labels.ts";
 import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 
-type HeadsUp = { weekStart: IsoDate; clientKey: string; itemId: number; title: string };
+type HeadsUp = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; trigger?: "dropped" | "demoted" };
 
 /** The week's list, progress and (when the loaded week is that week) the on-track question per client. */
 export function weekMusts(data: WeekLoadData, weekStart: IsoDate, now: string | null) {
@@ -78,7 +78,7 @@ export function AnythingShifted({ data, weekStart, now, onChanged }: { data: Wee
   const headsUp = async (h: HeadsUp) => {
     try {
       await call("weekplan.headsup", h);
-      setNotice(`Loop opened: heads-up to ${rows.find((r) => r.clientKey === h.clientKey)?.name ?? h.clientKey}`);
+      setNotice(`Follow-up opened: heads-up to ${rows.find((r) => r.clientKey === h.clientKey)?.name ?? h.clientKey}`);
       setOffer(null);
       onChanged();
     } catch (e) {
@@ -92,7 +92,7 @@ export function AnythingShifted({ data, weekStart, now, onChanged }: { data: Wee
       {offer ? (
         <p className="co-notice" role="status">
           #{offer.itemId} is out of the musts. Let them know?{" "}
-          <button type="button" className="mini" onClick={() => void headsUp(offer)}>Open a heads-up loop</button>{" "}
+          <button type="button" className="mini" onClick={() => void headsUp(offer)}>Open a heads-up follow-up</button>{" "}
           <button type="button" className="mini quiet" onClick={() => setOffer(null)}>Not needed</button>
         </p>
       ) : (

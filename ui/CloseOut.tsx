@@ -1,5 +1,5 @@
 // Close out (step 7): the end of the day in about three minutes. Picks done or not (focused time against size, and
-// what to do with the rest), a one-line resume note per client worked, and the loops to close. Commit at the end.
+// what to do with the rest), a one-line resume note per client worked, and the follow-ups to close. Commit at the end.
 // Any earlier day can be closed out later; nothing here blocks anything else. Local only.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CloseOutState, WeekLoadData } from "../actions/types.ts";
@@ -8,7 +8,8 @@ import type { Pick } from "../plan/types.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import { formatDuration } from "../week/format.ts";
 import { call, planAction } from "./api.ts";
-import { AddLoop, LoopRow } from "./Loops.tsx";
+import { captureClients } from "./Capture.tsx";
+import { AddFollowUp, Fading, FollowUpRow } from "./FollowUps.tsx";
 import { dayName, FlexOfferBar, FocusVsSize, HALF_NAMES, SlipActions, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 
 type Props = { date: IsoDate; data: WeekLoadData; onDate: (d: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
@@ -28,6 +29,8 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
   const sizes = data.planning.sizes;
   const names = new Map([...data.planClients.map((c) => [c.clientKey, c.clientName] as const), ...(data.devops ?? []).map((c) => [c.clientKey, c.clientName] as const)]);
   const clientName = (k: string) => names.get(k) ?? k;
+  const clients = captureClients(data);
+  const clearNotice = useCallback(() => setNotice(null), []);
 
   const load = useCallback(async () => {
     try {
@@ -73,7 +76,14 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
     [load, onChanged],
   );
 
+  const rowDone = (m?: string) => {
+    if (m) setNotice(m);
+    void load();
+    onChanged();
+  };
   if (!st) return <main className="closeout" aria-label="Close out">{error ? <p className="set-problem">{error}</p> : <p className="muted">Loading…</p>}</main>;
+  const dueBy = st.followUps.filter((l) => l.due !== null && l.due <= date);
+  const rest = st.followUps.filter((l) => !dueBy.includes(l));
 
   const live = st.picks.filter((p) => p.status === "planned" || p.status === "done");
   const settled = st.picks.filter((p) => p.status === "moved" || p.status === "dropped");
@@ -90,7 +100,7 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
 
   return (
     <main className="closeout" aria-label="Close out">
-      <div className="loops-head">
+      <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
           Close out <span className="muted">{dayName(date)}{st.access === "past" ? " (earlier day)" : ""}</span>
         </h2>
@@ -121,14 +131,14 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
         </button>
       </div>
       {error && <p className="set-problem" role="alert">{error}</p>}
-      {notice && <p className="co-notice" role="status">{notice}</p>}
+      <Fading text={notice} onGone={clearNotice} />
       {offer && <FlexOfferBar offer={offer.offer} clientKey={offer.pick.clientKey} clientName={clientName(offer.pick.clientKey)} title={offer.pick.title} onDone={(m) => { setOffer(null); setNotice(m); onChanged(); }} />}
 
       <section className="co-section" aria-labelledby="co-picks">
         <h3 id="co-picks">
           1. Picks <span className="muted">{formatDuration(totals.focusedMinutes) || "0m"} focused of {formatDuration(totals.plannedMinutes) || "0m"} planned</span>
         </h3>
-        {!st.picks.length && <p className="muted">{st.committedAt ? "No picks that day." : "Nothing was planned that day. That's fine: resume notes and loops still help."}</p>}
+        {!st.picks.length && <p className="muted">{st.committedAt ? "No picks that day." : "Nothing was planned that day. That's fine: resume notes and follow-ups still help."}</p>}
         {halves.map((h) => (
           <div key={h} className="co-half">
             <h4>{HALF_NAMES[h]}</h4>
@@ -208,35 +218,27 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
       {st.captures > 0 && (
         <section className="co-section co-captures" aria-label="Captures">
           <p>
-            <strong>{st.captures} unprocessed capture{st.captures === 1 ? "" : "s"}</strong> <span className="muted">waiting to become loops, draft stories or notes.</span>{" "}
+            <strong>{st.captures} unprocessed capture{st.captures === 1 ? "" : "s"}</strong> <span className="muted">waiting to become follow-ups, draft stories or draft features.</span>{" "}
             <button type="button" className="mini" onClick={onCaptures}>Sort captures</button>
           </p>
         </section>
       )}
-      <section className="co-section" aria-labelledby="co-loops">
-        <h3 id="co-loops">
-          3. Loops <span className="muted">{st.loops.length} open, newest first</span>
+      <section className="co-section" aria-labelledby="co-follow-ups">
+        <h3 id="co-follow-ups">
+          3. Follow-ups <span className="muted">{st.followUps.length} open{dueBy.length ? `, ${dueBy.length} due by ${date === st.today ? "today" : dayName(date)} still open` : ""}</span>
         </h3>
-        <AddLoop onAdded={() => { void load(); onChanged(); }} />
-        {!st.loops.length && <p className="muted">No open loops.</p>}
-        <ul className="loop-list">
-          {st.loops.map((l) => (
-            <LoopRow
-              key={l.id}
-              l={l}
-              timeZone={tz}
-              onClosed={async (note) => {
-                try {
-                  await call("loop.close", { id: l.id, note });
-                  await load();
-                  onChanged();
-                  return true;
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : "Could not close it");
-                  return false;
-                }
-              }}
-            />
+        <AddFollowUp clients={clients} onAdded={() => { void load(); onChanged(); }} />
+        {!st.followUps.length && <p className="muted">No open follow-ups.</p>}
+        {dueBy.length > 0 && <h4 className="co-due-head">Due {date === st.today ? "today" : `by ${dayName(date)}`}, still open</h4>}
+        <ul className="follow-up-list">
+          {dueBy.map((l) => (
+            <FollowUpRow key={l.id} l={l} timeZone={tz} today={st.today} clients={clients} onChanged={rowDone} />
+          ))}
+        </ul>
+        {dueBy.length > 0 && rest.length > 0 && <h4 className="co-due-head">Other open follow-ups</h4>}
+        <ul className="follow-up-list">
+          {rest.map((l) => (
+            <FollowUpRow key={l.id} l={l} timeZone={tz} today={st.today} clients={clients} onChanged={rowDone} />
           ))}
         </ul>
       </section>

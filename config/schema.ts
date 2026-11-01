@@ -46,8 +46,10 @@ export type AppConfig = {
   collab: CollabSettings;
 };
 /** `domains` empty means my work email's domain. */
-export type CollabSettings = { meetingMinutes: number; teams: boolean; daysAhead: number; domains: string[] };
-export const DEFAULT_COLLAB: CollabSettings = { meetingMinutes: 30, teams: true, daysAhead: 3, domains: [] };
+/** Step 13.5: `exclude` lists people (names or addresses) who are never candidates or Who suggestions, like bots. */
+export type CollabSettings = { meetingMinutes: number; teams: boolean; daysAhead: number; domains: string[]; exclude: string[] };
+export const DEFAULT_EXCLUDE: readonly string[] = ["Kat 🤖"];
+export const DEFAULT_COLLAB: CollabSettings = { meetingMinutes: 30, teams: true, daysAhead: 3, domains: [], exclude: [...DEFAULT_EXCLUDE] };
 export const COLLAB_LENGTHS = [15, 30, 45, 60, 90] as const;
 /** The domains invites may go to: config, else my work email's. */
 export const inviteDomains = (cfg: Pick<AppConfig, "collab" | "dataverse">) => (cfg.collab.domains.length ? cfg.collab.domains : [cfg.dataverse.myEmail.split("@")[1] ?? ""].filter(Boolean)).map((d) => d.toLowerCase());
@@ -496,11 +498,11 @@ export function parseConfig(text: string): ParseResult {
   }
 
   // [collab] (optional, step 13): meeting_minutes (15, 30, 45, 60 or 90), teams, days_ahead (1 to 10), domains
-  const collab: CollabSettings = { ...DEFAULT_COLLAB, domains: [] };
+  const collab: CollabSettings = { ...DEFAULT_COLLAB, domains: [], exclude: [...DEFAULT_EXCLUDE] };
   if (raw.collab !== undefined) {
     const t = isTable(raw.collab) ? raw.collab : (err("collab", "Must be a [collab] table"), null);
     if (t) {
-      for (const k of Object.keys(t)) if (!["meeting_minutes", "teams", "days_ahead", "domains"].includes(k)) err(`collab.${k}`, "Unknown field");
+      for (const k of Object.keys(t)) if (!["meeting_minutes", "teams", "days_ahead", "domains", "exclude"].includes(k)) err(`collab.${k}`, "Unknown field");
       if (t.meeting_minutes !== undefined) {
         if (typeof t.meeting_minutes !== "number" || !(COLLAB_LENGTHS as readonly number[]).includes(t.meeting_minutes)) err("collab.meeting_minutes", `Must be one of ${COLLAB_LENGTHS.join(", ")}`);
         else collab.meetingMinutes = t.meeting_minutes;
@@ -516,6 +518,10 @@ export function parseConfig(text: string): ParseResult {
       if (t.domains !== undefined) {
         if (!Array.isArray(t.domains) || t.domains.length > 5 || t.domains.some((d) => typeof d !== "string" || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(d))) err("collab.domains", "Must be a list of up to 5 domains, like \"cooptimize.org\"");
         else collab.domains = (t.domains as string[]).map((d) => d.toLowerCase());
+      }
+      if (t.exclude !== undefined) {
+        if (!Array.isArray(t.exclude) || t.exclude.length > 50 || t.exclude.some((d) => typeof d !== "string" || !d.trim() || d.length > 200)) err("collab.exclude", "Must be a list of up to 50 names or addresses");
+        else collab.exclude = (t.exclude as string[]).map((d) => d.trim());
       }
     }
   }

@@ -89,7 +89,7 @@ describe("heads-up on a dropped must", () => {
 });
 
 describe("heads-up for a dropped must", () => {
-  it("is one loop per week, client and item, with a plain draft", () => {
+  it("is one follow-up per week, client and item, with a plain draft", () => {
     expect(headsUpKey("2026-11-09", "CSC", 210)).toBe("slip:week:2026-11-09:CSC:210");
     expect(weekHeadsUpDraft("CSC Steel", "2026-11-09", { itemId: 210, title: "Export" })).toBe("Hi CSC Steel, a quick heads-up: #210 Export won't be finished the week of Mon, Nov 9 as I planned.\nI'll let you know where it lands.");
   });

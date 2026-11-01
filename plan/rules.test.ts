@@ -14,7 +14,7 @@ function pick(over: Partial<Pick> = {}): Pick {
   const id = nextId++;
   return {
     id, date: "2026-11-02", half: "AM", clientKey: "CSC", kind: "intention", itemId: null, draftId: null, title: `pick ${id}`,
-    itemType: null, itemUrl: null, size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, notes: null,
+    itemType: null, itemUrl: null, size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, followUpId: null, notes: null,
     position: id, createdAt: "", updatedAt: "", ...over,
   };
 }

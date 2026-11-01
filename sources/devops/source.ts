@@ -165,7 +165,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return items;
   }
 
-  /** Items read by id (step 7): those an open loop is about that aren't among my open items, completed ones too. */
+  /** Items read by id (step 7): those an open follow-up is about that aren't among my open items, completed ones too. */
   async function fetchWatched(ctx: Ctx, project: string, meta: Metadata, ids: number[]): Promise<WorkItem[]> {
     if (!ids.length) return [];
     const page = await call<{ value?: unknown[] }>(ctx, "workitemsbatch", `${encodeURIComponent(project)}/_apis/wit/workitemsbatch`, { ids: ids.slice(0, BATCH_MAX), fields: batchFields(meta.orderField), errorPolicy: "omit" });
@@ -440,7 +440,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return r?.items.find((i) => i.id === id) ?? r?.children.find((i) => i.id === id) ?? r?.committed?.find((i) => i.id === id) ?? null;
   }
 
-  /** The last result per client in memory (step 7: Close out's loop rules use what was already fetched). */
+  /** The last result per client in memory (step 7: Close out's follow-up rules use what was already fetched). */
   function last(clientKey: string): ClientWork | null {
     return memory.get(clientKey)?.result ?? null;
   }

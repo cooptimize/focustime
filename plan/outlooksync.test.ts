@@ -20,8 +20,8 @@ describe("two-way sync for Coopilot events", () => {
     expect(timeboxFrom(d.fields, "W&C", TZ)).toEqual({ date: "2026-11-03", start: "2026-11-03T10:00:00-06:00", end: "2026-11-03T11:00:00-06:00", title: "Import mapping v2", showAs: "tentative" });
   });
 
-  it("removes the timebox when the event was deleted in Outlook and Coopilot didn't change it", () => {
-    expect(syncDecision(last, null, last)).toEqual({ kind: "adopt_delete" });
+  it("deleted in Outlook: the timebox is kept and asks (step 13.5), whether or not Coopilot changed it", () => {
+    expect(syncDecision(last, null, last)).toEqual({ kind: "removed_in_outlook" });
     // Deleted in Outlook and removed in Coopilot too: nothing left to do.
     expect(syncDecision(last, null, null)).toEqual({ kind: "none" });
   });
@@ -30,8 +30,8 @@ describe("two-way sync for Coopilot events", () => {
     const mine = { ...last, start: "2026-11-03T15:30:00Z", end: "2026-11-03T17:00:00Z" };
     const d = syncDecision(last, seen({ subject: "W&C: renamed in Outlook" }), mine);
     expect(d).toMatchObject({ kind: "conflict", changed: ["title"], outlook: { subject: "W&C: renamed in Outlook" } });
-    // Moved in Coopilot, deleted in Outlook.
-    expect(syncDecision(last, null, mine)).toMatchObject({ kind: "conflict", outlook: null });
+    // Moved in Coopilot, deleted in Outlook: kept and asks too, never a re-create.
+    expect(syncDecision(last, null, mine)).toEqual({ kind: "removed_in_outlook" });
     // Removed in Coopilot, changed in Outlook.
     expect(syncDecision(last, seen({ showAs: "free" }), null)).toMatchObject({ kind: "conflict" });
   });

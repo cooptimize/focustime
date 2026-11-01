@@ -16,7 +16,7 @@ export type ScheduleDeps = { fetch: typeof fetch; token: () => Promise<string>; 
 const utcBody = (iso: string) => ({ dateTime: Temporal.Instant.from(iso).toString({ smallestUnit: "second" }).replace(/Z$/, ""), timeZone: "UTC" });
 
 export function createScheduleReader(d: ScheduleDeps) {
-  async function once(emails: string[], startIso: string, endIso: string, retried = false): Promise<Availability[]> {
+  async function once(emails: string[], startIso: string, endIso: string, zone: string, retried = false): Promise<Availability[]> {
     const token = await d.token();
     const started = performance.now();
     let res: Response;
@@ -35,19 +35,20 @@ export function createScheduleReader(d: ScheduleDeps) {
     if (res.status === 401 && !retried) {
       await res.body?.cancel();
       d.invalidate();
-      return once(emails, startIso, endIso, true);
+      return once(emails, startIso, endIso, zone, true);
     }
     if (!res.ok) {
       await res.body?.cancel();
       throw new HttpError(res.status);
     }
     // Parsed at once; the raw answer goes out of scope here.
-    return parseSchedule(await res.json().catch(() => null), startIso, endIso, SCHEDULE_INTERVAL);
+    return parseSchedule(await res.json().catch(() => null), startIso, endIso, SCHEDULE_INTERVAL, zone);
   }
   /** Availability for each address over [start, end), in batches. */
-  async function schedule(emails: readonly string[], startIso: string, endIso: string): Promise<Availability[]> {
+  /** `zone`: my time zone, assumed (9:00 to 5:00) for anyone who doesn't share working hours (step 13.5). */
+  async function schedule(emails: readonly string[], startIso: string, endIso: string, zone = "UTC"): Promise<Availability[]> {
     const out: Availability[] = [];
-    for (let i = 0; i < emails.length; i += SCHEDULE_BATCH) out.push(...(await once(emails.slice(i, i + SCHEDULE_BATCH), startIso, endIso)));
+    for (let i = 0; i < emails.length; i += SCHEDULE_BATCH) out.push(...(await once(emails.slice(i, i + SCHEDULE_BATCH), startIso, endIso, zone)));
     return out;
   }
   return { schedule };

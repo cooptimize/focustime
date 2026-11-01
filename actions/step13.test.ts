@@ -70,8 +70,8 @@ function setup() {
   };
   const confirm = (p: WritePreview) => run<WriteResult>("write.confirm", { previewId: p.previewId });
   const sync = () => syncWeek({ plan, ow: { access: async () => access, writer }, cfg: parsed.config, weekStart: WEEK, refresh: true, now: () => NOW, clients: [{ key: "W&C", name: "W&C" }] });
-  const box = async () => {
-    const r = await run<{ timebox: { id: number; uid: string } }>("timebox.add", { date: D, start: `${D}T09:00:00-06:00`, end: `${D}T10:30:00-06:00`, clientKey: "W&C", title: "#4512 Import mapping", url: "https://dev.azure.com/wc/p/_workitems/edit/4512", outlook: true });
+  const box = async (s = "09:00", e = "10:30") => {
+    const r = await run<{ timebox: { id: number; uid: string } }>("timebox.add", { date: D, start: `${D}T${s}:00-06:00`, end: `${D}T${e}:00-06:00`, clientKey: "W&C", title: "#4512 Import mapping", url: "https://dev.azure.com/wc/p/_workitems/edit/4512", outlook: true });
     const p = (await run<{ preview: WritePreview }>("write.preview", { uid: r.timebox.uid })).preview;
     expect((await confirm(p)).confirmed).toBe(true);
     return r.timebox;
@@ -151,13 +151,50 @@ describe("two-way sync for Coopilot events", () => {
     expect((await t.fail("write.preview", { undo: log.entries[0]!.id })).error).toMatch(/isn't undone from here/);
   });
 
-  it("removes the timebox when its event was deleted in Outlook", async () => {
+  it("deleted in Outlook: keeps the timebox, turns Put on Outlook off, never re-creates it; Keep or Remove (step 13.5)", async () => {
     const t = setup();
     const tb = await t.box();
     t.g.events.delete(t.plan.ownEvent(tb.uid)!.eventId);
+    const writes = t.g.calls.filter((c) => c.method !== "GET").length;
     await t.sync();
-    expect(t.plan.timebox(tb.id)).toMatchObject({ removedAt: expect.any(String), outlookNote: "Deleted in Outlook" });
+    expect(t.plan.timebox(tb.id)).toMatchObject({ removedAt: null, outlook: false, outlookNote: "Removed in Outlook", conflict: null });
     expect(t.plan.ownEvent(tb.uid)!.deletedAt).not.toBeNull();
+    await t.sync();
+    expect(t.g.calls.filter((c) => c.method !== "GET").length).toBe(writes);
+    // Keep: the note goes, the timebox stays local.
+    await t.run("timebox.resolve", { id: tb.id, keep: "local" });
+    expect(t.plan.timebox(tb.id)).toMatchObject({ removedAt: null, outlook: false, outlookNote: null });
+    // Remove (on another one): the timebox goes, nothing is written.
+    const tb2 = await t.box("13:00", "14:00");
+    t.g.events.delete(t.plan.ownEvent(tb2.uid)!.eventId);
+    await t.sync();
+    await t.run("timebox.resolve", { id: tb2.id, keep: "remove" });
+    expect(t.plan.timebox(tb2.id)!.removedAt).not.toBeNull();
+    expect((await t.fail("timebox.resolve", { id: tb.id, keep: "local" })).status).toBe(409);
+  });
+
+  it("removing or changing a timebox whose event is already gone is done, logged as already gone, never an error (step 13.5)", async () => {
+    const t = setup();
+    // Gone before the preview: a remove has nothing to do.
+    const a = await t.box();
+    t.g.events.delete(t.plan.ownEvent(a.uid)!.eventId);
+    await t.run("timebox.remove", { id: a.id });
+    expect(await t.run("write.preview", { uid: a.uid })).toEqual({ nothing: true, alreadyGone: true });
+    // Gone before the preview of a change: kept here with Put on Outlook off, never re-created.
+    const b = await t.box("11:00", "12:00");
+    t.g.events.delete(t.plan.ownEvent(b.uid)!.eventId);
+    await t.run("timebox.update", { id: b.id, start: `${D}T11:30:00-06:00`, end: `${D}T12:30:00-06:00` });
+    expect(await t.run("write.preview", { uid: b.uid })).toEqual({ nothing: true, alreadyGone: true });
+    expect(t.plan.timebox(b.id)).toMatchObject({ outlook: false, outlookNote: "Removed in Outlook", removedAt: null });
+    // Gone between preview and confirm (a 404): confirmed as already gone.
+    const c = await t.box("13:00", "14:00");
+    await t.run("timebox.remove", { id: c.id });
+    const p = (await t.run<{ preview: WritePreview }>("write.preview", { uid: c.uid })).preview;
+    t.g.events.delete(t.plan.ownEvent(c.uid)!.eventId);
+    expect(await t.confirm(p)).toMatchObject({ confirmed: true, message: "Already gone from Outlook; nothing to remove" });
+    const log = t.plan.writeLog(20).map((e) => e.message);
+    expect(log.filter((m) => m?.startsWith("Already gone from Outlook"))).toHaveLength(3);
+    expect(t.g.events.size).toBe(0);
   });
 
   it("both changed: keeps both, writes nothing, blocks the push until I choose; Use Outlook's or Keep Coopilot's", async () => {
@@ -246,7 +283,7 @@ describe("the collaboration finder", () => {
     expect((await t.fail("collab.suggest", { clientKey: "W&C", minutes: 30, people: ["pat@client.example"] })).status).toBe(422);
   });
 
-  it("previews an invite naming every attendee, sends it only on confirm, reads it back, tracks it and opens a loop", async () => {
+  it("previews an invite naming every attendee, sends it only on confirm, reads it back, tracks it and opens a follow-up", async () => {
     const t = setup();
     const r = await t.run<{ preview: WritePreview }>("collab.preview_invite", { clientKey: "W&C", title: "#4512 Import mapping", itemId: 4512, url: "https://dev.azure.com/wc/p/_workitems/edit/4512", start: `${D}T13:00:00-06:00`, end: `${D}T13:30:00-06:00`, people: ["ana@cooptimize.org", "ben@cooptimize.org"], note: "Stuck on the lookup" });
     const p = r.preview;
@@ -263,11 +300,11 @@ describe("the collaboration finder", () => {
     expect(post).toMatchObject({ isOnlineMeeting: true, onlineMeetingProvider: "teamsForBusiness", attendees: [{ emailAddress: { address: "ana@cooptimize.org", name: "Ana" }, type: "required" }, { emailAddress: { address: "ben@cooptimize.org" } }] });
     const inv = t.plan.invitesFrom("2026-11-01")[0]!;
     expect(inv).toMatchObject({ status: "sent", itemId: 4512, clientKey: "W&C", eventId: done.entry.eventId });
-    const loop = t.plan.getLoop(inv.loopId!)!;
-    expect(loop).toMatchObject({ kind: "help", what: "Help session with Ana and Ben on #4512 Import mapping", closedAt: null });
-    // The loop closes once the meeting is over.
-    expect(t.plan.closeHelpLoops(Temporal.Instant.from("2026-11-10T19:29:00Z"))).toBe(0);
-    expect(t.plan.closeHelpLoops(Temporal.Instant.from("2026-11-10T19:31:00Z"))).toBe(1);
+    const followUp = t.plan.getFollowUp(inv.followUpId!)!;
+    expect(followUp).toMatchObject({ kind: "help", what: "Help session with Ana and Ben on #4512 Import mapping", closedAt: null });
+    // The follow-up closes once the meeting is over.
+    expect(t.plan.closeHelpFollowUps(Temporal.Instant.from("2026-11-10T19:29:00Z"))).toBe(0);
+    expect(t.plan.closeHelpFollowUps(Temporal.Instant.from("2026-11-10T19:31:00Z"))).toBe(1);
   });
 
   it("limits attendee domains at preview and in the writer", async () => {
@@ -296,7 +333,7 @@ describe("the collaboration finder", () => {
     expect(t.g.calls.some((x) => x.method === "DELETE")).toBe(false);
     const inv = t.plan.invitesFrom("2026-11-01")[0]!;
     expect(inv.status).toBe("cancelled");
-    expect(t.plan.getLoop(inv.loopId!)!.closedAt).not.toBeNull();
+    expect(t.plan.getFollowUp(inv.followUpId!)!.closedAt).not.toBeNull();
     // A cancelled invite isn't sent again by another undo.
     expect((await t.run<WriteLogView>("write.log", {})).entries.every((e) => !e.undoable)).toBe(true);
   });

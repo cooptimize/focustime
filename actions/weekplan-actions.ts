@@ -1,6 +1,6 @@
 // Plan the week (step 8, by client since step 11): each client's week list of DevOps features and stories, Must or
 // Nice to have, in stack rank order unless reordered here, optionally pinned to blocks; the Coop brief; "being broken
-// down" marks; the "ask about priorities" loop; a heads-up loop when a committed must is dropped. Local only: the week
+// down" marks; the "ask about priorities" follow-up; a heads-up follow-up when a committed must is dropped. Local only: the week
 // plan lives in the plan store and nothing is written back to DevOps (features through the portfolio read, stories
 // from the work read, one description on demand).
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
@@ -11,7 +11,7 @@ import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { PlanError, type PlanStore, type WeekFeature, type WeekPlanRecord } from "../store/plan-store.ts";
 import { mondayOf } from "../week/dates.ts";
 import type { ClientPortfolio, ClientWork, IsoDate, PortfolioItem, Week } from "../week/types.ts";
-import { internalClients, loopView, nameOf } from "./loop-rules.ts";
+import { internalClients, followUpView, nameOf } from "./followup-rules.ts";
 import type { ActionResponse, WeekPlanState, WeekPlanView } from "./types.ts";
 
 export type WeekPlanAction =
@@ -28,7 +28,7 @@ export type WeekPlanAction =
   | "weekplan.headsup"
   | "feature.brief"
   | "feature.mark_breakdown"
-  | "loop.ask_priorities";
+  | "followup.ask_priorities";
 
 export type WeekPlanContext = {
   plan: PlanStore | undefined;
@@ -166,11 +166,11 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const portfolios = weekStart < thisWeek ? [] : await ctx.devops(cfg).portfolio(clients, refresh ? { refresh } : {});
         const names = new Map(clients.map((c) => [c.clientKey, c.clientName] as const));
         const clientName = nameOf(cfg, (k) => names.get(k));
-        const loops = plan.allLoops().filter((l) => l.kind === "priorities" && l.ruleKey?.startsWith(`priorities:${weekStart}:`)).map((l) => loopView(plan, l, today, clientName));
+        const followUps = plan.allFollowUps().filter((l) => l.kind === "priorities" && l.ruleKey?.startsWith(`priorities:${weekStart}:`)).map((l) => followUpView(plan, l, today, clientName));
         // Q51: current DevOps titles (this read's features, then fresh work items in memory); stored titles otherwise.
         const fromWork = titleFrom(clients.map((c) => ctx.devops(cfg).last(c.clientKey)).filter((w): w is ClientWork => !!w));
         const current = (k: string, id: number) => portfolios.find((p) => p.clientKey === k && p.status === "ok" && !p.fromCache)?.items.find((i) => i.id === id)?.title ?? fromWork(k, id);
-        const state: WeekPlanState = { weekStart, thisWeek, today, access: weekStart < thisWeek ? "past" : "plan", plan: withTitles(weekPlanView(plan.weekPlan(weekStart)), current), portfolios, marks: plan.breakdownMarks(), loops, drafts: plan.drafts(), captures: plan.inboxCount() };
+        const state: WeekPlanState = { weekStart, thisWeek, today, access: weekStart < thisWeek ? "past" : "plan", plan: withTitles(weekPlanView(plan.weekPlan(weekStart)), current), portfolios, marks: plan.breakdownMarks(), followUps, drafts: plan.drafts(), captures: plan.inboxCount() };
         return { ok: true, data: state };
       }
       case "weekplan.set_feature": {
@@ -255,9 +255,9 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const to = action === "weekplan.set_tier" ? tier(o.tier) : null;
         if (to) plan.setWeekItemTier(before.id, to);
         else plan.removeWeekItem(before.id);
-        // Dropping a must the week was committed with offers the heads-up loop; nothing else is asked (D197).
+        // Dropping a must the week was committed with offers the heads-up follow-up; nothing else is asked (D197).
         const dropped = to !== "must" && offersHeadsUp(before, committedAt) && !internalClients(cfg).has(before.clientKey);
-        return { ok: true, data: { plan: weekPlanView(plan.weekPlan(before.weekStart)), headsUp: dropped ? { weekStart: before.weekStart, clientKey: before.clientKey, itemId: before.itemId, title: before.title } : null } };
+        return { ok: true, data: { plan: weekPlanView(plan.weekPlan(before.weekStart)), headsUp: dropped ? { weekStart: before.weekStart, clientKey: before.clientKey, itemId: before.itemId, title: before.title, trigger: to ? "demoted" : "dropped" } : null } };
       }
       case "weekplan.set_blocks": {
         const o = fields(input, ["id", "blocks"]);
@@ -293,16 +293,19 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         return { ok: true, data: { plan: weekPlanView(plan.reorderWeekItems(weekStart, key, t, ids.map((itemId, i) => ({ itemId, position: i + 1 })))) } };
       }
       case "weekplan.headsup": {
-        const o = fields(input, ["weekStart", "clientKey", "itemId", "title"]);
+        const o = fields(input, ["weekStart", "clientKey", "itemId", "title"], ["trigger"]);
+        if (o.trigger !== undefined && o.trigger !== "dropped" && o.trigger !== "demoted") throw new Invalid("trigger must be dropped or demoted");
         const weekStart = monday(o.weekStart);
         const key = clientKey(o.clientKey);
         const itemId = id(o.itemId, "itemId");
         if (typeof o.title !== "string" || !o.title.trim() || o.title.length > 500) throw new Invalid("title must be text");
         const clients = await ctx.clients(cfg, weekStart, false);
         const name = nameOf(cfg, (k) => clients.find((c) => c.clientKey === k)?.clientName)(key);
-        const loop = plan.openRuleLoop({ kind: "slip", ruleKey: headsUpKey(weekStart, key, itemId), clientKey: key, who: name, what: `Heads-up to ${name}: #${itemId} moves out of the week`, itemId, draft: weekHeadsUpDraft(name, weekStart, { itemId, title: o.title.trim() }) });
-        const existing = loop ?? plan.allLoops().find((l) => l.ruleKey === headsUpKey(weekStart, key, itemId)) ?? null;
-        return { ok: true, data: { loop: existing ? loopView(plan, existing, today, () => name) : null, created: !!loop } };
+        const followUp = plan.openRuleFollowUp({ kind: "slip", ruleKey: headsUpKey(weekStart, key, itemId), clientKey: key, who: name, what: `Heads-up to ${name}: #${itemId} moves out of the week`, itemId, draft: weekHeadsUpDraft(name, weekStart, { itemId, title: o.title.trim() }),
+          // Step 13.5: where it came from, shown on the follow-up.
+          origin: { trigger: o.trigger === "demoted" ? "A committed must was made a nice to have" : "A committed must was taken off the week", items: [{ itemId, title: o.title.trim() }], at: ctx.now() } });
+        const existing = followUp ?? plan.allFollowUps().find((l) => l.ruleKey === headsUpKey(weekStart, key, itemId)) ?? null;
+        return { ok: true, data: { followUp: existing ? followUpView(plan, existing, today, () => name) : null, created: !!followUp } };
       }
       case "feature.brief": {
         const o = fields(input, ["clientKey", "itemId"], ["weekStart"]);
@@ -320,7 +323,7 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         plan.markBreakdown(clientKey(o.clientKey), id(o.itemId, "itemId"), bool(o.on, "on"));
         return { ok: true, data: { marks: plan.breakdownMarks() } };
       }
-      case "loop.ask_priorities": {
+      case "followup.ask_priorities": {
         const o = fields(input, ["weekStart", "clientKey"]);
         const weekStart = monday(o.weekStart);
         const key = clientKey(o.clientKey);
@@ -329,9 +332,9 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         if (!blocks.length) return bad(`No focus blocks with ${key} that week`, 422);
         const name = nameOf(cfg, (k) => week.days.flatMap((d) => [d.am, d.pm]).find((s) => s.focus[0]?.clientKey === k)?.focus[0]?.clientName)(key);
         const draft = [`Hi ${name}, I have focus time with you the week of ${shortDay(weekStart)}:`, ...blocks.map((b) => `- ${b}`), "Nothing open is assigned to me in DevOps right now. What should I work on first?"].join("\n");
-        const loop = plan.openRuleLoop({ kind: "priorities", ruleKey: prioritiesKey(weekStart, key), clientKey: key, who: name, what: `Ask ${name} about priorities for the week of ${shortDay(weekStart)}`, draft });
-        const existing = loop ?? plan.allLoops().find((l) => l.ruleKey === prioritiesKey(weekStart, key)) ?? null;
-        return { ok: true, data: { loop: existing ? loopView(plan, existing, today, () => name) : null, created: !!loop } };
+        const followUp = plan.openRuleFollowUp({ kind: "priorities", ruleKey: prioritiesKey(weekStart, key), clientKey: key, who: name, what: `Ask ${name} about priorities for the week of ${shortDay(weekStart)}`, draft });
+        const existing = followUp ?? plan.allFollowUps().find((l) => l.ruleKey === prioritiesKey(weekStart, key)) ?? null;
+        return { ok: true, data: { followUp: existing ? followUpView(plan, existing, today, () => name) : null, created: !!followUp } };
       }
     }
   } catch (e) {

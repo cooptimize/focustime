@@ -240,24 +240,31 @@ export function createGraphWriter(d: GraphWriterDeps) {
     const was = await owned(id, marker);
     const patch = patchBody({ subject: was.subject, body: bodyChanged ? "" : after.body, start: was.start, end: was.end, showAs: (was.showAs.toLowerCase() === after.showAs.toLowerCase() ? after.showAs : was.showAs) as OutlookShowAs, reminder: false }, after);
     if (was.isReminderOn) patch.isReminderOn = false;
-    if (Object.keys(patch).length) await send("write_update", "PATCH", `${API}me/events/${encodeURIComponent(id)}`, patch);
+    if (Object.keys(patch).length)
+      try {
+        await send("write_update", "PATCH", `${API}me/events/${encodeURIComponent(id)}`, patch);
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) throw new GoneError("gone");
+        throw e;
+      }
     return was;
   }
 
-  /** Delete a marked event; already gone counts as done. */
-  async function remove(id: string, marker: string): Promise<void> {
+  /** Delete a marked event; already gone (no event, or a 404 on delete) counts as done and says so. */
+  async function remove(id: string, marker: string): Promise<"deleted" | "already_gone"> {
     try {
       await owned(id, marker);
     } catch (e) {
-      if (e instanceof GoneError) return;
+      if (e instanceof GoneError) return "already_gone";
       throw e;
     }
     try {
       await send("write_delete", "DELETE", `${API}me/events/${encodeURIComponent(id)}`);
     } catch (e) {
-      if (e instanceof HttpError && e.status === 404) return;
+      if (e instanceof HttpError && e.status === 404) return "already_gone";
       throw e;
     }
+    return "deleted";
   }
 
   type RawPlus = GraphRaw & { isAllDay?: unknown; isOrganizer?: unknown; attendees?: { emailAddress?: { address?: unknown } }[]; type?: unknown; webLink?: unknown; isOnlineMeeting?: unknown };

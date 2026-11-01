@@ -17,7 +17,7 @@ import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../
 import type { PlanStore } from "../store/plan-store.ts";
 import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
 import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
-import type { OutlookWrite, ScheduleReader } from "../sources/graph/source.ts";
+import type { OutlookWrite, PeopleReader, ScheduleReader } from "../sources/graph/source.ts";
 import { collabAction } from "./collab-actions.ts";
 import { syncWeek } from "./outlook-sync.ts";
 import { outlookLink } from "../plan/caltier.ts";
@@ -31,10 +31,11 @@ import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { warnPoints, type TimerState } from "../plan/timer.ts";
 import { settingsAction, type SettingsContext } from "./settings-actions.ts";
 import { borrowedView, closeoutAction, noteView } from "./closeout-actions.ts";
-import { applyLoopRules, internalClients, nameOf, workdayOf } from "./loop-rules.ts";
-import { watchedIds } from "../plan/loops.ts";
+import { applyFollowUpRules, followUpView, internalClients, nameOf, workdayOf } from "./followup-rules.ts";
+import { watchedIds } from "../plan/followups.ts";
 import { isActionName, type ActionName } from "./registry.ts";
 import { captureAction } from "./capture-actions.ts";
+import { followUpAction } from "./followup-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import type { ActionResponse, HostBrowsers, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
@@ -44,7 +45,7 @@ export type { ActionResponse, SourceSummary, WeekLoadData };
 export type ActionContext = {
   loadConfig: () => Promise<{ path: string; parsed: ParseResult; created?: boolean }>;
   makeDataverse: (cfg: DataverseConfig, timeZone: string) => DataverseSource;
-  makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource & { write?: OutlookWrite; schedule?: ScheduleReader };
+  makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource & { write?: OutlookWrite; schedule?: ScheduleReader; people?: PeopleReader };
   makeGoogle: (cfg: GoogleConfig, timeZone: string) => CalendarSource;
   makeDevOps: (cfg: DataverseConfig, timeZone: string) => DevOpsSource;
   saveSystemUserId: (id: string) => Promise<void>;
@@ -207,9 +208,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const tz = model.timeZone;
   const now = input.now ?? ctx.now();
   const todayDate = localToday(now, tz);
-  // A flex session that has ended opens its update loop (D126), on any read. By the server's clock, never the UI's
-  // ?now (a check could otherwise open loops for sessions still ahead; step 6c, like D118).
-  ctx.plan?.openFlexLoops(Temporal.Instant.from(ctx.now()));
+  // A flex session that has ended opens its update follow-up (D126), on any read. By the server's clock, never the UI's
+  // ?now (a check could otherwise open follow-ups for sessions still ahead; step 6c, like D118).
+  ctx.plan?.openFlexFollowUps(Temporal.Instant.from(ctx.now()));
   const todayPlans = hasPlansOn(ctx, model, todayDate);
   const weekStart = input.weekStart ?? defaultWeekStart(todayDate, todayPlans);
 
@@ -262,8 +263,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       // Only followed clients (step 6d, replaces Q21 for DevOps): the rest get no PAT read, no call and no status.
       const picked = await devopsClients(ctx, { ...cfg, dataverse: dv }, weekStart, todayDate, refresh, dataverse.items);
       planClients = picked.planClients;
-      // Items an open loop is about are read by id too, so a completed one can close its loop (step 7).
-      const watch = ctx.plan ? watchedIds(ctx.plan.openLoops()) : {};
+      // Items an open follow-up is about are read by id too, so a completed one can close its follow-up (step 7).
+      const watch = ctx.plan ? watchedIds(ctx.plan.openFollowUps()) : {};
       // Features on the week lists of this week, today's week and next (step 8), so Plan the day can offer their
       // stories. Every list item (features and stories) is also read by id, done ones included, so progress can count
       // what DevOps shows as Completed (step 11).
@@ -289,7 +290,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     return { canWrite: true, facts: r?.facts ?? {} };
   })();
   const [outlook, google, devops, ptoResult, ahead, synced] = await Promise.all([outlookP, googleP, devopsP, ptoP, aheadP, syncP]);
-  ctx.plan?.closeHelpLoops(Temporal.Instant.from(ctx.now()));
+  ctx.plan?.closeHelpFollowUps(Temporal.Instant.from(ctx.now()));
   const pto = ptoByDate(ptoResult?.items ?? [], weekDates7(weekStart));
   const ptoAhead = [...new Set((ahead?.items ?? []).map((e) => e.date))].sort();
   const sunday = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
@@ -302,12 +303,12 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const todayDay = week.days.find((d) => d.date === todayDate);
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
 
-  // Loop rules (step 7) on the fresh DevOps results, and borrowed time paid by done payback picks. By the server's
-  // clock, like the flex loops.
+  // Follow-up rules (step 7) on the fresh DevOps results, and borrowed time paid by done payback picks. By the server's
+  // clock, like the flex follow-ups.
   const serverToday = localToday(ctx.now(), tz);
   const names = new Map([...planClients.map((c) => [c.clientKey, c.clientName] as const), ...(devops ?? []).map((w) => [w.clientKey, w.clientName] as const)]);
   if (ctx.plan) {
-    applyLoopRules(ctx.plan, { today: serverToday, work: devops, internal: internalClients(cfg), clientName: nameOf(cfg, (k) => names.get(k)), isWorkday: workdayOf(cfg) });
+    applyFollowUpRules(ctx.plan, { today: serverToday, work: devops, internal: internalClients(cfg), clientName: nameOf(cfg, (k) => names.get(k)), isWorkday: workdayOf(cfg) });
     ctx.plan.settleBorrowed();
   }
   const todayPlan = ctx.plan?.day(todayDate) ?? null;
@@ -333,8 +334,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     focus: cfg?.focus ?? DEFAULT_FOCUS,
     media: ctx.media ? await ctx.media.status() : { playerctl: false, spotify: false },
     timer: timerView(ctx.plan?.getState<TimerState>(TIMER_KEY) ?? null, Temporal.Instant.from(ctx.now())),
-    openLoops: ctx.plan?.openLoops().length ?? 0,
+    openFollowUps: ctx.plan?.openFollowUps().length ?? 0,
     captures: ctx.plan?.inboxCount() ?? 0,
+    followUps: ctx.plan ? ctx.plan.openFollowUps().filter((f) => !f.snoozedUntil || f.snoozedUntil <= serverToday).map((f) => followUpView(ctx.plan!, f, serverToday, nameOf(cfg, (k) => names.get(k)))) : [],
     focused: ctx.plan ? ctx.plan.focusedSeconds(Object.values(ctx.plan.week(week.days.map((d) => d.date))).flatMap((d) => d.picks.map((p) => p.id))) : {},
     resumeNotes: ctx.plan ? Object.fromEntries(Object.entries(ctx.plan.latestNotes()).map(([k, n]) => [k, noteView(n)])) : {},
     borrowed: ctx.plan ? ctx.plan.borrowedFor(weekStart, sunday).map(borrowedView) : [],
@@ -412,6 +414,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
             return { write: o.write ?? null, schedule: o.schedule ?? null, source: o };
           },
           google: (cfg) => (cfg.google ? ctx.makeGoogle(cfg.google, cfg.week.hours.timeZone) : null),
+          blocks: (cfg, w) => patternWeek(ctx, cfg, w),
           now: ctx.now,
         },
         action,
@@ -528,8 +531,6 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "timer.done":
     case "timer.next":
     case "playlist.open":
-    case "loops.list":
-    case "loop.close":
     case "plan.reset":
       return timerAction({ plan: ctx.plan, config: () => configured(ctx), now: ctx.now, media: ctx.media }, action, req.input);
     case "media.status": {
@@ -541,7 +542,6 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "closeout.commit":
     case "pick.make_up":
     case "note.set":
-    case "loop.add":
     case "borrow.pay":
       return closeoutAction(
         {
@@ -554,11 +554,31 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         action,
         req.input,
       );
+    case "followups.list":
+    case "followup.add":
+    case "followup.edit":
+    case "followup.close":
+    case "followup.not_needed":
+    case "followup.snooze":
+    case "followup.delete":
+    case "followup.people":
+    case "followups.review":
+      return followUpAction(
+        {
+          plan: ctx.plan,
+          config: () => configured(ctx),
+          dataverse: (cfg) => ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone),
+          people: (cfg) => (cfg.outlook ? ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).people ?? null : null),
+          now: ctx.now,
+        },
+        action,
+        req.input,
+      );
     case "capture.add":
     case "capture.load":
     case "capture.route":
     case "capture.features":
-    case "note.delete":
+    case "draft.add_feature":
       return captureAction(
         {
           plan: ctx.plan,
@@ -590,7 +610,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "weekplan.headsup":
     case "feature.brief":
     case "feature.mark_breakdown":
-    case "loop.ask_priorities":
+    case "followup.ask_priorities":
       return weekPlanAction(
         {
           plan: ctx.plan,

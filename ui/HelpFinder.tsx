@@ -91,6 +91,7 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
     <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div
         className="cap-dialog help-dialog"
+        data-overlay="modal"
         role="dialog"
         aria-modal="true"
         aria-label={`Needs help from… ${target.title}`}
@@ -177,7 +178,8 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
                     <strong>
                       {dayShort(s.date)}, {clock(s.start, tz)} to {clock(s.end, tz)}
                     </strong>{" "}
-                    with {s.people.map((p) => p.name).join(", ")} <span className="muted">{tierWord(s.tier, clientName)}</span>
+                    with {s.people.map((p) => (p.hoursUnknown ? `${p.name} (hours unknown)` : p.name)).join(", ")} <span className="muted">{tierWord(s.tier, clientName)}</span>
+                    {s.inFocus && <span className="muted"> · in your {clientName} focus block</span>}
                     {s.alsoFree.length > 0 && <span className="muted"> · also free: {s.alsoFree.join(", ")}</span>}
                     {s.overTimebox > 0 && <span className="help-warn"> · over your timebox by {formatDuration(s.overTimebox)}</span>}
                   </label>

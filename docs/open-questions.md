@@ -72,9 +72,9 @@ Raised in step 6b (not blocking):
 
 Raised in step 7 (not blocking):
 - Q41. Quiddity's blocked states sit in the Removed category (Q18), so those items never come back from the open-items query and the blocker rule can't see them. Treating Blocked as open for Quiddity (`open_states` in Settings > Clients) would let it. Do that?
-- Q42. ~~Closes on completion or a change by me~~ Answered: closes only on a Completed or Removed state category, or a change after it opened whose System.ChangedBy is my DevOps identity for that client (D156). Was: The DevOps update loop also closes when the item changed after the loop opened, whoever changed it (a comment or a field edit by someone else counts). Good enough, or should it wait for a state change only?
-- Q43. ~~Blockers nudge again~~ Answered: a blocker loop closed by hand opens again if the item is still blocked 3 workdays later (D157). Was: A blocker loop closed by hand stays closed while the item stays blocked; it opens again only after the block clears and returns. Should a long block nudge again (say, weekly)?
-- Q44. The slip rule skips internal clients (Cooptimize, standing blocks) and uncommitted days. Should a slip on an internal block open a loop too (for example, to tell a teammate)?
+- Q42. ~~Closes on completion or a change by me~~ Answered: closes only on a Completed or Removed state category, or a change after it opened whose System.ChangedBy is my DevOps identity for that client (D156). Was: The DevOps update follow-up also closes when the item changed after the follow-up opened, whoever changed it (a comment or a field edit by someone else counts). Good enough, or should it wait for a state change only?
+- Q43. ~~Blockers nudge again~~ Answered: a blocker follow-up closed by hand opens again if the item is still blocked 3 workdays later (D157). Was: A blocker follow-up closed by hand stays closed while the item stays blocked; it opens again only after the block clears and returns. Should a long block nudge again (say, weekly)?
+- Q44. The slip rule skips internal clients (Cooptimize, standing blocks) and uncommitted days. Should a slip on an internal block open a follow-up too (for example, to tell a teammate)?
 - Q45. ~~Carry-over waits for the session~~ Answered: a pick being made up in an evening or weekend session is not carry-over until that session ends (D158). Was: A pick made up tonight shows as carry-over in Plan the next workday before tonight is over. Hide it until the evening has passed?
 - Q46. ~~Note for another client~~ Answered: Close out offers "+ note for another client" for any followed client (D159). Was: Close out lists clients for notes from done picks, focused time, flex sessions and the day's focus blocks. A client worked outside its block with no pick or timer won't be listed. Add "Note for another client…"?
 
@@ -88,7 +88,7 @@ Raised in step 8 (not blocking):
 Raised in step 9 (not blocking):
 - Q52. ~~Global capture key~~ Answered: Super + Alt + N (D192). Was: The global capture key isn't bound (D178). Add `SUPER + ALT + SHIFT + C` (or Super + Alt + N) to bindings.lua?
 - Q53. Draft stories with no feature show only in Plan the day for that client. Should Plan the week list them per client too, so they can be put under a feature later (today that means deleting and capturing again)?
-- Q54. Numeric dates are read US style (11/14 is Nov 14). A bare weekday word ("monday standup notes") is read as a date but only makes a loop when led by by/due/before/until. Keep both?
+- Q54. Numeric dates are read US style (11/14 is Nov 14). A bare weekday word ("monday standup notes") is read as a date but only makes a follow-up when led by by/due/before/until. Keep both?
 - Q55. Notes can be searched and deleted but not edited, and a sorted capture can't be re-sorted. Add edit, or "undo sort" for a few minutes?
 - Q56. The Capture view has no tab or key of its own after the top-bar fit (D177); it opens from the dialog, the command menu, Close out and Plan the week. Give it a key (say Shift+N)?
 
@@ -116,8 +116,15 @@ Raised in step 12 (not blocking):
 
 
 Raised in step 13 (not blocking):
-- Q71. Repeating and all-day events I organize alone are not editable (series edits could move every occurrence). Allow moving one occurrence of a series?
-- Q72. Tentative counts as busy for teammates. Treat tentative as free for help sessions?
+- Q71. (Answered Nov 1, D236: keep them treated like meetings.) Repeating and all-day events I organize alone are not editable (series edits could move every occurrence). Allow moving one occurrence of a series?
+- Q72. (Answered Nov 1, D236: tentative stays busy.) Tentative counts as busy for teammates. Treat tentative as free for help sessions?
 - Q73. With nobody chosen, Coopilot picks one person per time. Should it invite two from the top tier instead?
-- Q74. RSVP to meetings (accept, tentative, decline with a note) behind preview and confirm is in the backlog. Next after DevOps writes, or before?
+- Q74. (Answered Nov 1, D236: DevOps writes first, then RSVP.) RSVP to meetings (accept, tentative, decline with a note) behind preview and confirm is in the backlog. Next after DevOps writes, or before?
 - Q75. A custom time zone in someone's working hours uses its standard offset only (no daylight rule). Fine, given Cooptimize uses named zones?
+
+## Step 13.5 (Nov 1)
+
+- Q76. Follow-ups show on every block of their client in the week (once a day, on the client's first block). Too much when a client has many open follow-ups? A cap of three per card with "and n more"?
+- Q77. A snoozed follow-up comes back on its day. Should a snoozed one with a due date before the snooze day keep its due badge, or should snoozing move the due date too?
+- Q78. Moving a pick to a day with no working hours asks every time. Should "Move anyway" be remembered for Friday catch-up (Friday is the overflow day and has no hours by default)?
+- Q79. Draft features stay local until added in DevOps by hand. Should Coop briefs also cover a draft feature (asking Coop to propose stories for it) before it exists in DevOps?

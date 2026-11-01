@@ -1,17 +1,16 @@
 // Focus timer actions (step 6c). The state lives in the plan store (kv "timer"), so it survives window close and
 // restarts; the server's tick (server/timer.ts) ends it on time and sends the notifications. Picks get their
-// focused time in the focus log. Loops list and Reset local plan live here too, as other plan-store actions.
+// focused time in the focus log. Reset local plan lives here too.
 import type { AppConfig } from "../config/schema.ts";
 import { extendTimer, MAX_MINUTES, pauseTimer, resumeTimer, startTimer, stopTimer, suggestMinutes, type Segment, type TimerKind, type TimerState } from "../plan/timer.ts";
 import { DEFAULT_PLAN } from "../config/schema.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
-import { loopView, nameOf, newestFirst } from "./loop-rules.ts";
 import type { Pick } from "../plan/types.ts";
 import { minutesOf as boxMinutes } from "../plan/timebox.ts";
 import { DEFAULT_FOCUS, playlistLink, playlistTarget, type TimerLike } from "../plan/focussound.ts";
 import type { ActionResponse, TimerView } from "./types.ts";
 
-export type TimerAction = "timer.start" | "timer.pause" | "timer.resume" | "timer.stop" | "timer.extend" | "timer.done" | "timer.next" | "playlist.open" | "loops.list" | "loop.close" | "plan.reset";
+export type TimerAction = "timer.start" | "timer.pause" | "timer.resume" | "timer.stop" | "timer.extend" | "timer.done" | "timer.next" | "playlist.open" | "plan.reset";
 
 /** Media control (step 10): playerctl and playlist links; the server's implementation is server/media.ts. */
 export type MediaControl = {
@@ -205,26 +204,6 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
         }
         return { ok: true, data: { opened: saved!.name, app: target.startsWith("spotify:") ? "spotify" : "browser" } };
       }
-      case "loops.list": {
-        const o = fields(input, ["includeClosed"]);
-        if (o.includeClosed !== undefined && typeof o.includeClosed !== "boolean") throw new Invalid("includeClosed must be true or false");
-        plan.openFlexLoops(now);
-        const name = nameOf(cfg, () => undefined);
-        const open = plan.openLoops().sort(newestFirst);
-        const closed = o.includeClosed ? plan.allLoops().filter((l) => l.closedAt).sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? "")) : [];
-        const loops = [...open, ...closed].map((l) => loopView(plan, l, today, name));
-        return { ok: true, data: { loops } };
-      }
-      case "loop.close": {
-        const o = fields(input, ["id", "note"]);
-        if (typeof o.id !== "number" || !Number.isInteger(o.id)) throw new Invalid("id must be a number");
-        let note: string | null = null;
-        if (o.note !== undefined && o.note !== null) {
-          if (typeof o.note !== "string" || o.note.length > 500) throw new Invalid("note must be text of at most 500 characters");
-          note = o.note.trim() || null;
-        }
-        return { ok: true, data: { loop: loopView(plan, plan.closeLoop(o.id, note), today, nameOf(cfg, () => undefined)) } };
-      }
       case "plan.reset": {
         const o = fields(input, ["confirm"]);
         // A typed confirmation, so neither a stray click nor a suggestion can reset by accident.
@@ -237,7 +216,7 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
     }
   } catch (e) {
     if (e instanceof Invalid) return bad(e.message);
-    if (e instanceof PlanError) return bad(e.message, /No loop/.test(e.message) ? 404 : 409);
+    if (e instanceof PlanError) return bad(e.message, /No followUp/.test(e.message) ? 404 : 409);
     throw e;
   }
 }

@@ -33,18 +33,19 @@ export type Pick = {
   /** Date of that pick, for "carried from Tue". */
   carriedFromDate: IsoDate | null;
   notes: string | null;
+  /** Step 13.5: the follow-up this pick is for (an intention pick). */
+  followUpId: number | null;
   position: number;
   createdAt: ZonedStamp;
   updatedAt: ZonedStamp;
 };
 
 /** A local draft story for a client, under a feature or (step 9, from a capture) under none yet. */
-export type DraftStory = { id: number; clientKey: string; parentItemId: number | null; title: string; size: Size; createdAt: ZonedStamp };
+/** A local draft story (under a feature), or since step 13.5 a draft feature (level "feature", under an epic). */
+export type DraftStory = { id: number; clientKey: string; parentItemId: number | null; title: string; size: Size; level: "story" | "feature"; createdAt: ZonedStamp };
 
-/** A quick capture (step 9): in the inbox until routed to a loop, a draft story or a note (or dismissed). */
-export type Capture = { id: number; text: string; clientKey: string | null; createdAt: ZonedStamp; routedAt: ZonedStamp | null; routedAs: "loop" | "draft" | "note" | "dismissed" | null; routedId: number | null };
-/** A personal note (step 9), optionally tagged to a client. */
-export type Note = { id: number; clientKey: string | null; text: string; captureId: number | null; createdAt: ZonedStamp };
+/** A quick capture (step 9): in the inbox until routed to a follow-up, a draft story or a note (or dismissed). */
+export type Capture = { id: number; text: string; clientKey: string | null; createdAt: ZonedStamp; routedAt: ZonedStamp | null; routedAs: "follow_up" | "draft" | "draft_feature" | "left_off" | "dismissed" | null; routedId: number | null };
 
 /** Everything the Plan the day panel needs for one date. */
 export type PlanDayState = {
@@ -103,3 +104,9 @@ export type WeekFeature = {
 };
 
 export type WeekPlanRecord = { weekStart: IsoDate; committedAt: ZonedStamp | null; /** The latest change to the plan or its features. */ updatedAt: ZonedStamp | null; features: WeekFeature[] };
+
+/** How a follow-up was closed (step 13.5), optional. */
+export const CLOSE_HOW = ["teams", "email", "devops", "call"] as const;
+export type CloseHow = (typeof CLOSE_HOW)[number];
+/** Why Coopilot opened a heads-up: the trigger, the items, when (step 13.5). */
+export type FollowUpOrigin = { trigger: string; items: { itemId: number | null; title: string }[]; at: string };

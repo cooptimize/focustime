@@ -17,8 +17,9 @@ import { dayFocus, focusLabel, liveFocused } from "../plan/focus.ts";
 import { formatDuration } from "../week/format.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { call } from "./api.ts";
-import { copy } from "./Loops.tsx";
-import { ITEM_ATTRS } from "./keys.ts";
+import { copy, DueBadge } from "./FollowUps.tsx";
+import { dueOrder } from "../plan/due.ts";
+import { isTypingTarget, ITEM_ATTRS, topOverlay } from "./keys.ts";
 import { itemMenu, pickMenu } from "./menu.ts";
 import { MenuRow, useMenu } from "./Menus.tsx";
 import { DayStrip, DragHandle, useTimeboxes } from "./Timeboxes.tsx";
@@ -58,7 +59,10 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
   useEffect(() => {
     if (!document.activeElement || document.activeElement === document.body) ref.current?.focus({ preventScroll: true });
   }, [state]);
-  const picked = new Set(state.picks.filter(inPlay).map((p) => (p.itemId !== null ? `i${p.clientKey}:${p.itemId}` : p.draftId !== null ? `d${p.draftId}` : `t${p.clientKey}:${p.title}`)));
+  const picked = new Set(state.picks.filter(inPlay).map((p) => (p.itemId !== null ? `i${p.clientKey}:${p.itemId}` : p.draftId !== null ? `d${p.draftId}` : p.followUpId !== null ? `f${p.followUpId}` : `t${p.clientKey}:${p.title}`)));
+  // Step 13.5: follow-ups due on this day or overdue, at the top.
+  const pv = useContext(PlanCtx);
+  const dueTop = (pv.followUps ?? []).filter((f) => f.due !== null && f.due <= day.date && !picked.has(`f${f.id}`));
   // Step 10: one block at a time shows what can be picked (its client's work); the others show their picks. It starts
   // on the half-day under way (or the first one) and moves when another block is clicked.
   const halves = cardHalves(day).filter((half) => !slotOf(day, half)!.off || day.kind === "overflow" || state.picks.some((p) => p.half === half && p.date === day.date && inPlay(p)));
@@ -69,7 +73,9 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
   const committed = state.plan.committedAt;
 
   const onKey = (e: KeyboardEvent) => {
-    const typing = (e.target instanceof HTMLInputElement && e.target.type !== "checkbox") || e.target instanceof HTMLSelectElement;
+    // Step 13.5: keys from a dialog or menu (React bubbles them through portals) are theirs alone.
+    if (topOverlay(document) === "modal") return;
+    const typing = isTypingTarget(e.target as HTMLElement);
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
@@ -144,6 +150,21 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
         <p className="pd-pto full" role="note">
           <strong>PTO</strong> · {off.titles.join(", ")}. This day is off, so nothing can be planned on it.
         </p>
+      )}
+
+      {!off && !past && dueTop.length > 0 && (
+        <section className="pd-due" aria-label="Follow-ups due">
+          <h3>Follow-ups due</h3>
+          <ul>
+            {dueTop.map((f) => (
+              <li key={f.id}>
+                <DueBadge l={f} /> <span className="fu-what">{f.hasWho ? `${f.who}: ` : ""}{f.what}</span>
+                {f.clientName && <span className="muted"> · {f.clientName}</span>}
+              </li>
+            ))}
+          </ul>
+          <p className="muted pd-note">Pick one into a block below (under its client), or close it in the Inbox.</p>
+        </section>
       )}
 
       {!off && !past && state.carryOver.length > 0 && <CarryOver picks={state.carryOver} date={day.date} act={act} />}
@@ -418,6 +439,25 @@ function Candidates({ clientKey, half, date, drafts, weekFeatures, picked, act }
   const free = (i: WorkItem) => !picked.has(`i${clientKey}:${i.id}`);
   const draftsUnder = (id: number) => drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === id && !picked.has(`d${d.id}`));
   const add = (input: Record<string, unknown>) => act("pick.add", { date, half, clientKey, ...input });
+  // Step 13.5: the client's open follow-ups, pickable like stories (size S by default).
+  const fus = dueOrder((useContext(PlanCtx).followUps ?? []).filter((f) => f.clientKey === clientKey && !picked.has(`f${f.id}`)), date, (f) => f.due, (f) => f.openedAt);
+  const fuList = fus.length > 0 && (
+    <div className="candidates">
+      <h4>Follow-ups <span className="muted">what you owe people</span></h4>
+      <ul>
+        {fus.map((f) => (
+          <li key={`f${f.id}`}>
+            <button type="button" className="cand" onClick={() => add({ followUpId: f.id })} title={`Follow-up${f.hasWho ? ` to ${f.who}` : ""}: ${f.what} (S)`}>
+              <span className="plus" aria-hidden="true">+</span>
+              <span className="wi-type">Follow-up</span>
+              <span className="wi-title">{f.what}</span>
+              <DueBadge l={f} />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
   // Step 11: the client's week list first: unfinished musts, then nice to haves (pinned to today first), then the
   // rest in board order. A must feature with no stories offers "Break down #id" with the Coop brief.
   const listed = weekList(weekFeatures, work ? [work] : null).items.map((f) => ({ ...f, done: !!f.done }));
@@ -496,12 +536,13 @@ function Candidates({ clientKey, half, date, drafts, weekFeatures, picked, act }
       </ul>
     </div>
   );
-  if (!work) return <>{committedList}{looseList}<p className="muted pd-note">No DevOps items for {clientKey} this week. Type an intention instead.</p></>;
+  if (!work) return <>{fuList}{committedList}{looseList}<p className="muted pd-note">No DevOps items for {clientKey} this week. Type an intention instead.</p></>;
   // Board order: my story-level items, and my epics and features (which open into their children).
   const rows = first.rest.filter((i) => (isPickable(i) && free(i)) || i.level === "portfolio");
   const shown = all ? rows : rows.slice(0, SHOWN);
   return (
     <>
+    {fuList}
     {committedList}
     {looseList}
     <div className="candidates">

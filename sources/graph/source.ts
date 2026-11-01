@@ -8,6 +8,7 @@ import { createOAuthClient, microsoftProvider, type Keyring } from "../oauth/oau
 import { weekRange } from "../when.ts";
 import { normalizeGraphEvents, type GraphEvent } from "./normalize.ts";
 import { createGraphWriter, type GraphWriter } from "./write.ts";
+import { createPeopleReader, type PeopleReader } from "./people.ts";
 import { createScheduleReader, type ScheduleReader } from "./schedule.ts";
 import type { WriteAccess } from "../oauth/oauth.ts";
 
@@ -81,9 +82,11 @@ export function createOutlookSource(deps: CalendarDeps<OutlookConfig>) {
   const write: OutlookWrite = { access: () => auth.writeAccess(), writer };
   // Free/busy (step 13) on the read token: Calendars.ReadBasic covers getSchedule.
   const schedule = createScheduleReader({ fetch: deps.fetch, token: () => auth.accessToken(), invalidate: () => auth.invalidate(), log: deps.log, timeoutMs });
-  return { ...base, write, schedule };
+  // Who suggestions for follow-ups (step 13.5): attendees in a client's domain, on the read token.
+  const people = createPeopleReader({ fetch: deps.fetch, token: () => auth.accessToken(), invalidate: () => auth.invalidate(), log: deps.log, timeoutMs });
+  return { ...base, write, schedule, people };
 }
 
 /** The write side: whether this sign-in may write, and the marker-checked writer. */
 export type OutlookWrite = { access: () => Promise<WriteAccess>; writer: GraphWriter };
-export type { ScheduleReader };
+export type { PeopleReader, ScheduleReader };

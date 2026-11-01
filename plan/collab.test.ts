@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultRange, domainAllowed, freeFor, helpLoopText, inviteFields, parseSchedule, rankCandidates, suggestSlots, withinWorkingHours, type Availability, type Teammate } from "./collab.ts";
+import { defaultRange, domainAllowed, freeFor, helpFollowUpText, isExcluded, inviteFields, parseSchedule, rankCandidates, suggestSlots, withinWorkingHours, type Availability, type Teammate } from "./collab.ts";
 import { zoneOf } from "./timezones.ts";
 
 const TZ = "America/Chicago";
@@ -68,7 +68,11 @@ describe("free/busy from getSchedule", () => {
     const t = (m: number) => Date.parse(start) + m * 60_000;
     expect(av[0]!.busy).toEqual([[t(15), t(60)]]);
     expect(av[1]!.problem).toBe("no free/busy shared");
-    expect(av[2]!.problem).toBe("no working hours shared");
+    // Step 13.5: no working hours shared means 9:00 to 5:00 in my zone, labelled "hours unknown".
+    expect(av[2]!.problem).toBeNull();
+    expect(av[2]!.hoursUnknown).toBe(true);
+    expect(av[2]!.workingHours).toEqual({ days: ["monday", "tuesday", "wednesday", "thursday", "friday"], start: "09:00", end: "17:00", zone: "UTC" });
+    expect(av[0]!.hoursUnknown).toBe(false);
   });
   it("reads working hours in each person's own zone (Windows names, IANA names, custom bias)", () => {
     expect(zoneOf({ name: "Pacific Standard Time" })).toBe("America/Los_Angeles");
@@ -131,6 +135,24 @@ describe("slot suggestions", () => {
     expect(s[0]!.start >= "2026-11-11T10:00").toBe(true);
   });
 
+  it("step 13.5: slots inside my focus blocks for that client come first, then other free time", () => {
+    const block = day("2026-11-10", "10:00", "12:00");
+    const s = suggestSlots({ ...base, focus: [[block.start, block.end]], chosen: ["ana@cooptimize.org"], availability: av({ "ana@cooptimize.org": freeAll }) });
+    expect(s[0]!.inFocus).toBe(true);
+    expect(s[0]!.date).toBe("2026-11-10");
+    expect(s[0]!.start >= "2026-11-10T10:00").toBe(true);
+    expect(s.filter((x) => x.inFocus).length).toBeGreaterThan(0);
+    expect(s.findIndex((x) => !x.inFocus)).toBeGreaterThan(s.findLastIndex((x) => x.inFocus));
+  });
+
+  it("step 13.5: a teammate with no working hours shared gets 9:00 to 5:00 in my zone, marked hours unknown", () => {
+    const body = { value: [{ scheduleId: "ana@cooptimize.org", availabilityView: freeAll }] };
+    const s = suggestSlots({ ...base, chosen: ["ana@cooptimize.org"], availability: parseSchedule(body, rangeStart, rangeEnd, 15, TZ) });
+    expect(s.length).toBeGreaterThan(0);
+    expect(s.every((x) => x.start.slice(11, 16) >= "09:00")).toBe(true);
+    expect(s[0]!.people[0]!.hoursUnknown).toBe(true);
+  });
+
   it("busy in Graph is busy", () => {
     const busyAll = "2".repeat(quarters);
     expect(suggestSlots({ ...base, chosen: null, availability: av({ "ana@cooptimize.org": busyAll, "ben@cooptimize.org": busyAll, "cy@cooptimize.org": busyAll }) })).toEqual([]);
@@ -143,11 +165,22 @@ describe("the invite and its range", () => {
     const f = inviteFields({ clientName: "W&C", itemTitle: "#4512 Import mapping", url: "https://dev.azure.com/wc/p/_workitems/edit/4512", note: "  stuck on the lookup  ", start: "2026-11-10T09:00:00-06:00", end: "2026-11-10T09:30:00-06:00", people: [{ name: "Ana", email: "Ana@cooptimize.org" }], teams: true });
     expect(f).toMatchObject({ subject: "W&C: help on #4512 Import mapping", start: "2026-11-10T15:00:00Z", attendees: [{ name: "Ana", email: "ana@cooptimize.org" }], teams: true, showAs: "busy" });
     expect(f.body).toBe("https://dev.azure.com/wc/p/_workitems/edit/4512\n\nstuck on the lookup\n\nHelp session planned in Coopilot.");
-    expect(helpLoopText(["Ana", "Ben", "Cy"], "#4512 Import mapping")).toBe("Help session with Ana, Ben and Cy on #4512 Import mapping");
+    expect(helpFollowUpText(["Ana", "Ben", "Cy"], "#4512 Import mapping")).toBe("Help session with Ana, Ben and Cy on #4512 Import mapping");
   });
   it("defaults to the pinned day, else the next 3 workdays", () => {
     const wd = (d: string) => Temporal.PlainDate.from(d).dayOfWeek <= 4;
     expect(defaultRange("2026-11-05", "2026-11-10", wd, 3)).toEqual({ from: "2026-11-10", to: "2026-11-10" });
     expect(defaultRange("2026-11-05", "2026-11-02", wd, 3)).toEqual({ from: "2026-11-05", to: "2026-11-10" });
+  });
+});
+
+describe("people to exclude (step 13.5)", () => {
+  it("matches a name or an address, any case, and is never a candidate", () => {
+    expect(isExcluded({ name: "Kat 🤖", email: "kat@cooptimize.org" }, ["Kat 🤖"])).toBe(true);
+    expect(isExcluded({ name: "Kat", email: "KAT-BOT@cooptimize.org" }, ["kat-bot@cooptimize.org"])).toBe(true);
+    expect(isExcluded({ name: "Ana", email: "ana@cooptimize.org" }, ["Kat 🤖"])).toBe(false);
+    const bot = { id: "u-kat", name: "Kat 🤖", email: "kat@cooptimize.org" };
+    const r = rankCandidates({ team: [...team, bot], meId: ME.id, meEmail: ME.email, domains: DOM, dates, away: [], patterns: [], workers: new Set(), exclude: ["Kat 🤖"] });
+    expect(r.some((c) => c.name === "Kat 🤖")).toBe(false);
   });
 });

@@ -63,20 +63,20 @@ describe("plan store", () => {
     expect(readdirSync(dir).filter((f) => f.startsWith("plan.db.bak-"))).toHaveLength(1);
   });
 
-  it("stores unavailable time and flex sessions; a flex session opens its update loop once it has ended", () => {
+  it("stores unavailable time and flex sessions; a flex session opens its update follow-up once it has ended", () => {
     const { store } = fresh();
     const u = store.addUnavailable({ date: "2026-11-03", title: "Dentist", start: "2026-11-03T19:00:00Z", end: "2026-11-03T20:00:00Z" });
     expect(store.unavailableBetween("2026-11-02", "2026-11-08").map((x) => x.id)).toEqual([u.id]);
     const f = store.addFlex({ date: "2026-11-07", clientKey: "CSC", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z", itemId: 101 });
     expect(store.flexBetween("2026-11-07", "2026-11-07").map((x) => x.itemId)).toEqual([101]);
-    store.openFlexLoops(Temporal.Instant.from("2026-11-07T16:00:00Z"));
-    expect(store.openLoops()).toEqual([]);
-    store.openFlexLoops(Temporal.Instant.from("2026-11-07T17:00:00Z"));
-    store.openFlexLoops(Temporal.Instant.from("2026-11-07T18:00:00Z"));
-    const loops = store.openLoops();
-    expect(loops).toHaveLength(1);
-    expect(loops[0]).toMatchObject({ clientKey: "CSC", sourceKind: "flex", sourceId: f.id });
-    expect(loops[0]!.what).toMatch(/update to CSC/);
+    store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T16:00:00Z"));
+    expect(store.openFollowUps()).toEqual([]);
+    store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T17:00:00Z"));
+    store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T18:00:00Z"));
+    const followUps = store.openFollowUps();
+    expect(followUps).toHaveLength(1);
+    expect(followUps[0]).toMatchObject({ clientKey: "CSC", sourceKind: "flex", sourceId: f.id });
+    expect(followUps[0]!.what).toMatch(/update to CSC/);
     expect(() => store.removeFlex(f.id)).toThrow();
     expect(store.removeUnavailable(u.id)).toBe(true);
   });
@@ -193,19 +193,19 @@ describe("plan store", () => {
   });
 });
 
-describe("step 6c: loops, timer state, focused time and reset", () => {
-  it("closes a loop by hand with a note, once", () => {
+describe("step 6c: follow-ups, timer state, focused time and reset", () => {
+  it("closes a follow-up by hand with a note, once", () => {
     const { store } = fresh();
     const f = store.addFlex({ date: "2026-11-07", clientKey: "CSC", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z" });
-    const [loop] = store.openFlexLoops(Temporal.Instant.from("2026-11-07T18:00:00Z"));
-    expect(loop?.sourceId).toBe(f.id);
-    const closed = store.closeLoop(loop!.id, "Posted in Teams");
+    const [followUp] = store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T18:00:00Z"));
+    expect(followUp?.sourceId).toBe(f.id);
+    const closed = store.closeFollowUp(followUp!.id, "Posted in Teams");
     expect(closed).toMatchObject({ closeNote: "Posted in Teams" });
     expect(closed.closedAt).not.toBeNull();
-    expect(store.openLoops()).toEqual([]);
-    expect(store.allLoops()).toHaveLength(1);
-    expect(() => store.closeLoop(loop!.id, null)).toThrow(/already closed/);
-    expect(() => store.closeLoop(999, null)).toThrow(/No loop/);
+    expect(store.openFollowUps()).toEqual([]);
+    expect(store.allFollowUps()).toHaveLength(1);
+    expect(() => store.closeFollowUp(followUp!.id, null)).toThrow(/already closed/);
+    expect(() => store.closeFollowUp(999, null)).toThrow(/No follow-up/);
   });
 
   it("keeps small state and focused time across a reopen", () => {
@@ -388,7 +388,7 @@ describe("quick capture (step 9)", () => {
     store.close();
   });
 
-  it("saves captures to the inbox and routes each once to a loop, a draft story, a note, or dismisses it", () => {
+  it("saves captures to the inbox and routes each once to a follow-up, a draft story, a note, or dismisses it", () => {
     const { store } = fresh();
     const a = store.addCapture({ text: "  Told Dana I'd send the export by Thursday  ", clientKey: "CSC" });
     expect(a).toMatchObject({ text: "Told Dana I'd send the export by Thursday", clientKey: "CSC", routedAt: null });
@@ -399,40 +399,64 @@ describe("quick capture (step 9)", () => {
     expect(store.inbox().map((x) => x.id)).toEqual([d.id, c.id, b.id, a.id]);
     expect(store.inboxCount()).toBe(4);
 
-    const la = store.routeCapture(a.id, { as: "loop", clientKey: "CSC", who: "Dana", what: "Send the export", due: "2026-11-05" });
-    expect(la).toMatchObject({ routedAs: "loop" });
-    expect(store.openLoops().find((l) => l.id === la.routedId)).toMatchObject({ kind: "capture", who: "Dana", what: "Send the export", due: "2026-11-05", clientKey: "CSC" });
+    const la = store.routeCapture(a.id, { as: "follow_up", clientKey: "CSC", who: "Dana", what: "Send the export", due: "2026-11-05" });
+    expect(la).toMatchObject({ routedAs: "follow_up" });
+    expect(store.openFollowUps().find((l) => l.id === la.routedId)).toMatchObject({ kind: "capture", who: "Dana", what: "Send the export", due: "2026-11-05", clientKey: "CSC" });
     const db = store.routeCapture(b.id, { as: "draft", clientKey: "W&C", parentItemId: null, title: "Add paging", size: "M" });
     expect(store.getDraft(db.routedId!)).toMatchObject({ clientKey: "W&C", parentItemId: null, title: "Add paging", size: "M" });
-    const nc = store.routeCapture(c.id, { as: "note", clientKey: "Quiddity", text: "Their CFO prefers email" });
-    expect(store.notes()).toEqual([expect.objectContaining({ id: nc.routedId, clientKey: "Quiddity", text: "Their CFO prefers email", captureId: c.id })]);
+    const nc = store.routeCapture(c.id, { as: "draft", clientKey: "Quiddity", parentItemId: null, title: "Their CFO prefers email", size: "S" });
+    expect(store.getDraft(nc.routedId!)).toMatchObject({ level: "story", clientKey: "Quiddity" });
     store.routeCapture(d.id, { as: "dismissed" });
     expect(store.inboxCount()).toBe(0);
     expect(() => store.routeCapture(a.id, { as: "dismissed" })).toThrow(/already sorted/);
     // A failed route leaves the capture in the inbox.
     const e = store.addCapture({ text: "x", clientKey: null });
-    expect(() => store.routeCapture(e.id, { as: "loop", clientKey: null, who: "", what: " ", due: null })).toThrow();
+    expect(() => store.routeCapture(e.id, { as: "follow_up", clientKey: null, who: "", what: " ", due: null })).toThrow();
     expect(store.inbox().map((x) => x.id)).toEqual([e.id]);
   });
 
-  it("notes: per client, searchable by words in any order and case (LIKE characters are literal); deleted by id; exported and reset", () => {
-    const { store } = fresh();
-    for (const [k, t] of [["CSC", "Schema manager: Git support wanted"], ["CSC", "100% of loads run nightly"], ["W&C", "Timesheet approvals go to Mark"], [null, "Read about caching"]] as const) {
-      const cap = store.addCapture({ text: t, clientKey: k });
-      store.routeCapture(cap.id, { as: "note", clientKey: k, text: t });
+  it("migration 11 renames loops to follow-ups and moves notes into where I left off, with a backup first", () => {
+    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const path = join(dir, "plan.db");
+    const old = new DatabaseSync(path);
+    old.exec("PRAGMA foreign_keys = ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+    for (let v = 1; v <= 10; v++) {
+      old.exec(MIGRATIONS[v - 1]!);
+      old.prepare("INSERT INTO schema_migrations VALUES (?, 'x')").run(v);
     }
-    expect(store.notes({ clientKey: "CSC" }).map((n) => n.text)).toEqual(["100% of loads run nightly", "Schema manager: Git support wanted"]);
-    expect(store.notes({ clientKey: null }).map((n) => n.text)).toEqual(["Read about caching"]);
-    expect(store.notes({ query: "git SCHEMA" }).map((n) => n.text)).toEqual(["Schema manager: Git support wanted"]);
-    expect(store.notes({ query: "100%" }).map((n) => n.text)).toEqual(["100% of loads run nightly"]);
-    expect(store.notes({ query: "_" })).toEqual([]);
-    const ex = store.exportJson();
-    expect(ex.notes).toHaveLength(4);
-    expect(ex.captures).toHaveLength(4);
-    expect(store.deleteNote(store.notes({ clientKey: null })[0]!.id)).toBe(true);
-    expect(store.notes()).toHaveLength(3);
-    store.reset();
-    expect([store.notes().length, store.inboxCount(), store.exportJson().captures.length]).toEqual([0, 0, 0]);
+    const at = "2026-10-30T16:00:00-04:00[America/New_York]";
+    old.exec(`INSERT INTO loops (id, kind, client_key, who, what, opened_at) VALUES (2, 'manual', NULL, 'Dana', 'Send it', '${at}')`);
+    old.exec(`INSERT INTO loops (id, kind, client_key, who, what, opened_at, closed_at, close_note, closed_by, rule_key) VALUES (1, 'slip', 'W&C', 'W&C', 'Heads-up', '${at}', '${at}', 'told', 'me', 'slip:x')`);
+    old.exec(`INSERT INTO resume_notes (client_key, date, note, created_at, updated_at) VALUES ('CSC', '2026-10-30', 'Left off at mapping', '${at}', '${at}')`);
+    old.exec(`INSERT INTO captures (id, text, client_key, created_at, routed_at, routed_as, routed_id) VALUES
+              (1, 'CSC wants Git', 'CSC', '${at}', '${at}', 'note', 1), (2, 'caching idea', NULL, '${at}', '${at}', 'note', 2),
+              (3, 'told Dana', NULL, '${at}', '${at}', 'loop', 2), (4, 'never mind', NULL, '${at}', '${at}', 'dismissed', NULL), (5, 'to sort', NULL, '${at}', NULL, NULL, NULL)`);
+    old.exec(`INSERT INTO notes (id, client_key, text, capture_id, created_at, updated_at) VALUES
+              (1, 'CSC', 'CSC wants Git', 1, '${at}', '${at}'), (2, NULL, 'caching idea', 2, '${at}', '${at}'), (3, 'W&C', 'Mark approves timesheets', NULL, '${at}', '${at}'), (4, NULL, 'Read the docs', NULL, '${at}', '${at}')`);
+    old.close();
+    const store = createPlanStore({ path, now });
+    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
+    expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v10-"))).toHaveLength(1);
+    // Loops are follow-ups now, ids kept; a closed one counts as done.
+    expect(store.allFollowUps().map((f) => [f.id, f.kind, f.outcome, f.byHand]).sort()).toEqual([[1, "slip", "done", false], [2, "manual", null, true]]);
+    // Notes with a client join that client's left-off line on their day; appended to one already there.
+    expect(store.latestNotes("2026-10-31").CSC?.note).toBe("Left off at mapping · CSC wants Git");
+    expect(store.latestNotes("2026-10-31")["W&C"]?.note).toBe("Mark approves timesheets");
+    // Notes with no client go back to the inbox: their own capture un-sorted, or a new capture.
+    expect(store.inbox().map((c) => c.text).sort()).toEqual(["Read the docs", "caching idea", "to sort"]);
+    const ex = store.exportJson() as Record<string, unknown>;
+    expect(ex.notes).toBeUndefined();
+    expect((ex.captures as { id: number; routedAs: string | null }[]).find((c) => c.id === 1)?.routedAs).toBe("left_off");
+    expect((ex.captures as { id: number; routedAs: string | null }[]).find((c) => c.id === 3)?.routedAs).toBe("follow_up");
+    store.close();
+  });
+
+  it("routes a capture to a draft feature, optionally under an epic", () => {
+    const { store } = fresh();
+    const c = store.addCapture({ text: "feature: onboarding", clientKey: "CSC" });
+    const r = store.routeCapture(c.id, { as: "draft_feature", clientKey: "CSC", parentItemId: 900, title: "Onboarding" });
+    expect(r.routedAs).toBe("draft_feature");
+    expect(store.getDraft(r.routedId!)).toMatchObject({ level: "feature", parentItemId: 900, title: "Onboarding", size: "M" });
   });
 });
 

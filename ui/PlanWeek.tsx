@@ -13,7 +13,7 @@ import { formatDuration } from "../week/format.ts";
 import type { ClientWork, IsoDate, PortfolioItem, Slot, WorkItem } from "../week/types.ts";
 import { call } from "./api.ts";
 import { clientColor } from "./labels.ts";
-import { copy } from "./Loops.tsx";
+import { copy } from "./FollowUps.tsx";
 import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 
@@ -21,7 +21,7 @@ type Props = { weekStart: IsoDate; data: WeekLoadData; version: number; now: str
 type Half = "AM" | "PM";
 type Place = { date: IsoDate; half: Half; label: string };
 type Item = Listed<WeekFeature>;
-type HeadsUp = { weekStart: IsoDate; clientKey: string; itemId: number; title: string };
+type HeadsUp = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; trigger?: "dropped" | "demoted" };
 
 const DRAG_TYPE = "application/x-coopilot-feature";
 const HALF_WORD: Record<Half, string> = { AM: "morning", PM: "afternoon" };
@@ -137,7 +137,7 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
   const flags = useMemo(
     () =>
       st && weekReady && st.access === "plan"
-        ? readiness({ week: data.week, portfolios: st.portfolios, features: raw, work: data.devops, marks: st.marks, loops: st.loops.map((l) => ({ id: l.id, kind: l.kind, clientKey: l.clientKey, ruleKey: `priorities:${weekStart}:${l.clientKey}`, closedAt: l.closedAt })), drafts: st.drafts, captures: st.captures, intentions })
+        ? readiness({ week: data.week, portfolios: st.portfolios, features: raw, work: data.devops, marks: st.marks, followUps: st.followUps.map((l) => ({ id: l.id, kind: l.kind, clientKey: l.clientKey, ruleKey: `priorities:${weekStart}:${l.clientKey}`, closedAt: l.closedAt })), drafts: st.drafts, captures: st.captures, intentions })
         : [],
     [st, weekReady, data.week, data.devops, raw, weekStart, intentions],
   );
@@ -154,7 +154,7 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
   const days = data.week.days.filter((d) => d.kind !== "weekend");
   const info = infoFor(st.portfolios, work);
 
-  // Summary strip: open loops, unpaid borrowed time, PTO days and flex sessions in the week.
+  // Summary strip: open follow-ups, unpaid borrowed time, PTO days and flex sessions in the week.
   const unpaid = borrowedSummary(data.borrowed, days[0]!.date, days.at(-1)!.date);
   const ptoDays = data.week.days.filter((d) => d.pto).length;
   const flexCount = data.week.days.reduce((n, d) => n + d.am.flex.length + d.pm.flex.length + (d.eve?.flex.length ?? 0), 0);
@@ -212,7 +212,7 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
 
   return (
     <main className="planweek" aria-label="Plan the week">
-      <div className="loops-head">
+      <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
           Plan the week <span className="muted">of {weekLabel(weekStart)}{isThis ? " (this week)" : weekStart === plainDate(st.thisWeek).add({ days: 7 }).toString() ? " (next week)" : past ? " (review)" : ""}</span>
         </h2>
@@ -245,7 +245,7 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
       {offer ? (
         <p className="co-notice pw-offer" role="status">
           #{offer.itemId} is out of the musts. Let {nameOf(offer.clientKey)} know?{" "}
-          <button type="button" className="mini" onClick={() => void act("weekplan.headsup", offer, `Loop opened: heads-up to ${nameOf(offer.clientKey)}`).then(() => setOffer(null))}>Open a heads-up loop</button>{" "}
+          <button type="button" className="mini" onClick={() => void act("weekplan.headsup", offer, `Follow-up opened: heads-up to ${nameOf(offer.clientKey)}`).then(() => setOffer(null))}>Open a heads-up follow-up</button>{" "}
           <button type="button" className="mini quiet" onClick={() => setOffer(null)}>Not needed</button>
         </p>
       ) : (
@@ -253,9 +253,9 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
       )}
 
       {/* Only what is there; nothing when the week has none of it. */}
-      {(data.openLoops > 0 || unpaid.unpaidMinutes > 0 || ptoDays > 0 || flexCount > 0 || past) && (
+      {(data.openFollowUps > 0 || unpaid.unpaidMinutes > 0 || ptoDays > 0 || flexCount > 0 || past) && (
         <ul className="pw-summary" aria-label="The week at a glance">
-          {data.openLoops > 0 && <li>{data.openLoops} open loop{data.openLoops === 1 ? "" : "s"}</li>}
+          {data.openFollowUps > 0 && <li>{data.openFollowUps} open follow-up{data.openFollowUps === 1 ? "" : "s"}</li>}
           {unpaid.unpaidMinutes > 0 && <li>{formatDuration(unpaid.unpaidMinutes)} borrowed time to make up</li>}
           {ptoDays > 0 && <li>{ptoDays} day{ptoDays === 1 ? "" : "s"} off</li>}
           {flexCount > 0 && <li>{flexCount} flex session{flexCount === 1 ? "" : "s"}</li>}
@@ -272,8 +272,9 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
                 <ReadyRow key={`${f.kind}:${f.clientKey}:${f.itemId ?? f.pickId ?? ""}`} f={f} clientName={nameOf(f.clientKey)} tz={tz}
                   onBrief={() => void copyBrief(f.clientKey, f.itemId!)}
                   onMark={(on) => void act("feature.mark_breakdown", { clientKey: f.clientKey, itemId: f.itemId, on }, on ? `#${f.itemId} marked as being broken down` : undefined)}
-                  onAsk={() => void act("loop.ask_priorities", { weekStart, clientKey: f.clientKey }, `Loop opened: ask ${nameOf(f.clientKey)} about priorities`)}
+                  onAsk={() => void act("followup.ask_priorities", { weekStart, clientKey: f.clientKey }, `Follow-up opened: ask ${nameOf(f.clientKey)} about priorities`)}
                   onDraft={() => void act("draft.add_story", { clientKey: f.clientKey, parentItemId: null, title: f.title, size: f.size ?? "M" }, `Draft story saved: ${f.title}. Add it in DevOps when you can`)}
+                  onDraftFeature={(title) => act("draft.add_feature", { clientKey: f.clientKey, parentItemId: f.itemId, title }, `Draft feature saved under #${f.itemId}: ${title}. Add it in DevOps when you can`).then((r) => r !== null)}
                   onCaptures={onCaptures} />
               ))}
             </ul>
@@ -367,11 +368,13 @@ const KIND: Record<ReadinessFlag["kind"], string> = {
   needs_breakdown: "Feature with no stories",
   no_target_date: "Must with no target date",
   intention_not_in_devops: "Not in DevOps yet",
-  needs_features: "Epic with no features",
+  needs_features: "Epic needs features",
   captures_to_sort: "Captures to sort",
 };
 
-function ReadyRow({ f, clientName, tz, onBrief, onMark, onAsk, onDraft, onCaptures }: { f: ReadinessFlag; clientName: string; tz: string; onBrief: () => void; onMark: (on: boolean) => void; onAsk: () => void; onDraft: () => void; onCaptures: () => void }) {
+function ReadyRow({ f, clientName, tz, onBrief, onMark, onAsk, onDraft, onDraftFeature, onCaptures }: { f: ReadinessFlag; clientName: string; tz: string; onBrief: () => void; onMark: (on: boolean) => void; onAsk: () => void; onDraft: () => void; onDraftFeature: (title: string) => Promise<boolean>; onCaptures: () => void }) {
+  const [drafting, setDrafting] = useState(false);
+  const [title, setTitle] = useState("");
   return (
     <li className={`pw-flag${f.soft ? " soft" : ""}`}>
       <span className="pw-kind">{KIND[f.kind]}</span>
@@ -386,7 +389,8 @@ function ReadyRow({ f, clientName, tz, onBrief, onMark, onAsk, onDraft, onCaptur
         ) : (
           <>
             <WorkLink clientKey={f.clientKey} url={f.url}>#{f.itemId} {f.title}</WorkLink>
-            {!!f.drafts && <span className="muted"> · {f.drafts} local draft stor{f.drafts === 1 ? "y" : "ies"} to add in DevOps</span>}
+            {!!f.drafts && f.kind === "needs_features" && <span className="muted"> · {f.drafts} local draft feature{f.drafts === 1 ? "" : "s"} to add in DevOps</span>}
+            {!!f.drafts && f.kind !== "needs_features" && <span className="muted"> · {f.drafts} local draft stor{f.drafts === 1 ? "y" : "ies"} to add in DevOps</span>}
           </>
         )}
       </span>
@@ -403,7 +407,17 @@ function ReadyRow({ f, clientName, tz, onBrief, onMark, onAsk, onDraft, onCaptur
         )}
         {f.kind === "intention_not_in_devops" && <button type="button" className="mini" onClick={onDraft}>Make it a draft story</button>}
         {f.kind === "captures_to_sort" && <button type="button" className="mini" onClick={onCaptures}>Sort captures</button>}
-        {f.kind === "block_needs_work" && (f.loopId ? <span className="muted">Loop open: ask about priorities (L)</span> : <button type="button" className="mini" onClick={onAsk}>Create loop: ask about priorities</button>)}
+        {f.kind === "block_needs_work" && (f.followUpId ? <span className="muted">Follow-up open: ask about priorities (L)</span> : <button type="button" className="mini" onClick={onAsk}>Create follow-up: ask about priorities</button>)}
+        {f.kind === "needs_features" &&
+          (drafting ? (
+            <form className="pw-draft-feature" onSubmit={(e) => { e.preventDefault(); if (title.trim()) void onDraftFeature(title.trim()).then((ok) => ok && (setDrafting(false), setTitle(""))); }}>
+              <input autoFocus value={title} maxLength={200} placeholder="Feature title" aria-label={`Draft feature under #${f.itemId}`} onChange={(e) => setTitle(e.target.value)} />
+              <button type="submit" className="mini primary" disabled={!title.trim()}>Save draft</button>
+              <button type="button" className="mini" onClick={() => setDrafting(false)}>Cancel</button>
+            </form>
+          ) : (
+            <button type="button" className="mini" onClick={() => setDrafting(true)}>Draft a feature</button>
+          ))}
         {(f.kind === "needs_features" || f.kind === "no_target_date") && <WorkLink clientKey={f.clientKey} url={f.url} className="mini">Open in DevOps</WorkLink>}
       </span>
     </li>

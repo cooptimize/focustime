@@ -51,6 +51,46 @@ export function openTarget(el: { closest: (sel: string) => ItemEl | null } | nul
   return clientKey && url && isDevOpsUrl(url) ? { clientKey, url } : null;
 }
 
+// ---------- Who gets a key (step 13.5) ----------
+// Global shortcuts never fire while typing, and never reach the views behind an open dialog or menu. Every overlay
+// carries data-overlay: "modal" (dialogs, menus, the command menu, the key legend) or "details" (the half-day details,
+// which owns the panel region). The overlay handles its own keys, Esc included, and stops them there.
+
+type TypingEl = { tagName?: string; type?: string; isContentEditable?: boolean } | null | undefined;
+const NOT_TEXT = new Set(["checkbox", "radio", "button", "submit", "reset", "range", "color", "file", "image"]);
+
+/** Is focus in something that takes typed text: a text-like input, a textarea, a select, or contenteditable? */
+export function isTypingTarget(el: TypingEl): boolean {
+  const tag = el?.tagName?.toUpperCase();
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag === "INPUT") return !NOT_TEXT.has((el!.type || "text").toLowerCase());
+  return !!el?.isContentEditable;
+}
+
+export type Overlay = "none" | "details" | "modal";
+/** The top overlay, from the markers in the document. */
+export function topOverlay(doc: { querySelector: (sel: string) => unknown }): Overlay {
+  if (doc.querySelector('[data-overlay="modal"]')) return "modal";
+  if (doc.querySelector('[data-overlay="details"]')) return "details";
+  return "none";
+}
+
+export type KeyIn = { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean };
+/**
+ * May a window-level shortcut handler act on this key? Never with Ctrl, Alt or Meta (chords have their own
+ * handlers), never behind a dialog or menu, only F6 behind the half-day details, and while typing only Esc and F6.
+ */
+export function globalKeyAllowed(e: KeyIn, target: TypingEl, overlay: Overlay): boolean {
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+  if (overlay === "modal") return false;
+  if (overlay === "details") return e.key === "F6";
+  if (isTypingTarget(target)) return e.key === "Escape" || e.key === "F6";
+  return true;
+}
+
+/** Ctrl+K: opens the command menu unless another dialog is on top; toggles the command menu itself closed. */
+export const commandKeyAllowed = (overlay: Overlay, commandOpen: boolean) => overlay !== "modal" || commandOpen;
+
 export type KeyRow = {
   keys: string[];
   does: string;
@@ -70,8 +110,8 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["1", "T"], does: "Today: now, next and Start focus", command: "view.today" },
   { keys: ["2"], does: "Week: every half-day of the week", command: "view.week" },
   { keys: ["3"], does: "Plan: the ritual for now (Plan the day, Check-in, Close out or Plan the week)", command: "view.plan" },
-  { keys: ["4", "L"], does: "Inbox: loops you owe and captures to sort", command: "view.inbox" },
-  { keys: ["N"], does: "Quick capture: one line, saved at once; then sort it into a loop, a draft story or a note", command: "capture.add" },
+  { keys: ["4", "L"], does: "Inbox: follow-ups you owe and captures to sort", command: "view.inbox" },
+  { keys: ["N"], does: "Quick capture: one line, saved at once; then sort it into a follow-up, a draft story or a note", command: "capture.add" },
   { keys: ["W"], does: "Plan the week: commit features per client (next week by default)", command: "view.planweek" },
   { keys: ["P"], does: "Plan the day, from anywhere (I also works)", command: "view.planday" },
   { keys: ["C"], does: "Commit, in Plan the day", command: "planday.commit" },
@@ -83,7 +123,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["Ctrl K"], does: "Command menu" },
   { keys: ["F"], does: "Focus timer: start one, or pause, +15, done, next pick or stop", command: "timer.start" },
   { keys: ["M"], does: "Check-in: what still fits today (midday)", command: "view.checkin" },
-  { keys: ["E"], does: "Close out: the end of the day (picks, resume notes, loops)", command: "closeout.load" },
+  { keys: ["E"], does: "Close out: the end of the day (picks, resume notes, follow-ups)", command: "closeout.load" },
   { keys: [","], does: "Settings (Esc goes back to the week)", command: "settings.load" },
   { keys: ["?"], does: "This list of keys", command: "ui.keys" },
   { keys: ["Esc"], does: "Close the menu, dialog or panel on top" },

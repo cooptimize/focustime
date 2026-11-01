@@ -5,6 +5,8 @@ import { worstSeverity } from "../week/risks.ts";
 import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
 import type { PtoDay } from "../week/pto.ts";
 import type { Pick } from "../plan/types.ts";
+import type { FollowUpView } from "../actions/types.ts";
+import { followUpsOnDay } from "../plan/due.ts";
 import { dayMenu, eventMenu, pickMenu, slotMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
 import { hourMarks, layoutEvents } from "./layout.ts";
@@ -118,6 +120,17 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
   const offDay = day.kind !== "work" && day.am.off && day.pm.off;
   const menu = useMenu((env) => dayMenu(env, day.date));
   const halves = cardHalves(day);
+  // Step 13.5: open follow-ups on the client's first block of the day; dated ones also on their due day.
+  const pv = useContext(PlanCtx);
+  const fuOn = followUpsOnDay(
+    day.date,
+    halves.map((h) => {
+      const sl = slotOf(day, h)!;
+      return { half: h, clientKey: overflow || day.kind === "weekend" || h === "EVE" ? null : (sl.focus[0]?.clientKey ?? null), working: !sl.off && !day.pto };
+    }),
+    pv.followUps ?? [],
+    pv.today ?? day.date,
+  );
   // Medium layout shares rows across days: a day without a card in a row keeps an empty cell there.
   // An evening-only day (a weekend flex session) gets one card spanning the three rows.
   const rows: (typeof halves[number] | null)[] = props.layout === "medium" && props.hasEve && !eveOnly(day) && !day.eve ? [...halves, null] : halves;
@@ -169,6 +182,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
           compact={compact}
           now={props.now}
           ptoOff={!!day.pto}
+          followUps={fuOn.get(half) ?? []}
         />
         ),
       )}
@@ -213,9 +227,11 @@ type HalfProps = {
   now: string;
   /** A full PTO day: the card is dimmed and shows the PTO instead of free time. */
   ptoOff: boolean;
+  /** Follow-ups to show on this card (step 13.5). */
+  followUps: readonly FollowUpView[];
 };
 
-function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, ptoOff }: HalfProps) {
+function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, ptoOff, followUps }: HalfProps) {
   const primary = slot.focus[0];
   const sev = worstSeverity(slot.risks);
   const allWork = useContext(DevOpsWork);
@@ -276,6 +292,17 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
       ))}
     </ul>
   );
+  const fuList = followUps.length > 0 && (
+    <ul className="week-fus" aria-label="Follow-ups">
+      {followUps.map((f) => (
+        <li key={f.id} className={f.dueState ? `due-${f.dueState.level}` : undefined} title={`Follow-up${f.hasWho ? ` to ${f.who}` : ""}: ${f.what}`}>
+          <span className="fu-tag">Follow-up</span>
+          {f.dueState && f.dueState.level !== "later" && <span className={`due-badge ${f.dueState.level}`}>{f.dueState.text}</span>}
+          <span className="fu-what">{f.what}</span>
+        </li>
+      ))}
+    </ul>
+  );
   const who = primary ? (
     <>
       <div className="client">
@@ -283,6 +310,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
         {primary.clientName}
       </div>
       {featList}
+      {fuList}
       {slot.focus.slice(1).map((b) => (
         <div key={b.id} className="also" style={{ "--c2": clientColor(b.clientKey, colors) } as CSSProperties}>
           <span className="swatch small" />
@@ -296,6 +324,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
     <>
       <div className="client open-label">Open</div>
       {featList}
+      {fuList}
     </>
   );
 

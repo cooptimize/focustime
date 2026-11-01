@@ -128,8 +128,8 @@ export type ReadinessFlag = {
   drafts?: number;
   /** Captures to sort (step 9): how many are in the inbox. */
   count?: number;
-  /** Block needs work: the open "ask about priorities" loop for that client and week, or null. */
-  loopId?: number | null;
+  /** Block needs work: the open "ask about priorities" follow-up for that client and week, or null. */
+  followUpId?: number | null;
   /** Intention not in DevOps (step 11): the typed pick, its day and size. */
   pickId?: number;
   date?: IsoDate;
@@ -137,7 +137,7 @@ export type ReadinessFlag = {
 };
 
 export type WorkLike = { clientKey: string; status: string; fromCache: boolean; items: readonly WorkItem[] };
-export type LoopRef = { id: number; kind: string; clientKey: string | null; ruleKey: string | null; closedAt: string | null };
+export type FollowUpRef = { id: number; kind: string; clientKey: string | null; ruleKey: string | null; closedAt: string | null };
 
 export type ReadinessInput = {
   week: Week;
@@ -146,13 +146,13 @@ export type ReadinessInput = {
   /** My open work per client (week.load's DevOps); null when DevOps wasn't loaded. */
   work: readonly WorkLike[] | null;
   marks: readonly { clientKey: string; itemId: number; markedAt: string }[];
-  loops: readonly LoopRef[];
+  followUps: readonly FollowUpRef[];
   /** Local draft stories (step 9), to count those under each feature. */
-  drafts?: readonly { clientKey: string; parentItemId: number | null; title?: string }[];
+  drafts?: readonly { clientKey: string; parentItemId: number | null; title?: string; level?: "story" | "feature" }[];
   /** Captures not sorted yet (step 9). */
   captures?: number;
   /** Typed intention picks around the week (step 11), to nudge them into DevOps as draft stories. */
-  intentions?: readonly { id: number; clientKey: string; title: string; date: IsoDate; size: "S" | "M" | "L"; status: string }[];
+  intentions?: readonly { id: number; clientKey: string; title: string; date: IsoDate; size: "S" | "M" | "L"; status: string; followUpId?: number | null }[];
 };
 
 /** "Break down #id …" picks are about a DevOps feature already; they aren't intentions to move into DevOps. */
@@ -160,7 +160,7 @@ export const isBreakDown = (title: string) => /^Break down #\d+/.test(title);
 
 const ORDER: readonly ReadinessKind[] = ["block_needs_work", "needs_breakdown", "no_target_date", "intention_not_in_devops", "needs_features", "captures_to_sort"];
 
-/** The "ask about priorities" loop key for a client and week. */
+/** The "ask about priorities" follow-up key for a client and week. */
 export const prioritiesKey = (weekStart: IsoDate, clientKey: string) => `priorities:${weekStart}:${clientKey}`;
 
 /**
@@ -179,8 +179,8 @@ export function readiness(i: ReadinessInput): ReadinessFlag[] {
     if (!w || w.status !== "ok" || w.fromCache || w.items.length > 0) continue;
     const blocks = clientBlocks(i.week, clientKey).filter((b) => !b.pto).length;
     if (!blocks) continue;
-    const loop = i.loops.find((l) => !l.closedAt && l.kind === "priorities" && l.ruleKey === prioritiesKey(i.week.weekStart, clientKey));
-    out.push({ kind: "block_needs_work", clientKey, itemId: null, title: `No open work assigned to me for ${clientKey}`, url: null, soft: false, blocks, loopId: loop?.id ?? null });
+    const followUp = i.followUps.find((l) => !l.closedAt && l.kind === "priorities" && l.ruleKey === prioritiesKey(i.week.weekStart, clientKey));
+    out.push({ kind: "block_needs_work", clientKey, itemId: null, title: `No open work assigned to me for ${clientKey}`, url: null, soft: false, blocks, followUpId: followUp?.id ?? null });
   }
   for (const f of i.features.filter(isFeature)) {
     const item = find(f.clientKey, f.itemId);
@@ -189,12 +189,13 @@ export function readiness(i: ReadinessInput): ReadinessFlag[] {
       out.push({
         kind: "needs_breakdown", clientKey: f.clientKey, itemId: f.itemId, title: item.title, url: item.url, soft: false,
         markedAt: i.marks.find((m) => m.clientKey === f.clientKey && m.itemId === f.itemId)?.markedAt ?? null,
-        drafts: (i.drafts ?? []).filter((d) => d.clientKey === f.clientKey && d.parentItemId === f.itemId).length,
+        drafts: (i.drafts ?? []).filter((d) => d.clientKey === f.clientKey && d.parentItemId === f.itemId && (d.level ?? "story") === "story").length,
       });
   }
   for (const p of i.portfolios)
     for (const e of p.items.filter((x) => x.tier === "epic"))
-      if (!e.children.some((c) => c.open && c.level === "portfolio")) out.push({ kind: "needs_features", clientKey: p.clientKey, itemId: e.id, title: e.title, url: e.url, soft: false });
+      if (!e.children.some((c) => c.open && c.level === "portfolio"))
+        out.push({ kind: "needs_features", clientKey: p.clientKey, itemId: e.id, title: e.title, url: e.url, soft: false, drafts: (i.drafts ?? []).filter((d) => d.clientKey === p.clientKey && d.parentItemId === e.id && d.level === "feature").length });
   // Step 11: musts (features) with no target date; a nice-to-have isn't a promise yet.
   for (const f of i.features.filter((x) => isFeature(x) && isMust(x))) {
     const item = find(f.clientKey, f.itemId);
@@ -203,7 +204,7 @@ export function readiness(i: ReadinessInput): ReadinessFlag[] {
   // Step 11: typed intentions still planned or done, not yet in DevOps (no draft story with that title for the client).
   const drafted = (k: string, t: string) => (i.drafts ?? []).some((d) => d.clientKey === k && d.title?.trim().toLowerCase() === t.trim().toLowerCase());
   for (const p of i.intentions ?? [])
-    if ((p.status === "planned" || p.status === "done") && !isBreakDown(p.title) && !drafted(p.clientKey, p.title))
+    if ((p.status === "planned" || p.status === "done") && !p.followUpId && !isBreakDown(p.title) && !drafted(p.clientKey, p.title))
       out.push({ kind: "intention_not_in_devops", clientKey: p.clientKey, itemId: null, title: p.title, url: null, soft: false, pickId: p.id, date: p.date, size: p.size });
   if (i.captures) out.push({ kind: "captures_to_sort", clientKey: "", itemId: null, title: `${i.captures} unprocessed capture${i.captures === 1 ? "" : "s"}`, url: null, soft: false, count: i.captures });
   return out.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
@@ -213,7 +214,7 @@ const longDate = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-U
 
 /**
  * The Coop brief: copyable markdown for one feature, for Coop on the client VM to propose user stories. Only DevOps
- * fields (and the client's name): nothing from Coopilot's plan, notes or loops, and no assignees.
+ * fields (and the client's name): nothing from Coopilot's plan, notes or follow-ups, and no assignees.
  */
 export function briefMarkdown(o: { clientName: string; item: PortfolioItem; description: string | null }): string {
   const { item } = o;

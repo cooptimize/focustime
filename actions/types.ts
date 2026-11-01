@@ -5,7 +5,7 @@ import type { FocusSettings } from "../plan/focussound.ts";
 import type { TodayTarget } from "../week/dates.ts";
 import type { PlanWeek } from "../plan/types.ts";
 import type { ClientPortfolio, ClientWork, IsoDate, RiskThresholds, SourceResult, StandingBlock, Week } from "../week/types.ts";
-import type { Capture, DraftStory, Note, WeekFeature } from "../plan/types.ts";
+import type { Capture, DraftStory, WeekFeature } from "../plan/types.ts";
 import type { TimeModel } from "../week/hours.ts";
 
 export type SourceSummary = Omit<SourceResult<unknown>, "items"> & { itemCount: number };
@@ -38,8 +38,8 @@ export type WeekLoadData = {
   focus: FocusSettings;
   /** What media control is on this machine (read-only check): playerctl, and the Spotify app for playlist links. */
   media: { playerctl: boolean; spotify: boolean };
-  /** Open loops, for the Loops count in the top bar (step 6c). */
-  openLoops: number;
+  /** Open follow-ups, for the Follow-ups count in the top bar (step 6c). */
+  openFollowUps: number;
   /** Focused seconds per pick on the week shown (focus log, step 6c). */
   focused: Record<number, number>;
   /** The latest resume note per client (step 7). */
@@ -54,6 +54,8 @@ export type WeekLoadData = {
   weekFeatures: WeekFeature[];
   /** Captures not sorted yet (step 9), for the Capture tab count. */
   captures: number;
+  /** Open follow-ups, not snoozed (step 13.5): on the week's cards, Today and Plan the day. */
+  followUps: FollowUpView[];
   /** The Plan the week badge: the week a nudge asked for that still isn't committed (server clock). */
   weekNudge: { badge: IsoDate | null };
   /** Display settings from [ui] (step 6b): the theme. Defaults when the config is invalid. */
@@ -74,7 +76,7 @@ export type WeekLoadData = {
 
 /** A value problem on one config field (Settings shows it next to the field). */
 export type FieldProblem = { field: string; message: string };
-export type ActionResponse<T = unknown> = { ok: true; data: T } | { ok: false; status: number; error: string; fields?: FieldProblem[] };
+export type ActionResponse<T = unknown> = { ok: true; data: T } | { ok: false; status: number; error: string; fields?: FieldProblem[]; /** A refusal the UI can answer (step 13.5): "no_hours" asks Add hours or Move anyway. */ code?: string };
 
 // ---- Settings (step 6b): what settings.load returns. Never a secret value. ----
 export type AppSecret = "dataverse-client-secret" | "google-client-secret";
@@ -148,13 +150,13 @@ export type TimerView = {
   runningSince: string | null;
 };
 
-/** A loop in the Loops view and Close out (step 6c, step 7): who, what, when, and how it can close. */
-export type LoopView = {
+/** A follow-up in the Follow-ups view and Close out (step 6c, step 7): who, what, when, and how it can close. */
+export type FollowUpView = {
   id: number;
   /** The rule that opened it: devops_update, slip, blocked, flex_update or manual. */
   kind: string;
   clientKey: string | null;
-  /** Who it is owed to: the client's name, or what I typed for a manual loop. */
+  /** Who it is owed to: the client's name, or what I typed for a manual follow-up. */
   who: string;
   what: string;
   channel: string | null;
@@ -162,7 +164,7 @@ export type LoopView = {
   /** The DevOps item it is about, with a link when known. */
   itemId: number | null;
   itemUrl: string | null;
-  /** The plain-text heads-up to copy (slip loops). */
+  /** The plain-text heads-up to copy (slip follow-ups). */
   draft: string | null;
   openedAt: string;
   /** Opened today (by the server's clock): listed first in Close out. */
@@ -170,8 +172,19 @@ export type LoopView = {
   closedAt: string | null;
   closeNote: string | null;
   closedBy: "me" | "signal" | null;
-  /** The flex session a flex loop came from (its when), or null. */
+  /** The flex session a flex follow-up came from (its when), or null. */
   session: { start: string; end: string } | null;
+  /** Step 13.5: closed the loop (done) or not needed; how I told them; snoozed until; where a rule's one came from. */
+  outcome: "done" | "not_needed" | null;
+  closeHow: import("../plan/types.ts").CloseHow | null;
+  snoozedUntil: IsoDate | null;
+  origin: import("../plan/types.ts").FollowUpOrigin | null;
+  /** Added by me (by hand or from a capture): can be deleted. */
+  byHand: boolean;
+  clientName: string | null;
+  /** Urgency in words (null when closed or no due date). */
+  dueState: import("../plan/due.ts").DueState | null;
+  hasWho: boolean;
 };
 
 /** The latest resume note for a client (step 7): where I left off, shown on its next block and in Plan the day. */
@@ -214,8 +227,8 @@ export type CloseOutState = {
   /** That day's resume notes, and the latest before it per client (shown as a hint). */
   notes: Record<string, ResumeNoteView>;
   previous: Record<string, ResumeNoteView>;
-  /** Open loops, newest first. */
-  loops: LoopView[];
+  /** Open follow-ups, newest first. */
+  followUps: FollowUpView[];
   /** Borrowed time from that day, and every unpaid record. */
   borrowed: BorrowedView[];
   /** Captures not sorted yet (step 9), for "N unprocessed captures". */
@@ -237,8 +250,8 @@ export type WeekPlanState = {
   portfolios: ClientPortfolio[];
   /** Features marked as being broken down (local). */
   marks: { clientKey: string; itemId: number; markedAt: string }[];
-  /** "Ask about priorities" loops for this week. */
-  loops: LoopView[];
+  /** "Ask about priorities" follow-ups for this week. */
+  followUps: FollowUpView[];
   /** Local draft stories (step 9: from captures or Plan the day), shown under their features. */
   drafts: DraftStory[];
   /** Captures not sorted yet (step 9). */
@@ -247,11 +260,11 @@ export type WeekPlanState = {
 
 
 // ---- Quick capture (step 9) ----
-/** What Capture shows: the inbox (newest first) and notes (filtered). */
-export type CaptureState = { today: IsoDate; inbox: Capture[]; notes: Note[]; inboxCount: number };
+/** What Capture shows: the inbox (newest first). Notes were removed in step 13.5. */
+export type CaptureState = { today: IsoDate; inbox: Capture[]; inboxCount: number };
 export type FeatureChoice = { id: number; title: string; state: string };
 /** A client's open features for "under a feature"; "unavailable" when DevOps can't say (a draft then saves without one). */
-export type CaptureFeatures = { clientKey: string; status: "ok" | "unavailable"; message?: string; features: FeatureChoice[] };
+export type CaptureFeatures = { clientKey: string; status: "ok" | "unavailable"; message?: string; features: FeatureChoice[]; /** Step 13.5: open epics, for a draft feature. */ epics: FeatureChoice[] };
 
 // ---- Step 12: timeboxes and the write framework ----
 /** One field of a write preview: before and after (null where there is none), and whether it changes. */
@@ -291,3 +304,7 @@ export type CandidateView = { name: string; email: string; tier: 1 | 2 | 3; onCl
 export type CandidatesData = { clientKey: string; from: string; to: string; candidates: CandidateView[]; problems: string[] };
 export type SlotView = import("../plan/collab.ts").Slot;
 export type SuggestData = { slots: SlotView[]; checked: number; problems: string[] };
+
+/** followup.people (step 13.5): names to suggest for Who. */
+export type PeopleData = { teammates: { name: string; email: string }[]; attendees: { name: string; email: string }[]; problems: string[] };
+export type ReviewData = { headsUps: { id: number; what: string; reason: string }[] };

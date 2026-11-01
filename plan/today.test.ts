@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusPick, urgentLoops } from "./today.ts";
+import { focusPick, urgentFollowUps } from "./today.ts";
 import type { Pick } from "./types.ts";
 
 const pick = (id: number, half: Pick["half"], position: number, status: Pick["status"] = "planned") =>
@@ -14,8 +14,8 @@ describe("Today", () => {
     expect(focusPick(picks, null)?.id).toBe(2);
     expect(focusPick([pick(1, "AM", 0, "done")], "AM")).toBeNull();
   });
-  it("urgent loops: open and due today or earlier", () => {
-    const loops = [{ id: 1, due: "2026-11-03" }, { id: 2, due: "2026-11-02" }, { id: 3, due: null }, { id: 4, due: "2026-10-30" }, { id: 5, due: "2026-11-01", closedAt: "x" }];
-    expect(urgentLoops(loops, "2026-11-02").map((l) => l.id)).toEqual([4, 2]);
+  it("urgent follow-ups: open and due today or earlier", () => {
+    const followUps = [{ id: 1, due: "2026-11-03" }, { id: 2, due: "2026-11-02" }, { id: 3, due: null }, { id: 4, due: "2026-10-30" }, { id: 5, due: "2026-11-01", closedAt: "x" }];
+    expect(urgentFollowUps(followUps, "2026-11-02").map((l) => l.id)).toEqual([4, 2]);
   });
 });

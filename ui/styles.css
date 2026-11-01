@@ -1285,30 +1285,30 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .set-inline input { max-width: 180px; }
 .mini.danger { color: var(--risk); border-color: color-mix(in oklab, var(--risk) 45%, var(--border)); }
 
-/* Loops (step 6c) */
-.loops { flex: 1; overflow: auto; padding: 8px 24px 24px; }
-.loops-head { display: flex; align-items: center; gap: 16px; }
-.loops-head h2 { margin: 0; font-size: 22px; }
-.loops-head h2:focus { outline: none; }
-.loops-head .top-btn { margin-left: auto; }
-.loops-note { margin: 6px 0 14px; font-size: 13px; }
-.loops-empty { color: var(--text-muted); }
-.loop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 1100px; }
-.loop { display: flex; align-items: center; gap: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
-.loop.closed .loop-who, .loop.closed .loop-what { color: var(--text-muted); }
-.loop-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; flex: 1; min-width: 0; }
-.loop-who { font-weight: 600; color: var(--text); }
-.loop-what { color: var(--text); }
-.loop-when { font-size: 12px; flex-basis: 100%; }
-.loop-close { display: flex; gap: 8px; align-items: center; }
-.loop-close input { width: 280px; }
+/* Follow-ups (step 6c) */
+.follow-ups { flex: 1; overflow: auto; padding: 8px 24px 24px; }
+.follow-ups-head { display: flex; align-items: center; gap: 16px; }
+.follow-ups-head h2 { margin: 0; font-size: 22px; }
+.follow-ups-head h2:focus { outline: none; }
+.follow-ups-head .top-btn { margin-left: auto; }
+.follow-ups-note { margin: 6px 0 14px; font-size: 13px; }
+.follow-ups-empty { color: var(--text-muted); }
+.follow-up-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 1100px; }
+.follow-up { display: flex; align-items: center; gap: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.follow-up.closed .follow-up-who, .follow-up.closed .follow-up-what { color: var(--text-muted); }
+.follow-up-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; flex: 1; min-width: 0; }
+.follow-up-who { font-weight: 600; color: var(--text); }
+.follow-up-what { color: var(--text); }
+.follow-up-when { font-size: 12px; flex-basis: 100%; }
+.follow-up-close { display: flex; gap: 8px; align-items: center; }
+.follow-up-close input { width: 280px; }
 .view-tab .count { margin-left: 6px; padding: 0 6px; border-radius: 99px; font-size: 11px; line-height: 16px; background: var(--sunken); color: var(--text); }
 
 /* Close out and Check-in (step 7) */
 .closeout { flex: 1; overflow: auto; padding: 8px 24px 32px; }
-.closeout .loops-head { flex-wrap: wrap; row-gap: 8px; }
-.closeout .loops-head .top-btn.primary { margin-left: auto; }
-.closeout .loops-head .top-btn.primary + .top-btn { margin-left: 0; }
+.closeout .follow-ups-head { flex-wrap: wrap; row-gap: 8px; }
+.closeout .follow-ups-head .top-btn.primary { margin-left: auto; }
+.closeout .follow-ups-head .top-btn.primary + .top-btn { margin-left: 0; }
 .top-btn.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .co-step { display: inline-flex; gap: 2px; }
 .co-done { font-size: 13px; color: var(--ok); }
@@ -1356,17 +1356,17 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .ci-walkon-form { margin-top: 8px; }
 .ci-walkon-form select { max-width: 420px; }
 
-/* Loops from rules (step 7) */
-.loop { flex-wrap: wrap; }
-.loop.new { border-color: color-mix(in oklab, var(--accent) 45%, var(--border)); }
-.loop-kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 0 6px; border: 1px solid var(--border); border-radius: 99px; }
-.loop-new { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); font-weight: 600; }
-.loop-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.loop-draft { flex-basis: 100%; }
-.loop-draft textarea { width: 100%; max-width: 760px; font: inherit; font-size: 13px; color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
-.loop-add { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 4px 0 10px; }
-.loop-add label { display: grid; gap: 2px; font-size: 12px; color: var(--text-muted); }
-.loop-add input { min-width: 180px; }
+/* Follow-ups from rules (step 7) */
+.follow-up { flex-wrap: wrap; }
+.follow-up.new { border-color: color-mix(in oklab, var(--accent) 45%, var(--border)); }
+.follow-up-kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 0 6px; border: 1px solid var(--border); border-radius: 99px; }
+.follow-up-new { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); font-weight: 600; }
+.follow-up-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.follow-up-draft { flex-basis: 100%; }
+.follow-up-draft textarea { width: 100%; max-width: 760px; font: inherit; font-size: 13px; color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.follow-up-add { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 4px 0 10px; }
+.follow-up-add label { display: grid; gap: 2px; font-size: 12px; color: var(--text-muted); }
+.follow-up-add input { min-width: 180px; }
 
 /* Resume notes and borrowed time (step 7) */
 .resume-note { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 2px 0; }
@@ -1377,20 +1377,20 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .view-tab .count.done { color: var(--ok); }
 .checkin .co-pick .co-status { grid-area: client; justify-self: end; }
 .co-section, .co-notice, .flex-offer { max-width: 1400px; }
-.closeout .loop-list { max-width: 1400px; }
-/* Text fields and selects in Close out, Check-in and Loops: the same look as Settings. */
+.closeout .follow-up-list { max-width: 1400px; }
+/* Text fields and selects in Close out, Check-in and Follow-ups: the same look as Settings. */
 .closeout input:not([type="checkbox"]), .closeout select, .closeout textarea,
-.loops input:not([type="checkbox"]), .loops select, .loops textarea {
+.follow-ups input:not([type="checkbox"]), .follow-ups select, .follow-ups textarea {
   font: inherit; font-size: 13px; color: inherit; background: var(--raised);
   border: 1px solid var(--border-strong); border-radius: 7px; padding: 5px 8px; min-width: 0;
 }
-.closeout input::placeholder, .loops input::placeholder { color: var(--text-faint); }
+.closeout input::placeholder, .follow-ups input::placeholder { color: var(--text-faint); }
 .co-other { display: inline-block; margin: 0 0 8px; }
 
 /* ---- Plan the week (step 8) ---- */
 .planweek { flex: 1; overflow: auto; padding: 8px 24px 32px; }
-.planweek .loops-head { flex-wrap: wrap; row-gap: 8px; }
-.planweek .loops-head .top-btn.primary { margin-left: auto; }
+.planweek .follow-ups-head { flex-wrap: wrap; row-gap: 8px; }
+.planweek .follow-ups-head .top-btn.primary { margin-left: auto; }
 .planweek input:not([type="checkbox"]), .planweek select, .planweek textarea {
   font: inherit; font-size: 13px; color: inherit; background: var(--raised);
   border: 1px solid var(--border-strong); border-radius: 7px; padding: 4px 8px; min-width: 0;
@@ -1450,13 +1450,13 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .pw-feature { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "kids" "blocks" "placed" "children"; }
   .pw-board { overflow-x: auto; }
 }
-.planweek .loops-head { max-width: 1400px; justify-content: flex-start; }
-.planweek .loops-head .top-btn.primary + .top-btn { margin-left: 0; }
+.planweek .follow-ups-head { max-width: 1400px; justify-content: flex-start; }
+.planweek .follow-ups-head .top-btn.primary + .top-btn { margin-left: 0; }
 
 /* ---- Quick capture (step 9) ---- */
 .capture { flex: 1; overflow: auto; padding: 8px 24px 32px; }
-.capture .loops-head { max-width: 1100px; }
-.capture .loops-head .top-btn { margin-left: auto; }
+.capture .follow-ups-head { max-width: 1100px; }
+.capture .follow-ups-head .top-btn { margin-left: auto; }
 .capture .co-section { max-width: 1100px; }
 .capture input:not([type="checkbox"]), .capture select, .cap-dialog input:not([type="checkbox"]), .cap-dialog select {
   font: inherit; font-size: 13px; color: inherit; background: var(--raised);
@@ -1565,8 +1565,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .top-timer-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 13px; color: var(--text-muted); }
 .top-timer.ended { border-color: var(--watch); }
 .inbox { flex: 1; overflow: auto; padding: 8px 24px 32px; }
-.inbox .loops-head, .inbox .co-section, .inbox .loops-note, .inbox-list, .inbox-tools { max-width: 1100px; }
-.inbox .loops-head .top-btn { margin-left: auto; }
+.inbox .follow-ups-head, .inbox .co-section, .inbox .follow-ups-note, .inbox-list, .inbox-tools { max-width: 1100px; }
+.inbox .follow-ups-head .top-btn { margin-left: auto; }
 .inbox input:not([type="checkbox"]), .inbox select { font: inherit; font-size: 13px; color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 5px 8px; min-width: 0; }
 .inbox-list { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 8px; }
 .inbox-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
@@ -1577,7 +1577,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* ---- Step 10 slice 2: quieter ---- */
 /* Shortcut hints are hidden by default; every key is in the button's tooltip, the command menu and the ? legend. */
-:where(.topbar, .loops-head, .planday, .settings, .closeout, .checkin, .planweek, .inbox, .today-view) button > kbd { display: none; }
+:where(.topbar, .follow-ups-head, .planday, .settings, .closeout, .checkin, .planweek, .inbox, .today-view) button > kbd { display: none; }
 .statusbar.quiet .status-row { justify-content: space-between; }
 .status-quiet { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 2px 4px; color: var(--text-faint); font: inherit; font-size: 12px; cursor: pointer; }
 .status-quiet .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
@@ -1590,7 +1590,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Step 10 slice 3: Plan the week. The block grid sits on top (pinned while the list scrolls) and is larger; the
    feature list is a right-hand panel when the window is wide enough, below the grid otherwise. */
-.planweek .loops-head, .planweek .co-section, .pw-summary { max-width: none; }
+.planweek .follow-ups-head, .planweek .co-section, .pw-summary { max-width: none; }
 .pw-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
 .pw-board-wrap { position: sticky; top: -8px; z-index: 2; background: var(--bg); padding-bottom: 8px; margin-top: 8px; }
 .pw-board { gap: 6px; }
@@ -1836,3 +1836,43 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .wl-kind-sync { border-color: var(--accent); color: var(--accent); }
 .help-dialog .chip-btn[aria-checked="true"] { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, var(--surface)); color: var(--text); }
 .help-slots label { display: block; }
+
+/* Step 13.5: follow-ups. Due badges are words and color (never color alone, never small gray). */
+.due-badge { --due: var(--text); display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--due); background: color-mix(in oklab, var(--due) 14%, var(--surface)); border: 1px solid color-mix(in oklab, var(--due) 45%, var(--border)); }
+.due-badge.later { --due: var(--text); font-weight: 600; }
+.due-badge.tomorrow { --due: var(--watch); }
+.due-badge.today { --due: color-mix(in oklab, var(--risk) 50%, var(--watch)); }
+.due-badge.overdue { --due: var(--risk); }
+.follow-up.due-overdue { border-left: 3px solid var(--risk); }
+.follow-up.due-today { border-left: 3px solid color-mix(in oklab, var(--risk) 50%, var(--watch)); }
+.follow-up-origin { flex-basis: 100%; font-size: 12px; color: var(--text-muted); }
+.follow-up-add label.wide input { min-width: 280px; }
+.follow-up-add select { min-width: 140px; }
+.follow-up > .follow-up-add { flex-basis: 100%; margin-top: 6px; }
+.fu-more { position: relative; display: inline-flex; }
+.fu-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; display: grid; min-width: 150px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-dialog); }
+.fu-menu button { text-align: left; padding: 6px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.fu-menu button:hover, .fu-menu button:focus-visible { background: var(--raised); }
+.fu-menu button.danger { color: var(--risk); }
+.week-fus { list-style: none; margin: 2px 0; padding: 0; font-size: 12px; color: var(--text-muted); display: grid; gap: 2px; }
+.week-fus li { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.week-fus .fu-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.week-fus .due-badge { font-size: 10.5px; padding: 0 6px; }
+.fu-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); font-weight: 600; flex: none; }
+.pd-due { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.pd-due h3 { margin: 0 0 6px; font-size: 14px; }
+.pd-due ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.pd-due li { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.cand .due-badge { margin-left: 6px; }
+.co-due-head { margin: 10px 0 4px; font-size: 13px; }
+.today-alert .due-badge { flex: none; }
+.co-notice.fading { animation: fade-out 4s ease-in forwards; }
+@keyframes fade-out { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .co-notice.fading { animation: none; } }
+.nohours-dialog { width: min(460px, 100%); }
+.nohours-q { margin: 0; font-size: 15px; font-weight: 600; }
+.fu-review { margin: 10px 0; padding: 8px 12px; border: 1px solid color-mix(in oklab, var(--watch) 45%, var(--border)); border-radius: 8px; max-width: 1100px; }
+.fu-review h3 { margin: 0 0 4px; font-size: 14px; }
+.fu-review ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }
+.pw-draft-feature { display: inline-flex; gap: 6px; align-items: center; } .pw-draft-feature input { width: 240px; }
+.set-inline { display: inline-flex; gap: 6px; align-items: center; margin-top: 6px; }

@@ -2,7 +2,7 @@ import { legacyHours } from "../config/schema.ts";
 import { describe, expect, it } from "vitest";
 import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
-import { KEYS, nextRegion, openTarget, regionOf, regionsAvailable } from "./keys.ts";
+import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, KEYS, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay } from "./keys.ts";
 import { commandList, type MenuEnv } from "./menu.ts";
 
 /** A stand-in element: `closest` answers for the selectors it is inside. */
@@ -63,7 +63,7 @@ describe("the keyboard legend and the command menu agree", () => {
     week, selection: { date: "2026-11-02", half: "AM" }, planWeek: null, planState: null, planTarget: { date: "2026-11-02", isToday: true }, today: "2026-11-02", work: new Map(), calendars: { outlook: false, google: false },
     runPlan: async () => true, openPlanDay: noop, commitPlan: noop, openDetails: noop, openLink: noop, changeWeek: noop, goToday: noop, refresh: noop, showSourceStatus: noop, connect: noop, disconnect: noop, setView: noop,
     moveRegion: noop, focusedItem: null, showKeys: noop, theme: "cooptimize-dark", setTheme: noop, viewRange: "business", setViewRange: noop, hours: legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" }), runTime: async () => true, openSettings: noop, exportPlan: noop,
-    openCloseOut: noop, openCheckIn: noop, closeOutDate: null, commitCloseOut: noop, makeUp: async () => true, runLoops: async () => true, borrowed: [],
+    openCloseOut: noop, openCheckIn: noop, closeOutDate: null, commitCloseOut: noop, makeUp: async () => true, runFollowUps: async () => true, borrowed: [],
   } as MenuEnv;
   const commands = commandList(env);
 
@@ -86,5 +86,50 @@ describe("the keyboard legend and the command menu agree", () => {
     void withItem.run?.();
     expect(calls).toEqual([["CSC", URL]]);
     expect(commands.find((c) => c.action === "ui.open_focused")!.disabled).toBe("Focus a work item first (Tab to it)");
+  });
+});
+
+describe("keys while typing or with a dialog open (step 13.5)", () => {
+  const el = (tagName: string, extra: { type?: string; isContentEditable?: boolean } = {}) => ({ tagName, ...extra });
+  const key = (k: string, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({ key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
+  // Every global shortcut the legend lists, plus the ones the week grid handles.
+  const SHORTCUTS = [" ", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "[", "]", "?", ",", "1", "2", "3", "4", "t", "T", "n", "N", "w", "W", "p", "i", "l", "e", "m", "f", "c", "C", "o", "O", "h", "r", "R"];
+  // The text fields in dialogs: help invite note, capture, follow-up form, timebox title, settings, command menu search.
+  const FIELDS = [el("TEXTAREA"), el("INPUT", { type: "text" }), el("INPUT", { type: "search" }), el("INPUT", { type: "time" }), el("INPUT", { type: "date" }), el("INPUT", { type: "number" }), el("SELECT"), el("DIV", { isContentEditable: true }), el("INPUT")];
+
+  it("knows what typing is: text-like inputs, textareas, selects and contenteditable; not checkboxes or buttons", () => {
+    for (const f of FIELDS) expect(isTypingTarget(f)).toBe(true);
+    for (const f of [el("INPUT", { type: "checkbox" }), el("INPUT", { type: "radio" }), el("BUTTON"), el("DIV"), null]) expect(isTypingTarget(f)).toBe(false);
+  });
+  it("no shortcut reaches the views while typing in any field, with or without a dialog", () => {
+    for (const f of FIELDS) for (const k of SHORTCUTS) for (const o of ["none", "details", "modal"] as const) expect(globalKeyAllowed(key(k), f, o), `${k} in ${f.tagName}/${o}`).toBe(false);
+  });
+  it("while a dialog or menu is open, the views behind it get no keys at all, Esc included (the dialog closes itself)", () => {
+    for (const k of [...SHORTCUTS, "Escape", "F6"]) expect(globalKeyAllowed(key(k), el("BUTTON"), "modal")).toBe(false);
+  });
+  it("Esc in a text field outside a dialog still reaches the view (leaves Settings), and F6 still moves regions", () => {
+    expect(globalKeyAllowed(key("Escape"), el("INPUT", { type: "text" }), "none")).toBe(true);
+    expect(globalKeyAllowed(key("F6"), el("TEXTAREA"), "none")).toBe(true);
+  });
+  it("with the half-day details open, only F6 (its regions) reaches the window handlers", () => {
+    expect(globalKeyAllowed(key("F6"), el("BUTTON"), "details")).toBe(true);
+    for (const k of SHORTCUTS) expect(globalKeyAllowed(key(k), el("BUTTON"), "details")).toBe(false);
+  });
+  it("outside fields and dialogs, shortcuts work as before; chords with Ctrl, Alt or Meta are never plain shortcuts", () => {
+    for (const k of SHORTCUTS) expect(globalKeyAllowed(key(k), el("BUTTON"), "none")).toBe(true);
+    expect(globalKeyAllowed(key("n", { ctrlKey: true }), el("DIV"), "none")).toBe(false);
+    expect(globalKeyAllowed(key("2", { altKey: true }), el("DIV"), "none")).toBe(false);
+  });
+  it("Ctrl+K opens the command menu unless another dialog is on top; it closes the command menu itself", () => {
+    expect(commandKeyAllowed("none", false)).toBe(true);
+    expect(commandKeyAllowed("details", false)).toBe(true);
+    expect(commandKeyAllowed("modal", false)).toBe(false);
+    expect(commandKeyAllowed("modal", true)).toBe(true);
+  });
+  it("finds the top overlay from data-overlay markers", () => {
+    const doc = (sel: Record<string, boolean>) => ({ querySelector: (s: string) => (sel[s] ? {} : null) });
+    expect(topOverlay(doc({}))).toBe("none");
+    expect(topOverlay(doc({ '[data-overlay="details"]': true }))).toBe("details");
+    expect(topOverlay(doc({ '[data-overlay="details"]': true, '[data-overlay="modal"]': true }))).toBe("modal");
   });
 });
