@@ -1595,3 +1595,47 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .details-picks li.done .d-pick-title { text-decoration: line-through; color: var(--text-faint); }
 .half .badges:has(.status-pill) { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; margin: 2px 0 4px; padding: 0; }
 .half .badges .status-pill { width: auto; flex: none; }
+
+/* Step 10 slice 3: Plan the week. The block grid sits on top (pinned while the list scrolls) and is larger; the
+   feature list is a right-hand panel when the window is wide enough, below the grid otherwise. */
+.planweek .loops-head, .planweek .co-section, .pw-summary { max-width: none; }
+.pw-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+.pw-board-wrap { position: sticky; top: -8px; z-index: 2; background: var(--bg); padding-bottom: 8px; margin-top: 8px; }
+.pw-board { gap: 6px; }
+.pw-cell { min-height: 84px; padding: 8px 10px; }
+.pw-cell .pw-who { font-size: 13px; color: var(--text); }
+.pw-cell.can { cursor: pointer; }
+.pw-cell.can:hover { border-color: var(--border-strong); }
+.pw-cell.picked { outline: 2px solid var(--focus); outline-offset: 1px; background: var(--raised); }
+.pw-cell:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pw-readiness > summary { cursor: pointer; list-style: none; }
+.pw-readiness > summary::-webkit-details-marker { display: none; }
+.pw-readiness > summary h3::before { content: "▸ "; color: var(--text-muted); }
+.pw-readiness[open] > summary h3::before { content: "▾ "; }
+.pw-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 4px 0 10px; }
+.pw-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.pw-target { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 99px; border: 1px solid var(--focus); font-size: 13px; font-weight: 600; }
+.planweek input.pw-search { margin-left: auto; min-width: 220px; }
+.pw-place-here { border-color: var(--focus); }
+.pw-side .pw-feature { grid-template-columns: minmax(220px, 1fr) auto auto minmax(150px, auto); }
+@media (min-width: 2400px) {
+  .pw-layout { grid-template-columns: minmax(0, 1.25fr) minmax(640px, 1fr); }
+  .pw-board-wrap { top: 0; margin-top: 0; }
+  .pw-cell { min-height: 140px; }
+  .pw-side { max-height: calc(100vh - 220px); overflow: auto; padding-right: 4px; }
+  .pw-side .pw-feature { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title title" "kids blocks" "placed placed" "children children"; }
+  .pw-side .pw-feature .pw-placed { justify-content: flex-start; }
+  .pw-side .pw-feature .pw-kids { justify-self: start; }
+}
+
+/* Step 10 slice 3: Plan the day shows candidates in one block at a time. */
+.pd-block.idle .pd-block-head { cursor: pointer; }
+.pd-block.idle { opacity: 0.92; }
+.pd-add-picks { align-self: flex-start; margin-top: 6px; }
+.pd-breakdown { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 2px 0 6px 22px; }
+.pd-breakdown .cand { width: auto; }
+.pd-breakdown textarea { flex-basis: 100%; font-family: ui-monospace, monospace; font-size: 12px; }
+
+/* First-run hint (step 10). */
+.flow-hint { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; background: var(--surface); font-size: 14px; }
+.flow-hint p { margin: 0; flex: 1; }

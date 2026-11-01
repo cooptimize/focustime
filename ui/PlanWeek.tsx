@@ -51,6 +51,11 @@ export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged,
   const [brief, setBrief] = useState<{ id: number; text: string } | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [dragOver, setDragOver] = useState<string | null>(null);
+  // Step 10: a clicked block filters the feature list to its client (an Open half-day shows every client) and is
+  // where "Place on" puts a feature. Client chips and search narrow the list further.
+  const [sel, setSel] = useState<{ date: IsoDate; half: Half } | null>(null);
+  const [only, setOnly] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const head = useRef<HTMLHeadingElement>(null);
   const briefArea = useRef<HTMLTextAreaElement>(null);
   const tz = data.hours.timeZone;
@@ -72,6 +77,7 @@ export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged,
   }, [load, version]);
   useEffect(() => {
     setBrief(null);
+    setSel(null);
     head.current?.focus();
   }, [weekStart]);
 
@@ -185,17 +191,20 @@ export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged,
       {error && <p className="set-problem" role="alert">{error} <button type="button" className="mini" onClick={() => setError(null)}>Dismiss</button></p>}
       {notice && <p className="co-notice" role="status">{notice}</p>}
 
-      <ul className="pw-summary" aria-label="The week at a glance">
-        <li><strong>{data.openLoops}</strong> open loop{data.openLoops === 1 ? "" : "s"}</li>
-        <li><strong>{unpaid.unpaidMinutes ? formatDuration(unpaid.unpaidMinutes) : "0"}</strong> unpaid borrowed time</li>
-        <li><strong>{ptoDays}</strong> PTO day{ptoDays === 1 ? "" : "s"}</li>
-        <li><strong>{flexCount}</strong> flex session{flexCount === 1 ? "" : "s"}</li>
-        {past && <li className="muted">Past week: a review, nothing changes</li>}
-      </ul>
+      {/* Step 10: only what is there; nothing when the week has none of it. */}
+      {(data.openLoops > 0 || unpaid.unpaidMinutes > 0 || ptoDays > 0 || flexCount > 0 || past) && (
+        <ul className="pw-summary" aria-label="The week at a glance">
+          {data.openLoops > 0 && <li>{data.openLoops} open loop{data.openLoops === 1 ? "" : "s"}</li>}
+          {unpaid.unpaidMinutes > 0 && <li>{formatDuration(unpaid.unpaidMinutes)} borrowed time to make up</li>}
+          {ptoDays > 0 && <li>{ptoDays} day{ptoDays === 1 ? "" : "s"} off</li>}
+          {flexCount > 0 && <li>{flexCount} flex session{flexCount === 1 ? "" : "s"}</li>}
+          {past && <li>Past week: a review, nothing changes</li>}
+        </ul>
+      )}
 
       {!past && (
-        <section className="co-section" aria-label="Readiness">
-          <h3>Readiness <span className="muted">{flags.length ? `${flags.length} to look at` : "Nothing to fix"}</span></h3>
+        <details className="co-section pw-readiness" aria-label="Readiness">
+          <summary><h3>Readiness <span className="muted">{flags.length ? `${flags.length} to look at` : "nothing to fix"}</span></h3></summary>
           {flags.length > 0 && (
             <ul className="pw-ready">
               {flags.map((f) => (
@@ -207,7 +216,7 @@ export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged,
               ))}
             </ul>
           )}
-        </section>
+        </details>
       )}
       {brief && (
         <section className="co-section pw-brief" aria-label="Coop brief">
@@ -216,8 +225,9 @@ export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged,
         </section>
       )}
 
+      <div className="pw-layout">
       <section className="co-section pw-board-wrap" aria-label="The week's blocks">
-        <h3>Blocks <span className="muted">{past ? "What was committed" : "Drop a feature on its client's block or an Open half-day"}</span></h3>
+        <h3>Blocks <span className="muted">{past ? "What was committed" : "Click a block to see what can go on it, or drag a feature onto it"}</span></h3>
         <div className="pw-board" style={{ gridTemplateColumns: `auto repeat(${days.length}, minmax(0, 1fr))` }}>
           <span />
           {days.map((d) => <span key={d.date} className="pw-day">{dateShort(d.date)}</span>)}
@@ -229,14 +239,19 @@ export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged,
               const here = features.filter((f) => f.slots.some((x) => x.date === d.date && x.half === half));
               const target = !past && !s.pto && (!!s.focus[0] || s.open);
               const c = s.focus[0];
+              const picked = sel?.date === d.date && sel.half === half;
+              const choose = () => setSel(picked ? null : { date: d.date, half });
               return (
-                <div key={key} className={`pw-cell${c ? " block" : s.open ? " open" : " none"}${dragOver === key ? " over" : ""}`}
+                <div key={key} className={`pw-cell${c ? " block" : s.open ? " open" : " none"}${dragOver === key ? " over" : ""}${picked ? " picked" : ""}${target ? " can" : ""}`}
                   style={{ "--c": clientColor(c?.clientKey, data.clients) } as CSSProperties}
+                  role={target ? "button" : undefined} tabIndex={target ? 0 : undefined} aria-pressed={target ? picked : undefined}
+                  onClick={target ? (e) => { if (!(e.target as HTMLElement).closest("button")) choose(); } : undefined}
+                  onKeyDown={target ? (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); choose(); } } : undefined}
                   onDragOver={target ? (e) => { if (e.dataTransfer.types.includes(DRAG_TYPE)) { e.preventDefault(); setDragOver(key); } } : undefined}
                   onDragLeave={target ? () => setDragOver(null) : undefined}
                   onDrop={target ? (e) => onDrop(e, d.date, half, s) : undefined}
-                  aria-label={`${dateShort(d.date)} ${HALF_WORD[half]}: ${s.pto ? "PTO" : c ? c.clientName : s.open ? "Open" : "no block"}`}>
-                  <span className="pw-who">{s.pto ? "PTO" : c ? c.clientName : s.open ? "Open" : "None"}</span>
+                  aria-label={`${dateShort(d.date)} ${HALF_WORD[half]}: ${s.pto ? "Day off" : c ? c.clientName : s.open ? "Open" : "no block"}${here.length ? `, ${here.map((f) => `#${f.itemId}`).join(", ")}` : ""}`}>
+                  <span className="pw-who">{s.pto ? "Day off" : c ? c.clientName : s.open ? "Open" : "No block"}</span>
                   {here.map((f) => (
                     <span key={f.id} className="pw-chip" title={f.title}>
                       #{f.itemId} {f.title}
@@ -250,12 +265,16 @@ export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged,
         </div>
       </section>
 
-      {past ? (
-        <PastList features={features} fits={fits} nameOf={nameOf} />
-      ) : (
-        <ClientSections st={st} fits={fits} features={features} days={days} nameOf={nameOf} colors={data.clients} open={open} toggleOpen={toggleOpen}
-          committed={committed} setBlocks={setBlocks} place={place} onBrief={(k, id) => void copyBrief(k, id)} />
-      )}
+      <div className="pw-side">
+        {past ? (
+          <PastList features={features} fits={fits} nameOf={nameOf} />
+        ) : (
+          <FeatureList st={st} fits={fits} features={features} days={days} nameOf={nameOf} colors={data.clients} open={open} toggleOpen={toggleOpen}
+            committed={committed} setBlocks={setBlocks} place={place} onBrief={(k, id) => void copyBrief(k, id)}
+            sel={sel} clearSel={() => setSel(null)} only={only} setOnly={setOnly} query={query} setQuery={setQuery} />
+        )}
+      </div>
+      </div>
     </main>
   );
 }
@@ -265,7 +284,7 @@ function FitChip({ fit }: { fit: ClientFit | undefined }) {
   const borrowed = fit.borrowedMinutes ? `, after ${formatDuration(fit.borrowedMinutes)} borrowed` : "";
   return (
     <span className={`pw-fit ${fit.verdict}`} title={`Committed ${fit.committedBlocks} of about ${fit.availableBlocks} available blocks (free time after PTO, meetings and unavailable time${borrowed})`}>
-      {VERDICT[fit.verdict]} <span className="muted">{fit.committedBlocks} planned, {roomLabel(fit.availableBlocks)}</span>
+      {VERDICT[fit.verdict]} <span className="muted">{fit.verdict === "none" ? roomLabel(fit.availableBlocks) : `${fit.committedBlocks} planned, ${roomLabel(fit.availableBlocks)}`}</span>
     </span>
   );
 }
@@ -321,20 +340,64 @@ type SectionProps = {
   setBlocks: (k: string, item: { id: number; title: string }, blocks: number) => void;
   place: (k: string, itemId: number, date: IsoDate, half: Half, on: boolean) => void;
   onBrief: (k: string, id: number) => void;
+  /** The clicked block: filters to its client and is the Place target. */
+  sel: { date: IsoDate; half: Half } | null;
+  query: string;
 };
+type ListProps = SectionProps & { clearSel: () => void; only: string | null; setOnly: (k: string | null) => void; setQuery: (q: string) => void };
 
-function ClientSections(p: SectionProps) {
-  const keys = [...new Set([...p.fits.map((f) => f.clientKey), ...p.st.portfolios.map((x) => x.clientKey)])];
+/** The block a feature would be placed on, when the clicked block can take this client's work. */
+function targetFor(p: Pick<SectionProps, "sel" | "days">, clientKey: string): Place | null {
+  if (!p.sel) return null;
+  return placesFor(p.days, clientKey).find((pl) => pl.date === p.sel!.date && pl.half === p.sel!.half) ?? null;
+}
+
+/** Step 10: the feature list with its filters (clicked block, client chips, search). */
+function FeatureList(p: ListProps) {
+  const all = [...new Set([...p.fits.map((f) => f.clientKey), ...p.st.portfolios.map((x) => x.clientKey)])];
+  const slot = p.sel ? p.days.find((d) => d.date === p.sel!.date)?.[p.sel.half === "AM" ? "am" : "pm"] : undefined;
+  const blockClient = slot?.focus[0]?.clientKey ?? null;
+  const keys = all.filter((k) => (blockClient ? k === blockClient : true) && (p.only && !blockClient ? k === p.only : true));
   return (
     <>
-      {keys.map((k) => {
+      <div className="pw-filter" role="group" aria-label="Filter features">
+        {p.sel && (
+          <span className="pw-target">
+            {slot?.focus[0] ? `${placeLabel(p.sel.date, p.sel.half)}: ${slot.focus[0].clientName}` : `${placeLabel(p.sel.date, p.sel.half)}: Open, any client`}
+            <button type="button" className="mini" onClick={p.clearSel} aria-label="Show every block's features">×</button>
+          </span>
+        )}
+        {!blockClient && all.length > 1 && (
+          <span className="pw-chips">
+            <button type="button" className="chip-btn" aria-pressed={!p.only} onClick={() => p.setOnly(null)}>All</button>
+            {all.map((k) => (
+              <button key={k} type="button" className="chip-btn" aria-pressed={p.only === k} style={{ "--c": clientColor(k, p.colors) } as CSSProperties} onClick={() => p.setOnly(p.only === k ? null : k)}>
+                <span className="swatch" />{p.nameOf(k)}
+              </button>
+            ))}
+          </span>
+        )}
+        <input type="search" className="pw-search" value={p.query} onChange={(e) => p.setQuery(e.target.value)} placeholder="Search features" aria-label="Search features by title or number" />
+      </div>
+      <ClientSections {...p} keys={keys} />
+    </>
+  );
+}
+
+function ClientSections(p: SectionProps & { keys: string[] }) {
+  const q = p.query.trim().toLowerCase();
+  const match = (i: { id: number; title: string }) => !q || i.title.toLowerCase().includes(q) || String(i.id).includes(q.replace(/^#/, ""));
+  return (
+    <>
+      {p.keys.map((k) => {
         const port = p.st.portfolios.find((x) => x.clientKey === k);
         const fit = p.fits.find((f) => f.clientKey === k);
-        const feats = port?.items.filter((i) => i.tier === "feature") ?? [];
-        const epics = port?.items.filter((i) => i.tier === "epic") ?? [];
+        const feats = port?.items.filter((i) => i.tier === "feature" && match(i)) ?? [];
+        const epics = port?.items.filter((i) => i.tier === "epic" && match(i)) ?? [];
         // Committed features DevOps no longer lists (closed, reassigned): kept as stored so they can be taken off.
         const gone = p.features.filter((f) => f.clientKey === k && !feats.some((i) => i.id === f.itemId));
         const places = placesFor(p.days, k);
+        const target = targetFor(p, k);
         return (
           <section key={k} className="co-section pw-client" style={{ "--c": clientColor(k, p.colors) } as CSSProperties} aria-label={p.nameOf(k)}>
             <h3>
@@ -348,7 +411,7 @@ function ClientSections(p: SectionProps) {
             {feats.length > 0 && (
               <ul className="pw-features">
                 {feats.map((item) => (
-                  <FeatureRow key={item.id} k={k} item={item} wf={p.committed(k, item.id)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === item.id)} places={places} open={p.open.has(`${k}:${item.id}`)} toggle={() => p.toggleOpen(`${k}:${item.id}`)}
+                  <FeatureRow key={item.id} k={k} item={item} wf={p.committed(k, item.id)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === item.id)} places={places} target={target} open={p.open.has(`${k}:${item.id}`)} toggle={() => p.toggleOpen(`${k}:${item.id}`)}
                     setBlocks={(n) => p.setBlocks(k, item, n)} place={(d, h, on) => p.place(k, item.id, d, h, on)} onBrief={() => p.onBrief(k, item.id)} />
                 ))}
               </ul>
@@ -387,8 +450,8 @@ function ClientSections(p: SectionProps) {
 
 const dateShortIso = (d: IsoDate) => plainDate(d).toLocaleString("en-US", { month: "short", day: "numeric" });
 
-function FeatureRow({ k, item, wf, drafts, places, open, toggle, setBlocks, place, onBrief }: {
-  k: string; item: PortfolioItem; wf: WeekFeature | undefined; drafts: DraftStory[]; places: Place[]; open: boolean; toggle: () => void;
+function FeatureRow({ k, item, wf, drafts, places, target, open, toggle, setBlocks, place, onBrief }: {
+  k: string; item: PortfolioItem; wf: WeekFeature | undefined; drafts: DraftStory[]; places: Place[]; target: Place | null; open: boolean; toggle: () => void;
   setBlocks: (n: number) => void; place: (d: IsoDate, h: Half, on: boolean) => void; onBrief: () => void;
 }) {
   const stories = item.children.filter((c) => c.level === "story");
@@ -414,6 +477,9 @@ function FeatureRow({ k, item, wf, drafts, places, open, toggle, setBlocks, plac
         <span className="muted">block{blocks === 1 ? "" : "s"}</span>
       </span>
       <span className="pw-placed">
+        {target && !wf?.slots.some((s) => s.date === target.date && s.half === target.half) && (
+          <button type="button" className="mini pw-place-here" onClick={() => place(target.date, target.half, true)}>Place on {target.label}</button>
+        )}
         {wf?.slots.map((s) => (
           <span key={`${s.date}${s.half}`} className="pw-chip">{placeLabel(s.date, s.half)} <button type="button" className="mini" aria-label={`Take off ${placeLabel(s.date, s.half)}`} onClick={() => place(s.date, s.half, false)}>×</button></span>
         ))}

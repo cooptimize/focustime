@@ -1,7 +1,7 @@
 // Plan the day: the planned day's column becomes a short planning panel. Each half-day shows its real capacity,
 // picks come from that client's DevOps items in board order (story level only) or a typed intention, and one
 // key commits. Everything here is local: the actions only write Coopilot's plan store.
-import { useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { blockClient, capacityMinutes, committedFirst, fitOf, isPickable, pickableChildren, plannedMinutes } from "../plan/rules.ts";
 import { dayLabel } from "../plan/days.ts";
 import { SIZES, type DraftStory, type PlanDayState, type Pick, type Size } from "../plan/types.ts";
@@ -14,6 +14,8 @@ import { PlanCtx, useFocused } from "./planview.ts";
 import { dayFocus, focusLabel, liveFocused } from "../plan/focus.ts";
 import { formatDuration } from "../week/format.ts";
 import { WorkLink } from "./WorkLink.tsx";
+import { call } from "./api.ts";
+import { copy } from "./Loops.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { itemMenu, pickMenu } from "./menu.ts";
 import { MenuRow, useMenu } from "./Menus.tsx";
@@ -53,7 +55,14 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
   useEffect(() => {
     if (!document.activeElement || document.activeElement === document.body) ref.current?.focus({ preventScroll: true });
   }, [state]);
-  const picked = new Set(state.picks.filter(inPlay).map((p) => (p.itemId !== null ? `i${p.clientKey}:${p.itemId}` : p.draftId !== null ? `d${p.draftId}` : "")));
+  const picked = new Set(state.picks.filter(inPlay).map((p) => (p.itemId !== null ? `i${p.clientKey}:${p.itemId}` : p.draftId !== null ? `d${p.draftId}` : `t${p.clientKey}:${p.title}`)));
+  // Step 10: one block at a time shows what can be picked (its client's work); the others show their picks. It starts
+  // on the half-day under way (or the first one) and moves when another block is clicked.
+  const halves = cardHalves(day).filter((half) => !slotOf(day, half)!.off || day.kind === "overflow" || state.picks.some((p) => p.half === half && p.date === day.date && inPlay(p)));
+  const nowI = Temporal.Instant.from(now);
+  const firstHalf = halves.find((h) => Temporal.Instant.compare(Temporal.Instant.from(slotOf(day, h)!.end), nowI) > 0) ?? halves[0] ?? "AM";
+  const [active, setActive] = useState<Half>(firstHalf);
+  useEffect(() => setActive(firstHalf), [day.date]);
   const committed = state.plan.committedAt;
 
   const onKey = (e: KeyboardEvent) => {
@@ -142,11 +151,11 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
       {!off && past && <PastDay halves={[...new Set<Half>(["AM", "PM", ...state.picks.filter((p) => p.date === day.date && p.half === "EVE").map((p) => p.half)])]} picks={state.picks.filter((p) => p.date === day.date && p.status !== "moved")} act={act} />}
 
       {!off && !past && <div className="pd-blocks">
-        {cardHalves(day)
-          .filter((half) => !slotOf(day, half)!.off || day.kind === "overflow" || state.picks.some((p) => p.half === half && p.date === day.date && inPlay(p)))
-          .map((half) => (
+        {halves.map((half) => (
           <Block
             key={half}
+            active={active === half}
+            onActivate={() => setActive(half)}
             slot={slotOf(day, half)!}
             overflow={day.kind !== "work" && half !== "EVE"}
             picks={state.picks.filter((p) => p.half === half && p.date === day.date && inPlay(p))}
@@ -257,6 +266,9 @@ function CarryOver({ picks, date, act }: { picks: Pick[]; date: string; act: Pla
 }
 
 type BlockProps = {
+  /** Shows the candidates (step 10: one block at a time). */
+  active: boolean;
+  onActivate: () => void;
   slot: Slot;
   overflow: boolean;
   picks: Pick[];
@@ -272,7 +284,7 @@ type BlockProps = {
   act: PlanDayAct;
 };
 
-function Block({ slot, overflow, picks, drafts, weekFeatures, picked, other, friday, now, tz, colors, clients, act }: BlockProps) {
+function Block({ slot, active, onActivate, overflow, picks, drafts, weekFeatures, picked, other, friday, now, tz, colors, clients, act }: BlockProps) {
   const focus = overflow ? null : slot.focus[0] ?? null;
   const bc = blockClient(focus?.clientKey ?? null, picks);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -287,8 +299,8 @@ function Block({ slot, overflow, picks, drafts, weekFeatures, picked, other, fri
   const note = (focus?.clientKey ?? bc.clientKey) ? notes?.[(focus?.clientKey ?? bc.clientKey)!] : undefined;
 
   return (
-    <section className={`pd-block fit-${fit.kind} ${focus ? "focus" : "open"}`} style={style} aria-label={`${slot.half} block`}>
-      <header className="pd-block-head">
+    <section className={`pd-block fit-${fit.kind} ${focus ? "focus" : "open"}${active ? " active" : " idle"}`} style={style} aria-label={`${slot.half} block`}>
+      <header className="pd-block-head" onClick={active ? undefined : onActivate}>
         <div className="pd-title">
           <span className="half-tag">{halfTag(slot.half)}</span>
           <span className="muted">{slotRange(slot, tz)}</span>
@@ -359,7 +371,12 @@ function Block({ slot, overflow, picks, drafts, weekFeatures, picked, other, fri
         </ol>
       )}
 
-      {!focus && clients.length > 0 && (
+      {!active && (
+        <button type="button" className="mini pd-add-picks" onClick={onActivate}>
+          {picks.length ? "Add more to this block" : "Pick work for this block"}
+        </button>
+      )}
+      {active && !focus && clients.length > 0 && (
         <div className="client-chooser" role="group" aria-label="Pick from client">
           {clients.map((c) => (
             <button key={c.clientKey} type="button" className="chip-btn" aria-pressed={source === c.clientKey} style={{ "--c": clientColor(c.clientKey, colors) } as CSSProperties} onClick={() => setChosen(c.clientKey)}>
@@ -370,8 +387,8 @@ function Block({ slot, overflow, picks, drafts, weekFeatures, picked, other, fri
         </div>
       )}
 
-      {source && <Candidates clientKey={source} half={slot.half} date={slot.date} drafts={drafts} weekFeatures={weekFeatures} picked={picked} act={act} />}
-      {source && <Intention clientKey={source} clientName={name(source)} half={slot.half} date={slot.date} act={act} />}
+      {active && source && <Candidates clientKey={source} half={slot.half} date={slot.date} drafts={drafts} weekFeatures={weekFeatures} picked={picked} act={act} />}
+      {active && source && <Intention clientKey={source} clientName={name(source)} half={slot.half} date={slot.date} act={act} />}
     </section>
   );
 }
@@ -392,7 +409,8 @@ function Candidates({ clientKey, half, date, drafts, weekFeatures, picked, act }
       <ul>
         {first.committed.map((c) =>
           c.item ? (
-            <Portfolio key={c.feature.itemId} item={c.item} clientKey={clientKey} kids={c.kids.filter(free)} drafts={draftsUnder(c.feature.itemId)} add={add} act={act} startOpen={c.placedHere || first.committed.length === 1} />
+            <Portfolio key={c.feature.itemId} item={c.item} clientKey={clientKey} kids={c.kids.filter(free)} drafts={draftsUnder(c.feature.itemId)} add={add} act={act} startOpen={c.placedHere || first.committed.length === 1}
+              extra={!c.kids.length && !draftsUnder(c.feature.itemId).length ? <BreakDown clientKey={clientKey} date={date} feature={c.feature} picked={picked} add={add} /> : null} />
           ) : (
             <li key={c.feature.itemId} className="portfolio">
               <div className="portfolio-row">
@@ -402,6 +420,7 @@ function Candidates({ clientKey, half, date, drafts, weekFeatures, picked, act }
                   <span className="needs">{work ? "Needs breakdown" : "DevOps not loaded"}</span>
                 </span>
               </div>
+              <BreakDown clientKey={clientKey} date={date} feature={c.feature} picked={picked} add={add} />
             </li>
           ),
         )}
@@ -476,7 +495,7 @@ function OpenItem({ clientKey, item }: { clientKey: string; item: WorkItem }) {
   );
 }
 
-function Portfolio({ item, clientKey, kids: children, drafts, add, act, startOpen = false }: { item: WorkItem; clientKey: string; kids: WorkItem[]; drafts: DraftStory[]; add: (i: Record<string, unknown>) => Promise<boolean>; act: PlanDayAct; startOpen?: boolean }) {
+function Portfolio({ item, clientKey, kids: children, drafts, add, act, startOpen = false, extra = null }: { item: WorkItem; clientKey: string; kids: WorkItem[]; drafts: DraftStory[]; add: (i: Record<string, unknown>) => Promise<boolean>; act: PlanDayAct; startOpen?: boolean; extra?: ReactNode }) {
   const [open, setOpen] = useState(startOpen);
   const [title, setTitle] = useState("");
   const [size, setSize] = useState<Size>("M");
@@ -494,6 +513,7 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act, startOpe
         <OpenItem clientKey={clientKey} item={item} />
         {menu.button(`Actions for ${item.type} ${item.id}`)}
       </div>
+      {extra}
       {open && (
         <ul className="kids-list">
           {children.map((c) => (
@@ -553,5 +573,46 @@ function Intention({ clientKey, clientName, half, date, act }: { clientKey: stri
     >
       <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Or type an intention for ${clientName}, Enter to add`} aria-label={`Intention for ${half}`} maxLength={200} />
     </form>
+  );
+}
+
+/** The pick title for breaking a feature down (step 10). */
+export const breakDownTitle = (f: { itemId: number; title: string }) => `Break down #${f.itemId} ${f.title}`.replace(/\s+/g, " ").trim().slice(0, 200);
+
+/**
+ * A committed feature with no stories to pick (step 10): offer one pick to break it down (an intention, size M by
+ * default) and the Coop brief beside it. Nothing is written to DevOps.
+ */
+function BreakDown({ clientKey, date, feature, picked, add }: { clientKey: string; date: string; feature: { itemId: number; title: string }; picked: Set<string>; add: (i: Record<string, unknown>) => Promise<boolean> }) {
+  const title = breakDownTitle(feature);
+  const [brief, setBrief] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const area = useRef<HTMLTextAreaElement>(null);
+  const copyBrief = async () => {
+    try {
+      const r = await call<{ markdown: string; descriptionRead: boolean }>("feature.brief", { weekStart: date, clientKey, itemId: feature.itemId });
+      setBrief(r.markdown);
+      await new Promise((res) => setTimeout(res, 0));
+      const ok = await copy(r.markdown, area.current);
+      setNote(ok ? `Coop brief copied${r.descriptionRead ? "" : " (the description couldn't be read)"}` : "Copy didn't work: the brief is selected below, press Ctrl+C");
+      if (ok) setBrief(null);
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "Could not build the brief");
+    }
+  };
+  return (
+    <div className="pd-breakdown">
+      {picked.has(`t${clientKey}:${title}`) ? (
+        <span className="muted">Break down #{feature.itemId} is planned</span>
+      ) : (
+        <button type="button" className="cand" onClick={() => void add({ intention: title, size: "M" })} title="Adds a pick (size M) to break this feature into stories">
+          <span className="plus" aria-hidden="true">+</span>
+          <span className="wi-title">Break down #{feature.itemId}</span>
+        </button>
+      )}
+      <button type="button" className="mini" onClick={() => void copyBrief()}>Copy Coop brief</button>
+      {note && <span className="muted" role="status">{note}</span>}
+      {brief && <textarea ref={area} readOnly value={brief} rows={6} aria-label={`Coop brief for #${feature.itemId}`} />}
+    </div>
   );
 }
