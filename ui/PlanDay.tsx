@@ -78,7 +78,7 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
 
   // This day's focused time (step 6d): its own log, on top of the week's, live while a session runs.
   const view = useContext(PlanCtx);
-  const inner = { ...view, focused: { ...view.focused, ...state.focused } };
+  const inner = { ...view, focused: { ...view.focused, ...state.focused }, resumeNotes: state.resumeNotes };
   const totals = dayFocus(state.picks.filter((p) => p.date === day.date && p.status !== "moved"), (id) => liveFocused(id, inner.focused, inner.timer, inner.nowMs), inner.sizes);
 
   return (
@@ -280,6 +280,9 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
   const started = Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.start)) > 0;
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? k ?? "";
   const style = { "--c": clientColor(bc.clientKey ?? undefined, colors) } as CSSProperties;
+  // Where I left off with this block's client (step 7): the latest resume note up to this day.
+  const notes = useContext(PlanCtx).resumeNotes;
+  const note = (focus?.clientKey ?? bc.clientKey) ? notes?.[(focus?.clientKey ?? bc.clientKey)!] : undefined;
 
   return (
     <section className={`pd-block fit-${fit.kind} ${focus ? "focus" : "open"}`} style={style} aria-label={`${slot.half} block`}>
@@ -292,6 +295,11 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
             {focus ? focus.clientName : overflow ? "Overflow" : slot.half === "EVE" ? (slot.flex.length ? `Flex · ${slot.flex.map((f) => name(f.clientKey)).join(", ")}` : bc.clientKey ? `Evening · ${name(bc.clientKey)}` : "Evening") : bc.clientKey ? `Open · ${name(bc.clientKey)}` : "Open"}
           </span>
         </div>
+        {note && (
+          <p className="resume-note" title={`Resume note from ${shortDate(note.date)}`}>
+            <span className="resume-tag">Left off {shortDate(note.date)}</span> {note.note}
+          </p>
+        )}
         <div className="pd-capacity">
           <span>
             <strong>{formatMinutes(capacity)}</strong> free{started ? " from now" : ""}

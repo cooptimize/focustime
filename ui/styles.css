@@ -1311,3 +1311,85 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .loop-close { display: flex; gap: 8px; align-items: center; }
 .loop-close input { width: 280px; }
 .view-tab .count { margin-left: 6px; padding: 0 6px; border-radius: 99px; font-size: 11px; line-height: 16px; background: var(--sunken); color: var(--text); }
+
+/* Close out and Check-in (step 7) */
+.closeout { flex: 1; overflow: auto; padding: 8px 24px 32px; }
+.closeout .loops-head { flex-wrap: wrap; row-gap: 8px; }
+.closeout .loops-head .top-btn.primary { margin-left: auto; }
+.closeout .loops-head .top-btn.primary + .top-btn { margin-left: 0; }
+.top-btn.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.co-step { display: inline-flex; gap: 2px; }
+.co-done { font-size: 13px; color: var(--ok); }
+.co-notice { margin: 8px 0; padding: 6px 12px; border-radius: 6px; background: var(--sunken); color: var(--text); font-size: 13px; max-width: 1100px; }
+.co-section { margin: 18px 0 0; max-width: 1100px; }
+.co-section h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 8px; font-size: 16px; }
+.co-section h3 .muted { font-weight: 400; font-size: 13px; }
+.co-section h4 { margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.co-picks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.co-pick { display: grid; grid-template-columns: minmax(220px, 1fr) auto 200px; grid-template-areas: "title client fvs" "acts acts acts"; align-items: center; gap: 6px 14px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.co-pick .co-tick, .co-pick > .co-title { grid-area: title; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.co-pick .co-client { grid-area: client; }
+.co-pick .fvs { grid-area: fvs; }
+.co-pick .slip-actions, .co-pick .slip-form, .co-pick .co-status { grid-area: acts; }
+.co-pick.done .co-title, .co-pick.moved .co-title, .co-pick.dropped .co-title { color: var(--text-muted); }
+.co-pick.done .co-title { text-decoration: line-through; text-decoration-color: var(--text-faint); }
+.co-pick.nofit { border-color: color-mix(in oklab, var(--risk) 45%, var(--border)); }
+.co-title { overflow: hidden; text-overflow: ellipsis; }
+.co-client { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.co-status { font-size: 12px; color: var(--text-muted); }
+.co-status.fits { color: var(--ok); }
+.co-status.nofit-tag { color: var(--risk); font-weight: 600; }
+.co-pick .co-status.nofit-tag { grid-area: client; }
+.fvs { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; white-space: nowrap; color: var(--text); }
+.fvs-bar { position: relative; width: 60px; height: 6px; border-radius: 99px; background: var(--sunken); overflow: hidden; flex: none; }
+.fvs-fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 99px; }
+.fvs-fill.over { background: var(--watch); }
+.slip-actions, .slip-form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.slip-form input[type="date"] { width: 150px; }
+.flex-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--accent); border-radius: 8px; max-width: 1100px; font-size: 13px; }
+.co-borrowed ul, .co-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.co-borrowed li { font-size: 13px; }
+.co-paid { color: var(--ok); }
+.co-note label { display: grid; grid-template-columns: 160px 1fr; align-items: center; gap: 12px; }
+.co-note { display: flex; align-items: center; gap: 10px; }
+.co-note label { flex: 1; }
+.co-note input { width: 100%; }
+.co-saved { font-size: 12px; }
+.ci-slot h3 .co-client { font-size: 13px; }
+.ci-verdict { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--ok); }
+.ci-verdict.over { color: var(--risk); }
+.ci-slot.ended { opacity: 0.85; }
+.ci-prompt { margin: 0 0 8px; font-size: 13px; color: var(--risk); }
+.ci-walkon { margin-top: 8px; }
+.ci-walkon-form { margin-top: 8px; }
+.ci-walkon-form select { max-width: 420px; }
+
+/* Loops from rules (step 7) */
+.loop { flex-wrap: wrap; }
+.loop.new { border-color: color-mix(in oklab, var(--accent) 45%, var(--border)); }
+.loop-kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 0 6px; border: 1px solid var(--border); border-radius: 99px; }
+.loop-new { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); font-weight: 600; }
+.loop-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.loop-draft { flex-basis: 100%; }
+.loop-draft textarea { width: 100%; max-width: 760px; font: inherit; font-size: 13px; color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.loop-add { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 4px 0 10px; }
+.loop-add label { display: grid; gap: 2px; font-size: 12px; color: var(--text-muted); }
+.loop-add input { min-width: 180px; }
+
+/* Resume notes and borrowed time (step 7) */
+.resume-note { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 2px 0; }
+.pd-block-head .resume-note { white-space: normal; flex-basis: 100%; margin: 4px 0 0; }
+.resume-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); font-weight: 600; margin-right: 4px; }
+.borrow-chip { margin-left: 8px; padding: 1px 10px; font-size: 12px; border-radius: 99px; border: 1px dashed var(--watch); color: var(--text); background: transparent; white-space: nowrap; }
+.now-borrowed { margin-left: 12px; font-size: 12px; color: var(--watch); white-space: nowrap; }
+.view-tab .count.done { color: var(--ok); }
+.checkin .co-pick .co-status { grid-area: client; justify-self: end; }
+.co-section, .co-notice, .flex-offer { max-width: 1400px; }
+.closeout .loop-list { max-width: 1400px; }
+/* Text fields and selects in Close out, Check-in and Loops: the same look as Settings. */
+.closeout input:not([type="checkbox"]), .closeout select, .closeout textarea,
+.loops input:not([type="checkbox"]), .loops select, .loops textarea {
+  font: inherit; font-size: 13px; color: inherit; background: var(--raised);
+  border: 1px solid var(--border-strong); border-radius: 7px; padding: 5px 8px; min-width: 0;
+}
+.closeout input::placeholder, .loops input::placeholder { color: var(--text-faint); }

@@ -10,7 +10,7 @@ export type PickKind = "item" | "draft" | "intention";
 /** ISO date-time with offset and zone, e.g. "2026-11-02T08:01:00-05:00[America/New_York]". */
 export type ZonedStamp = string;
 
-export type DayPlan = { date: IsoDate; committedAt: ZonedStamp | null; createdAt: ZonedStamp; updatedAt: ZonedStamp };
+export type DayPlan = { date: IsoDate; committedAt: ZonedStamp | null; /** When Close out was done for this day (step 7). */ closedOutAt: ZonedStamp | null; createdAt: ZonedStamp; updatedAt: ZonedStamp };
 
 export type Pick = {
   id: number;
@@ -56,6 +56,8 @@ export type PlanDayState = {
   opened: boolean;
   /** Seconds focused per pick id, from the focus log (step 6d). Picks with none are left out. */
   focused: Record<number, number>;
+  /** The latest resume note per client on or before this date (step 7). */
+  resumeNotes: Record<string, { clientKey: string; date: IsoDate; note: string }>;
 };
 
 /** Committed plans for the days of a week, for the checklist on the week view. */

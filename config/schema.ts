@@ -95,10 +95,14 @@ export type PlanConfig = {
   endSound: boolean;
   /** Days a client stays followed (DevOps, Open half-days) after its last Focus Time pattern ends (step 6d). */
   followGraceDays: number;
+  /** The Close out reminder: minutes before the end of the working day (step 7). */
+  closeoutReminderMinutes: number;
+  /** The Check-in reminder: minutes after the end of lunch, or midday without one (step 7). */
+  checkinReminderMinutes: number;
 };
 
-export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes"> = { sizes: { S: 60, M: 120, L: 210 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, followGraceDays: 14 };
-const PLAN_KEYS = ["pickable_portfolio_types", "size_s", "size_m", "size_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "follow_grace_days"];
+export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes"> = { sizes: { S: 60, M: 120, L: 210 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0 };
+const PLAN_KEYS = ["pickable_portfolio_types", "size_s", "size_m", "size_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes"];
 
 export type FieldError = { field: string; message: string };
 /** `legacyDayShape`: the file still has the old [day_shape] section (read as hours; migrated on load, D124). */
@@ -346,6 +350,10 @@ export function parseConfig(text: string): ParseResult {
     if (bm !== undefined) planOpts.breakMinutes = bm;
     const fg = minutes("follow_grace_days", 0, 90, 1);
     if (fg !== undefined) planOpts.followGraceDays = fg;
+    const cr = minutes("closeout_reminder_minutes", 0, 120);
+    if (cr !== undefined) planOpts.closeoutReminderMinutes = cr;
+    const kr = minutes("checkin_reminder_minutes", 0, 120);
+    if (kr !== undefined) planOpts.checkinReminderMinutes = kr;
     if (t?.end_sound !== undefined) {
       if (typeof t.end_sound !== "boolean") err("plan.end_sound", "Must be true or false");
       else planOpts.endSound = t.end_sound;

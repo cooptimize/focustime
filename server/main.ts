@@ -1,5 +1,6 @@
 // Start Coopilot: local server on 127.0.0.1, per-launch token, opens a Chromium app window.
-// Usage: node server/main.ts [--dev] [--no-open] [--port 5317]
+// Usage: node server/main.ts [--dev] [--no-open] [--port 5317] [--clock <ISO instant>]
+// --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
@@ -27,7 +28,7 @@ import { calendarRefreshDue, checkTimer, notifyWithActions, playEndSound } from 
 import { refreshTodayWarnings } from "../actions/warnings.ts";
 import { TIMER_KEY, timerAction } from "../actions/timer-actions.ts";
 import type { TimerState } from "../plan/timer.ts";
-import { checkReminder, notifySend } from "./notify.ts";
+import { CHECKIN_MESSAGE, CLOSEOUT_MESSAGE, checkDayReminder, checkinReminderDue, checkReminder, closeoutReminderDue, notifySend } from "./notify.ts";
 
 const args = process.argv.slice(2);
 const dev = args.includes("--dev");
@@ -35,6 +36,11 @@ const open = !args.includes("--no-open");
 const portArg = args.indexOf("--port");
 const port = portArg >= 0 ? Number(args[portArg + 1]) : 5317;
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("--port must be 1024-65535");
+const clockArg = args.indexOf("--clock");
+const clockOffsetMs = clockArg >= 0 ? Temporal.Instant.from(args[clockArg + 1] ?? "").epochMilliseconds - Date.now() : 0;
+/** The server's clock: real time, or a pinned start running forward (--clock). */
+const instantNow = () => (clockOffsetMs ? Temporal.Instant.fromEpochMilliseconds(Date.now() + clockOffsetMs) : Temporal.Now.instant());
+const zonedNow = (tz: string) => instantNow().toZonedDateTimeISO(tz);
 
 const root = resolve(import.meta.dirname, "..");
 const token = randomBytes(32).toString("base64url");
@@ -100,7 +106,7 @@ const loadConfig = async () => {
 await loadConfig().catch(() => null);
 let plan: PlanStore | undefined;
 try {
-  plan = createPlanStore({ path: planDbPath(), now: () => Temporal.Now.zonedDateTimeISO(timeZone) });
+  plan = createPlanStore({ path: planDbPath(), now: () => zonedNow(timeZone) });
 } catch {
   log({ source: "plan", op: "open", kind: "failed" });
 }
@@ -125,7 +131,7 @@ const server = createApp({
     makeDevOps,
     saveSystemUserId: (id) => saveSystemUserId(cfgPath, id),
     writeConfig: (edit) => writeConfig(cfgPath, edit),
-    now: () => Temporal.Now.instant().toString(),
+    now: () => instantNow().toString(),
     ...(plan ? { plan } : {}),
     launch: launchDetached,
     secrets: { state: (a) => secretState(a), set: (a, v) => setAppSecret(a, v) },
@@ -165,9 +171,13 @@ function launchDetached(argv: string[]): Promise<void> {
 // The once-a-day reminder. Checked every 30 s, so it also handles day rollover while running for days.
 if (plan) {
   const store = plan;
+  const configOrNull = async () => {
+    const r = await loadConfig();
+    return r.parsed.ok ? r.parsed.config : null;
+  };
   const tick = () =>
     checkReminder({
-      now: () => Temporal.Now.zonedDateTimeISO(timeZone),
+      now: () => zonedNow(timeZone),
       hours: async () => {
         const r = await loadConfig();
         return r.parsed.ok ? r.parsed.config.week.hours : null;
@@ -189,22 +199,52 @@ if (plan) {
         log({ source: "plan", op: "reminder", kind: "sent" });
       },
     }).catch(() => log({ source: "plan", op: "reminder", kind: "failed" }));
-  setInterval(tick, 30_000).unref();
+  // Check-in and Close out (step 7): once a day each, the same way.
+  const hoursOrNull = async () => (await configOrNull())?.week.hours ?? null;
+  const ptoOff = async (d: string) => {
+    const c = await configOrNull();
+    if (!c?.dataverse.mySystemUserId) return false;
+    return (await makeDataverse(c.dataverse, c.week.hours.timeZone).pto(d, d)).items.some((e) => e.date === d);
+  };
+  const dayReminders = () => {
+    void checkDayReminder({
+      now: () => zonedNow(timeZone),
+      hours: hoursOrNull,
+      due: async (n, m) => checkinReminderDue(n, m, !!store.day(n.toPlainDate().toString())?.committedAt, (await configOrNull())?.plan.checkinReminderMinutes ?? 0),
+      off: ptoOff,
+      once: (d) => store.markOnce("checkin_reminder", d),
+      send: () => {
+        notifySend("Coopilot", CHECKIN_MESSAGE);
+        log({ source: "plan", op: "checkin_reminder", kind: "sent" });
+      },
+    }).catch(() => log({ source: "plan", op: "checkin_reminder", kind: "failed" }));
+    void checkDayReminder({
+      now: () => zonedNow(timeZone),
+      hours: hoursOrNull,
+      due: async (n, m) => closeoutReminderDue(n, m, !!store.day(n.toPlainDate().toString())?.closedOutAt, (await configOrNull())?.plan.closeoutReminderMinutes ?? 15),
+      off: ptoOff,
+      once: (d) => store.markOnce("closeout_reminder", d),
+      send: () => {
+        notifySend("Coopilot", CLOSEOUT_MESSAGE);
+        log({ source: "plan", op: "closeout_reminder", kind: "sent" });
+      },
+    }).catch(() => log({ source: "plan", op: "closeout_reminder", kind: "failed" }));
+  };
+  setInterval(() => {
+    void tick();
+    dayReminders();
+  }, 30_000).unref();
   void tick();
 
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.
-  const configOrNull = async () => {
-    const r = await loadConfig();
-    return r.parsed.ok ? r.parsed.config : null;
-  };
   const timerTick = () =>
     checkTimer({
       plan: store,
-      now: () => Temporal.Now.instant(),
+      now: () => instantNow(),
       endSound: async () => (await configOrNull())?.plan.endSound ?? false,
       notify: notifyWithActions,
       sound: playEndSound,
-      act: (action) => timerAction({ plan: store, config: configOrNull, now: () => Temporal.Now.instant().toString() }, action, {}),
+      act: (action) => timerAction({ plan: store, config: configOrNull, now: () => instantNow().toString() }, action, {}),
     })
       .then((did) => did && log({ source: "plan", op: "timer", kind: did }))
       .catch(() => log({ source: "plan", op: "timer", kind: "failed" }));
@@ -217,7 +257,7 @@ if (plan) {
     if (!s?.runningSince) return void (lastCalendar = null);
     if (!calendarRefreshDue(s, lastCalendar, t)) return;
     lastCalendar = t;
-    void refreshTodayWarnings({ loadConfig, makeOutlook, makeGoogle, plan: store, now: () => Temporal.Now.instant().toString() })
+    void refreshTodayWarnings({ loadConfig, makeOutlook, makeGoogle, plan: store, now: () => instantNow().toString() })
       .then((n) => n !== null && log({ source: "plan", op: "warnings", kind: "refreshed", count: n }))
       .catch(() => log({ source: "plan", op: "warnings", kind: "failed" }));
   };

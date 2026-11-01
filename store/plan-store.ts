@@ -132,16 +132,98 @@ export const MIGRATIONS: readonly string[] = [
      seconds INTEGER NOT NULL CHECK (seconds >= 0)
    );
    CREATE INDEX focus_pick ON focus_log(pick_id);`,
+  // 5 (step 7): loop rules (who, the item, one loop per rule and thing, the heads-up draft, who closed it),
+  // Close out per day, resume notes per client and day, and borrowed time.
+  `ALTER TABLE loops ADD COLUMN who TEXT;
+   ALTER TABLE loops ADD COLUMN item_id INTEGER;
+   ALTER TABLE loops ADD COLUMN rule_key TEXT;
+   ALTER TABLE loops ADD COLUMN ref_at TEXT;
+   ALTER TABLE loops ADD COLUMN draft TEXT;
+   ALTER TABLE loops ADD COLUMN detail TEXT;
+   ALTER TABLE loops ADD COLUMN closed_by TEXT;
+   CREATE UNIQUE INDEX loops_rule ON loops(rule_key);
+   ALTER TABLE day_plans ADD COLUMN closed_out_at TEXT;
+   CREATE TABLE resume_notes (
+     id INTEGER PRIMARY KEY,
+     client_key TEXT NOT NULL,
+     date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     note TEXT NOT NULL,
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL,
+     UNIQUE (client_key, date)
+   );
+   CREATE TABLE borrowed (
+     id INTEGER PRIMARY KEY,
+     pick_id INTEGER NOT NULL REFERENCES picks(id),
+     from_pick_id INTEGER NOT NULL REFERENCES picks(id),
+     client_key TEXT NOT NULL,
+     title TEXT NOT NULL,
+     date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     minutes INTEGER NOT NULL CHECK (minutes > 0),
+     payback TEXT NOT NULL CHECK (payback IN ('tonight','friday','day')),
+     payback_date TEXT NOT NULL,
+     payback_half TEXT NOT NULL CHECK (payback_half IN ('AM','PM','EVE')),
+     created_at TEXT NOT NULL,
+     paid_at TEXT,
+     paid_by TEXT CHECK (paid_by IN ('picks','me'))
+   );`,
 ];
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
-const RESET_TABLES = ["focus_log", "kv", "loops", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
+const RESET_TABLES = ["borrowed", "resume_notes", "focus_log", "kv", "loops", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
 export type FocusSegment = { pickId: number | null; label: string; startedAt: string; endedAt: string; seconds: number };
 
 export type NewUnavailable = { date: IsoDate; title: string; start: string; end: string; note?: string | null };
 export type NewFlex = { date: IsoDate; clientKey: string; start: string; end: string; itemId?: number | null; itemTitle?: string | null; itemUrl?: string | null; note?: string | null };
-/** Something owed to someone (D92). Stored now, shown with the loops UI later. */
-export type Loop = { id: number; kind: string; clientKey: string | null; what: string; channel: string | null; due: string | null; sourceKind: string | null; sourceId: number | null; openedAt: string; closedAt: string | null; closeNote: string | null };
+/** Something owed to someone (D92). Opened by a rule (step 7, plan/loops.ts), a flex session or by hand. */
+export type Loop = {
+  id: number;
+  kind: string;
+  clientKey: string | null;
+  /** Who it is owed to (a client name, or what I typed). */
+  who: string | null;
+  what: string;
+  channel: string | null;
+  due: string | null;
+  sourceKind: string | null;
+  sourceId: number | null;
+  /** The DevOps item it is about, if any. */
+  itemId: number | null;
+  /** One loop per rule and thing ("devops_update:<pick>", "slip:<client>:<date>:<n>", "blocked:<client>:<item>"). */
+  ruleKey: string | null;
+  /** What a later DevOps change is compared with (when the pick was ticked done). */
+  refAt: string | null;
+  /** A copyable plain-text heads-up (slip loops). */
+  draft: string | null;
+  /** Rule details: the pick ids a slip loop covers. */
+  detail: { picks?: number[] } | null;
+  openedAt: string;
+  closedAt: string | null;
+  closeNote: string | null;
+  /** "me" (by hand) or "signal" (a DevOps change proved it). */
+  closedBy: "me" | "signal" | null;
+};
+export type NewRuleLoop = { kind: string; ruleKey: string; clientKey: string | null; who: string; what: string; itemId?: number | null; refAt?: string | null; draft?: string | null; detail?: { picks?: number[] } | null };
+export type ResumeNote = { id: number; clientKey: string; date: IsoDate; note: string; updatedAt: string };
+/** Borrowed time (step 7): planned focus that slipped, to be made up on a payback day. */
+export type Borrowed = {
+  id: number;
+  /** The pick on the payback day (the moved one). */
+  pickId: number;
+  /** The pick it slipped from. */
+  fromPickId: number;
+  clientKey: string;
+  title: string;
+  /** The day it was borrowed from. */
+  date: IsoDate;
+  minutes: number;
+  payback: "tonight" | "friday" | "day";
+  paybackDate: IsoDate;
+  paybackHalf: Half;
+  createdAt: string;
+  paidAt: string | null;
+  paidBy: "picks" | "me" | null;
+};
 
 export type NewPick = {
   date: IsoDate;
@@ -178,7 +260,7 @@ const toPick = (r: Row): Pick => ({
   createdAt: r.created_at as string,
   updatedAt: r.updated_at as string,
 });
-const toPlan = (r: Row): DayPlan => ({ date: r.date as string, committedAt: (r.committed_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
+const toPlan = (r: Row): DayPlan => ({ date: r.date as string, committedAt: (r.committed_at as string | null) ?? null, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
 const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: r.parent_item_id as number, title: r.title as string, size: r.size as Size, createdAt: r.created_at as string });
 
 const toUnavailable = (r: Row): Unavailable => ({ id: r.id as number, title: r.title as string, start: r.start_at as string, end: r.end_at as string, note: (r.note as string | null) ?? null });
@@ -196,14 +278,37 @@ const toLoop = (r: Row): Loop => ({
   id: r.id as number,
   kind: r.kind as string,
   clientKey: (r.client_key as string | null) ?? null,
+  who: (r.who as string | null) ?? null,
   what: r.what as string,
   channel: (r.channel as string | null) ?? null,
   due: (r.due as string | null) ?? null,
   sourceKind: (r.source_kind as string | null) ?? null,
   sourceId: (r.source_id as number | null) ?? null,
+  itemId: (r.item_id as number | null) ?? null,
+  ruleKey: (r.rule_key as string | null) ?? null,
+  refAt: (r.ref_at as string | null) ?? null,
+  draft: (r.draft as string | null) ?? null,
+  detail: r.detail ? (JSON.parse(r.detail as string) as Loop["detail"]) : null,
   openedAt: r.opened_at as string,
   closedAt: (r.closed_at as string | null) ?? null,
   closeNote: (r.close_note as string | null) ?? null,
+  closedBy: (r.closed_by as Loop["closedBy"]) ?? null,
+});
+const toNote = (r: Row): ResumeNote => ({ id: r.id as number, clientKey: r.client_key as string, date: r.date as string, note: r.note as string, updatedAt: r.updated_at as string });
+const toBorrowed = (r: Row): Borrowed => ({
+  id: r.id as number,
+  pickId: r.pick_id as number,
+  fromPickId: r.from_pick_id as number,
+  clientKey: r.client_key as string,
+  title: r.title as string,
+  date: r.date as string,
+  minutes: r.minutes as number,
+  payback: r.payback as Borrowed["payback"],
+  paybackDate: r.payback_date as string,
+  paybackHalf: r.payback_half as Half,
+  createdAt: r.created_at as string,
+  paidAt: (r.paid_at as string | null) ?? null,
+  paidBy: (r.paid_by as Borrowed["paidBy"]) ?? null,
 });
 
 const PICK_SELECT = `SELECT p.*, o.date AS carried_from_date FROM picks p LEFT JOIN picks o ON o.id = p.carried_from`;
@@ -414,15 +519,127 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     openLoops: (): Loop[] => (db.prepare("SELECT * FROM loops WHERE closed_at IS NULL ORDER BY opened_at, id").all() as Row[]).map(toLoop),
     /** Every loop, open first (step 6c loops list). */
     allLoops: (): Loop[] => (db.prepare("SELECT * FROM loops ORDER BY closed_at IS NOT NULL, opened_at, id").all() as Row[]).map(toLoop),
-    /** Closes an open loop by hand with an optional note. */
-    closeLoop(id: number, note: string | null): Loop {
+    /** Closes an open loop, by hand ("mark as told") with an optional note, or by a signal with its reason. */
+    closeLoop(id: number, note: string | null, by: "me" | "signal" = "me"): Loop {
       return tx(() => {
         const r = db.prepare("SELECT * FROM loops WHERE id = ?").get(id) as Row | undefined;
         if (!r) throw new PlanError(`No loop ${id}`);
         if (r.closed_at) throw new PlanError("That loop is already closed");
-        db.prepare("UPDATE loops SET closed_at = ?, close_note = ? WHERE id = ?").run(stamp(), note, id);
+        db.prepare("UPDATE loops SET closed_at = ?, close_note = ?, closed_by = ? WHERE id = ?").run(stamp(), note, by, id);
         return toLoop(db.prepare("SELECT * FROM loops WHERE id = ?").get(id) as Row);
       });
+    },
+    getLoop(id: number): Loop | null {
+      const r = db.prepare("SELECT * FROM loops WHERE id = ?").get(id) as Row | undefined;
+      return r ? toLoop(r) : null;
+    },
+    /** Opens a rule's loop once per rule key (step 7). Null when that key already has a loop, open or closed. */
+    openRuleLoop(l: NewRuleLoop): Loop | null {
+      const r = db
+        .prepare("INSERT INTO loops (kind, client_key, who, what, item_id, rule_key, ref_at, draft, detail, opened_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(rule_key) DO NOTHING")
+        .run(l.kind, l.clientKey, l.who, l.what, l.itemId ?? null, l.ruleKey, l.refAt ?? null, l.draft ?? null, l.detail ? JSON.stringify(l.detail) : null, stamp());
+      return Number(r.changes) === 1 ? toLoop(db.prepare("SELECT * FROM loops WHERE id = ?").get(Number(r.lastInsertRowid)) as Row) : null;
+    },
+    /** A slip loop that is still open takes more slipped picks: its draft and the picks it covers. */
+    updateLoopDraft(id: number, what: string, draft: string, detail: { picks: number[] }): void {
+      db.prepare("UPDATE loops SET what = ?, draft = ?, detail = ? WHERE id = ? AND closed_at IS NULL").run(what, draft, JSON.stringify(detail), id);
+    },
+    /** A loop added by hand: who, what, optional due date. */
+    addLoop(l: { who: string; what: string; due: IsoDate | null; clientKey?: string | null }): Loop {
+      const r = db.prepare("INSERT INTO loops (kind, client_key, who, what, due, opened_at) VALUES ('manual', ?, ?, ?, ?, ?)").run(l.clientKey ?? null, l.who, l.what, l.due, stamp());
+      return toLoop(db.prepare("SELECT * FROM loops WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
+    },
+    // ---- Close out, resume notes and borrowed time (step 7) ----
+    /** Marks Close out done for a day (creating the day plan if there is none). */
+    closeOut(date: IsoDate): DayPlan {
+      return tx(() => {
+        ensurePlan(date);
+        const at = stamp();
+        db.prepare("UPDATE day_plans SET closed_out_at = ?, updated_at = ? WHERE date = ?").run(at, at, date);
+        return getPlan(date)!;
+      });
+    },
+    /** One note per client and day: writing again the same day replaces it; an empty note removes that day's. */
+    setResumeNote(clientKey: string, date: IsoDate, note: string): ResumeNote | null {
+      if (!note) {
+        db.prepare("DELETE FROM resume_notes WHERE client_key = ? AND date = ?").run(clientKey, date);
+        return null;
+      }
+      const at = stamp();
+      db.prepare("INSERT INTO resume_notes (client_key, date, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(client_key, date) DO UPDATE SET note = excluded.note, updated_at = excluded.updated_at").run(clientKey, date, note, at, at);
+      return toNote(db.prepare("SELECT * FROM resume_notes WHERE client_key = ? AND date = ?").get(clientKey, date) as Row);
+    },
+    /** The latest note per client (on or before `upTo` when given): the one that wins. */
+    latestNotes(upTo?: IsoDate): Record<string, ResumeNote> {
+      const rows = (db.prepare("SELECT * FROM resume_notes WHERE date <= ? ORDER BY date, updated_at, id").all(upTo ?? "9999-12-31") as Row[]).map(toNote);
+      return Object.fromEntries(rows.map((n) => [n.clientKey, n]));
+    },
+    notesOn: (date: IsoDate): ResumeNote[] => (db.prepare("SELECT * FROM resume_notes WHERE date = ? ORDER BY client_key").all(date) as Row[]).map(toNote),
+    noteHistory: (clientKey: string): ResumeNote[] => (db.prepare("SELECT * FROM resume_notes WHERE client_key = ? ORDER BY date DESC").all(clientKey) as Row[]).map(toNote),
+    /**
+     * "I'll make it up": the pick moves to the payback day and slot, and borrowed time is recorded against the
+     * moved pick, in one transaction.
+     */
+    makeUp(id: number, to: { date: IsoDate; half: Half }, b: { minutes: number; payback: Borrowed["payback"] }): { pick: Pick; borrowed: Borrowed } {
+      return tx(() => {
+        const p = mustPick(id);
+        if (p.status !== "planned") throw new PlanError("Only a planned pick can be made up");
+        if (p.date === to.date && p.half === to.half) throw new PlanError("That is where the pick already is");
+        let moved: Pick;
+        if (p.date === to.date) {
+          db.prepare("UPDATE picks SET half = ?, position = ?, updated_at = ? WHERE id = ?").run(to.half, nextPosition(to.date, to.half), stamp(), id);
+          moved = mustPick(id);
+        } else {
+          db.prepare("UPDATE picks SET status = 'moved', updated_at = ? WHERE id = ?").run(stamp(), id);
+          const base: NewPick = { date: to.date, half: to.half, clientKey: p.clientKey, kind: p.kind, title: p.title, itemType: p.itemType, itemUrl: p.itemUrl, size: p.size };
+          if (p.itemId !== null) base.itemId = p.itemId;
+          if (p.draftId !== null) base.draftId = p.draftId;
+          moved = insertPick(base, p.id);
+        }
+        const r = db
+          .prepare("INSERT INTO borrowed (pick_id, from_pick_id, client_key, title, date, minutes, payback, payback_date, payback_half, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .run(moved.id, p.id, p.clientKey, p.title, p.date, b.minutes, b.payback, to.date, to.half, stamp());
+        return { pick: moved, borrowed: toBorrowed(db.prepare("SELECT * FROM borrowed WHERE id = ?").get(Number(r.lastInsertRowid)) as Row) };
+      });
+    },
+    /**
+     * Borrowed time is paid once its payback pick is done, following the pick if it was moved on again. Called on
+     * reads; returns the records it marked paid.
+     */
+    settleBorrowed(): Borrowed[] {
+      return tx(() => {
+        const paid: Borrowed[] = [];
+        for (const b of (db.prepare("SELECT * FROM borrowed WHERE paid_at IS NULL").all() as Row[]).map(toBorrowed)) {
+          let id: number | null = b.pickId;
+          for (let hops = 0; id !== null && hops < 50; hops++) {
+            const p = getPick(id);
+            if (p?.status === "done") {
+              db.prepare("UPDATE borrowed SET paid_at = ?, paid_by = 'picks' WHERE id = ?").run(stamp(), b.id);
+              paid.push({ ...b, paidAt: stamp(), paidBy: "picks" });
+              break;
+            }
+            id = p?.status === "moved" ? ((db.prepare("SELECT id FROM picks WHERE carried_from = ? ORDER BY id DESC").get(id) as Row | undefined)?.id as number | undefined) ?? null : null;
+          }
+        }
+        return paid;
+      });
+    },
+    payBorrowed(id: number): Borrowed {
+      return tx(() => {
+        const r = db.prepare("SELECT * FROM borrowed WHERE id = ?").get(id) as Row | undefined;
+        if (!r) throw new PlanError(`No borrowed time ${id}`);
+        if (r.paid_at) throw new PlanError("That is already paid");
+        db.prepare("UPDATE borrowed SET paid_at = ?, paid_by = 'me' WHERE id = ?").run(stamp(), id);
+        return toBorrowed(db.prepare("SELECT * FROM borrowed WHERE id = ?").get(id) as Row);
+      });
+    },
+    /** Borrowed records from days in a range, plus every unpaid one. */
+    borrowedFor: (from: IsoDate, to: IsoDate): Borrowed[] =>
+      (db.prepare("SELECT * FROM borrowed WHERE (date >= ? AND date <= ?) OR paid_at IS NULL ORDER BY date, id").all(from, to) as Row[]).map(toBorrowed),
+    /** The pick a moved pick went to (the latest one carried from it), for "moved to Wed PM". */
+    movedTo(id: number): Pick | null {
+      const r = db.prepare(`${PICK_SELECT} WHERE p.carried_from = ? ORDER BY p.id DESC`).get(id) as Row | undefined;
+      return r ? toPick(r) : null;
     },
     /** Small JSON state that survives restarts (the focus timer). null removes it. */
     getState<T>(key: string): T | null {
@@ -484,6 +701,8 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         unavailable: (db.prepare("SELECT * FROM unavailable ORDER BY date, start_at, id").all() as Row[]).map(toUnavailable),
         flexSessions: (db.prepare("SELECT * FROM flex_sessions ORDER BY date, start_at, id").all() as Row[]).map(toFlex),
         loops: (db.prepare("SELECT * FROM loops ORDER BY id").all() as Row[]).map(toLoop),
+        resumeNotes: (db.prepare("SELECT * FROM resume_notes ORDER BY date, client_key").all() as Row[]).map(toNote),
+        borrowed: (db.prepare("SELECT * FROM borrowed ORDER BY id").all() as Row[]).map(toBorrowed),
       };
     },
     close: () => db.close(),

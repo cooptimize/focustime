@@ -53,3 +53,48 @@ export function notifySend(title: string, body: string) {
   p.on("error", () => {});
   p.unref();
 }
+
+// ---- Check-in and Close out reminders (step 7): once a day each, near midday and near the end of the day. ----
+
+const at = (now: Temporal.ZonedDateTime, hm: string) => (hm === "24:00" ? now.withPlainTime("00:00").add({ days: 1 }) : now.withPlainTime(Temporal.PlainTime.from(hm)));
+const within = (now: Temporal.ZonedDateTime, start: Temporal.ZonedDateTime) => Temporal.ZonedDateTime.compare(now, start) >= 0 && Temporal.ZonedDateTime.compare(now, start.add({ minutes: REMINDER_WINDOW_MINUTES })) < 0;
+
+/** Close out: from `offset` minutes before the end of today's working hours (an evening counts) for 90 minutes, if not closed out. */
+export function closeoutReminderDue(now: Temporal.ZonedDateTime, model: TimeModel, closedOut: boolean, offsetMinutes: number): boolean {
+  if (closedOut) return false;
+  const end = hoursOn(model, now.toPlainDate().toString()).segments.at(-1)?.end;
+  return !!end && within(now, at(now, end).subtract({ minutes: offsetMinutes }));
+}
+
+/** Check-in: from the end of lunch (or midday without one) plus `offset`, for 90 minutes, only on a committed day. */
+export function checkinReminderDue(now: Temporal.ZonedDateTime, model: TimeModel, committed: boolean, offsetMinutes: number): boolean {
+  if (!committed) return false;
+  const pm = hoursOn(model, now.toPlainDate().toString()).pm;
+  return !!pm && within(now, at(now, pm.start).add({ minutes: offsetMinutes }));
+}
+
+export type DayReminderDeps = {
+  now: () => Temporal.ZonedDateTime;
+  hours: () => Promise<TimeModel | null>;
+  /** Whether the reminder is due (the rule above, with today's plan state and the offset). */
+  due: (now: Temporal.ZonedDateTime, model: TimeModel) => Promise<boolean> | boolean;
+  off?: (date: string) => Promise<boolean>;
+  once: (date: string) => boolean;
+  send: () => void;
+};
+
+/** One check of a once-a-day reminder; true when it was sent. */
+export async function checkDayReminder(d: DayReminderDeps): Promise<boolean> {
+  const model = await d.hours();
+  if (!model) return false;
+  const now = d.now().withTimeZone(model.timeZone);
+  const date = now.toPlainDate().toString();
+  if (!(await d.due(now, model))) return false;
+  if (d.off && (await d.off(date).catch(() => false))) return false;
+  if (!d.once(date)) return false;
+  d.send();
+  return true;
+}
+
+export const CLOSEOUT_MESSAGE = "Time to close out the day: picks, resume notes and loops. Open Coopilot and press E.";
+export const CHECKIN_MESSAGE = "Midday check-in: what still fits this afternoon. Open Coopilot and press M.";

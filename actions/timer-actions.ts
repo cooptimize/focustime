@@ -4,9 +4,10 @@
 import type { AppConfig } from "../config/schema.ts";
 import { extendTimer, MAX_MINUTES, pauseTimer, resumeTimer, startTimer, stopTimer, suggestMinutes, type Segment, type TimerKind, type TimerState } from "../plan/timer.ts";
 import { DEFAULT_PLAN } from "../config/schema.ts";
-import { PlanError, type Loop, type PlanStore } from "../store/plan-store.ts";
+import { PlanError, type PlanStore } from "../store/plan-store.ts";
+import { loopView, nameOf, newestFirst } from "./loop-rules.ts";
 import type { Pick } from "../plan/types.ts";
-import type { ActionResponse, LoopView, TimerView } from "./types.ts";
+import type { ActionResponse, TimerView } from "./types.ts";
 
 export type TimerAction = "timer.start" | "timer.pause" | "timer.resume" | "timer.stop" | "timer.extend" | "timer.done" | "timer.next" | "loops.list" | "loop.close" | "plan.reset";
 
@@ -49,10 +50,6 @@ export function nextPick(plan: PlanStore, today: string, except: number | null):
   return plan.picksFor(today).filter((p) => p.status === "planned" && p.id !== except).sort((a, b) => order.indexOf(a.half) - order.indexOf(b.half) || a.position - b.position)[0] ?? null;
 }
 
-function loopView(plan: PlanStore, l: Loop): LoopView {
-  const f = l.sourceKind === "flex" && l.sourceId !== null ? plan.getFlex(l.sourceId) : null;
-  return { id: l.id, kind: l.kind, clientKey: l.clientKey, what: l.what, channel: l.channel, due: l.due, openedAt: l.openedAt, closedAt: l.closedAt, closeNote: l.closeNote, session: f ? { start: f.start, end: f.end } : null };
-}
 
 function fields(input: unknown, allowed: string[]): Record<string, unknown> {
   if (input === undefined) return {};
@@ -141,7 +138,10 @@ export async function timerAction(ctx: TimerContext, action: TimerAction, input:
         const o = fields(input, ["includeClosed"]);
         if (o.includeClosed !== undefined && typeof o.includeClosed !== "boolean") throw new Invalid("includeClosed must be true or false");
         plan.openFlexLoops(now);
-        const loops = (o.includeClosed ? plan.allLoops() : plan.openLoops()).map((l) => loopView(plan, l));
+        const name = nameOf(cfg, () => undefined);
+        const open = plan.openLoops().sort(newestFirst);
+        const closed = o.includeClosed ? plan.allLoops().filter((l) => l.closedAt).sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? "")) : [];
+        const loops = [...open, ...closed].map((l) => loopView(plan, l, today, name));
         return { ok: true, data: { loops } };
       }
       case "loop.close": {
@@ -152,7 +152,7 @@ export async function timerAction(ctx: TimerContext, action: TimerAction, input:
           if (typeof o.note !== "string" || o.note.length > 500) throw new Invalid("note must be text of at most 500 characters");
           note = o.note.trim() || null;
         }
-        return { ok: true, data: { loop: loopView(plan, plan.closeLoop(o.id, note)) } };
+        return { ok: true, data: { loop: loopView(plan, plan.closeLoop(o.id, note), today, nameOf(cfg, () => undefined)) } };
       }
       case "plan.reset": {
         const o = fields(input, ["confirm"]);

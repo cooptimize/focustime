@@ -24,12 +24,17 @@ export const countdown = (ms: number) => {
 /** What's left on the timer at `nowMs`: from its end while running, else as stored. */
 export const timerLeft = (t: TimerView, nowMs: number) => (t.running && t.endsAt ? Math.max(0, Date.parse(t.endsAt) - nowMs) : t.remainingMs);
 
-type Props = { strip: Strip; onSelect: () => void; timer?: TimerView | null; nowMs?: number; onTimer?: (action: string) => void };
+type Props = { strip: Strip; onSelect: () => void; timer?: TimerView | null; nowMs?: number; onTimer?: (action: string) => void; borrowed?: { unpaid: number; minutes: number } | null };
 
-export function NowStrip({ strip, onSelect, timer = null, nowMs = Date.now(), onTimer }: Props) {
+export function NowStrip({ strip, onSelect, timer = null, nowMs = Date.now(), onTimer, borrowed = null }: Props) {
   return (
     <div className={`nowstrip ${strip.kind}${timer ? " has-timer" : ""}`}>
       <StripLine strip={strip} onSelect={onSelect} />
+      {borrowed && (
+        <span className="now-borrowed" title="Borrowed time still to make up (step 7)">
+          Borrowed {formatDuration(borrowed.minutes)} to make up{borrowed.unpaid > 1 ? ` (${borrowed.unpaid})` : ""}
+        </span>
+      )}
       {timer && <TimerBox t={timer} nowMs={nowMs} onTimer={onTimer ?? (() => {})} />}
     </div>
   );

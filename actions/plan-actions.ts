@@ -130,7 +130,9 @@ async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = tru
   const picks = plan.picksFor(d);
   // Focused seconds per pick (step 6d): the day's picks and the carry-over offered.
   const focused = plan.focusedSeconds([...picks, ...carryOver].map((p) => p.id));
-  return { date: d, plan: day, picks, carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: plan.drafts(), opened, focused };
+  // Where I left off per client (step 7): the latest resume note on or before this day.
+  const resumeNotes = Object.fromEntries(Object.entries(plan.latestNotes(d)).map(([k, n]) => [k, { clientKey: n.clientKey, date: n.date, note: n.note }]));
+  return { date: d, plan: day, picks, carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: plan.drafts(), opened, focused, resumeNotes };
 }
 
 export async function planAction(ctx: PlanContext, action: PlanAction, input: unknown): Promise<ActionResponse> {

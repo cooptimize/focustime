@@ -69,3 +69,12 @@ Raised in step 6b (not blocking):
 - Q38. ~~Draft picks in the Now strip~~ Answered: shown dimmed and labeled draft (D137). Was: The Now strip counts and suggests picks for today only, and only once the day is committed. Should it nudge to plan ("Not planned yet, P") on an uncommitted workday?
 - Q39. ~~Show focused time~~ Answered: "45m of M" on picks, day totals in Plan the day and the week (D142). Was: Focused time is recorded per pick (D140) but not shown yet. Show it on the pick (e.g. "35m focused") now, or wait for Close out?
 - Q40. ~~Fresher warnings~~ Answered: calendars reload every 5 minutes while a timer runs (D143). Was: Timer warnings use meetings known at the last week load (D139). Should the server refresh today's calendar on its own while a timer runs, or is the auto refresh enough?
+
+Raised in step 7 (not blocking):
+- Q41. Quiddity's blocked states sit in the Removed category (Q18), so those items never come back from the open-items query and the blocker rule can't see them. Treating Blocked as open for Quiddity (`open_states` in Settings > Clients) would let it. Do that?
+- Q42. The DevOps update loop also closes when the item changed after the loop opened, whoever changed it (a comment or a field edit by someone else counts). Good enough, or should it wait for a state change only?
+- Q43. A blocker loop closed by hand stays closed while the item stays blocked; it opens again only after the block clears and returns. Should a long block nudge again (say, weekly)?
+- Q44. The slip rule skips internal clients (Cooptimize, standing blocks) and uncommitted days. Should a slip on an internal block open a loop too (for example, to tell a teammate)?
+- Q45. A pick made up tonight shows as carry-over in Plan the next workday before tonight is over. Hide it until the evening has passed?
+- Q46. Close out lists clients for notes from done picks, focused time, flex sessions and the day's focus blocks. A client worked outside its block with no pick or timer won't be listed. Add "Note for another client…"?
+

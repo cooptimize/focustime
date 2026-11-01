@@ -353,7 +353,7 @@ function StandingForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
 function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
   const pl = p.data.planning;
   const [types, setTypes] = useState(pl.pickablePortfolioTypes.join(", "));
-  const [v, setV] = useState({ S: pl.sizes.S, M: pl.sizes.M, L: pl.sizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes, focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays });
+  const [v, setV] = useState({ S: pl.sizes.S, M: pl.sizes.M, L: pl.sizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes, focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes, checkinReminderMinutes: pl.checkinReminderMinutes });
   const { problems, status, save } = useSave(p.onSavedData);
   const num = (k: Exclude<keyof typeof v, "endSound">, label: string, field: string, hint: string, step = 5, max = 480) => (
     <Field label={label} hint={hint}>
@@ -375,6 +375,8 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
           breakMinutes: v.breakMinutes,
           endSound: v.endSound,
           followGraceDays: v.followGraceDays,
+          closeoutReminderMinutes: v.closeoutReminderMinutes,
+          checkinReminderMinutes: v.checkinReminderMinutes,
         });
       }}
     >
@@ -389,6 +391,11 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
         </Field>
         {num("carryDays", "Carry-over (days back)", "plan.carry_days", "Unfinished picks from this many days back are offered on the first upcoming day not committed yet. 0 turns it off.", 1, 30)}
         {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "plan.reminder_offset_minutes", "When today isn't committed, one reminder from this time, for 90 minutes.", 5, 240)}
+      </div>
+      <h3>Check-in and Close out</h3>
+      <div className="set-grid">
+        {num("checkinReminderMinutes", "Check-in reminder (minutes after lunch)", "plan.checkin_reminder_minutes", "One reminder after lunch ends (midday when there is no lunch), only on a committed day. 0 is right at the end of lunch.", 5, 120)}
+        {num("closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "plan.closeout_reminder_minutes", "One reminder this long before the end of the working day, if Close out isn't done.", 5, 120)}
       </div>
       <h3>Clients followed</h3>
       <div className="set-grid">

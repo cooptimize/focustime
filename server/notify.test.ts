@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkReminder, reminderDue } from "./notify.ts";
+import { CHECKIN_MESSAGE, CLOSEOUT_MESSAGE, checkDayReminder, checkinReminderDue, checkReminder, closeoutReminderDue, reminderDue } from "./notify.ts";
 
 import { legacyHours } from "../config/schema.ts";
 const shape = legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" });
@@ -60,5 +60,52 @@ describe("Plan the day reminder", () => {
     expect(await checkReminder({ ...base, off: async (d) => d === "2026-11-05", send: (_t, b) => sent.push(b) })).toBe(false);
     expect(await checkReminder({ ...base, off: async () => { throw new Error("offline"); }, send: (_t, b) => sent.push(b) })).toBe(true);
     expect(sent).toEqual(["Today isn't planned yet. Open Coopilot and press P to plan the day."]);
+  });
+});
+
+describe("Check-in and Close out reminders (step 7)", () => {
+  const lunch = { ...shape, lunch: { start: "12:00", end: "12:45" } };
+  it("Close out: from 15 minutes before the day's end for 90 minutes, until closed out; an evening moves it", () => {
+    expect(closeoutReminderDue(at("2026-11-02T16:44:00-05:00"), shape, false, 15)).toBe(false);
+    expect(closeoutReminderDue(at("2026-11-02T16:45:00-05:00"), shape, false, 15)).toBe(true);
+    expect(closeoutReminderDue(at("2026-11-02T18:14:00-05:00"), shape, false, 15)).toBe(true);
+    expect(closeoutReminderDue(at("2026-11-02T18:15:00-05:00"), shape, false, 15)).toBe(false);
+    expect(closeoutReminderDue(at("2026-11-02T16:50:00-05:00"), shape, true, 15)).toBe(false);
+    expect(closeoutReminderDue(at("2026-11-06T16:50:00-05:00"), shape, false, 15)).toBe(false); // Friday has no hours
+    const evening = { ...shape, overrides: [{ date: "2026-11-02", segments: [{ start: "09:00", end: "16:00" }, { start: "20:00", end: "22:00" }] }] };
+    expect(closeoutReminderDue(at("2026-11-02T16:50:00-05:00"), evening, false, 15)).toBe(false);
+    expect(closeoutReminderDue(at("2026-11-02T21:45:00-05:00"), evening, false, 15)).toBe(true);
+  });
+  it("Check-in: at the end of lunch (or midday) plus the offset, only on a committed day", () => {
+    expect(checkinReminderDue(at("2026-11-02T12:44:00-05:00"), lunch, true, 0)).toBe(false);
+    expect(checkinReminderDue(at("2026-11-02T12:45:00-05:00"), lunch, true, 0)).toBe(true);
+    expect(checkinReminderDue(at("2026-11-02T12:50:00-05:00"), lunch, false, 0)).toBe(false);
+    expect(checkinReminderDue(at("2026-11-02T13:00:00-05:00"), lunch, true, 30)).toBe(false);
+    expect(checkinReminderDue(at("2026-11-02T13:15:00-05:00"), lunch, true, 30)).toBe(true);
+    // No lunch: the middle of the day (9 to 5 splits at 1:00 PM).
+    const none = { ...shape, lunch: null };
+    expect(checkinReminderDue(at("2026-11-02T12:59:00-05:00"), none, true, 0)).toBe(false);
+    expect(checkinReminderDue(at("2026-11-02T13:00:00-05:00"), none, true, 0)).toBe(true);
+  });
+  it("each fires once a day, across checks and restarts (the store marker), not on a PTO day", async () => {
+    const marks = new Set<string>();
+    const sent: string[] = [];
+    let now = at("2026-11-02T16:46:00-05:00");
+    const closeout = {
+      now: () => now,
+      hours: async () => shape,
+      due: (n: Temporal.ZonedDateTime, m: typeof shape) => closeoutReminderDue(n, m, false, 15),
+      once: (d: string) => (marks.has(`closeout:${d}`) ? false : (marks.add(`closeout:${d}`), true)),
+      send: () => sent.push(CLOSEOUT_MESSAGE),
+    };
+    expect(await checkDayReminder(closeout)).toBe(true);
+    now = at("2026-11-02T16:50:00-05:00");
+    expect(await checkDayReminder(closeout)).toBe(false);
+    expect(await checkDayReminder({ ...closeout, now: () => at("2026-11-05T16:50:00-05:00"), off: async () => true })).toBe(false);
+    const checkin = { ...closeout, now: () => at("2026-11-02T13:05:00-05:00"), hours: async () => ({ ...shape, lunch: null }), due: (n: Temporal.ZonedDateTime, m: typeof shape) => checkinReminderDue(n, m, true, 0), once: (d: string) => (marks.has(`checkin:${d}`) ? false : (marks.add(`checkin:${d}`), true)), send: () => sent.push(CHECKIN_MESSAGE) };
+    expect(await checkDayReminder(checkin)).toBe(true);
+    expect(await checkDayReminder(checkin)).toBe(false);
+    expect(sent).toEqual([CLOSEOUT_MESSAGE, CHECKIN_MESSAGE]);
+    expect(sent.join(" ")).not.toMatch(/—/);
   });
 });

@@ -25,7 +25,7 @@ describe("board order detection", () => {
   });
   it("asks the batch for the detected field and nothing beyond the fields used", () => {
     expect(batchFields("Microsoft.VSTS.Common.BacklogPriority")).toEqual([
-      "System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "Microsoft.VSTS.Common.BacklogPriority",
+      "System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "Microsoft.VSTS.Common.BacklogPriority",
     ]);
     expect(batchFields(null)).not.toContain(null);
   });
@@ -84,6 +84,16 @@ describe("WIQL for my open work", () => {
 describe("work item normalization", () => {
   const agileCtx = { org: "fabrikam", projectName: "Fabrikam Data", orderField: "Microsoft.VSTS.Common.StackRank", categories: categoriesFrom(typesWithStates("agile")) };
 
+  it("reads tags and flags an item blocked by its state or a tag (step 7)", () => {
+    const { items } = normalizeWorkItems(
+      [
+        { id: 1, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.Tags": "Blocked; Data" } },
+        { id: 2, fields: { "System.WorkItemType": "User Story", "System.State": "Active" } },
+      ],
+      agileCtx,
+    );
+    expect(items.map((i) => [i.id, i.tags, i.blocked])).toEqual([[1, ["Blocked", "Data"], true], [2, [], false]]);
+  });
   it("Agile: only the fields used, closed items dropped, board order with unranked last", () => {
     const { items, skipped } = normalizeWorkItems(fx("agile-batch").value, agileCtx);
     expect(skipped).toBe(0);
@@ -98,6 +108,8 @@ describe("work item normalization", () => {
       order: 2000.5,
       parentId: 90,
       changedAt: "2026-10-29T15:04:05.123Z",
+      tags: [],
+      blocked: false,
       url: "https://dev.azure.com/fabrikam/Fabrikam%20Data/_workitems/edit/101",
     });
     expect(items.find((i) => i.id === 105)?.stateCategory).toBe("Resolved");

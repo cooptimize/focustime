@@ -37,6 +37,12 @@ export type WeekLoadData = {
   openLoops: number;
   /** Focused seconds per pick on the week shown (focus log, step 6c). */
   focused: Record<number, number>;
+  /** The latest resume note per client (step 7). */
+  resumeNotes: Record<string, ResumeNoteView>;
+  /** Borrowed time from this week's days, plus every unpaid record (step 7). */
+  borrowed: BorrowedView[];
+  /** Whether today is closed out (step 7). */
+  closeOut: { date: IsoDate; done: boolean };
   /** Display settings from [ui] (step 6b): the theme. Defaults when the config is invalid. */
   ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
@@ -104,8 +110,74 @@ export type TimerView = {
   runningSince: string | null;
 };
 
-/** A loop in the Loops view (step 6c): who (client), what, when. */
-export type LoopView = { id: number; kind: string; clientKey: string | null; what: string; channel: string | null; due: string | null; openedAt: string; closedAt: string | null; closeNote: string | null;
+/** A loop in the Loops view and Close out (step 6c, step 7): who, what, when, and how it can close. */
+export type LoopView = {
+  id: number;
+  /** The rule that opened it: devops_update, slip, blocked, flex_update or manual. */
+  kind: string;
+  clientKey: string | null;
+  /** Who it is owed to: the client's name, or what I typed for a manual loop. */
+  who: string;
+  what: string;
+  channel: string | null;
+  due: string | null;
+  /** The DevOps item it is about, with a link when known. */
+  itemId: number | null;
+  itemUrl: string | null;
+  /** The plain-text heads-up to copy (slip loops). */
+  draft: string | null;
+  openedAt: string;
+  /** Opened today (by the server's clock): listed first in Close out. */
+  isNew: boolean;
+  closedAt: string | null;
+  closeNote: string | null;
+  closedBy: "me" | "signal" | null;
   /** The flex session a flex loop came from (its when), or null. */
-  session: { start: string; end: string } | null };
+  session: { start: string; end: string } | null;
+};
 
+/** The latest resume note for a client (step 7): where I left off, shown on its next block and in Plan the day. */
+export type ResumeNoteView = { clientKey: string; date: IsoDate; note: string };
+
+/** Borrowed time (step 7). `paid` is set by the payback pick being done or by hand. */
+export type BorrowedView = {
+  id: number;
+  pickId: number;
+  /** The pick it slipped from. */
+  fromPickId: number;
+  clientKey: string;
+  title: string;
+  date: IsoDate;
+  minutes: number;
+  payback: "tonight" | "friday" | "day";
+  paybackDate: IsoDate;
+  paybackHalf: "AM" | "PM" | "EVE";
+  paidAt: string | null;
+  paidBy: "picks" | "me" | null;
+};
+
+/** What Close out shows for one day (step 7). */
+export type CloseOutState = {
+  date: IsoDate;
+  today: IsoDate;
+  /** "today" or "past" (Close out for a past day can be done later). */
+  access: "today" | "past";
+  committedAt: string | null;
+  closedOutAt: string | null;
+  picks: import("../plan/types.ts").Pick[];
+  /** Where each moved pick went. */
+  movedTo: Record<number, { date: IsoDate; half: "AM" | "PM" | "EVE" }>;
+  /** Focused seconds per pick id. */
+  focused: Record<number, number>;
+  /** Where "Carry over" sends a pick: the next plannable day (today for a past day when today can be planned). */
+  carryTo: IsoDate | null;
+  /** Clients worked that day (picks done or focused on, flex sessions), for resume notes. */
+  worked: { clientKey: string; clientName: string }[];
+  /** That day's resume notes, and the latest before it per client (shown as a hint). */
+  notes: Record<string, ResumeNoteView>;
+  previous: Record<string, ResumeNoteView>;
+  /** Open loops, newest first. */
+  loops: LoopView[];
+  /** Borrowed time from that day, and every unpaid record. */
+  borrowed: BorrowedView[];
+};

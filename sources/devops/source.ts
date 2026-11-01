@@ -161,7 +161,14 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return items;
   }
 
-  async function fetchClient(ref: ClientRef, target: DevOpsTarget): Promise<{ items: WorkItem[]; children: WorkItem[] }> {
+  /** Items read by id (step 7): those an open loop is about that aren't among my open items, completed ones too. */
+  async function fetchWatched(ctx: Ctx, project: string, meta: Metadata, ids: number[]): Promise<WorkItem[]> {
+    if (!ids.length) return [];
+    const page = await call<{ value?: unknown[] }>(ctx, "workitemsbatch", `${encodeURIComponent(project)}/_apis/wit/workitemsbatch`, { ids: ids.slice(0, BATCH_MAX), fields: batchFields(meta.orderField), errorPolicy: "omit" });
+    return normalizeWorkItems(page.value ?? [], { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, keepDone: true }).items.filter((i) => ids.includes(i.id));
+  }
+
+  async function fetchClient(ref: ClientRef, target: DevOpsTarget, watch: readonly number[] = []): Promise<{ items: WorkItem[]; children: WorkItem[]; watched: WorkItem[] }> {
     const org = target.org!;
     const ctx: Ctx = { client: ref.clientName, org, base: `https://dev.azure.com/${encodeURIComponent(org)}`, projectName: target.projectName ?? target.project!, pat: target.pat! };
     const project = target.project!;
@@ -180,7 +187,10 @@ export function createDevOpsSource(d: DevOpsDeps) {
       parents = found.filter((c) => c.level === "portfolio").map((c) => c.id);
     }
     if (children.length) log("children", { count: children.length });
-    return { items, children };
+    const missing = watch.filter((id) => Number.isInteger(id) && id > 0 && !seen.has(id));
+    const watched = await fetchWatched(ctx, project, meta, missing);
+    if (watched.length) log("watched", { count: watched.length });
+    return { items, children, watched };
   }
 
   /** Check the target is usable. Identity is never guessed. */
@@ -202,7 +212,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return { clientKey: ref.clientKey, clientName: ref.clientName, status: f.status, message, ...(f.rootCause ? { cause: f.rootCause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: (snap?.items ?? []).map(withLevel), children: Array.isArray(snap?.children) ? snap.children.map(withLevel) : [] };
   }
 
-  async function loadOne(ref: ClientRef, targets: TargetsResult): Promise<ClientWork> {
+  async function loadOne(ref: ClientRef, targets: TargetsResult, watch: readonly number[]): Promise<ClientWork> {
     try {
       // The settings come from Dataverse, so its root cause (a locked keyring, no network) is DevOps's too.
       if (!targets.ok) throw new DevOpsFailure(targets.cause === "keyring" ? "error" : "unreachable", `DevOps settings unavailable (${targets.message})`, targets.cause);
@@ -211,11 +221,11 @@ export function createDevOpsSource(d: DevOpsDeps) {
       if (target?.org && ORG.test(target.org)) orgs.set(ref.clientKey, target.org);
       const pre = precheck(ref, target);
       if (pre) throw pre;
-      const { items, children } = await fetchClient(ref, target!);
+      const { items, children, watched } = await fetchClient(ref, target!, watch);
       const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
       const snap: WorkSnapshot = { fetchedAt, items, children };
       await writeSnapshot(d.cacheDir, "devops", cacheKey(ref.clientKey), snap).catch(() => log("cache_write", { kind: "failed" }));
-      return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, children };
+      return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, children, watched };
     } catch (e) {
       if (!(e instanceof DevOpsFailure)) log("load", { kind: "unexpected" });
       return fromCache(ref, e instanceof DevOpsFailure ? e : new DevOpsFailure("error", `DevOps load failed for ${ref.clientName}`));
@@ -223,7 +233,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
   }
 
   /** One result per client, in the order given. A client never sees another client's items. */
-  async function load(clients: ClientRef[], opts: { refresh?: boolean } = {}): Promise<ClientWork[]> {
+  async function load(clients: ClientRef[], opts: { refresh?: boolean; watch?: Readonly<Record<string, readonly number[]>> } = {}): Promise<ClientWork[]> {
     const t = now().epochMilliseconds;
     const fresh = (ref: ClientRef) => {
       const hit = memory.get(ref.clientKey);
@@ -239,7 +249,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
       } catch {
         targets = { ok: false, message: "Dataverse read failed" };
       }
-      const results = await Promise.all(need.map((ref) => loadOne(ref, targets)));
+      const results = await Promise.all(need.map((ref) => loadOne(ref, targets, opts.watch?.[ref.clientKey] ?? [])));
       need.forEach((ref, i) => memory.set(ref.clientKey, { at: t, result: results[i]! }));
     }
     return clients.map((c) => memory.get(c.clientKey)!.result);
@@ -251,6 +261,11 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return r?.items.find((i) => i.id === id) ?? r?.children.find((i) => i.id === id) ?? null;
   }
 
+  /** The last result per client in memory (step 7: Close out's loop rules use what was already fetched). */
+  function last(clientKey: string): ClientWork | null {
+    return memory.get(clientKey)?.result ?? null;
+  }
+
   /** The client's DevOps organization, so a link can be checked against it. From cached items when the fetch failed. */
   function orgOf(clientKey: string): string | null {
     const known = orgs.get(clientKey);
@@ -260,7 +275,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return found.size === 1 ? decodeURIComponent([...found][0]!) : null;
   }
 
-  return { load, lookup, orgOf };
+  return { load, lookup, orgOf, last };
 }
 
 export type DevOpsSource = ReturnType<typeof createDevOpsSource>;

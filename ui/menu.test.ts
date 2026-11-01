@@ -51,6 +51,13 @@ function env(over: Partial<MenuEnv> = {}) {
     runTimer: async (a, i) => (calls.push([a, i ?? {}]), true),
     openLoops: () => calls.push(["loops"]),
     resetPlan: () => calls.push(["reset"]),
+    openCloseOut: (d) => calls.push(["closeout", d]),
+    openCheckIn: () => calls.push(["checkin"]),
+    closeOutDate: null,
+    commitCloseOut: () => calls.push(["closeoutCommit"]),
+    makeUp: async (id, i) => (calls.push(["pick.make_up", id, i]), true),
+    runLoops: async (a, i) => (calls.push([a, i]), true),
+    borrowed: [],
     ...over,
   };
   return { e, calls };
@@ -67,7 +74,8 @@ describe("command menu (built from the action registry)", () => {
     const list = commandList(env().e);
     expect(list.find((c) => c.action === "planday.start")?.hint).toBe("P");
     expect(list.find((c) => c.action === "week.load")?.hint).toBe("R");
-    for (const v of ["Plan the week", "Check-in", "Close out"]) expect(list.find((c) => c.label === v)?.disabled).toBe("Coming soon");
+    expect(list.find((c) => c.label === "Plan the week")?.disabled).toBe("Coming soon");
+    for (const v of ["Check-in", "Close out"]) expect(list.find((c) => c.id === `view.${v === "Check-in" ? "checkin" : "closeout"}`)?.disabled).toBeUndefined();
   });
   it("searches by words in any order", () => {
     const list = commandList(env().e);
@@ -90,7 +98,7 @@ describe("⋯ menus", () => {
   it("a pick: open in Edge, size, move, start focus, done, drop", async () => {
     const t = env();
     const m = pickMenu(t.e, pick);
-    expect(items(m).map((i) => i.label)).toEqual(["Open in Edge", "Set size", "Move", "Start focus", "Mark done", "Drop"]);
+    expect(items(m).map((i) => i.label)).toEqual(["Open in Edge", "Set size", "Move", "Start focus", "Mark done", "I'll make it up…", "Drop"]);
     await find(m, "Open in Edge").run!();
     await find(find(m, "Set size").next!(), "S").run!();
     expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);

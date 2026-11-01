@@ -39,6 +39,23 @@ function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | Targ
 const byKey = (r: ClientWork[], k: string) => r.find((c) => c.clientKey === k)!;
 const ids = (c: ClientWork) => c.items.map((i) => i.id);
 
+describe("items read by id for open loops (step 7)", () => {
+  it("reads only watched ids that aren't among my open items, completed ones kept, with the same fields", async () => {
+    const s = setup({ cscsteel: "agile" }, [target("CSC", "cscsteel")]);
+    const r = await s.src.load([ref("CSC")], { watch: { CSC: [104, 101] } });
+    const batches = s.calls.filter((c) => c.url.includes("workitemsbatch")).map((c) => JSON.parse(c.body!) as { ids: number[]; fields: string[] });
+    expect(batches.at(-1)).toEqual({ ids: [104], fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "Microsoft.VSTS.Common.StackRank"], errorPolicy: "omit" });
+    expect(byKey(r, "CSC").watched?.map((i) => [i.id, i.state, i.stateCategory])).toEqual([[104, "Closed", "Completed"]]);
+    expect(ids(byKey(r, "CSC"))).not.toContain(104);
+  });
+  it("makes no extra call when nothing is watched", async () => {
+    const s = setup({ cscsteel: "agile" }, [target("CSC", "cscsteel")]);
+    const r = await s.src.load([ref("CSC")]);
+    expect(s.calls.filter((c) => c.url.includes("workitemsbatch"))).toHaveLength(1);
+    expect(byKey(r, "CSC").watched).toEqual([]);
+  });
+});
+
 describe("DevOps work items per client", () => {
   it("fetches each client from its own org with its own PAT and shows items in board order", async () => {
     const s = setup({ cscsteel: "agile", jcerp: "scrum" }, [target("CSC", "cscsteel"), target("Quiddity", "jcerp")]);
@@ -64,7 +81,7 @@ describe("DevOps work items per client", () => {
     const batch = s.calls.find((c) => c.url.includes("workitemsbatch"))!;
     expect(JSON.parse(batch.body!)).toEqual({
       ids: [101, 102, 103, 104, 105],
-      fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "Microsoft.VSTS.Common.StackRank"],
+      fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "Microsoft.VSTS.Common.StackRank"],
       errorPolicy: "omit",
     });
     expect(byKey(r, "CSC").items[0]!.url).toBe("https://dev.azure.com/cscsteel/Project%20Ada/_workitems/edit/102");

@@ -311,12 +311,19 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
       </div>
     </div>
   );
+  // The client's resume note, on its next block after the note (step 7).
+  const resume = plan.resumeOn?.[`${slot.date}:${slot.half}`];
   const who = primary ? (
     <>
       <div className="client">
         <span className="swatch" />
         {primary.clientName}
       </div>
+      {resume && resume.clientKey === primary.clientKey && (
+        <div className="resume-note" title={`Resume note from ${Temporal.PlainDate.from(resume.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}: ${resume.note}`}>
+          <span className="resume-tag">Left off</span> {resume.note}
+        </div>
+      )}
       {slot.focus.slice(1).map((b) => (
         <div key={b.id} className="also" style={{ "--c2": clientColor(b.clientKey, colors) } as CSSProperties}>
           <span className="swatch small" />

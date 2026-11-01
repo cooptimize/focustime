@@ -8,7 +8,7 @@ import { dayRule } from "../plan/days.ts";
 import { isPickable } from "../plan/rules.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek } from "../plan/types.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
-import type { PlanningSettings, TimerView } from "../actions/types.ts";
+import type { PlanningSettings, TimerView, BorrowedView } from "../actions/types.ts";
 import { PRESETS, suggestMinutes } from "../plan/timer.ts";
 import { sizeNote } from "./planview.ts";
 
@@ -52,14 +52,14 @@ export type MenuStep =
 export type FormField = {
   key: string;
   label: string;
-  type: "text" | "time" | "select";
+  type: "text" | "time" | "select" | "date";
   value?: string;
   optional?: boolean;
   placeholder?: string;
   options?: { value: string; label: string }[];
 };
 
-export type View = "week" | "planday" | "settings" | "loops";
+export type View = "week" | "planday" | "settings" | "loops" | "checkin" | "closeout";
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
@@ -113,6 +113,18 @@ export type MenuEnv = {
   openLoops: () => void;
   /** Reset local plan, after a typed confirmation. */
   resetPlan: () => void;
+  /** Close out and Check-in (step 7). */
+  openCloseOut: (date?: IsoDate) => void;
+  openCheckIn: () => void;
+  /** The day Close out is open on, if it is. */
+  closeOutDate: IsoDate | null;
+  commitCloseOut: () => void;
+  /** "I'll make it up": moves the pick and records borrowed time; offers a flex session for tonight or a weekend. */
+  makeUp: (pickId: number, input: { when: "tonight" | "friday" | "day"; date?: IsoDate; half?: Half }) => Promise<boolean>;
+  /** loop.add and borrow.pay; false with a notice on refusal. */
+  runLoops: (action: string, input: Record<string, unknown>) => Promise<boolean>;
+  /** Borrowed time on the week shown plus every unpaid record. */
+  borrowed: readonly BorrowedView[];
 };
 
 const dayName = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -187,8 +199,67 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
         next: () => lengthStep(`Focus on "${p.title}"`, suggestMinutes(p.size, env.planning.sizes), (m) => env.runTimer("timer.start", { pickId: p.id, minutes: m })),
       },
       { id: "done", label: p.status === "done" ? "Mark not done" : "Mark done", action: "pick.mark_done", run: () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" }) },
+      { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be made up" } : {}), next: () => makeUpStep(env, p) },
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned pick can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
     ],
+  };
+}
+
+/** "I'll make it up" (step 7): tonight, the coming Friday, or a chosen day and slot. Records borrowed time. */
+export function makeUpStep(env: MenuEnv, p: Pick): MenuStep {
+  return {
+    title: `Make up "${p.title}"`,
+    items: [
+      { id: "tonight", label: "Tonight", hint: "this evening; offers a flex session", action: "pick.make_up", run: () => env.makeUp(p.id, { when: "tonight" }) },
+      { id: "friday", label: "Friday", hint: "the overflow day", action: "pick.make_up", run: () => env.makeUp(p.id, { when: "friday" }) },
+      {
+        id: "day",
+        label: "Another day…",
+        action: "pick.make_up",
+        next: () => ({
+          title: `Make up "${p.title}" on`,
+          button: "Make it up",
+          fields: [
+            { key: "date", label: "Day", type: "date", value: env.today },
+            { key: "half", label: "Slot", type: "select", value: "AM", options: [{ value: "AM", label: "Morning" }, { value: "PM", label: "Afternoon" }, { value: "EVE", label: "Evening" }] },
+          ],
+          save: (v) => env.makeUp(p.id, { when: "day", date: v.date!, half: v.half as Half }),
+        }),
+      },
+    ],
+  };
+}
+
+/** The borrowed-time chip (step 7): this week's records and anything unpaid; unpaid ones can be marked paid. */
+export function borrowStep(env: MenuEnv, list: readonly BorrowedView[]): MenuStep {
+  const when = (b: BorrowedView) => (b.payback === "tonight" ? `that evening (${dayName(b.paybackDate)})` : `${dayName(b.paybackDate)} ${b.paybackHalf === "AM" ? "morning" : b.paybackHalf === "PM" ? "afternoon" : "evening"}`);
+  const sorted = [...list].sort((a, b) => Number(!!a.paidAt) - Number(!!b.paidAt) || a.date.localeCompare(b.date));
+  return {
+    title: "Borrowed time",
+    items: sorted.length
+      ? sorted.map((b) => ({
+          id: `b${b.id}`,
+          label: `${b.minutes} min · ${b.title}`,
+          hint: b.paidAt ? (b.paidBy === "picks" ? "paid: pick done" : "paid") : `make up ${when(b)} · mark paid`,
+          action: "borrow.pay",
+          ...(b.paidAt ? { disabled: "Already paid" } : {}),
+          run: () => env.runLoops("borrow.pay", { id: b.id }),
+        }))
+      : [{ id: "none", label: "No borrowed time", disabled: "Nothing to make up" }],
+  };
+}
+
+/** "Add a loop" (step 7): who, what, optional due date. */
+export function loopForm(env: MenuEnv): MenuStep {
+  return {
+    title: "Add a loop",
+    button: "Add",
+    fields: [
+      { key: "who", label: "Who", type: "text", placeholder: "e.g. CSC, or a person" },
+      { key: "what", label: "What I owe", type: "text", placeholder: "e.g. Send the mapping notes" },
+      { key: "due", label: "Due", type: "date", optional: true },
+    ],
+    save: (v) => env.runLoops("loop.add", { who: v.who, what: v.what, ...(v.due ? { due: v.due } : {}) }),
   };
 }
 
@@ -548,6 +619,16 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "timer.extend": return env.timer ? { run: () => env.runTimer("timer.extend") } : { disabled: "No timer" };
     case "timer.done": return env.timer ? { run: () => env.runTimer("timer.done") } : { disabled: "No timer" };
     case "timer.next": return env.timer ? { run: () => env.runTimer("timer.next") } : { disabled: "No timer" };
+    case "closeout.load": return { run: () => env.openCloseOut() };
+    case "closeout.commit": return env.closeOutDate ? { run: env.commitCloseOut } : { disabled: "Open Close out first" };
+    case "pick.make_up": return { next: () => choosePick(env, "Make up which pick?", (p) => makeUpStep(env, p)) };
+    case "note.set": return { run: () => env.openCloseOut() };
+    case "loop.add": return { next: () => loopForm(env) };
+    case "borrow.pay": {
+      const unpaid = env.borrowed.filter((b) => !b.paidAt);
+      if (!unpaid.length) return { disabled: "No unpaid borrowed time" };
+      return { next: () => ({ title: "Mark which borrowed time paid?", items: unpaid.map((b) => ({ id: `b${b.id}`, label: b.title, hint: `${b.minutes} min from ${dayName(b.date)}`, run: () => env.runLoops("borrow.pay", { id: b.id }) })) }) };
+    }
     case "loops.list": return { run: env.openLoops };
     case "loop.close": return { run: env.openLoops };
     case "plan.reset": return { run: env.resetPlan };
@@ -563,8 +644,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.planday", action: "view.planday", group: "Views", label: "Plan the day", hint: "P", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
     { id: "view.planweek", action: "view.planweek", group: "Views", label: "Plan the week", disabled: soon },
-    { id: "view.checkin", action: "view.checkin", group: "Views", label: "Check-in", disabled: soon },
-    { id: "view.closeout", action: "view.closeout", group: "Views", label: "Close out", disabled: soon },
+    { id: "view.checkin", action: "view.checkin", group: "Views", label: "Check-in", hint: "M", run: env.openCheckIn },
+    { id: "view.closeout", action: "view.closeout", group: "Views", label: "Close out", hint: "E", run: () => env.openCloseOut() },
     { id: "week.prev", action: "week.prev", group: "Week", label: "Previous week", hint: "[", run: () => env.changeWeek(-1) },
     { id: "week.next", action: "week.next", group: "Week", label: "Next week", hint: "]", run: () => env.changeWeek(1) },
     { id: "week.today", action: "week.today", group: "Week", label: "Go to today", hint: "T", run: env.goToday },

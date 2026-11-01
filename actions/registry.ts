@@ -15,13 +15,14 @@ export type ActionTarget =
   | "range" // one of the view ranges
   | "unavailable" // one unavailable time
   | "flex" // one flex session
-  | "loop"; // one loop
+  | "loop" // one loop
+  | "borrowed"; // one borrowed time record
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the day" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops";
+  readonly group: "Week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -36,6 +37,11 @@ export const ACTIONS = [
   { name: "auth.disconnect", title: "Disconnect a calendar", group: "Sources", target: "calendar", summary: "Forget a calendar sign-in and its cached events" },
   { name: "planday.start", title: "Plan the day", group: "Plan the day", target: "day", shortcut: "P", summary: "Turn a day's free time into committed picks (I also works)" },
   { name: "planday.commit", title: "Commit the plan", group: "Plan the day", target: "plan", shortcut: "C", summary: "Commit the day being planned" },
+  { name: "closeout.load", title: "Close out", group: "Close out", target: "day", shortcut: "E", summary: "End of day: picks done or not, resume notes, loops (about 3 minutes)" },
+  { name: "closeout.commit", title: "Commit Close out", group: "Close out", target: "day", summary: "Mark the day closed out; it can also be done later for a past day" },
+  { name: "pick.make_up", title: "I'll make it up", group: "Picks", target: "pick", summary: "Move a pick to tonight, Friday or another day and record the borrowed time" },
+  { name: "note.set", title: "Write a resume note", group: "Close out", target: "none", summary: "Where you left off with a client; shown on its next block and in Plan the day" },
+  { name: "borrow.pay", title: "Mark borrowed time paid", group: "Close out", target: "borrowed", summary: "By hand; done payback picks mark it paid on their own" },
   { name: "pick.add", title: "Add to the plan", group: "Picks", target: "item", summary: "Pick a work item for a half-day" },
   { name: "pick.set_size", title: "Set size", group: "Picks", target: "pick", summary: "S about 1 h, M about 2 h, L a whole block" },
   { name: "pick.move", title: "Move pick", group: "Picks", target: "pick", summary: "To AM, PM, another day or Friday" },
@@ -62,7 +68,8 @@ export const ACTIONS = [
   { name: "timer.done", title: "Done with this session", group: "Focus", target: "none", summary: "End the session and tick its pick done" },
   { name: "timer.next", title: "Next pick", group: "Focus", target: "none", summary: "End the session and timebox today's next planned pick" },
   { name: "loops.list", title: "Show loops", group: "Loops", target: "none", shortcut: "L", summary: "What you owe people: open loops, closed ones on request" },
-  { name: "loop.close", title: "Close a loop", group: "Loops", target: "loop", summary: "By hand, with an optional note" },
+  { name: "loop.add", title: "Add a loop", group: "Loops", target: "none", summary: "Something you owe someone: who, what, optional due date" },
+  { name: "loop.close", title: "Close a loop", group: "Loops", target: "loop", summary: "Mark as told, with an optional note" },
   { name: "data.export", title: "Export the plan", group: "Settings", target: "none", summary: "Picks, drafts and time entries as JSON in ~/.local/share/coopilot/exports" },
   { name: "link.open", title: "Open in Edge", group: "Work items", target: "item", summary: "Open a work item in that client's Edge profile" },
 ] as const satisfies readonly ActionSpec[];

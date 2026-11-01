@@ -3,7 +3,8 @@ import type { Pick, PlanWeek, Size } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { WorkItem } from "../week/types.ts";
-import { cardPlan } from "./planview.ts";
+import { cardPlan, resumeSlots } from "./planview.ts";
+import { noStanding, pattern } from "../week/test-helpers.ts";
 import { fitLabel } from "./planday.ts";
 
 // Mon Nov 2 AM, 9:00–12:30 with no meetings: 3h 30m free. The clock is before the block starts.
@@ -54,5 +55,21 @@ describe("a card's plan (step 6.1)", () => {
   it("committed with no picks in this half: no fit, the list still collapses", () => {
     const cp = cardPlan(plan([pick({ half: "PM" })]), slot, "CSC", ITEMS, NOW);
     expect(cp).toMatchObject({ picks: [], fit: null, collapsed: true, items: ITEMS });
+  });
+});
+
+describe("resume notes on the week (step 7)", () => {
+  // CSC on Mon PM and Wed PM; W&C on Tue AM.
+  const days = buildWeek({
+    weekStart: "2026-11-02",
+    patterns: [pattern({ clientKey: "CSC", clientName: "CSC", days: { Mon: "PM", Wed: "PM" } }), pattern({ id: "p2", clientKey: "W&C", clientName: "W&C", days: { Tue: "AM" } })],
+    events: [],
+    config: noStanding,
+  }).days;
+  it("shows each client's latest note on its next block after the note's day, from today on", () => {
+    const notes = { CSC: { clientKey: "CSC", date: "2026-11-02", note: "Mapping half done" }, "W&C": { clientKey: "W&C", date: "2026-10-29", note: "Pump curves next" } };
+    expect(Object.keys(resumeSlots(days, notes, "2026-11-02")).sort()).toEqual(["2026-11-03:AM", "2026-11-04:PM"]);
+    // Later in the week the W&C block has passed: nothing shown for it.
+    expect(Object.keys(resumeSlots(days, notes, "2026-11-04"))).toEqual(["2026-11-04:PM"]);
   });
 });

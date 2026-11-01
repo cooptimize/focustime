@@ -21,6 +21,9 @@ import { timeAction } from "./time-actions.ts";
 import { TIMER_KEY, timerAction, timerView } from "./timer-actions.ts";
 import { warnPoints, type TimerState } from "../plan/timer.ts";
 import { settingsAction, type SettingsContext } from "./settings-actions.ts";
+import { borrowedView, closeoutAction, noteView } from "./closeout-actions.ts";
+import { applyLoopRules, internalClients, nameOf } from "./loop-rules.ts";
+import { watchedIds } from "../plan/loops.ts";
 import { isActionName, type ActionName } from "./registry.ts";
 import type { ActionResponse, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
 
@@ -219,7 +222,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       planClients = [...clients];
       for (const c of followedKeys(mine, follow.patterns, follow.options)) if (!planClients.some((p) => p.clientKey === c.clientKey)) planClients.push({ clientKey: c.clientKey, clientName: c.clientName });
       const fetch = [...clients, ...followedKeys(mine, follow.patterns, follow.options).filter((c) => c.devops && !clients.some((w) => w.clientKey === c.clientKey)).map(({ clientKey, clientName }) => ({ clientKey, clientName }))];
-      devopsP = ctx.makeDevOps(dv, tz).load(fetch, refresh).catch(() => null);
+      // Items an open loop is about are read by id too, so a completed one can close its loop (step 7).
+      const watch = ctx.plan ? watchedIds(ctx.plan.openLoops()) : {};
+      devopsP = ctx.makeDevOps(dv, tz).load(fetch, { ...refresh, watch }).catch(() => null);
     }
   }
 
@@ -234,6 +239,14 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const todayDay = week.days.find((d) => d.date === todayDate);
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
 
+  // Loop rules (step 7) on the fresh DevOps results, and borrowed time paid by done payback picks. By the server's
+  // clock, like the flex loops.
+  const serverToday = localToday(ctx.now(), tz);
+  const names = new Map([...planClients.map((c) => [c.clientKey, c.clientName] as const), ...(devops ?? []).map((w) => [w.clientKey, w.clientName] as const)]);
+  if (ctx.plan) {
+    applyLoopRules(ctx.plan, { today: serverToday, work: devops, internal: internalClients(cfg), clientName: nameOf(cfg, (k) => names.get(k)) });
+    ctx.plan.settleBorrowed();
+  }
   const todayPlan = ctx.plan?.day(todayDate) ?? null;
   // The focus timer warns 5 minutes before meetings and block ends (server/timer.ts); keep today's points fresh.
   if (ctx.plan && todayDay) ctx.plan.setState("warn_points", { date: todayDate, points: warnPoints(todayDay, tz) });
@@ -255,6 +268,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     timer: timerView(ctx.plan?.getState<TimerState>(TIMER_KEY) ?? null, Temporal.Instant.from(ctx.now())),
     openLoops: ctx.plan?.openLoops().length ?? 0,
     focused: ctx.plan ? ctx.plan.focusedSeconds(Object.values(ctx.plan.week(week.days.map((d) => d.date))).flatMap((d) => d.picks.map((p) => p.id))) : {},
+    resumeNotes: ctx.plan ? Object.fromEntries(Object.entries(ctx.plan.latestNotes()).map(([k, n]) => [k, noteView(n)])) : {},
+    borrowed: ctx.plan ? ctx.plan.borrowedFor(weekStart, sunday).map(borrowedView) : [],
+    closeOut: { date: todayDate, done: !!todayPlan?.closedOutAt },
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
   };
@@ -381,6 +397,23 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "loop.close":
     case "plan.reset":
       return timerAction({ plan: ctx.plan, config: () => configured(ctx), now: ctx.now }, action, req.input);
+    case "closeout.load":
+    case "closeout.commit":
+    case "pick.make_up":
+    case "note.set":
+    case "loop.add":
+    case "borrow.pay":
+      return closeoutAction(
+        {
+          plan: ctx.plan,
+          config: () => configured(ctx),
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
+          ptoAhead: (cfg, monday) => ptoAheadOf(ctx, cfg, monday),
+          now: ctx.now,
+        },
+        action,
+        req.input,
+      );
     case "planday.start":
     case "planday.commit":
     case "pick.add":

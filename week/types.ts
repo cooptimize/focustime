@@ -214,6 +214,10 @@ export type WorkItem = {
   parentId: number | null;
   changedAt: string;
   url: string;
+  /** DevOps tags (step 7); missing on items cached before it. */
+  tags?: string[];
+  /** Blocked by its state or a tag (step 7, plan/loops.ts isBlocked). */
+  blocked?: boolean;
 };
 
 export type ClientWorkStatus = "ok" | "identity_missing" | "not_set_up" | "auth_failed" | "no_access" | "unreachable" | "error";
@@ -231,4 +235,6 @@ export type ClientWork = {
   items: WorkItem[];
   /** Open children (any assignee) of my portfolio items, up to two levels down, for picking at story level. */
   children: WorkItem[];
+  /** Items read by id because an open loop is about them, completed ones included (step 7). */
+  watched?: WorkItem[];
 };

@@ -1,4 +1,5 @@
 // Pure: Azure DevOps responses → WorkItem. No I/O, no PATs.
+import { isBlocked } from "../../plan/loops.ts";
 import type { WorkItem } from "../../week/types.ts";
 
 /** type → (lowercased state name → state category). From each project's work item type metadata. */
@@ -100,13 +101,22 @@ export function buildChildrenWiql(parentIds: number[], categories: StateCategori
   return base.replace(`[System.AssignedTo] = 'x'`, `[System.Parent] IN (${ids.join(", ")})`);
 }
 
-export const BASE_FIELDS = ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate"] as const;
+// System.Tags (step 7): a "Blocked" tag opens a loop (plan/loops.ts).
+export const BASE_FIELDS = ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags"] as const;
 
 export function batchFields(orderField: string | null): string[] {
   return orderField ? [...BASE_FIELDS, orderField] : [...BASE_FIELDS];
 }
 
-export type NormalizeContext = { org: string; projectName: string; orderField: string | null; categories: StateCategories; levels?: BacklogLevels };
+export type NormalizeContext = {
+  org: string;
+  projectName: string;
+  orderField: string | null;
+  categories: StateCategories;
+  levels?: BacklogLevels;
+  /** Keep completed and removed items (items read by id for a loop, step 7). */
+  keepDone?: boolean;
+};
 
 const NO_LEVELS: BacklogLevels = { known: false, story: new Set(), portfolio: new Set() };
 
@@ -137,8 +147,10 @@ export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { 
     const type = typeof f["System.WorkItemType"] === "string" ? (f["System.WorkItemType"] as string) : "";
     const state = typeof f["System.State"] === "string" ? (f["System.State"] as string) : "";
     const category = ctx.categories.get(type)?.get(state.toLowerCase()) ?? "Unknown";
-    if (DONE_CATEGORIES.has(category)) continue;
+    if (DONE_CATEGORIES.has(category) && !ctx.keepDone) continue;
     const rawOrder = ctx.orderField ? f[ctx.orderField] : null;
+    // "a; b" in DevOps; absent when the item has none.
+    const tags = typeof f["System.Tags"] === "string" ? (f["System.Tags"] as string).split(";").map((t) => t.trim()).filter(Boolean).slice(0, 50) : [];
     const parent = f["System.Parent"];
     const title = typeof f["System.Title"] === "string" && f["System.Title"].trim() ? (f["System.Title"] as string) : "(No title)";
     items.push({
@@ -152,6 +164,8 @@ export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { 
       parentId: typeof parent === "number" && Number.isInteger(parent) ? parent : null,
       changedAt: typeof f["System.ChangedDate"] === "string" ? (f["System.ChangedDate"] as string) : "",
       url: workItemUrl(ctx.org, ctx.projectName, id),
+      tags,
+      blocked: isBlocked(state, tags),
     });
   }
   items.sort(byBoardOrder);

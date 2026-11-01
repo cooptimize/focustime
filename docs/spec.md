@@ -371,3 +371,14 @@ Purpose: in about two minutes, turn today's real capacity into a short, committe
 - **Carry-over (D119):** offered only on the earliest upcoming day (today until the usual end, else tomorrow) that can be planned and isn't committed. Other days show where it is offered. Source: picks still planned in the 7 days before that upcoming day.
 - **Contract change:** `PlanDayState` gains `access` ("plan" | "past") and `carryTarget`; `carryOver` is empty except on the carry-over day. `planday.start` and `planday.commit` can now refuse with 422. No new action, source or dependency.
 - **Rollback:** code only; no migration and no files outside the repo.
+
+## 23. Step 7: Check-in and Close out, built around closing loops (authorized Oct 31)
+
+- **Close out (D146):** end of day, about 3 minutes, any day up to today (key E). Picks with focused time against size; not done: carry over, move, make it up, drop. Resume notes per client worked. Open loops newest first, each closed in one step ("Mark as told…"). Commit Close out. Nothing blocks on an unreviewed day.
+- **Loop rules (D147):** DevOps update (done pick, item still open; closes on a later fetch), slip heads-up (moved or dropped from a committed client block, template draft), blocker nudge (state or tag), flex session ended, and manual. Rules only, no AI, nothing posted.
+- **Borrowed time (D150):** "I'll make it up" tonight, Friday or another day records minutes and payback; tonight or a weekend offers a local flex session. Paid when the pick is done or by hand. Week chip and Now strip.
+- **Resume notes (D151):** latest per client wins, history kept; shown on the client's next block and in Plan the day.
+- **Check-in (D152):** midday, about 1 minute (key M): each slot's time left after meetings, picks that no longer fit with the same actions, walk-on work.
+- **Reminders (D153):** Close out near the end of the day, Check-in at the end of lunch, each once a day, offsets in Settings > Planning.
+- **Contract change:** plan store migration 5 (D148); config `[plan] closeout_reminder_minutes`, `checkin_reminder_minutes`; DevOps `System.Tags` and a watched-by-id read (D149); actions `closeout.load`, `closeout.commit`, `pick.make_up`, `note.set`, `loop.add`, `borrow.pay`; `week.load` gains `resumeNotes`, `borrowed`, `closeOut`; `LoopView` gains who, kind, item, draft and close fields; `PlanDayState.resumeNotes`; `--clock` server flag (D154). All additive for existing callers.
+- **Rollback:** revert the commit. Migration 5 only adds columns and tables; the pre-migration copy `plan.db.bak-v4-<stamp>` is next to the store. The two config keys are optional and can stay.

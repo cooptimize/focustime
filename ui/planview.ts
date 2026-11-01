@@ -16,7 +16,31 @@ export type PlanView = {
   focused: Readonly<Record<number, number>>;
   timer: { pickId: number | null; runningSince: string | null } | null;
   nowMs: number;
+  /** The latest resume note per client (step 7), for Plan the day blocks. */
+  resumeNotes?: Readonly<Record<string, ResumeNote>>;
+  /** The note to show on a week card ("date:half"): each client's next block after its note. */
+  resumeOn?: Readonly<Record<string, ResumeNote>>;
 };
+export type ResumeNote = { clientKey: string; date: IsoDate; note: string };
+
+/**
+ * Where each client's latest resume note shows in the week (step 7): on that client's first focus block after the
+ * note's day, from today on. Blocks outside the week shown get nothing.
+ */
+export function resumeSlots(days: readonly { date: IsoDate; am: Slot; pm: Slot }[], notes: Readonly<Record<string, ResumeNote>>, today: IsoDate): Record<string, ResumeNote> {
+  const out: Record<string, ResumeNote> = {};
+  for (const n of Object.values(notes)) {
+    for (const d of days) {
+      if (d.date <= n.date || d.date < today) continue;
+      const half = d.am.focus.some((b) => b.clientKey === n.clientKey) ? "AM" : d.pm.focus.some((b) => b.clientKey === n.clientKey) ? "PM" : null;
+      if (half) {
+        out[`${d.date}:${half}`] = n;
+        break;
+      }
+    }
+  }
+  return out;
+}
 export const PlanCtx = createContext<PlanView>({ week: null, toggle: () => {}, sizes: SIZE_MINUTES, focused: {}, timer: null, nowMs: 0 });
 
 /** Seconds focused on a pick, live while its session runs. */

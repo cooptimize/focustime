@@ -11,7 +11,7 @@ import { planTarget } from "../plan/target.ts";
 import { stepDay } from "../plan/days.ts";
 import { PlanDay } from "./PlanDay.tsx";
 import { autoOpenDue, dayRolledOver } from "./planday.ts";
-import { PlanCtx } from "./planview.ts";
+import { PlanCtx, resumeSlots } from "./planview.ts";
 import { DevOpsWork, workByClient } from "./work.ts";
 import { afterLoad, createAutoRefresh, type LoadState, type RefreshTrigger } from "./refresh.ts";
 import { Details } from "./Details.tsx";
@@ -20,8 +20,12 @@ import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
 import { NowStrip, countdown, timerLeft } from "./NowStrip.tsx";
 import { Loops } from "./Loops.tsx";
+import { CloseOut } from "./CloseOut.tsx";
+import { CheckIn } from "./CheckIn.tsx";
+import { borrowedSummary } from "../plan/borrow.ts";
+import { formatDuration } from "../week/format.ts";
 import { PopupMenu } from "./Menus.tsx";
-import { timerStep } from "./menu.ts";
+import { borrowStep, timerStep } from "./menu.ts";
 import { nowStrip } from "../plan/now.ts";
 import { cardHalves, slotOf, validHalf } from "./halves.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
@@ -61,6 +65,10 @@ export function App() {
   const [settingsAt, setSettingsAt] = useState<SettingsSectionId | null>(null);
   /** The Loops view (step 6c) takes the week's place too. */
   const [loopsOpen, setLoopsOpen] = useState(false);
+  /** Close out (step 7) for a day, and Check-in for today, take the week's place too. */
+  const [closeOutAt, setCloseOutAt] = useState<IsoDate | null>(null);
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** The focus timer menu (F or the top bar Focus button), anchored where it was opened. */
   const [timerMenuAt, setTimerMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** A per-second clock while a timer runs, for its countdown. */
@@ -404,6 +412,8 @@ export function App() {
 
   const setView = useCallback(
     (v: View) => {
+      setCloseOutAt(null);
+      setCheckInOpen(false);
       if (v === "week") {
         closePlanDay();
         setDetailsOpen(false);
@@ -412,18 +422,25 @@ export function App() {
       } else if (v === "settings") {
         setLoopsOpen(false);
         setSettingsAt("you");
-      } else if (v === "loops") {
+      } else if (v === "loops" || v === "closeout" || v === "checkin") {
         closePlanDay();
         setDetailsOpen(false);
         setSettingsAt(null);
-        setLoopsOpen(true);
+        setLoopsOpen(v === "loops");
+        if (v === "closeout") setCloseOutAt(data?.planDay.date ?? null);
+        if (v === "checkin") {
+          setCheckInOpen(true);
+          // Check-in is about today: show today's week (on a weekend there is nothing to check in on).
+          const monday = data ? mondayOf(data.planDay.date) : null;
+          if (data && monday && monday !== data.weekStart) void load({ weekStart: monday });
+        }
       } else {
         setSettingsAt(null);
         setLoopsOpen(false);
         void openPlanDay();
       }
     },
-    [closePlanDay, openPlanDay],
+    [closePlanDay, openPlanDay, data, load],
   );
 
   // A per-second tick only while a timer runs; when it reaches zero locally, reload shortly after so the server's end shows.
@@ -554,17 +571,31 @@ export function App() {
       if (cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey) return;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
       const inMenu = !!(e.target as HTMLElement | null)?.closest?.(".popup-menu");
-      if ((settingsAt !== null || loopsOpen) && e.key === "Escape" && !inMenu) {
+      if ((settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen) && e.key === "Escape" && !inMenu) {
         e.preventDefault();
         setSettingsAt(null);
         setLoopsOpen(false);
+        setCloseOutAt(null);
+        setCheckInOpen(false);
       } else if (settingsAt === null && e.key === "," && !typing && !pd && !detailsOpen) {
         e.preventDefault();
         setLoopsOpen(false);
+        setCloseOutAt(null);
+        setCheckInOpen(false);
         setSettingsAt("you");
       } else if ((e.key === "l" || e.key === "L") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
         e.preventDefault();
+        setCloseOutAt(null);
+        setCheckInOpen(false);
         setLoopsOpen((o) => !o);
+      } else if ((e.key === "e" || e.key === "E") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
+        e.preventDefault();
+        if (closeOutAt !== null) setCloseOutAt(null);
+        else setView("closeout");
+      } else if ((e.key === "m" || e.key === "M") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
+        e.preventDefault();
+        if (checkInOpen) setCheckInOpen(false);
+        else setView("checkin");
       } else if ((e.key === "f" || e.key === "F") && !typing && !detailsOpen && !inMenu) {
         e.preventDefault();
         // Under the Focus button when it is on screen (it hides on narrow widths).
@@ -574,11 +605,11 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settingsAt, loopsOpen, cmdOpen, keysOpen, pd, detailsOpen]);
+  }, [settingsAt, loopsOpen, closeOutAt, checkInOpen, cmdOpen, keysOpen, pd, detailsOpen, setView]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (settingsAt !== null || loopsOpen || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (e.target instanceof HTMLInputElement) return;
       if ((e.target as HTMLElement | null)?.closest?.(".popup-menu")) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
@@ -622,7 +653,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, loopsOpen]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, loopsOpen, closeOutAt, checkInOpen]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
 
@@ -678,14 +709,46 @@ export function App() {
       planning: data.planning,
       timer: data.timer,
       runTimer,
-      openLoops: () => {
-        closePlanDay();
-        setDetailsOpen(false);
-        setSettingsAt(null);
-        setLoopsOpen(true);
+      openLoops: () => setView("loops"),
+      openCloseOut: (d) => {
+        setView("closeout");
+        if (d) setCloseOutAt(d);
       },
+      openCheckIn: () => setView("checkin"),
+      closeOutDate: closeOutAt,
+      commitCloseOut: () => {
+        if (closeOutAt) void call("closeout.commit", { date: closeOutAt }).then(() => { setNotice("Closed out"); reloadQuiet(); }, (e: unknown) => setNotice(e instanceof Error ? e.message : "Could not commit"));
+      },
+      makeUp: async (pickId, input) => {
+        try {
+          const r = await call<{ flexOffer: { date: string; start: string; end: string } | null; pick: { clientKey: string; title: string }; borrowed: { minutes: number } }>("pick.make_up", { id: pickId, ...input });
+          setNotice(`Borrowed ${formatDuration(r.borrowed.minutes)} to make up`);
+          const o = r.flexOffer;
+          if (o && window.confirm(`Add a flex session ${shortDay(o.date)}, ${o.start} to ${o.end} for ${r.pick.clientKey}? Local only; nothing goes on your calendar.`))
+            await call("flex.add", { date: o.date, clientKey: r.pick.clientKey, start: o.start, end: o.end, note: `Make up: ${r.pick.title}`.slice(0, 500) }).catch((e: unknown) => setNotice(e instanceof Error ? e.message : "Could not add the flex session"));
+          if (pd) setPd(await planAction("planday.start", { date: pd.date }));
+          reloadQuiet();
+          return true;
+        } catch (e) {
+          setNotice(e instanceof Error ? e.message : "That didn't work");
+          return false;
+        }
+      },
+      runLoops: async (action, input) => {
+        try {
+          await call(action, input);
+          reloadQuiet();
+          return true;
+        } catch (e) {
+          setNotice(e instanceof Error ? e.message : "That didn't work");
+          return false;
+        }
+      },
+      borrowed: data.borrowed,
       resetPlan: () => {
         setLoopsOpen(false);
+        setCloseOutAt(null);
+        setCheckInOpen(false);
         closePlanDay();
         setSettingsAt("data");
       },
@@ -693,6 +756,8 @@ export function App() {
         closePlanDay();
         setDetailsOpen(false);
         setLoopsOpen(false);
+        setCloseOutAt(null);
+        setCheckInOpen(false);
         setSettingsAt(SETTINGS_SECTIONS.some(([id]) => id === section) ? (section as SettingsSectionId) : "you");
       },
       exportPlan: () =>
@@ -701,7 +766,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.kind === "session") {
     return (
@@ -723,14 +788,15 @@ export function App() {
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
   const today = week.days.some((d) => d.date === localToday) ? localToday : "";
   const weekendNote = Temporal.PlainDate.from(localToday).dayOfWeek >= 6 && data.weekStart === data.today.weekStart ? `Today is ${shortDay(localToday)} · showing next week` : null;
-  const view: View = settingsAt !== null ? "settings" : loopsOpen ? "loops" : pd ? "planday" : "week";
+  const view: View = settingsAt !== null ? "settings" : loopsOpen ? "loops" : closeOutAt !== null ? "closeout" : checkInOpen ? "checkin" : pd ? "planday" : "week";
+  const borrowWeek = borrowedSummary(data.borrowed, week.days[0]!.date, week.days.at(-1)!.date);
 
   const samples = new Set(data.sources.filter((s) => s.sample).map((s) => s.source));
 
   return (
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={work}>
-    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, focused: data.focused, timer: data.timer, nowMs: secondMs }}>
+    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date) }}>
     <MenuHost env={env}>
     <div className={`app ${layout}${compact ? " compact" : ""}`}>
       <header className="topbar">
@@ -748,12 +814,16 @@ export function App() {
           <button type="button" className="view-tab" aria-current={view === "loops" ? "page" : undefined} onClick={() => setView(view === "loops" ? "week" : "loops")} title="What you owe people (L)">
             Loops{data.openLoops > 0 && <span className="count">{data.openLoops}</span>} <kbd>L</kbd>
           </button>
-          {["Plan the week", "Check-in", "Close out"].map((v) => (
-            <button key={v} type="button" className="view-tab soon" disabled title="Coming soon">
-              {v}
-              <span className="soon-tag">soon</span>
-            </button>
-          ))}
+          <button type="button" className="view-tab" aria-current={view === "checkin" ? "page" : undefined} onClick={() => setView(view === "checkin" ? "week" : "checkin")} title="Midday: what still fits today (M)">
+            Check-in <kbd>M</kbd>
+          </button>
+          <button type="button" className="view-tab" aria-current={view === "closeout" ? "page" : undefined} onClick={() => setView(view === "closeout" ? "week" : "closeout")} title="End of day: picks, resume notes, loops (E)">
+            Close out{data.closeOut.done && <span className="count done" title="Today is closed out">✓</span>} <kbd>E</kbd>
+          </button>
+          <button type="button" className="view-tab soon" disabled title="Coming soon">
+            Plan the week
+            <span className="soon-tag">soon</span>
+          </button>
         </nav>
         <nav className="weeknav" aria-label="Week">
           <button type="button" onClick={() => changeWeek(-1)} aria-label="Previous week" title="Previous week ([)">
@@ -767,6 +837,19 @@ export function App() {
             Today
           </button>
           {weekendNote && <span className="weekend-note">{weekendNote}</span>}
+          {(borrowWeek.totalMinutes > 0 || borrowWeek.unpaid > 0) && (
+            <button
+              type="button"
+              className="borrow-chip"
+              title="Borrowed time: slipped focus you said you'd make up"
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setBorrowMenuAt({ x: r.left, y: r.bottom + 4 });
+              }}
+            >
+              Borrowed {formatDuration(borrowWeek.totalMinutes) || "0m"} this week{borrowWeek.unpaid ? ` · ${borrowWeek.unpaid} unpaid` : " · paid"}
+            </button>
+          )}
         </nav>
         <div className="top-actions">
           <button
@@ -791,7 +874,7 @@ export function App() {
           </button>
         </div>
       </header>
-      {strip && <NowStrip strip={strip} onSelect={selectNow} timer={data.timer} nowMs={secondMs} onTimer={(a) => void runTimer(a)} />}
+      {strip && <NowStrip strip={strip} onSelect={selectNow} timer={data.timer} nowMs={secondMs} onTimer={(a) => void runTimer(a)} borrowed={borrowWeek.unpaid ? { unpaid: borrowWeek.unpaid, minutes: borrowWeek.unpaidMinutes } : null} />}
 
       {!data.config.ok && (
         <div className="config-banner" role="alert">
@@ -808,12 +891,11 @@ export function App() {
       )}
 
       {loopsOpen && settingsAt === null ? (
-        <Loops
-          clientName={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k}
-          timeZone={data.hours.timeZone}
-          onClose={() => setLoopsOpen(false)}
-          onChanged={reloadQuiet}
-        />
+        <Loops timeZone={data.hours.timeZone} onClose={() => setLoopsOpen(false)} onChanged={reloadQuiet} />
+      ) : closeOutAt !== null && settingsAt === null ? (
+        <CloseOut key={closeOutAt} date={closeOutAt} data={data} onDate={setCloseOutAt} onClose={() => setCloseOutAt(null)} onChanged={reloadQuiet} />
+      ) : checkInOpen && settingsAt === null ? (
+        <CheckIn data={data} now={now ?? new Date(clock).toISOString()} onClose={() => setCheckInOpen(false)} onChanged={reloadQuiet} />
       ) : settingsAt !== null ? (
         <Settings
           section={settingsAt}
@@ -902,6 +984,7 @@ export function App() {
       <Details open={detailsOpen} day={day} slot={slot} timeZone={week.timeZone} colors={data.clients} now={now ?? new Date(clock).toISOString()} onClose={() => setDetailsOpen(false)} />
       {cmdOpen && <CommandMenu commands={commandList(env)} onClose={() => setCmdOpen(false)} />}
       {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}
+      {borrowMenuAt && <PopupMenu at={borrowMenuAt} step={borrowStep(env, data.borrowed)} onClose={() => setBorrowMenuAt(null)} />}
       {keysOpen && <KeyLegend onClose={() => setKeysOpen(false)} />}
     </div>
     </MenuHost>
