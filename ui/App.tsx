@@ -19,7 +19,10 @@ import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
 import { NowStrip, TopTimer } from "./NowStrip.tsx";
-import { FocusScreen } from "./FocusScreen.tsx";
+import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
+import { sound } from "./sound.ts";
+import type { TimerView } from "../actions/types.ts";
+import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
 import { Inbox } from "./Inbox.tsx";
 import { Today } from "./Today.tsx";
@@ -519,6 +522,27 @@ export function App() {
   }, [data, zonedNow]);
   const openRitual = useCallback((r: Ritual = ritualNow()) => setView(r), [ritualNow, setView]);
   openFocusRef.current = () => setView("focus");
+
+  // Focus sounds (step 10): the session's choice (else Settings > Focus) plays only while focus runs; a soft chime
+  // marks a break when asked for. The choice and volume reset when the timer is cleared.
+  const [sessionSound, setSessionSound] = useState<SoundKind | null>(null);
+  const [sessionVolume, setSessionVolume] = useState<number | null>(null);
+  const prevTimer = useRef<TimerView | null>(null);
+  const focusCfg = data?.focus;
+  const timerNow = data?.timer ?? null;
+  useEffect(() => {
+    if (!focusCfg) return;
+    sound.setVolume(sessionVolume ?? focusCfg.volume);
+    const step = soundStep(prevTimer.current, timerNow, sessionSound ?? focusCfg.sound, focusCfg.onBreak);
+    if (step.play) sound.play(step.play, focusCfg.fadeSeconds);
+    else sound.stop(focusCfg.fadeSeconds);
+    if (step.chime) sound.chime();
+    prevTimer.current = timerNow;
+    if (!timerNow) {
+      setSessionSound(null);
+      setSessionVolume(null);
+    }
+  }, [focusCfg, timerNow, sessionSound, sessionVolume]);
 
   // A per-second tick only while a timer runs; when it reaches zero locally, reload shortly after so the server's end shows.
   const timerRunning = !!data?.timer?.running;
@@ -1035,6 +1059,22 @@ export function App() {
           onTimer={(a) => void runTimer(a)}
           onStart={() => startFocus(focusPick(data.plan?.[data.planDay.date]?.picks ?? [], strip?.half ?? null))}
           onClose={() => setView("today")}
+          sound={
+            <SoundControl
+              settings={data.focus}
+              media={data.media}
+              choice={sessionSound ?? data.focus.sound}
+              onChoice={(k) => {
+                void sound.unlock();
+                setSessionSound(k);
+              }}
+              volume={sessionVolume ?? data.focus.volume}
+              onVolume={setSessionVolume}
+              onPlaylist={(name) => void runTimer("playlist.open", { name })}
+              blocked={sound.blocked}
+              onUnlock={() => void sound.unlock()}
+            />
+          }
         />
       ) : planWeekAt !== null && settingsAt === null ? (
         <PlanWeek weekStart={planWeekAt} data={data} version={planWeekVersion} onWeek={openPlanWeek} onClose={() => setPlanWeekAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />

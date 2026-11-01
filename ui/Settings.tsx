@@ -10,12 +10,15 @@ import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS, type ViewRange }
 import { ActionRefusal, call } from "./api.ts";
 import { notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar } from "./status.ts";
 import { shortDate } from "./labels.ts";
+import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
+import { sound } from "./sound.ts";
 
 export const SETTINGS_SECTIONS = [
   ["you", "You"],
   ["hours", "Working hours"],
   ["standing", "Standing blocks"],
   ["planning", "Planning"],
+  ["focus", "Focus"],
   ["risk", "Risk rules"],
   ["clients", "Clients"],
   ["connections", "Connections"],
@@ -186,6 +189,8 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
       return <StandingForm {...p} />;
     case "planning":
       return <PlanningForm {...p} />;
+    case "focus":
+      return <FocusForm {...p} />;
     case "risk":
       return d.risk ? <RiskForm {...p} /> : null;
     case "clients":
@@ -427,6 +432,115 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
           <Problems all={problems} field="plan.end_sound" />
         </Field>
       </div>
+      <SaveRow status={status} />
+    </form>
+  );
+}
+
+/** Settings > Focus (step 10): the default sound, volume, fade, what a break sounds like, media pause, playlists. */
+function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
+  const f = p.data.focus;
+  const [v, setV] = useState({ sound: f.sound, volume: f.volume, fadeSeconds: f.fadeSeconds, onBreak: f.onBreak, pauseMedia: f.pauseMedia });
+  const [lists, setLists] = useState<Playlist[]>(f.playlists);
+  const [media, setMedia] = useState<{ playerctl: boolean; spotify: boolean } | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const { problems, status, save } = useSave(p.onSavedData);
+  useEffect(() => {
+    call<{ playerctl: boolean; spotify: boolean }>("media.status", {}).then(setMedia, () => setMedia(null));
+  }, []);
+  const preview = async () => {
+    if (v.sound === "none") return;
+    await sound.unlock();
+    sound.setVolume(v.volume);
+    sound.play(v.sound, 1);
+    setPreviewing(true);
+    setTimeout(() => {
+      sound.stop(1);
+      setPreviewing(false);
+    }, 6000);
+  };
+  const badLink = (u: string) => !!u.trim() && !playlistLink(u);
+  return (
+    <form
+      className="set-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save("focus", { ...v, playlists: lists.filter((l) => l.name.trim() || l.url.trim()) });
+      }}
+    >
+      <h3>Sound while focusing</h3>
+      <p className="muted">Made in the app, nothing to download. It plays only while focus runs, fades in and out, and goes quiet when you pause, stop or take a break. You can pick another one on the focus screen for a session.</p>
+      <div className="set-grid">
+        <Field label="Default sound" hint={BINAURAL[v.sound as SoundKind] ? "Binaural beats need headphones: each ear gets its own tone." : "Brown is deep, pink is brighter, rain is band-limited with a slow swell."}>
+          <span className="set-inline">
+            <select value={v.sound} onChange={(e) => setV({ ...v, sound: e.target.value as SoundKind })}>
+              {SOUNDS.map((k) => (
+                <option key={k} value={k}>{SOUND_NAMES[k]}</option>
+              ))}
+            </select>
+            <button type="button" className="mini" disabled={v.sound === "none" || previewing} onClick={() => void preview()}>
+              {previewing ? "Playing…" : "Try it"}
+            </button>
+          </span>
+          <Problems all={problems} field="focus.sound" />
+        </Field>
+        <Field label={`Volume (${v.volume})`} hint="0 to 100.">
+          <input type="range" min={0} max={100} step={5} value={v.volume} onChange={(e) => { setV({ ...v, volume: Number(e.target.value) }); sound.setVolume(Number(e.target.value)); }} />
+          <Problems all={problems} field="focus.volume" />
+        </Field>
+        <Field label="Fade in and out (seconds)" hint="0 to 30.">
+          <input type="number" min={0} max={30} step={1} value={v.fadeSeconds} onChange={(e) => setV({ ...v, fadeSeconds: Number(e.target.value) })} />
+          <Problems all={problems} field="focus.fade_seconds" />
+        </Field>
+        <Field label="When a break starts" hint="The sound stops either way.">
+          <select value={v.onBreak} onChange={(e) => setV({ ...v, onBreak: e.target.value as "silence" | "chime" })}>
+            <option value="silence">Silence</option>
+            <option value="chime">A soft chime</option>
+          </select>
+          <Problems all={problems} field="focus.on_break" />
+        </Field>
+      </div>
+      <h3>Music players</h3>
+      <div className="set-grid">
+        <Field
+          label="Pause and resume music"
+          hint={
+            media === null
+              ? "Checking for playerctl…"
+              : media.playerctl
+                ? "Pauses what is playing when focus ends or a break starts, and resumes it when the next focus starts. Uses playerctl (MPRIS)."
+                : "playerctl isn't installed, so Coopilot can't pause or resume music players. Install the playerctl package to use this; nothing is installed for you."
+          }
+        >
+          <label className="set-check">
+            <input type="checkbox" checked={v.pauseMedia} disabled={media !== null && !media.playerctl && !v.pauseMedia} onChange={(e) => setV({ ...v, pauseMedia: e.target.checked })} /> Pause music when focus ends
+          </label>
+          <Problems all={problems} field="focus.pause_media" />
+        </Field>
+      </div>
+      <h3>Playlists</h3>
+      <p className="muted">
+        Save up to {MAX_PLAYLISTS} Spotify or YouTube links. Choosing one on the focus screen opens it: {media?.spotify ? "Spotify links in the Spotify app" : "in your default browser (the Spotify app isn't installed)"}.
+      </p>
+      <ul className="set-playlists">
+        {lists.map((l, i) => (
+          <li key={i}>
+            <input value={l.name} placeholder="Name" aria-label={`Playlist ${i + 1} name`} maxLength={60} onChange={(e) => setLists(lists.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+            <input value={l.url} placeholder="https://open.spotify.com/playlist/… or https://www.youtube.com/playlist?list=…" aria-label={`Playlist ${i + 1} link`} maxLength={500} aria-invalid={badLink(l.url)} onChange={(e) => setLists(lists.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} />
+            <button type="button" className="mini quiet" onClick={() => setLists(lists.filter((_, j) => j !== i))} aria-label={`Remove playlist ${l.name || i + 1}`}>
+              Remove
+            </button>
+            {badLink(l.url) && <span className="field-problem">Only Spotify or YouTube links (https)</span>}
+            <Problems all={problems} field={`focus.playlists[${i}]`} />
+          </li>
+        ))}
+      </ul>
+      {lists.length < MAX_PLAYLISTS && (
+        <button type="button" className="mini" onClick={() => setLists([...lists, { name: "", url: "" }])}>
+          Add a playlist
+        </button>
+      )}
+      <Problems all={problems} field="focus.playlists" />
       <SaveRow status={status} />
     </form>
   );

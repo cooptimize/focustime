@@ -28,7 +28,9 @@ import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
 import { createApp } from "./app.ts";
 import { calendarRefreshDue, checkTimer, notifyWithActions, playEndSound } from "./timer.ts";
 import { refreshTodayWarnings } from "../actions/warnings.ts";
-import { TIMER_KEY, timerAction } from "../actions/timer-actions.ts";
+import { TIMER_KEY, timerAction, timerLike } from "../actions/timer-actions.ts";
+import { DEFAULT_FOCUS } from "../plan/focussound.ts";
+import { mediaControl } from "./media.ts";
 import type { TimerState } from "../plan/timer.ts";
 import { CHECKIN_MESSAGE, CLOSEOUT_MESSAGE, checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeoutReminderDue, notifySend } from "./notify.ts";
 
@@ -120,6 +122,9 @@ if (dev) {
   devMiddleware = vite.middlewares;
 }
 
+/** Media control for focus (step 10): playerctl when installed, playlist links through xdg-open. */
+const media = mediaControl();
+
 const server = createApp({
   port,
   token,
@@ -138,6 +143,7 @@ const server = createApp({
     now: () => instantNow().toString(),
     ...(plan ? { plan } : {}),
     launch: launchDetached,
+    media,
     secrets: { state: (a) => secretState(a), set: (a, v) => setAppSecret(a, v) },
     // Browser .desktop entries and Local State only; profile names are all that is kept.
     readText: (path) => {
@@ -267,7 +273,9 @@ if (plan) {
       endSound: async () => (await configOrNull())?.plan.endSound ?? false,
       notify: notifyWithActions,
       sound: playEndSound,
-      act: (action) => timerAction({ plan: store, config: configOrNull, now: () => instantNow().toString() }, action, {}),
+      act: (action) => timerAction({ plan: store, config: configOrNull, now: () => instantNow().toString(), media }, action, {}),
+      // Step 10: a session that ends on its own pauses media too (when Settings > Focus asks for it).
+      ended: async (before, after) => void (await media.transition(timerLike(before), timerLike(after), ((await configOrNull())?.focus ?? DEFAULT_FOCUS).pauseMedia)),
     })
       .then((did) => did && log({ source: "plan", op: "timer", kind: did }))
       .catch(() => log({ source: "plan", op: "timer", kind: "failed" }));

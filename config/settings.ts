@@ -5,7 +5,7 @@ import { WEEKDAY_KEYS, type WeekdayKey } from "../week/hours.ts";
 import { hoursBody, removeValue, replaceArrayTables, replaceSection, setValue, tomlValue, type TomlValue } from "./edit.ts";
 import { parseConfig } from "./schema.ts";
 
-export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display"] as const;
+export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export class SettingsInputError extends Error {
@@ -109,6 +109,28 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
         values.push(["end_sound", v.endSound]);
       }
       return (text) => values.reduce((t, [k, val]) => setValue(t, "plan", k, val), text);
+    }
+    case "focus": {
+      // Step 10. Written as given; parseConfig checks values and links per field (focus.playlists[0].url etc.).
+      only(v, ["sound", "volume", "fadeSeconds", "onBreak", "pauseMedia", "playlists"], "focus");
+      const values: [string, TomlValue][] = [];
+      if (v.sound !== undefined) values.push(["sound", str(v.sound, "focus.sound", 20)]);
+      if (v.volume !== undefined) values.push(["volume", int(v.volume, "focus.volume")]);
+      if (v.fadeSeconds !== undefined) values.push(["fade_seconds", int(v.fadeSeconds, "focus.fade_seconds")]);
+      if (v.onBreak !== undefined) values.push(["on_break", str(v.onBreak, "focus.on_break", 20)]);
+      if (v.pauseMedia !== undefined) {
+        if (typeof v.pauseMedia !== "boolean") throw new SettingsInputError("focus.pause_media", "Must be true or false");
+        values.push(["pause_media", v.pauseMedia]);
+      }
+      if (v.playlists !== undefined) {
+        if (!Array.isArray(v.playlists)) throw new SettingsInputError("focus.playlists", "Must be a list");
+        values.push(["playlists", v.playlists.map((x, i) => {
+          const o = obj(x, `focus.playlists[${i}]`);
+          only(o, ["name", "url"], `focus.playlists[${i}]`);
+          return { name: str(o.name, `focus.playlists[${i}].name`, 60), url: str(o.url, `focus.playlists[${i}].url`, 500) };
+        })]);
+      }
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "focus", k, val, i === 0 ? "Focus sounds and playlists (step 10). Sounds are made in the app; playlists open in Spotify or the browser." : undefined), text);
     }
     case "display": {
       only(v, ["theme", "viewRange"], "ui");

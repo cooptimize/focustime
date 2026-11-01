@@ -2,6 +2,7 @@ import type { FollowState } from "../week/follow.ts";
 // Action response shapes shared by the server and the UI. Types only, no runtime imports.
 import type { AppConfig, ClientSetting, FieldError, UiConfig } from "../config/schema.ts";
 import type { EdgeProfile } from "../links/edge.ts";
+import type { FocusSettings } from "../plan/focussound.ts";
 import type { TodayTarget } from "../week/dates.ts";
 import type { PlanWeek } from "../plan/types.ts";
 import type { ClientPortfolio, ClientWork, IsoDate, RiskThresholds, SourceResult, StandingBlock, Week } from "../week/types.ts";
@@ -34,6 +35,10 @@ export type WeekLoadData = {
   planning: PlanningSettings;
   /** The focus timer (step 6c), or null. */
   timer: TimerView | null;
+  /** Focus sounds, playlists and media control from [focus] (step 10); defaults when unset. */
+  focus: FocusSettings;
+  /** What media control is on this machine (read-only check): playerctl, and the Spotify app for playlist links. */
+  media: { playerctl: boolean; spotify: boolean };
   /** Open loops, for the Loops count in the top bar (step 6c). */
   openLoops: number;
   /** Focused seconds per pick on the week shown (focus log, step 6c). */
@@ -92,6 +97,8 @@ export type SettingsData = {
   standingBlocks: StandingBlock[];
   risk: RiskThresholds | null;
   planning: AppConfig["plan"];
+  /** Settings > Focus (step 10). */
+  focus: FocusSettings;
   clients: SettingsClient[];
   /** Whether Dataverse answered for the client list; when not, Dataverse-owned values are unknown, not empty. */
   dataverseReached: boolean;

@@ -18,7 +18,8 @@ import type { PlanStore } from "../store/plan-store.ts";
 import { checkDevOpsUrl, launchPlan } from "../links/edge.ts";
 import { hasHoursOn, planAction } from "./plan-actions.ts";
 import { timeAction } from "./time-actions.ts";
-import { TIMER_KEY, timerAction, timerView } from "./timer-actions.ts";
+import { TIMER_KEY, timerAction, timerView, type MediaControl } from "./timer-actions.ts";
+import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { warnPoints, type TimerState } from "../plan/timer.ts";
 import { settingsAction, type SettingsContext } from "./settings-actions.ts";
 import { borrowedView, closeoutAction, noteView } from "./closeout-actions.ts";
@@ -51,6 +52,8 @@ export type ActionContext = {
   readText?: (path: string) => string | null;
   home?: string;
   exportPlan?: (json: string) => Promise<string>;
+  /** Media control for focus (step 10): playerctl and playlist links. Absent: none (tests, no desktop). */
+  media?: MediaControl;
 };
 
 export type ActionRequest = { action: unknown; input: unknown };
@@ -300,6 +303,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     hours: model,
     thresholds: weekConfig.thresholds,
     planning: planningOf(cfg),
+    focus: cfg?.focus ?? DEFAULT_FOCUS,
+    media: ctx.media ? await ctx.media.status() : { playerctl: false, spotify: false },
     timer: timerView(ctx.plan?.getState<TimerState>(TIMER_KEY) ?? null, Temporal.Instant.from(ctx.now())),
     openLoops: ctx.plan?.openLoops().length ?? 0,
     captures: ctx.plan?.inboxCount() ?? 0,
@@ -432,10 +437,16 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "timer.extend":
     case "timer.done":
     case "timer.next":
+    case "playlist.open":
     case "loops.list":
     case "loop.close":
     case "plan.reset":
-      return timerAction({ plan: ctx.plan, config: () => configured(ctx), now: ctx.now }, action, req.input);
+      return timerAction({ plan: ctx.plan, config: () => configured(ctx), now: ctx.now, media: ctx.media }, action, req.input);
+    case "media.status": {
+      // Step 10: read-only check for playerctl (MPRIS) and the Spotify app. Nothing is run or installed.
+      if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("media.status takes {}");
+      return { ok: true, data: ctx.media ? await ctx.media.status() : { playerctl: false, spotify: false } };
+    }
     case "closeout.load":
     case "closeout.commit":
     case "pick.make_up":

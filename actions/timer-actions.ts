@@ -7,15 +7,29 @@ import { DEFAULT_PLAN } from "../config/schema.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import { loopView, nameOf, newestFirst } from "./loop-rules.ts";
 import type { Pick } from "../plan/types.ts";
+import { DEFAULT_FOCUS, playlistLink, playlistTarget, type TimerLike } from "../plan/focussound.ts";
 import type { ActionResponse, TimerView } from "./types.ts";
 
-export type TimerAction = "timer.start" | "timer.pause" | "timer.resume" | "timer.stop" | "timer.extend" | "timer.done" | "timer.next" | "loops.list" | "loop.close" | "plan.reset";
+export type TimerAction = "timer.start" | "timer.pause" | "timer.resume" | "timer.stop" | "timer.extend" | "timer.done" | "timer.next" | "playlist.open" | "loops.list" | "loop.close" | "plan.reset";
+
+/** Media control (step 10): playerctl and playlist links; the server's implementation is server/media.ts. */
+export type MediaControl = {
+  status: () => Promise<{ playerctl: boolean; spotify: boolean }>;
+  /** Pause or resume players on a timer change (only when enabled and playerctl is there). Never throws. */
+  transition: (prev: TimerLike, next: TimerLike, enabled: boolean) => Promise<"pause" | "play" | null>;
+  /** Opens one validated playlist target (https:// or spotify:) with xdg-open. */
+  open: (target: string) => Promise<void>;
+};
 
 export type TimerContext = {
   plan?: PlanStore | undefined;
   config: () => Promise<AppConfig | null>;
   now: () => string;
+  media?: MediaControl | undefined;
 };
+
+/** The part of the stored timer the sound and media rules look at. */
+export const timerLike = (s: TimerState | null): TimerLike => (s ? { kind: s.kind, running: !!s.runningSince, ended: s.ended, startedAt: s.startedAt } : null);
 
 export const TIMER_KEY = "timer";
 
@@ -63,6 +77,18 @@ const minutesOf = (v: unknown): number => {
 };
 
 export async function timerAction(ctx: TimerContext, action: TimerAction, input: unknown): Promise<ActionResponse> {
+  const before = action.startsWith("timer.") ? (ctx.plan?.getState<TimerState>(TIMER_KEY) ?? null) : undefined;
+  const r = await timerActionInner(ctx, action, input);
+  // Step 10: media players follow focus (pause on end or break, resume what was paused when focus starts again).
+  if (r.ok && before !== undefined && ctx.media && ctx.plan) {
+    const after = ctx.plan.getState<TimerState>(TIMER_KEY) ?? null;
+    const cfg = await ctx.config();
+    await ctx.media.transition(timerLike(before), timerLike(after), (cfg?.focus ?? DEFAULT_FOCUS).pauseMedia);
+  }
+  return r;
+}
+
+async function timerActionInner(ctx: TimerContext, action: TimerAction, input: unknown): Promise<ActionResponse> {
   const plan = ctx.plan;
   if (!plan) return bad("The local plan store is not available", 503);
   const now = Temporal.Instant.from(ctx.now());
@@ -88,9 +114,23 @@ export async function timerAction(ctx: TimerContext, action: TimerAction, input:
   try {
     switch (action) {
       case "timer.start": {
-        const o = fields(input, ["kind", "minutes", "pickId"]);
+        const o = fields(input, ["kind", "minutes", "pickId", "playlist"]);
         const kind: TimerKind = o.kind === undefined ? "focus" : o.kind === "focus" || o.kind === "break" ? o.kind : (() => { throw new Invalid("kind must be focus or break"); })();
         const minutes = o.minutes === undefined ? undefined : minutesOf(o.minutes);
+        // Step 10: a saved playlist (by name) opens as focus starts: the Spotify app when installed, else the browser.
+        let openList: () => Promise<Record<string, unknown>> = async () => ({});
+        if (o.playlist !== undefined) {
+          if (kind !== "focus") throw new Invalid("A playlist is for focus, not a break");
+          if (typeof o.playlist !== "string" || o.playlist.length > 60) throw new Invalid("playlist must be a saved playlist's name");
+          const saved = (cfg?.focus ?? DEFAULT_FOCUS).playlists.find((p) => p.name === o.playlist);
+          const link = saved ? playlistLink(saved.url) : null;
+          if (!link) return bad(`No saved playlist named "${o.playlist}"`, 422);
+          const spotifyApp = ctx.media ? (await ctx.media.status()).spotify : false;
+          const target = playlistTarget(link, spotifyApp);
+          // Opened only once the timer has started (a bad pick opens nothing).
+          openList = async () =>
+            ctx.media ? ctx.media.open(target).then(() => ({ playlist: saved!.name }), () => ({ notice: `Couldn't open ${saved!.name}` })) : { notice: "Playlists can't be opened here" };
+        }
         if (o.pickId !== undefined) {
           if (kind !== "focus") throw new Invalid("A break isn't for a pick");
           if (typeof o.pickId !== "number" || !Number.isInteger(o.pickId)) throw new Invalid("pickId must be a number");
@@ -98,12 +138,14 @@ export async function timerAction(ctx: TimerContext, action: TimerAction, input:
           if (!p) return bad(`No pick ${o.pickId}`, 404);
           if (p.status !== "planned") return bad("Only a planned pick can be timeboxed", 409);
           finish();
-          return respond(startFor(p, minutes));
+          const started = startFor(p, minutes);
+          return respond(started, await openList());
         }
         const m = minutes ?? (kind === "focus" ? planning.focusMinutes : planning.breakMinutes);
         if (!m) return bad("Breaks are set to 0 minutes in Settings > Planning", 409);
         finish();
-        return respond(save(startTimer(now, { kind, pickId: null, label: kind === "focus" ? "Focus" : "Break", minutes: m })));
+        const started = save(startTimer(now, { kind, pickId: null, label: kind === "focus" ? "Focus" : "Break", minutes: m }));
+        return respond(started, await openList());
       }
       case "timer.pause":
       case "timer.resume":
@@ -133,6 +175,22 @@ export async function timerAction(ctx: TimerContext, action: TimerAction, input:
         }
         const next = nextPick(plan, today, s.pickId);
         return next ? respond(startFor(next)) : respond(null, { notice: "No planned picks left today" });
+      }
+      case "playlist.open": {
+        // Step 10: open a saved playlist now (the focus screen's per-session choice). Spotify or YouTube only.
+        const o = fields(input, ["name"]);
+        if (typeof o.name !== "string" || o.name.length > 60) throw new Invalid("name must be a saved playlist's name");
+        const saved = (cfg?.focus ?? DEFAULT_FOCUS).playlists.find((p) => p.name === o.name);
+        const link = saved ? playlistLink(saved.url) : null;
+        if (!link) return bad(`No saved playlist named "${o.name}"`, 422);
+        if (!ctx.media) return bad("Playlists can't be opened here", 503);
+        const target = playlistTarget(link, (await ctx.media.status()).spotify);
+        try {
+          await ctx.media.open(target);
+        } catch {
+          return bad(`Couldn't open ${saved!.name}`, 502);
+        }
+        return { ok: true, data: { opened: saved!.name, app: target.startsWith("spotify:") ? "spotify" : "browser" } };
       }
       case "loops.list": {
         const o = fields(input, ["includeClosed"]);

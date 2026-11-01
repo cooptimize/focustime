@@ -16,6 +16,8 @@ export type TimerTickDeps = {
   sound: () => void;
   /** Runs a timer action as the UI would (timer.done, timer.extend, timer.next). */
   act: (action: "timer.done" | "timer.extend" | "timer.next") => Promise<unknown>;
+  /** After a session ends on its own (step 10: media pause). */
+  ended?: (before: TimerState, after: TimerState) => Promise<void>;
 };
 
 export const END_ACTIONS: NotifyAction[] = [
@@ -34,6 +36,7 @@ export async function checkTimer(d: TimerTickDeps): Promise<"ended" | "warned" |
   if (t.ended) {
     logSegment(d.plan, s, t.segment);
     d.plan.setState(TIMER_KEY, t.state);
+    if (d.ended) await d.ended(s, t.state).catch(() => {});
     if (await d.endSound().catch(() => false)) d.sound();
     const title = s.kind === "break" ? "Break over" : "Focus session done";
     // Not awaited: the notification stays until answered; the choice runs the same action as the UI.

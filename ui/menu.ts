@@ -600,6 +600,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "settings.load": return { run: () => env.openSettings() };
     case "settings.save": return { run: () => env.openSettings() };
     case "secret.set": return { run: () => env.openSettings("connections") };
+    case "media.status": return { run: () => env.openSettings("focus") };
+    case "playlist.open": return { run: () => env.openSettings("focus") };
     case "data.export": return { run: env.exportPlan };
     case "hours.set_day": return { next: () => chooseDay(env, "Working hours for which day?", (d) => hoursForm(env, d)) };
     case "hours.clear_day": {

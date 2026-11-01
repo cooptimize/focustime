@@ -2,6 +2,7 @@
 import { parse, TomlError } from "smol-toml";
 import { PROFILE_DIR } from "../links/edge.ts";
 import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
+import { DEFAULT_FOCUS, MAX_PLAYLISTS, playlistLink, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
 
 export type DataverseConfig = {
@@ -37,6 +38,8 @@ export type AppConfig = {
   edge: EdgeConfig;
   /** Display (step 6b). */
   ui: UiConfig;
+  /** Focus sounds, playlists and media control (step 10). */
+  focus: FocusSettings;
 };
 
 export const THEMES = ["cooptimize-dark", "cooptimize-light", "neutral"] as const;
@@ -169,7 +172,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -420,6 +423,51 @@ export function parseConfig(text: string): ParseResult {
     }
   }
 
+  // [focus] (optional, step 10): sound, volume, fade, on-break behavior, media pause, playlists
+  const focus: FocusSettings = { ...DEFAULT_FOCUS, playlists: [] };
+  if (raw.focus !== undefined) {
+    const t = isTable(raw.focus) ? raw.focus : (err("focus", "Must be a [focus] table"), null);
+    if (t) for (const k of Object.keys(t)) if (!["sound", "volume", "fade_seconds", "on_break", "pause_media", "playlists"].includes(k)) err(`focus.${k}`, "Unknown field");
+    const snd = t?.sound;
+    if (snd !== undefined) {
+      if (typeof snd !== "string" || !(SOUNDS as readonly string[]).includes(snd)) err("focus.sound", `Must be one of ${SOUNDS.map((x) => `"${x}"`).join(", ")}`);
+      else focus.sound = snd as SoundKind;
+    }
+    const whole = (key: string, min: number, max: number): number | undefined => {
+      const v = t?.[key];
+      if (v === undefined) return undefined;
+      if (typeof v !== "number" || !Number.isInteger(v) || v < min || v > max) return void err(`focus.${key}`, `Must be a whole number from ${min} to ${max}`);
+      return v;
+    };
+    const vol = whole("volume", 0, 100);
+    if (vol !== undefined) focus.volume = vol;
+    const fade = whole("fade_seconds", 0, 30);
+    if (fade !== undefined) focus.fadeSeconds = fade;
+    const ob = t?.on_break;
+    if (ob !== undefined) {
+      if (ob !== "silence" && ob !== "chime") err("focus.on_break", 'Must be "silence" or "chime"');
+      else focus.onBreak = ob;
+    }
+    if (t?.pause_media !== undefined) {
+      if (typeof t.pause_media !== "boolean") err("focus.pause_media", "Must be true or false");
+      else focus.pauseMedia = t.pause_media;
+    }
+    const pl = t?.playlists;
+    if (pl !== undefined) {
+      if (!Array.isArray(pl) || pl.length > MAX_PLAYLISTS) err("focus.playlists", `Must be a list of at most ${MAX_PLAYLISTS} { name, url } entries`);
+      else
+        pl.forEach((x, i) => {
+          const name = isTable(x) && typeof x.name === "string" ? x.name.trim() : "";
+          const url = isTable(x) && typeof x.url === "string" ? x.url.trim() : "";
+          if (!isTable(x) || Object.keys(x).some((k) => k !== "name" && k !== "url")) err(`focus.playlists[${i}]`, "Must be { name, url }");
+          else if (!name || name.length > 60) err(`focus.playlists[${i}].name`, "Must be a name of 1 to 60 characters");
+          else if (focus.playlists.some((p) => p.name === name)) err(`focus.playlists[${i}].name`, "Each playlist needs its own name");
+          else if (!playlistLink(url)) err(`focus.playlists[${i}].url`, "Must be a Spotify or YouTube link (https)");
+          else focus.playlists.push({ name, url });
+        });
+    }
+  }
+
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
   if (raw.outlook !== undefined) {
@@ -466,6 +514,7 @@ export function parseConfig(text: string): ParseResult {
       plan: { pickablePortfolioTypes, ...planOpts },
       edge,
       ui,
+      focus,
     },
   };
 }

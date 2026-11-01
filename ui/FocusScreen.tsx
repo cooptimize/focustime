@@ -5,6 +5,7 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import type { TimerView } from "../actions/types.ts";
 import type { NowStrip } from "../plan/now.ts";
 import type { Pick } from "../plan/types.ts";
+import { BINAURAL, SOUND_NAMES, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { formatDuration } from "../week/format.ts";
 import { countdown, timerLeft } from "./NowStrip.tsx";
 import { WorkLink } from "./WorkLink.tsx";
@@ -91,5 +92,53 @@ export function FocusScreen({ t, nowMs, pick, client, color, event, onTimer, onS
         Back to Today, the timer keeps running
       </button>
     </main>
+  );
+}
+
+/** The focus screen's sound control (step 10 slice 5): this session's sound, volume, and a saved playlist to open. */
+export function SoundControl({ settings, media, choice, onChoice, volume, onVolume, onPlaylist, blocked, onUnlock }: {
+  settings: FocusSettings;
+  media: { playerctl: boolean; spotify: boolean };
+  choice: SoundKind;
+  onChoice: (k: SoundKind) => void;
+  volume: number;
+  onVolume: (v: number) => void;
+  onPlaylist: (name: string) => void;
+  blocked: boolean;
+  onUnlock: () => void;
+}) {
+  return (
+    <>
+      <label className="focus-sound-pick">
+        <span>Sound</span>
+        <select value={choice} onChange={(e) => onChoice(e.target.value as SoundKind)} aria-label="Sound for this session">
+          {SOUNDS.map((k) => (
+            <option key={k} value={k}>{SOUND_NAMES[k]}</option>
+          ))}
+        </select>
+      </label>
+      {choice !== "none" && (
+        <label className="focus-sound-vol">
+          <span className="sr-only">Volume</span>
+          <input type="range" min={0} max={100} step={5} value={volume} onChange={(e) => onVolume(Number(e.target.value))} aria-label="Volume" />
+        </label>
+      )}
+      {BINAURAL[choice] && <span className="muted">Use headphones</span>}
+      {blocked && choice !== "none" && (
+        <button type="button" className="mini" onClick={onUnlock}>Play sound</button>
+      )}
+      {settings.playlists.length > 0 && (
+        <label className="focus-sound-pick">
+          <span>Playlist</span>
+          <select value="" onChange={(e) => e.target.value && onPlaylist(e.target.value)} aria-label="Open a saved playlist">
+            <option value="">Open…</option>
+            {settings.playlists.map((p) => (
+              <option key={p.name} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      {settings.pauseMedia && !media.playerctl && <span className="muted">Media pause is on, but playerctl isn't installed</span>}
+    </>
   );
 }

@@ -78,6 +78,8 @@ export const ACTIONS = [
   { name: "timer.extend", title: "Add 15 minutes", group: "Focus", target: "none", summary: "Keep going; after the end it runs again from now" },
   { name: "timer.done", title: "Done with this session", group: "Focus", target: "none", summary: "End the session and tick its pick done" },
   { name: "timer.next", title: "Next pick", group: "Focus", target: "none", summary: "End the session and timebox today's next planned pick" },
+  { name: "playlist.open", title: "Open a focus playlist", group: "Focus", target: "none", summary: "One of your saved Spotify or YouTube playlists (Settings > Focus)" },
+  { name: "media.status", title: "Check media control", group: "Focus", target: "none", summary: "Whether playerctl (pause and resume music) and the Spotify app are on this computer; read-only" },
   { name: "capture.add", title: "Quick capture", group: "Capture", target: "none", shortcut: "N", summary: "One line, saved at once (works offline); sort it into a loop, a draft story or a note" },
   { name: "capture.load", title: "Show captures and notes", group: "Capture", target: "none", summary: "The inbox of captures to sort, and notes per client (searchable)" },
   { name: "capture.route", title: "Sort a capture", group: "Capture", target: "capture", summary: "Make it a loop, a draft story or a note, or dismiss it (rules suggest one)" },
