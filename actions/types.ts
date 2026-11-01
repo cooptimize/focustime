@@ -1,7 +1,6 @@
 import type { FollowState } from "../week/follow.ts";
 // Action response shapes shared by the server and the UI. Types only, no runtime imports.
 import type { AppConfig, ClientSetting, FieldError, UiConfig } from "../config/schema.ts";
-import type { EdgeProfile } from "../links/edge.ts";
 import type { FocusSettings } from "../plan/focussound.ts";
 import type { TodayTarget } from "../week/dates.ts";
 import type { PlanWeek } from "../plan/types.ts";
@@ -58,6 +57,10 @@ export type WeekLoadData = {
   /** The Plan the week badge: the week a nudge asked for that still isn't committed (server clock). */
   weekNudge: { badge: IsoDate | null };
   /** Display settings from [ui] (step 6b): the theme. Defaults when the config is invalid. */
+  /** Timeboxes on the week (step 12): live ones, plus removed ones whose Outlook event is still to be taken off. */
+  timeboxes: TimeboxView[];
+  /** [timebox]: Put on Outlook by default, and whether changes to my own timebox events ask first. */
+  timeboxSettings: { outlookDefault: boolean; confirmOwn: boolean };
   ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
 };
@@ -86,7 +89,15 @@ export type SettingsClient = {
   follow: FollowState | null;
 };
 
-export type BrowserInfo = { found: boolean; profiles: EdgeProfile[] };
+export type BrowserProfile = { directory: string; name: string };
+export type BrowserInfo = { found: boolean; profiles: BrowserProfile[] };
+/** The host's browsers (step 12, Q63): implemented in server/host.ts so no OS-specific code sits in actions/. */
+export type HostBrowsers = {
+  /** Installed Edge and Chromium and their profiles by name (read-only). */
+  detect: () => { edge: BrowserInfo; chromium: BrowserInfo & { command: string[] | null } };
+  /** The argument array that opens a client's link (its browser and profile, or the default browser). */
+  linkCommand: (cfg: AppConfig, clientKey: string, url: string) => { argv: string[]; profile: string | null; notice: string | null; browser: "edge" | "chromium" | "default" };
+};
 
 export type SettingsData = {
   configPath: string;
@@ -107,6 +118,8 @@ export type SettingsData = {
   secrets: { account: AppSecret; label: string; state: SecretPresence; expires: string | null }[];
   display: AppConfig["ui"] | null;
   data: { planStore: boolean };
+  /** Settings > Planning > Timeboxes (step 12). */
+  timebox: AppConfig["timebox"];
 };
 
 /** [plan] values the UI uses (step 6c). */
@@ -230,3 +243,30 @@ export type CaptureState = { today: IsoDate; inbox: Capture[]; notes: Note[]; in
 export type FeatureChoice = { id: number; title: string; state: string };
 /** A client's open features for "under a feature"; "unavailable" when DevOps can't say (a draft then saves without one). */
 export type CaptureFeatures = { clientKey: string; status: "ok" | "unavailable"; message?: string; features: FeatureChoice[] };
+
+// ---- Step 12: timeboxes and the write framework ----
+/** One field of a write preview: before and after (null where there is none), and whether it changes. */
+export type PreviewField = { label: string; before: string | null; after: string | null; changed: boolean };
+/** What an external write will do, shown before it happens. Held on the server for five minutes. */
+export type WritePreview = {
+  previewId: string;
+  expiresAt: string;
+  op: "create" | "update" | "delete";
+  undo: boolean;
+  /** confirm_own is off and this changes my own timebox event: the UI confirms without asking (still logged). */
+  auto: boolean;
+  system: "Outlook";
+  account: string;
+  calendar: string;
+  summary: string;
+  fields: PreviewField[];
+  visibility: string;
+};
+export type WriteResult = { entry: import("../plan/timebox.ts").WriteEntry; confirmed: boolean; message: string };
+export type WriteState = { access: "write" | "read_only" | "not_connected" | "unavailable" | "not_set_up"; message: string; outlookDefault: boolean; confirmOwn: boolean };
+export type WriteLogView = {
+  entries: (import("../plan/timebox.ts").WriteEntry & { undoable: boolean; retryable: boolean; whenText: string | null })[];
+  orphans: { uid: string; title: string; when: string }[];
+};
+/** A timebox for the UI: `sync` says what Outlook needs (null: in step or not on Outlook), `onOutlook` whether its event exists. */
+export type TimeboxView = import("../plan/timebox.ts").Timebox & { sync: "create" | "update" | "delete" | null; onOutlook: boolean };

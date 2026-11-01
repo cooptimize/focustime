@@ -31,7 +31,7 @@ type SlotIn = { start: Slot["start"]; end: Slot["end"]; freeGaps: Slot["freeGaps
  * Picks keep their order: in turn, each planned pick takes its remaining need from what is left; the first one that
  * no longer fits and every one after it are flagged. Done picks are shown, never flagged.
  */
-export function checkIn(slots: readonly { half: Half; slot: SlotIn }[], picks: readonly Pick[], focused: (id: number) => number, sizes: Readonly<Record<Size, number>>, now: string): CheckSlot[] {
+export function checkIn(slots: readonly { half: Half; slot: SlotIn }[], picks: readonly Pick[], focused: (id: number) => number, sizes: Readonly<Record<Size, number>>, now: string, boxed: (pickId: number) => number | null = () => null): CheckSlot[] {
   const t = Temporal.Instant.from(now).epochMilliseconds;
   return slots.map(({ half, slot }) => {
     const ended = Temporal.Instant.from(slot.end).epochMilliseconds <= t;
@@ -42,7 +42,8 @@ export function checkIn(slots: readonly { half: Half; slot: SlotIn }[], picks: r
     const out = mine.map((p): CheckPick => {
       const focusedMinutes = Math.floor(focused(p.id) / 60);
       if (p.status === "done") return { pick: p, needMinutes: 0, focusedMinutes, fits: true };
-      const need = Math.max(0, sizes[p.size] - focusedMinutes);
+      // A timeboxed pick needs its timeboxed time (step 12), else its size.
+      const need = Math.max(0, (boxed(p.id) ?? sizes[p.size]) - focusedMinutes);
       used += need;
       if (used > left) broken = true;
       return { pick: p, needMinutes: need, focusedMinutes, fits: !broken };

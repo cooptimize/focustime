@@ -13,7 +13,7 @@ const MS_TOKEN = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`
 const G_CLIENT = "123-abc.apps.googleusercontent.com";
 const G_TOKEN = "https://oauth2.googleapis.com/token";
 
-function ms(opts: { exchange?: TokenBehavior; refresh?: TokenBehavior; keyring?: ReturnType<typeof memoryKeyring>; browser?: ReturnType<typeof fakeBrowser>; signInTimeoutMs?: number } = {}) {
+function ms(opts: { exchange?: TokenBehavior; refresh?: TokenBehavior; consented?: string[]; grantFewer?: boolean; keyring?: ReturnType<typeof memoryKeyring>; browser?: ReturnType<typeof fakeBrowser>; signInTimeoutMs?: number } = {}) {
   const tok = fakeTokenEndpoint(MS_TOKEN, opts);
   const keyring = opts.keyring ?? memoryKeyring();
   const browser = opts.browser ?? fakeBrowser({ kind: "approve" });
@@ -154,6 +154,63 @@ describe("access tokens from the stored refresh token", () => {
     expect([...keyring.store.keys()].sort()).toEqual(["dataverse-client-secret", "google-refresh-token"]);
     await expect(client.accessToken()).rejects.toMatchObject({ kind: "not_connected" });
     expect(tok.calls).toHaveLength(1);
+  });
+});
+
+describe("write access (step 12, optional)", () => {
+  const READ = "Calendars.ReadBasic";
+  it("a read-only sign-in reports read_only and reading keeps working, untouched", async () => {
+    const { client, tok, keyring } = ms({ consented: [READ], keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
+    expect(await client.accessToken()).toBe(FAKE_ACCESS);
+    const w = await client.writeAccess();
+    expect(w.status).toBe("read_only");
+    expect(w.status !== "write" && w.message).toMatch(/Reconnect Outlook in Settings > Connections/);
+    expect(w.status !== "write" && w.message).not.toContain(FAKE_REFRESH);
+    // Reads still come from memory, and the stored refresh token is unchanged.
+    expect(await client.accessToken()).toBe(FAKE_ACCESS);
+    expect(tok.calls.filter((c) => c.body.get("scope")?.includes(READ))).toHaveLength(1);
+    expect(keyring.store.get("outlook-refresh-token")).toBe(FAKE_REFRESH);
+    await expect(client.accessToken("write")).rejects.toBeInstanceOf(AuthFailure);
+  });
+
+  it("reads never ask for the write scope", async () => {
+    const { client, tok } = ms({ keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
+    await client.accessToken();
+    expect(tok.calls.every((c) => !c.body.get("scope")!.includes("ReadWrite"))).toBe(true);
+  });
+
+  it("connect with write asks for both scopes; then write and read tokens are separate", async () => {
+    const { client, tok, browser } = ms({ consented: [READ] });
+    expect(await client.connect({ write: true })).toEqual({ status: "connected" });
+    const asked = browser.seen[0]!.searchParams.get("scope")!.split(" ");
+    expect(asked).toEqual(expect.arrayContaining(["offline_access", "https://graph.microsoft.com/Calendars.ReadBasic", "https://graph.microsoft.com/Calendars.ReadWrite"]));
+    expect(await client.writeAccess()).toEqual({ status: "write" });
+    expect(await client.accessToken("write")).toBe(`${FAKE_ACCESS}-W`);
+    expect(await client.accessToken()).toBe(FAKE_ACCESS);
+    const refreshes = tok.calls.filter((c) => c.body.get("grant_type") === "refresh_token").map((c) => c.body.get("scope"));
+    expect(refreshes).toEqual(["offline_access https://graph.microsoft.com/Calendars.ReadWrite", "offline_access https://graph.microsoft.com/Calendars.ReadBasic"]);
+  });
+
+  it("a plain connect does not ask for write", async () => {
+    const { client, browser } = ms({ consented: [READ] });
+    await client.connect();
+    expect(browser.seen[0]!.searchParams.get("scope")).toBe("offline_access https://graph.microsoft.com/Calendars.ReadBasic");
+    expect((await client.writeAccess()).status).toBe("read_only");
+  });
+
+  it("a token granted without Calendars.ReadWrite is not write access", async () => {
+    const { client } = ms({ grantFewer: true, keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
+    expect((await client.writeAccess()).status).toBe("read_only");
+  });
+
+  it("not connected and offline are told apart", async () => {
+    expect((await ms({ keyring: memoryKeyring() }).client.writeAccess()).status).toBe("not_connected");
+    expect((await ms({ refresh: "network", keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) }).client.writeAccess()).status).toBe("unavailable");
+  });
+
+  it("Google has no write scope in Coopilot", async () => {
+    const { client } = google({ keyring: memoryKeyring({ "google-client-secret": FAKE_CLIENT_SECRET, "google-refresh-token": FAKE_REFRESH }) });
+    expect((await client.writeAccess()).status).toBe("read_only");
   });
 });
 

@@ -113,3 +113,15 @@ describe("on-track wording", () => {
     expect(onTrack({ musts: 2, left: 2, leftBlocks: 2 }, 0.6)).toEqual({ kind: "at_risk", text: "2 musts left, half a block left. Still realistic?" });
   });
 });
+
+describe("Resolved counts as done (Q65)", () => {
+  it("a Resolved item is done for the week, shown as resolved; an open one isn't", () => {
+    const wi = (id: number, stateCategory: string): WorkItem => ({ id, title: `#${id}`, type: "User Story", state: "x", stateCategory, level: "story", order: null, parentId: null, changedAt: "x", url: "u" });
+    const work: ClientWork[] = [{ clientKey: "CSC", clientName: "CSC", status: "ok", fetchedAt: "x", fromCache: false, items: [wi(1, "Resolved"), wi(2, "InProgress")], children: [], watched: [], committed: [] }];
+    const st = devopsStateFrom(work);
+    expect([st("CSC", 1), st("CSC", 2)]).toEqual(["resolved", "open"]);
+    expect(itemDone(item({ itemId: 1, level: "story" }), st, () => false)).toBe("resolved");
+    expect(weekList([item({ itemId: 1 }), item({ itemId: 2 })], work).progress[0]).toMatchObject({ musts: 2, done: 1 });
+  });
+});
+

@@ -31,7 +31,12 @@ export function memoryKeyring(initial: Partial<Record<SecretAccount, string>> = 
 
 export type TokenBehavior = "ok" | "ok_rotate" | "invalid_grant" | "invalid_client" | "network" | "no_refresh_token";
 
-export function fakeTokenEndpoint(tokenUrl: string, behavior: { exchange?: TokenBehavior; refresh?: TokenBehavior } = {}) {
+/**
+ * `consented`: scopes the user has agreed to (bare names, e.g. Calendars.ReadBasic). A refresh asking for anything
+ * else fails like Microsoft's consent_required (invalid_grant, AADSTS65001); a code exchange grants what was asked.
+ * Omitted: everything is consented. The response carries `scope` (what was granted, offline_access left out).
+ */
+export function fakeTokenEndpoint(tokenUrl: string, behavior: { exchange?: TokenBehavior; refresh?: TokenBehavior; consented?: string[]; grantFewer?: boolean } = {}) {
   const calls: { url: string; body: URLSearchParams }[] = [];
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const fetchFn = async (input: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
@@ -43,7 +48,13 @@ export function fakeTokenEndpoint(tokenUrl: string, behavior: { exchange?: Token
     if (b === "network") throw new TypeError("fetch failed");
     if (b === "invalid_grant") return json(400, { error: "invalid_grant", error_description: `Token has been expired or revoked: ${FAKE_REFRESH} ${FAKE_CLIENT_SECRET}` });
     if (b === "invalid_client") return json(401, { error: "invalid_client", error_description: `bad secret ${FAKE_CLIENT_SECRET}` });
-    const out: Record<string, unknown> = { access_token: FAKE_ACCESS, expires_in: 3599, token_type: "Bearer" };
+    const asked = (body.get("scope") ?? "").split(" ").filter((x) => x && x !== "offline_access");
+    const bare = (x: string) => x.split("/").pop()!;
+    if (body.get("grant_type") === "authorization_code") behavior.consented = [...new Set([...(behavior.consented ?? []), ...asked.map(bare)])];
+    else if (behavior.consented && asked.some((a) => !behavior.consented!.includes(bare(a))))
+      return json(400, { error: "invalid_grant", error_description: `AADSTS65001: The user or administrator has not consented. ${FAKE_REFRESH}`, suberror: "consent_required" });
+    const granted = behavior.grantFewer ? asked.filter((a) => !/ReadWrite/.test(a)) : asked;
+    const out: Record<string, unknown> = { access_token: body.get("scope")?.includes("ReadWrite") && !behavior.grantFewer ? `${FAKE_ACCESS}-W` : FAKE_ACCESS, expires_in: 3599, token_type: "Bearer", scope: granted.join(" ") };
     if (b === "ok" && body.get("grant_type") === "authorization_code") out.refresh_token = FAKE_REFRESH;
     if (b === "ok_rotate") out.refresh_token = FAKE_REFRESH_ROTATED;
     return json(200, out);

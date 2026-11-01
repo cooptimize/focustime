@@ -7,6 +7,7 @@ import { DEFAULT_PLAN } from "../config/schema.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import { loopView, nameOf, newestFirst } from "./loop-rules.ts";
 import type { Pick } from "../plan/types.ts";
+import { minutesOf as boxMinutes } from "../plan/timebox.ts";
 import { DEFAULT_FOCUS, playlistLink, playlistTarget, type TimerLike } from "../plan/focussound.ts";
 import type { ActionResponse, TimerView } from "./types.ts";
 
@@ -114,7 +115,7 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
   try {
     switch (action) {
       case "timer.start": {
-        const o = fields(input, ["kind", "minutes", "pickId", "playlist"]);
+        const o = fields(input, ["kind", "minutes", "pickId", "playlist", "timeboxId"]);
         const kind: TimerKind = o.kind === undefined ? "focus" : o.kind === "focus" || o.kind === "break" ? o.kind : (() => { throw new Invalid("kind must be focus or break"); })();
         const minutes = o.minutes === undefined ? undefined : minutesOf(o.minutes);
         // Step 10: a saved playlist (by name) opens as focus starts: the Spotify app when installed, else the browser.
@@ -130,6 +131,18 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
           // Opened only once the timer has started (a bad pick opens nothing).
           openList = async () =>
             ctx.media ? ctx.media.open(target).then(() => ({ playlist: saved!.name }), () => ({ notice: `Couldn't open ${saved!.name}` })) : { notice: "Playlists can't be opened here" };
+        }
+        // Step 12: from a timebox. Its pick when it has one; the length defaults to the timebox's.
+        if (o.timeboxId !== undefined) {
+          if (kind !== "focus" || o.pickId !== undefined) throw new Invalid("A timebox starts focus on its own pick");
+          if (typeof o.timeboxId !== "number" || !Number.isInteger(o.timeboxId)) throw new Invalid("timeboxId must be a number");
+          const tb = plan.timebox(o.timeboxId);
+          if (!tb || tb.removedAt) return bad("No such timebox", 404);
+          const m = minutes ?? Math.min(MAX_MINUTES, boxMinutes(tb));
+          const p = tb.pickId !== null ? plan.getPick(tb.pickId) : null;
+          finish();
+          const started = p && p.status === "planned" ? startFor(p, m) : save(startTimer(now, { kind: "focus", pickId: null, label: tb.title, minutes: m }));
+          return respond(started, await openList());
         }
         if (o.pickId !== undefined) {
           if (kind !== "focus") throw new Invalid("A break isn't for a pick");

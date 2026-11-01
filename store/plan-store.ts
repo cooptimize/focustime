@@ -8,6 +8,8 @@ import { carryOver } from "../plan/rules.ts";
 import { DEFAULT_BLOCKS, validBlocks, type ItemLevel, type Tier } from "../plan/weeklist.ts";
 import type { Capture, DayPlan, DraftStory, Note, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
+import type { Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteStatus } from "../plan/timebox.ts";
+export type { WriteEntry, WriteStatus } from "../plan/timebox.ts";
 
 /** Marks a migration that rebuilds a referenced table: run with foreign keys off, then checked (see migrate). */
 const FK_OFF = "-- foreign keys off for a table rebuild";
@@ -265,10 +267,59 @@ export const MIGRATIONS: readonly string[] = [
      SELECT id, week_start, client_key, item_id, 'feature', 'must', title, item_type, url, blocks, NULL, NULL, created_at, updated_at FROM week_features ORDER BY id;
    DROP TABLE week_features;
    ALTER TABLE week_features_v8 RENAME TO week_features;`,
+  // 9 (step 12): timeboxes (local, optionally on Outlook), the Outlook events Coopilot created (by marker uid, with the
+  // event id and the fields last confirmed), and the audit log of every external write with its prior values.
+  `CREATE TABLE timeboxes (
+     id INTEGER PRIMARY KEY,
+     uid TEXT NOT NULL UNIQUE,
+     date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     client_key TEXT NOT NULL,
+     pick_id INTEGER REFERENCES picks(id) ON DELETE SET NULL,
+     item_id INTEGER,
+     title TEXT NOT NULL,
+     url TEXT,
+     start_at TEXT NOT NULL,
+     end_at TEXT NOT NULL,
+     outlook INTEGER NOT NULL DEFAULT 0 CHECK (outlook IN (0, 1)),
+     removed_at TEXT,
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL
+   );
+   CREATE INDEX timeboxes_date ON timeboxes (date);
+   CREATE TABLE outlook_events (
+     uid TEXT PRIMARY KEY,
+     timebox_id INTEGER,
+     event_id TEXT NOT NULL,
+     fields TEXT NOT NULL,
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL,
+     deleted_at TEXT
+   );
+   CREATE TABLE write_log (
+     id INTEGER PRIMARY KEY,
+     at TEXT NOT NULL,
+     system TEXT NOT NULL CHECK (system IN ('outlook')),
+     op TEXT NOT NULL CHECK (op IN ('create', 'update', 'delete')),
+     uid TEXT NOT NULL,
+     event_id TEXT,
+     account TEXT,
+     calendar TEXT,
+     before TEXT,
+     after TEXT,
+     local_before TEXT,
+     local_after TEXT,
+     status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'unconfirmed', 'failed', 'refused')),
+     message TEXT,
+     auto INTEGER NOT NULL DEFAULT 0,
+     undo_of INTEGER REFERENCES write_log(id),
+     undone_by INTEGER REFERENCES write_log(id),
+     attempts INTEGER NOT NULL DEFAULT 1,
+     updated_at TEXT NOT NULL
+   );`,
 ];
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
-const RESET_TABLES = ["notes", "captures", "week_feature_slots", "week_features", "week_plans", "breakdown_marks", "borrowed", "resume_notes", "focus_log", "kv", "loops", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
+const RESET_TABLES = ["timeboxes", "notes", "captures", "week_feature_slots", "week_features", "week_plans", "breakdown_marks", "borrowed", "resume_notes", "focus_log", "kv", "loops", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
 export type FocusSegment = { pickId: number | null; label: string; startedAt: string; endedAt: string; seconds: number };
 
 export type NewUnavailable = { date: IsoDate; title: string; start: string; end: string; note?: string | null };
@@ -346,6 +397,22 @@ export type NewPick = {
 };
 
 type Row = Record<string, string | number | null>;
+
+const toTimebox = (r: Row): Timebox => ({
+  id: r.id as number, uid: r.uid as string, date: r.date as string, clientKey: r.client_key as string, pickId: (r.pick_id as number | null) ?? null, itemId: (r.item_id as number | null) ?? null,
+  title: r.title as string, url: (r.url as string | null) ?? null, start: r.start_at as string, end: r.end_at as string, outlook: r.outlook === 1,
+  removedAt: (r.removed_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+});
+const json = <T>(v: unknown): T | null => (typeof v === "string" ? (JSON.parse(v) as T) : null);
+const toOwn = (r: Row): OwnEvent => ({ uid: r.uid as string, timeboxId: (r.timebox_id as number | null) ?? null, eventId: r.event_id as string, fields: json<Fields>(r.fields)!, deletedAt: (r.deleted_at as string | null) ?? null });
+const toWrite = (r: Row): WriteEntry => ({
+  id: r.id as number, at: r.at as string, system: "outlook", op: r.op as SyncOp, uid: r.uid as string, eventId: (r.event_id as string | null) ?? null,
+  account: (r.account as string | null) ?? null, calendar: (r.calendar as string | null) ?? null, before: json<Fields>(r.before), after: json<Fields>(r.after),
+  localBefore: json<LocalState>(r.local_before), localAfter: json<LocalState>(r.local_after), status: r.status as WriteStatus, message: (r.message as string | null) ?? null,
+  auto: r.auto === 1, undoOf: (r.undo_of as number | null) ?? null, undoneBy: (r.undone_by as number | null) ?? null, attempts: r.attempts as number, updatedAt: r.updated_at as string,
+});
+export type NewTimebox = { date: IsoDate; clientKey: string; pickId?: number | null; itemId?: number | null; title: string; url?: string | null; start: string; end: string; outlook: boolean };
+export type NewWrite = { op: SyncOp; uid: string; eventId: string | null; account: string | null; calendar: string | null; before: Fields | null; after: Fields | null; localBefore: LocalState | null; localAfter: LocalState | null; auto: boolean; undoOf?: number | null };
 
 const toPick = (r: Row): Pick => ({
   id: r.id as number,
@@ -866,6 +933,8 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         chmodSync(bak, 0o600);
       }
       tx(() => {
+        // Coopilot's Outlook events and the audit log stay: they are what lets it find, undo and remove its own events.
+        db.exec("UPDATE outlook_events SET timebox_id = NULL");
         for (const t of RESET_TABLES) db.exec(`DELETE FROM ${t}`);
       });
       return bak;
@@ -1023,6 +1092,98 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       }
       return out;
     },
+    // ---- Timeboxes and Outlook writes (step 12) ----
+    timebox(id: number): Timebox | null {
+      const r = db.prepare("SELECT * FROM timeboxes WHERE id = ?").get(id) as Row | undefined;
+      return r ? toTimebox(r) : null;
+    },
+    timeboxByUid(uid: string): Timebox | null {
+      const r = db.prepare("SELECT * FROM timeboxes WHERE uid = ?").get(uid) as Row | undefined;
+      return r ? toTimebox(r) : null;
+    },
+    /** Timeboxes on these dates, including removed ones whose Outlook event is still to be taken off. */
+    timeboxesBetween(from: IsoDate, to: IsoDate): Timebox[] {
+      return (db.prepare("SELECT * FROM timeboxes WHERE date >= ? AND date <= ? ORDER BY date, start_at, id").all(from, to) as Row[]).map(toTimebox);
+    },
+    addTimebox(t: NewTimebox): Timebox {
+      const at = stamp();
+      const uid = `tb-${crypto.randomUUID()}`;
+      const r = db
+        .prepare("INSERT INTO timeboxes (uid, date, client_key, pick_id, item_id, title, url, start_at, end_at, outlook, removed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)")
+        .run(uid, t.date, t.clientKey, t.pickId ?? null, t.itemId ?? null, t.title, t.url ?? null, t.start, t.end, t.outlook ? 1 : 0, at, at);
+      return this.timebox(Number(r.lastInsertRowid))!;
+    },
+    /** Move, resize, toggle Outlook, or put back (removedAt null). */
+    updateTimebox(id: number, patch: { start?: string; end?: string; outlook?: boolean; removedAt?: string | null }): Timebox {
+      const t = this.timebox(id);
+      if (!t) throw new PlanError("No such timebox");
+      const n = { ...t, ...patch };
+      db.prepare("UPDATE timeboxes SET start_at = ?, end_at = ?, outlook = ?, removed_at = ?, updated_at = ? WHERE id = ?").run(n.start, n.end, n.outlook ? 1 : 0, n.removedAt, stamp(), id);
+      return this.timebox(id)!;
+    },
+    /** Remove: kept as removed while its Outlook event still exists (so it can be taken off and undone), else deleted. */
+    removeTimebox(id: number): { kept: boolean } {
+      const t = this.timebox(id);
+      if (!t) throw new PlanError("No such timebox");
+      const own = this.ownEvent(t.uid);
+      if (own && !own.deletedAt) {
+        this.updateTimebox(id, { removedAt: stamp() });
+        return { kept: true };
+      }
+      db.prepare("DELETE FROM timeboxes WHERE id = ?").run(id);
+      return { kept: false };
+    },
+    ownEvent(uid: string): OwnEvent | null {
+      const r = db.prepare("SELECT * FROM outlook_events WHERE uid = ?").get(uid) as Row | undefined;
+      return r ? toOwn(r) : null;
+    },
+    /** Every Outlook event Coopilot created and hasn't deleted. */
+    ownEvents(): OwnEvent[] {
+      return (db.prepare("SELECT * FROM outlook_events WHERE deleted_at IS NULL ORDER BY created_at, uid").all() as Row[]).map(toOwn);
+    },
+    /** Record a confirmed create or update: the event id and the fields now on Outlook. */
+    recordOwnEvent(uid: string, timeboxId: number | null, eventId: string, fields: Fields): void {
+      const at = stamp();
+      db.prepare(
+        `INSERT INTO outlook_events (uid, timebox_id, event_id, fields, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, NULL)
+         ON CONFLICT(uid) DO UPDATE SET timebox_id = excluded.timebox_id, event_id = excluded.event_id, fields = excluded.fields, updated_at = excluded.updated_at, deleted_at = NULL`,
+      ).run(uid, timeboxId, eventId, JSON.stringify(fields), at, at);
+    },
+    /** A confirmed delete. A removed timebox stays (as removed) so undo can put it back. */
+    markOwnDeleted(uid: string): void {
+      const at = stamp();
+      db.prepare("UPDATE outlook_events SET deleted_at = ?, updated_at = ? WHERE uid = ?").run(at, at, uid);
+    },
+    logWrite(w: NewWrite): WriteEntry {
+      const at = stamp();
+      const r = db
+        .prepare(
+          `INSERT INTO write_log (at, system, op, uid, event_id, account, calendar, before, after, local_before, local_after, status, message, auto, undo_of, undone_by, attempts, updated_at)
+           VALUES (?, 'outlook', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?, NULL, 1, ?)`,
+        )
+        .run(at, w.op, w.uid, w.eventId, w.account, w.calendar, w.before ? JSON.stringify(w.before) : null, w.after ? JSON.stringify(w.after) : null, w.localBefore ? JSON.stringify(w.localBefore) : null, w.localAfter ? JSON.stringify(w.localAfter) : null, w.auto ? 1 : 0, w.undoOf ?? null, at);
+      return this.writeEntry(Number(r.lastInsertRowid))!;
+    },
+    writeEntry(id: number): WriteEntry | null {
+      const r = db.prepare("SELECT * FROM write_log WHERE id = ?").get(id) as Row | undefined;
+      return r ? toWrite(r) : null;
+    },
+    /** The result of an attempt (a retry adds one to attempts). */
+    settleWrite(id: number, s: { status: WriteStatus; message?: string | null; eventId?: string | null; before?: Fields | null; retry?: boolean }): WriteEntry {
+      const w = this.writeEntry(id);
+      if (!w) throw new PlanError("No such write");
+      db.prepare("UPDATE write_log SET status = ?, message = ?, event_id = ?, before = ?, attempts = attempts + ?, updated_at = ? WHERE id = ?").run(
+        s.status, s.message ?? null, s.eventId === undefined ? w.eventId : s.eventId, s.before === undefined ? (w.before ? JSON.stringify(w.before) : null) : s.before ? JSON.stringify(s.before) : null, s.retry ? 1 : 0, stamp(), id,
+      );
+      return this.writeEntry(id)!;
+    },
+    markUndone(id: number, by: number): void {
+      db.prepare("UPDATE write_log SET undone_by = ?, updated_at = ? WHERE id = ?").run(by, stamp(), id);
+    },
+    /** The audit log, newest first. */
+    writeLog(limit = 100): WriteEntry[] {
+      return (db.prepare("SELECT * FROM write_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toWrite);
+    },
     schemaVersion: () => schemaVersion(db),
     exportJson() {
       return {
@@ -1041,6 +1202,9 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         breakdownMarks: this.breakdownMarks(),
         captures: (db.prepare("SELECT * FROM captures ORDER BY id").all() as Row[]).map(toCapture),
         notes: (db.prepare("SELECT * FROM notes ORDER BY id").all() as Row[]).map(toNoteRow),
+        timeboxes: (db.prepare("SELECT * FROM timeboxes ORDER BY date, start_at, id").all() as Row[]).map(toTimebox),
+        outlookEvents: (db.prepare("SELECT * FROM outlook_events ORDER BY created_at, uid").all() as Row[]).map(toOwn),
+        writeLog: (db.prepare("SELECT * FROM write_log ORDER BY id").all() as Row[]).map(toWrite),
       };
     },
     close: () => db.close(),

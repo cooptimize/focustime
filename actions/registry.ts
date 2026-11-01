@@ -20,13 +20,15 @@ export type ActionTarget =
   | "feature" // a feature on Plan the week
   | "week" // a week (its Monday)
   | "capture" // one capture in the inbox
-  | "note"; // one note
+  | "note" // one note
+  | "timebox" // one timebox
+  | "write"; // one entry in the write log
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops" | "Capture";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops" | "Capture" | "Timebox";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -96,6 +98,16 @@ export const ACTIONS = [
   { name: "loop.add", title: "Add a loop", group: "Loops", target: "none", summary: "Something you owe someone: who, what, optional due date" },
   { name: "loop.close", title: "Close a loop", group: "Loops", target: "loop", summary: "Mark as told, with an optional note" },
   { name: "data.export", title: "Export the plan", group: "Settings", target: "none", summary: "Picks, drafts and time entries as JSON in ~/.local/share/coopilot/exports" },
+  { name: "auth.connect_outlook_write", title: "Reconnect Outlook with calendar changes", group: "Sources", target: "none", summary: "Sign in again and allow Coopilot to create and change its own Outlook events (timeboxes)" },
+  { name: "timebox.add", title: "Timebox…", group: "Timebox", target: "pick", summary: "Give a pick or item a start and length on the day's timeline (local; Outlook optional)" },
+  { name: "timebox.update", title: "Move or resize a timebox", group: "Timebox", target: "timebox", summary: "New start or end; its Outlook event follows after a preview" },
+  { name: "timebox.remove", title: "Remove a timebox", group: "Timebox", target: "timebox", summary: "Take it off the timeline; its Outlook event is removed after a preview" },
+  { name: "timebox.set_outlook", title: "Put a timebox on Outlook", group: "Timebox", target: "timebox", summary: "Turn Put on Outlook on or off: a Busy event Coopilot owns, after a preview" },
+  { name: "write.status", title: "Check Outlook write access", group: "Settings", target: "none", summary: "Whether Coopilot may create and change its own Outlook events" },
+  { name: "write.preview", title: "Preview an Outlook change", group: "Settings", target: "timebox", summary: "What will change on Outlook, where, and who can see it, before anything is written" },
+  { name: "write.confirm", title: "Confirm an Outlook change", group: "Settings", target: "write", summary: "Write the previewed change, read it back, log it" },
+  { name: "write.retry", title: "Retry an Outlook change", group: "Settings", target: "write", summary: "Check and try again; never makes a duplicate" },
+  { name: "write.log", title: "Show the write log", group: "Settings", target: "none", summary: "Every external write: what, where, when, the result, the prior values, and Undo" },
   { name: "link.open", title: "Open in Edge", group: "Work items", target: "item", summary: "Open a work item in that client's Edge profile" },
 ] as const satisfies readonly ActionSpec[];
 

@@ -20,6 +20,11 @@ export type OAuthProvider = {
   extraAuthParams: Record<string, string>;
   /** Microsoft wants the scope repeated on token requests. */
   scopeOnTokenRequests: boolean;
+  /**
+   * Step 12: an optional write scope (Outlook Calendars.ReadWrite). Asked for only when connecting with write; its
+   * access token is separate from the read token and kept in memory only. Reads never ask for it.
+   */
+  writeScope?: string;
   clientSecretAccount?: AppSecretAccount;
   refreshAccount: RefreshTokenAccount;
 };
@@ -33,6 +38,7 @@ export function microsoftProvider(cfg: OutlookConfig): OAuthProvider {
     tokenUrl: `${base}/token`,
     clientId: cfg.clientId,
     scope: "offline_access https://graph.microsoft.com/Calendars.ReadBasic",
+    writeScope: "offline_access https://graph.microsoft.com/Calendars.ReadWrite",
     redirectHost: "localhost",
     extraAuthParams: { response_mode: "query", prompt: "select_account" },
     scopeOnTokenRequests: true,
@@ -85,6 +91,9 @@ export type OAuthDeps = {
 };
 
 export type ConnectResult = { status: "connected" } | { status: "cancelled" | "failed"; message: string };
+/** Whether this sign-in can write (step 12): "write" only when a write token was granted with the write scope. */
+export type WriteAccess = { status: "write" } | { status: "read_only" | "not_connected" | "unavailable"; message: string };
+type TokenKind = "read" | "write";
 
 const DONE_PAGE = (ok: boolean) => `<!doctype html><meta charset="utf-8"><title>Coopilot</title>
 <body style="font:16px system-ui;padding:40px;max-width:560px">
@@ -94,7 +103,9 @@ const DONE_PAGE = (ok: boolean) => `<!doctype html><meta charset="utf-8"><title>
 export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
   const now = deps.now ?? (() => Date.now());
   const timeoutMs = deps.timeoutMs ?? 20_000;
-  let access: { token: string; expiresAt: number } | null = null;
+  // One access token per scope set, memory only.
+  const access = new Map<TokenKind, { token: string; expiresAt: number; scope: string }>();
+  const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : p.scope);
   const log = (op: string, extra: { status?: number; kind?: string; durationMs?: number } = {}) => deps.log({ source: p.source, op, ...extra });
 
   async function clientSecret(): Promise<string | undefined> {
@@ -109,11 +120,11 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
   }
 
   /** POST to the token endpoint. Reads only access_token, refresh_token, expires_in and the error code. */
-  async function tokenRequest(op: string, params: Record<string, string>) {
+  async function tokenRequest(op: string, params: Record<string, string>, kind: TokenKind = "read", scope = scopeOf(kind)) {
     const secret = await clientSecret();
     const body = new URLSearchParams({ client_id: p.clientId, ...params });
     if (secret) body.set("client_secret", secret);
-    if (p.scopeOnTokenRequests) body.set("scope", p.scope);
+    if (p.scopeOnTokenRequests) body.set("scope", scope);
     const started = performance.now();
     let res: Response;
     try {
@@ -128,14 +139,15 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
       throw new AuthFailure("network", `${p.label} unreachable`);
     }
     log(op, { status: res.status, durationMs: performance.now() - started });
-    const json = (await res.json().catch(() => ({}))) as { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown; error?: unknown };
+    const json = (await res.json().catch(() => ({}))) as { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown; error?: unknown; scope?: unknown };
     if (!res.ok || typeof json.access_token !== "string") {
       if (json.error === "invalid_grant") throw new AuthFailure("expired", `${p.label} needs reconnecting`);
       if (json.error === "invalid_client" || json.error === "unauthorized_client" || json.error === "invalid_request")
         throw new AuthFailure("misconfigured", `${p.label} sign-in was rejected: check ${p.source}.client_id in config`);
       throw new AuthFailure("error", `${p.label} sign-in failed (HTTP ${res.status})`);
     }
-    access = { token: json.access_token, expiresAt: now() + (typeof json.expires_in === "number" ? json.expires_in : 3599) * 1000 };
+    // The granted scopes (Microsoft's non-standard field; absent means what was asked for).
+    access.set(kind, { token: json.access_token, expiresAt: now() + (typeof json.expires_in === "number" ? json.expires_in : 3599) * 1000, scope: typeof json.scope === "string" ? json.scope : scope });
     return { refreshToken: typeof json.refresh_token === "string" ? json.refresh_token : null };
   }
 
@@ -147,8 +159,9 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
     }
   }
 
-  async function accessToken(): Promise<string> {
-    if (access && access.expiresAt - 5 * 60_000 > now()) return access.token;
+  async function accessToken(kind: TokenKind = "read"): Promise<string> {
+    const held = access.get(kind);
+    if (held && held.expiresAt - 5 * 60_000 > now()) return held.token;
     let refresh: string;
     try {
       refresh = await deps.keyring.get(p.refreshAccount);
@@ -156,9 +169,33 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
       if (e instanceof SecretError && e.kind === "not_found") throw new AuthFailure("not_connected", `${p.label} is not connected yet`);
       throw new AuthFailure("keyring", "Secret storage unavailable (Secret Service). Unlock the keyring and retry");
     }
-    const r = await tokenRequest("token_refresh", { grant_type: "refresh_token", refresh_token: refresh });
+    const r = await tokenRequest("token_refresh", { grant_type: "refresh_token", refresh_token: refresh }, kind);
     if (r.refreshToken && r.refreshToken !== refresh) await storeRefresh(r.refreshToken);
-    return access!.token;
+    return access.get(kind)!.token;
+  }
+
+  /**
+   * Can this sign-in write? Asks for a write token (memory only). A refusal means the write scope was never consented:
+   * read-only, and reading is untouched (its token and the stored refresh token stay as they are).
+   */
+  async function writeAccess(): Promise<WriteAccess> {
+    if (!p.writeScope) return { status: "read_only", message: `${p.label} is read-only in Coopilot` };
+    try {
+      await accessToken("write");
+    } catch (e) {
+      access.delete("write");
+      if (e instanceof AuthFailure && e.kind === "not_connected") return { status: "not_connected", message: e.message };
+      if (e instanceof AuthFailure && (e.kind === "network" || e.kind === "keyring")) return { status: "unavailable", message: e.message };
+      return { status: "read_only", message: `Coopilot can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings > Connections and allow calendar changes` };
+    }
+    // Granted scopes come back as full URIs or bare names; compare the bare names.
+    const bare = (x: string) => x.split("/").pop()!.toLowerCase();
+    const granted = new Set((access.get("write")?.scope ?? "").split(" ").map(bare));
+    if (!p.writeScope.split(" ").filter((x) => x !== "offline_access").every((w) => granted.has(bare(w)))) {
+      access.delete("write");
+      return { status: "read_only", message: `Coopilot can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings > Connections and allow calendar changes` };
+    }
+    return { status: "write" };
   }
 
   /** Wait for the browser to come back to the loopback listener with our state. */
@@ -187,7 +224,9 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
     });
   }
 
-  async function connect(): Promise<ConnectResult> {
+  async function connect(opts: { write?: boolean } = {}): Promise<ConnectResult> {
+    // With write: the read and write scopes together, so later refreshes may ask for either (a subset).
+    const scope = opts.write && p.writeScope ? [...new Set([...p.scope.split(" "), ...p.writeScope.split(" ")])].join(" ") : p.scope;
     const verifier = randomBytes(48).toString("base64url");
     const challenge = createHash("sha256").update(verifier).digest("base64url");
     const state = randomBytes(24).toString("base64url");
@@ -206,7 +245,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
         client_id: p.clientId,
         response_type: "code",
         redirect_uri: redirectUri,
-        scope: p.scope,
+        scope,
         state,
         code_challenge: challenge,
         code_challenge_method: "S256",
@@ -225,16 +264,18 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
         return { status: "failed", message: `${p.label} sign-in failed` };
       }
 
-      const r = await tokenRequest("token_exchange", { grant_type: "authorization_code", code: result.code, redirect_uri: redirectUri, code_verifier: verifier });
+      access.clear();
+      const r = await tokenRequest("token_exchange", { grant_type: "authorization_code", code: result.code, redirect_uri: redirectUri, code_verifier: verifier }, "read", scope);
+      // The exchange token carries both scopes when write was asked for; reads ask for their own on refresh.
+      access.clear();
       if (!r.refreshToken) {
-        access = null;
         return { status: "failed", message: "Sign-in did not return a refresh token" };
       }
       await storeRefresh(r.refreshToken);
       log("sign_in", { kind: "connected" });
       return { status: "connected" };
     } catch (e) {
-      access = null;
+      access.clear();
       return { status: "failed", message: e instanceof AuthFailure ? e.message : `${p.label} sign-in failed` };
     } finally {
       server.closeAllConnections();
@@ -243,11 +284,11 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
   }
 
   async function disconnect(): Promise<void> {
-    access = null;
+    access.clear();
     await deps.keyring.delete(p.refreshAccount);
   }
 
-  return { provider: p, connect, accessToken, disconnect, invalidate: () => (access = null) };
+  return { provider: p, connect, accessToken, writeAccess, disconnect, invalidate: () => access.clear() };
 }
 
 export type OAuthClient = ReturnType<typeof createOAuthClient>;

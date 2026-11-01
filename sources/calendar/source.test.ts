@@ -51,7 +51,7 @@ describe("Outlook source requests", () => {
     expect(u.searchParams.get("startDateTime")).toBe("2026-11-02T00:00:00-05:00");
     expect(u.searchParams.get("endDateTime")).toBe("2026-11-09T00:00:00-05:00");
     expect(u.searchParams.get("$select")).toBe("subject,start,end,isAllDay,showAs,responseStatus,isCancelled");
-    expect(first.headers.prefer).toBe('outlook.timezone="America/New_York"');
+    expect(first.headers.prefer).toBe('outlook.timezone="America/New_York", IdType="ImmutableId"');
     expect(first.headers.authorization).toBe(`Bearer ${FAKE_ACCESS}`);
     for (const c of calls) expect(c.url).not.toMatch(/body|attendees/i);
   });

@@ -2,16 +2,15 @@
 // export the plan store. Secrets are never returned: only whether they are set and an expiry date Tanner entered.
 import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { join } from "node:path";
-import { CLIENT_SLOTS, colorCss, DEFAULT_PLAN, type AppConfig, type ParseResult } from "../config/schema.ts";
+import { DEFAULT_TIMEBOX, CLIENT_SLOTS, colorCss, DEFAULT_PLAN, type AppConfig, type ParseResult } from "../config/schema.ts";
 import { secretExpiryEdit, settingsEdit, SETTINGS_SECTIONS, SettingsInputError, type SettingsSection } from "../config/settings.ts";
 import type { WriteResult } from "../config/edit.ts";
-import { detectChromium, detectEdge, profilesFromLocalState } from "../links/edge.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { localToday } from "../week/dates.ts";
 import { followState } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
-import type { ActionResponse, AppSecret, FieldProblem, SecretPresence, SettingsClient, SettingsData } from "./types.ts";
+import type { ActionResponse, AppSecret, FieldProblem, HostBrowsers, SecretPresence, SettingsClient, SettingsData } from "./types.ts";
 
 export type SettingsAction = "settings.load" | "settings.save" | "secret.set" | "data.export";
 
@@ -26,9 +25,8 @@ export type SettingsContext = {
   plan?: PlanStore;
   /** Keyring presence and app secret writes (secrets/keyring.ts). Absent: shown as unavailable, can't be set. */
   secrets?: { state: (a: AppSecret) => Promise<SecretPresence>; set: (a: AppSecret, value: string) => Promise<void> };
-  /** Reads a local file (browser .desktop entries and Local State, profile names only). */
-  readText?: (path: string) => string | null;
-  home?: string;
+  /** The host's browsers and profiles (server/host.ts). Absent: none found. */
+  host?: HostBrowsers;
   /** Where data.export writes (0600), and how. */
   exportPlan?: (json: string) => Promise<string>;
 };
@@ -36,12 +34,8 @@ export type SettingsContext = {
 const SECRET_LABELS: Record<AppSecret, string> = { "dataverse-client-secret": "Dataverse client secret", "google-client-secret": "Google client secret" };
 
 function browsers(ctx: SettingsContext): SettingsData["browsers"] {
-  const read = ctx.readText ?? (() => null);
-  const home = ctx.home ?? "";
-  const edge = detectEdge(read, home);
-  const chromium = detectChromium(read, home);
-  const profiles = (dir: string | undefined) => (dir ? profilesFromLocalState(read(`${dir}/Local State`) ?? "") : []);
-  return { edge: { found: !!edge, profiles: profiles(edge?.profilesDir) }, chromium: { found: !!chromium, profiles: profiles(chromium?.profilesDir) } };
+  const d = ctx.host?.detect();
+  return { edge: d?.edge ?? { found: false, profiles: [] }, chromium: d ? { found: d.chromium.found, profiles: d.chromium.profiles } : { found: false, profiles: [] } };
 }
 
 const bad = (error: string, status = 400, fields?: FieldProblem[]): ActionResponse => ({ ok: false, status, error, ...(fields ? { fields } : {}) });
@@ -58,7 +52,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
   );
   const base = { configPath: loaded.path, palette: CLIENT_SLOTS, browsers: browsers(ctx), secrets, data: { planStore: !!ctx.plan } };
   if (!loaded.parsed.ok)
-    return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null };
+    return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX } };
   const cfg = loaded.parsed.config;
   const tz = cfg.week.hours.timeZone;
   const dv = cfg.dataverse.mySystemUserId ? ctx.makeDataverse(cfg.dataverse, tz) : null;
@@ -92,6 +86,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
     focus: cfg.focus,
     clients,
     display: cfg.ui,
+    timebox: cfg.timebox,
   };
 }
 
@@ -111,10 +106,10 @@ export async function settingsAction(ctx: SettingsContext, action: SettingsActio
       if (!ctx.writeConfig) return bad("Settings can't be saved here", 503);
       let edit: (text: string) => string;
       try {
-        const chromium = o.section === "client" ? detectChromium(ctx.readText ?? (() => null), ctx.home ?? "") : null;
+        const chromium = o.section === "client" ? ctx.host?.detect().chromium ?? null : null;
         const uwsm = (await ctx.loadConfig()).parsed;
         const prefix = uwsm.ok && uwsm.config.edge.command[0] === "uwsm-app" ? ["uwsm-app", "--"] : [];
-        edit = settingsEdit(o.section as SettingsSection, o.values, { chromiumCommand: chromium ? [...prefix, ...chromium.command] : null });
+        edit = settingsEdit(o.section as SettingsSection, o.values, { chromiumCommand: chromium?.command ? [...prefix, ...chromium.command] : null });
       } catch (e) {
         if (e instanceof SettingsInputError) return bad(`${e.field}: ${e.message}`, 422, [{ field: e.field, message: e.message }]);
         throw e;

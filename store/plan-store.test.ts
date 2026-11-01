@@ -435,3 +435,69 @@ describe("quick capture (step 9)", () => {
     expect([store.notes().length, store.inboxCount(), store.exportJson().captures.length]).toEqual([0, 0, 0]);
   });
 });
+
+describe("timeboxes, own Outlook events and the write log (step 12)", () => {
+  const F = { subject: "CSC: Story", body: "x", start: "2026-11-03T14:00:00Z", end: "2026-11-03T15:00:00Z", showAs: "busy" as const, reminder: false as const };
+  const box = { date: "2026-11-03", clientKey: "CSC", title: "Story", start: "2026-11-03T09:00:00-05:00", end: "2026-11-03T10:00:00-05:00", outlook: false };
+
+  it("keeps timeboxes across reopen, with a stable uid", () => {
+    const { path, store } = fresh();
+    const t = store.addTimebox(box);
+    expect(t.uid).toMatch(/^tb-[0-9a-f-]{36}$/);
+    store.updateTimebox(t.id, { start: "2026-11-03T09:30:00-05:00", end: "2026-11-03T11:00:00-05:00", outlook: true });
+    store.close();
+    const again = createPlanStore({ path, now });
+    expect(again.timeboxesBetween("2026-11-02", "2026-11-06")).toMatchObject([{ uid: t.uid, start: "2026-11-03T09:30:00-05:00", outlook: true, removedAt: null }]);
+  });
+
+  it("a removed timebox with a live Outlook event is kept (as removed), so its event can be taken off and undone", () => {
+    const { store } = fresh();
+    const t = store.addTimebox({ ...box, outlook: true });
+    store.recordOwnEvent(t.uid, t.id, "E1", F);
+    expect(store.removeTimebox(t.id)).toEqual({ kept: true });
+    expect(store.timebox(t.id)!.removedAt).not.toBeNull();
+    store.markOwnDeleted(t.uid);
+    expect(store.timebox(t.id)!.removedAt).not.toBeNull();
+    expect(store.ownEvents()).toEqual([]);
+    expect(store.ownEvent(t.uid)!.deletedAt).not.toBeNull();
+  });
+
+  it("a timebox never on Outlook is simply deleted", () => {
+    const { store } = fresh();
+    const t = store.addTimebox(box);
+    expect(store.removeTimebox(t.id)).toEqual({ kept: false });
+  });
+
+  it("logs a write with its prior values, settles it, and marks it undone", () => {
+    const { path, store } = fresh();
+    const local = { start: box.start, end: box.end, outlook: false, removedAt: null };
+    const w = store.logWrite({ op: "update", uid: "tb-1", eventId: "E1", account: "me@x", calendar: "Calendar", before: F, after: { ...F, start: "2026-11-03T14:30:00Z" }, localBefore: local, localAfter: local, auto: false });
+    expect(w.status).toBe("pending");
+    store.settleWrite(w.id, { status: "unconfirmed", message: "Couldn't confirm" });
+    store.settleWrite(w.id, { status: "confirmed", retry: true });
+    const u = store.logWrite({ op: "update", uid: "tb-1", eventId: "E1", account: null, calendar: null, before: null, after: F, localBefore: null, localAfter: null, auto: false, undoOf: w.id });
+    store.markUndone(w.id, u.id);
+    store.close();
+    const again = createPlanStore({ path, now });
+    expect(again.writeLog().map((x) => [x.id, x.status, x.attempts, x.undoneBy, x.undoOf])).toEqual([[u.id, "pending", 1, null, w.id], [w.id, "confirmed", 2, u.id, null]]);
+    expect(again.writeEntry(w.id)!.before).toEqual(F);
+  });
+
+  it("reset empties timeboxes but keeps Coopilot's Outlook events and the audit log", () => {
+    const { store } = fresh();
+    const t = store.addTimebox({ ...box, outlook: true });
+    store.recordOwnEvent(t.uid, t.id, "E1", F);
+    store.logWrite({ op: "create", uid: t.uid, eventId: "E1", account: null, calendar: null, before: null, after: F, localBefore: null, localAfter: null, auto: false });
+    store.reset();
+    expect(store.timeboxesBetween("2026-11-01", "2026-11-30")).toEqual([]);
+    expect(store.ownEvents()).toMatchObject([{ uid: t.uid, timeboxId: null, eventId: "E1" }]);
+    expect(store.writeLog()).toHaveLength(1);
+  });
+
+  it("export includes timeboxes, own events and the write log", () => {
+    const { store } = fresh();
+    store.addTimebox(box);
+    const e = store.exportJson();
+    expect([e.timeboxes.length, e.outlookEvents.length, e.writeLog.length]).toEqual([1, 0, 0]);
+  });
+});

@@ -100,9 +100,16 @@ Raised in step 10 (not blocking):
 - Q61. Done and Stop on the focus screen go back to Today. Should Done offer a break first (the F menu still has Break)?
 
 Raised in step 11 (not blocking):
+- (Answered Nov 1, D205: Q62 to Q66.)
 - Q62. Cooptimize is internal, so dropping one of its committed musts offers no heads-up (as the slip rule). Should internal musts offer one too (to a teammate)?
 - Q63. `actions/` imports `links/edge.ts`, a pure but Edge-specific launch argument builder. Move it behind a host adapter now, or when a hosted version is started?
 - Q64. Stories on the list are added from my assigned stories and a listed feature's children. Should Add also offer unassigned stories under a client's features that aren't on the list?
 - Q65. A must counts as done in DevOps only when its state category is Completed; Resolved (for example "Resolved" or "Ready for test") still counts as open. Count Resolved as done for the week?
 - Q66. Q53 is partly met: typed intentions not in DevOps become draft stories with no feature from DevOps health. Draft stories with no feature still aren't listed in Plan the week. List them per client?
 
+
+Raised in step 12 (not blocking):
+- Q67. Live verification needs you to click "Reconnect Outlook with calendar changes" (Settings > Connections) and consent to Calendars.ReadWrite once. If your tenant blocks user consent for that scope, add the delegated permission to the Coopilot Desktop app registration and grant it. Then I run the create, move and undo check on a free slot next week.
+- Q68. Undo is offered only for the latest confirmed change to an event (so it never fights a later change). Enough, or do you want a full history undo?
+- Q69. If the local record of an event is lost (store replaced, not Reset), reads can't recognize it (no marker without Calendars.Read), so it would show as a meeting. Use the write token to look up marked events in the week when write access exists?
+- Q70. Timeboxes don't yet sync from Outlook back to Coopilot: an event moved in Outlook keeps its Coopilot time, and the next move puts Coopilot's time back after a preview. Keep (Coopilot is the source), or adopt Outlook's time?

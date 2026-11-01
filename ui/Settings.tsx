@@ -12,6 +12,9 @@ import { notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar } fro
 import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
 import { sound } from "./sound.ts";
+import { useTimeboxes } from "./Timeboxes.tsx";
+import type { WriteLogView } from "../actions/types.ts";
+import type { WriteEntry } from "../plan/timebox.ts";
 
 export const SETTINGS_SECTIONS = [
   ["you", "You"],
@@ -188,7 +191,12 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
     case "standing":
       return <StandingForm {...p} />;
     case "planning":
-      return <PlanningForm {...p} />;
+      return (
+        <>
+          <PlanningForm {...p} />
+          <TimeboxForm {...p} />
+        </>
+      );
     case "focus":
       return <FocusForm {...p} />;
     case "risk":
@@ -430,6 +438,38 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
             <input type="checkbox" checked={v.endSound} onChange={(e) => setV({ ...v, endSound: e.target.checked })} /> Play a sound
           </label>
           <Problems all={problems} field="plan.end_sound" />
+        </Field>
+      </div>
+      <SaveRow status={status} />
+    </form>
+  );
+}
+
+/** Settings > Planning > Timeboxes (step 12): Put on Outlook by default, and asking before changing my own events. */
+function TimeboxForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
+  const [v, setV] = useState(p.data.timebox);
+  const { problems, status, save } = useSave(p.onSavedData);
+  return (
+    <form
+      className="set-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save("timebox", v);
+      }}
+    >
+      <h3>Timeboxes</h3>
+      <div className="set-grid">
+        <Field label="Put on Outlook" hint="New timeboxes start with Put on Outlook on. Creating an event always shows a preview first.">
+          <label className="set-check">
+            <input type="checkbox" checked={v.outlookDefault} onChange={(e) => setV({ ...v, outlookDefault: e.target.checked })} /> On by default
+          </label>
+          <Problems all={problems} field="timebox.outlook_default" />
+        </Field>
+        <Field label="Changes to my own timebox events" hint="Moving, resizing or removing a timebox updates its Outlook event. Off: no question for those; every change is still logged in Data and can be undone.">
+          <label className="set-check">
+            <input type="checkbox" checked={!v.confirmOwn} onChange={(e) => setV({ ...v, confirmOwn: !e.target.checked })} /> Don't ask again for my own timeboxes
+          </label>
+          <Problems all={problems} field="timebox.confirm_own" />
         </Field>
       </div>
       <SaveRow status={status} />
@@ -710,6 +750,7 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
           );
         })}
       </ul>
+      <OutlookWriteRow />
       {p.devops && p.devops.length > 0 && (
         <>
           <h3>DevOps per client</h3>
@@ -846,6 +887,7 @@ function DataSection(p: Props & { data: SettingsData }) {
   const [status, setStatus] = useState<string | null>(null);
   return (
     <div className="set-form">
+      <WriteLog />
       <div className="set-grid">
         <div className="set-field">
           <span className="set-label">Export the plan</span>
@@ -867,9 +909,104 @@ function DataSection(p: Props & { data: SettingsData }) {
           <span className="set-hint">{status ?? "Picks, drafts, unavailable time, flex sessions and loops. Local only."}</span>
         </div>
         <ReadOnly label="Config file" value={p.data.configPath} where="Backups are kept next to it in backups/ (the last 30)" />
-        <ReadOnly label="Audit log" value="Not built yet" where="Waits for the write framework" />
         <ResetPlan disabled={!p.data.data.planStore} onDone={p.onSaved} />
       </div>
     </div>
+  );
+}
+
+/** Settings > Connections (step 12): whether Coopilot may change its own Outlook events, and how to allow it. */
+function OutlookWriteRow() {
+  const env = useTimeboxes();
+  useEffect(() => env?.loadAccess(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!env) return null;
+  const a = env.access;
+  return (
+    <div className="set-write">
+      <h3>Outlook calendar changes</h3>
+      <p>
+        {!a ? "Checking…" : a.access === "write" ? "Allowed: Coopilot can create, change and remove the Outlook events it created (timeboxes), each after a preview. It can't change any other event." : a.message}
+      </p>
+      {a && a.access !== "write" && a.access !== "not_set_up" && (
+        <button type="button" className="mini primary" onClick={env.connectWrite}>
+          Reconnect Outlook with calendar changes
+        </button>
+      )}
+      <p className="set-hint">Reading your calendar keeps its own read-only access either way. Asks for Calendars.ReadWrite only when you reconnect here.</p>
+    </div>
+  );
+}
+
+const OPS: Record<WriteEntry["op"], string> = { create: "Created", update: "Changed", delete: "Removed" };
+const STATUS: Record<WriteEntry["status"], string> = { pending: "Not finished", confirmed: "Confirmed", unconfirmed: "Not confirmed", failed: "Failed", refused: "Refused" };
+/** Settings > Data (step 12): every external write, newest first, with Undo and Retry; and Coopilot events left on Outlook. */
+function WriteLog() {
+  const env = useTimeboxes();
+  const [log, setLog] = useState<WriteLogView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    call<WriteLogView>("write.log", {}).then(setLog, (e: unknown) => setError(e instanceof Error ? e.message : "The write log could not load"));
+  }, [env?.timeboxes]);
+  const tz = env?.tz ?? "UTC";
+  const stamp = (s: string) => Temporal.ZonedDateTime.from(s).withTimeZone(tz).toPlainDateTime().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return (
+    <section className="write-log" aria-label="Write log">
+      <h3>Write log</h3>
+      <p className="muted">Every change Coopilot made outside this computer: what, where, when, the result and the values before it. Undo puts back the latest change to an event.</p>
+      {error && <p className="set-problem">{error}</p>}
+      {log && log.orphans.length > 0 && (
+        <div className="wl-orphans">
+          <h4>Coopilot events with no timebox</h4>
+          <ul>
+            {log.orphans.map((o) => (
+              <li key={o.uid}>
+                <span>{o.title}</span> <span className="muted">{o.when}</span>{" "}
+                <button type="button" className="mini" onClick={() => void env?.sync(o.uid)}>Remove from Outlook</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {log && !log.entries.length && <p className="muted">Nothing written yet.</p>}
+      {log && log.entries.length > 0 && (
+        <table className="wl-table">
+          <thead>
+            <tr>
+              <th scope="col">When</th>
+              <th scope="col">What</th>
+              <th scope="col">Where</th>
+              <th scope="col">Result</th>
+              <th scope="col">Before</th>
+              <th scope="col"><span className="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {log.entries.map((e) => (
+              <tr key={e.id} className={`wl-${e.status}`}>
+                <td>{stamp(e.at)}</td>
+                <td>
+                  {e.undoOf !== null ? "Undo: " : ""}
+                  {OPS[e.op]} <strong>{(e.after ?? e.before)?.subject ?? ""}</strong>
+                  {e.whenText && <span className="muted"> · {e.whenText}</span>}
+                  {e.auto && <span className="muted"> · without asking</span>}
+                </td>
+                <td>Outlook{e.calendar ? ` · ${e.calendar}` : ""}{e.account ? ` · ${e.account}` : ""}</td>
+                <td>
+                  {STATUS[e.status]}
+                  {e.undoneBy !== null && <span className="muted"> · undone</span>}
+                  {e.attempts > 1 && <span className="muted"> · {e.attempts} tries</span>}
+                  {e.message && e.status !== "confirmed" && <div className="muted">{e.message}</div>}
+                </td>
+                <td className="muted">{e.before ? `${e.before.subject}, ${Temporal.Instant.from(e.before.start).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })} to ${Temporal.Instant.from(e.before.end).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}` : "Nothing (new)"}</td>
+                <td>
+                  {e.undoable && <button type="button" className="mini" onClick={() => void env?.undo(e.id)}>Undo</button>}
+                  {e.retryable && <button type="button" className="mini" onClick={() => void env?.retry(e.id)}>Retry</button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }

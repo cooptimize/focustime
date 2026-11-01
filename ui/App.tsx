@@ -6,6 +6,9 @@ import { dayEndOf, hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type ViewRange } from
 import { applyTheme, initialTheme } from "./theme.ts";
 import type { Theme } from "../config/schema.ts";
 import { NOTICE_EVENT, openWorkItem } from "./WorkLink.tsx";
+import { TimeboxCtx, TimeboxDialog, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
+import type { TimeboxTarget } from "./menu.ts";
+import type { WriteState } from "../actions/types.ts";
 import type { PlanDayState } from "../plan/types.ts";
 import { planTarget } from "../plan/target.ts";
 import { stepDay } from "../plan/days.ts";
@@ -220,6 +223,30 @@ export function App() {
     [now],
   );
   const reloadQuiet = useCallback(() => void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}) }, { quiet: true }), [load]);
+  // Timeboxes (step 12): the Timebox… dialog, Outlook write access (read when first needed), and the write flow.
+  const [tbTarget, setTbTarget] = useState<TimeboxTarget | null>(null);
+  const [writeAccess, setWriteAccess] = useState<WriteState | null>(null);
+  const accessAsked = useRef(false);
+  const loadAccess = useCallback(() => {
+    if (accessAsked.current) return;
+    accessAsked.current = true;
+    call<WriteState>("write.status", {}).then(setWriteAccess, () => (accessAsked.current = false));
+  }, []);
+  const writes = useWriteFlow(reloadQuiet);
+  const connectWrite = useCallback(async () => {
+    setNotice("Finish signing in to Microsoft in your browser, and allow calendar changes");
+    try {
+      const r = await call<{ status: string; message?: string }>("auth.connect_outlook_write", {});
+      setNotice(r.status === "connected" ? "Outlook reconnected" : (r.message ?? "Sign-in did not finish"));
+    } catch {
+      setNotice("Sign-in did not finish");
+    } finally {
+      accessAsked.current = false;
+      setWriteAccess(null);
+      loadAccess();
+      reloadQuiet();
+    }
+  }, [loadAccess, reloadQuiet]);
   reloadRef.current = reloadQuiet;
   // The week can lose a column (a weekend day emptied) or a slot (an evening removed): keep the selection valid.
   useEffect(() => {
@@ -303,6 +330,7 @@ export function App() {
       clientName: (k) => names.get(k) ?? k,
       noHoursToday: !hasHours(date),
       sizes: data.planning.sizes,
+      timeboxes: data.timeboxes,
     });
   }, [data, target, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -903,13 +931,18 @@ export function App() {
         setCheckInOpen(false);
         setSettingsAt(SETTINGS_SECTIONS.some(([id]) => id === section) ? (section as SettingsSectionId) : "you");
       },
+      openTimebox: (t) => {
+        setCmdOpen(false);
+        setTbTarget(t);
+      },
+      connectWrite: () => void connectWrite(),
       exportPlan: () =>
         void call<{ path: string }>("data.export", {}).then(
           (r) => setNotice(`Plan exported to ${r.path}`),
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, openRitual]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, openRitual, connectWrite]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.kind === "session") {
     return (
@@ -943,11 +976,27 @@ export function App() {
   const timerColor = timerPick ? clientColor(timerPick.clientKey, data.clients) : "var(--accent)";
 
   const samples = new Set(data.sources.filter((s) => s.sample).map((s) => s.source));
+  const tbEnv: TimeboxEnv = {
+    timeboxes: data.timeboxes,
+    settings: data.timeboxSettings,
+    colors: data.clients,
+    tz: week.timeZone,
+    access: writeAccess,
+    loadAccess,
+    changed: reloadQuiet,
+    sync: writes.sync,
+    undo: writes.undo,
+    retry: writes.retry,
+    open: (t) => setTbTarget(t),
+    startFocus: (tb) => void runTimer("timer.start", { timeboxId: tb.id }).then((ok) => ok && setFocusOpen(true)),
+    connectWrite: () => void connectWrite(),
+  };
 
   return (
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={work}>
-    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures }}>
+    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes }}>
+    <TimeboxCtx.Provider value={tbEnv}>
     <MenuHost env={env}>
     <div className={`app ${layout}${compact ? " compact" : ""}`}>
       <header className="topbar">
@@ -1195,9 +1244,15 @@ export function App() {
       {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}
       {borrowMenuAt && <PopupMenu at={borrowMenuAt} step={borrowStep(env, data.borrowed)} onClose={() => setBorrowMenuAt(null)} />}
       {keysOpen && <KeyLegend onClose={() => setKeysOpen(false)} />}
+      {tbTarget && (() => {
+        const pick = "pickId" in tbTarget ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).concat(pd?.picks ?? []).find((p) => p.id === tbTarget.pickId) : null;
+        return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "Pick"} defaultMinutes={pick ? data.planning.sizes[pick.size] : 60} onClose={() => setTbTarget(null)} />;
+      })()}
+      {writes.dialog}
       {captureOpen && <CaptureDialog data={data} onClose={() => setCaptureOpen(false)} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); reloadQuiet(); }} />}
     </div>
     </MenuHost>
+    </TimeboxCtx.Provider>
     </PlanCtx.Provider>
     </DevOpsWork.Provider>
     </SampleSources.Provider>

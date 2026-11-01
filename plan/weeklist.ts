@@ -74,28 +74,29 @@ export function stackRank(work: readonly ClientWork[] | null, portfolios: readon
   return (clientKey, itemId) => map.get(`${clientKey}:${itemId}`) ?? null;
 }
 
-export type DevOpsState = "open" | "done" | "removed" | null;
+export type DevOpsState = "open" | "resolved" | "done" | "removed" | null;
 
 /**
- * An item's DevOps state from fresh results only (not failed, not cached): open when DevOps lists it as open,
- * done when the by-id read shows it Completed, removed when Removed, null when DevOps can't say right now.
+ * An item's DevOps state from fresh results only (not failed, not cached): done when Completed, resolved when Resolved
+ * (counts as done for the week, Q65), removed when Removed, open otherwise; null when DevOps can't say right now.
  */
 export function devopsStateFrom(work: readonly ClientWork[] | null): (clientKey: string, itemId: number) => DevOpsState {
   return (clientKey, itemId) => {
     const w = work?.find((x) => x.clientKey === clientKey);
     if (!w || w.status !== "ok" || w.fromCache) return null;
-    if ([...w.items, ...w.children, ...(w.committed ?? [])].some((i) => i.id === itemId)) return "open";
-    const seen = w.watched?.find((i) => i.id === itemId);
+    const seen = [...w.items, ...w.children, ...(w.committed ?? []), ...(w.watched ?? [])].find((i) => i.id === itemId);
     if (!seen) return null;
-    return seen.stateCategory === "Completed" ? "done" : seen.stateCategory === "Removed" ? "removed" : "open";
+    return seen.stateCategory === "Completed" ? "done" : seen.stateCategory === "Resolved" ? "resolved" : seen.stateCategory === "Removed" ? "removed" : "open";
   };
 }
 
-export type DoneBy = "local" | "devops" | "pick";
-/** Done: a local mark, DevOps Completed, or (a story) a pick of it ticked done this week. */
+export type DoneBy = "local" | "devops" | "resolved" | "pick";
+/** Done: a local mark, DevOps Completed or Resolved (Q65), or (a story) a pick of it ticked done this week. */
 export function itemDone(i: Pick<ListItem, "clientKey" | "itemId" | "level" | "doneAt">, devops: (clientKey: string, itemId: number) => DevOpsState, pickDone: (clientKey: string, itemId: number) => boolean): DoneBy | null {
   if (i.doneAt) return "local";
-  if (devops(i.clientKey, i.itemId) === "done") return "devops";
+  const d = devops(i.clientKey, i.itemId);
+  if (d === "done") return "devops";
+  if (d === "resolved") return "resolved";
   if (i.level === "story" && pickDone(i.clientKey, i.itemId)) return "pick";
   return null;
 }

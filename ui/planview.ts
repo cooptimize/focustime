@@ -3,7 +3,8 @@ import { createContext, useContext } from "react";
 import { liveFocused } from "../plan/focus.ts";
 import { SIZE_MINUTES, type Pick, type PlanWeek, type Size, type WeekFeature } from "../plan/types.ts";
 import type { Half, IsoDate, Slot, WorkItem } from "../week/types.ts";
-import { capacityMinutes, fitOf, plannedMinutes, type Fit } from "../plan/rules.ts";
+import { capacityMinutes, fitOf, type Fit } from "../plan/rules.ts";
+import { slotPlanned } from "../plan/timebox.ts";
 
 /**
  * `sizes`: minutes per pick size from Settings > Planning (step 6c). `focused`: seconds per pick from the focus log,
@@ -22,7 +23,10 @@ export type PlanView = {
   resumeOn?: Readonly<Record<string, ResumeNote>>;
   /** Features committed to the weeks in view (step 8), for the week cards. */
   weekFeatures?: readonly WeekFeature[];
+  /** Timeboxes on the week (step 12): they count as planned time in fit. */
+  timeboxes?: readonly TimeboxLike[];
 };
+type TimeboxLike = { date: IsoDate; pickId: number | null; start: string; end: string; removedAt: string | null };
 export type ResumeNote = { clientKey: string; date: IsoDate; note: string };
 
 /**
@@ -95,7 +99,7 @@ export type CardPlan = {
  * (capacity from now on, the same number Plan the day uses), the DevOps list without items picked here, and
  * that list collapsed. Before commit: no picks, every item, not collapsed (unchanged).
  */
-export function cardPlan(week: PlanWeek | null, slot: Slot, clientKey: string | null, items: readonly WorkItem[], now: string, sizes: Readonly<Record<Size, number>> = SIZE_MINUTES): CardPlan {
+export function cardPlan(week: PlanWeek | null, slot: Slot, clientKey: string | null, items: readonly WorkItem[], now: string, sizes: Readonly<Record<Size, number>> = SIZE_MINUTES, timeboxes: readonly TimeboxLike[] = []): CardPlan {
   const picks = checklistFor(week, slot.date, slot.half);
   if (!week?.[slot.date]?.committedAt) return { picks: [], fit: null, items: [...items], collapsed: false };
   const picked = new Set(picks.filter((p) => p.kind === "item" && p.clientKey === clientKey && p.itemId !== null).map((p) => p.itemId));
@@ -103,7 +107,7 @@ export function cardPlan(week: PlanWeek | null, slot: Slot, clientKey: string | 
     picks,
     // Fit only matters while something is left to do: all done shows no pill (not "nothing picked").
     // A block that has ended has no time left to fit anything into, so no fit is shown (Plan any day).
-    fit: picks.some((p) => p.status === "planned") && Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.end)) < 0 ? fitOf(plannedMinutes(picks, sizes), capacityMinutes(slot, now)) : null,
+    fit: picks.some((p) => p.status === "planned") && Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.end)) < 0 ? fitOf(slotPlanned(picks, sizes, timeboxes, slot), capacityMinutes(slot, now)) : null,
     items: items.filter((i) => !picked.has(i.id)),
     collapsed: true,
   };

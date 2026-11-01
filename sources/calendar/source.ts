@@ -108,8 +108,8 @@ export function createCalendarSource(d: CalendarSourceDeps) {
     return result;
   }
 
-  async function connect(): Promise<ConnectResult> {
-    const r = await d.auth.connect();
+  async function connect(opts: { write?: boolean } = {}): Promise<ConnectResult> {
+    const r = await d.auth.connect(opts);
     memory.clear();
     return r;
   }

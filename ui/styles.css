@@ -1644,6 +1644,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pw-add h4 { margin: 4px 0 6px; font-size: 13px; }
 .pw-add-toggle { margin-bottom: 6px; }
 .pw-reset { margin-top: 6px; }
+.pw-under h4 { margin: 10px 0 6px; font-size: 12px; color: var(--text-muted); }
+.pw-drafts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
 .pw-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pd-pin { font-size: 12px; margin-left: 6px; }
 @media (max-width: 1100px) {
@@ -1710,3 +1712,93 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .focus-sound-pick { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
 .focus-sound-vol input { width: 140px; }
 .set-form > button.mini { justify-self: start; }
+
+/* ---------- Timeboxes and the write framework (step 12) ---------- */
+/* Week cards: a timebox sits behind meetings on the left edge, in the client's color. */
+.tbox {
+  position: absolute; left: 4px; right: 58px;
+  border-radius: 7px;
+  border: 1px dashed color-mix(in oklab, var(--c) 70%, transparent);
+  background: color-mix(in oklab, var(--c) 18%, var(--surface));
+  overflow: hidden; padding: 2px 8px;
+  pointer-events: auto;
+}
+.tbox-label { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+
+/* Plan the day: the day strip. */
+.tb-strip-wrap { display: grid; gap: 6px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--raised); }
+.tb-strip-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.tb-strip-head h3 { margin: 0; font-size: 14px; }
+.tb-strip-head .muted { font-size: 12px; }
+.tb-strip {
+  position: relative; height: 58px; margin-top: 16px;
+  border-radius: 8px; background: var(--surface); border: 1px solid var(--border);
+  touch-action: none; user-select: none;
+}
+.tb-strip.dragging { cursor: grabbing; }
+.tb-hour { position: absolute; top: -17px; transform: translateX(-50%); font-size: 11px; color: var(--text-faint); }
+.tb-hour::after { content: ""; position: absolute; left: 50%; top: 16px; height: 59px; border-left: 1px solid color-mix(in oklab, var(--text-faint) 22%, transparent); }
+.tb-meeting { position: absolute; bottom: 4px; height: 10px; border-radius: 3px; background: color-mix(in oklab, var(--text-faint) 45%, transparent); }
+.tb-meeting.personal { background: color-mix(in oklab, var(--personal) 55%, transparent); }
+.tb-now { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--accent); }
+.tb-box {
+  position: absolute; top: 5px; height: 32px;
+  display: flex; align-items: center;
+  border-radius: 7px; border: 1px solid var(--c);
+  background: color-mix(in oklab, var(--c) 30%, var(--surface));
+  cursor: grab; overflow: hidden; min-width: 12px;
+}
+.tb-box:focus-visible, .tb-box.selected { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 2; }
+.tb-box.out-of-step { border-style: dashed; }
+.tb-label { flex: 1; min-width: 0; padding: 0 6px; font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-ol { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-right: 4px; border-radius: 4px; font-size: 10px; font-weight: 700; color: var(--on-action); background: var(--accent); }
+.tb-edge { width: 7px; align-self: stretch; cursor: ew-resize; flex: none; }
+.tb-edge:hover { background: color-mix(in oklab, var(--c) 55%, transparent); }
+.tb-details { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; font-size: 13px; }
+.tb-ol-toggle { display: inline-flex; align-items: center; gap: 4px; }
+.tb-explain { color: var(--text-muted); font-size: 12.5px; }
+.tb-handle { cursor: grab; color: var(--text-faint); padding: 0 2px; font-size: 13px; user-select: none; }
+.tb-handle:hover { color: var(--text); }
+.tb-chip { font-size: 11.5px; font-weight: 600; padding: 0 6px; border-radius: 99px; border: 1px solid var(--border-strong); color: var(--text-muted); white-space: nowrap; }
+
+/* Timebox… and the write preview. */
+.tb-dialog .tb-fields { display: flex; gap: 16px; flex-wrap: wrap; }
+.tb-dialog label { display: grid; gap: 4px; font-size: 13px; }
+.tb-outlook label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tb-outlook .tb-explain { margin: 4px 0 0; }
+.wd-where { display: flex; gap: 8px; margin: 0; }
+.wd-where dt { font-weight: 600; }
+.wd-where dd { margin: 0; }
+.wd-fields { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.wd-fields th, .wd-fields td { text-align: left; vertical-align: top; padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: pre-wrap; overflow-wrap: anywhere; }
+.wd-fields thead th { color: var(--text-muted); font-weight: 600; font-size: 12px; }
+.wd-fields tr.changed td:last-child { font-weight: 700; color: var(--text); }
+.wd-fields tr.changed th::after { content: " (changes)"; color: var(--text-muted); font-weight: 400; }
+.wd-visibility { margin: 0; font-size: 13px; color: var(--text-muted); }
+.wd-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* Settings: write access and the write log. */
+.set-write { display: grid; gap: 6px; margin-top: 12px; }
+.set-write h3, .write-log h3 { margin: 0; font-size: 15px; }
+.set-write p { margin: 0; }
+.write-log { display: grid; gap: 8px; margin-bottom: 18px; }
+.write-log p { margin: 0; }
+.wl-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.wl-table th, .wl-table td { text-align: left; vertical-align: top; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.wl-table thead th { color: var(--text-muted); font-size: 12px; }
+.wl-failed td:nth-child(4), .wl-unconfirmed td:nth-child(4), .wl-refused td:nth-child(4) { color: var(--text); font-weight: 600; }
+.wl-orphans ul { margin: 4px 0 0; padding-left: 18px; }
+@media (max-width: 900px) {
+  .wl-table thead { display: none; }
+  .wl-table tr { display: grid; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .wl-table td { border: 0; padding: 0; }
+}
+.ev-list.tb-list li { border-left-color: var(--c); background: color-mix(in oklab, var(--c) 12%, transparent); border-radius: 0 4px 4px 0; }
+.ev-list.tb-list .ev-title { font-weight: 600; }
+.tb-hour.first { transform: none; }
+.tb-hour.last { transform: translateX(-100%); }
+.tb-hour.first::after { left: 0; }
+.tb-hour.last::after { left: 100%; }
+.set-write > button { justify-self: start; }
+.wd-actions .commit { background: var(--action); border-color: var(--action); color: var(--on-action); font-weight: 650; }
+.wd-actions .commit:disabled { opacity: 0.7; }

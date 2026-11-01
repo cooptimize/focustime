@@ -1,4 +1,5 @@
-// Outlook via Microsoft Graph calendarView, delegated Calendars.ReadBasic, read-only.
+// Outlook via Microsoft Graph calendarView, delegated Calendars.ReadBasic, read-only. Step 12: an optional write side
+// (Calendars.ReadWrite, its own token) for Coopilot's own timebox events only, through the write framework.
 import type { OutlookConfig } from "../../config/schema.ts";
 import type { Logger } from "../../log/logger.ts";
 import { ForeignLinkError, getJson, PartialError } from "../calendar/http.ts";
@@ -6,6 +7,8 @@ import { createCalendarSource } from "../calendar/source.ts";
 import { createOAuthClient, microsoftProvider, type Keyring } from "../oauth/oauth.ts";
 import { weekRange } from "../when.ts";
 import { normalizeGraphEvents, type GraphEvent } from "./normalize.ts";
+import { createGraphWriter, type GraphWriter } from "./write.ts";
+import type { WriteAccess } from "../oauth/oauth.ts";
 
 const API = "https://graph.microsoft.com/v1.0/";
 export const GRAPH_SELECT = "subject,start,end,isAllDay,showAs,responseStatus,isCancelled";
@@ -38,7 +41,8 @@ export function createOutlookSource(deps: CalendarDeps<OutlookConfig>) {
     first.searchParams.set("endDateTime", range.end);
     first.searchParams.set("$select", GRAPH_SELECT);
     first.searchParams.set("$top", "100");
-    const headers = { prefer: `outlook.timezone="${deps.timeZone}"` };
+    // Immutable ids (step 12): the same id the writer gets back, so Coopilot's own events are recognized.
+    const headers = { prefer: `outlook.timezone="${deps.timeZone}", IdType="ImmutableId"` };
     const items: GraphEvent[] = [];
     let url: string | null = first.toString();
     let page = 0;
@@ -68,8 +72,14 @@ export function createOutlookSource(deps: CalendarDeps<OutlookConfig>) {
     return events;
   }
 
-  return createCalendarSource({
+  const base = createCalendarSource({
     id: "outlook", label: "Outlook", connectAction: "connect_microsoft", auth, fetchWeek,
     cacheDir: deps.cacheDir, log: deps.log, timeZone: deps.timeZone, ...(deps.now ? { now: deps.now } : {}),
   });
+  const writer = createGraphWriter({ fetch: deps.fetch, token: () => auth.accessToken("write"), invalidate: () => auth.invalidate(), log: deps.log, timeoutMs });
+  const write: OutlookWrite = { access: () => auth.writeAccess(), writer };
+  return { ...base, write };
 }
+
+/** The write side: whether this sign-in may write, and the marker-checked writer. */
+export type OutlookWrite = { access: () => Promise<WriteAccess>; writer: GraphWriter };

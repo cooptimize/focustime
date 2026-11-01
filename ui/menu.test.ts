@@ -38,6 +38,8 @@ function env(over: Partial<MenuEnv> = {}) {
     moveRegion: (d) => calls.push(["region", d]),
     focusedItem: null,
     showKeys: () => calls.push(["keys"]),
+    openTimebox: (t) => calls.push(["timebox", t]),
+    connectWrite: () => calls.push(["connectWrite"]),
     theme: "cooptimize-dark",
     planning: { sizes: { S: 60, M: 120, L: 210 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false },
     setTheme: (t) => calls.push(["theme", t]),
@@ -106,7 +108,7 @@ describe("⋯ menus", () => {
   it("a pick: open in Edge, size, move, start focus, done, drop", async () => {
     const t = env();
     const m = pickMenu(t.e, pick);
-    expect(items(m).map((i) => i.label)).toEqual(["Open in Edge", "Set size", "Move", "Start focus", "Mark done", "I'll make it up…", "Drop"]);
+    expect(items(m).map((i) => i.label)).toEqual(["Open in Edge", "Set size", "Move", "Start focus", "Timebox…", "Mark done", "I'll make it up…", "Drop"]);
     await find(m, "Open in Edge").run!();
     await find(find(m, "Set size").next!(), "S").run!();
     expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
@@ -120,7 +122,7 @@ describe("⋯ menus", () => {
   });
   it("a work item: open, add to the plan (stories only), draft story for an empty feature", () => {
     const story = itemMenu(env().e, "internal", item(1));
-    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Open in Edge", ""], ["Add to the plan", ""]]);
+    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Open in Edge", ""], ["Add to the plan", ""], ["Timebox…", ""]]);
     const feature = itemMenu(env().e, "internal", item(2, "portfolio"));
     expect(find(feature, "Add to the plan").disabled).toMatch(/above story level/);
     expect(find(feature, "Add a draft story")).toBeTruthy();

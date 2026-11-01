@@ -1,4 +1,5 @@
 import { useContext, type CSSProperties, type ReactNode } from "react";
+import { TimeboxBands, TimeboxList } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
 import { worstSeverity } from "../week/risks.ts";
 import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
@@ -223,7 +224,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
   const work = primary && !overflow ? allWork.get(primary.clientKey) : undefined;
   const eve = slot.half === "EVE";
   // Committed: picks with their fit, the DevOps list without picked items and collapsed (step 6.1).
-  const cp = cardPlan(plan.week, slot, primary?.clientKey ?? null, work?.items ?? [], now, plan.sizes);
+  const cp = cardPlan(plan.week, slot, primary?.clientKey ?? null, work?.items ?? [], now, plan.sizes, plan.timeboxes);
   const ticks = cp.picks;
   const checklist = ticks.length > 0 && (
     <div className="card-plan">
@@ -386,6 +387,7 @@ function CardBody({ tag, slot, tz, overflow, who, badge, checklist, summary, mor
       {summary}
       {flex}
       {checklist}
+      <TimeboxList slot={slot} />
       <EventList kind="meeting" label="Meetings" events={meetings} max={MAX_MEETINGS} tz={tz} />
       <EventList kind="personal" label="Personal" events={personal} max={MAX_PERSONAL} tz={tz} />
     </div>
@@ -464,6 +466,7 @@ function Timeline({ slot, tz, showGaps, minFocusWindow }: { slot: Slot; tz: stri
               <span>{formatDuration(g.minutes)} free</span>
             </div>
           ))}
+      <TimeboxBands slot={slot} pos={pos} />
       <div className="lanes">
         {laid.map(({ placed, top, height, lane, lanes }) => (
           <EventCard key={placed.event.id} placed={placed} tz={tz} style={{ top: pct(top), height: pct(height), left: `calc(${pct(lane / lanes)} + 4px)`, width: `calc(${pct(1 / lanes)} - 8px)` }} />

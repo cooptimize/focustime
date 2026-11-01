@@ -4,6 +4,7 @@
 import { mondayOf, localToday } from "../week/dates.ts";
 import { buildWeek } from "../week/build.ts";
 import { warnPoints, type WarnPoint } from "../plan/timer.ts";
+import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
 import type { CalEvent } from "../week/types.ts";
 import type { ActionContext } from "./dispatch.ts";
 
@@ -24,7 +25,8 @@ export async function refreshTodayWarnings(ctx: WarningsContext): Promise<number
     cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(weekStart).catch(() => null) : null,
     cfg.google ? ctx.makeGoogle(cfg.google, tz).load(weekStart).catch(() => null) : null,
   ]);
-  const events: CalEvent[] = [...(outlook?.items ?? []), ...(google?.items ?? [])];
+  // Coopilot's own timebox events are not meetings (step 12).
+  const events: CalEvent[] = withoutOwn([...(outlook?.items ?? []), ...(google?.items ?? [])], ownEventIds(plan.ownEvents()));
   const sunday = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
   const week = buildWeek({ weekStart, patterns: [], events, config: cfg.week, unavailable: plan.unavailableBetween(weekStart, sunday), flex: plan.flexBetween(weekStart, sunday) });
   const day = week.days.find((d) => d.date === today);

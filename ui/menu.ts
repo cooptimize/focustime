@@ -134,7 +134,13 @@ export type MenuEnv = {
   openRitual: () => void;
   planWeekOpen: IsoDate | null;
   commitWeek: () => void;
+  /** Timeboxes (step 12): the Timebox… dialog for a pick or a work item, and Reconnect Outlook with calendar changes. */
+  openTimebox: (t: TimeboxTarget) => void;
+  connectWrite: () => void;
 };
+
+/** What a timebox is for: a pick (its client, title and link), or a work item or week list item on a date. */
+export type TimeboxTarget = { pickId: number; date: IsoDate } | { clientKey: string; itemId: number | null; title: string; url: string | null; date: IsoDate };
 
 const dayName = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
@@ -207,6 +213,7 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
         ...(p.status !== "planned" ? { disabled: "Only a planned pick can be timeboxed" } : p.date !== env.today ? { disabled: "Only today's picks" } : env.timer?.pickId === p.id ? { disabled: "Already timing this pick" } : {}),
         next: () => lengthStep(`Focus on "${p.title}"`, suggestMinutes(p.size, env.planning.sizes), (m) => env.runTimer("timer.start", { pickId: p.id, minutes: m })),
       },
+      { id: "timebox", label: "Timebox…", hint: "start and length on the day", action: "timebox.add", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be timeboxed" } : past ? { disabled: PAST } : {}), run: () => env.openTimebox({ pickId: p.id, date: p.date }) },
       { id: "done", label: p.status === "done" ? "Mark not done" : "Mark done", action: "pick.mark_done", run: () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" }) },
       { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be made up" } : {}), next: () => makeUpStep(env, p) },
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned pick can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
@@ -308,6 +315,7 @@ export function itemMenu(env: MenuEnv, clientKey: string, item: WorkItem): MenuS
         ...(isPickable(item) ? {} : { disabled: item.level === "portfolio" ? `${item.type} is above story level: pick a child or add a draft story` : `${item.type} is not on a story, task or bug backlog` }),
         next: () => addStep(env, clientKey, item),
       },
+      { id: "timebox", label: "Timebox…", hint: "start and length on the planned day", action: "timebox.add", run: () => env.openTimebox({ clientKey, itemId: item.id, title: item.title, url: item.url, date: env.planState?.date ?? env.today }) },
       ...(item.level === "portfolio" && !kids ? [{ id: "draft", label: "Add a draft story", action: "draft.add_story", next: () => draftPrompt(env, clientKey, item) } as MenuItem] : []),
     ],
   };
@@ -660,6 +668,20 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "feature.mark_breakdown":
     case "loop.ask_priorities":
       return { run: () => env.openPlanWeek(env.planWeekOpen ?? undefined) };
+    case "auth.connect_outlook_write": return { run: env.connectWrite };
+    case "timebox.add": return { next: () => choosePick(env, "Timebox which pick?", (p) => () => env.openTimebox({ pickId: p.id, date: p.date })) };
+    // Moving, resizing, removing and Outlook previews happen on the day's timeline in Plan the day.
+    case "timebox.update":
+    case "timebox.remove":
+    case "timebox.set_outlook":
+    case "write.preview":
+      return { run: () => env.openPlanDay() };
+    // Write access, the log, confirm and retry live in Settings > Data.
+    case "write.status":
+    case "write.confirm":
+    case "write.retry":
+    case "write.log":
+      return { run: () => env.openSettings("data") };
     case "capture.add": return { run: env.openCapture };
     // Sorting, a client's features and notes are handled in the Inbox.
     case "capture.load":

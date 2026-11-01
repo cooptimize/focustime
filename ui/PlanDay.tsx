@@ -2,7 +2,8 @@
 // picks come from that client's DevOps items in board order (story level only) or a typed intention, and one
 // key commits. Everything here is local: the actions only write Coopilot's plan store.
 import { useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
-import { blockClient, capacityMinutes, fitOf, isPickable, pickableChildren, plannedMinutes, weekFirst } from "../plan/rules.ts";
+import { blockClient, capacityMinutes, fitOf, isPickable, pickableChildren, weekFirst } from "../plan/rules.ts";
+import { slotPlanned } from "../plan/timebox.ts";
 import { pinLabel, weekList } from "../plan/weeklist.ts";
 import { dayLabel } from "../plan/days.ts";
 import { SIZES, type DraftStory, type PlanDayState, type Pick, type Size } from "../plan/types.ts";
@@ -20,6 +21,7 @@ import { copy } from "./Loops.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { itemMenu, pickMenu } from "./menu.ts";
 import { MenuRow, useMenu } from "./Menus.tsx";
+import { DayStrip, DragHandle, useTimeboxes } from "./Timeboxes.tsx";
 
 export type PlanDayAct = (action: string, input: Record<string, unknown>) => Promise<boolean>;
 
@@ -151,6 +153,8 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
 
       {!off && past && <PastDay halves={[...new Set<Half>(["AM", "PM", ...state.picks.filter((p) => p.date === day.date && p.half === "EVE").map((p) => p.half)])]} picks={state.picks.filter((p) => p.date === day.date && p.status !== "moved")} act={act} />}
 
+      {!off && !past && <DayStrip day={day} now={now} titleOf={(k) => clients.find((c) => c.clientKey === k)?.clientName ?? k} />}
+
       {!off && !past && <div className="pd-blocks">
         {halves.map((half) => (
           <Block
@@ -179,6 +183,15 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
 }
 
 /** "45m of M" when a pick has a minute or more of focused time (step 6d); the size alone otherwise. */
+/** "9:30" when a pick is timeboxed today (its time counts instead of its size). */
+function TimeboxChip({ pickId }: { pickId: number }) {
+  const env = useTimeboxes();
+  const mine = env?.timeboxes.filter((t) => t.pickId === pickId && !t.removedAt) ?? [];
+  if (!env || !mine.length) return null;
+  const f = (s: string) => Temporal.Instant.from(s).toZonedDateTimeISO(env.tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+  return <span className="tb-chip" title="Timeboxed: its timebox counts as planned time instead of its size">{mine.map((t) => f(t.start)).join(", ")}</span>;
+}
+
 function SizeTag({ pick }: { pick: Pick }) {
   const label = focusLabel(useFocused()(pick.id), pick.size);
   return <span className={`size-tag${label ? " focused" : ""}`}>{label ?? pick.size}</span>;
@@ -291,7 +304,8 @@ function Block({ slot, active, onActivate, overflow, picks, drafts, weekFeatures
   const [chosen, setChosen] = useState<string | null>(null);
   const source = focus?.clientKey ?? chosen ?? bc.clientKey ?? clients[0]?.clientKey ?? null;
   const capacity = capacityMinutes(slot, now);
-  const fit = fitOf(plannedMinutes(picks, useContext(PlanCtx).sizes), capacity);
+  const pv = useContext(PlanCtx);
+  const fit = fitOf(slotPlanned(picks, pv.sizes, pv.timeboxes, slot), capacity);
   const started = Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.start)) > 0;
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? k ?? "";
   const style = { "--c": clientColor(bc.clientKey ?? undefined, colors) } as CSSProperties;
@@ -334,7 +348,9 @@ function Block({ slot, active, onActivate, overflow, picks, drafts, weekFeatures
         <ol className="pd-picks">
           {picks.map((p) => (
             <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`Actions for ${p.title}`} item={{ clientKey: p.clientKey, url: p.itemUrl }} className={p.clientKey !== bc.clientKey ? "other-client" : ""}>
+              {p.status === "planned" && <DragHandle payload={{ pickId: p.id, minutes: pv.sizes[p.size] }} label={p.title} />}
               <span className="wi-type">{p.kind === "intention" ? "Note" : typeTag(p.itemType ?? "")}</span>
+              <TimeboxChip pickId={p.id} />
               <span className="pick-title" title={p.title}>
                 {p.kind === "item" && p.itemUrl ? (
                   <WorkLink clientKey={p.clientKey} url={p.itemUrl} className="pick-link">
@@ -412,6 +428,7 @@ function Candidates({ clientKey, half, date, drafts, weekFeatures, picked, act }
       if (c.item && isPickable(c.item) && free(c.item))
         return (
           <MenuRow key={c.feature.itemId} build={(env) => itemMenu(env, clientKey, c.item!)} label={`Actions for ${c.item.type} ${c.item.id}`} item={{ clientKey, url: c.item.url }}>
+            <DragHandle payload={{ clientKey, itemId: c.item.id, title: c.item.title, url: c.item.url, minutes: 60 }} label={c.item.title} />
             <button type="button" className="cand" onClick={() => add({ itemId: c.item!.id })} title={`${c.item.type} ${c.item.id}: ${c.item.title} (${c.item.state})`}>
               <span className="plus" aria-hidden="true">+</span>
               <span className="wi-type">{typeTag(c.item.type)}</span>

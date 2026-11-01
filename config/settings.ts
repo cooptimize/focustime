@@ -5,7 +5,7 @@ import { WEEKDAY_KEYS, type WeekdayKey } from "../week/hours.ts";
 import { hoursBody, removeValue, replaceArrayTables, replaceSection, setValue, tomlValue, type TomlValue } from "./edit.ts";
 import { parseConfig } from "./schema.ts";
 
-export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus"] as const;
+export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export class SettingsInputError extends Error {
@@ -109,6 +109,17 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
         values.push(["end_sound", v.endSound]);
       }
       return (text) => values.reduce((t, [k, val]) => setValue(t, "plan", k, val), text);
+    }
+    case "timebox": {
+      // Step 12: two switches.
+      only(v, ["outlookDefault", "confirmOwn"], "timebox");
+      const values: [string, boolean][] = [];
+      for (const [f, k] of [["outlookDefault", "outlook_default"], ["confirmOwn", "confirm_own"]] as const) {
+        if (v[f] === undefined) continue;
+        if (typeof v[f] !== "boolean") throw new SettingsInputError(`timebox.${k}`, "Must be true or false");
+        values.push([k, v[f]]);
+      }
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "timebox", k, val, i === 0 ? "Timeboxes (step 12). Creating an Outlook event always asks first; confirm_own = false skips the question for changes to my own timebox events (still logged, still undoable)." : undefined), text);
     }
     case "focus": {
       // Step 10. Written as given; parseConfig checks values and links per field (focus.playlists[0].url etc.).

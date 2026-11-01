@@ -4,7 +4,8 @@ import { useCallback, useContext, useEffect, useState } from "react";
 import type { LoopView, WeekLoadData } from "../actions/types.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import type { NowStrip } from "../plan/now.ts";
-import { capacityMinutes, fitOf, plannedMinutes } from "../plan/rules.ts";
+import { capacityMinutes, fitOf } from "../plan/rules.ts";
+import { slotPlanned } from "../plan/timebox.ts";
 import { focusPick, urgentLoops } from "../plan/today.ts";
 import type { Pick } from "../plan/types.ts";
 import type { Day, Half, Slot } from "../week/types.ts";
@@ -157,7 +158,7 @@ function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan
   const client = slot.focus[0]?.clientKey ?? null;
   const ended = Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.end)) >= 0;
   const left = picks.filter((p) => p.status === "planned");
-  const fit = committed && left.length && !ended ? fitOf(plannedMinutes(left, data.planning.sizes), capacityMinutes(slot, now)) : null;
+  const fit = committed && left.length && !ended ? fitOf(slotPlanned(left, data.planning.sizes, view.timeboxes, slot, picks), capacityMinutes(slot, now)) : null;
   const status = blockStatus(fit, slot.risks);
   const features = slot.half === "EVE" ? [] : featuresOn(data.weekFeatures, slot.date, slot.half as Half, client);
   const title = client ? nameOf(client) : slot.open ? "Open" : halfName(slot.half);

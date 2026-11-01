@@ -1,3 +1,4 @@
+import { createHostBrowsers } from "../server/host.ts";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -33,8 +34,7 @@ function setup(text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@exam
     now: () => "2026-11-02T14:00:00Z",
     writeConfig: (edit) => writeConfig(path, edit),
     secrets: { state: async (a) => (stored.some((s) => s.account === a) ? "set" : "missing"), set: async (account, value) => void stored.push({ account, value }) },
-    readText: (p) => files[p] ?? null,
-    home: HOME,
+    host: createHostBrowsers({ readText: (p) => files[p] ?? null, home: HOME }),
   };
   const run = (action: string, input: unknown) => dispatch(c, { action, input });
   return { c, path, run, stored, dir };

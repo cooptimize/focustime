@@ -1,3 +1,4 @@
+import { createHostBrowsers } from "../server/host.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,6 +38,7 @@ function setup(opts: { launchFails?: boolean; noLaunch?: boolean } = {}) {
     saveSystemUserId: async () => {},
     now: () => "2026-11-03T14:00:00Z",
     ...(opts.noLaunch ? {} : { launch: async (argv: string[]) => { if (opts.launchFails) throw new Error("ENOENT"); launched.push(argv); } }),
+    host: createHostBrowsers({ readText: () => null, home: "/home/x" }),
   };
   const open = (input: unknown) => dispatch(c, { action: "link.open", input });
   return { c, open, launched, ado };

@@ -40,7 +40,11 @@ export type AppConfig = {
   ui: UiConfig;
   /** Focus sounds, playlists and media control (step 10). */
   focus: FocusSettings;
+  /** Timeboxes (step 12): "Put on Outlook" on by default, and whether changes to my own timebox events ask first. */
+  timebox: TimeboxSettings;
 };
+export type TimeboxSettings = { outlookDefault: boolean; confirmOwn: boolean };
+export const DEFAULT_TIMEBOX: TimeboxSettings = { outlookDefault: false, confirmOwn: true };
 
 export const THEMES = ["cooptimize-dark", "cooptimize-light", "neutral"] as const;
 export type Theme = (typeof THEMES)[number];
@@ -172,7 +176,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -468,6 +472,21 @@ export function parseConfig(text: string): ParseResult {
     }
   }
 
+  // [timebox] (optional, step 12): outlook_default (new timeboxes go on Outlook), confirm_own (ask before updating or
+  // removing my own timebox events; creating always asks)
+  const timebox: TimeboxSettings = { ...DEFAULT_TIMEBOX };
+  if (raw.timebox !== undefined) {
+    const t = isTable(raw.timebox) ? raw.timebox : (err("timebox", "Must be a [timebox] table"), null);
+    if (t) {
+      for (const k of Object.keys(t)) if (!["outlook_default", "confirm_own"].includes(k)) err(`timebox.${k}`, "Unknown field");
+      for (const [k, f] of [["outlook_default", "outlookDefault"], ["confirm_own", "confirmOwn"]] as const) {
+        if (t[k] === undefined) continue;
+        if (typeof t[k] !== "boolean") err(`timebox.${k}`, "Must be true or false");
+        else timebox[f] = t[k];
+      }
+    }
+  }
+
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
   if (raw.outlook !== undefined) {
@@ -515,6 +534,7 @@ export function parseConfig(text: string): ParseResult {
       edge,
       ui,
       focus,
+      timebox,
     },
   };
 }

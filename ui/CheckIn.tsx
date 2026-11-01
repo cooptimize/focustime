@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import { checkIn } from "../plan/checkin.ts";
 import { blockClient, isPickable } from "../plan/rules.ts";
+import { boxedMinutes } from "../plan/timebox.ts";
 import type { Pick } from "../plan/types.ts";
 import { formatDuration } from "../week/format.ts";
 import type { Half, IsoDate, Slot } from "../week/types.ts";
@@ -73,7 +74,7 @@ export function CheckIn({ data, now, onClose, onChanged }: Props) {
     );
 
   const slots: { half: Half; slot: Slot }[] = [{ half: "AM", slot: day.am }, { half: "PM", slot: day.pm }, ...(day.eve ? [{ half: "EVE" as Half, slot: day.eve }] : [])];
-  const fit = checkIn(slots.map((s) => ({ half: s.half, slot: { ...s.slot, pto: !!day.pto } })), picks, focused, data.planning.sizes, now);
+  const fit = checkIn(slots.map((s) => ({ half: s.half, slot: { ...s.slot, pto: !!day.pto } })), picks, focused, data.planning.sizes, now, boxedMinutes(data.timeboxes));
   // Tomorrow's first plannable day for carry-over is the server's job; here "Carry over" goes to the next day with hours.
   const nextDay = data.week.days.find((d) => d.date > today && d.hours.segments.length > 0 && !d.pto)?.date ?? null;
 

@@ -35,7 +35,7 @@ const stamp = (s: string, tz: string) => {
 };
 /** Fit per client in plain words (step 11): fits, tight, too much. */
 const VERDICT: Record<ClientFit["verdict"], string> = { none: "No musts yet", fits: "Fits", tight: "Tight", over: "Too much" };
-const DONE_WORD: Record<DoneBy, string> = { devops: "Done in DevOps", local: "Done", pick: "Done (picked and ticked)" };
+const DONE_WORD: Record<DoneBy, string> = { devops: "Done in DevOps", resolved: "Resolved in DevOps", local: "Done", pick: "Done (picked and ticked)" };
 const blocksWord = (n: number) => (n === 0.5 ? "half a block" : `${n} block${n === 1 ? "" : "s"}`);
 /** "room for about 1.5 blocks", to the half block (step 10: no "0.8 blocks"). */
 export function roomLabel(available: number): string {
@@ -500,6 +500,14 @@ function ClientList(p: ListsProps & { k: string }) {
   // What can go on the list, in DevOps order: features (portfolio read), then my stories (work read).
   const features = (port?.items ?? []).filter((i) => i.tier === "feature" && !listed.has(i.id) && match(i));
   const stories = (w?.items ?? []).filter((i) => i.level === "story" && !listed.has(i.id) && match(i));
+  // Q64: open stories under the client's features (any assignee), not already offered above, grouped by feature.
+  const offered = new Set(stories.map((x) => x.id));
+  const under = (port?.items ?? [])
+    .filter((f) => f.tier === "feature")
+    .map((f) => ({ f, kids: f.children.filter((c) => c.level === "story" && c.open && !listed.has(c.id) && !offered.has(c.id) && match(c)) }))
+    .filter((g) => g.kids.length);
+  // Q66: draft stories with no feature yet, listed under their client.
+  const loose = p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === null && (!q || d.title.toLowerCase().includes(q)));
   const epics = (port?.items ?? []).filter((i) => i.tier === "epic" && match(i));
   const reordered = p.items.some((i) => i.clientKey === k && i.position !== null);
   const track = p.track && fit && prog ? onTrack(prog, blocksLeft(fit.blocks, p.track)) : null;
@@ -522,6 +530,16 @@ function ClientList(p: ListsProps & { k: string }) {
       {track && track.kind !== "none" && <p className={`pw-track ${track.kind}`}>{track.text}</p>}
       <TierList title="Must" hint="Should be done this week, and definitely touched" list={musts} row={row} empty={p.past ? "No musts" : "No musts yet. Add from DevOps below, or make a nice to have a must."} />
       <TierList title="Nice to have" hint="If there's room" list={nice} row={row} empty={null} />
+      {loose.length > 0 && (
+        <div className="pw-tier pw-loose">
+          <h4>Draft stories <span className="muted">Not in DevOps yet; add them there to plan them</span></h4>
+          <ul className="pw-drafts">
+            {loose.map((d) => (
+              <li key={d.id}><span className="pw-draft-tag">Draft</span> {d.title} <span className="muted">{d.size}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
       {!p.past && reordered && (
         <button type="button" className="mini quiet pw-reset" onClick={() => p.ops.reset(k)} title="Your order here is local; DevOps isn't changed">Back to DevOps order</button>
       )}
@@ -531,7 +549,7 @@ function ClientList(p: ListsProps & { k: string }) {
             <h4>Add from DevOps <span className="muted">{features.length + stories.length} assigned to you or above your stories</span></h4>
           ) : (
             <button type="button" className="mini quiet pw-add-toggle" aria-expanded={addOpen} onClick={() => p.toggleOpen(`add:${k}`)}>
-              {addOpen ? "▾" : "▸"} Add from DevOps <span className="muted">{features.length + stories.length} not on the list</span>
+              {addOpen ? "▾" : "▸"} Add from DevOps <span className="muted">{features.length + stories.length + under.reduce((n, g) => n + g.kids.length, 0)} not on the list</span>
             </button>
           )}
           {addOpen && (
@@ -544,6 +562,14 @@ function ClientList(p: ListsProps & { k: string }) {
             {features.map((f) => <AddRow key={f.id} k={k} id={f.id} title={f.title} url={f.url} what={`${f.type} · ${f.state}${f.targetDate ? ` · target ${dateShortIso(f.targetDate)}` : ""}`} ops={p.ops} />)}
             {stories.map((s) => <AddRow key={s.id} k={k} id={s.id} title={s.title} url={s.url} what={`${s.type} · ${s.state}`} ops={p.ops} />)}
           </ul>
+          {under.map((g) => (
+            <div key={g.f.id} className="pw-under">
+              <h4>Stories under #{g.f.id} {g.f.title}</h4>
+              <ul className="pw-features">
+                {g.kids.map((c) => <AddRow key={c.id} k={k} id={c.id} title={c.title} url={c.url} what={`${c.type} · ${c.state} · ${c.mine ? "you" : c.assignedTo ?? "unassigned"}`} ops={p.ops} />)}
+              </ul>
+            </div>
+          ))}
           {epics.length > 0 && (
             <>
               <h4>Epics</h4>
@@ -640,7 +666,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, target, open, tog
           <button type="button" className="mini" disabled={first} onClick={() => ops.move(i, -1)} aria-label={`Move #${i.itemId} up`} title="Up (local order only)">↑</button>
           <button type="button" className="mini" disabled={last} onClick={() => ops.move(i, 1)} aria-label={`Move #${i.itemId} down`} title="Down (local order only)">↓</button>
           <button type="button" className="mini" onClick={() => ops.tier(i, other)}>{other === "must" ? "Make a must" : "Make nice to have"}</button>
-          {i.done !== "devops" && i.done !== "pick" && <button type="button" className="mini quiet" onClick={() => ops.done(i, !i.done)}>{i.done ? "Not done" : "Mark done"}</button>}
+          {(!i.done || i.done === "local") && <button type="button" className="mini quiet" onClick={() => ops.done(i, !i.done)}>{i.done ? "Not done" : "Mark done"}</button>}
           <button type="button" className="mini quiet" onClick={() => ops.remove(i)} aria-label={`Take #${i.itemId} off the week`} title="Take off the week">×</button>
         </span>
       )}

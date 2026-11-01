@@ -1,6 +1,7 @@
 // Start Coopilot: local server on 127.0.0.1, per-launch token, opens a Chromium app window.
 // Usage: node server/main.ts [--dev] [--no-open] [--port 5317] [--clock <ISO instant>]
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
+import { createHostBrowsers } from "./host.ts";
 import { hoursOn } from "../week/hours.ts";
 import { takeOpenRequest } from "./open-request.ts";
 import { spawn } from "node:child_process";
@@ -146,14 +147,16 @@ const server = createApp({
     media,
     secrets: { state: (a) => secretState(a), set: (a, v) => setAppSecret(a, v) },
     // Browser .desktop entries and Local State only; profile names are all that is kept.
-    readText: (path) => {
-      try {
-        return readFileSync(path, "utf8");
-      } catch {
-        return null;
-      }
-    },
-    home: homedir(),
+    host: createHostBrowsers({
+      readText: (path) => {
+        try {
+          return readFileSync(path, "utf8");
+        } catch {
+          return null;
+        }
+      },
+      home: homedir(),
+    }),
     exportPlan: async (json) => {
       const out = exportPath(dirname(planDbPath()), new Date().toISOString());
       await mkdir(dirname(out), { recursive: true, mode: 0o700 });

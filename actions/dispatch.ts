@@ -1,7 +1,7 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
-import { DEFAULT_PLAN, DEFAULT_UI, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
+import { DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
 import { setValue, type WriteResult } from "../config/edit.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
@@ -15,7 +15,10 @@ import type { TimeModel } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
 import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
-import { checkDevOpsUrl, launchPlan } from "../links/edge.ts";
+import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
+import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
+import type { OutlookWrite } from "../sources/graph/source.ts";
+import { checkDevOpsUrl } from "../links/devops-url.ts";
 import { hasHoursOn, planAction } from "./plan-actions.ts";
 import { timeAction } from "./time-actions.ts";
 import { TIMER_KEY, timerAction, timerView, type MediaControl } from "./timer-actions.ts";
@@ -29,14 +32,14 @@ import { isActionName, type ActionName } from "./registry.ts";
 import { captureAction } from "./capture-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
-import type { ActionResponse, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
+import type { ActionResponse, HostBrowsers, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
 export type ActionContext = {
   loadConfig: () => Promise<{ path: string; parsed: ParseResult; created?: boolean }>;
   makeDataverse: (cfg: DataverseConfig, timeZone: string) => DataverseSource;
-  makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource;
+  makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource & { write?: OutlookWrite };
   makeGoogle: (cfg: GoogleConfig, timeZone: string) => CalendarSource;
   makeDevOps: (cfg: DataverseConfig, timeZone: string) => DevOpsSource;
   saveSystemUserId: (id: string) => Promise<void>;
@@ -49,8 +52,8 @@ export type ActionContext = {
   launch?: (argv: string[]) => Promise<void>;
   /** Settings (step 6b): keyring presence and app secret writes, local file reads for browser profiles, plan export. */
   secrets?: SettingsContext["secrets"];
-  readText?: (path: string) => string | null;
-  home?: string;
+  /** The host's browsers (step 12, Q63): detection and the link command, from server/host.ts. */
+  host?: HostBrowsers;
   exportPlan?: (json: string) => Promise<string>;
   /** Media control for focus (step 10): playerctl and playlist links. Absent: none (tests, no desktop). */
   media?: MediaControl;
@@ -276,7 +279,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const unavailable = ctx.plan?.unavailableBetween(weekStart, sunday) ?? [];
   const flex = ctx.plan?.flexBetween(weekStart, sunday) ?? [];
   const weekendPlanned = new Set(weekDates7(weekStart).slice(5).filter((d) => (ctx.plan?.picksFor(d) ?? []).some((p) => p.status === "planned" || p.status === "done")));
-  const week = buildWeek({ weekStart, patterns: dataverse.items, events: [...outlook.items, ...google.items], config: weekConfig, pto, unavailable, flex, viewRange: cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
+  // Coopilot's own Outlook events show once, as timeboxes, and never count as meetings in risk rules (step 12).
+  const own = ctx.plan ? ownEventIds(ctx.plan.ownEvents()) : new Set<string>();
+  const week = buildWeek({ weekStart, patterns: dataverse.items, events: withoutOwn([...outlook.items, ...google.items], own), config: weekConfig, pto, unavailable, flex, viewRange: cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
   const todayDay = week.days.find((d) => d.date === todayDate);
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
 
@@ -320,6 +325,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     weekPlan: ctx.plan ? withTitles(weekPlanView(ctx.plan.weekPlan(weekStart)), currentTitle) : null,
     weekFeatures: ctx.plan ? withCurrentTitles(ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate)), currentTitle) : [],
     weekNudge: { badge: ctx.plan && cfg ? weekNudges(Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz), nudgeTimes(cfg), (w) => !!ctx.plan!.weekPlan(w).committedAt).badge : null },
+    timeboxes: ctx.plan ? timeboxesFor(ctx.plan, weekStart, sunday).map((t) => timeboxView(t, ctx.plan!, cfg)) : [],
+    timeboxSettings: cfg?.timebox ?? DEFAULT_TIMEBOX,
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
   };
@@ -346,6 +353,27 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
   if (!isActionName(req.action)) return bad("unknown action");
   const action: ActionName = req.action;
   switch (action) {
+    case "auth.connect_outlook_write": {
+      // Step 12: the same sign-in, asking for Calendars.ReadWrite as well. Reading keeps its own token.
+      if (!noInput(req.input)) return bad(`${req.action} takes no input`);
+      const cfg = await configured(ctx);
+      if (!cfg?.outlook) return { ok: true, data: { status: "failed", message: "Add outlook.client_id to config first" } };
+      return { ok: true, data: await ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).connect({ write: true }) };
+    }
+    case "timebox.add":
+    case "timebox.update":
+    case "timebox.remove":
+    case "timebox.set_outlook":
+    case "write.status":
+    case "write.preview":
+    case "write.confirm":
+    case "write.retry":
+    case "write.log":
+      return timeboxAction(
+        { plan: ctx.plan, config: () => configured(ctx), outlook: (cfg) => (cfg.outlook ? ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).write ?? null : null), now: ctx.now },
+        action,
+        req.input,
+      );
     case "auth.connect_microsoft":
     case "auth.connect_google": {
       if (!noInput(req.input)) return bad(`${req.action} takes no input`);
@@ -381,8 +409,8 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       const org = ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone).orgOf(key);
       const checked = checkDevOpsUrl(input.url, org);
       if (!checked.ok) return { ok: false, status: 422, error: checked.error };
-      if (!ctx.launch) return { ok: false, status: 503, error: "Opening links is not available here" };
-      const plan = launchPlan(cfg.edge, key, cfg.clientSettings[key]?.name ?? key, checked.url, { setting: cfg.clientSettings[key], chromium: cfg.chromium.command });
+      if (!ctx.launch || !ctx.host) return { ok: false, status: 503, error: "Opening links is not available here" };
+      const plan = ctx.host.linkCommand(cfg, key, checked.url);
       try {
         await ctx.launch(plan.argv);
       } catch {
@@ -416,8 +444,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
           ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}),
           ...(ctx.plan ? { plan: ctx.plan } : {}),
           ...(ctx.secrets ? { secrets: ctx.secrets } : {}),
-          ...(ctx.readText ? { readText: ctx.readText } : {}),
-          ...(ctx.home ? { home: ctx.home } : {}),
+          ...(ctx.host ? { host: ctx.host } : {}),
           ...(ctx.exportPlan ? { exportPlan: ctx.exportPlan } : {}),
         },
         action,
