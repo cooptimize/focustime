@@ -408,3 +408,14 @@ Purpose: in about two minutes, turn today's real capacity into a short, committe
 - **Contract change:** plan store migration 7 (captures, notes, nullable draft parent; D173); actions `capture.add`, `capture.load`, `capture.features`, `capture.route`, `note.delete` (D174); `POST /api/open-request` and `coopilot-open --capture` (D176); loop kind `capture`; `week.load`, `closeout.load` and `weekplan.load` return the unsorted count; `weekplan.load` returns local drafts. Still no writes to any external system.
 - **Not done:** the global Hyprland key (D178, needs confirmation).
 - **Rollback:** revert the commit. Migration 7 adds tables and rebuilds `draft_stories` with the same rows; the pre-migration copy `plan.db.bak-v6-<stamp>` is next to the store.
+
+## 26. Step 10: simpler, week → day → focus, focus mode and sounds (authorized Nov 1)
+
+- **Navigation (D179 to D182):** Today is the default view; the top bar is Today · Week · Plan · Inbox plus Capture, Commands, Settings and the timer. Plan opens the ritual for the moment, with a switcher. Inbox merges loops and unsorted captures. Every earlier key and command still works.
+- **Quieter UI (D183, D184):** one status per card, details behind a click, a one-line status bar when all is well, plain words.
+- **Week → day (D185 to D187):** Plan the week grid on top with a filtering click and Place target, chips and search, readiness folded. Plan the day one block at a time, committed features first, "Break down #id" and Copy Coop brief. "This week: #id" on cards and Today. A first-run hint.
+- **Focus mode (D188):** a calm focus screen; the top-bar timer on every view; Start focus from Today, a pick and the Now strip.
+- **Focus sounds (D189 to D191):** Web Audio sounds, Settings > Focus, saved playlists, playerctl pause and resume when installed.
+- **Global capture key (D192):** Super + Alt + N.
+- **Contract change:** optional `[focus]` table; `week.load` and `settings.load` return `focus` (and `week.load` returns `media`); `timer.start` takes `playlist`; new actions `media.status` and `playlist.open`; settings section `focus`. No store migration. Still no writes to any external system.
+- **Rollback:** revert the step 10 commits, rebuild and restart the service; remove `[focus]` from config.toml if it was saved; remove the Super + Alt + N lines from bindings.lua or restore `bindings.lua.bak-step10`.

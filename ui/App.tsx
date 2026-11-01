@@ -1056,7 +1056,10 @@ export function App() {
           client={timerClient}
           color={timerColor}
           event={strip?.event ?? null}
-          onTimer={(a) => void runTimer(a)}
+          onTimer={(a) => {
+            // Done and Stop end focus: back to Today (the next step is there).
+            void runTimer(a).then((ok) => ok && (a === "timer.done" || a === "timer.stop") && setView("today"));
+          }}
           onStart={() => startFocus(focusPick(data.plan?.[data.planDay.date]?.picks ?? [], strip?.half ?? null))}
           onClose={() => setView("today")}
           sound={

@@ -86,8 +86,15 @@ Raised in step 8 (not blocking):
 - Q51. ~~Current titles~~ Answered: the current DevOps title always; the stored one only when DevOps is unreachable (D169). Was: Committed features are stored with their title at commit time. A renamed feature keeps its old title in the week cards and in a past week's review until it is committed again. Refresh titles from DevOps on each read of the current or next week?
 
 Raised in step 9 (not blocking):
-- Q52. The global capture key isn't bound (D178). Add `SUPER + ALT + SHIFT + C` (or Super + Alt + N) to bindings.lua?
+- Q52. ~~Global capture key~~ Answered: Super + Alt + N (D192). Was: The global capture key isn't bound (D178). Add `SUPER + ALT + SHIFT + C` (or Super + Alt + N) to bindings.lua?
 - Q53. Draft stories with no feature show only in Plan the day for that client. Should Plan the week list them per client too, so they can be put under a feature later (today that means deleting and capturing again)?
 - Q54. Numeric dates are read US style (11/14 is Nov 14). A bare weekday word ("monday standup notes") is read as a date but only makes a loop when led by by/due/before/until. Keep both?
 - Q55. Notes can be searched and deleted but not edited, and a sorted capture can't be re-sorted. Add edit, or "undo sort" for a few minutes?
 - Q56. The Capture view has no tab or key of its own after the top-bar fit (D177); it opens from the dialog, the command menu, Close out and Plan the week. Give it a key (say Shift+N)?
+
+Raised in step 10 (not blocking):
+- Q57. Media pause uses playerctl, which isn't installed here. Install the `playerctl` package (official repos) so Settings > Focus can pause and resume music? Nothing was installed.
+- Q58. A playlist picked on the focus screen opens at once (`playlist.open`); there is no per-playlist default that opens on every focus start. Add "open this playlist when focus starts" to Settings > Focus?
+- Q59. Plan the day now shows candidates for one block at a time. Is that calmer, or do you want every block's candidates at once on very wide screens (3840)?
+- Q60. The Plan button opens Plan the day all morning even when today is committed (it doesn't jump to Check-in until the morning ends). Keep, or switch to Check-in once committed?
+- Q61. Done and Stop on the focus screen go back to Today. Should Done offer a break first (the F menu still has Break)?
