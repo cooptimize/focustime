@@ -35,6 +35,11 @@ beforeAll(async () => {
     token: TOKEN,
     log: (r) => logs.push(r),
     distDir: dist,
+    takeOpenRequest: async () => {
+      const v = openRequest;
+      openRequest = null;
+      return v;
+    },
     ctx: {
       loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(text) }),
       makeDataverse: (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: f.fetch, cacheDir: mkdtempSync(join(tmpdir(), "c-")), log: (r) => logs.push(r) }),
@@ -49,6 +54,7 @@ beforeAll(async () => {
   close = () => server.close();
 });
 afterAll(() => close());
+let openRequest: string | null = "capture";
 
 type Res = { status: number; headers: Record<string, string | string[] | undefined>; body: string };
 function send(path: string, headers: Record<string, string> = {}, method = "GET", body?: string): Promise<Res> {
@@ -102,6 +108,15 @@ describe("local server", () => {
     expect(r.body).not.toContain(FAKE_TOKEN);
     const logged = JSON.stringify(logs);
     for (const s of [FAKE_SECRET, FAKE_TOKEN, TOKEN]) expect(logged).not.toContain(s);
+  });
+
+  it("hands the launcher's open request to the window once, guarded like actions and POST only (step 9)", async () => {
+    const at = (method = "POST", headers: Record<string, string> = {}) => send("/api/open-request", { cookie: cookie(), origin: `http://127.0.0.1:${port}`, "content-type": "application/json", ...headers }, method, method === "POST" ? "{}" : undefined);
+    expect((await at("POST", { cookie: "" })).status).toBe(401);
+    expect((await at("POST", { origin: "http://evil.example" })).status).toBe(403);
+    expect((await at("GET")).status).toBe(405);
+    expect(JSON.parse((await at()).body)).toEqual({ view: "capture" });
+    expect(JSON.parse((await at()).body)).toEqual({ view: null });
   });
 
   it("rejects unknown actions", async () => {

@@ -21,7 +21,7 @@ const span = (s: { start: string; end: string }, tz: string) => {
   return `${dayOf(a)}, ${clock(a)} to ${clock(b)}`;
 };
 
-const KIND_LABEL: Record<string, string> = { devops_update: "DevOps update", slip: "Heads-up", blocked: "Blocker", flex_update: "Flex session", manual: "Added by me" };
+const KIND_LABEL: Record<string, string> = { devops_update: "DevOps update", slip: "Heads-up", blocked: "Blocker", flex_update: "Flex session", manual: "Added by me", capture: "Captured", priorities: "Priorities" };
 
 /** Copies text; falls back to selecting it when the clipboard isn't available. */
 export async function copy(text: string, el: HTMLTextAreaElement | null): Promise<boolean> {

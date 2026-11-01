@@ -408,13 +408,32 @@ function Candidates({ clientKey, half, date, drafts, weekFeatures, picked, act }
       </ul>
     </div>
   );
-  if (!work) return <>{committedList}<p className="muted pd-note">No DevOps items for {clientKey} this week. Type an intention instead.</p></>;
+  // Step 9: draft stories captured for this client without a feature yet.
+  const loose = drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === null && !picked.has(`d${d.id}`));
+  const looseList = loose.length > 0 && (
+    <div className="candidates">
+      <h4>Draft stories <span className="muted">local, no feature yet</span></h4>
+      <ul>
+        {loose.map((d) => (
+          <li key={`d${d.id}`}>
+            <button type="button" className="cand" onClick={() => add({ draftId: d.id, size: d.size })} title={`Draft story: ${d.title} (${d.size})`}>
+              <span className="plus" aria-hidden="true">+</span>
+              <span className="wi-type">Draft</span>
+              <span className="wi-title">{d.title}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+  if (!work) return <>{committedList}{looseList}<p className="muted pd-note">No DevOps items for {clientKey} this week. Type an intention instead.</p></>;
   // Board order: my story-level items, and my epics and features (which open into their children).
   const rows = first.rest.filter((i) => (isPickable(i) && free(i)) || i.level === "portfolio");
   const shown = all ? rows : rows.slice(0, SHOWN);
   return (
     <>
     {committedList}
+    {looseList}
     <div className="candidates">
       <h4>
         {work.clientName} in board order

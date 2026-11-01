@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks, mondayOf } from "../week/dates.ts";
 import type { Half, IsoDate } from "../week/types.ts";
-import { ActionRefusal, call, connectSource, disconnectSource, planAction, SessionError, setThemeAction, weekLoad } from "./api.ts";
+import { ActionRefusal, call, connectSource, disconnectSource, planAction, SessionError, setThemeAction, takeOpenRequest, weekLoad } from "./api.ts";
 import { dayEndOf, hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type ViewRange } from "../week/hours.ts";
 import { applyTheme, initialTheme } from "./theme.ts";
 import type { Theme } from "../config/schema.ts";
@@ -23,6 +23,7 @@ import { Loops } from "./Loops.tsx";
 import { CloseOut } from "./CloseOut.tsx";
 import { CheckIn } from "./CheckIn.tsx";
 import { PlanWeek } from "./PlanWeek.tsx";
+import { CaptureDialog, CaptureView } from "./Capture.tsx";
 import { borrowedSummary } from "../plan/borrow.ts";
 import { formatDuration } from "../week/format.ts";
 import { PopupMenu } from "./Menus.tsx";
@@ -73,6 +74,10 @@ export function App() {
   const [planWeekAt, setPlanWeekAt] = useState<IsoDate | null>(null);
   /** Bumped when something outside Plan the week (the command menu) changes its plan, so it reloads. */
   const [planWeekVersion, setPlanWeekVersion] = useState(0);
+  /** Quick capture (step 9): the box over any view, and the Capture view (inbox and notes) in the week's place. */
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [captureView, setCaptureView] = useState(false);
+  const [captureVersion, setCaptureVersion] = useState(0);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** The focus timer menu (F or the top bar Focus button), anchored where it was opened. */
   const [timerMenuAt, setTimerMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -424,6 +429,7 @@ export function App() {
       setLoopsOpen(false);
       setCloseOutAt(null);
       setCheckInOpen(false);
+      setCaptureView(false);
       setPlanWeekAt(w);
       if (w !== weekRef.current) void load({ weekStart: w });
     },
@@ -435,7 +441,14 @@ export function App() {
       setCloseOutAt(null);
       setCheckInOpen(false);
       setPlanWeekAt(null);
-      if (v === "planweek") {
+      setCaptureView(false);
+      if (v === "capture") {
+        closePlanDay();
+        setDetailsOpen(false);
+        setSettingsAt(null);
+        setLoopsOpen(false);
+        setCaptureView(true);
+      } else if (v === "planweek") {
         // The week a nudge asked for, else next week.
         if (data) openPlanWeek(data.weekNudge.badge ?? addWeeks(mondayOf(data.planDay.date), 1));
       } else if (v === "week") {
@@ -482,6 +495,22 @@ export function App() {
     const id = setTimeout(() => reloadRef.current(), Math.max(1000, wait));
     return () => clearTimeout(id);
   }, [timerEndsAt]);
+
+  // Step 9: coopilot-open --capture leaves a request; take it on load, when the window gains focus, and every few
+  // seconds while it has focus (the global key may be pressed while Coopilot is already in front).
+  const hasData = !!data;
+  useEffect(() => {
+    if (!hasData) return;
+    const check = () => void takeOpenRequest().then((v) => v === "capture" && setCaptureOpen(true));
+    check();
+    const onFocus = () => check();
+    window.addEventListener("focus", onFocus);
+    const id = setInterval(() => document.hasFocus() && check(), 2000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      clearInterval(id);
+    };
+  }, [hasData]);
 
   /** Clicking the Now strip: back to the week with the current half-day selected (today's week if another is shown). */
   const selectNow = useCallback(() => {
@@ -595,9 +624,10 @@ export function App() {
       if (cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey) return;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
       const inMenu = !!(e.target as HTMLElement | null)?.closest?.(".popup-menu");
-      if ((settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null) && e.key === "Escape" && !inMenu) {
+      if ((settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureView) && e.key === "Escape" && !inMenu && !captureOpen) {
         e.preventDefault();
         setPlanWeekAt(null);
+        setCaptureView(false);
         setSettingsAt(null);
         setLoopsOpen(false);
         setCloseOutAt(null);
@@ -615,6 +645,9 @@ export function App() {
         setCheckInOpen(false);
         setPlanWeekAt(null);
         setLoopsOpen((o) => !o);
+      } else if ((e.key === "n" || e.key === "N") && !typing && !detailsOpen && !inMenu && !captureOpen) {
+        e.preventDefault();
+        setCaptureOpen(true);
       } else if ((e.key === "w" || e.key === "W") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
         e.preventDefault();
         if (planWeekAt !== null) setPlanWeekAt(null);
@@ -636,11 +669,11 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt, cmdOpen, keysOpen, pd, detailsOpen, setView]);
+  }, [settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt, captureView, captureOpen, cmdOpen, keysOpen, pd, detailsOpen, setView]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureView || captureOpen || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (e.target instanceof HTMLInputElement) return;
       if ((e.target as HTMLElement | null)?.closest?.(".popup-menu")) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
@@ -684,7 +717,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt, captureView, captureOpen]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
 
@@ -748,6 +781,8 @@ export function App() {
       openCheckIn: () => setView("checkin"),
       openPlanWeek: (w) => (w ? openPlanWeek(w) : setView("planweek")),
       planWeekOpen: planWeekAt,
+      openCapture: () => setCaptureOpen(true),
+      openCaptures: () => setView("capture"),
       commitWeek: () => {
         if (planWeekAt)
           void call("weekplan.commit", { weekStart: planWeekAt }).then(
@@ -828,7 +863,7 @@ export function App() {
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
   const today = week.days.some((d) => d.date === localToday) ? localToday : "";
   const weekendNote = Temporal.PlainDate.from(localToday).dayOfWeek >= 6 && data.weekStart === data.today.weekStart ? `Today is ${shortDay(localToday)} · showing next week` : null;
-  const view: View = settingsAt !== null ? "settings" : planWeekAt !== null ? "planweek" : loopsOpen ? "loops" : closeOutAt !== null ? "closeout" : checkInOpen ? "checkin" : pd ? "planday" : "week";
+  const view: View = settingsAt !== null ? "settings" : captureView ? "capture" : planWeekAt !== null ? "planweek" : loopsOpen ? "loops" : closeOutAt !== null ? "closeout" : checkInOpen ? "checkin" : pd ? "planday" : "week";
   const borrowWeek = borrowedSummary(data.borrowed, week.days[0]!.date, week.days.at(-1)!.date);
 
   const samples = new Set(data.sources.filter((s) => s.sample).map((s) => s.source));
@@ -891,6 +926,9 @@ export function App() {
           )}
         </nav>
         <div className="top-actions">
+          <button type="button" className="top-btn capture-btn" aria-current={view === "capture" ? "page" : undefined} onClick={() => setCaptureOpen(true)} title={`Quick capture: one line, saved at once (N)${data.captures ? `. ${data.captures} to sort` : ""}`}>
+            Capture{data.captures > 0 && <span className="count" aria-label={`${data.captures} to sort`}>{data.captures}</span>} <kbd>N</kbd>
+          </button>
           <button
             type="button"
             className={`top-btn timer-btn${data.timer ? " timer-on" : ""}`}
@@ -929,12 +967,14 @@ export function App() {
         </div>
       )}
 
-      {planWeekAt !== null && settingsAt === null ? (
-        <PlanWeek weekStart={planWeekAt} data={data} version={planWeekVersion} onWeek={openPlanWeek} onClose={() => setPlanWeekAt(null)} onChanged={reloadQuiet} />
+      {captureView && settingsAt === null ? (
+        <CaptureView data={data} version={captureVersion} onClose={() => setCaptureView(false)} onChanged={reloadQuiet} />
+      ) : planWeekAt !== null && settingsAt === null ? (
+        <PlanWeek weekStart={planWeekAt} data={data} version={planWeekVersion} onWeek={openPlanWeek} onClose={() => setPlanWeekAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : loopsOpen && settingsAt === null ? (
         <Loops timeZone={data.hours.timeZone} onClose={() => setLoopsOpen(false)} onChanged={reloadQuiet} />
       ) : closeOutAt !== null && settingsAt === null ? (
-        <CloseOut key={closeOutAt} date={closeOutAt} data={data} onDate={setCloseOutAt} onClose={() => setCloseOutAt(null)} onChanged={reloadQuiet} />
+        <CloseOut key={closeOutAt} date={closeOutAt} data={data} onDate={setCloseOutAt} onClose={() => setCloseOutAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : checkInOpen && settingsAt === null ? (
         <CheckIn data={data} now={now ?? new Date(clock).toISOString()} onClose={() => setCheckInOpen(false)} onChanged={reloadQuiet} />
       ) : settingsAt !== null ? (
@@ -1027,6 +1067,7 @@ export function App() {
       {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}
       {borrowMenuAt && <PopupMenu at={borrowMenuAt} step={borrowStep(env, data.borrowed)} onClose={() => setBorrowMenuAt(null)} />}
       {keysOpen && <KeyLegend onClose={() => setKeysOpen(false)} />}
+      {captureOpen && <CaptureDialog data={data} onClose={() => setCaptureOpen(false)} onOpenView={() => { setCaptureOpen(false); setView("capture"); }} onChanged={() => { setCaptureVersion((n) => n + 1); reloadQuiet(); }} />}
     </div>
     </MenuHost>
     </PlanCtx.Provider>

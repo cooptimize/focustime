@@ -4,8 +4,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
-import type { WeekFeature } from "../plan/types.ts";
-import { readiness, weekFit, type ClientFit, type ReadinessFlag } from "../plan/weekplan.ts";
+import type { DraftStory, WeekFeature } from "../plan/types.ts";
+import { borrowedForWeek, readiness, weekFit, type ClientFit, type ReadinessFlag } from "../plan/weekplan.ts";
 import { formatDuration } from "../week/format.ts";
 import type { IsoDate, PortfolioItem, Slot } from "../week/types.ts";
 import { call } from "./api.ts";
@@ -13,7 +13,7 @@ import { clientColor } from "./labels.ts";
 import { copy } from "./Loops.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 
-type Props = { weekStart: IsoDate; data: WeekLoadData; version: number; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void };
+type Props = { weekStart: IsoDate; data: WeekLoadData; version: number; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
 type Half = "AM" | "PM";
 type Place = { date: IsoDate; half: Half; label: string };
 
@@ -39,7 +39,7 @@ function placesFor(days: WeekLoadData["week"]["days"], clientKey: string): Place
   );
 }
 
-export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged }: Props) {
+export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged, onCaptures }: Props) {
   const [st, setSt] = useState<WeekPlanState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -87,16 +87,13 @@ export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged 
   );
 
   const features: WeekFeature[] = st?.plan.features ?? [];
-  const borrowedMinutes = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const b of data.borrowed) if (!b.paidAt) m[b.clientKey] = (m[b.clientKey] ?? 0) + b.minutes;
-    return m;
-  }, [data.borrowed]);
+  // Q48: only borrowed time paid back in this week counts against its fit.
+  const borrowedMinutes = useMemo(() => borrowedForWeek(data.borrowed, weekStart), [data.borrowed, weekStart]);
   const fits = useMemo(() => (weekReady ? weekFit(data.week, features, { borrowedMinutes }) : []), [weekReady, data.week, features, borrowedMinutes]);
   const flags = useMemo(
     () =>
       st && weekReady && st.access === "plan"
-        ? readiness({ week: data.week, portfolios: st.portfolios, features, work: data.devops, marks: st.marks, loops: st.loops.map((l) => ({ id: l.id, kind: l.kind, clientKey: l.clientKey, ruleKey: `priorities:${weekStart}:${l.clientKey}`, closedAt: l.closedAt })) })
+        ? readiness({ week: data.week, portfolios: st.portfolios, features, work: data.devops, marks: st.marks, loops: st.loops.map((l) => ({ id: l.id, kind: l.kind, clientKey: l.clientKey, ruleKey: `priorities:${weekStart}:${l.clientKey}`, closedAt: l.closedAt })), drafts: st.drafts, captures: st.captures })
         : [],
     [st, weekReady, data.week, data.devops, features, weekStart],
   );
@@ -200,7 +197,8 @@ export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged 
                 <ReadyRow key={`${f.kind}:${f.clientKey}:${f.itemId ?? ""}`} f={f} clientName={nameOf(f.clientKey)} tz={tz}
                   onBrief={() => void copyBrief(f.clientKey, f.itemId!)}
                   onMark={(on) => void act("feature.mark_breakdown", { clientKey: f.clientKey, itemId: f.itemId, on }, on ? `#${f.itemId} marked as being broken down` : undefined)}
-                  onAsk={() => void act("loop.ask_priorities", { weekStart, clientKey: f.clientKey }, `Loop opened: ask ${nameOf(f.clientKey)} about priorities`)} />
+                  onAsk={() => void act("loop.ask_priorities", { weekStart, clientKey: f.clientKey }, `Loop opened: ask ${nameOf(f.clientKey)} about priorities`)}
+                  onCaptures={onCaptures} />
               ))}
             </ul>
           )}
@@ -267,18 +265,23 @@ function FitChip({ fit }: { fit: ClientFit | undefined }) {
   );
 }
 
-const KIND: Record<ReadinessFlag["kind"], string> = { block_needs_work: "Block needs work", needs_breakdown: "Needs breakdown", needs_features: "Needs features", no_target_date: "No target date" };
+const KIND: Record<ReadinessFlag["kind"], string> = { block_needs_work: "Block needs work", needs_breakdown: "Needs breakdown", needs_features: "Needs features", captures_to_sort: "Captures to sort", no_target_date: "No target date" };
 
-function ReadyRow({ f, clientName, tz, onBrief, onMark, onAsk }: { f: ReadinessFlag; clientName: string; tz: string; onBrief: () => void; onMark: (on: boolean) => void; onAsk: () => void }) {
+function ReadyRow({ f, clientName, tz, onBrief, onMark, onAsk, onCaptures }: { f: ReadinessFlag; clientName: string; tz: string; onBrief: () => void; onMark: (on: boolean) => void; onAsk: () => void; onCaptures: () => void }) {
   return (
     <li className={`pw-flag${f.soft ? " soft" : ""}`}>
       <span className="pw-kind">{KIND[f.kind]}</span>
       <span className="pw-flag-what">
-        <span className="muted">{clientName}</span>{" "}
-        {f.kind === "block_needs_work" ? (
+        {f.kind !== "captures_to_sort" && <><span className="muted">{clientName}</span>{" "}</>}
+        {f.kind === "captures_to_sort" ? (
+          `${f.title}: some may be draft stories for these features`
+        ) : f.kind === "block_needs_work" ? (
           `${f.blocks} block${f.blocks === 1 ? "" : "s"}, nothing open is assigned to you`
         ) : (
-          <WorkLink clientKey={f.clientKey} url={f.url}>#{f.itemId} {f.title}</WorkLink>
+          <>
+            <WorkLink clientKey={f.clientKey} url={f.url}>#{f.itemId} {f.title}</WorkLink>
+            {!!f.drafts && <span className="muted"> · {f.drafts} local draft stor{f.drafts === 1 ? "y" : "ies"} to add in DevOps</span>}
+          </>
         )}
       </span>
       <span className="pw-acts">
@@ -292,6 +295,7 @@ function ReadyRow({ f, clientName, tz, onBrief, onMark, onAsk }: { f: ReadinessF
             )}
           </>
         )}
+        {f.kind === "captures_to_sort" && <button type="button" className="mini" onClick={onCaptures}>Sort captures</button>}
         {f.kind === "block_needs_work" && (f.loopId ? <span className="muted">Loop open: ask about priorities (L)</span> : <button type="button" className="mini" onClick={onAsk}>Create loop: ask about priorities</button>)}
         {(f.kind === "needs_features" || f.kind === "no_target_date") && <WorkLink clientKey={f.clientKey} url={f.url} className="mini">Open in DevOps</WorkLink>}
       </span>
@@ -339,7 +343,7 @@ function ClientSections(p: SectionProps) {
             {feats.length > 0 && (
               <ul className="pw-features">
                 {feats.map((item) => (
-                  <FeatureRow key={item.id} k={k} item={item} wf={p.committed(k, item.id)} places={places} open={p.open.has(`${k}:${item.id}`)} toggle={() => p.toggleOpen(`${k}:${item.id}`)}
+                  <FeatureRow key={item.id} k={k} item={item} wf={p.committed(k, item.id)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === item.id)} places={places} open={p.open.has(`${k}:${item.id}`)} toggle={() => p.toggleOpen(`${k}:${item.id}`)}
                     setBlocks={(n) => p.setBlocks(k, item, n)} place={(d, h, on) => p.place(k, item.id, d, h, on)} onBrief={() => p.onBrief(k, item.id)} />
                 ))}
               </ul>
@@ -348,7 +352,7 @@ function ClientSections(p: SectionProps) {
               <ul className="pw-features">
                 {gone.map((f) => (
                   <li key={f.id} className="pw-feature gone">
-                    <span className="pw-title"><WorkLink clientKey={k} url={f.url}>#{f.itemId} {f.title}</WorkLink> <span className="muted">no longer listed in DevOps (closed or reassigned)</span></span>
+                    <span className="pw-title"><WorkLink clientKey={k} url={f.url}>#{f.itemId} {f.title}</WorkLink> <span className="muted">no longer listed in DevOps (closed or reassigned){f.titleSource === "saved" ? "; title as saved" : ""}</span></span>
                     <span className="pw-acts"><span className="muted">{f.blocks} block{f.blocks === 1 ? "" : "s"}</span> <button type="button" className="mini" onClick={() => p.setBlocks(k, { id: f.itemId, title: f.title }, 0)}>Take off</button></span>
                   </li>
                 ))}
@@ -378,8 +382,8 @@ function ClientSections(p: SectionProps) {
 
 const dateShortIso = (d: IsoDate) => plainDate(d).toLocaleString("en-US", { month: "short", day: "numeric" });
 
-function FeatureRow({ k, item, wf, places, open, toggle, setBlocks, place, onBrief }: {
-  k: string; item: PortfolioItem; wf: WeekFeature | undefined; places: Place[]; open: boolean; toggle: () => void;
+function FeatureRow({ k, item, wf, drafts, places, open, toggle, setBlocks, place, onBrief }: {
+  k: string; item: PortfolioItem; wf: WeekFeature | undefined; drafts: DraftStory[]; places: Place[]; open: boolean; toggle: () => void;
   setBlocks: (n: number) => void; place: (d: IsoDate, h: Half, on: boolean) => void; onBrief: () => void;
 }) {
   const stories = item.children.filter((c) => c.level === "story");
@@ -394,8 +398,9 @@ function FeatureRow({ k, item, wf, places, open, toggle, setBlocks, place, onBri
         <span className="muted"> {item.type} · {item.state} · {why}</span>
         {item.targetDate ? <span className="muted"> · target {dateShortIso(item.targetDate)}</span> : <span className="pw-soft"> No target date</span>}
       </span>
-      <button type="button" className="mini pw-kids" aria-expanded={open} onClick={toggle} disabled={!item.children.length}>
+      <button type="button" className="mini pw-kids" aria-expanded={open} onClick={toggle} disabled={!item.children.length && !drafts.length}>
         {item.children.length ? `${openStories} open, ${stories.length - openStories} closed stor${stories.length === 1 ? "y" : "ies"}` : "No stories yet"}
+        {drafts.length > 0 && ` · ${drafts.length} draft${drafts.length === 1 ? "" : "s"}`}
       </button>
       <span className="pw-blocks" aria-label={`My blocks for #${item.id}`}>
         <button type="button" className="mini" disabled={blocks === 0} onClick={() => setBlocks(blocks - 1)} aria-label="One block fewer">−</button>
@@ -422,6 +427,11 @@ function FeatureRow({ k, item, wf, places, open, toggle, setBlocks, place, onBri
               <WorkLink clientKey={k} url={c.url}>#{c.id} {c.title}</WorkLink> <span className="muted">{c.type} · {c.state} · {c.mine ? "you" : c.assignedTo ?? "unassigned"}</span>
             </li>
           ))}
+          {drafts.map((d) => (
+            <li key={`d${d.id}`} className="draft">
+              <span className="pw-draft-tag">Draft</span> {d.title} <span className="muted">{d.size} · local only, not in DevOps yet</span>
+            </li>
+          ))}
         </ul>
       )}
     </li>
@@ -439,7 +449,7 @@ function PastList({ features, fits, nameOf }: { features: WeekFeature[]; fits: C
           <ul className="pw-features">
             {features.filter((f) => f.clientKey === k).map((f) => (
               <li key={f.id} className="pw-feature committed">
-                <span className="pw-title"><WorkLink clientKey={k} url={f.url}>#{f.itemId} {f.title}</WorkLink></span>
+                <span className="pw-title"><WorkLink clientKey={k} url={f.url}>#{f.itemId} {f.title}</WorkLink>{f.titleSource === "saved" && <span className="muted" title="DevOps couldn't give the current title"> (title as saved)</span>}</span>
                 <span className="muted">{f.blocks} block{f.blocks === 1 ? "" : "s"}{f.slots.length ? `: ${f.slots.map((s) => placeLabel(s.date, s.half)).join(", ")}` : ""}</span>
               </li>
             ))}

@@ -3,11 +3,15 @@
 # the key binding and login autostart.
 #
 #   coopilot-open           start the service if needed, wait for it, then launch or focus the window
+#   coopilot-open --capture same, then the window opens Quick capture (step 9)
 #   coopilot-open --window  (used by the step above) launch the app window
 #
 # The launch link holds the per-launch token. It is read from the server's private file
 # ($XDG_RUNTIME_DIR/coopilot/launch.json, mode 0600) and handed straight to the browser.
 # It is never printed, logged or passed through eval.
+#
+# --capture leaves a one-shot request file ($XDG_RUNTIME_DIR/coopilot/open-request, mode 0600) holding only the
+# word "capture". The window takes it (POST /api/open-request) when it loads or gains focus. No token is involved.
 set -euo pipefail
 
 LAUNCH_FILE="${XDG_RUNTIME_DIR:-/tmp}/coopilot/launch.json"
@@ -59,12 +63,30 @@ if [[ ${1:-} == "--window" ]]; then
   exec omarchy-launch-webapp "$LINK" --user-data-dir="$DATA_DIR" --no-first-run --no-default-browser-check
 fi
 
+CAPTURE=0
+if [[ ${1:-} == "--capture" ]]; then
+  CAPTURE=1
+elif [[ -n ${1:-} ]]; then
+  fail "Unknown option: $1 (use --capture, or nothing)"
+fi
+
 if ! systemctl --user is-active --quiet coopilot.service; then
   systemctl --user start coopilot.service || fail "Could not start the Coopilot service. Check: systemctl --user status coopilot"
 fi
 LINK=""
 wait_for_link
 unset LINK
+
+# The request goes in before the window is focused or launched, so its focus or load finds it.
+if ((CAPTURE)); then
+  REQUEST_DIR=$(dirname "$LAUNCH_FILE")
+  (
+    umask 077
+    tmp=$(mktemp "$REQUEST_DIR/open-request.XXXXXX")
+    printf 'capture\n' >"$tmp"
+    mv -f "$tmp" "$REQUEST_DIR/open-request"
+  ) || fail "Could not ask Coopilot to open Quick capture"
+fi
 
 window_address() {
   hyprctl clients -j | jq -r --arg p "$WINDOW_PATTERN" '.[]|select((.class|test("\\b" + $p + "\\b";"i")) or (.title|test("\\b" + $p + "\\b";"i")))|.address' | head -n1

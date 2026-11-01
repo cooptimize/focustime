@@ -20,6 +20,7 @@ export type OrgScenario =
   | "batch_fails" // metadata and WIQL work, the batch call fails
   | "portfolio"
   | "planweek" // agile; Plan the week (step 8): features I own, features that are parents of my stories, an epic with no open features
+  | "no_story_level" // agile, but the process configuration lists no requirement, task or bug backlog (Q47)
   | "flaky"; // agile, but the first try of every request fails at the network level (a blip) // agile process; I own a feature with children, an epic with a feature and a story below it, and a feature with none
 
 /** Work items for the "portfolio" scenario: id → [type, state, parent, title]. */
@@ -110,7 +111,7 @@ export function fakeDevOps(orgs: Record<string, OrgScenario>, opts: { ids?: numb
       case "server_error":
         return json('{"message":"boom"}', 500);
     }
-    const proc = scenario === "batch_fails" || scenario === "portfolio" || scenario === "planweek" ? "agile" : scenario;
+    const proc = scenario === "batch_fails" || scenario === "portfolio" || scenario === "planweek" || scenario === "no_story_level" ? "agile" : scenario;
     if (scenario === "planweek") {
       if (path === "_apis/wit/wiql") {
         const q = (JSON.parse(String(init?.body)) as { query: string }).query;
@@ -148,7 +149,16 @@ export function fakeDevOps(orgs: Record<string, OrgScenario>, opts: { ids?: numb
       const ids = (JSON.parse(String(init?.body)) as { ids: number[] }).ids;
       return json(JSON.stringify({ count: ids.length, value: ids.map((id) => { const [type, state, parent, title] = PORTFOLIO[id]!; return { id, fields: { "System.Id": id, "System.Title": title, "System.WorkItemType": type, "System.State": state, ...(parent ? { "System.Parent": parent } : {}), "Microsoft.VSTS.Common.StackRank": MINE.indexOf(id) + 1 || 50 + id } }; }) }));
     }
-    if (path === "_apis/work/processconfiguration") return json(fx(`${proc}-processconfiguration`));
+    if (path === "_apis/work/processconfiguration") {
+      if (scenario === "no_story_level") {
+        const pc = JSON.parse(fx("agile-processconfiguration")) as Record<string, unknown>;
+        delete pc.requirementBacklog;
+        delete pc.taskBacklog;
+        delete pc.bugWorkItems;
+        return json(JSON.stringify(pc));
+      }
+      return json(fx(`${proc}-processconfiguration`));
+    }
     if (path === "_apis/wit/workitemtypes") return json(fx(`${proc}-workitemtypes`));
     const states = path.match(/^_apis\/wit\/workitemtypes\/(.+)\/states$/);
     if (states) return json(fx(`${proc}-states-${states[1]}`));

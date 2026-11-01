@@ -1,3 +1,4 @@
+import { withTitles } from "./weekplan-actions.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -69,7 +70,7 @@ describe("Plan the week actions (step 8)", () => {
     const s = await t.run<WeekPlanState>("weekplan.load", {});
     expect(s).toMatchObject({ weekStart: NEXT, thisWeek: "2026-11-02", access: "plan", plan: { committedAt: null, features: [] } });
     const csc = s.portfolios.find((p) => p.clientKey === "CSC")!;
-    expect(csc.items.map((i) => [i.id, i.tier])).toEqual([[210, "feature"], [220, "feature"], [240, "feature"], [250, "epic"]]);
+    expect(csc.items.map((i) => [i.id, i.tier])).toEqual([[210, "feature"], [220, "feature"], [230, "epic"], [240, "feature"], [250, "epic"]]);
     for (const call of t.ado.calls) if (call.method === "POST") expect(call.url).toMatch(/\/_apis\/wit\/(wiql|workitemsbatch)\?/);
   });
 
@@ -90,6 +91,20 @@ describe("Plan the week actions (step 8)", () => {
     // An epic is not committed to a week; its features are.
     expect((await t.fail("weekplan.set_feature", { weekStart: NEXT, clientKey: "CSC", itemId: 250, blocks: 1 })).status).toBe(422);
     expect((await t.fail("weekplan.place", { weekStart: NEXT, clientKey: "CSC", itemId: 210, date: "2026-11-16", half: "AM", on: true })).status).toBe(422);
+  });
+
+  it("Q51: shows the current DevOps title; the stored title only when DevOps can't give one", async () => {
+    const t = setup();
+    await t.run("weekplan.load", { weekStart: NEXT });
+    await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "CSC", itemId: 210, blocks: 1 });
+    // The title stored at commit differs from DevOps's (as after a rename in DevOps).
+    t.plan.setWeekFeature({ weekStart: NEXT, clientKey: "CSC", itemId: 210, title: "Name at commit", itemType: "Feature", url: null, blocks: 1 });
+    const s = await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT });
+    expect(s.plan.features[0]).toMatchObject({ title: "Dana's feature", titleSource: "devops" });
+    const w = await t.run<WeekLoadData>("week.load", { weekStart: NEXT });
+    expect(w.weekPlan!.features[0]).toMatchObject({ title: "Dana's feature", titleSource: "devops" });
+    // DevOps unreachable (a fresh server with only the stored plan): the stored title stands, marked as saved.
+    expect(withTitles({ weekStart: NEXT, committedAt: null, updatedAt: null, changed: false, features: t.plan.weekPlan(NEXT).features }, () => null).features[0]).toMatchObject({ title: "Name at commit", titleSource: "saved" });
   });
 
   it("commits the week, stays editable and re-committable, and week.load shows it", async () => {

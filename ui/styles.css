@@ -1460,3 +1460,64 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 }
 .planweek .loops-head { max-width: 1400px; justify-content: flex-start; }
 .planweek .loops-head .top-btn.primary + .top-btn { margin-left: 0; }
+
+/* ---- Quick capture (step 9) ---- */
+.capture { flex: 1; overflow: auto; padding: 8px 24px 32px; }
+.capture .loops-head { max-width: 1100px; }
+.capture .loops-head .top-btn { margin-left: auto; }
+.capture .co-section { max-width: 1100px; }
+.capture input:not([type="checkbox"]), .capture select, .cap-dialog input:not([type="checkbox"]), .cap-dialog select {
+  font: inherit; font-size: 13px; color: inherit; background: var(--raised);
+  border: 1px solid var(--border-strong); border-radius: 7px; padding: 5px 8px; min-width: 0;
+}
+.capture input::placeholder, .cap-dialog input::placeholder { color: var(--text-faint); }
+.cap-box { display: grid; gap: 8px; }
+.cap-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.cap-input > input { font-size: 15px !important; padding: 8px 10px !important; }
+.cap-complete { list-style: none; margin: -4px 0 0; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); box-shadow: var(--shadow-menu); display: grid; gap: 2px; max-width: 420px; }
+.cap-complete button { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-size: 13px; }
+.cap-complete [aria-selected="true"] button, .cap-complete button:hover { background: var(--selected); }
+.cap-complete .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+.cap-saved, .cap-item { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); display: grid; gap: 8px; }
+.cap-text { margin: 0; font-size: 14px; color: var(--text); overflow-wrap: anywhere; }
+.cap-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ok); font-weight: 650; margin-right: 6px; }
+.cap-sort { display: grid; gap: 8px; }
+.cap-kinds { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cap-suggested { margin-left: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); font-weight: 650; }
+.cap-summary { margin: 0; font-size: 13px; color: var(--text-muted); overflow-wrap: anywhere; }
+.cap-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; align-items: end; }
+.cap-fields label { display: grid; gap: 3px; font-size: 12px; color: var(--text-muted); }
+.cap-fields label.wide { grid-column: 1 / -1; }
+.cap-size { display: inline-flex; gap: 2px; align-self: center; }
+.cap-size .mini[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 650; }
+.cap-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cap-inbox, .cap-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cap-filter { display: flex; gap: 8px; margin: 0 0 8px; }
+.cap-filter input { flex: 1; }
+.cap-notes li { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto auto; align-items: baseline; gap: 6px 12px; padding: 6px 12px; border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 8px; background: var(--surface); font-size: 13px; }
+.cap-note-client { font-weight: 600; color: var(--text-muted); }
+.cap-note-text { overflow-wrap: anywhere; }
+.cap-backdrop { position: fixed; inset: 0; z-index: 60; background: var(--backdrop); display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px; }
+.cap-dialog { width: min(720px, 100%); max-height: 76vh; overflow: auto; padding: 16px 18px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-dialog); display: grid; gap: 10px; }
+.cap-dialog-head { display: flex; align-items: baseline; gap: 4px 12px; }
+.cap-dialog-head .muted { flex: 1 1 auto; min-width: 0; }
+.cap-dialog-head .mini { flex: none; white-space: nowrap; }
+.cap-dialog-head h2 { margin: 0; font-size: 18px; white-space: nowrap; }
+.cap-dialog-head .mini:first-of-type { margin-left: auto; }
+.capture-btn .count { margin-left: 4px; padding: 0 6px; border-radius: 99px; font-size: 11px; line-height: 16px; background: var(--sunken); color: var(--text); }
+.capture-btn[aria-current="page"] { border-color: var(--accent); }
+.co-captures p { margin: 0; padding: 8px 12px; border: 1px dashed var(--border-strong); border-radius: 8px; font-size: 13px; }
+.pw-children li.draft { color: var(--text-muted); }
+.pw-draft-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); font-weight: 650; margin-right: 4px; }
+@media (max-width: 900px) {
+  .cap-fields, .cap-input { grid-template-columns: minmax(0, 1fr); }
+  .cap-notes li { grid-template-columns: minmax(0, 1fr); }
+}
+/* Step 9: the top bar gained Capture. Below 2100 px the key hints in tabs and buttons go (the keys still work, and
+   show in each title and the ? legend) so the tabs, the week title and the actions don't overlap. */
+@media (max-width: 2100px) { .view-tab > kbd, .top-btn > kbd { display: none; } }
+.borrow-chip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Medium widths: wrap to a second row instead of overlapping when the tabs, week title and actions don't fit. */
+.app.medium > .topbar { display: flex; flex-wrap: wrap; align-items: center; height: auto; min-height: 56px; padding-block: 8px; row-gap: 8px; }
+.app.medium > .topbar .weeknav { flex: 1 1 auto; justify-content: center; }
+.app.medium > .topbar .top-actions { margin-left: auto; }

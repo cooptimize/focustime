@@ -53,6 +53,8 @@ function env(over: Partial<MenuEnv> = {}) {
     resetPlan: () => calls.push(["reset"]),
     openCloseOut: (d) => calls.push(["closeout", d]),
     openCheckIn: () => calls.push(["checkin"]),
+    openCapture: () => calls.push(["capture"]),
+    openCaptures: () => calls.push(["captures"]),
     openPlanWeek: (w?: string) => calls.push(["planweek", w]),
     planWeekOpen: null,
     commitWeek: () => calls.push(["commitweek"]),

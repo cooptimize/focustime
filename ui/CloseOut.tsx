@@ -11,11 +11,11 @@ import { call, planAction } from "./api.ts";
 import { AddLoop, LoopRow } from "./Loops.tsx";
 import { dayName, FlexOfferBar, FocusVsSize, HALF_NAMES, SlipActions, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 
-type Props = { date: IsoDate; data: WeekLoadData; onDate: (d: IsoDate) => void; onClose: () => void; onChanged: () => void };
+type Props = { date: IsoDate; data: WeekLoadData; onDate: (d: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
 
 const PAYBACK: Record<string, string> = { tonight: "tonight", friday: "Friday", day: "" };
 
-export function CloseOut({ date, data, onDate, onClose, onChanged }: Props) {
+export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }: Props) {
   const [st, setSt] = useState<CloseOutState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -205,6 +205,14 @@ export function CloseOut({ date, data, onDate, onClose, onChanged }: Props) {
         </ul>
       </section>
 
+      {st.captures > 0 && (
+        <section className="co-section co-captures" aria-label="Captures">
+          <p>
+            <strong>{st.captures} unprocessed capture{st.captures === 1 ? "" : "s"}</strong> <span className="muted">waiting to become loops, draft stories or notes.</span>{" "}
+            <button type="button" className="mini" onClick={onCaptures}>Sort captures</button>
+          </p>
+        </section>
+      )}
       <section className="co-section" aria-labelledby="co-loops">
         <h3 id="co-loops">
           3. Loops <span className="muted">{st.loops.length} open, newest first</span>

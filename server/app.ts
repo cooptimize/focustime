@@ -15,6 +15,8 @@ export type AppOptions = {
   distDir?: string;
   /** Or hand UI requests to Vite (development). */
   devMiddleware?: (req: IncomingMessage, res: ServerResponse, next: () => void) => void;
+  /** Step 9: the view coopilot-open asked for (e.g. "capture"), taken once; null when none. */
+  takeOpenRequest?: () => Promise<string | null>;
 };
 
 const TYPES: Record<string, string> = {
@@ -100,6 +102,16 @@ export function createApp(opts: AppOptions) {
       opts.log({ source: "server", op: typeof out === "object" && out.ok ? "action" : "action_rejected", status, durationMs: performance.now() - started });
       res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
       return res.end(JSON.stringify(out));
+    }
+    // The launcher's one-shot request (coopilot-open --capture). Guarded like actions; POST so a link can't take it.
+    if (url.pathname === "/api/open-request") {
+      if (req.method !== "POST") {
+        res.writeHead(405, { allow: "POST" });
+        return res.end();
+      }
+      const view = (await opts.takeOpenRequest?.().catch(() => null)) ?? null;
+      res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+      return res.end(JSON.stringify({ view }));
     }
     if (url.pathname.startsWith("/api/")) {
       res.writeHead(404);

@@ -38,7 +38,13 @@ export type Pick = {
   updatedAt: ZonedStamp;
 };
 
-export type DraftStory = { id: number; clientKey: string; parentItemId: number; title: string; size: Size; createdAt: ZonedStamp };
+/** A local draft story for a client, under a feature or (step 9, from a capture) under none yet. */
+export type DraftStory = { id: number; clientKey: string; parentItemId: number | null; title: string; size: Size; createdAt: ZonedStamp };
+
+/** A quick capture (step 9): in the inbox until routed to a loop, a draft story or a note (or dismissed). */
+export type Capture = { id: number; text: string; clientKey: string | null; createdAt: ZonedStamp; routedAt: ZonedStamp | null; routedAs: "loop" | "draft" | "note" | "dismissed" | null; routedId: number | null };
+/** A personal note (step 9), optionally tagged to a client. */
+export type Note = { id: number; clientKey: string | null; text: string; captureId: number | null; createdAt: ZonedStamp };
 
 /** Everything the Plan the day panel needs for one date. */
 export type PlanDayState = {
@@ -82,6 +88,8 @@ export type WeekFeature = {
   blocks: number;
   /** Specific blocks (morning or afternoon) it is placed on, in date order. At most `blocks`. */
   slots: { date: IsoDate; half: "AM" | "PM" }[];
+  /** Q51: "devops" when the title is DevOps's current one, "saved" when it is the one stored at commit. Read models only. */
+  titleSource?: "devops" | "saved";
   position: number;
   createdAt: ZonedStamp;
   updatedAt: ZonedStamp;

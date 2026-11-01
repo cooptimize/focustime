@@ -41,3 +41,15 @@ export const planAction = (action: string, input: unknown) => call<PlanResult & 
 
 /** Saves the theme in config (step 6b). */
 export const setThemeAction = (theme: string) => call<{ ui: { theme: string } }>("ui.set_theme", { theme });
+
+/** Step 9: the view coopilot-open asked for ("capture"), taken once; null when none or on any failure. */
+export async function takeOpenRequest(): Promise<string | null> {
+  try {
+    const r = await fetch("/api/open-request", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { view?: unknown };
+    return typeof j.view === "string" ? j.view : null;
+  } catch {
+    return null;
+  }
+}

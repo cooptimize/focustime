@@ -33,6 +33,29 @@ export type ClientFit = {
   verdict: Verdict;
 };
 
+/**
+ * Q48: the unpaid borrowed minutes per client that count against a week's fit: those whose payback date falls in
+ * that week (Monday to Sunday), or that have no payback date.
+ */
+export function borrowedForWeek(list: readonly { clientKey: string; minutes: number; paidAt: string | null; paybackDate: IsoDate | null }[], weekStart: IsoDate): Record<string, number> {
+  const end = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
+  const out: Record<string, number> = {};
+  for (const b of list)
+    if (!b.paidAt && (!b.paybackDate || (b.paybackDate >= weekStart && b.paybackDate <= end))) out[b.clientKey] = (out[b.clientKey] ?? 0) + b.minutes;
+  return out;
+}
+
+/**
+ * Q51: committed features show their current DevOps title; the title stored at commit is only the fallback when
+ * DevOps can't give one right now (unreachable, cached, or the item no longer read).
+ */
+export function withCurrentTitles<T extends { clientKey: string; itemId: number; title: string }>(features: readonly T[], current: (clientKey: string, itemId: number) => string | null): (T & { titleSource: "devops" | "saved" })[] {
+  return features.map((f) => {
+    const t = current(f.clientKey, f.itemId);
+    return t ? { ...f, title: t, titleSource: "devops" as const } : { ...f, titleSource: "saved" as const };
+  });
+}
+
 /** Less than half a block to spare is tight. */
 export const TIGHT_BLOCKS = 0.5;
 /** A block's length when a client has none to average (unpaid borrowed time is still owed). */
@@ -73,7 +96,7 @@ export function weekFit(week: Week, features: readonly FeatureLike[], o: { borro
   });
 }
 
-export type ReadinessKind = "block_needs_work" | "needs_breakdown" | "needs_features" | "no_target_date";
+export type ReadinessKind = "block_needs_work" | "needs_breakdown" | "needs_features" | "captures_to_sort" | "no_target_date";
 
 export type ReadinessFlag = {
   kind: ReadinessKind;
@@ -87,6 +110,10 @@ export type ReadinessFlag = {
   blocks?: number;
   /** Needs breakdown: when it was marked as being broken down (local), or null. */
   markedAt?: string | null;
+  /** Needs breakdown (step 9): local draft stories under it, from captures or Plan the day. */
+  drafts?: number;
+  /** Captures to sort (step 9): how many are in the inbox. */
+  count?: number;
   /** Block needs work: the open "ask about priorities" loop for that client and week, or null. */
   loopId?: number | null;
 };
@@ -102,9 +129,13 @@ export type ReadinessInput = {
   work: readonly WorkLike[] | null;
   marks: readonly { clientKey: string; itemId: number; markedAt: string }[];
   loops: readonly LoopRef[];
+  /** Local draft stories (step 9), to count those under each feature. */
+  drafts?: readonly { clientKey: string; parentItemId: number | null }[];
+  /** Captures not sorted yet (step 9). */
+  captures?: number;
 };
 
-const ORDER: readonly ReadinessKind[] = ["block_needs_work", "needs_breakdown", "needs_features", "no_target_date"];
+const ORDER: readonly ReadinessKind[] = ["block_needs_work", "needs_breakdown", "needs_features", "captures_to_sort", "no_target_date"];
 
 /** The "ask about priorities" loop key for a client and week. */
 export const prioritiesKey = (weekStart: IsoDate, clientKey: string) => `priorities:${weekStart}:${clientKey}`;
@@ -132,7 +163,11 @@ export function readiness(i: ReadinessInput): ReadinessFlag[] {
     const item = find(f.clientKey, f.itemId);
     if (!item) continue;
     if (!item.children.some((c) => c.open && c.level === "story"))
-      out.push({ kind: "needs_breakdown", clientKey: f.clientKey, itemId: f.itemId, title: item.title, url: item.url, soft: false, markedAt: i.marks.find((m) => m.clientKey === f.clientKey && m.itemId === f.itemId)?.markedAt ?? null });
+      out.push({
+        kind: "needs_breakdown", clientKey: f.clientKey, itemId: f.itemId, title: item.title, url: item.url, soft: false,
+        markedAt: i.marks.find((m) => m.clientKey === f.clientKey && m.itemId === f.itemId)?.markedAt ?? null,
+        drafts: (i.drafts ?? []).filter((d) => d.clientKey === f.clientKey && d.parentItemId === f.itemId).length,
+      });
   }
   for (const p of i.portfolios)
     for (const e of p.items.filter((x) => x.tier === "epic"))
@@ -141,6 +176,7 @@ export function readiness(i: ReadinessInput): ReadinessFlag[] {
     const item = find(f.clientKey, f.itemId);
     if (item && !item.targetDate) out.push({ kind: "no_target_date", clientKey: f.clientKey, itemId: f.itemId, title: item.title, url: item.url, soft: true });
   }
+  if (i.captures) out.push({ kind: "captures_to_sort", clientKey: "", itemId: null, title: `${i.captures} unprocessed capture${i.captures === 1 ? "" : "s"}`, url: null, soft: false, count: i.captures });
   return out.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
 }
 
@@ -189,10 +225,17 @@ export type NudgeKey = "week_nudge_thu" | "week_nudge_fri" | "week_nudge_mon";
 
 /**
  * Week nudges: Thursday and Friday for next week, Monday for this week, each from its time until the end of that day
- * and only while that week isn't committed (the caller fires each once, markOnce). The top-bar badge shows the week of
- * the latest nudge time passed (looking back a week) until that week is committed.
+ * and only while that week isn't committed (the caller fires each once, markOnce). Q50: given today's working start
+ * (null: no working time today), one not sent on its day (a PTO day) is due again from that start, until its week
+ * starts (Thursday's and Friday's) or ends (Monday's). The top-bar badge shows the week of the latest nudge time
+ * passed (looking back a week) until that week is committed.
  */
-export function weekNudges(now: Temporal.ZonedDateTime, times: NudgeTimes, committed: (weekStart: IsoDate) => boolean): { due: { key: NudgeKey; weekStart: IsoDate }[]; badge: IsoDate | null } {
+export function weekNudges(
+  now: Temporal.ZonedDateTime,
+  times: NudgeTimes,
+  committed: (weekStart: IsoDate) => boolean,
+  o: { workStart?: Temporal.PlainTime | null } = {},
+): { due: { key: NudgeKey; weekStart: IsoDate }[]; badge: IsoDate | null } {
   type Moment = { key: NudgeKey; at: Temporal.ZonedDateTime; weekStart: IsoDate; day: IsoDate };
   const moments: Moment[] = [];
   const today = now.toPlainDate();
@@ -209,7 +252,10 @@ export function weekNudges(now: Temporal.ZonedDateTime, times: NudgeTimes, commi
     if (d.dayOfWeek === 1) add("week_nudge_mon", times.mon, mondayOf);
   }
   const passed = moments.filter((m) => Temporal.ZonedDateTime.compare(m.at, now) <= 0);
-  const due = passed.filter((m) => m.day === today.toString() && !committed(m.weekStart)).map((m) => ({ key: m.key, weekStart: m.weekStart }));
+  const until = (m: Moment) => Temporal.PlainDate.from(m.weekStart).add({ days: m.key === "week_nudge_mon" ? 7 : 0 });
+  const late = (m: Moment) =>
+    m.day < today.toString() && !!o.workStart && Temporal.PlainTime.compare(now.toPlainTime(), o.workStart) >= 0 && Temporal.PlainDate.compare(today, until(m)) < 0;
+  const due = passed.filter((m) => (m.day === today.toString() || late(m)) && !committed(m.weekStart)).map((m) => ({ key: m.key, weekStart: m.weekStart }));
   const last = passed.sort((a, b) => Temporal.ZonedDateTime.compare(a.at, b.at)).at(-1);
   return { due, badge: last && !committed(last.weekStart) ? last.weekStart : null };
 }

@@ -112,19 +112,24 @@ export async function checkWeekNudges(d: {
   off: (date: string) => Promise<boolean>;
   once: (key: string, weekStart: string) => boolean;
   send: (body: string) => void;
+  /** Today's working start ("HH:MM"), or null with no working time today (Q50: a skipped nudge fires then). */
+  workStart?: (date: string) => Promise<string | null>;
 }): Promise<number> {
   const times = await d.times();
   if (!times) return 0;
   const now = d.now();
-  const { due } = weekNudges(now, times, d.committed);
-  if (!due.length) return 0;
   const today = now.toPlainDate().toString();
+  const start = d.workStart ? await d.workStart(today).catch(() => null) : undefined;
+  const { due } = weekNudges(now, times, d.committed, start === undefined ? {} : { workStart: start ? Temporal.PlainTime.from(start) : null });
+  if (!due.length) return 0;
   if (await d.off(today).catch(() => false)) return 0;
   const thisWeek = now.toPlainDate().subtract({ days: now.dayOfWeek - 1 }).toString();
   let n = 0;
-  for (const x of due) {
-    if (!d.once(x.key, x.weekStart)) continue;
-    d.send(WEEK_NUDGE_MESSAGE(x.weekStart, x.weekStart === thisWeek));
+  // One message per week, however many of its nudges are due; each is marked so none repeats.
+  for (const weekStart of [...new Set(due.map((x) => x.weekStart))]) {
+    const fresh = due.filter((x) => x.weekStart === weekStart).map((x) => d.once(x.key, weekStart));
+    if (!fresh.some(Boolean)) continue;
+    d.send(WEEK_NUDGE_MESSAGE(weekStart, weekStart === thisWeek));
     n++;
   }
   return n;

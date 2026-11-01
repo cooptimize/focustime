@@ -123,6 +123,7 @@ export async function closeOutState(ctx: CloseoutContext, plan: PlanStore, d: Is
     previous: Object.fromEntries(Object.entries(plan.latestNotes(prevDay)).map(([k, n]) => [k, noteView(n)])),
     loops: plan.openLoops().sort(newestFirst).map((l) => loopView(plan, l, today, clientName)),
     borrowed: plan.borrowedFor(d, d).map(borrowedView),
+    captures: plan.inboxCount(),
   };
 }
 

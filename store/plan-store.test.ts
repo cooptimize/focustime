@@ -299,3 +299,75 @@ describe("week plan (step 8)", () => {
     expect(store.breakdownMarks()).toEqual([]);
   });
 });
+
+describe("quick capture (step 9)", () => {
+  it("migration 7 keeps draft stories and the picks that point at them, and lets a draft have no feature", () => {
+    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const path = join(dir, "plan.db");
+    const old = new DatabaseSync(path);
+    old.exec("PRAGMA foreign_keys = ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+    for (let v = 1; v <= 6; v++) {
+      old.exec(MIGRATIONS[v - 1]!);
+      old.prepare("INSERT INTO schema_migrations VALUES (?, 'x')").run(v);
+    }
+    old.exec("INSERT INTO day_plans (date, created_at, updated_at) VALUES ('2026-10-29', 'x', 'x')");
+    old.exec("INSERT INTO draft_stories VALUES (5, 'CSC', 210, 'Draft under 210', 'M', 'x', 'x')");
+    old.exec(`INSERT INTO picks (id, date, half, client_key, kind, draft_id, title, size, status, position, created_at, updated_at)
+              VALUES (1, '2026-10-29', 'AM', 'CSC', 'draft', 5, 'Draft under 210', 'M', 'planned', 0, 'x', 'x')`);
+    old.close();
+    const store = createPlanStore({ path, now });
+    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
+    expect(store.drafts()).toEqual([expect.objectContaining({ id: 5, parentItemId: 210, title: "Draft under 210" })]);
+    expect(store.picksFor("2026-10-29")[0]).toMatchObject({ kind: "draft", draftId: 5 });
+    expect(store.addDraft({ clientKey: "CSC", parentItemId: null, title: "No feature yet", size: "S" }).parentItemId).toBeNull();
+    expect(readdirSync(dir).filter((f) => f.startsWith("plan.db.bak-v6-"))).toHaveLength(1);
+    store.close();
+  });
+
+  it("saves captures to the inbox and routes each once to a loop, a draft story, a note, or dismisses it", () => {
+    const { store } = fresh();
+    const a = store.addCapture({ text: "  Told Dana I'd send the export by Thursday  ", clientKey: "CSC" });
+    expect(a).toMatchObject({ text: "Told Dana I'd send the export by Thursday", clientKey: "CSC", routedAt: null });
+    const b = store.addCapture({ text: "need to add paging", clientKey: "W&C" });
+    const c = store.addCapture({ text: "their CFO prefers email", clientKey: null });
+    const d = store.addCapture({ text: "never mind", clientKey: null });
+    expect(() => store.addCapture({ text: "   ", clientKey: null })).toThrow(/Type something/);
+    expect(store.inbox().map((x) => x.id)).toEqual([d.id, c.id, b.id, a.id]);
+    expect(store.inboxCount()).toBe(4);
+
+    const la = store.routeCapture(a.id, { as: "loop", clientKey: "CSC", who: "Dana", what: "Send the export", due: "2026-11-05" });
+    expect(la).toMatchObject({ routedAs: "loop" });
+    expect(store.openLoops().find((l) => l.id === la.routedId)).toMatchObject({ kind: "capture", who: "Dana", what: "Send the export", due: "2026-11-05", clientKey: "CSC" });
+    const db = store.routeCapture(b.id, { as: "draft", clientKey: "W&C", parentItemId: null, title: "Add paging", size: "M" });
+    expect(store.getDraft(db.routedId!)).toMatchObject({ clientKey: "W&C", parentItemId: null, title: "Add paging", size: "M" });
+    const nc = store.routeCapture(c.id, { as: "note", clientKey: "Quiddity", text: "Their CFO prefers email" });
+    expect(store.notes()).toEqual([expect.objectContaining({ id: nc.routedId, clientKey: "Quiddity", text: "Their CFO prefers email", captureId: c.id })]);
+    store.routeCapture(d.id, { as: "dismissed" });
+    expect(store.inboxCount()).toBe(0);
+    expect(() => store.routeCapture(a.id, { as: "dismissed" })).toThrow(/already sorted/);
+    // A failed route leaves the capture in the inbox.
+    const e = store.addCapture({ text: "x", clientKey: null });
+    expect(() => store.routeCapture(e.id, { as: "loop", clientKey: null, who: "", what: " ", due: null })).toThrow();
+    expect(store.inbox().map((x) => x.id)).toEqual([e.id]);
+  });
+
+  it("notes: per client, searchable by words in any order and case (LIKE characters are literal); deleted by id; exported and reset", () => {
+    const { store } = fresh();
+    for (const [k, t] of [["CSC", "Schema manager: Git support wanted"], ["CSC", "100% of loads run nightly"], ["W&C", "Timesheet approvals go to Mark"], [null, "Read about caching"]] as const) {
+      const cap = store.addCapture({ text: t, clientKey: k });
+      store.routeCapture(cap.id, { as: "note", clientKey: k, text: t });
+    }
+    expect(store.notes({ clientKey: "CSC" }).map((n) => n.text)).toEqual(["100% of loads run nightly", "Schema manager: Git support wanted"]);
+    expect(store.notes({ clientKey: null }).map((n) => n.text)).toEqual(["Read about caching"]);
+    expect(store.notes({ query: "git SCHEMA" }).map((n) => n.text)).toEqual(["Schema manager: Git support wanted"]);
+    expect(store.notes({ query: "100%" }).map((n) => n.text)).toEqual(["100% of loads run nightly"]);
+    expect(store.notes({ query: "_" })).toEqual([]);
+    const ex = store.exportJson();
+    expect(ex.notes).toHaveLength(4);
+    expect(ex.captures).toHaveLength(4);
+    expect(store.deleteNote(store.notes({ clientKey: null })[0]!.id)).toBe(true);
+    expect(store.notes()).toHaveLength(3);
+    store.reset();
+    expect([store.notes().length, store.inboxCount(), store.exportJson().captures.length]).toEqual([0, 0, 0]);
+  });
+});

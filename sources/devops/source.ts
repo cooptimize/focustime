@@ -16,6 +16,7 @@ const BATCH_MAX = 200; // documented maximum ids per workitemsbatch call
 const WIQL_TOP = 1000;
 const CHILD_DEPTH = 2; // epic → feature → story
 const MAX_PARENTS = 200; // keeps the IN (...) list far under the 32K WIQL limit
+const MAX_ANCESTOR_DEPTH = 4; // feature → epic → any custom levels above, Q49
 
 export type DevOpsDeps = {
   fetch: typeof fetch;
@@ -186,9 +187,16 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, ...n }).items;
   }
 
+  /** Q47: without a story level the backlog levels can't tell stories from features, so the client fails instead of guessing. */
+  function needStoryLevel(meta: Metadata, ctx: Ctx, project: string) {
+    if (meta.levels.story.size === 0)
+      throw new DevOpsFailure("error", `The process for ${ctx.projectName || project} (${ctx.client}) has no story level in its backlog levels, so Coopilot can't tell stories from features there. Nothing is guessed; check the project's backlog configuration`);
+  }
+
   async function fetchClient(ref: ClientRef, target: DevOpsTarget, watch: readonly number[] = [], features: readonly number[] = []): Promise<{ items: WorkItem[]; children: WorkItem[]; watched: WorkItem[]; committed: WorkItem[] }> {
     const { ctx, project } = contextOf(ref, target);
     const raw = await loadMetadata(ctx, project);
+    needStoryLevel(raw, ctx, project);
     const meta = { ...raw, categories: withOpenStates(raw.categories, d.openStates?.(ref.clientKey) ?? []), levels: allowPortfolio(raw.levels, d.pickableTypes?.() ?? []) };
     const items = await fetchItems(ctx, project, meta, buildWiql(target.email!, meta.categories, meta.orderField));
     log("items", { count: items.length });
@@ -246,6 +254,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
   async function fetchPortfolio(ref: ClientRef, target: DevOpsTarget, mine: readonly WorkItem[]): Promise<{ items: PortfolioItem[]; targetFields: Record<string, string> }> {
     const { ctx, project } = contextOf(ref, target);
     const raw = await loadMetadata(ctx, project);
+    needStoryLevel(raw, ctx, project);
     const categories = withOpenStates(raw.categories, d.openStates?.(ref.clientKey) ?? []);
     const portfolioTypes = new Set([...raw.tiers.feature, ...raw.tiers.epic]);
     // Assigned to me, or the parent of a story-level item assigned to me (raw backlog levels, not the pickable list).
@@ -257,6 +266,18 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const fields = [...batchFields(raw.orderField), "System.AssignedTo", ...new Set(Object.values(targetFields))];
     const n = { orderField: raw.orderField, categories, levels: raw.levels, keepDone: true, me: ctx.me, people: true, targetFields, timeZone: d.timeZone };
     const found = (await readByIds(ctx, project, ids, fields, n)).filter((i) => portfolioTypes.has(i.type) && !DONE_CATEGORIES.has(i.stateCategory));
+    // Q49: follow parent links up to the top portfolio level, so the epics above my features are read too.
+    const above = new Set<number>();
+    for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
+      const have = new Set(found.map((i) => i.id));
+      const up = [...new Set(found.map((i) => i.parentId).filter((id): id is number => id !== null && !have.has(id)))].slice(0, MAX_PARENTS);
+      if (!up.length) break;
+      const got = (await readByIds(ctx, project, up, fields, n)).filter((i) => portfolioTypes.has(i.type) && !DONE_CATEGORIES.has(i.stateCategory) && !have.has(i.id));
+      if (!got.length) break;
+      for (const i of got) above.add(i.id);
+      found.push(...got);
+    }
+    found.sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
     const kids: WorkItem[] = [];
     if (found.length) {
       const p = encodeURIComponent(project);
@@ -278,7 +299,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
       targetDate: i.targetDate ?? null,
       assignedTo: i.assignedTo ?? null,
       mine: !!i.assignedToMe,
-      why: [...(assigned.has(i.id) ? ["assigned" as const] : []), ...(parents.has(i.id) ? ["parent" as const] : [])],
+      why: [...(assigned.has(i.id) ? ["assigned" as const] : []), ...(parents.has(i.id) ? ["parent" as const] : []), ...(above.has(i.id) && !assigned.has(i.id) && !parents.has(i.id) ? ["above" as const] : [])],
       children: kids.filter((k) => k.parentId === i.id).map((k) => ({ id: k.id, title: k.title, type: k.type, state: k.state, stateCategory: k.stateCategory, open: !DONE_CATEGORIES.has(k.stateCategory), level: k.level, order: k.order, url: k.url, assignedTo: k.assignedTo ?? null, mine: !!k.assignedToMe })),
     }));
     return { items, targetFields };

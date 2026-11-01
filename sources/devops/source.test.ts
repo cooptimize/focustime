@@ -380,13 +380,15 @@ describe("Plan the week: features and epics (step 8)", () => {
     const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
     const [csc] = await s.src.portfolio([ref("CSC")]);
     expect(csc!.status).toBe("ok");
-    // Board order (StackRank = id here). 230 is only a grandparent and not mine, so it isn't listed.
+    // Board order (StackRank = id here). Q49: 230 is the epic above Dana's feature, read by following parent links up.
     expect(csc!.items.map((i) => [i.id, i.tier, i.why])).toEqual([
       [210, "feature", ["parent"]],
       [220, "feature", ["parent"]],
+      [230, "epic", ["above"]],
       [240, "feature", ["assigned"]],
       [250, "epic", ["assigned"]],
     ]);
+    expect(csc!.items.find((i) => i.id === 230)!.children.map((c) => [c.id, c.open, c.level])).toEqual([[210, true, "portfolio"]]);
     const dana = csc!.items.find((i) => i.id === 210)!;
     expect(dana).toMatchObject({ title: "Dana's feature", state: "Active", targetDate: "2026-11-20", assignedTo: "Dana Ruiz", mine: false, url: "https://dev.azure.com/planweek/CSC%20Project/_workitems/edit/210" });
     expect(dana.children.map((c) => [c.id, c.open, c.assignedTo, c.mine])).toEqual([[201, true, "Tanner S", true], [211, false, "Dana Ruiz", false], [212, true, null, false]]);
@@ -416,7 +418,17 @@ describe("Plan the week: features and epics (step 8)", () => {
     expect(s.calls.length).toBe(n);
     const [off] = await setup({ planweek: "offline" }, [target("CSC", "planweek")], { cacheDir }).src.portfolio([ref("CSC")]);
     expect(off!.fromCache).toBe(true);
-    expect(off!.items.map((i) => i.id)).toEqual([210, 220, 240, 250]);
+    expect(off!.items.map((i) => i.id)).toEqual([210, 220, 230, 240, 250]);
+  });
+  it("Q47: a project whose backlog levels give no story level is a clear per-client error, never a guess", async () => {
+    const s = setup({ planweek: "planweek", nostory: "no_story_level" }, [target("CSC", "planweek"), target("W&C", "nostory")]);
+    const [csc, wc] = await s.src.load([ref("CSC"), ref("W&C")]);
+    expect(csc!.status).toBe("ok");
+    expect(wc).toMatchObject({ status: "error", items: [] });
+    expect(wc!.message).toMatch(/no story level/i);
+    expect(wc!.message).toMatch(/W&C Project/);
+    const [, pw] = await s.src.portfolio([ref("CSC"), ref("W&C")]);
+    expect(pw).toMatchObject({ status: "error", items: [] });
   });
   it("reads one feature's description on demand as plain text, never cached", async () => {
     const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);

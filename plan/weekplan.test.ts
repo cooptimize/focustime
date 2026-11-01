@@ -3,7 +3,7 @@ import { buildWeek } from "../week/build.ts";
 import { weekConfig } from "../config/defaults.ts";
 import type { ClientPortfolio, FocusPattern, PortfolioItem, WorkItem } from "../week/types.ts";
 import type { WeekFeature } from "../store/plan-store.ts";
-import { briefMarkdown, clientBlocks, readiness, weekFit, weekNudges, type NudgeTimes } from "./weekplan.ts";
+import { withCurrentTitles, borrowedForWeek, briefMarkdown, clientBlocks, readiness, weekFit, weekNudges, type NudgeTimes } from "./weekplan.ts";
 
 const W = "2026-11-09";
 const pattern = (clientKey: string, days: FocusPattern["days"]): FocusPattern => ({ id: clientKey, clientKey, clientName: clientKey, startDate: "2026-01-01", endDate: null, active: true, days });
@@ -67,6 +67,22 @@ describe("fit per client: committed blocks against available focus blocks", () =
   });
 });
 
+describe("borrowed time against a week's fit (Q48)", () => {
+  it("counts only unpaid borrows paid back in that week, or with no payback date", () => {
+    const b = (clientKey: string, minutes: number, paybackDate: string | null, paidAt: string | null = null) => ({ clientKey, minutes, paybackDate, paidAt });
+    const list = [b("W&C", 120, "2026-11-10"), b("W&C", 60, "2026-11-15"), b("W&C", 90, "2026-11-06"), b("W&C", 45, "2026-11-11", "x"), b("CSC", 30, null), b("CSC", 15, "2026-11-16")];
+    expect(borrowedForWeek(list, W)).toEqual({ "W&C": 180, CSC: 30 });
+  });
+});
+
+describe("committed feature titles (Q51)", () => {
+  it("shows the current DevOps title, and the stored one only when DevOps can't give it", () => {
+    const fs = [feature({ itemId: 210, title: "Old name" }), feature({ id: 2, itemId: 220, title: "Kept name" })];
+    const now = withCurrentTitles(fs, (k, id) => (k === "W&C" && id === 210 ? "Export, renamed" : null));
+    expect(now.map((f) => [f.itemId, f.title, f.titleSource])).toEqual([[210, "Export, renamed", "devops"], [220, "Kept name", "saved"]]);
+  });
+});
+
 describe("readiness ladder", () => {
   const w = week();
   it("an epic with no open features needs features", () => {
@@ -92,6 +108,18 @@ describe("readiness ladder", () => {
     // DevOps not loaded, failed or from cache: nothing can be said.
     expect(readiness({ week: w, portfolios: [], features: [], marks: [], loops: [], work: [{ clientKey: "W&C", status: "auth_failed", fromCache: false, items: [] }] })).toEqual([]);
     expect(readiness({ week: w, portfolios: [], features: [], marks: [], loops: [], work: null })).toEqual([]);
+  });
+  it("step 9: a feature needing breakdown counts its local draft stories; unsorted captures are one line to sort", () => {
+    const empty = pItem({ id: 240, children: [] });
+    const r = readiness({
+      week: w, portfolios: [portfolio("W&C", [empty])], features: [feature({ itemId: 240 })], marks: [], loops: [],
+      work: [{ clientKey: "W&C", status: "ok", fromCache: false, items: [mine(1)] }, { clientKey: "CSC", status: "ok", fromCache: false, items: [mine(2)] }],
+      drafts: [{ clientKey: "W&C", parentItemId: 240 }, { clientKey: "W&C", parentItemId: 240 }, { clientKey: "W&C", parentItemId: null }, { clientKey: "CSC", parentItemId: 240 }],
+      captures: 3,
+    });
+    expect(r.find((x) => x.kind === "needs_breakdown")).toMatchObject({ itemId: 240, drafts: 2 });
+    expect(r.find((x) => x.kind === "captures_to_sort")).toMatchObject({ count: 3, soft: false });
+    expect(readiness({ week: w, portfolios: [], features: [], marks: [], loops: [], work: null, captures: 0 }).some((x) => x.kind === "captures_to_sort")).toBe(false);
   });
   it("a committed feature with no target date gets a soft flag", () => {
     const r = readiness({ week: w, portfolios: [portfolio("W&C", [pItem({ targetDate: null, children: [child(211, true)] })])], features: [feature({})], work: null, marks: [], loops: [] });
@@ -149,6 +177,21 @@ describe("week nudges (Thursday 2:00 PM, Friday morning, Monday 8:30 AM)", () =>
     expect(weekNudges(at("2026-11-09T08:29:00-05:00"), times, none).due).toEqual([]);
     expect(weekNudges(at("2026-11-09T08:30:00-05:00"), times, none).due).toEqual([{ key: "week_nudge_mon", weekStart: "2026-11-09" }]);
     expect(weekNudges(at("2026-11-10T08:30:00-05:00"), times, none).due).toEqual([]);
+  });
+  it("Q50: a nudge not sent on its day (PTO) is due from the start of the next working time, until its week starts", () => {
+    const nine = Temporal.PlainTime.from("09:00");
+    // The week of Nov 2 is committed, so its Monday nudge (also unsent here) stays out of the way.
+    const none = (w: string) => w === "2026-11-02";
+    // Thursday's nudge, Friday morning: due once work starts (Friday's own is due too; the caller sends one per week).
+    expect(weekNudges(at("2026-11-06T08:30:00-05:00"), { ...times, fri: "" }, none, { workStart: nine }).due).toEqual([]);
+    expect(weekNudges(at("2026-11-06T09:00:00-05:00"), { ...times, fri: "" }, none, { workStart: nine }).due).toEqual([{ key: "week_nudge_thu", weekStart: "2026-11-09" }]);
+    // Not on a day without working time, and not once its week has started (Monday's own nudge takes over).
+    expect(weekNudges(at("2026-11-06T10:00:00-05:00"), { ...times, fri: "" }, none, { workStart: null }).due).toEqual([]);
+    expect(weekNudges(at("2026-11-09T09:00:00-05:00"), { ...times, mon: "" }, none, { workStart: nine }).due).toEqual([]);
+    // Monday's (this week) carries to Tuesday's working start, and stops after that week.
+    expect(weekNudges(at("2026-11-10T09:05:00-05:00"), times, none, { workStart: nine }).due).toEqual([{ key: "week_nudge_mon", weekStart: "2026-11-09" }]);
+    // Without a working start (legacy callers), only the nudge's own day.
+    expect(weekNudges(at("2026-11-10T09:05:00-05:00"), times, none).due).toEqual([]);
   });
   it("a nudge set to empty is off", () => {
     expect(weekNudges(at("2026-11-05T15:00:00-05:00"), { ...times, thu: "" }, none).due).toEqual([]);

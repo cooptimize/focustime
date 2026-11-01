@@ -18,13 +18,15 @@ export type ActionTarget =
   | "loop" // one loop
   | "borrowed" // one borrowed time record
   | "feature" // a feature on Plan the week
-  | "week"; // a week (its Monday)
+  | "week" // a week (its Monday)
+  | "capture" // one capture in the inbox
+  | "note"; // one note
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops" | "Capture";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -76,6 +78,11 @@ export const ACTIONS = [
   { name: "timer.extend", title: "Add 15 minutes", group: "Focus", target: "none", summary: "Keep going; after the end it runs again from now" },
   { name: "timer.done", title: "Done with this session", group: "Focus", target: "none", summary: "End the session and tick its pick done" },
   { name: "timer.next", title: "Next pick", group: "Focus", target: "none", summary: "End the session and timebox today's next planned pick" },
+  { name: "capture.add", title: "Quick capture", group: "Capture", target: "none", shortcut: "N", summary: "One line, saved at once (works offline); sort it into a loop, a draft story or a note" },
+  { name: "capture.load", title: "Show captures and notes", group: "Capture", target: "none", summary: "The inbox of captures to sort, and notes per client (searchable)" },
+  { name: "capture.route", title: "Sort a capture", group: "Capture", target: "capture", summary: "Make it a loop, a draft story or a note, or dismiss it (rules suggest one)" },
+  { name: "capture.features", title: "List a client's features", group: "Capture", target: "none", summary: "Open features to put a draft story under (read-only DevOps)" },
+  { name: "note.delete", title: "Delete a note", group: "Capture", target: "note", summary: "Remove one note (local only)" },
   { name: "loops.list", title: "Show loops", group: "Loops", target: "none", shortcut: "L", summary: "What you owe people: open loops, closed ones on request" },
   { name: "loop.add", title: "Add a loop", group: "Loops", target: "none", summary: "Something you owe someone: who, what, optional due date" },
   { name: "loop.close", title: "Close a loop", group: "Loops", target: "loop", summary: "Mark as told, with an optional note" },

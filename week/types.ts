@@ -246,7 +246,8 @@ export type PortfolioItem = {
   targetDate: IsoDate | null;
   assignedTo: string | null;
   mine: boolean;
-  why: ("assigned" | "parent")[];
+  /** "above" (Q49): only an ancestor of one listed, read by following parent links up. */
+  why: ("assigned" | "parent" | "above")[];
   /** One level down, every state, board order. */
   children: PortfolioChild[];
 };

@@ -1,6 +1,8 @@
 // Start Coopilot: local server on 127.0.0.1, per-launch token, opens a Chromium app window.
 // Usage: node server/main.ts [--dev] [--no-open] [--port 5317] [--clock <ISO instant>]
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
+import { hoursOn } from "../week/hours.ts";
+import { takeOpenRequest } from "./open-request.ts";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
@@ -123,6 +125,7 @@ const server = createApp({
   token,
   log,
   ...(devMiddleware ? { devMiddleware } : { distDir: join(root, "dist") }),
+  takeOpenRequest: () => takeOpenRequest(runtimeDir),
   ctx: {
     loadConfig,
     makeDataverse,
@@ -238,6 +241,10 @@ if (plan) {
       },
       committed: (w) => !!store.weekPlan(w).committedAt,
       off: ptoOff,
+      workStart: async (d) => {
+        const h = await hoursOrNull();
+        return h ? (hoursOn(h, d).segments[0]?.start ?? null) : null;
+      },
       once: (key, w) => store.markOnce(key, w),
       send: (body) => {
         notifySend("Coopilot", body);

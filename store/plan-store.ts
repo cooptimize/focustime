@@ -5,8 +5,11 @@ import { chmodSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { carryOver } from "../plan/rules.ts";
-import type { DayPlan, DraftStory, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
+import type { Capture, DayPlan, DraftStory, Note, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
+
+/** Marks a migration that rebuilds a referenced table: run with foreign keys off, then checked (see migrate). */
+const FK_OFF = "-- foreign keys off for a table rebuild";
 
 /** Ordered schema changes. Never edit a shipped one; add a new entry. */
 export const MIGRATIONS: readonly string[] = [
@@ -201,10 +204,44 @@ export const MIGRATIONS: readonly string[] = [
      marked_at TEXT NOT NULL,
      PRIMARY KEY (client_key, item_id)
    );`,
+  // 7 (step 9): quick capture. Captures (an inbox until routed), notes (per client or none), and draft stories that
+  // need not sit under a feature: draft_stories is rebuilt with parent_item_id optional, ids kept, so picks still
+  // point at the same drafts (foreign keys checked at commit).
+  `${FK_OFF}
+   CREATE TABLE captures (
+     id INTEGER PRIMARY KEY,
+     text TEXT NOT NULL CHECK (length(text) BETWEEN 1 AND 1000),
+     client_key TEXT,
+     created_at TEXT NOT NULL,
+     routed_at TEXT,
+     routed_as TEXT CHECK (routed_as IN ('loop','draft','note','dismissed')),
+     routed_id INTEGER,
+     CHECK ((routed_at IS NULL) = (routed_as IS NULL))
+   );
+   CREATE TABLE notes (
+     id INTEGER PRIMARY KEY,
+     client_key TEXT,
+     text TEXT NOT NULL CHECK (length(text) BETWEEN 1 AND 1000),
+     capture_id INTEGER REFERENCES captures(id),
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL
+   );
+   CREATE TABLE draft_stories_v7 (
+     id INTEGER PRIMARY KEY,
+     client_key TEXT NOT NULL,
+     parent_item_id INTEGER,
+     title TEXT NOT NULL,
+     size TEXT NOT NULL CHECK (size IN ('S','M','L')),
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL
+   );
+   INSERT INTO draft_stories_v7 SELECT id, client_key, parent_item_id, title, size, created_at, updated_at FROM draft_stories ORDER BY id;
+   DROP TABLE draft_stories;
+   ALTER TABLE draft_stories_v7 RENAME TO draft_stories;`,
 ];
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
-const RESET_TABLES = ["week_feature_slots", "week_features", "week_plans", "breakdown_marks", "borrowed", "resume_notes", "focus_log", "kv", "loops", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
+const RESET_TABLES = ["notes", "captures", "week_feature_slots", "week_features", "week_plans", "breakdown_marks", "borrowed", "resume_notes", "focus_log", "kv", "loops", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
 export type FocusSegment = { pickId: number | null; label: string; startedAt: string; endedAt: string; seconds: number };
 
 export type NewUnavailable = { date: IsoDate; title: string; start: string; end: string; note?: string | null };
@@ -303,7 +340,26 @@ const toPick = (r: Row): Pick => ({
   updatedAt: r.updated_at as string,
 });
 const toPlan = (r: Row): DayPlan => ({ date: r.date as string, committedAt: (r.committed_at as string | null) ?? null, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
-const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: r.parent_item_id as number, title: r.title as string, size: r.size as Size, createdAt: r.created_at as string });
+const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, createdAt: r.created_at as string });
+
+const toCapture = (r: Row): Capture => ({
+  id: r.id as number,
+  text: r.text as string,
+  clientKey: (r.client_key as string | null) ?? null,
+  createdAt: r.created_at as string,
+  routedAt: (r.routed_at as string | null) ?? null,
+  routedAs: (r.routed_as as Capture["routedAs"]) ?? null,
+  routedId: (r.routed_id as number | null) ?? null,
+});
+const toNoteRow = (r: Row): Note => ({ id: r.id as number, clientKey: (r.client_key as string | null) ?? null, text: r.text as string, captureId: (r.capture_id as number | null) ?? null, createdAt: r.created_at as string });
+
+/** How a capture is sorted (step 9). */
+export type CaptureRoute =
+  | { as: "loop"; clientKey: string | null; who: string; what: string; due: IsoDate | null }
+  | { as: "draft"; clientKey: string; parentItemId: number | null; title: string; size: Size }
+  | { as: "note"; clientKey: string | null; text: string }
+  | { as: "dismissed" };
+export const MAX_CAPTURE = 1000;
 
 const toUnavailable = (r: Row): Unavailable => ({ id: r.id as number, title: r.title as string, start: r.start_at as string, end: r.end_at as string, note: (r.note as string | null) ?? null });
 const toFlex = (r: Row): FlexSession => ({
@@ -498,7 +554,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         return mustPick(id);
       });
     },
-    addDraft(d: { clientKey: string; parentItemId: number; title: string; size: Size }): DraftStory {
+    addDraft(d: { clientKey: string; parentItemId: number | null; title: string; size: Size }): DraftStory {
       return tx(() => {
         const at = stamp();
         const r = db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(d.clientKey, d.parentItemId, d.title, d.size, at, at);
@@ -591,6 +647,59 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       db.prepare("UPDATE loops SET what = ?, draft = ?, detail = ? WHERE id = ? AND closed_at IS NULL").run(what, draft, JSON.stringify(detail), id);
     },
     /** A loop added by hand: who, what, optional due date. */
+    // ---- quick capture (step 9) ----
+    /** Saves a capture to the inbox: the plan store only, so it works with every source offline. */
+    addCapture(c: { text: string; clientKey: string | null }): Capture {
+      const text = c.text.trim();
+      if (!text) throw new PlanError("Type something to capture");
+      if (text.length > MAX_CAPTURE) throw new PlanError(`A capture is at most ${MAX_CAPTURE} characters`);
+      const r = db.prepare("INSERT INTO captures (text, client_key, created_at) VALUES (?, ?, ?)").run(text, c.clientKey, stamp());
+      return toCapture(db.prepare("SELECT * FROM captures WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
+    },
+    getCapture(id: number): Capture | null {
+      const r = db.prepare("SELECT * FROM captures WHERE id = ?").get(id) as Row | undefined;
+      return r ? toCapture(r) : null;
+    },
+    /** Captures not routed yet, newest first. */
+    inbox: (): Capture[] => (db.prepare("SELECT * FROM captures WHERE routed_at IS NULL ORDER BY id DESC").all() as Row[]).map(toCapture),
+    inboxCount: (): number => (db.prepare("SELECT COUNT(*) AS n FROM captures WHERE routed_at IS NULL").get() as Row).n as number,
+    /** Routes a capture once: makes the loop, draft story or note and marks the capture, in one transaction. */
+    routeCapture(id: number, r: CaptureRoute): Capture {
+      return tx(() => {
+        const c = db.prepare("SELECT * FROM captures WHERE id = ?").get(id) as Row | undefined;
+        if (!c) throw new PlanError("No such capture");
+        if (c.routed_at) throw new PlanError("That capture is already sorted");
+        const at = stamp();
+        let routedId: number | null = null;
+        if (r.as === "loop") {
+          if (!r.what.trim()) throw new PlanError("A loop needs what you owe");
+          routedId = Number(db.prepare("INSERT INTO loops (kind, client_key, who, what, due, opened_at) VALUES ('capture', ?, ?, ?, ?, ?)").run(r.clientKey, r.who.trim(), r.what.trim(), r.due, at).lastInsertRowid);
+        } else if (r.as === "draft") {
+          if (!r.title.trim()) throw new PlanError("A draft story needs a title");
+          routedId = Number(db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(r.clientKey, r.parentItemId, r.title.trim(), r.size, at, at).lastInsertRowid);
+        } else if (r.as === "note") {
+          if (!r.text.trim()) throw new PlanError("A note needs text");
+          routedId = Number(db.prepare("INSERT INTO notes (client_key, text, capture_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(r.clientKey, r.text.trim(), id, at, at).lastInsertRowid);
+        }
+        db.prepare("UPDATE captures SET routed_at = ?, routed_as = ?, routed_id = ? WHERE id = ?").run(at, r.as, routedId, id);
+        return toCapture(db.prepare("SELECT * FROM captures WHERE id = ?").get(id) as Row);
+      });
+    },
+    /** Notes, newest first; by client ("" for notes with none) and words in the text, any case. */
+    notes(f: { clientKey?: string | null; query?: string } = {}): Note[] {
+      const where: string[] = [];
+      const args: (string | null)[] = [];
+      if (f.clientKey === null) where.push("client_key IS NULL");
+      else if (f.clientKey !== undefined) (where.push("client_key = ?"), args.push(f.clientKey));
+      for (const w of (f.query ?? "").trim().split(/\s+/).filter(Boolean)) {
+        where.push("text LIKE ? ESCAPE '\\'");
+        args.push(`%${w.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`);
+      }
+      return (db.prepare(`SELECT * FROM notes${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY id DESC`).all(...args) as Row[]).map(toNoteRow);
+    },
+    deleteNote(id: number): boolean {
+      return Number(db.prepare("DELETE FROM notes WHERE id = ?").run(id).changes) > 0;
+    },
     addLoop(l: { who: string; what: string; due: IsoDate | null; clientKey?: string | null }): Loop {
       const r = db.prepare("INSERT INTO loops (kind, client_key, who, what, due, opened_at) VALUES ('manual', ?, ?, ?, ?, ?)").run(l.clientKey ?? null, l.who, l.what, l.due, stamp());
       return toLoop(db.prepare("SELECT * FROM loops WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
@@ -839,6 +948,8 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         weekPlans: db.prepare("SELECT * FROM week_plans ORDER BY week_start").all() as Row[],
         weekFeatures: (db.prepare("SELECT DISTINCT week_start FROM week_features ORDER BY week_start").all() as Row[]).flatMap((r) => this.weekPlan(r.week_start as string).features),
         breakdownMarks: this.breakdownMarks(),
+        captures: (db.prepare("SELECT * FROM captures ORDER BY id").all() as Row[]).map(toCapture),
+        notes: (db.prepare("SELECT * FROM notes ORDER BY id").all() as Row[]).map(toNoteRow),
       };
     },
     close: () => db.close(),
@@ -865,14 +976,20 @@ function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":m
     chmodSync(bak, 0o600);
   }
   for (let v = current + 1; v <= MIGRATIONS.length; v++) {
+    // A table rebuild (SQLite's documented procedure): foreign keys off around it, then checked before commit.
+    const rebuild = MIGRATIONS[v - 1]!.trimStart().startsWith(FK_OFF);
+    if (rebuild) db.exec("PRAGMA foreign_keys = OFF");
     db.exec("BEGIN IMMEDIATE");
     try {
       db.exec(MIGRATIONS[v - 1]!);
+      if (rebuild && db.prepare("PRAGMA foreign_key_check").all().length) throw new Error(`Plan store migration ${v} would break references; not applied`);
       db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(v, now().toString({ smallestUnit: "second" }));
       db.exec("COMMIT");
     } catch (e) {
       db.exec("ROLLBACK");
       throw e;
+    } finally {
+      if (rebuild) db.exec("PRAGMA foreign_keys = ON");
     }
   }
 }

@@ -25,8 +25,9 @@ import { borrowedView, closeoutAction, noteView } from "./closeout-actions.ts";
 import { applyLoopRules, internalClients, nameOf, workdayOf } from "./loop-rules.ts";
 import { watchedIds } from "../plan/loops.ts";
 import { isActionName, type ActionName } from "./registry.ts";
-import { weekPlanAction, weekPlanView } from "./weekplan-actions.ts";
-import { weekNudges, type NudgeTimes } from "../plan/weekplan.ts";
+import { captureAction } from "./capture-actions.ts";
+import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
+import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import type { ActionResponse, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
@@ -283,6 +284,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   // The focus timer warns 5 minutes before meetings and block ends (server/timer.ts); keep today's points fresh.
   if (ctx.plan && todayDay) ctx.plan.setState("warn_points", { date: todayDate, points: warnPoints(todayDay, tz) });
   const todayOff = ptoAhead.includes(todayDate) || !!pto[todayDate];
+  // Q51: committed features show their current DevOps title (fresh results only); the stored one is the fallback.
+  const currentTitle = titleFrom(devops);
   return {
     weekStart,
     week,
@@ -299,12 +302,13 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     planning: planningOf(cfg),
     timer: timerView(ctx.plan?.getState<TimerState>(TIMER_KEY) ?? null, Temporal.Instant.from(ctx.now())),
     openLoops: ctx.plan?.openLoops().length ?? 0,
+    captures: ctx.plan?.inboxCount() ?? 0,
     focused: ctx.plan ? ctx.plan.focusedSeconds(Object.values(ctx.plan.week(week.days.map((d) => d.date))).flatMap((d) => d.picks.map((p) => p.id))) : {},
     resumeNotes: ctx.plan ? Object.fromEntries(Object.entries(ctx.plan.latestNotes()).map(([k, n]) => [k, noteView(n)])) : {},
     borrowed: ctx.plan ? ctx.plan.borrowedFor(weekStart, sunday).map(borrowedView) : [],
     closeOut: { date: todayDate, done: !!todayPlan?.closedOutAt },
-    weekPlan: ctx.plan ? weekPlanView(ctx.plan.weekPlan(weekStart)) : null,
-    weekFeatures: ctx.plan ? ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate)) : [],
+    weekPlan: ctx.plan ? withTitles(weekPlanView(ctx.plan.weekPlan(weekStart)), currentTitle) : null,
+    weekFeatures: ctx.plan ? withCurrentTitles(ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate)), currentTitle) : [],
     weekNudge: { badge: ctx.plan && cfg ? weekNudges(Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz), nudgeTimes(cfg), (w) => !!ctx.plan!.weekPlan(w).committedAt).badge : null },
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
@@ -449,6 +453,29 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         action,
         req.input,
       );
+    case "capture.add":
+    case "capture.load":
+    case "capture.route":
+    case "capture.features":
+    case "note.delete":
+      return captureAction(
+        {
+          plan: ctx.plan,
+          config: async () => {
+            const loaded = await ctx.loadConfig().catch(() => null);
+            return loaded?.parsed.ok ? loaded.parsed.config : null;
+          },
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
+          clients: async (cfg, weekStart) => {
+            const today = localToday(ctx.now(), cfg.week.hours.timeZone);
+            const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).load(weekStart, {}).catch(() => null) : null;
+            return (await devopsClients(ctx, cfg, weekStart, today, {}, dv?.items ?? [])).fetch;
+          },
+          now: ctx.now,
+        },
+        action,
+        req.input,
+      );
     case "weekplan.load":
     case "weekplan.set_feature":
     case "weekplan.place":
@@ -498,3 +525,4 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     }
   }
 }
+

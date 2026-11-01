@@ -396,3 +396,15 @@ Purpose: in about two minutes, turn today's real capacity into a short, committe
 - **Nudges (D167):** Thursday, Friday, Monday, each once, configurable; tab badge until committed.
 - **Contract change:** `System.ChangedBy` read (`changedByMe`, `assignedTo`, `targetDate` on items); a portfolio read and an on-demand description read; committed features read by id in `week.load`'s DevOps read; plan store migration 6; config `[plan] week_nudge_thu`, `week_nudge_fri`, `week_nudge_mon`; actions `weekplan.load`, `weekplan.set_feature`, `weekplan.place`, `weekplan.commit`, `feature.brief`, `feature.mark_breakdown`, `loop.ask_priorities`; `week.load` gains `weekPlan`, `weekFeatures`, `weekNudge`; `PlanDayState.weekFeatures`; `ClientWork.committed`; loop kind `priorities`. All additive for existing callers. Nothing is written to DevOps, Outlook, Google or Dataverse.
 - **Rollback:** revert the commit. Migration 6 only adds tables; the pre-migration copy `plan.db.bak-v5-<stamp>` is next to the store. The three config keys are optional and can stay.
+
+## 25. Step 9: Quick capture (authorized Nov 1)
+
+- **Step 8 answers (D169):** Q47 per-client error with no story level; Q48 borrowed time by payback week; Q49 epics above followed up; Q50 skipped nudge fires at next working time; Q51 current DevOps titles.
+- **Quick capture (D170):** one box, Enter saves locally at once, works offline. N, the top-bar Capture button, the command menu, `coopilot-open --capture`.
+- **Client tag (D171):** @nickname with autocomplete from followed clients, or a client select.
+- **Routing (D172):** rules, no AI: promise → loop (who, what, due), work → draft story (optionally under a feature), else note. One click to confirm or change.
+- **Inbox (D175):** the Capture view; "N unprocessed captures" in Close out; "Captures to sort" in Plan the week readiness; drafts under features in Plan the week.
+- **Notes (D175):** per client, searchable, deletable, in the export.
+- **Contract change:** plan store migration 7 (captures, notes, nullable draft parent; D173); actions `capture.add`, `capture.load`, `capture.features`, `capture.route`, `note.delete` (D174); `POST /api/open-request` and `coopilot-open --capture` (D176); loop kind `capture`; `week.load`, `closeout.load` and `weekplan.load` return the unsorted count; `weekplan.load` returns local drafts. Still no writes to any external system.
+- **Not done:** the global Hyprland key (D178, needs confirmation).
+- **Rollback:** revert the commit. Migration 7 adds tables and rebuilds `draft_stories` with the same rows; the pre-migration copy `plan.db.bak-v6-<stamp>` is next to the store.

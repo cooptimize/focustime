@@ -67,6 +67,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["Shift F6"], does: "Previous region", command: "ui.region_prev" },
   { keys: ["O"], does: "Open the focused work item in its client's Edge profile", command: "ui.open_focused" },
   { keys: ["Shift F10", "Menu"], does: "Actions (⋯) for what has focus" },
+  { keys: ["N"], does: "Quick capture: one line, saved at once; then sort it into a loop, a draft story or a note", command: "capture.add" },
   { keys: ["W"], does: "Plan the week: commit features per client (next week by default)", command: "view.planweek" },
   { keys: ["P"], does: "Plan the day (I also works)", command: "view.planday" },
   { keys: ["C"], does: "Commit, in Plan the day", command: "planday.commit" },

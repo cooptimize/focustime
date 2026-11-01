@@ -5,7 +5,7 @@ import type { EdgeProfile } from "../links/edge.ts";
 import type { TodayTarget } from "../week/dates.ts";
 import type { PlanWeek } from "../plan/types.ts";
 import type { ClientPortfolio, ClientWork, IsoDate, RiskThresholds, SourceResult, StandingBlock, Week } from "../week/types.ts";
-import type { WeekFeature } from "../plan/types.ts";
+import type { Capture, DraftStory, Note, WeekFeature } from "../plan/types.ts";
 import type { TimeModel } from "../week/hours.ts";
 
 export type SourceSummary = Omit<SourceResult<unknown>, "items"> & { itemCount: number };
@@ -48,6 +48,8 @@ export type WeekLoadData = {
   weekPlan: WeekPlanView | null;
   /** Committed features of the loaded week, this week and next week, for the week cards and Plan the day. */
   weekFeatures: WeekFeature[];
+  /** Captures not sorted yet (step 9), for the Capture tab count. */
+  captures: number;
   /** The Plan the week badge: the week a nudge asked for that still isn't committed (server clock). */
   weekNudge: { badge: IsoDate | null };
   /** Display settings from [ui] (step 6b): the theme. Defaults when the config is invalid. */
@@ -187,6 +189,8 @@ export type CloseOutState = {
   loops: LoopView[];
   /** Borrowed time from that day, and every unpaid record. */
   borrowed: BorrowedView[];
+  /** Captures not sorted yet (step 9), for "N unprocessed captures". */
+  captures: number;
 };
 
 /** A week's plan as the UI sees it (step 8). `changed`: edited since the last commit. */
@@ -206,5 +210,16 @@ export type WeekPlanState = {
   marks: { clientKey: string; itemId: number; markedAt: string }[];
   /** "Ask about priorities" loops for this week. */
   loops: LoopView[];
+  /** Local draft stories (step 9: from captures or Plan the day), shown under their features. */
+  drafts: DraftStory[];
+  /** Captures not sorted yet (step 9). */
+  captures: number;
 };
 
+
+// ---- Quick capture (step 9) ----
+/** What Capture shows: the inbox (newest first) and notes (filtered). */
+export type CaptureState = { today: IsoDate; inbox: Capture[]; notes: Note[]; inboxCount: number };
+export type FeatureChoice = { id: number; title: string; state: string };
+/** A client's open features for "under a feature"; "unavailable" when DevOps can't say (a draft then saves without one). */
+export type CaptureFeatures = { clientKey: string; status: "ok" | "unavailable"; message?: string; features: FeatureChoice[] };

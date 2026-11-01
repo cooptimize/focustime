@@ -59,7 +59,7 @@ export type FormField = {
   options?: { value: string; label: string }[];
 };
 
-export type View = "week" | "planday" | "planweek" | "settings" | "loops" | "checkin" | "closeout";
+export type View = "capture" | "week" | "planday" | "planweek" | "settings" | "loops" | "checkin" | "closeout";
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
@@ -127,6 +127,9 @@ export type MenuEnv = {
   borrowed: readonly BorrowedView[];
   /** Plan the week (step 8): open it (next week by default), and the week it is open on. */
   openPlanWeek: (weekStart?: IsoDate) => void;
+  /** Quick capture (step 9): the capture box anywhere, and the Capture view (inbox and notes). */
+  openCapture: () => void;
+  openCaptures: () => void;
   planWeekOpen: IsoDate | null;
   commitWeek: () => void;
 };
@@ -646,6 +649,13 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "feature.mark_breakdown":
     case "loop.ask_priorities":
       return { run: () => env.openPlanWeek(env.planWeekOpen ?? undefined) };
+    case "capture.add": return { run: env.openCapture };
+    // Sorting, a client's features and notes are handled in the Capture view.
+    case "capture.load":
+    case "capture.route":
+    case "capture.features":
+    case "note.delete":
+      return { run: env.openCaptures };
   }
 }
 
@@ -657,6 +667,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.planday", action: "view.planday", group: "Views", label: "Plan the day", hint: "P", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
     { id: "view.planweek", action: "view.planweek", group: "Views", label: "Plan the week", hint: "W", run: () => env.openPlanWeek() },
+    { id: "view.capture", action: "view.capture", group: "Views", label: "Captures and notes", run: env.openCaptures },
     { id: "view.checkin", action: "view.checkin", group: "Views", label: "Check-in", hint: "M", run: env.openCheckIn },
     { id: "view.closeout", action: "view.closeout", group: "Views", label: "Close out", hint: "E", run: () => env.openCloseOut() },
     { id: "week.prev", action: "week.prev", group: "Week", label: "Previous week", hint: "[", run: () => env.changeWeek(-1) },

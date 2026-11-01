@@ -3,11 +3,11 @@
 // plan lives in the plan store. DevOps is only read (features through the portfolio read, one description on demand).
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { briefMarkdown, prioritiesKey } from "../plan/weekplan.ts";
+import { briefMarkdown, prioritiesKey, withCurrentTitles } from "../plan/weekplan.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { PlanError, type PlanStore, type WeekFeature, type WeekPlanRecord } from "../store/plan-store.ts";
 import { mondayOf } from "../week/dates.ts";
-import type { ClientPortfolio, IsoDate, PortfolioItem, Week } from "../week/types.ts";
+import type { ClientPortfolio, ClientWork, IsoDate, PortfolioItem, Week } from "../week/types.ts";
 import { loopView, nameOf } from "./loop-rules.ts";
 import type { ActionResponse, WeekPlanState, WeekPlanView } from "./types.ts";
 
@@ -16,7 +16,7 @@ export type WeekPlanAction = "weekplan.load" | "weekplan.set_feature" | "weekpla
 export type WeekPlanContext = {
   plan: PlanStore | undefined;
   config: () => Promise<AppConfig | null>;
-  devops: (cfg: AppConfig) => Pick<DevOpsSource, "portfolio" | "description">;
+  devops: (cfg: AppConfig) => Pick<DevOpsSource, "portfolio" | "description" | "last">;
   /** Followed clients with DevOps, as week.load fetches them for that week. */
   clients: (cfg: AppConfig, weekStart: IsoDate, refresh: boolean) => Promise<ClientRef[]>;
   /** The week's blocks from focus patterns and standing blocks only (no calendars), to check where a feature goes. */
@@ -126,7 +126,10 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const names = new Map(clients.map((c) => [c.clientKey, c.clientName] as const));
         const clientName = nameOf(cfg, (k) => names.get(k));
         const loops = plan.allLoops().filter((l) => l.kind === "priorities" && l.ruleKey?.startsWith(`priorities:${weekStart}:`)).map((l) => loopView(plan, l, today, clientName));
-        const state: WeekPlanState = { weekStart, thisWeek, today, access: weekStart < thisWeek ? "past" : "plan", plan: weekPlanView(plan.weekPlan(weekStart)), portfolios, marks: plan.breakdownMarks(), loops };
+        // Q51: current DevOps titles (this read's features, then fresh work items in memory); stored titles otherwise.
+        const fromWork = titleFrom(clients.map((c) => ctx.devops(cfg).last(c.clientKey)).filter((w): w is ClientWork => !!w));
+        const current = (k: string, id: number) => portfolios.find((p) => p.clientKey === k && p.status === "ok" && !p.fromCache)?.items.find((i) => i.id === id)?.title ?? fromWork(k, id);
+        const state: WeekPlanState = { weekStart, thisWeek, today, access: weekStart < thisWeek ? "past" : "plan", plan: withTitles(weekPlanView(plan.weekPlan(weekStart)), current), portfolios, marks: plan.breakdownMarks(), loops, drafts: plan.drafts(), captures: plan.inboxCount() };
         return { ok: true, data: state };
       }
       case "weekplan.set_feature": {
@@ -217,3 +220,14 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
     throw e;
   }
 }
+
+/** Q51: a title from fresh DevOps results (not cached, not failed), for committed features. */
+export function titleFrom(work: readonly ClientWork[] | null): (clientKey: string, itemId: number) => string | null {
+  return (clientKey, itemId) => {
+    const w = work?.find((x) => x.clientKey === clientKey && x.status === "ok" && !x.fromCache);
+    return (w ? [...w.items, ...w.children, ...(w.committed ?? [])].find((i) => i.id === itemId)?.title : null) ?? null;
+  };
+}
+
+export const withTitles = (v: WeekPlanView, current: (clientKey: string, itemId: number) => string | null): WeekPlanView => ({ ...v, features: withCurrentTitles(v.features, current) });
+
