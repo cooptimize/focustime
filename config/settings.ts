@@ -5,7 +5,7 @@ import { WEEKDAY_KEYS, type WeekdayKey } from "../week/hours.ts";
 import { hoursBody, removeValue, replaceArrayTables, replaceSection, setValue, tomlValue, type TomlValue } from "./edit.ts";
 import { parseConfig } from "./schema.ts";
 
-export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox"] as const;
+export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export class SettingsInputError extends Error {
@@ -120,6 +120,24 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
         values.push([k, v[f]]);
       }
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "timebox", k, val, i === 0 ? "Timeboxes (step 12). Creating an Outlook event always asks first; confirm_own = false skips the question for changes to my own timebox events (still logged, still undoable)." : undefined), text);
+    }
+    case "collab": {
+      // Step 13: help session length, Teams, days to search. Domains are edited in the file only.
+      only(v, ["meetingMinutes", "teams", "daysAhead"], "collab");
+      const values: [string, number | boolean][] = [];
+      if (v.meetingMinutes !== undefined) {
+        if (typeof v.meetingMinutes !== "number") throw new SettingsInputError("collab.meeting_minutes", "Must be a number");
+        values.push(["meeting_minutes", v.meetingMinutes]);
+      }
+      if (v.teams !== undefined) {
+        if (typeof v.teams !== "boolean") throw new SettingsInputError("collab.teams", "Must be true or false");
+        values.push(["teams", v.teams]);
+      }
+      if (v.daysAhead !== undefined) {
+        if (typeof v.daysAhead !== "number") throw new SettingsInputError("collab.days_ahead", "Must be a number");
+        values.push(["days_ahead", v.daysAhead]);
+      }
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "collab", k, val, i === 0 ? "Help sessions (step 13). Invites go only to Cooptimize addresses (domains, default: my work email's) and always ask first." : undefined), text);
     }
     case "focus": {
       // Step 10. Written as given; parseConfig checks values and links per field (focus.playlists[0].url etc.).

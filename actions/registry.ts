@@ -22,13 +22,14 @@ export type ActionTarget =
   | "capture" // one capture in the inbox
   | "note" // one note
   | "timebox" // one timebox
-  | "write"; // one entry in the write log
+  | "write" // one entry in the write log
+  | "event"; // one calendar event (step 13)
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops" | "Capture" | "Timebox";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops" | "Capture" | "Timebox" | "Calendar" | "Help";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -108,6 +109,11 @@ export const ACTIONS = [
   { name: "write.confirm", title: "Confirm an Outlook change", group: "Settings", target: "write", summary: "Write the previewed change, read it back, log it" },
   { name: "write.retry", title: "Retry an Outlook change", group: "Settings", target: "write", summary: "Check and try again; never makes a duplicate" },
   { name: "write.log", title: "Show the write log", group: "Settings", target: "none", summary: "Every external write: what, where, when, the result, the prior values, and Undo" },
+  { name: "timebox.resolve", title: "Choose a version", group: "Timebox", target: "timebox", summary: "A timebox changed in Coopilot and in Outlook: keep Coopilot's (then preview the change) or use Outlook's" },
+  { name: "outlook.open", title: "Open in Outlook", group: "Calendar", target: "event", summary: "Open an event in Outlook on the web (meetings with others are changed there, never from Coopilot)" },
+  { name: "collab.candidates", title: "Needs help from…", group: "Help", target: "item", summary: "Cooptimizers who could help with an item: on this client that day, on this client, anyone else; PTO shows as away" },
+  { name: "collab.suggest", title: "Find help session times", group: "Help", target: "item", summary: "Up to 5 times when you and the people you pick are free inside everyone's working hours (free/busy only)" },
+  { name: "collab.preview_invite", title: "Preview a help invite", group: "Help", target: "item", summary: "A meeting with the chosen Cooptimizers: preview names everyone who gets the invite; sent only when you confirm" },
   { name: "link.open", title: "Open in Edge", group: "Work items", target: "item", summary: "Open a work item in that client's Edge profile" },
 ] as const satisfies readonly ActionSpec[];
 

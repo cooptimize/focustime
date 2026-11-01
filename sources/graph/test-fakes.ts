@@ -2,7 +2,11 @@
 import { MARKER_PROP } from "./write.ts";
 
 export const FAKE_WRITE_TOKEN = "FAKE-WRITE-TOKEN-77ab";
-type Ev = { id: string; subject: string; body: string; start: string; end: string; showAs: string; isReminderOn: boolean; marker: string | null; transactionId: string | null };
+type Ev = {
+  id: string; subject: string; body: string; start: string; end: string; showAs: string; isReminderOn: boolean; marker: string | null; transactionId: string | null;
+  // Step 13: who is on it, series or single, all-day, Teams.
+  attendees?: { address: string; name: string }[]; isOrganizer?: boolean; type?: string; isAllDay?: boolean; online?: boolean;
+};
 
 export function fakeGraph(opts: { owner?: string } = {}) {
   const events = new Map<string, Ev>();
@@ -15,11 +19,15 @@ export function fakeGraph(opts: { owner?: string } = {}) {
     loseCreateResponse: false,
     /** PATCH is accepted but not applied (read-back mismatch). */
     ignorePatch: false,
+    /** Step 13: what getSchedule answers (the raw Graph body). */
+    schedule: null as unknown,
   };
   const json = (status: number, body: unknown) => new Response(body === null ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const out = (e: Ev, withMarker: boolean) => ({
     id: e.id, subject: e.subject, start: { dateTime: e.start.replace(/Z$/, ".0000000"), timeZone: "UTC" }, end: { dateTime: e.end.replace(/Z$/, ".0000000"), timeZone: "UTC" },
     showAs: e.showAs, isReminderOn: e.isReminderOn, isCancelled: false,
+    isOrganizer: e.isOrganizer ?? true, attendees: (e.attendees ?? []).map((a) => ({ emailAddress: a, type: "required" })), type: e.type ?? "singleInstance", isAllDay: e.isAllDay ?? false,
+    isOnlineMeeting: e.online ?? false, webLink: `https://outlook.office365.com/owa/?itemid=${encodeURIComponent(e.id)}&exvsurl=1&path=/calendar/item`,
     ...(withMarker ? { singleValueExtendedProperties: e.marker ? [{ id: MARKER_PROP, value: e.marker }] : [] } : {}),
   });
   const utc = (t: { dateTime: string }) => Temporal.Instant.from(`${t.dateTime}Z`).toString();
@@ -43,6 +51,19 @@ export function fakeGraph(opts: { owner?: string } = {}) {
     }
     const path = u.pathname.replace("/v1.0/", "");
     const withMarker = (u.searchParams.get("$expand") ?? "").includes(MARKER_PROP);
+    if (path === "me/calendar/getSchedule" && method === "POST") return json(200, sw.schedule ?? { value: [] });
+    if (path === "me/calendarView" && method === "GET") {
+      const a = Date.parse(u.searchParams.get("startDateTime")!), b = Date.parse(u.searchParams.get("endDateTime")!);
+      return json(200, { value: [...events.values()].filter((e) => Date.parse(e.start) < b && Date.parse(e.end) > a).map((e) => out(e, withMarker)) });
+    }
+    if (/^me\/events\/[^/]+\/cancel$/.test(path) && method === "POST") {
+      const cid = decodeURIComponent(path.split("/")[2]!);
+      const e = events.get(cid);
+      if (!e) return json(404, {});
+      if (e.isOrganizer === false) return json(400, {});
+      events.delete(cid);
+      return json(202, null);
+    }
     if (path === "me/calendar") return json(200, { name: "Calendar", owner: { name: "Tanner", address: opts.owner ?? "tanner@cooptimize.example" } });
     if (path === "me/events" && method === "GET") {
       const f = u.searchParams.get("$filter") ?? "";
@@ -55,7 +76,10 @@ export function fakeGraph(opts: { owner?: string } = {}) {
       const id = dup?.id ?? `EV${++n}`;
       if (!dup) {
         const marker = (body.singleValueExtendedProperties ?? []).find((p: { id: string }) => p.id === MARKER_PROP)?.value ?? null;
-        events.set(id, { id, subject: body.subject, body: body.body?.content ?? "", start: utc(body.start), end: utc(body.end), showAs: body.showAs ?? "busy", isReminderOn: body.isReminderOn ?? true, marker, transactionId: body.transactionId ?? null });
+        events.set(id, {
+          id, subject: body.subject, body: body.body?.content ?? "", start: utc(body.start), end: utc(body.end), showAs: body.showAs ?? "busy", isReminderOn: body.isReminderOn ?? true, marker, transactionId: body.transactionId ?? null,
+          attendees: (body.attendees ?? []).map((x: { emailAddress: { address: string; name: string } }) => x.emailAddress), online: body.isOnlineMeeting === true,
+        });
       }
       if (sw.loseCreateResponse) {
         sw.loseCreateResponse = false;
@@ -79,6 +103,7 @@ export function fakeGraph(opts: { owner?: string } = {}) {
       return json(200, out(e, false));
     }
     if (method === "DELETE") {
+      if (u.pathname.endsWith("/cancel")) return json(405, {});
       events.delete(id);
       return json(204, null);
     }

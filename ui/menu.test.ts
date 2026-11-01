@@ -5,7 +5,7 @@ import type { Pick } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
-import { timerStep, commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
+import { eventMenu, timerStep, commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -66,6 +66,16 @@ function env(over: Partial<MenuEnv> = {}) {
     makeUp: async (id, i) => (calls.push(["pick.make_up", id, i]), true),
     runLoops: async (a, i) => (calls.push([a, i]), true),
     borrowed: [],
+    eventEdit: {},
+    canWrite: true,
+    editEvent: (i) => calls.push(["editEvent", i]),
+    openOutlook: (u) => calls.push(["outlook", u]),
+    timeboxChange: (a, i) => calls.push([a, i]),
+    startTimeboxFocus: (t) => calls.push(["tbfocus", t.id]),
+    openHelp: (t) => calls.push(["help", t]),
+    invites: [],
+    undoWrite: (id) => calls.push(["undo", id]),
+    tz: "America/New_York",
     ...over,
   };
   return { e, calls };
@@ -108,7 +118,7 @@ describe("⋯ menus", () => {
   it("a pick: open in Edge, size, move, start focus, done, drop", async () => {
     const t = env();
     const m = pickMenu(t.e, pick);
-    expect(items(m).map((i) => i.label)).toEqual(["Open in Edge", "Set size", "Move", "Start focus", "Timebox…", "Mark done", "I'll make it up…", "Drop"]);
+    expect(items(m).map((i) => i.label)).toEqual(["Open in Edge", "Set size", "Move", "Start focus", "Timebox…", "Needs help from…", "Mark done", "I'll make it up…", "Drop"]);
     await find(m, "Open in Edge").run!();
     await find(find(m, "Set size").next!(), "S").run!();
     expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
@@ -122,7 +132,7 @@ describe("⋯ menus", () => {
   });
   it("a work item: open, add to the plan (stories only), draft story for an empty feature", () => {
     const story = itemMenu(env().e, "internal", item(1));
-    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Open in Edge", ""], ["Add to the plan", ""], ["Timebox…", ""]]);
+    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Open in Edge", ""], ["Add to the plan", ""], ["Timebox…", ""], ["Needs help from…", ""]]);
     const feature = itemMenu(env().e, "internal", item(2, "portfolio"));
     expect(find(feature, "Add to the plan").disabled).toMatch(/above story level/);
     expect(find(feature, "Add a draft story")).toBeTruthy();
@@ -219,5 +229,35 @@ describe("focus timer menus (step 6c)", () => {
     expect(items(running).map((i) => i.label)).toEqual(["Pause", "+15 min", "Done (tick the pick)", "Next pick", "Stop"]);
     const ended = timerStep(env({ timer: { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 25, remainingMs: 0, running: false, ended: true, endsAt: null } }).e);
     expect(items(ended).map((i) => i.label)).toEqual(["+15 min", "Done", "Next pick", "Stop"]);
+  });
+});
+
+describe("event menus by editing tier (step 13)", () => {
+  const ev = (id: string, title = "Dentist"): import("../week/types.ts").CalEvent => ({ id, source: "outlook", title, start: "2026-11-03T14:00:00-05:00", end: "2026-11-03T15:00:00-05:00", allDay: false, showAs: "busy", isPersonal: false });
+  const web = "https://outlook.office365.com/owa/?itemid=X";
+  const labels = (s: MenuStep) => items(s).map((i) => [i.label, i.disabled ? "off" : "on"]);
+  it("my own event with no attendees: move, end and show as with a preview; never retitle or delete", () => {
+    const { e, calls } = env({ eventEdit: { "outlook:A": { isOrganizer: true, others: 0, recurring: false, allDay: false, marker: null, webLink: web } } });
+    const m = eventMenu(e, ev("outlook:A"));
+    const on = labels(m).filter(([, s]) => s === "on").map(([l]) => l);
+    expect(on.length).toBeGreaterThanOrEqual(3);
+    expect(items(m).find((i) => i.id === "retitle")?.disabled).toBeTruthy();
+    expect(items(m).find((i) => i.id === "delete")?.disabled).toBeTruthy();
+    const show = items(m).find((i) => i.id === "show_as")!.next!();
+    if (!("items" in show)) throw new Error("expected items");
+    show.items.find((i) => i.id === "free")!.run!();
+    expect(calls).toContainEqual(["editEvent", { id: "A", showAs: "free" }]);
+  });
+  it("a meeting with other attendees: only Open in Outlook; every edit off with a reason", () => {
+    const { e, calls } = env({ eventEdit: { "outlook:B": { isOrganizer: false, others: 3, recurring: false, allDay: false, marker: null, webLink: web } } });
+    const m = eventMenu(e, ev("outlook:B", "Sprint review"));
+    for (const i of items(m)) if (i.id !== "open") expect(typeof i.disabled === "string" && i.disabled.length > 0).toBe(true);
+    items(m).find((i) => i.id === "open")!.run!();
+    expect(calls).toContainEqual(["outlook", web]);
+  });
+  it("without write access, my own event offers no edits", () => {
+    const { e } = env({ canWrite: false, eventEdit: { "outlook:A": { isOrganizer: true, others: 0, recurring: false, allDay: false, marker: null, webLink: web } } });
+    const m = eventMenu(e, ev("outlook:A"));
+    expect(items(m).filter((i) => i.id !== "open").every((i) => !!i.disabled)).toBe(true);
   });
 });

@@ -1,11 +1,11 @@
-import { useContext, type CSSProperties, type ReactNode } from "react";
+import { useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { TimeboxBands, TimeboxList } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
 import { worstSeverity } from "../week/risks.ts";
 import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
 import type { PtoDay } from "../week/pto.ts";
 import type { Pick } from "../plan/types.ts";
-import { dayMenu, pickMenu, slotMenu } from "./menu.ts";
+import { dayMenu, eventMenu, pickMenu, slotMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
 import { hourMarks, layoutEvents } from "./layout.ts";
 import { DevOpsWork } from "./work.ts";
@@ -400,18 +400,20 @@ function EventList({ kind, label, events, max, tz }: { kind: "meeting" | "person
   const shown = events.slice(0, max);
   return (
     <ul className={`ev-list ${kind}`} aria-label={label}>
-      {shown.map((p) => {
-        const e = p.event;
-        const show = e.showAs ?? "busy";
-        return (
-          <li key={e.id} className={`show-${show}`} title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}`}>
-            <span className="ev-time">{startClock(e.start, tz)}</span>
-            <span className="ev-title">{e.title}</span>
-          </li>
-        );
-      })}
+      {shown.map((p) => <EventItem key={p.event.id} e={p.event} tz={tz} samples={samples} />)}
       {events.length > max && <li className="ev-more">+{events.length - max} more</li>}
     </ul>
+  );
+}
+
+function EventItem({ e, tz, samples }: { e: CalEvent; tz: string; samples: ReadonlySet<string> }) {
+  const show = e.showAs ?? "busy";
+  const menu = useEventMenu(e);
+  return (
+    <li className={`show-${show}`} title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}`} {...menu}>
+      <span className="ev-time">{startClock(e.start, tz)}</span>
+      <span className="ev-title">{e.title}</span>
+    </li>
   );
 }
 
@@ -476,16 +478,33 @@ function Timeline({ slot, tz, showGaps, minFocusWindow }: { slot: Slot; tz: stri
   );
 }
 
+/** Step 13: any calendar event opens its menu (click, right-click, Enter): only what its tier allows is enabled. */
+function useEventMenu(e: CalEvent) {
+  const menu = useMenu((env) => eventMenu(env, e));
+  const live = !e.unavailable && e.source !== "coopilot";
+  const open = (ev: ReactMouseEvent | KeyboardEvent) => {
+    ev.stopPropagation();
+    const el = ev.currentTarget as HTMLElement;
+    const r = el.getBoundingClientRect();
+    menu.onContextMenu({ preventDefault: () => ev.preventDefault(), stopPropagation() {}, currentTarget: el, type: "contextmenu", clientX: "clientX" in ev ? ev.clientX : r.left + 8, clientY: "clientY" in ev ? ev.clientY : r.bottom } as never);
+  };
+  return live
+    ? { role: "button" as const, tabIndex: -1, onClick: open, onContextMenu: open, onKeyDown: (ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === "ContextMenu") && (ev.preventDefault(), open(ev)), onDoubleClick: (ev: ReactMouseEvent) => ev.stopPropagation() }
+    : {};
+}
+
 function EventCard({ placed, tz, style }: { placed: PlacedEvent; tz: string; style: CSSProperties }) {
   const e = placed.event;
   const samples = useContext(SampleSources);
   const kind = e.isPersonal ? "personal" : "meeting";
   const show = e.showAs ?? "busy";
+  const menu = useEventMenu(e);
   return (
     <div
       className={`event ${e.unavailable ? "unavailable" : kind} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
       style={style}
-      title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}`}
+      title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}${e.unavailable ? "" : "\nClick for what Coopilot can do with it"}`}
+      {...menu}
     >
       <span className="ev-line">
         <span className="ev-time">{eventRange(e, tz)}</span>

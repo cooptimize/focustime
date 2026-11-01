@@ -4,8 +4,10 @@
 // is read back before it says so. With "don't ask again" (confirm_own off) changes to my own timebox events confirm
 // right after the preview, still logged and undoable.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import type { TimeboxView, WritePreview, WriteResult, WriteState } from "../actions/types.ts";
-import { minutesOf, snap, TIMEBOX_MAX, TIMEBOX_MIN, TIMEBOX_SNAP } from "../plan/timebox.ts";
+import type { InviteView, TimeboxView, WritePreview, WriteResult, WriteState } from "../actions/types.ts";
+import { minutesOf, SHOW_AS_LABEL, SHOW_AS_VALUES, snap, TIMEBOX_MAX, TIMEBOX_MIN, TIMEBOX_SNAP, type OutlookShowAs } from "../plan/timebox.ts";
+import { useMenu } from "./Menus.tsx";
+import { timeboxMenu, type HelpTarget } from "./menu.ts";
 import type { Day, IsoDate, Slot } from "../week/types.ts";
 import { formatDuration } from "../week/format.ts";
 import { call } from "./api.ts";
@@ -38,6 +40,9 @@ export type TimeboxEnv = {
   open: (t: TimeboxTarget) => void;
   startFocus: (tb: TimeboxView) => void;
   connectWrite: () => void;
+  /** Step 13: "Needs help from…", and the help invites to show on items. */
+  help: (t: HelpTarget) => void;
+  invites: readonly InviteView[];
 };
 export const TimeboxCtx = createContext<TimeboxEnv | null>(null);
 export const useTimeboxes = () => useContext(TimeboxCtx);
@@ -87,7 +92,7 @@ export function useWriteFlow(onDone: () => void) {
     [onDone],
   );
   const begin = useCallback(
-    async (input: { uid: string } | { undo: number }) => {
+    async (input: { uid: string } | { undo: number } | { event: { id: string; start?: string; end?: string; showAs?: string } }) => {
       try {
         const r = await call<{ preview?: WritePreview; nothing?: true }>("write.preview", input);
         if (!r.preview) return;
@@ -118,7 +123,16 @@ export function useWriteFlow(onDone: () => void) {
     [onDone],
   );
   const dialog = flow ? <WriteDialog flow={flow} onConfirm={() => void confirm(flow.preview)} onRetry={() => flow.result && void retry(flow.result.entry.id, flow.preview)} onClose={() => setFlow(null)} /> : null;
-  return { sync: (uid: string) => begin({ uid }), undo: (id: number) => begin({ undo: id }), retry: (id: number) => retry(id), dialog };
+  return {
+    sync: (uid: string) => begin({ uid }),
+    undo: (id: number) => begin({ undo: id }),
+    retry: (id: number) => retry(id),
+    /** Step 13: one of my own events (time and show as only), previewed first. */
+    edit: (event: { id: string; start?: string; end?: string; showAs?: string }) => begin({ event }),
+    /** A preview made elsewhere (a help invite). */
+    show: (p: WritePreview) => setFlow({ preview: p, result: null, busy: false, error: null }),
+    dialog,
+  };
 }
 
 function WriteDialog({ flow, onConfirm, onRetry, onClose }: { flow: Flow; onConfirm: () => void; onRetry: () => void; onClose: () => void }) {
@@ -155,6 +169,18 @@ function WriteDialog({ flow, onConfirm, onRetry, onClose }: { flow: Flow; onConf
             {p.system} · {p.account} · {p.calendar}
           </dd>
         </dl>
+        {p.kind === "invite" && p.attendees.length > 0 && (
+          <div className="wd-people" role="note">
+            <strong>{p.op === "delete" ? "These people get a cancellation:" : "These people get an invite by email:"}</strong>
+            <ul>
+              {p.attendees.map((a) => (
+                <li key={a.email}>
+                  {a.name} <span className="muted">{a.email}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <table className="wd-fields">
           <thead>
             <tr>
@@ -195,7 +221,7 @@ function WriteDialog({ flow, onConfirm, onRetry, onClose }: { flow: Flow; onConf
             )
           ) : (
             <button ref={first} type="button" className="commit" disabled={busy} onClick={onConfirm}>
-              {busy ? "Writing and checking…" : p.op === "create" ? "Put on Outlook" : p.op === "update" ? "Update Outlook" : "Remove from Outlook"}
+              {busy ? "Writing and checking…" : p.kind === "invite" ? (p.op === "delete" ? "Cancel the invite" : "Send invite") : p.op === "create" ? "Put on Outlook" : p.op === "update" ? "Update Outlook" : "Remove from Outlook"}
             </button>
           )}
           <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
@@ -475,14 +501,40 @@ export function DayStrip({ day, now, titleOf }: { day: Day; now: string; titleOf
 function TimeboxDetails({ tb, env, clientName, today, onRemoved }: { tb: TimeboxView; env: TimeboxEnv; clientName: string; today: boolean; onRemoved: () => void }) {
   useEffect(() => env.loadAccess(), []);
   const canWrite = env.access?.access === "write";
+  const [title, setTitle] = useState(tb.title);
+  useEffect(() => setTitle(tb.title), [tb.id, tb.title]);
   return (
     <div className="tb-details" style={{ "--c": clientColor(tb.clientKey, env.colors) } as CSSProperties}>
       <span className="swatch" aria-hidden="true" />
       <strong>{range(tb, env.tz)}</strong>
-      <span>
-        {clientName}: {tb.title}
+      <span className="tb-retitle">
+        {clientName}:{" "}
+        <input
+          aria-label="Timebox title"
+          value={title}
+          maxLength={200}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={() => title.trim() && title.trim() !== tb.title && void timeboxChange(env, "timebox.update", { id: tb.id, title: title.trim() })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            if (e.key === "Escape") setTitle(tb.title);
+          }}
+        />
       </span>
       <span className="muted">{formatDuration(minutesOf(tb))}</span>
+      <label className="tb-show">
+        Show as{" "}
+        <select value={tb.showAs} onChange={(e) => void timeboxChange(env, "timebox.update", { id: tb.id, showAs: e.target.value })}>
+          {SHOW_AS_VALUES.map((v) => (
+            <option key={v} value={v}>
+              {SHOW_AS_LABEL[v]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="button" className="mini" onClick={() => env.help({ clientKey: tb.clientKey, title: tb.title, url: tb.url, itemId: tb.itemId, pickId: tb.pickId, timeboxId: tb.id, pinned: tb.date })}>
+        Needs help from…
+      </button>
       {today && (
         <button type="button" className="mini" onClick={() => env.startFocus(tb)}>
           Start focus
@@ -496,7 +548,9 @@ function TimeboxDetails({ tb, env, clientName, today, onRemoved }: { tb: Timebox
           {tb.sync === "create" ? "Put on Outlook now" : tb.sync === "update" ? "Update Outlook" : "Remove from Outlook"}
         </button>
       )}
-      {tb.onOutlook && !tb.sync && <span className="muted">On Outlook</span>}
+      {tb.onOutlook && !tb.sync && !tb.conflict && <span className="muted">On Outlook</span>}
+      {tb.outlookNote && !tb.conflict && <span className="tb-note">{tb.outlookNote}</span>}
+      {tb.conflict && <ConflictChoice tb={tb} env={env} clientName={clientName} />}
       {tb.sync && env.access && !canWrite && (
         <span className="tb-explain">
           {env.access.access === "not_set_up" ? "Outlook isn't set up; kept in Coopilot." : "Saved in Coopilot. To put it on Outlook, reconnect Outlook and allow calendar changes."}{" "}
@@ -521,6 +575,60 @@ function TimeboxDetails({ tb, env, clientName, today, onRemoved }: { tb: Timebox
   );
 }
 
+/** Both sides changed since the last sync (step 13): both versions, and a choice. Nothing is overwritten until then. */
+export function ConflictChoice({ tb, env, clientName }: { tb: TimeboxView; env: TimeboxEnv; clientName: string }) {
+  const c = tb.conflict!;
+  const theirs = c.outlook;
+  const choose = async (keep: "coopilot" | "outlook") => {
+    try {
+      const r = await call<{ timebox: TimeboxView | null; uid?: string; sync: string | null }>("timebox.resolve", { id: tb.id, keep });
+      env.changed();
+      if (r.sync) await env.sync(tb.uid);
+      else notify(keep === "outlook" ? "Took Outlook's version" : "Kept Coopilot's version");
+    } catch (e) {
+      notify(errText(e));
+    }
+  };
+  return (
+    <div className="tb-conflict" role="group" aria-label="Changed in Coopilot and in Outlook">
+      <p>
+        <strong>Changed in both places</strong> <span className="muted">({c.changed.join(", ")}). Nothing was overwritten.</span>
+      </p>
+      <dl>
+        <dt>Coopilot</dt>
+        <dd>
+          {clientName}: {tb.title} · {range(tb, env.tz)} · {SHOW_AS_LABEL[tb.showAs]}
+        </dd>
+        <dt>Outlook</dt>
+        <dd>{theirs ? `${theirs.subject} · ${range(theirs, env.tz)} · ${SHOW_AS_LABEL[theirs.showAs as OutlookShowAs] ?? theirs.showAs}` : "Deleted in Outlook"}</dd>
+      </dl>
+      <button type="button" className="mini" onClick={() => void choose("coopilot")}>
+        Keep Coopilot's
+      </button>
+      <button type="button" className="mini" onClick={() => void choose("outlook")}>
+        {theirs ? "Use Outlook's" : "Remove the timebox too"}
+      </button>
+    </div>
+  );
+}
+
+/** "Help: Tue 1:00 PM with Ana": a help invite on an item (step 13). */
+export function InviteChips({ match }: { match: (i: InviteView) => boolean }): ReactNode {
+  const env = useTimeboxes();
+  if (!env) return null;
+  const list = env.invites.filter((i) => i.status === "sent" && match(i));
+  if (!list.length) return null;
+  return list.map((i) => {
+    const s = Temporal.Instant.from(i.start).toZonedDateTimeISO(env.tz);
+    const day = s.toPlainDate().toLocaleString("en-US", { weekday: "short" });
+    return (
+      <span key={i.uid} className="help-chip" title={`Help session ${range(i, env.tz)} with ${i.names.join(", ")}${i.teams ? " (Teams)" : ""}`}>
+        Help {day} {clock(i.start, env.tz)} · {i.names.join(", ")}
+      </span>
+    );
+  });
+}
+
 /** A drag handle for a pick or item: drop it on the day strip to timebox it. */
 export function DragHandle({ payload, label }: { payload: DragPayload; label: string }) {
   return (
@@ -541,21 +649,78 @@ export function DragHandle({ payload, label }: { payload: DragPayload; label: st
 
 // ---------- the week cards ----------
 
-/** Timeboxes inside a card's timeline, in client color (Coopilot's own Outlook events show only here, once). */
+/**
+ * Timeboxes inside a card's timeline, in client color (Coopilot's own Outlook events show only here, once). Step 13:
+ * drag to move, the bottom edge to resize (15 minute steps); right-click or Enter for its menu (by tier).
+ */
 export function TimeboxBands({ slot, pos }: { slot: Slot; pos: (iso: string) => number }): ReactNode {
   const env = useTimeboxes();
   if (!env) return null;
   const a = ms(slot.view.start), b = ms(slot.view.end);
   const here = env.timeboxes.filter((t) => t.date === slot.date && !t.removedAt && ms(t.end) > a && ms(t.start) < b);
-  return here.map((t) => {
-    const s = Math.max(ms(t.start), a), e = Math.min(ms(t.end), b);
-    const top = pos(new Date(s).toISOString()), bottom = pos(new Date(e).toISOString());
-    return (
-      <div key={`tb-${t.id}`} className="tbox" style={{ top: `${top * 100}%`, height: `${(bottom - top) * 100}%`, "--c": clientColor(t.clientKey, env.colors) } as CSSProperties} title={`Timebox: ${t.title}\n${range(t, env.tz)}${t.onOutlook ? " · on Outlook" : ""}`}>
-        <span className="tbox-label">{t.title}</span>
-      </div>
-    );
-  });
+  return here.map((t) => <Band key={`tb-${t.id}`} t={t} env={env} slot={slot} pos={pos} />);
+}
+
+function Band({ t, env, slot, pos }: { t: TimeboxView; env: TimeboxEnv; slot: Slot; pos: (iso: string) => number }) {
+  const menu = useMenu((m) => timeboxMenu(m, t));
+  const [drag, setDrag] = useState<{ mode: "move" | "end"; y0: number; h: number; d: number } | null>(null);
+  const a = ms(slot.view.start), b = ms(slot.view.end);
+  const spanMin = (b - a) / 60_000;
+  const shift = drag ? drag.d : 0;
+  const s0 = ms(t.start), e0 = ms(t.end);
+  const s = drag?.mode === "move" ? s0 + shift * 60_000 : s0;
+  const e = e0 + shift * 60_000 * (drag ? 1 : 0);
+  const top = pos(new Date(Math.max(s, a)).toISOString()), bottom = pos(new Date(Math.min(drag?.mode === "end" ? Math.max(e, s0 + TIMEBOX_MIN * 60_000) : e, b)).toISOString());
+  const down = (ev: PointerEvent, mode: "move" | "end") => {
+    if (ev.button !== 0) return;
+    ev.stopPropagation();
+    const parent = (ev.currentTarget as HTMLElement).closest(".timeline") as HTMLElement | null;
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    setDrag({ mode, y0: ev.clientY, h: parent?.getBoundingClientRect().height ?? 1, d: 0 });
+  };
+  const move = (ev: PointerEvent) => drag && setDrag({ ...drag, d: snap(((ev.clientY - drag.y0) / drag.h) * spanMin) });
+  const up = () => {
+    if (!drag) return;
+    const d = drag.d;
+    setDrag(null);
+    if (!d) return;
+    const iso = (x: number) => Temporal.Instant.fromEpochMilliseconds(x).toZonedDateTimeISO(env.tz).toString({ timeZoneName: "never", smallestUnit: "second" });
+    if (drag.mode === "move") void timeboxChange(env, "timebox.update", { id: t.id, start: iso(s0 + d * 60_000), end: iso(e0 + d * 60_000) });
+    else void timeboxChange(env, "timebox.update", { id: t.id, end: iso(Math.max(s0 + TIMEBOX_MIN * 60_000, e0 + d * 60_000)) });
+  };
+  const label = `Timebox: ${t.title}, ${range(t, env.tz)}${t.onOutlook ? ", on Outlook" : ""}${t.conflict ? ", changed in both places" : t.outlookNote ? `, ${t.outlookNote}` : ""}`;
+  return (
+    <div
+      className={`tbox${drag ? " dragging" : ""}${t.conflict ? " conflict" : ""}${t.sync ? " out-of-step" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      style={{ top: `${top * 100}%`, height: `${(bottom - top) * 100}%`, "--c": clientColor(t.clientKey, env.colors) } as CSSProperties}
+      title={`${label}\nDrag to move, the bottom edge to resize. Right-click for more.`}
+      onPointerDown={(ev) => down(ev, "move")}
+      onPointerMove={move}
+      onPointerUp={up}
+      onPointerCancel={() => setDrag(null)}
+      onClick={(ev) => ev.stopPropagation()}
+      onDoubleClick={(ev) => ev.stopPropagation()}
+      onContextMenu={menu.onContextMenu}
+      onKeyDown={(ev) => {
+        if (ev.key === "Enter" || ev.key === "ContextMenu") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+          menu.onContextMenu({ preventDefault() {}, stopPropagation() {}, currentTarget: ev.currentTarget, type: "contextmenu", clientX: r.left + 8, clientY: r.top + 8 } as never);
+        }
+      }}
+    >
+      <span className="tbox-label">
+        {t.conflict ? "⚠ " : ""}
+        {t.title}
+      </span>
+      {drag && <span className="tbox-time">{range({ start: new Date(s).toISOString(), end: new Date(drag.mode === "end" ? Math.max(e, s0 + TIMEBOX_MIN * 60_000) : e).toISOString() }, env.tz)}</span>}
+      <span className="tbox-edge" onPointerDown={(ev) => down(ev, "end")} aria-hidden="true" />
+    </div>
+  );
 }
 
 /** Compact cards (no timeline): the timeboxes that start in this half-day, as a short list in client color. */

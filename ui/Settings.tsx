@@ -3,7 +3,7 @@
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { FieldProblem, SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
-import { THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
+import { COLLAB_LENGTHS, THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
 import type { ClientWork } from "../week/types.ts";
 import type { FollowState } from "../week/follow.ts";
 import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS, type ViewRange } from "../week/hours.ts";
@@ -195,6 +195,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
         <>
           <PlanningForm {...p} />
           <TimeboxForm {...p} />
+          <CollabForm {...p} />
         </>
       );
     case "focus":
@@ -471,6 +472,46 @@ function TimeboxForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
           </label>
           <Problems all={problems} field="timebox.confirm_own" />
         </Field>
+      </div>
+      <SaveRow status={status} />
+    </form>
+  );
+}
+
+/** Settings > Planning > Help sessions (step 13): length, Teams, how many workdays "Needs help from…" searches. */
+function CollabForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
+  const c = p.data.collab;
+  const [v, setV] = useState({ meetingMinutes: c.meetingMinutes, teams: c.teams, daysAhead: c.daysAhead });
+  const { problems, status, save } = useSave(p.onSavedData);
+  return (
+    <form
+      className="set-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save("collab", v);
+      }}
+    >
+      <h3>Help sessions</h3>
+      <div className="set-grid">
+        <Field label="Default length" hint="What Needs help from… starts with. You can pick another length each time.">
+          <select value={v.meetingMinutes} onChange={(e) => setV({ ...v, meetingMinutes: Number(e.target.value) })}>
+            {COLLAB_LENGTHS.map((m) => (
+              <option key={m} value={m}>{m} minutes</option>
+            ))}
+          </select>
+          <Problems all={problems} field="collab.meeting_minutes" />
+        </Field>
+        <Field label="Teams meeting" hint="Invites start with a Teams link. You can turn it off per invite.">
+          <label className="set-check">
+            <input type="checkbox" checked={v.teams} onChange={(e) => setV({ ...v, teams: e.target.checked })} /> On by default
+          </label>
+          <Problems all={problems} field="collab.teams" />
+        </Field>
+        <Field label="Days to search" hint="Workdays from today, when the item isn't pinned to a day.">
+          <input type="number" min={1} max={10} step={1} value={v.daysAhead} onChange={(e) => setV({ ...v, daysAhead: Number(e.target.value) })} />
+          <Problems all={problems} field="collab.days_ahead" />
+        </Field>
+        <ReadOnly label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where="Cooptimize addresses. Set in config.toml ([collab] domains); default is your work email's domain" />
       </div>
       <SaveRow status={status} />
     </form>
@@ -938,6 +979,7 @@ function OutlookWriteRow() {
 }
 
 const OPS: Record<WriteEntry["op"], string> = { create: "Created", update: "Changed", delete: "Removed" };
+const KINDS: Record<WriteEntry["kind"], string | null> = { timebox: null, event: "Your event", invite: "Help invite", sync: "From Outlook" };
 const STATUS: Record<WriteEntry["status"], string> = { pending: "Not finished", confirmed: "Confirmed", unconfirmed: "Not confirmed", failed: "Failed", refused: "Refused" };
 /** Settings > Data (step 12): every external write, newest first, with Undo and Retry; and Coopilot events left on Outlook. */
 function WriteLog() {
@@ -985,10 +1027,11 @@ function WriteLog() {
               <tr key={e.id} className={`wl-${e.status}`}>
                 <td>{stamp(e.at)}</td>
                 <td>
+                  {KINDS[e.kind] && <span className={`wl-kind wl-kind-${e.kind}`}>{KINDS[e.kind]}</span>}{" "}
                   {e.undoOf !== null ? "Undo: " : ""}
-                  {OPS[e.op]} <strong>{(e.after ?? e.before)?.subject ?? ""}</strong>
+                  {e.kind === "sync" ? (e.message ?? OPS[e.op]).replace(/^From Outlook: /, "") : OPS[e.op]} <strong>{(e.after ?? e.before)?.subject ?? ""}</strong>
                   {e.whenText && <span className="muted"> · {e.whenText}</span>}
-                  {e.auto && <span className="muted"> · without asking</span>}
+                  {e.auto && e.kind !== "sync" && <span className="muted"> · without asking</span>}
                 </td>
                 <td>Outlook{e.calendar ? ` · ${e.calendar}` : ""}{e.account ? ` · ${e.account}` : ""}</td>
                 <td>

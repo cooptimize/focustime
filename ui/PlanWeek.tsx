@@ -3,7 +3,7 @@
 // (dependencies); the block grid on top previews pins and each client's must count. Fit per client counts musts
 // against that client's free blocks. DevOps health sits on top, folded to a count. DevOps is read-only; the week
 // plan lives only in the local plan store. A past week is a review.
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
 import type { WeekFeature } from "../plan/types.ts";
@@ -14,6 +14,7 @@ import type { ClientWork, IsoDate, PortfolioItem, Slot, WorkItem } from "../week
 import { call } from "./api.ts";
 import { clientColor } from "./labels.ts";
 import { copy } from "./Loops.tsx";
+import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 
 type Props = { weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
@@ -624,6 +625,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, target, open, tog
   const openStories = stories.filter((c) => c.open).length;
   const free = places.filter((pl) => !i.slots.some((s) => s.date === pl.date && s.half === pl.half));
   const other: Tier = i.tier === "must" ? "nice" : "must";
+  const { env } = useContext(MenuCtx);
   return (
     <li className={`pw-feature pw-item${i.done ? " done" : ""}`} draggable={!past}
       onDragStart={(e) => { e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ clientKey: k, itemId: i.itemId })); e.dataTransfer.effectAllowed = "copy"; }}>
@@ -667,6 +669,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, target, open, tog
           <button type="button" className="mini" disabled={last} onClick={() => ops.move(i, 1)} aria-label={`Move #${i.itemId} down`} title="Down (local order only)">↓</button>
           <button type="button" className="mini" onClick={() => ops.tier(i, other)}>{other === "must" ? "Make a must" : "Make nice to have"}</button>
           {(!i.done || i.done === "local") && <button type="button" className="mini quiet" onClick={() => ops.done(i, !i.done)}>{i.done ? "Not done" : "Mark done"}</button>}
+          {env && !i.done && <button type="button" className="mini quiet" onClick={() => env.openHelp({ clientKey: k, title: `#${i.itemId} ${i.title}`, url: i.url, itemId: i.itemId, pinned: i.slots[0]?.date ?? null })} title="Find a Cooptimizer who is free to help">Needs help…</button>}
           <button type="button" className="mini quiet" onClick={() => ops.remove(i)} aria-label={`Take #${i.itemId} off the week`} title="Take off the week">×</button>
         </span>
       )}

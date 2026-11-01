@@ -18,10 +18,22 @@ export type Timebox = {
   end: string;
   /** "Put on Outlook". */
   outlook: boolean;
+  /** Outlook show as for its event (step 13); busy by default. */
+  showAs: OutlookShowAs;
+  /** Set when a sync followed a change made in Outlook (step 13): "Changed in Outlook: time". */
+  outlookNote: string | null;
+  /** Both sides changed since the last sync (step 13): Outlook's version (null: deleted there), until I choose. */
+  conflict: { outlook: Fields | null; changed: string[]; at: string } | null;
   removedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
+
+/** Outlook's show as values Coopilot can set. */
+export type OutlookShowAs = "free" | "tentative" | "busy" | "oof" | "workingElsewhere";
+export const SHOW_AS_VALUES: readonly OutlookShowAs[] = ["busy", "tentative", "free", "oof", "workingElsewhere"];
+export const SHOW_AS_LABEL: Record<OutlookShowAs, string> = { busy: "Busy", tentative: "Tentative", free: "Free", oof: "Away", workingElsewhere: "Working elsewhere" };
+export const isShowAs = (v: unknown): v is OutlookShowAs => typeof v === "string" && (SHOW_AS_VALUES as readonly string[]).includes(v);
 
 export const TIMEBOX_MIN = 15;
 export const TIMEBOX_MAX = 8 * 60;
@@ -55,18 +67,24 @@ export function timeboxProblem(date: IsoDate, start: string, end: string): strin
 /** Snap minutes past midnight to the drag grid. */
 export const snap = (minutes: number, step = TIMEBOX_SNAP) => Math.round(minutes / step) * step;
 
-/** The fields Coopilot writes to Outlook: "<client>: <title>", Busy, no reminder, the DevOps link in the body. */
-export function outlookFields(tb: Pick<Timebox, "title" | "url" | "start" | "end">, clientName: string) {
+/** One attendee of a help invite (step 13): Cooptimize staff only. */
+export type Attendee = { name: string; email: string };
+/**
+ * The fields Coopilot writes. Timeboxes: subject, body, start, end, show as, no reminder. Invites (step 13) add the
+ * attendees and whether it is a Teams meeting.
+ */
+export type Fields = { subject: string; body: string; start: string; end: string; showAs: OutlookShowAs; reminder: false; attendees?: Attendee[]; teams?: boolean };
+/** The fields Coopilot writes to Outlook: "<client>: <title>", its show as (Busy by default), no reminder, the DevOps link in the body. */
+export function outlookFields(tb: Pick<Timebox, "title" | "url" | "start" | "end"> & { showAs?: OutlookShowAs }, clientName: string): Fields {
   return {
     subject: `${clientName}: ${tb.title}`.slice(0, 255),
     body: [tb.url ?? "", "Timebox planned in Coopilot."].filter(Boolean).join("\n\n"),
     start: Temporal.Instant.from(tb.start).toString(),
     end: Temporal.Instant.from(tb.end).toString(),
-    showAs: "busy" as const,
+    showAs: tb.showAs ?? "busy",
     reminder: false as const,
   };
 }
-export type Fields = ReturnType<typeof outlookFields>;
 
 /** What Coopilot last wrote and confirmed for a timebox's event. */
 export type OwnEvent = { uid: string; timeboxId: number | null; eventId: string; fields: Fields; deletedAt: string | null };
@@ -132,10 +150,18 @@ export function boxedMinutes(timeboxes: readonly Pick<Timebox, "pickId" | "start
 export const dayTimeboxes = <T extends Pick<Timebox, "date" | "start" | "removedAt">>(all: readonly T[], date: IsoDate) => all.filter((t) => t.date === date && !t.removedAt).sort((a, b) => ms(a.start) - ms(b.start));
 
 /** Local state a write log entry keeps, so undo can put the timebox back too. */
-export type LocalState = { start: string; end: string; outlook: boolean; removedAt: string | null };
-export type WriteRecord = { op: SyncOp; uid: string; eventId: string | null; before: Fields | null; after: Fields | null; localBefore: LocalState | null };
-/** How to undo a write: delete what was created, put back what was changed, recreate what was deleted (same marker). */
+export type LocalState = { start: string; end: string; outlook: boolean; removedAt: string | null; title?: string; showAs?: OutlookShowAs; date?: string };
+/** What a write was for (step 13): a timebox's event, one of my own events, a help invite, or a sync from Outlook. */
+export type WriteKind = "timebox" | "event" | "invite" | "sync";
+export type WriteRecord = { op: SyncOp; uid: string; eventId: string | null; before: Fields | null; after: Fields | null; localBefore: LocalState | null; kind?: WriteKind };
+/**
+ * How to undo a write: delete what was created (an invite is cancelled, so attendees hear), put back what was changed,
+ * recreate what was deleted (same marker). A cancelled invite isn't sent again, and a sync from Outlook isn't undone
+ * from the log (it records what happened there).
+ */
 export function undoOf(w: WriteRecord): { op: SyncOp; uid: string; eventId: string | null; fields: Fields | null; local: LocalState | null } | null {
+  if (w.kind === "sync") return null;
+  if (w.kind === "invite" && w.op !== "create") return null;
   if (w.op === "create") return w.eventId ? { op: "delete", uid: w.uid, eventId: w.eventId, fields: null, local: w.localBefore } : null;
   if (w.op === "update") return w.eventId && w.before ? { op: "update", uid: w.uid, eventId: w.eventId, fields: w.before, local: w.localBefore } : null;
   return w.before ? { op: "create", uid: w.uid, eventId: null, fields: w.before, local: w.localBefore } : null;
@@ -144,7 +170,7 @@ export function undoOf(w: WriteRecord): { op: SyncOp; uid: string; eventId: stri
 export type WriteStatus = "pending" | "confirmed" | "unconfirmed" | "failed" | "refused";
 /** One external write in the audit log: what, where, when, the result, and the values before it. */
 export type WriteEntry = {
-  id: number; at: string; system: "outlook"; op: SyncOp; uid: string; eventId: string | null; account: string | null; calendar: string | null;
+  id: number; at: string; system: "outlook"; op: SyncOp; kind: WriteKind; uid: string; eventId: string | null; account: string | null; calendar: string | null;
   before: Fields | null; after: Fields | null; localBefore: LocalState | null; localAfter: LocalState | null;
   status: WriteStatus; message: string | null; auto: boolean; undoOf: number | null; undoneBy: number | null; attempts: number; updatedAt: string;
 };

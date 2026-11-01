@@ -30,7 +30,14 @@ November 1, 2026. Planning-chat record. The repo's docs/ folder is the living so
     - Global capture key Super + Alt + N
 11. **Plan the week by client** (DevOps first): each client's Must and Nice to have lists from DevOps in stack rank order (local reorder), optional pins, fit per client on musts, one-click re-planning with a heads-up offer for a dropped committed must, "Anything shifted?" in Check-in, "2 of 4 musts done" and a midweek "Still realistic?" question, Plan the day drawing from the week, DevOps health at the top of Plan the week
 
-In progress: nothing. Step 11 is live; open questions Q57–Q66 in docs/open-questions.md.
+12. **Write framework and timeboxing**: named external writes with preview, confirm, read back, audit log and undo; timeboxes on the day strip with optional Put on Outlook (marker-owned events only)
+13. **Calendar editing tiers and the collaboration finder**: Coopilot events fully editable and synced both ways (conflicts ask), my own no-attendee events movable with preview, meetings only opened in Outlook; "Needs help from…" ranks Cooptimizers by client, finds free times in everyone's working hours (free/busy only) and sends an invite after preview, undo cancels
+
+In progress: nothing. Step 13 is built; open questions Q71–Q75 in docs/open-questions.md.
+
+## Calendar editing rule (agreed Nov 1, built in step 13)
+
+Coopilot only edits what it created or what only I can see. Coopilot events (marked) are fully editable and follow changes made in Outlook; my own events with no other attendees can be moved, resized and shown as free or busy, never retitled or marked; meetings with anyone else are never edited (Open in Outlook). Every write goes through the write framework. Backlog: RSVP (accept, tentative, decline with a note) behind preview and confirm.
 
 ## Principle #1: DevOps first (agreed Nov 1)
 
@@ -47,7 +54,7 @@ We plan, track and show work in DevOps. If it isn't in DevOps, it isn't planned 
 ## After step 11 (agreed Nov 1)
 
 12. Write framework (preview, confirm, audit log, undo) + timeboxing: drag picks onto the day timeline (local first); per-timebox "Put on Outlook" toggle; Coopilot edits only its own events.
-13. Collaboration finder: "Needs help from…" ranks Cooptimizers (1) on the client that same day per Focus Time, (2) on the client per Account Worker, (3) anyone else; PTO shown as "away" only; Graph free/busy finds real overlap within each person's working hours and time zone; invites only after preview and confirm. Reads teammates' focus time and PTO (decided: not sensitive at Cooptimize).
+13. ~~Collaboration finder~~ (built): "Needs help from…" ranks Cooptimizers (1) on the client that same day per Focus Time, (2) on the client per Account Worker, (3) anyone else; PTO shown as "away" only; Graph free/busy finds real overlap within each person's working hours and time zone; invites only after preview and confirm. Reads teammates' focus time and PTO (decided: not sensitive at Cooptimize).
 14. DevOps writes: update state, comment, drafts become real stories.
 
 Later: schedule a meeting for an item (pre-filled Outlook first); chat panel on the same actions as the command menu; Ownership area (epics/features I own, contributors, target-date risk); browser access from machines that can't run Moonlight; Remmina launch/resume.

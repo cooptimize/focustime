@@ -1,13 +1,14 @@
 // Musts per client for a week (step 11): "CSC: 2 of 4 musts done" from DevOps state, local done marks and done picks,
 // against the current list (not the original). In this week, the on-track question: musts left against the client's
 // blocks left, worded as a question. In Check-in, "Anything shifted?" swaps musts in or out in one click each.
-import { useState, type CSSProperties } from "react";
+import { useContext, useState, type CSSProperties } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import { borrowedForWeek, weekFit } from "../plan/weekplan.ts";
 import { blocksLeft, onTrack, pickDoneFrom, progressLabel, weekList } from "../plan/weeklist.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
 import { clientColor } from "./labels.ts";
+import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 
 type HeadsUp = { weekStart: IsoDate; clientKey: string; itemId: number; title: string };
@@ -60,6 +61,7 @@ export function AnythingShifted({ data, weekStart, now, onChanged }: { data: Wee
   const [offer, setOffer] = useState<HeadsUp | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const { env } = useContext(MenuCtx);
   const shown = rows.filter((r) => r.musts > 0 || r.nice > 0);
   if (!shown.length) return null;
   const swap = async (id: number, itemId: number, tier: "must" | "nice") => {
@@ -112,6 +114,7 @@ export function AnythingShifted({ data, weekStart, now, onChanged }: { data: Wee
                   <button type="button" className="mini" onClick={() => void swap(i.id, i.itemId, i.tier === "must" ? "nice" : "must")}>
                     {i.tier === "must" ? "Make nice to have" : "Make a must"}
                   </button>
+                  {env && <button type="button" className="mini quiet" onClick={() => env.openHelp({ clientKey: i.clientKey, title: `#${i.itemId} ${i.title}`, url: i.url, itemId: i.itemId, pinned: null })}>Needs help…</button>}
                 </li>
               ))}
             </ul>

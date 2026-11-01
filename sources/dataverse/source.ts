@@ -534,8 +534,108 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
-  return { load, following, resolveUserId, devopsTargets, myClients, pto };
+  // ---------- the collaboration finder (step 13): teammates, who works on a client, team PTO ----------
+  // Read-only, never cached on disk, kept in memory for 5 minutes. Teammates' PTO is read as dates only: the title
+  // (coop_title) and the out-of-office message are never selected.
+  const teamMemo = new Map<string, { at: number; value: unknown }>();
+  async function memo<T>(key: string, run: () => Promise<T>): Promise<T> {
+    const t = now().epochMilliseconds;
+    const hit = teamMemo.get(key);
+    if (hit && t - hit.at < ttl) return hit.value as T;
+    const value = await run();
+    teamMemo.set(key, { at: t, value });
+    return value;
+  }
+  const guid = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v);
+  const fail = (e: unknown, op: string): TeamFailure => {
+    if (!(e instanceof SourceFailure)) log({ source: "dataverse", op, kind: "unexpected" });
+    const f = e instanceof SourceFailure ? e : null;
+    return { ok: false, message: f?.rootCause === "keyring" ? "Keyring locked" : f?.status === "unreachable" ? "Dataverse unreachable" : f?.status === "auth_required" ? "Dataverse access denied: check the Coopilot role (users, Focus Time, Account Workers, PTO)" : f?.message ?? "Dataverse read failed" };
+  };
+
+  /** Cooptimize staff: enabled, licensed users who aren't application users, with a work email. */
+  async function teammates(): Promise<{ ok: true; people: { id: string; name: string; email: string }[] } | TeamFailure> {
+    try {
+      return await memo("teammates", async () => {
+        const filter = "isdisabled eq false and islicensed eq true and applicationid eq null and internalemailaddress ne null";
+        const rows = await getAll<{ systemuserid?: unknown; fullname?: unknown; internalemailaddress?: unknown }>("team_users", `systemusers?$select=systemuserid,fullname,internalemailaddress&$filter=${encodeURIComponent(filter)}`);
+        const people = rows.filter((r) => guid(r.systemuserid) && typeof r.internalemailaddress === "string" && r.internalemailaddress.includes("@")).map((r) => ({ id: (r.systemuserid as string).toLowerCase(), name: typeof r.fullname === "string" && r.fullname.trim() ? r.fullname.trim() : (r.internalemailaddress as string), email: (r.internalemailaddress as string).trim().toLowerCase() }));
+        return { ok: true as const, people };
+      });
+    } catch (e) {
+      return fail(e, "team_users");
+    }
+  }
+
+  /**
+   * Who works on a client: every active Focus Time pattern on its account overlapping [from, to] (any person), and its
+   * active Account Workers. The client is one of mine (I'm an active Account Worker on it), found by its key.
+   */
+  async function clientTeam(clientKey: string, from: string, to: string): Promise<{ ok: true; accountId: string | null; patterns: { userId: string; startDate: string; endDate: string | null; days: FocusPattern["days"] }[]; workers: string[] } | TeamFailure> {
+    try {
+      return await memo(`team:${clientKey}:${from}:${to}`, async () => {
+        const userId = config.mySystemUserId;
+        if (!guid(userId)) throw new SourceFailure("misconfigured", "Your Dataverse user id is not resolved yet");
+        const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
+        const accts = await getAll<AccountRow>("team_account", `accounts?$select=accountid,name,coop_reportingnickname&$filter=${encodeURIComponent(`coop_reportingnickname eq ${q(clientKey)} or name eq ${q(clientKey)}`)}`);
+        const matches = accts.filter((a) => clientKeyOf(a) === clientKey && guid(a.accountid));
+        if (matches.length !== 1) return { ok: true as const, accountId: null, patterns: [], workers: [] };
+        const acct = matches[0]!.accountid.toLowerCase();
+        const workers = await getAll<{ _coop_user_value?: unknown; coop_accountworkerid?: unknown }>("team_workers", `coop_accountworkers?$select=coop_accountworkerid,_coop_user_value&$filter=${encodeURIComponent(`_coop_account_value eq ${acct} and statecode eq 0`)}`);
+        const workerIds = workers.map((w) => w._coop_user_value).filter(guid).map((x) => x.toLowerCase());
+        const dates = `coop_startdate le ${Temporal.PlainDate.from(to)} and (coop_enddate eq null or coop_enddate ge ${Temporal.PlainDate.from(from)})`;
+        const filter = `statecode eq 0 and ${dates} and (_coop_account_value eq ${acct} or coop_AccountWorker/_coop_account_value eq ${acct})`;
+        const expand = "coop_AccountWorker($select=_coop_user_value,_coop_account_value)";
+        const rows = await getAll<FocusTimeRow>("team_focustimes", `coop_focustimes?$select=${FOCUS_COLUMNS.join(",")}&$filter=${encodeURIComponent(filter)}&$expand=${expand}`);
+        const patterns = rows.flatMap((r) => {
+          const person = (r.coop_AccountWorker?._coop_user_value ?? r._coop_systemuser_value ?? "").toLowerCase();
+          if (!guid(person) || !r.coop_startdate) return [];
+          const days: FocusPattern["days"] = {};
+          for (const [day, col] of [["Mon", "coop_mondaydaypart"], ["Tue", "coop_tuesdaydaypart"], ["Wed", "coop_wednesdaydaypart"], ["Thu", "coop_thursdaydaypart"]] as const) {
+            const v = r[col];
+            if (v === 1) days[day] = "AM";
+            else if (v === 2) days[day] = "PM";
+            else if (v === 3) days[day] = "AllDay";
+          }
+          return [{ userId: person, startDate: r.coop_startdate.slice(0, 10), endDate: r.coop_enddate ? r.coop_enddate.slice(0, 10) : null, days }];
+        });
+        log({ source: "dataverse", op: "team_client", count: patterns.length });
+        return { ok: true as const, accountId: acct, patterns, workers: workerIds };
+      });
+    } catch (e) {
+      return fail(e, "team_client");
+    }
+  }
+
+  /** Everyone's PTO days in [from, to]: who and which date only. Never the title or message. */
+  async function teamPto(from: string, to: string): Promise<{ ok: true; away: { userId: string; date: string }[] } | TeamFailure> {
+    try {
+      return await memo(`teampto:${from}:${to}`, async () => {
+        const filter = `statecode eq 0 and coop_timeoffstartdate le ${Temporal.PlainDate.from(to)} and (coop_enddate eq null or coop_enddate ge ${Temporal.PlainDate.from(from)})`;
+        const trackers = await getAll<{ coop_timeofftrackerid?: unknown; _coop_employee_value?: unknown; coop_timeoffstartdate: string | null; coop_enddate: string | null }>("team_pto", `coop_timeofftrackers?$select=coop_timeofftrackerid,_coop_employee_value,coop_timeoffstartdate,coop_enddate&$filter=${encodeURIComponent(filter)}`);
+        const live = trackers.filter((t) => guid(t.coop_timeofftrackerid) && guid(t._coop_employee_value));
+        const ids = live.map((t) => (t.coop_timeofftrackerid as string).toLowerCase());
+        const details: PtoDetailRow[] = [];
+        for (let i = 0; i < ids.length; i += 25) {
+          const chunk = ids.slice(i, i + 25);
+          details.push(...(await getAll<PtoDetailRow>("team_pto_details", `coop_timeofftrackerdetails?$select=${PTO_DETAIL_COLUMNS.join(",")}&$filter=${encodeURIComponent(`statecode eq 0 and (${chunk.map((id) => `_coop_timeofftracker_value eq ${id}`).join(" or ")})`)}`)));
+        }
+        // ptoEntries wants a title; a fixed word is passed and dropped: only who and when leave here.
+        const { entries } = ptoEntries(live.map((t) => ({ coop_timeofftrackerid: (t.coop_timeofftrackerid as string).toLowerCase(), coop_timeoffstartdate: t.coop_timeoffstartdate, coop_enddate: t.coop_enddate, coop_title: "away" })), details);
+        const owner = new Map(live.map((t) => [(t.coop_timeofftrackerid as string).toLowerCase(), (t._coop_employee_value as string).toLowerCase()]));
+        const away = entries.filter((e) => e.date >= from && e.date <= to).map((e) => ({ userId: owner.get(e.trackerId)!, date: e.date }));
+        log({ source: "dataverse", op: "team_pto", count: away.length });
+        return { ok: true as const, away };
+      });
+    } catch (e) {
+      return fail(e, "team_pto");
+    }
+  }
+
+  return { load, following, resolveUserId, devopsTargets, myClients, pto, teammates, clientTeam, teamPto };
 }
+
+export type TeamFailure = { ok: false; message: string };
 
 /** One of my clients. `devopsEmail` is my DevOps identity there (Account Worker), shown read-only in Settings. */
 export type MyClient = { clientKey: string; clientName: string; devops: boolean; devopsEmail: string | null };

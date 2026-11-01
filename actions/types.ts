@@ -61,6 +61,13 @@ export type WeekLoadData = {
   timeboxes: TimeboxView[];
   /** [timebox]: Put on Outlook by default, and whether changes to my own timebox events ask first. */
   timeboxSettings: { outlookDefault: boolean; confirmOwn: boolean };
+  /** Step 13: edit facts per Outlook event id ("outlook:<id>") from the write-token scan (no attendee addresses). */
+  eventEdit: Record<string, import("../plan/caltier.ts").EditFacts>;
+  /** Whether Coopilot may write to Outlook (the tiers only matter with it). */
+  canWrite: boolean;
+  /** Help invites on and around the week. */
+  invites: InviteView[];
+  collab: import("../config/schema.ts").CollabSettings;
   ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
 };
@@ -120,6 +127,8 @@ export type SettingsData = {
   data: { planStore: boolean };
   /** Settings > Planning > Timeboxes (step 12). */
   timebox: AppConfig["timebox"];
+  /** Settings > Planning > Help sessions (step 13); domains as used (config, else my work email's). */
+  collab: AppConfig["collab"];
 };
 
 /** [plan] values the UI uses (step 6c). */
@@ -252,6 +261,8 @@ export type WritePreview = {
   previewId: string;
   expiresAt: string;
   op: "create" | "update" | "delete";
+  /** Step 13: a timebox's event, one of my own events, or a help invite. */
+  kind: import("../plan/timebox.ts").WriteKind;
   undo: boolean;
   /** confirm_own is off and this changes my own timebox event: the UI confirms without asking (still logged). */
   auto: boolean;
@@ -261,6 +272,8 @@ export type WritePreview = {
   summary: string;
   fields: PreviewField[];
   visibility: string;
+  /** Help invites: every person who will receive it (or its cancellation). */
+  attendees: { name: string; email: string }[];
 };
 export type WriteResult = { entry: import("../plan/timebox.ts").WriteEntry; confirmed: boolean; message: string };
 export type WriteState = { access: "write" | "read_only" | "not_connected" | "unavailable" | "not_set_up"; message: string; outlookDefault: boolean; confirmOwn: boolean };
@@ -270,3 +283,11 @@ export type WriteLogView = {
 };
 /** A timebox for the UI: `sync` says what Outlook needs (null: in step or not on Outlook), `onOutlook` whether its event exists. */
 export type TimeboxView = import("../plan/timebox.ts").Timebox & { sync: "create" | "update" | "delete" | null; onOutlook: boolean };
+
+// ---- Step 13: calendar editing tiers and the collaboration finder ----
+/** A help invite as the UI shows it on its item. */
+export type InviteView = { uid: string; clientKey: string; itemId: number | null; pickId: number | null; timeboxId: number | null; title: string; start: string; end: string; names: string[]; teams: boolean; status: "pending" | "sent" | "cancelled"; writeId: number | null };
+export type CandidateView = { name: string; email: string; tier: 1 | 2 | 3; onClient: string[]; away: string[] };
+export type CandidatesData = { clientKey: string; from: string; to: string; candidates: CandidateView[]; problems: string[] };
+export type SlotView = import("../plan/collab.ts").Slot;
+export type SuggestData = { slots: SlotView[]; checked: number; problems: string[] };

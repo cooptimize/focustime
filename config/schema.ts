@@ -42,7 +42,15 @@ export type AppConfig = {
   focus: FocusSettings;
   /** Timeboxes (step 12): "Put on Outlook" on by default, and whether changes to my own timebox events ask first. */
   timebox: TimeboxSettings;
+  /** The collaboration finder (step 13): help session length, Teams, days to search, invite domains. */
+  collab: CollabSettings;
 };
+/** `domains` empty means my work email's domain. */
+export type CollabSettings = { meetingMinutes: number; teams: boolean; daysAhead: number; domains: string[] };
+export const DEFAULT_COLLAB: CollabSettings = { meetingMinutes: 30, teams: true, daysAhead: 3, domains: [] };
+export const COLLAB_LENGTHS = [15, 30, 45, 60, 90] as const;
+/** The domains invites may go to: config, else my work email's. */
+export const inviteDomains = (cfg: Pick<AppConfig, "collab" | "dataverse">) => (cfg.collab.domains.length ? cfg.collab.domains : [cfg.dataverse.myEmail.split("@")[1] ?? ""].filter(Boolean)).map((d) => d.toLowerCase());
 export type TimeboxSettings = { outlookDefault: boolean; confirmOwn: boolean };
 export const DEFAULT_TIMEBOX: TimeboxSettings = { outlookDefault: false, confirmOwn: true };
 
@@ -176,7 +184,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -487,6 +495,31 @@ export function parseConfig(text: string): ParseResult {
     }
   }
 
+  // [collab] (optional, step 13): meeting_minutes (15, 30, 45, 60 or 90), teams, days_ahead (1 to 10), domains
+  const collab: CollabSettings = { ...DEFAULT_COLLAB, domains: [] };
+  if (raw.collab !== undefined) {
+    const t = isTable(raw.collab) ? raw.collab : (err("collab", "Must be a [collab] table"), null);
+    if (t) {
+      for (const k of Object.keys(t)) if (!["meeting_minutes", "teams", "days_ahead", "domains"].includes(k)) err(`collab.${k}`, "Unknown field");
+      if (t.meeting_minutes !== undefined) {
+        if (typeof t.meeting_minutes !== "number" || !(COLLAB_LENGTHS as readonly number[]).includes(t.meeting_minutes)) err("collab.meeting_minutes", `Must be one of ${COLLAB_LENGTHS.join(", ")}`);
+        else collab.meetingMinutes = t.meeting_minutes;
+      }
+      if (t.teams !== undefined) {
+        if (typeof t.teams !== "boolean") err("collab.teams", "Must be true or false");
+        else collab.teams = t.teams;
+      }
+      if (t.days_ahead !== undefined) {
+        if (typeof t.days_ahead !== "number" || !Number.isInteger(t.days_ahead) || t.days_ahead < 1 || t.days_ahead > 10) err("collab.days_ahead", "Must be a whole number from 1 to 10");
+        else collab.daysAhead = t.days_ahead;
+      }
+      if (t.domains !== undefined) {
+        if (!Array.isArray(t.domains) || t.domains.length > 5 || t.domains.some((d) => typeof d !== "string" || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(d))) err("collab.domains", "Must be a list of up to 5 domains, like \"cooptimize.org\"");
+        else collab.domains = (t.domains as string[]).map((d) => d.toLowerCase());
+      }
+    }
+  }
+
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
   if (raw.outlook !== undefined) {
@@ -535,6 +568,7 @@ export function parseConfig(text: string): ParseResult {
       ui,
       focus,
       timebox,
+      collab,
     },
   };
 }

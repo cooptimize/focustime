@@ -8,7 +8,10 @@ import { dayRule } from "../plan/days.ts";
 import { isPickable } from "../plan/rules.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek } from "../plan/types.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
-import type { PlanningSettings, TimerView, BorrowedView } from "../actions/types.ts";
+import type { PlanningSettings, TimerView, BorrowedView, TimeboxView, InviteView } from "../actions/types.ts";
+import { eventEdit, type EditAction, type EditFacts } from "../plan/caltier.ts";
+import { SHOW_AS_LABEL, SHOW_AS_VALUES, type OutlookShowAs } from "../plan/timebox.ts";
+import type { CalEvent } from "../week/types.ts";
 import { PRESETS, suggestMinutes } from "../plan/timer.ts";
 import { sizeNote } from "./planview.ts";
 
@@ -137,7 +140,23 @@ export type MenuEnv = {
   /** Timeboxes (step 12): the Timebox… dialog for a pick or a work item, and Reconnect Outlook with calendar changes. */
   openTimebox: (t: TimeboxTarget) => void;
   connectWrite: () => void;
+  /** Step 13: edit facts per Outlook event and whether Coopilot may write; my own event's preview; Outlook on the web. */
+  eventEdit: Record<string, EditFacts>;
+  canWrite: boolean;
+  editEvent: (input: { id: string; start?: string; end?: string; showAs?: OutlookShowAs }) => void;
+  openOutlook: (url: string) => void;
+  /** Timebox changes that may need an Outlook preview (the same path as the day strip). */
+  timeboxChange: (action: string, input: Record<string, unknown>) => void;
+  startTimeboxFocus: (tb: TimeboxView) => void;
+  /** "Needs help from…" (the collaboration finder) and the help invites sent (cancel = undo of their write). */
+  openHelp: (t: HelpTarget) => void;
+  invites: readonly InviteView[];
+  undoWrite: (id: number) => void;
+  tz: string;
 };
+
+/** What help is wanted on: a pick, a week list item, a timebox or a work item. `pinned` is its day when it has one. */
+export type HelpTarget = { clientKey: string; title: string; url: string | null; itemId: number | null; pickId?: number | null; timeboxId?: number | null; pinned?: IsoDate | null };
 
 /** What a timebox is for: a pick (its client, title and link), or a work item or week list item on a date. */
 export type TimeboxTarget = { pickId: number; date: IsoDate } | { clientKey: string; itemId: number | null; title: string; url: string | null; date: IsoDate };
@@ -214,6 +233,7 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
         next: () => lengthStep(`Focus on "${p.title}"`, suggestMinutes(p.size, env.planning.sizes), (m) => env.runTimer("timer.start", { pickId: p.id, minutes: m })),
       },
       { id: "timebox", label: "Timebox…", hint: "start and length on the day", action: "timebox.add", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be timeboxed" } : past ? { disabled: PAST } : {}), run: () => env.openTimebox({ pickId: p.id, date: p.date }) },
+      { id: "help", label: "Needs help from…", hint: "Cooptimizers who are free", action: "collab.candidates", ...(past ? { disabled: PAST } : {}), run: () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date }) },
       { id: "done", label: p.status === "done" ? "Mark not done" : "Mark done", action: "pick.mark_done", run: () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" }) },
       { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be made up" } : {}), next: () => makeUpStep(env, p) },
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned pick can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
@@ -316,7 +336,84 @@ export function itemMenu(env: MenuEnv, clientKey: string, item: WorkItem): MenuS
         next: () => addStep(env, clientKey, item),
       },
       { id: "timebox", label: "Timebox…", hint: "start and length on the planned day", action: "timebox.add", run: () => env.openTimebox({ clientKey, itemId: item.id, title: item.title, url: item.url, date: env.planState?.date ?? env.today }) },
+      { id: "help", label: "Needs help from…", hint: "Cooptimizers who are free", action: "collab.candidates", run: () => env.openHelp({ clientKey, title: `#${item.id} ${item.title}`, url: item.url, itemId: item.id, pinned: env.planState?.date ?? null }) },
       ...(item.level === "portfolio" && !kids ? [{ id: "draft", label: "Add a draft story", action: "draft.add_story", next: () => draftPrompt(env, clientKey, item) } as MenuItem] : []),
+    ],
+  };
+}
+
+// ---------- calendar events (step 13): the editing rule ----------
+
+const EDIT_LABEL: Record<EditAction, string> = { move: "Move…", resize: "Change end…", retitle: "Retitle…", show_as: "Show as", delete: "Delete", cancel: "Cancel invite…", open: "Open in Outlook" };
+const hhmm = (iso: string, tz: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(tz).toPlainTime().toString({ smallestUnit: "minute" });
+/** A local time on `date` at "HH:MM" in the zone, with offset. */
+const atTime = (date: IsoDate, hm: string, tz: string) => Temporal.PlainDate.from(date).toZonedDateTime({ timeZone: tz, plainTime: Temporal.PlainTime.from(hm) }).toString({ timeZoneName: "never", smallestUnit: "second" });
+const outlookDay = (date: IsoDate) => {
+  const d = Temporal.PlainDate.from(date);
+  return `https://outlook.office.com/calendar/view/day/${d.year}/${d.month}/${d.day}`;
+};
+
+/**
+ * The menu of any calendar event: every action, those its tier doesn't allow disabled with a one-line reason
+ * ("Coopilot only edits what it created or what only I can see"). My own events: move, change end and show as,
+ * each previewed. Meetings with others: Open in Outlook only.
+ */
+export function eventMenu(env: MenuEnv, e: CalEvent): MenuStep {
+  const facts = env.eventEdit[e.id] ?? null;
+  const x = eventEdit(e, facts, env.canWrite);
+  const id = e.id.replace(/^outlook:/, "");
+  const date = e.start.slice(0, 10);
+  const tz = env.tz;
+  const dur = Temporal.Instant.from(e.start).until(Temporal.Instant.from(e.end)).total("minutes");
+  const invite = facts?.marker ? env.invites.find((i) => i.uid === facts.marker) ?? null : null;
+  const items: MenuItem[] = x.actions.map((a): MenuItem => {
+    const base: MenuItem = { id: a.id, label: EDIT_LABEL[a.id], ...(a.allowed ? {} : { disabled: a.reason ?? "Not for this event" }) };
+    if (!a.allowed) return base;
+    switch (a.id) {
+      case "move":
+        return { ...base, hint: "keeps its length; preview first", next: () => ({ title: `Move "${e.title}"`, button: "Preview", fields: [{ key: "start", label: "Starts at", type: "time", value: hhmm(e.start, tz) }], save: (v) => { const s = atTime(date, v.start!, tz); const end = Temporal.Instant.from(s).add({ minutes: dur }).toZonedDateTimeISO(tz).toString({ timeZoneName: "never", smallestUnit: "second" }); env.editEvent({ id, start: s, end }); } }) };
+      case "resize":
+        return { ...base, hint: "preview first", next: () => ({ title: `End of "${e.title}"`, button: "Preview", fields: [{ key: "end", label: "Ends at", type: "time", value: hhmm(e.end, tz) }], save: (v) => env.editEvent({ id, end: atTime(date, v.end!, tz) }) }) };
+      case "show_as":
+        return { ...base, hint: SHOW_AS_LABEL[(e.showAs ?? "busy") as OutlookShowAs] ?? e.showAs, next: () => ({ title: `Show "${e.title}" as`, items: SHOW_AS_VALUES.map((v) => ({ id: v, label: SHOW_AS_LABEL[v], checked: (e.showAs ?? "busy") === v, run: () => env.editEvent({ id, showAs: v }) })) }) };
+      case "cancel":
+        return invite?.writeId ? { ...base, hint: `${invite.names.join(", ")} get a cancellation; preview first`, danger: true, run: () => env.undoWrite(invite.writeId!) } : { ...base, disabled: "Cancel it from Settings > Data (Undo)" };
+      case "open":
+        return { ...base, run: () => env.openOutlook(x.webLink ?? outlookDay(date)) };
+      default:
+        // Coopilot's own events show as timeboxes, where these live.
+        return { ...base, disabled: "Edit it as a timebox (its band in the block)" };
+    }
+  });
+  return { title: `${e.title} · ${x.why}`, items };
+}
+
+/** The menu of a timebox (a Coopilot event: the event and its timebox are one thing). */
+export function timeboxMenu(env: MenuEnv, t: TimeboxView): MenuStep {
+  const tz = env.tz;
+  const dur = Temporal.Instant.from(t.start).until(Temporal.Instant.from(t.end)).total("minutes");
+  const ev = Object.entries(env.eventEdit).find(([, f]) => f.marker === t.uid);
+  const blocked = t.conflict ? "Changed in Coopilot and in Outlook: choose a version first" : undefined;
+  const change = (input: Record<string, unknown>) => env.timeboxChange("timebox.update", { id: t.id, ...input });
+  const conflict: MenuItem[] = t.conflict
+    ? [
+        { id: "keep", label: "Keep Coopilot's version", hint: t.conflict.changed.join(", "), action: "timebox.resolve", run: () => env.timeboxChange("timebox.resolve", { id: t.id, keep: "coopilot" }) },
+        { id: "theirs", label: t.conflict.outlook ? "Use Outlook's version" : "Remove (deleted in Outlook)", action: "timebox.resolve", run: () => env.timeboxChange("timebox.resolve", { id: t.id, keep: "outlook" }) },
+      ]
+    : [];
+  return {
+    title: `Timebox: ${t.title}${t.onOutlook ? " · on Outlook" : ""}${t.outlookNote ? ` · ${t.outlookNote}` : ""}`,
+    items: [
+      ...conflict,
+      { id: "move", label: "Move…", hint: "keeps its length", action: "timebox.update", ...(blocked ? { disabled: blocked } : {}), next: () => ({ title: `Move "${t.title}"`, button: "Move", fields: [{ key: "start", label: "Starts at", type: "time", value: hhmm(t.start, tz) }], save: (v) => { const s = atTime(t.date, v.start!, tz); change({ start: s, end: Temporal.Instant.from(s).add({ minutes: dur }).toZonedDateTimeISO(tz).toString({ timeZoneName: "never", smallestUnit: "second" }) }); } }) },
+      { id: "resize", label: "Change end…", action: "timebox.update", ...(blocked ? { disabled: blocked } : {}), next: () => ({ title: `End of "${t.title}"`, button: "Save", fields: [{ key: "end", label: "Ends at", type: "time", value: hhmm(t.end, tz) }], save: (v) => change({ end: atTime(t.date, v.end!, tz) }) }) },
+      { id: "retitle", label: "Retitle…", action: "timebox.update", ...(blocked ? { disabled: blocked } : {}), next: () => ({ title: `Retitle "${t.title}"`, prompt: "Title (the client name stays in front on Outlook)", value: t.title, button: "Save", submit: (title) => change({ title }) }) },
+      { id: "show", label: "Show as", hint: SHOW_AS_LABEL[t.showAs], action: "timebox.update", ...(blocked ? { disabled: blocked } : {}), next: () => ({ title: `Show "${t.title}" as`, items: SHOW_AS_VALUES.map((v) => ({ id: v, label: SHOW_AS_LABEL[v], checked: t.showAs === v, run: () => change({ showAs: v }) })) }) },
+      { id: "outlook", label: t.outlook ? "Take off Outlook" : "Put on Outlook", action: "timebox.set_outlook", ...(blocked ? { disabled: blocked } : {}), run: () => env.timeboxChange("timebox.set_outlook", { id: t.id, on: !t.outlook }) },
+      { id: "focus", label: "Start focus", action: "timer.start", ...(t.date !== env.today ? { disabled: "Only today's timeboxes" } : {}), run: () => env.startTimeboxFocus(t) },
+      { id: "help", label: "Needs help from…", action: "collab.candidates", run: () => env.openHelp({ clientKey: t.clientKey, title: t.title, url: t.url, itemId: t.itemId, pickId: t.pickId, timeboxId: t.id, pinned: t.date }) },
+      { id: "open", label: "Open in Outlook", action: "outlook.open", ...(t.onOutlook ? {} : { disabled: "Not on Outlook" }), run: () => env.openOutlook(ev?.[1].webLink ?? outlookDay(t.date)) },
+      { id: "remove", label: "Remove", danger: true, action: "timebox.remove", ...(t.onOutlook ? { hint: "and its Outlook event, after a preview" } : {}), run: () => env.timeboxChange("timebox.remove", { id: t.id }) },
     ],
   };
 }
@@ -669,6 +766,12 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "loop.ask_priorities":
       return { run: () => env.openPlanWeek(env.planWeekOpen ?? undefined) };
     case "auth.connect_outlook_write": return { run: env.connectWrite };
+    case "timebox.resolve": return { run: () => env.openPlanDay() };
+    case "outlook.open": return { run: () => env.openOutlook(outlookDay(env.selection.date)) };
+    case "collab.candidates":
+    case "collab.suggest":
+    case "collab.preview_invite":
+      return { next: () => choosePick(env, "Help on which pick?", (p) => () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date })) };
     case "timebox.add": return { next: () => choosePick(env, "Timebox which pick?", (p) => () => env.openTimebox({ pickId: p.id, date: p.date })) };
     // Moving, resizing, removing and Outlook previews happen on the day's timeline in Plan the day.
     case "timebox.update":

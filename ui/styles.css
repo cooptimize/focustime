@@ -1802,3 +1802,37 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .set-write > button { justify-self: start; }
 .wd-actions .commit { background: var(--action); border-color: var(--action); color: var(--on-action); font-weight: 650; }
 .wd-actions .commit:disabled { opacity: 0.7; }
+
+/* ---------- Calendar editing tiers and Needs help from… (step 13) ---------- */
+.tbox { cursor: grab; touch-action: none; }
+.tbox.dragging { cursor: grabbing; z-index: 3; box-shadow: var(--shadow-dialog); }
+.tbox.conflict { border-style: solid; border-color: var(--risk); }
+.tbox.out-of-step { border-style: dotted; }
+.tbox-edge { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: ns-resize; }
+.tbox-edge:hover { background: color-mix(in oklab, var(--c) 55%, transparent); }
+.tbox-time { display: block; font-size: 11px; font-weight: 600; color: var(--text); }
+.tb-retitle input { width: min(320px, 60vw); }
+.tb-show { display: inline-flex; align-items: center; gap: 6px; }
+.tb-note { font-size: 12px; color: var(--text-muted); font-style: italic; }
+.tb-conflict { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--risk); border-radius: 8px; background: color-mix(in oklab, var(--risk) 8%, var(--surface)); font-size: 13px; }
+.tb-conflict p { margin: 0; }
+.wd-people { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--raised); font-size: 13.5px; }
+.wd-people ul { margin: 4px 0 0; padding-left: 18px; }
+.help-chip { font-size: 11.5px; font-weight: 600; padding: 0 6px; border-radius: 99px; border: 1px solid var(--accent); color: var(--accent); white-space: nowrap; }
+.help-dialog { width: min(760px, 100%); }
+.help-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; }
+.help-label { min-width: 64px; font-weight: 600; }
+.help-people, .help-slots { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin: 0; display: grid; gap: 6px; }
+.help-people legend, .help-slots legend { font-weight: 600; padding: 0 4px; font-size: 13.5px; }
+.help-tier h3 { margin: 4px 0 2px; font-size: 12.5px; color: var(--text-muted); font-weight: 600; }
+.help-tier ul, .help-slots ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 13.5px; }
+.help-tier label { display: inline-flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.help-problem { margin: 0; font-size: 12.5px; }
+.help-warn { color: var(--text); font-weight: 600; }
+.help-invite { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.help-note { display: grid; gap: 4px; flex: 1; min-width: 240px; font-size: 13px; }
+.help-note textarea { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); }
+.wl-kind { font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 99px; border: 1px solid var(--border-strong); color: var(--text-muted); white-space: nowrap; }
+.wl-kind-sync { border-color: var(--accent); color: var(--accent); }
+.help-dialog .chip-btn[aria-checked="true"] { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, var(--surface)); color: var(--text); }
+.help-slots label { display: block; }

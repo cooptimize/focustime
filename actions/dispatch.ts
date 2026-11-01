@@ -17,7 +17,12 @@ import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../
 import type { PlanStore } from "../store/plan-store.ts";
 import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
 import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
-import type { OutlookWrite } from "../sources/graph/source.ts";
+import type { OutlookWrite, ScheduleReader } from "../sources/graph/source.ts";
+import { collabAction } from "./collab-actions.ts";
+import { syncWeek } from "./outlook-sync.ts";
+import { outlookLink } from "../plan/caltier.ts";
+import { DEFAULT_COLLAB } from "../config/schema.ts";
+import { INTERNAL_CLIENT } from "../week/follow.ts";
 import { checkDevOpsUrl } from "../links/devops-url.ts";
 import { hasHoursOn, planAction } from "./plan-actions.ts";
 import { timeAction } from "./time-actions.ts";
@@ -39,7 +44,7 @@ export type { ActionResponse, SourceSummary, WeekLoadData };
 export type ActionContext = {
   loadConfig: () => Promise<{ path: string; parsed: ParseResult; created?: boolean }>;
   makeDataverse: (cfg: DataverseConfig, timeZone: string) => DataverseSource;
-  makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource & { write?: OutlookWrite };
+  makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource & { write?: OutlookWrite; schedule?: ScheduleReader };
   makeGoogle: (cfg: GoogleConfig, timeZone: string) => CalendarSource;
   makeDevOps: (cfg: DataverseConfig, timeZone: string) => DevOpsSource;
   saveSystemUserId: (id: string) => Promise<void>;
@@ -272,7 +277,19 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     }
   }
 
-  const [outlook, google, devops, ptoResult, ahead] = await Promise.all([outlookP, googleP, devopsP, ptoP, aheadP]);
+  // Step 13: with write access, scan the week for edit facts and sync Coopilot's own events (Outlook changes come
+  // back to the timeboxes; Q69 rebuilds lost records). Its failure only means no sync and no edit facts this time.
+  const ow = cfg?.outlook ? ctx.makeOutlook(cfg.outlook, tz).write ?? null : null;
+  const syncP = (async () => {
+    if (!cfg || !ow || !ctx.plan) return { canWrite: false, facts: {} };
+    const access = await ow.access().catch(() => null);
+    if (access?.status !== "write") return { canWrite: false, facts: {} };
+    const known = [...new Map([[INTERNAL_CLIENT, INTERNAL_CLIENT], ...Object.entries(cfg.clientSettings).map(([k, v]) => [k, v.name ?? k] as [string, string]), ...planClients.map((c) => [c.clientKey, c.clientName] as [string, string])]).entries()].map(([key, name]) => ({ key, name }));
+    const r = await syncWeek({ plan: ctx.plan, ow, cfg, weekStart, refresh: !!input.refresh, now: ctx.now, clients: known }).catch(() => null);
+    return { canWrite: true, facts: r?.facts ?? {} };
+  })();
+  const [outlook, google, devops, ptoResult, ahead, synced] = await Promise.all([outlookP, googleP, devopsP, ptoP, aheadP, syncP]);
+  ctx.plan?.closeHelpLoops(Temporal.Instant.from(ctx.now()));
   const pto = ptoByDate(ptoResult?.items ?? [], weekDates7(weekStart));
   const ptoAhead = [...new Set((ahead?.items ?? []).map((e) => e.date))].sort();
   const sunday = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
@@ -327,6 +344,10 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     weekNudge: { badge: ctx.plan && cfg ? weekNudges(Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz), nudgeTimes(cfg), (w) => !!ctx.plan!.weekPlan(w).committedAt).badge : null },
     timeboxes: ctx.plan ? timeboxesFor(ctx.plan, weekStart, sunday).map((t) => timeboxView(t, ctx.plan!, cfg)) : [],
     timeboxSettings: cfg?.timebox ?? DEFAULT_TIMEBOX,
+    eventEdit: synced.facts,
+    canWrite: synced.canWrite,
+    invites: ctx.plan ? ctx.plan.invitesFrom(Temporal.PlainDate.from(weekStart).subtract({ days: 7 }).toString()).map((i, _n, _a, log = ctx.plan!.writeLog(1000)) => ({ writeId: log.find((e) => e.uid === i.uid && e.op === "create" && e.status === "confirmed" && !e.undoneBy)?.id ?? null, uid: i.uid, clientKey: i.clientKey, itemId: i.itemId, pickId: i.pickId, timeboxId: i.timeboxId, title: i.title, start: i.start, end: i.end, names: i.attendees.map((a) => a.name), teams: i.teams, status: i.status })) : [],
+    collab: cfg?.collab ?? DEFAULT_COLLAB,
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
   };
@@ -360,6 +381,43 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (!cfg?.outlook) return { ok: true, data: { status: "failed", message: "Add outlook.client_id to config first" } };
       return { ok: true, data: await ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).connect({ write: true }) };
     }
+    case "outlook.open": {
+      // Step 13: Outlook on the web, for meetings Coopilot won't change. Only Outlook links, in Cooptimize's profile.
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "url")) return bad("outlook.open takes { url }");
+      const url = outlookLink(i.url);
+      if (!url) return { ok: false, status: 422, error: "Only Outlook on the web links open from here" };
+      const cfg = await configured(ctx);
+      if (!cfg) return { ok: false, status: 409, error: "Fix the config first" };
+      if (!ctx.launch || !ctx.host) return { ok: false, status: 503, error: "Opening links is not available here" };
+      const cmd = ctx.host.linkCommand(cfg, INTERNAL_CLIENT, url);
+      try {
+        await ctx.launch(cmd.argv);
+      } catch {
+        return { ok: false, status: 500, error: "Could not start the browser" };
+      }
+      return { ok: true, data: { opened: cmd.profile ? "edge" : "default" } };
+    }
+    case "collab.candidates":
+    case "collab.suggest":
+    case "collab.preview_invite":
+      return collabAction(
+        {
+          plan: ctx.plan,
+          config: () => configured(ctx),
+          dataverse: (cfg) => ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone),
+          outlook: (cfg) => {
+            if (!cfg.outlook) return null;
+            const o = ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone);
+            return { write: o.write ?? null, schedule: o.schedule ?? null, source: o };
+          },
+          google: (cfg) => (cfg.google ? ctx.makeGoogle(cfg.google, cfg.week.hours.timeZone) : null),
+          now: ctx.now,
+        },
+        action,
+        req.input,
+      );
+    case "timebox.resolve":
     case "timebox.add":
     case "timebox.update":
     case "timebox.remove":

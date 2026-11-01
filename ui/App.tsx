@@ -6,7 +6,9 @@ import { dayEndOf, hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type ViewRange } from
 import { applyTheme, initialTheme } from "./theme.ts";
 import type { Theme } from "../config/schema.ts";
 import { NOTICE_EVENT, openWorkItem } from "./WorkLink.tsx";
-import { TimeboxCtx, TimeboxDialog, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
+import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
+import { HelpFinder } from "./HelpFinder.tsx";
+import type { HelpTarget } from "./menu.ts";
 import type { TimeboxTarget } from "./menu.ts";
 import type { WriteState } from "../actions/types.ts";
 import type { PlanDayState } from "../plan/types.ts";
@@ -225,6 +227,9 @@ export function App() {
   const reloadQuiet = useCallback(() => void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}) }, { quiet: true }), [load]);
   // Timeboxes (step 12): the Timebox… dialog, Outlook write access (read when first needed), and the write flow.
   const [tbTarget, setTbTarget] = useState<TimeboxTarget | null>(null);
+  // Step 13: the collaboration finder's target, and the timebox env for menus built before render.
+  const [helpTarget, setHelpTarget] = useState<HelpTarget | null>(null);
+  const tbEnvRef = useRef<TimeboxEnv | null>(null);
   const [writeAccess, setWriteAccess] = useState<WriteState | null>(null);
   const accessAsked = useRef(false);
   const loadAccess = useCallback(() => {
@@ -936,6 +941,19 @@ export function App() {
         setTbTarget(t);
       },
       connectWrite: () => void connectWrite(),
+      eventEdit: data.eventEdit ?? {},
+      canWrite: !!data.canWrite,
+      editEvent: (input) => void writes.edit(input),
+      openOutlook: (url) => void call("outlook.open", { url }).catch((e: unknown) => setNotice(e instanceof Error ? e.message : "Could not open Outlook")),
+      timeboxChange: (action, input) => void (tbEnvRef.current && tbChange(tbEnvRef.current, action, input)),
+      startTimeboxFocus: (tb) => void runTimer("timer.start", { timeboxId: tb.id }).then((ok) => ok && setFocusOpen(true)),
+      openHelp: (t) => {
+        setCmdOpen(false);
+        setHelpTarget(t);
+      },
+      invites: data.invites ?? [],
+      undoWrite: (id) => void writes.undo(id),
+      tz: data.week.timeZone,
       exportPlan: () =>
         void call<{ path: string }>("data.export", {}).then(
           (r) => setNotice(`Plan exported to ${r.path}`),
@@ -990,7 +1008,10 @@ export function App() {
     open: (t) => setTbTarget(t),
     startFocus: (tb) => void runTimer("timer.start", { timeboxId: tb.id }).then((ok) => ok && setFocusOpen(true)),
     connectWrite: () => void connectWrite(),
+    help: (t) => setHelpTarget(t),
+    invites: data.invites ?? [],
   };
+  tbEnvRef.current = tbEnv;
 
   return (
     <SampleSources.Provider value={samples}>
@@ -1248,6 +1269,16 @@ export function App() {
         const pick = "pickId" in tbTarget ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).concat(pd?.picks ?? []).find((p) => p.id === tbTarget.pickId) : null;
         return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "Pick"} defaultMinutes={pick ? data.planning.sizes[pick.size] : 60} onClose={() => setTbTarget(null)} />;
       })()}
+      {helpTarget && (
+        <HelpFinder
+          target={helpTarget}
+          clientName={data.planClients.find((c) => c.clientKey === helpTarget.clientKey)?.clientName ?? helpTarget.clientKey}
+          settings={data.collab}
+          tz={week.timeZone}
+          onPreview={(p) => writes.show(p)}
+          onClose={() => setHelpTarget(null)}
+        />
+      )}
       {writes.dialog}
       {captureOpen && <CaptureDialog data={data} onClose={() => setCaptureOpen(false)} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); reloadQuiet(); }} />}
     </div>

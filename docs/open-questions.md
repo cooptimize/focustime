@@ -111,5 +111,13 @@ Raised in step 11 (not blocking):
 Raised in step 12 (not blocking):
 - Q67. (Done Nov 1, D216.) Live verification needs you to click "Reconnect Outlook with calendar changes" (Settings > Connections) and consent to Calendars.ReadWrite once. If your tenant blocks user consent for that scope, add the delegated permission to the Coopilot Desktop app registration and grant it. Then I run the create, move and undo check on a free slot next week.
 - Q68. Undo is a stack per event (newest change not undone first, so undoing a move and then the create works). Enough, or do you want to undo any entry out of order?
-- Q69. If the local record of an event is lost (store replaced, not Reset), reads can't recognize it (no marker without Calendars.Read), so it would show as a meeting. Use the write token to look up marked events in the week when write access exists?
-- Q70. Timeboxes don't yet sync from Outlook back to Coopilot: an event moved in Outlook keeps its Coopilot time, and the next move puts Coopilot's time back after a preview. Keep (Coopilot is the source), or adopt Outlook's time?
+- Q69. (Done Nov 1, D219: rebuilt from the marker with the write token.) If the local record of an event is lost (store replaced, not Reset), reads can't recognize it (no marker without Calendars.Read), so it would show as a meeting. Use the write token to look up marked events in the week when write access exists?
+- Q70. (Done Nov 1, D218: two-way sync, conflicts ask.) Timeboxes don't yet sync from Outlook back to Coopilot: an event moved in Outlook keeps its Coopilot time, and the next move puts Coopilot's time back after a preview. Keep (Coopilot is the source), or adopt Outlook's time?
+
+
+Raised in step 13 (not blocking):
+- Q71. Repeating and all-day events I organize alone are not editable (series edits could move every occurrence). Allow moving one occurrence of a series?
+- Q72. Tentative counts as busy for teammates. Treat tentative as free for help sessions?
+- Q73. With nobody chosen, Coopilot picks one person per time. Should it invite two from the top tier instead?
+- Q74. RSVP to meetings (accept, tentative, decline with a note) behind preview and confirm is in the backlog. Next after DevOps writes, or before?
+- Q75. A custom time zone in someone's working hours uses its standard offset only (no daylight rule). Fine, given Cooptimize uses named zones?
