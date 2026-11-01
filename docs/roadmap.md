@@ -35,7 +35,9 @@ November 1, 2026. Planning-chat record. The repo's docs/ folder is the living so
 
 13.5. **Follow-ups overhaul, capture simplification and a keyboard fix**: Loop renamed Follow-up; Close the loop, Not needed, Snooze and Delete; a follow-up form with client and Who suggestions; due badges in words and color, due order; follow-ups on week cards, Today, Plan the day (pickable) and Close out; a narrower heads-up rule that says where it came from; capture sorts into follow-up, draft story or draft feature, and notes moved into "where I left off"; shortcuts never act while typing or under a dialog; Add hours or Move anyway; Coopilot events deleted in Outlook kept as "Removed in Outlook"
 
-In progress: nothing. Step 13.5 is built; open questions Q73, Q75 and Q76–Q79 in docs/open-questions.md.
+13.6. **Planning visibility, Plan panel fixes and timeboxing redesign**: Plan / Planned ✓ in each day header, "+ Add work" on blocks and key A, Friday as catch-up without a prompt, three follow-ups per card, a fixed-height Plan panel that scrolls on its own, Draft feature for epics, a per-block agenda with free gaps instead of the day strip, one-click Timebox into a gap, Timebox my day, and one combined Outlook preview
+
+In progress: nothing. Step 13.6 is built; open questions Q73 and Q75 in docs/open-questions.md.
 
 ## Calendar editing rule (agreed Nov 1, built in step 13)
 

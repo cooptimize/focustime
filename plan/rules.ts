@@ -137,3 +137,8 @@ export function weekFirst<R extends CommittedRef>(work: WorkLike | undefined, re
 
 /** Step 8's name for it: features committed to the week first (now musts, then nice-to-haves). */
 export const committedFirst = weekFirst;
+
+/** Step 13.6 (D243): an epic with no features offers a draft feature; a feature (or an older cached item) a draft story. */
+export function draftOffer(item: { level: WorkItem["level"]; tier?: "feature" | "epic" | undefined }): { kind: "feature" | "story"; action: "draft.add_feature" | "draft.add_story"; label: string } {
+  return item.tier === "epic" ? { kind: "feature", action: "draft.add_feature", label: "Draft feature" } : { kind: "story", action: "draft.add_story", label: "Draft story" };
+}

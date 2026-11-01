@@ -167,6 +167,8 @@ export const VIEW_RANGE_NAMES: Record<ViewRange, string> = { business: "Business
 export function noHoursPrompt(model: TimeModel, date: IsoDate, today?: IsoDate): string | null {
   if (hoursOn(model, date).segments.length) return null;
   const d = Temporal.PlainDate.from(date);
+  // Step 13.6 (Q78, D238): Friday is the overflow / catch-up day (D26); a pick moved there is catch-up work.
+  if (d.dayOfWeek === 5) return null;
   const near = !today || Math.abs(Temporal.PlainDate.from(today).until(d, { largestUnit: "days" }).days) < 7;
   const name = near ? d.toLocaleString("en-US", { weekday: "long" }) : d.toLocaleString("en-US", { weekday: "long", month: "short", day: "numeric" });
   return `${name} has no working hours. Add hours for that day?`;

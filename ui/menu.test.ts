@@ -5,7 +5,7 @@ import type { Pick } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
-import { eventMenu, timerStep, commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
+import { eventMenu, timerStep, timeboxStep, commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -118,7 +118,7 @@ describe("⋯ menus", () => {
   it("a pick: open in Edge, size, move, start focus, done, drop", async () => {
     const t = env();
     const m = pickMenu(t.e, pick);
-    expect(items(m).map((i) => i.label)).toEqual(["Open in Edge", "Set size", "Move", "Start focus", "Timebox…", "Needs help from…", "Mark done", "I'll make it up…", "Drop"]);
+    expect(items(m).map((i) => i.label)).toEqual(["Open in Edge", "Set size", "Move", "Start focus", "Timebox", "Needs help from…", "Mark done", "I'll make it up…", "Drop"]);
     await find(m, "Open in Edge").run!();
     await find(find(m, "Set size").next!(), "S").run!();
     expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
@@ -259,5 +259,51 @@ describe("event menus by editing tier (step 13)", () => {
     const { e } = env({ canWrite: false, eventEdit: { "outlook:A": { isOrganizer: true, others: 0, recurring: false, allDay: false, marker: null, webLink: web } } });
     const m = eventMenu(e, ev("outlook:A"));
     expect(items(m).filter((i) => i.id !== "open").every((i) => !!i.disabled)).toBe(true);
+  });
+});
+
+describe("Timebox a pick into a free gap (step 13.6, D245)", () => {
+  // Tue Nov 3 AM is 9:00 to 12:30 with no meetings; a timebox 9:00 to 10:00 is already there.
+  const tbx = { id: 1, uid: "u", date: "2026-11-03", clientKey: "internal", pickId: null, itemId: null, title: "x", url: null, start: "2026-11-03T09:00:00-05:00", end: "2026-11-03T10:00:00-05:00", outlook: false, removedAt: null } as never;
+  it("lists the block's free gaps after timeboxes, then Custom time", () => {
+    const { e } = env({ timeboxes: [tbx], now: "2026-11-03T13:00:00Z" });
+    const s = timeboxStep(e, pick);
+    expect(items(s).map((i) => [i.label, i.hint])).toEqual([
+      ["Free 10:00–12:30 · 2h 30m", "2h from 10:00"],
+      ["Custom time…", "start and length"],
+    ]);
+  });
+  it("one click adds the timebox at the gap start for the pick's size, trimmed to the gap", async () => {
+    const { e, calls } = env({ timeboxes: [tbx], planning: { sizes: { S: 60, M: 240, L: 300 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false } });
+    const gap = items(timeboxStep(e, pick))[0]!;
+    expect(gap.hint).toBe("trimmed to 2h 30m");
+    await gap.run?.();
+    expect(calls.at(-1)).toEqual(["timebox.add", { pickId: 7, date: "2026-11-03", start: "2026-11-03T10:00:00-05:00", end: "2026-11-03T12:30:00-05:00" }]);
+  });
+  it("says so when the block has no free time left", () => {
+    const full = { ...(tbx as object), start: "2026-11-03T09:00:00-05:00", end: "2026-11-03T12:30:00-05:00" } as never;
+    expect(items(timeboxStep(env({ timeboxes: [full] }).e, pick))[0]).toMatchObject({ label: "No free time left in this block", disabled: expect.any(String) });
+  });
+  it("the pick menu's Timebox opens this step", () => {
+    const m = pickMenu(env().e, pick);
+    expect(find(m, "Timebox").next).toBeDefined();
+  });
+});
+
+describe("+ Add work entry points (step 13.6, D241)", () => {
+  it("the block menu and the command menu add work to a block with working time (key A)", async () => {
+    const { e, calls } = env({ addWork: (d, h) => calls.push(["addWork", d, h]), selection: { date: "2026-11-04", half: "PM" } });
+    await find(slotMenu(e, "2026-11-04", "AM", "internal", "Internal"), "Add work…").run?.();
+    expect(calls.at(-1)).toEqual(["addWork", "2026-11-04", "AM"]);
+    const cmd = commandList(e).find((c) => c.action === "ui.add_work")!;
+    expect(cmd.hint).toBe("A");
+    await cmd.run?.();
+    expect(calls.at(-1)).toEqual(["addWork", "2026-11-04", "PM"]);
+  });
+  it("is disabled on a past day, a PTO day and a block without working hours", () => {
+    const { e } = env();
+    expect(find(slotMenu(e, "2026-11-02", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/Past day/);
+    expect(find(slotMenu(e, "2026-11-05", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/PTO/);
+    expect(find(slotMenu(e, "2026-11-07", "AM", null, null), "Add work…").disabled).toBe("No working hours in this block");
   });
 });

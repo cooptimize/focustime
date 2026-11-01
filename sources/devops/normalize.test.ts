@@ -86,6 +86,19 @@ describe("WIQL for my open work", () => {
 describe("work item normalization", () => {
   const agileCtx = { org: "fabrikam", projectName: "Fabrikam Data", orderField: "Microsoft.VSTS.Common.StackRank", categories: categoriesFrom(typesWithStates("agile")) };
 
+  it("gives portfolio items their tier from the backlog levels (step 13.6, D243)", () => {
+    const levels = { known: true, story: new Set(["User Story"]), portfolio: new Set(["Feature", "Epic"]) };
+    const tiers = { feature: new Set(["Feature"]), epic: new Set(["Epic"]) };
+    const { items } = normalizeWorkItems(
+      [
+        { id: 1, fields: { "System.WorkItemType": "Epic", "System.State": "New" } },
+        { id: 2, fields: { "System.WorkItemType": "Feature", "System.State": "New" } },
+        { id: 3, fields: { "System.WorkItemType": "User Story", "System.State": "New" } },
+      ],
+      { ...agileCtx, levels, tiers } as never,
+    );
+    expect(items.map((i) => [i.id, i.level, i.tier])).toEqual([[1, "portfolio", "epic"], [2, "portfolio", "feature"], [3, "story", undefined]]);
+  });
   it("reads tags and flags an item blocked by its state or a tag (step 7)", () => {
     const { items } = normalizeWorkItems(
       [

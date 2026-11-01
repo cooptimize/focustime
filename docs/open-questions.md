@@ -124,7 +124,7 @@ Raised in step 13 (not blocking):
 
 ## Step 13.5 (Nov 1)
 
-- Q76. Follow-ups show on every block of their client in the week (once a day, on the client's first block). Too much when a client has many open follow-ups? A cap of three per card with "and n more"?
-- Q77. A snoozed follow-up comes back on its day. Should a snoozed one with a due date before the snooze day keep its due badge, or should snoozing move the due date too?
-- Q78. Moving a pick to a day with no working hours asks every time. Should "Move anyway" be remembered for Friday catch-up (Friday is the overflow day and has no hours by default)?
-- Q79. Draft features stay local until added in DevOps by hand. Should Coop briefs also cover a draft feature (asking Coop to propose stories for it) before it exists in DevOps?
+- Q76. (Answered Nov 1, D239: at most three per card, then "+N more".) Follow-ups show on every block of their client in the week (once a day, on the client's first block). Too much when a client has many open follow-ups? A cap of three per card with "and n more"?
+- Q77. (Answered Nov 1, D248: keep the due date and its badge.) A snoozed follow-up comes back on its day. Should a snoozed one with a due date before the snooze day keep its due badge, or should snoozing move the due date too?
+- Q78. (Answered Nov 1, D238: Friday never asks; weekends still do.) Moving a pick to a day with no working hours asks every time. Should "Move anyway" be remembered for Friday catch-up (Friday is the overflow day and has no hours by default)?
+- Q79. (Answered Nov 1, D248: not until it is in DevOps.) Draft features stay local until added in DevOps by hand. Should Coop briefs also cover a draft feature (asking Coop to propose stories for it) before it exists in DevOps?

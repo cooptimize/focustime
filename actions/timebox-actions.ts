@@ -20,7 +20,7 @@ import type { IsoDate } from "../week/types.ts";
 import type { ActionResponse, PreviewField, TimeboxView, WritePreview, WriteResult, WriteState } from "./types.ts";
 
 export const TIMEBOX_ACTIONS = [
-  "timebox.add", "timebox.update", "timebox.remove", "timebox.set_outlook", "timebox.resolve",
+  "timebox.add", "timebox.add_many", "timebox.update", "timebox.remove", "timebox.set_outlook", "timebox.resolve",
   "write.status", "write.preview", "write.confirm", "write.retry", "write.log",
 ] as const;
 export type TimeboxAction = (typeof TIMEBOX_ACTIONS)[number];
@@ -170,6 +170,60 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
   const sync = (tb: Timebox) => syncNeed(tb, plan.ownEvent(tb.uid), want(cfg, tb));
   const out = (tb: Timebox) => ({ ok: true as const, data: { timebox: timeboxView(tb, plan, cfg), sync: sync(tb) } });
 
+  /** One timebox's preview (single or combined): what to hold, nothing to do, already gone, or a refusal. */
+  type HeldIn = Omit<Held, "id" | "expiresAt" | "account" | "calendar">;
+  const previewTimebox = async (ow: OutlookWrite, uid: string): Promise<{ held: HeldIn | "nothing" | "gone" } | { bad: ActionResponse }> => {
+    const tb = plan.timeboxByUid(uid);
+    const own = plan.ownEvent(uid);
+    if (!tb && !own) throw new PlanError("No such timebox");
+    if (tb?.conflict) return { bad: bad("This timebox changed in Coopilot and in Outlook: choose which version to keep first", 409) };
+    const w = want(cfg, tb);
+    let op = syncNeed(tb, own, w);
+    let current: OutlookEvent | null = null;
+    if (op && op !== "create" && own) {
+      // Read the event now: preview shows what is really there, and an event deleted in Outlook isn't "changed".
+      current = await ow.writer.get(own.eventId).catch((e: unknown) => { throw e instanceof NetworkError ? new PlanError("Outlook unreachable") : e; });
+      if (!current) {
+        // Step 13.5: already gone from Outlook. Done for a delete; for a change, the timebox is kept here with Put
+        // on Outlook off (never re-created on its own). Logged as "already gone", not an error.
+        plan.markOwnDeleted(uid);
+        const localBefore = tb ? localOf(tb) : null;
+        if (tb && !tb.removedAt && op !== "delete") plan.updateTimebox(tb.id, { outlook: false, outlookNote: REMOVED_IN_OUTLOOK, conflict: null });
+        plan.logWrite({ op, kind: "timebox", status: "confirmed", message: op === "delete" ? "Already gone from Outlook; nothing to remove" : "Already gone from Outlook; the timebox is kept here with Put on Outlook off", uid, eventId: own.eventId, account: null, calendar: null, before: own.fields, after: null, localBefore, localAfter: tb ? localOf(plan.timebox(tb.id)!) : null, auto: true });
+        return { held: "gone" as const };
+      } else if (current.marker !== uid) return { bad: bad(new OwnershipError().message, 409) };
+    }
+    if (!op) return { held: "nothing" as const };
+    const own2 = plan.ownEvent(uid);
+    const before = op === "create" ? null : current ? { ...own2!.fields, subject: current.subject, start: current.start, end: current.end } : own2!.fields;
+    const after = op === "delete" ? null : w;
+    // What the timebox looked like before this change (for undo): from the event's fields when there is one.
+    const localBefore: LocalState | null = op === "create" ? (tb ? { ...localOf(tb), outlook: false } : null) : before ? { start: toLocal(before.start, tz), end: toLocal(before.end, tz), outlook: true, removedAt: null } : null;
+    return { held: { kind: "timebox" as const, uid, op, eventId: op === "create" ? null : own2!.eventId, before, after, localBefore, localAfter: tb ? localOf(tb) : null, undoOf: null, auto: !settings.confirmOwn && op !== "create" } };
+  };
+
+  /** Confirm one held preview: still the same change, then write, read back and log (single and combined). */
+  const confirmOne = async (previewId: string): Promise<ActionResponse> => {
+    const held = previews.get(previewId);
+    previews.delete(previewId);
+    if (!held || held.expiresAt < Date.now()) return bad("That preview has expired. Review the change again", 410);
+    // Still the same change? A timebox moved again after the preview needs a new one.
+    if (held.undoOf === null && held.kind === "timebox") {
+      const tb = plan.timeboxByUid(held.uid);
+      if (tb?.conflict) return bad("This timebox changed in Coopilot and in Outlook: choose which version to keep first", 409);
+      const w = want(cfg, tb);
+      const now = syncNeed(tb, plan.ownEvent(held.uid), w);
+      if (now !== held.op || JSON.stringify(w) !== JSON.stringify(held.after)) return bad("The timebox changed since the preview. Review the change again", 409);
+    }
+    // Invites go only to allowed domains: checked at preview, here, and again in the writer.
+    if (held.kind === "invite" && held.op === "create" && (held.after?.attendees ?? []).some((a) => !domainAllowed(a.email, inviteDomains(cfg)))) return bad(new DomainError().message, 422);
+    const ow = cfg.outlook ? ctx.outlook(cfg) : null;
+    if (!ow) return bad("Outlook isn't set up", 409);
+    if (held.kind === "invite" && held.op === "create" && held.invite) plan.addInvite({ uid: held.uid, ...held.invite, start: toLocal(held.after!.start, tz), end: toLocal(held.after!.end, tz), attendees: held.after!.attendees ?? [], teams: !!held.after!.teams });
+    const entry = plan.logWrite({ op: held.op, kind: held.kind, uid: held.uid, eventId: held.eventId, account: held.account, calendar: held.calendar, before: held.before, after: held.after, localBefore: held.localBefore, localAfter: held.localAfter, auto: held.auto, undoOf: held.undoOf });
+    return { ok: true, data: await attempt(plan, ow, entry, false, { domains: inviteDomains(cfg), now: ctx.now }) };
+  };
+
   switch (action) {
     case "timebox.add": {
       const o = fields(input, ["date", "start", "end"], ["pickId", "clientKey", "itemId", "title", "url", "outlook"]);
@@ -194,6 +248,33 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
         tb = plan.addTimebox({ date, clientKey: text(o.clientKey, "clientKey", 100), itemId: optId(o.itemId, "itemId"), title: text(o.title, "title", 200), url: devopsUrl(o.url), start, end, outlook });
       }
       return out(tb);
+    }
+    case "timebox.add_many": {
+      // Step 13.6 (D246): Timebox my day. Every item is checked first, then all are added in one transaction.
+      const o = fields(input, ["date", "items"]);
+      const date = isoDate(o.date);
+      if (!Array.isArray(o.items) || o.items.length === 0) throw new Invalid("items needs at least one timebox");
+      if (o.items.length > 30) throw new Invalid("At most 30 timeboxes at once");
+      const boxed = new Set(plan.timeboxesBetween(date, date).filter((t) => !t.removedAt && t.pickId !== null).map((t) => t.pickId));
+      const seen = new Set<number>();
+      const list = o.items.map((raw) => {
+        const it = fields(raw, ["pickId", "start", "end"], ["outlook"]);
+        const pickId = posId(it.pickId, "pickId");
+        const start = localTime(it.start, "start", tz);
+        const end = localTime(it.end, "end", tz);
+        const p = timeboxProblem(date, start, end);
+        if (p) throw new Invalid(p);
+        if (it.outlook !== undefined && typeof it.outlook !== "boolean") throw new Invalid("outlook must be true or false");
+        const pick = plan.getPick(pickId);
+        if (!pick) throw new PlanError(`No pick ${pickId}`);
+        if (pick.date !== date) throw new Invalid("A pick's timebox is on the pick's day");
+        if (pick.status !== "planned") throw new PlanError(`"${pick.title}" isn't planned`);
+        if (boxed.has(pickId) || seen.has(pickId)) throw new PlanError(`"${pick.title}" is already timeboxed`);
+        seen.add(pickId);
+        return { date, clientKey: pick.clientKey, pickId, itemId: pick.itemId, title: pick.title, url: pick.itemUrl, start, end, outlook: typeof it.outlook === "boolean" ? it.outlook : settings.outlookDefault };
+      });
+      const added = plan.addTimeboxes(list);
+      return { ok: true, data: { timeboxes: added.map((t) => timeboxView(t, plan, cfg)), sync: added.filter((t) => sync(t)).map((t) => t.uid) } };
     }
     case "timebox.update": {
       // Step 13: also the title and show as. Editing the timebox and editing its Outlook event are the same thing.
@@ -273,12 +354,27 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
       return { ok: true, data: { entries: entries.map((e) => ({ ...e, undoable: undoable(e), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending", whenText: e.after ? when(e.after, tz) : e.before ? when(e.before, tz) : null })), orphans } };
     }
     case "write.preview": {
-      const o = fields(input, [], ["uid", "undo", "event"]);
-      if ([o.uid, o.undo, o.event].filter((x) => x !== undefined).length !== 1) throw new Invalid("write.preview takes { uid }, { undo } or { event }");
+      const o = fields(input, [], ["uid", "uids", "undo", "event"]);
+      if ([o.uid, o.uids, o.undo, o.event].filter((x) => x !== undefined).length !== 1) throw new Invalid("write.preview takes { uid }, { uids }, { undo } or { event }");
       const ow = cfg.outlook ? ctx.outlook(cfg) : null;
       if (!ow) return bad("Outlook isn't set up", 409);
       const access = await ow.access();
       if (access.status !== "write") return bad(access.status === "unavailable" ? access.message : NO_WRITE, 409);
+      if (o.uids !== undefined) {
+        // Step 13.6 (D247): the combined preview. Each event is held exactly as a single preview would be.
+        if (!Array.isArray(o.uids) || o.uids.length === 0) throw new Invalid("uids needs at least one timebox");
+        if (o.uids.length > 20) throw new Invalid("At most 20 events in one preview");
+        const uids = [...new Set(o.uids.map((u) => text(u, "uid", 80)))];
+        const previews: WritePreview[] = [], nothing: string[] = [], alreadyGone: string[] = [];
+        for (const uid of uids) {
+          const r = await previewTimebox(ow, uid);
+          if ("bad" in r) return r.bad;
+          if (r.held === "nothing") nothing.push(uid);
+          else if (r.held === "gone") alreadyGone.push(uid);
+          else previews.push(await hold(ow, r.held, tz));
+        }
+        return { ok: true, data: { previews, nothing, alreadyGone } };
+      }
       let held: Omit<Held, "id" | "expiresAt" | "account" | "calendar">;
       if (o.undo !== undefined) {
         const entry = plan.writeEntry(posId(o.undo, "undo"));
@@ -307,58 +403,31 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
         if (sameInstant(before.start, after.start) && sameInstant(before.end, after.end) && before.showAs === after.showAs) return { ok: true, data: { nothing: true } };
         held = { kind: "event", uid: `ev:${eventId}`, op: "update", eventId, before, after, localBefore: null, localAfter: null, undoOf: null, auto: false };
       } else {
-        const uid = text(o.uid, "uid", 80);
-        const tb = plan.timeboxByUid(uid);
-        const own = plan.ownEvent(uid);
-        if (!tb && !own) throw new PlanError("No such timebox");
-        if (tb?.conflict) return bad("This timebox changed in Coopilot and in Outlook: choose which version to keep first", 409);
-        const w = want(cfg, tb);
-        let op = syncNeed(tb, own, w);
-        let current: OutlookEvent | null = null;
-        if (op && op !== "create" && own) {
-          // Read the event now: preview shows what is really there, and an event deleted in Outlook isn't "changed".
-          current = await ow.writer.get(own.eventId).catch((e: unknown) => { throw e instanceof NetworkError ? new PlanError("Outlook unreachable") : e; });
-          if (!current) {
-            // Step 13.5: already gone from Outlook. Done for a delete; for a change, the timebox is kept here with Put
-            // on Outlook off (never re-created on its own). Logged as "already gone", not an error.
-            plan.markOwnDeleted(uid);
-            const localBefore = tb ? localOf(tb) : null;
-            if (tb && !tb.removedAt && op !== "delete") plan.updateTimebox(tb.id, { outlook: false, outlookNote: REMOVED_IN_OUTLOOK, conflict: null });
-            plan.logWrite({ op, kind: "timebox", status: "confirmed", message: op === "delete" ? "Already gone from Outlook; nothing to remove" : "Already gone from Outlook; the timebox is kept here with Put on Outlook off", uid, eventId: own.eventId, account: null, calendar: null, before: own.fields, after: null, localBefore, localAfter: tb ? localOf(plan.timebox(tb.id)!) : null, auto: true });
-            return { ok: true, data: { nothing: true, alreadyGone: true } };
-          } else if (current.marker !== uid) return bad(new OwnershipError().message, 409);
-        }
-        if (!op) return { ok: true, data: { nothing: true } };
-        const own2 = plan.ownEvent(uid);
-        const before = op === "create" ? null : current ? { ...own2!.fields, subject: current.subject, start: current.start, end: current.end } : own2!.fields;
-        const after = op === "delete" ? null : w;
-        // What the timebox looked like before this change (for undo): from the event's fields when there is one.
-        const localBefore: LocalState | null = op === "create" ? (tb ? { ...localOf(tb), outlook: false } : null) : before ? { start: toLocal(before.start, tz), end: toLocal(before.end, tz), outlook: true, removedAt: null } : null;
-        held = { kind: "timebox", uid, op, eventId: op === "create" ? null : own2!.eventId, before, after, localBefore, localAfter: tb ? localOf(tb) : null, undoOf: null, auto: !settings.confirmOwn && op !== "create" };
+        const r = await previewTimebox(ow, text(o.uid, "uid", 80));
+        if ("bad" in r) return r.bad;
+        if (r.held === "gone") return { ok: true, data: { nothing: true, alreadyGone: true } };
+        if (r.held === "nothing") return { ok: true, data: { nothing: true } };
+        held = r.held;
       }
       return { ok: true, data: { preview: await hold(ow, held, tz) } };
     }
     case "write.confirm": {
-      const o = fields(input, ["previewId"]);
-      if (typeof o.previewId !== "string") throw new Invalid("previewId must be text");
-      const held = previews.get(o.previewId);
-      previews.delete(o.previewId);
-      if (!held || held.expiresAt < Date.now()) return bad("That preview has expired. Review the change again", 410);
-      // Still the same change? A timebox moved again after the preview needs a new one.
-      if (held.undoOf === null && held.kind === "timebox") {
-        const tb = plan.timeboxByUid(held.uid);
-        if (tb?.conflict) return bad("This timebox changed in Coopilot and in Outlook: choose which version to keep first", 409);
-        const w = want(cfg, tb);
-        const now = syncNeed(tb, plan.ownEvent(held.uid), w);
-        if (now !== held.op || JSON.stringify(w) !== JSON.stringify(held.after)) return bad("The timebox changed since the preview. Review the change again", 409);
+      const o = fields(input, [], ["previewId", "previewIds"]);
+      if ((o.previewId === undefined) === (o.previewIds === undefined)) throw new Invalid("write.confirm takes { previewId } or { previewIds }");
+      if (o.previewIds !== undefined) {
+        // Step 13.6 (D247): each held preview confirmed in turn, exactly as one confirm; a refusal or failure on one
+        // doesn't stop the rest.
+        if (!Array.isArray(o.previewIds) || o.previewIds.length === 0 || o.previewIds.length > 20) throw new Invalid("previewIds needs 1 to 20 previews");
+        const results: (WriteResult | { error: string; status: number })[] = [];
+        for (const id of o.previewIds) {
+          if (typeof id !== "string") throw new Invalid("previewId must be text");
+          const r = await confirmOne(id);
+          results.push(r.ok ? (r.data as WriteResult) : { error: r.error, status: r.status });
+        }
+        return { ok: true, data: { results } };
       }
-      // Invites go only to allowed domains: checked at preview, here, and again in the writer.
-      if (held.kind === "invite" && held.op === "create" && (held.after?.attendees ?? []).some((a) => !domainAllowed(a.email, inviteDomains(cfg)))) return bad(new DomainError().message, 422);
-      const ow = cfg.outlook ? ctx.outlook(cfg) : null;
-      if (!ow) return bad("Outlook isn't set up", 409);
-      if (held.kind === "invite" && held.op === "create" && held.invite) plan.addInvite({ uid: held.uid, ...held.invite, start: toLocal(held.after!.start, tz), end: toLocal(held.after!.end, tz), attendees: held.after!.attendees ?? [], teams: !!held.after!.teams });
-      const entry = plan.logWrite({ op: held.op, kind: held.kind, uid: held.uid, eventId: held.eventId, account: held.account, calendar: held.calendar, before: held.before, after: held.after, localBefore: held.localBefore, localAfter: held.localAfter, auto: held.auto, undoOf: held.undoOf });
-      return { ok: true, data: await attempt(plan, ow, entry, false, { domains: inviteDomains(cfg), now: ctx.now }) };
+      if (typeof o.previewId !== "string") throw new Invalid("previewId must be text");
+      return confirmOne(o.previewId);
     }
     case "write.retry": {
       const o = fields(input, ["id"]);

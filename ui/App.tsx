@@ -13,7 +13,7 @@ import type { TimeboxTarget } from "./menu.ts";
 import type { WriteState } from "../actions/types.ts";
 import type { PlanDayState } from "../plan/types.ts";
 import { planTarget } from "../plan/target.ts";
-import { stepDay } from "../plan/days.ts";
+import { canAddWork, stepDay } from "../plan/days.ts";
 import { PlanDay } from "./PlanDay.tsx";
 import { autoOpenDue, dayRolledOver } from "./planday.ts";
 import { PlanCtx, resumeSlots } from "./planview.ts";
@@ -129,6 +129,8 @@ export function App() {
   }, []);
   const [clock, setClock] = useState(() => Date.now());
   const [pd, setPd] = useState<PlanDayState | null>(null);
+  // Step 13.6: "+ Add work" and A open Plan the day on one block's picker.
+  const [pdStart, setPdStart] = useState<{ half: Half; n: number } | null>(null);
   const [pdError, setPdError] = useState<string | null>(null);
   const autoTried = useRef<string | null>(null);
   const cellRefs = useRef(new Map<string, HTMLDivElement>());
@@ -374,6 +376,14 @@ export function App() {
     [data, target, showPlanDay],
   );
 
+  const addWork = useCallback(
+    (date: IsoDate, half: Half) => {
+      setPdStart((s) => ({ half, n: (s?.n ?? 0) + 1 }));
+      void openPlanDay(date);
+    },
+    [openPlanDay],
+  );
+
   /**
    * ← → in Plan the day: the previous or next day that can be planned. Days without working hours and known PTO
    * are skipped here; a PTO day only the server knows of is skipped too (it refuses with 422), up to a few times.
@@ -430,6 +440,7 @@ export function App() {
       await planAction("planday.commit", { date: pd.date });
       setPd(null);
       reloadQuiet();
+      setNotice("Committed. Planned ✓ in the day's header opens it again, with Timebox my day");
     } catch (e) {
       setPdError(e instanceof Error ? e.message : "Could not commit");
     }
@@ -809,6 +820,16 @@ export function App() {
         case " ":
           e.preventDefault();
           return setDetailsOpen(true);
+        case "a":
+        case "A": {
+          // Step 13.6 (D241): add work to the selected block (its picker in Plan the day).
+          e.preventDefault();
+          const d = days[sel.dayIndex];
+          const sl = d ? slotOf(d, sel.half) : undefined;
+          if (!d || !sl) return;
+          if (!canAddWork({ date: d.date, today: data.planDay.date, pto: !!d.pto, off: sl.off })) return setNotice(d.date < data.planDay.date ? "That day is past: its picks can only be ticked done or dropped" : d.pto ? "That's a PTO day" : "That block has no working hours");
+          return addWork(d.date, sel.half);
+        }
         case "r":
           e.preventDefault();
           auto.trigger("key");
@@ -819,7 +840,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, base, captureOpen]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, base, captureOpen]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
 
@@ -956,13 +977,16 @@ export function App() {
       invites: data.invites ?? [],
       undoWrite: (id) => void writes.undo(id),
       tz: data.week.timeZone,
+      timeboxes: data.timeboxes,
+      now: now ?? new Date(clock).toISOString(),
+      addWork,
       exportPlan: () =>
         void call<{ path: string }>("data.export", {}).then(
           (r) => setNotice(`Plan exported to ${r.path}`),
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, openRitual, connectWrite]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, openRitual, connectWrite, addWork]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.kind === "session") {
     return (
@@ -1005,6 +1029,7 @@ export function App() {
     loadAccess,
     changed: reloadQuiet,
     sync: writes.sync,
+    syncMany: writes.syncMany,
     undo: writes.undo,
     retry: writes.retry,
     open: (t) => setTbTarget(t),
@@ -1230,12 +1255,20 @@ export function App() {
                       onCommit={() => void commit()}
                       onClose={closePlanDay}
                       onStep={(dir) => void stepPlanDay(dir)}
+                      start={pdStart}
                     />
                   ),
                 };
               })()
             : undefined
         }
+        onPlanDay={(d) => void openPlanDay(d)}
+        onAddWork={addWork}
+        onAddHours={() => {
+          closePlanDay();
+          setDetailsOpen(false);
+          setSettingsAt("hours");
+        }}
         onSelect={(s) => setSel(s)}
         onOpen={(s) => {
           setSel(s);

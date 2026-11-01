@@ -107,6 +107,7 @@ export const ACTIONS = [
   { name: "data.export", title: "Export the plan", group: "Settings", target: "none", summary: "Picks, drafts and time entries as JSON in ~/.local/share/coopilot/exports" },
   { name: "auth.connect_outlook_write", title: "Reconnect Outlook with calendar changes", group: "Sources", target: "none", summary: "Sign in again and allow Coopilot to create and change its own Outlook events (timeboxes)" },
   { name: "timebox.add", title: "Timebox…", group: "Timebox", target: "pick", summary: "Give a pick or item a start and length on the day's timeline (local; Outlook optional)" },
+  { name: "timebox.add_many", title: "Timebox my day", group: "Timebox", target: "day", summary: "Place every planned pick without a timebox into its block's free gaps, after showing the resulting agenda" },
   { name: "timebox.update", title: "Move or resize a timebox", group: "Timebox", target: "timebox", summary: "New start or end; its Outlook event follows after a preview" },
   { name: "timebox.remove", title: "Remove a timebox", group: "Timebox", target: "timebox", summary: "Take it off the timeline; its Outlook event is removed after a preview" },
   { name: "timebox.set_outlook", title: "Put a timebox on Outlook", group: "Timebox", target: "timebox", summary: "Turn Put on Outlook on or off: a Busy event Coopilot owns, after a preview" },

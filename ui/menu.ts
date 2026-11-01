@@ -4,7 +4,9 @@
 import { ACTIONS, type ActionName, type ActionSpec } from "../actions/registry.ts";
 import { THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
 import { hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
-import { dayRule } from "../plan/days.ts";
+import { canAddWork, dayRule } from "../plan/days.ts";
+import { openGaps, placeInGap } from "../plan/agenda.ts";
+import { formatDuration } from "../week/format.ts";
 import { isPickable } from "../plan/rules.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek } from "../plan/types.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
@@ -153,6 +155,10 @@ export type MenuEnv = {
   invites: readonly InviteView[];
   undoWrite: (id: number) => void;
   tz: string;
+  /** Step 13.6: the week's timeboxes and the clock, for a pick's free gaps; "+ Add work" on a block (key A). */
+  timeboxes?: readonly TimeboxView[];
+  now?: string;
+  addWork?: (date: IsoDate, half: Half) => void;
 };
 
 /** What help is wanted on: a pick, a week list item, a timebox or a work item. `pinned` is its day when it has one. */
@@ -232,7 +238,7 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
         ...(p.status !== "planned" ? { disabled: "Only a planned pick can be timeboxed" } : p.date !== env.today ? { disabled: "Only today's picks" } : env.timer?.pickId === p.id ? { disabled: "Already timing this pick" } : {}),
         next: () => lengthStep(`Focus on "${p.title}"`, suggestMinutes(p.size, env.planning.sizes), (m) => env.runTimer("timer.start", { pickId: p.id, minutes: m })),
       },
-      { id: "timebox", label: "Timebox…", hint: "start and length on the day", action: "timebox.add", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be timeboxed" } : past ? { disabled: PAST } : {}), run: () => env.openTimebox({ pickId: p.id, date: p.date }) },
+      { id: "timebox", label: "Timebox", hint: "a free gap in its block", action: "timebox.add", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be timeboxed" } : past ? { disabled: PAST } : {}), next: () => timeboxStep(env, p) },
       { id: "help", label: "Needs help from…", hint: "Cooptimizers who are free", action: "collab.candidates", ...(past ? { disabled: PAST } : {}), run: () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date }) },
       { id: "done", label: p.status === "done" ? "Mark not done" : "Mark done", action: "pick.mark_done", run: () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" }) },
       { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be made up" } : {}), next: () => makeUpStep(env, p) },
@@ -431,6 +437,7 @@ export function slotMenu(env: MenuEnv, date: IsoDate, half: Half, clientKey: str
     items: [
       { id: "details", label: "Details", hint: "Enter", action: "ui.details", run: () => env.openDetails(date, half) },
       { id: "plan", label: "Plan this day", action: "planday.start", ...(refused ? { disabled: refused } : {}), run: () => env.openPlanDay(date) },
+      { id: "addwork", label: "Add work…", hint: "A", action: "ui.add_work", ...(addWorkRefusal(env, date, half) ? { disabled: addWorkRefusal(env, date, half)! } : {}), run: () => env.addWork?.(date, half) },
       {
         id: "intention",
         label: "Add an intention",
@@ -447,6 +454,46 @@ export function slotMenu(env: MenuEnv, date: IsoDate, half: Half, clientKey: str
       },
     ],
   };
+}
+
+/** "9:00–11:00" in the configured zone, no AM or PM (the agenda's short form). */
+export function spanText(start: string, end: string, tz: string): string {
+  const t = (x: string) => {
+    const z = Temporal.Instant.from(x).toZonedDateTimeISO(tz);
+    return `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")}`;
+  };
+  return `${t(start)}–${t(end)}`;
+}
+
+/**
+ * A pick's Timebox (step 13.6, D245): its block's free gaps, one click places it at the gap start for its size
+ * (trimmed to the gap), then "Custom time…" for the dialog.
+ */
+export function timeboxStep(env: MenuEnv, p: Pick): MenuStep {
+  const day = env.week.days.find((d) => d.date === p.date);
+  const slot = day ? (p.half === "AM" ? day.am : p.half === "PM" ? day.pm : day.eve) : undefined;
+  const gaps = slot ? openGaps(slot, env.timeboxes ?? [], p.date === env.today ? env.now : undefined) : [];
+  const want = env.planning.sizes[p.size];
+  const items: MenuItem[] = gaps.flatMap((g, i) => {
+    const at = placeInGap(g, want);
+    if (!at) return [];
+    return [{ id: `gap${i}`, label: `Free ${spanText(g.start, g.end, env.tz)} · ${formatDuration(g.minutes)}`, hint: at.trimmed ? `trimmed to ${formatDuration(at.minutes)}` : `${formatDuration(at.minutes)} from ${spanText(at.start, at.end, env.tz).split("–")[0]}`, action: "timebox.add", run: () => env.timeboxChange("timebox.add", { pickId: p.id, date: p.date, start: at.start, end: at.end }) } satisfies MenuItem];
+  });
+  return {
+    title: `Timebox "${p.title}"`,
+    items: [
+      ...(items.length ? items : [{ id: "none", label: slot ? "No free time left in this block" : "This day isn't in the week shown", action: "timebox.add", disabled: "Use Custom time, or free up the block" } satisfies MenuItem]),
+      { id: "custom", label: "Custom time…", hint: "start and length", action: "timebox.add", run: () => env.openTimebox({ pickId: p.id, date: p.date }) },
+    ],
+  };
+}
+
+/** Why a block can't take "+ Add work" (step 13.6, D241), or undefined. */
+export function addWorkRefusal(env: MenuEnv, date: IsoDate, half: Half): string | undefined {
+  const day = env.week.days.find((d) => d.date === date);
+  const slot = day ? (half === "AM" ? day.am : half === "PM" ? day.pm : day.eve) : undefined;
+  if (canAddWork({ date, today: env.today, pto: !!day?.pto, off: !slot || slot.off })) return undefined;
+  return date < env.today ? PAST : day?.pto ? `PTO day (${day.pto.titles.join(", ")})` : "No working hours in this block";
 }
 
 // ---------- day headers ----------
@@ -782,6 +829,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "collab.preview_invite":
       return { next: () => choosePick(env, "Help on which pick?", (p) => () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date })) };
     case "timebox.add": return { next: () => choosePick(env, "Timebox which pick?", (p) => () => env.openTimebox({ pickId: p.id, date: p.date })) };
+    // Step 13.6: Timebox my day is in Plan the day once it is committed.
+    case "timebox.add_many": return { run: () => env.openPlanDay() };
     // Moving, resizing, removing and Outlook previews happen on the day's timeline in Plan the day.
     case "timebox.update":
     case "timebox.remove":
@@ -821,6 +870,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "week.next", action: "week.next", group: "Week", label: "Next week", hint: "]", run: () => env.changeWeek(1) },
     { id: "week.today", action: "week.today", group: "Week", label: "Back to this week", run: env.goToday },
     { id: "ui.details", action: "ui.details", group: "Week", label: "Details of the selected half-day", hint: "Enter", run: () => env.openDetails(env.selection.date, env.selection.half) },
+    { id: "ui.add_work", action: "ui.add_work", group: "Week", label: "Add work to the selected block", hint: "A", ...(addWorkRefusal(env, env.selection.date, env.selection.half) ? { disabled: addWorkRefusal(env, env.selection.date, env.selection.half)! } : { run: () => env.addWork?.(env.selection.date, env.selection.half) }) },
     { id: "ui.settings", action: "ui.settings", group: "Week", label: "Settings", disabled: soon },
     { id: "ui.region_next", action: "ui.region_next", group: "Keyboard", label: "Next region (top bar, week, panel, status bar)", hint: "F6", run: () => env.moveRegion(1) },
     { id: "ui.region_prev", action: "ui.region_prev", group: "Keyboard", label: "Previous region", hint: "Shift F6", run: () => env.moveRegion(-1) },

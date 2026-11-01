@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { carryTarget, dayRule, stepDay, upcomingStart } from "./days.ts";
+import { canAddWork, carryTarget, dayRule, planButton, stepDay, upcomingStart } from "./days.ts";
 import { planTarget } from "./target.ts";
 
 const at = (s: string) => Temporal.ZonedDateTime.from(`${s}[America/New_York]`);
@@ -68,5 +68,41 @@ describe("plannability from the time model (step 6b, D127)", () => {
   });
   it("a day ending at midnight is still today until midnight", () => {
     expect(upcomingStart(Temporal.ZonedDateTime.from("2026-11-05T23:30:00-05:00[America/New_York]"), "24:00")).toBe("2026-11-05");
+  });
+});
+
+describe("the day header Plan button (step 13.6, D240)", () => {
+  const base = { date: "2026-11-02", today: "2026-11-01", pto: false, hasHours: true, committed: false, hasPicks: false };
+  it("says Plan before commit and Planned once committed", () => {
+    expect(planButton(base)).toBe("plan");
+    expect(planButton({ ...base, committed: true })).toBe("planned");
+  });
+  it("is hidden on PTO days and days without working hours", () => {
+    expect(planButton({ ...base, pto: true })).toBe("hidden");
+    expect(planButton({ ...base, date: "2026-11-07", hasHours: false, hasPicks: true })).toBe("hidden");
+  });
+  it("on Friday: Plan with hours, the Add hours link with work and no hours, nothing otherwise", () => {
+    const fri = { ...base, date: "2026-11-06" };
+    expect(planButton({ ...fri, hasHours: true })).toBe("plan");
+    expect(planButton({ ...fri, hasHours: false, hasPicks: true })).toBe("add_hours");
+    expect(planButton({ ...fri, hasHours: false })).toBe("hidden");
+  });
+  it("past days show only when they were planned (a review)", () => {
+    const past = { ...base, date: "2026-10-29" };
+    expect(planButton(past)).toBe("hidden");
+    expect(planButton({ ...past, committed: true })).toBe("planned");
+  });
+});
+
+describe("+ Add work on a block (step 13.6, D241)", () => {
+  const base = { date: "2026-11-02", today: "2026-11-01", pto: false, off: false };
+  it("is offered on a block with working time, today or later", () => {
+    expect(canAddWork(base)).toBe(true);
+    expect(canAddWork({ ...base, date: "2026-11-01" })).toBe(true);
+  });
+  it("is not offered on past days, PTO or blocks without working time (Friday without hours too)", () => {
+    expect(canAddWork({ ...base, date: "2026-10-30" })).toBe(false);
+    expect(canAddWork({ ...base, pto: true })).toBe(false);
+    expect(canAddWork({ ...base, date: "2026-11-06", off: true })).toBe(false);
   });
 });

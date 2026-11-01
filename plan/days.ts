@@ -59,3 +59,18 @@ export function carryTarget(start: IsoDate, isCommitted: (d: IsoDate) => boolean
   }
   return null;
 }
+
+export type PlanButton = "hidden" | "plan" | "planned" | "add_hours";
+/**
+ * The Plan button in a day header (step 13.6, D240): "Plan", "Planned ✓" once committed, or hidden. Friday with work
+ * on it and no hours shows the "Add hours" link instead (Plan the day plans against working time).
+ */
+export function planButton(d: { date: IsoDate; today: IsoDate; pto: boolean; hasHours: boolean; committed: boolean; hasPicks: boolean }): PlanButton {
+  if (d.pto) return "hidden";
+  if (!d.hasHours) return Temporal.PlainDate.from(d.date).dayOfWeek === 5 && d.hasPicks ? "add_hours" : "hidden";
+  if (d.date < d.today) return d.committed ? "planned" : "hidden";
+  return d.committed ? "planned" : "plan";
+}
+
+/** "+ Add work" on a block card and key A (step 13.6, D241): today or later, not PTO, with working time. */
+export const canAddWork = (b: { date: IsoDate; today: IsoDate; pto: boolean; off: boolean }) => b.date >= b.today && !b.pto && !b.off;

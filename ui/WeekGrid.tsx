@@ -6,7 +6,8 @@ import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types
 import type { PtoDay } from "../week/pto.ts";
 import type { Pick } from "../plan/types.ts";
 import type { FollowUpView } from "../actions/types.ts";
-import { followUpsOnDay } from "../plan/due.ts";
+import { capFollowUps, followUpsOnDay } from "../plan/due.ts";
+import { canAddWork, planButton } from "../plan/days.ts";
 import { dayMenu, eventMenu, pickMenu, slotMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
 import { hourMarks, layoutEvents } from "./layout.ts";
@@ -14,7 +15,7 @@ import { DevOpsWork } from "./work.ts";
 import { clientColor, eventRange, halfTag, SampleSources, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 import { cardHalves, eveOnly, slotOf } from "./halves.ts";
 import type { Layout } from "./viewport.ts";
-import { cardPlan, featuresOn, PlanCtx } from "./planview.ts";
+import { cardPlan, featuresOn, PlanCtx, type PlanView } from "./planview.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import { ITEM_ATTRS } from "./keys.ts";
 import { HalfScope, useScopedTab } from "./scope.ts";
@@ -38,9 +39,13 @@ type Props = {
   compact: boolean;
   /** Plan the day: this day's column becomes the planning panel; the rest of the week is dimmed. */
   planDay?: { dayIndex: number; node: ReactNode } | undefined;
+  /** Step 13.6: the day header's Plan button, "+ Add work" on a block and Friday's "Add hours" link. */
+  onPlanDay?: ((date: string) => void) | undefined;
+  onAddWork?: ((date: string, half: Half) => void) | undefined;
+  onAddHours?: ((date: string) => void) | undefined;
 };
 
-export function WeekGrid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact, planDay }: Props) {
+export function WeekGrid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact, planDay, onPlanDay, onAddWork, onAddHours }: Props) {
   const column = (day: Day, i: number) =>
     planDay?.dayIndex === i ? (
       <div key={day.date} className="pd-cell">
@@ -63,6 +68,9 @@ export function WeekGrid({ week, colors, minFocusWindow, today, now, selection, 
       onOpen={onOpen}
       layout={layout}
       compact={compact}
+      onPlanDay={onPlanDay}
+      onAddWork={onAddWork}
+      onAddHours={onAddHours}
     />
   );
   if (layout === "narrow") {
@@ -135,6 +143,16 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
   // An evening-only day (a weekend flex session) gets one card spanning the three rows.
   const rows: (typeof halves[number] | null)[] = props.layout === "medium" && props.hasEve && !eveOnly(day) && !day.eve ? [...halves, null] : halves;
   const firstView = (day.eve && eveOnly(day) ? day.eve : day.am).view.start;
+  // Step 13.6 (D240): Plan, Planned ✓, Friday's Add hours link, or nothing.
+  const dayPlan = pv.week?.[day.date];
+  const btn = planButton({
+    date: day.date,
+    today: pv.today ?? "",
+    pto: !!day.pto,
+    hasHours: !(day.am.off && day.pm.off && (!day.eve || day.eve.off)) || day.flexMinutes > 0,
+    committed: !!dayPlan?.committedAt,
+    hasPicks: (dayPlan?.picks ?? []).some((p) => p.status === "planned" || p.status === "done"),
+  });
   const lastView = (day.eve ?? day.pm).view.end;
 
   return (
@@ -150,6 +168,15 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
             {ptoLabel(day.pto)}
           </span>
         )}
+        {btn === "plan" || btn === "planned" ? (
+          <button type="button" className={`day-plan ${btn}`} onClick={() => props.onPlanDay?.(day.date)} title={btn === "planned" ? "Committed: open it to see or change the plan" : "Plan this day"}>
+            {btn === "planned" ? "Planned ✓" : "Plan"}
+          </button>
+        ) : btn === "add_hours" ? (
+          <button type="button" className="day-addhours" onClick={() => props.onAddHours?.(day.date)} title="Friday has catch-up work but no working hours">
+            Add hours
+          </button>
+        ) : null}
         {/* In the Tab order only for the selected day (Shift+Tab from its half-day reaches it). */}
         <HalfScope.Provider value={props.selection.dayIndex === dayIndex}>{menu.button(`Actions for ${day.weekday} ${shortDate(day.date)}`)}</HalfScope.Provider>
       </header>
@@ -183,6 +210,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
           now={props.now}
           ptoOff={!!day.pto}
           followUps={fuOn.get(half) ?? []}
+          addWork={props.onAddWork && canAddWork({ date: day.date, today: pv.today ?? "", pto: !!day.pto, off: slotOf(day, half)!.off }) ? () => props.onAddWork!(day.date, half) : undefined}
         />
         ),
       )}
@@ -227,11 +255,13 @@ type HalfProps = {
   now: string;
   /** A full PTO day: the card is dimmed and shows the PTO instead of free time. */
   ptoOff: boolean;
-  /** Follow-ups to show on this card (step 13.5). */
+  /** Follow-ups to show on this card (step 13.5); at most three, then "+N more" (step 13.6). */
   followUps: readonly FollowUpView[];
+  /** "+ Add work" (step 13.6): opens Plan the day on this block's picker. Absent where work can't be added. */
+  addWork?: (() => void) | undefined;
 };
 
-function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, ptoOff, followUps }: HalfProps) {
+function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, ptoOff, followUps, addWork }: HalfProps) {
   const primary = slot.focus[0];
   const sev = worstSeverity(slot.risks);
   const allWork = useContext(DevOpsWork);
@@ -241,7 +271,8 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
   const eve = slot.half === "EVE";
   // Committed: picks with their fit, the DevOps list without picked items and collapsed (step 6.1).
   const cp = cardPlan(plan.week, slot, primary?.clientKey ?? null, work?.items ?? [], now, plan.sizes, plan.timeboxes);
-  const ticks = cp.picks;
+  // Step 13.6 (D238): Friday's catch-up work shows on its card even though Friday is never committed.
+  const ticks = overflow && !eve && !cp.picks.length ? catchUp(plan.week, slot) : cp.picks;
   const checklist = ticks.length > 0 && (
     <div className="card-plan">
       <ul className="checklist" aria-label={`Committed plan for ${dayLabel} ${slot.half}`}>
@@ -292,16 +323,49 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
       ))}
     </ul>
   );
+  const fuCap = capFollowUps(followUps);
   const fuList = followUps.length > 0 && (
     <ul className="week-fus" aria-label="Follow-ups">
-      {followUps.map((f) => (
+      {fuCap.shown.map((f) => (
         <li key={f.id} className={f.dueState ? `due-${f.dueState.level}` : undefined} title={`Follow-up${f.hasWho ? ` to ${f.who}` : ""}: ${f.what}`}>
           <span className="fu-tag">Follow-up</span>
           {f.dueState && f.dueState.level !== "later" && <span className={`due-badge ${f.dueState.level}`}>{f.dueState.text}</span>}
           <span className="fu-what">{f.what}</span>
         </li>
       ))}
+      {fuCap.more > 0 && (
+        <li className="fu-more">
+          <button
+            type="button"
+            className="link-btn"
+            tabIndex={selected ? 0 : -1}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen();
+            }}
+            title="Open the details for every follow-up"
+          >
+            +{fuCap.more} more
+          </button>
+        </li>
+      )}
     </ul>
+  );
+  const addBtn = addWork && (
+    <button
+      type="button"
+      className="add-work"
+      tabIndex={selected ? 0 : -1}
+      title="Add work to this block (A)"
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+        addWork();
+      }}
+      onDoubleClick={(e) => e.stopPropagation()}
+    >
+      + Add work
+    </button>
   );
   const who = primary ? (
     <>
@@ -347,9 +411,18 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
     >
       <HalfScope.Provider value={selected}>
       {compact ? (
-        <CardBody tag={tag} slot={slot} tz={tz} overflow={overflow && !eve} who={who} badge={badge} checklist={checklist} summary={summary} more={more_} flex={flexList} />
+        <CardBody tag={tag} slot={slot} tz={tz} overflow={overflow && !eve} who={who} badge={badge} checklist={checklist} summary={summary} more={more_} flex={flexList} add={addBtn} />
       ) : (
         <>
+      {overflow && !eve && checklist && (
+        <aside className="rail catchup">
+          <div className="half-label">
+            <span className="half-tag">{tag ?? halfTag(slot.half)}</span> Catch-up
+            {more_}
+          </div>
+          {checklist}
+        </aside>
+      )}
       {(!overflow || eve) && (
         <aside className="rail">
           <div className="half-label">
@@ -361,6 +434,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
           {summary}
           {flexList}
           {checklist}
+          {addBtn}
         </aside>
       )}
 
@@ -370,6 +444,11 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
       </HalfScope.Provider>
     </div>
   );
+}
+
+/** Picks moved to the overflow day (step 13.6, D238): planned and done ones, committed or not. */
+function catchUp(week: PlanView["week"], slot: Slot): Pick[] {
+  return (week?.[slot.date]?.picks ?? []).filter((p) => p.half === slot.half && (p.status === "planned" || p.status === "done"));
 }
 
 /** A PTO day or a half-day without working hours says so; free time is in the details panel (step 10). */
@@ -402,7 +481,7 @@ const MAX_MEETINGS = 4;
 const MAX_PERSONAL = 3;
 
 /** Compact half-day: client, free time, one badge, meetings and personal events as short lists, top DevOps items. */
-function CardBody({ tag, slot, tz, overflow, who, badge, checklist, summary, more, flex }: { slot: Slot; tz: string; overflow: boolean; who: ReactNode; badge: ReactNode; checklist: ReactNode; summary: ReactNode; more: ReactNode; flex: ReactNode; tag?: string | undefined }) {
+function CardBody({ tag, slot, tz, overflow, who, badge, checklist, summary, more, flex, add }: { slot: Slot; tz: string; overflow: boolean; who: ReactNode; badge: ReactNode; checklist: ReactNode; summary: ReactNode; more: ReactNode; flex: ReactNode; add: ReactNode; tag?: string | undefined }) {
   const meetings = slot.events.filter((p) => !p.event.isPersonal);
   const personal = slot.events.filter((p) => p.event.isPersonal);
   return (
@@ -419,6 +498,7 @@ function CardBody({ tag, slot, tz, overflow, who, badge, checklist, summary, mor
       <TimeboxList slot={slot} />
       <EventList kind="meeting" label="Meetings" events={meetings} max={MAX_MEETINGS} tz={tz} />
       <EventList kind="personal" label="Personal" events={personal} max={MAX_PERSONAL} tz={tz} />
+      {add}
     </div>
   );
 }

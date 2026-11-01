@@ -422,6 +422,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       );
     case "timebox.resolve":
     case "timebox.add":
+    case "timebox.add_many":
     case "timebox.update":
     case "timebox.remove":
     case "timebox.set_outlook":

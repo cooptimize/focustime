@@ -60,3 +60,9 @@ export function followUpsOnDay<T extends CardFollowUp>(date: IsoDate, slots: rea
   if (first) for (const f of ordered) if (f.due && (f.due === date || (date === today && f.due < today))) add(first.half, f);
   return out;
 }
+
+/** At most this many follow-ups on a week card (step 13.6, Q76, D239); the rest are "+N more" in the details. */
+export const CARD_FOLLOW_UPS = 3;
+export function capFollowUps<T>(list: readonly T[], max = CARD_FOLLOW_UPS): { shown: T[]; more: number } {
+  return { shown: list.slice(0, max), more: Math.max(0, list.length - max) };
+}

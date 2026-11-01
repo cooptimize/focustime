@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dueOrder, dueState, followUpsOnDay } from "./due.ts";
+import { capFollowUps, dueOrder, dueState, followUpsOnDay } from "./due.ts";
 
 describe("due urgency (step 13.5)", () => {
   const today = "2026-11-03"; // a Tuesday
@@ -47,5 +47,26 @@ describe("follow-ups on the week's cards (step 13.5)", () => {
     expect(followUpsOnDay("2026-11-02", [{ half: "AM", clientKey: null, working: true }], fus, "2026-11-02").get("AM")?.map((x) => x.id)).toEqual([3]);
     // Not on a day with no working card.
     expect(followUpsOnDay("2026-11-04", [{ half: "AM", clientKey: null, working: false }], fus, "2026-11-02").size).toBe(0);
+  });
+});
+
+describe("follow-ups per card (step 13.6, Q76, D239)", () => {
+  it("shows at most three, keeping their order, and counts the rest", () => {
+    expect(capFollowUps([1, 2, 3, 4, 5])).toEqual({ shown: [1, 2, 3], more: 2 });
+    expect(capFollowUps([1, 2, 3])).toEqual({ shown: [1, 2, 3], more: 0 });
+    expect(capFollowUps([])).toEqual({ shown: [], more: 0 });
+  });
+  it("overdue and due soon come first because the day's list is already in due order", () => {
+    const fus = [
+      { id: 1, clientKey: "w", due: null, openedAt: "2026-11-01T09:00:00Z" },
+      { id: 2, clientKey: "w", due: "2026-11-09", openedAt: "2026-11-01T09:00:00Z" },
+      { id: 3, clientKey: "w", due: "2026-10-30", openedAt: "2026-11-01T09:00:00Z" },
+      { id: 4, clientKey: "w", due: "2026-11-03", openedAt: "2026-11-01T09:00:00Z" },
+      { id: 5, clientKey: "w", due: null, openedAt: "2026-11-01T10:00:00Z" },
+    ];
+    const day = followUpsOnDay("2026-11-02", [{ half: "AM", clientKey: "w", working: true }], fus, "2026-11-02").get("AM")!;
+    const c = capFollowUps(day);
+    expect(c.shown.map((f) => f.id)).toEqual([3, 4, 2]);
+    expect(c.more).toBe(2);
   });
 });

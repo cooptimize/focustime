@@ -161,17 +161,27 @@ describe("Plan the day actions", () => {
     expect((await t.run<PlanDayState>("planday.start", { date: D })).carryOver).toEqual([]);
   });
 
-  it("moving a pick to a day with no working hours asks first; Move anyway moves it (step 13.5)", async () => {
+  it("moving a pick to a weekend day with no working hours asks first; Move anyway moves it (step 13.5)", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
     const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
-    const r = await t.fail("pick.move", { id: pick.id, date: "2026-11-06", half: "AM" });
-    expect(r).toMatchObject({ status: 409, code: "no_hours", error: "Friday has no working hours. Add hours for that day?" });
+    const r = await t.fail("pick.move", { id: pick.id, date: "2026-11-07", half: "AM" });
+    expect(r).toMatchObject({ status: 409, code: "no_hours", error: "Saturday has no working hours. Add hours for that day?" });
     expect(t.plan.getPick(pick.id)!.date).toBe(D);
-    const fri = (await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: "2026-11-06", half: "AM", anyway: true })).pick;
-    expect(fri.date).toBe("2026-11-06");
+    const sat = (await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: "2026-11-07", half: "AM", anyway: true })).pick;
+    expect(sat.date).toBe("2026-11-07");
     // A day with hours never asks.
-    expect((await t.run<{ pick: Pick }>("pick.move", { id: fri.id, date: "2026-11-04", half: "PM" })).pick.date).toBe("2026-11-04");
+    expect((await t.run<{ pick: Pick }>("pick.move", { id: sat.id, date: "2026-11-04", half: "PM" })).pick.date).toBe("2026-11-04");
+  });
+
+  it("moving a pick to Friday never asks: it is catch-up work on the overflow day (step 13.6, Q78, D238)", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
+    const fri = (await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: "2026-11-06", half: "AM" })).pick;
+    expect(fri).toMatchObject({ date: "2026-11-06", half: "AM", status: "planned" });
+    // It counts in the week: the week's picks include it.
+    expect(t.plan.picksBetween("2026-11-02", "2026-11-08").filter((p) => p.status === "planned").map((p) => p.date)).toEqual(["2026-11-06"]);
   });
 
   it("a pick being made up tonight isn't offered as carry-over until its evening session has ended (Q45)", async () => {

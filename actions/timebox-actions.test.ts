@@ -331,3 +331,81 @@ describe("focus timer from a timebox", () => {
     expect(r2.timer).toMatchObject({ pickId: null, label: "#4512 Import mapping", plannedMinutes: 25 });
   });
 });
+
+describe("Timebox my day (step 13.6, D246)", () => {
+  const pickOn = (t: ReturnType<typeof setup>, title: string, half: "AM" | "PM" = "AM") =>
+    t.plan.addPick({ date: D, half, clientKey: "CSC", kind: "item", itemId: Math.floor(Math.random() * 9000) + 1000, title, itemType: "User Story", itemUrl: null, size: "M" });
+  it("adds every placement in one go, each with its own Put on Outlook", async () => {
+    const t = setup();
+    const a = pickOn(t, "Import mapping"), b = pickOn(t, "Export");
+    const r = await t.run<{ timeboxes: { pickId: number; outlook: boolean; uid: string }[]; sync: string[] }>("timebox.add_many", {
+      date: D,
+      items: [
+        { pickId: a.id, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, outlook: true },
+        { pickId: b.id, start: `${D}T10:00:00-05:00`, end: `${D}T11:00:00-05:00`, outlook: false },
+      ],
+    });
+    expect(r.timeboxes.map((x) => [x.pickId, x.outlook])).toEqual([[a.id, true], [b.id, false]]);
+    // Only the one on Outlook needs a write, and nothing is written yet.
+    expect(r.sync).toEqual([r.timeboxes[0]!.uid]);
+    expect(t.g.calls).toEqual([]);
+  });
+  it("checks every item first: one bad item adds nothing", async () => {
+    const t = setup();
+    const a = pickOn(t, "Import mapping");
+    const r = await t.fail("timebox.add_many", { date: D, items: [{ pickId: a.id, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00` }, { pickId: a.id + 99, start: `${D}T10:00:00-05:00`, end: `${D}T11:00:00-05:00` }] });
+    expect(r.status).toBe(409);
+    expect(t.plan.timeboxesBetween(D, D)).toEqual([]);
+    expect((await t.fail("timebox.add_many", { date: D, items: [] })).error).toMatch(/at least one/);
+    expect((await t.fail("timebox.add_many", { date: D, items: [{ pickId: a.id, start: `${D}T09:00:00-05:00`, end: `${D}T09:05:00-05:00` }] })).error).toMatch(/at least 15/);
+  });
+  it("refuses a pick that already has a timebox", async () => {
+    const t = setup();
+    const a = pickOn(t, "Import mapping");
+    await t.run("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, pickId: a.id });
+    expect((await t.fail("timebox.add_many", { date: D, items: [{ pickId: a.id, start: `${D}T11:00:00-05:00`, end: `${D}T12:00:00-05:00` }] })).error).toMatch(/already timeboxed/);
+  });
+});
+
+describe("combined Outlook preview (step 13.6, D247)", () => {
+  it("previews each event in one call, writes nothing until confirmed", async () => {
+    const t = setup();
+    const a = (await t.box()).timebox;
+    const b = (await t.box({ start: `${D}T11:00:00-05:00`, end: `${D}T12:00:00-05:00`, title: "#4513 Export" })).timebox;
+    const c = (await t.box({ start: `${D}T13:00:00-05:00`, end: `${D}T14:00:00-05:00`, outlook: false })).timebox;
+    const r = await t.run<{ previews: WritePreview[]; nothing: string[]; alreadyGone: string[] }>("write.preview", { uids: [a.uid, b.uid, c.uid] });
+    expect(r.previews.map((p) => [p.op, p.fields.find((f) => f.label === "Title")?.after])).toEqual([["create", "CSC: #4512 Import mapping"], ["create", "CSC: #4513 Export"]]);
+    expect(r.nothing).toEqual([c.uid]);
+    expect(t.g.calls.filter((x) => x.method !== "GET")).toEqual([]);
+  });
+  it("confirms each in turn: own read back, own log entry, own undo", async () => {
+    const t = setup();
+    const a = (await t.box()).timebox;
+    const b = (await t.box({ start: `${D}T11:00:00-05:00`, end: `${D}T12:00:00-05:00`, title: "#4513 Export" })).timebox;
+    const { previews } = await t.run<{ previews: WritePreview[] }>("write.preview", { uids: [a.uid, b.uid] });
+    const { results } = await t.run<{ results: WriteResult[] }>("write.confirm", { previewIds: previews.map((p) => p.previewId) });
+    expect(results.map((x) => x.confirmed)).toEqual([true, true]);
+    expect(t.g.events.size).toBe(2);
+    const log = await t.run<WriteLogView>("write.log", {});
+    expect(log.entries.map((e) => [e.uid, e.status, e.undoable])).toEqual([[b.uid, "confirmed", true], [a.uid, "confirmed", true]]);
+    // Undo one: only that event goes.
+    await t.confirm((await t.preview({ undo: log.entries.find((e) => e.uid === a.uid)!.id })).preview!);
+    expect([...t.g.events.values()].map((e) => e.marker)).toEqual([b.uid]);
+  });
+  it("one failure doesn't stop the rest, and each shows its own result", async () => {
+    const t = setup();
+    const a = (await t.box()).timebox;
+    const b = (await t.box({ start: `${D}T11:00:00-05:00`, end: `${D}T12:00:00-05:00`, title: "#4513 Export" })).timebox;
+    const { previews } = await t.run<{ previews: WritePreview[] }>("write.preview", { uids: [a.uid, b.uid] });
+    t.g.sw.failNext = { method: "POST", status: 500 };
+    const { results } = await t.run<{ results: WriteResult[] }>("write.confirm", { previewIds: previews.map((p) => p.previewId) });
+    expect(results.map((x) => [x.confirmed, x.entry.status])).toEqual([[false, "failed"], [true, "confirmed"]]);
+    expect(t.g.events.size).toBe(1);
+  });
+  it("takes uids or one uid, never both, and at most 20", async () => {
+    const t = setup();
+    expect((await t.fail("write.preview", { uid: "a", uids: ["b"] })).error).toMatch(/takes/);
+    expect((await t.fail("write.preview", { uids: Array.from({ length: 21 }, (_, i) => `u${i}`) })).error).toMatch(/20/);
+    expect((await t.fail("write.confirm", { previewId: "x", previewIds: ["y"] })).error).toMatch(/previewId/);
+  });
+});

@@ -2,7 +2,9 @@
 // picks come from that client's DevOps items in board order (story level only) or a typed intention, and one
 // key commits. Everything here is local: the actions only write Coopilot's plan store.
 import { useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
-import { blockClient, capacityMinutes, fitOf, isPickable, pickableChildren, weekFirst } from "../plan/rules.ts";
+import { blockClient, capacityMinutes, draftOffer, fitOf, isPickable, pickableChildren, weekFirst } from "../plan/rules.ts";
+import { agendaOf, planMyDay, type DayPlacement, type Unplaced } from "../plan/agenda.ts";
+import { scrollKeyDelta, wheelEscapes } from "./scroll.ts";
 import { slotPlanned } from "../plan/timebox.ts";
 import { pinLabel, weekList } from "../plan/weeklist.ts";
 import { dayLabel } from "../plan/days.ts";
@@ -20,9 +22,10 @@ import { call } from "./api.ts";
 import { copy, DueBadge } from "./FollowUps.tsx";
 import { dueOrder } from "../plan/due.ts";
 import { isTypingTarget, ITEM_ATTRS, topOverlay } from "./keys.ts";
-import { itemMenu, pickMenu } from "./menu.ts";
+import { itemMenu, pickMenu, spanText, timeboxStep } from "./menu.ts";
 import { MenuRow, useMenu } from "./Menus.tsx";
-import { DayStrip, DragHandle, useTimeboxes } from "./Timeboxes.tsx";
+import { TimeboxDetails, useTimeboxes } from "./Timeboxes.tsx";
+import { NOTICE_EVENT } from "./WorkLink.tsx";
 
 export type PlanDayAct = (action: string, input: Record<string, unknown>) => Promise<boolean>;
 
@@ -44,11 +47,13 @@ type Props = {
   onClose: () => void;
   /** ← → and the ‹ › buttons: the previous or next day that can be planned. */
   onStep: (dir: 1 | -1) => void;
+  /** Step 13.6: "+ Add work" or A on a block opens the panel on that block's picker (n changes on each request). */
+  start?: { half: Half; n: number } | null;
 };
 
 const inPlay = (p: Pick) => p.status === "planned" || p.status === "done";
 
-export function PlanDay({ day, state, which, friday, now, tz, colors, clients, error, act, onCommit, onClose, onStep }: Props) {
+export function PlanDay({ day, state, which, friday, now, tz, colors, clients, error, act, onCommit, onClose, onStep, start }: Props) {
   const past = state.access === "past";
   const off = day.pto;
   const ref = useRef<HTMLElement>(null);
@@ -68,8 +73,27 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
   const halves = cardHalves(day).filter((half) => !slotOf(day, half)!.off || day.kind === "overflow" || state.picks.some((p) => p.half === half && p.date === day.date && inPlay(p)));
   const nowI = Temporal.Instant.from(now);
   const firstHalf = halves.find((h) => Temporal.Instant.compare(Temporal.Instant.from(slotOf(day, h)!.end), nowI) > 0) ?? halves[0] ?? "AM";
-  const [active, setActive] = useState<Half>(firstHalf);
+  const [active, setActive] = useState<Half>(start && halves.includes(start.half) ? start.half : firstHalf);
   useEffect(() => setActive(firstHalf), [day.date]);
+  // Step 13.6 (D241): open on the block "+ Add work" was clicked on, scrolled into view with its picker.
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!start || !halves.includes(start.half)) return;
+    setActive(start.half);
+    requestAnimationFrame(() => scroller.current?.querySelector<HTMLElement>(`[data-half="${start.half}"]`)?.scrollIntoView({ block: "start" }));
+  }, [start?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Step 13.6 (D242): the lists scroll inside the panel; a wheel or trackpad at an edge never reaches the page.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      // A nested scroller (a long textarea) that can still move takes it; otherwise the panel's list does or nothing.
+      if (wheelEscapes(el, e.deltaY)) e.preventDefault();
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+  const [myDay, setMyDay] = useState(false);
   const committed = state.plan.committedAt;
 
   const onKey = (e: KeyboardEvent) => {
@@ -79,11 +103,20 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
-      if (typing) (e.target as HTMLElement).blur();
+      // Leaving a text box keeps focus in the panel, so the next Esc closes it.
+      if (typing) ref.current?.focus({ preventScroll: true });
       else onClose();
       return;
     }
     if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+    // Scroll keys move the panel's list, never the page behind (D242). Buttons keep Space and Enter.
+    const d = scrollKeyDelta(e.key, scroller.current?.clientHeight ?? 0, typing);
+    if (d !== null && scroller.current && !(e.target instanceof HTMLSelectElement)) {
+      e.preventDefault();
+      const el = scroller.current;
+      el.scrollTo({ top: d === Infinity ? el.scrollHeight : d === -Infinity ? 0 : el.scrollTop + d });
+      return;
+    }
     if ((e.key === "c" || e.key === "C") && !past) {
       e.preventDefault();
       onCommit();
@@ -130,6 +163,11 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
               ›
             </button>
           </span>
+          {!past && !off && committed && (
+            <button type="button" onClick={() => setMyDay(true)} title="Place every planned pick without a timebox into its block's free time">
+              Timebox my day
+            </button>
+          )}
           {!past && (
             <button type="button" className="commit" onClick={onCommit} title="Commit (C)">
               <kbd>c</kbd> {committed ? "Commit again" : "Commit"}
@@ -145,6 +183,7 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
           {error}
         </p>
       )}
+      <div ref={scroller} className="pd-scroll" tabIndex={-1}>
 
       {off && (
         <p className="pd-pto full" role="note">
@@ -174,12 +213,11 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
 
       {!off && past && <PastDay halves={[...new Set<Half>(["AM", "PM", ...state.picks.filter((p) => p.date === day.date && p.half === "EVE").map((p) => p.half)])]} picks={state.picks.filter((p) => p.date === day.date && p.status !== "moved")} act={act} />}
 
-      {!off && !past && <DayStrip day={day} now={now} titleOf={(k) => clients.find((c) => c.clientKey === k)?.clientName ?? k} />}
-
       {!off && !past && <div className="pd-blocks">
         {halves.map((half) => (
           <Block
             key={half}
+            dataHalf={half}
             active={active === half}
             onActivate={() => setActive(half)}
             slot={slotOf(day, half)!}
@@ -198,6 +236,8 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
           />
         ))}
       </div>}
+      </div>
+      {myDay && <TimeboxMyDay day={day} picks={state.picks.filter((p) => p.date === day.date)} weekFeatures={state.weekFeatures} now={now} tz={tz} onClose={() => setMyDay(false)} />}
     </section>
     </PlanCtx.Provider>
   );
@@ -301,6 +341,7 @@ function CarryOver({ picks, date, act }: { picks: Pick[]; date: string; act: Pla
 }
 
 type BlockProps = {
+  dataHalf: Half;
   /** Shows the candidates (step 10: one block at a time). */
   active: boolean;
   onActivate: () => void;
@@ -319,7 +360,7 @@ type BlockProps = {
   act: PlanDayAct;
 };
 
-function Block({ slot, active, onActivate, overflow, picks, drafts, weekFeatures, picked, other, friday, now, tz, colors, clients, act }: BlockProps) {
+function Block({ dataHalf, slot, active, onActivate, overflow, picks, drafts, weekFeatures, picked, other, friday, now, tz, colors, clients, act }: BlockProps) {
   const focus = overflow ? null : slot.focus[0] ?? null;
   const bc = blockClient(focus?.clientKey ?? null, picks);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -335,7 +376,7 @@ function Block({ slot, active, onActivate, overflow, picks, drafts, weekFeatures
   const note = (focus?.clientKey ?? bc.clientKey) ? notes?.[(focus?.clientKey ?? bc.clientKey)!] : undefined;
 
   return (
-    <section className={`pd-block fit-${fit.kind} ${focus ? "focus" : "open"}${active ? " active" : " idle"}`} style={style} aria-label={`${slot.half} block`}>
+    <section className={`pd-block fit-${fit.kind} ${focus ? "focus" : "open"}${active ? " active" : " idle"}`} style={style} aria-label={`${slot.half} block`} data-half={dataHalf}>
       <header className="pd-block-head" onClick={active ? undefined : onActivate}>
         <div className="pd-title">
           <span className="half-tag">{halfTag(slot.half)}</span>
@@ -357,6 +398,7 @@ function Block({ slot, active, onActivate, overflow, picks, drafts, weekFeatures
           <span className={`fit ${fit.kind}`}>{fitLabel(fit)}</span>
         </div>
       </header>
+      {!slot.off && <Agenda slot={slot} now={now} tz={tz} clientName={name} />}
       {bc.mixed && <p className="pd-flag">Mixed clients in one block: {bc.clients.map(name).join(", ")}</p>}
       {fit.kind === "over" && (
         <p className="pd-flag over">
@@ -369,7 +411,6 @@ function Block({ slot, active, onActivate, overflow, picks, drafts, weekFeatures
         <ol className="pd-picks">
           {picks.map((p) => (
             <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`Actions for ${p.title}`} item={{ clientKey: p.clientKey, url: p.itemUrl }} className={p.clientKey !== bc.clientKey ? "other-client" : ""}>
-              {p.status === "planned" && <DragHandle payload={{ pickId: p.id, minutes: pv.sizes[p.size] }} label={p.title} />}
               <span className="wi-type">{p.kind === "intention" ? "Note" : typeTag(p.itemType ?? "")}</span>
               <TimeboxChip pickId={p.id} />
               <span className="pick-title" title={p.title}>
@@ -392,6 +433,7 @@ function Block({ slot, active, onActivate, overflow, picks, drafts, weekFeatures
                 ))}
               </span>
               <span className="row-actions">
+                {p.status === "planned" && !slot.off && <TimeboxButton pick={p} />}
                 <button type="button" className="mini" onClick={() => act("pick.move", { id: p.id, date: p.date, half: other })} aria-label={`Move to ${halfTag(other)}`}>
                   To {halfTag(other)}
                 </button>
@@ -468,7 +510,6 @@ function Candidates({ clientKey, half, date, drafts, weekFeatures, picked, act }
       if (c.item && isPickable(c.item) && free(c.item))
         return (
           <MenuRow key={c.feature.itemId} build={(env) => itemMenu(env, clientKey, c.item!)} label={`Actions for ${c.item.type} ${c.item.id}`} item={{ clientKey, url: c.item.url }}>
-            <DragHandle payload={{ clientKey, itemId: c.item.id, title: c.item.title, url: c.item.url, minutes: 60 }} label={c.item.title} />
             <button type="button" className="cand" onClick={() => add({ itemId: c.item!.id })} title={`${c.item.type} ${c.item.id}: ${c.item.title} (${c.item.state})`}>
               <span className="plus" aria-hidden="true">+</span>
               <span className="wi-type">{typeTag(c.item.type)}</span>
@@ -591,7 +632,10 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act, startOpe
   const [open, setOpen] = useState(startOpen);
   const [title, setTitle] = useState("");
   const [size, setSize] = useState<Size>("M");
-  const needs = children.length === 0 && drafts.length === 0;
+  // Step 13.6 (D243): an epic with no features offers a draft feature; a feature with no stories a draft story.
+  const offer = draftOffer(item);
+  const kids = offer.kind === "feature" ? [] : children;
+  const needs = kids.length === 0 && drafts.length === 0;
   const menu = useMenu((env) => itemMenu(env, clientKey, item));
   return (
     <li className="portfolio" onContextMenu={menu.onContextMenu}>
@@ -600,7 +644,7 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act, startOpe
           <span className="plus" aria-hidden="true">{open ? "▾" : "▸"}</span>
           <span className="wi-type">{typeTag(item.type)}</span>
           <span className="wi-title">{item.title}</span>
-          <span className={needs ? "needs" : "muted kids"}>{needs ? "Needs breakdown" : `${children.length + drafts.length} to pick`}</span>
+          <span className={needs ? "needs" : "muted kids"}>{needs ? (offer.kind === "feature" ? "Needs features" : "Needs breakdown") : offer.kind === "feature" ? `${drafts.length} draft feature${drafts.length === 1 ? "" : "s"}` : `${kids.length + drafts.length} to pick`}</span>
         </button>
         <OpenItem clientKey={clientKey} item={item} />
         {menu.button(`Actions for ${item.type} ${item.id}`)}
@@ -608,7 +652,7 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act, startOpe
       {extra}
       {open && (
         <ul className="kids-list">
-          {children.map((c) => (
+          {kids.map((c) => (
             <MenuRow key={c.id} build={(env) => itemMenu(env, clientKey, c)} label={`Actions for ${c.type} ${c.id}`} item={{ clientKey, url: c.url }}>
               <button type="button" className="cand" onClick={() => add({ itemId: c.id })} title={`${c.type} ${c.id}: ${c.title} (${c.state})`}>
                 <span className="plus" aria-hidden="true">+</span>
@@ -618,33 +662,45 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act, startOpe
               <OpenItem clientKey={clientKey} item={c} />
             </MenuRow>
           ))}
-          {drafts.map((d) => (
-            <li key={`d${d.id}`}>
-              <button type="button" className="cand" onClick={() => add({ draftId: d.id, size: d.size })}>
-                <span className="plus" aria-hidden="true">+</span>
-                <span className="wi-type">Draft</span>
-                <span className="wi-title">{d.title}</span>
-              </button>
-            </li>
-          ))}
+          {drafts.map((d) =>
+            d.level === "feature" ? (
+              <li key={`d${d.id}`}>
+                <span className="cand static" title="A local draft feature: add it in DevOps, then break it into stories">
+                  <span className="wi-type">Draft feature</span>
+                  <span className="wi-title">{d.title}</span>
+                  <span className="muted">add it in DevOps</span>
+                </span>
+              </li>
+            ) : (
+              <li key={`d${d.id}`}>
+                <button type="button" className="cand" onClick={() => add({ draftId: d.id, size: d.size })}>
+                  <span className="plus" aria-hidden="true">+</span>
+                  <span className="wi-type">Draft</span>
+                  <span className="wi-title">{d.title}</span>
+                </button>
+              </li>
+            ),
+          )}
           <li>
             <form
               className="draft-form"
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (!title.trim()) return;
-                if (await act("draft.add_story", { clientKey, parentItemId: item.id, title, size })) setTitle("");
+                if (await act(offer.action, offer.kind === "feature" ? { clientKey, parentItemId: item.id, title } : { clientKey, parentItemId: item.id, title, size })) setTitle("");
               }}
             >
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Draft story (local only)" aria-label={`Draft story under ${item.title}`} maxLength={200} />
-              <span className="sizes" role="group" aria-label="Draft size">
-                {SIZES.map((s) => (
-                  <button key={s} type="button" className="size" aria-pressed={size === s} onClick={() => setSize(s)}>
-                    {s}
-                  </button>
-                ))}
-              </span>
-              <button type="submit" className="mini">Add draft</button>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${offer.label} (local only)`} aria-label={`${offer.label} under ${item.title}`} maxLength={200} />
+              {offer.kind === "story" && (
+                <span className="sizes" role="group" aria-label="Draft size">
+                  {SIZES.map((s) => (
+                    <button key={s} type="button" className="size" aria-pressed={size === s} onClick={() => setSize(s)}>
+                      {s}
+                    </button>
+                  ))}
+                </span>
+              )}
+              <button type="submit" className="mini">{offer.kind === "feature" ? "Add draft feature" : "Add draft"}</button>
             </form>
           </li>
         </ul>
@@ -706,5 +762,235 @@ function BreakDown({ clientKey, date, feature, picked, add }: { clientKey: strin
       {note && <span className="muted" role="status">{note}</span>}
       {brief && <textarea ref={area} readOnly value={brief} rows={6} aria-label={`Coop brief for #${feature.itemId}`} />}
     </div>
+  );
+}
+
+// ---------- step 13.6: the block agenda, Timebox and Timebox my day ----------
+
+const isTodayIn = (date: string, now: string, tz: string) => Temporal.Instant.from(now).toZonedDateTimeISO(tz).toPlainDate().toString() === date;
+
+/**
+ * A block's agenda (D244): meetings, personal events, unavailable time and timeboxes in time order, with the free gaps
+ * between ("Free 9:00–11:00 · 2h"). A timebox row opens its details (show as, Put on Outlook, Removed in Outlook).
+ */
+function Agenda({ slot, now, tz, clientName }: { slot: Slot; now: string; tz: string; clientName: (k: string | null) => string }) {
+  const env = useTimeboxes();
+  const [open, setOpen] = useState<number | null>(null);
+  if (!env) return null;
+  const rows = agendaOf(slot, env.timeboxes, isTodayIn(slot.date, now, tz) ? now : undefined);
+  if (!rows.length) return null;
+  const sel = open !== null ? env.timeboxes.find((t) => t.id === open && !t.removedAt) ?? null : null;
+  return (
+    <div className="pd-agenda">
+      <ol aria-label={`${halfTag(slot.half)} agenda`}>
+        {rows.map((r) => {
+          const tb = r.kind === "timebox" ? env.timeboxes.find((t) => t.id === r.timeboxId) : undefined;
+          const when = spanText(r.start, r.end, tz);
+          if (r.kind === "free")
+            return (
+              <li key={`f${r.start}`} className="ag-free">
+                <span className="ag-time">{when}</span>
+                <span className="ag-title">Free · {formatDuration(r.minutes)}</span>
+              </li>
+            );
+          if (tb)
+            return (
+              <li key={`t${tb.id}`} className={`ag-timebox${tb.outlookNote ? " noted" : ""}${tb.conflict ? " conflict" : ""}`} style={{ "--c": clientColor(tb.clientKey, env.colors) } as CSSProperties}>
+                <button type="button" className="ag-open" aria-expanded={open === tb.id} onClick={() => setOpen(open === tb.id ? null : tb.id)} title="Timebox details: show as, Put on Outlook, remove">
+                  <span className="ag-time">{when}</span>
+                  <span className="ag-title">
+                    {tb.conflict ? "⚠ " : ""}
+                    {tb.title}
+                  </span>
+                  {tb.onOutlook && <span className="tb-ol" title="On Outlook">O</span>}
+                  {tb.outlookNote && <span className="tb-note">{tb.outlookNote}</span>}
+                </button>
+              </li>
+            );
+          return (
+            <li key={`e${r.eventId}${r.start}`} className={`ag-${r.kind}${r.free ? " shown-free" : ""}`}>
+              <span className="ag-time">{when}</span>
+              <span className="ag-title" title={r.title}>
+                {r.title}
+              </span>
+              {r.free && <span className="muted">shown as free</span>}
+            </li>
+          );
+        })}
+      </ol>
+      {sel && <TimeboxDetails tb={sel} env={env} clientName={clientName(sel.clientKey)} today={isTodayIn(sel.date, now, tz)} onRemoved={() => setOpen(null)} />}
+    </div>
+  );
+}
+
+/** A pick's Timebox (D245): its block's free gaps (one click places it), then Custom time. Hidden once it has one. */
+function TimeboxButton({ pick }: { pick: Pick }) {
+  const env = useTimeboxes();
+  const menu = useMenu((m) => timeboxStep(m, pick));
+  if (!env || env.timeboxes.some((t) => t.pickId === pick.id && !t.removedAt)) return null;
+  return (
+    <button type="button" className="mini" aria-haspopup="menu" onClick={menu.onContextMenu} title="Place it in a free gap of this block">
+      Timebox
+    </button>
+  );
+}
+
+/** Musts on this day's picks: the item is a must on the week list, or its parent feature is. */
+function mustPicks(picks: readonly Pick[], weekFeatures: PlanDayState["weekFeatures"], work: ReadonlyMap<string, { items: WorkItem[] }>): Set<number> {
+  const musts = new Set(weekFeatures.filter((f) => f.tier === "must").map((f) => `${f.clientKey}:${f.itemId}`));
+  const out = new Set<number>();
+  for (const p of picks) {
+    if (p.itemId === null) continue;
+    const parent = work.get(p.clientKey)?.items.find((i) => i.id === p.itemId)?.parentId ?? null;
+    if (musts.has(`${p.clientKey}:${p.itemId}`) || (parent !== null && musts.has(`${p.clientKey}:${parent}`))) out.add(p.id);
+  }
+  return out;
+}
+
+/**
+ * Timebox my day (D246): every planned pick without a timebox, musts first, then larger sizes, into its block's free
+ * gaps. Shows the resulting agenda first; each new timebox has its own Put on Outlook. Apply adds them all at once,
+ * then any Outlook events go through one combined preview.
+ */
+function TimeboxMyDay({ day, picks, weekFeatures, now, tz, onClose }: { day: Day; picks: Pick[]; weekFeatures: PlanDayState["weekFeatures"]; now: string; tz: string; onClose: () => void }) {
+  const env = useTimeboxes();
+  const pv = useContext(PlanCtx);
+  const work = useContext(DevOpsWork);
+  const back = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null);
+  const first = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    env?.loadAccess();
+    first.current?.focus();
+    return () => back.current?.focus?.();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [plan] = useState(() => {
+    const blocks: Partial<Record<Half, Slot>> = {};
+    for (const h of ["AM", "PM", "EVE"] as Half[]) {
+      const sl = slotOf(day, h);
+      if (sl && !sl.off) blocks[h] = sl;
+    }
+    return planMyDay(picks, blocks, env?.timeboxes ?? [], pv.sizes, mustPicks(picks, weekFeatures, work), isTodayIn(day.date, now, tz) ? now : undefined);
+  });
+  const [outlook, setOutlook] = useState<Record<number, boolean>>(() => Object.fromEntries(plan.placed.map((p) => [p.pickId, !!env?.settings.outlookDefault])));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!env) return null;
+  const canWrite = env.access?.access === "write";
+  const anyOutlook = plan.placed.some((p) => outlook[p.pickId]);
+  const allOutlook = plan.placed.length > 0 && plan.placed.every((p) => outlook[p.pickId]);
+  const apply = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await call<{ timeboxes: { uid: string }[]; sync: string[] }>("timebox.add_many", { date: day.date, items: plan.placed.map((p) => ({ pickId: p.pickId, start: p.start, end: p.end, outlook: !!outlook[p.pickId] })) });
+      env.changed();
+      onClose();
+      window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: `Timeboxed ${r.timeboxes.length} pick${r.timeboxes.length === 1 ? "" : "s"}` }));
+      if (r.sync.length && canWrite) await env.syncMany(r.sync);
+    } catch (e) {
+      setBusy(false);
+      setError(e instanceof Error ? e.message : "That didn't work");
+    }
+  };
+  const halvesShown = (["AM", "PM", "EVE"] as Half[]).filter((h) => plan.placed.some((p) => p.half === h) || plan.unplaced.some((u) => u.half === h));
+  return (
+    <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
+      <div
+        className="cap-dialog write-dialog myday"
+        data-overlay="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Timebox my day"
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && !busy) {
+            e.stopPropagation();
+            e.preventDefault();
+            onClose();
+          }
+        }}
+      >
+        <div className="cap-dialog-head">
+          <h2>Timebox my day</h2>
+          <span className="muted">{longDate(day.date)} · musts first, then larger picks, each in its own block</span>
+        </div>
+        {plan.placed.length === 0 && plan.unplaced.length === 0 && <p className="muted">Every planned pick already has a timebox.</p>}
+        {halvesShown.map((h) => (
+          <MyDayBlock key={h} slot={slotOf(day, h)!} placed={plan.placed.filter((p) => p.half === h)} unplaced={plan.unplaced.filter((u) => u.half === h)} outlook={outlook} setOutlook={(id, v) => setOutlook((o) => ({ ...o, [id]: v }))} now={isTodayIn(day.date, now, tz) ? now : undefined} tz={tz} colors={env.colors} />
+        ))}
+        {plan.placed.length > 1 && (
+          <label className="myday-all">
+            <input type="checkbox" checked={allOutlook} onChange={(e) => setOutlook(Object.fromEntries(plan.placed.map((p) => [p.pickId, e.target.checked])))} /> Put all on Outlook
+          </label>
+        )}
+        {anyOutlook && env.access && !canWrite && (
+          <p className="tb-explain" role="note">
+            {env.access.access === "not_set_up" ? "Outlook isn't set up, so these stay in Coopilot." : env.access.message}{" "}
+            {(env.access.access === "read_only" || env.access.access === "not_connected") && (
+              <button type="button" className="mini" onClick={env.connectWrite}>
+                Reconnect Outlook
+              </button>
+            )}
+          </p>
+        )}
+        {error && (
+          <p className="set-problem" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="wd-actions">
+          <button ref={first} type="button" className="commit" disabled={busy || plan.placed.length === 0} onClick={() => void apply()}>
+            {busy ? "Saving…" : `Timebox ${plan.placed.length} pick${plan.placed.length === 1 ? "" : "s"}`}
+          </button>
+          <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
+            Cancel
+          </button>
+          {anyOutlook && canWrite && <span className="muted">You'll see every Outlook event in one preview before anything is written.</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MyDayBlock({ slot, placed, unplaced, outlook, setOutlook, now, tz, colors }: { slot: Slot; placed: DayPlacement[]; unplaced: Unplaced[]; outlook: Record<number, boolean>; setOutlook: (id: number, v: boolean) => void; now: string | undefined; tz: string; colors: Record<string, string> }) {
+  const env = useTimeboxes()!;
+  // The resulting agenda: what is there now plus the new timeboxes (marked New).
+  const proposed = placed.map((p) => ({ id: -p.pickId, date: slot.date, start: p.start, end: p.end, title: p.title, clientKey: p.clientKey, pickId: p.pickId, removedAt: null }));
+  const rows = agendaOf(slot, [...env.timeboxes, ...proposed], now);
+  return (
+    <section className="myday-block" aria-label={`${halfTag(slot.half)} after timeboxing`}>
+      <h3>
+        <span className="half-tag">{halfTag(slot.half)}</span> {slot.focus[0]?.clientName ?? (slot.half === "EVE" ? "Evening" : "Open")}
+      </h3>
+      <ol className="pd-agenda-list">
+        {rows.map((r) => {
+          const when = spanText(r.start, r.end, tz);
+          const p = r.kind === "timebox" && r.timeboxId !== undefined && r.timeboxId < 0 ? placed.find((x) => x.pickId === -r.timeboxId!) : undefined;
+          if (p)
+            return (
+              <li key={`n${p.pickId}`} className="ag-timebox new" style={{ "--c": clientColor(p.clientKey, colors) } as CSSProperties}>
+                <span className="ag-time">{when}</span>
+                <span className="ag-title">
+                  <span className="ag-new">New</span> {p.title}
+                  {p.trimmed && <span className="muted"> · trimmed to {formatDuration(p.minutes)}</span>}
+                </span>
+                <label className="ag-ol">
+                  <input type="checkbox" checked={!!outlook[p.pickId]} onChange={(e) => setOutlook(p.pickId, e.target.checked)} aria-label={`Put ${p.title} on Outlook`} /> Outlook
+                </label>
+              </li>
+            );
+          return (
+            <li key={`${r.kind}${r.start}${r.timeboxId ?? r.eventId ?? ""}`} className={`ag-${r.kind}`}>
+              <span className="ag-time">{when}</span>
+              <span className="ag-title">{r.kind === "free" ? `Free · ${formatDuration(r.minutes)}` : r.title}</span>
+            </li>
+          );
+        })}
+      </ol>
+      {unplaced.map((u) => (
+        <p key={u.pickId} className="pd-flag">
+          {u.title}: {u.reason}. Move it, make it smaller, or use Custom time.
+        </p>
+      ))}
+    </section>
   );
 }

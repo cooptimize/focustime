@@ -1725,40 +1725,9 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 }
 .tbox-label { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 
-/* Plan the day: the day strip. */
-.tb-strip-wrap { display: grid; gap: 6px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--raised); }
-.tb-strip-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.tb-strip-head h3 { margin: 0; font-size: 14px; }
-.tb-strip-head .muted { font-size: 12px; }
-.tb-strip {
-  position: relative; height: 58px; margin-top: 16px;
-  border-radius: 8px; background: var(--surface); border: 1px solid var(--border);
-  touch-action: none; user-select: none;
-}
-.tb-strip.dragging { cursor: grabbing; }
-.tb-hour { position: absolute; top: -17px; transform: translateX(-50%); font-size: 11px; color: var(--text-faint); }
-.tb-hour::after { content: ""; position: absolute; left: 50%; top: 16px; height: 59px; border-left: 1px solid color-mix(in oklab, var(--text-faint) 22%, transparent); }
-.tb-meeting { position: absolute; bottom: 4px; height: 10px; border-radius: 3px; background: color-mix(in oklab, var(--text-faint) 45%, transparent); }
-.tb-meeting.personal { background: color-mix(in oklab, var(--personal) 55%, transparent); }
-.tb-now { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--accent); }
-.tb-box {
-  position: absolute; top: 5px; height: 32px;
-  display: flex; align-items: center;
-  border-radius: 7px; border: 1px solid var(--c);
-  background: color-mix(in oklab, var(--c) 30%, var(--surface));
-  cursor: grab; overflow: hidden; min-width: 12px;
-}
-.tb-box:focus-visible, .tb-box.selected { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 2; }
-.tb-box.out-of-step { border-style: dashed; }
-.tb-label { flex: 1; min-width: 0; padding: 0 6px; font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tb-ol { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-right: 4px; border-radius: 4px; font-size: 10px; font-weight: 700; color: var(--on-action); background: var(--accent); }
-.tb-edge { width: 7px; align-self: stretch; cursor: ew-resize; flex: none; }
-.tb-edge:hover { background: color-mix(in oklab, var(--c) 55%, transparent); }
 .tb-details { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; font-size: 13px; }
 .tb-ol-toggle { display: inline-flex; align-items: center; gap: 4px; }
 .tb-explain { color: var(--text-muted); font-size: 12.5px; }
-.tb-handle { cursor: grab; color: var(--text-faint); padding: 0 2px; font-size: 13px; user-select: none; }
-.tb-handle:hover { color: var(--text); }
 .tb-chip { font-size: 11.5px; font-weight: 600; padding: 0 6px; border-radius: 99px; border: 1px solid var(--border-strong); color: var(--text-muted); white-space: nowrap; }
 
 /* Timebox… and the write preview. */
@@ -1795,10 +1764,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 }
 .ev-list.tb-list li { border-left-color: var(--c); background: color-mix(in oklab, var(--c) 12%, transparent); border-radius: 0 4px 4px 0; }
 .ev-list.tb-list .ev-title { font-weight: 600; }
-.tb-hour.first { transform: none; }
-.tb-hour.last { transform: translateX(-100%); }
-.tb-hour.first::after { left: 0; }
-.tb-hour.last::after { left: 100%; }
 .set-write > button { justify-self: start; }
 .wd-actions .commit { background: var(--action); border-color: var(--action); color: var(--on-action); font-weight: 650; }
 .wd-actions .commit:disabled { opacity: 0.7; }
@@ -1876,3 +1841,78 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .fu-review ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }
 .pw-draft-feature { display: inline-flex; gap: 6px; align-items: center; } .pw-draft-feature input { width: 240px; }
 .set-inline { display: inline-flex; gap: 6px; align-items: center; margin-top: 6px; }
+
+/* ---------- Step 13.6: planning visibility, Plan panel and timeboxing ---------- */
+
+/* The day header's Plan button (D240) and Friday's quiet Add hours link. */
+.day-plan {
+  align-self: center;
+  margin-left: auto; padding: 1px 10px; height: 22px; border-radius: 99px; font-size: 12px; font-weight: 650;
+  border: 1px solid var(--action); background: var(--action); color: var(--on-action);
+}
+.day-plan.planned { background: transparent; color: var(--ok); border-color: color-mix(in oklab, var(--ok) 55%, var(--border)); }
+.day-plan:hover { filter: brightness(1.08); }
+.day-addhours { align-self: center; margin-left: auto; border: 0; background: none; padding: 0; font-size: 12px; color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
+.day-addhours:hover { color: var(--text); }
+.day-head .day-plan + .more-btn, .day-head .day-addhours + .more-btn { margin-left: 4px; }
+
+/* + Add work on a block (D241): on hover, always on the selected card. */
+.add-work {
+  align-self: flex-start; margin-top: 2px; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 600;
+  border: 1px dashed var(--border-strong); background: transparent; color: var(--text-muted);
+  visibility: hidden;
+}
+.half:hover .add-work, .half.selected .add-work, .add-work:focus-visible { visibility: visible; }
+.add-work:hover { color: var(--text); border-color: var(--c, var(--accent)); }
+@media (hover: none) { .add-work { visibility: visible; } }
+.week-fus .fu-more { font-size: 12px; }
+.week-fus .fu-more .link-btn { color: var(--text-muted); }
+.rail.catchup { padding-top: 4px; }
+
+/* The Plan panel (D242): fixed height in the window, header and block headers pinned, only the lists scroll. */
+.grid.planning { overflow: hidden; }
+.grid.planning .pd-cell { contain: size; }
+.grid.narrow.planning .pd-cell { flex: 1 1 0; }
+.planday { overflow: hidden; }
+.pd-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 10px;
+  margin: 0 -16px -14px; padding: 0 16px 14px; outline: none;
+  scroll-padding-top: 8px;
+}
+.pd-block-head {
+  position: sticky; top: 0; z-index: 2;
+  margin: -10px -12px 0; padding: 10px 12px 6px; border-radius: 12px 12px 0 0;
+  background: color-mix(in oklab, var(--c) 4%, var(--surface));
+}
+
+/* A block's agenda (D244): meetings, personal events, timeboxes and free gaps, in time order. */
+.pd-agenda ol, .pd-agenda-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 12.5px; }
+.pd-agenda li, .pd-agenda-list li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 2px 6px; border-radius: 6px; border-left: 3px solid transparent; }
+.ag-time { flex: none; min-width: 84px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.ag-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-meeting { border-left-color: color-mix(in oklab, var(--text-faint) 60%, transparent) !important; background: color-mix(in oklab, var(--text-faint) 8%, transparent); }
+.ag-personal { border-left-color: var(--personal) !important; background: color-mix(in oklab, var(--personal) 9%, transparent); }
+.ag-unavailable { border-left-color: var(--text-faint) !important; color: var(--text-muted); }
+.shown-free { opacity: 0.75; }
+.ag-free { color: var(--ok); border-left: 3px dashed color-mix(in oklab, var(--ok) 50%, transparent) !important; }
+.ag-free .ag-title { font-weight: 600; }
+.ag-timebox { border-left-color: var(--c) !important; background: color-mix(in oklab, var(--c) 16%, var(--surface)); }
+.ag-timebox .ag-title { font-weight: 600; color: var(--text); }
+.ag-timebox.noted, .ag-timebox.conflict { outline: 1px dashed var(--watch); }
+.ag-open { display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; border: 0; padding: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pd-agenda .tb-details { margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: var(--raised); }
+.ag-new { display: inline-block; margin-right: 4px; padding: 0 6px; border-radius: 99px; font-size: 10.5px; font-weight: 700; color: var(--on-action); background: var(--action); }
+.ag-ol { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-muted); flex: none; }
+
+/* Timebox my day and the combined Outlook preview (D246, D247). */
+.myday { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; }
+.myday-block { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border); }
+.myday-block h3 { margin: 0; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.myday-all { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.write-dialog.batch { max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; }
+.wd-batch { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.wd-batch > li { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+.wd-batch > li.ok { border-color: color-mix(in oklab, var(--ok) 50%, var(--border)); }
+.wd-batch > li.bad { border-color: color-mix(in oklab, var(--risk) 55%, var(--border)); }
+.wd-batch-head { margin: 0 0 4px; font-size: 13.5px; }

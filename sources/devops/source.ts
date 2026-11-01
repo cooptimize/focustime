@@ -160,7 +160,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
       });
       values.push(...(page.value ?? []));
     }
-    const { items, skipped } = normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, me: ctx.me });
+    const { items, skipped } = normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, tiers: meta.tiers, me: ctx.me });
     if (skipped) log("normalize", { kind: "skipped", count: skipped });
     return items;
   }
@@ -169,7 +169,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
   async function fetchWatched(ctx: Ctx, project: string, meta: Metadata, ids: number[]): Promise<WorkItem[]> {
     if (!ids.length) return [];
     const page = await call<{ value?: unknown[] }>(ctx, "workitemsbatch", `${encodeURIComponent(project)}/_apis/wit/workitemsbatch`, { ids: ids.slice(0, BATCH_MAX), fields: batchFields(meta.orderField), errorPolicy: "omit" });
-    return normalizeWorkItems(page.value ?? [], { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, keepDone: true, me: ctx.me }).items.filter((i) => ids.includes(i.id));
+    return normalizeWorkItems(page.value ?? [], { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, tiers: meta.tiers, keepDone: true, me: ctx.me }).items.filter((i) => ids.includes(i.id));
   }
 
   function contextOf(ref: ClientRef, target: DevOpsTarget): { ctx: Ctx; project: string } {

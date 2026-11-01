@@ -161,13 +161,22 @@ describe("view range", () => {
   });
 });
 
-describe("moving a pick to a day with no working hours (step 13.5)", () => {
-  it("asks on a day with no hours, by its weekday name; never on a day with hours", () => {
-    expect(noHoursPrompt(model(), "2026-11-06")).toBe("Friday has no working hours. Add hours for that day?");
+describe("moving a pick to a day with no working hours (step 13.5, Friday since 13.6)", () => {
+  it("asks on a weekend day with no hours, by its weekday name; never on a day with hours", () => {
+    expect(noHoursPrompt(model(), "2026-11-07")).toBe("Saturday has no working hours. Add hours for that day?");
+    expect(noHoursPrompt(model(), "2026-11-08")).toBe("Sunday has no working hours. Add hours for that day?");
     expect(noHoursPrompt(model(), "2026-11-05")).toBeNull();
     // A one-day override with hours counts.
-    expect(noHoursPrompt(model({ overrides: [{ date: "2026-11-06", segments: [{ start: "09:00", end: "12:00" }] }] }), "2026-11-06")).toBeNull();
-    // Further than a week out, the date says which Friday.
-    expect(noHoursPrompt(model(), "2026-11-20", "2026-11-02")).toBe("Friday, Nov 20 has no working hours. Add hours for that day?");
+    expect(noHoursPrompt(model({ overrides: [{ date: "2026-11-07", segments: [{ start: "09:00", end: "12:00" }] }] }), "2026-11-07")).toBeNull();
+    // Further than a week out, the date says which day.
+    expect(noHoursPrompt(model(), "2026-11-21", "2026-11-02")).toBe("Saturday, Nov 21 has no working hours. Add hours for that day?");
+  });
+  it("never asks for Friday, the overflow day (Q78, D238), with or without hours", () => {
+    expect(noHoursPrompt(model(), "2026-11-06")).toBeNull();
+    expect(noHoursPrompt(model(), "2026-11-20", "2026-11-02")).toBeNull();
+  });
+  it("asks for any other weekday without hours (a Wednesday made a day off)", () => {
+    const off = model({ overrides: [{ date: "2026-11-04", segments: [] }] });
+    expect(noHoursPrompt(off, "2026-11-04")).toBe("Wednesday has no working hours. Add hours for that day?");
   });
 });

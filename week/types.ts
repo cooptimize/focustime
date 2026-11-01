@@ -209,6 +209,8 @@ export type WorkItem = {
   stateCategory: string;
   /** From the project's backlog categories: story (requirement, task, bug) can be picked, portfolio can't, other is on no backlog. */
   level: "story" | "portfolio" | "other";
+  /** Step 13.6 (D243): a portfolio item's tier from the backlog levels ("feature" is the lowest). Missing on stories and older caches. */
+  tier?: "feature" | "epic";
   /** Board order from the project's process (StackRank or BacklogPriority); null when unset. */
   order: number | null;
   parentId: number | null;

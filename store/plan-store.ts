@@ -1227,6 +1227,10 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         .run(uid, t.date, t.clientKey, t.pickId ?? null, t.itemId ?? null, t.title, t.url ?? null, t.start, t.end, t.outlook ? 1 : 0, t.showAs ?? "busy", at, at);
       return this.timebox(Number(r.lastInsertRowid))!;
     },
+    /** Step 13.6 (D246): several timeboxes in one transaction (Timebox my day); none if one fails. */
+    addTimeboxes(list: readonly NewTimebox[]): Timebox[] {
+      return tx(() => list.map((t) => this.addTimebox(t)));
+    },
     /** Move, resize, retitle, show as, toggle Outlook, put back (removedAt null), or a sync note and conflict (step 13). */
     updateTimebox(id: number, patch: { start?: string; end?: string; date?: IsoDate; title?: string; showAs?: Timebox["showAs"]; outlook?: boolean; removedAt?: string | null; outlookNote?: string | null; conflict?: Timebox["conflict"]; pickId?: number | null }): Timebox {
       const t = this.timebox(id);

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { backlogLevels, levelOf } from "../sources/devops/normalize.ts";
 import type { WorkItem } from "../week/types.ts";
-import { blockClient, capacityMinutes, carryOver, committedFirst, weekFirst, fitOf, pickableChildren, plannedMinutes, sessionEnd, unpickableReason } from "./rules.ts";
+import { blockClient, capacityMinutes, carryOver, committedFirst, draftOffer, weekFirst, fitOf, pickableChildren, plannedMinutes, sessionEnd, unpickableReason } from "./rules.ts";
 import type { Pick } from "./types.ts";
 
 const gap = (start: string, end: string) => ({ start: `2026-11-02T${start}:00-05:00`, end: `2026-11-02T${end}:00-05:00`, minutes: 0 });
@@ -223,3 +223,13 @@ describe("carry-over waits for an evening or weekend session (Q45)", () => {
   });
 });
 
+
+describe("what a portfolio item with nothing to pick offers (step 13.6, D243)", () => {
+  it("an epic offers a draft feature, a feature a draft story", () => {
+    expect(draftOffer({ level: "portfolio", tier: "epic" })).toEqual({ kind: "feature", action: "draft.add_feature", label: "Draft feature" });
+    expect(draftOffer({ level: "portfolio", tier: "feature" })).toEqual({ kind: "story", action: "draft.add_story", label: "Draft story" });
+  });
+  it("an item cached before tiers counts as a feature", () => {
+    expect(draftOffer({ level: "portfolio" })).toMatchObject({ kind: "story" });
+  });
+});

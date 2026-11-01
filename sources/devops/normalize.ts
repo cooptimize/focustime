@@ -200,6 +200,8 @@ export type NormalizeContext = {
   orderField: string | null;
   categories: StateCategories;
   levels?: BacklogLevels;
+  /** Step 13.6 (D243): portfolio tiers (portfolioTiers), so a portfolio item says whether it is a feature or an epic. */
+  tiers?: { feature: ReadonlySet<string>; epic: ReadonlySet<string> };
   /** Keep completed and removed items (items read by id for a follow-up, step 7). */
   keepDone?: boolean;
   /** My DevOps identity (email) for this client, to tell my own changes (Q42). */
@@ -253,6 +255,7 @@ export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { 
       state,
       stateCategory: category,
       level: levelOf(type, ctx.levels ?? NO_LEVELS),
+      ...(ctx.tiers && levelOf(type, ctx.levels ?? NO_LEVELS) === "portfolio" && (ctx.tiers.feature.has(type) || ctx.tiers.epic.has(type)) ? { tier: ctx.tiers.feature.has(type) ? ("feature" as const) : ("epic" as const) } : {}),
       order: typeof rawOrder === "number" && Number.isFinite(rawOrder) ? rawOrder : null,
       parentId: typeof parent === "number" && Number.isInteger(parent) ? parent : null,
       changedAt: typeof f["System.ChangedDate"] === "string" ? (f["System.ChangedDate"] as string) : "",
