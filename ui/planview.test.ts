@@ -74,17 +74,20 @@ describe("resume notes on the week (step 7)", () => {
   });
 });
 
-describe("committed features on a block (step 8)", () => {
-  const f = (over: Partial<{ clientKey: string; itemId: number; title: string; blocks: number; slots: { date: string; half: "AM" | "PM" }[] }>) => ({ clientKey: "W&C", itemId: 1, title: "Export", blocks: 2, slots: [], ...over });
-  it("shows features placed on this block, then the client's features not fully placed", () => {
-    const placed = f({ itemId: 1, title: "Placed here", slots: [{ date: "2026-11-09", half: "PM" }] });
-    const floating = f({ itemId: 2, title: "Anywhere", blocks: 2, slots: [{ date: "2026-11-10", half: "AM" }] });
-    const elsewhere = f({ itemId: 3, title: "Placed elsewhere", blocks: 1, slots: [{ date: "2026-11-10", half: "AM" }] });
+describe("week items on a block (step 11)", () => {
+  type F = { clientKey: string; itemId: number; title: string; blocks: number; slots: { date: string; half: "AM" | "PM" }[]; tier?: "must" | "nice"; doneAt?: string | null };
+  const f = (over: Partial<F>): F => ({ clientKey: "W&C", itemId: 1, title: "Export", blocks: 2, slots: [], ...over });
+  it("shows what is pinned to this block, then the client's unpinned musts that aren't done", () => {
+    const placed = f({ itemId: 1, title: "Pinned here", slots: [{ date: "2026-11-09", half: "PM" }] });
+    const floating = f({ itemId: 2, title: "Unpinned must" });
+    const elsewhere = f({ itemId: 3, title: "Pinned elsewhere", slots: [{ date: "2026-11-10", half: "AM" }] });
+    const nice = f({ itemId: 5, title: "Nice", tier: "nice" });
+    const done = f({ itemId: 6, title: "Done", doneAt: "x" });
     const other = f({ clientKey: "CSC", itemId: 4, title: "CSC's" });
-    const all = [elsewhere, floating, placed, other];
-    expect(featuresOn(all, "2026-11-09", "PM", "W&C").map((x) => x.title)).toEqual(["Placed here", "Anywhere"]);
-    // An Open half-day shows only what is placed on it.
-    expect(featuresOn(all, "2026-11-09", "PM", null).map((x) => x.title)).toEqual(["Placed here"]);
+    const all = [elsewhere, floating, placed, nice, done, other];
+    expect(featuresOn(all, "2026-11-09", "PM", "W&C").map((x) => x.title)).toEqual(["Pinned here", "Unpinned must"]);
+    // An Open half-day shows only what is pinned to it.
+    expect(featuresOn(all, "2026-11-09", "PM", null).map((x) => x.title)).toEqual(["Pinned here"]);
     expect(featuresOn(all, "2026-11-11", "AM", "CSC").map((x) => x.title)).toEqual(["CSC's"]);
   });
 });

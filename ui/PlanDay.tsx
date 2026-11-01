@@ -2,7 +2,8 @@
 // picks come from that client's DevOps items in board order (story level only) or a typed intention, and one
 // key commits. Everything here is local: the actions only write Coopilot's plan store.
 import { useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
-import { blockClient, capacityMinutes, committedFirst, fitOf, isPickable, pickableChildren, plannedMinutes } from "../plan/rules.ts";
+import { blockClient, capacityMinutes, fitOf, isPickable, pickableChildren, plannedMinutes, weekFirst } from "../plan/rules.ts";
+import { pinLabel, weekList } from "../plan/weeklist.ts";
 import { dayLabel } from "../plan/days.ts";
 import { SIZES, type DraftStory, type PlanDayState, type Pick, type Size } from "../plan/types.ts";
 import type { Day, Half, Slot, WorkItem } from "../week/types.ts";
@@ -401,31 +402,64 @@ function Candidates({ clientKey, half, date, drafts, weekFeatures, picked, act }
   const free = (i: WorkItem) => !picked.has(`i${clientKey}:${i.id}`);
   const draftsUnder = (id: number) => drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === id && !picked.has(`d${d.id}`));
   const add = (input: Record<string, unknown>) => act("pick.add", { date, half, clientKey, ...input });
-  // Step 8: features committed to this week come first in the client's blocks (placed here before the rest).
-  const first = half === "EVE" ? { committed: [], rest: work?.items ?? [] } : committedFirst(work, weekFeatures, clientKey, date, half);
-  const committedList = first.committed.length > 0 && (
-    <div className="candidates committed-first">
-      <h4>Committed this week</h4>
-      <ul>
-        {first.committed.map((c) =>
-          c.item ? (
-            <Portfolio key={c.feature.itemId} item={c.item} clientKey={clientKey} kids={c.kids.filter(free)} drafts={draftsUnder(c.feature.itemId)} add={add} act={act} startOpen={c.placedHere || first.committed.length === 1}
-              extra={!c.kids.length && !draftsUnder(c.feature.itemId).length ? <BreakDown clientKey={clientKey} date={date} feature={c.feature} picked={picked} add={add} /> : null} />
-          ) : (
-            <li key={c.feature.itemId} className="portfolio">
-              <div className="portfolio-row">
-                <span className="cand parent static">
-                  <span className="wi-type">Feature</span>
-                  <span className="wi-title">{c.feature.title}</span>
-                  <span className="needs">{work ? "Needs breakdown" : "DevOps not loaded"}</span>
-                </span>
-              </div>
-              <BreakDown clientKey={clientKey} date={date} feature={c.feature} picked={picked} add={add} />
-            </li>
-          ),
-        )}
-      </ul>
-    </div>
+  // Step 11: the client's week list first: unfinished musts, then nice to haves (pinned to today first), then the
+  // rest in board order. A must feature with no stories offers "Break down #id" with the Coop brief.
+  const listed = weekList(weekFeatures, work ? [work] : null).items.map((f) => ({ ...f, done: !!f.done }));
+  const first = half === "EVE" ? { musts: [], nice: [], rest: work?.items ?? [] } : weekFirst(work, listed, clientKey, date, half);
+  const entry = (c: (typeof first.musts)[number]) => {
+    const pin = c.pinnedToday ? <span className="muted pd-pin">{c.feature.slots.filter((s) => s.date === date).map(pinLabel).join(", ")}</span> : null;
+    if (c.level === "story") {
+      if (c.item && isPickable(c.item) && free(c.item))
+        return (
+          <MenuRow key={c.feature.itemId} build={(env) => itemMenu(env, clientKey, c.item!)} label={`Actions for ${c.item.type} ${c.item.id}`} item={{ clientKey, url: c.item.url }}>
+            <button type="button" className="cand" onClick={() => add({ itemId: c.item!.id })} title={`${c.item.type} ${c.item.id}: ${c.item.title} (${c.item.state})`}>
+              <span className="plus" aria-hidden="true">+</span>
+              <span className="wi-type">{typeTag(c.item.type)}</span>
+              <span className="wi-title">{c.item.title}</span>
+              {pin}
+            </button>
+            <OpenItem clientKey={clientKey} item={c.item} />
+          </MenuRow>
+        );
+      return (
+        <li key={c.feature.itemId}>
+          <span className="cand static">
+            <span className="wi-type">Story</span>
+            <span className="wi-title">{c.feature.title}</span>
+            <span className="muted">{!work ? "DevOps not loaded" : c.item ? "picked" : "not open in DevOps"}</span>
+          </span>
+        </li>
+      );
+    }
+    const breakDown = c.tier === "must" ? <BreakDown clientKey={clientKey} date={date} feature={c.feature} picked={picked} add={add} /> : null;
+    return c.item ? (
+      <Portfolio key={c.feature.itemId} item={c.item} clientKey={clientKey} kids={c.kids.filter(free)} drafts={draftsUnder(c.feature.itemId)} add={add} act={act} startOpen={c.placedHere || first.musts.length + first.nice.length === 1}
+        extra={<>{pin}{!c.kids.length && !draftsUnder(c.feature.itemId).length ? breakDown : null}</>} />
+    ) : (
+      <li key={c.feature.itemId} className="portfolio">
+        <div className="portfolio-row">
+          <span className="cand parent static">
+            <span className="wi-type">Feature</span>
+            <span className="wi-title">{c.feature.title}</span>
+            <span className="needs">{work ? "Needs breakdown" : "DevOps not loaded"}</span>
+          </span>
+        </div>
+        {breakDown}
+      </li>
+    );
+  };
+  const group = (title: string, list: typeof first.musts) =>
+    list.length > 0 && (
+      <div className="candidates committed-first">
+        <h4>{title}</h4>
+        <ul>{list.map(entry)}</ul>
+      </div>
+    );
+  const committedList = (first.musts.length > 0 || first.nice.length > 0) && (
+    <>
+      {group("Musts this week", first.musts)}
+      {group("Nice to have", first.nice)}
+    </>
   );
   // Step 9: draft stories captured for this client without a feature yet.
   const loose = drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === null && !picked.has(`d${d.id}`));
@@ -455,7 +489,7 @@ function Candidates({ clientKey, half, date, drafts, weekFeatures, picked, act }
     {looseList}
     <div className="candidates">
       <h4>
-        {work.clientName} in board order
+        {first.musts.length + first.nice.length ? `The rest of ${work.clientName}, in board order` : `${work.clientName} in board order`}
         {work.status !== "ok" && <span className="muted"> · {workStatusLabel(work)}</span>}
       </h4>
       {rows.length === 0 && <p className="muted pd-note">Nothing left to pick for {work.clientName}. Type an intention instead.</p>}

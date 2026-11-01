@@ -43,15 +43,15 @@ export function resumeSlots(days: readonly { date: IsoDate; am: Slot; pm: Slot }
   }
   return out;
 }
-type FeatureOnWeek = { clientKey: string; itemId: number; title: string; blocks: number; slots: readonly { date: IsoDate; half: "AM" | "PM" }[] };
+type FeatureOnWeek = { clientKey: string; itemId: number; title: string; blocks: number; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; tier?: "must" | "nice"; doneAt?: string | null };
 
 /**
- * Committed features to show on a block (step 8): those placed on it, then (on a client's own block) that client's
- * features with blocks not yet placed. An Open half-day (no client) shows only what is placed on it.
+ * Week items to show on a block (step 11): those pinned to it, then (on a client's own block) that client's musts not
+ * pinned anywhere and not marked done. An Open half-day (no client) shows only what is pinned to it.
  */
 export function featuresOn<T extends FeatureOnWeek>(features: readonly T[], date: IsoDate, half: Half, clientKey: string | null): T[] {
   const here = features.filter((f) => f.slots.some((s) => s.date === date && s.half === half));
-  const floating = clientKey ? features.filter((f) => f.clientKey === clientKey && !here.includes(f) && f.slots.length < f.blocks) : [];
+  const floating = clientKey ? features.filter((f) => f.clientKey === clientKey && !here.includes(f) && !f.slots.length && (f.tier ?? "must") === "must" && !f.doneAt) : [];
   return [...here, ...floating];
 }
 

@@ -65,7 +65,7 @@ export type PlanDayState = {
   /** The latest resume note per client on or before this date (step 7). */
   resumeNotes: Record<string, { clientKey: string; date: IsoDate; note: string }>;
   /** Features committed to this date's week (step 8): their stories are offered first in their client's blocks. */
-  weekFeatures: { clientKey: string; itemId: number; title: string; url: string | null; slots: { date: IsoDate; half: "AM" | "PM" }[] }[];
+  weekFeatures: { clientKey: string; itemId: number; title: string; url: string | null; slots: WeekFeature["slots"]; level: WeekFeature["level"]; tier: WeekFeature["tier"]; blocks: number; position: number | null; doneAt: ZonedStamp | null }[];
 };
 
 /** Committed plans for the days of a week, for the checklist on the week view. */
@@ -85,12 +85,19 @@ export type WeekFeature = {
   title: string;
   itemType: string | null;
   url: string | null;
+  /** Step 11: a feature or a story on the client's week list, a must or a nice to have. */
+  level: "feature" | "story";
+  tier: "must" | "nice";
+  /** The client's week share it needs, in blocks (half steps). */
   blocks: number;
-  /** Specific blocks (morning or afternoon) it is placed on, in date order. At most `blocks`. */
+  /** Pins: specific blocks (morning or afternoon) it is tied to, in date order. Optional. */
   slots: { date: IsoDate; half: "AM" | "PM" }[];
+  /** A local done mark (DevOps state and done picks count too; see plan/weeklist.ts). */
+  doneAt: ZonedStamp | null;
   /** Q51: "devops" when the title is DevOps's current one, "saved" when it is the one stored at commit. Read models only. */
   titleSource?: "devops" | "saved";
-  position: number;
+  /** Local order within the client's tier; null follows DevOps stack rank. */
+  position: number | null;
   createdAt: ZonedStamp;
   updatedAt: ZonedStamp;
 };

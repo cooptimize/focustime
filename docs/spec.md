@@ -419,3 +419,18 @@ Purpose: in about two minutes, turn today's real capacity into a short, committe
 - **Global capture key (D192):** Super + Alt + N.
 - **Contract change:** optional `[focus]` table; `week.load` and `settings.load` return `focus` (and `week.load` returns `media`); `timer.start` takes `playlist`; new actions `media.status` and `playlist.open`; settings section `focus`. No store migration. Still no writes to any external system.
 - **Rollback:** revert the step 10 commits, rebuild and restart the service; remove `[focus]` from config.toml if it was saved; remove the Super + Alt + N lines from bindings.lua or restore `bindings.lua.bak-step10`.
+
+## 27. Step 11: Plan the week by client, flexible musts, DevOps first (authorized Nov 1)
+
+Principles: **DevOps first** (if it isn't in DevOps, it isn't planned yet; the healthy path is the easy path, without policing; re-planning never feels like failure) and **nothing machine-specific in core modules** (D194).
+
+- **Week list per client (D195, D196):** each followed client (Cooptimize included) has a week list of DevOps features and stories, in stack rank order, split into Must and Nice to have. Local reorder only, with "Back to DevOps order". Fit counts musts against the client's free blocks: Fits, Tight, Too much (D199).
+- **Pins (D198):** optional, for dependencies. The block grid stays on top and shows pins and each client's musts left.
+- **Flexible (D197):** move, swap, demote or take off in one click, no reason. Dropping a must the week was committed with offers a heads-up loop and nothing else. Progress is against the current list.
+- **Check-in:** "Anything shifted?" lists each client's open musts and nice to haves with one-click swaps and the on-track question.
+- **Plan the day (D202):** musts first, then nice to haves, then the rest; pinned items first on their day; "Break down #id" for a must with no stories.
+- **Tracking (D200, D201):** "CSC: 2 of 4 musts done" from DevOps state, local done marks and done picks, in Today, the Week strip, Plan the day and Plan the week; midweek "Still realistic?" question.
+- **DevOps health (D203):** top of Plan the week, folded to a count, one action each.
+- **Contract change:** store migration 8 (backup first); `WeekFeature` gains `level`, `tier`, `position` (nullable) and `doneAt`, and `blocks` may be a half; new actions (D204); `weekplan.place` pins without raising blocks; `draft.add_story` takes `parentItemId: null`; `week.load` reads list items by id; Plan the day's `weekFeatures` carry the list fields. Still no writes to any external system.
+- **Rollback:** stop the service, restore `plan.db.bak-v7-<stamp>` over `plan.db` (and remove `plan.db-wal`, `plan.db-shm`), check out the commit before step 11, rebuild and start the service.
+

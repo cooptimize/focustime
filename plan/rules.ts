@@ -96,25 +96,44 @@ export function pickableChildren(parentId: number, children: readonly WorkItem[]
   return [...direct, ...below].filter(isPickable);
 }
 
-type CommittedRef = { clientKey: string; itemId: number; title: string; url: string | null; slots: readonly { date: IsoDate; half: "AM" | "PM" }[] };
+type CommittedRef = {
+  clientKey: string;
+  itemId: number;
+  title: string;
+  url: string | null;
+  slots: readonly { date: IsoDate; half: "AM" | "PM" }[];
+  /** Step 11: must or nice to have (missing: must), feature or story (missing: feature), done this week. */
+  tier?: "must" | "nice";
+  level?: "feature" | "story";
+  done?: boolean;
+};
 type WorkLike = { items: readonly WorkItem[]; children: readonly WorkItem[]; committed?: readonly WorkItem[] };
 
+export type WeekEntry<R extends CommittedRef = CommittedRef> = { feature: R; tier: "must" | "nice"; level: "feature" | "story"; placedHere: boolean; pinnedToday: boolean; item: WorkItem | null; kids: WorkItem[] };
+
 /**
- * Plan the day (step 8): a client's features committed to the week come first in its blocks, those placed on this
- * block before the rest, each with its pickable stories (anyone's open stories under it). `item` is null when DevOps
- * can't show it right now. `rest` is the remaining board, without those features and their stories.
+ * Plan the day draws from the week (step 11): in a client's block, its unfinished musts first, then nice-to-haves,
+ * then the rest of the board. Within each, items pinned to this half-day, then to this day, then the week list's
+ * order (the caller passes it ordered). A feature opens into its pickable stories (anyone's open stories under it); a
+ * story is picked directly. `item` is null when DevOps can't show it right now. `rest` is the board without them.
  */
-export function committedFirst(work: WorkLike | undefined, features: readonly CommittedRef[], clientKey: string, date: IsoDate, half: Half) {
-  const here = (f: CommittedRef) => f.slots.some((s) => s.date === date && s.half === half);
-  const mine = features.filter((f) => f.clientKey === clientKey).sort((a, b) => Number(here(b)) - Number(here(a)));
-  const ids = new Set(mine.map((f) => f.itemId));
+export function weekFirst<R extends CommittedRef>(work: WorkLike | undefined, refs: readonly R[], clientKey: string, date: IsoDate, half: Half) {
+  const pin = (r: R) => (r.slots.some((s) => s.date === date && s.half === half) ? 0 : r.slots.some((s) => s.date === date) ? 1 : 2);
+  const mine = refs.filter((r) => r.clientKey === clientKey && !r.done).map((r, n) => ({ r, n })).sort((a, b) => pin(a.r) - pin(b.r) || a.n - b.n).map((x) => x.r);
   // My own items under a feature are in the board list, not its children list: look in both (board order first).
-  const pool = work ? [...work.items, ...work.children.filter((c) => !work.items.some((i) => i.id === c.id))] : [];
-  const committed = mine.map((f) => {
-    const item = work?.items.find((i) => i.id === f.itemId) ?? work?.committed?.find((i) => i.id === f.itemId) ?? null;
-    return { feature: f, placedHere: here(f), item, kids: work ? pickableChildren(f.itemId, pool) : [] };
+  const pool = work ? [...work.items, ...work.children.filter((c) => !work.items.some((i) => i.id === c.id)), ...(work.committed ?? [])] : [];
+  const entries = mine.map((r): WeekEntry<R> => {
+    const level = r.level ?? "feature";
+    const item = pool.find((i) => i.id === r.itemId) ?? null;
+    return { feature: r, tier: r.tier ?? "must", level, placedHere: pin(r) === 0, pinnedToday: pin(r) <= 1, item, kids: work && level === "feature" ? pickableChildren(r.itemId, pool) : [] };
   });
-  const under = new Set(committed.flatMap((c) => c.kids.map((k) => k.id)));
-  const rest = (work?.items ?? []).filter((i) => !ids.has(i.id) && !under.has(i.id));
-  return { committed, rest };
+  const listed = new Set(refs.filter((r) => r.clientKey === clientKey).map((r) => r.itemId));
+  const under = new Set(entries.flatMap((e) => e.kids.map((k) => k.id)));
+  const rest = (work?.items ?? []).filter((i) => !listed.has(i.id) && !under.has(i.id));
+  const musts = entries.filter((e) => e.tier === "must");
+  const nice = entries.filter((e) => e.tier === "nice");
+  return { musts, nice, committed: [...musts, ...nice], rest };
 }
+
+/** Step 8's name for it: features committed to the week first (now musts, then nice-to-haves). */
+export const committedFirst = weekFirst;

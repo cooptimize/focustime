@@ -256,10 +256,15 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       planClients = picked.planClients;
       // Items an open loop is about are read by id too, so a completed one can close its loop (step 7).
       const watch = ctx.plan ? watchedIds(ctx.plan.openLoops()) : {};
-      // Features committed to this week, today's week and next (step 8), so Plan the day can offer their stories.
+      // Features on the week lists of this week, today's week and next (step 8), so Plan the day can offer their
+      // stories. Every list item (features and stories) is also read by id, done ones included, so progress can count
+      // what DevOps shows as Completed (step 11).
       const features: Record<string, number[]> = {};
       if (ctx.plan)
-        for (const f of ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate))) (features[f.clientKey] ??= []).includes(f.itemId) || features[f.clientKey]!.push(f.itemId);
+        for (const f of ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate))) {
+          if (f.level === "feature") (features[f.clientKey] ??= []).includes(f.itemId) || features[f.clientKey]!.push(f.itemId);
+          (watch[f.clientKey] ??= []).includes(f.itemId) || watch[f.clientKey]!.push(f.itemId);
+        }
       devopsP = ctx.makeDevOps(dv, tz).load(picked.fetch, { ...refresh, watch, features }).catch(() => null);
     }
   }
@@ -491,6 +496,13 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "weekplan.set_feature":
     case "weekplan.place":
     case "weekplan.commit":
+    case "weekplan.add":
+    case "weekplan.set_tier":
+    case "weekplan.set_blocks":
+    case "weekplan.reorder":
+    case "weekplan.remove":
+    case "weekplan.mark_done":
+    case "weekplan.headsup":
     case "feature.brief":
     case "feature.mark_breakdown":
     case "loop.ask_priorities":

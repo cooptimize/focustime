@@ -152,7 +152,7 @@ async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = tru
   const resumeNotes = Object.fromEntries(Object.entries(plan.latestNotes(d)).map(([k, n]) => [k, { clientKey: n.clientKey, date: n.date, note: n.note }]));
   // Committed features of this date's week (step 8).
   const monday = Temporal.PlainDate.from(d).subtract({ days: Temporal.PlainDate.from(d).dayOfWeek - 1 }).toString();
-  const weekFeatures = plan.weekPlan(monday).features.map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, url: f.url, slots: f.slots }));
+  const weekFeatures = plan.weekPlan(monday).features.map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, url: f.url, slots: f.slots, level: f.level, tier: f.tier, blocks: f.blocks, position: f.position, doneAt: f.doneAt }));
   return { date: d, plan: day, picks, carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: plan.drafts(), opened, focused, resumeNotes, weekFeatures };
 }
 
@@ -252,11 +252,13 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
       case "draft.add_story": {
         const o = fields(input, ["clientKey", "parentItemId", "title"], ["size"]);
         const key = clientKey(o.clientKey);
-        const parentItemId = id(o.parentItemId, "parentItemId");
+        // Step 11: a draft can have no feature yet (an intention made a draft: "nudge to make them drafts").
+        const parentItemId = o.parentItemId === null ? null : id(o.parentItemId, "parentItemId");
         const title = text(o.title, "title");
         const sz = size(o.size);
         const cfg = await ctx.config();
         if (!cfg) return bad("Fix the config first", 409);
+        if (parentItemId === null) return { ok: true, data: { draft: plan.addDraft({ clientKey: key, parentItemId: null, title, size: sz }) } };
         const parent = ctx.devops(cfg).lookup(key, parentItemId);
         if (!parent) return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${key}. Refresh and try again`, 409);
         if (parent.level !== "portfolio") return bad("Draft stories go under an epic or feature; this item can be picked directly", 422);

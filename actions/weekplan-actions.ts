@@ -1,17 +1,34 @@
-// Plan the week (step 8): commit features per client to a week, by a number of my blocks or by placing them on
-// specific blocks; the Coop brief; "being broken down" marks; the "ask about priorities" loop. Local only: the week
-// plan lives in the plan store. DevOps is only read (features through the portfolio read, one description on demand).
+// Plan the week (step 8, by client since step 11): each client's week list of DevOps features and stories, Must or
+// Nice to have, in stack rank order unless reordered here, optionally pinned to blocks; the Coop brief; "being broken
+// down" marks; the "ask about priorities" loop; a heads-up loop when a committed must is dropped. Local only: the week
+// plan lives in the plan store and nothing is written back to DevOps (features through the portfolio read, stories
+// from the work read, one description on demand).
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { briefMarkdown, prioritiesKey, withCurrentTitles } from "../plan/weekplan.ts";
+import { headsUpKey, offersHeadsUp, validBlocks, weekHeadsUpDraft, type ItemLevel, type Tier } from "../plan/weeklist.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { PlanError, type PlanStore, type WeekFeature, type WeekPlanRecord } from "../store/plan-store.ts";
 import { mondayOf } from "../week/dates.ts";
 import type { ClientPortfolio, ClientWork, IsoDate, PortfolioItem, Week } from "../week/types.ts";
-import { loopView, nameOf } from "./loop-rules.ts";
+import { internalClients, loopView, nameOf } from "./loop-rules.ts";
 import type { ActionResponse, WeekPlanState, WeekPlanView } from "./types.ts";
 
-export type WeekPlanAction = "weekplan.load" | "weekplan.set_feature" | "weekplan.place" | "weekplan.commit" | "feature.brief" | "feature.mark_breakdown" | "loop.ask_priorities";
+export type WeekPlanAction =
+  | "weekplan.load"
+  | "weekplan.set_feature"
+  | "weekplan.place"
+  | "weekplan.commit"
+  | "weekplan.add"
+  | "weekplan.set_tier"
+  | "weekplan.set_blocks"
+  | "weekplan.reorder"
+  | "weekplan.remove"
+  | "weekplan.mark_done"
+  | "weekplan.headsup"
+  | "feature.brief"
+  | "feature.mark_breakdown"
+  | "loop.ask_priorities";
 
 export type WeekPlanContext = {
   plan: PlanStore | undefined;
@@ -62,6 +79,14 @@ function clientKey(v: unknown): string {
   if (typeof v !== "string" || !v.trim() || v.length > 100) throw new Invalid("clientKey must be text");
   return v;
 }
+function tier(v: unknown): Tier {
+  if (v !== "must" && v !== "nice") throw new Invalid("tier must be must or nice");
+  return v;
+}
+function blocks(v: unknown): number {
+  if (!validBlocks(v)) throw new Invalid("blocks must be 0.5 to 20 in half steps");
+  return v;
+}
 function bool(v: unknown, name: string): boolean {
   if (typeof v !== "boolean") throw new Invalid(`${name} must be true or false`);
   return v;
@@ -93,6 +118,22 @@ async function featureOf(ctx: WeekPlanContext, cfg: AppConfig, weekStart: IsoDat
   const [portfolio] = await ctx.devops(cfg).portfolio([ref]);
   const item = portfolio?.items.find((i) => i.id === itemId && (tier === "any" || i.tier === "feature"));
   return item && portfolio ? { item, portfolio } : null;
+}
+
+/**
+ * A story of the client's as DevOps shows it now (step 11): one of my items or a child read with them (work read), or
+ * a story under one of the client's features (portfolio read). Features and epics are not stories.
+ */
+async function storyOf(ctx: WeekPlanContext, cfg: AppConfig, weekStart: IsoDate, key: string, itemId: number): Promise<{ title: string; type: string; url: string } | null> {
+  const w = ctx.devops(cfg).last(key);
+  const fromWork = w ? [...w.items, ...w.children, ...(w.committed ?? []), ...(w.watched ?? [])].find((i) => i.id === itemId && i.level === "story") : undefined;
+  if (fromWork) return { title: fromWork.title, type: fromWork.type, url: fromWork.url };
+  const clients = await ctx.clients(cfg, weekStart, false);
+  const ref = clients.find((c) => c.clientKey === key);
+  if (!ref) return null;
+  const [portfolio] = await ctx.devops(cfg).portfolio([ref]);
+  const kid = portfolio?.items.flatMap((i) => i.children).find((c) => c.id === itemId && c.level === "story");
+  return kid ? { title: kid.title, type: kid.type, url: kid.url } : null;
 }
 
 /** Where a feature can go: that client's own blocks, or an Open half-day (Mon to Thu, no focus block). */
@@ -138,18 +179,18 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         editable(weekStart);
         const key = clientKey(o.clientKey);
         const itemId = id(o.itemId, "itemId");
-        if (typeof o.blocks !== "number" || !Number.isInteger(o.blocks)) throw new Invalid("blocks must be a whole number");
+        const n = o.blocks === 0 ? 0 : blocks(o.blocks);
         const existing = plan.weekPlan(weekStart).features.find((f) => f.clientKey === key && f.itemId === itemId);
         let title = existing?.title ?? "";
         let itemType = existing?.itemType ?? null;
         let url = existing?.url ?? null;
         // Committing (not taking off) needs the feature to be one of this client's, as DevOps shows it now.
-        if (o.blocks > 0) {
+        if (n > 0) {
           const found = await featureOf(ctx, cfg, weekStart, key, itemId);
           if (!found && !existing) return bad(`#${itemId} isn't one of your features for ${key}`, 422);
           if (found) ({ title, type: itemType, url } = { title: found.item.title, type: found.item.type, url: found.item.url });
         }
-        const feature = plan.setWeekFeature({ weekStart, clientKey: key, itemId, title, itemType, url, blocks: o.blocks });
+        const feature = plan.setWeekFeature({ weekStart, clientKey: key, itemId, title, itemType, url, blocks: n });
         return { ok: true, data: { feature, plan: weekPlanView(plan.weekPlan(weekStart)) } };
       }
       case "weekplan.place": {
@@ -169,9 +210,12 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
           const why = await checkSlot(ctx, cfg, weekStart, key, d, h);
           if (why) return bad(why, 422);
           if (!feature) {
+            // Pinning something not on the list yet puts it on as a must (step 11: a feature or a story).
             const found = await featureOf(ctx, cfg, weekStart, key, itemId);
-            if (!found) return bad(`#${itemId} isn't one of your features for ${key}`, 422);
-            feature = plan.setWeekFeature({ weekStart, clientKey: key, itemId, title: found.item.title, itemType: found.item.type, url: found.item.url, blocks: 1 });
+            const story = found ? null : await storyOf(ctx, cfg, weekStart, key, itemId);
+            if (!found && !story) return bad(`#${itemId} isn't one of your features for ${key}`, 422);
+            const src = found ? { title: found.item.title, type: found.item.type, url: found.item.url } : story!;
+            feature = plan.addWeekItem({ weekStart, clientKey: key, itemId, title: src.title, itemType: src.type, url: src.url, level: found ? "feature" : "story" });
           }
         }
         if (!feature) return bad("That feature isn't on this week's plan", 422);
@@ -183,6 +227,82 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const weekStart = monday(o.weekStart);
         editable(weekStart);
         return { ok: true, data: { plan: weekPlanView(plan.commitWeek(weekStart)) } };
+      }
+      case "weekplan.add": {
+        const o = fields(input, ["weekStart", "clientKey", "itemId"], ["tier", "blocks"]);
+        const weekStart = monday(o.weekStart);
+        editable(weekStart);
+        const key = clientKey(o.clientKey);
+        const itemId = id(o.itemId, "itemId");
+        const t = o.tier === undefined ? undefined : tier(o.tier);
+        const b = o.blocks === undefined ? undefined : blocks(o.blocks);
+        // DevOps first: only what DevOps shows as this client's feature or story now goes on the list.
+        const feature = await featureOf(ctx, cfg, weekStart, key, itemId);
+        const story = feature ? null : await storyOf(ctx, cfg, weekStart, key, itemId);
+        if (!feature && !story) return bad(`#${itemId} isn't one of ${key}'s features or stories in DevOps`, 422);
+        const level: ItemLevel = feature ? "feature" : "story";
+        const src = feature ? { title: feature.item.title, type: feature.item.type, url: feature.item.url } : story!;
+        const item = plan.addWeekItem({ weekStart, clientKey: key, itemId, title: src.title, itemType: src.type, url: src.url, level, ...(t ? { tier: t } : {}), ...(b !== undefined ? { blocks: b } : {}) });
+        return { ok: true, data: { item, plan: weekPlanView(plan.weekPlan(weekStart)) } };
+      }
+      case "weekplan.set_tier":
+      case "weekplan.remove": {
+        const o = fields(input, action === "weekplan.set_tier" ? ["id", "tier"] : ["id"]);
+        const before = plan.weekItem(id(o.id, "id"));
+        if (!before) return bad("That item isn't on a week plan", 422);
+        editable(before.weekStart);
+        const committedAt = plan.weekPlan(before.weekStart).committedAt;
+        const to = action === "weekplan.set_tier" ? tier(o.tier) : null;
+        if (to) plan.setWeekItemTier(before.id, to);
+        else plan.removeWeekItem(before.id);
+        // Dropping a must the week was committed with offers the heads-up loop; nothing else is asked (D197).
+        const dropped = to !== "must" && offersHeadsUp(before, committedAt) && !internalClients(cfg).has(before.clientKey);
+        return { ok: true, data: { plan: weekPlanView(plan.weekPlan(before.weekStart)), headsUp: dropped ? { weekStart: before.weekStart, clientKey: before.clientKey, itemId: before.itemId, title: before.title } : null } };
+      }
+      case "weekplan.set_blocks": {
+        const o = fields(input, ["id", "blocks"]);
+        const before = plan.weekItem(id(o.id, "id"));
+        if (!before) return bad("That item isn't on a week plan", 422);
+        editable(before.weekStart);
+        const item = plan.setWeekItemBlocks(before.id, blocks(o.blocks));
+        return { ok: true, data: { item, plan: weekPlanView(plan.weekPlan(before.weekStart)) } };
+      }
+      case "weekplan.mark_done": {
+        const o = fields(input, ["id", "on"]);
+        const before = plan.weekItem(id(o.id, "id"));
+        if (!before) return bad("That item isn't on a week plan", 422);
+        editable(before.weekStart);
+        const item = plan.markWeekItemDone(before.id, bool(o.on, "on"));
+        return { ok: true, data: { item, plan: weekPlanView(plan.weekPlan(before.weekStart)) } };
+      }
+      case "weekplan.reorder": {
+        // The order as shown, top first; or reset: back to DevOps stack rank for the client's whole list.
+        const o = fields(input, ["weekStart", "clientKey"], ["tier", "order", "reset"]);
+        const weekStart = monday(o.weekStart);
+        editable(weekStart);
+        const key = clientKey(o.clientKey);
+        if (o.reset !== undefined) {
+          if (o.reset !== true) throw new Invalid("reset must be true");
+          if (o.order !== undefined || o.tier !== undefined) throw new Invalid("reset takes no order");
+          return { ok: true, data: { plan: weekPlanView(plan.reorderWeekItems(weekStart, key, "must", null)) } };
+        }
+        const t = tier(o.tier);
+        if (!Array.isArray(o.order) || !o.order.length || o.order.length > 200) throw new Invalid("order must be a list of item numbers");
+        const ids = o.order.map((x) => id(x, "order"));
+        if (new Set(ids).size !== ids.length) throw new Invalid("order has an item twice");
+        return { ok: true, data: { plan: weekPlanView(plan.reorderWeekItems(weekStart, key, t, ids.map((itemId, i) => ({ itemId, position: i + 1 })))) } };
+      }
+      case "weekplan.headsup": {
+        const o = fields(input, ["weekStart", "clientKey", "itemId", "title"]);
+        const weekStart = monday(o.weekStart);
+        const key = clientKey(o.clientKey);
+        const itemId = id(o.itemId, "itemId");
+        if (typeof o.title !== "string" || !o.title.trim() || o.title.length > 500) throw new Invalid("title must be text");
+        const clients = await ctx.clients(cfg, weekStart, false);
+        const name = nameOf(cfg, (k) => clients.find((c) => c.clientKey === k)?.clientName)(key);
+        const loop = plan.openRuleLoop({ kind: "slip", ruleKey: headsUpKey(weekStart, key, itemId), clientKey: key, who: name, what: `Heads-up to ${name}: #${itemId} moves out of the week`, itemId, draft: weekHeadsUpDraft(name, weekStart, { itemId, title: o.title.trim() }) });
+        const existing = loop ?? plan.allLoops().find((l) => l.ruleKey === headsUpKey(weekStart, key, itemId)) ?? null;
+        return { ok: true, data: { loop: existing ? loopView(plan, existing, today, () => name) : null, created: !!loop } };
       }
       case "feature.brief": {
         const o = fields(input, ["clientKey", "itemId"], ["weekStart"]);

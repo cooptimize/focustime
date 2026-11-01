@@ -14,6 +14,8 @@ import { countdown, timerLeft } from "./NowStrip.tsx";
 import { featuresOn, PlanCtx } from "./planview.ts";
 import { causeLines } from "./status.ts";
 import { WorkLink } from "./WorkLink.tsx";
+import { WeekMusts } from "./WeekMusts.tsx";
+import { mondayOf } from "../week/dates.ts";
 
 type Props = {
   data: WeekLoadData;
@@ -124,6 +126,8 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
           ))}
         </section>
       )}
+
+      <WeekMusts data={data} weekStart={mondayOf(workday ? date : target.date)} now={workday ? now : null} title={workday || mondayOf(target.date) === mondayOf(date) ? "This week" : "Next week"} />
 
       <p className="today-foot">
         <button type="button" className="link-btn" onClick={onWeek}>
@@ -236,7 +240,7 @@ export function FlowHint() {
   return (
     <aside className="flow-hint" aria-label="How Coopilot fits together">
       <p>
-        <strong>Week</strong> is for features: which ones each client's blocks go to. <strong>Day</strong> is for stories: what you pick for each block. <strong>Focus</strong> is one story at a time.
+        <strong>Week</strong> is each client's musts and nice to haves, from DevOps. <strong>Day</strong> is for stories: what you pick for each block. <strong>Focus</strong> is one story at a time.
       </p>
       <button type="button" className="mini" onClick={dismiss}>Got it</button>
     </aside>

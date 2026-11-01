@@ -1620,6 +1620,58 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .pw-side .pw-feature .pw-kids { justify-self: start; }
 }
 
+/* Step 11: Plan the week by client. Must and Nice to have lists per client, musts per client above the grid, the
+   on-track question, the heads-up offer. */
+.pw-musts { display: flex; flex-wrap: wrap; gap: 6px 16px; list-style: none; margin: 0 0 8px; padding: 0; font-size: 13px; color: var(--text-muted); }
+.pw-musts li { display: inline-flex; align-items: center; gap: 6px; }
+.pw-musts strong { color: var(--text); font-weight: 650; }
+.pw-progress { font-size: 13px; font-weight: 600; color: var(--text); }
+.pw-track { margin: 0 0 8px; font-size: 13px; color: var(--text-muted); }
+.pw-track.at_risk { color: var(--text); }
+.pw-track.done { color: var(--ok); }
+.pw-tier { margin-top: 6px; }
+.pw-tier h4 { margin: 4px 0 6px; font-size: 13px; color: var(--text); }
+.pw-tier h4 .muted, .pw-add h4 .muted { font-weight: 400; margin-left: 6px; text-transform: none; letter-spacing: 0; }
+.pw-tier + .pw-tier h4 { color: var(--text-muted); }
+.pw-item { grid-template-columns: minmax(240px, 1fr) auto auto minmax(120px, auto) auto; grid-template-areas: "title kids blocks placed acts" "children children children children children"; border-left: 4px solid var(--c); }
+.pw-item .pw-row-acts { grid-area: acts; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.pw-item.done .pw-title a { color: var(--text-muted); }
+.pw-done { color: var(--ok); font-weight: 600; }
+.pw-chip.done { color: var(--text-muted); text-decoration: line-through; }
+.pw-addrow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title placed"; cursor: default; border-style: dashed; }
+.pw-addrow .pw-acts { grid-area: placed; }
+.pw-add { margin-top: 10px; }
+.pw-add h4 { margin: 4px 0 6px; font-size: 13px; }
+.pw-add-toggle { margin-bottom: 6px; }
+.pw-reset { margin-top: 6px; }
+.pw-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pd-pin { font-size: 12px; margin-left: 6px; }
+@media (max-width: 1100px) {
+  .pw-item { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "kids" "blocks" "placed" "acts" "children"; }
+  .pw-item .pw-row-acts { justify-content: flex-start; }
+}
+@media (min-width: 2400px) {
+  .pw-side .pw-item { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title title" "kids blocks" "placed acts" "children children"; }
+}
+
+/* Step 11: musts per client (Today, Week, Plan the day) and Check-in's "Anything shifted?". */
+.week-musts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin: 0 0 8px; font-size: 13px; color: var(--text-muted); }
+.week-musts h3 { margin: 0; font-size: 13px; font-weight: 650; color: var(--text); }
+.week-musts ul { display: flex; flex-wrap: wrap; gap: 4px 18px; list-style: none; margin: 0; padding: 0; }
+.week-musts li { display: inline-flex; align-items: baseline; gap: 6px; }
+.week-musts li strong { color: var(--text); font-weight: 600; }
+.week-musts .swatch, .shifted .swatch { width: 9px; height: 9px; border-radius: 3px; background: var(--c); display: inline-block; align-self: center; }
+.week-musts.in-week { padding: 0 20px; margin: 2px 0 4px; }
+.today-view .week-musts { margin: 18px 0 0; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.wm-track { color: var(--text-muted); }
+.wm-track.at_risk { color: var(--text); }
+.shifted-client { margin-top: 8px; }
+.shifted-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0 0 4px; font-size: 13px; }
+.shifted-list { list-style: none; margin: 0; padding: 0 0 0 16px; display: grid; gap: 4px; font-size: 13px; }
+.shifted-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.shifted-tier { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); min-width: 40px; }
+.shifted-tier.must { color: var(--accent); }
+
 /* Step 10 slice 3: Plan the day shows candidates in one block at a time. */
 .pd-block.idle .pd-block-head { cursor: pointer; }
 .pd-block.idle { opacity: 0.92; }

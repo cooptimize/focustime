@@ -5,14 +5,25 @@ import { freeMinutes } from "../week/free.ts";
 import type { ClientPortfolio, IsoDate, PortfolioItem, Slot, Week, WorkItem } from "../week/types.ts";
 
 /** The week plan's features as these rules need them (the store's WeekFeature fits). */
-export type FeatureLike = { clientKey: string; itemId: number; title: string; blocks: number; slots: readonly { date: IsoDate; half: "AM" | "PM" }[] };
+export type FeatureLike = {
+  clientKey: string;
+  itemId: number;
+  title: string;
+  blocks: number;
+  slots: readonly { date: IsoDate; half: "AM" | "PM" }[];
+  /** Step 11: must or nice to have (missing: must, as step 8 stored them), and feature or story (missing: feature). */
+  tier?: "must" | "nice";
+  level?: "feature" | "story";
+};
+const isMust = (f: FeatureLike) => (f.tier ?? "must") === "must";
+const isFeature = (f: FeatureLike) => (f.level ?? "feature") === "feature";
 
-export type Block = { date: IsoDate; half: "AM" | "PM"; freeMinutes: number; totalMinutes: number; pto: boolean; /** An Open half-day a feature of this client is placed on. */ open: boolean };
+export type Block = { date: IsoDate; half: "AM" | "PM"; start: string; end: string; freeMinutes: number; totalMinutes: number; pto: boolean; /** An Open half-day an item of this client is pinned to. */ open: boolean };
 
 const windowMinutes = (s: Slot) => s.windows.reduce((m, w) => m + Temporal.Instant.from(w.start).until(Temporal.Instant.from(w.end)).total("minutes"), 0);
 
 function blockOf(s: Slot, open: boolean): Block {
-  return { date: s.date, half: s.half as "AM" | "PM", freeMinutes: s.pto ? 0 : freeMinutes(s), totalMinutes: windowMinutes(s), pto: s.pto, open };
+  return { date: s.date, half: s.half as "AM" | "PM", start: s.start, end: s.end, freeMinutes: s.pto ? 0 : freeMinutes(s), totalMinutes: windowMinutes(s), pto: s.pto, open };
 }
 
 /** A client's focus blocks in the week (Dataverse or standing; the block the card shows), with free time after meetings. */
@@ -28,7 +39,9 @@ export type ClientFit = {
   blocks: Block[];
   /** Blocks' free share (free over working minutes), less unpaid borrowed time, to one decimal. */
   availableBlocks: number;
+  /** Step 11: the blocks of its musts (nice-to-haves don't count against fit). */
   committedBlocks: number;
+  niceBlocks: number;
   borrowedMinutes: number;
   verdict: Verdict;
 };
@@ -90,13 +103,14 @@ export function weekFit(week: Week, features: readonly FeatureLike[], o: { borro
     const avg = working.length ? working.reduce((n, b) => n + b.totalMinutes, 0) / working.length : NOMINAL_BLOCK_MINUTES;
     const borrowed = o.borrowedMinutes[clientKey] ?? 0;
     const availableBlocks = Math.max(0, round1(share - borrowed / avg));
-    const committedBlocks = mine.reduce((n, f) => n + f.blocks, 0);
+    const committedBlocks = mine.filter(isMust).reduce((n, f) => n + f.blocks, 0);
+    const niceBlocks = mine.filter((f) => !isMust(f)).reduce((n, f) => n + f.blocks, 0);
     const verdict: Verdict = committedBlocks === 0 ? "none" : committedBlocks > availableBlocks + 1e-9 ? "over" : committedBlocks > availableBlocks - TIGHT_BLOCKS ? "tight" : "fits";
-    return { clientKey, clientName, blocks, availableBlocks, committedBlocks, borrowedMinutes: borrowed, verdict };
+    return { clientKey, clientName, blocks, availableBlocks, committedBlocks, niceBlocks, borrowedMinutes: borrowed, verdict };
   });
 }
 
-export type ReadinessKind = "block_needs_work" | "needs_breakdown" | "needs_features" | "captures_to_sort" | "no_target_date";
+export type ReadinessKind = "block_needs_work" | "needs_breakdown" | "no_target_date" | "intention_not_in_devops" | "needs_features" | "captures_to_sort";
 
 export type ReadinessFlag = {
   kind: ReadinessKind;
@@ -116,6 +130,10 @@ export type ReadinessFlag = {
   count?: number;
   /** Block needs work: the open "ask about priorities" loop for that client and week, or null. */
   loopId?: number | null;
+  /** Intention not in DevOps (step 11): the typed pick, its day and size. */
+  pickId?: number;
+  date?: IsoDate;
+  size?: "S" | "M" | "L";
 };
 
 export type WorkLike = { clientKey: string; status: string; fromCache: boolean; items: readonly WorkItem[] };
@@ -130,12 +148,17 @@ export type ReadinessInput = {
   marks: readonly { clientKey: string; itemId: number; markedAt: string }[];
   loops: readonly LoopRef[];
   /** Local draft stories (step 9), to count those under each feature. */
-  drafts?: readonly { clientKey: string; parentItemId: number | null }[];
+  drafts?: readonly { clientKey: string; parentItemId: number | null; title?: string }[];
   /** Captures not sorted yet (step 9). */
   captures?: number;
+  /** Typed intention picks around the week (step 11), to nudge them into DevOps as draft stories. */
+  intentions?: readonly { id: number; clientKey: string; title: string; date: IsoDate; size: "S" | "M" | "L"; status: string }[];
 };
 
-const ORDER: readonly ReadinessKind[] = ["block_needs_work", "needs_breakdown", "needs_features", "captures_to_sort", "no_target_date"];
+/** "Break down #id …" picks are about a DevOps feature already; they aren't intentions to move into DevOps. */
+export const isBreakDown = (title: string) => /^Break down #\d+/.test(title);
+
+const ORDER: readonly ReadinessKind[] = ["block_needs_work", "needs_breakdown", "no_target_date", "intention_not_in_devops", "needs_features", "captures_to_sort"];
 
 /** The "ask about priorities" loop key for a client and week. */
 export const prioritiesKey = (weekStart: IsoDate, clientKey: string) => `priorities:${weekStart}:${clientKey}`;
@@ -159,7 +182,7 @@ export function readiness(i: ReadinessInput): ReadinessFlag[] {
     const loop = i.loops.find((l) => !l.closedAt && l.kind === "priorities" && l.ruleKey === prioritiesKey(i.week.weekStart, clientKey));
     out.push({ kind: "block_needs_work", clientKey, itemId: null, title: `No open work assigned to me for ${clientKey}`, url: null, soft: false, blocks, loopId: loop?.id ?? null });
   }
-  for (const f of i.features) {
+  for (const f of i.features.filter(isFeature)) {
     const item = find(f.clientKey, f.itemId);
     if (!item) continue;
     if (!item.children.some((c) => c.open && c.level === "story"))
@@ -172,10 +195,16 @@ export function readiness(i: ReadinessInput): ReadinessFlag[] {
   for (const p of i.portfolios)
     for (const e of p.items.filter((x) => x.tier === "epic"))
       if (!e.children.some((c) => c.open && c.level === "portfolio")) out.push({ kind: "needs_features", clientKey: p.clientKey, itemId: e.id, title: e.title, url: e.url, soft: false });
-  for (const f of i.features) {
+  // Step 11: musts (features) with no target date; a nice-to-have isn't a promise yet.
+  for (const f of i.features.filter((x) => isFeature(x) && isMust(x))) {
     const item = find(f.clientKey, f.itemId);
     if (item && !item.targetDate) out.push({ kind: "no_target_date", clientKey: f.clientKey, itemId: f.itemId, title: item.title, url: item.url, soft: true });
   }
+  // Step 11: typed intentions still planned or done, not yet in DevOps (no draft story with that title for the client).
+  const drafted = (k: string, t: string) => (i.drafts ?? []).some((d) => d.clientKey === k && d.title?.trim().toLowerCase() === t.trim().toLowerCase());
+  for (const p of i.intentions ?? [])
+    if ((p.status === "planned" || p.status === "done") && !isBreakDown(p.title) && !drafted(p.clientKey, p.title))
+      out.push({ kind: "intention_not_in_devops", clientKey: p.clientKey, itemId: null, title: p.title, url: null, soft: false, pickId: p.id, date: p.date, size: p.size });
   if (i.captures) out.push({ kind: "captures_to_sort", clientKey: "", itemId: null, title: `${i.captures} unprocessed capture${i.captures === 1 ? "" : "s"}`, url: null, soft: false, count: i.captures });
   return out.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
 }

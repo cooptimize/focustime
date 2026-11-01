@@ -11,6 +11,8 @@ import { formatDuration } from "../week/format.ts";
 import type { Half, IsoDate, Slot } from "../week/types.ts";
 import { call, planAction } from "./api.ts";
 import { useFocused } from "./planview.ts";
+import { AnythingShifted } from "./WeekMusts.tsx";
+import { mondayOf } from "../week/dates.ts";
 import { dayName, FlexOfferBar, FocusVsSize, HALF_NAMES, SlipActions, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 
 type Props = { data: WeekLoadData; now: string; onClose: () => void; onChanged: () => void };
@@ -134,6 +136,7 @@ export function CheckIn({ data, now, onClose, onChanged }: Props) {
           </section>
         );
       })}
+      <AnythingShifted data={data} weekStart={mondayOf(today)} now={now} onChanged={onChanged} />
     </main>
   );
 }

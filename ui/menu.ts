@@ -649,6 +649,13 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // Features are chosen in Plan the week itself.
     case "weekplan.set_feature":
     case "weekplan.place":
+    case "weekplan.add":
+    case "weekplan.set_tier":
+    case "weekplan.set_blocks":
+    case "weekplan.reorder":
+    case "weekplan.remove":
+    case "weekplan.mark_done":
+    case "weekplan.headsup":
     case "feature.brief":
     case "feature.mark_breakdown":
     case "loop.ask_priorities":

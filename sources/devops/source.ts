@@ -408,11 +408,14 @@ export function createDevOpsSource(d: DevOpsDeps) {
   /** One result per client, in the order given. A client never sees another client's items. */
   async function load(clients: ClientRef[], opts: { refresh?: boolean; watch?: Readonly<Record<string, readonly number[]>>; features?: Readonly<Record<string, readonly number[]>> } = {}): Promise<ClientWork[]> {
     const t = now().epochMilliseconds;
+    // What was asked for besides my items (committed features, items read by id): asking for other ones reads again.
+    const ids = (r?: Readonly<Record<string, readonly number[]>>, k = "") => (r?.[k] ?? []).slice().sort((a, b) => a - b).join(",");
+    const askedKey = (k: string) => `${ids(opts.features, k)}|${ids(opts.watch, k)}`;
     const fresh = (ref: ClientRef) => {
       const hit = memory.get(ref.clientKey);
       if (!hit) return null;
-      // Read with other committed features (step 8): read again, so Plan the day has their stories.
-      const asked = (opts.features?.[ref.clientKey] ?? []).slice().sort((a, b) => a - b).join(",");
+      // Read with other committed features (step 8) or other items by id (step 11): read again.
+      const asked = askedKey(ref.clientKey);
       if (asked !== hit.features) return null;
       const age = t - hit.at;
       return (opts.refresh ? age < minRefresh : age < ttl) ? hit.result : null;
@@ -426,7 +429,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
         targets = { ok: false, message: "Dataverse read failed" };
       }
       const results = await Promise.all(need.map((ref) => loadOne(ref, targets, opts.watch?.[ref.clientKey] ?? [], opts.features?.[ref.clientKey] ?? [])));
-      need.forEach((ref, i) => memory.set(ref.clientKey, { at: t, result: results[i]!, features: (opts.features?.[ref.clientKey] ?? []).slice().sort((a, b) => a - b).join(",") }));
+      need.forEach((ref, i) => memory.set(ref.clientKey, { at: t, result: results[i]!, features: askedKey(ref.clientKey) }));
     }
     return clients.map((c) => memory.get(c.clientKey)!.result);
   }

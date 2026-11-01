@@ -31,6 +31,7 @@ import type { Pick } from "../plan/types.ts";
 import { CloseOut } from "./CloseOut.tsx";
 import { CheckIn } from "./CheckIn.tsx";
 import { PlanWeek } from "./PlanWeek.tsx";
+import { WeekMusts } from "./WeekMusts.tsx";
 import { CaptureDialog } from "./Capture.tsx";
 import { borrowedSummary } from "../plan/borrow.ts";
 import { formatDuration } from "../week/format.ts";
@@ -1080,7 +1081,7 @@ export function App() {
           }
         />
       ) : planWeekAt !== null && settingsAt === null ? (
-        <PlanWeek weekStart={planWeekAt} data={data} version={planWeekVersion} onWeek={openPlanWeek} onClose={() => setPlanWeekAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
+        <PlanWeek weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => setPlanWeekAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : loopsOpen && settingsAt === null ? (
         <Inbox data={data} version={captureVersion} onClose={() => setLoopsOpen(false)} onChanged={reloadQuiet} />
       ) : closeOutAt !== null && settingsAt === null ? (
@@ -1121,6 +1122,8 @@ export function App() {
           onFix={() => setSettingsAt("connections")}
         />
       ) : (
+      <>
+      <WeekMusts data={data} weekStart={pd ? mondayOf(pd.date) : data.weekStart} now={(pd ? mondayOf(pd.date) : data.weekStart) === mondayOf(localToday) ? (now ?? new Date(clock).toISOString()) : null} title={pd ? "Musts this week" : "Musts"} className="in-week" />
       <WeekGrid
         week={week}
         colors={data.clients}
@@ -1167,6 +1170,7 @@ export function App() {
           setDetailsOpen(true);
         }}
       />
+      </>
       )}
 
       <StatusBar

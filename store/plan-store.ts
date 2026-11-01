@@ -5,6 +5,7 @@ import { chmodSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { carryOver } from "../plan/rules.ts";
+import { DEFAULT_BLOCKS, validBlocks, type ItemLevel, type Tier } from "../plan/weeklist.ts";
 import type { Capture, DayPlan, DraftStory, Note, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 
@@ -238,6 +239,32 @@ export const MIGRATIONS: readonly string[] = [
    INSERT INTO draft_stories_v7 SELECT id, client_key, parent_item_id, title, size, created_at, updated_at FROM draft_stories ORDER BY id;
    DROP TABLE draft_stories;
    ALTER TABLE draft_stories_v7 RENAME TO draft_stories;`,
+  // 8 (step 11): the week plan by client. week_features is rebuilt with ids kept (pins in week_feature_slots still
+  // point at them): a level (feature or story), a tier (must or nice), blocks in half steps, a local position that is
+  // empty unless reordered by hand (empty follows DevOps stack rank), and a local done mark. Step 8 rows become
+  // feature musts in DevOps order; their placements stay as pins (D195).
+  `${FK_OFF}
+   CREATE TABLE week_features_v8 (
+     id INTEGER PRIMARY KEY,
+     week_start TEXT NOT NULL CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     client_key TEXT NOT NULL,
+     item_id INTEGER NOT NULL,
+     level TEXT NOT NULL DEFAULT 'feature' CHECK (level IN ('feature','story')),
+     tier TEXT NOT NULL DEFAULT 'must' CHECK (tier IN ('must','nice')),
+     title TEXT NOT NULL,
+     item_type TEXT,
+     url TEXT,
+     blocks REAL NOT NULL CHECK (blocks BETWEEN 0.5 AND 20 AND blocks * 2 = CAST(blocks * 2 AS INTEGER)),
+     position INTEGER,
+     done_at TEXT,
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL,
+     UNIQUE (week_start, client_key, item_id)
+   );
+   INSERT INTO week_features_v8 (id, week_start, client_key, item_id, level, tier, title, item_type, url, blocks, position, done_at, created_at, updated_at)
+     SELECT id, week_start, client_key, item_id, 'feature', 'must', title, item_type, url, blocks, NULL, NULL, created_at, updated_at FROM week_features ORDER BY id;
+   DROP TABLE week_features;
+   ALTER TABLE week_features_v8 RENAME TO week_features;`,
 ];
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
@@ -281,6 +308,7 @@ export type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
 import type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
 
 export type NewWeekFeature = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; blocks: number };
+export type NewWeekItem = Omit<NewWeekFeature, "blocks"> & { level: ItemLevel; tier?: Tier; blocks?: number };
 
 /** Most blocks one feature can take in a week (ten half-days, a little headroom). */
 export const MAX_FEATURE_BLOCKS = 20;
@@ -436,6 +464,16 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
   /** The week's plan row, created if missing, with its updated time moved on. */
   const touchWeek = (weekStart: IsoDate, at: ZonedStamp) =>
     db.prepare("INSERT INTO week_plans (week_start, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(week_start) DO UPDATE SET updated_at = excluded.updated_at").run(weekStart, at, at);
+  /** One change to a week item: runs `change`, touches its week; returns the week it is on. */
+  const weekItemChange = (id: number, change: (at: ZonedStamp) => unknown): IsoDate =>
+    tx(() => {
+      const r = db.prepare("SELECT week_start FROM week_features WHERE id = ?").get(id) as Row | undefined;
+      if (!r) throw new PlanError("No such item on the week plan");
+      const at = stamp();
+      change(at);
+      touchWeek(r.week_start as string, at);
+      return r.week_start as string;
+    });
 
   const getPlan = (date: IsoDate) => {
     const r = db.prepare("SELECT * FROM day_plans WHERE date = ?").get(date) as Row | undefined;
@@ -835,51 +873,110 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     // ---- Plan the week (step 8) ----
     weekPlan(weekStart: IsoDate): WeekPlanRecord {
       const plan = db.prepare("SELECT * FROM week_plans WHERE week_start = ?").get(weekStart) as Row | undefined;
-      const rows = db.prepare("SELECT * FROM week_features WHERE week_start = ? ORDER BY position, id").all(weekStart) as Row[];
+      const rows = db.prepare("SELECT * FROM week_features WHERE week_start = ? ORDER BY id").all(weekStart) as Row[];
       const slots = db.prepare("SELECT s.* FROM week_feature_slots s JOIN week_features f ON f.id = s.feature_id WHERE f.week_start = ? ORDER BY s.date, s.half").all(weekStart) as Row[];
       const features = rows.map((r): WeekFeature => ({
         id: r.id as number,
         weekStart: r.week_start as string,
         clientKey: r.client_key as string,
         itemId: r.item_id as number,
+        level: r.level as "feature" | "story",
+        tier: r.tier as "must" | "nice",
         title: r.title as string,
         itemType: (r.item_type as string | null) ?? null,
         url: (r.url as string | null) ?? null,
         blocks: r.blocks as number,
         slots: slots.filter((x) => x.feature_id === r.id).map((x) => ({ date: x.date as string, half: x.half as "AM" | "PM" })),
-        position: r.position as number,
+        doneAt: (r.done_at as string | null) ?? null,
+        position: (r.position as number | null) ?? null,
         createdAt: r.created_at as string,
         updatedAt: r.updated_at as string,
       }));
       const latest = [plan?.updated_at as string | undefined, ...features.map((x) => x.updatedAt)].filter((x): x is string => !!x).sort((a, b) => Temporal.Instant.compare(Temporal.ZonedDateTime.from(a).toInstant(), Temporal.ZonedDateTime.from(b).toInstant())).at(-1);
       return { weekStart, committedAt: (plan?.committed_at as string | null) ?? null, updatedAt: latest ?? null, features };
     },
-    /** Commit a feature to a week with a number of blocks (updating it if there); 0 blocks takes it off the week. */
+    /** Step 8's call: a feature on a week with a number of blocks (a must when new); 0 blocks takes it off. */
     setWeekFeature(f: NewWeekFeature): WeekFeature | null {
-      if (!Number.isInteger(f.blocks) || f.blocks < 0 || f.blocks > MAX_FEATURE_BLOCKS) throw new PlanError(`blocks must be 0 to ${MAX_FEATURE_BLOCKS}`);
+      if (f.blocks === 0) {
+        const row = db.prepare("SELECT id FROM week_features WHERE week_start = ? AND client_key = ? AND item_id = ?").get(f.weekStart, f.clientKey, f.itemId) as Row | undefined;
+        if (row) this.removeWeekItem(row.id as number);
+        return null;
+      }
+      return this.addWeekItem({ ...f, level: "feature" });
+    },
+    /**
+     * Put a feature or story on a client's week list (step 11), or update it if there: title, type and link always;
+     * tier and blocks when given. New items are musts with the level's default blocks unless told otherwise.
+     */
+    addWeekItem(f: NewWeekItem): WeekFeature {
+      if (f.blocks !== undefined && !validBlocks(f.blocks)) throw new PlanError(`blocks must be 0.5 to ${MAX_FEATURE_BLOCKS} in half steps`);
       return tx(() => {
         const at = stamp();
-        const row = db.prepare("SELECT id FROM week_features WHERE week_start = ? AND client_key = ? AND item_id = ?").get(f.weekStart, f.clientKey, f.itemId) as Row | undefined;
+        const row = db.prepare("SELECT id, tier FROM week_features WHERE week_start = ? AND client_key = ? AND item_id = ?").get(f.weekStart, f.clientKey, f.itemId) as Row | undefined;
         touchWeek(f.weekStart, at);
-        if (f.blocks === 0) {
-          if (row) db.prepare("DELETE FROM week_features WHERE id = ?").run(row.id as number);
-          return null;
-        }
         let id: number;
         if (row) {
           id = row.id as number;
-          db.prepare("UPDATE week_features SET blocks = ?, title = ?, item_type = ?, url = ?, updated_at = ? WHERE id = ?").run(f.blocks, f.title, f.itemType, f.url, at, id);
-          // Fewer blocks than placements: the latest placements go.
-          const placed = db.prepare("SELECT date, half FROM week_feature_slots WHERE feature_id = ? ORDER BY date DESC, half DESC").all(id) as Row[];
-          for (const x of placed.slice(0, Math.max(0, placed.length - f.blocks))) db.prepare("DELETE FROM week_feature_slots WHERE feature_id = ? AND date = ? AND half = ?").run(id, x.date as string, x.half as string);
+          db.prepare("UPDATE week_features SET title = ?, item_type = ?, url = ?, level = ?, updated_at = ? WHERE id = ?").run(f.title, f.itemType, f.url, f.level, at, id);
+          if (f.blocks !== undefined) db.prepare("UPDATE week_features SET blocks = ? WHERE id = ?").run(f.blocks, id);
+          if (f.tier && f.tier !== row.tier) db.prepare("UPDATE week_features SET tier = ?, position = NULL WHERE id = ?").run(f.tier, id);
         } else {
-          const pos = ((db.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM week_features WHERE week_start = ?").get(f.weekStart) as Row).p as number) + 1;
-          id = Number(db.prepare("INSERT INTO week_features (week_start, client_key, item_id, title, item_type, url, blocks, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(f.weekStart, f.clientKey, f.itemId, f.title, f.itemType, f.url, f.blocks, pos, at, at).lastInsertRowid);
+          id = Number(
+            db
+              .prepare("INSERT INTO week_features (week_start, client_key, item_id, level, tier, title, item_type, url, blocks, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)")
+              .run(f.weekStart, f.clientKey, f.itemId, f.level, f.tier ?? "must", f.title, f.itemType, f.url, f.blocks ?? DEFAULT_BLOCKS[f.level], at, at).lastInsertRowid,
+          );
         }
         return this.weekPlan(f.weekStart).features.find((x) => x.id === id)!;
       });
     },
-    /** Place a committed feature on a block of its week (on) or take it off (off). More placements raise its blocks. */
+    /** Must or nice to have; changing tier puts it back in DevOps order within the new tier. */
+    setWeekItemTier(id: number, tier: "must" | "nice"): WeekFeature {
+      const w = weekItemChange(id, (at) => db.prepare("UPDATE week_features SET tier = ?, position = CASE WHEN tier = ? THEN position ELSE NULL END, updated_at = ? WHERE id = ?").run(tier, tier, at, id));
+      return this.weekPlan(w).features.find((x) => x.id === id)!;
+    },
+    setWeekItemBlocks(id: number, blocks: number): WeekFeature {
+      if (!validBlocks(blocks)) throw new PlanError(`blocks must be 0.5 to ${MAX_FEATURE_BLOCKS} in half steps`);
+      const w = weekItemChange(id, (at) => db.prepare("UPDATE week_features SET blocks = ?, updated_at = ? WHERE id = ?").run(blocks, at, id));
+      return this.weekPlan(w).features.find((x) => x.id === id)!;
+    },
+    /** A local done mark (on) or taking it back (off). */
+    markWeekItemDone(id: number, on: boolean): WeekFeature {
+      const w = weekItemChange(id, (at) => db.prepare("UPDATE week_features SET done_at = ?, updated_at = ? WHERE id = ?").run(on ? at : null, at, id));
+      return this.weekPlan(w).features.find((x) => x.id === id)!;
+    },
+    /**
+     * A local order for one client's tier: positions 1..n for the items given (the rest of the tier follows in DevOps
+     * order). `null` resets the client's whole list (both tiers) to DevOps order. Never written back to DevOps.
+     */
+    reorderWeekItems(weekStart: IsoDate, clientKey: string, tier: "must" | "nice", order: readonly { itemId: number; position: number }[] | null): WeekPlanRecord {
+      tx(() => {
+        const at = stamp();
+        if (order === null) db.prepare("UPDATE week_features SET position = NULL, updated_at = ? WHERE week_start = ? AND client_key = ? AND position IS NOT NULL").run(at, weekStart, clientKey);
+        else
+          for (const o of order) {
+            if (!Number.isInteger(o.position) || o.position < 1) throw new PlanError("position must be a whole number from 1");
+            const r = db.prepare("UPDATE week_features SET position = ?, updated_at = ? WHERE week_start = ? AND client_key = ? AND tier = ? AND item_id = ?").run(o.position, at, weekStart, clientKey, tier, o.itemId);
+            if (Number(r.changes) !== 1) throw new PlanError(`#${o.itemId} isn't a ${tier === "must" ? "must" : "nice to have"} on this client's week`);
+          }
+        touchWeek(weekStart, at);
+      });
+      return this.weekPlan(weekStart);
+    },
+    /** Take an item off the week list (its pins go with it). */
+    removeWeekItem(id: number): void {
+      tx(() => {
+        const r = db.prepare("SELECT week_start FROM week_features WHERE id = ?").get(id) as Row | undefined;
+        if (!r) throw new PlanError("No such item on the week plan");
+        db.prepare("DELETE FROM week_features WHERE id = ?").run(id);
+        touchWeek(r.week_start as string, stamp());
+      });
+    },
+    weekItem(id: number): WeekFeature | null {
+      const r = db.prepare("SELECT week_start FROM week_features WHERE id = ?").get(id) as Row | undefined;
+      return r ? (this.weekPlan(r.week_start as string).features.find((x) => x.id === id) ?? null) : null;
+    },
+    /** Pin a week item to a block of its week (on) or unpin it (off). Pins don't change its blocks (step 11). */
     placeFeature(featureId: number, date: IsoDate, half: "AM" | "PM", on: boolean): WeekFeature {
       return tx(() => {
         const r = db.prepare("SELECT * FROM week_features WHERE id = ?").get(featureId) as Row | undefined;
@@ -888,14 +985,8 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         const offset = Temporal.PlainDate.from(week).until(Temporal.PlainDate.from(date)).days;
         if (offset < 0 || offset > 6) throw new PlanError("That block isn't in the feature's week");
         const at = stamp();
-        if (on) {
-          db.prepare("INSERT INTO week_feature_slots (feature_id, date, half) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").run(featureId, date, half);
-          const n = (db.prepare("SELECT COUNT(*) AS n FROM week_feature_slots WHERE feature_id = ?").get(featureId) as Row).n as number;
-          if (n > (r.blocks as number)) {
-            if (n > MAX_FEATURE_BLOCKS) throw new PlanError(`blocks must be 0 to ${MAX_FEATURE_BLOCKS}`);
-            db.prepare("UPDATE week_features SET blocks = ? WHERE id = ?").run(n, featureId);
-          }
-        } else db.prepare("DELETE FROM week_feature_slots WHERE feature_id = ? AND date = ? AND half = ?").run(featureId, date, half);
+        if (on) db.prepare("INSERT INTO week_feature_slots (feature_id, date, half) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").run(featureId, date, half);
+        else db.prepare("DELETE FROM week_feature_slots WHERE feature_id = ? AND date = ? AND half = ?").run(featureId, date, half);
         db.prepare("UPDATE week_features SET updated_at = ? WHERE id = ?").run(at, featureId);
         touchWeek(week, at);
         return this.weekPlan(week).features.find((x) => x.id === featureId)!;

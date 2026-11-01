@@ -255,17 +255,15 @@ describe("week plan (step 8)", () => {
     expect(store.weekPlan(W).features.map((x) => x.itemId)).toEqual([210]);
     expect(() => store.setWeekFeature({ ...f, blocks: 99 })).toThrow(/blocks/);
   });
-  it("places a feature on specific blocks; more placements than blocks raises the count, fewer blocks drops the latest placements", () => {
+  it("pins a feature to specific blocks without changing its blocks (step 11)", () => {
     const { store } = fresh();
     const a = store.setWeekFeature({ ...f, blocks: 1 })!;
     store.placeFeature(a.id, "2026-11-10", "PM", true);
     store.placeFeature(a.id, "2026-11-09", "AM", true);
-    expect(store.weekPlan(W).features[0]).toMatchObject({ blocks: 2, slots: [{ date: "2026-11-09", half: "AM" }, { date: "2026-11-10", half: "PM" }] });
+    expect(store.weekPlan(W).features[0]).toMatchObject({ blocks: 1, slots: [{ date: "2026-11-09", half: "AM" }, { date: "2026-11-10", half: "PM" }] });
     store.placeFeature(a.id, "2026-11-09", "AM", true); // again: no change
-    store.setWeekFeature({ ...f, blocks: 1 });
-    expect(store.weekPlan(W).features[0]!.slots).toEqual([{ date: "2026-11-09", half: "AM" }]);
     store.placeFeature(a.id, "2026-11-09", "AM", false);
-    expect(store.weekPlan(W).features[0]).toMatchObject({ blocks: 1, slots: [] });
+    expect(store.weekPlan(W).features[0]).toMatchObject({ blocks: 1, slots: [{ date: "2026-11-10", half: "PM" }] });
     expect(() => store.placeFeature(a.id, "2026-11-17", "AM", true)).toThrow(/week/);
     expect(() => store.placeFeature(999, "2026-11-09", "AM", true)).toThrow();
   });
@@ -297,6 +295,72 @@ describe("week plan (step 8)", () => {
     store.reset();
     expect(store.weekPlan(W).features).toEqual([]);
     expect(store.breakdownMarks()).toEqual([]);
+  });
+});
+
+describe("week plan by client (step 11)", () => {
+  const W = "2026-11-09";
+  const base = { weekStart: W, clientKey: "CSC", title: "T", itemType: "Feature", url: null };
+  it("migration 8 turns committed features into musts and placements into pins, ids kept, with a backup first", () => {
+    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const path = join(dir, "plan.db");
+    const old = new DatabaseSync(path);
+    old.exec("PRAGMA foreign_keys = ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+    for (let v = 1; v <= 7; v++) {
+      old.exec(MIGRATIONS[v - 1]!);
+      old.prepare("INSERT INTO schema_migrations VALUES (?, 'x')").run(v);
+    }
+    old.exec("INSERT INTO week_plans VALUES ('2026-11-09', '2026-11-06T16:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T16:00:00-05:00[America/New_York]')");
+    old.exec(`INSERT INTO week_features (id, week_start, client_key, item_id, title, item_type, url, blocks, position, created_at, updated_at) VALUES
+              (7, '2026-11-09', 'CSC', 210, 'Export', 'Feature', NULL, 3, 1, '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]'),
+              (9, '2026-11-09', 'W&C', 300, 'Paging', 'Feature', NULL, 1, 2, '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]')`);
+    old.exec("INSERT INTO week_feature_slots VALUES (7, '2026-11-10', 'PM'), (7, '2026-11-11', 'AM')");
+    old.close();
+    const store = createPlanStore({ path, now });
+    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
+    expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v7-"))).toHaveLength(1);
+    const p = store.weekPlan(W);
+    expect(p.committedAt).toBe("2026-11-06T16:00:00-05:00[America/New_York]");
+    expect(p.features.map((x) => [x.id, x.itemId, x.level, x.tier, x.blocks, x.position, x.doneAt, x.slots.length])).toEqual([
+      [7, 210, "feature", "must", 3, null, null, 2],
+      [9, 300, "feature", "must", 1, null, null, 0],
+    ]);
+    store.close();
+  });
+
+  it("adds features and stories as musts or nice to haves, sets tier, blocks in half steps, and a done mark", () => {
+    const { store } = fresh();
+    const a = store.addWeekItem({ ...base, itemId: 210, level: "feature" });
+    expect(a).toMatchObject({ level: "feature", tier: "must", blocks: 1, position: null, doneAt: null });
+    const b = store.addWeekItem({ ...base, itemId: 501, itemType: "User Story", level: "story", tier: "nice" });
+    expect(b).toMatchObject({ level: "story", tier: "nice", blocks: 0.5 });
+    // Adding again updates it in place.
+    expect(store.addWeekItem({ ...base, itemId: 210, title: "Renamed", level: "feature", tier: "nice", blocks: 2.5 })).toMatchObject({ id: a.id, title: "Renamed", tier: "nice", blocks: 2.5 });
+    expect(store.setWeekItemTier(a.id, "must").tier).toBe("must");
+    expect(store.setWeekItemBlocks(b.id, 1.5).blocks).toBe(1.5);
+    expect(() => store.setWeekItemBlocks(b.id, 0.3)).toThrow(/half steps/);
+    expect(() => store.setWeekItemBlocks(b.id, 21)).toThrow(/blocks/);
+    expect(store.markWeekItemDone(b.id, true).doneAt).toBe(clock.toString({ smallestUnit: "second" }));
+    expect(store.markWeekItemDone(b.id, false).doneAt).toBeNull();
+    store.removeWeekItem(b.id);
+    expect(store.weekPlan(W).features.map((x) => x.itemId)).toEqual([210]);
+    expect(() => store.removeWeekItem(b.id)).toThrow(/No such/);
+    expect(store.weekItem(a.id)?.itemId).toBe(210);
+  });
+
+  it("keeps a local order per client and tier, resets to DevOps order, and a tier change drops the position", () => {
+    const { store } = fresh();
+    const ids = [210, 220, 230].map((itemId) => store.addWeekItem({ ...base, itemId, level: "feature" }).id);
+    store.addWeekItem({ ...base, clientKey: "W&C", itemId: 300, level: "feature" });
+    store.reorderWeekItems(W, "CSC", "must", [{ itemId: 230, position: 1 }, { itemId: 210, position: 2 }]);
+    const pos = () => Object.fromEntries(store.weekPlan(W).features.map((x) => [x.itemId, x.position]));
+    expect(pos()).toEqual({ 210: 2, 220: null, 230: 1, 300: null });
+    expect(() => store.reorderWeekItems(W, "CSC", "nice", [{ itemId: 230, position: 1 }])).toThrow(/nice to have/);
+    expect(() => store.reorderWeekItems(W, "W&C", "must", [{ itemId: 210, position: 1 }])).toThrow();
+    store.setWeekItemTier(ids[2]!, "nice");
+    expect(pos()[230]).toBeNull();
+    store.reorderWeekItems(W, "CSC", "must", null);
+    expect(pos()).toEqual({ 210: null, 220: null, 230: null, 300: null });
   });
 });
 

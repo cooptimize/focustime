@@ -12,7 +12,7 @@ const patterns = [pattern("W&C", { Mon: "PM", Tue: "AllDay", Wed: "PM" }), patte
 const week = (over: Partial<Parameters<typeof buildWeek>[0]> = {}) => buildWeek({ weekStart: W, patterns, events: [], config: weekConfig, ...over });
 
 const feature = (over: Partial<WeekFeature>): WeekFeature => ({
-  id: 1, weekStart: W, clientKey: "W&C", itemId: 210, title: "Export", itemType: "Feature", url: null, blocks: 2, slots: [], position: 1, createdAt: "", updatedAt: "", ...over,
+  id: 1, weekStart: W, clientKey: "W&C", itemId: 210, title: "Export", itemType: "Feature", url: null, blocks: 2, slots: [], position: 1, level: "feature", tier: "must", doneAt: null, createdAt: "", updatedAt: "", ...over,
 });
 const pItem = (over: Partial<PortfolioItem>): PortfolioItem => ({
   id: 210, title: "Export", type: "Feature", state: "Active", stateCategory: "InProgress", tier: "feature", order: 1, parentId: null, url: "https://dev.azure.com/o/p/_workitems/edit/210",
@@ -125,7 +125,7 @@ describe("readiness ladder", () => {
     const r = readiness({ week: w, portfolios: [portfolio("W&C", [pItem({ targetDate: null, children: [child(211, true)] })])], features: [feature({})], work: null, marks: [], loops: [] });
     expect(r).toEqual([expect.objectContaining({ kind: "no_target_date", itemId: 210, soft: true })]);
   });
-  it("orders the list: blocks needing work, breakdown, epics, then target dates", () => {
+  it("orders the list: blocks needing work, breakdown, target dates, intentions, epics", () => {
     const r = readiness({
       week: w,
       portfolios: [portfolio("W&C", [pItem({ id: 240, targetDate: null }), pItem({ id: 250, tier: "epic", type: "Epic" })])],
@@ -134,7 +134,36 @@ describe("readiness ladder", () => {
       marks: [],
       loops: [],
     });
-    expect(r.map((x) => x.kind)).toEqual(["block_needs_work", "needs_breakdown", "needs_features", "no_target_date"]);
+    expect(r.map((x) => x.kind)).toEqual(["block_needs_work", "needs_breakdown", "no_target_date", "needs_features"]);
+  });
+});
+
+describe("fit per client counts musts only (step 11)", () => {
+  it("nice-to-haves are listed but don't count against the client's free blocks", () => {
+    const fit = weekFit(week(), [feature({ itemId: 1, blocks: 2 }), { ...feature({ itemId: 2, blocks: 3 }), tier: "nice" }], { borrowedMinutes: {} }).find((f) => f.clientKey === "W&C")!;
+    expect(fit).toMatchObject({ committedBlocks: 2, niceBlocks: 3 });
+    expect(fit.verdict).not.toBe("none");
+    const onlyNice = weekFit(week(), [{ ...feature({ itemId: 2, blocks: 3 }), tier: "nice" }], { borrowedMinutes: {} }).find((f) => f.clientKey === "W&C")!;
+    expect(onlyNice.verdict).toBe("none");
+  });
+});
+
+describe("DevOps health (step 11)", () => {
+  const base = { week: week(), work: null, marks: [], loops: [] };
+  const ports = [portfolio("W&C", [pItem({ id: 240, targetDate: null }), pItem({ id: 241, targetDate: null }), pItem({ id: 242, targetDate: "2026-11-20", children: [child(1, true)] })])];
+  it("flags list features with no stories (must or nice) and musts with no target date; stories aren't checked as features", () => {
+    const r = readiness({ ...base, portfolios: ports, features: [feature({ itemId: 240 }), { ...feature({ itemId: 241 }), tier: "nice" }, feature({ itemId: 242 }), { ...feature({ itemId: 243 }), level: "story" }] });
+    expect(r.map((x) => `${x.kind}:${x.itemId}`)).toEqual(["needs_breakdown:240", "needs_breakdown:241", "no_target_date:240"]);
+  });
+  it("nudges typed intentions into DevOps, unless already a draft, dropped, or a Break down pick", () => {
+    const intentions = [
+      { id: 1, clientKey: "W&C", title: "Review the export", date: "2026-11-09", size: "M" as const, status: "planned" },
+      { id: 2, clientKey: "W&C", title: "Already drafted", date: "2026-11-09", size: "S" as const, status: "done" },
+      { id: 3, clientKey: "W&C", title: "Gone", date: "2026-11-09", size: "S" as const, status: "dropped" },
+      { id: 4, clientKey: "W&C", title: "Break down #240 Export", date: "2026-11-09", size: "M" as const, status: "planned" },
+    ];
+    const r = readiness({ ...base, portfolios: [], features: [], intentions, drafts: [{ clientKey: "W&C", parentItemId: null, title: "already drafted " }] });
+    expect(r).toEqual([expect.objectContaining({ kind: "intention_not_in_devops", pickId: 1, clientKey: "W&C", title: "Review the export", size: "M" })]);
   });
 });
 
