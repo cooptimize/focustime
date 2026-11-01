@@ -59,7 +59,7 @@ export type FormField = {
   options?: { value: string; label: string }[];
 };
 
-export type View = "capture" | "week" | "planday" | "planweek" | "settings" | "loops" | "checkin" | "closeout";
+export type View = "today" | "week" | "inbox" | "focus" | "capture" | "planday" | "planweek" | "settings" | "loops" | "checkin" | "closeout";
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
@@ -130,6 +130,8 @@ export type MenuEnv = {
   /** Quick capture (step 9): the capture box anywhere, and the Capture view (inbox and notes). */
   openCapture: () => void;
   openCaptures: () => void;
+  /** The Plan button (step 10): the ritual for the moment. */
+  openRitual: () => void;
   planWeekOpen: IsoDate | null;
   commitWeek: () => void;
 };
@@ -650,7 +652,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "loop.ask_priorities":
       return { run: () => env.openPlanWeek(env.planWeekOpen ?? undefined) };
     case "capture.add": return { run: env.openCapture };
-    // Sorting, a client's features and notes are handled in the Capture view.
+    // Sorting, a client's features and notes are handled in the Inbox.
     case "capture.load":
     case "capture.route":
     case "capture.features":
@@ -663,16 +665,19 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
 function uiCommands(env: MenuEnv): MenuItem[] {
   const soon = "Coming soon";
   return [
-    { id: "view.week", action: "view.week", group: "Views", label: "Week", ...(env.planState ? { hint: "Esc" } : {}), run: () => env.setView("week") },
+    { id: "view.today", action: "view.today", group: "Views", label: "Today", hint: "1", run: () => env.setView("today") },
+    { id: "view.week", action: "view.week", group: "Views", label: "Week", hint: "2", run: () => env.setView("week") },
+    { id: "view.plan", action: "view.plan", group: "Views", label: "Plan (the ritual for now)", hint: "3", run: env.openRitual },
+    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: loops and captures", hint: "4", run: () => env.setView("inbox") },
     { id: "view.planday", action: "view.planday", group: "Views", label: "Plan the day", hint: "P", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
     { id: "view.planweek", action: "view.planweek", group: "Views", label: "Plan the week", hint: "W", run: () => env.openPlanWeek() },
-    { id: "view.capture", action: "view.capture", group: "Views", label: "Captures and notes", run: env.openCaptures },
+    { id: "view.capture", action: "view.capture", group: "Views", label: "Notes and captures (Inbox)", run: env.openCaptures },
     { id: "view.checkin", action: "view.checkin", group: "Views", label: "Check-in", hint: "M", run: env.openCheckIn },
     { id: "view.closeout", action: "view.closeout", group: "Views", label: "Close out", hint: "E", run: () => env.openCloseOut() },
     { id: "week.prev", action: "week.prev", group: "Week", label: "Previous week", hint: "[", run: () => env.changeWeek(-1) },
     { id: "week.next", action: "week.next", group: "Week", label: "Next week", hint: "]", run: () => env.changeWeek(1) },
-    { id: "week.today", action: "week.today", group: "Week", label: "Go to today", hint: "T", run: env.goToday },
+    { id: "week.today", action: "week.today", group: "Week", label: "Back to this week", run: env.goToday },
     { id: "ui.details", action: "ui.details", group: "Week", label: "Details of the selected half-day", hint: "Enter", run: () => env.openDetails(env.selection.date, env.selection.half) },
     { id: "ui.settings", action: "ui.settings", group: "Week", label: "Settings", disabled: soon },
     { id: "ui.region_next", action: "ui.region_next", group: "Keyboard", label: "Next region (top bar, week, panel, status bar)", hint: "F6", run: () => env.moveRegion(1) },

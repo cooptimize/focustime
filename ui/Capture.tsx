@@ -280,93 +280,59 @@ export function CaptureDialog({ data, onClose, onChanged, onOpenView }: { data: 
   );
 }
 
-/** The Capture view: the box, the inbox of unsorted captures, and notes per client (searchable). */
-export function CaptureView({ data, version, onClose, onChanged }: { data: WeekLoadData; version: number; onClose: () => void; onChanged: () => void }) {
+/** Notes per client (step 9), searchable and deletable; in the Inbox (step 10), folded until opened. */
+export function NotesSection({ data, version }: { data: WeekLoadData; version: number }) {
   const clients = useMemo(() => captureClients(data), [data]);
-  const [st, setSt] = useState<CaptureState | null>(null);
+  const [notes, setNotes] = useState<Note[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<string>("*");
-  const head = useRef<HTMLHeadingElement>(null);
   const tz = data.hours.timeZone;
   const load = useCallback(async () => {
     try {
-      setSt(await call<CaptureState>("capture.load", { ...(query.trim() ? { query } : {}), ...(filter === "*" ? {} : { clientKey: filter === "-" ? "" : filter }) }));
+      setNotes((await call<CaptureState>("capture.load", { ...(query.trim() ? { query } : {}), ...(filter === "*" ? {} : { clientKey: filter === "-" ? "" : filter }) })).notes);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load captures");
+      setError(e instanceof Error ? e.message : "Could not load notes");
     }
   }, [query, filter]);
   useEffect(() => {
     const id = setTimeout(() => void load(), 150);
     return () => clearTimeout(id);
   }, [load, version]);
-  useEffect(() => head.current?.focus(), []);
-  const changed = useCallback(() => {
-    void load();
-    onChanged();
-  }, [load, onChanged]);
   const name = (k: string | null) => (k ? (clients.find((c) => c.clientKey === k)?.clientName ?? k) : null);
   const del = async (n: Note) => {
     try {
       await call("note.delete", { id: n.id });
-      setNotice("Note deleted");
-      changed();
+      void load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete");
     }
   };
-
   return (
-    <main className="capture" aria-label="Capture">
-      <div className="loops-head">
-        <h2 ref={head} tabIndex={-1}>
-          Capture <span className="muted">{st ? `${st.inboxCount} to sort` : ""}</span>
-        </h2>
-        <button type="button" className="top-btn" onClick={onClose} title="Back to the week (Esc)">Back</button>
+    <>
+      <div className="cap-filter">
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes" aria-label="Search notes" />
+        <select aria-label="Notes for" value={filter} onChange={(e) => setFilter(e.target.value)}>
+          <option value="*">All clients</option>
+          <option value="-">No client</option>
+          {clients.map((c) => <option key={c.clientKey} value={c.clientKey}>{c.clientName}</option>)}
+        </select>
       </div>
-      <section className="co-section">
-        <CaptureBox data={data} onChanged={changed} />
-      </section>
       {error && <p className="set-problem" role="alert">{error}</p>}
-      {notice && <p className="co-notice" role="status">{notice}</p>}
-      <section className="co-section" aria-label="Inbox">
-        <h3>Inbox <span className="muted">{st?.inbox.length ? "Unsorted captures, newest first" : "Nothing to sort"}</span></h3>
-        <ul className="cap-inbox">
-          {st?.inbox.map((c) => (
-            <li key={c.id} className="cap-item">
-              <p className="cap-text">
-                {c.text}
-                <span className="muted"> · {when(c.createdAt, tz)}{c.clientKey ? ` · ${name(c.clientKey)}` : ""}</span>
-              </p>
-              <SortCapture capture={c} clients={clients} today={st.today} onDone={(m) => { setNotice(m); changed(); }} />
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section className="co-section" aria-label="Notes">
-        <h3>Notes</h3>
-        <div className="cap-filter">
-          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes" aria-label="Search notes" />
-          <select aria-label="Notes for" value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <option value="*">All clients</option>
-            <option value="-">No client</option>
-            {clients.map((c) => <option key={c.clientKey} value={c.clientKey}>{c.clientName}</option>)}
-          </select>
-        </div>
-        {st && !st.notes.length && <p className="muted">{query || filter !== "*" ? "No notes match." : "No notes yet."}</p>}
-        <ul className="cap-notes">
-          {st?.notes.map((n) => (
-            <li key={n.id} style={{ "--c": clientColor(n.clientKey ?? undefined, data.clients) } as CSSProperties}>
-              <span className="cap-note-client">{name(n.clientKey) ?? "No client"}</span>
-              <span className="cap-note-text">{n.text}</span>
-              <span className="muted">{when(n.createdAt, tz)}</span>
-              <button type="button" className="mini quiet" onClick={() => void del(n)} aria-label={`Delete note: ${n.text}`}>Delete</button>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </main>
+      {notes && !notes.length && <p className="muted">{query || filter !== "*" ? "No notes match." : "No notes yet."}</p>}
+      <ul className="cap-notes">
+        {notes?.map((n) => (
+          <li key={n.id} style={{ "--c": clientColor(n.clientKey ?? undefined, data.clients) } as CSSProperties}>
+            <span className="cap-note-client">{name(n.clientKey) ?? "No client"}</span>
+            <span className="cap-note-text">{n.text}</span>
+            <span className="muted">{when(n.createdAt, tz)}</span>
+            <button type="button" className="mini quiet" onClick={() => void del(n)} aria-label={`Delete note: ${n.text}`}>Delete</button>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
+
+export { when as captureWhen };

@@ -18,12 +18,15 @@ import { Details } from "./Details.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
-import { NowStrip, countdown, timerLeft } from "./NowStrip.tsx";
-import { Loops } from "./Loops.tsx";
+import { NowStrip, TopTimer } from "./NowStrip.tsx";
+import { Inbox } from "./Inbox.tsx";
+import { Today } from "./Today.tsx";
+import { ritualFor, RITUAL_NAMES, type Ritual } from "../plan/ritual.ts";
+import type { Pick } from "../plan/types.ts";
 import { CloseOut } from "./CloseOut.tsx";
 import { CheckIn } from "./CheckIn.tsx";
 import { PlanWeek } from "./PlanWeek.tsx";
-import { CaptureDialog, CaptureView } from "./Capture.tsx";
+import { CaptureDialog } from "./Capture.tsx";
 import { borrowedSummary } from "../plan/borrow.ts";
 import { formatDuration } from "../week/format.ts";
 import { PopupMenu } from "./Menus.tsx";
@@ -31,7 +34,7 @@ import { borrowStep, timerStep } from "./menu.ts";
 import { nowStrip } from "../plan/now.ts";
 import { cardHalves, slotOf, validHalf } from "./halves.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
-import { SampleSources, weekLabel } from "./labels.ts";
+import { clientColor, SampleSources, weekLabel } from "./labels.ts";
 import { SAMPLE_WEEK } from "../fixtures/sample-week.ts";
 import { useLayout } from "./viewport.ts";
 import { commandList, type MenuEnv, type View } from "./menu.ts";
@@ -65,7 +68,9 @@ export function App() {
   const [keysOpen, setKeysOpen] = useState(false);
   /** Settings (step 6b): the section shown, or null when closed. It takes the week's place. */
   const [settingsAt, setSettingsAt] = useState<SettingsSectionId | null>(null);
-  /** The Loops view (step 6c) takes the week's place too. */
+  /** The base view (step 10): Today (the default) or the Week. Other views sit on top and Esc returns here. */
+  const [base, setBase] = useState<"today" | "week">("today");
+  /** The Inbox (step 10): open loops and unsorted captures, in the base view's place. Replaces Loops and Capture. */
   const [loopsOpen, setLoopsOpen] = useState(false);
   /** Close out (step 7) for a day, and Check-in for today, take the week's place too. */
   const [closeOutAt, setCloseOutAt] = useState<IsoDate | null>(null);
@@ -76,8 +81,9 @@ export function App() {
   const [planWeekVersion, setPlanWeekVersion] = useState(0);
   /** Quick capture (step 9): the box over any view, and the Capture view (inbox and notes) in the week's place. */
   const [captureOpen, setCaptureOpen] = useState(false);
-  const [captureView, setCaptureView] = useState(false);
   const [captureVersion, setCaptureVersion] = useState(0);
+  /** The focus screen (step 10): a calm full view while focus runs. Esc goes back; the timer keeps running. */
+  const [focusOpen, setFocusOpen] = useState(false);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** The focus timer menu (F or the top bar Focus button), anchored where it was opened. */
   const [timerMenuAt, setTimerMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -175,6 +181,9 @@ export function App() {
       return false;
     }
   }, []);
+
+  /** Start focus (step 10): on a pick (its size's length), or a plain focus timer. */
+  const startFocus = useCallback((p: Pick | null) => void runTimer("timer.start", p ? { pickId: p.id } : { kind: "focus" }), [runTimer]);
 
   /** Loads a week. Data on screen stays put until the new data arrives; a failure keeps it (afterLoad). */
   const load = useCallback(
@@ -429,7 +438,6 @@ export function App() {
       setLoopsOpen(false);
       setCloseOutAt(null);
       setCheckInOpen(false);
-      setCaptureView(false);
       setPlanWeekAt(w);
       if (w !== weekRef.current) void load({ weekStart: w });
     },
@@ -441,29 +449,38 @@ export function App() {
       setCloseOutAt(null);
       setCheckInOpen(false);
       setPlanWeekAt(null);
-      setCaptureView(false);
-      if (v === "capture") {
+      setFocusOpen(false);
+      if (v === "inbox" || v === "loops" || v === "capture") {
         closePlanDay();
         setDetailsOpen(false);
         setSettingsAt(null);
-        setLoopsOpen(false);
-        setCaptureView(true);
+        setLoopsOpen(true);
       } else if (v === "planweek") {
         // The week a nudge asked for, else next week.
         if (data) openPlanWeek(data.weekNudge.badge ?? addWeeks(mondayOf(data.planDay.date), 1));
-      } else if (v === "week") {
+      } else if (v === "week" || v === "today") {
         closePlanDay();
         setDetailsOpen(false);
         setSettingsAt(null);
         setLoopsOpen(false);
+        setBase(v);
+        // Both start on today's week, the Week view with the current half-day selected.
+        if (data && data.weekStart !== data.today.weekStart) void load({ weekStart: data.today.weekStart }, { selectToday: true });
+        else if (data && v === "week") setSel({ dayIndex: data.today.dayIndex, half: data.today.half });
+      } else if (v === "focus") {
+        closePlanDay();
+        setDetailsOpen(false);
+        setSettingsAt(null);
+        setLoopsOpen(false);
+        setFocusOpen(true);
       } else if (v === "settings") {
         setLoopsOpen(false);
         setSettingsAt("you");
-      } else if (v === "loops" || v === "closeout" || v === "checkin") {
+      } else if (v === "closeout" || v === "checkin") {
         closePlanDay();
         setDetailsOpen(false);
         setSettingsAt(null);
-        setLoopsOpen(v === "loops");
+        setLoopsOpen(false);
         if (v === "closeout") setCloseOutAt(data?.planDay.date ?? null);
         if (v === "checkin") {
           setCheckInOpen(true);
@@ -479,6 +496,21 @@ export function App() {
     },
     [closePlanDay, openPlanDay, data, load, openPlanWeek],
   );
+
+  /** The ritual the Plan button opens now (step 10): Plan the day, Check-in, Close out or Plan the week. */
+  const ritualNow = useCallback((): Ritual => {
+    if (!data) return "planday";
+    const zn = zonedNow(data.hours.timeZone);
+    const today = zn.toPlainDate().toString();
+    const h = hoursOn(data.hours, today);
+    return ritualFor({
+      time: zn.toPlainTime().toString({ smallestUnit: "minute" }),
+      today: { workday: data.planDay.workday, amEnd: h.am?.end ?? null, end: dayEndOf(data.hours, today), committed: data.planDay.committed, closedOut: data.closeOut.done },
+      weekNudge: !!data.weekNudge.badge,
+      closeoutLeadMinutes: data.planning.closeoutReminderMinutes,
+    }).ritual;
+  }, [data, zonedNow]);
+  const openRitual = useCallback((r: Ritual = ritualNow()) => setView(r), [ritualNow, setView]);
 
   // A per-second tick only while a timer runs; when it reaches zero locally, reload shortly after so the server's end shows.
   const timerRunning = !!data?.timer?.running;
@@ -624,10 +656,10 @@ export function App() {
       if (cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey) return;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
       const inMenu = !!(e.target as HTMLElement | null)?.closest?.(".popup-menu");
-      if ((settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureView) && e.key === "Escape" && !inMenu && !captureOpen) {
+      if ((settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || focusOpen) && e.key === "Escape" && !inMenu && !captureOpen) {
         e.preventDefault();
         setPlanWeekAt(null);
-        setCaptureView(false);
+        setFocusOpen(false);
         setSettingsAt(null);
         setLoopsOpen(false);
         setCloseOutAt(null);
@@ -639,12 +671,19 @@ export function App() {
         setCheckInOpen(false);
         setPlanWeekAt(null);
         setSettingsAt("you");
+      } else if (["1", "2", "3", "4", "t", "T"].includes(e.key) && !typing && !detailsOpen && !inMenu && !captureOpen) {
+        // Step 10: the four places in the top bar. T keeps going to Today.
+        e.preventDefault();
+        if (e.key === "1" || e.key === "t" || e.key === "T") setView("today");
+        else if (e.key === "2") setView("week");
+        else if (e.key === "3") openRitual();
+        else setView(loopsOpen ? base : "inbox");
+      } else if ((e.key === "p" || e.key === "P" || e.key === "i" || e.key === "I") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu && !captureOpen) {
+        e.preventDefault();
+        setView("planday");
       } else if ((e.key === "l" || e.key === "L") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
         e.preventDefault();
-        setCloseOutAt(null);
-        setCheckInOpen(false);
-        setPlanWeekAt(null);
-        setLoopsOpen((o) => !o);
+        setView(loopsOpen ? base : "inbox");
       } else if ((e.key === "n" || e.key === "N") && !typing && !detailsOpen && !inMenu && !captureOpen) {
         e.preventDefault();
         setCaptureOpen(true);
@@ -669,11 +708,11 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt, captureView, captureOpen, cmdOpen, keysOpen, pd, detailsOpen, setView]);
+  }, [settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, captureOpen, cmdOpen, keysOpen, pd, detailsOpen, setView, openRitual, base]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureView || captureOpen || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (base !== "week" || focusOpen || settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (e.target instanceof HTMLInputElement) return;
       if ((e.target as HTMLElement | null)?.closest?.(".popup-menu")) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
@@ -701,12 +740,6 @@ export function App() {
         case " ":
           e.preventDefault();
           return setDetailsOpen(true);
-        case "t": return goToday();
-        case "p":
-        case "i": // the old key, kept as an alias
-          e.preventDefault();
-          void openPlanDay();
-          return;
         case "r":
           e.preventDefault();
           auto.trigger("key");
@@ -717,7 +750,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt, captureView, captureOpen]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, base, captureOpen]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
 
@@ -773,7 +806,7 @@ export function App() {
       planning: data.planning,
       timer: data.timer,
       runTimer,
-      openLoops: () => setView("loops"),
+      openLoops: () => setView("inbox"),
       openCloseOut: (d) => {
         setView("closeout");
         if (d) setCloseOutAt(d);
@@ -782,7 +815,8 @@ export function App() {
       openPlanWeek: (w) => (w ? openPlanWeek(w) : setView("planweek")),
       planWeekOpen: planWeekAt,
       openCapture: () => setCaptureOpen(true),
-      openCaptures: () => setView("capture"),
+      openCaptures: () => setView("inbox"),
+      openRitual: () => openRitual(),
       commitWeek: () => {
         if (planWeekAt)
           void call("weekplan.commit", { weekStart: planWeekAt }).then(
@@ -841,7 +875,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, openRitual]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.kind === "session") {
     return (
@@ -863,8 +897,16 @@ export function App() {
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
   const today = week.days.some((d) => d.date === localToday) ? localToday : "";
   const weekendNote = Temporal.PlainDate.from(localToday).dayOfWeek >= 6 && data.weekStart === data.today.weekStart ? `Today is ${shortDay(localToday)} · showing next week` : null;
-  const view: View = settingsAt !== null ? "settings" : captureView ? "capture" : planWeekAt !== null ? "planweek" : loopsOpen ? "loops" : closeOutAt !== null ? "closeout" : checkInOpen ? "checkin" : pd ? "planday" : "week";
+  const view: View = settingsAt !== null ? "settings" : focusOpen ? "focus" : planWeekAt !== null ? "planweek" : loopsOpen ? "inbox" : closeOutAt !== null ? "closeout" : checkInOpen ? "checkin" : pd ? "planday" : base;
+  const ritualOpen: Ritual | null = view === "planday" || view === "checkin" || view === "closeout" || view === "planweek" ? view : null;
+  const suggested = ritualNow();
+  const inboxCount = data.openLoops + data.captures;
+  const showWeekNav = view === "week" || view === "planday";
   const borrowWeek = borrowedSummary(data.borrowed, week.days[0]!.date, week.days.at(-1)!.date);
+  // The running timer's pick and client, for the top bar timer and the focus screen (client color).
+  const timerPick = data.timer?.pickId != null ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).find((p) => p.id === data.timer!.pickId) ?? null : null;
+  const timerClient = timerPick ? (data.planClients.find((c) => c.clientKey === timerPick.clientKey)?.clientName ?? timerPick.clientKey) : null;
+  const timerColor = timerPick ? clientColor(timerPick.clientKey, data.clients) : "var(--accent)";
 
   const samples = new Set(data.sources.filter((s) => s.sample).map((s) => s.source));
 
@@ -880,70 +922,68 @@ export function App() {
           <span className="name">Coopilot</span>
         </div>
         <nav className="views" aria-label="Views">
-          <button type="button" className="view-tab" aria-current={view === "week" ? "page" : undefined} onClick={() => setView("week")} title="Week (Esc closes other views)">
-            Week
-          </button>
-          <button type="button" className="view-tab" aria-current={view === "planday" ? "page" : undefined} onClick={() => setView("planday")} title={`Plan ${shortDay(target.date)} (P)`}>
-            Plan the day <kbd>P</kbd>
-          </button>
-          <button type="button" className="view-tab" aria-current={view === "loops" ? "page" : undefined} onClick={() => setView(view === "loops" ? "week" : "loops")} title="What you owe people (L)">
-            Loops{data.openLoops > 0 && <span className="count">{data.openLoops}</span>} <kbd>L</kbd>
-          </button>
-          <button type="button" className="view-tab" aria-current={view === "checkin" ? "page" : undefined} onClick={() => setView(view === "checkin" ? "week" : "checkin")} title="Midday: what still fits today (M)">
-            Check-in <kbd>M</kbd>
-          </button>
-          <button type="button" className="view-tab" aria-current={view === "closeout" ? "page" : undefined} onClick={() => setView(view === "closeout" ? "week" : "closeout")} title="End of day: picks, resume notes, loops (E)">
-            Close out{data.closeOut.done && <span className="count done" title="Today is closed out">✓</span>} <kbd>E</kbd>
-          </button>
-          <button type="button" className="view-tab" aria-current={view === "planweek" ? "page" : undefined} onClick={() => setView(view === "planweek" ? "week" : "planweek")} title={data.weekNudge.badge ? `The week of ${shortDay(data.weekNudge.badge)} isn't committed yet (W)` : "Commit features per client to a week (W)"}>
-            Plan the week{data.weekNudge.badge && <span className="count nudge" aria-label="not committed yet">!</span>} <kbd>W</kbd>
-          </button>
-        </nav>
-        <nav className="weeknav" aria-label="Week">
-          <button type="button" onClick={() => changeWeek(-1)} aria-label="Previous week" title="Previous week ([)">
-            ‹
-          </button>
-          <h1>Week of {weekLabel(week.days[0]!.date, week.days[4]!.date)}</h1>
-          <button type="button" onClick={() => changeWeek(1)} aria-label="Next week" title="Next week (])">
-            ›
-          </button>
-          <button type="button" className="today-btn" onClick={goToday} title="Go to today (T)">
+          <button type="button" className="view-tab" aria-current={view === "today" ? "page" : undefined} onClick={() => setView("today")} title="Today: now, next and Start focus (1 or T)">
             Today
           </button>
-          {weekendNote && <span className="weekend-note">{weekendNote}</span>}
-          {(borrowWeek.totalMinutes > 0 || borrowWeek.unpaid > 0) && (
-            <button
-              type="button"
-              className="borrow-chip"
-              title="Borrowed time: slipped focus you said you'd make up"
-              onClick={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                setBorrowMenuAt({ x: r.left, y: r.bottom + 4 });
-              }}
-            >
-              Borrowed {formatDuration(borrowWeek.totalMinutes) || "0m"} this week{borrowWeek.unpaid ? ` · ${borrowWeek.unpaid} unpaid` : " · paid"}
-            </button>
+          <button type="button" className="view-tab" aria-current={view === "week" ? "page" : undefined} onClick={() => setView("week")} title="The week, half-day by half-day (2)">
+            Week
+          </button>
+          <button type="button" className={`view-tab${ritualOpen ? "" : " plan-tab"}`} aria-current={ritualOpen ? "page" : undefined} onClick={() => openRitual()} title={`Plan: ${RITUAL_NAMES[suggested]} now (3)`}>
+            Plan{!ritualOpen && <span className="plan-now">{RITUAL_NAMES[suggested]}</span>}
+          </button>
+          <button type="button" className="view-tab" aria-current={view === "inbox" ? "page" : undefined} onClick={() => setView(view === "inbox" ? base : "inbox")} title="Loops you owe and captures to sort (4 or L)">
+            Inbox{inboxCount > 0 && <span className="count" aria-label={`${inboxCount} waiting`}>{inboxCount}</span>}
+          </button>
+        </nav>
+        <nav className="weeknav" aria-label="Week" hidden={!showWeekNav}>
+          {showWeekNav && (
+            <>
+              <button type="button" onClick={() => changeWeek(-1)} aria-label="Previous week" title="Previous week ([)">
+                ‹
+              </button>
+              <h1>Week of {weekLabel(week.days[0]!.date, week.days[4]!.date)}</h1>
+              <button type="button" onClick={() => changeWeek(1)} aria-label="Next week" title="Next week (])">
+                ›
+              </button>
+              {data.weekStart !== data.today.weekStart && (
+                <button type="button" className="today-btn" onClick={goToday} title="Back to this week">
+                  This week
+                </button>
+              )}
+              {weekendNote && <span className="weekend-note">{weekendNote}</span>}
+              {(borrowWeek.totalMinutes > 0 || borrowWeek.unpaid > 0) && (
+                <button
+                  type="button"
+                  className="borrow-chip"
+                  title="Borrowed time: slipped focus you said you'd make up"
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setBorrowMenuAt({ x: r.left, y: r.bottom + 4 });
+                  }}
+                >
+                  {borrowWeek.unpaid ? `${formatDuration(borrowWeek.unpaidMinutes)} to make up` : `Borrowed ${formatDuration(borrowWeek.totalMinutes)}, paid`}
+                </button>
+              )}
+            </>
           )}
         </nav>
         <div className="top-actions">
-          <button type="button" className="top-btn capture-btn" aria-current={view === "capture" ? "page" : undefined} onClick={() => setCaptureOpen(true)} title={`Quick capture: one line, saved at once (N)${data.captures ? `. ${data.captures} to sort` : ""}`}>
-            Capture{data.captures > 0 && <span className="count" aria-label={`${data.captures} to sort`}>{data.captures}</span>} <kbd>N</kbd>
+          {data.timer && (
+            <TopTimer
+              t={data.timer}
+              nowMs={secondMs}
+              color={timerColor}
+              client={timerClient}
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setTimerMenuAt({ x: r.right, y: r.bottom + 4 });
+              }}
+            />
+          )}
+          <button type="button" className="top-btn capture-btn" onClick={() => setCaptureOpen(true)} title="Quick capture: one line, saved at once (N)">
+            Capture <kbd>N</kbd>
           </button>
-          <button
-            type="button"
-            className={`top-btn timer-btn${data.timer ? " timer-on" : ""}`}
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              setTimerMenuAt({ x: r.right, y: r.bottom + 4 });
-            }}
-            title="Focus timer (F)"
-          >
-            {data.timer ? (data.timer.ended ? "Time's up" : countdown(timerLeft(data.timer, secondMs))) : "Focus"} <kbd>F</kbd>
-          </button>
-          <button type="button" className="top-btn" onClick={() => auto.trigger("button")} disabled={loading} title="Refresh all sources (R)">
-            {loading ? "Loading…" : "Refresh"}
-          </button>
-          <button type="button" className="top-btn cmd-btn" onClick={openCommands} title="Every command, with its shortcut">
+          <button type="button" className="top-btn cmd-btn" onClick={openCommands} title="Every command, with its shortcut (Ctrl K)">
             Commands <kbd>Ctrl K</kbd>
           </button>
           <button type="button" className="top-btn" aria-current={view === "settings" ? "page" : undefined} onClick={() => (settingsAt === null ? setSettingsAt("you") : setSettingsAt(null))} title="Settings (,)">
@@ -951,7 +991,7 @@ export function App() {
           </button>
         </div>
       </header>
-      {strip && <NowStrip strip={strip} onSelect={selectNow} timer={data.timer} nowMs={secondMs} onTimer={(a) => void runTimer(a)} borrowed={borrowWeek.unpaid ? { unpaid: borrowWeek.unpaid, minutes: borrowWeek.unpaidMinutes } : null} />}
+      {strip && view !== "today" && view !== "focus" && <NowStrip strip={strip} onSelect={selectNow} timer={null} nowMs={secondMs} onTimer={(a) => void runTimer(a)} borrowed={borrowWeek.unpaid ? { unpaid: borrowWeek.unpaid, minutes: borrowWeek.unpaidMinutes } : null} />}
 
       {!data.config.ok && (
         <div className="config-banner" role="alert">
@@ -967,12 +1007,21 @@ export function App() {
         </div>
       )}
 
-      {captureView && settingsAt === null ? (
-        <CaptureView data={data} version={captureVersion} onClose={() => setCaptureView(false)} onChanged={reloadQuiet} />
-      ) : planWeekAt !== null && settingsAt === null ? (
+      {ritualOpen && (
+        <nav className="ritual-bar" aria-label="Rituals">
+          {(["planday", "checkin", "closeout", "planweek"] as const).map((r) => (
+            <button key={r} type="button" className="ritual-chip" aria-current={ritualOpen === r ? "page" : undefined} onClick={() => openRitual(r)}>
+              {RITUAL_NAMES[r]}
+              {r === suggested && ritualOpen !== r && <span className="ritual-now">now</span>}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {planWeekAt !== null && settingsAt === null ? (
         <PlanWeek weekStart={planWeekAt} data={data} version={planWeekVersion} onWeek={openPlanWeek} onClose={() => setPlanWeekAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : loopsOpen && settingsAt === null ? (
-        <Loops timeZone={data.hours.timeZone} onClose={() => setLoopsOpen(false)} onChanged={reloadQuiet} />
+        <Inbox data={data} version={captureVersion} onClose={() => setLoopsOpen(false)} onChanged={reloadQuiet} />
       ) : closeOutAt !== null && settingsAt === null ? (
         <CloseOut key={closeOutAt} date={closeOutAt} data={data} onDate={setCloseOutAt} onClose={() => setCloseOutAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : checkInOpen && settingsAt === null ? (
@@ -995,6 +1044,20 @@ export function App() {
           viewRange={data.week.range.mode}
           setViewRange={(r) => void setViewRange(r)}
           runTime={runTime}
+        />
+      ) : base === "today" && !pd ? (
+        <Today
+          data={data}
+          strip={strip}
+          target={target}
+          now={now ?? new Date(clock).toISOString()}
+          nowMs={secondMs}
+          onStart={startFocus}
+          onFocusScreen={() => setView("focus")}
+          onPlan={(d) => void openPlanDay(d)}
+          onInbox={() => setView("inbox")}
+          onWeek={() => setView("week")}
+          onFix={() => setSettingsAt("connections")}
         />
       ) : (
       <WeekGrid
@@ -1067,7 +1130,7 @@ export function App() {
       {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}
       {borrowMenuAt && <PopupMenu at={borrowMenuAt} step={borrowStep(env, data.borrowed)} onClose={() => setBorrowMenuAt(null)} />}
       {keysOpen && <KeyLegend onClose={() => setKeysOpen(false)} />}
-      {captureOpen && <CaptureDialog data={data} onClose={() => setCaptureOpen(false)} onOpenView={() => { setCaptureOpen(false); setView("capture"); }} onChanged={() => { setCaptureVersion((n) => n + 1); reloadQuiet(); }} />}
+      {captureOpen && <CaptureDialog data={data} onClose={() => setCaptureOpen(false)} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); reloadQuiet(); }} />}
     </div>
     </MenuHost>
     </PlanCtx.Provider>

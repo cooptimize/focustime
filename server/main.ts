@@ -124,7 +124,8 @@ const server = createApp({
   port,
   token,
   log,
-  ...(devMiddleware ? { devMiddleware } : { distDir: join(root, "dist") }),
+  // COOPILOT_DIST: a verification build elsewhere, so checking work never swaps the UI the service serves.
+  ...(devMiddleware ? { devMiddleware } : { distDir: process.env.COOPILOT_DIST ?? join(root, "dist") }),
   takeOpenRequest: () => takeOpenRequest(runtimeDir),
   ctx: {
     loadConfig,

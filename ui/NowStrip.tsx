@@ -40,6 +40,19 @@ export function NowStrip({ strip, onSelect, timer = null, nowMs = Date.now(), on
   );
 }
 
+/** The compact timer in the top bar (step 10), on every view while a timer runs: client color, time left, the pick. */
+export function TopTimer({ t, nowMs, color, client, onClick }: { t: TimerView; nowMs: number; color: string; client: string | null; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void }) {
+  const left = timerLeft(t, nowMs);
+  return (
+    <button type="button" className={`top-timer ${t.kind}${t.ended ? " ended" : ""}${t.running ? "" : " paused"}`} style={{ "--c": color } as React.CSSProperties} onClick={onClick} title={`${t.kind === "break" ? "Break" : "Focus"}: ${t.label}${client ? ` (${client})` : ""}. Open the focus screen`}>
+      <span className="top-timer-dot" aria-hidden="true" />
+      <strong className="top-timer-count">{t.ended ? "Time's up" : countdown(left)}</strong>
+      {!t.running && !t.ended && <span className="top-timer-state">paused</span>}
+      <span className="top-timer-label">{t.kind === "break" ? "Break" : t.label}</span>
+    </button>
+  );
+}
+
 function TimerBox({ t, nowMs, onTimer }: { t: TimerView; nowMs: number; onTimer: (action: string) => void }) {
   const left = timerLeft(t, nowMs);
   // The pick's focused time so far, this session included (step 6d), when the pick is in the week shown.

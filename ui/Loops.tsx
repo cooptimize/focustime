@@ -1,11 +1,10 @@
 // Loops (step 6c, step 7): what I owe people. Opened by rules (pick done but DevOps not updated, slipped work, a
 // blocked item, a flex session) or by hand; closed by a DevOps signal or "mark as told" with an optional note. Closed
 // ones are hidden unless asked for. Local only: nothing is posted anywhere; heads-up drafts are copied by hand.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { LoopView } from "../actions/types.ts";
 import { call } from "./api.ts";
 
-type Props = { timeZone: string; onClose: () => void; onChanged: () => void };
 
 const zoned = (iso: string, tz: string) => (iso.includes("[") ? Temporal.ZonedDateTime.from(iso) : Temporal.Instant.from(iso).toZonedDateTimeISO(tz)).withTimeZone(tz);
 const dayOf = (z: Temporal.ZonedDateTime) => z.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -149,69 +148,5 @@ export function AddLoop({ onAdded }: { onAdded: () => void }) {
       </button>
       {error && <span className="set-problem">{error}</span>}
     </form>
-  );
-}
-
-export function Loops({ timeZone, onClose, onChanged }: Props) {
-  const [loops, setLoops] = useState<LoopView[] | null>(null);
-  const [showClosed, setShowClosed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const head = useRef<HTMLHeadingElement>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const r = await call<{ loops: LoopView[] }>("loops.list", { includeClosed: showClosed });
-      setLoops(r.loops);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load loops");
-    }
-  }, [showClosed]);
-  useEffect(() => {
-    void load();
-  }, [load]);
-  useEffect(() => head.current?.focus(), []);
-
-  const close = async (id: number, note: string | null) => {
-    try {
-      await call("loop.close", { id, note });
-      await load();
-      onChanged();
-      return true;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not close it");
-      return false;
-    }
-  };
-
-  const open = loops?.filter((l) => !l.closedAt) ?? [];
-  const closed = loops?.filter((l) => l.closedAt) ?? [];
-  const row = (l: LoopView) => <LoopRow key={l.id} l={l} timeZone={timeZone} onClosed={(n) => close(l.id, n)} />;
-
-  return (
-    <main className="loops" aria-label="Loops">
-      <div className="loops-head">
-        <h2 ref={head} tabIndex={-1}>
-          Loops <span className="muted">{loops ? `${open.length} open` : ""}</span>
-        </h2>
-        <AddLoop onAdded={() => { void load(); onChanged(); }} />
-        <label className="set-check">
-          <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} /> Show closed
-        </label>
-        <button type="button" className="top-btn" onClick={onClose}>
-          Back to the week <kbd>Esc</kbd>
-        </button>
-      </div>
-      <p className="muted loops-note">Things you owe someone, newest first. Rules open them: a pick done but its DevOps item not updated, work that slipped, a blocked item, a flex session. A later DevOps fetch closes the DevOps ones. Nothing is posted anywhere.</p>
-      {error && <p className="set-problem">{error}</p>}
-      {loops && !open.length && <p className="loops-empty">No open loops.</p>}
-      <ul className="loop-list">{open.map(row)}</ul>
-      {showClosed && closed.length > 0 && (
-        <>
-          <h3>Closed</h3>
-          <ul className="loop-list">{closed.map(row)}</ul>
-        </>
-      )}
-    </main>
   );
 }
