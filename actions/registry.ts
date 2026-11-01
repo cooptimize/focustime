@@ -16,13 +16,15 @@ export type ActionTarget =
   | "unavailable" // one unavailable time
   | "flex" // one flex session
   | "loop" // one loop
-  | "borrowed"; // one borrowed time record
+  | "borrowed" // one borrowed time record
+  | "feature" // a feature on Plan the week
+  | "week"; // a week (its Monday)
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Loops";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -35,6 +37,13 @@ export const ACTIONS = [
   { name: "auth.connect_microsoft", title: "Connect Outlook", group: "Sources", target: "none", summary: "Sign in to Microsoft in your browser (read-only calendar)" },
   { name: "auth.connect_google", title: "Connect Google Calendar", group: "Sources", target: "none", summary: "Sign in to Google in your browser (read-only calendar)" },
   { name: "auth.disconnect", title: "Disconnect a calendar", group: "Sources", target: "calendar", summary: "Forget a calendar sign-in and its cached events" },
+  { name: "weekplan.load", title: "Plan the week", group: "Plan the week", target: "week", shortcut: "W", summary: "Commit features per client to a week (next week by default); a past week is a review" },
+  { name: "weekplan.set_feature", title: "Commit a feature to the week", group: "Plan the week", target: "feature", summary: "Give a feature a number of your blocks; 0 takes it off" },
+  { name: "weekplan.place", title: "Place a feature on a block", group: "Plan the week", target: "feature", summary: "Put a committed feature on one of its client's blocks or an Open half-day" },
+  { name: "weekplan.commit", title: "Commit the week", group: "Plan the week", target: "week", summary: "Commit the week's features; it stays editable and can be committed again" },
+  { name: "feature.brief", title: "Copy Coop brief", group: "Plan the week", target: "feature", summary: "Markdown for Coop to propose user stories: DevOps fields only" },
+  { name: "feature.mark_breakdown", title: "Mark as being broken down", group: "Plan the week", target: "feature", summary: "Local note that a feature is with Coop or the team for stories" },
+  { name: "loop.ask_priorities", title: "Create loop: ask about priorities", group: "Plan the week", target: "week", summary: "For a client block next week with no open work assigned to you" },
   { name: "planday.start", title: "Plan the day", group: "Plan the day", target: "day", shortcut: "P", summary: "Turn a day's free time into committed picks (I also works)" },
   { name: "planday.commit", title: "Commit the plan", group: "Plan the day", target: "plan", shortcut: "C", summary: "Commit the day being planned" },
   { name: "closeout.load", title: "Close out", group: "Close out", target: "day", shortcut: "E", summary: "End of day: picks done or not, resume notes, loops (about 3 minutes)" },

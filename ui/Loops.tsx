@@ -24,7 +24,7 @@ const span = (s: { start: string; end: string }, tz: string) => {
 const KIND_LABEL: Record<string, string> = { devops_update: "DevOps update", slip: "Heads-up", blocked: "Blocker", flex_update: "Flex session", manual: "Added by me" };
 
 /** Copies text; falls back to selecting it when the clipboard isn't available. */
-async function copy(text: string, el: HTMLTextAreaElement | null): Promise<boolean> {
+export async function copy(text: string, el: HTMLTextAreaElement | null): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     return true;

@@ -354,6 +354,7 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
   const pl = p.data.planning;
   const [types, setTypes] = useState(pl.pickablePortfolioTypes.join(", "));
   const [v, setV] = useState({ S: pl.sizes.S, M: pl.sizes.M, L: pl.sizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes, focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes, checkinReminderMinutes: pl.checkinReminderMinutes });
+  const [nudges, setNudges] = useState({ weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon });
   const { problems, status, save } = useSave(p.onSavedData);
   const num = (k: Exclude<keyof typeof v, "endSound">, label: string, field: string, hint: string, step = 5, max = 480) => (
     <Field label={label} hint={hint}>
@@ -377,6 +378,7 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
           followGraceDays: v.followGraceDays,
           closeoutReminderMinutes: v.closeoutReminderMinutes,
           checkinReminderMinutes: v.checkinReminderMinutes,
+          ...nudges,
         });
       }}
     >
@@ -396,6 +398,19 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
       <div className="set-grid">
         {num("checkinReminderMinutes", "Check-in reminder (minutes after lunch)", "plan.checkin_reminder_minutes", "One reminder after lunch ends (midday when there is no lunch), only on a committed day. 0 is right at the end of lunch.", 5, 120)}
         {num("closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "plan.closeout_reminder_minutes", "One reminder this long before the end of the working day, if Close out isn't done.", 5, 120)}
+      </div>
+      <h3>Plan the week</h3>
+      <div className="set-grid">
+        {([
+          ["weekNudgeThu", "week_nudge_thu", "Thursday nudge", "For next week. Leave empty to turn it off."],
+          ["weekNudgeFri", "week_nudge_fri", "Friday nudge", "For next week, if Thursday's didn't get it committed."],
+          ["weekNudgeMon", "week_nudge_mon", "Monday nudge", "For this week, if it still isn't committed."],
+        ] as const).map(([k, toml, label, hint]) => (
+          <Field key={k} label={label} hint={`${hint} Each fires once, only while that week isn't committed.`}>
+            <input type="time" value={nudges[k]} onChange={(e) => setNudges({ ...nudges, [k]: e.target.value })} />
+            <Problems all={problems} field={`plan.${toml}`} />
+          </Field>
+        ))}
       </div>
       <h3>Clients followed</h3>
       <div className="set-grid">

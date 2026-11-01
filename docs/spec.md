@@ -382,3 +382,17 @@ Purpose: in about two minutes, turn today's real capacity into a short, committe
 - **Reminders (D153):** Close out near the end of the day, Check-in at the end of lunch, each once a day, offsets in Settings > Planning.
 - **Contract change:** plan store migration 5 (D148); config `[plan] closeout_reminder_minutes`, `checkin_reminder_minutes`; DevOps `System.Tags` and a watched-by-id read (D149); actions `closeout.load`, `closeout.commit`, `pick.make_up`, `note.set`, `loop.add`, `borrow.pay`; `week.load` gains `resumeNotes`, `borrowed`, `closeOut`; `LoopView` gains who, kind, item, draft and close fields; `PlanDayState.resumeNotes`; `--clock` server flag (D154). All additive for existing callers.
 - **Rollback:** revert the commit. Migration 5 only adds columns and tables; the pre-migration copy `plan.db.bak-v4-<stamp>` is next to the store. The two config keys are optional and can stay.
+
+## 24. Step 8: Plan the week (authorized Oct 31)
+
+- **Step 7 answers:** Q42 (D156), Q43 (D157), Q45 (D158), Q46 (D159).
+- **Plan the week (D160):** tab and key W; next week by default (or the week a nudge asked for); any week; past weeks are a review.
+- **Features and epics (D161, D162):** read-only, followed clients only; tiers from backlog levels; assigned to me or parent of my stories; state, target date (field detected per process), children with assignees, board order.
+- **My share of time (D163):** blocks per feature or drop on blocks; fit per client after PTO, meetings, unavailable time and unpaid borrowed time: fits, tight, over. No sizing or forecasting.
+- **Readiness (D164):** Block needs work, Needs breakdown, Needs features, No target date, one action each.
+- **Coop brief (D165):** markdown from DevOps fields only, copied.
+- **Commit the week (D166):** local, editable, re-committable; week cards and Plan the day show committed features first.
+- **Summary strip:** open loops, unpaid borrowed time, PTO days, flex sessions.
+- **Nudges (D167):** Thursday, Friday, Monday, each once, configurable; tab badge until committed.
+- **Contract change:** `System.ChangedBy` read (`changedByMe`, `assignedTo`, `targetDate` on items); a portfolio read and an on-demand description read; committed features read by id in `week.load`'s DevOps read; plan store migration 6; config `[plan] week_nudge_thu`, `week_nudge_fri`, `week_nudge_mon`; actions `weekplan.load`, `weekplan.set_feature`, `weekplan.place`, `weekplan.commit`, `feature.brief`, `feature.mark_breakdown`, `loop.ask_priorities`; `week.load` gains `weekPlan`, `weekFeatures`, `weekNudge`; `PlanDayState.weekFeatures`; `ClientWork.committed`; loop kind `priorities`. All additive for existing callers. Nothing is written to DevOps, Outlook, Google or Dataverse.
+- **Rollback:** revert the commit. Migration 6 only adds tables; the pre-migration copy `plan.db.bak-v5-<stamp>` is next to the store. The three config keys are optional and can stay.

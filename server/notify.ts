@@ -1,6 +1,7 @@
 // One desktop reminder per day with working hours when today isn't committed yet (step 5), only near the day start (Q23). Never
 // repeats: the store keeps a marker per date, so a restart or a second check the same day sends nothing.
 import { spawn } from "node:child_process";
+import { WEEK_NUDGE_MESSAGE, weekNudges, type NudgeTimes } from "../plan/weekplan.ts";
 import { hoursOn, type TimeModel } from "../week/hours.ts";
 
 /** The reminder can fire only this long after the day's start (Q23). */
@@ -98,3 +99,34 @@ export async function checkDayReminder(d: DayReminderDeps): Promise<boolean> {
 
 export const CLOSEOUT_MESSAGE = "Time to close out the day: picks, resume notes and loops. Open Coopilot and press E.";
 export const CHECKIN_MESSAGE = "Midday check-in: what still fits this afternoon. Open Coopilot and press M.";
+
+/**
+ * Plan the week nudges (step 8): Thursday and Friday for next week, Monday for this week, each from its time (Settings
+ * > Planning) until the end of that day, only while that week isn't committed, never on a PTO day, and each once per
+ * week (`once`, the store's markOnce). Returns how many were sent.
+ */
+export async function checkWeekNudges(d: {
+  now: () => Temporal.ZonedDateTime;
+  times: () => Promise<NudgeTimes | null>;
+  committed: (weekStart: string) => boolean;
+  off: (date: string) => Promise<boolean>;
+  once: (key: string, weekStart: string) => boolean;
+  send: (body: string) => void;
+}): Promise<number> {
+  const times = await d.times();
+  if (!times) return 0;
+  const now = d.now();
+  const { due } = weekNudges(now, times, d.committed);
+  if (!due.length) return 0;
+  const today = now.toPlainDate().toString();
+  if (await d.off(today).catch(() => false)) return 0;
+  const thisWeek = now.toPlainDate().subtract({ days: now.dayOfWeek - 1 }).toString();
+  let n = 0;
+  for (const x of due) {
+    if (!d.once(x.key, x.weekStart)) continue;
+    d.send(WEEK_NUDGE_MESSAGE(x.weekStart, x.weekStart === thisWeek));
+    n++;
+  }
+  return n;
+}
+

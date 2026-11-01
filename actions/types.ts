@@ -4,7 +4,8 @@ import type { AppConfig, ClientSetting, FieldError, UiConfig } from "../config/s
 import type { EdgeProfile } from "../links/edge.ts";
 import type { TodayTarget } from "../week/dates.ts";
 import type { PlanWeek } from "../plan/types.ts";
-import type { ClientWork, IsoDate, RiskThresholds, SourceResult, StandingBlock, Week } from "../week/types.ts";
+import type { ClientPortfolio, ClientWork, IsoDate, RiskThresholds, SourceResult, StandingBlock, Week } from "../week/types.ts";
+import type { WeekFeature } from "../plan/types.ts";
 import type { TimeModel } from "../week/hours.ts";
 
 export type SourceSummary = Omit<SourceResult<unknown>, "items"> & { itemCount: number };
@@ -43,6 +44,12 @@ export type WeekLoadData = {
   borrowed: BorrowedView[];
   /** Whether today is closed out (step 7). */
   closeOut: { date: IsoDate; done: boolean };
+  /** The loaded week's plan (step 8): committed features per client, with any blocks they are placed on. */
+  weekPlan: WeekPlanView | null;
+  /** Committed features of the loaded week, this week and next week, for the week cards and Plan the day. */
+  weekFeatures: WeekFeature[];
+  /** The Plan the week badge: the week a nudge asked for that still isn't committed (server clock). */
+  weekNudge: { badge: IsoDate | null };
   /** Display settings from [ui] (step 6b): the theme. Defaults when the config is invalid. */
   ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
@@ -181,3 +188,23 @@ export type CloseOutState = {
   /** Borrowed time from that day, and every unpaid record. */
   borrowed: BorrowedView[];
 };
+
+/** A week's plan as the UI sees it (step 8). `changed`: edited since the last commit. */
+export type WeekPlanView = { weekStart: IsoDate; committedAt: string | null; updatedAt: string | null; changed: boolean; features: WeekFeature[] };
+
+/** Everything Plan the week needs beyond the week itself (step 8). Fit and readiness are computed from this and week.load. */
+export type WeekPlanState = {
+  weekStart: IsoDate;
+  thisWeek: IsoDate;
+  today: IsoDate;
+  /** "past": a review, nothing changes. */
+  access: "plan" | "past";
+  plan: WeekPlanView;
+  /** Features and epics per followed client with DevOps (none for a past week). */
+  portfolios: ClientPortfolio[];
+  /** Features marked as being broken down (local). */
+  marks: { clientKey: string; itemId: number; markedAt: string }[];
+  /** "Ask about priorities" loops for this week. */
+  loops: LoopView[];
+};
+

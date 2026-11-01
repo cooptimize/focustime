@@ -167,10 +167,44 @@ export const MIGRATIONS: readonly string[] = [
      paid_at TEXT,
      paid_by TEXT CHECK (paid_by IN ('picks','me'))
    );`,
+  // 6 (step 8): Plan the week. Features committed to a week per client with a number of my blocks, optionally placed
+  // on specific blocks; the week's commit; features marked as being broken down (local only).
+  `CREATE TABLE week_plans (
+     week_start TEXT PRIMARY KEY CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     committed_at TEXT,
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL
+   );
+   CREATE TABLE week_features (
+     id INTEGER PRIMARY KEY,
+     week_start TEXT NOT NULL CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     client_key TEXT NOT NULL,
+     item_id INTEGER NOT NULL,
+     title TEXT NOT NULL,
+     item_type TEXT,
+     url TEXT,
+     blocks INTEGER NOT NULL CHECK (blocks BETWEEN 1 AND 20),
+     position INTEGER NOT NULL,
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL,
+     UNIQUE (week_start, client_key, item_id)
+   );
+   CREATE TABLE week_feature_slots (
+     feature_id INTEGER NOT NULL REFERENCES week_features(id) ON DELETE CASCADE,
+     date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     half TEXT NOT NULL CHECK (half IN ('AM','PM')),
+     PRIMARY KEY (feature_id, date, half)
+   );
+   CREATE TABLE breakdown_marks (
+     client_key TEXT NOT NULL,
+     item_id INTEGER NOT NULL,
+     marked_at TEXT NOT NULL,
+     PRIMARY KEY (client_key, item_id)
+   );`,
 ];
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
-const RESET_TABLES = ["borrowed", "resume_notes", "focus_log", "kv", "loops", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
+const RESET_TABLES = ["week_feature_slots", "week_features", "week_plans", "breakdown_marks", "borrowed", "resume_notes", "focus_log", "kv", "loops", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
 export type FocusSegment = { pickId: number | null; label: string; startedAt: string; endedAt: string; seconds: number };
 
 export type NewUnavailable = { date: IsoDate; title: string; start: string; end: string; note?: string | null };
@@ -206,6 +240,14 @@ export type Loop = {
 export type NewRuleLoop = { kind: string; ruleKey: string; clientKey: string | null; who: string; what: string; itemId?: number | null; refAt?: string | null; draft?: string | null; detail?: { picks?: number[] } | null };
 export type ResumeNote = { id: number; clientKey: string; date: IsoDate; note: string; updatedAt: string };
 /** Borrowed time (step 7): planned focus that slipped, to be made up on a payback day. */
+export type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
+import type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
+
+export type NewWeekFeature = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; blocks: number };
+
+/** Most blocks one feature can take in a week (ten half-days, a little headroom). */
+export const MAX_FEATURE_BLOCKS = 20;
+
 export type Borrowed = {
   id: number;
   /** The pick on the payback day (the moved one). */
@@ -335,6 +377,10 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     }
   };
 
+  /** The week's plan row, created if missing, with its updated time moved on. */
+  const touchWeek = (weekStart: IsoDate, at: ZonedStamp) =>
+    db.prepare("INSERT INTO week_plans (week_start, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(week_start) DO UPDATE SET updated_at = excluded.updated_at").run(weekStart, at, at);
+
   const getPlan = (date: IsoDate) => {
     const r = db.prepare("SELECT * FROM day_plans WHERE date = ?").get(date) as Row | undefined;
     return r ? toPlan(r) : null;
@@ -378,9 +424,9 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     getPick,
     picksFor: (date: IsoDate) => picksBetween(date, date),
     picksBetween,
-    carryOverFor(today: IsoDate, days?: number): Pick[] {
+    carryOverFor(today: IsoDate, days?: number, pending?: (p: Pick) => boolean): Pick[] {
       const from = Temporal.PlainDate.from(today).subtract({ days: Math.max(14, days ?? 0) }).toString();
-      return carryOver(picksBetween(from, today), today, days);
+      return carryOver(picksBetween(from, today), today, days, pending);
     },
     addPick: (p: NewPick): Pick => tx(() => insertPick(p)),
     /** Before the day is committed a pick is simply removed; after, it is kept as dropped. */
@@ -677,6 +723,93 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       });
       return bak;
     },
+    // ---- Plan the week (step 8) ----
+    weekPlan(weekStart: IsoDate): WeekPlanRecord {
+      const plan = db.prepare("SELECT * FROM week_plans WHERE week_start = ?").get(weekStart) as Row | undefined;
+      const rows = db.prepare("SELECT * FROM week_features WHERE week_start = ? ORDER BY position, id").all(weekStart) as Row[];
+      const slots = db.prepare("SELECT s.* FROM week_feature_slots s JOIN week_features f ON f.id = s.feature_id WHERE f.week_start = ? ORDER BY s.date, s.half").all(weekStart) as Row[];
+      const features = rows.map((r): WeekFeature => ({
+        id: r.id as number,
+        weekStart: r.week_start as string,
+        clientKey: r.client_key as string,
+        itemId: r.item_id as number,
+        title: r.title as string,
+        itemType: (r.item_type as string | null) ?? null,
+        url: (r.url as string | null) ?? null,
+        blocks: r.blocks as number,
+        slots: slots.filter((x) => x.feature_id === r.id).map((x) => ({ date: x.date as string, half: x.half as "AM" | "PM" })),
+        position: r.position as number,
+        createdAt: r.created_at as string,
+        updatedAt: r.updated_at as string,
+      }));
+      const latest = [plan?.updated_at as string | undefined, ...features.map((x) => x.updatedAt)].filter((x): x is string => !!x).sort((a, b) => Temporal.Instant.compare(Temporal.ZonedDateTime.from(a).toInstant(), Temporal.ZonedDateTime.from(b).toInstant())).at(-1);
+      return { weekStart, committedAt: (plan?.committed_at as string | null) ?? null, updatedAt: latest ?? null, features };
+    },
+    /** Commit a feature to a week with a number of blocks (updating it if there); 0 blocks takes it off the week. */
+    setWeekFeature(f: NewWeekFeature): WeekFeature | null {
+      if (!Number.isInteger(f.blocks) || f.blocks < 0 || f.blocks > MAX_FEATURE_BLOCKS) throw new PlanError(`blocks must be 0 to ${MAX_FEATURE_BLOCKS}`);
+      return tx(() => {
+        const at = stamp();
+        const row = db.prepare("SELECT id FROM week_features WHERE week_start = ? AND client_key = ? AND item_id = ?").get(f.weekStart, f.clientKey, f.itemId) as Row | undefined;
+        touchWeek(f.weekStart, at);
+        if (f.blocks === 0) {
+          if (row) db.prepare("DELETE FROM week_features WHERE id = ?").run(row.id as number);
+          return null;
+        }
+        let id: number;
+        if (row) {
+          id = row.id as number;
+          db.prepare("UPDATE week_features SET blocks = ?, title = ?, item_type = ?, url = ?, updated_at = ? WHERE id = ?").run(f.blocks, f.title, f.itemType, f.url, at, id);
+          // Fewer blocks than placements: the latest placements go.
+          const placed = db.prepare("SELECT date, half FROM week_feature_slots WHERE feature_id = ? ORDER BY date DESC, half DESC").all(id) as Row[];
+          for (const x of placed.slice(0, Math.max(0, placed.length - f.blocks))) db.prepare("DELETE FROM week_feature_slots WHERE feature_id = ? AND date = ? AND half = ?").run(id, x.date as string, x.half as string);
+        } else {
+          const pos = ((db.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM week_features WHERE week_start = ?").get(f.weekStart) as Row).p as number) + 1;
+          id = Number(db.prepare("INSERT INTO week_features (week_start, client_key, item_id, title, item_type, url, blocks, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(f.weekStart, f.clientKey, f.itemId, f.title, f.itemType, f.url, f.blocks, pos, at, at).lastInsertRowid);
+        }
+        return this.weekPlan(f.weekStart).features.find((x) => x.id === id)!;
+      });
+    },
+    /** Place a committed feature on a block of its week (on) or take it off (off). More placements raise its blocks. */
+    placeFeature(featureId: number, date: IsoDate, half: "AM" | "PM", on: boolean): WeekFeature {
+      return tx(() => {
+        const r = db.prepare("SELECT * FROM week_features WHERE id = ?").get(featureId) as Row | undefined;
+        if (!r) throw new PlanError("No such feature on the week plan");
+        const week = r.week_start as string;
+        const offset = Temporal.PlainDate.from(week).until(Temporal.PlainDate.from(date)).days;
+        if (offset < 0 || offset > 6) throw new PlanError("That block isn't in the feature's week");
+        const at = stamp();
+        if (on) {
+          db.prepare("INSERT INTO week_feature_slots (feature_id, date, half) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").run(featureId, date, half);
+          const n = (db.prepare("SELECT COUNT(*) AS n FROM week_feature_slots WHERE feature_id = ?").get(featureId) as Row).n as number;
+          if (n > (r.blocks as number)) {
+            if (n > MAX_FEATURE_BLOCKS) throw new PlanError(`blocks must be 0 to ${MAX_FEATURE_BLOCKS}`);
+            db.prepare("UPDATE week_features SET blocks = ? WHERE id = ?").run(n, featureId);
+          }
+        } else db.prepare("DELETE FROM week_feature_slots WHERE feature_id = ? AND date = ? AND half = ?").run(featureId, date, half);
+        db.prepare("UPDATE week_features SET updated_at = ? WHERE id = ?").run(at, featureId);
+        touchWeek(week, at);
+        return this.weekPlan(week).features.find((x) => x.id === featureId)!;
+      });
+    },
+    commitWeek(weekStart: IsoDate): WeekPlanRecord {
+      tx(() => {
+        const at = stamp();
+        touchWeek(weekStart, at);
+        db.prepare("UPDATE week_plans SET committed_at = ?, updated_at = ? WHERE week_start = ?").run(at, at, weekStart);
+      });
+      return this.weekPlan(weekStart);
+    },
+    /** Committed features per week for these weeks (the week view and Plan the day). */
+    weekFeaturesFor(weekStarts: readonly IsoDate[]): WeekFeature[] {
+      return [...new Set(weekStarts)].flatMap((w) => this.weekPlan(w).features);
+    },
+    markBreakdown(clientKey: string, itemId: number, on: boolean): void {
+      if (on) db.prepare("INSERT INTO breakdown_marks (client_key, item_id, marked_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").run(clientKey, itemId, stamp());
+      else db.prepare("DELETE FROM breakdown_marks WHERE client_key = ? AND item_id = ?").run(clientKey, itemId);
+    },
+    breakdownMarks: (): { clientKey: string; itemId: number; markedAt: ZonedStamp }[] =>
+      (db.prepare("SELECT * FROM breakdown_marks ORDER BY marked_at, client_key, item_id").all() as Row[]).map((r) => ({ clientKey: r.client_key as string, itemId: r.item_id as number, markedAt: r.marked_at as string })),
     /** True the first time (kind, date) is marked, false after: "only once a day" across restarts. */
     markOnce(kind: string, date: IsoDate): boolean {
       const r = db.prepare("INSERT INTO markers (kind, date, at) VALUES (?, ?, ?) ON CONFLICT(kind, date) DO NOTHING").run(kind, date, stamp());
@@ -703,6 +836,9 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         loops: (db.prepare("SELECT * FROM loops ORDER BY id").all() as Row[]).map(toLoop),
         resumeNotes: (db.prepare("SELECT * FROM resume_notes ORDER BY date, client_key").all() as Row[]).map(toNote),
         borrowed: (db.prepare("SELECT * FROM borrowed ORDER BY id").all() as Row[]).map(toBorrowed),
+        weekPlans: db.prepare("SELECT * FROM week_plans ORDER BY week_start").all() as Row[],
+        weekFeatures: (db.prepare("SELECT DISTINCT week_start FROM week_features ORDER BY week_start").all() as Row[]).flatMap((r) => this.weekPlan(r.week_start as string).features),
+        breakdownMarks: this.breakdownMarks(),
       };
     },
     close: () => db.close(),

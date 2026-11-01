@@ -20,6 +20,9 @@ export function CloseOut({ date, data, onDate, onClose, onChanged }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [offer, setOffer] = useState<{ offer: FlexOffer; pick: Pick } | null>(null);
+  // Q46: a note for any followed client, not only those worked that day.
+  const [extra, setExtra] = useState<string[]>([]);
+  useEffect(() => setExtra([]), [date]);
   const head = useRef<HTMLHeadingElement>(null);
   const tz = data.hours.timeZone;
   const sizes = data.planning.sizes;
@@ -79,7 +82,8 @@ export function CloseOut({ date, data, onDate, onClose, onChanged }: Props) {
   // Clients worked: from the server (done, focused, flex), plus the day's focus blocks when the week on screen has it.
   const day = data.week.days.find((d) => d.date === date);
   const blockClients = day ? [...day.am.focus, ...day.pm.focus].map((b) => b.clientKey) : [];
-  const worked = [...new Set([...st.worked.map((w) => w.clientKey), ...blockClients])];
+  const worked = [...new Set([...st.worked.map((w) => w.clientKey), ...blockClients, ...Object.keys(st.notes), ...extra])];
+  const others = data.planClients.filter((c) => !worked.includes(c.clientKey));
   const prev = Temporal.PlainDate.from(date).subtract({ days: 1 }).toString();
   const next = Temporal.PlainDate.from(date).add({ days: 1 }).toString();
   const unpaid = data.borrowed.filter((b) => !b.paidAt);
@@ -181,6 +185,19 @@ export function CloseOut({ date, data, onDate, onClose, onChanged }: Props) {
           2. Resume notes <span className="muted">where you left off, one line per client (optional)</span>
         </h3>
         {!worked.length && <p className="muted">No client work recorded that day.</p>}
+        {others.length > 0 && (
+          <label className="co-other">
+            <span className="sr-only">Note for another client</span>
+            <select value="" onChange={(e) => e.target.value && setExtra((x) => [...x, e.target.value])}>
+              <option value="">+ note for another client</option>
+              {others.map((c) => (
+                <option key={c.clientKey} value={c.clientKey}>
+                  {c.clientName}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <ul className="co-notes">
           {worked.map((k) => (
             <NoteRow key={`${date}:${k}`} clientKey={k} clientName={clientName(k)} date={date} saved={st.notes[k]?.note ?? ""} previous={st.previous[k]?.note ?? null} onSaved={() => void load()} onError={setError} />

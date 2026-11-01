@@ -4,6 +4,7 @@ import type { AppConfig } from "../config/schema.ts";
 import { detectLoops, type WorkState } from "../plan/loops.ts";
 import type { Loop, PlanStore } from "../store/plan-store.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
+import { hoursOn } from "../week/hours.ts";
 import type { IsoDate } from "../week/types.ts";
 import type { LoopView } from "./types.ts";
 
@@ -15,7 +16,10 @@ export function internalClients(cfg: AppConfig | null): Set<string> {
   return new Set([INTERNAL_CLIENT, ...(cfg?.week.standingBlocks.map((b) => b.clientKey) ?? [])]);
 }
 
-export function applyLoopRules(plan: PlanStore, o: { today: IsoDate; work: readonly WorkState[] | null; internal: ReadonlySet<string>; clientName: (key: string) => string }): { opened: number; closed: number } {
+/** Workdays for the blocker re-nudge (Q43): days with working hours in config; Mon to Fri without a config. */
+export const workdayOf = (cfg: AppConfig | null) => (cfg ? (d: IsoDate) => hoursOn(cfg.week.hours, d).segments.length > 0 : undefined);
+
+export function applyLoopRules(plan: PlanStore, o: { today: IsoDate; work: readonly WorkState[] | null; internal: ReadonlySet<string>; clientName: (key: string) => string; isWorkday?: ((d: IsoDate) => boolean) | undefined }): { opened: number; closed: number } {
   const t = Temporal.PlainDate.from(o.today);
   const picks = plan.picksBetween(t.subtract({ days: RULE_WINDOW_DAYS }).toString(), t.add({ days: RULE_WINDOW_DAYS }).toString());
   const r = detectLoops({
@@ -28,6 +32,7 @@ export function applyLoopRules(plan: PlanStore, o: { today: IsoDate; work: reado
     loops: plan.allLoops(),
     internal: o.internal,
     clientName: o.clientName,
+    ...(o.isWorkday ? { isWorkday: o.isWorkday } : {}),
   });
   let opened = 0;
   for (const l of r.open) if (plan.openRuleLoop(l)) opened++;

@@ -218,6 +218,51 @@ export type WorkItem = {
   tags?: string[];
   /** Blocked by its state or a tag (step 7, plan/loops.ts isBlocked). */
   blocked?: boolean;
+  /** The last change was made by my DevOps identity for this client (System.ChangedBy, Q42). Nobody else's identity is kept. */
+  changedByMe?: boolean;
+  /** Plan the week (step 8): the assignee's display name (never an email) and whether it's me. */
+  assignedTo?: string | null;
+  assignedToMe?: boolean;
+  /** Plan the week: the process's target date field as a date, when the type has one. */
+  targetDate?: IsoDate | null;
+};
+
+/** A child of a feature or epic in Plan the week (step 8): any state, any assignee (display name only). */
+export type PortfolioChild = { id: number; title: string; type: string; state: string; stateCategory: string; open: boolean; level: WorkItem["level"]; order: number | null; url: string; assignedTo: string | null; mine: boolean };
+
+/** A feature or epic for Plan the week (step 8): assigned to me, or the parent of a story assigned to me. */
+export type PortfolioItem = {
+  id: number;
+  title: string;
+  type: string;
+  state: string;
+  stateCategory: string;
+  /** "feature": the lowest portfolio backlog (what a week commits to). "epic": any level above it. */
+  tier: "feature" | "epic";
+  order: number | null;
+  parentId: number | null;
+  url: string;
+  /** From the process's target date field for this type, when it has one and it is set. */
+  targetDate: IsoDate | null;
+  assignedTo: string | null;
+  mine: boolean;
+  why: ("assigned" | "parent")[];
+  /** One level down, every state, board order. */
+  children: PortfolioChild[];
+};
+
+/** One client's features and epics (step 8). Fetched, failing and cached per client like its work items. */
+export type ClientPortfolio = {
+  clientKey: string;
+  clientName: string;
+  status: ClientWorkStatus;
+  message?: string;
+  cause?: FailureCause;
+  fetchedAt: string | null;
+  fromCache: boolean;
+  items: PortfolioItem[];
+  /** The target date field detected per portfolio type (reference names, not secret). */
+  targetFields: Record<string, string>;
 };
 
 export type ClientWorkStatus = "ok" | "identity_missing" | "not_set_up" | "auth_failed" | "no_access" | "unreachable" | "error";
@@ -237,4 +282,6 @@ export type ClientWork = {
   children: WorkItem[];
   /** Items read by id because an open loop is about them, completed ones included (step 7). */
   watched?: WorkItem[];
+  /** Features committed to a week that aren't assigned to me, read by id (open ones) for Plan the day (step 8). */
+  committed?: WorkItem[];
 };

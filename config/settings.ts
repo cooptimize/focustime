@@ -90,7 +90,7 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
       return (text) => setValue(setValue(setValue(text, "risk", "meeting_watch_minutes", watch), "risk", "meeting_at_risk_minutes", atRisk), "risk", "min_focus_window_minutes", window);
     }
     case "planning": {
-      const keys = ["pickablePortfolioTypes", "sizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes"];
+      const keys = ["pickablePortfolioTypes", "sizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
       only(v, keys, "plan");
       const types = strList(v.pickablePortfolioTypes ?? [], "plan.pickable_portfolio_types").filter(Boolean);
       // Each value is written as given; parseConfig checks ranges and order per field (plan.size_m etc.).
@@ -102,6 +102,8 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
       }
       const num: [string, string][] = [["carryDays", "carry_days"], ["reminderOffsetMinutes", "reminder_offset_minutes"], ["focusMinutes", "focus_minutes"], ["breakMinutes", "break_minutes"], ["followGraceDays", "follow_grace_days"], ["closeoutReminderMinutes", "closeout_reminder_minutes"], ["checkinReminderMinutes", "checkin_reminder_minutes"]];
       for (const [k, toml] of num) if (v[k] !== undefined) values.push([toml, int(v[k], `plan.${toml}`)]);
+      // Week nudge times (step 8): written as given ("" is off); parseConfig checks the format.
+      for (const [k, toml] of [["weekNudgeThu", "week_nudge_thu"], ["weekNudgeFri", "week_nudge_fri"], ["weekNudgeMon", "week_nudge_mon"]] as const) if (v[k] !== undefined) values.push([toml, str(v[k], `plan.${toml}`, 5)]);
       if (v.endSound !== undefined) {
         if (typeof v.endSound !== "boolean") throw new SettingsInputError("plan.end_sound", "Must be true or false");
         values.push(["end_sound", v.endSound]);

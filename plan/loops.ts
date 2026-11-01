@@ -19,7 +19,7 @@ export type LoopLike = {
 };
 
 export type RuleLoop = {
-  kind: "devops_update" | "slip" | "blocked";
+  kind: "devops_update" | "slip" | "blocked" | "priorities";
   ruleKey: string;
   clientKey: string;
   who: string;
@@ -57,7 +57,19 @@ export type DetectInput = {
   /** Clients a heads-up isn't owed to: Cooptimize and standing-block clients. */
   internal: ReadonlySet<string>;
   clientName: (key: string) => string;
+  /** Whether a date is a workday (working hours), for the blocker re-nudge (Q43). Mon to Fri when absent. */
+  isWorkday?: (date: IsoDate) => boolean;
 };
+
+/** Workdays to wait before nudging again on an item still blocked after a nudge by hand (Q43). */
+export const RENUDGE_WORKDAYS = 3;
+
+/** Workdays after `from` up to and including `to`. */
+export function workdaysAfter(from: IsoDate, to: IsoDate, isWorkday: (d: IsoDate) => boolean): number {
+  let n = 0;
+  for (let d = Temporal.PlainDate.from(from).add({ days: 1 }); Temporal.PlainDate.compare(d, to) <= 0 && n < 366; d = d.add({ days: 1 })) if (isWorkday(d.toString())) n++;
+  return n;
+}
 
 export type Detected = {
   open: RuleLoop[];
@@ -72,6 +84,7 @@ const BLOCKED = /\bblocked\b/i;
 /** Blocked by its state ("Blocked", "10-Blocked") or a tag ("Blocked", "Blocked by vendor"). */
 export const isBlocked = (state: string, tags: readonly string[]) => BLOCKED.test(state) || tags.some((t) => BLOCKED.test(t));
 
+const monToFri = (d: IsoDate) => Temporal.PlainDate.from(d).dayOfWeek <= 5;
 const instant = (s: string) => Temporal.Instant.from(s);
 const after = (a: string, b: string) => !!a && !!b && Temporal.Instant.compare(instant(a), instant(b)) > 0;
 const dayText = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -114,8 +127,8 @@ export function detectLoops(i: DetectInput): Detected {
     const item = find(work.get(p.clientKey), p.itemId);
     // Unknown (DevOps not loaded, item not seen): nothing to say yet.
     if (!item || !OPEN_CATEGORIES.has(item.stateCategory)) continue;
-    // Already updated after it was ticked done: nothing owed.
-    if (after(item.changedAt, p.updatedAt)) continue;
+    // I already updated it after ticking it done: nothing owed. Someone else's change isn't my update (Q42).
+    if (item.changedByMe && after(item.changedAt, p.updatedAt)) continue;
     out.open.push({ kind: "devops_update", ruleKey: key, clientKey: p.clientKey, who: i.clientName(p.clientKey), what: `Update DevOps #${p.itemId}: ${p.title}`, itemId: p.itemId, refAt: p.updatedAt });
   }
   for (const l of open.filter((x) => x.kind === "devops_update")) {
@@ -129,7 +142,8 @@ export function detectLoops(i: DetectInput): Detected {
     const item = l.itemId !== null ? find(w, l.itemId) : null;
     if (!item) continue;
     if (DONE_CATEGORIES.has(item.stateCategory)) out.close.push({ id: l.id, note: `DevOps #${item.id} is ${item.state}` });
-    else if (l.refAt && after(item.changedAt, l.refAt)) out.close.push({ id: l.id, note: `DevOps #${item.id} was updated` });
+    // Q42: only my own change after the loop opened proves the update.
+    else if (item.changedByMe && after(item.changedAt, l.openedAt)) out.close.push({ id: l.id, note: `DevOps #${item.id} was updated` });
   }
 
   // 2. Planned work moved to another day or dropped from a committed day: "Heads-up to <client> about the slip".
@@ -164,9 +178,14 @@ export function detectLoops(i: DetectInput): Detected {
       if (!item.blocked) continue;
       const mine = i.loops.filter((l) => l.kind === "blocked" && l.clientKey === w.clientKey && l.itemId === item.id);
       if (mine.some((l) => !l.closedAt)) continue;
-      // Closed by me while it stays blocked: I've nudged. Closed by a signal (it was unblocked): blocked again.
+      // Closed by a signal (it was unblocked): blocked again, nudge again. Closed by me (I nudged): nudge again only
+      // if it is still blocked RENUDGE_WORKDAYS workdays later (Q43).
       const last = mine.at(-1);
-      if (last && last.closedBy !== "signal") continue;
+      if (last && last.closedBy !== "signal") {
+        // Stored stamps are local zoned date-times, so the first ten characters are the local date.
+        const closedDay = last.closedAt?.slice(0, 10);
+        if (!closedDay || workdaysAfter(closedDay, i.today, i.isWorkday ?? monToFri) < RENUDGE_WORKDAYS) continue;
+      }
       const key = `blocked:${w.clientKey}:${item.id}:${mine.length + 1}`;
       if (byKey.has(key)) continue;
       out.open.push({ kind: "blocked", ruleKey: key, clientKey: w.clientKey, who: i.clientName(w.clientKey), what: `Nudge on blocker for #${item.id}: ${item.title}`, itemId: item.id });
@@ -177,6 +196,12 @@ export function detectLoops(i: DetectInput): Detected {
     if (!item) continue;
     if (DONE_CATEGORIES.has(item.stateCategory)) out.close.push({ id: l.id, note: `DevOps #${item.id} is ${item.state}` });
     else if (!item.blocked) out.close.push({ id: l.id, note: `DevOps #${item.id} is no longer blocked` });
+  }
+
+  // 5. Asked a client about priorities (Plan the week, "Block needs work"): closes once work is assigned to me there.
+  for (const l of open.filter((x) => x.kind === "priorities")) {
+    const w = freshWork(l.clientKey);
+    if (w && w.items.length > 0) out.close.push({ id: l.id, note: `Work is assigned to you at ${i.clientName(l.clientKey!)} again` });
   }
   return out;
 }

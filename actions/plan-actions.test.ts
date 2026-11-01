@@ -161,6 +161,21 @@ describe("Plan the day actions", () => {
     expect((await t.run<PlanDayState>("planday.start", { date: D })).carryOver).toEqual([]);
   });
 
+  it("a pick being made up tonight isn't offered as carry-over until its evening session has ended (Q45)", async () => {
+    const t = setup();
+    const mon = "2026-11-02";
+    t.at("2026-11-02T22:15:00Z"); // Mon 5:15 PM, after the workday: the next workday (Tue) is the carry-over day
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    await t.run("flex.add", { date: mon, clientKey: "CSC", start: "20:00", end: "22:00" });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: mon, half: "EVE", clientKey: "CSC", intention: "Make up the export" });
+    const tue = "2026-11-03";
+    expect((await t.run<PlanDayState>("planday.start", { date: tue })).carryOver).toEqual([]);
+    t.at("2026-11-03T02:30:00Z"); // Mon 9:30 PM: still under way
+    expect((await t.run<PlanDayState>("planday.start", { date: tue })).carryOver).toEqual([]);
+    t.at("2026-11-03T03:05:00Z"); // Mon 10:05 PM: ended, still unfinished
+    expect((await t.run<PlanDayState>("planday.start", { date: tue })).carryOver.map((p) => p.id)).toEqual([pick.id]);
+  });
+
   it("without a plan store the actions say so and the week still loads", async () => {
     const t = setup({ noPlan: true });
     expect((await t.fail("planday.start", { date: D })).status).toBe(503);

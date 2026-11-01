@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { backlogLevels, levelOf } from "../sources/devops/normalize.ts";
 import type { WorkItem } from "../week/types.ts";
-import { blockClient, capacityMinutes, carryOver, fitOf, pickableChildren, plannedMinutes, unpickableReason } from "./rules.ts";
+import { blockClient, capacityMinutes, carryOver, committedFirst, fitOf, pickableChildren, plannedMinutes, sessionEnd, unpickableReason } from "./rules.ts";
 import type { Pick } from "./types.ts";
 
 const gap = (start: string, end: string) => ({ start: `2026-11-02T${start}:00-05:00`, end: `2026-11-02T${end}:00-05:00`, minutes: 0 });
@@ -147,3 +147,62 @@ describe("story-level enforcement", () => {
     expect(pickableChildren(20, children)).toEqual([]);
   });
 });
+
+describe("Plan the day offers committed features first (step 8)", () => {
+  const item = (id: number, type: string, level: WorkItem["level"], parentId: number | null = null): WorkItem => ({
+    id, title: `${type} ${id}`, type, state: "New", stateCategory: "Proposed", level, order: null, parentId, changedAt: "", url: "",
+  });
+  const f = (itemId: number, slots: { date: string; half: "AM" | "PM" }[] = [], clientKey = "W&C") => ({ clientKey, itemId, title: `F ${itemId}`, url: null, slots });
+  const work = {
+    // Board: my story 1 under feature 10, my story 2 with no committed parent, my feature 30.
+    items: [item(1, "User Story", "story", 10), item(2, "User Story", "story", 99), item(30, "Feature", "portfolio")],
+    children: [item(1, "User Story", "story", 10), item(11, "User Story", "story", 10)],
+    // Feature 10 isn't mine: read by id because it is committed.
+    committed: [item(10, "Feature", "portfolio")],
+  };
+  it("lists the client's committed features, placed-here first, with anyone's open stories; the rest of the board follows", () => {
+    const r = committedFirst(work, [f(30), f(10, [{ date: "2026-11-09", half: "PM" }]), f(50, [], "CSC")], "W&C", "2026-11-09", "PM");
+    expect(r.committed.map((c) => [c.feature.itemId, c.placedHere, c.item?.id ?? null, c.kids.map((k) => k.id)])).toEqual([
+      [10, true, 10, [1, 11]],
+      [30, false, 30, []],
+    ]);
+    // Story 1 is under a committed feature, so it shows there, not again in the board.
+    expect(r.rest.map((i) => i.id)).toEqual([2]);
+  });
+  it("my own stories under a committed feature (in the board list, not its children list) show under it", () => {
+    const w = { items: [item(5, "User Story", "story", 10), item(6, "Bug", "story", 7)], children: [item(11, "User Story", "story", 10)], committed: [item(10, "Feature", "portfolio")] };
+    const r = committedFirst(w, [f(10)], "W&C", "2026-11-09", "AM");
+    expect(r.committed[0]!.kids.map((k) => k.id)).toEqual([5, 11]);
+    expect(r.rest.map((i) => i.id)).toEqual([6]);
+  });
+  it("a committed feature DevOps can't show right now still comes first, with no stories", () => {
+    const r = committedFirst(undefined, [f(10)], "W&C", "2026-11-09", "AM");
+    expect(r.committed).toEqual([{ feature: f(10), placedHere: false, item: null, kids: [] }]);
+    expect(r.rest).toEqual([]);
+  });
+});
+
+describe("carry-over waits for an evening or weekend session (Q45)", () => {
+  const weekday = { segments: [{ start: "09:00", end: "17:00" }], main: { start: "09:00", end: "17:00" } };
+  const split = { segments: [{ start: "09:00", end: "16:00" }, { start: "20:00", end: "22:00" }], main: { start: "09:00", end: "16:00" } };
+  const weekend = { segments: [], main: null };
+  it("an evening pick's session ends at the later of the evening span and that day's flex sessions", () => {
+    expect(sessionEnd(pick({ half: "EVE" }), weekday, ["22:00"])).toBe("22:00");
+    expect(sessionEnd(pick({ half: "EVE" }), split, ["21:00"])).toBe("22:00");
+    expect(sessionEnd(pick({ half: "EVE" }), weekday, [])).toBe("24:00");
+  });
+  it("a pick on a day without regular hours (a weekend) ends with that day's flex sessions, else midnight", () => {
+    expect(sessionEnd(pick({ half: "AM", date: "2026-11-07" }), weekend, ["13:00", "11:00"])).toBe("13:00");
+    expect(sessionEnd(pick({ half: "AM", date: "2026-11-07" }), weekend, [])).toBe("24:00");
+  });
+  it("regular morning and afternoon picks aren't waited for", () => {
+    expect(sessionEnd(pick({ half: "PM" }), weekday, ["22:00"])).toBeNull();
+  });
+  it("carry-over leaves out picks whose session is still to come or under way", () => {
+    const eve = pick({ date: "2026-11-02", half: "EVE" });
+    const am = pick({ date: "2026-11-02", half: "AM" });
+    expect(carryOver([eve, am], "2026-11-03", 7, (p) => p.id === eve.id).map((p) => p.id)).toEqual([am.id]);
+    expect(carryOver([eve, am], "2026-11-03", 7, () => false).map((p) => p.id).sort()).toEqual([eve.id, am.id].sort());
+  });
+});
+

@@ -2,7 +2,7 @@
 // picks come from that client's DevOps items in board order (story level only) or a typed intention, and one
 // key commits. Everything here is local: the actions only write Coopilot's plan store.
 import { useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
-import { blockClient, capacityMinutes, fitOf, isPickable, pickableChildren, plannedMinutes } from "../plan/rules.ts";
+import { blockClient, capacityMinutes, committedFirst, fitOf, isPickable, pickableChildren, plannedMinutes } from "../plan/rules.ts";
 import { dayLabel } from "../plan/days.ts";
 import { SIZES, type DraftStory, type PlanDayState, type Pick, type Size } from "../plan/types.ts";
 import type { Day, Half, Slot, WorkItem } from "../week/types.ts";
@@ -151,6 +151,7 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
             overflow={day.kind !== "work" && half !== "EVE"}
             picks={state.picks.filter((p) => p.half === half && p.date === day.date && inPlay(p))}
             drafts={state.drafts}
+            weekFeatures={state.weekFeatures}
             picked={picked}
             other={half === "AM" ? "PM" : half === "PM" ? "AM" : day.pm.off ? "AM" : "PM"}
             friday={friday}
@@ -260,6 +261,7 @@ type BlockProps = {
   overflow: boolean;
   picks: Pick[];
   drafts: DraftStory[];
+  weekFeatures: PlanDayState["weekFeatures"];
   picked: Set<string>;
   other: Half;
   friday: string | null;
@@ -270,7 +272,7 @@ type BlockProps = {
   act: PlanDayAct;
 };
 
-function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, colors, clients, act }: BlockProps) {
+function Block({ slot, overflow, picks, drafts, weekFeatures, picked, other, friday, now, tz, colors, clients, act }: BlockProps) {
   const focus = overflow ? null : slot.focus[0] ?? null;
   const bc = blockClient(focus?.clientKey ?? null, picks);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -368,7 +370,7 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
         </div>
       )}
 
-      {source && <Candidates clientKey={source} half={slot.half} date={slot.date} drafts={drafts} picked={picked} act={act} />}
+      {source && <Candidates clientKey={source} half={slot.half} date={slot.date} drafts={drafts} weekFeatures={weekFeatures} picked={picked} act={act} />}
       {source && <Intention clientKey={source} clientName={name(source)} half={slot.half} date={slot.date} act={act} />}
     </section>
   );
@@ -376,16 +378,43 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
 
 const SHOWN = 6;
 
-function Candidates({ clientKey, half, date, drafts, picked, act }: { clientKey: string; half: Half; date: string; drafts: DraftStory[]; picked: Set<string>; act: PlanDayAct }) {
+function Candidates({ clientKey, half, date, drafts, weekFeatures, picked, act }: { clientKey: string; half: Half; date: string; drafts: DraftStory[]; weekFeatures: PlanDayState["weekFeatures"]; picked: Set<string>; act: PlanDayAct }) {
   const work = useContext(DevOpsWork).get(clientKey);
   const [all, setAll] = useState(false);
-  if (!work) return <p className="muted pd-note">No DevOps items for {clientKey} this week. Type an intention instead.</p>;
   const free = (i: WorkItem) => !picked.has(`i${clientKey}:${i.id}`);
-  // Board order: my story-level items, and my epics and features (which open into their children).
-  const rows = work.items.filter((i) => (isPickable(i) && free(i)) || i.level === "portfolio");
-  const shown = all ? rows : rows.slice(0, SHOWN);
+  const draftsUnder = (id: number) => drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === id && !picked.has(`d${d.id}`));
   const add = (input: Record<string, unknown>) => act("pick.add", { date, half, clientKey, ...input });
+  // Step 8: features committed to this week come first in the client's blocks (placed here before the rest).
+  const first = half === "EVE" ? { committed: [], rest: work?.items ?? [] } : committedFirst(work, weekFeatures, clientKey, date, half);
+  const committedList = first.committed.length > 0 && (
+    <div className="candidates committed-first">
+      <h4>Committed this week</h4>
+      <ul>
+        {first.committed.map((c) =>
+          c.item ? (
+            <Portfolio key={c.feature.itemId} item={c.item} clientKey={clientKey} kids={c.kids.filter(free)} drafts={draftsUnder(c.feature.itemId)} add={add} act={act} startOpen={c.placedHere || first.committed.length === 1} />
+          ) : (
+            <li key={c.feature.itemId} className="portfolio">
+              <div className="portfolio-row">
+                <span className="cand parent static">
+                  <span className="wi-type">Feature</span>
+                  <span className="wi-title">{c.feature.title}</span>
+                  <span className="needs">{work ? "Needs breakdown" : "DevOps not loaded"}</span>
+                </span>
+              </div>
+            </li>
+          ),
+        )}
+      </ul>
+    </div>
+  );
+  if (!work) return <>{committedList}<p className="muted pd-note">No DevOps items for {clientKey} this week. Type an intention instead.</p></>;
+  // Board order: my story-level items, and my epics and features (which open into their children).
+  const rows = first.rest.filter((i) => (isPickable(i) && free(i)) || i.level === "portfolio");
+  const shown = all ? rows : rows.slice(0, SHOWN);
   return (
+    <>
+    {committedList}
     <div className="candidates">
       <h4>
         {work.clientName} in board order
@@ -395,7 +424,7 @@ function Candidates({ clientKey, half, date, drafts, picked, act }: { clientKey:
       <ul>
         {shown.map((i) =>
           i.level === "portfolio" ? (
-            <Portfolio key={i.id} item={i} clientKey={clientKey} kids={pickableChildren(i.id, work.children).filter(free)} drafts={drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === i.id && !picked.has(`d${d.id}`))} add={add} act={act} />
+            <Portfolio key={i.id} item={i} clientKey={clientKey} kids={pickableChildren(i.id, work.children).filter(free)} drafts={draftsUnder(i.id)} add={add} act={act} />
           ) : (
             <MenuRow key={i.id} build={(env) => itemMenu(env, clientKey, i)} label={`Actions for ${i.type} ${i.id}`} item={{ clientKey, url: i.url }}>
               <button type="button" className="cand" onClick={() => add({ itemId: i.id })} title={`${i.type} ${i.id}: ${i.title} (${i.state})`}>
@@ -414,6 +443,7 @@ function Candidates({ clientKey, half, date, drafts, picked, act }: { clientKey:
         </button>
       )}
     </div>
+    </>
   );
 }
 
@@ -427,8 +457,8 @@ function OpenItem({ clientKey, item }: { clientKey: string; item: WorkItem }) {
   );
 }
 
-function Portfolio({ item, clientKey, kids: children, drafts, add, act }: { item: WorkItem; clientKey: string; kids: WorkItem[]; drafts: DraftStory[]; add: (i: Record<string, unknown>) => Promise<boolean>; act: PlanDayAct }) {
-  const [open, setOpen] = useState(false);
+function Portfolio({ item, clientKey, kids: children, drafts, add, act, startOpen = false }: { item: WorkItem; clientKey: string; kids: WorkItem[]; drafts: DraftStory[]; add: (i: Record<string, unknown>) => Promise<boolean>; act: PlanDayAct; startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
   const [title, setTitle] = useState("");
   const [size, setSize] = useState<Size>("M");
   const needs = children.length === 0 && drafts.length === 0;

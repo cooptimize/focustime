@@ -53,6 +53,9 @@ function env(over: Partial<MenuEnv> = {}) {
     resetPlan: () => calls.push(["reset"]),
     openCloseOut: (d) => calls.push(["closeout", d]),
     openCheckIn: () => calls.push(["checkin"]),
+    openPlanWeek: (w?: string) => calls.push(["planweek", w]),
+    planWeekOpen: null,
+    commitWeek: () => calls.push(["commitweek"]),
     closeOutDate: null,
     commitCloseOut: () => calls.push(["closeoutCommit"]),
     makeUp: async (id, i) => (calls.push(["pick.make_up", id, i]), true),
@@ -70,12 +73,14 @@ describe("command menu (built from the action registry)", () => {
     const listed = commandList(env().e).map((c) => c.action);
     for (const name of ACTION_NAMES) expect(listed, name).toContain(name);
   });
-  it("shows shortcuts and reserves the future views as coming soon", () => {
+  it("shows shortcuts; every view is built (Plan the week since step 8)", () => {
     const list = commandList(env().e);
     expect(list.find((c) => c.action === "planday.start")?.hint).toBe("P");
     expect(list.find((c) => c.action === "week.load")?.hint).toBe("R");
-    expect(list.find((c) => c.label === "Plan the week")?.disabled).toBe("Coming soon");
-    for (const v of ["Check-in", "Close out"]) expect(list.find((c) => c.id === `view.${v === "Check-in" ? "checkin" : "closeout"}`)?.disabled).toBeUndefined();
+    for (const id of ["view.checkin", "view.closeout", "view.planweek"]) expect(list.find((c) => c.id === id)?.disabled).toBeUndefined();
+    expect(list.find((c) => c.id === "view.planweek")?.hint).toBe("W");
+    // Committing the week needs Plan the week open.
+    expect(list.find((c) => c.action === "weekplan.commit")?.disabled).toBe("Open Plan the week first");
   });
   it("searches by words in any order", () => {
     const list = commandList(env().e);

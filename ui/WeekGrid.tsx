@@ -12,7 +12,7 @@ import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
 import { clientColor, eventRange, halfTag, ruleLabel, SampleSources, severityLabel, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 import { cardHalves, eveOnly, slotOf } from "./halves.ts";
 import type { Layout } from "./viewport.ts";
-import { CARD_ITEMS, cardPlan, PlanCtx, useFocused } from "./planview.ts";
+import { CARD_ITEMS, cardPlan, featuresOn, PlanCtx, useFocused } from "./planview.ts";
 import { dayFocus, focusLabel } from "../plan/focus.ts";
 import { fitLabel } from "./planday.ts";
 import { WorkLink } from "./WorkLink.tsx";
@@ -313,6 +313,17 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
   );
   // The client's resume note, on its next block after the note (step 7).
   const resume = plan.resumeOn?.[`${slot.date}:${slot.half}`];
+  // Committed features (step 8): placed on this block, or the client's not yet placed. Not on the evening slot.
+  const feats = !eve && !ptoOff && (slot.half === "AM" || slot.half === "PM") ? featuresOn(plan.weekFeatures ?? [], slot.date, slot.half, primary?.clientKey ?? null) : [];
+  const featList = feats.length > 0 && (
+    <ul className="week-feats" aria-label="Features committed this week">
+      {feats.map((f) => (
+        <li key={f.id} title={`Committed to this week: ${f.blocks} block${f.blocks === 1 ? "" : "s"}${f.slots.some((x) => x.date === slot.date && x.half === slot.half) ? ", placed here" : ""}`}>
+          <span className="feat-tag">Feature</span> {f.title}
+        </li>
+      ))}
+    </ul>
+  );
   const who = primary ? (
     <>
       <div className="client">
@@ -324,6 +335,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
           <span className="resume-tag">Left off</span> {resume.note}
         </div>
       )}
+      {featList}
       {slot.focus.slice(1).map((b) => (
         <div key={b.id} className="also" style={{ "--c2": clientColor(b.clientKey, colors) } as CSSProperties}>
           <span className="swatch small" />
@@ -336,6 +348,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
   ) : (
     <>
       <div className="client open-label">Open</div>
+      {featList}
     </>
   );
 

@@ -22,9 +22,11 @@ import { TIMER_KEY, timerAction, timerView } from "./timer-actions.ts";
 import { warnPoints, type TimerState } from "../plan/timer.ts";
 import { settingsAction, type SettingsContext } from "./settings-actions.ts";
 import { borrowedView, closeoutAction, noteView } from "./closeout-actions.ts";
-import { applyLoopRules, internalClients, nameOf } from "./loop-rules.ts";
+import { applyLoopRules, internalClients, nameOf, workdayOf } from "./loop-rules.ts";
 import { watchedIds } from "../plan/loops.ts";
 import { isActionName, type ActionName } from "./registry.ts";
+import { weekPlanAction, weekPlanView } from "./weekplan-actions.ts";
+import { weekNudges, type NudgeTimes } from "../plan/weekplan.ts";
 import type { ActionResponse, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
@@ -118,6 +120,9 @@ function columnOf(t: ReturnType<typeof todayTarget>, week: Week): ReturnType<typ
   return i < 0 ? t : { ...t, dayIndex: i };
 }
 
+/** The week nudge times from Settings > Planning (step 8). */
+export const nudgeTimes = (cfg: AppConfig): NudgeTimes => ({ thu: cfg.plan.weekNudgeThu, fri: cfg.plan.weekNudgeFri, mon: cfg.plan.weekNudgeMon });
+
 /** Settings > Planning as the UI uses it (defaults when the config is invalid). */
 export function planningOf(cfg: AppConfig | null): PlanningSettings {
   if (!cfg) return { ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } };
@@ -150,6 +155,34 @@ export function weekClients(week: Week, standing: readonly { clientKey: string; 
     for (const slot of [day.am, day.pm]) for (const b of slot.focus) if (!seen.has(b.clientKey)) seen.set(b.clientKey, { clientKey: b.clientKey, clientName: b.clientName });
   for (const b of standing) if (!seen.has(b.clientKey)) seen.set(b.clientKey, { clientKey: b.clientKey, clientName: b.clientName });
   return [...seen.values()];
+}
+
+/**
+ * The clients for a week (step 6d): the week's followed focus-block clients and standing-block clients, then my other
+ * followed clients. `fetch`: those with DevOps, as week.load and Plan the week read them.
+ */
+async function devopsClients(ctx: ActionContext, cfg: AppConfig, weekStart: string, todayDate: string, refresh: { refresh?: boolean }, patterns: readonly FocusPattern[]): Promise<{ planClients: ClientRef[]; fetch: ClientRef[] }> {
+  const weekConfig = cfg.week;
+  const dvSource = ctx.makeDataverse(cfg.dataverse, weekConfig.hours.timeZone);
+  const [mineR, follow] = await Promise.all([dvSource.myClients?.().catch(() => null), followOptions(dvSource, cfg, todayDate, refresh, patterns)]);
+  const mine = mineR ?? [];
+  const clients = followedKeys(weekClients(buildWeek({ weekStart, patterns, events: [], config: weekConfig }), weekConfig.standingBlocks), follow.patterns, follow.options);
+  const planClients = [...clients];
+  for (const c of followedKeys(mine, follow.patterns, follow.options)) if (!planClients.some((p) => p.clientKey === c.clientKey)) planClients.push({ clientKey: c.clientKey, clientName: c.clientName });
+  const fetch = [...clients, ...followedKeys(mine, follow.patterns, follow.options).filter((c) => c.devops && !clients.some((w) => w.clientKey === c.clientKey)).map(({ clientKey, clientName }) => ({ clientKey, clientName }))];
+  return { planClients, fetch };
+}
+
+/** Weeks whose committed features the DevOps read brings along: the week shown, today's week and next week. */
+const featureWeeks = (weekStart: string, todayDate: string) => {
+  const thisWeek = mondayOf(todayDate);
+  return [weekStart, thisWeek, Temporal.PlainDate.from(thisWeek).add({ days: 7 }).toString()];
+};
+
+/** The week's blocks from focus patterns and standing blocks only (no calendars): where a feature can go (step 8). */
+async function patternWeek(ctx: ActionContext, cfg: AppConfig, weekStart: string): Promise<Week> {
+  const r = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).load(weekStart).catch(() => null) : null;
+  return buildWeek({ weekStart, patterns: r?.items ?? [], events: [], config: cfg.week });
 }
 
 async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekLoadData> {
@@ -215,16 +248,15 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       // Plus every client I'm an Account Worker on (Q21), so Open half-days can take their work. Only those
       // with DevOps set up are fetched; the rest can still take a typed intention.
       // Only followed clients (step 6d, replaces Q21 for DevOps): the rest get no PAT read, no call and no status.
-      const dvSource = ctx.makeDataverse(dv, tz);
-      const [mineR, follow] = await Promise.all([dvSource.myClients?.().catch(() => null), followOptions(dvSource, cfg, todayDate, refresh, dataverse.items)]);
-      const mine = mineR ?? [];
-      const clients = followedKeys(weekClients(buildWeek({ weekStart, patterns: dataverse.items, events: [], config: weekConfig }), weekConfig.standingBlocks), follow.patterns, follow.options);
-      planClients = [...clients];
-      for (const c of followedKeys(mine, follow.patterns, follow.options)) if (!planClients.some((p) => p.clientKey === c.clientKey)) planClients.push({ clientKey: c.clientKey, clientName: c.clientName });
-      const fetch = [...clients, ...followedKeys(mine, follow.patterns, follow.options).filter((c) => c.devops && !clients.some((w) => w.clientKey === c.clientKey)).map(({ clientKey, clientName }) => ({ clientKey, clientName }))];
+      const picked = await devopsClients(ctx, { ...cfg, dataverse: dv }, weekStart, todayDate, refresh, dataverse.items);
+      planClients = picked.planClients;
       // Items an open loop is about are read by id too, so a completed one can close its loop (step 7).
       const watch = ctx.plan ? watchedIds(ctx.plan.openLoops()) : {};
-      devopsP = ctx.makeDevOps(dv, tz).load(fetch, { ...refresh, watch }).catch(() => null);
+      // Features committed to this week, today's week and next (step 8), so Plan the day can offer their stories.
+      const features: Record<string, number[]> = {};
+      if (ctx.plan)
+        for (const f of ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate))) (features[f.clientKey] ??= []).includes(f.itemId) || features[f.clientKey]!.push(f.itemId);
+      devopsP = ctx.makeDevOps(dv, tz).load(picked.fetch, { ...refresh, watch, features }).catch(() => null);
     }
   }
 
@@ -244,7 +276,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const serverToday = localToday(ctx.now(), tz);
   const names = new Map([...planClients.map((c) => [c.clientKey, c.clientName] as const), ...(devops ?? []).map((w) => [w.clientKey, w.clientName] as const)]);
   if (ctx.plan) {
-    applyLoopRules(ctx.plan, { today: serverToday, work: devops, internal: internalClients(cfg), clientName: nameOf(cfg, (k) => names.get(k)) });
+    applyLoopRules(ctx.plan, { today: serverToday, work: devops, internal: internalClients(cfg), clientName: nameOf(cfg, (k) => names.get(k)), isWorkday: workdayOf(cfg) });
     ctx.plan.settleBorrowed();
   }
   const todayPlan = ctx.plan?.day(todayDate) ?? null;
@@ -271,6 +303,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     resumeNotes: ctx.plan ? Object.fromEntries(Object.entries(ctx.plan.latestNotes()).map(([k, n]) => [k, noteView(n)])) : {},
     borrowed: ctx.plan ? ctx.plan.borrowedFor(weekStart, sunday).map(borrowedView) : [],
     closeOut: { date: todayDate, done: !!todayPlan?.closedOutAt },
+    weekPlan: ctx.plan ? weekPlanView(ctx.plan.weekPlan(weekStart)) : null,
+    weekFeatures: ctx.plan ? ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate)) : [],
+    weekNudge: { badge: ctx.plan && cfg ? weekNudges(Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz), nudgeTimes(cfg), (w) => !!ctx.plan!.weekPlan(w).committedAt).badge : null },
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
   };
@@ -409,6 +444,29 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
           config: () => configured(ctx),
           devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
           ptoAhead: (cfg, monday) => ptoAheadOf(ctx, cfg, monday),
+          now: ctx.now,
+        },
+        action,
+        req.input,
+      );
+    case "weekplan.load":
+    case "weekplan.set_feature":
+    case "weekplan.place":
+    case "weekplan.commit":
+    case "feature.brief":
+    case "feature.mark_breakdown":
+    case "loop.ask_priorities":
+      return weekPlanAction(
+        {
+          plan: ctx.plan,
+          config: () => configured(ctx),
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
+          clients: async (cfg, weekStart, refresh) => {
+            const today = localToday(ctx.now(), cfg.week.hours.timeZone);
+            const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).load(weekStart, refresh ? { refresh } : {}).catch(() => null) : null;
+            return (await devopsClients(ctx, cfg, weekStart, today, refresh ? { refresh } : {}, dv?.items ?? [])).fetch;
+          },
+          blocks: (cfg, weekStart) => patternWeek(ctx, cfg, weekStart),
           now: ctx.now,
         },
         action,

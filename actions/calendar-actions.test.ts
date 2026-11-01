@@ -35,7 +35,7 @@ function ctx(opts: { dv?: Scenario; outlook?: ApiScenario; google?: ApiScenario;
     makeDataverse: (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dvFetch, cacheDir, log: () => {} }),
     makeOutlook: (cfg, tz) => createOutlookSource({ config: cfg, timeZone: tz, fetch: oFetch, keyring, openBrowser: async (u) => { opened.push(u); }, cacheDir, log: () => {}, signInTimeoutMs: 150 }),
     makeGoogle: (cfg, tz) => createGoogleSource({ config: cfg, timeZone: tz, fetch: gFetch, keyring, openBrowser: async (u) => { opened.push(u); }, cacheDir, log: () => {} }),
-    makeDevOps: () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null }),
+    makeDevOps: () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null }),
     saveSystemUserId: async () => {},
     now: () => "2026-11-03T15:00:00Z",
   };

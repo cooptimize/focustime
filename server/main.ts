@@ -28,7 +28,7 @@ import { calendarRefreshDue, checkTimer, notifyWithActions, playEndSound } from 
 import { refreshTodayWarnings } from "../actions/warnings.ts";
 import { TIMER_KEY, timerAction } from "../actions/timer-actions.ts";
 import type { TimerState } from "../plan/timer.ts";
-import { CHECKIN_MESSAGE, CLOSEOUT_MESSAGE, checkDayReminder, checkinReminderDue, checkReminder, closeoutReminderDue, notifySend } from "./notify.ts";
+import { CHECKIN_MESSAGE, CLOSEOUT_MESSAGE, checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeoutReminderDue, notifySend } from "./notify.ts";
 
 const args = process.argv.slice(2);
 const dev = args.includes("--dev");
@@ -229,6 +229,21 @@ if (plan) {
         log({ source: "plan", op: "closeout_reminder", kind: "sent" });
       },
     }).catch(() => log({ source: "plan", op: "closeout_reminder", kind: "failed" }));
+    // Plan the week nudges (step 8): once per nudge and week, while that week isn't committed.
+    void checkWeekNudges({
+      now: () => zonedNow(timeZone),
+      times: async () => {
+        const c = await configOrNull();
+        return c ? { thu: c.plan.weekNudgeThu, fri: c.plan.weekNudgeFri, mon: c.plan.weekNudgeMon } : null;
+      },
+      committed: (w) => !!store.weekPlan(w).committedAt,
+      off: ptoOff,
+      once: (key, w) => store.markOnce(key, w),
+      send: (body) => {
+        notifySend("Coopilot", body);
+        log({ source: "plan", op: "week_nudge", kind: "sent" });
+      },
+    }).catch(() => log({ source: "plan", op: "week_nudge", kind: "failed" }));
   };
   setInterval(() => {
     void tick();

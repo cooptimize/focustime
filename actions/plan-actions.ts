@@ -3,8 +3,8 @@
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { carryTarget, dayLabel, dayRule, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
-import { unpickableReason } from "../plan/rules.ts";
-import { DEFAULT_SIZE, SIZES, type PlanDayState, type Size } from "../plan/types.ts";
+import { sessionEnd, unpickableReason } from "../plan/rules.ts";
+import { DEFAULT_SIZE, SIZES, type Pick as PlanPick, type PlanDayState, type Size } from "../plan/types.ts";
 import { PlanError, type NewPick, type PlanStore } from "../store/plan-store.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
 import { dayEndOf, hoursOn, type TimeModel } from "../week/hours.ts";
@@ -121,18 +121,39 @@ async function carryDay(ctx: PlanContext, plan: PlanStore): Promise<{ target: Is
   return { target: carryTarget(upcoming, (d) => !!plan.day(d)?.committedAt, pto, hasHours), upcoming };
 }
 
+/** A pick whose evening or weekend session hasn't ended yet by the server's clock (Q45): not carry-over yet. */
+function pendingSession(ctx: PlanContext, plan: PlanStore, cfg: AppConfig | null): (p: PlanPick) => boolean {
+  const model = cfg?.week.hours ?? defaultWeekConfig.hours;
+  const now = Temporal.Instant.from(ctx.now());
+  return (p) => {
+    // Flex ends are date-times; as local times on the pick's date (a session past midnight counts as midnight).
+    const flexEnds = plan.flexBetween(p.date, p.date).map((f) => {
+      const z = Temporal.Instant.from(f.end).toZonedDateTimeISO(model.timeZone);
+      return z.toPlainDate().toString() > p.date ? "24:00" : z.toPlainTime().toString({ smallestUnit: "minute" });
+    });
+    const end = sessionEnd(p, hoursOn(model, p.date), flexEnds);
+    if (!end) return false;
+    const [h, m] = end.split(":").map(Number) as [number, number];
+    const at = Temporal.PlainDate.from(p.date).toZonedDateTime({ timeZone: model.timeZone }).add({ hours: h, minutes: m });
+    return Temporal.Instant.compare(now, at.toInstant()) < 0;
+  };
+}
+
 async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = true): Promise<PlanDayState> {
   const { today, cfg } = await clock(ctx);
   const day = plan.start(d);
   const carry = await carryDay(ctx, plan);
   // Unfinished picks from before the first upcoming day, offered only on the carry-over day.
-  const carryOver = carry.target === d ? plan.carryOverFor(carry.upcoming, cfg?.plan.carryDays) : [];
+  const carryOver = carry.target === d ? plan.carryOverFor(carry.upcoming, cfg?.plan.carryDays, pendingSession(ctx, plan, cfg)) : [];
   const picks = plan.picksFor(d);
   // Focused seconds per pick (step 6d): the day's picks and the carry-over offered.
   const focused = plan.focusedSeconds([...picks, ...carryOver].map((p) => p.id));
   // Where I left off per client (step 7): the latest resume note on or before this day.
   const resumeNotes = Object.fromEntries(Object.entries(plan.latestNotes(d)).map(([k, n]) => [k, { clientKey: n.clientKey, date: n.date, note: n.note }]));
-  return { date: d, plan: day, picks, carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: plan.drafts(), opened, focused, resumeNotes };
+  // Committed features of this date's week (step 8).
+  const monday = Temporal.PlainDate.from(d).subtract({ days: Temporal.PlainDate.from(d).dayOfWeek - 1 }).toString();
+  const weekFeatures = plan.weekPlan(monday).features.map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, url: f.url, slots: f.slots }));
+  return { date: d, plan: day, picks, carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: plan.drafts(), opened, focused, resumeNotes, weekFeatures };
 }
 
 export async function planAction(ctx: PlanContext, action: PlanAction, input: unknown): Promise<ActionResponse> {

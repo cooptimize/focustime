@@ -239,3 +239,63 @@ describe("step 6c: loops, timer state, focused time and reset", () => {
     expect(readdirSync(join(path, "..")).some((f) => f.includes("bak-reset"))).toBe(true);
   });
 });
+
+describe("week plan (step 8)", () => {
+  const W = "2026-11-09";
+  const f = { weekStart: W, clientKey: "CSC", itemId: 210, title: "Dana's feature", itemType: "Feature", url: "https://dev.azure.com/x/y/_workitems/edit/210" };
+  it("commits features to a week by a number of blocks; 0 blocks takes it off", () => {
+    const { store } = fresh();
+    expect(store.weekPlan(W)).toEqual({ weekStart: W, committedAt: null, updatedAt: null, features: [] });
+    const a = store.setWeekFeature({ ...f, blocks: 2 });
+    expect(a).toMatchObject({ clientKey: "CSC", itemId: 210, blocks: 2, slots: [] });
+    store.setWeekFeature({ ...f, blocks: 3 });
+    store.setWeekFeature({ ...f, itemId: 240, title: "Mine", blocks: 1 });
+    expect(store.weekPlan(W).features.map((x) => [x.itemId, x.blocks])).toEqual([[210, 3], [240, 1]]);
+    store.setWeekFeature({ ...f, itemId: 240, title: "Mine", blocks: 0 });
+    expect(store.weekPlan(W).features.map((x) => x.itemId)).toEqual([210]);
+    expect(() => store.setWeekFeature({ ...f, blocks: 99 })).toThrow(/blocks/);
+  });
+  it("places a feature on specific blocks; more placements than blocks raises the count, fewer blocks drops the latest placements", () => {
+    const { store } = fresh();
+    const a = store.setWeekFeature({ ...f, blocks: 1 })!;
+    store.placeFeature(a.id, "2026-11-10", "PM", true);
+    store.placeFeature(a.id, "2026-11-09", "AM", true);
+    expect(store.weekPlan(W).features[0]).toMatchObject({ blocks: 2, slots: [{ date: "2026-11-09", half: "AM" }, { date: "2026-11-10", half: "PM" }] });
+    store.placeFeature(a.id, "2026-11-09", "AM", true); // again: no change
+    store.setWeekFeature({ ...f, blocks: 1 });
+    expect(store.weekPlan(W).features[0]!.slots).toEqual([{ date: "2026-11-09", half: "AM" }]);
+    store.placeFeature(a.id, "2026-11-09", "AM", false);
+    expect(store.weekPlan(W).features[0]).toMatchObject({ blocks: 1, slots: [] });
+    expect(() => store.placeFeature(a.id, "2026-11-17", "AM", true)).toThrow(/week/);
+    expect(() => store.placeFeature(999, "2026-11-09", "AM", true)).toThrow();
+  });
+  it("commits the week, stays editable, and knows when it changed since the commit", () => {
+    const { store } = fresh();
+    store.setWeekFeature({ ...f, blocks: 2 });
+    const c = store.commitWeek(W);
+    expect(c.committedAt).toBe(clock.toString({ smallestUnit: "second" }));
+    clock = clock.add({ minutes: 5 });
+    store.setWeekFeature({ ...f, blocks: 3 });
+    const p = store.weekPlan(W);
+    expect(p.updatedAt! > p.committedAt!).toBe(true);
+    clock = clock.add({ minutes: 5 });
+    expect(store.commitWeek(W).committedAt! >= p.updatedAt!).toBe(true);
+  });
+  it("marks a feature as being broken down (local only), and the reset and export cover the week plan", () => {
+    const { store } = fresh();
+    store.markBreakdown("CSC", 240, true);
+    expect(store.breakdownMarks()).toEqual([{ clientKey: "CSC", itemId: 240, markedAt: clock.toString({ smallestUnit: "second" }) }]);
+    store.markBreakdown("CSC", 240, false);
+    expect(store.breakdownMarks()).toEqual([]);
+    store.setWeekFeature({ ...f, blocks: 2 });
+    store.commitWeek(W);
+    store.markBreakdown("CSC", 240, true);
+    const e = store.exportJson();
+    expect(e.weekPlans).toHaveLength(1);
+    expect(e.weekFeatures).toHaveLength(1);
+    expect(e.breakdownMarks).toHaveLength(1);
+    store.reset();
+    expect(store.weekPlan(W).features).toEqual([]);
+    expect(store.breakdownMarks()).toEqual([]);
+  });
+});

@@ -1,6 +1,6 @@
 // Plan the day rules: capacity, fit, carry-over, block client and story level. Pure, no I/O.
 import { freeMinutes } from "../week/free.ts";
-import type { IsoDate, WorkItem } from "../week/types.ts";
+import type { Half, IsoDate, WorkItem } from "../week/types.ts";
 import { SIZE_MINUTES, type Pick, type Size } from "./types.ts";
 
 
@@ -37,7 +37,7 @@ export const CARRY_DAYS = 7;
  * the original "moved", and done or dropped picks are settled, so each unfinished pick shows once until
  * it is carried, done or dropped. Newest day first, then block and position.
  */
-export function carryOver(picks: readonly Pick[], today: IsoDate, days = CARRY_DAYS): Pick[] {
+export function carryOver(picks: readonly Pick[], today: IsoDate, days = CARRY_DAYS, pending: (p: Pick) => boolean = () => false): Pick[] {
   if (days <= 0) return [];
   const t = Temporal.PlainDate.from(today);
   const from = t.subtract({ days });
@@ -47,7 +47,20 @@ export function carryOver(picks: readonly Pick[], today: IsoDate, days = CARRY_D
       const d = Temporal.PlainDate.from(p.date);
       return Temporal.PlainDate.compare(d, t) < 0 && Temporal.PlainDate.compare(d, from) >= 0;
     })
+    // A pick being made up tonight or on a weekend isn't unfinished until its session has ended (Q45).
+    .filter((p) => !pending(p))
     .sort((a, b) => b.date.localeCompare(a.date) || a.half.localeCompare(b.half) || a.position - b.position);
+}
+
+/**
+ * When the session a pick sits in ends, for picks in an evening or on a day without regular hours (a weekend): the
+ * later of the day's last working span and its flex sessions, else midnight ("24:00"). Null for a regular morning or
+ * afternoon pick, which carry-over never waits for (Q45).
+ */
+export function sessionEnd(p: Pick, day: { segments: readonly { end: string }[]; main: { end: string } | null }, flexEnds: readonly string[]): string | null {
+  if (p.half !== "EVE" && day.main) return null;
+  const ends = [...(p.half === "EVE" ? day.segments.slice(1) : day.segments).map((s) => s.end), ...flexEnds].sort();
+  return ends.at(-1) ?? "24:00";
 }
 
 export type BlockClient = { clientKey: string | null; mixed: boolean; clients: string[] };
@@ -81,4 +94,27 @@ export function pickableChildren(parentId: number, children: readonly WorkItem[]
   const direct = children.filter((c) => c.parentId === parentId);
   const below = direct.filter((c) => c.level === "portfolio").flatMap((c) => children.filter((g) => g.parentId === c.id));
   return [...direct, ...below].filter(isPickable);
+}
+
+type CommittedRef = { clientKey: string; itemId: number; title: string; url: string | null; slots: readonly { date: IsoDate; half: "AM" | "PM" }[] };
+type WorkLike = { items: readonly WorkItem[]; children: readonly WorkItem[]; committed?: readonly WorkItem[] };
+
+/**
+ * Plan the day (step 8): a client's features committed to the week come first in its blocks, those placed on this
+ * block before the rest, each with its pickable stories (anyone's open stories under it). `item` is null when DevOps
+ * can't show it right now. `rest` is the remaining board, without those features and their stories.
+ */
+export function committedFirst(work: WorkLike | undefined, features: readonly CommittedRef[], clientKey: string, date: IsoDate, half: Half) {
+  const here = (f: CommittedRef) => f.slots.some((s) => s.date === date && s.half === half);
+  const mine = features.filter((f) => f.clientKey === clientKey).sort((a, b) => Number(here(b)) - Number(here(a)));
+  const ids = new Set(mine.map((f) => f.itemId));
+  // My own items under a feature are in the board list, not its children list: look in both (board order first).
+  const pool = work ? [...work.items, ...work.children.filter((c) => !work.items.some((i) => i.id === c.id))] : [];
+  const committed = mine.map((f) => {
+    const item = work?.items.find((i) => i.id === f.itemId) ?? work?.committed?.find((i) => i.id === f.itemId) ?? null;
+    return { feature: f, placedHere: here(f), item, kids: work ? pickableChildren(f.itemId, pool) : [] };
+  });
+  const under = new Set(committed.flatMap((c) => c.kids.map((k) => k.id)));
+  const rest = (work?.items ?? []).filter((i) => !ids.has(i.id) && !under.has(i.id));
+  return { committed, rest };
 }

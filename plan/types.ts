@@ -58,6 +58,8 @@ export type PlanDayState = {
   focused: Record<number, number>;
   /** The latest resume note per client on or before this date (step 7). */
   resumeNotes: Record<string, { clientKey: string; date: IsoDate; note: string }>;
+  /** Features committed to this date's week (step 8): their stories are offered first in their client's blocks. */
+  weekFeatures: { clientKey: string; itemId: number; title: string; url: string | null; slots: { date: IsoDate; half: "AM" | "PM" }[] }[];
 };
 
 /** Committed plans for the days of a week, for the checklist on the week view. */
@@ -67,3 +69,22 @@ export type PlanWeek = Record<IsoDate, { committedAt: ZonedStamp | null; picks: 
 export const SIZE_MINUTES: Record<Size, number> = { S: 60, M: 120, L: 210 };
 export const SIZES: readonly Size[] = ["S", "M", "L"];
 export const DEFAULT_SIZE: Size = "M";
+
+/** A feature committed to a week (step 8): a number of my blocks for its client, some maybe placed on specific blocks. */
+export type WeekFeature = {
+  id: number;
+  weekStart: IsoDate;
+  clientKey: string;
+  itemId: number;
+  title: string;
+  itemType: string | null;
+  url: string | null;
+  blocks: number;
+  /** Specific blocks (morning or afternoon) it is placed on, in date order. At most `blocks`. */
+  slots: { date: IsoDate; half: "AM" | "PM" }[];
+  position: number;
+  createdAt: ZonedStamp;
+  updatedAt: ZonedStamp;
+};
+
+export type WeekPlanRecord = { weekStart: IsoDate; committedAt: ZonedStamp | null; /** The latest change to the plan or its features. */ updatedAt: ZonedStamp | null; features: WeekFeature[] };

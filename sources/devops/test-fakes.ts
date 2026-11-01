@@ -19,6 +19,7 @@ export type OrgScenario =
   | "server_error" // 500
   | "batch_fails" // metadata and WIQL work, the batch call fails
   | "portfolio"
+  | "planweek" // agile; Plan the week (step 8): features I own, features that are parents of my stories, an epic with no open features
   | "flaky"; // agile, but the first try of every request fails at the network level (a blip) // agile process; I own a feature with children, an epic with a feature and a story below it, and a feature with none
 
 /** Work items for the "portfolio" scenario: id → [type, state, parent, title]. */
@@ -33,6 +34,32 @@ export const PORTFOLIO: Record<number, [string, string, number | null, string]> 
   130: ["Feature", "New", null, "Feature with no children"],
 };
 const MINE = [110, 101, 120, 130];
+
+/**
+ * Plan the week (step 8): id → [type, state, parent, title, assignee display name or null, target date or null].
+ * Mine (open, assigned to me): 201, 202, 203, 204, 240, 250.
+ */
+export const PLANWEEK: Record<number, [string, string, number | null, string, string | null, string | null]> = {
+  201: ["User Story", "Active", 210, "My story under Dana's feature", "Tanner S", null],
+  202: ["User Story", "New", 220, "My story under an unassigned feature", "Tanner S", null],
+  203: ["Task", "Active", 201, "My task under my story", "Tanner S", null],
+  204: ["User Story", "Active", null, "My story with no parent", "Tanner S", null],
+  210: ["Feature", "Active", 230, "Dana's feature", "Dana Ruiz", "2026-11-20T05:00:00Z"],
+  211: ["User Story", "Closed", 210, "Done story", "Dana Ruiz", null],
+  212: ["User Story", "New", 210, "Unassigned story", null, null],
+  220: ["Feature", "New", null, "Unassigned feature", null, null],
+  230: ["Epic", "Active", null, "Dana's epic", "Dana Ruiz", null],
+  240: ["Feature", "Active", null, "My feature with no stories", "Tanner S", null],
+  250: ["Epic", "New", null, "My epic", "Tanner S", null],
+  251: ["Feature", "Closed", 250, "Finished feature", "Dana Ruiz", null],
+};
+const PLANWEEK_MINE = [240, 201, 202, 250, 203, 204];
+const PLANWEEK_FIELDS = [
+  { referenceName: "System.Title", name: "Title", type: "string" },
+  { referenceName: "Microsoft.VSTS.Scheduling.StartDate", name: "Start Date", type: "dateTime" },
+  { referenceName: "Microsoft.VSTS.Scheduling.TargetDate", name: "Target Date", type: "dateTime" },
+  { referenceName: "Microsoft.VSTS.Common.ClosedDate", name: "Closed Date", type: "dateTime" },
+];
 
 const fx = (name: string) => readFileSync(join(import.meta.dirname, "fixtures", `${name}.json`), "utf8");
 
@@ -83,7 +110,34 @@ export function fakeDevOps(orgs: Record<string, OrgScenario>, opts: { ids?: numb
       case "server_error":
         return json('{"message":"boom"}', 500);
     }
-    const proc = scenario === "batch_fails" || scenario === "portfolio" ? "agile" : scenario;
+    const proc = scenario === "batch_fails" || scenario === "portfolio" || scenario === "planweek" ? "agile" : scenario;
+    if (scenario === "planweek") {
+      if (path === "_apis/wit/wiql") {
+        const q = (JSON.parse(String(init?.body)) as { query: string }).query;
+        const parents = q.match(/\[System\.Parent\] IN \(([\d, ]+)\)/)?.[1]?.split(",").map(Number);
+        const ids = parents ? Object.entries(PLANWEEK).filter(([, v]) => v[2] !== null && parents.includes(v[2])).map(([k]) => Number(k)) : PLANWEEK_MINE;
+        return json(JSON.stringify({ workItems: ids.map((id) => ({ id })) }));
+      }
+      if (path === "_apis/wit/workitemsbatch") {
+        const body = JSON.parse(String(init?.body)) as { ids: number[]; fields: string[] };
+        const value = body.ids.filter((id) => PLANWEEK[id]).map((id) => {
+          const [type, state, parent, title, who, target] = PLANWEEK[id]!;
+          const all: Record<string, unknown> = {
+            "System.Id": id, "System.Title": title, "System.WorkItemType": type, "System.State": state, "System.ChangedDate": "2026-10-30T15:00:00Z",
+            "Microsoft.VSTS.Common.StackRank": id, "System.Description": id === 210 ? "<div>Export the <b>weekly</b> report &amp; email it.</div><ul><li>CSV</li></ul>" : "",
+            ...(parent ? { "System.Parent": parent } : {}),
+            ...(who ? { "System.AssignedTo": { displayName: who, uniqueName: who === "Tanner S" ? `tanner@${org}.example` : "dana@client.example" } } : {}),
+            ...(target ? { "Microsoft.VSTS.Scheduling.TargetDate": target } : {}),
+          };
+          // Only the fields asked for, like DevOps.
+          return { id, fields: Object.fromEntries(Object.entries(all).filter(([k]) => body.fields.includes(k))) };
+        });
+        return json(JSON.stringify({ count: value.length, value }));
+      }
+      if (path === "_apis/wit/fields") return json(JSON.stringify({ count: PLANWEEK_FIELDS.length, value: PLANWEEK_FIELDS }));
+      const typeFields = path.match(/^_apis\/wit\/workitemtypes\/(.+)\/fields$/);
+      if (typeFields) return json(JSON.stringify({ value: PLANWEEK_FIELDS.filter((f) => decodeURIComponent(typeFields[1]!) !== "Epic" || f.referenceName !== "Microsoft.VSTS.Scheduling.TargetDate").map(({ referenceName, name }) => ({ referenceName, name })) }));
+    }
     if (scenario === "portfolio" && path === "_apis/wit/wiql") {
       const q = (JSON.parse(String(init?.body)) as { query: string }).query;
       const parents = q.match(/\[System\.Parent\] IN \(([\d, ]+)\)/)?.[1]?.split(",").map(Number);

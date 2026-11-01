@@ -1,7 +1,7 @@
 // The committed plan as the week view sees it: picks per day, and ticking one done (local status only).
 import { createContext, useContext } from "react";
 import { liveFocused } from "../plan/focus.ts";
-import { SIZE_MINUTES, type Pick, type PlanWeek, type Size } from "../plan/types.ts";
+import { SIZE_MINUTES, type Pick, type PlanWeek, type Size, type WeekFeature } from "../plan/types.ts";
 import type { Half, IsoDate, Slot, WorkItem } from "../week/types.ts";
 import { capacityMinutes, fitOf, plannedMinutes, type Fit } from "../plan/rules.ts";
 
@@ -20,6 +20,8 @@ export type PlanView = {
   resumeNotes?: Readonly<Record<string, ResumeNote>>;
   /** The note to show on a week card ("date:half"): each client's next block after its note. */
   resumeOn?: Readonly<Record<string, ResumeNote>>;
+  /** Features committed to the weeks in view (step 8), for the week cards. */
+  weekFeatures?: readonly WeekFeature[];
 };
 export type ResumeNote = { clientKey: string; date: IsoDate; note: string };
 
@@ -41,6 +43,18 @@ export function resumeSlots(days: readonly { date: IsoDate; am: Slot; pm: Slot }
   }
   return out;
 }
+type FeatureOnWeek = { clientKey: string; itemId: number; title: string; blocks: number; slots: readonly { date: IsoDate; half: "AM" | "PM" }[] };
+
+/**
+ * Committed features to show on a block (step 8): those placed on it, then (on a client's own block) that client's
+ * features with blocks not yet placed. An Open half-day (no client) shows only what is placed on it.
+ */
+export function featuresOn<T extends FeatureOnWeek>(features: readonly T[], date: IsoDate, half: Half, clientKey: string | null): T[] {
+  const here = features.filter((f) => f.slots.some((s) => s.date === date && s.half === half));
+  const floating = clientKey ? features.filter((f) => f.clientKey === clientKey && !here.includes(f) && f.slots.length < f.blocks) : [];
+  return [...here, ...floating];
+}
+
 export const PlanCtx = createContext<PlanView>({ week: null, toggle: () => {}, sizes: SIZE_MINUTES, focused: {}, timer: null, nowMs: 0 });
 
 /** Seconds focused on a pick, live while its session runs. */

@@ -3,7 +3,7 @@ import type { Pick, PlanWeek, Size } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { WorkItem } from "../week/types.ts";
-import { cardPlan, resumeSlots } from "./planview.ts";
+import { cardPlan, resumeSlots, featuresOn } from "./planview.ts";
 import { noStanding, pattern } from "../week/test-helpers.ts";
 import { fitLabel } from "./planday.ts";
 
@@ -71,5 +71,20 @@ describe("resume notes on the week (step 7)", () => {
     expect(Object.keys(resumeSlots(days, notes, "2026-11-02")).sort()).toEqual(["2026-11-03:AM", "2026-11-04:PM"]);
     // Later in the week the W&C block has passed: nothing shown for it.
     expect(Object.keys(resumeSlots(days, notes, "2026-11-04"))).toEqual(["2026-11-04:PM"]);
+  });
+});
+
+describe("committed features on a block (step 8)", () => {
+  const f = (over: Partial<{ clientKey: string; itemId: number; title: string; blocks: number; slots: { date: string; half: "AM" | "PM" }[] }>) => ({ clientKey: "W&C", itemId: 1, title: "Export", blocks: 2, slots: [], ...over });
+  it("shows features placed on this block, then the client's features not fully placed", () => {
+    const placed = f({ itemId: 1, title: "Placed here", slots: [{ date: "2026-11-09", half: "PM" }] });
+    const floating = f({ itemId: 2, title: "Anywhere", blocks: 2, slots: [{ date: "2026-11-10", half: "AM" }] });
+    const elsewhere = f({ itemId: 3, title: "Placed elsewhere", blocks: 1, slots: [{ date: "2026-11-10", half: "AM" }] });
+    const other = f({ clientKey: "CSC", itemId: 4, title: "CSC's" });
+    const all = [elsewhere, floating, placed, other];
+    expect(featuresOn(all, "2026-11-09", "PM", "W&C").map((x) => x.title)).toEqual(["Placed here", "Anywhere"]);
+    // An Open half-day shows only what is placed on it.
+    expect(featuresOn(all, "2026-11-09", "PM", null).map((x) => x.title)).toEqual(["Placed here"]);
+    expect(featuresOn(all, "2026-11-11", "AM", "CSC").map((x) => x.title)).toEqual(["CSC's"]);
   });
 });

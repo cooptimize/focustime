@@ -5,9 +5,9 @@
 import { createHash } from "node:crypto";
 import { readSnapshot, writeSnapshot } from "../../cache/snapshots.ts";
 import type { Logger } from "../../log/logger.ts";
-import type { ClientWork, ClientWorkStatus, FailureCause, WorkItem } from "../../week/types.ts";
+import type { ClientPortfolio, ClientWork, ClientWorkStatus, FailureCause, PortfolioItem, WorkItem } from "../../week/types.ts";
 import { formatFetchedAt } from "../when.ts";
-import { withOpenStates, allowPortfolio, backlogLevels, batchFields, buildChildrenWiql, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, type BacklogLevels, type StateCategories } from "./normalize.ts";
+import { withOpenStates, allowPortfolio, backlogLevels, batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, categoriesFrom, detectOrderField, detectTargetField, DONE_CATEGORIES, htmlToText, normalizeWorkItems, portfolioTiers, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
 import type { Pat } from "./pat.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
 
@@ -54,7 +54,10 @@ class DevOpsFailure extends Error {
   }
 }
 
-type Metadata = { orderField: string | null; categories: StateCategories; levels: BacklogLevels };
+type Metadata = { orderField: string | null; categories: StateCategories; levels: BacklogLevels; /** Plan the week (step 8): portfolio tiers from the backlog levels. */ tiers: { feature: Set<string>; epic: Set<string> } };
+
+/** What the cache file holds for Plan the week per client: normalized portfolio items only (no descriptions). */
+type PortfolioSnapshot = { fetchedAt: string; items: PortfolioItem[]; targetFields: Record<string, string> };
 
 /** What the cache file holds per client: normalized items only. */
 type WorkSnapshot = { fetchedAt: string; items: WorkItem[]; children?: WorkItem[] };
@@ -76,13 +79,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
   const ttl = d.memoryTtlMs ?? 5 * 60_000;
   const minRefresh = d.minRefreshMs ?? 60_000;
   const metaTtl = d.metadataTtlMs ?? 60 * 60_000;
-  const memory = new Map<string, { at: number; result: ClientWork }>();
+  const memory = new Map<string, { at: number; result: ClientWork; /** The committed features it was read with, sorted ids. */ features: string }>();
   const metadata = new Map<string, { at: number; meta: Metadata }>();
   /** Each client's DevOps organization name (not secret), from its last Dataverse settings. */
   const orgs = new Map<string, string>();
   const log = (op: string, extra: { status?: number; durationMs?: number; count?: number; kind?: string } = {}) => d.log({ source: "devops", op, ...extra });
 
-  type Ctx = { client: string; org: string; base: string; projectName: string; pat: Pat };
+  type Ctx = { client: string; org: string; base: string; projectName: string; pat: Pat; /** My identity here (not secret), for changedByMe. */ me: string | null };
 
   /** One request. Errors are mapped to plain messages; response bodies of failures are never read. */
   async function call<T>(c: Ctx, op: string, path: string, body?: unknown): Promise<T> {
@@ -137,7 +140,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
         return { name: x.name, states: s.value ?? [] };
       }),
     );
-    const meta = { orderField: detectOrderField(pc), categories: categoriesFrom(withStates), levels: backlogLevels(pc) };
+    const meta = { orderField: detectOrderField(pc), categories: categoriesFrom(withStates), levels: backlogLevels(pc), tiers: portfolioTiers(pc) };
     metadata.set(key, { at: t, meta });
     return meta;
   }
@@ -156,7 +159,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
       });
       values.push(...(page.value ?? []));
     }
-    const { items, skipped } = normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels });
+    const { items, skipped } = normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, me: ctx.me });
     if (skipped) log("normalize", { kind: "skipped", count: skipped });
     return items;
   }
@@ -165,21 +168,38 @@ export function createDevOpsSource(d: DevOpsDeps) {
   async function fetchWatched(ctx: Ctx, project: string, meta: Metadata, ids: number[]): Promise<WorkItem[]> {
     if (!ids.length) return [];
     const page = await call<{ value?: unknown[] }>(ctx, "workitemsbatch", `${encodeURIComponent(project)}/_apis/wit/workitemsbatch`, { ids: ids.slice(0, BATCH_MAX), fields: batchFields(meta.orderField), errorPolicy: "omit" });
-    return normalizeWorkItems(page.value ?? [], { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, keepDone: true }).items.filter((i) => ids.includes(i.id));
+    return normalizeWorkItems(page.value ?? [], { org: ctx.org, projectName: ctx.projectName, orderField: meta.orderField, categories: meta.categories, levels: meta.levels, keepDone: true, me: ctx.me }).items.filter((i) => ids.includes(i.id));
   }
 
-  async function fetchClient(ref: ClientRef, target: DevOpsTarget, watch: readonly number[] = []): Promise<{ items: WorkItem[]; children: WorkItem[]; watched: WorkItem[] }> {
+  function contextOf(ref: ClientRef, target: DevOpsTarget): { ctx: Ctx; project: string } {
     const org = target.org!;
-    const ctx: Ctx = { client: ref.clientName, org, base: `https://dev.azure.com/${encodeURIComponent(org)}`, projectName: target.projectName ?? target.project!, pat: target.pat! };
-    const project = target.project!;
+    return { ctx: { client: ref.clientName, org, base: `https://dev.azure.com/${encodeURIComponent(org)}`, projectName: target.projectName ?? target.project!, pat: target.pat!, me: target.email }, project: target.project! };
+  }
+
+  /** The batch call for given ids and fields, in chunks of 200, normalized with the given context. */
+  async function readByIds(ctx: Ctx, project: string, ids: readonly number[], fields: string[], n: Omit<NormalizeContext, "org" | "projectName">): Promise<WorkItem[]> {
+    const values: unknown[] = [];
+    for (let i = 0; i < ids.length; i += BATCH_MAX) {
+      const page = await call<{ value?: unknown[] }>(ctx, "workitemsbatch", `${encodeURIComponent(project)}/_apis/wit/workitemsbatch`, { ids: ids.slice(i, i + BATCH_MAX), fields, errorPolicy: "omit" });
+      values.push(...(page.value ?? []));
+    }
+    return normalizeWorkItems(values, { org: ctx.org, projectName: ctx.projectName, ...n }).items;
+  }
+
+  async function fetchClient(ref: ClientRef, target: DevOpsTarget, watch: readonly number[] = [], features: readonly number[] = []): Promise<{ items: WorkItem[]; children: WorkItem[]; watched: WorkItem[]; committed: WorkItem[] }> {
+    const { ctx, project } = contextOf(ref, target);
     const raw = await loadMetadata(ctx, project);
     const meta = { ...raw, categories: withOpenStates(raw.categories, d.openStates?.(ref.clientKey) ?? []), levels: allowPortfolio(raw.levels, d.pickableTypes?.() ?? []) };
     const items = await fetchItems(ctx, project, meta, buildWiql(target.email!, meta.categories, meta.orderField));
     log("items", { count: items.length });
+    // Features committed to a week (step 8) that aren't mine: read by id (open ones), so their stories can be offered.
+    const mineIds = new Set(items.map((i) => i.id));
+    const wanted = features.filter((id) => Number.isInteger(id) && id > 0 && !mineIds.has(id)).slice(0, BATCH_MAX);
+    const committed = wanted.length ? (await readByIds(ctx, project, wanted, batchFields(meta.orderField), { orderField: meta.orderField, categories: meta.categories, levels: meta.levels, me: ctx.me })).filter((i) => wanted.includes(i.id)) : [];
     // Epics and features can't be picked: read their open children (any assignee), up to two levels down, read-only.
     const children: WorkItem[] = [];
-    const seen = new Set(items.map((i) => i.id));
-    let parents = items.filter((i) => i.level === "portfolio").map((i) => i.id);
+    const seen = new Set([...items.map((i) => i.id), ...committed.map((i) => i.id)]);
+    let parents = [...items.filter((i) => i.level === "portfolio").map((i) => i.id), ...committed.map((i) => i.id)];
     for (let depth = 0; depth < CHILD_DEPTH && parents.length; depth++) {
       const found = (await fetchItems(ctx, project, meta, buildChildrenWiql(parents.slice(0, MAX_PARENTS), meta.categories, meta.orderField))).filter((c) => !seen.has(c.id));
       for (const c of found) seen.add(c.id);
@@ -190,7 +210,139 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const missing = watch.filter((id) => Number.isInteger(id) && id > 0 && !seen.has(id));
     const watched = await fetchWatched(ctx, project, meta, missing);
     if (watched.length) log("watched", { count: watched.length });
-    return { items, children, watched };
+    return { items, children, watched, committed };
+  }
+
+  // ---- Plan the week (step 8): features and epics, read-only ----
+  const portfolioMemory = new Map<string, { at: number; result: ClientPortfolio }>();
+  const targetFieldMemory = new Map<string, { at: number; fields: Record<string, string> }>();
+
+  /** The target date field per portfolio type for a project (cached like the metadata). None found: no target dates. */
+  async function targetFieldsFor(c: Ctx, project: string, types: readonly string[]): Promise<Record<string, string>> {
+    const key = `${c.org.toLowerCase()}/${project.toLowerCase()}`;
+    const hit = targetFieldMemory.get(key);
+    const t = now().epochMilliseconds;
+    if (hit && t - hit.at < metaTtl) return hit.fields;
+    const p = encodeURIComponent(project);
+    const out: Record<string, string> = {};
+    try {
+      const all = await call<{ value?: FieldInfo[] }>(c, "fields", `${p}/_apis/wit/fields`);
+      for (const type of types) {
+        const tf = await call<{ value?: { referenceName?: unknown }[] }>(c, "typefields", `${p}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields`);
+        const has = new Set((tf.value ?? []).map((f) => f.referenceName).filter((r): r is string => typeof r === "string"));
+        const found = detectTargetField(all.value ?? [], has);
+        if (found) out[type] = found;
+      }
+    } catch (e) {
+      // A refused field list only means no target dates; a bad PAT fails the reads that follow anyway.
+      if (e instanceof DevOpsFailure && e.status === "auth_failed") throw e;
+      log("target_fields", { kind: "unavailable" });
+      return {};
+    }
+    targetFieldMemory.set(key, { at: t, fields: out });
+    return out;
+  }
+
+  async function fetchPortfolio(ref: ClientRef, target: DevOpsTarget, mine: readonly WorkItem[]): Promise<{ items: PortfolioItem[]; targetFields: Record<string, string> }> {
+    const { ctx, project } = contextOf(ref, target);
+    const raw = await loadMetadata(ctx, project);
+    const categories = withOpenStates(raw.categories, d.openStates?.(ref.clientKey) ?? []);
+    const portfolioTypes = new Set([...raw.tiers.feature, ...raw.tiers.epic]);
+    // Assigned to me, or the parent of a story-level item assigned to me (raw backlog levels, not the pickable list).
+    const assigned = new Set(mine.filter((i) => portfolioTypes.has(i.type)).map((i) => i.id));
+    const parents = new Set(mine.filter((i) => raw.levels.story.has(i.type) && i.parentId !== null).map((i) => i.parentId!));
+    const ids = [...new Set([...assigned, ...parents])].slice(0, MAX_PARENTS);
+    if (!ids.length) return { items: [], targetFields: {} };
+    const targetFields = await targetFieldsFor(ctx, project, [...portfolioTypes]);
+    const fields = [...batchFields(raw.orderField), "System.AssignedTo", ...new Set(Object.values(targetFields))];
+    const n = { orderField: raw.orderField, categories, levels: raw.levels, keepDone: true, me: ctx.me, people: true, targetFields, timeZone: d.timeZone };
+    const found = (await readByIds(ctx, project, ids, fields, n)).filter((i) => portfolioTypes.has(i.type) && !DONE_CATEGORIES.has(i.stateCategory));
+    const kids: WorkItem[] = [];
+    if (found.length) {
+      const p = encodeURIComponent(project);
+      const wiql = await call<{ workItems?: { id?: unknown }[] }>(ctx, "wiql", `${p}/_apis/wit/wiql?$top=${WIQL_TOP}`, { query: buildAllChildrenWiql(found.map((i) => i.id), raw.orderField) });
+      const kidIds = (wiql.workItems ?? []).map((w) => w.id).filter((id): id is number => typeof id === "number" && Number.isInteger(id));
+      kids.push(...(await readByIds(ctx, project, kidIds, fields, n)));
+    }
+    log("portfolio", { count: found.length });
+    const items: PortfolioItem[] = found.map((i) => ({
+      id: i.id,
+      title: i.title,
+      type: i.type,
+      state: i.state,
+      stateCategory: i.stateCategory,
+      tier: raw.tiers.feature.has(i.type) ? "feature" : "epic",
+      order: i.order,
+      parentId: i.parentId,
+      url: i.url,
+      targetDate: i.targetDate ?? null,
+      assignedTo: i.assignedTo ?? null,
+      mine: !!i.assignedToMe,
+      why: [...(assigned.has(i.id) ? ["assigned" as const] : []), ...(parents.has(i.id) ? ["parent" as const] : [])],
+      children: kids.filter((k) => k.parentId === i.id).map((k) => ({ id: k.id, title: k.title, type: k.type, state: k.state, stateCategory: k.stateCategory, open: !DONE_CATEGORIES.has(k.stateCategory), level: k.level, order: k.order, url: k.url, assignedTo: k.assignedTo ?? null, mine: !!k.assignedToMe })),
+    }));
+    return { items, targetFields };
+  }
+
+  /** Features and epics per followed client (step 8), after the usual read of my items. Cached for five minutes. */
+  async function portfolio(clients: ClientRef[], opts: { refresh?: boolean } = {}): Promise<ClientPortfolio[]> {
+    const t = now().epochMilliseconds;
+    const fresh = (ref: ClientRef) => {
+      const hit = portfolioMemory.get(ref.clientKey);
+      return hit && (opts.refresh ? t - hit.at < minRefresh : t - hit.at < ttl) ? hit.result : null;
+    };
+    const need = clients.filter((c) => !fresh(c));
+    if (need.length) {
+      // The same committed features the last read had, so this reuses it instead of reading again.
+      const features = Object.fromEntries(need.map((c) => [c.clientKey, (memory.get(c.clientKey)?.features ?? "").split(",").filter(Boolean).map(Number)]));
+      const works = await load(need, { ...opts, features });
+      let targets: TargetsResult;
+      try {
+        targets = await d.targets(need.map((c) => c.clientKey));
+      } catch {
+        targets = { ok: false, message: "Dataverse read failed" };
+      }
+      const results = await Promise.all(
+        need.map(async (ref, i): Promise<ClientPortfolio> => {
+          const w = works[i]!;
+          const key = `portfolio-${cacheKey(ref.clientKey)}`;
+          const fallback = async (status: ClientWorkStatus, message: string, cause?: FailureCause): Promise<ClientPortfolio> => {
+            const snap = (await readSnapshot<PortfolioItem>(d.cacheDir, "devops", key)) as PortfolioSnapshot | null;
+            const msg = snap ? `${message}. Showing features from ${formatFetchedAt(snap.fetchedAt, d.timeZone, now())}` : message;
+            return { clientKey: ref.clientKey, clientName: ref.clientName, status, message: msg, ...(cause ? { cause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [], targetFields: snap?.targetFields ?? {} };
+          };
+          if (w.status !== "ok" || w.fromCache) return fallback(w.status, w.message ?? `DevOps unavailable for ${ref.clientName}`, w.cause);
+          try {
+            const target = targets.ok ? targets.targets.find((x) => x.clientKey === ref.clientKey) : undefined;
+            const pre = precheck(ref, target);
+            if (pre) throw pre;
+            const { items, targetFields } = await fetchPortfolio(ref, target!, w.items);
+            const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
+            await writeSnapshot(d.cacheDir, "devops", key, { fetchedAt, items, targetFields } as unknown as WorkSnapshot).catch(() => log("cache_write", { kind: "failed" }));
+            return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, targetFields };
+          } catch (e) {
+            if (!(e instanceof DevOpsFailure)) log("portfolio", { kind: "unexpected" });
+            const f = e instanceof DevOpsFailure ? e : new DevOpsFailure("error", `DevOps load failed for ${ref.clientName}`);
+            return fallback(f.status, f.message, f.rootCause);
+          }
+        }),
+      );
+      need.forEach((ref, i) => portfolioMemory.set(ref.clientKey, { at: t, result: results[i]! }));
+    }
+    return clients.map((c) => portfolioMemory.get(c.clientKey)!.result);
+  }
+
+  /** One work item's description as plain text, read when asked (the Coop brief). Never cached or logged. */
+  async function description(clientKey: string, id: number): Promise<string | null> {
+    if (!Number.isInteger(id) || id <= 0) return null;
+    const targets = await d.targets([clientKey]).catch(() => null);
+    const target = targets?.ok ? targets.targets.find((x) => x.clientKey === clientKey) : undefined;
+    const ref = { clientKey, clientName: target?.clientName ?? clientKey };
+    if (!target || precheck(ref, target)) return null;
+    const { ctx, project } = contextOf(ref, target);
+    const page = await call<{ value?: { id?: unknown; fields?: Record<string, unknown> }[] }>(ctx, "workitemsbatch", `${encodeURIComponent(project)}/_apis/wit/workitemsbatch`, { ids: [id], fields: ["System.Id", "System.Description"], errorPolicy: "omit" });
+    const html = page.value?.find((v) => v.id === id)?.fields?.["System.Description"];
+    return typeof html === "string" ? htmlToText(html) : "";
   }
 
   /** Check the target is usable. Identity is never guessed. */
@@ -212,7 +364,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return { clientKey: ref.clientKey, clientName: ref.clientName, status: f.status, message, ...(f.rootCause ? { cause: f.rootCause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: (snap?.items ?? []).map(withLevel), children: Array.isArray(snap?.children) ? snap.children.map(withLevel) : [] };
   }
 
-  async function loadOne(ref: ClientRef, targets: TargetsResult, watch: readonly number[]): Promise<ClientWork> {
+  async function loadOne(ref: ClientRef, targets: TargetsResult, watch: readonly number[], features: readonly number[]): Promise<ClientWork> {
     try {
       // The settings come from Dataverse, so its root cause (a locked keyring, no network) is DevOps's too.
       if (!targets.ok) throw new DevOpsFailure(targets.cause === "keyring" ? "error" : "unreachable", `DevOps settings unavailable (${targets.message})`, targets.cause);
@@ -221,11 +373,11 @@ export function createDevOpsSource(d: DevOpsDeps) {
       if (target?.org && ORG.test(target.org)) orgs.set(ref.clientKey, target.org);
       const pre = precheck(ref, target);
       if (pre) throw pre;
-      const { items, children, watched } = await fetchClient(ref, target!, watch);
+      const { items, children, watched, committed } = await fetchClient(ref, target!, watch, features);
       const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
       const snap: WorkSnapshot = { fetchedAt, items, children };
       await writeSnapshot(d.cacheDir, "devops", cacheKey(ref.clientKey), snap).catch(() => log("cache_write", { kind: "failed" }));
-      return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, children, watched };
+      return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, children, watched, committed };
     } catch (e) {
       if (!(e instanceof DevOpsFailure)) log("load", { kind: "unexpected" });
       return fromCache(ref, e instanceof DevOpsFailure ? e : new DevOpsFailure("error", `DevOps load failed for ${ref.clientName}`));
@@ -233,11 +385,14 @@ export function createDevOpsSource(d: DevOpsDeps) {
   }
 
   /** One result per client, in the order given. A client never sees another client's items. */
-  async function load(clients: ClientRef[], opts: { refresh?: boolean; watch?: Readonly<Record<string, readonly number[]>> } = {}): Promise<ClientWork[]> {
+  async function load(clients: ClientRef[], opts: { refresh?: boolean; watch?: Readonly<Record<string, readonly number[]>>; features?: Readonly<Record<string, readonly number[]>> } = {}): Promise<ClientWork[]> {
     const t = now().epochMilliseconds;
     const fresh = (ref: ClientRef) => {
       const hit = memory.get(ref.clientKey);
       if (!hit) return null;
+      // Read with other committed features (step 8): read again, so Plan the day has their stories.
+      const asked = (opts.features?.[ref.clientKey] ?? []).slice().sort((a, b) => a - b).join(",");
+      if (asked !== hit.features) return null;
       const age = t - hit.at;
       return (opts.refresh ? age < minRefresh : age < ttl) ? hit.result : null;
     };
@@ -249,8 +404,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
       } catch {
         targets = { ok: false, message: "Dataverse read failed" };
       }
-      const results = await Promise.all(need.map((ref) => loadOne(ref, targets, opts.watch?.[ref.clientKey] ?? [])));
-      need.forEach((ref, i) => memory.set(ref.clientKey, { at: t, result: results[i]! }));
+      const results = await Promise.all(need.map((ref) => loadOne(ref, targets, opts.watch?.[ref.clientKey] ?? [], opts.features?.[ref.clientKey] ?? [])));
+      need.forEach((ref, i) => memory.set(ref.clientKey, { at: t, result: results[i]!, features: (opts.features?.[ref.clientKey] ?? []).slice().sort((a, b) => a - b).join(",") }));
     }
     return clients.map((c) => memory.get(c.clientKey)!.result);
   }
@@ -258,7 +413,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
   /** An item from the last result for a client (mine or a child), so picks can be checked on the server. */
   function lookup(clientKey: string, id: number): WorkItem | null {
     const r = memory.get(clientKey)?.result;
-    return r?.items.find((i) => i.id === id) ?? r?.children.find((i) => i.id === id) ?? null;
+    return r?.items.find((i) => i.id === id) ?? r?.children.find((i) => i.id === id) ?? r?.committed?.find((i) => i.id === id) ?? null;
   }
 
   /** The last result per client in memory (step 7: Close out's loop rules use what was already fetched). */
@@ -275,7 +430,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return found.size === 1 ? decodeURIComponent([...found][0]!) : null;
   }
 
-  return { load, lookup, orgOf, last };
+  return { load, lookup, orgOf, last, portfolio, description };
 }
 
 export type DevOpsSource = ReturnType<typeof createDevOpsSource>;

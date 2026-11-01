@@ -9,7 +9,7 @@ import type { ClientWork, Half, IsoDate } from "../week/types.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
 import { PlanError, type Borrowed, type PlanStore, type ResumeNote } from "../store/plan-store.ts";
 import { hasHoursOn } from "./plan-actions.ts";
-import { applyLoopRules, internalClients, loopView, nameOf, newestFirst } from "./loop-rules.ts";
+import { applyLoopRules, internalClients, loopView, nameOf, newestFirst, workdayOf } from "./loop-rules.ts";
 import type { ActionResponse, BorrowedView, CloseOutState, ResumeNoteView } from "./types.ts";
 
 export type CloseoutAction = "closeout.load" | "closeout.commit" | "pick.make_up" | "note.set" | "loop.add" | "borrow.pay";
@@ -92,7 +92,7 @@ export async function closeOutState(ctx: CloseoutContext, plan: PlanStore, d: Is
   const clientName = nameOf(cfg, (k) => known.get(k));
   // The rules run here too, so ticks and moves made in Close out open their loops at once.
   plan.openFlexLoops(Temporal.Instant.from(ctx.now()));
-  applyLoopRules(plan, { today, work, internal: internalClients(cfg), clientName });
+  applyLoopRules(plan, { today, work, internal: internalClients(cfg), clientName, isWorkday: workdayOf(cfg) });
   plan.settleBorrowed();
   const picks = plan.picksFor(d);
   const focused = plan.focusedSeconds(picks.map((p) => p.id));

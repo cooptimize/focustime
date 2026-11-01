@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHECKIN_MESSAGE, CLOSEOUT_MESSAGE, checkDayReminder, checkinReminderDue, checkReminder, closeoutReminderDue, reminderDue } from "./notify.ts";
+import { CHECKIN_MESSAGE, CLOSEOUT_MESSAGE, checkDayReminder, checkinReminderDue, checkReminder, closeoutReminderDue, reminderDue, checkWeekNudges } from "./notify.ts";
 
 import { legacyHours } from "../config/schema.ts";
 const shape = legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: "America/New_York" });
@@ -107,5 +107,40 @@ describe("Check-in and Close out reminders (step 7)", () => {
     expect(await checkDayReminder(checkin)).toBe(false);
     expect(sent).toEqual([CLOSEOUT_MESSAGE, CHECKIN_MESSAGE]);
     expect(sent.join(" ")).not.toMatch(/—/);
+  });
+});
+
+describe("week nudges (step 8)", () => {
+  const times = { thu: "14:00", fri: "09:00", mon: "08:30" };
+  const zoned = (iso: string) => Temporal.ZonedDateTime.from(`${iso}[America/New_York]`);
+  function deps(now: string, over: Partial<Parameters<typeof checkWeekNudges>[0]> = {}) {
+    const marks = new Set<string>();
+    const sent: string[] = [];
+    return {
+      sent,
+      d: {
+        now: () => zoned(now),
+        times: async () => times,
+        committed: () => false,
+        off: async () => false,
+        once: (key: string, week: string) => (marks.has(`${key}:${week}`) ? false : (marks.add(`${key}:${week}`), true)),
+        send: (body: string) => void sent.push(body),
+        ...over,
+      },
+    };
+  }
+  it("fires Thursday's nudge once for next week, naming the key", async () => {
+    const { d, sent } = deps("2026-11-05T14:00:00-05:00");
+    expect(await checkWeekNudges(d)).toBe(1);
+    expect(await checkWeekNudges(d)).toBe(0);
+    expect(sent).toEqual(["Next week (Nov 9) isn't planned yet: commit features per client. Open Coopilot and press W."]);
+  });
+  it("Monday's is about this week; nothing once committed, before the time, or on a PTO day", async () => {
+    const mon = deps("2026-11-09T08:45:00-05:00");
+    await checkWeekNudges(mon.d);
+    expect(mon.sent).toEqual(["This week isn't planned yet: commit features per client. Open Coopilot and press W."]);
+    expect(await checkWeekNudges(deps("2026-11-09T08:45:00-05:00", { committed: () => true }).d)).toBe(0);
+    expect(await checkWeekNudges(deps("2026-11-09T08:00:00-05:00").d)).toBe(0);
+    expect(await checkWeekNudges(deps("2026-11-06T10:00:00-05:00", { off: async () => true }).d)).toBe(0);
   });
 });

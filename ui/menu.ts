@@ -59,7 +59,7 @@ export type FormField = {
   options?: { value: string; label: string }[];
 };
 
-export type View = "week" | "planday" | "settings" | "loops" | "checkin" | "closeout";
+export type View = "week" | "planday" | "planweek" | "settings" | "loops" | "checkin" | "closeout";
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
@@ -125,6 +125,10 @@ export type MenuEnv = {
   runLoops: (action: string, input: Record<string, unknown>) => Promise<boolean>;
   /** Borrowed time on the week shown plus every unpaid record. */
   borrowed: readonly BorrowedView[];
+  /** Plan the week (step 8): open it (next week by default), and the week it is open on. */
+  openPlanWeek: (weekStart?: IsoDate) => void;
+  planWeekOpen: IsoDate | null;
+  commitWeek: () => void;
 };
 
 const dayName = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -633,6 +637,15 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "loop.close": return { run: env.openLoops };
     case "plan.reset": return { run: env.resetPlan };
     case "link.open": return { next: () => chooseItem(env, "Open which work item?", () => true, (k, i) => () => env.openLink(k, i.url)) };
+    case "weekplan.load": return { run: () => env.openPlanWeek() };
+    case "weekplan.commit": return env.planWeekOpen ? { run: env.commitWeek } : { disabled: "Open Plan the week first" };
+    // Features are chosen in Plan the week itself.
+    case "weekplan.set_feature":
+    case "weekplan.place":
+    case "feature.brief":
+    case "feature.mark_breakdown":
+    case "loop.ask_priorities":
+      return { run: () => env.openPlanWeek(env.planWeekOpen ?? undefined) };
   }
 }
 
@@ -643,7 +656,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.week", action: "view.week", group: "Views", label: "Week", ...(env.planState ? { hint: "Esc" } : {}), run: () => env.setView("week") },
     { id: "view.planday", action: "view.planday", group: "Views", label: "Plan the day", hint: "P", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
-    { id: "view.planweek", action: "view.planweek", group: "Views", label: "Plan the week", disabled: soon },
+    { id: "view.planweek", action: "view.planweek", group: "Views", label: "Plan the week", hint: "W", run: () => env.openPlanWeek() },
     { id: "view.checkin", action: "view.checkin", group: "Views", label: "Check-in", hint: "M", run: env.openCheckIn },
     { id: "view.closeout", action: "view.closeout", group: "Views", label: "Close out", hint: "E", run: () => env.openCloseOut() },
     { id: "week.prev", action: "week.prev", group: "Week", label: "Previous week", hint: "[", run: () => env.changeWeek(-1) },

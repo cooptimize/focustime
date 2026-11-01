@@ -187,8 +187,8 @@ describe("[plan] pickable portfolio types (Q20)", () => {
 
 describe("[plan] planning settings (step 6c, Q36)", () => {
   it("reads sizes, carry-over days, the reminder offset and timer defaults", () => {
-    const r = parseConfig(`${valid}\n[plan]\nsize_s = 45\nsize_m = 90\nsize_l = 180\ncarry_days = 0\nreminder_offset_minutes = 30\nfocus_minutes = 25\nbreak_minutes = 5\nend_sound = true\nfollow_grace_days = 30\ncloseout_reminder_minutes = 30\ncheckin_reminder_minutes = 15\n`);
-    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], sizes: { S: 45, M: 90, L: 180 }, carryDays: 0, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, followGraceDays: 30, closeoutReminderMinutes: 30, checkinReminderMinutes: 15 });
+    const r = parseConfig(`${valid}\n[plan]\nsize_s = 45\nsize_m = 90\nsize_l = 180\ncarry_days = 0\nreminder_offset_minutes = 30\nfocus_minutes = 25\nbreak_minutes = 5\nend_sound = true\nfollow_grace_days = 30\ncloseout_reminder_minutes = 30\ncheckin_reminder_minutes = 15\nweek_nudge_thu = "15:30"\nweek_nudge_fri = ""\nweek_nudge_mon = "08:00"\n`);
+    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], sizes: { S: 45, M: 90, L: 180 }, carryDays: 0, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, followGraceDays: 30, closeoutReminderMinutes: 30, checkinReminderMinutes: 15, weekNudgeThu: "15:30", weekNudgeFri: "", weekNudgeMon: "08:00" });
     // Old configs get 14 days of grace.
     expect(parseConfig(valid).ok && (parseConfig(valid) as { config: { plan: { followGraceDays: number } } }).config.plan.followGraceDays).toBe(14);
   });
@@ -198,6 +198,7 @@ describe("[plan] planning settings (step 6c, Q36)", () => {
     expect(fields(`${valid}\n[plan]\ncarry_days = 31\nfocus_minutes = 0\nend_sound = "yes"\n`)).toEqual(["plan.carry_days", "plan.focus_minutes", "plan.end_sound"]);
     expect(fields(`${valid}\n[plan]\nfollow_grace_days = 91\n`)).toEqual(["plan.follow_grace_days"]);
     expect(fields(`${valid}\n[plan]\ncloseout_reminder_minutes = 125\ncheckin_reminder_minutes = 7\n`)).toEqual(["plan.closeout_reminder_minutes", "plan.checkin_reminder_minutes"]);
+    expect(fields(`${valid}\n[plan]\nweek_nudge_thu = "2pm"\nweek_nudge_fri = 9\nweek_nudge_mon = "24:00"\n`)).toEqual(["plan.week_nudge_thu", "plan.week_nudge_fri", "plan.week_nudge_mon"]);
   });
 
   it("reads Keep following per client (step 6d)", () => {

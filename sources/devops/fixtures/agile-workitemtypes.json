@@ -1,96 +1,146 @@
 {
- "count": 3,
- "value": [
-  {
-   "name": "User Story",
-   "referenceName": "Microsoft.VSTS.WorkItemTypes.UserStory",
-   "isDisabled": false,
-   "states": [
+  "count": 5,
+  "value": [
     {
-     "name": "New",
-     "color": "b2b2b2",
-     "category": "Proposed"
+      "name": "User Story",
+      "referenceName": "Microsoft.VSTS.WorkItemTypes.UserStory",
+      "isDisabled": false,
+      "states": [
+        {
+          "name": "New",
+          "color": "b2b2b2",
+          "category": "Proposed"
+        },
+        {
+          "name": "Active",
+          "color": "b2b2b2",
+          "category": "InProgress"
+        },
+        {
+          "name": "Resolved",
+          "color": "b2b2b2",
+          "category": "Resolved"
+        },
+        {
+          "name": "Closed",
+          "color": "b2b2b2",
+          "category": "Completed"
+        },
+        {
+          "name": "Removed",
+          "color": "b2b2b2",
+          "category": "Removed"
+        }
+      ]
     },
     {
-     "name": "Active",
-     "color": "b2b2b2",
-     "category": "InProgress"
+      "name": "Bug",
+      "referenceName": "Microsoft.VSTS.WorkItemTypes.Bug",
+      "isDisabled": false,
+      "states": [
+        {
+          "name": "New",
+          "color": "b2b2b2",
+          "category": "Proposed"
+        },
+        {
+          "name": "Active",
+          "color": "b2b2b2",
+          "category": "InProgress"
+        },
+        {
+          "name": "Resolved",
+          "color": "b2b2b2",
+          "category": "Resolved"
+        },
+        {
+          "name": "Closed",
+          "color": "b2b2b2",
+          "category": "Completed"
+        }
+      ]
     },
     {
-     "name": "Resolved",
-     "color": "b2b2b2",
-     "category": "Resolved"
+      "name": "Task",
+      "referenceName": "Microsoft.VSTS.WorkItemTypes.Task",
+      "isDisabled": false,
+      "states": [
+        {
+          "name": "New",
+          "color": "b2b2b2",
+          "category": "Proposed"
+        },
+        {
+          "name": "Active",
+          "color": "b2b2b2",
+          "category": "InProgress"
+        },
+        {
+          "name": "Blocked",
+          "color": "b2b2b2",
+          "category": "InProgress"
+        },
+        {
+          "name": "Closed",
+          "color": "b2b2b2",
+          "category": "Completed"
+        },
+        {
+          "name": "Removed",
+          "color": "b2b2b2",
+          "category": "Removed"
+        }
+      ]
     },
     {
-     "name": "Closed",
-     "color": "b2b2b2",
-     "category": "Completed"
+      "name": "Feature",
+      "states": [
+        {
+          "name": "New",
+          "category": "Proposed"
+        },
+        {
+          "name": "Active",
+          "category": "InProgress"
+        },
+        {
+          "name": "Resolved",
+          "category": "Resolved"
+        },
+        {
+          "name": "Closed",
+          "category": "Completed"
+        },
+        {
+          "name": "Removed",
+          "category": "Removed"
+        }
+      ]
     },
     {
-     "name": "Removed",
-     "color": "b2b2b2",
-     "category": "Removed"
+      "name": "Epic",
+      "states": [
+        {
+          "name": "New",
+          "category": "Proposed"
+        },
+        {
+          "name": "Active",
+          "category": "InProgress"
+        },
+        {
+          "name": "Resolved",
+          "category": "Resolved"
+        },
+        {
+          "name": "Closed",
+          "category": "Completed"
+        },
+        {
+          "name": "Removed",
+          "category": "Removed"
+        }
+      ]
     }
-   ]
-  },
-  {
-   "name": "Bug",
-   "referenceName": "Microsoft.VSTS.WorkItemTypes.Bug",
-   "isDisabled": false,
-   "states": [
-    {
-     "name": "New",
-     "color": "b2b2b2",
-     "category": "Proposed"
-    },
-    {
-     "name": "Active",
-     "color": "b2b2b2",
-     "category": "InProgress"
-    },
-    {
-     "name": "Resolved",
-     "color": "b2b2b2",
-     "category": "Resolved"
-    },
-    {
-     "name": "Closed",
-     "color": "b2b2b2",
-     "category": "Completed"
-    }
-   ]
-  },
-  {
-   "name": "Task",
-   "referenceName": "Microsoft.VSTS.WorkItemTypes.Task",
-   "isDisabled": false,
-   "states": [
-    {
-     "name": "New",
-     "color": "b2b2b2",
-     "category": "Proposed"
-    },
-    {
-     "name": "Active",
-     "color": "b2b2b2",
-     "category": "InProgress"
-    },
-    {
-     "name": "Blocked",
-     "color": "b2b2b2",
-     "category": "InProgress"
-    },
-    {
-     "name": "Closed",
-     "color": "b2b2b2",
-     "category": "Completed"
-    },
-    {
-     "name": "Removed",
-     "color": "b2b2b2",
-     "category": "Removed"
-    }
-   ]
-  }
- ]
+  ]
 }

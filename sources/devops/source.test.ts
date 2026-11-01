@@ -44,7 +44,7 @@ describe("items read by id for open loops (step 7)", () => {
     const s = setup({ cscsteel: "agile" }, [target("CSC", "cscsteel")]);
     const r = await s.src.load([ref("CSC")], { watch: { CSC: [104, 101] } });
     const batches = s.calls.filter((c) => c.url.includes("workitemsbatch")).map((c) => JSON.parse(c.body!) as { ids: number[]; fields: string[] });
-    expect(batches.at(-1)).toEqual({ ids: [104], fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "Microsoft.VSTS.Common.StackRank"], errorPolicy: "omit" });
+    expect(batches.at(-1)).toEqual({ ids: [104], fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "System.ChangedBy", "Microsoft.VSTS.Common.StackRank"], errorPolicy: "omit" });
     expect(byKey(r, "CSC").watched?.map((i) => [i.id, i.state, i.stateCategory])).toEqual([[104, "Closed", "Completed"]]);
     expect(ids(byKey(r, "CSC"))).not.toContain(104);
   });
@@ -81,7 +81,7 @@ describe("DevOps work items per client", () => {
     const batch = s.calls.find((c) => c.url.includes("workitemsbatch"))!;
     expect(JSON.parse(batch.body!)).toEqual({
       ids: [101, 102, 103, 104, 105],
-      fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "Microsoft.VSTS.Common.StackRank"],
+      fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "System.ChangedBy", "Microsoft.VSTS.Common.StackRank"],
       errorPolicy: "omit",
     });
     expect(byKey(r, "CSC").items[0]!.url).toBe("https://dev.azure.com/cscsteel/Project%20Ada/_workitems/edit/102");
@@ -372,5 +372,78 @@ describe("pickable portfolio types from config (Q20)", () => {
     expect(level).toMatchObject({ 110: "story", 130: "story", 120: "portfolio" });
     const queries = s.calls.filter((c) => c.url.includes("/_apis/wit/wiql")).map((c) => (JSON.parse(c.body!) as { query: string }).query);
     expect(queries[1]).toContain("[System.Parent] IN (120)");
+  });
+});
+
+describe("Plan the week: features and epics (step 8)", () => {
+  it("finds portfolio items assigned to me and the parents of my stories, with their children in every state", async () => {
+    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
+    const [csc] = await s.src.portfolio([ref("CSC")]);
+    expect(csc!.status).toBe("ok");
+    // Board order (StackRank = id here). 230 is only a grandparent and not mine, so it isn't listed.
+    expect(csc!.items.map((i) => [i.id, i.tier, i.why])).toEqual([
+      [210, "feature", ["parent"]],
+      [220, "feature", ["parent"]],
+      [240, "feature", ["assigned"]],
+      [250, "epic", ["assigned"]],
+    ]);
+    const dana = csc!.items.find((i) => i.id === 210)!;
+    expect(dana).toMatchObject({ title: "Dana's feature", state: "Active", targetDate: "2026-11-20", assignedTo: "Dana Ruiz", mine: false, url: "https://dev.azure.com/planweek/CSC%20Project/_workitems/edit/210" });
+    expect(dana.children.map((c) => [c.id, c.open, c.assignedTo, c.mine])).toEqual([[201, true, "Tanner S", true], [211, false, "Dana Ruiz", false], [212, true, null, false]]);
+    expect(csc!.items.find((i) => i.id === 240)!.children).toEqual([]);
+    // The epic's only feature is closed.
+    expect(csc!.items.find((i) => i.id === 250)!.children.map((c) => [c.id, c.open, c.level])).toEqual([[251, false, "portfolio"]]);
+    expect(csc!.targetFields).toEqual({ Feature: "Microsoft.VSTS.Scheduling.TargetDate" });
+    // Nobody's email is kept.
+    expect(JSON.stringify(csc)).not.toMatch(/@/);
+  });
+  it("reads only: metadata and field lists with GET, items with WIQL and the batch call; no description unless asked", async () => {
+    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
+    await s.src.portfolio([ref("CSC")]);
+    for (const c of s.calls) {
+      if (c.method === "POST") expect(c.url).toMatch(/\/_apis\/wit\/(wiql|workitemsbatch)\?/);
+      else expect(c.method).toBe("GET");
+    }
+    expect(s.calls.some((c) => c.body?.includes("System.Description"))).toBe(false);
+    expect(s.calls.some((c) => c.url.includes("/_apis/wit/fields?"))).toBe(true);
+  });
+  it("caches for five minutes, and falls back to the last snapshot when DevOps fails", async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-devops-"));
+    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")], { cacheDir });
+    await s.src.portfolio([ref("CSC")]);
+    const n = s.calls.length;
+    await s.src.portfolio([ref("CSC")]);
+    expect(s.calls.length).toBe(n);
+    const [off] = await setup({ planweek: "offline" }, [target("CSC", "planweek")], { cacheDir }).src.portfolio([ref("CSC")]);
+    expect(off!.fromCache).toBe(true);
+    expect(off!.items.map((i) => i.id)).toEqual([210, 220, 240, 250]);
+  });
+  it("reads one feature's description on demand as plain text, never cached", async () => {
+    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
+    const d = await s.src.description("CSC", 210);
+    expect(d).toBe("Export the weekly report & email it.\n- CSV");
+    expect(await s.src.description("Other", 210)).toBeNull();
+  });
+});
+
+describe("committed features in the usual read (step 8, Plan the day)", () => {
+  it("reads committed features by id with their open children, so their stories can be offered", async () => {
+    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
+    const [csc] = await s.src.load([ref("CSC")], { features: { CSC: [210, 240] } });
+    // 240 is mine already; 210 isn't, so it comes back as committed.
+    expect(csc!.committed?.map((i) => i.id)).toEqual([210]);
+    // Open children of 210 (any assignee); 201 is mine and already among my items; the closed one is left out.
+    expect(csc!.children.map((c) => c.id)).toContain(212);
+    expect(csc!.children.map((c) => c.id)).not.toContain(211);
+  });
+  it("a cached result is reused only when it was read with the same committed features", async () => {
+    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
+    await s.src.load([ref("CSC")]);
+    const n = s.calls.length;
+    await s.src.load([ref("CSC")]);
+    expect(s.calls.length).toBe(n);
+    const [csc] = await s.src.load([ref("CSC")], { features: { CSC: [210] } });
+    expect(s.calls.length).toBeGreaterThan(n);
+    expect(csc!.committed?.map((i) => i.id)).toEqual([210]);
   });
 });

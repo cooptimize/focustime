@@ -99,10 +99,14 @@ export type PlanConfig = {
   closeoutReminderMinutes: number;
   /** The Check-in reminder: minutes after the end of lunch, or midday without one (step 7). */
   checkinReminderMinutes: number;
+  /** Plan the week nudges (step 8): "HH:MM" on Thursday and Friday for next week and Monday for this week; "" is off. */
+  weekNudgeThu: string;
+  weekNudgeFri: string;
+  weekNudgeMon: string;
 };
 
-export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes"> = { sizes: { S: 60, M: 120, L: 210 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0 };
-const PLAN_KEYS = ["pickable_portfolio_types", "size_s", "size_m", "size_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes"];
+export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes"> = { sizes: { S: 60, M: 120, L: 210 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0, weekNudgeThu: "14:00", weekNudgeFri: "09:00", weekNudgeMon: "08:30" };
+const PLAN_KEYS = ["pickable_portfolio_types", "size_s", "size_m", "size_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes", "week_nudge_thu", "week_nudge_fri", "week_nudge_mon"];
 
 export type FieldError = { field: string; message: string };
 /** `legacyDayShape`: the file still has the old [day_shape] section (read as hours; migrated on load, D124). */
@@ -354,6 +358,12 @@ export function parseConfig(text: string): ParseResult {
     if (cr !== undefined) planOpts.closeoutReminderMinutes = cr;
     const kr = minutes("checkin_reminder_minutes", 0, 120);
     if (kr !== undefined) planOpts.checkinReminderMinutes = kr;
+    for (const [toml, key] of [["week_nudge_thu", "weekNudgeThu"], ["week_nudge_fri", "weekNudgeFri"], ["week_nudge_mon", "weekNudgeMon"]] as const) {
+      const v = t?.[toml];
+      if (v === undefined) continue;
+      if (typeof v !== "string" || (v !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v))) err(`plan.${toml}`, 'Must be a time like "14:00", or "" for off');
+      else planOpts[key] = v;
+    }
     if (t?.end_sound !== undefined) {
       if (typeof t.end_sound !== "boolean") err("plan.end_sound", "Must be true or false");
       else planOpts.endSound = t.end_sound;

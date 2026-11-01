@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { allowPortfolio, backlogLevels, levelOf, batchFields, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, type StateCategories } from "./normalize.ts";
+import { allowPortfolio, backlogLevels, buildAllChildrenWiql, dateOnly, detectTargetField, levelOf, batchFields, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, portfolioTiers, type StateCategories } from "./normalize.ts";
 
 const fx = (name: string) => JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", `${name}.json`), "utf8"));
 const typesWithStates = (name: string) => fx(`${name}-workitemtypes`).value as { name: string; states: { name: string; category: string }[] }[];
@@ -25,7 +25,7 @@ describe("board order detection", () => {
   });
   it("asks the batch for the detected field and nothing beyond the fields used", () => {
     expect(batchFields("Microsoft.VSTS.Common.BacklogPriority")).toEqual([
-      "System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "Microsoft.VSTS.Common.BacklogPriority",
+      "System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "System.ChangedBy", "Microsoft.VSTS.Common.BacklogPriority",
     ]);
     expect(batchFields(null)).not.toContain(null);
   });
@@ -56,6 +56,8 @@ describe("WIQL for my open work", () => {
     expect(q).toBe(
       "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.AssignedTo] = 'tanner@client.com' AND (" +
         "([System.WorkItemType] = 'Bug' AND [System.State] NOT IN ('closed')) OR " +
+        "([System.WorkItemType] = 'Epic' AND [System.State] NOT IN ('closed', 'removed')) OR " +
+        "([System.WorkItemType] = 'Feature' AND [System.State] NOT IN ('closed', 'removed')) OR " +
         "([System.WorkItemType] = 'Task' AND [System.State] NOT IN ('closed', 'removed')) OR " +
         "([System.WorkItemType] = 'User Story' AND [System.State] NOT IN ('closed', 'removed'))" +
         ") ORDER BY [Microsoft.VSTS.Common.StackRank] ASC, [System.Id] ASC",
@@ -94,6 +96,22 @@ describe("work item normalization", () => {
     );
     expect(items.map((i) => [i.id, i.tags, i.blocked])).toEqual([[1, ["Blocked", "Data"], true], [2, [], false]]);
   });
+  it("reduces System.ChangedBy to changedByMe against my identity for the client, keeping no one's identity (Q42)", () => {
+    const me = { ...agileCtx, me: "Tanner@Fabrikam.example" };
+    const { items } = normalizeWorkItems(
+      [
+        { id: 1, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.ChangedBy": { displayName: "Tanner S", uniqueName: "tanner@fabrikam.example", id: "x" } } },
+        { id: 2, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.ChangedBy": { displayName: "Dana", uniqueName: "dana@fabrikam.example" } } },
+        { id: 3, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.ChangedBy": "Tanner S <TANNER@fabrikam.example>" } },
+        { id: 4, fields: { "System.WorkItemType": "User Story", "System.State": "Active" } },
+      ],
+      me,
+    );
+    expect(items.map((i) => [i.id, i.changedByMe])).toEqual([[1, true], [2, false], [3, true], [4, false]]);
+    expect(JSON.stringify(items)).not.toMatch(/dana|Dana|tanner@/i);
+    // Without my identity nothing counts as mine.
+    expect(normalizeWorkItems([{ id: 1, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.ChangedBy": { uniqueName: "tanner@fabrikam.example" } } }], agileCtx).items[0]!.changedByMe).toBe(false);
+  });
   it("Agile: only the fields used, closed items dropped, board order with unranked last", () => {
     const { items, skipped } = normalizeWorkItems(fx("agile-batch").value, agileCtx);
     expect(skipped).toBe(0);
@@ -110,6 +128,7 @@ describe("work item normalization", () => {
       changedAt: "2026-10-29T15:04:05.123Z",
       tags: [],
       blocked: false,
+      changedByMe: false,
       url: "https://dev.azure.com/fabrikam/Fabrikam%20Data/_workitems/edit/101",
     });
     expect(items.find((i) => i.id === 105)?.stateCategory).toBe("Resolved");
@@ -188,5 +207,56 @@ describe("pickable portfolio allowlist (Q20)", () => {
   it("an empty list, or a type that isn't portfolio, changes nothing", () => {
     expect(allowPortfolio(coop, [])).toBe(coop);
     expect(levelOf("Review", allowPortfolio(coop, ["Review"]))).toBe("other");
+  });
+});
+
+describe("Plan the week: portfolio tiers and target dates (step 8)", () => {
+  it("the lowest portfolio backlog is the feature tier; any above it is the epic tier (backlog levels, not type names)", () => {
+    expect(portfolioTiers(fx("agile-processconfiguration"))).toEqual({ feature: new Set(["Feature"]), epic: new Set(["Epic"]) });
+    expect(portfolioTiers(fx("recorded-processconfiguration"))).toEqual({ feature: new Set(["Feature"]), epic: new Set(["Epic"]) });
+    // Basic: Epic sits right above Issue, so Epic is what weeks commit to.
+    expect(portfolioTiers(fx("custom-processconfiguration"))).toEqual({ feature: new Set(["Epic"]), epic: new Set() });
+    // A renamed or extra level follows its place, not its name.
+    const pc = { portfolioBacklogs: [{ workItemTypes: [{ name: "Initiative" }] }, { workItemTypes: [{ name: "Epic" }] }, { workItemTypes: [{ name: "Capability" }] }] };
+    expect(portfolioTiers(pc)).toEqual({ feature: new Set(["Capability"]), epic: new Set(["Initiative", "Epic"]) });
+    expect(portfolioTiers(null)).toEqual({ feature: new Set(), epic: new Set() });
+  });
+  it("detects the target date field per process: the standard TargetDate, else a date field named like a target", () => {
+    const fields = [
+      { referenceName: "Microsoft.VSTS.Scheduling.StartDate", name: "Start Date", type: "dateTime" },
+      { referenceName: "Microsoft.VSTS.Scheduling.TargetDate", name: "Target Date", type: "dateTime" },
+      { referenceName: "Custom.EstimatedCompletion", name: "Estimated Completion", type: "dateTime" },
+      { referenceName: "Custom.TargetNotes", name: "Target notes", type: "string" },
+      { referenceName: "Microsoft.VSTS.Common.ClosedDate", name: "Closed Date", type: "dateTime" },
+    ];
+    expect(detectTargetField(fields, new Set(["Microsoft.VSTS.Scheduling.TargetDate", "Custom.EstimatedCompletion"]))).toBe("Microsoft.VSTS.Scheduling.TargetDate");
+    expect(detectTargetField(fields, new Set(["Custom.EstimatedCompletion", "Custom.TargetNotes", "Microsoft.VSTS.Common.ClosedDate"]))).toBe("Custom.EstimatedCompletion");
+    // Only fields the type has, only dates, never a system date like Closed Date.
+    expect(detectTargetField(fields, new Set(["Custom.TargetNotes", "Microsoft.VSTS.Common.ClosedDate", "Microsoft.VSTS.Scheduling.StartDate"]))).toBeNull();
+    expect(detectTargetField(fields, new Set())).toBeNull();
+  });
+  it("reads a date field as a calendar date: midnight UTC as stored, else the local date", () => {
+    expect(dateOnly("2026-11-20T00:00:00Z", "America/New_York")).toBe("2026-11-20");
+    expect(dateOnly("2026-11-20T05:00:00Z", "America/New_York")).toBe("2026-11-20");
+    expect(dateOnly("2026-11-21T03:00:00Z", "America/New_York")).toBe("2026-11-20");
+    expect(dateOnly("not a date", "America/New_York")).toBeNull();
+    expect(dateOnly(undefined, "America/New_York")).toBeNull();
+  });
+  it("children of portfolio items in every state, any assignee", () => {
+    const q = buildAllChildrenWiql([210, 220], "Microsoft.VSTS.Common.StackRank");
+    expect(q).toBe("SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.Parent] IN (210, 220) ORDER BY [Microsoft.VSTS.Common.StackRank] ASC, [System.Id] ASC");
+  });
+  it("keeps assignee display names (never emails) and the target date when asked", () => {
+    const ctx = { org: "o", projectName: "p", orderField: null, categories: categoriesFrom(typesWithStates("agile")), me: "tanner@o.example", people: true, targetFields: { Feature: "Microsoft.VSTS.Scheduling.TargetDate" }, timeZone: "America/New_York", keepDone: true };
+    const { items } = normalizeWorkItems(
+      [
+        { id: 1, fields: { "System.WorkItemType": "Feature", "System.State": "Active", "System.AssignedTo": { displayName: "Dana Ruiz", uniqueName: "dana@o.example" }, "Microsoft.VSTS.Scheduling.TargetDate": "2026-11-20T05:00:00Z" } },
+        { id: 2, fields: { "System.WorkItemType": "User Story", "System.State": "Closed", "System.AssignedTo": { displayName: "Tanner S", uniqueName: "Tanner@o.example" } } },
+        { id: 3, fields: { "System.WorkItemType": "User Story", "System.State": "New" } },
+      ],
+      ctx,
+    );
+    expect(items.map((i) => [i.id, i.assignedTo, i.assignedToMe, i.targetDate ?? null])).toEqual([[1, "Dana Ruiz", false, "2026-11-20"], [2, "Tanner S", true, null], [3, null, false, null]]);
+    expect(JSON.stringify(items)).not.toContain("@o.example");
   });
 });

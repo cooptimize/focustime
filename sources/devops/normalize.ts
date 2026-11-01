@@ -47,6 +47,77 @@ export function backlogLevels(processConfig: unknown): BacklogLevels {
   return { known: story.size > 0 || portfolio.size > 0, story, portfolio };
 }
 
+/**
+ * Plan the week (step 8): the portfolio tiers from the backlog levels, never type names. The lowest portfolio backlog
+ * (right above requirements) is what a week commits to, the "feature" tier; any level above it is the "epic" tier.
+ * Process configuration lists portfolio backlogs top-down (the documented sample and real projects: Epics, then
+ * Features); Basic has only Epics, so Epic is its feature tier.
+ */
+export function portfolioTiers(processConfig: unknown): { feature: Set<string>; epic: Set<string> } {
+  const list = (processConfig as { portfolioBacklogs?: Category[] } | null)?.portfolioBacklogs;
+  const levels = (Array.isArray(list) ? list : []).map(typesOf).filter((t) => t.length > 0);
+  return { feature: new Set(levels.at(-1) ?? []), epic: new Set(levels.slice(0, -1).flat()) };
+}
+
+export type FieldInfo = { referenceName?: unknown; name?: unknown; type?: unknown };
+
+const TARGET_FIELD = "Microsoft.VSTS.Scheduling.TargetDate";
+/** Names a client process may give its target date, best first. */
+const TARGET_NAMES = [/\btarget\b/i, /estimated\s+(completion|end|finish|delivery)/i, /\bdue\b/i, /\b(finish|delivery|go-?live)\s+date\b/i];
+/** Dates that record what happened, never a promise. */
+const SYSTEM_DATES = /^(System\.|Microsoft\.VSTS\.Common\.(Closed|Resolved|Activated|StateChange)Date)/;
+
+/**
+ * A process's target date field for a type: the standard TargetDate when the type has it, else the first date field
+ * the type has whose name reads like a target (Estimated Completion, Due Date). Null when there is none (step 8).
+ */
+export function detectTargetField(fields: readonly FieldInfo[], typeHas: ReadonlySet<string>): string | null {
+  const dates = fields.filter((f): f is { referenceName: string; name: string; type: string } => typeof f.referenceName === "string" && typeof f.name === "string" && f.type === "dateTime" && typeHas.has(f.referenceName) && !SYSTEM_DATES.test(f.referenceName));
+  if (dates.some((f) => f.referenceName === TARGET_FIELD)) return TARGET_FIELD;
+  for (const re of TARGET_NAMES) {
+    const hit = dates.find((f) => re.test(f.name) && !/start/i.test(f.name));
+    if (hit && /^[A-Za-z][\w.]*$/.test(hit.referenceName)) return hit.referenceName;
+  }
+  return null;
+}
+
+/** A DevOps date field as a calendar date: stored at midnight UTC, that date; else the date in the local zone. */
+export function dateOnly(value: unknown, timeZone: string): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const i = Temporal.Instant.from(value);
+    const utc = i.toZonedDateTimeISO("UTC");
+    if (utc.hour === 0 && utc.minute === 0) return utc.toPlainDate().toString();
+    return i.toZonedDateTimeISO(timeZone).toPlainDate().toString();
+  } catch {
+    return null;
+  }
+}
+
+/** Every child of the given parents, in any state and for any assignee, in board order (step 8). */
+export function buildAllChildrenWiql(parentIds: number[], orderField: string | null): string {
+  const ids = parentIds.filter((id) => Number.isInteger(id) && id > 0);
+  const order = orderField ? `[${orderField}] ASC, [System.Id] ASC` : `[System.ChangedDate] DESC`;
+  return `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.Parent] IN (${ids.join(", ")}) ORDER BY ${order}`;
+}
+
+/** A DevOps HTML field (a description) as plain text with simple bullets, at most 4000 characters (step 8). */
+export function htmlToText(html: string): string {
+  const named: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+  return html
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\s*li[^>]*>/gi, "- ")
+    .replace(/<\/\s*(p|div|li|h[1-6]|tr|ul|ol)\s*>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (m, e: string) => (e[0] === "#" ? String.fromCodePoint(e[1]?.toLowerCase() === "x" ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : (named[e.toLowerCase()] ?? m)))
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .filter((l, i, all) => l || (i > 0 && all[i - 1]))
+    .join("\n")
+    .trim()
+    .slice(0, 4000);
+}
+
 /** Portfolio types listed in config (Q20) count as story level, so they can be picked; matched without case. */
 export function allowPortfolio(levels: BacklogLevels, pickable: readonly string[]): BacklogLevels {
   if (pickable.length === 0) return levels;
@@ -101,8 +172,23 @@ export function buildChildrenWiql(parentIds: number[], categories: StateCategori
   return base.replace(`[System.AssignedTo] = 'x'`, `[System.Parent] IN (${ids.join(", ")})`);
 }
 
-// System.Tags (step 7): a "Blocked" tag opens a loop (plan/loops.ts).
-export const BASE_FIELDS = ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags"] as const;
+// System.Tags (step 7): a "Blocked" tag opens a loop (plan/loops.ts). System.ChangedBy (step 8, Q42): reduced to
+// changedByMe at once; nobody's identity is kept.
+export const BASE_FIELDS = ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "System.ChangedBy"] as const;
+
+/** The email in an identity field: an IdentityRef's uniqueName, or "Name <email>" text. Lowercased; null when absent. */
+export function identityEmail(v: unknown): string | null {
+  if (typeof v === "string") return (v.match(/<([^<>\s]+@[^<>\s]+)>/)?.[1] ?? (v.includes("@") ? v.trim() : null))?.toLowerCase() ?? null;
+  const u = (v as { uniqueName?: unknown } | null)?.uniqueName;
+  return typeof u === "string" && u.includes("@") ? u.trim().toLowerCase() : null;
+}
+
+/** An identity field's display name (for assignees shown in Plan the week). Never the email. */
+export function identityName(v: unknown): string | null {
+  if (typeof v === "string") return v.replace(/\s*<[^>]*>\s*$/, "").trim() || null;
+  const n = (v as { displayName?: unknown } | null)?.displayName;
+  return typeof n === "string" && n.trim() ? n.trim().slice(0, 100) : null;
+}
 
 export function batchFields(orderField: string | null): string[] {
   return orderField ? [...BASE_FIELDS, orderField] : [...BASE_FIELDS];
@@ -116,6 +202,13 @@ export type NormalizeContext = {
   levels?: BacklogLevels;
   /** Keep completed and removed items (items read by id for a loop, step 7). */
   keepDone?: boolean;
+  /** My DevOps identity (email) for this client, to tell my own changes (Q42). */
+  me?: string | null;
+  /** Keep the assignee's display name and whether it's me (Plan the week). Emails are never kept. */
+  people?: boolean;
+  /** The target date field per type (Plan the week), and the zone its dates are read in. */
+  targetFields?: Readonly<Record<string, string>>;
+  timeZone?: string;
 };
 
 const NO_LEVELS: BacklogLevels = { known: false, story: new Set(), portfolio: new Set() };
@@ -166,6 +259,9 @@ export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { 
       url: workItemUrl(ctx.org, ctx.projectName, id),
       tags,
       blocked: isBlocked(state, tags),
+      changedByMe: !!ctx.me && identityEmail(f["System.ChangedBy"]) === ctx.me.toLowerCase(),
+      ...(ctx.people ? { assignedTo: identityName(f["System.AssignedTo"]), assignedToMe: !!ctx.me && identityEmail(f["System.AssignedTo"]) === ctx.me.toLowerCase() } : {}),
+      ...(ctx.targetFields?.[type] ? { targetDate: dateOnly(f[ctx.targetFields[type]!], ctx.timeZone ?? "UTC") } : {}),
     });
   }
   items.sort(byBoardOrder);

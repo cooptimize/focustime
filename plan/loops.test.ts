@@ -34,8 +34,10 @@ describe("loop rule: pick done, DevOps not updated (step 7)", () => {
     const r = detectLoops(input({ picks: [done], work: [work([item({ changedAt: "2026-11-02T18:00:00Z" })])] }));
     expect(r.open).toEqual([expect.objectContaining({ kind: "devops_update", ruleKey: "devops_update:1", who: "CSC", what: "Update DevOps #101: Export report", itemId: 101, refAt: T("15:00") })]);
   });
-  it("doesn't open when the item was already updated after the tick, is resolved, or isn't known", () => {
-    expect(detectLoops(input({ picks: [done], work: [work([item({ changedAt: "2026-11-02T20:30:00Z" })])] })).open).toEqual([]);
+  it("doesn't open when I already updated the item after the tick, it is resolved, or it isn't known", () => {
+    expect(detectLoops(input({ picks: [done], work: [work([item({ changedAt: "2026-11-02T20:30:00Z", changedByMe: true })])] })).open).toEqual([]);
+    // Someone else's change after the tick isn't my update (Q42).
+    expect(detectLoops(input({ picks: [done], work: [work([item({ changedAt: "2026-11-02T20:30:00Z", changedByMe: false })])] })).open).toHaveLength(1);
     expect(detectLoops(input({ picks: [done], work: [work([item({ stateCategory: "Resolved", state: "Resolved" })])] })).open).toEqual([]);
     expect(detectLoops(input({ picks: [done], work: null })).open).toEqual([]);
     expect(detectLoops(input({ picks: [done], work: [work([])] })).open).toEqual([]);
@@ -48,12 +50,19 @@ describe("loop rule: pick done, DevOps not updated (step 7)", () => {
     const again = pick({ id: 2, date: "2026-11-02", status: "done", updatedAt: T("16:00") });
     expect(detectLoops(input({ picks: [again], work: w, loops: [loop({})] })).open).toEqual([]);
   });
-  it("closes when a later fetch shows the item completed or changed after the tick", () => {
+  it("closes when a later fetch shows the item completed, or changed by me after the loop opened (Q42)", () => {
     const open = [loop({})];
     const completed = work([], { watched: [item({ state: "Closed", stateCategory: "Completed", changedAt: "2026-11-02T22:00:00Z" })] });
     expect(detectLoops(input({ picks: [done], work: [completed], loops: open })).close).toEqual([{ id: 1, note: "DevOps #101 is Closed" }]);
-    const changed = work([item({ changedAt: "2026-11-02T21:00:00Z" })]);
+    const changed = work([item({ changedAt: "2026-11-02T22:30:00Z", changedByMe: true })]);
     expect(detectLoops(input({ picks: [done], work: [changed], loops: open })).close).toEqual([{ id: 1, note: "DevOps #101 was updated" }]);
+  });
+  it("stays open when someone else changed the item, or I changed it before the loop opened (Q42)", () => {
+    const open = [loop({})];
+    expect(detectLoops(input({ picks: [done], work: [work([item({ changedAt: "2026-11-02T22:30:00Z", changedByMe: false })])], loops: open })).close).toEqual([]);
+    expect(detectLoops(input({ picks: [done], work: [work([item({ changedAt: "2026-11-02T22:30:00Z" })])], loops: open })).close).toEqual([]);
+    // Opened 5:15 PM (22:15Z); my change at 21:00Z was before it.
+    expect(detectLoops(input({ picks: [done], work: [work([item({ changedAt: "2026-11-02T21:00:00Z", changedByMe: true })])], loops: open })).close).toEqual([]);
   });
   it("stays open on a cached or failed fetch, or while nothing changed", () => {
     const open = [loop({})];
@@ -122,7 +131,20 @@ describe("loop rule: a blocked item assigned to me", () => {
     expect(r.open).toEqual([expect.objectContaining({ kind: "blocked", ruleKey: "blocked:CSC:202:1", what: "Nudge on blocker for #202: Waiting on API keys", itemId: 202 })]);
     expect(detectLoops(input({ work: [work(items, { fromCache: true })] })).open).toEqual([]);
     const nudged = loop({ id: 4, kind: "blocked", itemId: 202, ruleKey: "blocked:CSC:202:1", closedAt: T("17:20"), closedBy: "me" });
+    // Nudged by hand and still blocked: quiet for 3 workdays, then a new nudge (Q43).
     expect(detectLoops(input({ work: w, loops: [nudged] })).open).toEqual([]);
+    // Closed Mon Nov 2: Tue, Wed are 2 workdays; Thu is the 3rd. A weekend in between doesn't count.
+    expect(detectLoops(input({ today: "2026-11-04", work: w, loops: [nudged] })).open).toEqual([]);
+    expect(detectLoops(input({ today: "2026-11-05", work: w, loops: [nudged] })).open.map((l) => l.ruleKey)).toEqual(["blocked:CSC:202:2"]);
+    const friday = { ...nudged, closedAt: T("17:20", "2026-11-06") };
+    expect(detectLoops(input({ today: "2026-11-10", work: w, loops: [friday] })).open).toEqual([]);
+    expect(detectLoops(input({ today: "2026-11-11", work: w, loops: [friday] })).open).toHaveLength(1);
+    // Workdays come from the caller (working hours): with Mon to Thu only, Fri doesn't count.
+    const monThu = (d: string) => Temporal.PlainDate.from(d).dayOfWeek <= 4;
+    const wednesday = { ...nudged, closedAt: T("17:20", "2026-11-04") };
+    expect(detectLoops(input({ today: "2026-11-09", work: w, loops: [wednesday] })).open).toHaveLength(1);
+    expect(detectLoops(input({ today: "2026-11-09", work: w, loops: [wednesday], isWorkday: monThu })).open).toEqual([]);
+    expect(detectLoops(input({ today: "2026-11-10", work: w, loops: [wednesday], isWorkday: monThu })).open).toHaveLength(1);
     // Unblocked (closed by the signal) and blocked again: a new loop.
     expect(detectLoops(input({ work: w, loops: [{ ...nudged, closedBy: "signal" }] })).open.map((l) => l.ruleKey)).toEqual(["blocked:CSC:202:2"]);
   });
@@ -131,6 +153,19 @@ describe("loop rule: a blocked item assigned to me", () => {
     expect(detectLoops(input({ work: [work([item({ id: 202, blocked: false })])], loops: open })).close).toEqual([{ id: 4, note: "DevOps #202 is no longer blocked" }]);
     expect(detectLoops(input({ work: [work([], { watched: [item({ id: 202, state: "Done", stateCategory: "Completed" })] })], loops: open })).close).toEqual([{ id: 4, note: "DevOps #202 is Done" }]);
     expect(detectLoops(input({ work: [work([item({ id: 202, blocked: true })])], loops: open })).close).toEqual([]);
+  });
+});
+
+describe("loop rule: asked a client about priorities (step 8)", () => {
+  const asked = loop({ id: 7, kind: "priorities", clientKey: "W&C", itemId: null, ruleKey: "priorities:2026-11-09:W&C", refAt: null });
+  it("closes when a fresh fetch shows open work assigned to me for that client again", () => {
+    const w = work([item({ id: 7001 })], { clientKey: "W&C" });
+    expect(detectLoops(input({ work: [w], loops: [asked] })).close).toEqual([{ id: 7, note: "Work is assigned to you at W&C again" }]);
+  });
+  it("stays open while nothing is assigned, or DevOps can't say", () => {
+    expect(detectLoops(input({ work: [work([], { clientKey: "W&C" })], loops: [asked] })).close).toEqual([]);
+    expect(detectLoops(input({ work: [work([item({ id: 7001 })], { clientKey: "W&C", fromCache: true })], loops: [asked] })).close).toEqual([]);
+    expect(detectLoops(input({ work: null, loops: [asked] })).close).toEqual([]);
   });
 });
 

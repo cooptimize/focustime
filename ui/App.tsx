@@ -22,6 +22,7 @@ import { NowStrip, countdown, timerLeft } from "./NowStrip.tsx";
 import { Loops } from "./Loops.tsx";
 import { CloseOut } from "./CloseOut.tsx";
 import { CheckIn } from "./CheckIn.tsx";
+import { PlanWeek } from "./PlanWeek.tsx";
 import { borrowedSummary } from "../plan/borrow.ts";
 import { formatDuration } from "../week/format.ts";
 import { PopupMenu } from "./Menus.tsx";
@@ -68,6 +69,10 @@ export function App() {
   /** Close out (step 7) for a day, and Check-in for today, take the week's place too. */
   const [closeOutAt, setCloseOutAt] = useState<IsoDate | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
+  /** Plan the week (step 8) for a week (its Monday), or null when closed. It takes the week's place too. */
+  const [planWeekAt, setPlanWeekAt] = useState<IsoDate | null>(null);
+  /** Bumped when something outside Plan the week (the command menu) changes its plan, so it reloads. */
+  const [planWeekVersion, setPlanWeekVersion] = useState(0);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** The focus timer menu (F or the top bar Focus button), anchored where it was opened. */
   const [timerMenuAt, setTimerMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -410,11 +415,30 @@ export function App() {
     [load],
   );
 
+  /** Plan the week for a week; the week view loads that week too, since fit and readiness use it. */
+  const openPlanWeek = useCallback(
+    (w: IsoDate) => {
+      closePlanDay();
+      setDetailsOpen(false);
+      setSettingsAt(null);
+      setLoopsOpen(false);
+      setCloseOutAt(null);
+      setCheckInOpen(false);
+      setPlanWeekAt(w);
+      if (w !== weekRef.current) void load({ weekStart: w });
+    },
+    [closePlanDay, load],
+  );
+
   const setView = useCallback(
     (v: View) => {
       setCloseOutAt(null);
       setCheckInOpen(false);
-      if (v === "week") {
+      setPlanWeekAt(null);
+      if (v === "planweek") {
+        // The week a nudge asked for, else next week.
+        if (data) openPlanWeek(data.weekNudge.badge ?? addWeeks(mondayOf(data.planDay.date), 1));
+      } else if (v === "week") {
         closePlanDay();
         setDetailsOpen(false);
         setSettingsAt(null);
@@ -440,7 +464,7 @@ export function App() {
         void openPlanDay();
       }
     },
-    [closePlanDay, openPlanDay, data, load],
+    [closePlanDay, openPlanDay, data, load, openPlanWeek],
   );
 
   // A per-second tick only while a timer runs; when it reaches zero locally, reload shortly after so the server's end shows.
@@ -571,8 +595,9 @@ export function App() {
       if (cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey) return;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
       const inMenu = !!(e.target as HTMLElement | null)?.closest?.(".popup-menu");
-      if ((settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen) && e.key === "Escape" && !inMenu) {
+      if ((settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null) && e.key === "Escape" && !inMenu) {
         e.preventDefault();
+        setPlanWeekAt(null);
         setSettingsAt(null);
         setLoopsOpen(false);
         setCloseOutAt(null);
@@ -582,12 +607,18 @@ export function App() {
         setLoopsOpen(false);
         setCloseOutAt(null);
         setCheckInOpen(false);
+        setPlanWeekAt(null);
         setSettingsAt("you");
       } else if ((e.key === "l" || e.key === "L") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
         e.preventDefault();
         setCloseOutAt(null);
         setCheckInOpen(false);
+        setPlanWeekAt(null);
         setLoopsOpen((o) => !o);
+      } else if ((e.key === "w" || e.key === "W") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
+        e.preventDefault();
+        if (planWeekAt !== null) setPlanWeekAt(null);
+        else setView("planweek");
       } else if ((e.key === "e" || e.key === "E") && !typing && !pd && !detailsOpen && settingsAt === null && !inMenu) {
         e.preventDefault();
         if (closeOutAt !== null) setCloseOutAt(null);
@@ -605,11 +636,11 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settingsAt, loopsOpen, closeOutAt, checkInOpen, cmdOpen, keysOpen, pd, detailsOpen, setView]);
+  }, [settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt, cmdOpen, keysOpen, pd, detailsOpen, setView]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (settingsAt !== null || loopsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (e.target instanceof HTMLInputElement) return;
       if ((e.target as HTMLElement | null)?.closest?.(".popup-menu")) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
@@ -653,7 +684,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, loopsOpen, closeOutAt, checkInOpen]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, setViewRange, settingsAt, loopsOpen, closeOutAt, checkInOpen, planWeekAt]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
 
@@ -715,6 +746,15 @@ export function App() {
         if (d) setCloseOutAt(d);
       },
       openCheckIn: () => setView("checkin"),
+      openPlanWeek: (w) => (w ? openPlanWeek(w) : setView("planweek")),
+      planWeekOpen: planWeekAt,
+      commitWeek: () => {
+        if (planWeekAt)
+          void call("weekplan.commit", { weekStart: planWeekAt }).then(
+            () => { setNotice("Week committed"); setPlanWeekVersion((n) => n + 1); reloadQuiet(); },
+            (e: unknown) => setNotice(e instanceof Error ? e.message : "Could not commit the week"),
+          );
+      },
       closeOutDate: closeOutAt,
       commitCloseOut: () => {
         if (closeOutAt) void call("closeout.commit", { date: closeOutAt }).then(() => { setNotice("Closed out"); reloadQuiet(); }, (e: unknown) => setNotice(e instanceof Error ? e.message : "Could not commit"));
@@ -766,7 +806,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.kind === "session") {
     return (
@@ -788,7 +828,7 @@ export function App() {
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
   const today = week.days.some((d) => d.date === localToday) ? localToday : "";
   const weekendNote = Temporal.PlainDate.from(localToday).dayOfWeek >= 6 && data.weekStart === data.today.weekStart ? `Today is ${shortDay(localToday)} · showing next week` : null;
-  const view: View = settingsAt !== null ? "settings" : loopsOpen ? "loops" : closeOutAt !== null ? "closeout" : checkInOpen ? "checkin" : pd ? "planday" : "week";
+  const view: View = settingsAt !== null ? "settings" : planWeekAt !== null ? "planweek" : loopsOpen ? "loops" : closeOutAt !== null ? "closeout" : checkInOpen ? "checkin" : pd ? "planday" : "week";
   const borrowWeek = borrowedSummary(data.borrowed, week.days[0]!.date, week.days.at(-1)!.date);
 
   const samples = new Set(data.sources.filter((s) => s.sample).map((s) => s.source));
@@ -796,7 +836,7 @@ export function App() {
   return (
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={work}>
-    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date) }}>
+    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures }}>
     <MenuHost env={env}>
     <div className={`app ${layout}${compact ? " compact" : ""}`}>
       <header className="topbar">
@@ -820,9 +860,8 @@ export function App() {
           <button type="button" className="view-tab" aria-current={view === "closeout" ? "page" : undefined} onClick={() => setView(view === "closeout" ? "week" : "closeout")} title="End of day: picks, resume notes, loops (E)">
             Close out{data.closeOut.done && <span className="count done" title="Today is closed out">✓</span>} <kbd>E</kbd>
           </button>
-          <button type="button" className="view-tab soon" disabled title="Coming soon">
-            Plan the week
-            <span className="soon-tag">soon</span>
+          <button type="button" className="view-tab" aria-current={view === "planweek" ? "page" : undefined} onClick={() => setView(view === "planweek" ? "week" : "planweek")} title={data.weekNudge.badge ? `The week of ${shortDay(data.weekNudge.badge)} isn't committed yet (W)` : "Commit features per client to a week (W)"}>
+            Plan the week{data.weekNudge.badge && <span className="count nudge" aria-label="not committed yet">!</span>} <kbd>W</kbd>
           </button>
         </nav>
         <nav className="weeknav" aria-label="Week">
@@ -890,7 +929,9 @@ export function App() {
         </div>
       )}
 
-      {loopsOpen && settingsAt === null ? (
+      {planWeekAt !== null && settingsAt === null ? (
+        <PlanWeek weekStart={planWeekAt} data={data} version={planWeekVersion} onWeek={openPlanWeek} onClose={() => setPlanWeekAt(null)} onChanged={reloadQuiet} />
+      ) : loopsOpen && settingsAt === null ? (
         <Loops timeZone={data.hours.timeZone} onClose={() => setLoopsOpen(false)} onChanged={reloadQuiet} />
       ) : closeOutAt !== null && settingsAt === null ? (
         <CloseOut key={closeOutAt} date={closeOutAt} data={data} onDate={setCloseOutAt} onClose={() => setCloseOutAt(null)} onChanged={reloadQuiet} />
