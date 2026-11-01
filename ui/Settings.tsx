@@ -1,6 +1,7 @@
 // Settings (step 6b): every setting Coopilot owns, read from and written to the same validated config file. Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
+import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { FieldProblem, SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
 import { COLLAB_LENGTHS, THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
@@ -207,7 +208,10 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
         <div className="set-clients">
           {d.clients.length === 0 && <p className="muted">No clients yet: they come from Dataverse (your Account Worker records) and from config.</p>}
           {d.clients.map((c) => (
-            <ClientForm key={c.key} client={c} data={d} onSavedData={p.onSavedData} />
+            <div key={c.key} className="set-client-wrap">
+              <ClientForm client={c} data={d} onSavedData={p.onSavedData} />
+              {c.devops && <WriteAccess client={c} onDone={p.reload} />}
+            </div>
           ))}
         </div>
       );
@@ -904,6 +908,85 @@ function SecretForm({ secret: s, onDone }: { secret: SettingsData["secrets"][num
   );
 }
 
+/**
+ * Step 14: DevOps write access per client. A masked field for my own PAT; the server checks it belongs to my DevOps
+ * identity there before keeping it in the keyring. The PAT is never shown again, and never sent anywhere else.
+ */
+function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][number]; onDone: () => Promise<void> }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [expires, setExpires] = useState(c.write?.expires ?? "");
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const w = c.write;
+  const daysLeft = w?.expires ? Temporal.PlainDate.from(w.expires).since(Temporal.Now.plainDateISO()).days : null;
+  return (
+    <form
+      className="set-row secret devops-write"
+      autoComplete="off"
+      aria-label={`DevOps write access for ${c.setting.name ?? c.key}`}
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const value = ref.current?.value ?? "";
+        const input: Record<string, unknown> = { clientKey: c.key };
+        if (value) input.pat = value;
+        if (expires !== (w?.expires ?? "")) input.expires = expires || null;
+        if (Object.keys(input).length === 1) return setStatus("Nothing to save");
+        setBusy(true);
+        setStatus(value ? "Checking whose PAT this is…" : null);
+        try {
+          await call("devops.set_write_pat", input);
+          setStatus(value ? "Checked and saved to the keyring" : "Expiry date saved");
+          await onDone();
+        } catch (err) {
+          setStatus(err instanceof Error ? err.message : "Not saved");
+        } finally {
+          if (ref.current) ref.current.value = "";
+          setBusy(false);
+        }
+      }}
+    >
+      <strong>DevOps write access</strong>
+      <span className={`state ${w ? "live" : "muted"}`}>{w ? "On" : "Off, read-only"}</span>
+      {w ? (
+        <span className="muted">
+          as {w.name} ({w.email}) on {w.org}
+          {w.expires ? `, expires ${shortDate(w.expires)}` : ""}
+        </span>
+      ) : (
+        <span className="muted">Your own PAT with Work Items (Read &amp; write) for this client's DevOps, never the company PAT.</span>
+      )}
+      {w?.expires && daysLeft !== null && daysLeft < 14 && <span className="field-problem">Expires in {Math.max(0, daysLeft)} days</span>}
+      <input ref={ref} type="password" autoComplete="new-password" spellCheck={false} placeholder={w ? "New PAT to replace it" : "Paste your PAT"} aria-label={`DevOps write PAT for ${c.setting.name ?? c.key} (masked)`} />
+      <label className="set-inline">
+        <span className="muted">Expires (optional)</span>
+        <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} title="DevOps doesn't tell Coopilot the expiry; copy it from the PAT page" />
+      </label>
+      <button type="submit" className="mini primary" disabled={busy}>
+        {busy ? "Checking…" : "Save"}
+      </button>
+      {w && (
+        <button
+          type="button"
+          className="mini quiet"
+          disabled={busy}
+          onClick={async () => {
+            await call("devops.clear_write_pat", { clientKey: c.key }).catch(() => null);
+            setStatus("Turned off. The PAT was removed from the keyring");
+            await onDone();
+          }}
+        >
+          Turn off
+        </button>
+      )}
+      {status && (
+        <span className="muted" role="status">
+          {status}
+        </span>
+      )}
+    </form>
+  );
+}
+
 /** Reset local plan (Q37): type "reset" to confirm; the server backs the store up first. */
 function ResetPlan({ disabled, onDone }: { disabled: boolean; onDone: () => void }) {
   const [asking, setAsking] = useState(false);
@@ -951,6 +1034,7 @@ function DataSection(p: Props & { data: SettingsData }) {
   return (
     <div className="set-form">
       <WriteLog />
+      <DevOpsWriteLog />
       <div className="set-grid">
         <div className="set-field">
           <span className="set-label">Export the plan</span>

@@ -23,13 +23,14 @@ export type ActionTarget =
   | "note" // one resume note ("where I left off")
   | "timebox" // one timebox
   | "write" // one entry in the write log
-  | "event"; // one calendar event (step 13)
+  | "event" // one calendar event (step 13)
+  | "devops"; // a DevOps change (step 14)
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -121,6 +122,14 @@ export const ACTIONS = [
   { name: "collab.candidates", title: "Needs help from…", group: "Help", target: "item", summary: "Cooptimizers who could help with an item: on this client that day, on this client, anyone else; PTO shows as away" },
   { name: "collab.suggest", title: "Find help session times", group: "Help", target: "item", summary: "Up to 5 times when you and the people you pick are free inside everyone's working hours (free/busy only)" },
   { name: "collab.preview_invite", title: "Preview a help invite", group: "Help", target: "item", summary: "A meeting with the chosen Cooptimizers: preview names everyone who gets the invite; sent only when you confirm" },
+  { name: "devops.set_write_pat", title: "Enable DevOps writes for a client", group: "DevOps", target: "none", summary: "Your own DevOps PAT for one client, checked against your DevOps identity there, kept only in the keyring" },
+  { name: "devops.clear_write_pat", title: "Turn off DevOps writes for a client", group: "DevOps", target: "none", summary: "Forget that client's write PAT; everything stays read-only" },
+  { name: "devops.write_status", title: "Check DevOps write access", group: "DevOps", target: "none", summary: "Which clients have a write PAT, whose it is and its expiry" },
+  { name: "devops.states", title: "List an item's states", group: "DevOps", target: "item", summary: "The states of a work item's type, for Mark done in DevOps (read-only)" },
+  { name: "devops.preview", title: "Preview a DevOps change", group: "DevOps", target: "devops", summary: "State, comment, create from a draft or target date: every field before and after, who it writes as, before anything is written" },
+  { name: "devops.confirm", title: "Confirm a DevOps change", group: "DevOps", target: "devops", summary: "Write the previewed change (only if the item didn't change since), read it back, log it" },
+  { name: "devops.retry", title: "Retry a DevOps change", group: "DevOps", target: "write", summary: "Check and try again; never writes twice" },
+  { name: "devops.log", title: "Show the DevOps write log", group: "DevOps", target: "none", summary: "Every DevOps write: what, where, when, the result, the prior values, and Undo" },
   { name: "link.open", title: "Open in Edge", group: "Work items", target: "item", summary: "Open a work item in that client's Edge profile" },
 ] as const satisfies readonly ActionSpec[];
 

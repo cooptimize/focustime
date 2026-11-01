@@ -1,6 +1,7 @@
 // Plan the day: the planned day's column becomes a short planning panel. Each half-day shows its real capacity,
 // picks come from that client's DevOps items in board order (story level only) or a typed intention, and one
 // key commits. Everything here is local: the actions only write Coopilot's plan store.
+import { CreateInDevOps } from "./DevOpsWrite.tsx";
 import { useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { blockClient, capacityMinutes, draftOffer, fitOf, isPickable, pickableChildren, weekFirst } from "../plan/rules.ts";
 import { agendaOf, planMyDay, type DayPlacement, type Unplaced } from "../plan/agenda.ts";
@@ -44,6 +45,9 @@ type Props = {
   error: string | null;
   act: PlanDayAct;
   onCommit: () => void;
+  /** Step 14 (D254): set right after a commit, so the panel offers Timebox my day. */
+  justCommitted?: boolean;
+  onCommitSeen?: () => void;
   onClose: () => void;
   /** ← → and the ‹ › buttons: the previous or next day that can be planned. */
   onStep: (dir: 1 | -1) => void;
@@ -53,7 +57,7 @@ type Props = {
 
 const inPlay = (p: Pick) => p.status === "planned" || p.status === "done";
 
-export function PlanDay({ day, state, which, friday, now, tz, colors, clients, error, act, onCommit, onClose, onStep, start }: Props) {
+export function PlanDay({ day, state, which, friday, now, tz, colors, clients, error, act, onCommit, onClose, onStep, start, justCommitted = false, onCommitSeen }: Props) {
   const past = state.access === "past";
   const off = day.pto;
   const ref = useRef<HTMLElement>(null);
@@ -94,6 +98,9 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
   const [myDay, setMyDay] = useState(false);
+  const tbEnv = useTimeboxes();
+  const boxed = new Set((tbEnv?.timeboxes ?? []).filter((t) => t.date === day.date && !t.removedAt).map((t) => t.pickId));
+  const unboxed = state.picks.filter((p) => p.date === day.date && p.status === "planned" && !boxed.has(p.id)).length;
   const committed = state.plan.committedAt;
 
   const onKey = (e: KeyboardEvent) => {
@@ -163,7 +170,7 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
               ›
             </button>
           </span>
-          {!past && !off && committed && (
+          {!past && !off && committed && !justCommitted && (
             <button type="button" onClick={() => setMyDay(true)} title="Place every planned pick without a timebox into its block's free time">
               Timebox my day
             </button>
@@ -178,6 +185,25 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
           </button>
         </div>
       </header>
+      {justCommitted && !past && (
+        <div className="pd-committed" role="status">
+          <p>
+            <strong>Committed.</strong>{" "}
+            {unboxed > 0 && !off ? `${unboxed} planned pick${unboxed === 1 ? " has" : "s have"} no time yet. Timebox them into the free gaps now?` : "Every planned pick has its time."}
+          </p>
+          {unboxed > 0 && !off && (
+            <button type="button" className="primary" onClick={() => (onCommitSeen?.(), setMyDay(true))}>
+              Timebox my day
+            </button>
+          )}
+          <button type="button" onClick={() => onCommitSeen?.()}>
+            Keep planning
+          </button>
+          <button type="button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      )}
       {error && (
         <p className="pd-error" role="alert">
           {error}
@@ -668,8 +694,8 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act, startOpe
                 <span className="cand static" title="A local draft feature: add it in DevOps, then break it into stories">
                   <span className="wi-type">Draft feature</span>
                   <span className="wi-title">{d.title}</span>
-                  <span className="muted">add it in DevOps</span>
                 </span>
+                <CreateInDevOps drafts={[d]} />
               </li>
             ) : (
               <li key={`d${d.id}`}>
@@ -678,6 +704,7 @@ function Portfolio({ item, clientKey, kids: children, drafts, add, act, startOpe
                   <span className="wi-type">Draft</span>
                   <span className="wi-title">{d.title}</span>
                 </button>
+                <CreateInDevOps drafts={[d]} label="Create" />
               </li>
             ),
           )}

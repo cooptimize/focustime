@@ -1,5 +1,6 @@
 // The Inbox (step 10, step 13.5): open follow-ups and unsorted captures in one list, overdue first, then due soon, then
 // the rest newest first, with the capture box on top. Snoozed and closed follow-ups are behind "Show closed".
+import { DraftsToAdd } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CaptureState, FollowUpView, ReviewData, WeekLoadData } from "../actions/types.ts";
 import { dueOrder } from "../plan/due.ts";
@@ -114,6 +115,7 @@ export function Inbox({ data, version, onClose, onChanged }: { data: WeekLoadDat
           ),
         )}
       </ul>
+      {caps && <DraftsToAdd drafts={caps.drafts} clientName={(k) => name(k) ?? k} />}
       <div className="inbox-tools">
         <AddFollowUp clients={clients} onAdded={changed} />
         <label className="set-check">

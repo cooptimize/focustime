@@ -72,7 +72,10 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
     // Without the focus time read, only what doesn't need it is known (internal, standing block, Keep following).
     const sure = follow ? followState(key, follow.usable ? follow.patterns : [], follow.options) : null;
     const state = sure && (follow!.usable || sure.active) ? sure : null;
-    return { key, dataverseName: m?.clientName ?? null, devopsEmail: m?.devopsEmail ?? null, devops: m?.devops ?? false, setting, profile, css: setting.color ? colorCss(setting.color) : null, follow: state };
+    // Step 14: whose write PAT this client has, if any (never the PAT).
+    const w = ctx.plan?.devopsIdentity(key) ?? null;
+    const write = w ? { name: w.name, email: w.email, org: w.org, validatedAt: w.validatedAt, expires: w.expires } : null;
+    return { key, dataverseName: m?.clientName ?? null, devopsEmail: m?.devopsEmail ?? null, devops: m?.devops ?? false, setting, profile, css: setting.color ? colorCss(setting.color) : null, follow: state, write };
   });
   return {
     ...base,

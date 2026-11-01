@@ -6,6 +6,7 @@ import { dayEndOf, hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type ViewRange } from
 import { applyTheme, initialTheme } from "./theme.ts";
 import type { Theme } from "../config/schema.ts";
 import { NOTICE_EVENT, openWorkItem } from "./WorkLink.tsx";
+import { DevOpsWriteCtx, useDevOpsWriteFlow } from "./DevOpsWrite.tsx";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
 import { HelpFinder } from "./HelpFinder.tsx";
 import type { HelpTarget } from "./menu.ts";
@@ -129,6 +130,8 @@ export function App() {
   }, []);
   const [clock, setClock] = useState(() => Date.now());
   const [pd, setPd] = useState<PlanDayState | null>(null);
+  const [justCommitted, setJustCommitted] = useState(false);
+  useEffect(() => setJustCommitted(false), [pd?.date]);
   // Step 13.6: "+ Add work" and A open Plan the day on one block's picker.
   const [pdStart, setPdStart] = useState<{ half: Half; n: number } | null>(null);
   const [pdError, setPdError] = useState<string | null>(null);
@@ -241,6 +244,9 @@ export function App() {
     call<WriteState>("write.status", {}).then(setWriteAccess, () => (accessAsked.current = false));
   }, []);
   const writes = useWriteFlow(reloadQuiet);
+  // Step 14: DevOps writes (preview, confirm, read back) and the way to Settings > Clients for a write PAT.
+  const openSettingsRef = useRef<((section?: string) => void) | null>(null);
+  const devopsWrites = useDevOpsWriteFlow({ allowed: data?.devopsWrite ?? [], onDone: reloadQuiet, openSettings: () => openSettingsRef.current?.("clients") });
   const connectWrite = useCallback(async () => {
     setNotice("Finish signing in to Microsoft in your browser, and allow calendar changes");
     try {
@@ -438,9 +444,10 @@ export function App() {
     if (!pd) return;
     try {
       await planAction("planday.commit", { date: pd.date });
-      setPd(null);
+      // Step 14 (D254): the panel stays open and offers Timebox my day right away; Close or Esc leaves it.
+      setPd(await planAction("planday.start", { date: pd.date }));
+      setJustCommitted(true);
       reloadQuiet();
-      setNotice("Committed. Planned ✓ in the day's header opens it again, with Timebox my day");
     } catch (e) {
       setPdError(e instanceof Error ? e.message : "Could not commit");
     }
@@ -987,6 +994,7 @@ export function App() {
         ),
     };
   }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, openRitual, connectWrite, addWork]); // eslint-disable-line react-hooks/exhaustive-deps
+  openSettingsRef.current = env?.openSettings ?? null;
 
   if (state.kind === "session") {
     return (
@@ -1045,6 +1053,7 @@ export function App() {
     <DevOpsWork.Provider value={work}>
     <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date }}>
     <TimeboxCtx.Provider value={tbEnv}>
+    <DevOpsWriteCtx.Provider value={devopsWrites.env}>
     <MenuHost env={env}>
     <div className={`app ${layout}${compact ? " compact" : ""}`}>
       <header className="topbar">
@@ -1253,6 +1262,8 @@ export function App() {
                       error={pdError}
                       act={runPlan}
                       onCommit={() => void commit()}
+                      justCommitted={justCommitted}
+                      onCommitSeen={() => setJustCommitted(false)}
                       onClose={closePlanDay}
                       onStep={(dir) => void stepPlanDay(dir)}
                       start={pdStart}
@@ -1325,9 +1336,11 @@ export function App() {
         />
       )}
       {writes.dialog}
+      {devopsWrites.dialog}
       {captureOpen && <CaptureDialog data={data} onClose={() => setCaptureOpen(false)} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); reloadQuiet(); }} />}
     </div>
     </MenuHost>
+    </DevOpsWriteCtx.Provider>
     </TimeboxCtx.Provider>
     </PlanCtx.Provider>
     </DevOpsWork.Provider>

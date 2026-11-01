@@ -113,7 +113,7 @@ export async function captureAction(ctx: CaptureContext, action: CaptureAction, 
       case "capture.load": {
         fields(input ?? {}, []);
         const cfg = await ctx.config().catch(() => null);
-        const state: CaptureState = { today: await todayOf(ctx, cfg), inbox: plan.inbox(), inboxCount: plan.inboxCount() };
+        const state: CaptureState = { today: await todayOf(ctx, cfg), inbox: plan.inbox(), inboxCount: plan.inboxCount(), drafts: plan.drafts() };
         return { ok: true, data: state };
       }
       case "capture.features": {

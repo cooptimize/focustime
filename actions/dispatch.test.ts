@@ -22,7 +22,7 @@ function ctx(scenario: Scenario, text = configText): ActionContext {
       createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: f.fetch, cacheDir: mkdtempSync(join(tmpdir(), "c-")), log: () => {} }),
     makeOutlook: () => { throw new Error("Outlook is not configured in these tests"); },
     makeGoogle: () => { throw new Error("Google is not configured in these tests"); },
-    makeDevOps: () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null }),
+    makeDevOps: () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined }),
     saveSystemUserId: async () => {},
     now: () => "2026-11-03T15:00:00Z",
   };

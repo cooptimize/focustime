@@ -16,6 +16,8 @@ import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
 import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
+import { devopsWriteAction, type WritePats } from "./devops-write-actions.ts";
+import type { DevOpsWriter } from "../sources/devops/write.ts";
 import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
 import type { OutlookWrite, PeopleReader, ScheduleReader } from "../sources/graph/source.ts";
 import { collabAction } from "./collab-actions.ts";
@@ -61,6 +63,9 @@ export type ActionContext = {
   /** The host's browsers (step 12, Q63): detection and the link command, from server/host.ts. */
   host?: HostBrowsers;
   exportPlan?: (json: string) => Promise<string>;
+  /** Step 14: personal DevOps write PATs in the keyring, and the DevOps writer. Absent: DevOps stays read-only. */
+  writePats?: WritePats;
+  devopsWriter?: DevOpsWriter;
   /** Media control for focus (step 10): playerctl and playlist links. Absent: none (tests, no desktop). */
   media?: MediaControl;
 };
@@ -350,6 +355,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     canWrite: synced.canWrite,
     invites: ctx.plan ? ctx.plan.invitesFrom(Temporal.PlainDate.from(weekStart).subtract({ days: 7 }).toString()).map((i, _n, _a, log = ctx.plan!.writeLog(1000)) => ({ writeId: log.find((e) => e.uid === i.uid && e.op === "create" && e.status === "confirmed" && !e.undoneBy)?.id ?? null, uid: i.uid, clientKey: i.clientKey, itemId: i.itemId, pickId: i.pickId, timeboxId: i.timeboxId, title: i.title, start: i.start, end: i.end, names: i.attendees.map((a) => a.name), teams: i.teams, status: i.status })) : [],
     collab: cfg?.collab ?? DEFAULT_COLLAB,
+    devopsWrite: ctx.plan && ctx.devopsWriter && ctx.writePats ? ctx.plan.devopsIdentities().map((i) => i.clientKey) : [],
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
   };
@@ -433,6 +439,28 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "write.log":
       return timeboxAction(
         { plan: ctx.plan, config: () => configured(ctx), outlook: (cfg) => (cfg.outlook ? ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).write ?? null : null), now: ctx.now },
+        action,
+        req.input,
+      );
+    case "devops.set_write_pat":
+    case "devops.clear_write_pat":
+    case "devops.write_status":
+    case "devops.states":
+    case "devops.preview":
+    case "devops.confirm":
+    case "devops.retry":
+    case "devops.log":
+      return devopsWriteAction(
+        {
+          plan: ctx.plan,
+          config: () => configured(ctx),
+          // Never the company read PAT: this read doesn't select it.
+          targets: (cfg, keys) => ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).devopsTargets(keys, { withPat: false }),
+          writer: ctx.devopsWriter ?? null,
+          pats: ctx.writePats ?? null,
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
+          now: ctx.now,
+        },
         action,
         req.input,
       );

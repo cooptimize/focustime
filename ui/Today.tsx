@@ -1,5 +1,6 @@
 // Today (step 10): the default view. What's now and next, today's picks by block with the week's committed
 // features as context, one large Start focus, and anything urgent. Everything else is a click away.
+import { useTimeboxes } from "./Timeboxes.tsx";
 import { DueBadge } from "./FollowUps.tsx";
 import { useContext, useState } from "react";
 import type { FollowUpView, WeekLoadData } from "../actions/types.ts";
@@ -159,6 +160,10 @@ function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan
   const status = blockStatus(fit, slot.risks);
   const features = slot.half === "EVE" ? [] : featuresOn(data.weekFeatures, slot.date, slot.half as Half, client);
   const title = client ? nameOf(client) : slot.open ? "Open" : halfName(slot.half);
+  // Step 14 (D254): the block that is running now offers Timebox on its picks with no time yet.
+  const tb = useTimeboxes();
+  const current = !ended && Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.start)) >= 0;
+  const boxed = new Set((tb?.timeboxes ?? []).filter((t) => t.date === slot.date && !t.removedAt).map((t) => t.pickId));
   return (
     <article className={`today-block${ended ? " ended" : ""}`} style={{ "--c": clientColor(client ?? undefined, data.clients) } as React.CSSProperties}>
       <header>
@@ -198,6 +203,11 @@ function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan
                 </button>
               )}
               {running === p.id && <span className="today-running">Focusing</span>}
+              {current && committed && tb && p.status === "planned" && !boxed.has(p.id) && (
+                <button type="button" className="mini quiet" onClick={() => tb.open({ pickId: p.id, date: slot.date })} title="Give this pick a stretch of the block's free time">
+                  Timebox
+                </button>
+              )}
             </li>
           ))}
         </ul>

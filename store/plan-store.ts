@@ -9,6 +9,7 @@ import { DEFAULT_BLOCKS, validBlocks, type ItemLevel, type Tier } from "../plan/
 import type { Capture, DayPlan, DraftStory, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
+import type { DevOpsWriteEntry } from "../plan/devopswrite.ts";
 export type { WriteEntry, WriteStatus } from "../plan/timebox.ts";
 
 /** Marks a migration that rebuilds a referenced table: run with foreign keys off, then checked (see migrate). */
@@ -382,6 +383,46 @@ export const MIGRATIONS: readonly string[] = [
    ALTER TABLE draft_stories ADD COLUMN level TEXT NOT NULL DEFAULT 'story' CHECK (level IN ('story', 'feature'));`,
   // 12 (step 13.5): a follow-up picked into a block is an intention pick tied to its follow-up (size S by default).
   `ALTER TABLE picks ADD COLUMN follow_up_id INTEGER REFERENCES follow_ups(id);`,
+  // 13 (step 14): DevOps writes. A draft created in DevOps keeps its row with the new item (and leaves draft lists);
+  // the identity each client's write PAT was checked against (never the PAT); the DevOps audit log with prior values.
+  `ALTER TABLE draft_stories ADD COLUMN devops_id INTEGER;
+   ALTER TABLE draft_stories ADD COLUMN devops_url TEXT;
+   CREATE TABLE devops_identities (
+     client_key TEXT PRIMARY KEY,
+     org TEXT NOT NULL,
+     identity_id TEXT NOT NULL,
+     name TEXT NOT NULL,
+     email TEXT NOT NULL,
+     validated_at TEXT NOT NULL,
+     expires TEXT CHECK (expires IS NULL OR expires GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')
+   );
+   CREATE TABLE devops_write_log (
+     id INTEGER PRIMARY KEY,
+     at TEXT NOT NULL,
+     client_key TEXT NOT NULL,
+     org TEXT NOT NULL,
+     project TEXT NOT NULL,
+     op TEXT NOT NULL CHECK (op IN ('state', 'comment', 'create', 'target_date', 'undo_state', 'undo_comment', 'undo_create', 'undo_target_date')),
+     item_id INTEGER,
+     parent_id INTEGER,
+     title TEXT NOT NULL,
+     identity TEXT NOT NULL,
+     before TEXT NOT NULL,
+     after TEXT NOT NULL,
+     ops TEXT,
+     rev_before INTEGER,
+     rev_after INTEGER,
+     comment_id INTEGER,
+     draft_id INTEGER,
+     pick_ids TEXT NOT NULL DEFAULT '[]',
+     follow_up_id INTEGER,
+     status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'unconfirmed', 'failed', 'refused')),
+     message TEXT,
+     undo_of INTEGER REFERENCES devops_write_log(id),
+     undone_by INTEGER REFERENCES devops_write_log(id),
+     attempts INTEGER NOT NULL DEFAULT 1,
+     updated_at TEXT NOT NULL
+   );`,
 ];
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
@@ -522,7 +563,18 @@ const toPick = (r: Row): Pick => ({
   updatedAt: r.updated_at as string,
 });
 const toPlan = (r: Row): DayPlan => ({ date: r.date as string, committedAt: (r.committed_at as string | null) ?? null, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
-const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string });
+const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}) });
+export type DevOpsIdentityRow = { clientKey: string; org: string; id: string; name: string; email: string; validatedAt: string; expires: string | null };
+const toIdentity = (r: Row): DevOpsIdentityRow => ({ clientKey: r.client_key as string, org: r.org as string, id: r.identity_id as string, name: r.name as string, email: r.email as string, validatedAt: r.validated_at as string, expires: (r.expires as string | null) ?? null });
+const toDevopsWrite = (r: Row): DevOpsWriteEntry => ({
+  id: r.id as number, at: r.at as string, clientKey: r.client_key as string, org: r.org as string, project: r.project as string, op: r.op as DevOpsWriteEntry["op"],
+  itemId: (r.item_id as number | null) ?? null, parentId: (r.parent_id as number | null) ?? null, title: r.title as string, identity: r.identity as string,
+  before: json<Record<string, string | null>>(r.before) ?? {}, after: json<Record<string, string | null>>(r.after) ?? {}, ops: json<DevOpsWriteEntry["ops"]>(r.ops),
+  revBefore: (r.rev_before as number | null) ?? null, revAfter: (r.rev_after as number | null) ?? null, commentId: (r.comment_id as number | null) ?? null, draftId: (r.draft_id as number | null) ?? null,
+  pickIds: json<number[]>(r.pick_ids) ?? [], followUpId: (r.follow_up_id as number | null) ?? null, status: r.status as DevOpsWriteEntry["status"], message: (r.message as string | null) ?? null,
+  undoOf: (r.undo_of as number | null) ?? null, undoneBy: (r.undone_by as number | null) ?? null, attempts: r.attempts as number, updatedAt: r.updated_at as string,
+});
+export type NewDevOpsWrite = Omit<DevOpsWriteEntry, "id" | "at" | "status" | "message" | "undoneBy" | "attempts" | "updatedAt" | "pickIds"> & { pickIds?: number[] };
 
 const toCapture = (r: Row): Capture => ({
   id: r.id as number,
@@ -765,7 +817,79 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       const r = db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row | undefined;
       return r ? toDraft(r) : null;
     },
-    drafts: (): DraftStory[] => (db.prepare("SELECT * FROM draft_stories ORDER BY id").all() as Row[]).map(toDraft),
+    /** Drafts not yet created in DevOps (step 14: a created one leaves every draft list). */
+    drafts: (): DraftStory[] => (db.prepare("SELECT * FROM draft_stories WHERE devops_id IS NULL ORDER BY id").all() as Row[]).map(toDraft),
+    /**
+     * Step 14: a draft now exists in DevOps. The draft keeps its row with the new item, and its picks become item picks
+     * for the new id (title, type, link), so the plan keeps them. Returns those pick ids, for undo.
+     */
+    markDraftCreated(id: number, item: { itemId: number; url: string; title: string; type: string }): number[] {
+      return tx(() => {
+        const d = db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row | undefined;
+        if (!d) throw new PlanError("No such draft");
+        if (d.devops_id != null) throw new PlanError("That draft is already in DevOps");
+        const at = stamp();
+        db.prepare("UPDATE draft_stories SET devops_id = ?, devops_url = ?, updated_at = ? WHERE id = ?").run(item.itemId, item.url, at, id);
+        const picks = (db.prepare("SELECT id FROM picks WHERE draft_id = ?").all(id) as Row[]).map((r) => r.id as number);
+        db.prepare("UPDATE picks SET kind = 'item', item_id = ?, draft_id = NULL, title = ?, item_type = ?, item_url = ?, updated_at = ? WHERE draft_id = ?").run(item.itemId, item.title, item.type, item.url, at, id);
+        return picks;
+      });
+    },
+    /** Undo of a create (step 14): the draft is back, and the picks that were moved to the item point at it again. */
+    restoreDraft(id: number, pickIds: readonly number[]): void {
+      tx(() => {
+        const d = db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row | undefined;
+        if (!d || d.devops_id == null) return;
+        const at = stamp();
+        for (const p of pickIds) db.prepare("UPDATE picks SET kind = 'draft', draft_id = ?, item_id = NULL, title = ?, item_type = NULL, item_url = NULL, updated_at = ? WHERE id = ? AND item_id = ?").run(id, d.title as string, at, p, d.devops_id as number);
+        db.prepare("UPDATE draft_stories SET devops_id = NULL, devops_url = NULL, updated_at = ? WHERE id = ?").run(at, id);
+      });
+    },
+    // ---- DevOps write identities and the DevOps audit log (step 14) ----
+    devopsIdentity(clientKey: string): DevOpsIdentityRow | null {
+      const r = db.prepare("SELECT * FROM devops_identities WHERE client_key = ?").get(clientKey) as Row | undefined;
+      return r ? toIdentity(r) : null;
+    },
+    devopsIdentities: (): DevOpsIdentityRow[] => (db.prepare("SELECT * FROM devops_identities ORDER BY client_key").all() as Row[]).map(toIdentity),
+    setDevopsIdentity(i: Omit<DevOpsIdentityRow, "validatedAt">): DevOpsIdentityRow {
+      db.prepare(
+        `INSERT INTO devops_identities (client_key, org, identity_id, name, email, validated_at, expires) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(client_key) DO UPDATE SET org = excluded.org, identity_id = excluded.identity_id, name = excluded.name, email = excluded.email, validated_at = excluded.validated_at, expires = excluded.expires`,
+      ).run(i.clientKey, i.org, i.id, i.name, i.email, stamp(), i.expires);
+      return this.devopsIdentity(i.clientKey)!;
+    },
+    clearDevopsIdentity(clientKey: string): void {
+      db.prepare("DELETE FROM devops_identities WHERE client_key = ?").run(clientKey);
+    },
+    logDevopsWrite(w: NewDevOpsWrite): DevOpsWriteEntry {
+      const at = stamp();
+      const r = db
+        .prepare(
+          `INSERT INTO devops_write_log (at, client_key, org, project, op, item_id, parent_id, title, identity, before, after, ops, rev_before, rev_after, comment_id, draft_id, pick_ids, follow_up_id, status, message, undo_of, undone_by, attempts, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, NULL, 1, ?)`,
+        )
+        .run(at, w.clientKey, w.org, w.project, w.op, w.itemId, w.parentId, w.title, w.identity, JSON.stringify(w.before), JSON.stringify(w.after), w.ops ? JSON.stringify(w.ops) : null, w.revBefore, w.revAfter, w.commentId, w.draftId, JSON.stringify(w.pickIds ?? []), w.followUpId, w.undoOf, at);
+      return this.devopsWrite(Number(r.lastInsertRowid))!;
+    },
+    devopsWrite(id: number): DevOpsWriteEntry | null {
+      const r = db.prepare("SELECT * FROM devops_write_log WHERE id = ?").get(id) as Row | undefined;
+      return r ? toDevopsWrite(r) : null;
+    },
+    settleDevopsWrite(id: number, s: { status: DevOpsWriteEntry["status"]; message?: string | null; itemId?: number | null; revBefore?: number | null; revAfter?: number | null; commentId?: number | null; before?: Record<string, string | null>; pickIds?: number[]; retry?: boolean }): DevOpsWriteEntry {
+      const w = this.devopsWrite(id);
+      if (!w) throw new PlanError("No such write");
+      db.prepare("UPDATE devops_write_log SET status = ?, message = ?, item_id = ?, rev_before = ?, rev_after = ?, comment_id = ?, before = ?, pick_ids = ?, attempts = attempts + ?, updated_at = ? WHERE id = ?").run(
+        s.status, s.message ?? null, s.itemId === undefined ? w.itemId : s.itemId, s.revBefore === undefined ? w.revBefore : s.revBefore, s.revAfter === undefined ? w.revAfter : s.revAfter,
+        s.commentId === undefined ? w.commentId : s.commentId, JSON.stringify(s.before ?? w.before), JSON.stringify(s.pickIds ?? w.pickIds), s.retry ? 1 : 0, stamp(), id,
+      );
+      return this.devopsWrite(id)!;
+    },
+    markDevopsUndone(id: number, by: number): void {
+      db.prepare("UPDATE devops_write_log SET undone_by = ?, updated_at = ? WHERE id = ?").run(by, stamp(), id);
+    },
+    devopsWriteLog(limit = 100): DevOpsWriteEntry[] {
+      return (db.prepare("SELECT * FROM devops_write_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toDevopsWrite);
+    },
     // ---- unavailable time and flex sessions (step 6b) ----
     unavailableBetween: (from: IsoDate, to: IsoDate): Unavailable[] =>
       (db.prepare("SELECT * FROM unavailable WHERE date >= ? AND date <= ? ORDER BY date, start_at, id").all(from, to) as Row[]).map(toUnavailable),
@@ -1355,6 +1479,8 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         outlookEvents: (db.prepare("SELECT * FROM outlook_events ORDER BY created_at, uid").all() as Row[]).map(toOwn),
         writeLog: (db.prepare("SELECT * FROM write_log ORDER BY id").all() as Row[]).map(toWrite),
         invites: (db.prepare("SELECT * FROM invites ORDER BY id").all() as Row[]).map(toInvite),
+        devopsIdentities: this.devopsIdentities(),
+        devopsWriteLog: (db.prepare("SELECT * FROM devops_write_log ORDER BY id").all() as Row[]).map(toDevopsWrite),
       };
     },
     close: () => db.close(),

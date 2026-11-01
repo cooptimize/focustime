@@ -13,7 +13,8 @@ import { cacheRoot, configPath, loadConfigFile, planDbPath, saveSystemUserId } f
 import { writeConfig } from "../config/edit.ts";
 import type { DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
 import { stderrLogger } from "../log/logger.ts";
-import { deleteSecret, getSecret, secretState, setAppSecret, setSecret } from "../secrets/keyring.ts";
+import { clearWritePat, deleteSecret, getSecret, getWritePat, secretState, setAppSecret, setSecret, setWritePat } from "../secrets/keyring.ts";
+import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { readFileSync } from "node:fs";
 import { chmod } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -146,6 +147,9 @@ const server = createApp({
     launch: launchDetached,
     media,
     secrets: { state: (a) => secretState(a), set: (a, v) => setAppSecret(a, v) },
+    // Step 14: personal DevOps write PATs (keyring, stdin only) and the writer (dev.azure.com of one client per call).
+    writePats: { get: (k) => getWritePat(k), set: (k, v) => setWritePat(k, v), clear: (k) => clearWritePat(k) },
+    devopsWriter: createDevOpsWriter({ fetch, log }),
     // Browser .desktop entries and Local State only; profile names are all that is kept.
     host: createHostBrowsers({
       readText: (path) => {

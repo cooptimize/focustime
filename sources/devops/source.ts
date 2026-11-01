@@ -454,7 +454,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return found.size === 1 ? decodeURIComponent([...found][0]!) : null;
   }
 
-  return { load, lookup, orgOf, last, portfolio, description };
+  /** Step 14: after a write, drop what is remembered for the client so the next read shows the change. */
+  function forget(clientKey: string) {
+    memory.delete(clientKey);
+    portfolioMemory.delete(clientKey);
+  }
+
+  return { load, lookup, orgOf, last, portfolio, description, forget };
 }
 
 export type DevOpsSource = ReturnType<typeof createDevOpsSource>;

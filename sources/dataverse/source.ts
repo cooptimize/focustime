@@ -343,8 +343,11 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
    * DevOps settings for the given clients, read live for one DevOps fetch. This is the only query that
    * selects coop_devopstoken. Nothing here is cached, memoized or logged beyond counts, and each PAT is
    * wrapped in Pat as soon as it is read. Only accounts I am an active Account Worker on are considered.
+   * Step 14: `withPat: false` (the DevOps write path) never selects coop_devopstoken, so the company read PAT
+   * can't reach a write at all; every target then has `pat: null`.
    */
-  async function devopsTargets(clientKeys: string[]): Promise<TargetsResult> {
+  async function devopsTargets(clientKeys: string[], opts: { withPat?: boolean } = {}): Promise<TargetsResult> {
+    const withPat = opts.withPat !== false;
     try {
       const userId = config.mySystemUserId;
       if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) return { ok: false, message: "Your Dataverse user id is not resolved yet" };
@@ -364,7 +367,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
       const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
       const idFilter = [...emailByAccount.keys()].map((id) => `accountid eq ${id}`).join(" or ");
       const keyFilter = clientKeys.flatMap((k) => [`coop_reportingnickname eq ${q(k)}`, `name eq ${q(k)}`]).join(" or ");
-      const select = "accountid,name,coop_reportingnickname,coop_devopsorg,coop_devopsprojectid,coop_devopsprojectname,coop_devopstoken";
+      const select = "accountid,name,coop_reportingnickname,coop_devopsorg,coop_devopsprojectid,coop_devopsprojectname" + (withPat ? ",coop_devopstoken" : "");
       const rows = await getAll<AccountRow & { coop_devopsorg: string | null; coop_devopsprojectid: string | null; coop_devopsprojectname: string | null; coop_devopstoken?: string | null }>(
         "devops_accounts",
         `accounts?$select=${select}&$filter=${encodeURIComponent(`(${idFilter}) and (${keyFilter})`)}`,

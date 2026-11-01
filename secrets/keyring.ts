@@ -2,6 +2,8 @@
 // The only module that touches secrets. The secret arrives on stdout and is never put in argv,
 // logged, cached or included in an error.
 import { execFile } from "node:child_process";
+import { Pat } from "../sources/devops/pat.ts";
+import { cacheKey } from "../sources/devops/source.ts";
 
 export const KEYRING_SERVICE = "coopilot";
 /** App secrets set up by Tanner outside Coopilot: read-only here. */
@@ -104,4 +106,44 @@ export async function getSecret(account: SecretAccount, run: Runner = runSecretT
   if (r.code === 0 && r.stdout.length > 0) return r.stdout.replace(/\r?\n$/, "");
   if (r.stderr.trim() !== "") throw failure(r);
   throw new SecretError("not_found");
+}
+
+// ---- Step 14: personal DevOps write PATs, one per client ----
+// Account `devops-write-pat:<slug>-<hash>` (the DevOps cache key of the client). Set through stdin only; read back only
+// wrapped in Pat, so the value never leaves this module as a string. Never logged, cached, exported or returned.
+
+export const writePatAccount = (clientKey: string) => `devops-write-pat:${cacheKey(clientKey)}`;
+
+export async function setWritePat(clientKey: string, value: string, run: Runner = runSecretTool): Promise<void> {
+  if (!value || value.length > 1024 || /[\r\n\s]/.test(value)) throw new Error("A PAT is one line of 1 to 1024 characters with no spaces");
+  const account = writePatAccount(clientKey);
+  let r: RunResult;
+  try {
+    r = await run(["store", `--label=Coopilot DevOps write PAT (${account})`, "service", KEYRING_SERVICE, "account", account], value);
+  } catch {
+    throw new SecretError("unavailable");
+  }
+  if (r.code !== 0) throw failure(r);
+}
+
+export async function getWritePat(clientKey: string, run: Runner = runSecretTool): Promise<Pat> {
+  let r: RunResult;
+  try {
+    r = await run(["lookup", "service", KEYRING_SERVICE, "account", writePatAccount(clientKey)]);
+  } catch {
+    throw new SecretError("unavailable");
+  }
+  if (r.code === 0 && r.stdout.length > 0) return new Pat(r.stdout.replace(/\r?\n$/, ""));
+  if (r.stderr.trim() !== "") throw failure(r);
+  throw new SecretError("not_found");
+}
+
+export async function clearWritePat(clientKey: string, run: Runner = runSecretTool): Promise<void> {
+  let r: RunResult;
+  try {
+    r = await run(["clear", "service", KEYRING_SERVICE, "account", writePatAccount(clientKey)]);
+  } catch {
+    throw new SecretError("unavailable");
+  }
+  if (r.code !== 0 && r.stderr.trim() !== "") throw failure(r);
 }

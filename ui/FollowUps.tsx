@@ -2,6 +2,7 @@
 // work, a blocked item, a flex session) or by hand; closed by a DevOps signal or "Close the loop" with an optional how
 // and note. Not needed closes one quietly; Snooze hides one until a day; Delete is only for ones I added. Local only:
 // nothing is posted anywhere; heads-up drafts are copied by hand.
+import { DevOpsAction } from "./DevOpsWrite.tsx";
 import { useEffect, useRef, useState } from "react";
 import type { FollowUpView, PeopleData } from "../actions/types.ts";
 import type { CaptureClient } from "../plan/capture.ts";
@@ -132,9 +133,13 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged }: { l: Fol
             </button>
           </>
         )}
+        {!l.closedAt && mode === "none" && l.kind === "devops_update" && l.itemId !== null && l.clientKey && (
+          // Step 14: one click to the state picker (completed state preselected); the loop closes after read back.
+          <DevOpsAction clientKey={l.clientKey} label="Mark done in DevOps" className="mini primary" onRun={(w) => w.markDone({ clientKey: l.clientKey!, itemId: l.itemId!, title: l.what, followUpId: l.id })} />
+        )}
         {!l.closedAt && mode === "none" && (
           <>
-            <button type="button" className="mini primary" onClick={() => { setMode("close"); setNote(""); }}>
+            <button type="button" className={`mini${l.kind === "devops_update" ? "" : " primary"}`} onClick={() => { setMode("close"); setNote(""); }}>
               Close the loop
             </button>
             <span className="fu-more">

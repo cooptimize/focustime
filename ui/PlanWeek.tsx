@@ -3,10 +3,11 @@
 // (dependencies); the block grid on top previews pins and each client's must count. Fit per client counts musts
 // against that client's free blocks. DevOps health sits on top, folded to a count. DevOps is read-only; the week
 // plan lives only in the local plan store. A past week is a review.
+import { CreateInDevOps, DevOpsAction } from "./DevOpsWrite.tsx";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
-import type { WeekFeature } from "../plan/types.ts";
+import type { DraftStory, WeekFeature } from "../plan/types.ts";
 import { borrowedForWeek, readiness, weekFit, type ClientFit, type ReadinessFlag } from "../plan/weekplan.ts";
 import { blocksLeft, moveWithin, onTrack, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
 import { formatDuration } from "../week/format.ts";
@@ -269,7 +270,7 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
           {flags.length > 0 && (
             <ul className="pw-ready">
               {flags.map((f) => (
-                <ReadyRow key={`${f.kind}:${f.clientKey}:${f.itemId ?? f.pickId ?? ""}`} f={f} clientName={nameOf(f.clientKey)} tz={tz}
+                <ReadyRow key={`${f.kind}:${f.clientKey}:${f.itemId ?? f.pickId ?? ""}`} f={f} clientName={nameOf(f.clientKey)} tz={tz} drafts={f.itemId ? st.drafts.filter((d) => d.clientKey === f.clientKey && d.parentItemId === f.itemId) : []}
                   onBrief={() => void copyBrief(f.clientKey, f.itemId!)}
                   onMark={(on) => void act("feature.mark_breakdown", { clientKey: f.clientKey, itemId: f.itemId, on }, on ? `#${f.itemId} marked as being broken down` : undefined)}
                   onAsk={() => void act("followup.ask_priorities", { weekStart, clientKey: f.clientKey }, `Follow-up opened: ask ${nameOf(f.clientKey)} about priorities`)}
@@ -372,7 +373,7 @@ const KIND: Record<ReadinessFlag["kind"], string> = {
   captures_to_sort: "Captures to sort",
 };
 
-function ReadyRow({ f, clientName, tz, onBrief, onMark, onAsk, onDraft, onDraftFeature, onCaptures }: { f: ReadinessFlag; clientName: string; tz: string; onBrief: () => void; onMark: (on: boolean) => void; onAsk: () => void; onDraft: () => void; onDraftFeature: (title: string) => Promise<boolean>; onCaptures: () => void }) {
+function ReadyRow({ f, clientName, tz, drafts, onBrief, onMark, onAsk, onDraft, onDraftFeature, onCaptures }: { f: ReadinessFlag; clientName: string; tz: string; drafts: DraftStory[]; onBrief: () => void; onMark: (on: boolean) => void; onAsk: () => void; onDraft: () => void; onDraftFeature: (title: string) => Promise<boolean>; onCaptures: () => void }) {
   const [drafting, setDrafting] = useState(false);
   const [title, setTitle] = useState("");
   return (
@@ -418,6 +419,11 @@ function ReadyRow({ f, clientName, tz, onBrief, onMark, onAsk, onDraft, onDraftF
           ) : (
             <button type="button" className="mini" onClick={() => setDrafting(true)}>Draft a feature</button>
           ))}
+        {/* Step 14: drafted stories (or features) under it go to DevOps in one combined preview; a target date is set there. */}
+        {(f.kind === "needs_breakdown" || f.kind === "needs_features") && drafts.length > 0 && (
+          <CreateInDevOps drafts={drafts.slice(0, 10)} label={`Create ${drafts.length === 1 ? "the drafted" : `${Math.min(10, drafts.length)} drafted`} ${f.kind === "needs_features" ? (drafts.length === 1 ? "feature" : "features") : drafts.length === 1 ? "story" : "stories"} in DevOps`} />
+        )}
+        {f.kind === "no_target_date" && f.itemId && <DevOpsAction clientKey={f.clientKey} label="Set target date" onRun={(w) => w.targetDate({ clientKey: f.clientKey, itemId: f.itemId!, title: f.title, current: null })} />}
         {(f.kind === "needs_features" || f.kind === "no_target_date") && <WorkLink clientKey={f.clientKey} url={f.url} className="mini">Open in DevOps</WorkLink>}
       </span>
     </li>
@@ -530,7 +536,7 @@ function ClientList(p: ListsProps & { k: string }) {
   const emptyList = !p.items.some((i) => i.clientKey === k);
   const addOpen = emptyList || p.open.has(`add:${k}`);
   const row = (i: Item, n: number, group: Item[]) => (
-    <ItemRow key={i.id} i={i} first={n === 0} last={n === group.length - 1} past={p.past} info={p.info(k, i.itemId)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === i.itemId).length}
+    <ItemRow key={i.id} i={i} first={n === 0} last={n === group.length - 1} past={p.past} info={p.info(k, i.itemId)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === i.itemId)}
       places={places} target={target} open={p.open.has(`${k}:${i.itemId}`)} toggle={() => p.toggleOpen(`${k}:${i.itemId}`)} ops={p.ops} />
   );
   return (
@@ -550,7 +556,7 @@ function ClientList(p: ListsProps & { k: string }) {
           <h4>Draft stories <span className="muted">Not in DevOps yet; add them there to plan them</span></h4>
           <ul className="pw-drafts">
             {loose.map((d) => (
-              <li key={d.id}><span className="pw-draft-tag">Draft</span> {d.title} <span className="muted">{d.size}</span></li>
+              <li key={d.id}><span className="pw-draft-tag">Draft</span> {d.title} <span className="muted">{d.size}</span> <CreateInDevOps drafts={[d]} /></li>
             ))}
           </ul>
         </div>
@@ -631,7 +637,7 @@ function AddRow({ k, id, title, url, what, ops }: { k: string; id: number; title
 }
 
 function ItemRow({ i, first, last, past, info, drafts, places, target, open, toggle, ops }: {
-  i: Item; first: boolean; last: boolean; past: boolean; info: Info | null; drafts: number; places: Place[]; target: Place | null; open: boolean; toggle: () => void; ops: Ops;
+  i: Item; first: boolean; last: boolean; past: boolean; info: Info | null; drafts: DraftStory[]; places: Place[]; target: Place | null; open: boolean; toggle: () => void; ops: Ops;
 }) {
   const k = i.clientKey;
   const feature = info?.feature ?? null;
@@ -648,12 +654,12 @@ function ItemRow({ i, first, last, past, info, drafts, places, target, open, tog
         <span className="muted"> {info?.type ?? (i.level === "feature" ? "Feature" : "Story")}{info ? ` · ${info.state}` : " · not in this DevOps read"}</span>
         {i.done && <span className="pw-done"> {DONE_WORD[i.done]}</span>}
         {i.titleSource === "saved" && <span className="muted" title="DevOps couldn't give the current title"> (title as saved)</span>}
-        {feature && (feature.targetDate ? <span className="muted"> · target {dateShortIso(feature.targetDate)}</span> : i.tier === "must" && <span className="pw-soft"> No target date</span>)}
+        {feature && (feature.targetDate ? <span className="muted"> · target {dateShortIso(feature.targetDate)}</span> : i.tier === "must" && <><span className="pw-soft"> No target date</span>{!past && <> <DevOpsAction clientKey={k} label="Set target date" onRun={(w) => w.targetDate({ clientKey: k, itemId: i.itemId, title: i.title, current: null })} /></>}</>)}
       </span>
       {i.level === "feature" && (
         <button type="button" className="mini pw-kids" aria-expanded={open} onClick={toggle} disabled={!stories.length}>
           {stories.length ? `${openStories} open, ${stories.length - openStories} closed stor${stories.length === 1 ? "y" : "ies"}` : "No stories yet"}
-          {drafts > 0 && ` · ${drafts} draft${drafts === 1 ? "" : "s"}`}
+          {drafts.length > 0 && ` · ${drafts.length} draft${drafts.length === 1 ? "" : "s"}`}
         </button>
       )}
       <span className="pw-blocks" aria-label={`Blocks for #${i.itemId}`}>
@@ -675,6 +681,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, target, open, tog
             {free.map((pl, n) => <option key={`${pl.date}${pl.half}`} value={n}>{pl.label}</option>)}
           </select>
         )}
+        {!past && drafts.length > 0 && <CreateInDevOps drafts={drafts.slice(0, 10)} label={`Create ${drafts.length === 1 ? "the draft" : `${Math.min(10, drafts.length)} drafts`} in DevOps`} />}
         {!past && i.level === "feature" && !openStories && <button type="button" className="mini" onClick={() => ops.brief(k, i.itemId)}>Copy Coop brief</button>}
       </span>
       {!past && (

@@ -1,7 +1,9 @@
 // Close out (step 7): the end of the day in about three minutes. Picks done or not (focused time against size, and
 // what to do with the rest), a one-line resume note per client worked, and the follow-ups to close. Commit at the end.
 // Any earlier day can be closed out later; nothing here blocks anything else. Local only.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { DevOpsAction } from "./DevOpsWrite.tsx";
+import { DevOpsWork } from "./work.ts";
+import { useContext, useCallback, useEffect, useRef, useState } from "react";
 import type { CloseOutState, WeekLoadData } from "../actions/types.ts";
 import { dayFocus } from "../plan/focus.ts";
 import type { Pick } from "../plan/types.ts";
@@ -86,6 +88,10 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
   const rest = st.followUps.filter((l) => !dueBy.includes(l));
 
   const live = st.picks.filter((p) => p.status === "planned" || p.status === "done");
+  // Step 14: a done pick whose item DevOps still lists among my open items; its "Update DevOps" follow-up, if any.
+  const work = useContext(DevOpsWork);
+  const stillOpen = (clientKey: string, id: number) => !!work.get(clientKey)?.items.some((i) => i.id === id);
+  const followUpFor = (id: number) => st.followUps.find((f) => f.kind === "devops_update" && f.itemId === id && !f.closedAt)?.id ?? null;
   const settled = st.picks.filter((p) => p.status === "moved" || p.status === "dropped");
   const totals = dayFocus(st.picks, st.focused, sizes);
   const halves = (["AM", "PM", "EVE"] as const).filter((h) => st.picks.some((p) => p.half === h));
@@ -155,6 +161,10 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
                   <span className="co-client">{clientName(p.clientKey)}</span>
                   <FocusVsSize seconds={st.focused[p.id] ?? 0} size={p.size} sizes={sizes} />
                   {p.status === "planned" ? <SlipActions pick={p} carryTo={st.carryTo} today={st.today} act={act} makeUp={(i) => makeUp(p, i)} /> : <span className="co-status">Done</span>}
+                  {p.status === "done" && p.itemId !== null && stillOpen(p.clientKey, p.itemId) && (
+                    // Step 14: done here, still open in DevOps: the same state change as a follow-up's, inline.
+                    <DevOpsAction clientKey={p.clientKey} label="Mark done in DevOps" onRun={(w) => w.markDone({ clientKey: p.clientKey, itemId: p.itemId!, title: p.title, ...(followUpFor(p.itemId!) ? { followUpId: followUpFor(p.itemId!)! } : {}) })} />
+                  )}
                 </li>
               ))}
               {settled.filter((p) => p.half === h).map((p) => (

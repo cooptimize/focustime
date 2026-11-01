@@ -843,6 +843,18 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "write.retry":
     case "write.log":
       return { run: () => env.openSettings("data") };
+    // Step 14: DevOps write access is per client in Settings; changes start from follow-ups, drafts and Close out.
+    case "devops.set_write_pat":
+    case "devops.clear_write_pat":
+    case "devops.write_status":
+      return { run: () => env.openSettings("clients") };
+    case "devops.states":
+    case "devops.preview":
+      return { run: env.openCaptures };
+    case "devops.confirm":
+    case "devops.retry":
+    case "devops.log":
+      return { run: () => env.openSettings("data") };
     case "capture.add": return { run: env.openCapture };
     // Sorting and a client's features and epics are handled in the Inbox.
     case "capture.load":

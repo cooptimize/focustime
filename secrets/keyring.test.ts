@@ -98,3 +98,26 @@ describe("app secrets from Settings (step 6b)", () => {
     expect(await secretState("dataverse-client-secret", async () => ({ code: 1, stdout: "", stderr: "locked collection" }))).toBe("locked");
   });
 });
+
+describe("DevOps write PATs (step 14)", () => {
+  it("stores through stdin under one account per client, never in argv", async () => {
+    const { setWritePat, writePatAccount } = await import("./keyring.ts");
+    const seen: { args: string[]; stdin: string | undefined }[] = [];
+    await setWritePat("Cooptimize", SECRET, async (args, stdin) => (seen.push({ args, stdin }), { code: 0, stdout: "", stderr: "" }));
+    expect(seen[0]!.stdin).toBe(SECRET);
+    expect(seen[0]!.args.join(" ")).not.toContain(SECRET);
+    expect(seen[0]!.args).toContain(writePatAccount("Cooptimize"));
+    expect(writePatAccount("Cooptimize")).not.toBe(writePatAccount("CSC"));
+  });
+  it("reads back only wrapped in Pat, which never prints the value", async () => {
+    const { getWritePat } = await import("./keyring.ts");
+    const pat = await getWritePat("Cooptimize", async () => ({ code: 0, stdout: `${SECRET}\n`, stderr: "" }));
+    expect(String(pat)).toBe("[PAT]");
+    expect(JSON.stringify({ pat })).not.toContain(SECRET);
+    await expect(getWritePat("Cooptimize", async () => ({ code: 1, stdout: "", stderr: "" }))).rejects.toThrow(SecretError);
+  });
+  it("refuses a value with spaces or newlines", async () => {
+    const { setWritePat } = await import("./keyring.ts");
+    await expect(setWritePat("X", "a b", async () => ({ code: 0, stdout: "", stderr: "" }))).rejects.toThrow();
+  });
+});

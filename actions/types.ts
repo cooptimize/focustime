@@ -70,6 +70,8 @@ export type WeekLoadData = {
   /** Help invites on and around the week. */
   invites: InviteView[];
   collab: import("../config/schema.ts").CollabSettings;
+  /** Step 14: clients with a checked DevOps write PAT (everything else stays read-only). */
+  devopsWrite: string[];
   ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
 };
@@ -96,6 +98,8 @@ export type SettingsClient = {
   css: string | null;
   /** Whether Coopilot follows it (DevOps, Open half-days) and why (step 6d); null when it couldn't be worked out. */
   follow: FollowState | null;
+  /** Step 14: the checked DevOps write PAT's owner (never the PAT), or null: this client stays read-only. */
+  write: { name: string; email: string; org: string; validatedAt: string; expires: string | null } | null;
 };
 
 export type BrowserProfile = { directory: string; name: string };
@@ -261,7 +265,7 @@ export type WeekPlanState = {
 
 // ---- Quick capture (step 9) ----
 /** What Capture shows: the inbox (newest first). Notes were removed in step 13.5. */
-export type CaptureState = { today: IsoDate; inbox: Capture[]; inboxCount: number };
+export type CaptureState = { today: IsoDate; inbox: Capture[]; inboxCount: number; /** Step 14: drafts not yet created in DevOps, for Create in DevOps. */ drafts: DraftStory[] };
 export type FeatureChoice = { id: number; title: string; state: string };
 /** A client's open features for "under a feature"; "unavailable" when DevOps can't say (a draft then saves without one). */
 export type CaptureFeatures = { clientKey: string; status: "ok" | "unavailable"; message?: string; features: FeatureChoice[]; /** Step 13.5: open epics, for a draft feature. */ epics: FeatureChoice[] };
@@ -308,3 +312,12 @@ export type SuggestData = { slots: SlotView[]; checked: number; problems: string
 /** followup.people (step 13.5): names to suggest for Who. */
 export type PeopleData = { teammates: { name: string; email: string }[]; attendees: { name: string; email: string }[]; problems: string[] };
 export type ReviewData = { headsUps: { id: number; what: string; reason: string }[] };
+
+// ---- Step 14: DevOps writes ----
+/** One DevOps change shown before it is written: where, which item, each field before and after, who it writes as. */
+export type DevOpsPreview = {
+  previewId: string; expiresAt: string; op: import("../plan/devopswrite.ts").WriteOp; summary: string; system: "DevOps"; org: string; project: string; item: string; identity: string;
+  fields: import("../plan/devopswrite.ts").Row[]; links: string[]; notes: string[]; visibility: string; undo: boolean;
+};
+export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
+export type DevOpsLogView = { entries: (import("../plan/devopswrite.ts").DevOpsWriteEntry & { undoable: boolean; retryable: boolean })[] };
