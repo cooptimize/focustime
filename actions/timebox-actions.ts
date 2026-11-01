@@ -186,9 +186,8 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
     case "write.log": {
       fields(input ?? {}, [], ["limit"]);
       const entries = plan.writeLog(100);
-      const latest = new Map<string, number>();
-      for (const e of [...entries].reverse()) if (e.status === "confirmed") latest.set(e.uid, e.id);
-      const undoable = (e: WriteEntry) => e.status === "confirmed" && !e.undoneBy && latest.get(e.uid) === e.id && !!undoOf(e);
+      const top = undoTops(plan.writeLog(1000));
+      const undoable = (e: WriteEntry) => top.get(e.uid) === e.id && !!undoOf(e);
       // Coopilot events on Outlook whose timebox is gone (after Reset local plan): offered for removal.
       const orphans = plan.ownEvents().filter((x) => { const t = plan.timeboxByUid(x.uid); return !t || t.removedAt || !t.outlook; }).map((x) => ({ uid: x.uid, title: x.fields.subject, when: when(x.fields, tz) }));
       return { ok: true, data: { entries: entries.map((e) => ({ ...e, undoable: undoable(e), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending", whenText: e.after ? when(e.after, tz) : e.before ? when(e.before, tz) : null })), orphans } };
@@ -204,8 +203,7 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
       if (o.undo !== undefined) {
         const entry = plan.writeEntry(posId(o.undo, "undo"));
         if (!entry) throw new PlanError("No such write");
-        const latest = plan.writeLog(1000).find((e) => e.uid === entry.uid && e.status === "confirmed");
-        if (entry.status !== "confirmed" || entry.undoneBy || latest?.id !== entry.id) throw new PlanError("Only the latest confirmed change to an event can be undone");
+        if (undoTops(plan.writeLog(1000)).get(entry.uid) !== entry.id) throw new PlanError("Only the latest change to an event that isn't undone yet can be undone");
         const u = undoOf(entry);
         if (!u) throw new PlanError("This change can't be undone");
         const tb = plan.timeboxByUid(entry.uid);
@@ -277,6 +275,16 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
       return { ok: true, data: await attempt(plan, ow, entry, true) };
     }
   }
+}
+
+/**
+ * Undo works as a stack per event: the newest confirmed change that isn't undone and isn't itself an undo. Undoing a
+ * move and then the create is two undos in a row. `log` is newest first.
+ */
+export function undoTops(log: readonly WriteEntry[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const e of log) if (!out.has(e.uid) && e.status === "confirmed" && e.undoOf === null && !e.undoneBy) out.set(e.uid, e.id);
+  return out;
 }
 
 /** Write access and the two settings, for Settings and the toggle. */

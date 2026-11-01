@@ -239,11 +239,23 @@ describe("write framework: undo", () => {
     expect(t.plan.timebox(id)).toMatchObject({ removedAt: null, outlook: true });
   });
 
-  it("only the latest confirmed change can be undone", async () => {
+  it("undo is a stack: undo the move, then the create, and the calendar is as before", async () => {
+    await t.run("timebox.update", { id, start: `${D}T13:00:00-05:00`, end: `${D}T14:00:00-05:00` });
+    await t.put(uid);
+    await t.confirm((await t.preview({ undo: (await latest()).id })).preview!);
+    const log = (await t.run<WriteLogView>("write.log", {})).entries;
+    const create = log.find((e) => e.op === "create" && e.undoOf === null)!;
+    expect(log.filter((e) => e.undoable).map((e) => e.id)).toEqual([create.id]);
+    await t.confirm((await t.preview({ undo: create.id })).preview!);
+    expect(t.g.events.size).toBe(0);
+    expect((await t.run<WriteLogView>("write.log", {})).entries.some((e) => e.undoable)).toBe(false);
+  });
+
+  it("only the latest change not undone can be undone", async () => {
     const first = await latest();
     await t.run("timebox.update", { id, start: `${D}T13:00:00-05:00`, end: `${D}T14:00:00-05:00` });
     await t.put(uid);
-    expect((await t.fail("write.preview", { undo: first.id })).error).toMatch(/latest confirmed/);
+    expect((await t.fail("write.preview", { undo: first.id })).error).toMatch(/latest change/);
   });
 });
 

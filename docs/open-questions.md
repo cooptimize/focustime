@@ -109,7 +109,7 @@ Raised in step 11 (not blocking):
 
 
 Raised in step 12 (not blocking):
-- Q67. Live verification needs you to click "Reconnect Outlook with calendar changes" (Settings > Connections) and consent to Calendars.ReadWrite once. If your tenant blocks user consent for that scope, add the delegated permission to the Coopilot Desktop app registration and grant it. Then I run the create, move and undo check on a free slot next week.
-- Q68. Undo is offered only for the latest confirmed change to an event (so it never fights a later change). Enough, or do you want a full history undo?
+- Q67. (Done Nov 1, D216.) Live verification needs you to click "Reconnect Outlook with calendar changes" (Settings > Connections) and consent to Calendars.ReadWrite once. If your tenant blocks user consent for that scope, add the delegated permission to the Coopilot Desktop app registration and grant it. Then I run the create, move and undo check on a free slot next week.
+- Q68. Undo is a stack per event (newest change not undone first, so undoing a move and then the create works). Enough, or do you want to undo any entry out of order?
 - Q69. If the local record of an event is lost (store replaced, not Reset), reads can't recognize it (no marker without Calendars.Read), so it would show as a meeting. Use the write token to look up marked events in the week when write access exists?
 - Q70. Timeboxes don't yet sync from Outlook back to Coopilot: an event moved in Outlook keeps its Coopilot time, and the next move puts Coopilot's time back after a preview. Keep (Coopilot is the source), or adopt Outlook's time?
