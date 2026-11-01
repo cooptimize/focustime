@@ -60,7 +60,7 @@ export type KeyRow = {
 
 /** Every key, in one list: the legend shows it, and a test checks the command menu matches. */
 export const KEYS: readonly KeyRow[] = [
-  { keys: ["←", "→", "↑", "↓"], does: "Move between half-days (↓ from PM reaches the evening slot)" },
+  { keys: ["←", "→", "↑", "↓"], does: "Move between half-days (↓ from the afternoon reaches the evening)" },
   { keys: ["Enter", "Space"], does: "Details of the selected half-day", command: "ui.details" },
   { keys: ["Tab", "Shift Tab"], does: "Items and menus of the selected half-day, then on to the next part of the window" },
   { keys: ["F6"], does: "Next region: top bar, week, panel, status bar", command: "ui.region_next" },

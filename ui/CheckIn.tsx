@@ -81,8 +81,8 @@ export function CheckIn({ data, now, onClose, onChanged }: Props) {
         <h2 tabIndex={-1}>
           Check-in <span className="muted">{dayName(today)}, {time(now, tz)}</span>
         </h2>
-        <button type="button" className="top-btn" onClick={onClose}>
-          Back to the week <kbd>Esc</kbd>
+        <button type="button" className="top-btn" onClick={onClose} title="Back (Esc)">
+          Back
         </button>
       </div>
       {!committed && <p className="co-notice">Today isn't committed yet. Plan the day (P) to make the most of the afternoon.</p>}
@@ -93,7 +93,7 @@ export function CheckIn({ data, now, onClose, onChanged }: Props) {
         const slot = slots.find((s) => s.half === f.half)!.slot;
         const block = blockClient(slot.focus[0]?.clientKey ?? null, picks.filter((p) => p.half === f.half));
         const head = f.ended ? "ended" : `${formatDuration(f.leftMinutes) || "no time"} left after meetings`;
-        const verdict = !f.needMinutes ? "nothing planned left" : f.overBy ? `over by ${formatDuration(f.overBy)}` : `picks need ${formatDuration(f.needMinutes)}, fits`;
+        const verdict = !f.needMinutes ? "nothing planned left" : f.overBy ? `${formatDuration(f.overBy)} more than the time left` : `picks need ${formatDuration(f.needMinutes)}, fits`;
         return (
           <section key={f.half} className={`co-section ci-slot${f.overBy ? " over" : ""}${f.ended ? " ended" : ""}`} aria-label={HALF_NAMES[f.half]}>
             <h3>
@@ -106,7 +106,7 @@ export function CheckIn({ data, now, onClose, onChanged }: Props) {
             </h3>
             {f.overBy > 0 && !f.ended && (
               <p className="ci-prompt" role="status">
-                Over by {formatDuration(f.overBy)}. What should move? Carry over, move, drop or make up one of the picks marked "No longer fits".
+                {formatDuration(f.overBy)} more planned than the time left. What should move? Carry over, move, drop or make up one of the picks marked "No longer fits".
               </p>
             )}
             <ul className="co-picks">

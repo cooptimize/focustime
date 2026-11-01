@@ -1,21 +1,18 @@
-import { useContext, useState, type CSSProperties, type ReactNode } from "react";
+import { useContext, type CSSProperties, type ReactNode } from "react";
 import { formatDuration } from "../week/format.ts";
-import { topRisk, worstSeverity } from "../week/risks.ts";
-import type { CalEvent, Day, Half, PlacedEvent, Slot, Week, WorkItem } from "../week/types.ts";
+import { worstSeverity } from "../week/risks.ts";
+import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
 import type { PtoDay } from "../week/pto.ts";
 import type { Pick } from "../plan/types.ts";
-import { freeMinutes, longestFree, nowIfUnderway } from "../week/free.ts";
-import { dayMenu, itemMenu, pickMenu, slotMenu } from "./menu.ts";
+import { dayMenu, pickMenu, slotMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
 import { hourMarks, layoutEvents } from "./layout.ts";
-import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
-import { clientColor, eventRange, halfTag, ruleLabel, SampleSources, severityLabel, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
+import { DevOpsWork } from "./work.ts";
+import { clientColor, eventRange, halfTag, SampleSources, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 import { cardHalves, eveOnly, slotOf } from "./halves.ts";
 import type { Layout } from "./viewport.ts";
-import { CARD_ITEMS, cardPlan, featuresOn, PlanCtx, useFocused } from "./planview.ts";
-import { dayFocus, focusLabel } from "../plan/focus.ts";
-import { fitLabel } from "./planday.ts";
-import { WorkLink } from "./WorkLink.tsx";
+import { cardPlan, featuresOn, PlanCtx } from "./planview.ts";
+import { blockStatus } from "../plan/blockstatus.ts";
 import { ITEM_ATTRS } from "./keys.ts";
 import { HalfScope, useScopedTab } from "./scope.ts";
 
@@ -118,13 +115,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
   const { day, dayIndex, tz, isToday } = props;
   const overflow = day.kind === "overflow";
   const offDay = day.kind !== "work" && day.am.off && day.pm.off;
-  const slots = [day.am, day.pm, ...(day.eve ? [day.eve] : [])];
-  const risks = slots.flatMap((s) => s.risks);
-  const atRisk = slots.filter((s) => worstSeverity(s.risks) === "at_risk").length;
-  const watch = slots.filter((s) => worstSeverity(s.risks) === "watch").length;
   const menu = useMenu((env) => dayMenu(env, day.date));
-  const plan = useContext(PlanCtx);
-  const focus = dayFocus(plan.week?.[day.date]?.picks ?? [], useFocused(), plan.sizes);
   const halves = cardHalves(day);
   // Medium layout shares rows across days: a day without a card in a row keeps an empty cell there.
   // An evening-only day (a weekend flex session) gets one card spanning the three rows.
@@ -145,16 +136,6 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
             {ptoLabel(day.pto)}
           </span>
         )}
-        <span className="day-sum">
-          {focus.focusedMinutes > 0 && (
-            <span className="sum focus" title={`${formatDuration(focus.focusedMinutes)} focused of ${formatDuration(focus.plannedMinutes)} planned`} aria-label={`${formatDuration(focus.focusedMinutes)} focused of ${formatDuration(focus.plannedMinutes)} planned`}>
-              {formatDuration(focus.focusedMinutes)} of {formatDuration(focus.plannedMinutes)}
-            </span>
-          )}
-          {atRisk > 0 && <span className="sum at_risk">{atRisk} at risk</span>}
-          {watch > 0 && <span className="sum watch">{watch} watch</span>}
-          {day.kind === "work" && !day.pto && risks.length === 0 && <span className="sum ok">Clear</span>}
-        </span>
         {/* In the Tab order only for the selected day (Shift+Tab from its half-day reaches it). */}
         <HalfScope.Provider value={props.selection.dayIndex === dayIndex}>{menu.button(`Actions for ${day.weekday} ${shortDate(day.date)}`)}</HalfScope.Provider>
       </header>
@@ -236,10 +217,8 @@ type HalfProps = {
 function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, ptoOff }: HalfProps) {
   const primary = slot.focus[0];
   const sev = worstSeverity(slot.risks);
-  const { top, more } = topRisk(slot.risks);
   const allWork = useContext(DevOpsWork);
   const plan = useContext(PlanCtx);
-  const [showItems, setShowItems] = useState(false);
   // Only the block's own client; Open half-days and Friday have no client, so nothing from DevOps.
   const work = primary && !overflow ? allWork.get(primary.clientKey) : undefined;
   const eve = slot.half === "EVE";
@@ -248,12 +227,6 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
   const ticks = cp.picks;
   const checklist = ticks.length > 0 && (
     <div className="card-plan">
-      {cp.fit && (
-        <div className="plan-fit" title="Planned picks against this block's free time">
-          <span className="pf-label">Plan</span>
-          <span className={`fit ${cp.fit.kind}`}>{fitLabel(cp.fit)}</span>
-        </div>
-      )}
       <ul className="checklist" aria-label={`Committed plan for ${dayLabel} ${slot.half}`}>
         {ticks.map((p) => (
           <PickRow key={p.id} pick={p} toggle={plan.toggle} />
@@ -261,15 +234,15 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
       </ul>
     </div>
   );
-  const collapsed = cp.collapsed && !showItems;
-  const items = { top: collapsed ? [] : cp.items.slice(0, CARD_ITEMS), more: collapsed ? 0 : Math.max(0, cp.items.length - CARD_ITEMS) };
   const style = { "--c": clientColor(primary?.clientKey, colors), ...(compact ? {} : { flexGrow: minutesOf(slot) }) } as CSSProperties;
   const state = eve ? "eve" : overflow ? "overflow" : slot.open ? "open" : slot.off ? "off" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
   const label = `${dayLabel} ${eve ? "evening" : slot.half}, ${primary ? primary.clientName : eve ? (slot.flex.length ? "flex session" : "evening hours") : overflow ? "overflow" : slot.off ? "no working hours" : "Open"}${ptoOff ? ", PTO" : ""}${sev ? `, ${sev === "at_risk" ? "at risk" : "watch"}` : ""}`;
   const menu = useMenu((env) => slotMenu(env, slot.date, slot.half, primary?.clientKey ?? null, primary?.clientName ?? null));
   const more_ = menu.button(`Actions for ${dayLabel} ${slot.half}`);
-  const summary = <SlotSummary slot={slot} now={now} ptoOff={ptoOff} offDay={offDay} />;
+  // Step 10: one status per block; free time, DevOps items and resume notes are in the details panel (Enter).
+  const status = blockStatus(cp.fit, slot.risks);
+  const summary = <SlotNote slot={slot} ptoOff={ptoOff} offDay={offDay} />;
   const flexList = slot.flex.length > 0 && (
     <ul className="flex-list" aria-label="Flex sessions">
       {slot.flex.map((f) => (
@@ -283,43 +256,21 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
     </ul>
   );
 
-  const workList = work && (
-    <>
-      {cp.collapsed && cp.items.length > 0 && (
-        <ItemsToggle open={showItems} count={cp.items.length} onToggle={() => setShowItems((o) => !o)} label={`${primary!.clientName} DevOps items`} />
-      )}
-      {items.top.length > 0 && (
-        <ul className="work-items" aria-label={`DevOps items assigned to you for ${primary!.clientName}`}>
-          {items.top.map((i) => (
-            <WorkRow key={i.id} clientKey={primary!.clientKey} item={i} />
-          ))}
-          {items.more > 0 && <li className="wi-more">+{items.more} more</li>}
-        </ul>
-      )}
-      {cp.items.length === 0 && work.status !== "ok" && <div className="work-note">DevOps: {workStatusLabel(work)}</div>}
-    </>
-  );
-  const badge = top && (
+  const badge = status.kind !== "none" && (
     <div className="badges" id={reasonsId}>
-      <div className={`badge ${top.severity}`}>
-        <span className="badge-text">
-          <span className="dot" aria-hidden="true" />
-          {severityLabel(top)}: {ruleLabel[top.rule]}
-          {more > 0 && <span className="more">+{more} more</span>}
-        </span>
-        <span className="reason">{top.reason}</span>
-      </div>
+      <span className={`status-pill ${status.kind}`} title={status.detail ?? undefined}>
+        {status.label}
+      </span>
+      {status.detail && <span className="sr-only">{status.detail}</span>}
     </div>
   );
-  // The client's resume note, on its next block after the note (step 7).
-  const resume = plan.resumeOn?.[`${slot.date}:${slot.half}`];
   // Committed features (step 8): placed on this block, or the client's not yet placed. Not on the evening slot.
   const feats = !eve && !ptoOff && (slot.half === "AM" || slot.half === "PM") ? featuresOn(plan.weekFeatures ?? [], slot.date, slot.half, primary?.clientKey ?? null) : [];
   const featList = feats.length > 0 && (
     <ul className="week-feats" aria-label="Features committed this week">
       {feats.map((f) => (
         <li key={f.id} title={`Committed to this week: ${f.blocks} block${f.blocks === 1 ? "" : "s"}${f.slots.some((x) => x.date === slot.date && x.half === slot.half) ? ", placed here" : ""}`}>
-          <span className="feat-tag">Feature</span> {f.title}
+          <span className="feat-tag">This week</span> #{f.itemId} {f.title}
         </li>
       ))}
     </ul>
@@ -330,11 +281,6 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
         <span className="swatch" />
         {primary.clientName}
       </div>
-      {resume && resume.clientKey === primary.clientKey && (
-        <div className="resume-note" title={`Resume note from ${Temporal.PlainDate.from(resume.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}: ${resume.note}`}>
-          <span className="resume-tag">Left off</span> {resume.note}
-        </div>
-      )}
       {featList}
       {slot.focus.slice(1).map((b) => (
         <div key={b.id} className="also" style={{ "--c2": clientColor(b.clientKey, colors) } as CSSProperties}>
@@ -371,7 +317,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
     >
       <HalfScope.Provider value={selected}>
       {compact ? (
-        <CardBody tag={tag} slot={slot} tz={tz} overflow={overflow && !eve} who={who} badge={badge} workList={workList} checklist={checklist} summary={summary} more={more_} flex={flexList} />
+        <CardBody tag={tag} slot={slot} tz={tz} overflow={overflow && !eve} who={who} badge={badge} checklist={checklist} summary={summary} more={more_} flex={flexList} />
       ) : (
         <>
       {(!overflow || eve) && (
@@ -381,12 +327,10 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
             {more_}
           </div>
           {who}
+          {badge}
           {summary}
           {flexList}
-
           {checklist}
-          {workList}
-          {badge}
         </aside>
       )}
 
@@ -398,58 +342,22 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
   );
 }
 
-/** "2h meetings · 2h 15m free · longest 1h" in every layout (D100); the PTO instead on a full PTO day. */
-function SlotSummary({ slot, now, ptoOff, offDay }: { slot: Slot; now: string; ptoOff: boolean; offDay: boolean }) {
+/** A PTO day or a half-day without working hours says so; free time is in the details panel (step 10). */
+function SlotNote({ slot, ptoOff, offDay }: { slot: Slot; ptoOff: boolean; offDay: boolean }) {
   if (ptoOff) return <div className="stats pto">PTO · nothing planned</div>;
   if (slot.off) return <div className="stats off">{offDay && slot.half !== "EVE" ? "Not a working day" : "No working hours"}</div>;
-  const at = nowIfUnderway(slot, now);
-  const free = freeMinutes(slot, at);
-  return (
-    <div className="stats" title={at ? "Free time from now on" : "Free time in this half-day"}>
-      <span>{formatDuration(slot.busyMeetingMinutes)} meetings</span>
-      <span className="free">
-        {formatDuration(free)} free{at ? " left" : ""}
-      </span>
-      <span>longest {formatDuration(longestFree(slot, at))}</span>
-    </div>
-  );
-}
-
-/** A work item on a card: opens in Edge; "⋯" or right-click for the rest. */
-function WorkRow({ clientKey, item }: { clientKey: string; item: WorkItem }) {
-  const menu = useMenu((env) => itemMenu(env, clientKey, item));
-  return (
-    <li title={`${item.type} ${item.id}: ${item.title} (${item.state})`} onContextMenu={menu.onContextMenu} {...ITEM_ATTRS(clientKey, item.url)}>
-      <span className="wi-type">{typeTag(item.type)}</span>
-      <WorkLink clientKey={clientKey} url={item.url} className="wi-title">
-        {item.title}
-      </WorkLink>
-      {menu.button(`Actions for ${item.type} ${item.id}`)}
-    </li>
-  );
-}
-
-/** Committed cards keep their DevOps items behind "+N more items" (step 6.1). */
-function ItemsToggle({ open, count, onToggle, label }: { open: boolean; count: number; onToggle: () => void; label: string }) {
-  const tabIndex = useScopedTab();
-  return (
-    <button type="button" className="items-toggle" tabIndex={tabIndex} aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} ${count} ${label}`} onClick={onToggle} onDoubleClick={(e) => e.stopPropagation()}>
-      {open ? "Hide items" : `+${count} more ${count === 1 ? "item" : "items"}`}
-    </button>
-  );
+  return null;
 }
 
 /** A committed pick on a card: tick it, or "⋯" / right-click for size, move, drop and more. */
 function PickRow({ pick, toggle }: { pick: Pick; toggle: (id: number, done: boolean) => void }) {
   const menu = useMenu((env) => pickMenu(env, pick));
-  const focused = focusLabel(useFocused()(pick.id), pick.size);
   const tabIndex = useScopedTab();
   return (
     <li className={pick.status} onContextMenu={menu.onContextMenu} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
       <label onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
         <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} onChange={(e) => toggle(pick.id, e.target.checked)} />
         <span className="ck-title" title={pick.title}>{pick.title}</span>
-        <span className={`size-tag${focused ? " focused" : ""}`} title={focused ? "Focused time of the pick's size" : undefined}>{focused ?? pick.size}</span>
       </label>
       {menu.button(`Actions for ${pick.title}`)}
     </li>
@@ -464,7 +372,7 @@ const MAX_MEETINGS = 4;
 const MAX_PERSONAL = 3;
 
 /** Compact half-day: client, free time, one badge, meetings and personal events as short lists, top DevOps items. */
-function CardBody({ tag, slot, tz, overflow, who, badge, workList, checklist, summary, more, flex }: { slot: Slot; tz: string; overflow: boolean; who: ReactNode; badge: ReactNode; workList: ReactNode; checklist: ReactNode; summary: ReactNode; more: ReactNode; flex: ReactNode; tag?: string | undefined }) {
+function CardBody({ tag, slot, tz, overflow, who, badge, checklist, summary, more, flex }: { slot: Slot; tz: string; overflow: boolean; who: ReactNode; badge: ReactNode; checklist: ReactNode; summary: ReactNode; more: ReactNode; flex: ReactNode; tag?: string | undefined }) {
   const meetings = slot.events.filter((p) => !p.event.isPersonal);
   const personal = slot.events.filter((p) => p.event.isPersonal);
   return (
@@ -474,13 +382,12 @@ function CardBody({ tag, slot, tz, overflow, who, badge, workList, checklist, su
         {more}
       </div>
       {!overflow && who}
+      {!overflow && badge}
       {summary}
       {flex}
-      {!overflow && badge}
       {checklist}
       <EventList kind="meeting" label="Meetings" events={meetings} max={MAX_MEETINGS} tz={tz} />
       <EventList kind="personal" label="Personal" events={personal} max={MAX_PERSONAL} tz={tz} />
-      {workList}
     </div>
   );
 }

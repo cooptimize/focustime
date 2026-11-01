@@ -8,6 +8,7 @@ import { freeMinutes, longestFree, nowIfUnderway } from "../week/free.ts";
 import { itemMenu } from "./menu.ts";
 import { MenuRow } from "./Menus.tsx";
 import { updatedAgo } from "./refresh.ts";
+import { checklistFor, PlanCtx, useFocused } from "./planview.ts";
 import { clientColor, eventRange, halfName, longDate, ruleLabel, SampleSources, severityLabel, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 
 type Props = { open: boolean; day: Day; slot: Slot; timeZone: string; colors: Record<string, string>; now: string; onClose: () => void };
@@ -66,6 +67,8 @@ export function Details({ open, day, slot, timeZone, colors, now, onClose }: Pro
           ))}
         </section>
       )}
+
+      <PlanSection slot={slot} />
 
       {slot.risks.length > 0 && (
         <section>
@@ -173,5 +176,46 @@ function ShowAsLegend() {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * The plan behind the card (step 10): today's picks with their size and focused time, and the client's resume note.
+ * The card itself shows only the picks and one status.
+ */
+function PlanSection({ slot }: { slot: Slot }) {
+  const plan = useContext(PlanCtx);
+  const focused = useFocused();
+  const picks = checklistFor(plan.week, slot.date, slot.half);
+  const client = slot.focus[0]?.clientKey;
+  const note = client ? plan.resumeNotes?.[client] : undefined;
+  if (!picks.length && !note) return null;
+  return (
+    <section>
+      <h3>Plan</h3>
+      {picks.length > 0 && (
+        <ul className="details-picks">
+          {picks.map((p) => {
+            const mins = Math.floor(focused(p.id) / 60);
+            return (
+              <li key={p.id} className={p.status}>
+                <span className="d-pick-title">{p.title}</span>
+                <span className="muted">
+                  {" "}
+                  · size {p.size}
+                  {mins > 0 ? ` · ${formatDuration(mins)} focused` : ""}
+                  {p.status === "done" ? " · done" : ""}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {note && (
+        <p className="resume-note">
+          <span className="resume-tag">Left off {Temporal.PlainDate.from(note.date).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span> {note.note}
+        </p>
+      )}
+    </section>
   );
 }

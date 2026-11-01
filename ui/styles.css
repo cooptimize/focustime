@@ -1582,3 +1582,16 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .inbox-notes summary h3 { display: inline; margin: 0; }
 @media (max-width: 900px) { .today-view { padding: 16px; } .today-blocks { grid-template-columns: minmax(0, 1fr); } }
 @media (min-width: 2400px) { .today-view { max-width: 1680px; } .today-blocks { grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); } }
+
+/* ---- Step 10 slice 2: quieter ---- */
+/* Shortcut hints are hidden by default; every key is in the button's tooltip, the command menu and the ? legend. */
+:where(.topbar, .loops-head, .planday, .settings, .closeout, .checkin, .planweek, .inbox, .today-view) button > kbd { display: none; }
+.statusbar.quiet .status-row { justify-content: space-between; }
+.status-quiet { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 2px 4px; color: var(--text-faint); font: inherit; font-size: 12px; cursor: pointer; }
+.status-quiet .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.status-quiet:hover { color: var(--text-muted); }
+.half .badges .status-pill { font-size: 11.5px; }
+.details-picks { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.details-picks li.done .d-pick-title { text-decoration: line-through; color: var(--text-faint); }
+.half .badges:has(.status-pill) { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; margin: 2px 0 4px; padding: 0; }
+.half .badges .status-pill { width: auto; flex: none; }

@@ -38,6 +38,10 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, ra
   const shape = { timeZone: hours.timeZone };
   const nextRange = VIEW_RANGES[(VIEW_RANGES.indexOf(range.mode) + 1) % VIEW_RANGES.length]!;
   const lines = causeLines(sources, devops);
+  // Step 10: one quiet line when everything is live; it opens on a click and on its own when something needs attention.
+  const [open, setOpen] = useState(false);
+  const fine = !lines.length && !samples.length && sources.every((s) => stateOf(s).cls === "live") && (devops ?? []).every((c) => c.status === "ok");
+  const oldest = sources.map((s) => s.fetchedAt).filter((x): x is string => !!x).sort()[0] ?? null;
   const fixButton = (f: Fix, key: string) =>
     f.kind === "retry" ? (
       <button key={key} type="button" className="mini primary" disabled={loading} onClick={onRefresh}>
@@ -48,9 +52,29 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, ra
         {busy === f.calendar ? "Waiting for sign-in…" : `${f.kind === "connect" ? "Connect" : "Reconnect"} ${SOURCE_NAMES[f.calendar]}`}
       </button>
     );
+  if (fine && !open)
+    return (
+      <footer className="statusbar quiet" aria-label="Source status">
+        <div className="status-row">
+          <button type="button" className="status-quiet" onClick={() => setOpen(true)} title="Every source is live. Click for each source's status">
+            <span className="dot" aria-hidden="true" />
+            All sources live{oldest ? ` · ${updatedAgo(oldest, clock, shape.timeZone)}` : ""}
+          </button>
+          <button type="button" className="refresh mini quiet" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources" title="Refresh all sources (R)">
+            {loading ? "Loading…" : "Refresh"}
+          </button>
+        </div>
+        {notice && <div className="status-line notice" role="status">{notice}</div>}
+      </footer>
+    );
   return (
     <footer className="statusbar" aria-label="Source status">
       <div className="status-row">
+        {fine && (
+          <button type="button" className="mini quiet" onClick={() => setOpen(false)} aria-label="Fold the source status">
+            Hide
+          </button>
+        )}
         {sources.map((s) => {
           const st = stateOf(s);
           const detail = s.source === "dataverse" ? `${s.itemCount} ${s.itemCount === 1 ? "pattern" : "patterns"}` : s.source === "pto" ? `${s.itemCount} ${s.itemCount === 1 ? "day" : "days"}` : s.sample || notConnected(s) ? "" : `${s.itemCount} events`;

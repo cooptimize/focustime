@@ -140,8 +140,8 @@ export function Settings(props: Props) {
             {label}
           </button>
         ))}
-        <button type="button" className="set-tab close" onClick={props.onClose}>
-          Back to the week <kbd>Esc</kbd>
+        <button type="button" className="set-tab close" onClick={props.onClose} title="Back (Esc)">
+          Back
         </button>
       </nav>
       <section className="set-body">
@@ -251,7 +251,7 @@ function HoursForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
         void save("hours", { timeZone: tz, lunch: lunch.replace(/\s+/g, ""), weekdays: Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, spansIn(days[k] ?? "")])) });
       }}
     >
-      <p className="muted">Working spans per day, like 09:00-17:00. A second span, like 20:00-22:00, becomes an evening slot that can hold picks. Leave a day empty for a day off. Friday is the overflow day unless you give it hours.</p>
+      <p className="muted">Working spans per day, like 09:00-17:00. A second span, like 20:00-22:00, becomes an evening that can hold picks. Leave a day empty for a day off. Friday is the overflow day unless you give it hours.</p>
       <div className="set-days">
         {WEEKDAY_KEYS.map((k) => (
           <Field key={k} label={DAY_NAMES[k]}>

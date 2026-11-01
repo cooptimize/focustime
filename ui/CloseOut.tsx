@@ -116,8 +116,8 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
         >
           {st.closedOutAt ? "Commit again" : "Commit Close out"}
         </button>
-        <button type="button" className="top-btn" onClick={onClose}>
-          Back to the week <kbd>Esc</kbd>
+        <button type="button" className="top-btn" onClick={onClose} title="Back (Esc)">
+          Back
         </button>
       </div>
       {error && <p className="set-problem" role="alert">{error}</p>}

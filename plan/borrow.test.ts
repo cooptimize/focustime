@@ -13,7 +13,7 @@ describe("borrowed time (step 7)", () => {
     expect(paybackSlot("friday", "2026-11-07")).toEqual({ date: "2026-11-13", half: "AM" });
     expect(paybackSlot("day", "2026-11-02", { date: "2026-11-07", half: "AM" })).toEqual({ date: "2026-11-07", half: "AM" });
     expect(paybackSlot("day", "2026-11-02", { date: "2026-11-01", half: "AM" })).toBe("Make it up today or later");
-    expect(paybackSlot("day", "2026-11-02")).toBe("Choose the day and slot to make it up");
+    expect(paybackSlot("day", "2026-11-02")).toBe("Choose the day and half-day to make it up");
   });
   it("owes the size less what was already focused, in quarter hours", () => {
     expect(borrowMinutes(120, 45 * 60)).toBe(75);

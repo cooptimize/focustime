@@ -27,9 +27,9 @@ export const formatMinutes = (m: number) => {
 /** The fit in a few words, the same in Plan the day and on committed cards. */
 export function fitLabel(f: Fit): string {
   switch (f.kind) {
-    case "empty": return "nothing picked";
-    case "fits": return `fits · ${formatMinutes(f.spare)} spare`;
-    case "tight": return f.spare ? `tight · ${formatMinutes(f.spare)} spare` : "tight · full";
-    case "over": return `over by ${formatMinutes(f.by)}`;
+    case "empty": return "nothing planned";
+    case "fits": return `fits, ${formatMinutes(f.spare)} to spare`;
+    case "tight": return f.spare ? `just fits, ${formatMinutes(f.spare)} to spare` : "just fits, no time to spare";
+    case "over": return `too much: ${formatMinutes(f.by)} more than the free time`;
   }
 }

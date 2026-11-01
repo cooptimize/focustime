@@ -113,7 +113,7 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
             </button>
           </span>
           {!past && (
-            <button type="button" className="commit" onClick={onCommit}>
+            <button type="button" className="commit" onClick={onCommit} title="Commit (C)">
               <kbd>c</kbd> {committed ? "Commit again" : "Commit"}
             </button>
           )}
@@ -312,7 +312,7 @@ function Block({ slot, overflow, picks, drafts, weekFeatures, picked, other, fri
       {bc.mixed && <p className="pd-flag">Mixed clients in one block: {bc.clients.map(name).join(", ")}</p>}
       {fit.kind === "over" && (
         <p className="pd-flag over">
-          Over by {formatMinutes(fit.by)}. Drop a pick, make one smaller, or move one to {halfTag(other)}
+          About {formatMinutes(fit.by)} more than the free time. Drop a pick, make one smaller, or move one to the {other === "AM" ? "morning" : "afternoon"}
           {friday ? " or to Friday" : ""}.
         </p>
       )}

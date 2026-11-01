@@ -13,7 +13,7 @@ export function paybackSlot(when: Payback, today: IsoDate, chosen?: { date?: Iso
     const t = Temporal.PlainDate.from(today);
     return { date: t.add({ days: (5 - t.dayOfWeek + 7) % 7 }).toString(), half: chosen?.half ?? "AM" };
   }
-  if (!chosen?.date || !chosen.half) return "Choose the day and slot to make it up";
+  if (!chosen?.date || !chosen.half) return "Choose the day and half-day to make it up";
   if (chosen.date < today) return "Make it up today or later";
   return { date: chosen.date, half: chosen.half };
 }

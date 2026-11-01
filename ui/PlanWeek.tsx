@@ -28,7 +28,12 @@ const stamp = (s: string, tz: string) => {
   const z = Temporal.ZonedDateTime.from(s).withTimeZone(tz);
   return `${z.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}, ${z.toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 };
-const VERDICT: Record<ClientFit["verdict"], string> = { none: "Nothing committed", fits: "Fits", tight: "Tight", over: "Over" };
+const VERDICT: Record<ClientFit["verdict"], string> = { none: "Nothing planned yet", fits: "Fits", tight: "Just fits", over: "Too much" };
+/** "room for about 1.5 blocks", to the half block (step 10: no "0.8 blocks"). */
+export function roomLabel(available: number): string {
+  const r = Math.round(available * 2) / 2;
+  return r <= 0 ? "no free blocks" : r === 0.5 ? "room for about half a block" : `room for about ${r} ${r === 1 ? "block" : "blocks"}`;
+}
 
 /** Where a client's feature can go: its own blocks, or an Open half-day. */
 function placesFor(days: WeekLoadData["week"]["days"], clientKey: string): Place[] {
@@ -173,7 +178,7 @@ export function PlanWeek({ weekStart, data, version, onWeek, onClose, onChanged,
             {commitLabel}
           </button>
         )}
-        <button type="button" className="top-btn" onClick={onClose} title="Back to the week (Esc)">
+        <button type="button" className="top-btn" onClick={onClose} title="Back (Esc)">
           Back
         </button>
       </div>
@@ -260,7 +265,7 @@ function FitChip({ fit }: { fit: ClientFit | undefined }) {
   const borrowed = fit.borrowedMinutes ? `, after ${formatDuration(fit.borrowedMinutes)} borrowed` : "";
   return (
     <span className={`pw-fit ${fit.verdict}`} title={`Committed ${fit.committedBlocks} of about ${fit.availableBlocks} available blocks (free time after PTO, meetings and unavailable time${borrowed})`}>
-      {VERDICT[fit.verdict]} <span className="muted">{fit.committedBlocks} of {fit.availableBlocks} blocks</span>
+      {VERDICT[fit.verdict]} <span className="muted">{fit.committedBlocks} planned, {roomLabel(fit.availableBlocks)}</span>
     </span>
   );
 }

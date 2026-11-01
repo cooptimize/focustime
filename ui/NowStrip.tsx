@@ -102,7 +102,7 @@ function StripLine({ strip: s, onSelect }: { strip: Strip; onSelect: () => void 
         {s.draft ? `${s.picks.total} draft ${s.picks.total === 1 ? "pick" : "picks"}, not committed` : `${s.picks.done} of ${s.picks.total} picks done`}
       </span>,
     );
-  if (s.overBy) parts.push(<span key="over" className="now-over">Over by {formatDuration(s.overBy)}</span>);
+  if (s.overBy) parts.push(<span key="over" className="now-over">{formatDuration(s.overBy)} too much planned</span>);
   if (s.nextPick)
     parts.push(
       <span key="next" className={s.draft ? "now-pick now-draft" : "now-pick"}>
