@@ -15,13 +15,14 @@ const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
   .replace('my_systemuserid = ""', `my_systemuserid = "${dvConfig.mySystemUserId}"`)
   .replace("https://cooptimize.crm.dynamics.com", dvConfig.environmentUrl);
 
-function ctx(orgs: Record<string, OrgScenario> = { cscsteel: "agile" }, opts: { devopsThrows?: boolean } = {}) {
+function ctx(orgs: Record<string, OrgScenario> = { cscsteel: "agile" }, opts: { devopsThrows?: boolean; text?: string } = {}) {
   const cacheDir = mkdtempSync(join(tmpdir(), "c-"));
-  const dvFetch = fakeFetch("ok").fetch;
+  const dv = fakeFetch("ok");
+  const dvFetch = dv.fetch;
   const ado = fakeDevOps(orgs);
   const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dvFetch, cacheDir, log: () => {} });
   const c: ActionContext = {
-    loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(text) }),
+    loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(opts.text ?? text) }),
     makeDataverse,
     makeOutlook: () => { throw new Error("n/a"); },
     makeGoogle: () => { throw new Error("n/a"); },
@@ -33,7 +34,7 @@ function ctx(orgs: Record<string, OrgScenario> = { cscsteel: "agile" }, opts: { 
     saveSystemUserId: async () => {},
     now: () => "2026-11-03T15:00:00Z",
   };
-  return { c, ado };
+  return { c, ado, dv };
 }
 
 async function load(c: ActionContext): Promise<WeekLoadData> {
@@ -47,9 +48,32 @@ describe("week.load with DevOps", () => {
     const d = await load(ctx().c);
     const keys = weekClients(d.week).map((c) => c.clientKey);
     expect(keys).toContain("Cooptimize");
-    // This week's clients first, then the other Account Worker clients with DevOps set up (Q21).
-    expect(d.devops!.map((c) => c.clientKey)).toEqual([...keys, "HM Electronics", "W&C"]);
-    expect(d.planClients.map((c) => c.clientKey)).toEqual([...keys, "CSC", "HM Electronics", "W&C"].filter((k, i, a) => a.indexOf(k) === i));
+    // This week's clients first, then the other followed clients with DevOps set up (step 6d): W&C has focus time
+    // starting next week; HM Electronics has DevOps but no focus time, so it isn't followed.
+    expect(d.devops!.map((c) => c.clientKey)).toEqual([...keys, "W&C"]);
+    expect(d.planClients.map((c) => c.clientKey)).toEqual([...keys, "CSC", "W&C"].filter((k, i, a) => a.indexOf(k) === i));
+  });
+
+  it("a client that isn't followed gets no PAT read and no DevOps call (step 6d)", async () => {
+    const { c, ado, dv } = ctx({ cscsteel: "agile", cooptimize: "agile", hme: "agile" });
+    const d = await load(c);
+    expect(d.devops!.some((x) => x.clientKey === "HM Electronics")).toBe(false);
+    expect(ado.calls.some((x) => x.url.includes("dev.azure.com/hme/"))).toBe(false);
+    // W&C is followed (its focus time starts next week): checked, though its fixture has no DevOps email.
+    expect(d.devops!.find((x) => x.clientKey === "W&C")?.status).toBe("identity_missing");
+    // The PAT query names only followed clients.
+    const patReads = dv.calls.filter((x) => x.url.includes("coop_devopstoken")).map((x) => decodeURIComponent(x.url));
+    expect(patReads.length).toBeGreaterThan(0);
+    for (const u of patReads) expect(u).not.toContain("HM Electronics");
+  });
+
+  it("Keep following brings a client back", async () => {
+    const kept = text.replace('"W&C" = "#1f9e8f"', '"W&C" = "#1f9e8f"\n"HM Electronics" = { follow = true }');
+    const { c, ado } = ctx({ cscsteel: "agile", cooptimize: "agile", hme: "agile" }, { text: kept });
+    const d = await load(c);
+    expect(d.devops!.map((x) => x.clientKey)).toContain("HM Electronics");
+    expect(d.planClients.map((x) => x.clientKey)).toContain("HM Electronics");
+    expect(ado.calls.some((x) => x.url.includes("dev.azure.com/hme/"))).toBe(true);
   });
 
   it("CSC shows its own items; clients without DevOps settings say why and show none", async () => {

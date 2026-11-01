@@ -237,12 +237,17 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     if (gone) throw new SourceFailure("misconfigured", `${use.label} column ${gone} not found in ${use.table} (renamed or removed?)`, "open_settings", "column");
   }
 
-  function focusTimesPath(weekStart: string, userId: string): string {
-    const mon = Temporal.PlainDate.from(weekStart);
-    const thu = mon.add({ days: 3 });
+  /** A week (Mon to Thu), or every row still running on or after `since` (step 6d, for following clients). */
+  type FocusRange = { week: string } | { since: string };
+  function focusTimesPath(range: FocusRange, userId: string): string {
     const select = FOCUS_COLUMNS.join(",");
+    let dates: string;
+    if ("week" in range) {
+      const mon = Temporal.PlainDate.from(range.week);
+      dates = `coop_startdate le ${mon.add({ days: 3 })} and (coop_enddate eq null or coop_enddate ge ${mon})`;
+    } else dates = `(coop_enddate eq null or coop_enddate ge ${Temporal.PlainDate.from(range.since)})`;
     const filter =
-      `statecode eq 0 and coop_startdate le ${thu} and (coop_enddate eq null or coop_enddate ge ${mon})` +
+      `statecode eq 0 and ${dates}` +
       ` and (_coop_systemuser_value eq ${userId} or coop_AccountWorker/_coop_user_value eq ${userId})`;
     const expand = "coop_AccountWorker($select=_coop_user_value,_coop_account_value)";
     return `coop_focustimes?$select=${select}&$filter=${encodeURIComponent(filter)}&$expand=${expand}`;
@@ -261,7 +266,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     return `${z.toPlainDate().toLocaleString("en-US", { month: "short", day: "numeric" })} ${time}`;
   };
 
-  async function fetchLive(weekStart: string): Promise<SourceResult<FocusPattern>> {
+  async function fetchLive(range: FocusRange, snapshotKey: string): Promise<SourceResult<FocusPattern>> {
     const userId = config.mySystemUserId;
     if (!userId) throw new SourceFailure("misconfigured", "Your Dataverse user id is not resolved yet: check my_email in config", "open_settings");
     if (!/^[0-9a-f-]{36}$/i.test(userId)) throw new SourceFailure("misconfigured", "my_systemuserid is not a GUID", "open_settings");
@@ -277,7 +282,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     };
     const focusUse: SchemaUse = { label: "Focus block", table: "coop_focustimes", key: "coop_focustimeid", scope: `_coop_systemuser_value eq ${userId}`, scopeColumn: "_coop_systemuser_value", columns: FOCUS_COLUMNS.filter((c) => c !== "coop_focustimeid" && c !== "_coop_systemuser_value") };
     const rows = await named(focusUse, async () => {
-      const r = await getAll<FocusTimeRow>("focustimes", focusTimesPath(weekStart, userId));
+      const r = await getAll<FocusTimeRow>("focustimes", focusTimesPath(range, userId));
       checkColumns(focusUse, r, FOCUS_COLUMNS);
       return r;
     });
@@ -294,7 +299,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     if (skipped.length) log({ source: "dataverse", op: "normalize", kind: "skipped", count: skipped.length });
 
     const fetchedAt = now().toZonedDateTimeISO(deps.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
-    await writeSnapshot(deps.cacheDir, "dataverse", weekStart, { fetchedAt, items: patterns }).catch(() =>
+    await writeSnapshot(deps.cacheDir, "dataverse", snapshotKey, { fetchedAt, items: patterns }).catch(() =>
       log({ source: "dataverse", op: "cache_write", kind: "failed" }),
     );
     const result: SourceResult<FocusPattern> = { source: "dataverse", status: "ok", fetchedAt, fromCache: false, items: patterns };
@@ -302,18 +307,25 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     return result;
   }
 
-  async function load(weekStart: string, opts: { refresh?: boolean } = {}): Promise<SourceResult<FocusPattern>> {
+  const load = (weekStart: string, opts: { refresh?: boolean } = {}) => cachedPatterns({ week: weekStart }, weekStart, opts);
+  /**
+   * My Focus Time rows still running on or after `since` (today minus the grace days), whatever week is shown:
+   * which clients to follow (step 6d). Same columns and filter on me as the week read; its own cache file.
+   */
+  const following = (since: string, opts: { refresh?: boolean } = {}) => cachedPatterns({ since }, `following-${since}`, opts, "following");
+
+  async function cachedPatterns(range: FocusRange, key: string, opts: { refresh?: boolean }, snapshotKey = key): Promise<SourceResult<FocusPattern>> {
     const t = now().epochMilliseconds;
-    const hit = memory.get(weekStart);
+    const hit = memory.get(key);
     if (hit && !opts.refresh && t - hit.at < ttl) return hit.result;
 
     let result: SourceResult<FocusPattern>;
     try {
-      result = await fetchLive(weekStart);
+      result = await fetchLive(range, snapshotKey);
     } catch (e) {
       const f = e instanceof SourceFailure ? e : new SourceFailure("error", "Dataverse load failed");
       if (!(e instanceof SourceFailure)) log({ source: "dataverse", op: "load", kind: "unexpected" });
-      const snap = await readSnapshot<FocusPattern>(deps.cacheDir, "dataverse", weekStart);
+      const snap = await readSnapshot<FocusPattern>(deps.cacheDir, "dataverse", snapshotKey);
       const message = snap
         ? f.status === "unreachable"
           ? `Offline, showing data from ${fmtAt(snap.fetchedAt)}`
@@ -323,7 +335,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
       if (f.fixAction) result.fixAction = f.fixAction;
       if (f.rootCause) result.cause = f.rootCause;
     }
-    memory.set(weekStart, { at: t, result });
+    memory.set(key, { at: t, result });
     return result;
   }
 
@@ -522,7 +534,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     }
   }
 
-  return { load, resolveUserId, devopsTargets, myClients, pto };
+  return { load, following, resolveUserId, devopsTargets, myClients, pto };
 }
 
 /** One of my clients. `devopsEmail` is my DevOps identity there (Account Worker), shown read-only in Settings. */

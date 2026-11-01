@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import type { FieldProblem, SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
 import { THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
 import type { ClientWork } from "../week/types.ts";
+import type { FollowState } from "../week/follow.ts";
 import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS, type ViewRange } from "../week/hours.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar } from "./status.ts";
@@ -352,7 +353,7 @@ function StandingForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
 function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
   const pl = p.data.planning;
   const [types, setTypes] = useState(pl.pickablePortfolioTypes.join(", "));
-  const [v, setV] = useState({ S: pl.sizes.S, M: pl.sizes.M, L: pl.sizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes, focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound });
+  const [v, setV] = useState({ S: pl.sizes.S, M: pl.sizes.M, L: pl.sizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes, focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays });
   const { problems, status, save } = useSave(p.onSavedData);
   const num = (k: Exclude<keyof typeof v, "endSound">, label: string, field: string, hint: string, step = 5, max = 480) => (
     <Field label={label} hint={hint}>
@@ -373,6 +374,7 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
           focusMinutes: v.focusMinutes,
           breakMinutes: v.breakMinutes,
           endSound: v.endSound,
+          followGraceDays: v.followGraceDays,
         });
       }}
     >
@@ -387,6 +389,10 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
         </Field>
         {num("carryDays", "Carry-over (days back)", "plan.carry_days", "Unfinished picks from this many days back are offered on the first upcoming day not committed yet. 0 turns it off.", 1, 30)}
         {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "plan.reminder_offset_minutes", "When today isn't committed, one reminder from this time, for 90 minutes.", 5, 240)}
+      </div>
+      <h3>Clients followed</h3>
+      <div className="set-grid">
+        {num("followGraceDays", "Keep following after focus time ends (days)", "plan.follow_grace_days", "DevOps items and Open half-day choices come only from clients with focus time that is ongoing, ends today or later, or ended within this many days. Cooptimize always counts; Settings > Clients can keep one.", 1, 90)}
       </div>
       <h3>Focus timer</h3>
       <div className="set-grid">
@@ -432,6 +438,22 @@ function RiskForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData
   );
 }
 
+const fullDate = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
+/** Why a client is (or isn't) followed, in plain words (step 6d). */
+export function followText(f: FollowState | null, grace: number): string {
+  if (!f) return "Unknown until Dataverse connects.";
+  switch (f.why) {
+    case "internal": return "Always followed (internal).";
+    case "standing": return "Always followed (standing block).";
+    case "ongoing": return "Followed: focus time is ongoing.";
+    case "until": return `Followed: focus time until ${fullDate(f.date)}.`;
+    case "grace": return `Followed until ${fullDate(f.until)}: focus time ended ${fullDate(f.date)} (${grace} days grace).`;
+    case "kept": return "Followed because Keep following is on.";
+    case "ended": return `Not followed: focus time ended ${fullDate(f.date)}. No DevOps items or Open half-day choices.`;
+    case "none": return "Not followed: no focus time. No DevOps items or Open half-day choices.";
+  }
+}
+
 function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; data: SettingsData; onSavedData: (d: SettingsData) => void }) {
   const reached = data.dataverseReached;
   const [name, setName] = useState(c.setting.name ?? "");
@@ -439,6 +461,7 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
   const [browser, setBrowser] = useState(c.setting.browser);
   const [profile, setProfile] = useState(c.profile ?? "");
   const [open, setOpen] = useState(c.setting.openStates.join(", "));
+  const [keep, setKeep] = useState(c.setting.follow);
   const { problems, status, save } = useSave(onSavedData);
   const f = `clients.${c.key}`;
   const info = data.browsers[browser];
@@ -449,7 +472,7 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
       style={{ "--c": color ? (color.startsWith("#") ? color : `var(--client-${color})`) : "var(--client-none)" } as CSSProperties}
       onSubmit={(e) => {
         e.preventDefault();
-        void save("client", { key: c.key, name, color, browser, profile, openStates: open.split(",").map((x) => x.trim()).filter(Boolean) });
+        void save("client", { key: c.key, name, color, browser, profile, openStates: open.split(",").map((x) => x.trim()).filter(Boolean), follow: keep });
       }}
     >
       <h3>
@@ -501,6 +524,12 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
             ))}
           </select>
           <Problems all={problems} field={`${f}.profile`} />
+        </Field>
+        <Field label="Followed" hint={followText(c.follow, data.planning.followGraceDays)}>
+          <label className="set-check">
+            <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} disabled={c.follow?.why === "internal" || c.follow?.why === "standing"} /> Keep following
+          </label>
+          <Problems all={problems} field={`${f}.follow`} />
         </Field>
         <Field label='States treated as open' hint="DevOps states this client still works in, though DevOps files them as done (e.g. Resolved). Applies on the next refresh.">
           <input value={open} placeholder="none" onChange={(e) => setOpen(e.target.value)} />

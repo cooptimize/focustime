@@ -65,7 +65,7 @@ describe("Settings (step 6b)", () => {
     expect(text).toContain('CSC = { color = "ochre", name = "CSC Steel", browser = "chromium", profile = "Profile 2", open_states = ["Resolved"] }');
     expect(text).toContain('[chromium]\ncommand = ["/usr/bin/chromium"]');
     const cfg = parseConfig(text);
-    expect(cfg.ok && cfg.config.clientSettings.CSC).toEqual({ color: "ochre", name: "CSC Steel", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"] });
+    expect(cfg.ok && cfg.config.clientSettings.CSC).toEqual({ color: "ochre", name: "CSC Steel", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"], follow: false });
     expect(cfg.ok && cfg.config.clients.CSC).toBe("var(--client-ochre)");
     // Round trip: saving the same values again changes nothing but the backup.
     await t.run("settings.save", { section: "client", values: { key: "CSC", name: "CSC Steel", color: "ochre", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"] } });
@@ -92,7 +92,7 @@ describe("Settings (step 6b)", () => {
     expect((await t.run("settings.save", { section: "hours", values: { timeZone: "America/Chicago", lunch: "12:00-12:30", weekdays: { mon: ["08:00-16:00"], tue: ["08:00-16:00"], wed: ["08:00-16:00"], thu: ["08:00-16:00", "20:00-21:00"], fri: ["09:00-12:00"], sat: [], sun: [] } } })).ok).toBe(true);
     expect((await t.run("settings.save", { section: "standing", values: { blocks: [{ day: "Tue", half: "PM", client: "Internal" }] } })).ok).toBe(true);
     expect((await t.run("settings.save", { section: "planning", values: { pickablePortfolioTypes: ["Recurring", "Chore"] } })).ok).toBe(true);
-    expect((await t.run("settings.save", { section: "planning", values: { pickablePortfolioTypes: ["Recurring", "Chore"], sizes: { S: 45, M: 90, L: 180 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true } })).ok).toBe(true);
+    expect((await t.run("settings.save", { section: "planning", values: { pickablePortfolioTypes: ["Recurring", "Chore"], sizes: { S: 45, M: 90, L: 180 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, followGraceDays: 21 } })).ok).toBe(true);
     const bad = await t.run("settings.save", { section: "planning", values: { sizes: { S: 60, M: 50, L: 180 } } });
     expect(bad).toMatchObject({ ok: false, status: 422, fields: [{ field: "plan.size_m" }] });
     expect((await t.run("settings.save", { section: "display", values: { theme: "neutral", viewRange: "12h" } })).ok).toBe(true);
@@ -101,7 +101,7 @@ describe("Settings (step 6b)", () => {
     expect(cfg.config.week.hours.timeZone).toBe("America/Chicago");
     expect(cfg.config.week.hours.weekdays.thu).toHaveLength(2);
     expect(cfg.config.week.standingBlocks).toEqual([{ day: "Tue", half: "PM", clientKey: "Internal", clientName: "Internal" }]);
-    expect(cfg.config.plan).toEqual({ pickablePortfolioTypes: ["Recurring", "Chore"], sizes: { S: 45, M: 90, L: 180 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true });
+    expect(cfg.config.plan).toEqual({ pickablePortfolioTypes: ["Recurring", "Chore"], sizes: { S: 45, M: 90, L: 180 }, carryDays: 3, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, followGraceDays: 21 });
     expect(cfg.config.ui).toEqual({ theme: "neutral", viewRange: "12h" });
     expect(readFileSync(t.path, "utf8")).toContain("# my own note at the top");
   });
@@ -157,5 +157,29 @@ describe("secrets from Settings never come back", () => {
     expect(res).not.toContain(SECRET);
     expect(JSON.stringify(logs)).not.toContain(SECRET);
     expect(logs.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Settings > Clients follow state (step 6d)", () => {
+  it("says which clients are followed and why; Keep following saves and turns one on", async () => {
+    const { createDataverseSource } = await import("../sources/dataverse/source.ts");
+    const { dvConfig, FAKE_SECRET, fakeFetch } = await import("../sources/dataverse/test-fakes.ts");
+    const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"')
+      .replace('my_systemuserid = ""', `my_systemuserid = "${dvConfig.mySystemUserId}"`)
+      .replace("https://cooptimize.crm.dynamics.com", dvConfig.environmentUrl);
+    const t = setup(text);
+    const dv = fakeFetch("ok").fetch;
+    const cacheDir = mkdtempSync(join(tmpdir(), "c-follow-"));
+    t.c.makeDataverse = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv, cacheDir, log: () => {} });
+    const load = async () => ((await t.run("settings.load", {})) as { data: SettingsData }).data.clients;
+    const by = (cs: SettingsData["clients"], k: string) => cs.find((c) => c.key === k)?.follow;
+    let cs = await load();
+    expect(by(cs, "Cooptimize")).toEqual({ active: true, why: "internal" });
+    expect(by(cs, "W&C")).toEqual({ active: true, why: "ongoing" });
+    expect(by(cs, "HM Electronics")).toEqual({ active: false, why: "none" });
+    expect((await t.run("settings.save", { section: "client", values: { key: "HM Electronics", follow: true } })).ok).toBe(true);
+    expect(readFileSync(t.path, "utf8")).toMatch(/"HM Electronics" = \{[^}]*follow = true/);
+    cs = await load();
+    expect(by(cs, "HM Electronics")).toEqual({ active: true, why: "kept" });
   });
 });

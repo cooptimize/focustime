@@ -127,7 +127,10 @@ async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = tru
   const carry = await carryDay(ctx, plan);
   // Unfinished picks from before the first upcoming day, offered only on the carry-over day.
   const carryOver = carry.target === d ? plan.carryOverFor(carry.upcoming, cfg?.plan.carryDays) : [];
-  return { date: d, plan: day, picks: plan.picksFor(d), carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: plan.drafts(), opened };
+  const picks = plan.picksFor(d);
+  // Focused seconds per pick (step 6d): the day's picks and the carry-over offered.
+  const focused = plan.focusedSeconds([...picks, ...carryOver].map((p) => p.id));
+  return { date: d, plan: day, picks, carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: plan.drafts(), opened, focused };
 }
 
 export async function planAction(ctx: PlanContext, action: PlanAction, input: unknown): Promise<ActionResponse> {

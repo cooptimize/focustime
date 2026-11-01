@@ -434,7 +434,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   padding: 0 4px;
 }
 .dow { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
-.date { font-size: 15px; color: var(--text-muted); }
+.date { font-size: 15px; color: var(--text-muted); white-space: nowrap; }
 .today .dow, .today .date { color: var(--accent); }
 .today-pill, .overflow-pill {
   font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; align-self: center;
@@ -442,10 +442,11 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .today-pill { background: var(--accent); color: var(--surface); }
 .overflow-pill { color: var(--text-faint); border: 1px dashed var(--border-strong); }
 .day-sum { margin-left: auto; display: flex; gap: 8px; align-self: center; }
-.sum { font-size: 12.5px; font-weight: 600; }
+.sum { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .sum.at_risk { color: var(--risk); }
 .sum.watch { color: var(--watch); }
 .sum.ok { color: var(--text-faint); font-weight: 500; }
+.sum.focus { color: var(--text-muted); font-weight: 500; }
 .day-head .more-btn { align-self: center; height: 22px; line-height: 16px; }
 
 /* Strips: all day, before 9, after 5 */
@@ -895,6 +896,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pd-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .pd-head h2 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
 .pd-head p { margin: 3px 0 0; font-size: 13px; }
+.pd-head .pd-focus { color: var(--text-muted); }
+.pd-head .pd-focus strong { color: var(--text); }
 .pd-actions { display: flex; gap: 8px; flex: none; }
 .pd-actions .commit { background: var(--action); border-color: var(--action); color: var(--on-action); font-weight: 650; }
 .pd-actions .commit kbd { background: transparent; color: inherit; border-color: color-mix(in oklab, var(--on-action) 55%, transparent); }
@@ -935,6 +938,9 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .size + .size { border-left: 1px solid var(--border-strong); }
 .size[aria-pressed="true"] { background: var(--text); color: var(--bg); }
 .size-tag { flex: none; font-size: 11px; font-weight: 700; color: var(--text-faint); border: 1px solid var(--border-strong); border-radius: 5px; padding: 0 5px; }
+/* Focused time of the size (step 6d): "45m of M". */
+.size-tag.focused { color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+.focus-note { flex: none; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 .row-actions { display: inline-flex; gap: 2px; flex: none; }
 
 .client-chooser { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1234,6 +1240,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .now-count { font-variant-numeric: tabular-nums; color: var(--text); font-size: 14px; min-width: 44px; }
 .now-timer.paused .now-count { color: var(--text-muted); }
 .now-timer-label { max-width: 320px; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.now-timer-focus { color: var(--text-muted); white-space: nowrap; }
 .now-tag {
   flex: none; margin-right: 10px; padding: 0 7px; border-radius: 99px; line-height: 18px; font-size: 11px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.05em; color: var(--on-action); background: var(--action);

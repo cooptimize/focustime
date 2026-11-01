@@ -8,6 +8,8 @@ import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { loadSampleSources } from "../sources/sample.ts";
 import { buildWeek } from "../week/build.ts";
+import { followedKeys } from "../week/follow.ts";
+import { followOptions } from "./follow.ts";
 import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
 import type { TimeModel } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
@@ -209,12 +211,14 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       // inside the source; anything unexpected here only drops DevOps, never the week.
       // Plus every client I'm an Account Worker on (Q21), so Open half-days can take their work. Only those
       // with DevOps set up are fetched; the rest can still take a typed intention.
+      // Only followed clients (step 6d, replaces Q21 for DevOps): the rest get no PAT read, no call and no status.
       const dvSource = ctx.makeDataverse(dv, tz);
-      const mine = (await dvSource.myClients?.().catch(() => null)) ?? [];
-      const clients = weekClients(buildWeek({ weekStart, patterns: dataverse.items, events: [], config: weekConfig }), weekConfig.standingBlocks);
+      const [mineR, follow] = await Promise.all([dvSource.myClients?.().catch(() => null), followOptions(dvSource, cfg, todayDate, refresh, dataverse.items)]);
+      const mine = mineR ?? [];
+      const clients = followedKeys(weekClients(buildWeek({ weekStart, patterns: dataverse.items, events: [], config: weekConfig }), weekConfig.standingBlocks), follow.patterns, follow.options);
       planClients = [...clients];
-      for (const c of mine) if (!planClients.some((p) => p.clientKey === c.clientKey)) planClients.push({ clientKey: c.clientKey, clientName: c.clientName });
-      const fetch = [...clients, ...mine.filter((c) => c.devops && !clients.some((w) => w.clientKey === c.clientKey)).map(({ clientKey, clientName }) => ({ clientKey, clientName }))];
+      for (const c of followedKeys(mine, follow.patterns, follow.options)) if (!planClients.some((p) => p.clientKey === c.clientKey)) planClients.push({ clientKey: c.clientKey, clientName: c.clientName });
+      const fetch = [...clients, ...followedKeys(mine, follow.patterns, follow.options).filter((c) => c.devops && !clients.some((w) => w.clientKey === c.clientKey)).map(({ clientKey, clientName }) => ({ clientKey, clientName }))];
       devopsP = ctx.makeDevOps(dv, tz).load(fetch, refresh).catch(() => null);
     }
   }
@@ -343,6 +347,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         {
           loadConfig: ctx.loadConfig,
           makeDataverse: ctx.makeDataverse,
+          now: ctx.now,
           ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}),
           ...(ctx.plan ? { plan: ctx.plan } : {}),
           ...(ctx.secrets ? { secrets: ctx.secrets } : {}),

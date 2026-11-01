@@ -1,3 +1,4 @@
+import type { FollowState } from "../week/follow.ts";
 // Action response shapes shared by the server and the UI. Types only, no runtime imports.
 import type { AppConfig, ClientSetting, FieldError, UiConfig } from "../config/schema.ts";
 import type { EdgeProfile } from "../links/edge.ts";
@@ -61,6 +62,8 @@ export type SettingsClient = {
   profile: string | null;
   /** The color as CSS (hex or palette token). */
   css: string | null;
+  /** Whether Coopilot follows it (DevOps, Open half-days) and why (step 6d); null when it couldn't be worked out. */
+  follow: FollowState | null;
 };
 
 export type BrowserInfo = { found: boolean; profiles: EdgeProfile[] };
@@ -97,6 +100,8 @@ export type TimerView = {
   running: boolean;
   ended: boolean;
   endsAt: string | null;
+  /** When the current run started (null when paused or ended), so the UI can count focused time live (step 6d). */
+  runningSince: string | null;
 };
 
 /** A loop in the Loops view (step 6c): who (client), what, when. */

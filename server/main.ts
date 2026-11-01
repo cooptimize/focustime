@@ -23,8 +23,10 @@ import { createDevOpsSource, type DevOpsSource } from "../sources/devops/source.
 import type { Keyring } from "../sources/oauth/oauth.ts";
 import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
 import { createApp } from "./app.ts";
-import { checkTimer, notifyWithActions, playEndSound } from "./timer.ts";
-import { timerAction } from "../actions/timer-actions.ts";
+import { calendarRefreshDue, checkTimer, notifyWithActions, playEndSound } from "./timer.ts";
+import { refreshTodayWarnings } from "../actions/warnings.ts";
+import { TIMER_KEY, timerAction } from "../actions/timer-actions.ts";
+import type { TimerState } from "../plan/timer.ts";
 import { checkReminder, notifySend } from "./notify.ts";
 
 const args = process.argv.slice(2);
@@ -206,7 +208,23 @@ if (plan) {
     })
       .then((did) => did && log({ source: "plan", op: "timer", kind: did }))
       .catch(() => log({ source: "plan", op: "timer", kind: "failed" }));
-  setInterval(timerTick, 5_000).unref();
+  // Fresher warnings (step 6d): while a timer runs, reload today's calendars every 5 minutes (their own cache
+  // decides whether that is a live call) and recompute today's warning points.
+  let lastCalendar: number | null = null;
+  const warningsTick = () => {
+    const s = store.getState<TimerState>(TIMER_KEY);
+    const t = Date.now();
+    if (!s?.runningSince) return void (lastCalendar = null);
+    if (!calendarRefreshDue(s, lastCalendar, t)) return;
+    lastCalendar = t;
+    void refreshTodayWarnings({ loadConfig, makeOutlook, makeGoogle, plan: store, now: () => Temporal.Now.instant().toString() })
+      .then((n) => n !== null && log({ source: "plan", op: "warnings", kind: "refreshed", count: n }))
+      .catch(() => log({ source: "plan", op: "warnings", kind: "failed" }));
+  };
+  setInterval(() => {
+    void timerTick();
+    warningsTick();
+  }, 5_000).unref();
   void timerTick();
 }
 

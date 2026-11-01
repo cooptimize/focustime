@@ -61,6 +61,8 @@ export type ClientSetting = {
   profile: string | null;
   /** DevOps states treated as open although DevOps files them as Completed or Removed. */
   openStates: string[];
+  /** Keep following this client although it has no current Focus Time (step 6d). */
+  follow: boolean;
 };
 
 /** A color setting as CSS: a hex as is, a slot as its token. */
@@ -91,10 +93,12 @@ export type PlanConfig = {
   breakMinutes: number;
   /** Play a sound when a focus session ends (default off). */
   endSound: boolean;
+  /** Days a client stays followed (DevOps, Open half-days) after its last Focus Time pattern ends (step 6d). */
+  followGraceDays: number;
 };
 
-export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes"> = { sizes: { S: 60, M: 120, L: 210 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false };
-const PLAN_KEYS = ["pickable_portfolio_types", "size_s", "size_m", "size_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound"];
+export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes"> = { sizes: { S: 60, M: 120, L: 210 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, followGraceDays: 14 };
+const PLAN_KEYS = ["pickable_portfolio_types", "size_s", "size_m", "size_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "follow_grace_days"];
 
 export type FieldError = { field: string; message: string };
 /** `legacyDayShape`: the file still has the old [day_shape] section (read as hours; migrated on load, D124). */
@@ -243,7 +247,7 @@ export function parseConfig(text: string): ParseResult {
     for (const [k, v] of Object.entries(cl)) {
       if (typeof v === "string") {
         if (!HEX.test(v)) err(`clients.${k}`, 'Must be a color like "#1f9e8f" or a table');
-        else (clients[k] = v), (clientSettings[k] = { color: v, name: null, browser: "edge", profile: null, openStates: [] });
+        else (clients[k] = v), (clientSettings[k] = { color: v, name: null, browser: "edge", profile: null, openStates: [], follow: false });
         continue;
       }
       if (!isTable(v)) {
@@ -251,8 +255,8 @@ export function parseConfig(text: string): ParseResult {
         continue;
       }
       const f = `clients.${k}`;
-      for (const x of Object.keys(v)) if (!["color", "name", "browser", "profile", "open_states"].includes(x)) err(`${f}.${x}`, "Unknown field");
-      const c: ClientSetting = { color: null, name: null, browser: "edge", profile: null, openStates: [] };
+      for (const x of Object.keys(v)) if (!["color", "name", "browser", "profile", "open_states", "follow"].includes(x)) err(`${f}.${x}`, "Unknown field");
+      const c: ClientSetting = { color: null, name: null, browser: "edge", profile: null, openStates: [], follow: false };
       if (v.color !== undefined) {
         if (!colorOk(v.color)) err(`${f}.color`, `Must be a palette color (${CLIENT_SLOTS.join(", ")}) or "#rrggbb"`);
         else c.color = v.color as string;
@@ -272,6 +276,10 @@ export function parseConfig(text: string): ParseResult {
       if (v.open_states !== undefined) {
         if (!Array.isArray(v.open_states) || v.open_states.some((s) => typeof s !== "string" || !s.trim() || s.length > 60)) err(`${f}.open_states`, 'Must be a list of DevOps state names, e.g. ["Resolved"]');
         else c.openStates = (v.open_states as string[]).map((s) => s.trim());
+      }
+      if (v.follow !== undefined) {
+        if (typeof v.follow !== "boolean") err(`${f}.follow`, "Must be true or false");
+        else c.follow = v.follow;
       }
       clientSettings[k] = c;
       if (c.color) clients[k] = colorCss(c.color);
@@ -336,6 +344,8 @@ export function parseConfig(text: string): ParseResult {
     if (fm !== undefined) planOpts.focusMinutes = fm;
     const bm = minutes("break_minutes", 0, 60);
     if (bm !== undefined) planOpts.breakMinutes = bm;
+    const fg = minutes("follow_grace_days", 0, 90, 1);
+    if (fg !== undefined) planOpts.followGraceDays = fg;
     if (t?.end_sound !== undefined) {
       if (typeof t.end_sound !== "boolean") err("plan.end_sound", "Must be true or false");
       else planOpts.endSound = t.end_sound;

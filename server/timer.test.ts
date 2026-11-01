@@ -144,3 +144,90 @@ describe("focus timer on the server (step 6c)", () => {
     expect((await t.run("loops.list", { includeClosed: true }) as { data: { loops: unknown[] } }).data.loops).toEqual([]);
   });
 });
+
+describe("focused time on a pick across sessions and restarts (step 6d)", () => {
+  it("adds every running stretch, paused gaps left out, through a restart and a late end", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const path = join(mkdtempSync(join(tmpdir(), "c-focus-")), "plan.db");
+    let clock = T("09:00");
+    const open = () => createPlanStore({ path, now: () => clock.toZonedDateTimeISO(NY) });
+    const cfg = { plan: { ...DEFAULT_PLAN, pickablePortfolioTypes: [] }, week: { hours: legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: NY }) } } as unknown as AppConfig;
+    const runOn = (plan: ReturnType<typeof open>, a: Parameters<typeof timerAction>[1], input?: unknown) => timerAction({ plan, config: async () => cfg, now: () => clock.toString() }, a, input);
+
+    let plan = open();
+    const a = pickAt(plan, "Write the summary", "M");
+    await runOn(plan, "timer.start", { pickId: a.id, minutes: 30 });
+    clock = T("09:10");
+    await runOn(plan, "timer.pause"); // 10 min
+    clock = T("09:40"); // 30 paused minutes don't count
+    plan.close?.();
+    plan = open(); // restart
+    await runOn(plan, "timer.resume");
+    clock = T("09:45");
+    await runOn(plan, "timer.stop"); // +5 min
+    expect(plan.focusedSeconds([a.id])).toEqual({ [a.id]: 15 * 60 });
+
+    // A second session that ends while nobody looks: only its 20 minutes count.
+    await runOn(plan, "timer.start", { pickId: a.id, minutes: 20 });
+    plan.close?.();
+    plan = open();
+    clock = T("11:00");
+    const deps = { plan, now: () => clock, endSound: async () => false, notify: async () => null, sound: () => {}, act: async () => undefined };
+    expect(await checkTimer(deps)).toBe("ended");
+    expect(plan.focusedSeconds([a.id])).toEqual({ [a.id]: 35 * 60 });
+    // A plain timer and a break never add to a pick.
+    await runOn(plan, "timer.start", { minutes: 10 });
+    clock = T("11:10");
+    await runOn(plan, "timer.stop");
+    await runOn(plan, "timer.start", { kind: "break", minutes: 5 });
+    clock = T("11:15");
+    await runOn(plan, "timer.stop");
+    expect(plan.focusedSeconds([a.id])).toEqual({ [a.id]: 35 * 60 });
+  });
+});
+
+describe("fresher warnings while a timer runs (step 6d, Q40)", () => {
+  it("a meeting added mid-session is warned about after the next calendar refresh", async () => {
+    const { refreshTodayWarnings } = await import("../actions/warnings.ts");
+    const { weekConfig } = await import("../config/defaults.ts");
+    const { calendarRefreshDue } = await import("./timer.ts");
+    const t = setup();
+    const outlook: { title: string; start: string; end: string }[] = [];
+    const loads: { refresh?: boolean }[] = [];
+    const source = { load: async (_w: string, opts: { refresh?: boolean } = {}) => (loads.push(opts), { source: "outlook" as const, status: "ok" as const, fetchedAt: null, fromCache: false, items: outlook.map((e, i) => ({ id: `m${i}`, source: "outlook" as const, allDay: false, isPersonal: false, showAs: "busy" as const, ...e })) }) };
+    const cfg = { week: weekConfig, outlook: {}, google: null } as unknown as AppConfig;
+    let clock = T("09:30");
+    t.at("09:30");
+    const ctx = {
+      loadConfig: async () => ({ path: "/x", parsed: { ok: true as const, config: cfg } }),
+      makeOutlook: () => source as never,
+      makeGoogle: () => { throw new Error("not configured"); },
+      plan: t.plan,
+      now: () => clock.toString(),
+    };
+    await t.run("timer.start", { minutes: 90 });
+    const s = () => t.plan.getState<TimerState>(TIMER_KEY);
+    expect(calendarRefreshDue(s(), null, clock.epochMilliseconds)).toBe(true);
+    await refreshTodayWarnings(ctx);
+    const last = clock.epochMilliseconds;
+
+    // Someone books 10:00 at 9:40. Before the next refresh nothing knows about it.
+    outlook.push({ title: "Quick sync", start: "2026-11-02T10:00:00-05:00", end: "2026-11-02T10:15:00-05:00" });
+    clock = T("09:34");
+    expect(calendarRefreshDue(s(), last, clock.epochMilliseconds)).toBe(false);
+    t.at("09:56");
+    clock = T("09:56");
+    expect(calendarRefreshDue(s(), last, clock.epochMilliseconds)).toBe(true);
+    expect(await checkTimer(t.deps)).toBeNull(); // the old points don't have it
+    await refreshTodayWarnings(ctx);
+    expect(await checkTimer(t.deps)).toBe("warned");
+    expect(t.sent.at(-1)).toEqual({ title: "In 5 minutes", body: "Quick sync at 10:00 AM" });
+    // Calendars go through their cache: never a forced refresh.
+    expect(loads.every((o) => !o.refresh)).toBe(true);
+    // Paused or ended: no refreshes.
+    await t.run("timer.pause");
+    expect(calendarRefreshDue(s(), null, clock.epochMilliseconds)).toBe(false);
+  });
+});

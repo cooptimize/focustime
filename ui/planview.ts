@@ -1,12 +1,29 @@
 // The committed plan as the week view sees it: picks per day, and ticking one done (local status only).
-import { createContext } from "react";
+import { createContext, useContext } from "react";
+import { liveFocused } from "../plan/focus.ts";
 import { SIZE_MINUTES, type Pick, type PlanWeek, type Size } from "../plan/types.ts";
 import type { Half, IsoDate, Slot, WorkItem } from "../week/types.ts";
 import { capacityMinutes, fitOf, plannedMinutes, type Fit } from "../plan/rules.ts";
 
-/** `sizes`: minutes per pick size from Settings > Planning (step 6c). */
-export type PlanView = { week: PlanWeek | null; toggle: (id: number, done: boolean) => void; sizes: Readonly<Record<Size, number>> };
-export const PlanCtx = createContext<PlanView>({ week: null, toggle: () => {}, sizes: SIZE_MINUTES });
+/**
+ * `sizes`: minutes per pick size from Settings > Planning (step 6c). `focused`: seconds per pick from the focus log,
+ * with the running timer and the clock so a live session counts as it goes (step 6d).
+ */
+export type PlanView = {
+  week: PlanWeek | null;
+  toggle: (id: number, done: boolean) => void;
+  sizes: Readonly<Record<Size, number>>;
+  focused: Readonly<Record<number, number>>;
+  timer: { pickId: number | null; runningSince: string | null } | null;
+  nowMs: number;
+};
+export const PlanCtx = createContext<PlanView>({ week: null, toggle: () => {}, sizes: SIZE_MINUTES, focused: {}, timer: null, nowMs: 0 });
+
+/** Seconds focused on a pick, live while its session runs. */
+export function useFocused(): (id: number) => number {
+  const v = useContext(PlanCtx);
+  return (id) => liveFocused(id, v.focused, v.timer, v.nowMs);
+}
 
 /** "about 1 h" for a size's minutes. */
 export function sizeNote(minutes: number): string {

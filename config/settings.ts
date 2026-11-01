@@ -90,7 +90,7 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
       return (text) => setValue(setValue(setValue(text, "risk", "meeting_watch_minutes", watch), "risk", "meeting_at_risk_minutes", atRisk), "risk", "min_focus_window_minutes", window);
     }
     case "planning": {
-      const keys = ["pickablePortfolioTypes", "sizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound"];
+      const keys = ["pickablePortfolioTypes", "sizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays"];
       only(v, keys, "plan");
       const types = strList(v.pickablePortfolioTypes ?? [], "plan.pickable_portfolio_types").filter(Boolean);
       // Each value is written as given; parseConfig checks ranges and order per field (plan.size_m etc.).
@@ -100,7 +100,7 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
         only(sz, ["S", "M", "L"], "plan.sizes");
         for (const k of ["S", "M", "L"] as const) if (sz[k] !== undefined) values.push([`size_${k.toLowerCase()}`, int(sz[k], `plan.size_${k.toLowerCase()}`)]);
       }
-      const num: [string, string][] = [["carryDays", "carry_days"], ["reminderOffsetMinutes", "reminder_offset_minutes"], ["focusMinutes", "focus_minutes"], ["breakMinutes", "break_minutes"]];
+      const num: [string, string][] = [["carryDays", "carry_days"], ["reminderOffsetMinutes", "reminder_offset_minutes"], ["focusMinutes", "focus_minutes"], ["breakMinutes", "break_minutes"], ["followGraceDays", "follow_grace_days"]];
       for (const [k, toml] of num) if (v[k] !== undefined) values.push([toml, int(v[k], `plan.${toml}`)]);
       if (v.endSound !== undefined) {
         if (typeof v.endSound !== "boolean") throw new SettingsInputError("plan.end_sound", "Must be true or false");
@@ -115,7 +115,7 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
       return (text) => setValue(setValue(text, "ui", "theme", theme), "ui", "view_range", range);
     }
     case "client": {
-      only(v, ["key", "color", "name", "browser", "profile", "openStates"], "clients");
+      only(v, ["key", "color", "name", "browser", "profile", "openStates", "follow"], "clients");
       const key = clientKey(v.key);
       const f = `clients.${key}`;
       const table: Record<string, TomlValue> = {};
@@ -129,6 +129,10 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
       if (profile) table.profile = profile;
       const open = v.openStates == null ? [] : strList(v.openStates, `${f}.open_states`).filter(Boolean);
       if (open.length) table.open_states = open;
+      if (v.follow !== undefined && v.follow !== null && v.follow !== false) {
+        if (v.follow !== true) throw new SettingsInputError(`${f}.follow`, "Must be true or false");
+        table.follow = true;
+      }
       return (text) => {
         let t = setValue(text, "clients", key, table);
         if (browser === "chromium" && extra.chromiumCommand?.length) {

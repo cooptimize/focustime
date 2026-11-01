@@ -187,13 +187,23 @@ describe("[plan] pickable portfolio types (Q20)", () => {
 
 describe("[plan] planning settings (step 6c, Q36)", () => {
   it("reads sizes, carry-over days, the reminder offset and timer defaults", () => {
-    const r = parseConfig(`${valid}\n[plan]\nsize_s = 45\nsize_m = 90\nsize_l = 180\ncarry_days = 0\nreminder_offset_minutes = 30\nfocus_minutes = 25\nbreak_minutes = 5\nend_sound = true\n`);
-    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], sizes: { S: 45, M: 90, L: 180 }, carryDays: 0, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true });
+    const r = parseConfig(`${valid}\n[plan]\nsize_s = 45\nsize_m = 90\nsize_l = 180\ncarry_days = 0\nreminder_offset_minutes = 30\nfocus_minutes = 25\nbreak_minutes = 5\nend_sound = true\nfollow_grace_days = 30\n`);
+    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], sizes: { S: 45, M: 90, L: 180 }, carryDays: 0, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, followGraceDays: 30 });
+    // Old configs get 14 days of grace.
+    expect(parseConfig(valid).ok && (parseConfig(valid) as { config: { plan: { followGraceDays: number } } }).config.plan.followGraceDays).toBe(14);
   });
   it("refuses sizes out of order or off the 5-minute steps, per field", () => {
     expect(fields(`${valid}\n[plan]\nsize_s = 47\n`)).toEqual(["plan.size_s"]);
     expect(fields(`${valid}\n[plan]\nsize_m = 50\n`)).toEqual(["plan.size_m"]);
     expect(fields(`${valid}\n[plan]\ncarry_days = 31\nfocus_minutes = 0\nend_sound = "yes"\n`)).toEqual(["plan.carry_days", "plan.focus_minutes", "plan.end_sound"]);
+    expect(fields(`${valid}\n[plan]\nfollow_grace_days = 91\n`)).toEqual(["plan.follow_grace_days"]);
+  });
+
+  it("reads Keep following per client (step 6d)", () => {
+    const r = parseConfig(valid.replace("[clients]\n", "[clients]\nHME = { follow = true }\nKEEP = \"#d2892a\"\n"));
+    expect(r.ok && r.config.clientSettings.HME?.follow).toBe(true);
+    expect(r.ok && r.config.clientSettings.KEEP?.follow).toBe(false);
+    expect(fields(valid.replace("[clients]\n", "[clients]\nHME = { follow = \"yes\" }\n"))).toEqual(["clients.HME.follow"]);
   });
 });
 

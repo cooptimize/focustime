@@ -52,6 +52,18 @@ export const accountWorkers = {
     { _coop_account_value: ACCT.hme, coop_devopsemail: "c.someone@hme.example" },
   ],
 };
+/**
+ * W&C focus time for me that starts the week after the test week (Nov 9), so the fixture weeks are unchanged.
+ * Returned only when the query's dates include it, as Dataverse would: the following read (step 6d) sees it, a
+ * week read for Nov 2 doesn't.
+ */
+export const WC_FOCUS = {
+  "@odata.etag": 'W/"1000009"', coop_focustimeid: "f0000000-0000-4000-8000-000000000009", _coop_account_value: null, _coop_systemuser_value: null,
+  _coop_accountworker_value: "a0000000-0000-4000-8000-000000000009", coop_startdate: "2026-11-09", coop_enddate: null,
+  coop_mondaydaypart: null, coop_tuesdaydaypart: 2, coop_wednesdaydaypart: null, coop_thursdaydaypart: null, statecode: 0,
+  coop_AccountWorker: { _coop_user_value: ME, _coop_account_value: ACCT.wc, coop_accountworkerid: "a0000000-0000-4000-8000-000000000009" },
+};
+const WC_ACCOUNT = { accountid: ACCT.wc, name: "Woodard and Curran", coop_reportingnickname: "W&C" };
 export const devopsAccounts = {
   value: [
     { accountid: ACCT.csc, name: "CSC Steel Corporation", coop_reportingnickname: "CSC", coop_devopsorg: "cscsteel", coop_devopsprojectid: "11111111-2222-4333-8444-555555555555", coop_devopsprojectname: "Project Ada", coop_devopstoken: FAKE_PAT_CSC },
@@ -105,7 +117,7 @@ export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devops
     if (path.startsWith("accounts") && path.includes("coop_devopstoken")) return json(200, extra.devopsAccounts ?? devopsAccounts);
     // My clients (Q21): same accounts, never with the token.
     if (path.startsWith("accounts") && path.includes("coop_devopsorg")) return json(200, { value: devopsAccounts.value.map(({ coop_devopstoken: _t, ...rest }) => rest) });
-    if (path.startsWith("accounts")) return json(200, accounts);
+    if (path.startsWith("accounts")) return json(200, decodeURIComponent(path).includes(ACCT.wc) ? { value: [...accounts.value, WC_ACCOUNT] } : accounts);
     if (path.startsWith("coop_timeofftracker")) {
       if (extra.pto === "forbidden") return leakyError(403, "0x80040220");
       if (extra.pto === "none") return json(200, { value: [] });
@@ -115,7 +127,8 @@ export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devops
     }
     if (path.startsWith("coop_focustimes")) {
       const paged = scenario === "paged" || scenario === "paged_foreign_next" || scenario === "page_fails";
-      if (!paged) return json(200, focustimes);
+      const before = /coop_startdate le (\d{4}-\d{2}-\d{2})/.exec(decodeURIComponent(path))?.[1];
+      if (!paged) return json(200, !before || before >= WC_FOCUS.coop_startdate ? { value: [...focustimes.value, WC_FOCUS] } : focustimes);
       if (url.includes("$skiptoken=page2")) {
         if (scenario === "page_fails") return leakyError(500, "0x80040216");
         return json(200, { value: focustimes.value.slice(2) });

@@ -5,8 +5,11 @@ import { CLIENT_SLOTS, colorCss, DEFAULT_PLAN, type AppConfig, type ParseResult 
 import { secretExpiryEdit, settingsEdit, SETTINGS_SECTIONS, SettingsInputError, type SettingsSection } from "../config/settings.ts";
 import type { WriteResult } from "../config/edit.ts";
 import { detectChromium, detectEdge, profilesFromLocalState } from "../links/edge.ts";
-import type { DataverseSource, MyClient } from "../sources/dataverse/source.ts";
+import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { PlanStore } from "../store/plan-store.ts";
+import { localToday } from "../week/dates.ts";
+import { followState } from "../week/follow.ts";
+import { followOptions } from "./follow.ts";
 import type { ActionResponse, AppSecret, FieldProblem, SecretPresence, SettingsClient, SettingsData } from "./types.ts";
 
 export type SettingsAction = "settings.load" | "settings.save" | "secret.set" | "data.export";
@@ -16,7 +19,9 @@ export const APP_SECRETS: readonly AppSecret[] = ["dataverse-client-secret", "go
 export type SettingsContext = {
   loadConfig: () => Promise<{ path: string; parsed: ParseResult }>;
   writeConfig?: (edit: (text: string) => string) => Promise<WriteResult>;
-  makeDataverse: (cfg: AppConfig["dataverse"], timeZone: string) => Pick<DataverseSource, "myClients">;
+  makeDataverse: (cfg: AppConfig["dataverse"], timeZone: string) => Pick<DataverseSource, "myClients"> & Partial<Pick<DataverseSource, "following">>;
+  /** The server clock (ISO instant), for which clients are followed today. */
+  now?: () => string;
   plan?: PlanStore;
   /** Keyring presence and app secret writes (secrets/keyring.ts). Absent: shown as unavailable, can't be set. */
   secrets?: { state: (a: AppSecret) => Promise<SecretPresence>; set: (a: AppSecret, value: string) => Promise<void> };
@@ -55,14 +60,24 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
     return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, clients: [], display: null };
   const cfg = loaded.parsed.config;
   const tz = cfg.week.hours.timeZone;
-  const fetched: MyClient[] | null = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, tz).myClients().catch(() => null) : null;
+  const dv = cfg.dataverse.mySystemUserId ? ctx.makeDataverse(cfg.dataverse, tz) : null;
+  const [fetched, follow] = await Promise.all([
+    dv ? dv.myClients().catch(() => null) : Promise.resolve(null),
+    // Which clients are followed (step 6d). Without the read (or its cache) the state is unknown, not guessed.
+    dv?.following && ctx.now
+      ? followOptions(dv as Pick<DataverseSource, "following">, cfg, localToday(ctx.now(), tz), {}, []).catch(() => null)
+      : Promise.resolve(null),
+  ]);
   const mine = fetched ?? [];
   const keys = [...new Set([...mine.map((c) => c.clientKey), ...Object.keys(cfg.clientSettings), ...cfg.week.standingBlocks.map((b) => b.clientKey)])].sort((a, b) => a.localeCompare(b));
   const clients = keys.map((key): SettingsClient => {
     const m = mine.find((c) => c.clientKey === key);
-    const setting = cfg.clientSettings[key] ?? { color: null, name: null, browser: "edge", profile: null, openStates: [] };
+    const setting = cfg.clientSettings[key] ?? { color: null, name: null, browser: "edge", profile: null, openStates: [], follow: false };
     const profile = setting.profile ?? (setting.browser === "edge" && Object.hasOwn(cfg.edge.profiles, key) ? cfg.edge.profiles[key]! : null);
-    return { key, dataverseName: m?.clientName ?? null, devopsEmail: m?.devopsEmail ?? null, devops: m?.devops ?? false, setting, profile, css: setting.color ? colorCss(setting.color) : null };
+    // Without the focus time read, only what doesn't need it is known (internal, standing block, Keep following).
+    const sure = follow ? followState(key, follow.usable ? follow.patterns : [], follow.options) : null;
+    const state = sure && (follow!.usable || sure.active) ? sure : null;
+    return { key, dataverseName: m?.clientName ?? null, devopsEmail: m?.devopsEmail ?? null, devops: m?.devops ?? false, setting, profile, css: setting.color ? colorCss(setting.color) : null, follow: state };
   });
   return {
     ...base,

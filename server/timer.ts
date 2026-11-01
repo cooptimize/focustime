@@ -57,6 +57,14 @@ export async function checkTimer(d: TimerTickDeps): Promise<"ended" | "warned" |
   return "warned";
 }
 
+/** While a timer runs, today's calendars are reloaded this often (step 6d), through their own 5-minute cache. */
+export const CALENDAR_REFRESH_MS = 5 * 60_000;
+
+/** Whether to reload today's calendars now: a running timer, and none done in the last 5 minutes. */
+export function calendarRefreshDue(s: TimerState | null, lastMs: number | null, nowMs: number): boolean {
+  return !!s?.runningSince && !s.ended && (lastMs === null || nowMs - lastMs >= CALENDAR_REFRESH_MS);
+}
+
 /** notify-send with actions (fixed argument list, no shell); resolves the chosen key. */
 export function notifyWithActions(title: string, body: string, actions: NotifyAction[] = []): Promise<string | null> {
   return new Promise((resolve) => {

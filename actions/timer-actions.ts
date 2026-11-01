@@ -34,6 +34,7 @@ export function timerView(s: TimerState | null, now: Temporal.Instant): TimerVie
     running: !!s.runningSince,
     ended: s.ended,
     endsAt: s.runningSince ? now.add({ milliseconds: remaining }).toString() : null,
+    runningSince: s.runningSince,
   };
 }
 

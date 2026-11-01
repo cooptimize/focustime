@@ -54,6 +54,8 @@ export type PlanDayState = {
   drafts: DraftStory[];
   /** False when this call was an automatic open and the day had already been offered once. */
   opened: boolean;
+  /** Seconds focused per pick id, from the focus log (step 6d). Picks with none are left out. */
+  focused: Record<number, number>;
 };
 
 /** Committed plans for the days of a week, for the checklist on the week view. */

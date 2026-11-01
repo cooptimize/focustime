@@ -417,3 +417,17 @@ describe("flex loops open by the server's clock (step 6c)", () => {
     expect(t.plan.openLoops()).toHaveLength(1);
   });
 });
+
+describe("focused time in Plan the day (step 6d)", () => {
+  it("planday.start returns seconds focused per pick, for past days too", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const { pick: p } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", intention: "Write it" });
+    t.plan.addFocus({ pickId: p.id, label: "Write it", startedAt: "2026-11-03T14:00:00Z", endedAt: "2026-11-03T14:25:00Z", seconds: 1500 });
+    t.plan.addFocus({ pickId: p.id, label: "Write it", startedAt: "2026-11-03T15:00:00Z", endedAt: "2026-11-03T15:20:00Z", seconds: 1200 });
+    expect((await t.run<PlanDayState>("planday.start", { date: D })).focused).toEqual({ [p.id]: 2700 });
+    t.at("2026-11-05T14:00:00Z"); // the day is past: Review shows it too
+    const past = await t.run<PlanDayState>("planday.start", { date: D });
+    expect(past).toMatchObject({ access: "past", focused: { [p.id]: 2700 } });
+  });
+});

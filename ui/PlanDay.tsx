@@ -10,7 +10,9 @@ import { fitLabel, formatMinutes } from "./planday.ts";
 import { clientColor, halfTag, longDate, shortDate, slotRange, startClock } from "./labels.ts";
 import { cardHalves, slotOf } from "./halves.ts";
 import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
-import { PlanCtx } from "./planview.ts";
+import { PlanCtx, useFocused } from "./planview.ts";
+import { dayFocus, focusLabel, liveFocused } from "../plan/focus.ts";
+import { formatDuration } from "../week/format.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { itemMenu, pickMenu } from "./menu.ts";
@@ -74,7 +76,13 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
   };
   const badge = past ? "Past" : which;
 
+  // This day's focused time (step 6d): its own log, on top of the week's, live while a session runs.
+  const view = useContext(PlanCtx);
+  const inner = { ...view, focused: { ...view.focused, ...state.focused } };
+  const totals = dayFocus(state.picks.filter((p) => p.date === day.date && p.status !== "moved"), (id) => liveFocused(id, inner.focused, inner.timer, inner.nowMs), inner.sizes);
+
   return (
+    <PlanCtx.Provider value={inner}>
     <section ref={ref} className="planday" tabIndex={-1} aria-label={`Plan ${longDate(day.date)}`} onKeyDown={onKey}>
       <header className="pd-head">
         <div>
@@ -89,6 +97,11 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
                 ? `Committed at ${startClock(committed.replace(/\[.*\]$/, ""), tz)}. Changes are saved as you go; commit again when done.`
                 : "About two minutes: pick story-level work for each block, then commit."}
           </p>
+          {totals.plannedMinutes > 0 && (
+            <p className="pd-focus">
+              <strong>{formatDuration(totals.focusedMinutes)}</strong> focused of {formatDuration(totals.plannedMinutes)} planned
+            </p>
+          )}
         </div>
         <div className="pd-actions">
           <span className="pd-step" role="group" aria-label="Day">
@@ -150,7 +163,20 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
         ))}
       </div>}
     </section>
+    </PlanCtx.Provider>
   );
+}
+
+/** "45m of M" when a pick has a minute or more of focused time (step 6d); the size alone otherwise. */
+function SizeTag({ pick }: { pick: Pick }) {
+  const label = focusLabel(useFocused()(pick.id), pick.size);
+  return <span className={`size-tag${label ? " focused" : ""}`}>{label ?? pick.size}</span>;
+}
+
+/** Focused time beside the S/M/L buttons of a pick being planned; nothing until a minute is logged. */
+function FocusNote({ pick }: { pick: Pick }) {
+  const label = focusLabel(useFocused()(pick.id), pick.size);
+  return label ? <span className="focus-note">{label}</span> : null;
 }
 
 /** A past day: its picks per block, tick done or drop. No sizes, moves, candidates or commit (server enforces it too). */
@@ -179,7 +205,7 @@ function PastDay({ halves, picks, act }: { halves: Half[]; picks: Pick[]; act: P
                         <span className="muted"> · {p.clientKey}</span>
                       </span>
                     </label>
-                    <span className="size-tag">{p.size}</span>
+                    <SizeTag pick={p} />
                     {p.status === "dropped" ? (
                       <span className="muted">dropped</span>
                     ) : (
@@ -210,7 +236,7 @@ function CarryOver({ picks, date, act }: { picks: Pick[]; date: string; act: Pla
             <span className="carry-when">{shortDate(p.date)} {p.half}</span>
             <span className="carry-client">{p.clientKey}</span>
             <span className="pick-title">{p.title}</span>
-            <span className="size-tag">{p.size}</span>
+            <SizeTag pick={p} />
             <span className="row-actions">
               <button type="button" className="mini" onClick={() => act("pick.move", { id: p.id, date, half: "AM" })}>
                 To AM
@@ -297,6 +323,7 @@ function Block({ slot, overflow, picks, drafts, picked, other, friday, now, tz, 
                 {p.clientKey !== bc.clientKey && <span className="muted"> · {name(p.clientKey)}</span>}
                 {p.carriedFromDate && <span className="muted"> · from {shortDate(p.carriedFromDate)}</span>}
               </span>
+              <FocusNote pick={p} />
               <span className="sizes" role="group" aria-label="Size">
                 {SIZES.map((s) => (
                   <button key={s} type="button" className="size" aria-pressed={p.size === s} onClick={() => p.size !== s && act("pick.set_size", { id: p.id, size: s })}>

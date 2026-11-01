@@ -6,7 +6,7 @@ Read before changing code: this file, `docs/spec.md` (current slice), `docs/deci
 
 ## Current milestone
 
-Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks), step 4.5 (responsive layout: wide, medium, narrow) and step 5 (morning planning, now "Plan the day": local plan store, picks, commit, checklist, reminder, autostart) and step 5.5 (Omarchy app launcher and key, work item links in the client's Edge profile, card polish, Loop recorded but not built) and step 6 (top bar views, item and command menus from the action registry, the ignition → Plan the day rename, planning the next workday, PTO from Dataverse, Outlook show-as styling and free-time summary), and step 6.1 (UX review fixes on a token foundation: Plan the day styling, three token layers, AA contrast, status bar by root cause, Tab scope, F6 and O, keyboard legend, plan fit on committed cards), and Plan any day (any date, day header menu, ← →, date picker, past days settle-only, one carry-over day), and step 6b (themes, time model with evening slot, unavailable time and flex sessions, Settings, Now strip, /styleguide), and step 6c (live verification of 6b, Settings > Planning sizes, carry-over, reminder and timer defaults, Reset local plan, draft picks in the Now strip, flex overlap, focus timer, basic Loops list), all authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
+Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work items assigned to me inside focus blocks), step 4.5 (responsive layout: wide, medium, narrow) and step 5 (morning planning, now "Plan the day": local plan store, picks, commit, checklist, reminder, autostart) and step 5.5 (Omarchy app launcher and key, work item links in the client's Edge profile, card polish, Loop recorded but not built) and step 6 (top bar views, item and command menus from the action registry, the ignition → Plan the day rename, planning the next workday, PTO from Dataverse, Outlook show-as styling and free-time summary), and step 6.1 (UX review fixes on a token foundation: Plan the day styling, three token layers, AA contrast, status bar by root cause, Tab scope, F6 and O, keyboard legend, plan fit on committed cards), and Plan any day (any date, day header menu, ← →, date picker, past days settle-only, one carry-over day), and step 6b (themes, time model with evening slot, unavailable time and flex sessions, Settings, Now strip, /styleguide), and step 6c (live verification of 6b, Settings > Planning sizes, carry-over, reminder and timer defaults, Reset local plan, draft picks in the Now strip, flex overlap, focus timer, basic Loops list), and step 6d (focused time on picks and days, calendar refresh for timer warnings, DevOps and Open half-days only for clients followed by focus time, Keep following), all authorized Oct 31. Only the work in `docs/spec.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
 
 ## Hard rules
 
@@ -22,9 +22,9 @@ Milestones 1–2: read model + week view, plus step 4 (read-only DevOps work ite
 
 ```
 ui/        week grid, top bar, Plan the day, menus (menu.ts builders, Menus.tsx popup and command menu), source status (status.ts: causes and actions), keys.ts (F6, O, legend), styles.css tokens (primitives, semantic, domain) and themes, Settings.tsx, NowStrip.tsx (with the timer box), Loops.tsx, StyleGuide.tsx (/styleguide)
-actions/   named, validated actions; registry.ts is the one list (dispatcher, command menu, future chat)
-week/      pure: normalize, slots, risk rules, PTO days (pto.ts), free time (free.ts) (no I/O, no tokens)
-plan/      pure: plan types, capacity, fit, carry-over, block client, story level, planning target (target.ts), day rule, stepping and carry-over day (days.ts), Now strip (now.ts), focus timer rules and warnings (timer.ts)
+actions/   named, validated actions; registry.ts is the one list (dispatcher, command menu, future chat); follow.ts (which clients are followed), warnings.ts (calendar refresh while a timer runs)
+week/      pure: normalize, slots, risk rules, PTO days (pto.ts), free time (free.ts), followed clients (follow.ts) (no I/O, no tokens)
+plan/      pure: plan types, capacity, fit, carry-over, block client, story level, planning target (target.ts), day rule, stepping and carry-over day (days.ts), Now strip (now.ts), focus timer rules and warnings (timer.ts), focused time (focus.ts)
 store/     SQLite plan store (~/.local/share/coopilot/plan.db), migrations, export
 sources/   dataverse (focus time, PTO) | graph | google | devops adapters; oauth/ (PKCE loopback), calendar/ (shared fetch, cache, status), devops/ (per-client work items, Pat)
 secrets/   keyring access only
@@ -58,7 +58,8 @@ Run: `coopilot-open` (starts the service if needed, then opens or focuses the wi
 | Pick | One planned piece of work in a block: a DevOps item, a draft story or an intention, sized S/M/L |
 | Source | Dataverse, Outlook or Google; each reports its own status |
 | Pattern | A Focus Time row: recurring weekly AM/PM/All Day per weekday between start and (optional) end date |
-| Open | A Mon–Thu half-day with no focus block; free for client or internal work |
+| Open | A Mon–Thu half-day with no focus block; free for client or internal work (offered clients: those followed) |
+| Followed client | A client with Focus Time ongoing, ending today or later, or ended within the grace days; Cooptimize, standing-block and "Keep following" clients always. Only these get DevOps fetches and Open half-day choices (D144) |
 | Standing block | A focus block defined in Coopilot config, e.g. Monday AM Internal |
 | Overflow day | Friday: not scheduled, available for catch-up |
 | Day shape | Soft start/split/end times used only to place events into AM or PM and estimate capacity |

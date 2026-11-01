@@ -12,7 +12,8 @@ import { DevOpsWork, typeTag, workStatusLabel } from "./work.ts";
 import { clientColor, eventRange, halfTag, ruleLabel, SampleSources, severityLabel, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 import { cardHalves, eveOnly, slotOf } from "./halves.ts";
 import type { Layout } from "./viewport.ts";
-import { CARD_ITEMS, cardPlan, PlanCtx } from "./planview.ts";
+import { CARD_ITEMS, cardPlan, PlanCtx, useFocused } from "./planview.ts";
+import { dayFocus, focusLabel } from "../plan/focus.ts";
 import { fitLabel } from "./planday.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
@@ -122,6 +123,8 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
   const atRisk = slots.filter((s) => worstSeverity(s.risks) === "at_risk").length;
   const watch = slots.filter((s) => worstSeverity(s.risks) === "watch").length;
   const menu = useMenu((env) => dayMenu(env, day.date));
+  const plan = useContext(PlanCtx);
+  const focus = dayFocus(plan.week?.[day.date]?.picks ?? [], useFocused(), plan.sizes);
   const halves = cardHalves(day);
   // Medium layout shares rows across days: a day without a card in a row keeps an empty cell there.
   // An evening-only day (a weekend flex session) gets one card spanning the three rows.
@@ -143,6 +146,11 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
           </span>
         )}
         <span className="day-sum">
+          {focus.focusedMinutes > 0 && (
+            <span className="sum focus" title={`${formatDuration(focus.focusedMinutes)} focused of ${formatDuration(focus.plannedMinutes)} planned`} aria-label={`${formatDuration(focus.focusedMinutes)} focused of ${formatDuration(focus.plannedMinutes)} planned`}>
+              {formatDuration(focus.focusedMinutes)} of {formatDuration(focus.plannedMinutes)}
+            </span>
+          )}
           {atRisk > 0 && <span className="sum at_risk">{atRisk} at risk</span>}
           {watch > 0 && <span className="sum watch">{watch} watch</span>}
           {day.kind === "work" && !day.pto && risks.length === 0 && <span className="sum ok">Clear</span>}
@@ -414,13 +422,14 @@ function ItemsToggle({ open, count, onToggle, label }: { open: boolean; count: n
 /** A committed pick on a card: tick it, or "⋯" / right-click for size, move, drop and more. */
 function PickRow({ pick, toggle }: { pick: Pick; toggle: (id: number, done: boolean) => void }) {
   const menu = useMenu((env) => pickMenu(env, pick));
+  const focused = focusLabel(useFocused()(pick.id), pick.size);
   const tabIndex = useScopedTab();
   return (
     <li className={pick.status} onContextMenu={menu.onContextMenu} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
       <label onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
         <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} onChange={(e) => toggle(pick.id, e.target.checked)} />
         <span className="ck-title" title={pick.title}>{pick.title}</span>
-        <span className="size-tag">{pick.size}</span>
+        <span className={`size-tag${focused ? " focused" : ""}`} title={focused ? "Focused time of the pick's size" : undefined}>{focused ?? pick.size}</span>
       </label>
       {menu.button(`Actions for ${pick.title}`)}
     </li>

@@ -1,4 +1,7 @@
 // The Now strip (step 6b slice 4): a line under the top bar about right now. Clicking it selects the current half-day.
+import { useContext } from "react";
+import { focusLabel } from "../plan/focus.ts";
+import { PlanCtx, useFocused } from "./planview.ts";
 import type { TimerView } from "../actions/types.ts";
 import type { NowStrip as Strip } from "../plan/now.ts";
 import { formatDuration } from "../week/format.ts";
@@ -34,6 +37,11 @@ export function NowStrip({ strip, onSelect, timer = null, nowMs = Date.now(), on
 
 function TimerBox({ t, nowMs, onTimer }: { t: TimerView; nowMs: number; onTimer: (action: string) => void }) {
   const left = timerLeft(t, nowMs);
+  // The pick's focused time so far, this session included (step 6d), when the pick is in the week shown.
+  const view = useContext(PlanCtx);
+  const focused = useFocused();
+  const pick = t.pickId === null ? undefined : Object.values(view.week ?? {}).flatMap((d) => d.picks).find((p) => p.id === t.pickId);
+  const note = pick ? focusLabel(focused(pick.id), pick.size) : null;
   const b = (action: string, label: string, primary = false) => (
     <button key={action} type="button" className={primary ? "mini primary" : "mini"} onClick={() => onTimer(action)}>
       {label}
@@ -45,6 +53,7 @@ function TimerBox({ t, nowMs, onTimer }: { t: TimerView; nowMs: number; onTimer:
       {t.ended ? <strong>Time's up</strong> : <strong className="now-count">{countdown(left)}</strong>}
       {!t.running && !t.ended && <span className="muted">paused</span>}
       <span className="now-timer-label">{t.label}</span>
+      {note && <span className="now-timer-focus">{note}</span>}
       {t.ended ? [b("timer.done", t.pickId ? "Done" : "Finish", true), b("timer.extend", "+15 min"), b("timer.next", "Next pick")] : [t.running ? b("timer.pause", "Pause") : b("timer.resume", "Resume"), b("timer.extend", "+15")]}
       {b("timer.stop", "Stop")}
     </div>

@@ -45,6 +45,9 @@ const plan: PlanWeek = {
   },
 };
 
+/** Focused time on the sample picks (step 6d): the done one took 50 minutes, the release notes 45 so far. */
+const SAMPLE_FOCUSED: Record<number, number> = { [plan[SAMPLE_WEEK]!.picks[0]!.id]: 50 * 60, [plan[SAMPLE_WEEK]!.picks[1]!.id]: 45 * 60 };
+
 const sources: SourceSummary[] = [
   { source: "dataverse", status: "ok", fetchedAt: "2026-11-02T10:05:00-05:00", fromCache: false, itemCount: 4, sample: true },
   { source: "outlook", status: "ok", fetchedAt: "2026-11-02T10:05:00-05:00", fromCache: false, itemCount: 12, sample: true },
@@ -63,10 +66,10 @@ const strips: [string, Strip][] = [
 ];
 
 const timers: [string, TimerView][] = [
-  ["Focus running", { kind: "focus", pickId: 2, label: "Draft the release notes", plannedMinutes: 50, remainingMs: 23 * 60_000 + 14_000, running: true, ended: false, endsAt: new Date(Date.parse(NOW) + 23 * 60_000 + 14_000).toISOString() }],
-  ["Focus paused", { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 25, remainingMs: 9 * 60_000, running: false, ended: false, endsAt: null }],
-  ["Time's up", { kind: "focus", pickId: 2, label: "Draft the release notes", plannedMinutes: 50, remainingMs: 0, running: false, ended: true, endsAt: null }],
-  ["Break", { kind: "break", pickId: null, label: "Break", plannedMinutes: 10, remainingMs: 4 * 60_000, running: true, ended: false, endsAt: new Date(Date.parse(NOW) + 4 * 60_000).toISOString() }],
+  ["Focus running", { kind: "focus", pickId: 2, label: "Draft the release notes", plannedMinutes: 50, remainingMs: 23 * 60_000 + 14_000, running: true, ended: false, endsAt: new Date(Date.parse(NOW) + 23 * 60_000 + 14_000).toISOString(), runningSince: new Date(Date.parse(NOW) - 26 * 60_000 - 46_000).toISOString() }],
+  ["Focus paused", { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 25, remainingMs: 9 * 60_000, running: false, ended: false, endsAt: null, runningSince: null }],
+  ["Time's up", { kind: "focus", pickId: 2, label: "Draft the release notes", plannedMinutes: 50, remainingMs: 0, running: false, ended: true, endsAt: null, runningSince: null }],
+  ["Break", { kind: "break", pickId: null, label: "Break", plannedMinutes: 10, remainingMs: 4 * 60_000, running: true, ended: false, endsAt: new Date(Date.parse(NOW) + 4 * 60_000).toISOString(), runningSince: new Date(Date.parse(NOW) - 6 * 60_000).toISOString() }],
 ];
 
 // Machado et al. 2009, severity 1 (the matrices used in docs/design/style-guide.md).
@@ -292,7 +295,7 @@ export function StyleGuide() {
         <h2>Week</h2>
         <p className="muted">Sample week at Mon 10:10 AM: a committed plan over its free time, a split day with an evening, unavailable time, a flex session, a PTO day.</p>
         <div className="sg-week">
-          <PlanCtx.Provider value={{ week: plan, toggle: noop, sizes: SIZE_MINUTES }}>
+          <PlanCtx.Provider value={{ week: plan, toggle: noop, sizes: SIZE_MINUTES, focused: SAMPLE_FOCUSED, timer: null, nowMs: Date.parse(NOW) }}>
             <WeekGrid week={week} colors={colors} minFocusWindow={90} today={SAMPLE_WEEK} now={NOW} selection={{ dayIndex: 0, half: "AM" }} cellRefs={cellRefs} onSelect={noop} onOpen={noop} layout={layout} compact={compact} />
           </PlanCtx.Provider>
         </div>
