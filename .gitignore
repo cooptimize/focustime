@@ -31,3 +31,8 @@ config.toml
 # Caches (the cache/ source folder is code and stays tracked)
 .cache/
 .vite/
+
+# Codex (not used in this repo)
+AGENTS.md
+.codex/
+AGENTS.override.md
