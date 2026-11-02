@@ -1,6 +1,6 @@
 # Coopilot style guide (proposal)
 
-Status: proposal, Oct 31 2026. Step 6.1 built the token layers (section 3) with the step 6 palette, the AA contrast fixes, and parts of section 6 (Tab scope, F6, O, the legend); see D110 to D115. Step 6b built the themes (Cooptimize Dark default, Cooptimize Light, Neutral) and self-hosted Red Hat Display (D120); the Omarchy option stays a proposal. It describes the token system, themes and components that Phase 5 would implement, starting with a token layer and theme switcher that changes no layout. Words follow the glossary in `CLAUDE.md` (Plan the day, Check-in, Close out, focus block, Open, PTO).
+Status: proposal, Oct 31 2026. Step 6.1 built the token layers (section 3) with the step 6 palette, the AA contrast fixes, and parts of section 6 (Tab scope, F6, O, the legend); see D110 to D115. Step 6b built the themes (Cooptimize Dark default, Cooptimize Light, Neutral) and self-hosted Red Hat Display (D120); the Omarchy option stays a proposal. It describes the token system, themes and components that Phase 5 would implement, starting with a token layer and theme switcher that changes no layout. Words follow the glossary in `CLAUDE.md` (Plan the day, Check-in, Close out, focus block, Open, PTO). Step 17.5 replaced the font with IBM Plex Sans and Plex Mono (D358) and added the brand tokens and components (section 4.1, docs/design/brand.md).
 
 ## 1. Principles
 
@@ -136,7 +136,7 @@ Checked numerically (WCAG contrast; color-vision simulation with Machado 2009 ma
 
 ## 4. Type, spacing, density
 
-**Families:** Red Hat Display 600/700 for the week title, client names and panel headings. Red Hat Text 400/500/600 for everything else (it is drawn for small sizes; Display is not). Red Hat Mono 500 for key caps. Verify tabular figures (`tnum`) in the subset before adopting; if missing, set times in Red Hat Mono.
+**Families (step 17.5, D358):** IBM Plex Sans 400, 500 and 600 for everything (`--font-ui`), self-hosted from `@fontsource/ibm-plex-sans` (latin, woff2, OFL 1.1, `ui/fonts.css`); every `font-weight` in the stylesheet is one of those three. Tabular figures (`tnum`) are on for the whole body, so times, durations and counts line up. IBM Plex Mono 400 and 500 (`--font-mono`) only for keyboard hints and shortcut chips (`kbd`). No network fonts. Red Hat Display (step 6b, D120) is gone.
 
 | Step | Size / line | Use |
 |---|---|---|
@@ -155,6 +155,23 @@ Checked numerically (WCAG contrast; color-vision simulation with Machado 2009 ma
 - *3840x1080 (wide layout):* half-day cards show the rail (client, stats, picks, work items, badge) on the left third and the hour timeline on the right. Plan the day takes the planned day's whole widened track. Room for the Now strip and every top-bar item on one line.
 - *1920x1080 (medium layout):* compact cards. The top bar hides "coming soon" tabs and Settings text behind a "More" menu when space runs out, never by wrapping the week title. Work item lists collapse to a count when a day is committed.
 - Both: the status bar is one line when everything is live; failures add one line per cause, never per source.
+
+## 4.1 Brand (step 17.5)
+
+Tokens, in every theme (`ui/styles.css`, domain layer):
+
+| Token | Cooptimize Dark | Cooptimize Light | Use |
+|---|---|---|---|
+| `--brand-am` | #1E3A55 | #7FA6C9 | the marks' AM bars |
+| `--brand-pm` | #4FA3DD | #00416B | the marks' PM bars |
+| `--brand-accent` | #9CC24F | #42783C | Lumen's body, the hollow Mon AM |
+| `--brand-ghost` | #2B3A4D | #B9C6D3 | the dashed inner AM band |
+| `--mascot-highlight` | #B2D235 | #B2D235 | Lumen's light bar and beam; only inside `ui/brand/` (tested) |
+| `--brand-beam-blend` | screen | multiply | how the beam blends |
+
+Neutral uses the dark values in dark mode and the light values in light mode. The brief's full surface and text palette is not applied (Q93).
+
+Components (`ui/brand/`, docs/design/brand.md): `WeekMark` (top bar, about 18 px tall), `BentMark` (sign-in), `Lockup` (About), `Lumen` (`pose` still, idle or bob), `LumenLoading` (the loader), `Unroll` (`direction` open or close), and the overlays `Opening`, `CloseReverse`, `MomentOverlay`, plus `EmptyState` (idle Lumen, one line, one action) and `InlineMoment`. Every mark is decorative (`aria-hidden`); the words beside it carry the meaning.
 
 ## 5. Core components
 

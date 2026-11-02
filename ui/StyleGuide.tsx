@@ -15,6 +15,7 @@ import { StatusBar } from "./StatusBar.tsx";
 import { isTheme } from "./theme.ts";
 import { useLayout } from "./viewport.ts";
 import { WeekGrid } from "./WeekGrid.tsx";
+import { BentMark, Lockup, Lumen, LumenLoading, WeekMark } from "./brand/Brand.tsx";
 
 const NY = "America/New_York";
 const NOW = "2026-11-02T10:10:00-05:00";
@@ -159,7 +160,7 @@ export function StyleGuide() {
     <div className="sg">
       <header className="sg-head">
         <div className="brand">
-          <span className="logo" aria-hidden="true" />
+          <WeekMark height={18} />
           <span className="name">Coopilot style guide</span>
         </div>
         <div className="sg-themes" role="radiogroup" aria-label="Theme preview">
@@ -171,6 +172,20 @@ export function StyleGuide() {
         </div>
         <p className="muted sg-note">Preview only. Settings &gt; Display saves the theme. Neutral follows the system light or dark setting. Sample data, no client data.</p>
       </header>
+
+      <section className="sg-section">
+        <h2>Brand</h2>
+        <p className="muted">Step 17.5 (docs/design/brand.md): the marks and Lumen. Lumen appears only in the opening, Close out's reverse, sign-in, About, three empty states and three fun moments.</p>
+        <div className="sg-brand">
+          <figure><WeekMark height={36} /><figcaption>WeekMark: top bar, icon</figcaption></figure>
+          <figure><BentMark width={120} /><figcaption>BentMark: sign-in</figcaption></figure>
+          <figure><Lockup width={240} /><figcaption>Lockup: About</figcaption></figure>
+          <figure><Lumen pose="still" size={40} /><figcaption>Lumen still</figcaption></figure>
+          <figure><Lumen pose="idle" size={40} /><figcaption>Lumen idle</figcaption></figure>
+          <figure><Lumen pose="bob" size={40} /><figcaption>Lumen bob</figcaption></figure>
+          <figure><LumenLoading height={120} /><figcaption>LumenLoading</figcaption></figure>
+        </div>
+      </section>
 
       <section className="sg-section">
         <h2>Tokens</h2>

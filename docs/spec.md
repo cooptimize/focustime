@@ -744,3 +744,15 @@ A 4-week plan and an 8 to 12 week direction view on one timeline, built in four 
 - Look ahead 4 weeks (`plan/rituals.ts`): every other Thursday (from Nov 5 2026, D355), once that Thursday's next week is planned (Done in Plan the week). Due from work start on a working day in the Thursday-to-Wednesday window; a PTO day or a day without hours waits for the next working day's start. After Done in Plan the week, the Week shows an offer "Look ahead 4 weeks" (open Plan ahead, or Not now).
 - Direction review: the first Thursday of each month, due from work start on a working day until the month ends.
 - Both: a desktop notification once per occasion (new kinds `plan_ahead` and `direction`, each with its switch in Settings > Notifications under the ritual reminders, quiet outside hours and on PTO, held during focus), a due dot on Roadmap's Plan ahead, a click opens Roadmap › Plan ahead (route `ahead`). Opening Plan ahead answers them (`roadmap.ahead {seen}`, markers `ahead_seen`): the dot goes and a shown notification closes (Q91). Settings > Planning lists when each comes next.
+
+## 45. Step 17.5: brand integration and IBM Plex Sans (authorized Nov 2)
+
+The identity from `assets/brand/` in the app, with no layout or domain token change. Details in `docs/design/brand.md`; decisions D358 to D365.
+
+- **Font:** IBM Plex Sans 400/500/600 for the UI, IBM Plex Mono 400/500 for keyboard hints, self-hosted from @fontsource (latin woff2); tabular figures; weights snapped to the three that exist.
+- **Tokens:** brand-am, brand-pm, brand-accent, brand-ghost, mascot-highlight and brand-beam-blend in every theme; mascot-highlight only inside `ui/brand/`.
+- **Assets:** Lumen upright, a level gradient beam (about 1.8x tall, 2.3x long, lime fading out, screen or multiply), a radial loading sweep about 50 degrees wide; re-baked; wordmark and lockup outlined (opentype.js); favicon.
+- **Desktop:** `system/install-icons.sh` (install or uninstall into the user's hicolor theme, icon cache refreshed for the user folder only); notify-send `-i coopilot` everywhere.
+- **UI (`ui/brand/`):** WeekMark in the top bar (to Today); the opening (nothing within 400 ms, else the loader for at least 600 ms with each source waiting, done or didn't load; then the unroll, the hop into Mon AM and the flight into the top bar); Close out's reverse, with "Musts done. See you tomorrow." when today's musts are done; the first launch moment once (`ui.first_launch`); a reconnect moment in Settings > Connections; empty states in Inbox and Close out; About in Settings; Settings > Display "Reduce motion" (`ui.set_reduce_motion`), with the system setting doing the same.
+- **Never:** Lumen in Week, Plan the week, Today › Now, Plan the day, Check-in, Roadmap or Plan ahead, on cards or for inline waits.
+- **Open:** Q93 (the brief's surface palette), Q94 (a zero at-risk week moment, suggested after Done in Plan the week), Q95 (B08 live favicon), Q96 (the icon tile's recipe). B07 stays open.
