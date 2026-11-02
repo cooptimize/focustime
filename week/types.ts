@@ -123,7 +123,8 @@ export type RiskRule =
   | "double_booked_block";
 export type Severity = "watch" | "at_risk";
 
-export type Risk = { rule: RiskRule; severity: Severity; reason: string };
+/** reason: the full sentence (tooltips, details). short (U2): a few words for the card pill ("Dentist 12:00", "2h 30m of meetings"). */
+export type Risk = { rule: RiskRule; severity: Severity; reason: string; short?: string };
 
 export type Slot = {
   date: IsoDate;

@@ -31,6 +31,8 @@ export type MenuItem = {
   hint?: string;
   /** Plain reason when the item can't be used now; the item shows but does nothing. */
   disabled?: string;
+  /** U2: a disabled item someone would look for (Move on a done pick): kept in ⋯ menus, its reason as a tooltip. Other disabled items are hidden there. */
+  expected?: boolean;
   checked?: boolean;
   danger?: boolean;
   /** The registry action (or UI command id) this item stands for. */
@@ -260,7 +262,7 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
     items: [
       { id: "open", label: "Open in Edge", action: "link.open", ...(p.itemUrl ? {} : { disabled: p.kind === "intention" ? "An intention has no work item" : "A draft story isn't in DevOps yet" }), run: () => { if (p.itemUrl) env.openLink(p.clientKey, p.itemUrl); } },
       { id: "size", label: "Set size", hint: p.size, action: "pick.set_size", ...(past ? { disabled: PAST } : {}), next: () => sizeStep(env, p) },
-      { id: "move", label: "Move", hint: past ? "to today or later" : "AM, PM, another day, Friday", action: "pick.move", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be moved" } : {}), next: () => moveStep(env, p) },
+      { id: "move", label: "Move", hint: past ? "to today or later" : "AM, PM, another day, Friday", action: "pick.move", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be moved", expected: true } : {}), next: () => moveStep(env, p) },
       {
         id: "focus",
         label: env.timer?.pickId === p.id ? "Focus timer running" : "Start focus",
@@ -339,8 +341,8 @@ export function followUpForm(env: MenuEnv): MenuStep {
 // ---------- work items ----------
 
 /** Step 15.1 (D277): a work item already planned (or done) in this block is shown disabled, not added again. */
-function plannedHere(env: MenuEnv, date: string, half: Half, clientKey: string, itemId: number): { disabled?: string } {
-  return alreadyPlanned(env.planWeek?.[date]?.picks ?? [], { clientKey, itemId }, date, half) ? { disabled: "Already planned here" } : {};
+function plannedHere(env: MenuEnv, date: string, half: Half, clientKey: string, itemId: number): { disabled?: string; expected?: boolean } {
+  return alreadyPlanned(env.planWeek?.[date]?.picks ?? [], { clientKey, itemId }, date, half) ? { disabled: "Already planned here", expected: true } : {};
 }
 
 /** Step 15.3: the week's blocks that could take this work, in the 15.2 order (shared by "Add to the plan" and the drop strip). */
@@ -372,14 +374,14 @@ export function addStep(env: MenuEnv, clientKey: string, item: WorkItem | { draf
   const draftId = "draftId" in item ? item.draftId : null;
   const planDate = env.planState?.date ?? env.selection.date;
   const targets = weekTargets(env, clientKey, draftId !== null ? { draftId } : { itemId: (item as WorkItem).id });
-  const clientName = (k: string) => env.work.get(k)?.clientName ?? env.week.days.flatMap((d) => [d.am, d.pm]).find((sl) => sl.focus[0]?.clientKey === k)?.focus[0]?.clientName ?? k;
+  const clientName = (k: string) => env.week.days.flatMap((d) => [d.am, d.pm]).find((sl) => sl.focus[0]?.clientKey === k)?.focus[0]?.clientName ?? env.work.get(k)?.clientName ?? k;
   const own = clientName(clientKey);
   const heading: Record<TargetGroup, string> = { here: `${own} on ${weekday(planDate)}`, client: `Other ${own} blocks`, open: "Open half-days", other: "Different client" };
   const add = (t: AddTarget) => () => env.runPlan("pick.add", { date: t.date, half: t.half, clientKey, ...(draftId !== null ? { draftId, ...("size" in item && item.size ? { size: item.size } : {}) } : { itemId: (item as WorkItem).id }) });
   const items = targets.map<MenuItem>((t) => {
     const fri = env.week.days.find((d) => d.date === t.date)?.kind === "overflow";
     const label = `${dayName(t.date)} ${halfLabel(t.half)}${t.otherClient ? ` · ${clientName(t.otherClient)}` : fri ? " (Friday catch-up)" : ""}`;
-    const base: MenuItem = { id: `add-${t.date}-${t.half}`, label, group: t.selected ? "This block" : heading[t.group], action: "pick.add", ...(t.disabled ? { disabled: t.disabled } : {}) };
+    const base: MenuItem = { id: `add-${t.date}-${t.half}`, label, group: t.selected ? "This block" : heading[t.group], action: "pick.add", ...(t.disabled ? { disabled: t.disabled, expected: true } : {}) };
     if (t.disabled) return base;
     if (t.otherClient)
       return {
@@ -397,7 +399,7 @@ export function addStep(env: MenuEnv, clientKey: string, item: WorkItem | { draf
   return { title: `Add "${item.title}" to`, items: items.length ? items : [{ id: "none", label: "No block can take it this week", disabled: "Past days and days without working hours are left out" }] };
 }
 
-function draftPrompt(env: MenuEnv, clientKey: string, item: WorkItem): MenuStep {
+export function draftPrompt(env: MenuEnv, clientKey: string, item: WorkItem): MenuStep {
   return { title: `Draft story under "${item.title}"`, prompt: "Story title (stays local until a write step)", placeholder: "First slice of the feature", submit: (title) => env.runPlan("draft.add_story", { clientKey, parentItemId: item.id, title }) };
 }
 

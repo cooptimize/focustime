@@ -118,3 +118,14 @@ export function cardPlan(week: PlanWeek | null, slot: Slot, clientKey: string | 
     collapsed: true,
   };
 }
+
+/**
+ * U2: one client name everywhere. The plan's name (from the focus blocks) wins; DevOps's configured name is only a
+ * fallback for a client with no blocks, so "Northwind" never shows as "Northwind Foods" on one screen.
+ */
+export function clientNames(data: { planClients: readonly { clientKey: string; clientName: string }[]; devops?: readonly { clientKey: string; clientName: string }[] | null }): (key: string) => string {
+  const m = new Map<string, string>();
+  for (const c of data.devops ?? []) m.set(c.clientKey, c.clientName);
+  for (const c of data.planClients) m.set(c.clientKey, c.clientName);
+  return (k) => m.get(k) ?? k;
+}

@@ -18,7 +18,7 @@ export async function openWorkItem(clientKey: string, url: string): Promise<void
   }
 }
 
-export function WorkLink({ clientKey, url, className, title, children }: { clientKey: string; url: string | null | undefined; className?: string; title?: string; children: ReactNode }) {
+export function WorkLink({ clientKey, url, className, title, children }: { clientKey: string; url: string | null | undefined; className?: string | undefined; title?: string | undefined; children: ReactNode }) {
   const tabIndex = useScopedTab();
   if (!url || !isDevOpsUrl(url)) return <span className={className}>{children}</span>;
   const open = (e: MouseEvent) => {

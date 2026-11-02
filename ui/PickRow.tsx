@@ -1,5 +1,7 @@
 // One pick, one row (step 15, D269): checkbox, title, size chip, time, ⋯. The same row on week cards, Today and Plan
 // the day. Every other action (move, drop, timebox, open, Needs help from…) is in ⋯ and on right-click.
+// U2: density "today" is the same row on Today's Now, Check-in and Close out: no size chip, the title a link to
+// DevOps with its #id as the cue, "+ time" and ⋯ on hover only (always on the next pick), a badge and actions on the right.
 import { useContext, type DragEvent, type ReactNode } from "react";
 import { SIZES, type Pick, type Size } from "../plan/types.ts";
 import { focusLabel } from "../plan/focus.ts";
@@ -33,9 +35,18 @@ type Props = {
   draggable?: boolean;
   tabIndex?: number;
   className?: string;
+  /** U2: "today" for Today's Now, Check-in and Close out. */
+  density?: "default" | "today";
+  /** U2: the next pick: highlighted, its controls always shown. */
+  next?: boolean;
+  /** U2: on the right before the hover controls (a due badge, "45m focused", the fit word). */
+  badge?: ReactNode;
+  /** U2: always-visible buttons on the right (Start focus, the timer, one suggested move). */
+  actions?: ReactNode;
 };
 
-export function PickRow({ pick, toggle, link = false, canTick = true, timeEditable = true, hint = false, highlight = false, extra, readOnly = false, draggable = false, tabIndex, className = "" }: Props) {
+export function PickRow({ pick, toggle, link = false, canTick = true, timeEditable = true, hint = false, highlight = false, extra, readOnly = false, draggable = false, tabIndex, className = "", density = "default", next = false, badge, actions }: Props) {
+  const today = density === "today";
   const menu = useMenu((env) => pickMenu(env, pick));
   const { env } = useContext(MenuCtx);
   const focused = focusLabel(useFocused()(pick.id), pick.size);
@@ -53,21 +64,35 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
       </button>
     );
   return (
-    <li className={`pick-row ${pick.status}${highlight ? " trim" : ""} ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
+    <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
       <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} disabled={!canTick || pick.status === "dropped"} onChange={(e) => toggle(pick.id, e.target.checked)} onClick={stop} onDoubleClick={stop} aria-label={`Done: ${pick.title}`} />
       <span className="pr-title" title={pick.title}>
         {link && pick.itemUrl ? (
-          <WorkLink clientKey={pick.clientKey} url={pick.itemUrl}>
+          <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} className={today ? "pr-link" : undefined} title={today ? `Open #${pick.itemId ?? ""} in DevOps` : undefined}>
             {pick.title}
+            {today && pick.itemId !== null && <span className="pr-id">#{pick.itemId}</span>}
           </WorkLink>
         ) : (
           pick.title
         )}
       </span>
       {extra}
-      {sizeChip}
-      <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
-      {menu.button(`More for ${pick.title}`)}
+      {today ? (
+        <>
+          {badge}
+          {actions}
+          <span className="pr-hover">
+            <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
+            {menu.button(`More for ${pick.title}`)}
+          </span>
+        </>
+      ) : (
+        <>
+          {sizeChip}
+          <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
+          {menu.button(`More for ${pick.title}`)}
+        </>
+      )}
     </li>
   );
 }

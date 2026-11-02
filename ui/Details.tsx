@@ -90,7 +90,7 @@ export function Details({ open, day, slot, timeZone, colors, now, onClose }: Pro
       {works.map((w) => (
         <section key={w.clientKey} className="work-section">
           <h3>
-            Assigned to you in DevOps · {w.clientName}
+            Assigned to you in DevOps · {slot.focus.find((f) => f.clientKey === w.clientKey)?.clientName ?? w.clientName}
             <span className="muted"> · {w.items.length} open{w.status === "ok" ? "" : ` · ${workStatusLabel(w)}`}{w.fetchedAt ? ` · ${updatedAgo(w.fetchedAt, Date.now(), tz)}` : ""}</span>
           </h3>
           {w.message && <p className="muted">{w.message}</p>}

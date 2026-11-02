@@ -69,7 +69,8 @@ const nextMondayOf = (today: IsoDate) => {
 };
 
 /** One follow-up: due badge, who, what, where it came from; "Close the loop" and the ⋯ menu (Not needed, Snooze, Edit, Delete). */
-export function FollowUpRow({ l, timeZone, today, clients, onChanged }: { l: FollowUpView; timeZone: string; today: IsoDate; clients: readonly CaptureClient[]; onChanged: (msg?: string) => void }) {
+/** compact (U2, Close out): the due badge, who and what, Close the loop and ⋯; no kind, "New today" or when. */
+export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = false }: { l: FollowUpView; timeZone: string; today: IsoDate; clients: readonly CaptureClient[]; onChanged: (msg?: string) => void; compact?: boolean }) {
   const [mode, setMode] = useState<"none" | "close" | "snooze" | "edit">("none");
   const [menu, setMenu] = useState(false);
   const [note, setNote] = useState("");
@@ -96,20 +97,20 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged }: { l: Fol
   return (
     <li data-follow-up={l.id} className={`follow-up${l.closedAt ? " closed" : ""}${l.isNew && !l.closedAt ? " new" : ""}${l.dueState ? ` due-${l.dueState.level}` : ""}`}>
       <div className="follow-up-main">
-        <span className="follow-up-kind">{KIND_LABEL[l.kind] ?? "Follow-up"}</span>
+        {!compact && <span className="follow-up-kind">{KIND_LABEL[l.kind] ?? "Follow-up"}</span>}
         <DueBadge l={l} />
-        {l.isNew && !l.closedAt && <span className="follow-up-new">New today</span>}
+        {!compact && l.isNew && !l.closedAt && <span className="follow-up-new">New today</span>}
         <span className="follow-up-who">{l.hasWho ? l.who : "No one named"}</span>
         <span className="follow-up-what">{l.what}</span>
         {(l.kind === "manual" || l.kind === "capture") && <LinkedItem l={l} />}
-        <span className="muted follow-up-when">
+        {!compact && <span className="muted follow-up-when">
           {l.clientName && l.who !== l.clientName ? `${l.clientName} · ` : ""}
           {l.session ? `Flex session ${span(l.session, timeZone)} · ` : ""}opened {when(l.openedAt, timeZone)}
           {l.channel && !l.closedAt ? ` · on ${HOW_LABEL[l.channel as CloseHow] ?? l.channel}` : ""}
           {l.snoozedUntil && !l.closedAt ? ` · snoozed until ${plainDay(l.snoozedUntil)}` : ""}
           {closedText ? ` · ${closedText}` : ""}
-        </span>
-        {l.origin && (
+        </span>}
+        {!compact && l.origin && (
           <span className="follow-up-origin">
             Why: {l.origin.trigger}
             {l.origin.items.length ? ` (${l.origin.items.map((i) => (i.itemId ? `#${i.itemId} ${i.title}` : i.title)).join(", ")})` : ""} · {when(l.origin.at, timeZone)}

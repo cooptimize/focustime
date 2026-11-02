@@ -54,11 +54,17 @@ async function choose(item: MenuItem, push: (s: MenuStep) => void): Promise<bool
   return true;
 }
 
-function StepView({ step, query, onDone, push, back, canBack, autoFocusList }: { step: MenuStep; query: string; onDone: () => void; push: (s: MenuStep) => void; back: () => void; canBack: boolean; autoFocusList: boolean }) {
+/** U2: ⋯ menus show what can be done now. A disabled item stays only when it is expected there (its reason as a tooltip), or when nothing else is left. */
+export function visibleItems(items: readonly MenuItem[]): MenuItem[] {
+  const kept = items.filter((i) => !i.disabled || i.expected);
+  return kept.some((i) => !i.disabled) || !items.length ? kept : [...items];
+}
+
+function StepView({ step, query, onDone, push, back, canBack, autoFocusList, popup = false }: { step: MenuStep; query: string; onDone: () => void; push: (s: MenuStep) => void; back: () => void; canBack: boolean; autoFocusList: boolean; popup?: boolean }) {
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const shown = "items" in step ? filterCommands(step.items, query) : [];
+  const shown = "items" in step ? filterCommands(popup ? visibleItems(step.items) : step.items, query) : [];
   useEffect(() => {
     setActive(Math.max(0, shown.findIndex((i) => !i.disabled)));
   }, [step, query]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -192,7 +198,7 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList }: {
               <span className="menu-label">
                 {it.checked && <span aria-hidden="true">✓ </span>}
                 {it.label}
-                {it.disabled && <span className="menu-why"> · {it.disabled}</span>}
+                {it.disabled && !popup && <span className="menu-why"> · {it.disabled}</span>}
               </span>
               {it.hint && <span className="menu-hint">{it.hint.length <= 5 ? <kbd>{it.hint}</kbd> : it.hint}</span>}
               {it.next && <span className="menu-arrow" aria-hidden="true">›</span>}
@@ -257,7 +263,7 @@ export function PopupMenu({ at, step: first, onClose }: { at: { x: number; y: nu
         )}
         <span>{step.title}</span>
       </div>
-      <StepView step={step} query="" onDone={onClose} push={push} back={back} canBack={canBack} autoFocusList />
+      <StepView step={step} query="" onDone={onClose} push={push} back={back} canBack={canBack} autoFocusList popup />
     </div>
   );
 }

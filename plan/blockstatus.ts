@@ -3,7 +3,8 @@ import type { Risk } from "../week/types.ts";
 import type { Fit } from "./rules.ts";
 import { fitWords } from "./fit.ts";
 
-export type BlockStatus = { kind: "at_risk" | "too_much" | "tight" | "fits" | "none"; label: string; detail: string | null };
+/** short (U2): the risk's reason in a few words for the pill ("At risk · Dentist 12:00"); null when not at risk. */
+export type BlockStatus = { kind: "at_risk" | "too_much" | "tight" | "fits" | "none"; label: string; detail: string | null; short?: string | null };
 
 /**
  * At risk wins (a meeting or event threatens the block, red), then the plan's fit in the same calm words as Plan the
@@ -12,7 +13,7 @@ export type BlockStatus = { kind: "at_risk" | "too_much" | "tight" | "fits" | "n
  */
 export function blockStatus(fit: Fit | null, risks: readonly Risk[]): BlockStatus {
   const atRisk = risks.find((r) => r.severity === "at_risk");
-  if (atRisk) return { kind: "at_risk", label: "At risk", detail: atRisk.reason };
+  if (atRisk) return { kind: "at_risk", label: "At risk", detail: atRisk.reason, short: atRisk.short ?? null };
   const w = fitWords(fit);
   if (w.kind === "over") return { kind: "too_much", label: w.text, detail: "More planned than the block's free time. Shrink or move a pick" };
   if (w.kind === "fits") return { kind: "tight", label: w.text, detail: null };

@@ -80,27 +80,27 @@ export function evaluateRisks(input: RiskInput, t: RiskThresholds): RiskResult {
   // 1. Meeting load
   if (busyMeetingMinutes >= t.meetingWatchMinutes) {
     const severity: Severity = busyMeetingMinutes >= t.meetingAtRiskMinutes ? "at_risk" : "watch";
-    risks.push({ rule: "meeting_load", severity, reason: `${formatDuration(busyMeetingMinutes)} of meetings inside ${block}` });
+    risks.push({ rule: "meeting_load", severity, reason: `${formatDuration(busyMeetingMinutes)} of meetings inside ${block}`, short: `${formatDuration(busyMeetingMinutes)} of meetings` });
   }
 
   // 2. Personal conflict: timed events overlapping (at risk), all-day events on the day (watch)
   const overlapsWork = (p: PlacedEvent) => workMinutes([ms(p.clipStart), ms(p.clipEnd)]) > 0;
   for (const p of busy.filter((x) => x.event.isPersonal && overlapsWork(x))) {
     const range = formatRange(toZoned(p.event.start, input.timeZone), toZoned(p.event.end, input.timeZone));
-    risks.push({ rule: "personal_conflict", severity: "at_risk", reason: `${p.event.title} ${range} overlaps ${block}` });
+    risks.push({ rule: "personal_conflict", severity: "at_risk", reason: `${p.event.title} ${range} overlaps ${block}`, short: `${p.event.title} ${clockOf(p.event.start, input.timeZone)}` });
   }
   for (const e of input.allDay.filter((x) => x.isPersonal && isBusy(x))) {
-    risks.push({ rule: "personal_conflict", severity: "watch", reason: `All-day personal event: ${e.title}` });
+    risks.push({ rule: "personal_conflict", severity: "watch", reason: `All-day personal event: ${e.title}`, short: `${e.title} all day` });
   }
 
   // Q7: out of office puts covered half-days at risk; other all-day Outlook events flag only when busy.
   for (const p of busy.filter((x) => !x.event.isPersonal && x.event.showAs === "oof" && overlapsWork(x))) {
     const range = formatRange(toZoned(p.event.start, input.timeZone), toZoned(p.event.end, input.timeZone));
-    risks.push({ rule: "out_of_office", severity: "at_risk", reason: `Out of office (${p.event.title}) ${range} overlaps ${block}` });
+    risks.push({ rule: "out_of_office", severity: "at_risk", reason: `Out of office (${p.event.title}) ${range} overlaps ${block}`, short: `Out of office ${clockOf(p.event.start, input.timeZone)}` });
   }
   for (const e of input.allDay.filter((x) => !x.isPersonal)) {
-    if (e.showAs === "oof") risks.push({ rule: "out_of_office", severity: "at_risk", reason: `Out of office (${e.title}) covers ${block}` });
-    else if (e.showAs === "busy" || e.showAs === undefined) risks.push({ rule: "all_day_busy", severity: "watch", reason: `All-day busy event: ${e.title}` });
+    if (e.showAs === "oof") risks.push({ rule: "out_of_office", severity: "at_risk", reason: `Out of office (${e.title}) covers ${block}`, short: "Out of office" });
+    else if (e.showAs === "busy" || e.showAs === undefined) risks.push({ rule: "all_day_busy", severity: "watch", reason: `All-day busy event: ${e.title}`, short: `${e.title} all day` });
   }
 
   // 3. No focus window
@@ -109,16 +109,23 @@ export function evaluateRisks(input: RiskInput, t: RiskThresholds): RiskResult {
       rule: "no_focus_window",
       severity: "at_risk",
       reason: `Longest free stretch is ${formatDuration(longestFreeMinutes)}, under ${formatDuration(t.minFocusWindowMinutes)}, in ${block}`,
+      short: longestFreeMinutes ? `Longest gap ${formatDuration(longestFreeMinutes)}` : "No free time",
     });
   }
 
   // 4. Double-booked
   if (input.focus.length > 1) {
     const names = input.focus.map((b) => `${b.clientName} (${sourceLabel(b)})`);
-    risks.push({ rule: "double_booked_block", severity: "at_risk", reason: `Double-booked: ${names.join(" and ")}` });
+    risks.push({ rule: "double_booked_block", severity: "at_risk", reason: `Double-booked: ${names.join(" and ")}`, short: "Double-booked" });
   }
 
   return { risks, longestFreeMinutes, busyMeetingMinutes, freeGaps };
+}
+
+/** "12:00", "9:30": a start time for the short reason (no AM/PM; the card shows its own range). */
+function clockOf(at: string, tz: string): string {
+  const z = toZoned(at, tz);
+  return `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")}`;
 }
 
 export function worstSeverity(risks: readonly Risk[]): Severity | null {
