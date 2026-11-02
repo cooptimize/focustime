@@ -323,7 +323,6 @@ if (plan) {
   };
   const todayOf = (c: AppConfig) => localToday(instantNow().toString(), c.week.hours.timeZone);
   const vmCtx = () => vmContext(liveCtx);
-  const icon = existsSync(join(root, "system", "coopilot-icon.png")) ? join(root, "system", "coopilot-icon.png") : null;
 
   /** A button on a notification: the VM's Start and Restore (the timer's buttons go to checkTimer). */
   const act = async (n: Notice, key: string) => {
@@ -387,7 +386,7 @@ if (plan) {
   };
   const notifier = createNotifier({
     plan: store,
-    host: { show: (n, shown) => (headless ? Promise.resolve(null) : desktopNotify(n, icon, shown)), close: closeDesktopNotification },
+    host: { show: (n, shown) => (headless ? Promise.resolve(null) : desktopNotify(n, shown)), close: closeDesktopNotification },
     done,
     facts: async () => {
       const c = await configOrNull();

@@ -49,9 +49,12 @@ export async function checkReminder(d: ReminderDeps): Promise<boolean> {
   return true;
 }
 
+/** The icon name every notification carries (step 17.5): the hicolor icons installed by system/install-icons.sh. */
+export const NOTIFY_ICON = "coopilot";
+
 /** notify-send with a fixed argument list (no shell). Fire and forget: for a line that needs no buttons or click. */
 export function notifySend(title: string, body: string) {
-  const p = spawn("notify-send", ["--app-name=Coopilot", "--urgency=normal", title, body], { stdio: "ignore" });
+  const p = spawn("notify-send", ["--app-name=Coopilot", "--urgency=normal", `--icon=${NOTIFY_ICON}`, title, body], { stdio: "ignore" });
   p.on("error", () => {});
   p.unref();
 }
@@ -63,10 +66,10 @@ export function notifySend(title: string, body: string) {
  * prints the chosen key; resolves null when it is dismissed or expires. Only known keys are passed on (the notifier
  * checks again).
  */
-export function desktopNotify(n: Notice, icon: string | null = null, shown?: (handle: string) => void): Promise<string | null> {
+export function desktopNotify(n: Notice, shown?: (handle: string) => void): Promise<string | null> {
   return new Promise((resolve) => {
     // --print-id (Q91): the first line is the notification's id, so it can be closed when its occasion is handled.
-    const args = ["--app-name=Coopilot", "--urgency=normal", "--print-id", ...(icon ? [`--icon=${icon}`] : []), `--action=${OPEN_KEY}=Open`, ...n.buttons.map((b) => `--action=${b.key}=${b.label}`), n.title, n.body];
+    const args = ["--app-name=Coopilot", "--urgency=normal", "--print-id", `--icon=${NOTIFY_ICON}`, `--action=${OPEN_KEY}=Open`, ...n.buttons.map((b) => `--action=${b.key}=${b.label}`), n.title, n.body];
     const p = spawn("notify-send", args, { stdio: ["ignore", "pipe", "ignore"] });
     let out = "";
     let told = false;

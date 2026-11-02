@@ -158,3 +158,9 @@ lock += '<text x="100" y="52" font-family="IBM Plex Sans, Inter, system-ui, sans
 lock += '<text x="101" y="74" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="400" font-size="14" fill="currentColor" opacity="0.6">by Cooptimize</text>'
 write("lockup-horizontal.svg", svg(300, 92, lock, "Coopilot lockup", "Bent mark, Lumen, wordmark and by-line."))
 print("ok", sorted(os.listdir(OUT)))
+
+# ---------- favicon (step 17.5): mark-week in a square, dark by default, light under prefers-color-scheme ----------
+fav, _, _ = week("var(--am)", "var(--pm)", "var(--hollow)")
+fav_style = ("<style>svg{--am:#2F5F8C;--pm:#4FA3DD;--hollow:#9CC24F}"
+             "@media (prefers-color-scheme: light){svg{--am:#7FA6C9;--pm:#00416B;--hollow:#42783C}}</style>")
+write("favicon.svg", f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -55 200 200" width="32" height="32">{fav_style}{fav}</svg>')

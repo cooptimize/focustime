@@ -5,7 +5,7 @@ THEMES={"dark":{"brand-am":"#1E3A55","brand-pm":"#4FA3DD","accent":"#9CC24F","li
         "light":{"brand-am":"#7FA6C9","brand-pm":"#00416B","accent":"#42783C","lime":"#B2D235","ghost":"#B9C6D3","beam-blend":"multiply","cur":"#14212E","bg":"#F5F7FA"}}
 for theme,t in THEMES.items():
     out=os.path.join(SRC,"baked",theme); os.makedirs(out,exist_ok=True)
-    for f in sorted(x for x in os.listdir(SRC) if x.endswith(".svg")):
+    for f in sorted(x for x in os.listdir(SRC) if x.endswith(".svg") and x != "favicon.svg"):
         s=open(f"{SRC}/{f}").read()
         for k,v in t.items(): s=s.replace(f"var(--{k})",v)
         s=s.replace("currentColor",t["cur"])

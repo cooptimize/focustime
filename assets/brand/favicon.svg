@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -55 200 200" width="32" height="32"><style>svg{--am:#2F5F8C;--pm:#4FA3DD;--hollow:#9CC24F}@media (prefers-color-scheme: light){svg{--am:#7FA6C9;--pm:#00416B;--hollow:#42783C}}</style><rect x="9.5" y="9.5" width="37" height="23" rx="5" fill="none" stroke="var(--hollow)" stroke-width="3"/>
+<rect x="8" y="50" width="40" height="32" rx="6" fill="var(--pm)"/>
+<rect x="56" y="8" width="40" height="26" rx="6" fill="var(--am)"/>
+<rect x="56" y="50" width="40" height="32" rx="6" fill="var(--pm)"/>
+<rect x="104" y="8" width="40" height="26" rx="6" fill="var(--am)"/>
+<rect x="104" y="50" width="40" height="32" rx="6" fill="var(--pm)"/>
+<rect x="152" y="8" width="40" height="26" rx="6" fill="var(--am)"/>
+<rect x="152" y="50" width="40" height="32" rx="6" fill="var(--pm)"/></svg>

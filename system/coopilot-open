@@ -26,7 +26,7 @@ WINDOW_FILE="${XDG_RUNTIME_DIR:-/tmp}/coopilot/window-server-pid"
 
 fail() {
   echo "coopilot-open: $1" >&2
-  command -v notify-send >/dev/null && notify-send -a Coopilot "Coopilot" "$1" || true
+  command -v notify-send >/dev/null && notify-send -a Coopilot -i coopilot "Coopilot" "$1" || true
   exit 1
 }
 
