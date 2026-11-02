@@ -7,7 +7,10 @@
 import type React from "react";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { AheadState, RoadmapClient, RoadmapRow, RoadmapState, WeekLoadData } from "../actions/types.ts";
-import { barDates, cellChoices, dragBar, monthLoad, stepCell, timelineScale, type AheadColumn, type BarDates, type DragMode, type Scale } from "../plan/ahead.ts";
+import { barDates, cellChoices, dragBar, monthLoad, NEXT_WORDS, pastWords, readiness, stepCell, timelineScale, type AheadColumn, type BarDates, type DragMode, type MonthLoad, type NextStep, type ReadinessFlag, type Scale } from "../plan/ahead.ts";
+import type { DraftStory } from "../plan/types.ts";
+import { DraftEditorCtx } from "./DraftEditor.tsx";
+import { copy } from "./FollowUps.tsx";
 import { STATE_WORDS } from "../plan/roadmap.ts";
 import { call } from "./api.ts";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
@@ -88,9 +91,11 @@ export function PlanAhead({ data, switcher, onDone, onChanged }: { data: WeekLoa
   const labelW = width >= 2400 ? 440 : width >= 1600 ? 320 : 240;
   const cols = ahead?.columns ?? [];
   const months = cols.filter((c) => c.kind === "month").length;
-  // Weeks 1 to 4 get room for their cells; each month (four or five weeks) is compressed to 1.6 weeks' width.
-  const weekW = Math.max(90, Math.floor((width - labelW - 24) / (4 + 1.6 * months)));
-  const scale = useMemo(() => (cols.length ? timelineScale(cols, { week: weekW, month: Math.floor(weekW * 1.6) }) : null), [cols, weekW]);
+  const pastN = cols.filter((c) => c.kind === "past").length;
+  // Weeks 1 to 4 get room for their cells; each month (four or five weeks) is compressed to 1.6 weeks' width; the two
+  // past weeks take 0.8 each (planned against worked, read only).
+  const weekW = Math.max(90, Math.floor((width - labelW - 24) / (4 + 1.6 * months + 0.8 * pastN)));
+  const scale = useMemo(() => (cols.length ? timelineScale(cols, { week: weekW, month: Math.floor(weekW * 1.6), past: Math.floor(weekW * 0.8) }) : null), [cols, weekW]);
 
   const setBlocks = useCallback(
     async (clientKey: string, itemId: number, weekStart: string, blocks: number) => {
@@ -143,7 +148,7 @@ export function PlanAhead({ data, switcher, onDone, onChanged }: { data: WeekLoa
             <HeaderRow cols={cols} scale={scale} today={ahead.today} />
             {clients.length === 0 && <p className="muted">Nothing of yours in DevOps for the followed clients.</p>}
             {clients.map((c) => (
-              <ClientGroup key={c.clientKey} c={c} ahead={ahead} scale={scale} cols={cols} color={clientColor(c.clientKey, data.clients)} closed={closed} toggle={(id) => setClosed((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; })} setBlocks={setBlocks} setDates={setDates} save={save} canWrite={!!dw?.can(c.clientKey)} onNotice={setNotice} />
+              <ClientGroup key={c.clientKey} c={c} ahead={ahead} scale={scale} cols={cols} pastN={pastN} wide={labelW >= 440} color={clientColor(c.clientKey, data.clients)} closed={closed} toggle={(id) => setClosed((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; })} setBlocks={setBlocks} setDates={setDates} save={save} canWrite={!!dw?.can(c.clientKey)} onNotice={setNotice} onError={setError} onChanged={onChanged} />
             ))}
           </div>
         )}
@@ -158,9 +163,9 @@ function HeaderRow({ cols, scale, today }: { cols: AheadColumn[]; scale: Scale; 
       <div className="pa-label" role="columnheader">Feature or epic</div>
       <div className="pa-track" role="presentation">
         {cols.map((c, i) => (
-          <div key={c.from} className={`pa-col ${c.kind}`} role="columnheader" style={{ left: scale.colX(i), width: scale.colW(i) }} title={c.kind === "week" ? `Week ${c.index}: ${monthDay(c.from)} to ${monthDay(addDays(c.to, -1))}` : `${c.label}: ${plural(c.weeks.length, "week", "weeks")}, ${monthDay(c.from)} to ${monthDay(addDays(c.to, -1))}`}>
+          <div key={c.from} className={`pa-col ${c.kind}`} role="columnheader" style={{ left: scale.colX(i), width: scale.colW(i) }} title={c.kind === "week" ? `Week ${c.index}: ${monthDay(c.from)} to ${monthDay(addDays(c.to, -1))}` : c.kind === "past" ? `${monthDay(c.from)} to ${monthDay(addDays(c.to, -1))}: planned against focused time` : `${c.label}: ${plural(c.weeks.length, "week", "weeks")}, ${monthDay(c.from)} to ${monthDay(addDays(c.to, -1))}`}>
             <span className="pa-col-main">{c.label}</span>
-            <span className="pa-col-sub">{c.kind === "week" ? `Week ${c.index}` : plural(c.weeks.length, "week", "weeks")}</span>
+            <span className="pa-col-sub">{c.kind === "week" ? `Week ${c.index}` : c.kind === "past" ? (i === pastCount(cols) - 1 ? "Last week" : "2 weeks ago") : plural(c.weeks.length, "week", "weeks")}</span>
           </div>
         ))}
         <span className="pa-today" style={{ left: scale.x(today) }} aria-hidden="true" />
@@ -169,7 +174,14 @@ function HeaderRow({ cols, scale, today }: { cols: AheadColumn[]; scale: Scale; 
   );
 }
 
+const pastCount = (cols: readonly AheadColumn[]) => cols.filter((c) => c.kind === "past").length;
+
 type GroupProps = {
+  pastN: number;
+  /** A wide label column (3840): a single flag shows its words. */
+  wide: boolean;
+  onError: (s: string) => void;
+  onChanged: () => void;
   c: RoadmapClient;
   ahead: AheadState;
   scale: Scale;
@@ -188,6 +200,8 @@ function ClientGroup(p: GroupProps) {
   const { c, ahead, scale, cols } = p;
   const bars = useMemo(() => barsFor(c, ahead), [c, ahead]);
   const cap = ahead.clients.find((x) => x.clientKey === c.clientKey);
+  const loads = useMemo(() => monthLoads(c, cap, cols, bars), [c, cap, cols, bars]);
+  const crowded = useMemo(() => new Set(loads.filter((m) => m.crowded).map((m) => m.month)), [loads]);
   // Epics first (their features under them), then features with no epic listed, each by start date.
   const byStart = (a: RoadmapRow, b: RoadmapRow) => (bars.get(a.id)!.start).localeCompare(bars.get(b.id)!.start) || a.title.localeCompare(b.title);
   const epics = c.rows.filter((r) => r.tier === "epic").sort(byStart);
@@ -246,18 +260,19 @@ function ClientGroup(p: GroupProps) {
         </div>
       </div>
       {lines.map((l) => (
-        <BarRow key={l.bar.row.id} l={l} g={p} first={editable[0]?.bar.row.id === l.bar.row.id} focus={focus} setFocus={setFocus} move={move} cellRefs={cellRefs.current} drag={drag} dragSpan={dragSpan} setDragSpan={setDragSpan} />
+        <BarRow key={l.bar.row.id} l={l} g={p} crowded={crowded} first={editable[0]?.bar.row.id === l.bar.row.id} focus={focus} setFocus={setFocus} move={move} cellRefs={cellRefs.current} drag={drag} dragSpan={dragSpan} setDragSpan={setDragSpan} />
       ))}
-      <CapacityRow c={c} cap={cap} cols={cols} scale={scale} rows={c.rows} bars={bars} />
+      <CapacityRow c={c} cap={cap} cols={cols} scale={scale} loads={loads} ahead={ahead} />
     </section>
   );
 }
 
-function BarRow({ l, g, first, focus, setFocus, move, cellRefs, drag, dragSpan, setDragSpan }: { l: Line; g: GroupProps; first: boolean; focus: { id: number; week: number } | null; setFocus: (f: { id: number; week: number }) => void; move: (id: number, week: number, dRow: number, dWeek: number) => void; cellRefs: Map<string, HTMLElement>; drag: React.MutableRefObject<{ id: number; from: number; to: number } | null>; dragSpan: { id: number; from: number; to: number } | null; setDragSpan: (s: { id: number; from: number; to: number } | null) => void }) {
+function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, dragSpan, setDragSpan }: { l: Line; g: GroupProps; crowded: ReadonlySet<string>; first: boolean; focus: { id: number; week: number } | null; setFocus: (f: { id: number; week: number }) => void; move: (id: number, week: number, dRow: number, dWeek: number) => void; cellRefs: Map<string, HTMLElement>; drag: React.MutableRefObject<{ id: number; from: number; to: number } | null>; dragSpan: { id: number; from: number; to: number } | null; setDragSpan: (s: { id: number; from: number; to: number } | null) => void }) {
   const { bar: b } = l;
   const { c, ahead, scale } = g;
   const r = b.row;
-  const { open: openMenu } = useContext(MenuCtx);
+  const { env, open: openMenu } = useContext(MenuCtx);
+  const dw = useDevOpsWrite();
   const [live, setLive] = useState<{ start: string; end: string } | null>(null);
   const shown = live ?? { start: b.start, end: b.end };
   const x0 = scale.x(shown.start), x1 = scale.x(addDays(shown.end, 1));
@@ -267,6 +282,53 @@ function BarRow({ l, g, first, focus, setFocus, move, cellRefs, drag, dragSpan, 
   const cellOf = (w: string) => (isFeature ? ahead.cells.find((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.weekStart === w) : null);
   const epicBlocks = (w: string) => ahead.cells.filter((x) => x.clientKey === c.clientKey && kids.includes(x.itemId) && x.weekStart === w).reduce((n, x) => n + x.blocks, 0);
   const owned = r.relation === "owned";
+  const openDraft = useContext(DraftEditorCtx);
+  const flags = readiness({
+    tier: r.tier, state: r.status.state, owned, stories: r.done + r.open, start: b.start, target: r.targetDate, today: ahead.today, weeks: ahead.weeks,
+    plannedWeeks: isFeature ? ahead.cells.filter((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.blocks > 0).map((x) => x.weekStart) : [],
+    crowdedMonths: crowded, cols: g.cols, needsStories: isFeature && ahead.cells.some((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.blocks > 0 && x.fill === "needs_stories"),
+  });
+  const runNext = async (f: ReadinessFlag, n: NextStep) => {
+    try {
+      if (n === "brief") {
+        const res = await call<{ markdown: string }>("feature.brief", { clientKey: c.clientKey, itemId: r.id });
+        g.onNotice((await copy(res.markdown, null)) ? `Coop brief for #${r.id} copied` : "Copy didn't work: open the Roadmap row's ⋯ to copy the brief");
+      } else if (n === "breakdown") {
+        const res = await call<{ draft: DraftStory }>("draft.add_story", { clientKey: c.clientKey, parentItemId: r.id, title: `First story for ${r.title}` });
+        g.onChanged();
+        if (openDraft) openDraft(res.draft);
+        else g.onNotice(`A draft story is under ${r.title}`);
+      } else if (n === "draft_feature") {
+        const res = await call<{ draft: DraftStory }>("draft.add_feature", { clientKey: c.clientKey, parentItemId: r.id, title: `New feature for ${r.title}` });
+        g.onChanged();
+        if (openDraft) openDraft(res.draft);
+        else g.onNotice(`A draft feature is under ${r.title}`);
+      } else if (n === "set_target") {
+        if (!dw) return;
+        if (!dw.can(c.clientKey)) dw.enable(c.clientKey);
+        else dw.targetDate({ clientKey: c.clientKey, itemId: r.id, title: r.title, current: r.targetDate });
+      } else if (n === "ask_owner") {
+        const who = r.owner && r.owner !== "You" ? r.owner : (r.people.find((x) => x.name !== "You")?.name ?? null);
+        await call("followup.add", { clientKey: c.clientKey, itemId: r.id, what: `Ask about ${r.title}: ${f.text.toLowerCase()}`, channel: "teams", ...(who ? { who } : {}) });
+        g.onChanged();
+        g.onNotice(`Follow-up added${who ? ` for ${who}` : ""}: ask about ${r.title}`);
+      } else if (n === "help") {
+        env?.openHelp({ clientKey: c.clientKey, title: `#${r.id} ${r.title}`, url: r.url, itemId: r.id, pinned: null });
+      } else if (n === "plan_weeks") {
+        const i = ahead.weeks.slice(0, 4).findIndex((w) => !(ahead.cells.find((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.weekStart === w)?.blocks));
+        cellRefs.get(`${r.id}:${Math.max(0, i)}`)?.focus();
+      }
+    } catch (e) {
+      g.onError(e instanceof Error ? e.message : "That didn't work");
+    }
+  };
+  const showFlags = (e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    openMenu({ x: rect.left, y: rect.bottom + 4 }, {
+      title: `${r.title}: ready?`,
+      items: flags.flatMap((f) => f.next.map((n) => ({ id: `${f.kind}:${n}`, label: `${f.text}: ${NEXT_WORDS[n]}`, run: () => void runNext(f, n) }))),
+    });
+  };
 
   const startDrag = (mode: DragMode) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -321,6 +383,11 @@ function BarRow({ l, g, first, focus, setFocus, move, cellRefs, drag, dragSpan, 
         <span className="pa-title" title={`${r.title} (#${r.id}): ${r.status.reason}`}>
           <WorkLink clientKey={c.clientKey} url={r.url}>{r.title}</WorkLink>
         </span>
+        {flags.length > 0 && (
+          <button type="button" className="pa-flags" onClick={showFlags} aria-label={`${r.title}: ${plural(flags.length, "thing", "things")} to get ready: ${flags.map((f) => f.text).join("; ")}`} title={flags.map((f) => f.text).join("\n")}>
+            <span aria-hidden="true">⚑</span> {g.wide && flags.length === 1 ? flags[0]!.text : flags.length}
+          </button>
+        )}
         {b.changed && (
           <span className="pa-save">
             {owned ? (
@@ -350,18 +417,30 @@ function BarRow({ l, g, first, focus, setFocus, move, cellRefs, drag, dragSpan, 
           onPointerDown={startDrag("move")}
         >
           <span className="pa-handle start" onPointerDown={startDrag("start")} aria-hidden="true" />
-          {!(b.solid && !live) && <span className="pa-est">est.</span>}
+          {!(b.solid && !live) && x1 - x0 >= 44 && <span className="pa-est">est.</span>}
           <span className="pa-handle end" onPointerDown={startDrag("end")} aria-hidden="true" />
         </div>
         )}
         {b.ghostEnd && b.target && <span className="pa-ghost" style={{ left: scale.x(addDays(b.target, 1)), width: Math.max(4, scale.x(addDays(b.ghostEnd, 1)) - scale.x(addDays(b.target, 1))) }} title={`At the pace stories close, about ${monthDay(b.ghostEnd)}: after the target date`} aria-hidden="true" />}
         {b.target && b.target >= scale.from && b.target < scale.to && <span className="pa-diamond" style={{ left: scale.x(b.target) + (scale.x(addDays(b.target, 1)) - scale.x(b.target)) / 2 }} title={`Target ${monthDay(b.target)}`} aria-hidden="true" />}
         {endsLate && <span className="pa-beyond" title={`Ends ${monthDay(b.end)}, after these 12 weeks`}>→ {monthDay(b.end)}</span>}
+        {ahead.past.map((p, j) => {
+          const ids = new Set([r.id, ...r.stories.map((x) => x.id), ...(isFeature ? [] : c.rows.filter((x) => x.parentId === r.id).flatMap((x) => [x.id, ...x.stories.map((y) => y.id)]))]);
+          const planned = p.planned.filter((x) => x.clientKey === c.clientKey && (x.itemId === r.id || (!isFeature && kids.includes(x.itemId)))).reduce((n, x) => n + x.blocks, 0);
+          const minutes = p.worked.filter((x) => x.clientKey === c.clientKey && x.itemId !== null && ids.has(x.itemId)).reduce((n, x) => n + x.minutes, 0);
+          const words = pastWords(planned, minutes, ahead.blockMinutes);
+          if (!words) return null;
+          return (
+            <span key={p.weekStart} className="pa-past" style={{ left: scale.colX(j) + 2, width: scale.colW(j) - 4 }} title={`Week of ${monthDay(p.weekStart)}${p.committed ? "" : " (not committed)"}: ${words}`}>
+              <PastWords words={words} />
+            </span>
+          );
+        })}
         {ahead.weeks.slice(0, 4).map((w, i) => {
           const cell = cellOf(w);
           const n = isFeature ? (cell?.blocks ?? 0) : epicBlocks(w);
           const budget = cap?.weeks[i]?.budget ?? 0;
-          const style = { left: scale.colX(i) + 2, width: scale.colW(i) - 4 };
+          const style = { left: scale.colX(i + g.pastN) + 2, width: scale.colW(i + g.pastN) - 4 };
           const focused = focus?.id === r.id && focus.week === i;
           if (!isFeature)
             return (
@@ -438,6 +517,17 @@ function BarRow({ l, g, first, focus, setFocus, move, cellRefs, drag, dragSpan, 
   );
 }
 
+/** "planned 2, worked about 1" breaking only after the comma. */
+function PastWords({ words }: { words: string }) {
+  const [a, b] = words.split(", ");
+  return (
+    <span className="pa-pw">
+      <span>{b ? `${a},` : a}</span>
+      {b && <span>{b}</span>}
+    </span>
+  );
+}
+
 /** Whole blocks as filled segments (a number beside them past four). */
 function Segments({ n }: { n: number }) {
   return (
@@ -448,14 +538,38 @@ function Segments({ n }: { n: number }) {
   );
 }
 
-/** Under each client: weeks 1 to 4 against the whole-block budget (as Plan the week), then each month's load. */
-function CapacityRow({ c, cap, cols, scale, rows, bars }: { c: RoadmapClient; cap: AheadState["clients"][number] | undefined; cols: AheadColumn[]; scale: Scale; rows: RoadmapRow[]; bars: Map<number, Bar> }) {
+/** Each month's load for a client: blocks available against features (not epics) whose target, or else estimated end, falls in it. */
+function monthLoads(c: RoadmapClient, cap: AheadState["clients"][number] | undefined, cols: AheadColumn[], bars: Map<number, Bar>): MonthLoad[] {
+  return cols.flatMap((col) => {
+    if (col.kind !== "month") return [];
+    const available = cap?.months.find((m) => m.month === col.month)?.available ?? 0;
+    const due = c.rows.filter((r) => r.tier === "feature" && r.status.state !== "done").filter((r) => {
+      const end = r.targetDate ?? bars.get(r.id)?.end ?? null;
+      return !!end && end >= col.from && end < col.to;
+    }).length;
+    return [monthLoad(col, available, due)];
+  });
+}
+
+/** Under each client: the last 2 weeks (planned against worked), weeks 1 to 4 against the whole-block budget (as Plan the week), then each month's load. */
+function CapacityRow({ c, cap, cols, scale, loads, ahead }: { c: RoadmapClient; cap: AheadState["clients"][number] | undefined; cols: AheadColumn[]; scale: Scale; loads: MonthLoad[]; ahead: AheadState }) {
   return (
     <div className="pa-row pa-cap" role="row" aria-label={`${c.clientName}: blocks per week and month`}>
       <div className="pa-label muted" role="rowheader">Blocks</div>
       <div className="pa-track" role="presentation">
         {cols.map((col, i) => {
           const style = { left: scale.colX(i) + 2, width: scale.colW(i) - 4 };
+          if (col.kind === "past") {
+            const p = ahead.past.find((x) => x.weekStart === col.weekStart);
+            const planned = p?.planned.filter((x) => x.clientKey === c.clientKey).reduce((n, x) => n + x.blocks, 0) ?? 0;
+            const minutes = p?.worked.filter((x) => x.clientKey === c.clientKey).reduce((n, x) => n + x.minutes, 0) ?? 0;
+            const words = pastWords(planned, minutes, ahead.blockMinutes) ?? "nothing planned";
+            return (
+              <span key={col.from} className="pa-capcell past" style={style} title={`Week of ${monthDay(col.weekStart)}: ${words} (musts on that week's plan; focused time on its picks)`}>
+                <PastWords words={words} />
+              </span>
+            );
+          }
           if (col.kind === "week") {
             const w = cap?.weeks.find((x) => x.weekStart === col.weekStart);
             const why = w?.notCounted.length ? `Not counted: ${w.notCounted.join(" · ")}` : "";
@@ -465,13 +579,7 @@ function CapacityRow({ c, cap, cols, scale, rows, bars }: { c: RoadmapClient; ca
               </span>
             );
           }
-          const available = cap?.months.find((m) => m.month === col.month)?.available ?? 0;
-          // Features (not epics) whose target, or else estimated end, falls in this month.
-          const due = rows.filter((r) => r.tier === "feature" && r.status.state !== "done").filter((r) => {
-            const end = r.targetDate ?? bars.get(r.id)?.end ?? null;
-            return !!end && end >= col.from && end < col.to;
-          }).length;
-          const m = monthLoad(col, available, due);
+          const m = loads.find((x) => x.month === col.month)!;
           return (
             <span key={col.from} className={`pa-capcell month${m.crowded ? " crowded" : ""}`} style={style} title={m.crowded ? `${m.text}: fewer than 3 blocks for each feature due` : m.text}>
               {m.crowded && <strong className="pa-crowded">Crowded month</strong>}

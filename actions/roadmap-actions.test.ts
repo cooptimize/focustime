@@ -117,7 +117,7 @@ describe("roadmap.ahead and roadmap.set_dates (step 17, slice 2)", () => {
     expect(asked).toEqual([{ n: 12, withCalendars: 4, refresh: true }]);
     expect(d.today).toBe("2026-11-02");
     expect(d.weeks[0]).toBe("2026-11-02");
-    expect(d.columns.map((c) => c.label)).toEqual(["Nov 2", "Nov 9", "Nov 16", "Nov 23", "Dec", "Jan"]);
+    expect(d.columns.map((c) => c.label)).toEqual(["Oct 19", "Oct 26", "Nov 2", "Nov 9", "Nov 16", "Nov 23", "Dec", "Jan"]);
     const fab = d.clients.find((c) => c.clientKey === "Fabrikam")!;
     expect(fab.weeks.map((w) => [w.weekStart, w.budget, w.planned, w.status, w.text])).toEqual([
       ["2026-11-02", 2, 0, "none", "2 blocks free"],
@@ -130,6 +130,23 @@ describe("roadmap.ahead and roadmap.set_dates (step 17, slice 2)", () => {
     expect(d.cells.map((c) => [c.itemId, c.weekStart, c.blocks, c.tier, c.auto])).toEqual([[10, "2026-11-09", 3, "must", false], [11, "2026-11-16", 1, "nice", false]]);
     // Every shown number is whole.
     expect(JSON.stringify(d.clients)).not.toMatch(/\d\.\d/);
+  });
+  it("slice 3: the last 2 weeks, musts planned and focused minutes per pick item; fill on each cell", async () => {
+    const { ctx, plan } = withWeeks();
+    plan.addWeekItem({ weekStart: "2026-10-26", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 2 });
+    plan.addWeekItem({ weekStart: "2026-10-26", clientKey: "Fabrikam", itemId: 11, title: "Feature 11", itemType: "Feature", url: null, level: "feature", tier: "nice", blocks: 1 });
+    plan.commitWeek("2026-10-26");
+    const pick = plan.addPick({ date: "2026-10-27", half: "AM", clientKey: "Fabrikam", kind: "item", itemId: 2, title: "Story 2", size: "L" });
+    plan.addFocus({ pickId: pick.id, label: "Story 2", startedAt: "2026-10-27T09:00:00-05:00[America/Chicago]", endedAt: "2026-10-27T12:20:00-05:00[America/Chicago]", seconds: 200 * 60 });
+    plan.addWeekItem({ weekStart: "2026-11-02", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 1 });
+    const d = await ahead(ctx);
+    expect(d.columns.slice(0, 2).map((c) => [c.kind, c.label])).toEqual([["past", "Oct 19"], ["past", "Oct 26"]]);
+    expect(d.past).toEqual([
+      { weekStart: "2026-10-19", committed: false, planned: [], worked: [] },
+      { weekStart: "2026-10-26", committed: true, planned: [{ clientKey: "Fabrikam", itemId: 10, blocks: 2 }], worked: [{ clientKey: "Fabrikam", itemId: 2, minutes: 200 }] },
+    ]);
+    expect(d.blockMinutes).toBe(210);
+    expect(d.cells[0]).toMatchObject({ itemId: 10, blocks: 1, fill: "needs_stories" });
   });
   it("keeps dragged dates locally, clears them, and refuses bad input", async () => {
     const { ctx } = withWeeks();

@@ -360,6 +360,8 @@ export type RoadmapRow = {
   url: string;
   /** Owned: assigned to me. Contributing: the parent of a story assigned to me (D347). */
   relation: "owned" | "contributing";
+  /** Who it is assigned to ("You" when me; a display name, never an email), for "Ask owner as a follow-up". */
+  owner: string | null;
   /** The epic above it, when that epic is on the Roadmap too (Plan ahead nests it). */
   parentId: number | null;
   targetDate: string | null;
@@ -409,9 +411,16 @@ export type AheadState = {
     months: { month: string; available: number }[];
   }[];
   /** Each feature's whole blocks per week in weeks 1 to 4, from the week plans (what Plan the week shows). */
-  cells: { clientKey: string; itemId: number; weekStart: string; blocks: number; auto: boolean; tier: "must" | "nice"; weekItemId: number; stories: number }[];
+  cells: { clientKey: string; itemId: number; weekStart: string; blocks: number; auto: boolean; tier: "must" | "nice"; weekItemId: number; stories: number; /** Step 16.4 fill: its listed stories against its blocks. */ fill: "filled" | "needs_stories" | "over" }[];
   /** Dates dragged on the timeline, not saved to DevOps yet, per "<client>:<id>". */
   dates: Record<string, { start: string; end: string }>;
+  /**
+   * Slice 3: the 2 weeks before week 1. Musts' blocks from that week's plan (committed or not) and focused minutes per
+   * pick item (a story maps to its feature in the UI); whole minutes, shown only as whole blocks in words.
+   */
+  past: { weekStart: string; committed: boolean; planned: { clientKey: string; itemId: number; blocks: number }[]; worked: { clientKey: string; itemId: number | null; minutes: number }[] }[];
+  /** A block in minutes (size L, Settings > Planning), to turn focused time into whole blocks. */
+  blockMinutes: number;
 };
 
 // ---- Step 16.3: Teams presence ----

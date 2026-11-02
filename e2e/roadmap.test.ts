@@ -105,7 +105,7 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
 
   it("Plan ahead: weeks 1 to 4 then months, solid and estimated bars, target diamonds, a ghost past the target, a crowded month", async () => {
     const { page, errors } = await ahead();
-    await expect(page.locator(".pa-head .pa-col-main").allTextContents()).resolves.toEqual(["Nov 2", "Nov 9", "Nov 16", "Nov 23", "Dec", "Jan"]);
+    await expect(page.locator(".pa-head .pa-col-main").allTextContents()).resolves.toEqual(["Oct 19", "Oct 26", "Nov 2", "Nov 9", "Nov 16", "Nov 23", "Dec", "Jan"]);
     // DevOps Start Date and Target Date: solid. No start: estimated.
     await expect(barRow(page, "Patient intake form").locator(".pa-bar").getAttribute("class")).resolves.not.toContain(" est");
     await expect(barRow(page, "Loyalty points").locator(".pa-bar").getAttribute("class")).resolves.toContain(" est");
@@ -116,7 +116,7 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     // Atlas: two features due in December with few blocks.
     const atlasCap = page.locator('.pa-cap[aria-label="Atlas Freight: blocks per week and month"]');
     await expect(atlasCap.locator(".pa-capcell.crowded").textContent()).resolves.toMatch(/^Crowded month\s*\d+ blocks, 2 features due$/);
-    await expect(page.locator('.pa-cap[aria-label="Northwind Foods: blocks per week and month"] .pa-capcell').first().textContent()).resolves.toBe("3 planned, 2 available");
+    await expect(page.locator('.pa-cap[aria-label="Northwind Foods: blocks per week and month"] .pa-capcell:not(.past)').first().textContent()).resolves.toBe("3 planned, 2 available");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -190,6 +190,25 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     await expect(row.locator(".pa-save").textContent()).resolves.toContain("Not yours to save");
     await row.getByRole("button", { name: "Reset" }).click();
     await expect.poll(() => row.locator(".pa-save").count()).toBe(0);
+    await page.close();
+  }, T);
+
+  it("readiness: each flag with its next steps; Ask owner adds a follow-up; the last 2 weeks read planned against worked", async () => {
+    const { page, errors } = await ahead();
+    // Planned against worked, in words (demo: Northwind's export planned 2 last week, about 1 worked).
+    await expect(barRow(page, "Order history export").locator(".pa-past").allTextContents()).resolves.toEqual(["planned 1,worked about 1", "planned 2,worked about 1"]);
+    await expect(page.locator('.pa-cap[aria-label="Cooptimize: blocks per week and month"] .pa-capcell.past').allTextContents()).resolves.toEqual(["nothing planned", "planned 1,no focus time"]);
+    // Supplier onboarding: planned this week, no stories yet.
+    await barRow(page, "Supplier onboarding").locator(".pa-flags").click();
+    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual(expect.arrayContaining(["Starts this week, not scoped: Break it down", "Starts this week, not scoped: Copy Coop brief", "No target date: Set target date"]));
+    await page.keyboard.press("Escape");
+    // The stalled dashboard: Ask owner as a follow-up adds one to the Inbox.
+    await barRow(page, "Shipment tracking dashboard").locator(".pa-flags").click();
+    await page.getByRole("menuitem", { name: "Stalled: Ask owner as a follow-up" }).click();
+    await expect.poll(() => page.locator(".notice").textContent()).toContain("ask about Shipment tracking dashboard");
+    await page.evaluate(() => (location.hash = "#/inbox"));
+    await expect.poll(() => page.locator("body").textContent()).toContain("Ask about Shipment tracking dashboard: stalled");
+    expect(errors).toEqual([]);
     await page.close();
   }, T);
 

@@ -2552,3 +2552,25 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pa-capcell.crowded { background: color-mix(in oklab, var(--watch) 16%, var(--surface)); box-shadow: inset 0 0 0 1.5px var(--watch); }
 .pa-crowded { color: var(--watch); font-size: 11.5px; }
 .pa-before { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 11.5px; color: var(--text-muted); z-index: 2; }
+/* Step 17 slice 3: readiness flags and the last 2 weeks. */
+.pa-flags { flex: none; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 7px; border: 1px solid color-mix(in oklab, var(--watch) 70%, var(--border)); border-radius: 999px; background: color-mix(in oklab, var(--watch) 14%, var(--surface)); color: var(--text); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.pa-flags:hover, .pa-flags:focus-visible { background: color-mix(in oklab, var(--watch) 26%, var(--surface)); }
+.pa-col.past { background: color-mix(in oklab, var(--sunken) 80%, transparent); }
+.pa-col.past .pa-col-main { color: var(--text-muted); }
+.pa-past { position: absolute; top: 2px; bottom: 2px; z-index: 2; display: flex; align-items: center; padding: 0 6px; border-radius: 5px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); font-size: 11px; line-height: 1.2; color: var(--text); overflow: hidden; }
+.pa-capcell.past { font-weight: 500; white-space: normal; font-size: 11.5px; }
+.pa-pw { display: inline-flex; flex-wrap: wrap; column-gap: 0.3em; }
+.pa-pw > span { white-space: nowrap; }
+.pa-flags { min-width: 0; }
+/* Week cells sit above the bar, so the bar can be dragged anywhere along it (weeks 1 to 4 included). */
+.pa-item, .pa-item .pa-track { min-height: 46px; }
+.pa-item .pa-cell { top: 2px; bottom: auto; height: 22px; padding: 1px 4px; }
+.pa-item .pa-bar { top: auto; bottom: 6px; margin-top: 0; height: 13px; }
+.pa-item.epic .pa-bar { bottom: 8px; height: 8px; margin-top: 0; }
+.pa-item .pa-ghost { top: auto; bottom: 6px; margin-top: 0; height: 13px; }
+.pa-item .pa-diamond { top: auto; bottom: 6px; margin-top: 0; }
+.pa-item.epic .pa-diamond { bottom: 6px; }
+.pa-item .pa-est { font-size: 10px; }
+.pa-item .pa-before { top: auto; bottom: 4px; transform: none; }
+.pa-item, .pa-item .pa-track { min-height: 50px; }
+.pa-item .pa-past { top: 1px; bottom: auto; height: 28px; padding: 0 5px; font-size: 10.5px; line-height: 1.15; }

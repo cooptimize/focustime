@@ -22,6 +22,7 @@ export function aheadWeeks(thisMonday: IsoDate): IsoDate[] {
 }
 
 export type AheadColumn =
+  | { kind: "past"; weekStart: IsoDate; from: IsoDate; to: IsoDate; label: string }
   | { kind: "week"; index: number; weekStart: IsoDate; from: IsoDate; to: IsoDate; label: string }
   | { kind: "month"; month: string; weeks: IsoDate[]; from: IsoDate; to: IsoDate; label: string };
 
@@ -29,8 +30,11 @@ export type AheadColumn =
  * Weekly columns for weeks 1 to 4, then one column per month for weeks 5 to 12: a week belongs to the month its
  * Thursday is in, so a month column never holds a sliver. `to` is exclusive.
  */
-export function aheadColumns(weeks: readonly IsoDate[]): AheadColumn[] {
+export function aheadColumns(weeks: readonly IsoDate[], past: readonly IsoDate[] = []): AheadColumn[] {
+  const label = (w: IsoDate) => D(w).toLocaleString("en-US", { month: "short", day: "numeric" });
+  const before: AheadColumn[] = past.map((w) => ({ kind: "past", weekStart: w, from: w, to: plus(w, 7), label: label(w) }));
   const cols: AheadColumn[] = weeks.slice(0, PLAN_WEEKS).map((w, i) => ({ kind: "week", index: i + 1, weekStart: w, from: w, to: plus(w, 7), label: D(w).toLocaleString("en-US", { month: "short", day: "numeric" }) }));
+  cols.unshift(...before);
   for (const w of weeks.slice(PLAN_WEEKS)) {
     const thu = D(w).add({ days: 3 });
     const month = thu.toPlainYearMonth().toString();
@@ -46,8 +50,8 @@ export function aheadColumns(weeks: readonly IsoDate[]): AheadColumn[] {
 export type Scale = { width: number; from: IsoDate; to: IsoDate; x: (d: IsoDate) => number; dateAt: (x: number) => IsoDate; colX: (i: number) => number; colW: (i: number) => number };
 
 /** Pixel positions: each column a fixed width, dates spread evenly inside it. Dates outside clamp to the edges. */
-export function timelineScale(cols: readonly AheadColumn[], w: { week: number; month: number }): Scale {
-  const widths = cols.map((c) => (c.kind === "week" ? w.week : w.month));
+export function timelineScale(cols: readonly AheadColumn[], w: { week: number; month: number; past?: number }): Scale {
+  const widths = cols.map((c) => (c.kind === "week" ? w.week : c.kind === "past" ? (w.past ?? w.week) : w.month));
   const starts = widths.map((_, i) => widths.slice(0, i).reduce((a, b) => a + b, 0));
   const width = widths.reduce((a, b) => a + b, 0);
   const x = (d: IsoDate) => {
@@ -168,3 +172,90 @@ export function overbooked(
   const items = new Set(cells.filter((x) => x.blocks > 0 && over.has(`${x.clientKey}|${x.weekStart}`)).map((x) => `${x.clientKey}:${x.itemId}`));
   return { weeks: over.size, items };
 }
+
+/** The two weeks before week 1, shown as planned against worked. */
+export const PAST_WEEKS = 2;
+export const pastWeeks = (thisMonday: IsoDate): IsoDate[] => Array.from({ length: PAST_WEEKS }, (_, i) => plus(thisMonday, -7 * (PAST_WEEKS - i)));
+
+/** Focused minutes as whole blocks (a block is about one L), rounded. */
+export const workedBlocks = (minutes: number, blockMinutes: number): number => Math.round(minutes / Math.max(1, blockMinutes));
+
+/** "planned 2, worked about 1"; "planned 2, no focus time"; "not planned, worked about 1"; null when neither. */
+export function pastWords(planned: number, minutes: number, blockMinutes: number): string | null {
+  const w = workedBlocks(minutes, blockMinutes);
+  const worked = minutes <= 0 ? "no focus time" : w === 0 ? "worked under a block" : `worked about ${w}`;
+  if (planned > 0) return `planned ${planned}, ${worked}`;
+  return minutes > 0 ? `not planned, ${worked}` : null;
+}
+
+export type NextStep = "breakdown" | "brief" | "draft_feature" | "set_target" | "ask_owner" | "help" | "plan_weeks";
+export type ReadinessKind = "not_scoped" | "blocked" | "stalled" | "no_target" | "target_before_planned" | "gap_before_target" | "crowded" | "beyond" | "needs_stories";
+export type ReadinessFlag = { kind: ReadinessKind; text: string; next: NextStep[] };
+export type ReadinessInput = {
+  tier: "feature" | "epic";
+  state: string;
+  /** Assigned to me: I can set its dates; otherwise ask the owner. */
+  owned: boolean;
+  /** Its stories (an epic: features), any state. */
+  stories: number;
+  /** The bar's start (DevOps or estimated). */
+  start: IsoDate;
+  target: IsoDate | null;
+  today: IsoDate;
+  /** The 12 Mondays (week 1 is this week). */
+  weeks: readonly IsoDate[];
+  /** Weeks 1 to 4 with blocks for it. */
+  plannedWeeks: readonly IsoDate[];
+  crowdedMonths: ReadonlySet<string>;
+  cols: readonly AheadColumn[];
+  /** A week's blocks not filled by its listed stories (step 16.4 "needs more stories"). */
+  needsStories: boolean;
+};
+
+/**
+ * Plan ahead's readiness flags (step 17, slice 3), each with its next steps, in this order: not scoped, blocked,
+ * stalled, no target date, target before its last planned week, nothing planned before the target, crowded month,
+ * target beyond the 12 weeks, needs more stories. Done rows have none. Weeks count from this week (week 1).
+ */
+export function readiness(i: ReadinessInput): ReadinessFlag[] {
+  if (i.state === "done") return [];
+  const out: ReadinessFlag[] = [];
+  const monday = i.weeks[0]!;
+  const weekIdx = (d: IsoDate) => Math.floor(diff(monday, d) / 7);
+  const inWeeks = (d: IsoDate) => (weekIdx(d) <= 0 ? "this week" : `in ${weekIdx(d)} ${weekIdx(d) === 1 ? "week" : "weeks"}`);
+  const ask: NextStep = i.owned ? "set_target" : "ask_owner";
+  if (i.state === "not_scoped" || i.stories === 0) {
+    const when = i.start < monday ? "Started" : `Starts ${inWeeks(i.start)}`;
+    out.push(i.tier === "epic" ? { kind: "not_scoped", text: `${when}, no features`, next: ["draft_feature"] } : { kind: "not_scoped", text: `${when}, not scoped`, next: ["breakdown", "brief"] });
+  }
+  if (i.state === "blocked") out.push({ kind: "blocked", text: "Blocked", next: ["ask_owner", "help"] });
+  if (i.state === "stalled") out.push({ kind: "stalled", text: "Stalled", next: ["ask_owner", "help"] });
+  const end = plus(i.weeks[i.weeks.length - 1]!, 7);
+  const planned = [...i.plannedWeeks].sort();
+  const last = planned[planned.length - 1];
+  if (!i.target) out.push({ kind: "no_target", text: "No target date", next: [ask] });
+  else {
+    if (last && i.target < last) out.push({ kind: "target_before_planned", text: "Target date before its last planned week", next: [ask] });
+    if (i.target >= i.today && i.target < end && i.tier === "feature") {
+      const t = weekIdx(i.target);
+      if (!last) out.push({ kind: "gap_before_target", text: `Target ${inWeeks(i.target)}, nothing planned`, next: ["plan_weeks"] });
+      else if (weekIdx(last) < Math.min(t, PLAN_WEEKS - 1)) out.push({ kind: "gap_before_target", text: `Target ${inWeeks(i.target)}, nothing planned after week ${weekIdx(last) + 1}`, next: ["plan_weeks"] });
+    }
+    const m = monthOf(i.cols, i.target);
+    if (m && i.crowdedMonths.has(m)) out.push({ kind: "crowded", text: "Crowded month", next: [ask] });
+    if (i.target >= end) out.push({ kind: "beyond", text: "Target beyond 12 weeks", next: [ask] });
+  }
+  if (i.needsStories && i.tier === "feature") out.push({ kind: "needs_stories", text: "Needs more stories", next: ["breakdown", "brief"] });
+  return out;
+}
+
+/** The words on each next step. */
+export const NEXT_WORDS: Record<NextStep, string> = {
+  breakdown: "Break it down",
+  brief: "Copy Coop brief",
+  draft_feature: "Draft a feature",
+  set_target: "Set target date",
+  ask_owner: "Ask owner as a follow-up",
+  help: "Needs help from…",
+  plan_weeks: "Plan its weeks",
+};

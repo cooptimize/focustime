@@ -1,6 +1,6 @@
 // Step 17, slice 2: Plan ahead's timeline rules. Fictional data only.
 import { describe, expect, it } from "vitest";
-import { aheadColumns, aheadWeeks, barDates, cellChoices, dragBar, monthLoad, monthOf, overbooked, stepCell, timelineScale, type BarInput } from "./ahead.ts";
+import { aheadColumns, aheadWeeks, barDates, cellChoices, dragBar, monthLoad, monthOf, overbooked, pastWords, readiness, stepCell, timelineScale, workedBlocks, type BarInput, type ReadinessInput } from "./ahead.ts";
 
 const weeks = aheadWeeks("2026-11-02");
 const cols = aheadColumns(weeks);
@@ -113,4 +113,65 @@ describe("over-booked weeks", () => {
     expect(o.weeks).toBe(2);
     expect([...o.items].sort()).toEqual(["Contoso:1", "Fabrikam:9"]);
   });
+});
+
+describe("the last 2 weeks: planned vs worked, in plain words", () => {
+  it("adds two past weekly columns before this week", () => {
+    const c = aheadColumns(weeks, ["2026-10-19", "2026-10-26"]);
+    expect(c.slice(0, 3).map((x) => [x.kind, x.label])).toEqual([["past", "Oct 19"], ["past", "Oct 26"], ["week", "Nov 2"]]);
+    const s = timelineScale(c, { week: 140, month: 200, past: 100 });
+    expect(s.x("2026-11-02")).toBe(200);
+    expect(s.from).toBe("2026-10-19");
+  });
+  it("worked blocks are focused minutes over a block (size L), rounded; never a fraction", () => {
+    expect(pastWords(2, 200, 210)).toBe("planned 2, worked about 1");
+    expect(pastWords(2, 0, 210)).toBe("planned 2, no focus time");
+    expect(pastWords(1, 60, 210)).toBe("planned 1, worked under a block");
+    expect(pastWords(0, 420, 210)).toBe("not planned, worked about 2");
+    expect(pastWords(0, 0, 210)).toBeNull();
+    expect(workedBlocks(330, 210)).toBe(2);
+  });
+});
+
+describe("readiness flags, each with its next steps", () => {
+  const base: ReadinessInput = {
+    tier: "feature", state: "on_track", owned: true, stories: 3, start: "2026-11-09", target: "2026-12-11", today: "2026-11-02",
+    weeks, plannedWeeks: ["2026-11-09", "2026-11-16", "2026-11-23"], crowdedMonths: new Set(), cols, needsStories: false,
+  };
+  const kinds = (i: Partial<ReadinessInput>) => readiness({ ...base, ...i }).map((f) => f.kind);
+  it("a healthy feature has none", () => expect(readiness(base)).toEqual([]));
+  it("starts in N weeks, not scoped: Break it down or Copy Coop brief", () => {
+    const [f] = readiness({ ...base, state: "not_scoped", stories: 0, start: "2026-11-16" });
+    expect(f).toEqual({ kind: "not_scoped", text: "Starts in 2 weeks, not scoped", next: ["breakdown", "brief"] });
+    expect(readiness({ ...base, state: "not_scoped", stories: 0, start: "2026-11-03" })[0]!.text).toBe("Starts this week, not scoped");
+    expect(readiness({ ...base, state: "not_scoped", stories: 0, start: "2026-10-20" })[0]!.text).toBe("Started, not scoped");
+    expect(readiness({ ...base, tier: "epic", state: "not_scoped", stories: 0, start: "2026-11-16" })[0]).toEqual({ kind: "not_scoped", text: "Starts in 2 weeks, no features", next: ["draft_feature"] });
+  });
+  it("no target date: Set target date (mine), else ask the owner", () => {
+    expect(readiness({ ...base, target: null, plannedWeeks: [] })).toEqual([{ kind: "no_target", text: "No target date", next: ["set_target"] }]);
+    expect(readiness({ ...base, target: null, plannedWeeks: [], owned: false })[0]!.next).toEqual(["ask_owner"]);
+  });
+  it("target before its last planned week", () => {
+    expect(kinds({ target: "2026-11-13" })).toEqual(["target_before_planned"]);
+    expect(readiness({ ...base, target: "2026-11-13" })[0]!.text).toBe("Target date before its last planned week");
+  });
+  it("target in N weeks, nothing planned after week X (only inside weeks 1 to 4)", () => {
+    expect(readiness({ ...base, target: "2026-11-27", plannedWeeks: ["2026-11-09"] })).toEqual([{ kind: "gap_before_target", text: "Target in 3 weeks, nothing planned after week 2", next: ["plan_weeks"] }]);
+    // Target after week 4 and planned through week 4: nothing to flag yet.
+    expect(kinds({ target: "2026-12-30", plannedWeeks: ["2026-11-23"] })).toEqual([]);
+    expect(readiness({ ...base, target: "2026-11-20", plannedWeeks: [] })[0]!.text).toBe("Target in 2 weeks, nothing planned");
+  });
+  it("stalled or blocked: ask the owner as a follow-up, or find help", () => {
+    expect(readiness({ ...base, state: "stalled" })).toEqual([{ kind: "stalled", text: "Stalled", next: ["ask_owner", "help"] }]);
+    expect(readiness({ ...base, state: "blocked" })).toEqual([{ kind: "blocked", text: "Blocked", next: ["ask_owner", "help"] }]);
+  });
+  it("crowded month and a target beyond the 12 weeks", () => {
+    expect(readiness({ ...base, crowdedMonths: new Set(["2026-12"]) })).toEqual([{ kind: "crowded", text: "Crowded month", next: ["set_target"] }]);
+    expect(kinds({ target: "2027-03-01", plannedWeeks: [] })).toEqual(["beyond"]);
+    expect(readiness({ ...base, target: "2027-03-01", plannedWeeks: [] })[0]!.text).toBe("Target beyond 12 weeks");
+  });
+  it("needs more stories (blocks not filled by stories, as step 16.4)", () => {
+    expect(readiness({ ...base, needsStories: true })).toEqual([{ kind: "needs_stories", text: "Needs more stories", next: ["breakdown", "brief"] }]);
+  });
+  it("done rows have none", () => expect(readiness({ ...base, state: "done", target: null, stories: 0 })).toEqual([]));
 });

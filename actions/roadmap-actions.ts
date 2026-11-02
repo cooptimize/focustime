@@ -11,7 +11,8 @@ import { localToday, mondayOf } from "../week/dates.ts";
 import type { IsoDate } from "../week/types.ts";
 import type { ActionResponse, RoadmapClient, RoadmapRow, RoadmapState, RoadmapStory } from "./types.ts";
 import type { PortfolioItem, Week } from "../week/types.ts";
-import { aheadColumns, aheadWeeks, PLAN_WEEKS } from "../plan/ahead.ts";
+import { aheadColumns, aheadWeeks, pastWeeks, PLAN_WEEKS } from "../plan/ahead.ts";
+import { DEFAULT_PLAN } from "../config/schema.ts";
 import { borrowedForWeek, weekBudget } from "../plan/weekplan.ts";
 import { estimate } from "../plan/estimate.ts";
 import type { AheadState } from "./types.ts";
@@ -88,6 +89,7 @@ export async function roadmapAction(ctx: RoadmapContext, action: RoadmapAction, 
         return {
           id: i.id, title: i.title, type: i.type, tier: i.tier, state: i.state, url: i.url,
           relation: i.why.includes("assigned") ? "owned" : "contributing",
+          owner: i.mine ? "You" : (i.assignedTo ?? null),
           parentId: i.parentId !== null && ids.has(i.parentId) ? i.parentId : null,
           targetDate: i.targetDate, startDate: i.startDate ?? null, hasStartField: !!p.startFields?.[i.type],
           ...c, blocked, lastActivity: last, firstActivity: firstActivity(i), people: people(c.people), trend: t.points,
@@ -148,7 +150,8 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
   if (!cfg) return bad("Fix the config first", 409);
   const today = localToday(ctx.now(), cfg.week.hours.timeZone);
   const weekStarts = aheadWeeks(mondayOf(today));
-  const columns = aheadColumns(weekStarts);
+  const past = pastWeeks(weekStarts[0]!);
+  const columns = aheadColumns(weekStarts, past);
   const weeks = await ctx.weeks(cfg, weekStarts, PLAN_WEEKS, o.refresh === true);
   const borrowed = plan.borrowedFor(weekStarts[0]!, Temporal.PlainDate.from(weekStarts[PLAN_WEEKS - 1]!).add({ days: 6 }).toString());
   type Cap = AheadState["clients"][number];
@@ -168,7 +171,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     }
     // Each feature's whole blocks that week: as set, or (no count) what its stories add up to.
     const est = estimate(items.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })));
-    for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, blocks: env.blocks, auto: env.auto, tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length });
+    for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, blocks: env.blocks, auto: env.auto, tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length, fill: env.fill });
   });
   // Weeks 5 to 12: blocks available per month column (patterns and PTO; meetings aren't known that far ahead).
   for (const col of columns) {
@@ -191,7 +194,31 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
       if (!c.weeks.some((x) => x.weekStart === w)) c.weeks.push({ weekStart: w, budget: 0, planned: 0, nicePlanned: 0, status: "none", text: "No blocks this week", notCounted: [] });
   for (const c of caps.values()) c.weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const dates = Object.fromEntries(plan.roadmapDates());
-  const state: AheadState = { today, weeks: weekStarts, columns, clients: [...caps.values()], cells, dates };
+  // The last 2 weeks: each feature's blocks on that week's plan against the focused time on its picks (slice 3).
+  const pastOut: AheadState["past"] = past.map((w) => {
+    const wp = plan.weekPlan(w);
+    const est = estimate(wp.features.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })));
+    const picks = plan.picksBetween(w, Temporal.PlainDate.from(w).add({ days: 6 }).toString());
+    const secs = plan.focusedSeconds(picks.map((p) => p.id));
+    const worked = new Map<string, number>();
+    for (const p of picks) {
+      const m = Math.round((secs[p.id] ?? 0) / 60);
+      if (m <= 0) continue;
+      const k = `${p.clientKey}|${p.itemId ?? ""}`;
+      worked.set(k, (worked.get(k) ?? 0) + m);
+    }
+    return {
+      weekStart: w,
+      committed: !!wp.committedAt,
+      planned: est.envelopes.filter((e) => e.feature.tier === "must").map((e) => ({ clientKey: e.feature.clientKey, itemId: e.feature.itemId, blocks: e.blocks })),
+      worked: [...worked].map(([k, minutes]) => {
+        const [clientKey, id] = k.split("|");
+        return { clientKey: clientKey!, itemId: id ? Number(id) : null, minutes };
+      }),
+    };
+  });
+  const blockMinutes = (cfg.plan ?? DEFAULT_PLAN).sizes.L;
+  const state: AheadState = { today, weeks: weekStarts, columns, clients: [...caps.values()], cells, dates, past: pastOut, blockMinutes };
   return { ok: true, data: state };
 }
 

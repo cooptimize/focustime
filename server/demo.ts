@@ -97,5 +97,26 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
     ["Northwind", 1150, [[0, 1], [0, 1], [0, 1]]],
     ["Harbor", 2240, [[0, 2], [1, 1], [2, 0]]],
   ];
+  // Step 17 (slice 3): the last 2 weeks for Plan ahead's planned against worked: committed week plans and focused time
+  // on picks settled as dropped (nothing carries over into today, and no DevOps update follow-up opens).
+  const plan = ctx.plan;
+  if (plan) {
+    const past: [number, [string, number, string, number][], [string, number, string, number, number][]][] = [
+      [-14, [["Northwind", 1110, "Order history export", 1]], [["Northwind", 1114, "Order export API endpoint", 1, 220]]],
+      [-7, [["Northwind", 1110, "Order history export", 2], ["Harbor", 2210, "Patient intake form", 1], ["Cooptimize", 4410, "Internal reporting refresh", 1]], [["Northwind", 1111, "Export orders to CSV", 1, 200], ["Harbor", 2211, "Insurance card upload", 3, 60]]],
+    ];
+    for (const [n, features, picks] of past) {
+      const ws = Temporal.PlainDate.from(weekStart).add({ days: n }).toString();
+      for (const [clientKey, itemId, title, blocks] of features) plan.addWeekItem({ weekStart: ws, clientKey, itemId, title, itemType: "Feature", url: null, level: "feature", tier: "must", blocks });
+      plan.commitWeek(ws);
+      for (const [clientKey, itemId, title, dayN, minutes] of picks) {
+        const date = Temporal.PlainDate.from(ws).add({ days: dayN }).toString();
+        const pick = plan.addPick({ date, half: "AM", clientKey, kind: "item", itemId, title, itemType: "User Story", size: "L" });
+        const start = Temporal.ZonedDateTime.from({ timeZone: tz, year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)), day: Number(date.slice(8, 10)), hour: 9 });
+        plan.addFocus({ pickId: pick.id, label: title, startedAt: start.toString(), endedAt: start.add({ minutes }).toString(), seconds: minutes * 60 });
+        plan.drop(pick.id);
+      }
+    }
+  }
   [-21, -14, -7].forEach((n, i) => ctx.plan?.recordSnapshots(day(n), history.map(([clientKey, itemId, c]) => ({ clientKey, itemId, done: c[i]![0], open: c[i]![1] }))));
 }
