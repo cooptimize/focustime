@@ -249,11 +249,29 @@ describe("event menus by editing tier (step 13)", () => {
     expect(calls).toContainEqual(["editEvent", { id: "A", showAs: "free" }]);
   });
   it("a meeting with other attendees: only Open in Outlook; every edit off with a reason", () => {
-    const { e, calls } = env({ eventEdit: { "outlook:B": { isOrganizer: false, others: 3, recurring: false, allDay: false, marker: null, webLink: web } } });
+    const { e, calls } = env({ eventEdit: { "outlook:B": { isOrganizer: true, others: 3, recurring: false, allDay: false, marker: null, webLink: web } } });
     const m = eventMenu(e, ev("outlook:B", "Sprint review"));
     for (const i of items(m)) if (i.id !== "open") expect(typeof i.disabled === "string" && i.disabled.length > 0).toBe(true);
     items(m).find((i) => i.id === "open")!.run!();
     expect(calls).toContainEqual(["outlook", web]);
+  });
+  it("a meeting someone else invited me to: Accept, Tentative and Decline with a note and a proposed time; still no edits (step 16)", async () => {
+    const calls: unknown[][] = [];
+    const { e } = env({ rsvp: (i) => void calls.push(["rsvp", i]), eventEdit: { "outlook:B": { isOrganizer: false, others: 3, recurring: false, allDay: false, marker: null, webLink: web, response: "tentativelyAccepted", organizer: "Dana Morales", proposals: true } } });
+    const m = eventMenu(e, ev("outlook:B", "Sprint review"));
+    const on = labels(m).filter(([, s]) => s === "on").map(([l]) => l);
+    expect(on).toEqual(["Accept…", "Tentative…", "Decline…", "Open in Outlook"]);
+    expect(items(m).some((i) => i.id === "move")).toBe(false);
+    expect(items(m).find((i) => i.id === "rsvp-tentativelyAccepted")).toMatchObject({ checked: true, hint: "your answer now" });
+    const accept = items(m).find((i) => i.id === "rsvp-accepted")!.next!();
+    if (!("fields" in accept)) throw new Error("expected a form");
+    expect(accept.fields.map((f) => f.key)).toEqual(["comment"]);
+    const decline = items(m).find((i) => i.id === "rsvp-declined")!.next!();
+    if (!("fields" in decline)) throw new Error("expected a form");
+    expect(decline.fields.map((f) => f.label)).toEqual(["Note to Dana Morales", "Propose a new start", "and end"]);
+    expect(await decline.save({ comment: "", start: "15:00", end: "" })).toBe(false);
+    await decline.save({ comment: " Out that afternoon ", start: "15:00", end: "15:30" });
+    expect(calls).toEqual([["rsvp", { id: "B", response: "declined", comment: "Out that afternoon", proposedStart: "2026-11-03T15:00:00-05:00", proposedEnd: "2026-11-03T15:30:00-05:00" }]]);
   });
   it("without write access, my own event offers no edits", () => {
     const { e } = env({ canWrite: false, eventEdit: { "outlook:A": { isOrganizer: true, others: 0, recurring: false, allDay: false, marker: null, webLink: web } } });

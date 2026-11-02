@@ -13,17 +13,21 @@ export type EditFacts = {
   /** Coopilot's marker value, when the event carries one. */
   marker: string | null;
   webLink: string | null;
+  /** Step 16 (D283): my response (Graph's value), the organizer's name for a meeting I'm invited to, and whether new times may be proposed. */
+  response?: string | null;
+  organizer?: string | null;
+  proposals?: boolean;
 };
 
 export type Tier = "coopilot" | "invite" | "mine" | "meeting" | "readonly" | "unknown";
-export type EditAction = "move" | "resize" | "retitle" | "show_as" | "delete" | "cancel" | "open";
+export type EditAction = "move" | "resize" | "retitle" | "show_as" | "delete" | "cancel" | "open" | "rsvp";
 export type ActionState = { id: EditAction; allowed: boolean; reason?: string };
 export type EventEdit = { tier: Tier; actions: ActionState[]; webLink: string | null; why: string };
 
 export const TIMEBOX_MARKER = /^tb-[0-9a-f-]{36}$/;
 export const INVITE_MARKER = /^inv-[0-9a-f-]{36}$/;
 
-const ALL: EditAction[] = ["move", "resize", "retitle", "show_as", "delete", "cancel", "open"];
+const ALL: EditAction[] = ["move", "resize", "retitle", "show_as", "delete", "cancel", "open", "rsvp"];
 const REASON = {
   meeting: "Others are on this meeting, so Coopilot won't change it: open it in Outlook",
   mineTitle: "Coopilot never changes the title or body of your own events",
@@ -36,6 +40,8 @@ const REASON = {
   invite: "A help invite with attendees: only cancelling is done from Coopilot (Undo in Settings > Data)",
   cancelOnly: "Only invites Coopilot sent can be cancelled here",
   coopilotOnly: "Only events Coopilot created",
+  rsvpOnly: "Only meetings someone else invited you to can be answered",
+  rsvpOrganizer: "You organize this meeting, so there is nothing to answer",
 };
 
 /** The tier of an Outlook event from its scan facts (null: not scanned, or no write access). */
@@ -64,7 +70,7 @@ export function eventEdit(e: Pick<CalEvent, "source" | "allDay">, f: EditFacts |
   }
   switch (tier) {
     case "coopilot":
-      return { tier, why: "Created by Coopilot: edit it here, the event and its timebox are one thing", webLink, actions: ALL.map((a) => (a === "cancel" ? st(a, false, REASON.cancelOnly) : a === "open" ? open : st(a, true))) };
+      return { tier, why: "Created by Coopilot: edit it here, the event and its timebox are one thing", webLink, actions: ALL.map((a) => (a === "cancel" ? st(a, false, REASON.cancelOnly) : a === "rsvp" ? st(a, false, REASON.rsvpOnly) : a === "open" ? open : st(a, true))) };
     case "invite":
       return { tier, why: REASON.invite, webLink, actions: ALL.map((a) => (a === "cancel" || a === "open" ? st(a, true) : st(a, false, REASON.invite))) };
     case "mine": {
@@ -78,14 +84,23 @@ export function eventEdit(e: Pick<CalEvent, "source" | "allDay">, f: EditFacts |
           if (a === "retitle") return st(a, false, REASON.mineTitle);
           if (a === "delete") return st(a, false, REASON.mineDelete);
           if (a === "cancel") return st(a, false, REASON.cancelOnly);
+          if (a === "rsvp") return st(a, false, REASON.rsvpOnly);
           if (lock) return st(a, false, lock);
           if (a === "show_as") return st(a, true);
           return st(a, true);
         }),
       };
     }
-    default:
-      return { tier, why: REASON.meeting, webLink, actions: ALL.map((a) => (a === "open" ? open : st(a, false, REASON.meeting))) };
+    default: {
+      // Step 16 (D283): a meeting someone else organizes can be answered (my response only; the meeting isn't edited).
+      const invited = !f!.isOrganizer && f!.others > 0;
+      return {
+        tier,
+        why: invited ? "A meeting you're invited to: answer it here, change anything else in Outlook" : REASON.meeting,
+        webLink,
+        actions: ALL.map((a) => (a === "open" ? open : a === "rsvp" ? st(a, invited, REASON.rsvpOrganizer) : st(a, false, REASON.meeting))),
+      };
+    }
   }
 }
 

@@ -3,6 +3,10 @@
 // with timeboxes, whether Outlook needs a change, which Outlook events are Coopilot's own, and how a write is undone.
 import type { CalEvent, IsoDate } from "../week/types.ts";
 
+/** The three answers to a meeting (step 16), as Graph's responseStatus names them. */
+export const RSVP_RESPONSES = ["accepted", "tentativelyAccepted", "declined"] as const;
+export type RsvpResponse = (typeof RSVP_RESPONSES)[number];
+
 export type Timebox = {
   id: number;
   /** The stable id that becomes the Outlook marker value. */
@@ -73,7 +77,11 @@ export type Attendee = { name: string; email: string };
  * The fields Coopilot writes. Timeboxes: subject, body, start, end, show as, no reminder. Invites (step 13) add the
  * attendees and whether it is a Teams meeting.
  */
-export type Fields = { subject: string; body: string; start: string; end: string; showAs: OutlookShowAs; reminder: false; attendees?: Attendee[]; teams?: boolean };
+export type Fields = {
+  subject: string; body: string; start: string; end: string; showAs: OutlookShowAs; reminder: false; attendees?: Attendee[]; teams?: boolean;
+  /** Step 16 (D284), RSVP only: my response, the note sent with it, a proposed new time, and the organizer's name. */
+  response?: string; comment?: string; proposed?: { start: string; end: string }; organizer?: string;
+};
 /** The fields Coopilot writes to Outlook: "<client>: <title>", its show as (Busy by default), no reminder, the DevOps link in the body. */
 export function outlookFields(tb: Pick<Timebox, "title" | "url" | "start" | "end"> & { showAs?: OutlookShowAs }, clientName: string): Fields {
   return {
@@ -152,7 +160,7 @@ export const dayTimeboxes = <T extends Pick<Timebox, "date" | "start" | "removed
 /** Local state a write log entry keeps, so undo can put the timebox back too. */
 export type LocalState = { start: string; end: string; outlook: boolean; removedAt: string | null; title?: string; showAs?: OutlookShowAs; date?: string };
 /** What a write was for (step 13): a timebox's event, one of my own events, a help invite, or a sync from Outlook. */
-export type WriteKind = "timebox" | "event" | "invite" | "sync";
+export type WriteKind = "timebox" | "event" | "invite" | "sync" | "rsvp";
 export type WriteRecord = { op: SyncOp; uid: string; eventId: string | null; before: Fields | null; after: Fields | null; localBefore: LocalState | null; kind?: WriteKind };
 /**
  * How to undo a write: delete what was created (an invite is cancelled, so attendees hear), put back what was changed,
@@ -161,6 +169,14 @@ export type WriteRecord = { op: SyncOp; uid: string; eventId: string | null; bef
  */
 export function undoOf(w: WriteRecord): { op: SyncOp; uid: string; eventId: string | null; fields: Fields | null; local: LocalState | null } | null {
   if (w.kind === "sync") return null;
+  // Step 16 (D284): an RSVP is undone by a new response restoring the previous one, without the note or a proposed
+  // time. Graph can't take a response back, so there is no undo when there was none before.
+  if (w.kind === "rsvp") {
+    const prev = w.before?.response;
+    if (!w.eventId || !w.before || !prev || !RSVP_RESPONSES.includes(prev as never)) return null;
+    const { comment: _c, proposed: _p, ...fields } = w.before;
+    return { op: "update", uid: w.uid, eventId: w.eventId, fields, local: null };
+  }
   if (w.kind === "invite" && w.op !== "create") return null;
   if (w.op === "create") return w.eventId ? { op: "delete", uid: w.uid, eventId: w.eventId, fields: null, local: w.localBefore } : null;
   if (w.op === "update") return w.eventId && w.before ? { op: "update", uid: w.uid, eventId: w.eventId, fields: w.before, local: w.localBefore } : null;

@@ -6,6 +6,7 @@ import type { Logger } from "../../log/logger.ts";
 import type { EditFacts } from "../../plan/caltier.ts";
 import type { Attendee, Fields, OutlookShowAs } from "../../plan/timebox.ts";
 import { domainAllowed } from "../../plan/collab.ts";
+import { RSVP_ENDPOINT, rsvpBody, rsvpProblem, type MeetingFacts, type RsvpResponse } from "../../plan/rsvp.ts";
 import { HttpError, NetworkError } from "../calendar/http.ts";
 
 const API = "https://graph.microsoft.com/v1.0/";
@@ -14,7 +15,9 @@ export const MARKER_PROP = "String {5b0f3c1e-8a2d-4e7f-9c41-6d2a8e0b7f13} Name C
 /** All writer calls: times in UTC and immutable event ids (so ids survive moves between folders). */
 export const WRITE_PREFER = 'outlook.timezone="UTC", IdType="ImmutableId"';
 const SELECT = "subject,start,end,showAs,isReminderOn,isCancelled";
-const SCAN_SELECT = "subject,start,end,showAs,isAllDay,isCancelled,isOrganizer,attendees,type,webLink";
+const SCAN_SELECT = "subject,start,end,showAs,isAllDay,isCancelled,isOrganizer,attendees,type,webLink,responseStatus,organizer,allowNewTimeProposals";
+/** Step 16: what an RSVP reads. The organizer's name is kept; attendee addresses are only counted. */
+const MEETING_SELECT = "subject,start,end,showAs,isCancelled,isOrganizer,attendees,responseStatus,organizer,allowNewTimeProposals";
 const OWN_SELECT = "subject,start,end,showAs,isAllDay,isCancelled,isOrganizer,attendees,type";
 const expandMarker = `singleValueExtendedProperties($filter=id eq '${MARKER_PROP}')`;
 
@@ -34,6 +37,8 @@ export class OwnershipError extends Error {
 export class GoneError extends Error {}
 /** One of my own events that Coopilot may not change (others on it, repeating, all-day, or marked). Nothing changed. */
 export class NotMineError extends Error {}
+/** A meeting Coopilot won't answer (I organize it, it's Coopilot's, nobody else, cancelled). Nothing was sent. */
+export class RsvpRefused extends Error {}
 /** An attendee outside the allowed domains. Nothing was sent. */
 export class DomainError extends Error {
   constructor() {
@@ -267,7 +272,12 @@ export function createGraphWriter(d: GraphWriterDeps) {
     return "deleted";
   }
 
-  type RawPlus = GraphRaw & { isAllDay?: unknown; isOrganizer?: unknown; attendees?: { emailAddress?: { address?: unknown } }[]; type?: unknown; webLink?: unknown; isOnlineMeeting?: unknown };
+  type RawPlus = GraphRaw & {
+    isAllDay?: unknown; isOrganizer?: unknown; attendees?: { emailAddress?: { address?: unknown } }[]; type?: unknown; webLink?: unknown; isOnlineMeeting?: unknown;
+    responseStatus?: { response?: unknown }; organizer?: { emailAddress?: { name?: unknown } }; allowNewTimeProposals?: unknown;
+  };
+  const responseOf = (r: RawPlus) => (typeof r.responseStatus?.response === "string" ? r.responseStatus.response : null);
+  const organizerOf = (r: RawPlus) => (typeof r.organizer?.emailAddress?.name === "string" ? r.organizer.emailAddress.name : null);
   const othersOf = (r: RawPlus) => (Array.isArray(r.attendees) ? r.attendees.length : 0);
 
   /**
@@ -294,7 +304,11 @@ export function createGraphWriter(d: GraphWriterDeps) {
         out.push({
           id: e.id, start: e.start, end: e.end, showAs: e.showAs,
           subject: e.marker ? e.subject : null,
-          facts: { isOrganizer: r.isOrganizer === true, others: othersOf(r), recurring: typeof r.type === "string" && r.type !== "singleInstance", allDay: r.isAllDay === true, marker: e.marker, webLink: web },
+          facts: {
+            isOrganizer: r.isOrganizer === true, others: othersOf(r), recurring: typeof r.type === "string" && r.type !== "singleInstance", allDay: r.isAllDay === true, marker: e.marker, webLink: web,
+            // Step 16: my response and the organizer's name (meetings I'm invited to), and whether new times may be proposed.
+            response: responseOf(r), organizer: r.isOrganizer === true ? null : organizerOf(r), proposals: r.allowNewTimeProposals !== false,
+          },
         });
       }
       const next = typeof body?.["@odata.nextLink"] === "string" ? (body["@odata.nextLink"] as string) : null;
@@ -392,6 +406,47 @@ export function createGraphWriter(d: GraphWriterDeps) {
     }
   }
 
-  return { calendar, get, findByMarker, create, update, remove, scan, ownEditable, updateOwn, getInvite, createInvite, cancel };
+  /**
+   * A meeting as an RSVP sees it (step 16): its time, my response, the organizer's name and the facts the refusal rule
+   * needs. Cancelled meetings are read too (to refuse them). Null when it no longer exists.
+   */
+  async function meeting(id: string): Promise<(MeetingFacts & { id: string; subject: string; start: string; end: string }) | null> {
+    const u = new URL(`${API}me/events/${encodeURIComponent(id)}`);
+    u.searchParams.set("$select", MEETING_SELECT);
+    u.searchParams.set("$expand", expandMarker);
+    let r: RawPlus;
+    try {
+      r = (await send("write_get", "GET", u.toString())).json as RawPlus;
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 404) return null;
+      throw e;
+    }
+    if (typeof r?.id !== "string") return null;
+    const e = fromGraph({ ...r, isCancelled: false })!;
+    return {
+      id: e.id, subject: e.subject, start: e.start, end: e.end, marker: e.marker,
+      isOrganizer: r.isOrganizer === true, others: othersOf(r), isCancelled: r.isCancelled === true,
+      response: responseOf(r), organizer: organizerOf(r), allowNewTimeProposals: r.allowNewTimeProposals !== false,
+    };
+  }
+
+  /**
+   * Answer a meeting (step 16): read first and refuse (RsvpRefused, nothing sent) one I organize, a Coopilot event, one
+   * with nobody else, a cancelled one. Then one POST to accept, tentativelyAccept or decline; the organizer is always
+   * told. Never a PATCH, DELETE or cancel: the meeting itself is not edited. Returns the meeting as it was.
+   */
+  async function respond(id: string, response: RsvpResponse, o: { comment?: string; proposed?: { start: string; end: string } } = {}) {
+    const was = await meeting(id);
+    if (!was) throw new GoneError("gone");
+    const problem = rsvpProblem(was);
+    if (problem) {
+      d.log({ source: "outlook", op: "write_refused", kind: "not_invited" });
+      throw new RsvpRefused(problem);
+    }
+    await send("write_rsvp", "POST", `${API}me/events/${encodeURIComponent(id)}/${RSVP_ENDPOINT[response]}`, rsvpBody(response, { comment: o.comment?.slice(0, 1000), proposed: o.proposed }));
+    return was;
+  }
+
+  return { calendar, get, findByMarker, create, update, remove, scan, ownEditable, updateOwn, getInvite, createInvite, cancel, meeting, respond };
 }
 export type GraphWriter = ReturnType<typeof createGraphWriter>;

@@ -39,7 +39,16 @@ describe("calendar editing tiers (Coopilot only edits what it created or what on
   it("meetings with others are never edited: only Open in Outlook, each other action says why", () => {
     const x = eventEdit(ol, facts({ others: 3 }), true);
     expect(x.actions.filter((a) => a.allowed).map((a) => a.id)).toEqual(["open"]);
-    expect(x.actions.filter((a) => !a.allowed).every((a) => /Others are on this meeting/.test(a.reason!))).toBe(true);
+    expect(x.actions.filter((a) => !a.allowed && a.id !== "rsvp").every((a) => /Others are on this meeting/.test(a.reason!))).toBe(true);
+    expect(x.actions.find((a) => a.id === "rsvp")!.reason).toMatch(/You organize this meeting/);
+  });
+
+  it("a meeting someone else invited me to can be answered, and still never edited (step 16, D283)", () => {
+    const x = eventEdit(ol, facts({ others: 3, isOrganizer: false }), true);
+    expect(x.tier).toBe("meeting");
+    expect(x.actions.filter((a) => a.allowed).map((a) => a.id)).toEqual(["open", "rsvp"]);
+    expect(eventEdit(ol, facts({ isOrganizer: true, others: 0 }), true).actions.find((a) => a.id === "rsvp")!.allowed).toBe(false);
+    expect(eventEdit(ol, facts({ others: 3, isOrganizer: false }), false).actions.find((a) => a.id === "rsvp")!.allowed).toBe(false);
   });
 
   it("help invites can only be cancelled", () => {

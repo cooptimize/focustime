@@ -6,6 +6,8 @@ type Ev = {
   id: string; subject: string; body: string; start: string; end: string; showAs: string; isReminderOn: boolean; marker: string | null; transactionId: string | null;
   // Step 13: who is on it, series or single, all-day, Teams.
   attendees?: { address: string; name: string }[]; isOrganizer?: boolean; type?: string; isAllDay?: boolean; online?: boolean;
+  // Step 16: my response, the organizer, whether new times may be proposed, cancelled.
+  response?: string; organizer?: { name: string; address: string }; allowNewTimeProposals?: boolean; isCancelled?: boolean;
 };
 
 export function fakeGraph(opts: { owner?: string } = {}) {
@@ -24,11 +26,17 @@ export function fakeGraph(opts: { owner?: string } = {}) {
     ignorePatch: false,
     /** Step 13: what getSchedule answers (the raw Graph body). */
     schedule: null as unknown,
+    /** Step 16: a decline takes the meeting off the calendar (later GETs are 404). */
+    declineRemoves: false,
+    /** Step 16: a response is accepted (202) but not applied (read-back mismatch). */
+    ignoreRsvp: false,
   };
   const json = (status: number, body: unknown) => new Response(body === null ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const out = (e: Ev, withMarker: boolean) => ({
     id: e.id, subject: e.subject, start: { dateTime: e.start.replace(/Z$/, ".0000000"), timeZone: "UTC" }, end: { dateTime: e.end.replace(/Z$/, ".0000000"), timeZone: "UTC" },
-    showAs: e.showAs, isReminderOn: e.isReminderOn, isCancelled: false,
+    showAs: e.showAs, isReminderOn: e.isReminderOn, isCancelled: e.isCancelled ?? false,
+    responseStatus: { response: e.response ?? ((e.isOrganizer ?? true) ? "organizer" : "notResponded"), time: "0001-01-01T00:00:00Z" },
+    organizer: { emailAddress: e.organizer ?? { name: "Tanner", address: "tanner@cooptimize.example" } }, allowNewTimeProposals: e.allowNewTimeProposals ?? true,
     isOrganizer: e.isOrganizer ?? true, attendees: (e.attendees ?? []).map((a) => ({ emailAddress: a, type: "required" })), type: e.type ?? "singleInstance", isAllDay: e.isAllDay ?? false,
     isOnlineMeeting: e.online ?? false, webLink: `https://outlook.office365.com/owa/?itemid=${encodeURIComponent(e.id)}&exvsurl=1&path=/calendar/item`,
     ...(withMarker ? { singleValueExtendedProperties: e.marker ? [{ id: MARKER_PROP, value: e.marker }] : [] } : {}),
@@ -69,6 +77,18 @@ export function fakeGraph(opts: { owner?: string } = {}) {
       if (!e) return json(404, {});
       if (e.isOrganizer === false) return json(400, {});
       events.delete(cid);
+      return json(202, null);
+    }
+    const rsvp = /^me\/events\/([^/]+)\/(accept|tentativelyAccept|decline)$/.exec(path);
+    if (rsvp && method === "POST") {
+      const e = events.get(decodeURIComponent(rsvp[1]!));
+      if (!e) return json(404, {});
+      if (e.isOrganizer !== false) return json(400, {});
+      if (body?.proposedNewTime && (rsvp[2] === "accept" || e.allowNewTimeProposals === false || body.sendResponse === false)) return json(400, {});
+      if (!sw.ignoreRsvp) {
+        e.response = rsvp[2] === "accept" ? "accepted" : rsvp[2] === "decline" ? "declined" : "tentativelyAccepted";
+        if (rsvp[2] === "decline" && sw.declineRemoves) events.delete(e.id);
+      }
       return json(202, null);
     }
     if (path === "me/calendar") return json(200, { name: "Calendar", owner: { name: "Tanner", address: opts.owner ?? "tanner@cooptimize.example" } });

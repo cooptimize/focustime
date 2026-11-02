@@ -84,7 +84,7 @@ export function demoPatterns(): FocusPattern[] {
 export function demoOutlook(monday: IsoDate): CalEvent[] {
   const o = (id: string, day: number, title: string, from: string, to: string, extra: Partial<CalEvent> = {}): CalEvent => {
     const d = plus(monday, day);
-    return { id: `outlook-demo-${id}-${d}`, source: "outlook", title, start: at(d, from), end: at(d, to), allDay: false, showAs: "busy", isPersonal: false, responseStatus: "accepted", ...extra };
+    return { id: `outlook:demo-${id}-${d}`, source: "outlook", title, start: at(d, from), end: at(d, to), allDay: false, showAs: "busy", isPersonal: false, responseStatus: "accepted", ...extra };
   };
   return [
     ...[0, 1, 2].map((d) => o(`standup${d}`, d, "Team standup", "09:00", "09:15")),
@@ -98,6 +98,15 @@ export function demoOutlook(monday: IsoDate): CalEvent[] {
     o("lunch", 2, "Lunch and learn: Power Automate", "12:00", "12:45", { showAs: "tentative", responseStatus: "tentative" }),
     o("allhands", 4, "Cooptimize all hands", "11:00", "11:30"),
   ];
+}
+
+/** Step 16: who organizes each demo meeting (all fictional); every one is a meeting I'm invited to. */
+export function demoOrganizer(id: string): string {
+  if (/nw/.test(id)) return "Dana Morales";
+  if (/hh/.test(id)) return "Chris Park";
+  if (/at(ref|demo)/.test(id)) return "Morgan Diaz";
+  if (/lunch/.test(id)) return "Priya Shah";
+  return "Jordan Lee";
 }
 
 /** Personal events (Google): one crosses the morning and afternoon seam on Monday. */

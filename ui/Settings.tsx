@@ -1,6 +1,7 @@
 // Settings (step 6b): every setting Coopilot owns, read from and written to the same validated config file. Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
+import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { FieldProblem, SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
@@ -1115,7 +1116,7 @@ function OutlookWriteRow() {
 }
 
 const OPS: Record<WriteEntry["op"], string> = { create: "Created", update: "Changed", delete: "Removed" };
-const KINDS: Record<WriteEntry["kind"], string | null> = { timebox: null, event: "Your event", invite: "Help invite", sync: "From Outlook" };
+const KINDS: Record<WriteEntry["kind"], string | null> = { timebox: null, event: "Your event", invite: "Help invite", sync: "From Outlook", rsvp: "Response" };
 const STATUS: Record<WriteEntry["status"], string> = { pending: "Not finished", confirmed: "Confirmed", unconfirmed: "Not confirmed", failed: "Failed", refused: "Refused" };
 /** Settings > Data (step 12): every external write, newest first, with Undo and Retry; and Coopilot events left on Outlook. */
 function WriteLog() {
@@ -1165,7 +1166,7 @@ function WriteLog() {
                 <td>
                   {KINDS[e.kind] && <span className={`wl-kind wl-kind-${e.kind}`}>{KINDS[e.kind]}</span>}{" "}
                   {e.undoOf !== null ? "Undo: " : ""}
-                  {e.kind === "sync" ? (e.message ?? OPS[e.op]).replace(/^From Outlook: /, "") : OPS[e.op]} <strong>{(e.after ?? e.before)?.subject ?? ""}</strong>
+                  {e.kind === "sync" ? (e.message ?? OPS[e.op]).replace(/^From Outlook: /, "") : e.kind === "rsvp" ? `${responseLabel(e.after?.response)} to` : OPS[e.op]} <strong>{(e.after ?? e.before)?.subject ?? ""}</strong>
                   {e.whenText && <span className="muted"> · {e.whenText}</span>}
                   {e.auto && e.kind !== "sync" && <span className="muted"> · without asking</span>}
                 </td>
@@ -1176,7 +1177,7 @@ function WriteLog() {
                   {e.attempts > 1 && <span className="muted"> · {e.attempts} tries</span>}
                   {e.message && e.status !== "confirmed" && <div className="muted">{e.message}</div>}
                 </td>
-                <td className="muted">{e.before ? `${e.before.subject}, ${Temporal.Instant.from(e.before.start).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })} to ${Temporal.Instant.from(e.before.end).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}` : "Nothing (new)"}</td>
+                <td className="muted">{e.kind === "rsvp" ? responseLabel(e.before?.response) : e.before ? `${e.before.subject}, ${Temporal.Instant.from(e.before.start).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })} to ${Temporal.Instant.from(e.before.end).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}` : "Nothing (new)"}</td>
                 <td>
                   {e.undoable && <button type="button" className="mini" onClick={() => void env?.undo(e.id)}>Undo</button>}
                   {e.retryable && <button type="button" className="mini" onClick={() => void env?.retry(e.id)}>Retry</button>}

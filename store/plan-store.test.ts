@@ -507,6 +507,27 @@ describe("timeboxes, own Outlook events and the write log (step 12)", () => {
     expect(again.writeEntry(w.id)!.before).toEqual(F);
   });
 
+  it("migration 15 rebuilds the write log keeping every row and undo link, and then takes RSVP writes (D284)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const path = join(dir, "plan.db");
+    const old = new DatabaseSync(path, { enableForeignKeyConstraints: false });
+    old.exec("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+    for (let v = 1; v <= 14; v++) {
+      old.exec(MIGRATIONS[v - 1]!.replace(/^\s*-- foreign keys off for a table rebuild/, ""));
+      old.prepare("INSERT INTO schema_migrations VALUES (?, 'x')").run(v);
+    }
+    old.exec(`INSERT INTO write_log (id, at, system, op, kind, uid, event_id, before, after, status, auto, undo_of, undone_by, attempts, updated_at)
+              VALUES (1, 'x', 'outlook', 'create', 'timebox', 'tb-1', 'E1', NULL, '{}', 'confirmed', 0, NULL, 2, 1, 'x'),
+                     (2, 'x', 'outlook', 'delete', 'timebox', 'tb-1', 'E1', '{}', NULL, 'confirmed', 0, 1, NULL, 1, 'x')`);
+    old.close();
+    const store = createPlanStore({ path, now });
+    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
+    expect(store.writeLog().map((x) => [x.id, x.kind, x.undoOf, x.undoneBy])).toEqual([[2, "timebox", 1, null], [1, "timebox", null, 2]]);
+    const r = store.logWrite({ op: "update", kind: "rsvp", uid: "rsvp:M1", eventId: "M1", account: null, calendar: null, before: { ...F, response: "notResponded" }, after: { ...F, response: "accepted", comment: "See you there" }, localBefore: null, localAfter: null, auto: false });
+    expect(store.writeEntry(r.id)).toMatchObject({ kind: "rsvp", after: { response: "accepted", comment: "See you there" } });
+    store.close();
+  });
+
   it("reset empties timeboxes but keeps Coopilot's Outlook events and the audit log", () => {
     const { store } = fresh();
     const t = store.addTimebox({ ...box, outlook: true });

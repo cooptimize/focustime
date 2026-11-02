@@ -15,6 +15,7 @@ import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts
 import type { PlanningSettings, TimerView, BorrowedView, TimeboxView, InviteView } from "../actions/types.ts";
 import { eventEdit, type EditAction, type EditFacts } from "../plan/caltier.ts";
 import { minutesOf as minutesOfBox, SHOW_AS_LABEL, SHOW_AS_VALUES, type OutlookShowAs } from "../plan/timebox.ts";
+import { overlapHint, RSVP_RESPONSES, RSVP_VERB, type RsvpResponse } from "../plan/rsvp.ts";
 import type { CalEvent } from "../week/types.ts";
 import { PRESETS, suggestMinutes } from "../plan/timer.ts";
 import { sizeNote } from "./planview.ts";
@@ -151,6 +152,8 @@ export type MenuEnv = {
   eventEdit: Record<string, EditFacts>;
   canWrite: boolean;
   editEvent: (input: { id: string; start?: string; end?: string; showAs?: OutlookShowAs }) => void;
+  /** Step 16 (D283): answer a meeting; opens the write preview. False keeps the form open. */
+  rsvp?: (input: { id: string; response: RsvpResponse; comment?: string; proposedStart?: string; proposedEnd?: string }) => void | Promise<unknown>;
   openOutlook: (url: string) => void;
   /** Timebox changes that may need an Outlook preview (the same path as the day strip). */
   timeboxChange: (action: string, input: Record<string, unknown>) => void;
@@ -365,7 +368,55 @@ export function itemMenu(env: MenuEnv, clientKey: string, item: WorkItem): MenuS
 
 // ---------- calendar events (step 13): the editing rule ----------
 
-const EDIT_LABEL: Record<EditAction, string> = { move: "Move…", resize: "Change end…", retitle: "Retitle…", show_as: "Show as", delete: "Delete", cancel: "Cancel invite…", open: "Open in Outlook" };
+const EDIT_LABEL: Record<EditAction, string> = { move: "Move…", resize: "Change end…", retitle: "Retitle…", show_as: "Show as", delete: "Delete", cancel: "Cancel invite…", open: "Open in Outlook", rsvp: "Answer" };
+
+/**
+ * Step 16 (D283): Accept, Tentative and Decline for a meeting someone else invited me to, the current answer checked.
+ * Each opens a short form: an optional note and, for Tentative and Decline when the meeting allows it, a proposed new
+ * time. Saving asks for a preview; nothing is sent before Confirm.
+ */
+export function rsvpItems(env: { rsvp?: MenuEnv["rsvp"]; tz: string }, e: { id: string; title: string; start: string; end: string }, facts: { response?: string | null; organizer?: string | null; proposals?: boolean }, disabled?: string): MenuItem[] {
+  const id = e.id.replace(/^outlook:/, "");
+  const date = e.start.slice(0, 10);
+  const who = facts.organizer || "the organizer";
+  return RSVP_RESPONSES.map((r): MenuItem => {
+    const propose = r !== "accepted" && facts.proposals !== false;
+    return {
+      id: `rsvp-${r}`,
+      label: `${RSVP_VERB[r]}…`,
+      action: "write.preview",
+      checked: facts.response === r,
+      ...(disabled ? { disabled } : { hint: facts.response === r ? "your answer now" : `tells ${who}` }),
+      next: () => ({
+        title: `${RSVP_VERB[r]} "${e.title}"`,
+        button: "Preview",
+        fields: [
+          { key: "comment", label: `Note to ${who}`, type: "text", optional: true },
+          ...(propose
+            ? ([
+                { key: "start", label: "Propose a new start", type: "time", optional: true },
+                { key: "end", label: "and end", type: "time", optional: true },
+              ] as FormField[])
+            : []),
+        ],
+        save: (v) => {
+          if (!env.rsvp) return;
+          const both = !!v.start && !!v.end;
+          // A proposed time needs both ends: keep the form open.
+          if (!!v.start !== !!v.end) return Promise.resolve(false);
+          return env.rsvp({ id, response: r, ...(v.comment?.trim() ? { comment: v.comment.trim() } : {}), ...(both ? { proposedStart: atTime(date, v.start!, env.tz), proposedEnd: atTime(date, v.end!, env.tz) } : {}) });
+        },
+      }),
+    };
+  });
+}
+
+/** The focus blocks of an event's day, for the overlap hint. */
+function blocksOn(week: Week, date: IsoDate) {
+  const day = week.days.find((d) => d.date === date);
+  if (!day) return [];
+  return [day.am, day.pm].flatMap((sl) => (sl.focus[0] ? [{ start: sl.start, end: sl.end, clientName: sl.focus[0].clientName }] : []));
+}
 const hhmm = (iso: string, tz: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(tz).toPlainTime().toString({ smallestUnit: "minute" });
 /** A local time on `date` at "HH:MM" in the zone, with offset. */
 const atTime = (date: IsoDate, hm: string, tz: string) => Temporal.PlainDate.from(date).toZonedDateTime({ timeZone: tz, plainTime: Temporal.PlainTime.from(hm) }).toString({ timeZoneName: "never", smallestUnit: "second" });
@@ -387,7 +438,17 @@ export function eventMenu(env: MenuEnv, e: CalEvent): MenuStep {
   const tz = env.tz;
   const dur = Temporal.Instant.from(e.start).until(Temporal.Instant.from(e.end)).total("minutes");
   const invite = facts?.marker ? env.invites.find((i) => i.uid === facts.marker) ?? null : null;
-  const items: MenuItem[] = x.actions.map((a): MenuItem => {
+  // Step 16: a meeting I'm invited to leads with Accept, Tentative and Decline, then Open in Outlook. Its edits, all off
+  // for the same reason, are left out: the menu title already says to change anything else in Outlook.
+  const invited = x.tier === "meeting" && !!facts && !facts.isOrganizer && facts.others > 0;
+  const rsvp = x.actions.find((a) => a.id === "rsvp");
+  const items: MenuItem[] = invited && rsvp
+    ? [...rsvpItems(env, e, facts, rsvp.allowed ? undefined : rsvp.reason ?? "Not for this event"), ...x.actions.filter((a) => a.id === "open").map(item)]
+    : x.actions.filter((a) => a.id !== "rsvp").map(item);
+  const hint = x.tier === "meeting" ? overlapHint(e, blocksOn(env.week, date)) : null;
+  return { title: `${e.title} · ${hint ? `${hint} · ` : ""}${x.why}`, items };
+
+  function item(a: (typeof x.actions)[number]): MenuItem {
     const base: MenuItem = { id: a.id, label: EDIT_LABEL[a.id], ...(a.allowed ? {} : { disabled: a.reason ?? "Not for this event" }) };
     if (!a.allowed) return base;
     switch (a.id) {
@@ -405,8 +466,7 @@ export function eventMenu(env: MenuEnv, e: CalEvent): MenuStep {
         // Coopilot's own events show as timeboxes, where these live.
         return { ...base, disabled: "Edit it as a timebox (its band in the block)" };
     }
-  });
-  return { title: `${e.title} · ${x.why}`, items };
+  }
 }
 
 /** The menu of a timebox (a Coopilot event: the event and its timebox are one thing). */

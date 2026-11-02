@@ -432,6 +432,34 @@ export const MIGRATIONS: readonly string[] = [
      open INTEGER NOT NULL CHECK (open >= 0),
      PRIMARY KEY (client_key, item_id, date)
    );`,
+  // 15: step 16 (D284), meeting RSVP: write_log rebuilt (ids kept, undo links kept) so kind allows 'rsvp'.
+  `${FK_OFF}
+   CREATE TABLE write_log_v15 (
+     id INTEGER PRIMARY KEY,
+     at TEXT NOT NULL,
+     system TEXT NOT NULL CHECK (system IN ('outlook')),
+     op TEXT NOT NULL CHECK (op IN ('create', 'update', 'delete')),
+     kind TEXT NOT NULL DEFAULT 'timebox' CHECK (kind IN ('timebox', 'event', 'invite', 'sync', 'rsvp')),
+     uid TEXT NOT NULL,
+     event_id TEXT,
+     account TEXT,
+     calendar TEXT,
+     before TEXT,
+     after TEXT,
+     local_before TEXT,
+     local_after TEXT,
+     status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'unconfirmed', 'failed', 'refused')),
+     message TEXT,
+     auto INTEGER NOT NULL DEFAULT 0,
+     undo_of INTEGER REFERENCES write_log(id),
+     undone_by INTEGER REFERENCES write_log(id),
+     attempts INTEGER NOT NULL DEFAULT 1,
+     updated_at TEXT NOT NULL
+   );
+   INSERT INTO write_log_v15 (id, at, system, op, kind, uid, event_id, account, calendar, before, after, local_before, local_after, status, message, auto, undo_of, undone_by, attempts, updated_at)
+     SELECT id, at, system, op, kind, uid, event_id, account, calendar, before, after, local_before, local_after, status, message, auto, undo_of, undone_by, attempts, updated_at FROM write_log ORDER BY id;
+   DROP TABLE write_log;
+   ALTER TABLE write_log_v15 RENAME TO write_log;`,
 ];
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */

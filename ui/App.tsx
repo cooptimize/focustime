@@ -1041,6 +1041,7 @@ export function App() {
       eventEdit: data.eventEdit ?? {},
       canWrite: !!data.canWrite,
       editEvent: (input) => void writes.edit(input),
+      rsvp: (input) => void writes.rsvp(input),
       openOutlook: (url) => void call("outlook.open", { url }).catch((e: unknown) => setNotice(e instanceof Error ? e.message : "Could not open Outlook")),
       timeboxChange: (action, input) => void (tbEnvRef.current && tbChange(tbEnvRef.current, action, input)),
       startTimeboxFocus: (tb) => void runTimer("timer.start", { timeboxId: tb.id }).then((ok) => ok && setFocusOpen(true)),

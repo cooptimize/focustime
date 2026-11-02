@@ -70,6 +70,17 @@ describe("demo mode (D272)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("shows meetings I'm invited to with their organizer, previews an answer, and refuses to send it (step 16)", async () => {
+    const ctx = await demo();
+    const w = await ok<WeekLoadData>(ctx, "week.load", {});
+    const id = Object.keys(w.eventEdit).find((k) => k.includes("nwstatus"))!;
+    expect(w.eventEdit[id]).toMatchObject({ isOrganizer: false, organizer: "Dana Morales", response: "accepted" });
+    const p = await ok<{ preview: { previewId: string; summary: string; visibility: string } }>(ctx, "write.preview", { rsvp: { id: id.replace(/^outlook:/, ""), response: "declined", comment: "Out that afternoon" } });
+    expect(p.preview).toMatchObject({ summary: "Decline the meeting", visibility: expect.stringMatching(/^Dana Morales gets your response/) });
+    expect(await run(ctx, "write.confirm", { previewId: p.preview.previewId })).toMatchObject({ ok: false, code: "demo" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("refuses every outward action with a plain reason", async () => {
     const ctx = await demo();
     for (const action of DEMO_REFUSED) {

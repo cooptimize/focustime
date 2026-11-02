@@ -15,7 +15,8 @@ import { domainAllowed, helpFollowUpText } from "../plan/collab.ts";
 import { REMOVED_IN_OUTLOOK, timeboxFrom } from "../plan/outlooksync.ts";
 import { HttpError, NetworkError } from "../sources/calendar/http.ts";
 import type { OutlookWrite } from "../sources/graph/source.ts";
-import { DomainError, editableMine, GoneError, inviteMatches, matches, NotMineError, OwnershipError, sameInstant, type OutlookEvent } from "../sources/graph/write.ts";
+import { DomainError, editableMine, GoneError, inviteMatches, matches, NotMineError, OwnershipError, RsvpRefused, sameInstant, type OutlookEvent } from "../sources/graph/write.ts";
+import { isRsvpResponse, proposalProblem, responseLabel, rsvpProblem, rsvpVisibility, type RsvpResponse } from "../plan/rsvp.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import type { IsoDate } from "../week/types.ts";
 import type { ActionResponse, PreviewField, TimeboxView, WritePreview, WriteResult, WriteState } from "./types.ts";
@@ -114,6 +115,18 @@ export function previewFields(op: SyncOp, before: Fields | null, after: Fields |
       row("When", before ? when(before, tz) : null, after ? when(after, tz) : null),
       row("Show as", before ? showLabel(before.showAs) : null, after ? showLabel(after.showAs) : null),
     ];
+  if (kind === "rsvp") {
+    // Step 16 (D284): the meeting is shown so I know which one; only my response (and the note) goes out.
+    const proposed = (f: Fields | null) => (f?.proposed ? when({ ...f, start: f.proposed.start, end: f.proposed.end }, tz) : "None");
+    return [
+      { label: "Meeting", before: pick(before, "subject"), after: pick(after, "subject"), changed: false },
+      { label: "When", before: before ? when(before, tz) : null, after: after ? when(after, tz) : null, changed: false },
+      { label: "Notified", before: null, after: after?.organizer || "The organizer", changed: false },
+      row("Your response", responseLabel(before?.response), responseLabel(after?.response)),
+      { label: "Note", before: null, after: after?.comment || "None", changed: false },
+      { label: "Proposed time", before: null, after: proposed(after), changed: false },
+    ];
+  }
   if (kind === "invite")
     return [
       row("Title", pick(before, "subject"), pick(after, "subject")),
@@ -151,6 +164,7 @@ const visibility = (kind: WriteKind, op: SyncOp, f: Fields | null) =>
   : kind === "invite" ? inviteVisibility(op, f)
   : VISIBILITY;
 const SUMMARY: Record<SyncOp, string> = { create: "Create an Outlook event", update: "Change an Outlook event Coopilot created", delete: "Delete an Outlook event Coopilot created" };
+const RSVP_SUMMARY: Record<RsvpResponse, string> = { accepted: "Accept the meeting", tentativelyAccepted: "Answer Tentative to the meeting", declined: "Decline the meeting" };
 const summaryOf = (kind: WriteKind, op: SyncOp) => (kind === "event" ? "Change your own Outlook event" : kind === "invite" ? (op === "delete" ? "Cancel the help invite" : "Send a help invite") : SUMMARY[op]);
 
 const NO_WRITE = "Coopilot can't change your Outlook calendar yet. Reconnect Outlook in Settings > Connections and allow calendar changes. Your timeboxes still work locally.";
@@ -359,8 +373,8 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
       return { ok: true, data: { entries: entries.map((e) => ({ ...e, undoable: undoable(e), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending", whenText: e.after ? when(e.after, tz) : e.before ? when(e.before, tz) : null })), orphans } };
     }
     case "write.preview": {
-      const o = fields(input, [], ["uid", "uids", "undo", "event"]);
-      if ([o.uid, o.uids, o.undo, o.event].filter((x) => x !== undefined).length !== 1) throw new Invalid("write.preview takes { uid }, { uids }, { undo } or { event }");
+      const o = fields(input, [], ["uid", "uids", "undo", "event", "rsvp"]);
+      if ([o.uid, o.uids, o.undo, o.event, o.rsvp].filter((x) => x !== undefined).length !== 1) throw new Invalid("write.preview takes { uid }, { uids }, { undo }, { event } or { rsvp }");
       const ow = cfg.outlook ? ctx.outlook(cfg) : null;
       if (!ow) return bad("Outlook isn't set up", 409);
       const access = await ow.access();
@@ -390,6 +404,24 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
         if (!u) throw new PlanError("This change can't be undone");
         const tb = entry.kind === "timebox" ? plan.timeboxByUid(entry.uid) : null;
         held = { kind: entry.kind, uid: entry.uid, op: u.op, eventId: u.eventId, before: entry.after, after: u.fields, localBefore: tb ? localOf(tb) : null, localAfter: u.local, undoOf: entry.id, auto: false };
+      } else if (o.rsvp !== undefined) {
+        // Step 16 (D284): my answer to a meeting someone else organizes. Read the meeting first; only my response goes out.
+        const r = fields(o.rsvp, ["id", "response"], ["comment", "proposedStart", "proposedEnd"]);
+        const eventId = text(r.id, "event id", 400);
+        if (!isRsvpResponse(r.response)) throw new Invalid("response must be accepted, tentativelyAccepted or declined");
+        const response = r.response;
+        const comment = r.comment === undefined || r.comment === "" ? null : text(r.comment, "note", 1000);
+        if ((r.proposedStart === undefined) !== (r.proposedEnd === undefined)) throw new Invalid("A proposed time needs a start and an end");
+        const proposed = r.proposedStart === undefined ? null : { start: Temporal.Instant.from(localTime(r.proposedStart, "proposedStart", tz)).toString(), end: Temporal.Instant.from(localTime(r.proposedEnd, "proposedEnd", tz)).toString() };
+        const m = await ow.writer.meeting(eventId).catch((x: unknown) => { throw x instanceof NetworkError ? new PlanError("Outlook unreachable") : x; });
+        if (!m) throw new PlanError("That meeting is gone from Outlook");
+        const problem = rsvpProblem(m);
+        if (problem) return bad(problem, 409);
+        const pp = proposalProblem(response, proposed, m.allowNewTimeProposals);
+        if (pp) return bad(pp, 422);
+        const before: Fields = { subject: m.subject, body: "", start: m.start, end: m.end, showAs: "busy", reminder: false, response: m.response ?? "none", ...(m.organizer ? { organizer: m.organizer } : {}) };
+        const after: Fields = { ...before, response, ...(comment ? { comment } : {}), ...(proposed ? { proposed } : {}) };
+        held = { kind: "rsvp", uid: `rsvp:${eventId}`, op: "update", eventId, before, after, localBefore: null, localAfter: null, undoOf: null, auto: false };
       } else if (o.event !== undefined) {
         // Step 13, tier "mine": one of my own events with nobody else on it. Time and show as only.
         const e = fields(o.event, ["id"], ["start", "end", "showAs"]);
@@ -459,8 +491,9 @@ export async function hold(ow: OutlookWrite, held: Omit<Held, "id" | "expiresAt"
   return {
     previewId: id, expiresAt: new Date(expiresAt).toISOString(), op: held.op, kind: held.kind, undo: held.undoOf !== null, auto: held.auto,
     system: "Outlook", account: cal.owner || "Your Microsoft account", calendar: cal.name,
-    summary: held.undoOf !== null && held.kind !== "invite" ? `Undo: ${lowerFirst(summaryOf(held.kind, held.op))}` : summaryOf(held.kind, held.op),
-    fields: previewFields(held.op, held.before, held.after, tz, held.kind), visibility: visibility(held.kind, held.op, subject),
+    summary: held.kind === "rsvp" ? (held.undoOf !== null ? `Undo your response: back to ${responseLabel(held.after?.response)}` : RSVP_SUMMARY[held.after!.response as RsvpResponse]) : held.undoOf !== null && held.kind !== "invite" ? `Undo: ${lowerFirst(summaryOf(held.kind, held.op))}` : summaryOf(held.kind, held.op),
+    fields: previewFields(held.op, held.before, held.after, tz, held.kind),
+    visibility: held.kind === "rsvp" ? rsvpVisibility(held.after?.organizer ?? null, held.undoOf !== null, !!held.after?.comment) : visibility(held.kind, held.op, subject),
     attendees: held.kind === "invite" ? (subject?.attendees ?? []).map((a) => ({ ...a })) : [],
   };
 }
@@ -498,9 +531,9 @@ async function attempt(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, ret
     const e = plan.settleWrite(entry.id, { status, message, retry, ...more });
     return { entry: e, confirmed: status === "confirmed", message };
   };
-  if (entry.kind === "event" || entry.kind === "invite") {
+  if (entry.kind === "event" || entry.kind === "invite" || entry.kind === "rsvp") {
     try {
-      return entry.kind === "event" ? await attemptOwn(plan, ow, entry, settle, env) : await attemptInvite(plan, ow, entry, settle, env);
+      return entry.kind === "event" ? await attemptOwn(plan, ow, entry, settle, env) : entry.kind === "rsvp" ? await attemptRsvp(plan, ow, entry, settle, env, retry) : await attemptInvite(plan, ow, entry, settle, env);
     } catch (e) {
       return failed(e, settle);
     }
@@ -553,7 +586,7 @@ async function attempt(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, ret
 
 type Settle = (status: WriteEntry["status"], message: string, more?: { eventId?: string | null; before?: Fields | null }) => WriteResult;
 function failed(e: unknown, settle: Settle): WriteResult {
-  if (e instanceof OwnershipError || e instanceof NotMineError || e instanceof DomainError) return settle("refused", e.message);
+  if (e instanceof OwnershipError || e instanceof NotMineError || e instanceof DomainError || e instanceof RsvpRefused) return settle("refused", e.message);
   if (e instanceof GoneError) return settle("refused", "That event is gone from Outlook, so there is nothing to change");
   if (e instanceof NetworkError) return settle("unconfirmed", "Outlook didn't answer, so Coopilot can't tell whether the change landed. Retry checks first and won't make a duplicate");
   if (e instanceof HttpError && e.status === 403) return settle("failed", NO_WRITE);
@@ -571,6 +604,36 @@ async function attemptOwn(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, 
   if (!ok) return settle("unconfirmed", "Outlook didn't show the change yet. Retry to check and fix it");
   if (entry.undoOf !== null) plan.markUndone(entry.undoOf, entry.id);
   return settle("confirmed", entry.undoOf !== null ? "Undone on Outlook" : "Outlook updated");
+}
+
+/**
+ * My answer to a meeting (step 16, D284): one POST to accept, tentativelyAccept or decline (the writer reads first and
+ * refuses what isn't a meeting I'm invited to), then my response is read back before success. After a decline a 404
+ * also confirms: Outlook took the meeting off the calendar. A retry checks first and doesn't send the same answer twice.
+ * Undo is just another response (the previous one), so the organizer hears again.
+ */
+async function attemptRsvp(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, settle: Settle, env: AttemptEnv, retry: boolean): Promise<WriteResult> {
+  const after = entry.after!;
+  const response = after.response as RsvpResponse;
+  const id = entry.eventId!;
+  const label = responseLabel(response);
+  const who = after.organizer || "The organizer";
+  const done = (gone: boolean) => {
+    if (entry.undoOf !== null) plan.markUndone(entry.undoOf, entry.id);
+    return settle("confirmed", entry.undoOf !== null ? `Back to ${label}. ${who} was told` : gone ? "Declined. Outlook took it off your calendar" : `${label}. ${who} was told`);
+  };
+  if (retry) {
+    const now = await again(env, () => ow.writer.meeting(id));
+    if (now?.response === response) return done(false);
+    if (!now && response === "declined") return done(true);
+  }
+  const was = await ow.writer.respond(id, response, { ...(after.comment ? { comment: after.comment } : {}), ...(after.proposed ? { proposed: after.proposed } : {}) });
+  // The prior response is what was really there just before this one.
+  if (entry.attempts === 1 && entry.undoOf === null && entry.before) plan.settleWrite(entry.id, { status: "pending", before: { ...entry.before, response: was.response ?? "none" } });
+  const back = await again(env, () => ow.writer.meeting(id));
+  if (!back) return response === "declined" ? done(true) : settle("unconfirmed", "Outlook doesn't show the meeting anymore, so Coopilot can't confirm your response. Retry checks first");
+  if (back.response !== response) return settle("unconfirmed", "Outlook didn't show your response yet. Retry checks first and won't send it twice");
+  return done(false);
 }
 
 /**

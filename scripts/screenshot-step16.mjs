@@ -1,5 +1,6 @@
 // @ts-nocheck
-// Step 16 UI inspection: the Delivery view and its row menu. Meant for demo mode (--demo turns it on first), so no real
+// Step 16 UI inspection: the Delivery view and its row menu; in demo mode also a meeting's RSVP menu, form and preview
+// (the preview is never confirmed, and demo mode refuses confirm anyway). Meant for demo mode (--demo turns it on first), so no real
 // data shows. Read-only: it opens Delivery and a ⋯ menu, and never clicks an item that writes. The launch token is never printed.
 // Usage: node scripts/screenshot-step16.mjs <outDir> <light|dark> [--demo] [--now <ISO>] [--runtime <dir>]
 import { chromium } from "playwright-core";
@@ -58,6 +59,32 @@ try {
       report[`${w} menu`] = await page.evaluate(() => [...document.querySelectorAll("[role=menu] [role=menuitem], .menu li")].map((e) => e.textContent?.trim()).slice(0, 8));
       await shot("delivery-menu");
       await page.keyboard.press("Escape");
+    }
+    // Slice 2 (demo only): a meeting's menu with Accept, Tentative, Decline and the overlap hint, the answer form, the preview.
+    if (demo) {
+      await page.keyboard.press("2");
+      await page.waitForTimeout(1200);
+      const ev = page.locator(".event, .r-ev, [title*=\"Northwind weekly status\"]", { hasText: "Northwind weekly status" }).first();
+      if (await ev.count()) {
+        await ev.click();
+        await page.waitForTimeout(400);
+        report[`${w} event menu`] = await page.evaluate(() => [...document.querySelectorAll("[data-overlay] [role=menuitem], [data-overlay] [role=menuitemradio], [data-overlay] li")].map((e) => e.textContent?.trim()).filter(Boolean).slice(0, 12));
+        report[`${w} event title`] = await page.evaluate(() => document.querySelector("[data-overlay] h2, [data-overlay] .menu-title, [role=menu] [aria-hidden], [role=menu] header")?.textContent ?? null);
+        await shot("rsvp-menu");
+        const dec = page.getByText("Decline…").first();
+        await dec.click();
+        await page.waitForTimeout(400);
+        await shot("rsvp-form");
+        const note = page.locator("[data-overlay] input[type=text], [data-overlay] input:not([type])").first();
+        if (await note.count()) await note.fill("Out that afternoon, notes to follow");
+        const times = page.locator("[data-overlay] input[type=time]");
+        if ((await times.count()) >= 2) { await times.nth(0).fill("15:00"); await times.nth(1).fill("15:30"); }
+        await page.getByRole("button", { name: "Preview" }).click();
+        await page.waitForTimeout(1200);
+        report[`${w} preview`] = await page.evaluate(() => document.querySelector(".write-dialog")?.textContent?.slice(0, 400) ?? null);
+        await shot("rsvp-preview");
+        await page.keyboard.press("Escape");
+      }
     }
     await page.close();
   }

@@ -141,7 +141,7 @@ export function useWriteFlow(onDone: () => void) {
     [onDone],
   );
   const begin = useCallback(
-    async (input: { uid: string } | { undo: number } | { event: { id: string; start?: string; end?: string; showAs?: string } }) => {
+    async (input: { uid: string } | { undo: number } | { event: { id: string; start?: string; end?: string; showAs?: string } } | { rsvp: { id: string; response: string; comment?: string; proposedStart?: string; proposedEnd?: string } }) => {
       try {
         const r = await call<{ preview?: WritePreview; nothing?: true; alreadyGone?: true }>("write.preview", input);
         if (r.alreadyGone) {
@@ -187,6 +187,8 @@ export function useWriteFlow(onDone: () => void) {
     retry: (id: number) => retry(id),
     /** Step 13: one of my own events (time and show as only), previewed first. */
     edit: (event: { id: string; start?: string; end?: string; showAs?: string }) => begin({ event }),
+    /** Step 16: answer a meeting, previewed first. */
+    rsvp: (rsvp: { id: string; response: string; comment?: string; proposedStart?: string; proposedEnd?: string }) => begin({ rsvp }),
     /** A preview made elsewhere (a help invite). */
     show: (p: WritePreview) => setFlow({ preview: p, result: null, busy: false, error: null }),
     dialog,
@@ -259,7 +261,7 @@ function WriteDialog({ flow, onConfirm, onRetry, onClose }: { flow: Flow; onConf
           </tbody>
         </table>
         <p className="wd-visibility">
-          <strong>Who can see it:</strong> {p.visibility}
+          <strong>{p.kind === "rsvp" ? "Who hears about it:" : "Who can see it:"}</strong> {p.visibility}
         </p>
         {result && !result.confirmed && (
           <p className="set-problem" role="alert">
@@ -280,13 +282,13 @@ function WriteDialog({ flow, onConfirm, onRetry, onClose }: { flow: Flow; onConf
             )
           ) : (
             <button ref={first} type="button" className="commit" disabled={busy} onClick={onConfirm}>
-              {busy ? "Writing and checking…" : p.kind === "invite" ? (p.op === "delete" ? "Cancel the invite" : "Send invite") : p.op === "create" ? "Put on Outlook" : p.op === "update" ? "Update Outlook" : "Remove from Outlook"}
+              {busy ? "Writing and checking…" : p.kind === "rsvp" ? "Send response" : p.kind === "invite" ? (p.op === "delete" ? "Cancel the invite" : "Send invite") : p.op === "create" ? "Put on Outlook" : p.op === "update" ? "Update Outlook" : "Remove from Outlook"}
             </button>
           )}
           <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>
             {result ? "Close" : "Not now"}
           </button>
-          <span className="muted">Logged in Settings &gt; Data, with Undo.</span>
+          <span className="muted">{p.kind === "rsvp" && !p.undo && p.fields.some((f) => f.label === "Your response" && f.before === "No response yet") ? "Logged in Settings > Data. No undo: a first response can't be taken back." : "Logged in Settings > Data, with Undo."}</span>
         </div>
       </div>
     </div>
