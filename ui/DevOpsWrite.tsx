@@ -20,7 +20,7 @@ export type DevOpsChange =
   | { kind: "state"; itemId: number; state: string; comment?: string; followUpId?: number }
   | { kind: "comment"; itemId: number; text: string }
   | { kind: "create"; draftId: number }
-  | { kind: "target_date"; itemId: number; date: string }
+  | { kind: "target_date"; itemId: number; date: string; /** Step 17: Save dates to DevOps (where the process has Start Date). */ startDate?: string }
   | { kind: "undo"; writeId: number };
 
 export type DevOpsWriteEnv = {

@@ -7,7 +7,7 @@
 // come from devopsTargets(keys, { withPat: false }). Nothing is ever deleted except a comment Coopilot added (undo).
 import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { AC_FIELD, BATCH_LIMIT, START_FIELD, completedState, createOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
+import { AC_FIELD, BATCH_LIMIT, START_FIELD, completedState, createOps, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
 import { dateOnly, detectTargetField, htmlToText, identityEmail, portfolioTiers, workItemUrl } from "../sources/devops/normalize.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
@@ -276,7 +276,7 @@ const none = { draftId: null, followUpId: null, undoOf: null, commentId: null, p
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "writeId", "followUpId"]);
+  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -300,12 +300,24 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
       if (identityEmail(item.fields["System.AssignedTo"]) !== env.me.email.toLowerCase()) throw new Refused(`#${item.id} isn't assigned to you, so Coopilot won't set its target date`, 409);
       const tiers = portfolioTiers(await writer.processConfig(org, pat, project));
       if (!tiers.feature.has(item.type) && !tiers.epic.has(item.type)) throw new Refused(`#${item.id} is a ${item.type}: target dates are set on features and epics`, 409);
-      const field = detectTargetField(await writer.fields(org, pat, project), await writer.typeFields(org, pat, project, item.type));
+      const typeHas = await writer.typeFields(org, pat, project, item.type);
+      const field = detectTargetField(await writer.fields(org, pat, project), typeHas);
       if (!field) throw new Refused(`${item.type} has no target date field in this process`, 409);
       const date = isoDate(o.date, "date");
       const cur = dateOnly(item.fields[field], tz);
+      const had = (f: string) => item.fields[f] !== undefined && item.fields[f] !== null;
+      // Step 17 (Save dates to DevOps): Start Date too, in the same patch, only where the process has it.
+      if (o.startDate !== undefined) {
+        if (!typeHas.has(START_FIELD)) throw new Refused(`${item.type} has no Start Date field in this process: save the target date alone`, 409);
+        const start = isoDate(o.startDate, "startDate");
+        if (start > date) throw new Invalid("The start date is after the target date");
+        const curStart = dateOnly(item.fields[START_FIELD], tz);
+        if (cur === date && curStart === start) return `#${item.id} already has those dates`;
+        const ops = datesOps(item.rev, [{ field, date, had: had(field) }, { field: START_FIELD, date: start, had: had(START_FIELD) }], tz);
+        return { ...base(env), ...none, op: "target_date", itemId: item.id, title: item.title, ops, rev: item.rev, before: { "Start date": curStart, "Target date": cur }, after: { "Start date": start, "Target date": date }, type: item.type, field };
+      }
       if (cur === date) return `#${item.id} already has that target date`;
-      return { ...base(env), ...none, op: "target_date", itemId: item.id, title: item.title, ops: targetDateOps(item.rev, field, date, tz, item.fields[field] !== undefined && item.fields[field] !== null), rev: item.rev, before: { "Target date": cur }, after: { "Target date": date }, type: item.type, field };
+      return { ...base(env), ...none, op: "target_date", itemId: item.id, title: item.title, ops: targetDateOps(item.rev, field, date, tz, had(field)), rev: item.rev, before: { "Target date": cur }, after: { "Target date": date }, type: item.type, field };
     }
     case "create": {
       const draft = plan.getDraft(posId(o.draftId, "draftId"));
@@ -368,6 +380,14 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
         const cur = dateOnly(item.fields[field], tz);
         if (cur !== entry.after["Target date"]) throw new Refused(`DevOps shows another target date on #${item.id} now (${cur ?? "none"}). Undo would overwrite it`, 409, "changed");
         const prior = entry.before["Target date"] ?? null;
+        // Step 17: a dates write puts Start Date back too, if it is still what Coopilot set.
+        if ("Start date" in entry.after) {
+          const curStart = dateOnly(item.fields[START_FIELD], tz);
+          if (curStart !== entry.after["Start date"]) throw new Refused(`DevOps shows another start date on #${item.id} now (${curStart ?? "none"}). Undo would overwrite it`, 409, "changed");
+          const priorStart = entry.before["Start date"] ?? null;
+          const had = (f: string) => item.fields[f] !== undefined && item.fields[f] !== null;
+          return { ...u, op: "undo_target_date", ops: datesOps(item.rev, [{ field, date: prior, had: had(field) }, { field: START_FIELD, date: priorStart, had: had(START_FIELD) }], tz), rev: item.rev, before: { "Start date": curStart, "Target date": cur }, after: { "Start date": priorStart, "Target date": prior }, field };
+        }
         return { ...u, op: "undo_target_date", ops: targetDateOps(item.rev, field, prior, tz, true), rev: item.rev, before: { "Target date": cur }, after: { "Target date": prior }, field };
       }
       if (entry.op === "comment") {
@@ -403,7 +423,7 @@ function current(e: DevOpsWriteEntry, item: ItemSnapshot, tz: string): Record<st
   if (e.op === "state" || e.op === "undo_state" || e.op === "undo_create") return { State: item.state };
   if (e.op === "target_date" || e.op === "undo_target_date") {
     const f = fieldOf(e.ops);
-    return { "Target date": f ? dateOnly(item.fields[f], tz) : null };
+    return { ...("Start date" in e.after ? { "Start date": dateOnly(item.fields[START_FIELD], tz) } : {}), "Target date": f ? dateOnly(item.fields[f], tz) : null };
   }
   return {};
 }

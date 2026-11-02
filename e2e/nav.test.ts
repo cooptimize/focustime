@@ -119,12 +119,13 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.close();
   }, T);
 
-  it("Roadmap · Plan ahead (placeholder); the ⋯ menu has Commands and the keys; the initials menu has Settings", async () => {
+  it("Roadmap · Plan ahead; the ⋯ menu has Commands and the keys; the initials menu has Settings", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("3");
     await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual(["Roadmap", "Plan ahead"]);
     await page.keyboard.press("p");
-    await expect.poll(() => page.locator(".plan-ahead-soon").textContent()).toBe("Coming next: plan the next 4 weeks on a timeline.");
+    await expect.poll(() => hash(page)).toBe("#/roadmap/ahead");
+    await page.locator(".plan-ahead .pa-grid").waitFor();
     await page.locator(".roadmap .done-btn").click();
     await expect.poll(() => hash(page)).toBe("#/roadmap");
     await page.locator(".top-more").click();

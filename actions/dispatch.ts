@@ -239,6 +239,36 @@ async function patternWeek(ctx: ActionContext, cfg: AppConfig, weekStart: string
   return buildWeek({ weekStart, patterns: r?.items ?? [], events: [], config: cfg.week });
 }
 
+/**
+ * Step 17: Plan ahead's week models. One focus-pattern read (everything running from week 1 on) and one PTO read for
+ * the 12 weeks; meetings and personal events only for the first `withCalendars` weeks (as week.load reads them, sample
+ * meetings only for a calendar that isn't configured at all), so "mostly meetings" counts as in Plan the week.
+ */
+async function aheadWeekModels(ctx: ActionContext, cfg: AppConfig, weekStarts: string[], withCalendars: number, refresh: boolean): Promise<Week[]> {
+  const tz = cfg.week.hours.timeZone;
+  const opts = refresh ? { refresh: true } : {};
+  const first = weekStarts[0]!;
+  const last = Temporal.PlainDate.from(weekStarts[weekStarts.length - 1]!).add({ days: 6 }).toString();
+  const dv = cfg.dataverse.mySystemUserId ? ctx.makeDataverse(cfg.dataverse, tz) : null;
+  const [patterns, ptoR] = await Promise.all([dv ? dv.following(first, opts).catch(() => null) : null, dv ? dv.pto(first, last, opts).catch(() => null) : null]);
+  const sample = loadSampleSources();
+  const own = ctx.plan ? ownEventIds(ctx.plan.ownEvents()) : new Set<string>();
+  return Promise.all(
+    weekStarts.map(async (w, i) => {
+      let events: CalEvent[] = [];
+      if (i < withCalendars) {
+        const [o, g] = await Promise.all([
+          cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(w, opts).catch(() => null) : sample.outlook,
+          cfg.google ? ctx.makeGoogle(cfg.google, tz).load(w, opts).catch(() => null) : sample.google,
+        ]);
+        events = withoutOwn([...(o?.items ?? []), ...(g?.items ?? [])], own);
+      }
+      const sunday = Temporal.PlainDate.from(w).add({ days: 6 }).toString();
+      return buildWeek({ weekStart: w, patterns: patterns?.items ?? [], events, config: cfg.week, pto: ptoByDate(ptoR?.items ?? [], weekDates7(w)), unavailable: ctx.plan?.unavailableBetween(w, sunday) ?? [] });
+    }),
+  );
+}
+
 async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekLoadData> {
   const loaded = await ctx.loadConfig();
   const parsed = loaded.parsed;
@@ -788,7 +818,10 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         req.input,
       );
     case "roadmap.load":
+    case "roadmap.ahead":
+    case "roadmap.set_dates":
       // Step 16 (D278): read-only; the same followed clients and portfolio read as Plan the week, for this week.
+      // Step 17: Plan ahead's 12 weeks; dragged dates stay in the plan store until saved to DevOps.
       return roadmapAction(
         {
           plan: ctx.plan,
@@ -804,6 +837,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
             const r = await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).teammates();
             return r.ok ? r.people : null;
           },
+          weeks: (cfg, weekStarts, withCalendars, refresh) => aheadWeekModels(ctx, cfg, weekStarts, withCalendars, refresh),
         },
         action,
         req.input,

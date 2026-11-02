@@ -67,6 +67,26 @@ export function targetDateOps(rev: number, field: string, date: string | null, t
   const value = Temporal.PlainDate.from(date).toZonedDateTime({ timeZone }).toInstant().toString();
   return [test(rev), { op: had ? "replace" : "add", path: `/fields/${field}`, value }];
 }
+/**
+ * Step 17: Save dates to DevOps: the target date and, where the process has it, Start Date, in one patch behind one
+ * rev test. Each field is set (add or replace) or removed (null).
+ */
+export function datesOps(rev: number, fields: { field: string; date: string | null; had: boolean }[], timeZone: string): PatchOp[] {
+  const ops: PatchOp[] = [test(rev)];
+  for (const f of fields) {
+    if (f.date === null) {
+      if (f.had) ops.push({ op: "remove", path: `/fields/${f.field}` });
+    } else ops.push({ op: f.had ? "replace" : "add", path: `/fields/${f.field}`, value: Temporal.PlainDate.from(f.date).toZonedDateTime({ timeZone }).toInstant().toString() });
+  }
+  return ops;
+}
+/** The date fields a dates write touches, by label ("Target date", "Start date"), from its ops. */
+export function dateFieldsOf(ops: unknown, targetField: string | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (targetField) out["Target date"] = targetField;
+  if (Array.isArray(ops)) for (const p of ops as PatchOp[]) if (p.op !== "test" && p.path === `/fields/${START_FIELD}`) out["Start date"] = START_FIELD;
+  return out;
+}
 export const dateValue = (date: string, timeZone: string) => Temporal.PlainDate.from(date).toZonedDateTime({ timeZone }).toInstant().toString();
 
 export type CreateSpec = { org: string; title: string; description?: string | null; acceptance?: string | null; acField: boolean; assignedTo: string; areaPath: string; iterationPath: string; parentId: number;

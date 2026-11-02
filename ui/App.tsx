@@ -37,7 +37,8 @@ import type { TimerView } from "../actions/types.ts";
 import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
 import { Inbox } from "./Inbox.tsx";
-import { PlanAhead, Roadmap } from "./Roadmap.tsx";
+import { Roadmap } from "./Roadmap.tsx";
+import { PlanAhead } from "./PlanAhead.tsx";
 import { Today } from "./Today.tsx";
 import type { DraftStory, Pick } from "../plan/types.ts";
 import { CloseOut } from "./CloseOut.tsx";
@@ -1331,7 +1332,7 @@ export function App() {
       ) : checkInOpen ? (
         <CheckIn switcher={switches.today} data={data} now={now ?? new Date(clock).toISOString()} onClose={leavePlanning} onChanged={reloadQuiet} />
       ) : roadmapOpen ? (
-        nav.tab === "roadmap" && nav.mode === "ahead" ? <PlanAhead switcher={switches.roadmap} onDone={leavePlanning} /> : <Roadmap switcher={switches.roadmap} data={data} onChanged={reloadQuiet} />
+        nav.tab === "roadmap" && nav.mode === "ahead" ? <PlanAhead data={data} switcher={switches.roadmap} onDone={leavePlanning} onChanged={reloadQuiet} /> : <Roadmap switcher={switches.roadmap} data={data} onChanged={reloadQuiet} />
       ) : nav.tab === "today" && nav.mode === "plan" ? (
         pd && week.days.some((d) => d.date === pd.date) ? (
           (() => {

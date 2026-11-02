@@ -4,9 +4,10 @@
 import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
 import { useCallback, useContext, useEffect, useRef, useState, type CSSProperties } from "react";
-import type { RoadmapClient, RoadmapRow, RoadmapState, RoadmapStory, WeekLoadData } from "../actions/types.ts";
+import type { AheadState, RoadmapClient, RoadmapRow, RoadmapState, RoadmapStory, WeekLoadData } from "../actions/types.ts";
 import { DEFAULT_FILTER, filterRows, stateCounts, STATE_MEANING, STATE_ORDER, STATE_WORDS, type RoadmapFilter, type RoadmapSort, type RoadmapStateKind } from "../plan/roadmap.ts";
 import { call } from "./api.ts";
+import { overbooked } from "../plan/ahead.ts";
 import { DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { copy } from "./FollowUps.tsx";
 import { clientColor } from "./labels.ts";
@@ -61,8 +62,10 @@ export function StateBadge({ state, small }: { state: RoadmapStateKind; small?: 
   );
 }
 
-export function Roadmap({ data, switcher, onChanged, extraSummary, overbooked }: { data: WeekLoadData; switcher?: React.ReactNode; onChanged: () => void; extraSummary?: React.ReactNode; overbooked?: (clientKey: string, id: number) => boolean }) {
+export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; switcher?: React.ReactNode; onChanged: () => void }) {
   const [state, setState] = useState<RoadmapState | null>(null);
+  // Step 17: weeks 1 to 4 from Plan ahead, for the Over-booked weeks filter (read after the rows; never blocks them).
+  const [ahead, setAhead] = useState<AheadState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -82,6 +85,7 @@ export function Roadmap({ data, switcher, onChanged, extraSummary, overbooked }:
     try {
       setState(await call<RoadmapState>("roadmap.load", refresh ? { refresh: true } : {}));
       setError(null);
+      void call<AheadState>("roadmap.ahead", {}).then(setAhead, () => setAhead(null));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load Roadmap");
     } finally {
@@ -119,7 +123,9 @@ export function Roadmap({ data, switcher, onChanged, extraSummary, overbooked }:
 
   const clients = state?.clients ?? [];
   const counts = stateCounts(clients, filter);
-  const extra = (k: string) => (r: RoadmapRow) => !filter.overbooked || !overbooked || overbooked(k, r.id);
+  const over = ahead ? overbooked(ahead.clients, ahead.cells) : null;
+  const extra = (k: string) => (r: RoadmapRow) =>
+    !filter.overbooked || !over || over.items.has(`${k}:${r.id}`) || (r.tier === "epic" && !!clients.find((c) => c.clientKey === k)?.rows.some((f) => f.parentId === r.id && over.items.has(`${k}:${f.id}`)));
   const shown = clients.map((c) => ({ c, rows: filterRows(c.clientKey, c.rows, filter, extra(c.clientKey)) }));
   const total = clients.reduce((n, c) => n + c.rows.length, 0);
   const visible = shown.reduce((n, x) => n + x.rows.length, 0);
@@ -150,7 +156,12 @@ export function Roadmap({ data, switcher, onChanged, extraSummary, overbooked }:
               <span className="rm-sum-w"><span className="rm-mark" aria-hidden="true" />{STATE_WORDS[k]}</span>
             </button>
           ))}
-          {extraSummary}
+          {over && (over.weeks > 0 || filter.overbooked) && (
+            <button type="button" className="rm-sum rm-over" aria-pressed={filter.overbooked} onClick={() => setFilter({ ...filter, overbooked: !filter.overbooked })} title="Weeks 1 to 4 where a client's musts take more blocks than it has: show the features in them">
+              <span className="rm-sum-n">{over.weeks}</span>
+              <span className="rm-sum-w"><span className="rm-mark" aria-hidden="true" />Over-booked {over.weeks === 1 ? "week" : "weeks"}</span>
+            </button>
+          )}
         </div>
       )}
       {state && total > 0 && (
@@ -399,18 +410,5 @@ function Trend({ points, noun }: { points: RoadmapRow["trend"]; noun: string }) 
       </svg>
       <span className="dl-trend-label muted">Open {noun}, 3 weeks</span>
     </span>
-  );
-}
-
-/** Step 16.2: Roadmap › Plan ahead, a placeholder until step 17. */
-export function PlanAhead({ switcher, onDone }: { switcher?: React.ReactNode; onDone: () => void }) {
-  return (
-    <main className="roadmap" aria-label="Plan ahead">
-      <div className="follow-ups-head">
-        <h2 tabIndex={-1}>Plan ahead</h2>
-        <ModeArea done={{ onClick: onDone, title: "Back to the Roadmap" }}>{switcher}</ModeArea>
-      </div>
-      <p className="plan-ahead-soon">Coming next: plan the next 4 weeks on a timeline.</p>
-    </main>
   );
 }

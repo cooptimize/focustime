@@ -530,6 +530,16 @@ export const MIGRATIONS: readonly string[] = [
      FROM week_features ORDER BY id;
    DROP TABLE week_features;
    ALTER TABLE week_features_v19 RENAME TO week_features;`,
+  // 20: step 17 (D349), Plan ahead: a feature's or epic's dates as I dragged them on the timeline, kept locally until
+  // saved to DevOps (then removed). Whole days; end inclusive.
+  `CREATE TABLE roadmap_dates (
+     client_key TEXT NOT NULL,
+     item_id INTEGER NOT NULL CHECK (item_id > 0),
+     start_date TEXT NOT NULL CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     end_date TEXT NOT NULL CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND end_date >= start_date),
+     updated_at TEXT NOT NULL,
+     PRIMARY KEY (client_key, item_id)
+   );`,
 ];
 
 import type { AzureWriteEntry, TeamsStatusEntry } from "../actions/account-types.ts";
@@ -1707,6 +1717,21 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       }
       return out;
     },
+    /** Step 17: dates dragged on Plan ahead's timeline, per item ("<client>:<id>"). */
+    roadmapDates(): Map<string, { start: IsoDate; end: IsoDate }> {
+      const out = new Map<string, { start: IsoDate; end: IsoDate }>();
+      for (const r of db.prepare("SELECT * FROM roadmap_dates").all() as Row[]) out.set(`${r.client_key as string}:${r.item_id as number}`, { start: r.start_date as string, end: r.end_date as string });
+      return out;
+    },
+    /** Keep dragged dates (null clears them: back to DevOps or the estimate). */
+    setRoadmapDates(clientKey: string, itemId: number, dates: { start: IsoDate; end: IsoDate } | null): void {
+      if (!dates) {
+        db.prepare("DELETE FROM roadmap_dates WHERE client_key = ? AND item_id = ?").run(clientKey, itemId);
+        return;
+      }
+      if (dates.end < dates.start) throw new PlanError("The end date is before the start date");
+      db.prepare("INSERT INTO roadmap_dates (client_key, item_id, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id) DO UPDATE SET start_date = excluded.start_date, end_date = excluded.end_date, updated_at = excluded.updated_at").run(clientKey, itemId, dates.start, dates.end, stamp());
+    },
     writeLog(limit = 100): WriteEntry[] {
       return (db.prepare("SELECT * FROM write_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toWrite);
     },
@@ -1735,6 +1760,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         devopsWriteLog: (db.prepare("SELECT * FROM devops_write_log ORDER BY id").all() as Row[]).map(toDevopsWrite),
         azureWriteLog: (db.prepare("SELECT * FROM azure_write_log ORDER BY id").all() as Row[]).map(toAzureWrite),
         teamsStatusLog: (db.prepare("SELECT * FROM teams_status_log ORDER BY id").all() as Row[]).map(toTeamsStatus),
+        roadmapDates: [...this.roadmapDates()].map(([k, d]) => ({ item: k, ...d })),
       };
     },
     close: () => db.close(),

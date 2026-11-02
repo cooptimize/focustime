@@ -179,6 +179,16 @@ export function lastActivity(item: PortfolioItem): string | null {
   return best;
 }
 
+/** The earliest change among an item's children: the closest Coopilot gets to "first story activity" (Plan ahead). */
+export function firstActivity(item: PortfolioItem): string | null {
+  let best: string | null = null;
+  for (const c of item.children) {
+    if (c.stateCategory === "Removed" || !c.changedAt) continue;
+    if (!best || Temporal.Instant.compare(Temporal.Instant.from(c.changedAt), Temporal.Instant.from(best)) < 0) best = c.changedAt;
+  }
+  return best;
+}
+
 /** Open children that are blocked (one level down, Removed left out). */
 export function blockedCount(item: PortfolioItem): number {
   const level = item.tier === "epic" ? "portfolio" : "story";

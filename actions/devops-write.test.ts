@@ -376,6 +376,33 @@ describe("undo of each kind", () => {
     await undo(r.entry.id);
     expect(s.dv.items.get(437)!.fields["Microsoft.VSTS.Scheduling.TargetDate"]).toBeUndefined();
   });
+  it("step 17, Save dates: Start Date and target date in one patch behind one rev test, read back, undo puts both back", async () => {
+    const p = await s.preview({ kind: "target_date", itemId: 437, date: "2026-12-11", startDate: "2026-11-16" });
+    expect(p.fields).toEqual(expect.arrayContaining([expect.objectContaining({ label: "Start date", before: null, after: "2026-11-16" }), expect.objectContaining({ label: "Target date", after: "2026-12-11" })]));
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    const patches = s.dv.writes().filter((w) => w.method === "PATCH" && w.url.includes("/workitems/437"));
+    expect(patches).toHaveLength(1);
+    const ops = patches[0]!.body as { op: string; path: string }[];
+    expect(ops[0]).toMatchObject({ op: "test", path: "/rev" });
+    expect(ops.slice(1).map((o) => o.path)).toEqual(["/fields/Microsoft.VSTS.Scheduling.TargetDate", "/fields/Microsoft.VSTS.Scheduling.StartDate"]);
+    expect(s.dv.items.get(437)!.fields).toMatchObject({ "Microsoft.VSTS.Scheduling.StartDate": "2026-11-16T05:00:00Z", "Microsoft.VSTS.Scheduling.TargetDate": "2026-12-11T05:00:00Z" });
+    await undo(r.entry.id);
+    expect(s.dv.items.get(437)!.fields["Microsoft.VSTS.Scheduling.StartDate"]).toBeUndefined();
+    expect(s.dv.items.get(437)!.fields["Microsoft.VSTS.Scheduling.TargetDate"]).toBeUndefined();
+  });
+  it("step 17, Save dates: refused where the process has no Start Date, on items not assigned to me, or a start after the target", async () => {
+    const t = setup({ startDate: false });
+    await t.enable();
+    expect(await t.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 437, date: "2026-12-11", startDate: "2026-11-16" } })).toMatchObject({ status: 409 });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 601, date: "2026-12-11", startDate: "2026-11-16" } })).toMatchObject({ status: 409 });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 437, date: "2026-11-11", startDate: "2026-11-16" } })).toMatchObject({ status: 400 });
+  });
+  it("step 17: undo of Save dates refuses when either date changed in DevOps since", async () => {
+    const r = await s.write({ kind: "target_date", itemId: 437, date: "2026-12-11", startDate: "2026-11-16" });
+    s.dv.touch(437, { "Microsoft.VSTS.Scheduling.StartDate": "2026-11-23T05:00:00Z" });
+    expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "undo", writeId: r.entry.id } })).toMatchObject({ status: 409, code: "changed" });
+  });
   it("undo refuses when DevOps shows another value now", async () => {
     const r = await s.write({ kind: "state", itemId: 500, state: "Closed" });
     s.dv.touch(500, { "System.State": "Active" });

@@ -183,18 +183,21 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
     [2242, "User Story", "Closed", 2240, "Remember this device", "Sam Ortiz"],
   ],
   Atlas: [
-    [3310, "Feature", "Active", null, "Shipment tracking dashboard", ME, null],
+    // Step 17: two Atlas features due in December, a month with few Atlas blocks (a crowded month in Plan ahead).
+    [3310, "Feature", "Active", null, "Shipment tracking dashboard", ME, "2026-12-10"],
     [3311, "User Story", "Active", 3310, "Map of active shipments", ME],
     [3312, "User Story", "New", 3310, "Delay alerts", ME],
     [3320, "Epic", "New", null, "Carrier integrations", ME],
     [3330, "User Story", "New", null, "Rate table import", ME],
+    [3340, "Feature", "New", null, "Delivery time estimates", ME, "2026-12-17"],
+    [3341, "User Story", "New", 3340, "Estimate from carrier history", ME],
   ],
 };
 
 /** Step 16 (Roadmap): stories with no change in a while, and stories with no size yet. Step 17: Atlas's dashboard is stalled. */
 const QUIET = new Set([4412, 1112, 3311, 3312]);
 /** Step 17: a story blocked by a tag (Harbor's intake form reads Blocked). */
-const BLOCKED = new Set([2212]);
+const BLOCKED = new Set([2212, 3341]);
 /** Step 17: DevOps Start Date on some features (the demo process has the field); the rest are estimated in Plan ahead. */
 const START: Record<number, IsoDate> = { 4410: "2026-10-26", 1110: "2026-10-19", 2210: "2026-10-12", 4430: "2026-11-09" };
 const UNSIZED = new Set([1113, 2213]);

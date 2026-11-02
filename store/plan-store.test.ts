@@ -598,4 +598,17 @@ describe("Roadmap snapshots (step 16, D280)", () => {
     expect(all.get("Contoso:10")).toEqual([{ date: "2026-10-26", done: 1, open: 1 }]);
     expect(s.snapshotsFrom("2026-11-01").get("Fabrikam:10")).toHaveLength(1);
   });
+
+  it("step 17 (migration 20): dates dragged on Plan ahead are kept per item, replaced, cleared and exported", () => {
+    const s = createPlanStore({ path: ":memory:", now });
+    expect(s.roadmapDates().size).toBe(0);
+    s.setRoadmapDates("Fabrikam", 10, { start: "2026-11-09", end: "2026-12-04" });
+    s.setRoadmapDates("Fabrikam", 10, { start: "2026-11-16", end: "2026-12-11" });
+    s.setRoadmapDates("Contoso", 10, { start: "2026-11-02", end: "2026-11-02" });
+    expect(Object.fromEntries(s.roadmapDates())).toEqual({ "Fabrikam:10": { start: "2026-11-16", end: "2026-12-11" }, "Contoso:10": { start: "2026-11-02", end: "2026-11-02" } });
+    expect(() => s.setRoadmapDates("Fabrikam", 11, { start: "2026-11-10", end: "2026-11-09" })).toThrow(/before the start/);
+    expect(s.exportJson().roadmapDates).toContainEqual({ item: "Fabrikam:10", start: "2026-11-16", end: "2026-12-11" });
+    s.setRoadmapDates("Fabrikam", 10, null);
+    expect([...s.roadmapDates().keys()]).toEqual(["Contoso:10"]);
+  });
 });

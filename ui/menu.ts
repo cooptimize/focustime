@@ -1016,6 +1016,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "link.open": return { next: () => chooseItem(env, "Open which work item?", () => true, (k, i) => () => env.openLink(k, i.url)) };
     case "weekplan.load": return { run: () => env.openPlanWeek() };
     case "roadmap.load": return { run: () => env.setView("roadmap") };
+    case "roadmap.ahead":
+    case "roadmap.set_dates":
+      return { run: () => env.setView("ahead") };
     case "weekplan.commit": return env.planWeekOpen ? { run: env.commitWeek } : { disabled: "Open Plan the week first" };
     // Features are chosen in Plan the week itself.
     case "weekplan.set_feature":

@@ -3,16 +3,20 @@
 // a live read. Nothing external is written here: the row actions use the existing named actions.
 import type { AppConfig } from "../config/schema.ts";
 import { matchCooptimizer, type Teammate } from "../plan/people.ts";
-import { blockedCount, contributingItems, lastActivity, ownedItems, rowState, storyCounts, trendRate, TREND_DAYS } from "../plan/roadmap.ts";
+import { blockedCount, contributingItems, firstActivity, lastActivity, ownedItems, rowState, storyCounts, trendRate, TREND_DAYS } from "../plan/roadmap.ts";
 import { needsBreakdown, needsFeatures } from "../plan/weekplan.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { localToday, mondayOf } from "../week/dates.ts";
 import type { IsoDate } from "../week/types.ts";
 import type { ActionResponse, RoadmapClient, RoadmapRow, RoadmapState, RoadmapStory } from "./types.ts";
-import type { PortfolioItem } from "../week/types.ts";
+import type { PortfolioItem, Week } from "../week/types.ts";
+import { aheadColumns, aheadWeeks, PLAN_WEEKS } from "../plan/ahead.ts";
+import { borrowedForWeek, weekBudget } from "../plan/weekplan.ts";
+import { estimate } from "../plan/estimate.ts";
+import type { AheadState } from "./types.ts";
 
-export const ROADMAP_ACTIONS = ["roadmap.load"] as const;
+export const ROADMAP_ACTIONS = ["roadmap.load", "roadmap.ahead", "roadmap.set_dates"] as const;
 export type RoadmapAction = (typeof ROADMAP_ACTIONS)[number];
 
 export type RoadmapContext = {
@@ -24,11 +28,18 @@ export type RoadmapContext = {
   now: () => string;
   /** Step 16.4: Cooptimizers (Dataverse), to match DevOps people by email; null when they can't be read. */
   team?: (cfg: AppConfig) => Promise<Teammate[] | null>;
+  /**
+   * Step 17: the week models for Plan ahead: the first `withCalendars` weeks with meetings and personal events (for
+   * "mostly meetings"), the rest from focus patterns, standing blocks and PTO only.
+   */
+  weeks?: (cfg: AppConfig, weekStarts: IsoDate[], withCalendars: number, refresh: boolean) => Promise<Week[]>;
 };
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
 
 export async function roadmapAction(ctx: RoadmapContext, action: RoadmapAction, input: unknown): Promise<ActionResponse> {
+  if (action === "roadmap.ahead") return aheadAction(ctx, input);
+  if (action === "roadmap.set_dates") return setDatesAction(ctx, input);
   if (action !== "roadmap.load") return bad(`Unknown action ${action}`);
   const o = (input ?? {}) as Record<string, unknown>;
   if (typeof o !== "object" || Array.isArray(o) || Object.keys(o).some((k) => k !== "refresh")) return bad("roadmap.load takes { refresh? }");
@@ -79,7 +90,7 @@ export async function roadmapAction(ctx: RoadmapContext, action: RoadmapAction, 
           relation: i.why.includes("assigned") ? "owned" : "contributing",
           parentId: i.parentId !== null && ids.has(i.parentId) ? i.parentId : null,
           targetDate: i.targetDate, startDate: i.startDate ?? null, hasStartField: !!p.startFields?.[i.type],
-          ...c, blocked, lastActivity: last, people: people(c.people), trend: t.points,
+          ...c, blocked, lastActivity: last, firstActivity: firstActivity(i), people: people(c.people), trend: t.points,
           status: rowState({ open: c.open, done: c.done, blocked, lastActivity: last, perWeek: t.perWeek, days: t.days, targetDate: i.targetDate, today, now, noun: i.tier === "epic" ? "features" : "stories", th }),
           stories: storiesOf(i, match),
           flags,
@@ -108,4 +119,97 @@ function storiesOf(i: PortfolioItem, match: (name: string | null, email: string 
       return { id: c.id, title: c.title, state: c.state, group, assignee: c.mine ? "You" : c.assignedTo, email: c.mine ? null : match(c.assignedTo, c.assignedToEmail), url: c.url };
     })
     .sort((a, b) => GROUP_ORDER[a.group] - GROUP_ORDER[b.group]);
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const isoDate = (v: unknown): IsoDate | null => {
+  if (typeof v !== "string" || !DATE.test(v)) return null;
+  try {
+    return Temporal.PlainDate.from(v).toString() === v ? v : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Step 17 (slice 2): Plan ahead's 12 weeks. Weeks 1 to 4: each client's whole-block budget (the same rules as Plan the
+ * week: half-days less PTO and mostly-meetings half-days, less borrowed time) against the musts planned, and every
+ * feature's blocks that week, from the week plans themselves (one source of truth with Plan the week). Weeks 5 to 12:
+ * blocks available per month from focus patterns and PTO. Read only; nothing external is written.
+ */
+async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionResponse> {
+  const o = (input ?? {}) as Record<string, unknown>;
+  if (typeof o !== "object" || Array.isArray(o) || Object.keys(o).some((k) => k !== "refresh")) return bad("roadmap.ahead takes { refresh? }");
+  if (o.refresh !== undefined && typeof o.refresh !== "boolean") return bad("refresh must be true or false");
+  const plan = ctx.plan;
+  if (!plan) return bad("The local plan store isn't available", 503);
+  if (!ctx.weeks) return bad("Plan ahead isn't available here", 503);
+  const cfg = await ctx.config();
+  if (!cfg) return bad("Fix the config first", 409);
+  const today = localToday(ctx.now(), cfg.week.hours.timeZone);
+  const weekStarts = aheadWeeks(mondayOf(today));
+  const columns = aheadColumns(weekStarts);
+  const weeks = await ctx.weeks(cfg, weekStarts, PLAN_WEEKS, o.refresh === true);
+  const borrowed = plan.borrowedFor(weekStarts[0]!, Temporal.PlainDate.from(weekStarts[PLAN_WEEKS - 1]!).add({ days: 6 }).toString());
+  type Cap = AheadState["clients"][number];
+  const caps = new Map<string, Cap>();
+  const capOf = (k: string, name: string): Cap => {
+    let c = caps.get(k);
+    if (!c) caps.set(k, (c = { clientKey: k, clientName: name, weeks: [], months: [] }));
+    return c;
+  };
+  const cells: AheadState["cells"] = [];
+  weeks.slice(0, PLAN_WEEKS).forEach((week, i) => {
+    const w = weekStarts[i]!;
+    const items = plan.weekPlan(w).features;
+    for (const b of weekBudget(week, items, { borrowedMinutes: borrowedForWeek(borrowed, w) })) {
+      const reasons = [...b.blocks.filter((x) => !x.counts).map((x) => x.reason!).filter(Boolean), ...(b.borrowedBlocks ? [`${b.borrowedBlocks} ${b.borrowedBlocks === 1 ? "block" : "blocks"} of borrowed time to make up`] : [])];
+      capOf(b.clientKey, b.clientName).weeks.push({ weekStart: w, budget: b.budget, planned: b.planned, nicePlanned: b.nicePlanned, status: b.status, text: b.text, notCounted: reasons });
+    }
+    // Each feature's whole blocks that week: as set, or (no count) what its stories add up to.
+    const est = estimate(items.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })));
+    for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, blocks: env.blocks, auto: env.auto, tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length });
+  });
+  // Weeks 5 to 12: blocks available per month column (patterns and PTO; meetings aren't known that far ahead).
+  for (const col of columns) {
+    if (col.kind !== "month") continue;
+    const per = new Map<string, { name: string; n: number }>();
+    for (const w of col.weeks) {
+      const week = weeks[weekStarts.indexOf(w)];
+      if (!week) continue;
+      for (const b of weekBudget(week, [], { borrowedMinutes: {} })) {
+        const x = per.get(b.clientKey) ?? { name: b.clientName, n: 0 };
+        x.n += b.budget;
+        per.set(b.clientKey, x);
+      }
+    }
+    for (const [k, x] of per) capOf(k, x.name).months.push({ month: col.month, available: x.n });
+  }
+  // A client with blocks only after week 4 still gets its four weeks (none available).
+  for (const c of caps.values())
+    for (const w of weekStarts.slice(0, PLAN_WEEKS))
+      if (!c.weeks.some((x) => x.weekStart === w)) c.weeks.push({ weekStart: w, budget: 0, planned: 0, nicePlanned: 0, status: "none", text: "No blocks this week", notCounted: [] });
+  for (const c of caps.values()) c.weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+  const dates = Object.fromEntries(plan.roadmapDates());
+  const state: AheadState = { today, weeks: weekStarts, columns, clients: [...caps.values()], cells, dates };
+  return { ok: true, data: state };
+}
+
+/** Step 17: keep dates dragged on the timeline locally (null clears them), until Save dates to DevOps. */
+async function setDatesAction(ctx: RoadmapContext, input: unknown): Promise<ActionResponse> {
+  const o = (input ?? {}) as Record<string, unknown>;
+  if (typeof o !== "object" || Array.isArray(o) || Object.keys(o).some((k) => !["clientKey", "itemId", "start", "end"].includes(k))) return bad("roadmap.set_dates takes { clientKey, itemId, start, end } (both null to clear)");
+  if (typeof o.clientKey !== "string" || !o.clientKey.trim() || o.clientKey.length > 100) return bad("clientKey is required");
+  if (typeof o.itemId !== "number" || !Number.isInteger(o.itemId) || o.itemId <= 0) return bad("itemId must be a positive whole number");
+  const plan = ctx.plan;
+  if (!plan) return bad("The local plan store isn't available", 503);
+  if (o.start === null && o.end === null) {
+    plan.setRoadmapDates(o.clientKey, o.itemId, null);
+    return { ok: true, data: { dates: null } };
+  }
+  const start = isoDate(o.start), end = isoDate(o.end);
+  if (!start || !end) return bad("start and end must be dates (YYYY-MM-DD)");
+  if (end < start) return bad("The end date is before the start date", 422);
+  plan.setRoadmapDates(o.clientKey, o.itemId, { start, end });
+  return { ok: true, data: { dates: { start, end } } };
 }

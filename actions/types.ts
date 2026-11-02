@@ -378,6 +378,8 @@ export type RoadmapRow = {
   stale: number;
   /** The latest change of any child; null when none. */
   lastActivity: string | null;
+  /** The earliest of its children's last changes (an estimated bar's start, Plan ahead); null when none. */
+  firstActivity: string | null;
   /** Daily snapshots of the last 21 days, oldest first. */
   trend: { date: string; done: number; open: number }[];
   /** One state, its plain reason, whether the trend is still building, and the pace forecast. */
@@ -391,6 +393,26 @@ export type RoadmapRow = {
 };
 export type RoadmapClient = { clientKey: string; clientName: string; status: import("../week/types.ts").ClientWorkStatus; message?: string; fetchedAt: string | null; fromCache: boolean; rows: RoadmapRow[] };
 export type RoadmapState = { today: string; weekStart: string; clients: RoadmapClient[]; thresholds: import("../plan/roadmap.ts").RoadmapThresholds };
+
+/** Step 17: Plan ahead's 12 weeks (roadmap.ahead). Whole numbers only. */
+export type AheadState = {
+  today: string;
+  /** The 12 Mondays; week 1 is this week. */
+  weeks: string[];
+  columns: import("../plan/ahead.ts").AheadColumn[];
+  clients: {
+    clientKey: string;
+    clientName: string;
+    /** Weeks 1 to 4: the whole-block budget against the musts planned, as Plan the week counts them. */
+    weeks: { weekStart: string; budget: number; planned: number; nicePlanned: number; status: "none" | "all" | "free" | "over"; text: string; notCounted: string[] }[];
+    /** Weeks 5 to 12: blocks available per month column (patterns and PTO). */
+    months: { month: string; available: number }[];
+  }[];
+  /** Each feature's whole blocks per week in weeks 1 to 4, from the week plans (what Plan the week shows). */
+  cells: { clientKey: string; itemId: number; weekStart: string; blocks: number; auto: boolean; tier: "must" | "nice"; weekItemId: number; stories: number }[];
+  /** Dates dragged on the timeline, not saved to DevOps yet, per "<client>:<id>". */
+  dates: Record<string, { start: string; end: string }>;
+};
 
 // ---- Step 16.3: Teams presence ----
 /** Teams access, in words the UI can act on. */

@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { roadmapAction, type RoadmapContext } from "./roadmap-actions.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import type { AppConfig } from "../config/schema.ts";
-import type { ClientPortfolio, PortfolioChild, PortfolioItem } from "../week/types.ts";
-import type { RoadmapClient } from "./types.ts";
+import type { ClientPortfolio, FocusPattern, PortfolioChild, PortfolioItem } from "../week/types.ts";
+import type { AheadState, RoadmapClient } from "./types.ts";
+import { buildWeek } from "../week/build.ts";
+import { weekConfig } from "../config/defaults.ts";
 
 const cfg = { week: { hours: { timeZone: "America/Chicago" } } } as unknown as AppConfig;
 const kid = (id: number, extra: Partial<PortfolioChild> = {}): PortfolioChild => ({ id, title: `Story ${id}`, type: "User Story", state: "Active", stateCategory: "InProgress", open: true, level: "story", order: id, url: `https://dev.azure.com/fabrikam/P/_workitems/edit/${id}`, assignedTo: "Alex Rivera", mine: false, changedAt: "2026-10-30T12:00:00Z", size: 2, ...extra });
@@ -91,5 +93,55 @@ describe("roadmap.load", () => {
   it("refuses unknown input", async () => {
     const { ctx } = setup();
     expect(await roadmapAction(ctx, "roadmap.load", { x: 1 })).toMatchObject({ ok: false, status: 400 });
+  });
+});
+
+describe("roadmap.ahead and roadmap.set_dates (step 17, slice 2)", () => {
+  const patterns: FocusPattern[] = [{ id: "fab", clientKey: "Fabrikam", clientName: "Fabrikam", startDate: "2026-01-01", endDate: null, active: true, days: { Tue: "AllDay" } }];
+  const withWeeks = () => {
+    const s = setup();
+    const asked: { n: number; withCalendars: number; refresh: boolean }[] = [];
+    s.ctx.weeks = async (_cfg, starts, withCalendars, refresh) => (asked.push({ n: starts.length, withCalendars, refresh }), starts.map((w) => buildWeek({ weekStart: w, patterns, events: [], config: weekConfig })));
+    return { ...s, asked };
+  };
+  const ahead = async (ctx: RoadmapContext, input: unknown = {}) => {
+    const r = await roadmapAction(ctx, "roadmap.ahead", input);
+    if (!r.ok) throw new Error(r.error);
+    return r.data as AheadState;
+  };
+  it("12 weeks from this week; budgets for weeks 1 to 4 and feature blocks from the week plans; months after", async () => {
+    const { ctx, plan, asked } = withWeeks();
+    plan.addWeekItem({ weekStart: "2026-11-09", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 3 });
+    plan.addWeekItem({ weekStart: "2026-11-16", clientKey: "Fabrikam", itemId: 11, title: "Feature 11", itemType: "Feature", url: null, level: "feature", tier: "nice", blocks: 1 });
+    const d = await ahead(ctx, { refresh: true });
+    expect(asked).toEqual([{ n: 12, withCalendars: 4, refresh: true }]);
+    expect(d.today).toBe("2026-11-02");
+    expect(d.weeks[0]).toBe("2026-11-02");
+    expect(d.columns.map((c) => c.label)).toEqual(["Nov 2", "Nov 9", "Nov 16", "Nov 23", "Dec", "Jan"]);
+    const fab = d.clients.find((c) => c.clientKey === "Fabrikam")!;
+    expect(fab.weeks.map((w) => [w.weekStart, w.budget, w.planned, w.status, w.text])).toEqual([
+      ["2026-11-02", 2, 0, "none", "2 blocks free"],
+      ["2026-11-09", 2, 3, "over", "3 planned, 2 available"],
+      ["2026-11-16", 2, 0, "none", "2 blocks free"],
+      ["2026-11-23", 2, 0, "none", "2 blocks free"],
+    ]);
+    // Weeks 5 to 12: Tuesdays all day, two blocks a week (December has five weeks by their Thursdays).
+    expect(fab.months).toEqual([{ month: "2026-12", available: 10 }, { month: "2027-01", available: 6 }]);
+    expect(d.cells.map((c) => [c.itemId, c.weekStart, c.blocks, c.tier, c.auto])).toEqual([[10, "2026-11-09", 3, "must", false], [11, "2026-11-16", 1, "nice", false]]);
+    // Every shown number is whole.
+    expect(JSON.stringify(d.clients)).not.toMatch(/\d\.\d/);
+  });
+  it("keeps dragged dates locally, clears them, and refuses bad input", async () => {
+    const { ctx } = withWeeks();
+    const set = (input: unknown) => roadmapAction(ctx, "roadmap.set_dates", input);
+    expect(await set({ clientKey: "Fabrikam", itemId: 10, start: "2026-11-09", end: "2026-12-04" })).toMatchObject({ ok: true, data: { dates: { start: "2026-11-09", end: "2026-12-04" } } });
+    expect((await ahead(ctx)).dates).toEqual({ "Fabrikam:10": { start: "2026-11-09", end: "2026-12-04" } });
+    expect(await set({ clientKey: "Fabrikam", itemId: 10, start: "2026-12-05", end: "2026-12-04" })).toMatchObject({ ok: false, status: 422 });
+    expect(await set({ clientKey: "Fabrikam", itemId: 10, start: "2026-02-30", end: "2026-12-04" })).toMatchObject({ ok: false, status: 400 });
+    expect(await set({ clientKey: "Fabrikam", itemId: 1.5, start: "2026-11-09", end: "2026-12-04" })).toMatchObject({ ok: false, status: 400 });
+    expect(await set({ clientKey: "Fabrikam", itemId: 10, start: "2026-11-09", end: "2026-12-04", extra: 1 })).toMatchObject({ ok: false, status: 400 });
+    expect(await set({ clientKey: "Fabrikam", itemId: 10, start: null, end: null })).toMatchObject({ ok: true, data: { dates: null } });
+    expect((await ahead(ctx)).dates).toEqual({});
+    expect(await roadmapAction(ctx, "roadmap.ahead", { x: 1 })).toMatchObject({ ok: false, status: 400 });
   });
 });

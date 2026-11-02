@@ -33,8 +33,11 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     expect(await badge("Knowledge base search")).toBe("On track");
     expect(await badge("Patient portal login")).toBe("Done");
     await expect(rowOf(page, "Order history export").locator(".rm-reason").textContent()).resolves.toBe("3 stories open, about 1 closes every 3 weeks, 11 days left, needs about 9 weeks");
+    await page.locator(".rm-sum.rm-over").waitFor();
     const sums = await page.locator(".rm-sum").allTextContents();
-    expect(sums.length).toBe(8);
+    // Eight states, then Over-booked weeks (Northwind's and Atlas's week 1).
+    expect(sums.length).toBe(9);
+    expect(sums[8]).toMatch(/^2\s*Over-booked weeks$/);
     expect(sums.every((t) => /^\d+/.test(t))).toBe(true);
     expect(errors).toEqual([]);
     await page.close();
@@ -58,6 +61,10 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     await expect(page.locator(".rm-row").count()).resolves.toBe(1);
     await expect(page.locator(".rm-sum.st-watch").getAttribute("aria-pressed")).resolves.toBe("true");
     await page.getByRole("button", { name: "Clear filters" }).click();
+    // Over-booked weeks: only the features with blocks in a week that has more musts than blocks.
+    await page.locator(".rm-sum.rm-over").click();
+    await expect.poll(async () => (await page.locator(".rm-row .dl-title a").allTextContents()).sort()).toEqual(["Customer portal redesign", "Order history export", "Supplier onboarding"]);
+    await page.locator(".rm-sum.rm-over").click();
     await expect.poll(() => page.locator(".rm-row").count()).toBeGreaterThan(10);
     // Contributing: only the parents of my stories.
     await page.getByRole("button", { name: "Contributing", exact: true }).click();
@@ -84,6 +91,105 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     await expect(row.locator(".rm-group.g-blocked li").textContent()).resolves.toContain("Validate date of birth");
     await page.getByRole("button", { name: "What do these mean?" }).click();
     await expect(page.locator(".rm-legend dt").count()).resolves.toBe(9);
+    await page.close();
+  }, T);
+
+  const ahead = async () => {
+    const { page, errors } = await freshPage(h);
+    await page.evaluate(() => (location.hash = "#/roadmap/ahead"));
+    await page.locator(".pa-item").first().waitFor({ timeout: 30_000 });
+    return { page, errors };
+  };
+  const barRow = (page: Awaited<ReturnType<typeof ahead>>["page"], title: string) => page.locator(".pa-item", { has: page.getByRole("link", { name: title, exact: true }) });
+  const cell = (page: Awaited<ReturnType<typeof ahead>>["page"], title: string, week: string) => page.getByRole("gridcell", { name: new RegExp(`^${title}, week of ${week}:`) });
+
+  it("Plan ahead: weeks 1 to 4 then months, solid and estimated bars, target diamonds, a ghost past the target, a crowded month", async () => {
+    const { page, errors } = await ahead();
+    await expect(page.locator(".pa-head .pa-col-main").allTextContents()).resolves.toEqual(["Nov 2", "Nov 9", "Nov 16", "Nov 23", "Dec", "Jan"]);
+    // DevOps Start Date and Target Date: solid. No start: estimated.
+    await expect(barRow(page, "Patient intake form").locator(".pa-bar").getAttribute("class")).resolves.not.toContain(" est");
+    await expect(barRow(page, "Loyalty points").locator(".pa-bar").getAttribute("class")).resolves.toContain(" est");
+    await expect(barRow(page, "Loyalty points").locator(".pa-diamond").count()).resolves.toBe(1);
+    // The pace forecast lands after the target: a ghost past the diamond, and the row reads At risk.
+    await expect(barRow(page, "Order history export").locator(".pa-ghost").count()).resolves.toBe(1);
+    await expect(barRow(page, "Order history export").locator(".rm-badge").textContent()).resolves.toContain("At risk");
+    // Atlas: two features due in December with few blocks.
+    const atlasCap = page.locator('.pa-cap[aria-label="Atlas Freight: blocks per week and month"]');
+    await expect(atlasCap.locator(".pa-capcell.crowded").textContent()).resolves.toMatch(/^Crowded month\s*\d+ blocks, 2 features due$/);
+    await expect(page.locator('.pa-cap[aria-label="Northwind Foods: blocks per week and month"] .pa-capcell').first().textContent()).resolves.toBe("3 planned, 2 available");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("a week cell sets whole blocks, the same blocks Plan the week shows; a change there shows here", async () => {
+    const { page, errors } = await ahead();
+    await cell(page, "Store locator", "Nov 9").click();
+    await page.getByRole("menuitem", { name: "2 blocks" }).click();
+    await expect.poll(() => cell(page, "Store locator", "Nov 9").getAttribute("aria-label")).toContain(": 2 blocks.");
+    // Plan the week (next week, Nov 9): the feature is there as a must with 2 blocks.
+    await page.evaluate(() => (location.hash = "#/week/plan/2026-11-09"));
+    const row = page.locator(".pw-row", { hasText: "Store locator" });
+    await row.waitFor({ timeout: 20_000 });
+    await expect.poll(() => row.locator(".pw-stepper .pw-chip-btn").first().textContent()).toBe("2 blocks");
+    await row.getByRole("button", { name: "One block less" }).first().click();
+    await expect.poll(() => row.locator(".pw-stepper .pw-chip-btn").first().textContent()).toBe("1 block");
+    await page.evaluate(() => (location.hash = "#/roadmap/ahead"));
+    await page.locator(".pa-item").first().waitFor();
+    await expect.poll(() => cell(page, "Store locator", "Nov 9").getAttribute("aria-label")).toContain(": 1 block.");
+    // None removes it from the week again.
+    await cell(page, "Store locator", "Nov 9").click();
+    await page.getByRole("menuitem", { name: "None" }).click();
+    await expect.poll(() => cell(page, "Store locator", "Nov 9").getAttribute("aria-label")).toContain(": no blocks.");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("keyboard: arrows move between weeks and rows, + and − change the focused week's blocks", async () => {
+    const { page } = await ahead();
+    await cell(page, "Loyalty points", "Nov 9").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? "")).toMatch(/^Loyalty points, week of Nov 16:/);
+    await page.keyboard.press("+");
+    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label")).toContain(": 1 block.");
+    await page.keyboard.press("-");
+    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label")).toContain(": no blocks.");
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? "")).toMatch(/^Store locator, week of Nov 16:/);
+    // Enter on an epic's row hides its features, and again shows them.
+    await cell(page, "Customer portal redesign", "Nov 2").focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => barRow(page, "Loyalty points").count()).toBe(0);
+    await page.keyboard.press("Enter");
+    await expect.poll(() => barRow(page, "Loyalty points").count()).toBe(1);
+    await page.close();
+  }, T);
+
+  it("dragging across weeks gives each empty week 1 block; dragging a bar keeps estimated dates locally until reset", async () => {
+    const { page } = await ahead();
+    const a = (await cell(page, "Supplier onboarding", "Nov 9").boundingBox())!;
+    const b = (await cell(page, "Supplier onboarding", "Nov 23").boundingBox())!;
+    await page.mouse.move(a.x + 10, a.y + a.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(a.x + a.width + 10, a.y + a.height / 2, { steps: 4 });
+    await page.mouse.move(b.x + 10, b.y + b.height / 2, { steps: 4 });
+    await page.mouse.up();
+    for (const w of ["Nov 9", "Nov 16", "Nov 23"]) await expect.poll(() => cell(page, "Supplier onboarding", w).getAttribute("aria-label")).toContain(": 1 block.");
+    for (const w of ["Nov 9", "Nov 16", "Nov 23"]) {
+      await cell(page, "Supplier onboarding", w).click();
+      await page.getByRole("menuitem", { name: "None" }).click();
+    }
+    // A bar's body: both dates move; Save dates and Reset appear.
+    const bar = barRow(page, "Appointment reminders").locator(".pa-bar");
+    const box = (await bar.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2, { steps: 6 });
+    await page.mouse.up();
+    const row = barRow(page, "Appointment reminders");
+    await expect.poll(() => row.locator(".pa-save").count()).toBe(1);
+    await expect(row.locator(".pa-save").textContent()).resolves.toContain("Not yours to save");
+    await row.getByRole("button", { name: "Reset" }).click();
+    await expect.poll(() => row.locator(".pa-save").count()).toBe(0);
     await page.close();
   }, T);
 
