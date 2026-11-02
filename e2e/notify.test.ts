@@ -41,7 +41,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await expect.poll(() => page.locator(".set-field", { hasText: "Start my VM without asking" }).textContent(), { timeout: 5000 }).toContain("Saved");
     await page.keyboard.press("Escape");
     await page.keyboard.press("1");
-    const prompt = page.locator(".vm-banner", { hasText: "Your VM is off" });
+    const prompt = page.locator(".att-chip.vm", { hasText: "VM is off" });
     await prompt.waitFor({ timeout: 10_000 });
     await prompt.getByRole("button", { name: "Start" }).click();
     const dialog = page.locator(".vm-preview");
@@ -59,8 +59,8 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
       await go(route);
       await page.locator(selector).first().waitFor({ timeout: 10_000 });
     };
-    await expectView("checkin", 'main[aria-label="Check-in"]');
-    await expectView("closeout", 'main[aria-label="Close out"]');
+    await expectView("checkin", "main.mode-checkin");
+    await expectView("closeout", ".closeout-panel");
     await expectView("planday", ".pd2-left");
     await expectView("planweek:2026-11-09", 'main[aria-label="Plan the week"]');
     await expectView("focus", ".focus-screen");

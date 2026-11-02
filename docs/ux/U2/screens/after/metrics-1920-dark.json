@@ -1,0 +1,210 @@
+{
+ "now": {
+  "words": {
+   "ui": 85,
+   "titles": 78
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 72,
+    "titles": 78
+   }
+  },
+  "elements": 59,
+  "kinds": {
+   "button": 30,
+   "icon": 1,
+   "badge/chip/tag": 10,
+   "input": 9,
+   "link": 9
+  },
+  "textStyles": 27,
+  "colors": 26,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "uiText": [
+   "Today",
+   "Monday, November 2",
+   "Now",
+   "Plan",
+   "Check-in",
+   "Close out",
+   "2 ×4",
+   "follow-up",
+   "s",
+   "due",
+   "VM is off",
+   "Start",
+   "Not today",
+   "Cooptimize",
+   "9:00 AM–12:30 PM",
+   "At risk · Dentist 12:00 ×2",
+   "9:00–9:15",
+   "Start focus",
+   "+ time",
+   "11:00–11:45",
+   "Next",
+   "Overdue 1 day",
+   "12:00–1:00",
+   "Northwind",
+   "12:30–5:00 PM",
+   "1:00–1:30",
+   "3:00–4:00",
+   "This week",
+   "of ×2",
+   "stories ×2",
+   "planned ×2",
+   "3",
+   "Needs stories",
+   "Draft stories",
+   "Coop brief",
+   "All sources live",
+   "· updated 4 h ago",
+   "Refresh"
+  ]
+ },
+ "checkin": {
+  "words": {
+   "ui": 116,
+   "titles": 37
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 103,
+    "titles": 37
+   }
+  },
+  "elements": 39,
+  "kinds": {
+   "button": 25,
+   "icon": 1,
+   "input": 7,
+   "link": 5,
+   "badge/chip/tag": 1
+  },
+  "textStyles": 23,
+  "colors": 22,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "uiText": [
+   "Check-in ×2",
+   "9:30 AM",
+   "about 4 hours left today",
+   "Done",
+   "Now",
+   "Plan",
+   "Close out",
+   "Cooptimize",
+   "Morning · about 2 hours left after meetings",
+   "1",
+   "done ×2",
+   "S ×5",
+   "fits ×2",
+   "doesn't fit ×5",
+   "Move to Tue ×4",
+   "Overdue 1 day",
+   "Tonight",
+   "About an hour over",
+   ". Move one? ×2",
+   "Northwind",
+   "Afternoon · about 3 hours left after meetings",
+   "0",
+   "M ×2",
+   "About 4 hours over",
+   "Walked in",
+   "+ Add walk-on work",
+   "Musts this week:",
+   "4",
+   "clients",
+   "Northwind, Atlas",
+   "tight",
+   "Review ›",
+   "All sources live",
+   "· updated 4 h ago",
+   "Refresh"
+  ]
+ },
+ "closeout": {
+  "words": {
+   "ui": 118,
+   "titles": 52
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 105,
+    "titles": 52
+   }
+  },
+  "elements": 54,
+  "kinds": {
+   "button": 35,
+   "icon": 1,
+   "input": 9,
+   "link": 6,
+   "badge/chip/tag": 3
+  },
+  "textStyles": 26,
+  "colors": 24,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "uiText": [
+   "Today",
+   "Monday, November 2",
+   "Now",
+   "Plan",
+   "Check-in",
+   "Close out ×2",
+   "Cooptimize ×2",
+   "Morning",
+   "1 done",
+   "Tue ×7",
+   "Overdue 1 day ×2",
+   "Northwind ×2",
+   "Afternoon",
+   "0 done",
+   "Monday",
+   "Done",
+   "1 ×2",
+   "done",
+   "7",
+   "carry over",
+   "0",
+   "dropped",
+   "0m",
+   "focused",
+   "Where you left off",
+   "+ Another client",
+   "DevOps updates owed",
+   "done here, still open in DevOps",
+   "Enable DevOps writes",
+   "Follow-ups due",
+   "Jordan Lee",
+   "Close the loop ×2",
+   "Due today",
+   "Dana Morales",
+   "3",
+   "more in Inbox",
+   "capture",
+   "to sort",
+   "Done closes the day and plays the week back into the ring.",
+   "All sources live",
+   "· updated 4 h ago",
+   "Refresh"
+  ]
+ }
+}

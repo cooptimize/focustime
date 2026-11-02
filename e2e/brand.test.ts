@@ -95,7 +95,7 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
     // Close out with today's musts done: no reverse, the moment shows Lumen still, then Today.
     await mustDone(page);
     await page.evaluate(() => (location.hash = "#/today/closeout"));
-    await page.locator(".closeout .done-btn").click();
+    await page.locator(".closeout-panel .done-btn").click();
     await page.getByText("Musts done. See you tomorrow.").waitFor();
     await expect(page.locator(".brand-stage [data-lumen]").getAttribute("data-lumen")).resolves.toBe("still");
     await page.keyboard.press("Space"); // any key skips
@@ -132,7 +132,7 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
     await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
     await mustDone(page);
     await page.evaluate(() => (location.hash = "#/today/closeout"));
-    await page.locator(".closeout .done-btn").click();
+    await page.locator(".closeout-panel .done-btn").click();
     await page.waitForSelector('[data-close="unroll"]');
     await page.getByText("Musts done. See you tomorrow.").waitFor();
     await page.waitForSelector('[data-close="moment"] [data-lumen="bob"]');

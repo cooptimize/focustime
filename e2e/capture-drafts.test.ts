@@ -120,7 +120,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await page.close();
   }, T);
 
-  it("Ctrl+K Add a follow-up and Close out open the capture box with Follow-up chosen", async () => {
+  it("Ctrl+K Add a follow-up opens the capture box with Follow-up chosen; Close out is the panel, with no capture box (U2)", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("Control+k");
     await page.keyboard.type("Add a follow-up");
@@ -130,8 +130,8 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await page.keyboard.press("Control+k");
     await page.keyboard.type("Close out");
     await page.getByRole("menuitem", { name: /Close out/ }).first().click();
-    await page.waitForSelector(".closeout");
-    await expect.poll(() => page.locator(".closeout .cap-box-kinds [role=radio][aria-checked=true]").textContent()).toContain("Follow-up");
+    await page.waitForSelector(".closeout-panel");
+    await expect(page.locator(".closeout-panel .cap-box").count()).resolves.toBe(0);
     await page.close();
   }, T);
 

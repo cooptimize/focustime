@@ -28,7 +28,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await expect.poll(() => chip.textContent(), { timeout: 10_000 }).toContain("Stopped (deallocated)");
     // Step 16.3: the header chip is the one place for VM status; Today has only the prompts.
     await expect(page.locator(".today-view .vm-chip").count()).resolves.toBe(0);
-    const prompt = page.locator(".vm-banner", { hasText: "Your VM is off. Start it?" });
+    const prompt = page.locator(".att-chip.vm", { hasText: "VM is off" });
     await prompt.waitFor();
     await prompt.getByRole("button", { name: "Not today" }).click();
     await expect.poll(() => prompt.count(), { timeout: 5000 }).toBe(0);
@@ -39,7 +39,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
   it("Start from the prompt: Starting… then Running, logged in Settings > Data", async () => {
     const { page, errors } = await freshPage(h);
     await today(page);
-    const prompt = page.locator(".vm-banner", { hasText: "Your VM is off" });
+    const prompt = page.locator(".att-chip.vm", { hasText: "VM is off" });
     await prompt.getByRole("button", { name: "Start" }).click();
     const chip = page.locator(".topbar .vm-chip");
     await expect.poll(() => chip.textContent(), { timeout: 10_000 }).toContain("Starting…");

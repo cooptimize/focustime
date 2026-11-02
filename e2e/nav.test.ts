@@ -68,12 +68,12 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     const { page } = await freshPage(h);
     await page.keyboard.press("m");
     await expect.poll(() => hash(page)).toBe("#/today/checkin");
-    await page.locator(".checkin .done-btn").click();
+    await page.locator(".mode-checkin .done-btn").click();
     await expect.poll(() => hash(page)).toBe("#/today");
     await expect.poll(() => page.locator(".mode-switch .ms-btn", { hasText: "Check-in" }).locator(".ms-done").count()).toBe(1);
     await page.keyboard.press("e");
     await expect.poll(() => hash(page)).toBe("#/today/closeout");
-    await page.locator(".closeout .co-step button[aria-label='Previous day']").click();
+    await page.locator(".closeout-panel .co-step button[aria-label='Previous day']").click();
     await expect.poll(() => hash(page)).toBe("#/today/closeout/2026-11-01");
     await page.close();
   }, T);

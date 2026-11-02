@@ -1,0 +1,145 @@
+{
+ "checkin": {
+  "words": {
+   "ui": 112,
+   "titles": 37
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 99,
+    "titles": 37
+   }
+  },
+  "elements": 40,
+  "kinds": {
+   "button": 26,
+   "icon": 1,
+   "input": 7,
+   "link": 5,
+   "badge/chip/tag": 1
+  },
+  "textStyles": 23,
+  "colors": 22,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "uiText": [
+   "Check-in ×2",
+   "1:05 PM",
+   "about 3 hours left today",
+   "Done",
+   "Now",
+   "Plan",
+   "Close out",
+   "Cooptimize",
+   "Morning · ended",
+   "1",
+   "done ×2",
+   "Move to Tue ×5",
+   "Overdue 1 day",
+   "Tonight",
+   "3",
+   "not done. Move",
+   "them ×2",
+   ", or leave",
+   "for Close out.",
+   "Northwind",
+   "Afternoon · about 3 hours left after meetings",
+   "0",
+   "M ×2",
+   "fits",
+   "doesn't fit ×3",
+   "S ×2",
+   "About 4 hours over",
+   ". Move one?",
+   "Walked in",
+   "+ Add walk-on work",
+   "Musts this week:",
+   "4",
+   "clients",
+   "Cooptimize, Northwind, Atlas",
+   "tight",
+   "Review ›",
+   "All sources live",
+   "· updated 4 h ago",
+   "Refresh"
+  ]
+ },
+ "closeout": {
+  "words": {
+   "ui": 118,
+   "titles": 52
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 105,
+    "titles": 52
+   }
+  },
+  "elements": 54,
+  "kinds": {
+   "button": 35,
+   "icon": 1,
+   "input": 9,
+   "link": 6,
+   "badge/chip/tag": 3
+  },
+  "textStyles": 26,
+  "colors": 24,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "uiText": [
+   "Today",
+   "Monday, November 2",
+   "Now",
+   "Plan",
+   "Check-in",
+   "Close out ×2",
+   "Cooptimize ×2",
+   "Morning",
+   "1 done",
+   "Tue ×7",
+   "Overdue 1 day ×2",
+   "Northwind ×2",
+   "Afternoon",
+   "0 done",
+   "Monday",
+   "Done",
+   "1 ×2",
+   "done",
+   "7",
+   "carry over",
+   "0",
+   "dropped",
+   "0m",
+   "focused",
+   "Where you left off",
+   "+ Another client",
+   "DevOps updates owed",
+   "done here, still open in DevOps",
+   "Enable DevOps writes",
+   "Follow-ups due",
+   "Jordan Lee",
+   "Close the loop ×2",
+   "Due today",
+   "Dana Morales",
+   "3",
+   "more in Inbox",
+   "capture",
+   "to sort",
+   "Done closes the day and plays the week back into the ring.",
+   "All sources live",
+   "· updated 4 h ago",
+   "Refresh"
+  ]
+ }
+}

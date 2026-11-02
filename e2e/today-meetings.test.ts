@@ -14,7 +14,7 @@ describe.skipIf(!CHROMIUM)("Meetings on Today and Plan the day (browser, demo mo
 
   it("Today › Now lists each block's meetings in time order, the past one dimmed and the next one marked", async () => {
     const { page, errors } = await freshPage(h);
-    const morning = page.locator(".today-block", { hasText: "Morning" }).locator(".day-cal li");
+    const morning = page.locator(".today-block", { hasText: "Cooptimize" }).locator(".today-rows > li:not(.pick-row)");
     await expect.poll(() => morning.count()).toBeGreaterThan(0);
     const rows = await morning.allTextContents();
     expect(rows[0]).toMatch(/^9:00–9:15\s*Team standup/);
@@ -22,9 +22,9 @@ describe.skipIf(!CHROMIUM)("Meetings on Today and Plan the day (browser, demo mo
     await expect(morning.first().getAttribute("class")).resolves.toContain("when-past");
     // Exactly one Next on the page; the afternoon block has its own meetings.
     await expect(page.locator(".today-view .cal-tag.next").count()).resolves.toBe(1);
-    await expect(page.locator(".today-block", { hasText: "Afternoon" }).locator(".day-cal li").count()).resolves.toBeGreaterThan(0);
+    await expect(page.locator(".today-block", { hasText: "Northwind" }).locator(".today-rows > li:not(.pick-row)").count()).resolves.toBeGreaterThan(0);
     // A meeting opens the same event menu as on Week.
-    await page.locator(".today-view .day-cal li", { hasText: "Proposal review" }).click();
+    await page.locator(".today-view .today-rows > li", { hasText: "Proposal review" }).click();
     await expect(page.locator("[role=menu]").count()).resolves.toBe(1);
     await page.keyboard.press("Escape");
     expect(errors).toEqual([]);
