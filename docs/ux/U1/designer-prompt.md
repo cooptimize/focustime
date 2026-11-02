@@ -249,6 +249,24 @@ Cross-screen issues to solve once:
 - **Copy:** plain language, no em dashes in UI copy, middle dots (·) between facts, sentence case. The wording guide is `wording.md`.
 - **Screens:** 1920x1080 and 3840x1600. No phone layout.
 
+## 5a. Decisions already made (Nov 2, after the audit)
+
+Treat these as settled. Do not reopen them; design from them.
+
+1. **Screen jobs confirmed**, including Plan the week's "What are the musts for each client, and are they broken into stories?"
+2. **Today at 3840x1600** uses the width: a day timeline (like Week's rail, with timeboxes draggable on it) with the picks beside it. At 1920 Today stays one column.
+3. **Typed items in Plan the day** become a draft story under the client's feature on Enter. A plain note is still possible but shows "not in DevOps".
+4. **Check-in and Close out are no longer pages.** Check-in is a state of Today's block cards: done picks collapse to a count, only picks that no longer fit show one suggested Move, one amber fit line per block, never red. Close out is a side panel over Today with three short sections (where you left off per client worked, follow-ups due, DevOps updates owed); carrying picks over happens on the cards. The mode switch keeps Check-in and Close out as entries; they change Today's state instead of navigating away.
+5. **VM prompt** leaves Today; the header chip is the one place.
+6. **Week at 1920:** the timeline rail replaces the meeting list. Full titles on hover; clicking a block opens the shared detail panel with the full agenda.
+7. **A must** is a feature, or a single story when there is no feature. The week commits features; the day commits stories.
+8. **Breaking down is a soft gate.** A feature can be a must with no stories, but shows "Needs stories" everywhere it appears, and cannot be placed on a day until it has at least one story. In its place Plan the day offers "Draft stories" and "Coop brief".
+9. **Today shows only stories.** Features appear only as a "Needs stories" row at the bottom of Today, per client with a block today.
+10. **Shared parts:** one detail panel (right side, Today and Week), one block card at three densities, one pick row with hover controls, one amber fit word set, menus hide disabled items, one name per client and per idea.
+11. **Risk** shows its short reason on the card, in words, always.
+
+So section 6's "ask before deciding the two open product questions" no longer applies: both are decided above (3 and 4).
+
 ## 6. What I want from you
 
 a. **A short critique of the pruning plan.** Where would you go further? What would you keep that the plan cuts?
