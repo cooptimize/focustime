@@ -23,7 +23,7 @@ import { clientColor, halfName, longDate, slotRange } from "./labels.ts";
 import { countdown, timerLeft } from "./NowStrip.tsx";
 import { clientNames, featuresOn, PlanCtx, useFocused } from "./planview.ts";
 import { causeLines } from "./status.ts";
-import { WorkLink } from "./WorkLink.tsx";
+import { NOTICE_EVENT, WorkLink } from "./WorkLink.tsx";
 import { weekMusts } from "./WeekMusts.tsx";
 import { mondayOf } from "../week/dates.ts";
 import { dayCalendar, splitByBlocks, type DayEvent } from "../plan/todaycal.ts";
@@ -141,7 +141,8 @@ export function Today(props: Props) {
     async (p: Pick, input: { when: "tonight" | "friday" | "day"; date?: IsoDate; half?: Half }) => {
       try {
         const r = await call<MakeUpResult>("pick.make_up", { id: p.id, ...input });
-        setNotice(`Borrowed ${formatDuration(r.borrowed.minutes)} to make up`);
+        // U5.1: in the status bar with the other notices, never as a line under it.
+        window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: `Borrowed ${formatDuration(r.borrowed.minutes)} to make up` }));
         if (r.flexOffer) setOffer({ offer: r.flexOffer, pick: p });
         props.onChanged();
         return true;
@@ -264,7 +265,7 @@ export function Today(props: Props) {
           <div className="today-main">
             {mode !== "checkin" && cal && <AllDayRow events={cal.allDay} />}
             {mode !== "checkin" && split && !wide && <OutsideLine label="Before your blocks" events={split.before} tz={tz} />}
-            <section className="today-blocks" aria-label="Today's blocks">
+            <section className={`today-blocks${blocks.length === 1 ? " one" : ""}`} style={{ "--blocks": blocks.length } as CSSProperties} aria-label="Today's blocks">
               {blocks.map((s) => (
                 <BlockCard
                   key={s.half}
@@ -579,7 +580,7 @@ function BlockCard(b: BlockProps) {
           </button>
         </p>
       )}
-      {b.leftOff && note && <p className="today-resume" title="Where you left off last time">Left off: {note.note}</p>}
+      {b.leftOff && note && <p className="today-resume" title={`Where you left off: ${note.note}`}>Left off: {note.note}</p>}
     </article>
   );
 }

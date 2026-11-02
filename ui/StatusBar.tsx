@@ -38,6 +38,16 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, lo
   const [open, setOpen] = useState(false);
   const fine = !lines.length && !samples.length && sources.every((s) => stateOf(s).cls === "live") && (devops ?? []).every((c) => c.status === "ok");
   const oldest = sources.map((s) => s.fetchedAt).filter((x): x is string => !!x).sort()[0] ?? null;
+  // U5.1: notices are chips inside the bar's one row, never lines under it.
+  const chips = (
+    <span className="status-chips">
+      {notice && (
+        <span className="status-chip notice" role="status" title={notice}>
+          {notice}
+        </span>
+      )}
+    </span>
+  );
   const fixButton = (f: Fix, key: string) =>
     f.kind === "retry" ? (
       <button key={key} type="button" className="mini primary" disabled={loading} onClick={onRefresh}>
@@ -56,11 +66,11 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, lo
           <button type="button" className="status-quiet" onClick={() => setOpen(true)} aria-label="All sources live. Show each source's status" title={`All sources live${oldest ? `, oldest data ${updatedAgo(oldest, clock, shape.timeZone)}` : ""}. Click for each source's status`}>
             <span className="dot" aria-hidden="true" />
           </button>
+          {chips}
           <button type="button" className="refresh mini quiet" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources" title="Refresh all sources (R)">
             {loading ? "Loading…" : "Refresh"}
           </button>
         </div>
-        {notice && <div className="status-line notice" role="status">{notice}</div>}
       </footer>
     );
   return (
@@ -109,6 +119,7 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, lo
             </span>
           </span>
         )}
+        {chips}
         <span className="muted shape" title={`Working hours. Change them in Settings or a day's menu. Times in ${hours.timeZone}`}>
           {hoursSummary(hours)}
         </span>
@@ -116,7 +127,6 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, lo
           {loading ? "Loading…" : "Refresh"}
         </button>
       </div>
-      {notice && <div className="status-line notice" role="status">{notice}</div>}
       {lines.map((l) => (
         <div key={l.key} className={`status-line problem ${l.cause ?? "own"}`} role="status">
           <span className="dot" aria-hidden="true" />

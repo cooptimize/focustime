@@ -1537,7 +1537,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .app.medium > .topbar .top-actions { margin-left: auto; }
 
 /* ---- Step 10 slice 1: Today, Inbox, Plan, top timer ---- */
-.today-view { flex: 1; overflow: auto; padding: 24px 32px 40px; display: grid; align-content: start; gap: 20px; max-width: 1180px; width: 100%; margin: 0 auto; box-sizing: border-box; }
+.today-view { flex: 1; overflow: auto; padding: 24px 24px 40px; display: grid; align-content: start; gap: 20px; width: 100%; box-sizing: border-box; }
 .today-head h1 { margin: 0; font-size: var(--fs-4); font-weight: 600; letter-spacing: -0.01em; }
 .today-blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
 .today-block { padding: 14px 16px; border: 1px solid var(--border); border-left: 5px solid var(--c); border-radius: 10px; background: var(--surface); display: grid; gap: 8px; align-content: start; }
@@ -1597,8 +1597,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .inbox-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .inbox-notes summary { cursor: pointer; display: flex; align-items: baseline; gap: 8px; }
 .inbox-notes summary h3 { display: inline; margin: 0; }
-@media (max-width: 900px) { .today-view { padding: 16px; } .today-blocks { grid-template-columns: minmax(0, 1fr); } }
-@media (min-width: 2400px) { .today-view { max-width: 1680px; } .today-blocks { grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); } }
+@media (max-width: 900px) { .today-view { padding: 16px 24px; } .today-blocks { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---- Step 10 slice 2: quieter ---- */
 /* Shortcut hints are hidden by default; every key is in the button's tooltip, the command menu and the ? legend. */
@@ -2583,8 +2582,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* ---- U2: Today in three states (Now, Check-in, Close out), the block card at density "today", the attention line,
    This week, the 3840 timeline and the Close out panel. Fit and moves are amber (--watch), never --risk. ---- */
-.today-view.u2 { max-width: 1240px; gap: 14px; position: relative; }
-.today-view.u2.wide { max-width: none; padding-inline: 48px; }
+.today-view.u2 { gap: 14px; position: relative; }
 .today-view.u2 .today-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .today-view.u2 .today-head .ph-title { flex: 1; min-width: 0; }
 .today-view.u2 .today-head .mode-area { margin-left: auto; }
@@ -2593,7 +2591,10 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .today-body { display: grid; gap: 20px; align-items: start; }
 .today-view.wide .today-body { grid-template-columns: minmax(380px, 460px) minmax(0, 1fr); }
 .today-main { display: grid; gap: 12px; align-content: start; min-width: 0; }
-.today-view.u2 .today-blocks { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; align-items: start; }
+/* U5.1: the blocks share the full width equally; one block is capped at 900 px and left-aligned. */
+.today-view.u2 .today-blocks { --blocks: 1; grid-template-columns: repeat(var(--blocks), minmax(0, 1fr)); gap: 16px; align-items: start; }
+.today-view.u2 .today-blocks.one { grid-template-columns: minmax(0, 900px); }
+.app.narrow .today-view.u2 .today-blocks { grid-template-columns: minmax(0, 1fr); }
 .today-view.u2 .today-block { padding: 12px 16px 14px; gap: 6px; }
 .today-view.u2 .today-block header { flex-wrap: nowrap; align-items: baseline; gap: 10px; }
 .today-view.u2 .today-block h2 { order: 0; flex-basis: auto; font-size: var(--fs-4); white-space: nowrap; }
@@ -2737,8 +2738,8 @@ button.att-chip { cursor: pointer; }
 .cp-notes input, .cp-comment input, .closeout-panel select { box-sizing: border-box; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-3); }
 .closeout-panel > .cp-body > .cp-section > .link-btn { justify-self: start; }
 /* The cards stay readable beside the panel: Today moves left of it. */
-.today-view.u2.mode-closeout { max-width: none; margin: 0; padding-right: calc(min(520px, 42vw) + 32px); }
-.today-view.u2.wide.mode-closeout { padding-right: calc(min(720px, 30vw) + 48px); }
+.today-view.u2.mode-closeout { padding-right: calc(min(520px, 42vw) + 24px); }
+.today-view.u2.wide.mode-closeout { padding-right: calc(min(720px, 30vw) + 24px); }
 
 /* ---------- U3: Week (day headers, cards, the time rail, whole-day cells) ---------- */
 .day-head { align-items: center; gap: 8px; height: calc(26px * var(--text-scale)); }
@@ -3137,3 +3138,36 @@ button.att-chip { cursor: pointer; }
 .pd2-type .item-lookup { display: block; width: 100%; }
 .pd2-plus { font-size: var(--fs-4); font-weight: 600; }
 .pw-handle { font-weight: 400; }
+
+/* U5.1: nothing inside a card paints outside it. Every row is one line: flex children may shrink (min-width: 0),
+   titles end in an ellipsis with the full text on hover, time columns have one fixed width so titles align. */
+.today-block, .half.card .card-body, .whole, .pd2-block { min-width: 0; overflow: hidden; }
+.today-block { grid-template-columns: minmax(0, 1fr); }
+.today-block ul, .today-block li, .today-block li > *, .today-block header > * { min-width: 0; }
+.today-rows > li:not(.pick-row) .ev-time { flex: none; min-width: 0; width: calc(84px * var(--text-scale)); white-space: nowrap; }
+.today-rows > li:not(.pick-row) .ev-title, .today-resume, .day-allday-ev, .day-allday .chip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-resume { min-width: 0; }
+.day-allday-ev { min-width: 0; max-width: 100%; }
+.day-allday, .day-outside { min-width: 0; }
+.day-outside .ev-list.day-cal li { min-width: 0; }
+.day-outside .ev-list.day-cal .ev-time { flex: none; width: calc(88px * var(--text-scale)); min-width: 0; }
+.day-outside .ev-list.day-cal .ev-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A pick's #id cue sits on the title's line only while both fit: it wraps onto a hidden second line first. */
+.pick-row .pr-title:has(> .pr-cue) { display: flex; min-width: 0; }
+.pick-row .pr-link.pr-cue { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; max-width: 100%; height: 1.5em; line-height: 1.5; overflow: hidden; }
+.pr-cue .pr-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-cue .pr-id { flex: none; }
+/* U5.1: the status bar's notices (borrowed time, the Timelines note, saved settings) are chips in its one row. */
+.status-chips { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; overflow: hidden; }
+.status-chips:empty { display: none; }
+.statusbar.quiet .status-chips { margin-right: auto; margin-left: 4px; }
+.status-chip { display: inline-block; min-width: 0; max-width: 60vw; padding: 1px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--raised); color: var(--text-muted); font-size: var(--fs-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* U5.1: a 12-character client name never truncates at 1920. The card's text column keeps at least 200 px and the rail
+   takes the rest (about 150 px on a 400 px card); the time range wraps onto a hidden second line before the name
+   shortens, and the hover ⋯ sits over the head's right end. At 3840 the hour timeline keeps the U3 widths. */
+.half.card.has-ruler { --ruler-w: clamp(96px, calc(100cqw - 250px), 186px); }
+.card-head { flex-wrap: wrap; align-content: flex-start; overflow: hidden; position: relative; padding-right: 22px; }
+.card-head > .swatch { align-self: center; }
+.card-head .card-client { flex: 0 1 auto; line-height: calc(20px * var(--text-scale)); }
+.card-head .card-when { flex: none; line-height: calc(20px * var(--text-scale)); }
+.card-head .card-more { position: absolute; right: 0; top: 0; margin-left: 0; }

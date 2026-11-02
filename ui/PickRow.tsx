@@ -80,8 +80,8 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
       )}
       <span className="pr-title" title={pick.title}>
         {link && pick.itemUrl ? (
-          <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} className={today ? "pr-link" : undefined} title={today ? `Open #${pick.itemId ?? ""} in DevOps` : undefined}>
-            {pick.title}
+          <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} className={today ? "pr-link pr-cue" : undefined} title={today ? `${pick.title}\nOpen #${pick.itemId ?? ""} in DevOps` : undefined}>
+            {today ? <span className="pr-text">{pick.title}</span> : pick.title}
             {today && pick.itemId !== null && <span className="pr-id">#{pick.itemId}</span>}
           </WorkLink>
         ) : (

@@ -413,7 +413,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
     <div className="card-body">
       <div className="card-head">
         <span className="swatch" aria-hidden="true" />
-        <span className={`card-client${primary ? "" : " open-label"}`}>{name}</span>
+        <span className={`card-client${primary ? "" : " open-label"}`} title={name}>{name}</span>
         <span className="card-when">{shortRange(slot, tz)}</span>
         <span className="card-more">{menu.button(`Actions for ${dayLabel} ${slot.half}`)}</span>
       </div>
