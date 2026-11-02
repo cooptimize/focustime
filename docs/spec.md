@@ -507,3 +507,15 @@ Contract changes, before any code:
 - **Rollback:** stop the service, restore `plan.db.bak-v12-<stamp>`, check out the commit before step 14, rebuild and start. Write PATs: `secret-tool clear service coopilot account devops-write-pat:<key>` (listed in Settings > Clients). Items created in DevOps stay (undo first, which sets them Removed).
 
 Step 14 additive contract changes found during UI wiring: `capture.load` returns `drafts` (drafts not yet in DevOps) for the Inbox's "Drafts to add in DevOps"; `PlanDay` takes `justCommitted` and `onCommitSeen` (the commit keeps the panel open, D254).
+
+### Step 14 live verification (Nov 1, Cooptimize org only, each write approved in chat)
+
+- Identity: write PAT saved by Tanner in Settings; `connectionData` (no api-version) answered the identity live: Tanner Spaulding, tanner.spaulding@cooptimize.org, org cooptimize.
+- Baseline #437: rev 1, New, parent #291, no children.
+- 1 create: #495 "[Coopilot test] safe to remove", User Story, New, under #437, assigned to me, area and iteration from #437. Confirmed. #437 gained only the Hierarchy-Forward link and kept rev 1 (DevOps doesn't add a parent revision; the fake does, harmless).
+- 2 comment (7.1-preview.4): confirmed, id 23514739. A comment moves the item's rev (1 to 2).
+- 3 state New → Active with `test /rev` 2: PATCH 200, but the read-back GET failed at the network level, so it was logged Not confirmed. Retry (approved) read the item, found Active, sent no PATCH, confirmed (2 attempts).
+- 4 undo state: Active → New with test rev 3, confirmed.
+- 5 undo comment: DELETE answered 204 with no body (handled as success), comment read back as deleted, confirmed. The delete moved the rev (4 to 5).
+- 6 undo create: test rev 5, State Removed plus the removal comment, confirmed. The local draft came back.
+- Final: #495 Removed at rev 6, still under #437. #437 identical to the baseline apart from the child link to #495. Nothing written to W&C, Quiddity or CSC.
