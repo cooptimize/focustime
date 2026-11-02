@@ -4,8 +4,8 @@ import { createContext, useContext } from "react";
 import { liveFocused } from "../plan/focus.ts";
 import { SIZE_MINUTES, type Pick, type PlanWeek, type Size, type WeekFeature } from "../plan/types.ts";
 import type { Half, IsoDate, Slot, WorkItem } from "../week/types.ts";
-import { capacityMinutes, fitOf, type Fit } from "../plan/rules.ts";
-import { slotPlanned } from "../plan/timebox.ts";
+import { type Fit } from "../plan/rules.ts";
+import { planFit } from "../plan/fit.ts";
 
 /**
  * `sizes`: minutes per pick size from Settings > Planning (step 6c). `focused`: seconds per pick from the focus log,
@@ -99,8 +99,8 @@ export type CardPlan = {
 };
 
 /**
- * A card's plan (step 6.1). Once the day is committed: its picks, their fit against the block's free time
- * (capacity from now on, the same number Plan the day uses), the DevOps list without items picked here, and
+ * A card's plan (step 6.1). Once the day is committed: its picks, their fit against the block's whole free time
+ * (step 15, D266: the same number Plan the day uses), the DevOps list without items picked here, and
  * that list collapsed. Before commit: no picks, every item, not collapsed (unchanged).
  */
 export function cardPlan(week: PlanWeek | null, slot: Slot, clientKey: string | null, items: readonly WorkItem[], now: string, sizes: Readonly<Record<Size, number>> = SIZE_MINUTES, timeboxes: readonly TimeboxLike[] = []): CardPlan {
@@ -111,7 +111,7 @@ export function cardPlan(week: PlanWeek | null, slot: Slot, clientKey: string | 
     picks,
     // Fit only matters while something is left to do: all done shows no pill (not "nothing picked").
     // A block that has ended has no time left to fit anything into, so no fit is shown (Plan any day).
-    fit: picks.some((p) => p.status === "planned") && Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.end)) < 0 ? fitOf(slotPlanned(picks, sizes, timeboxes, slot), capacityMinutes(slot, now)) : null,
+    fit: picks.some((p) => p.status === "planned") && Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.end)) < 0 ? planFit(picks, sizes, timeboxes, slot) : null,
     items: items.filter((i) => !picked.has(i.id)),
     collapsed: true,
   };

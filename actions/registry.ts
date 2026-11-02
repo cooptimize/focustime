@@ -60,7 +60,7 @@ export const ACTIONS = [
   { name: "planday.start", title: "Plan the day", group: "Plan the day", target: "day", shortcut: "P", summary: "Turn a day's free time into committed picks (I also works)" },
   { name: "planday.commit", title: "Commit the plan", group: "Plan the day", target: "plan", shortcut: "C", summary: "Commit the day being planned" },
   { name: "closeout.load", title: "Close out", group: "Close out", target: "day", shortcut: "E", summary: "End of day: picks done or not, resume notes, follow-ups (about 3 minutes)" },
-  { name: "closeout.commit", title: "Commit Close out", group: "Close out", target: "day", summary: "Mark the day closed out; it can also be done later for a past day" },
+  { name: "closeout.commit", title: "Finish Close out", group: "Close out", target: "day", summary: "Mark the day closed out; it can also be done later for a past day" },
   { name: "pick.make_up", title: "I'll make it up", group: "Picks", target: "pick", summary: "Move a pick to tonight, Friday or another day and record the borrowed time" },
   { name: "note.set", title: "Write a resume note", group: "Close out", target: "none", summary: "Where you left off with a client; shown on its next block and in Plan the day" },
   { name: "borrow.pay", title: "Mark borrowed time paid", group: "Close out", target: "borrowed", summary: "By hand; done payback picks mark it paid on their own" },

@@ -2,7 +2,10 @@
 import type { TimerView } from "../actions/types.ts";
 import type { NowStrip as Strip } from "../plan/now.ts";
 import { formatDuration } from "../week/format.ts";
-import { halfName } from "./labels.ts";
+import { clientColor, halfName } from "./labels.ts";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { mustsSummary } from "../plan/addpane.ts";
+import { progressLabel } from "../plan/weeklist.ts";
 
 /** "13:05" as "1:05 PM", like the rest of the UI. */
 const clock = (hm: string) => {
@@ -76,10 +79,9 @@ function StripLine({ strip: s, onSelect }: { strip: Strip; onSelect: () => void 
   if (s.picks)
     parts.push(
       <span key="picks" className={s.draft ? "now-draft" : undefined}>
-        {s.draft ? `${s.picks.total} draft ${s.picks.total === 1 ? "pick" : "picks"}, not committed` : `${s.picks.done} of ${s.picks.total} picks done`}
+        {s.draft ? `${s.picks.total} ${s.picks.total === 1 ? "pick" : "picks"}, press Done to keep the plan` : `${s.picks.done} of ${s.picks.total} picks done`}
       </span>,
     );
-  if (s.overBy) parts.push(<span key="over" className="now-over">{formatDuration(s.overBy)} too much planned</span>);
   if (s.nextPick)
     parts.push(
       <span key="next" className={s.draft ? "now-pick now-draft" : "now-pick"}>
@@ -104,5 +106,69 @@ function StripLine({ strip: s, onSelect }: { strip: Strip; onSelect: () => void 
         </span>
       ))}
     </button>
+  );
+}
+
+type MustsRow = { clientKey: string; name: string; musts: number; done: number; left: number; leftBlocks: number; nice: number };
+
+/**
+ * Step 15 (D268): one context line under the top bar instead of the Now strip, the ritual chips and the Musts strip:
+ * now / next in a few words, then each client's musts ("Northwind 0/2 · Harbor 0/1"); a click on the musts opens
+ * the details. No "Still realistic?" here: that question is Check-in's alone.
+ */
+export function ContextLine({ strip, onSelect, onStartFocus = null, borrowed = null, musts, colors, onPlanWeek }: Omit<Props, "strip"> & { strip: Strip | null; musts: MustsRow[]; colors: Record<string, string>; onPlanWeek: () => void }) {
+  const [open, setOpen] = useState(false);
+  const pop = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !pop.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+  const names = new Map(musts.map((m) => [m.clientKey, m.name]));
+  const summary = mustsSummary(musts, (k) => names.get(k) ?? k);
+  return (
+    <div className={`context-line ${strip?.kind ?? ""}`}>
+      {strip && <StripLine strip={strip} onSelect={onSelect} />}
+      {borrowed && (
+        <span className="now-borrowed" title="Slipped focus you said you'd make up">
+          {formatDuration(borrowed.minutes)} to make up
+        </span>
+      )}
+      {onStartFocus && (
+        <button type="button" className="mini now-start" onClick={onStartFocus} title="Start focus on the next planned pick">
+          Start focus
+        </button>
+      )}
+      {summary && (
+        <div className="cl-musts" ref={pop}>
+          <button type="button" className="cl-musts-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)} title="Musts done this week, per client">
+            <span className="cl-label">Musts</span> {summary}
+          </button>
+          {open && (
+            <div className="cl-pop" role="dialog" aria-label="Musts this week">
+              <h3>Musts this week</h3>
+              <ul>
+                {musts.filter((m) => m.musts > 0).map((m) => (
+                  <li key={m.clientKey} style={{ "--c": clientColor(m.clientKey, colors) } as CSSProperties}>
+                    <span className="swatch" aria-hidden="true" />
+                    <strong>{m.name}</strong> {progressLabel(m)}
+                  </li>
+                ))}
+              </ul>
+              <button type="button" className="link-btn" onClick={() => (setOpen(false), onPlanWeek())}>
+                Open Plan the week
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

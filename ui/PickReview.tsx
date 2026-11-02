@@ -86,8 +86,8 @@ export function SlipActions({ pick, carryTo, today, act, makeUp }: { pick: Pick;
   return (
     <div className="slip-actions" role="group" aria-label="Not done">
       {carryTo && (
-        <button type="button" className="mini" onClick={() => void act("pick.move", { id: pick.id, date: carryTo, half: pick.half })} title={`Carry over to ${dayName(carryTo)}, ${HALF_NAMES[pick.half].toLowerCase()}`}>
-          Carry over to {dayName(carryTo)}
+        <button type="button" className="mini" onClick={() => void act("pick.move", { id: pick.id, date: carryTo, half: pick.half })} title={`Move to ${dayName(carryTo)}, ${HALF_NAMES[pick.half].toLowerCase()}`}>
+          Move to {dayName(carryTo)}
         </button>
       )}
       <button type="button" className="mini" onClick={() => setMode("move")}>

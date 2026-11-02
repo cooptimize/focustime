@@ -1,6 +1,5 @@
 import { useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { TimeboxBands, TimeboxList } from "./Timeboxes.tsx";
-import { PickTime } from "./PickTime.tsx";
 import { formatDuration } from "../week/format.ts";
 import { worstSeverity } from "../week/risks.ts";
 import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
@@ -9,8 +8,9 @@ import type { Pick } from "../plan/types.ts";
 import type { FollowUpView } from "../actions/types.ts";
 import { capFollowUps, followUpsOnDay } from "../plan/due.ts";
 import { canAddWork, planButton } from "../plan/days.ts";
-import { dayMenu, eventMenu, pickMenu, slotMenu } from "./menu.ts";
-import { useMenu } from "./Menus.tsx";
+import { dayMenu, eventMenu, slotMenu } from "./menu.ts";
+import { MenuCtx, useMenu } from "./Menus.tsx";
+import { PickRow } from "./PickRow.tsx";
 import { hourMarks, labelHere, layoutEvents } from "./layout.ts";
 import { DevOpsWork } from "./work.ts";
 import { clientColor, eventRange, halfTag, SampleSources, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
@@ -18,8 +18,8 @@ import { cardHalves, eveOnly, slotOf } from "./halves.ts";
 import type { Layout } from "./viewport.ts";
 import { cardPlan, featuresOn, PlanCtx, type PlanView } from "./planview.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
-import { ITEM_ATTRS } from "./keys.ts";
-import { HalfScope, useScopedTab } from "./scope.ts";
+
+import { HalfScope } from "./scope.ts";
 
 export type Selection = { dayIndex: number; half: Half };
 
@@ -170,7 +170,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
           </span>
         )}
         {btn === "plan" || btn === "planned" ? (
-          <button type="button" className={`day-plan ${btn}`} onClick={() => props.onPlanDay?.(day.date)} title={btn === "planned" ? "Committed: open it to see or change the plan" : "Plan this day"}>
+          <button type="button" className={`day-plan ${btn}`} onClick={() => props.onPlanDay?.(day.date)} title={btn === "planned" ? "Planned: open it to see or change the plan" : "Plan this day"}>
             {btn === "planned" ? "Planned ✓" : "Plan"}
           </button>
         ) : btn === "add_hours" ? (
@@ -281,7 +281,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, offDay, tag,
     <div className="card-plan">
       <ul className="checklist" aria-label={`Committed plan for ${dayLabel} ${slot.half}`}>
         {ticks.map((p) => (
-          <PickRow key={p.id} pick={p} toggle={plan.toggle} />
+          <PickRow key={p.id} pick={p} toggle={plan.toggle} tabIndex={selected ? 0 : -1} />
         ))}
       </ul>
     </div>
@@ -317,12 +317,21 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, offDay, tag,
     </div>
   );
   // Committed features (step 8): placed on this block, or the client's not yet placed. Not on the evening slot.
+  const { env: menuEnv } = useContext(MenuCtx);
+  const canPlan = !!addWork;
   const feats = !eve && !ptoOff && (slot.half === "AM" || slot.half === "PM") ? featuresOn(plan.weekFeatures ?? [], slot.date, slot.half, primary?.clientKey ?? null) : [];
   const featList = feats.length > 0 && (
     <ul className="week-feats" aria-label="Features committed this week">
       {feats.map((f) => (
-        <li key={f.id} title={`Committed to this week: ${f.blocks} block${f.blocks === 1 ? "" : "s"}${f.slots.some((x) => x.date === slot.date && x.half === slot.half) ? ", placed here" : ""}`}>
-          <span className="feat-tag">This week</span> #{f.itemId} {f.title}
+        <li key={f.id} title={`Planned for this week: ${f.blocks} block${f.blocks === 1 ? "" : "s"}${f.slots.some((x) => x.date === slot.date && x.half === slot.half) ? ", placed here" : ""}`}>
+          <span className="feat-tag">This week:</span>{" "}
+          {menuEnv?.planFeature && canPlan ? (
+            <button type="button" className="link-btn feat-link" tabIndex={selected ? 0 : -1} onClick={(e) => (e.stopPropagation(), menuEnv.planFeature!(slot.date, slot.half, f.itemId))} onDoubleClick={(e) => e.stopPropagation()} title="Plan this block from that feature">
+              {f.title}
+            </button>
+          ) : (
+            f.title
+          )}
         </li>
       ))}
     </ul>
@@ -460,22 +469,6 @@ function SlotNote({ slot, ptoOff, offDay }: { slot: Slot; ptoOff: boolean; offDa
   if (ptoOff) return <div className="stats pto">PTO · nothing planned</div>;
   if (slot.off) return <div className="stats off">{offDay && slot.half !== "EVE" ? "Not a working day" : "No working hours"}</div>;
   return null;
-}
-
-/** A committed pick on a card: tick it, or "⋯" / right-click for size, move, drop and more. */
-function PickRow({ pick, toggle }: { pick: Pick; toggle: (id: number, done: boolean) => void }) {
-  const menu = useMenu((env) => pickMenu(env, pick));
-  const tabIndex = useScopedTab();
-  return (
-    <li className={pick.status} onContextMenu={menu.onContextMenu} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
-      <label onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-        <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} onChange={(e) => toggle(pick.id, e.target.checked)} />
-        <span className="ck-title" title={pick.title}>{pick.title}</span>
-      </label>
-      <PickTime pick={pick} />
-      {menu.button(`Actions for ${pick.title}`)}
-    </li>
-  );
 }
 
 export function ptoLabel(p: PtoDay): string {

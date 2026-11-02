@@ -206,7 +206,7 @@ export function readiness(i: ReadinessInput): ReadinessFlag[] {
   for (const p of i.intentions ?? [])
     if ((p.status === "planned" || p.status === "done") && !p.followUpId && !isBreakDown(p.title) && !drafted(p.clientKey, p.title))
       out.push({ kind: "intention_not_in_devops", clientKey: p.clientKey, itemId: null, title: p.title, url: null, soft: false, pickId: p.id, date: p.date, size: p.size });
-  if (i.captures) out.push({ kind: "captures_to_sort", clientKey: "", itemId: null, title: `${i.captures} unprocessed capture${i.captures === 1 ? "" : "s"}`, url: null, soft: false, count: i.captures });
+  if (i.captures) out.push({ kind: "captures_to_sort", clientKey: "", itemId: null, title: `${i.captures} ${i.captures === 1 ? "capture" : "captures"} to sort`, url: null, soft: false, count: i.captures });
   return out.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
 }
 
@@ -291,4 +291,4 @@ export function weekNudges(
 }
 
 export const WEEK_NUDGE_MESSAGE = (weekStart: IsoDate, thisWeek: boolean) =>
-  `${thisWeek ? "This week" : `Next week (${Temporal.PlainDate.from(weekStart).toLocaleString("en-US", { month: "short", day: "numeric" })})`} isn't planned yet: commit features per client. Open Coopilot and press W.`;
+  `${thisWeek ? "This week" : `Next week (${Temporal.PlainDate.from(weekStart).toLocaleString("en-US", { month: "short", day: "numeric" })})`} isn't planned yet: choose each client's features. Open Coopilot and press W.`;

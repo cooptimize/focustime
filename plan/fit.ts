@@ -11,8 +11,12 @@ type SlotLike = { date: IsoDate; start: string; end: string; pto: boolean; freeG
 
 /** Planned and done picks (timebox minutes when timed) against the block's whole free time. */
 export function planFit(picks: readonly PickLike[], sizes: Readonly<Record<string, number>>, timeboxes: readonly BoxLike[] | undefined, slot: SlotLike): Fit {
+  return fitOf(planMinutes(picks, sizes, timeboxes, slot), freeMinutes(slot));
+}
+/** Minutes of planned and done picks in a block (timed ones by their timebox). */
+export function planMinutes(picks: readonly PickLike[], sizes: Readonly<Record<string, number>>, timeboxes: readonly BoxLike[] | undefined, slot: Pick<SlotLike, "date" | "start" | "end">): number {
   const live = picks.filter((p) => p.status === "planned" || p.status === "done").map((p) => ({ ...p, status: "planned" }));
-  return fitOf(slotPlanned(live, sizes, timeboxes, slot), freeMinutes(slot));
+  return slotPlanned(live, sizes, timeboxes, slot);
 }
 
 /** Spare time from this much on reads "Room for about …". */
@@ -67,4 +71,15 @@ export function dayTotals(blocks: readonly { planned: number; free: number }[]):
   const work = blocks.reduce((s, b) => s + b.planned, 0);
   const free = blocks.reduce((s, b) => s + b.free, 0);
   return work ? `${hm(work)} of work · ${hm(free)} free` : `Nothing planned yet · ${hm(free)} free`;
+}
+
+const halves = (n: number) => Math.round(n * 2) / 2;
+const blocksText = (n: number) => (n === 0.5 ? "half a block" : `${n} block${n === 1 ? "" : "s"}`);
+/** Plan the week's fit per client in the same calm words (D266): musts' blocks against the client's free blocks. */
+export function weekFitWords(f: { committedBlocks: number; availableBlocks: number; verdict: string } | undefined): FitWords {
+  if (!f || f.verdict === "none" || f.committedBlocks === 0) return { kind: "none", text: "No musts yet", tone: "neutral" };
+  const diff = f.availableBlocks - f.committedBlocks;
+  if (diff < -0.25) return { kind: "over", text: `About ${blocksText(Math.max(0.5, halves(-diff)))} over`, tone: "watch" };
+  if (diff >= 0.5) return { kind: "room", text: `Room for about ${blocksText(halves(diff))} more`, tone: "neutral" };
+  return { kind: "fits", text: "Fits", tone: "neutral" };
 }

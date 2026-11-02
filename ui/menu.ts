@@ -163,6 +163,8 @@ export type MenuEnv = {
   /** Step 15 (D272): demo mode on or off (the server swaps every source and the plan store). */
   demo?: boolean;
   setDemo?: (on: boolean) => void;
+  /** Step 15 (D269): a card's "This week: <feature>": Plan the day on that block, filtered to the feature. */
+  planFeature?: (date: IsoDate, half: Half, itemId: number) => void;
 };
 
 /** What help is wanted on: a pick, a week list item, a timebox or a work item. `pinned` is its day when it has one. */
@@ -980,4 +982,88 @@ export function filterCommands(items: MenuItem[], query: string): MenuItem[] {
   const typed = words.join(" ");
   const starts = (i: MenuItem) => i.label.toLowerCase().startsWith(typed);
   return [...found.filter(starts), ...found.filter((i) => !starts(i))];
+}
+
+// ---------- step 15: a Plan the week row's ⋯ menu (D267) ----------
+
+/** What a week list row's menu needs to know. */
+export type WeekItemFacts = {
+  itemId: number;
+  title: string;
+  tier: "must" | "nice";
+  level: "feature" | "story";
+  /** First or last in its list (no Move up / Move down). */
+  first: boolean;
+  last: boolean;
+  /** A past week is a review: nothing changes. */
+  past: boolean;
+  /** How it is done: "local" (my own mark) can be undone; DevOps or a done pick can't from here. */
+  done: "local" | "other" | null;
+  blocks: number;
+  /** Where it can be pinned, and where it is. */
+  places: { date: IsoDate; half: "AM" | "PM"; label: string }[];
+  pinned: { date: IsoDate; half: "AM" | "PM" }[];
+  /** A feature with open stories (no Coop brief needed). */
+  openStories: number;
+  targetDate: IsoDate | null;
+  /** Local drafts under it, not yet in DevOps. */
+  drafts: number;
+  /** DevOps writes are enabled for the client (else Set target date and Create say so). */
+  canWrite: boolean;
+};
+export type WeekItemOps = {
+  move: (by: -1 | 1) => void;
+  tier: (to: "must" | "nice") => void;
+  pin: (date: IsoDate, half: "AM" | "PM", on: boolean) => void;
+  blocks: (n: number) => void;
+  done: (on: boolean) => void;
+  help: () => void;
+  targetDate: () => void;
+  brief: () => void;
+  createDrafts: () => void;
+  enableWrites: () => void;
+  remove: () => void;
+};
+
+/** Block counts offered for a week item: half steps up to five. */
+export const BLOCK_CHOICES = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5] as const;
+export const blocksText = (n: number) => `${n} block${n === 1 ? "" : "s"}`;
+
+export function blocksStep(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
+  return { title: `Blocks for "${f.title}"`, items: BLOCK_CHOICES.map((n) => ({ id: `b${n}`, label: blocksText(n), checked: f.blocks === n, action: "weekplan.set_blocks", run: () => ops.blocks(n) })) };
+}
+
+/** Everything a week row does besides its title, state, story count, blocks and pin (D267). */
+export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
+  const closed = f.past ? { disabled: "A past week is a review" } : {};
+  const isPinned = (p: { date: IsoDate; half: string }) => f.pinned.some((x) => x.date === p.date && x.half === p.half);
+  const writes = (_why: string) => (f.canWrite ? {} : { hint: "Enable DevOps writes first" });
+  const other = f.tier === "must" ? "nice" : "must";
+  return {
+    title: f.title,
+    items: [
+      { id: "up", label: "Move up", action: "weekplan.reorder", ...(f.past ? closed : f.first ? { disabled: "Already first" } : {}), run: () => ops.move(-1) },
+      { id: "down", label: "Move down", action: "weekplan.reorder", ...(f.past ? closed : f.last ? { disabled: "Already last" } : {}), run: () => ops.move(1) },
+      { id: "tier", label: other === "nice" ? "Make it a nice to have" : "Make it a must", action: "weekplan.set_tier", ...closed, run: () => ops.tier(other) },
+      { id: "blocks", label: "Blocks", hint: blocksText(f.blocks), action: "weekplan.set_blocks", ...closed, next: () => blocksStep(f, ops) },
+      {
+        id: "pin",
+        label: "Pin to a block",
+        hint: f.pinned.length ? `${f.pinned.length} pinned` : "optional",
+        action: "weekplan.place",
+        ...(f.past ? closed : !f.places.length ? { disabled: "No blocks for this client this week" } : {}),
+        next: () => ({ title: `Pin "${f.title}"`, items: f.places.map((p) => ({ id: `pin-${p.date}-${p.half}`, label: p.label, checked: isPinned(p), action: "weekplan.place", run: () => ops.pin(p.date, p.half, !isPinned(p)) })) }),
+      },
+      { id: "done", label: f.done ? "Mark not done" : "Mark done", action: "weekplan.mark_done", ...(f.past ? closed : f.done === "other" ? { disabled: "Done in DevOps or by a done pick" } : {}), run: () => ops.done(!f.done) },
+      { id: "help", label: "Needs help from…", hint: "Cooptimizers who are free", action: "collab.candidates", ...(f.past || f.done ? { disabled: f.past ? "A past week is a review" : "Already done" } : {}), run: ops.help },
+      ...(f.level === "feature"
+        ? ([
+            { id: "target", label: f.targetDate ? "Change target date" : "Set target date", ...writes("target"), action: "devops.preview", ...closed, run: f.canWrite ? ops.targetDate : ops.enableWrites },
+            { id: "brief", label: "Copy Coop brief", hint: f.openStories ? `${f.openStories} open stories already` : "ask Coop for stories", action: "feature.brief", run: ops.brief },
+          ] as MenuItem[])
+        : []),
+      ...(f.drafts > 0 ? [{ id: "create", label: `Create ${f.drafts === 1 ? "the draft" : `${f.drafts} drafts`} in DevOps`, ...writes("create"), action: "devops.preview", ...closed, run: f.canWrite ? ops.createDrafts : ops.enableWrites } as MenuItem] : []),
+      { id: "remove", label: "Take off the week", danger: true, action: "weekplan.remove", ...closed, run: ops.remove },
+    ],
+  };
 }

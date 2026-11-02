@@ -49,6 +49,9 @@ type Props = {
   setTheme: (t: Theme) => void;
   viewRange: ViewRange;
   setViewRange: (r: ViewRange) => void;
+  /** Step 15 (D272): demo mode and its switch. */
+  demo: boolean;
+  setDemo: (on: boolean) => void;
   /** Clears an override (hours.clear_day) and reloads. */
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
 };
@@ -236,7 +239,14 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
                 <input type="radio" name="range" checked={p.viewRange === r} onChange={() => p.setViewRange(r)} /> {VIEW_RANGE_NAMES[r]}
               </label>
             ))}
-            <span className="set-hint">H in the week cycles it. Timelines widen to show anything planned outside it.</span>
+            <span className="set-hint">Saved as your default. H in the week changes it until you close Coopilot. Timelines widen to show anything planned outside it.</span>
+          </fieldset>
+          <fieldset className="set-choice">
+            <legend>Demo mode</legend>
+            <label>
+              <input type="checkbox" checked={p.demo} onChange={(e) => p.setDemo(e.target.checked)} /> Show demo data
+            </label>
+            <span className="set-hint">Fictional clients, people, work items and meetings, so you can demo Coopilot safely. Nothing leaves Coopilot and your own plan isn't touched. Turn it off to see your data again.</span>
           </fieldset>
           <div className="set-field">
             <span className="set-label">Style guide</span>
@@ -409,7 +419,7 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
           <input value={types} onChange={(e) => setTypes(e.target.value)} />
           <Problems all={problems} field="plan.pickable_portfolio_types" />
         </Field>
-        {num("carryDays", "Carry-over (days back)", "plan.carry_days", "Unfinished picks from this many days back are offered on the first upcoming day not committed yet. 0 turns it off.", 1, 30)}
+        {num("carryDays", "Carry-over (days back)", "plan.carry_days", "Unfinished picks from this many days back are offered on the next day that isn't planned yet. 0 turns it off.", 1, 30)}
         {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "plan.reminder_offset_minutes", "When today isn't committed, one reminder from this time, for 90 minutes.", 5, 240)}
       </div>
       <h3>Check-in and Close out</h3>

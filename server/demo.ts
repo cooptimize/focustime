@@ -54,12 +54,12 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   await run("week.load", { weekStart });
   await run("weekplan.load", { weekStart });
   const list: [string, number, "must" | "nice", number][] = [
-    ["Cooptimize", 4410, "must", 1],
+    ["Cooptimize", 4410, "must", 0.5],
     ["Northwind", 1110, "must", 1.5],
     ["Northwind", 1120, "must", 0.5],
     ["Northwind", 1130, "nice", 0.5],
     ["Harbor", 2210, "must", 1],
-    ["Atlas", 3310, "must", 1],
+    ["Atlas", 3310, "must", 0.5],
     ["Atlas", 3330, "nice", 0.5],
   ];
   for (const [clientKey, itemId, tier, blocks] of list) await run("weekplan.add", { weekStart, clientKey, itemId, tier, blocks });
@@ -68,7 +68,7 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   await run("followup.add", { clientKey: "Cooptimize", who: "Jordan Lee", what: "Reply about the proposal timeline", channel: "teams", due: day(-1) });
   await run("followup.add", { clientKey: "Northwind", who: "Dana Morales", what: "Send the export spec for review", channel: "email", due: day(0) });
   await run("followup.add", { clientKey: "Harbor", who: "Chris Park", what: "Confirm the intake form go-live date", channel: "teams", due: day(1) });
-  await run("followup.add", { clientKey: "Atlas", what: "Share the delay alert mockups", channel: "email", due: day(3) });
+  await run("followup.add", { clientKey: "Atlas", who: "Morgan Diaz", what: "Share the delay alert mockups", channel: "email", due: day(3) });
   await run("note.set", { clientKey: "Northwind", date: day(0), note: "CSV export works for orders. Next: the date filter." });
   await run("capture.add", { text: "Ask Harbor about single sign-on for the intake form", clientKey: "Harbor" });
 }

@@ -1,3 +1,4 @@
+import type React from "react";
 // Close out (step 7): the end of the day in about three minutes. Picks done or not (focused time against size, and
 // what to do with the rest), a one-line resume note per client worked, and the follow-ups to close. Commit at the end.
 // Any earlier day can be closed out later; nothing here blocks anything else. Local only.
@@ -14,11 +15,11 @@ import { captureClients } from "./Capture.tsx";
 import { AddFollowUp, Fading, FollowUpRow } from "./FollowUps.tsx";
 import { dayName, FlexOfferBar, FocusVsSize, HALF_NAMES, SlipActions, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 
-type Props = { date: IsoDate; data: WeekLoadData; onDate: (d: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
+type Props = { /** Step 15 (D268): the ritual chips, in this view's header. */ rituals?: React.ReactNode; date: IsoDate; data: WeekLoadData; onDate: (d: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
 
 const PAYBACK: Record<string, string> = { tonight: "tonight", friday: "Friday", day: "" };
 
-export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }: Props) {
+export function CloseOut({ rituals, date, data, onDate, onClose, onChanged, onCaptures }: Props) {
   const [st, setSt] = useState<CloseOutState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
 
   return (
     <main className="closeout" aria-label="Close out">
+      {rituals}
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
           Close out <span className="muted">{dayName(date)}{st.access === "past" ? " (earlier day)" : ""}</span>
@@ -126,11 +128,11 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
               setNotice("Closed out. Nice work.");
               onChanged();
             } catch (e) {
-              setError(e instanceof Error ? e.message : "Could not commit");
+              setError(e instanceof Error ? e.message : "Couldn't save Close out");
             }
           }}
         >
-          {st.closedOutAt ? "Commit again" : "Commit Close out"}
+          {st.closedOutAt ? "Save again" : "Done for the day"}
         </button>
         <button type="button" className="top-btn" onClick={onClose} title="Back (Esc)">
           Back
@@ -202,14 +204,14 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
 
       <section className="co-section" aria-labelledby="co-notes">
         <h3 id="co-notes">
-          2. Resume notes <span className="muted">where you left off, one line per client (optional)</span>
+          2. Where you left off <span className="muted">one line per client, optional</span>
         </h3>
         {!worked.length && <p className="muted">No client work recorded that day.</p>}
         {others.length > 0 && (
           <label className="co-other">
             <span className="sr-only">Note for another client</span>
             <select value="" onChange={(e) => e.target.value && setExtra((x) => [...x, e.target.value])}>
-              <option value="">+ note for another client</option>
+              <option value="">+ Another client</option>
               {others.map((c) => (
                 <option key={c.clientKey} value={c.clientKey}>
                   {c.clientName}
@@ -228,7 +230,7 @@ export function CloseOut({ date, data, onDate, onClose, onChanged, onCaptures }:
       {st.captures > 0 && (
         <section className="co-section co-captures" aria-label="Captures">
           <p>
-            <strong>{st.captures} unprocessed capture{st.captures === 1 ? "" : "s"}</strong> <span className="muted">waiting to become follow-ups, draft stories or draft features.</span>{" "}
+            <strong>{st.captures} {st.captures === 1 ? "capture" : "captures"} to sort</strong> <span className="muted">into follow-ups or drafts.</span>{" "}
             <button type="button" className="mini" onClick={onCaptures}>Sort captures</button>
           </p>
         </section>
@@ -288,7 +290,7 @@ function NoteRow({ clientKey, clientName, date, saved, previous, onSaved, onErro
         <input
           value={v}
           maxLength={200}
-          placeholder={previous ? `Last: ${previous}` : "Where I left off / next step"}
+          placeholder={previous ? `Last: ${previous}` : "Where you left off, and what's next"}
           onChange={(e) => { setV(e.target.value); setState("idle"); }}
           onBlur={() => void save()}
           onKeyDown={(e) => e.key === "Enter" && void save()}

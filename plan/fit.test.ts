@@ -68,3 +68,14 @@ describe("dayTotals", () => {
   it("reads work then free", () => expect(dayTotals([{ planned: 240, free: 210 }, { planned: 180, free: 165 }])).toBe("7h of work · 6h 15m free"));
   it("says nothing planned yet", () => expect(dayTotals([{ planned: 0, free: 120 }])).toBe("Nothing planned yet · 2h free"));
 });
+
+import { weekFitWords } from "./fit.ts";
+describe("weekFitWords (Plan the week per client)", () => {
+  it("speaks in blocks with the same calm words", () => {
+    expect(weekFitWords({ committedBlocks: 0, availableBlocks: 2, verdict: "none" }).text).toBe("No musts yet");
+    expect(weekFitWords({ committedBlocks: 2, availableBlocks: 1.1, verdict: "over" })).toEqual({ kind: "over", text: "About 1 block over", tone: "watch" });
+    expect(weekFitWords({ committedBlocks: 2, availableBlocks: 1.6, verdict: "over" }).text).toBe("About half a block over");
+    expect(weekFitWords({ committedBlocks: 1, availableBlocks: 1.2, verdict: "tight" }).text).toBe("Fits");
+    expect(weekFitWords({ committedBlocks: 1, availableBlocks: 2.6, verdict: "fits" }).text).toBe("Room for about 1.5 blocks more");
+  });
+});

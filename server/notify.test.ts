@@ -133,7 +133,7 @@ describe("week nudges (step 8)", () => {
     const { d, sent } = deps("2026-11-05T14:00:00-05:00");
     expect(await checkWeekNudges(d)).toBe(1);
     expect(await checkWeekNudges(d)).toBe(0);
-    expect(sent).toEqual(["Next week (Nov 9) isn't planned yet: commit features per client. Open Coopilot and press W."]);
+    expect(sent).toEqual(["Next week (Nov 9) isn't planned yet: choose each client's features. Open Coopilot and press W."]);
   });
   it("Q50: Thursday's nudge skipped for PTO fires at Friday's working start; several due for one week send one message", async () => {
     const thu = deps("2026-11-05T14:30:00-05:00", { off: async () => true });
@@ -149,7 +149,7 @@ describe("week nudges (step 8)", () => {
   it("Monday's is about this week; nothing once committed, before the time, or on a PTO day", async () => {
     const mon = deps("2026-11-09T08:45:00-05:00");
     await checkWeekNudges(mon.d);
-    expect(mon.sent).toEqual(["This week isn't planned yet: commit features per client. Open Coopilot and press W."]);
+    expect(mon.sent).toEqual(["This week isn't planned yet: choose each client's features. Open Coopilot and press W."]);
     expect(await checkWeekNudges(deps("2026-11-09T08:45:00-05:00", { committed: () => true }).d)).toBe(0);
     expect(await checkWeekNudges(deps("2026-11-09T08:00:00-05:00").d)).toBe(0);
     expect(await checkWeekNudges(deps("2026-11-06T10:00:00-05:00", { off: async () => true }).d)).toBe(0);

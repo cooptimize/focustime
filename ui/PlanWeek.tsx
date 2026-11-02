@@ -1,16 +1,19 @@
+import type React from "react";
 // Plan the week (step 8, by client since step 11): each followed client's week list of DevOps features and stories,
 // split into Must and Nice to have, in DevOps stack rank order unless reordered here. Pins to a block are optional
 // (dependencies); the block grid on top previews pins and each client's must count. Fit per client counts musts
 // against that client's free blocks. DevOps health sits on top, folded to a count. DevOps is read-only; the week
 // plan lives only in the local plan store. A past week is a review.
-import { CreateInDevOps, DevOpsAction } from "./DevOpsWrite.tsx";
+import { CreateInDevOps, DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
+import { blocksStep, blocksText, weekItemMenu, type MenuStep, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
 import type { DraftStory, WeekFeature } from "../plan/types.ts";
 import { borrowedForWeek, readiness, weekFit, type ClientFit, type ReadinessFlag } from "../plan/weekplan.ts";
-import { blocksLeft, moveWithin, onTrack, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
+import { moveWithin, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
 import { formatDuration } from "../week/format.ts";
+import { weekFitWords } from "../plan/fit.ts";
 import type { ClientWork, IsoDate, PortfolioItem, Slot, WorkItem } from "../week/types.ts";
 import { call } from "./api.ts";
 import { clientColor } from "./labels.ts";
@@ -18,7 +21,7 @@ import { copy } from "./FollowUps.tsx";
 import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 
-type Props = { weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
+type Props = { /** Step 15 (D268): the ritual chips, in this view's header. */ rituals?: React.ReactNode; weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
 type Half = "AM" | "PM";
 type Place = { date: IsoDate; half: Half; label: string };
 type Item = Listed<WeekFeature>;
@@ -36,9 +39,7 @@ const stamp = (s: string, tz: string) => {
   return `${z.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}, ${z.toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 };
 /** Fit per client in plain words (step 11): fits, tight, too much. */
-const VERDICT: Record<ClientFit["verdict"], string> = { none: "No musts yet", fits: "Fits", tight: "Tight", over: "Too much" };
 const DONE_WORD: Record<DoneBy, string> = { devops: "Done in DevOps", resolved: "Resolved in DevOps", local: "Done", pick: "Done (picked and ticked)" };
-const blocksWord = (n: number) => (n === 0.5 ? "half a block" : `${n} block${n === 1 ? "" : "s"}`);
 /** "room for about 1.5 blocks", to the half block (step 10: no "0.8 blocks"). */
 export function roomLabel(available: number): string {
   const r = Math.round(available * 2) / 2;
@@ -68,7 +69,7 @@ function infoFor(portfolios: WeekPlanState["portfolios"], work: readonly ClientW
   };
 }
 
-export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onChanged, onCaptures }: Props) {
+export function PlanWeek({ rituals, weekStart, data, version, onWeek, onClose, onChanged, onCaptures }: Props) {
   const [st, setSt] = useState<WeekPlanState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -178,6 +179,11 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
       const order = moveWithin(group, i.itemId, group.indexOf(i.itemId) + by).map((x) => x.itemId);
       void act("weekplan.reorder", { weekStart, clientKey: i.clientKey, tier: i.tier, order });
     },
+    reorderTo: (k, tier, itemId, before) => {
+      const group = items.filter((x) => x.clientKey === k && x.tier === tier).map((x) => x.itemId);
+      const order = moveWithin(group, itemId, group.indexOf(before)).map((x) => x.itemId);
+      void act("weekplan.reorder", { weekStart, clientKey: k, tier, order });
+    },
     reset: (k) => void act("weekplan.reorder", { weekStart, clientKey: k, reset: true }, `${nameOf(k)} is back in DevOps order`),
     pin,
     brief: (k, id) => void copyBrief(k, id),
@@ -208,11 +214,12 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
     }
   };
 
-  const commitLabel = st.plan.committedAt ? (st.plan.changed ? "Commit again" : "Committed") : "Commit week";
+  const commitLabel = st.plan.committedAt ? (st.plan.changed ? "Done" : "Planned ✓") : "Done";
   const keys = [...new Set([...fits.map((f) => f.clientKey), ...st.portfolios.map((x) => x.clientKey), ...items.map((i) => i.clientKey)])];
 
   return (
     <main className="planweek" aria-label="Plan the week">
+      {rituals}
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
           Plan the week <span className="muted">of {weekLabel(weekStart)}{isThis ? " (this week)" : weekStart === plainDate(st.thisWeek).add({ days: 7 }).toString() ? " (next week)" : past ? " (review)" : ""}</span>
@@ -223,10 +230,10 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
         </span>
         {st.plan.committedAt ? (
           <span className={st.plan.changed ? "pw-state changed" : "co-done"}>
-            {st.plan.changed ? `Changed since commit (${stamp(st.plan.committedAt, tz)})` : `Committed ${stamp(st.plan.committedAt, tz)}`}
+            {st.plan.changed ? `Changed since planned (${stamp(st.plan.committedAt, tz)})` : `Planned ${stamp(st.plan.committedAt, tz)}`}
           </span>
         ) : (
-          !past && <span className="pw-state">Not committed</span>
+          !past && <span className="pw-state">Not planned yet</span>
         )}
         {!past && (
           <button type="button" className="top-btn" onClick={() => void load(true)} title="Read features and stories from DevOps again">
@@ -291,7 +298,7 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
 
       <div className="pw-layout">
       <section className="co-section pw-board-wrap" aria-label="The week's blocks">
-        <h3>Blocks <span className="muted">{past ? "What was pinned" : "Pins are optional. Click a block to see its client's list, or drag an item onto it to pin it"}</span></h3>
+        <h3>Blocks <span className="muted">{past ? "What was pinned" : "Click a block to see its client's list. Drag an item onto a block to pin it there (optional)"}</span></h3>
         {keys.length > 0 && (
           <ul className="pw-musts" aria-label="Musts per client">
             {keys.map((k) => {
@@ -300,7 +307,7 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
               return (
                 <li key={k} style={{ "--c": clientColor(k, data.clients) } as CSSProperties}>
                   <span className="pw-swatch" aria-hidden="true" /> {nameOf(k)} <strong>{n}</strong> must{n === 1 ? "" : "s"} left
-                  {f && f.verdict !== "none" && <span className={`pw-fit ${f.verdict}`}>{VERDICT[f.verdict]}</span>}
+                  {f && f.verdict !== "none" && <span className={`pw-fit2 ${weekFitWords(f).kind}`}>{weekFitWords(f).text}</span>}
                 </li>
               );
             })}
@@ -347,7 +354,7 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
       <div className="pw-side">
         <ClientLists st={st} past={past} keys={keys} items={items} progress={list.progress} fits={fits} days={days} info={info} work={work} nameOf={nameOf} colors={data.clients}
           open={open} toggleOpen={toggleOpen} ops={ops} sel={sel} clearSel={() => setSel(null)} only={only} setOnly={setOnly} query={query} setQuery={setQuery}
-          track={isThis ? now : null} />
+          />
       </div>
       </div>
     </main>
@@ -356,10 +363,11 @@ export function PlanWeek({ weekStart, data, version, now, onWeek, onClose, onCha
 
 function FitChip({ fit }: { fit: ClientFit | undefined }) {
   if (!fit) return null;
+  const w = weekFitWords(fit);
   const borrowed = fit.borrowedMinutes ? `, after ${formatDuration(fit.borrowedMinutes)} borrowed` : "";
   return (
-    <span className={`pw-fit ${fit.verdict}`} title={`Musts need ${fit.committedBlocks} of about ${fit.availableBlocks} free blocks (free time after PTO, meetings and unavailable time${borrowed}). Nice to haves don't count.`}>
-      {VERDICT[fit.verdict]} <span className="muted">{fit.verdict === "none" ? roomLabel(fit.availableBlocks) : `musts need ${blocksWord(fit.committedBlocks)}, ${roomLabel(fit.availableBlocks)}`}</span>
+    <span className={`pw-fit2 ${w.kind}`} title={`Musts need ${fit.committedBlocks} of about ${fit.availableBlocks} free blocks (free time after time off, meetings and unavailable time${borrowed}). Nice to haves don't count.`}>
+      {w.text}
     </span>
   );
 }
@@ -437,6 +445,8 @@ type Ops = {
   blocks: (i: Item, n: number) => void;
   done: (i: Item, on: boolean) => void;
   move: (i: Item, by: -1 | 1) => void;
+  /** Drag within a list: put `itemId` where `before` is. */
+  reorderTo: (k: string, tier: Tier, itemId: number, before: number) => void;
   reset: (k: string) => void;
   pin: (k: string, itemId: number, date: IsoDate, half: Half, on: boolean) => void;
   brief: (k: string, id: number) => void;
@@ -462,8 +472,6 @@ type ListsProps = {
   setOnly: (k: string | null) => void;
   query: string;
   setQuery: (q: string) => void;
-  /** This week only: now, for the on-track question. */
-  track: string | null;
 };
 
 /** Each client's week list with its filters (clicked block, client chips, search). */
@@ -531,7 +539,6 @@ function ClientList(p: ListsProps & { k: string }) {
   const loose = p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === null && (!q || d.title.toLowerCase().includes(q)));
   const epics = (port?.items ?? []).filter((i) => i.tier === "epic" && match(i));
   const reordered = p.items.some((i) => i.clientKey === k && i.position !== null);
-  const track = p.track && fit && prog ? onTrack(prog, blocksLeft(fit.blocks, p.track)) : null;
   // Open when the client's list is empty, or when opened.
   const emptyList = !p.items.some((i) => i.clientKey === k);
   const addOpen = emptyList || p.open.has(`add:${k}`);
@@ -548,8 +555,7 @@ function ClientList(p: ListsProps & { k: string }) {
         {port && port.status !== "ok" && <span className="muted">DevOps: {port.message ?? port.status}</span>}
         {port?.fromCache && <span className="muted">from cache</span>}
       </h3>
-      {track && track.kind !== "none" && <p className={`pw-track ${track.kind}`}>{track.text}</p>}
-      <TierList title="Must" hint="Should be done this week, and definitely touched" list={musts} row={row} empty={p.past ? "No musts" : "No musts yet. Add from DevOps below, or make a nice to have a must."} />
+      <TierList title="Must" hint="Finish this week, or at least start" list={musts} row={row} empty={p.past ? "No musts" : "No musts yet. Add from DevOps below, or make a nice to have a must."} />
       <TierList title="Nice to have" hint="If there's room" list={nice} row={row} empty={null} />
       {loose.length > 0 && (
         <div className="pw-tier pw-loose">
@@ -567,7 +573,7 @@ function ClientList(p: ListsProps & { k: string }) {
       {!p.past && (
         <div className="pw-add">
           {emptyList ? (
-            <h4>Add from DevOps <span className="muted">{features.length + stories.length} assigned to you or above your stories</span></h4>
+            <h4>Add from DevOps <span className="muted">{features.length + stories.length} of yours</span></h4>
           ) : (
             <button type="button" className="mini quiet pw-add-toggle" aria-expanded={addOpen} onClick={() => p.toggleOpen(`add:${k}`)}>
               {addOpen ? "▾" : "▸"} Add from DevOps <span className="muted">{features.length + stories.length + under.reduce((n, g) => n + g.kids.length, 0)} not on the list</span>
@@ -636,69 +642,88 @@ function AddRow({ k, id, title, url, what, ops }: { k: string; id: number; title
   );
 }
 
-function ItemRow({ i, first, last, past, info, drafts, places, target, open, toggle, ops }: {
+function ItemRow({ i, first, last, past, info, drafts, places, open, toggle, ops }: {
   i: Item; first: boolean; last: boolean; past: boolean; info: Info | null; drafts: DraftStory[]; places: Place[]; target: Place | null; open: boolean; toggle: () => void; ops: Ops;
 }) {
   const k = i.clientKey;
   const feature = info?.feature ?? null;
   const stories = feature ? feature.children.filter((c) => c.level === "story") : [];
   const openStories = stories.filter((c) => c.open).length;
-  const free = places.filter((pl) => !i.slots.some((s) => s.date === pl.date && s.half === pl.half));
   const other: Tier = i.tier === "must" ? "nice" : "must";
-  const { env } = useContext(MenuCtx);
+  const { env, open: openMenu } = useContext(MenuCtx);
+  const dw = useDevOpsWrite();
+  const facts: WeekItemFacts = {
+    itemId: i.itemId, title: i.title, tier: i.tier, level: i.level, first, last, past, done: i.done ? (i.done === "local" ? "local" : "other") : null, blocks: i.blocks,
+    places: places.map((pl) => ({ date: pl.date, half: pl.half, label: pl.label })), pinned: i.slots, openStories, targetDate: feature?.targetDate ?? null, drafts: drafts.length, canWrite: !!dw?.can(k),
+  };
+  const wops: WeekItemOps = {
+    move: (by) => ops.move(i, by),
+    tier: () => ops.tier(i, other),
+    pin: (date, half, on) => ops.pin(k, i.itemId, date, half, on),
+    blocks: (n) => ops.blocks(i, n),
+    done: (on) => ops.done(i, on),
+    help: () => env?.openHelp({ clientKey: k, title: `#${i.itemId} ${i.title}`, url: i.url, itemId: i.itemId, pinned: i.slots[0]?.date ?? null }),
+    targetDate: () => dw?.targetDate({ clientKey: k, itemId: i.itemId, title: i.title, current: feature?.targetDate ?? null }),
+    brief: () => ops.brief(k, i.itemId),
+    createDrafts: () => dw?.create(k, drafts.slice(0, 10)),
+    enableWrites: () => dw?.enable(k),
+    remove: () => ops.remove(i),
+  };
+  const show = (e: React.MouseEvent, step: MenuStep) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    openMenu(e.type === "click" ? { x: r.right, y: r.bottom + 4 } : { x: e.clientX, y: e.clientY }, step);
+  };
   return (
-    <li className={`pw-feature pw-item${i.done ? " done" : ""}`} draggable={!past}
-      onDragStart={(e) => { e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ clientKey: k, itemId: i.itemId })); e.dataTransfer.effectAllowed = "copy"; }}>
+    <li
+      className={`pw-feature pw-item pw-row${i.done ? " done" : ""}`}
+      draggable={!past}
+      onContextMenu={(e) => show(e, weekItemMenu(facts, wops))}
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ clientKey: k, itemId: i.itemId, tier: i.tier }));
+        e.dataTransfer.effectAllowed = "copyMove";
+      }}
+      onDragOver={(e) => !past && e.dataTransfer.types.includes(DRAG_TYPE) && e.preventDefault()}
+      onDrop={(e) => {
+        try {
+          const f = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)) as { clientKey: string; itemId: number; tier: Tier };
+          if (f.clientKey !== k || f.tier !== i.tier || f.itemId === i.itemId) return;
+          e.preventDefault();
+          e.stopPropagation();
+          ops.reorderTo(k, i.tier, f.itemId, i.itemId);
+        } catch {
+          /* not a week item */
+        }
+      }}
+    >
       <span className="pw-title">
-        <WorkLink clientKey={k} url={i.url}>#{i.itemId} {i.title}</WorkLink>
-        <span className="muted"> {info?.type ?? (i.level === "feature" ? "Feature" : "Story")}{info ? ` · ${info.state}` : " · not in this DevOps read"}</span>
-        {i.done && <span className="pw-done"> {DONE_WORD[i.done]}</span>}
-        {i.titleSource === "saved" && <span className="muted" title="DevOps couldn't give the current title"> (title as saved)</span>}
-        {feature && (feature.targetDate ? <span className="muted"> · target {dateShortIso(feature.targetDate)}</span> : i.tier === "must" && <><span className="pw-soft"> No target date</span>{!past && <> <DevOpsAction clientKey={k} label="Set target date" onRun={(w) => w.targetDate({ clientKey: k, itemId: i.itemId, title: i.title, current: null })} /></>}</>)}
+        <WorkLink clientKey={k} url={i.url}>{i.title}</WorkLink>
+        <span className="pw-state">{info ? info.state : "not in this DevOps read"}</span>
+        {i.done && <span className="pw-done">{DONE_WORD[i.done]}</span>}
       </span>
-      {i.level === "feature" && (
-        <button type="button" className="mini pw-kids" aria-expanded={open} onClick={toggle} disabled={!stories.length}>
-          {stories.length ? `${openStories} open, ${stories.length - openStories} closed stor${stories.length === 1 ? "y" : "ies"}` : "No stories yet"}
+      {i.level === "feature" ? (
+        <button type="button" className="pw-chip-btn" aria-expanded={open} onClick={toggle} disabled={!stories.length} title={stories.length ? "Show its stories" : "No stories yet: Copy Coop brief is in ⋯"}>
+          {stories.length ? `${openStories} of ${stories.length} stor${stories.length === 1 ? "y" : "ies"} open` : "No stories yet"}
           {drafts.length > 0 && ` · ${drafts.length} draft${drafts.length === 1 ? "" : "s"}`}
         </button>
+      ) : (
+        <span className="pw-chip-static">Story</span>
       )}
-      <span className="pw-blocks" aria-label={`Blocks for #${i.itemId}`}>
-        {!past && <button type="button" className="mini" disabled={i.blocks <= 0.5} onClick={() => ops.blocks(i, i.blocks - 0.5)} aria-label="Half a block less">−</button>}
-        <span className="pw-n">{i.blocks}</span>
-        {!past && <button type="button" className="mini" disabled={i.blocks >= 20} onClick={() => ops.blocks(i, i.blocks + 0.5)} aria-label="Half a block more">+</button>}
-        <span className="muted">block{i.blocks === 1 ? "" : "s"}</span>
-      </span>
-      <span className="pw-placed">
-        {i.slots.map((s) => (
-          <span key={`${s.date}${s.half}`} className="pw-chip" title="Pinned to this block">{pinLabel(s)}{!past && <button type="button" className="mini" aria-label={`Unpin from ${pinLabel(s)}`} onClick={() => ops.pin(k, i.itemId, s.date, s.half, false)}>×</button>}</span>
-        ))}
-        {!past && target && !i.slots.some((s) => s.date === target.date && s.half === target.half) && (
-          <button type="button" className="mini pw-place-here" onClick={() => ops.pin(k, i.itemId, target.date, target.half, true)}>Pin to {target.label}</button>
-        )}
-        {!past && free.length > 0 && (
-          <select aria-label={`Pin #${i.itemId} to a block`} value="" onChange={(e) => { const pl = free[Number(e.target.value)]; if (pl) ops.pin(k, i.itemId, pl.date, pl.half, true); }}>
-            <option value="">Pin to…</option>
-            {free.map((pl, n) => <option key={`${pl.date}${pl.half}`} value={n}>{pl.label}</option>)}
-          </select>
-        )}
-        {!past && drafts.length > 0 && <CreateInDevOps drafts={drafts.slice(0, 10)} label={`Create ${drafts.length === 1 ? "the draft" : `${Math.min(10, drafts.length)} drafts`} in DevOps`} />}
-        {!past && i.level === "feature" && !openStories && <button type="button" className="mini" onClick={() => ops.brief(k, i.itemId)}>Copy Coop brief</button>}
-      </span>
-      {!past && (
-        <span className="pw-row-acts">
-          <button type="button" className="mini" disabled={first} onClick={() => ops.move(i, -1)} aria-label={`Move #${i.itemId} up`} title="Up (local order only)">↑</button>
-          <button type="button" className="mini" disabled={last} onClick={() => ops.move(i, 1)} aria-label={`Move #${i.itemId} down`} title="Down (local order only)">↓</button>
-          <button type="button" className="mini" onClick={() => ops.tier(i, other)}>{other === "must" ? "Make a must" : "Make nice to have"}</button>
-          {(!i.done || i.done === "local") && <button type="button" className="mini quiet" onClick={() => ops.done(i, !i.done)}>{i.done ? "Not done" : "Mark done"}</button>}
-          {env && !i.done && <button type="button" className="mini quiet" onClick={() => env.openHelp({ clientKey: k, title: `#${i.itemId} ${i.title}`, url: i.url, itemId: i.itemId, pinned: i.slots[0]?.date ?? null })} title="Find a Cooptimizer who is free to help">Needs help…</button>}
-          <button type="button" className="mini quiet" onClick={() => ops.remove(i)} aria-label={`Take #${i.itemId} off the week`} title="Take off the week">×</button>
-        </span>
+      <button type="button" className="pw-chip-btn" disabled={past} onClick={(e) => show(e, blocksStep(facts, wops))} title="How many of this client's blocks it needs">
+        {blocksText(i.blocks)}
+      </button>
+      {i.slots.length > 0 && <span className="pw-pin" title="Pinned to this block">{i.slots.map(pinLabel).join(", ")}</span>}
+      {env && (
+        <button type="button" className="more" aria-label={`More for ${i.title}`} onClick={(e) => show(e, weekItemMenu(facts, wops))}>
+          ⋯
+        </button>
       )}
       {open && feature && (
         <ul className="pw-children">
           {feature.children.map((c) => (
             <li key={c.id} className={c.open ? "" : "closed"}>
-              <WorkLink clientKey={k} url={c.url}>#{c.id} {c.title}</WorkLink> <span className="muted">{c.type} · {c.state} · {c.mine ? "you" : c.assignedTo ?? "unassigned"}</span>
+              <WorkLink clientKey={k} url={c.url}>{c.title}</WorkLink> <span className="muted">{c.state} · {c.mine ? "you" : c.assignedTo ?? "unassigned"}</span>
             </li>
           ))}
         </ul>

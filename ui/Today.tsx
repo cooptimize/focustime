@@ -1,13 +1,12 @@
 // Today (step 10): the default view. What's now and next, today's picks by block with the week's committed
 // features as context, one large Start focus, and anything urgent. Everything else is a click away.
-import { PickTime } from "./PickTime.tsx";
 import { DueBadge } from "./FollowUps.tsx";
 import { useContext, useState } from "react";
 import type { FollowUpView, WeekLoadData } from "../actions/types.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import type { NowStrip } from "../plan/now.ts";
-import { capacityMinutes, fitOf } from "../plan/rules.ts";
-import { slotPlanned } from "../plan/timebox.ts";
+import { planFit } from "../plan/fit.ts";
+import { PickRow } from "./PickRow.tsx";
 import { focusPick, urgentFollowUps } from "../plan/today.ts";
 import type { Pick } from "../plan/types.ts";
 import type { Day, Half, Slot } from "../week/types.ts";
@@ -30,6 +29,8 @@ type Props = {
   onStart: (pick: Pick | null) => void;
   onFocusScreen: () => void;
   onPlan: (date?: string) => void;
+  /** Step 15 (D269): "This week: <feature>" opens Plan the day on that block, filtered to the feature. */
+  onPlanFeature?: (date: string, half: Half, itemId: number) => void;
   onInbox: () => void;
   onWeek: () => void;
   onFix: () => void;
@@ -42,7 +43,7 @@ const hm = (t: string) => {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 || h === 24 ? "AM" : "PM"}`;
 };
 
-export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen, onPlan, onInbox, onWeek, onFix, onSettings }: Props) {
+export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen, onPlan, onPlanFeature, onInbox, onWeek, onFix, onSettings }: Props) {
   const date = data.planDay.date;
   const day = data.week.days.find((d) => d.date === date) ?? null;
   const plan = data.plan?.[date];
@@ -131,12 +132,12 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
       {workday && day && (
         <section className="today-blocks" aria-label="Today's blocks">
           {slotsOf(day).map((s) => (
-            <TodayBlock key={s.half} slot={s} data={data} picks={picks.filter((p) => p.half === s.half && (p.status === "planned" || p.status === "done"))} committed={committed} now={now} nameOf={nameOf} onStart={onStart} onPlan={() => onPlan(date)} running={t?.pickId ?? null} hintPick={hintPick} />
+            <TodayBlock key={s.half} slot={s} data={data} picks={picks.filter((p) => p.half === s.half && (p.status === "planned" || p.status === "done"))} committed={committed} now={now} nameOf={nameOf} onStart={onStart} onPlan={() => onPlan(date)} onFeature={onPlanFeature ? (half, itemId) => onPlanFeature(date, half, itemId) : undefined} running={t?.pickId ?? null} hintPick={hintPick} />
           ))}
         </section>
       )}
 
-      <WeekMusts data={data} weekStart={mondayOf(workday ? date : target.date)} now={workday ? now : null} title={workday || mondayOf(target.date) === mondayOf(date) ? "This week" : "Next week"} />
+      <WeekMusts data={data} weekStart={mondayOf(workday ? date : target.date)} now={null} title={workday || mondayOf(target.date) === mondayOf(date) ? "This week" : "Next week"} />
 
       <p className="today-foot">
         <button type="button" className="link-btn" onClick={onWeek}>
@@ -161,12 +162,13 @@ function slotsOf(day: Day): Slot[] {
   return [day.am, day.pm, ...(day.eve ? [day.eve] : [])].filter((s) => !s.off && (s.focus.length > 0 || s.open || s.half === "EVE"));
 }
 
-function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan, running, hintPick }: { slot: Slot; data: WeekLoadData; picks: Pick[]; committed: boolean; now: string; nameOf: (k: string) => string; onStart: (p: Pick) => void; onPlan: () => void; running: number | null; hintPick: number | null }) {
+function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan, onFeature, running, hintPick }: { onFeature?: ((half: Half, itemId: number) => void) | undefined; slot: Slot; data: WeekLoadData; picks: Pick[]; committed: boolean; now: string; nameOf: (k: string) => string; onStart: (p: Pick) => void; onPlan: () => void; running: number | null; hintPick: number | null }) {
   const view = useContext(PlanCtx);
   const client = slot.focus[0]?.clientKey ?? null;
   const ended = Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.end)) >= 0;
   const left = picks.filter((p) => p.status === "planned");
-  const fit = committed && left.length && !ended ? fitOf(slotPlanned(left, data.planning.sizes, view.timeboxes, slot, picks), capacityMinutes(slot, now)) : null;
+  // Step 15 (D266): the plan's fit against the block's whole free time, in the same words as Plan the day.
+  const fit = committed && left.length && !ended ? planFit(picks, data.planning.sizes, view.timeboxes, slot) : null;
   const status = blockStatus(fit, slot.risks);
   const features = slot.half === "EVE" ? [] : featuresOn(data.weekFeatures, slot.date, slot.half as Half, client);
   const title = client ? nameOf(client) : slot.open ? "Open" : halfName(slot.half);
@@ -189,9 +191,15 @@ function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan
           {features.map((f, i) => (
             <span key={f.itemId}>
               {i > 0 && ", "}
-              <WorkLink clientKey={f.clientKey} url={f.url}>
-                #{f.itemId} {f.title}
-              </WorkLink>
+              {onFeature && !ended ? (
+                <button type="button" className="link-btn" onClick={() => onFeature(slot.half, f.itemId)} title="Plan this block from that feature">
+                  {f.title}
+                </button>
+              ) : (
+                <WorkLink clientKey={f.clientKey} url={f.url}>
+                  {f.title}
+                </WorkLink>
+              )}
             </span>
           ))}
         </p>
@@ -199,18 +207,26 @@ function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan
       {picks.length ? (
         <ul className="today-picks">
           {picks.map((p) => (
-            <li key={p.id} className={p.status === "done" ? "done" : undefined}>
-              <input type="checkbox" checked={p.status === "done"} onChange={(e) => view.toggle(p.id, e.target.checked)} aria-label={`Done: ${p.title}`} disabled={!committed} />
-              <span className="today-pick-title">{p.itemUrl ? <WorkLink clientKey={p.clientKey} url={p.itemUrl}>{p.title}</WorkLink> : p.title}</span>
-              {!committed && <span className="draft-tag">draft</span>}
-              {p.status === "planned" && running !== p.id && (
-                <button type="button" className="mini" onClick={() => onStart(p)} title="Start focus on this pick">
-                  Start focus
-                </button>
-              )}
-              {running === p.id && <span className="today-running">Focusing</span>}
-              {committed && <PickTime pick={p} editable={!ended} hint={p.id === hintPick} />}
-            </li>
+            <PickRow
+              key={p.id}
+              pick={p}
+              toggle={view.toggle}
+              link
+              canTick={committed}
+              timeEditable={committed && !ended}
+              hint={p.id === hintPick}
+              extra={
+                <>
+                  {!committed && <span className="draft-tag">draft</span>}
+                  {p.status === "planned" && running !== p.id && (
+                    <button type="button" className="mini" onClick={() => onStart(p)} title="Start focus on this pick">
+                      Start focus
+                    </button>
+                  )}
+                  {running === p.id && <span className="today-running">Focusing</span>}
+                </>
+              }
+            />
           ))}
         </ul>
       ) : (

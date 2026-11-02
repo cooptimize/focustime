@@ -1,3 +1,4 @@
+import type React from "react";
 // Check-in (step 7): midday, about a minute. For today: each pick's status and focused time, what each block or
 // slot has left after meetings, and which picks no longer fit, with move, drop or "make it up". Walk-on work can
 // be added to a block; if that puts it over, the picks that no longer fit say so. Computed here from the week
@@ -16,14 +17,14 @@ import { AnythingShifted } from "./WeekMusts.tsx";
 import { mondayOf } from "../week/dates.ts";
 import { dayName, FlexOfferBar, FocusVsSize, HALF_NAMES, SlipActions, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 
-type Props = { data: WeekLoadData; now: string; onClose: () => void; onChanged: () => void };
+type Props = { /** Step 15 (D268): the ritual chips, in this view's header. */ rituals?: React.ReactNode; data: WeekLoadData; now: string; onClose: () => void; onChanged: () => void };
 
 const time = (iso: string, tz: string) => {
   const z = Temporal.Instant.from(iso).toZonedDateTimeISO(tz);
   return `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")} ${z.hour < 12 ? "AM" : "PM"}`;
 };
 
-export function CheckIn({ data, now, onClose, onChanged }: Props) {
+export function CheckIn({ rituals, data, now, onClose, onChanged }: Props) {
   const tz = data.hours.timeZone;
   const today: IsoDate = data.planDay.date;
   const day = data.week.days.find((d) => d.date === today);
@@ -80,6 +81,7 @@ export function CheckIn({ data, now, onClose, onChanged }: Props) {
 
   return (
     <main className="closeout checkin" aria-label="Check-in">
+      {rituals}
       <div className="follow-ups-head">
         <h2 tabIndex={-1}>
           Check-in <span className="muted">{dayName(today)}, {time(now, tz)}</span>
