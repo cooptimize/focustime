@@ -69,13 +69,18 @@ export function targetDateOps(rev: number, field: string, date: string | null, t
 }
 export const dateValue = (date: string, timeZone: string) => Temporal.PlainDate.from(date).toZonedDateTime({ timeZone }).toInstant().toString();
 
-export type CreateSpec = { org: string; title: string; description?: string | null; acceptance?: string | null; acField: boolean; assignedTo: string; areaPath: string; iterationPath: string; parentId: number };
+export type CreateSpec = { org: string; title: string; description?: string | null; acceptance?: string | null; acField: boolean; assignedTo: string; areaPath: string; iterationPath: string; parentId: number;
+  /** Step 15.3: a draft feature's dates, each only when the type has the field (start) or a target field was found. */
+  startDate?: { field: string; date: string } | null; targetDate?: { field: string; date: string } | null; timeZone?: string };
+export const START_FIELD = "Microsoft.VSTS.Scheduling.StartDate";
 /** A new item under its parent: title, description, acceptance criteria (when the type has it), me, area and iteration of the parent, the parent link. */
 export function createOps(s: CreateSpec): PatchOp[] {
   const ops: PatchOp[] = [
     { op: "add", path: "/fields/System.Title", value: s.title },
     ...(s.description ? [{ op: "add" as const, path: "/fields/System.Description", value: textToHtml(s.description) }] : []),
     ...(s.acceptance && s.acField ? [{ op: "add" as const, path: `/fields/${AC_FIELD}`, value: textToHtml(s.acceptance) }] : []),
+    ...(s.startDate ? [{ op: "add" as const, path: `/fields/${s.startDate.field}`, value: dateValue(s.startDate.date, s.timeZone ?? "UTC") }] : []),
+    ...(s.targetDate ? [{ op: "add" as const, path: `/fields/${s.targetDate.field}`, value: dateValue(s.targetDate.date, s.timeZone ?? "UTC") }] : []),
     { op: "add", path: "/fields/System.AssignedTo", value: s.assignedTo },
     { op: "add", path: "/fields/System.AreaPath", value: s.areaPath },
     { op: "add", path: "/fields/System.IterationPath", value: s.iterationPath },

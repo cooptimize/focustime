@@ -460,6 +460,12 @@ export const MIGRATIONS: readonly string[] = [
      SELECT id, at, system, op, kind, uid, event_id, account, calendar, before, after, local_before, local_after, status, message, auto, undo_of, undone_by, attempts, updated_at FROM write_log ORDER BY id;
    DROP TABLE write_log;
    ALTER TABLE write_log_v15 RENAME TO write_log;`,
+  // 16: step 15.3, the draft editor: a draft's description, acceptance criteria (stories) and start and target dates
+  // (features), written to DevOps by Create in DevOps.
+  `ALTER TABLE draft_stories ADD COLUMN description TEXT;
+   ALTER TABLE draft_stories ADD COLUMN acceptance TEXT;
+   ALTER TABLE draft_stories ADD COLUMN start_date TEXT;
+   ALTER TABLE draft_stories ADD COLUMN target_date TEXT;`,
 ];
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
@@ -505,6 +511,7 @@ export type FollowUp = {
 };
 import { CLOSE_HOW, type CloseHow, type FollowUpOrigin } from "../plan/types.ts";
 export { CLOSE_HOW, type CloseHow, type FollowUpOrigin };
+export type DraftPatch = { clientKey?: string; parentItemId?: number | null; title?: string; size?: Size; description?: string | null; acceptance?: string | null; startDate?: string | null; targetDate?: string | null };
 export type FollowUpFields = { clientKey: string | null; who: string | null; what: string; channel: string | null; due: IsoDate | null; itemId: number | null };
 export type NewRuleFollowUp = { kind: string; ruleKey: string; clientKey: string | null; who: string; what: string; itemId?: number | null; refAt?: string | null; draft?: string | null; detail?: { picks?: number[] } | null; origin?: FollowUpOrigin | null };
 export type ResumeNote = { id: number; clientKey: string; date: IsoDate; note: string; updatedAt: string };
@@ -600,7 +607,7 @@ const toPick = (r: Row): Pick => ({
   updatedAt: r.updated_at as string,
 });
 const toPlan = (r: Row): DayPlan => ({ date: r.date as string, committedAt: (r.committed_at as string | null) ?? null, closedOutAt: (r.closed_out_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string });
-const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}) });
+const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.client_key as string, parentItemId: (r.parent_item_id as number | null) ?? null, title: r.title as string, size: r.size as Size, level: ((r.level as string | null) ?? "story") as DraftStory["level"], createdAt: r.created_at as string, description: (r.description as string | null) ?? null, acceptance: (r.acceptance as string | null) ?? null, startDate: (r.start_date as string | null) ?? null, targetDate: (r.target_date as string | null) ?? null, ...(r.devops_id != null ? { devopsId: r.devops_id as number, devopsUrl: (r.devops_url as string | null) ?? null } : {}) });
 export type DevOpsIdentityRow = { clientKey: string; org: string; id: string; name: string; email: string; validatedAt: string; expires: string | null };
 const toIdentity = (r: Row): DevOpsIdentityRow => ({ clientKey: r.client_key as string, org: r.org as string, id: r.identity_id as string, name: r.name as string, email: r.email as string, validatedAt: r.validated_at as string, expires: (r.expires as string | null) ?? null });
 const toDevopsWrite = (r: Row): DevOpsWriteEntry => ({
@@ -625,9 +632,9 @@ const toCapture = (r: Row): Capture => ({
 
 /** How a capture is sorted (step 9). */
 export type CaptureRoute =
-  | { as: "follow_up"; clientKey: string | null; who: string; what: string; due: IsoDate | null; channel?: string | null }
+  | { as: "follow_up"; clientKey: string | null; who: string; what: string; due: IsoDate | null; channel?: string | null; itemId?: number | null }
   | { as: "draft"; clientKey: string; parentItemId: number | null; title: string; size: Size }
-  | { as: "draft_feature"; clientKey: string; parentItemId: number | null; title: string }
+  | { as: "draft_feature"; clientKey: string; parentItemId: number | null; title: string; targetDate?: IsoDate | null }
   | { as: "dismissed" };
 export const MAX_CAPTURE = 1000;
 
@@ -862,6 +869,23 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         return toDraft(db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row);
       });
     },
+    /** Step 15.3: the draft editor's edits (checked by the caller). A new client clears the parent; refused while a pick uses it. */
+    updateDraft(id: number, patch: DraftPatch): DraftStory {
+      return tx(() => {
+        const r = db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row | undefined;
+        if (!r || r.devops_id != null) throw new PlanError("No such draft, or it is already in DevOps");
+        const d = toDraft(r);
+        const moved = patch.clientKey !== undefined && patch.clientKey !== d.clientKey;
+        if (moved && (db.prepare("SELECT COUNT(*) AS n FROM picks WHERE draft_id = ? AND status IN ('planned','done')").get(id) as { n: number }).n > 0)
+          throw new PlanError("A pick uses this draft. Drop the pick first, then change the client");
+        const n = { ...d, parentItemId: moved && patch.parentItemId === undefined ? null : d.parentItemId, ...patch };
+        db.prepare("UPDATE draft_stories SET client_key = ?, parent_item_id = ?, title = ?, size = ?, description = ?, acceptance = ?, start_date = ?, target_date = ?, updated_at = ? WHERE id = ?").run(n.clientKey, n.parentItemId, n.title, n.size, n.description ?? null, n.acceptance ?? null, n.startDate ?? null, n.targetDate ?? null, stamp(), id);
+        if (moved) db.prepare("UPDATE picks SET client_key = ? WHERE draft_id = ?").run(n.clientKey, id);
+        // A planned pick of the draft shows its new title.
+        if (n.title !== d.title) db.prepare("UPDATE picks SET title = ?, updated_at = ? WHERE draft_id = ? AND status = 'planned'").run(n.title, stamp(), id);
+        return toDraft(db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row);
+      });
+    },
     /** Step 14.5: delete a local draft no pick uses (local only; DevOps is never touched). */
     removeDraft(id: number): void {
       tx(() => {
@@ -1089,13 +1113,13 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         let routedId: number | null = null;
         if (r.as === "follow_up") {
           if (!r.what.trim()) throw new PlanError("A follow-up needs what you owe");
-          routedId = Number(db.prepare("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, opened_at) VALUES ('capture', ?, ?, ?, ?, ?, ?)").run(r.clientKey, r.who.trim() || null, r.what.trim(), r.due, r.channel ?? null, at).lastInsertRowid);
+          routedId = Number(db.prepare("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, item_id, opened_at) VALUES ('capture', ?, ?, ?, ?, ?, ?, ?)").run(r.clientKey, r.who.trim() || null, r.what.trim(), r.due, r.channel ?? null, r.clientKey ? (r.itemId ?? null) : null, at).lastInsertRowid);
         } else if (r.as === "draft") {
           if (!r.title.trim()) throw new PlanError("A draft story needs a title");
           routedId = Number(db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(r.clientKey, r.parentItemId, r.title.trim(), r.size, at, at).lastInsertRowid);
         } else if (r.as === "draft_feature") {
           if (!r.title.trim()) throw new PlanError("A draft feature needs a title");
-          routedId = Number(db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, level, created_at, updated_at) VALUES (?, ?, ?, 'M', 'feature', ?, ?)").run(r.clientKey, r.parentItemId, r.title.trim(), at, at).lastInsertRowid);
+          routedId = Number(db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, level, target_date, created_at, updated_at) VALUES (?, ?, ?, 'M', 'feature', ?, ?, ?)").run(r.clientKey, r.parentItemId, r.title.trim(), r.targetDate ?? null, at, at).lastInsertRowid);
         }
         db.prepare("UPDATE captures SET routed_at = ?, routed_as = ?, routed_id = ? WHERE id = ?").run(at, r.as, routedId, id);
         return toCapture(db.prepare("SELECT * FROM captures WHERE id = ?").get(id) as Row);

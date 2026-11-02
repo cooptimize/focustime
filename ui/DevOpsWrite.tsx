@@ -11,6 +11,7 @@ import { parentChoices } from "../plan/devopswrite.ts";
 import { DevOpsWork } from "./work.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
+import { DraftTitle } from "./DraftEditor.tsx";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -18,7 +19,7 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't w
 export type DevOpsChange =
   | { kind: "state"; itemId: number; state: string; comment?: string; followUpId?: number }
   | { kind: "comment"; itemId: number; text: string }
-  | { kind: "create"; draftId: number; description?: string; acceptance?: string }
+  | { kind: "create"; draftId: number }
   | { kind: "target_date"; itemId: number; date: string }
   | { kind: "undo"; writeId: number };
 
@@ -29,7 +30,7 @@ export type DevOpsWriteEnv = {
   begin: (clientKey: string, changes: DevOpsChange[]) => Promise<void>;
   /** The state picker for "Mark done in DevOps". */
   markDone: (t: { clientKey: string; itemId: number; title: string; followUpId?: number }) => void;
-  /** Description and acceptance criteria, then the create preview. */
+  /** The create preview, with the draft's saved values (step 15.3: edited in the draft editor). */
   create: (clientKey: string, drafts: DraftStory[]) => void;
   targetDate: (t: { clientKey: string; itemId: number; title: string; current: string | null }) => void;
   enable: (clientKey: string) => void;
@@ -45,7 +46,6 @@ type Row = { preview: DevOpsPreview; result: DevOpsResult | { error: string; sta
 type Flow = { clientKey: string; changes: DevOpsChange[]; rows: Row[]; busy: boolean; error: string | null };
 type Ask =
   | { kind: "state"; clientKey: string; itemId: number; title: string; followUpId?: number }
-  | { kind: "create"; clientKey: string; drafts: DraftStory[] }
   | { kind: "target"; clientKey: string; itemId: number; title: string; current: string | null };
 
 /** The DevOps write flow, owned by App. `onDone` reloads the week (a draft became an item, a follow-up closed). */
@@ -101,7 +101,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
     can: (k) => o.allowed.includes(k),
     begin,
     markDone: (t) => setAsk({ kind: "state", ...t }),
-    create: (clientKey, drafts) => setAsk({ kind: "create", clientKey, drafts: drafts.slice(0, 10) }),
+    create: (clientKey, drafts) => void begin(clientKey, drafts.slice(0, 10).map((d) => ({ kind: "create" as const, draftId: d.id }))),
     targetDate: (t) => setAsk({ kind: "target", ...t }),
     enable: () => openSettings(),
     version,
@@ -248,14 +248,13 @@ function PreviewDialog({ flow, onConfirm, onReload, onClose }: { flow: Flow; onC
 const confirmLabel = (p: DevOpsPreview) =>
   p.op === "create" ? "Create in DevOps" : p.op === "comment" ? "Add comment in DevOps" : p.op === "state" ? "Change state in DevOps" : p.op === "target_date" ? "Set target date in DevOps" : "Undo in DevOps";
 
-/** The small form before a preview: a state and comment, a description and acceptance criteria, or a date. */
+/** The small form before a preview: a state and comment, or a date. */
 function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void; onPreview: (c: DevOpsChange[]) => void }) {
   const first = useModalFocus<HTMLSelectElement & HTMLTextAreaElement & HTMLInputElement>();
   const [states, setStates] = useState<StateInfo[] | null>(null);
   const [state, setState] = useState("");
   const [current, setCurrent] = useState<string | null>(null);
   const [text, setText] = useState("");
-  const [extra, setExtra] = useState("");
   const [date, setDate] = useState(ask.kind === "target" ? ask.current ?? "" : "");
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -268,21 +267,20 @@ function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void;
       })
       .catch((e: unknown) => setError(errText(e)));
   }, [ask]);
-  const title = ask.kind === "state" ? `Mark done in DevOps: #${ask.itemId}` : ask.kind === "target" ? `Set target date: #${ask.itemId}` : ask.drafts.length === 1 ? `Create in DevOps: ${ask.drafts[0]!.title}` : `Create ${ask.drafts.length} drafts in DevOps`;
+  const title = ask.kind === "state" ? `Mark done in DevOps: #${ask.itemId}` : `Set target date: #${ask.itemId}`;
   return (
     <Modal label={title} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (ask.kind === "state") onPreview([{ kind: "state", itemId: ask.itemId, state, ...(text.trim() ? { comment: text.trim() } : {}), ...(ask.followUpId ? { followUpId: ask.followUpId } : {}) }]);
-          else if (ask.kind === "target") onPreview([{ kind: "target_date", itemId: ask.itemId, date }]);
-          else onPreview(ask.drafts.map((d) => ({ kind: "create" as const, draftId: d.id, ...(ask.drafts.length === 1 && text.trim() ? { description: text.trim() } : {}), ...(ask.drafts.length === 1 && extra.trim() ? { acceptance: extra.trim() } : {}) })));
+          else onPreview([{ kind: "target_date", itemId: ask.itemId, date }]);
         }}
       >
         <div className="cap-dialog-head">
           <h2>{title}</h2>
         </div>
-        {ask.kind !== "create" && <p className="muted">{ask.title}</p>}
+        <p className="muted">{ask.title}</p>
         {ask.kind === "state" &&
           (states ? (
             <label className="set-field">
@@ -310,30 +308,6 @@ function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void;
             <input ref={first} type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
         )}
-        {ask.kind === "create" &&
-          (ask.drafts.length === 1 ? (
-            <>
-              <p className="muted">
-                {ask.drafts[0]!.level === "feature" ? "A feature" : "A story"} under #{ask.drafts[0]!.parentItemId}, assigned to you, with the parent's area and iteration.
-              </p>
-              <label className="set-field">
-                <span className="set-label">Description (optional)</span>
-                <textarea ref={first} value={text} maxLength={8000} rows={3} onChange={(e) => setText(e.target.value)} />
-              </label>
-              {ask.drafts[0]!.level === "story" && (
-                <label className="set-field">
-                  <span className="set-label">Acceptance criteria (optional; used when the process has the field)</span>
-                  <textarea value={extra} maxLength={8000} rows={3} onChange={(e) => setExtra(e.target.value)} />
-                </label>
-              )}
-            </>
-          ) : (
-            <ul className="dw-drafts">
-              {ask.drafts.map((d) => (
-                <li key={d.id}>{d.title}</li>
-              ))}
-            </ul>
-          ))}
         {error && (
           <p className="set-problem" role="alert">
             {error}
@@ -429,7 +403,7 @@ export function DraftsToAdd({ drafts, clientName, onChanged }: { drafts: DraftSt
           <li key={d.id} className="cap-item">
             <p className="cap-text">
               <span className="cap-tag">{d.level === "feature" ? "Draft feature" : "Draft story"}</span>
-              {d.title}
+              <DraftTitle draft={d} />
               <span className="muted">
                 {" "}
                 · {clientName(d.clientKey)}

@@ -1,6 +1,6 @@
 # Coopilot demo (about 5 minutes)
 
-A scripted walkthrough in demo mode, verified end to end at 1920x1080 on Nov 1, 2026 (step 15) and again on Nov 2 (step 15.2) with `scripts/demo-walkthrough.mjs`. Screenshots are in `docs/demo/`.
+A scripted walkthrough in demo mode, verified end to end at 1920x1080 on Nov 1, 2026 (step 15) and again on Nov 2 (steps 15.2 and 15.3) with `scripts/demo-walkthrough.mjs`. Since step 15.3, Close out (step 13) shows the capture box with Follow-up chosen for anything new I owe. Screenshots are in `docs/demo/`.
 
 ## Before you start
 1. Turn on demo mode: Settings (`,`) > Display > "Show demo data", or Ctrl+K > "Demo mode". The top bar shows **Demo data**.

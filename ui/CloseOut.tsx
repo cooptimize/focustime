@@ -11,8 +11,8 @@ import type { Pick } from "../plan/types.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import { formatDuration } from "../week/format.ts";
 import { call, planAction } from "./api.ts";
-import { captureClients } from "./Capture.tsx";
-import { AddFollowUp, Fading, FollowUpRow } from "./FollowUps.tsx";
+import { CaptureBox, captureClients } from "./Capture.tsx";
+import { Fading, FollowUpRow } from "./FollowUps.tsx";
 import { dayName, FlexOfferBar, FocusVsSize, HALF_NAMES, SlipActions, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 
 type Props = { /** Step 15 (D268): the ritual chips, in this view's header. */ rituals?: React.ReactNode; date: IsoDate; data: WeekLoadData; onDate: (d: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
@@ -84,13 +84,14 @@ export function CloseOut({ rituals, date, data, onDate, onClose, onChanged, onCa
     void load();
     onChanged();
   };
+  // Before the early return below: hooks run in the same order every render.
+  const work = useContext(DevOpsWork);
   if (!st) return <main className="closeout" aria-label="Close out">{error ? <p className="set-problem">{error}</p> : <p className="muted">Loading…</p>}</main>;
   const dueBy = st.followUps.filter((l) => l.due !== null && l.due <= date);
   const rest = st.followUps.filter((l) => !dueBy.includes(l));
 
   const live = st.picks.filter((p) => p.status === "planned" || p.status === "done");
   // Step 14: a done pick whose item DevOps still lists among my open items; its "Update DevOps" follow-up, if any.
-  const work = useContext(DevOpsWork);
   const stillOpen = (clientKey: string, id: number) => !!work.get(clientKey)?.items.some((i) => i.id === id);
   const followUpFor = (id: number) => st.followUps.find((f) => f.kind === "devops_update" && f.itemId === id && !f.closedAt)?.id ?? null;
   const settled = st.picks.filter((p) => p.status === "moved" || p.status === "dropped");
@@ -244,7 +245,7 @@ export function CloseOut({ rituals, date, data, onDate, onClose, onChanged, onCa
         <h3 id="co-follow-ups">
           3. Follow-ups <span className="muted">{st.followUps.length} open{dueBy.length ? `, ${dueBy.length} due by ${date === st.today ? "today" : dayName(date)} still open` : ""}</span>
         </h3>
-        <AddFollowUp clients={clients} onAdded={() => { void load(); onChanged(); }} />
+        <CaptureBox data={data} initialKind="follow_up" onChanged={() => { void load(); onChanged(); }} />
         {!st.followUps.length && <p className="muted">No open follow-ups.</p>}
         {dueBy.length > 0 && <h4 className="co-due-head">Due {date === st.today ? "today" : `by ${dayName(date)}`}, still open</h4>}
         <ul className="follow-up-list">

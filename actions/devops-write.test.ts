@@ -16,9 +16,9 @@ const base = STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-
 const COOP = "Cooptimize";
 const Adatum = "Adatum";
 
-function setup(opts: { email?: string | null; acceptance?: boolean } = {}) {
+function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: boolean } = {}) {
   clearDevopsPreviews();
-  const dv = fakeDevOpsWrite({ now: () => NOW, ...(opts.acceptance === false ? { acceptance: false } : {}) });
+  const dv = fakeDevOpsWrite({ now: () => NOW, ...(opts.acceptance === false ? { acceptance: false } : {}), ...(opts.startDate === false ? { startDate: false } : {}) });
   dv.add(437, { "System.WorkItemType": "Feature", "System.Title": "Need Features Here", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
   dv.add(500, { "System.WorkItemType": "User Story", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } }, 437);
   dv.add(600, { "System.WorkItemType": "Epic", "System.Title": "Platform", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
@@ -225,6 +225,39 @@ describe("each write", () => {
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "create", draftId: wrong.id } })).toMatchObject({ status: 409 });
     const orphan = s.plan.addDraft({ clientKey: COOP, parentItemId: null, title: "No parent", size: "M" });
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "create", draftId: orphan.id } })).toMatchObject({ status: 409 });
+  });
+  it("step 15.3: a story uses the draft editor's description and acceptance criteria; the preview shows every field", async () => {
+    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "Old title", size: "S" });
+    s.plan.updateDraft(d.id, { title: "Edited title", description: "Line one\nLine two", acceptance: "Given a file, it imports" });
+    const p = await s.preview({ kind: "create", draftId: d.id });
+    expect(p.item).toBe("New User Story: Edited title");
+    const rows = Object.fromEntries(p.fields.map((r) => [r.label, r.after]));
+    expect(rows).toMatchObject({ Type: "User Story", Title: "Edited title", Description: "Line one\nLine two", "Acceptance criteria": "Given a file, it imports", Area: "Cooptimize\\Ops", Iteration: "Cooptimize\\Sprint 9", Parent: "#437 Need Features Here" });
+    expect(rows["Assigned to"]).toContain("avery@cooptimize.example");
+    await s.confirm(p);
+    const ops = s.dv.writes().find((w) => w.method === "POST")!.body as { path: string; value: unknown }[];
+    expect(ops).toContainEqual({ op: "add", path: "/fields/System.Title", value: "Edited title" });
+    expect(ops).toContainEqual({ op: "add", path: "/fields/System.Description", value: "<div>Line one</div><div>Line two</div>" });
+    expect(ops.find((o) => o.path === "/fields/Microsoft.VSTS.Common.AcceptanceCriteria")!.value).toContain("Given a file, it imports");
+  });
+  it("step 15.3: a feature sends its start and target dates (midnight in my zone) and the preview shows them", async () => {
+    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 600, title: "Dated feature", size: "M", level: "feature" });
+    s.plan.updateDraft(d.id, { startDate: "2026-11-09", targetDate: "2026-11-27" });
+    const p = await s.preview({ kind: "create", draftId: d.id });
+    const rows = Object.fromEntries(p.fields.map((r) => [r.label, r.after]));
+    expect(rows).toMatchObject({ Type: "Feature", "Start date": "2026-11-09", "Target date": "2026-11-27" });
+    await s.confirm(p);
+    const ops = s.dv.writes().find((w) => w.method === "POST")!.body as { path: string; value: unknown }[];
+    expect(ops).toContainEqual({ op: "add", path: "/fields/Microsoft.VSTS.Scheduling.StartDate", value: "2026-11-09T05:00:00Z" });
+    expect(ops).toContainEqual({ op: "add", path: "/fields/Microsoft.VSTS.Scheduling.TargetDate", value: "2026-11-27T05:00:00Z" });
+  });
+  it("step 15.3: a start date the type has no field for is refused, not dropped", async () => {
+    const t = setup({ startDate: false });
+    await t.enable();
+    const d = t.plan.addDraft({ clientKey: COOP, parentItemId: 600, title: "F", size: "M", level: "feature" });
+    t.plan.updateDraft(d.id, { startDate: "2026-11-09" });
+    expect(await t.fail("devops.preview", { clientKey: COOP, change: { kind: "create", draftId: d.id } })).toMatchObject({ status: 409 });
+    expect(t.dv.writes()).toEqual([]);
   });
   it("no acceptance criteria field: none is sent", async () => {
     const t = setup({ acceptance: false });

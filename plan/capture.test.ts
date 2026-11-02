@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDue, parseTag, suggest, takeTag, type CaptureClient } from "./capture.ts";
+import { parseDue, boxKind, parseTag, suggest, takeTag, type CaptureClient } from "./capture.ts";
 
 // Sunday Nov 1, 2026 is "today" unless a test says otherwise; Thu Nov 5 is PTO in real life but rules don't care.
 const SUN = "2026-11-01";
@@ -103,5 +103,24 @@ describe("routing suggestions (rules, no AI)", () => {
   it("offers the other two kinds as alternatives, every time", () => {
     expect(suggest("Told Dana I'd send it", null, WED, clients).others).toEqual(["draft", "draft_feature"]);
     expect(suggest("just a thought", null, WED, clients).others).toEqual(["follow_up", "draft_feature"]);
+  });
+});
+
+describe("boxKind: the chip the capture box highlights while I type (step 15.3)", () => {
+  const T = "2026-11-02";
+  const k = (text: string, client: string | null = null) => boxKind(text, client, T, clients);
+  it("nothing typed, or nothing the rules recognize: Sort later", () => {
+    expect(k("")).toBe("later");
+    expect(k("   ")).toBe("later");
+    expect(k("pallet labels look odd")).toBe("later");
+  });
+  it("a promise or a due date after by is a follow-up", () => {
+    expect(k("told Dana I'd send the export")).toBe("follow_up");
+    expect(k("send the export by Friday")).toBe("follow_up");
+  });
+  it("feature words are a draft feature; work words are a draft story", () => {
+    expect(k("feature: bulk import")).toBe("draft_feature");
+    expect(k("story: retry failed syncs")).toBe("draft");
+    expect(k("need to add paging", "Adatum")).toBe("draft");
   });
 });

@@ -100,7 +100,7 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged }: { l: Fol
         {l.isNew && !l.closedAt && <span className="follow-up-new">New today</span>}
         <span className="follow-up-who">{l.hasWho ? l.who : "No one named"}</span>
         <span className="follow-up-what">{l.what}</span>
-        {l.kind === "manual" && <LinkedItem l={l} />}
+        {(l.kind === "manual" || l.kind === "capture") && <LinkedItem l={l} />}
         <span className="muted follow-up-when">
           {l.clientName && l.who !== l.clientName ? `${l.clientName} · ` : ""}
           {l.session ? `Flex session ${span(l.session, timeZone)} · ` : ""}opened {when(l.openedAt, timeZone)}
@@ -246,7 +246,7 @@ export function FollowUpForm({ clients, initial, defaultClient = null, onSaved, 
   const [item, setItem] = useState<ItemValue>(() => {
     if (!initial?.itemId) return { ...NO_ITEM };
     const cw = initial.clientKey ? work.get(initial.clientKey) : undefined;
-    const w = [...(cw?.items ?? []), ...(cw?.children ?? []), ...(cw?.watched ?? [])].find((x) => x.id === initial.itemId);
+    const w = [...(cw?.items ?? []), ...(cw?.children ?? []), ...(cw?.watched ?? []), ...(cw?.committed ?? [])].find((x) => x.id === initial.itemId);
     return { itemId: initial.itemId, title: w?.title ?? null, url: w?.url ?? null, text: "" };
   });
   const [error, setError] = useState<string | null>(null);
@@ -303,24 +303,12 @@ function LinkedItem({ l }: { l: FollowUpView }) {
   const work = useContext(DevOpsWork);
   if (!l.itemId || !l.clientKey) return null;
   const cw = work.get(l.clientKey);
-  const w = [...(cw?.items ?? []), ...(cw?.children ?? []), ...(cw?.watched ?? [])].find((x) => x.id === l.itemId);
+  const w = [...(cw?.items ?? []), ...(cw?.children ?? []), ...(cw?.watched ?? []), ...(cw?.committed ?? [])].find((x) => x.id === l.itemId);
   return (
     <span className="follow-up-item">
       {w ? <WorkLink clientKey={l.clientKey} url={w.url}>#{w.id} {w.title}</WorkLink> : `#${l.itemId}`}
     </span>
   );
-}
-
-/** "Add a follow-up" button that opens the form. */
-export function AddFollowUp({ clients, defaultClient = null, onAdded }: { clients: readonly CaptureClient[]; defaultClient?: string | null; onAdded: () => void }) {
-  const [open, setOpen] = useState(false);
-  if (!open)
-    return (
-      <button type="button" className="mini" onClick={() => setOpen(true)}>
-        Add a follow-up
-      </button>
-    );
-  return <FollowUpForm clients={clients} defaultClient={defaultClient} onCancel={() => setOpen(false)} onSaved={() => { setOpen(false); onAdded(); }} />;
 }
 
 /** A status line that fades on its own (step 13.5: no bar left behind). */

@@ -113,6 +113,22 @@ describe("quick capture actions (step 9)", () => {
     expect((await t.fail("note.delete", { id: 1 })).status).toBe(400);
   });
 
+  it("step 15.3: each kind's inline fields save with it (a follow-up's linked item, a draft feature's target date)", async () => {
+    const t = setup();
+    const a = await t.run<{ capture: { id: number } }>("capture.add", { text: "send Dana the mapping", clientKey: "Adatum" });
+    expect((await t.fail("capture.route", { id: a.capture.id, as: "follow_up", what: "Send the mapping", itemId: 240 })).status).toBe(400); // a linked item needs a client
+    await t.run("capture.route", { id: a.capture.id, as: "follow_up", clientKey: "Adatum", who: "Dana", what: "Send the mapping", channel: "teams", itemId: 240 });
+    expect(t.plan.openFollowUps()).toEqual([expect.objectContaining({ kind: "capture", who: "Dana", channel: "teams", itemId: 240 })]);
+    const b = await t.run<{ capture: { id: number } }>("capture.add", { text: "feature: bulk import", clientKey: "Adatum" });
+    expect((await t.fail("capture.route", { id: b.capture.id, as: "draft_feature", clientKey: "Adatum", title: "Bulk import", targetDate: "Friday" })).status).toBe(400);
+    const r = await t.run<{ capture: { routedId: number } }>("capture.route", { id: b.capture.id, as: "draft_feature", clientKey: "Adatum", title: "Bulk import", parentItemId: 250, targetDate: "2026-11-27" });
+    expect(t.plan.getDraft(r.capture.routedId)).toMatchObject({ level: "feature", parentItemId: 250, targetDate: "2026-11-27" });
+    const c = await t.run<{ capture: { id: number } }>("capture.add", { text: "story: retry", clientKey: "Adatum" });
+    expect((await t.fail("capture.route", { id: c.capture.id, as: "draft", clientKey: "Adatum", title: "Retry", targetDate: "2026-11-27" })).status).toBe(400); // dates are for features
+    const f = await t.run<CaptureFeatures>("capture.features", { clientKey: "Adatum" });
+    expect(typeof f.acceptanceField).toBe("boolean");
+  });
+
   it("Close out says how many captures are unprocessed", async () => {
     const t = setup();
     await t.run("capture.add", { text: "one" });

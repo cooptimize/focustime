@@ -34,12 +34,14 @@ import { Inbox } from "./Inbox.tsx";
 import { Delivery } from "./Delivery.tsx";
 import { Today } from "./Today.tsx";
 import { ritualFor, RITUAL_NAMES, type Ritual } from "../plan/ritual.ts";
-import type { Pick } from "../plan/types.ts";
+import type { DraftStory, Pick } from "../plan/types.ts";
 import { CloseOut } from "./CloseOut.tsx";
 import { CheckIn } from "./CheckIn.tsx";
 import { PlanWeek } from "./PlanWeek.tsx";
 import { weekMusts } from "./WeekMusts.tsx";
 import { CaptureDialog } from "./Capture.tsx";
+import { DraftEditor, DraftEditorCtx } from "./DraftEditor.tsx";
+import type { BoxKind } from "../plan/capture.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
 import { formatDuration } from "../week/format.ts";
 import { PopupMenu } from "./Menus.tsx";
@@ -98,6 +100,10 @@ export function App() {
   const [planWeekVersion, setPlanWeekVersion] = useState(0);
   /** Quick capture (step 9): the box over any view, and the Capture view (inbox and notes) in the week's place. */
   const [captureOpen, setCaptureOpen] = useState(false);
+  // Step 15.3: the kind chip to start on (Follow-up from "Add a follow-up"), or the rules' suggestion.
+  const [captureKind, setCaptureKind] = useState<BoxKind | null>(null);
+  // Step 15.3: the draft open in the draft editor.
+  const [draftEdit, setDraftEdit] = useState<DraftStory | null>(null);
   const [captureVersion, setCaptureVersion] = useState(0);
   /** The focus screen (step 10): a calm full view while focus runs. Esc goes back; the timer keeps running. */
   const [focusOpen, setFocusOpen] = useState(false);
@@ -988,7 +994,7 @@ export function App() {
       openCheckIn: () => setView("checkin"),
       openPlanWeek: (w) => (w ? openPlanWeek(w) : setView("planweek")),
       planWeekOpen: planWeekAt,
-      openCapture: () => setCaptureOpen(true),
+      openCapture: (kind) => (setCaptureKind(kind ?? null), setCaptureOpen(true)),
       openCaptures: () => setView("inbox"),
       openRitual: () => openRitual(),
       commitWeek: () => {
@@ -1148,6 +1154,7 @@ export function App() {
     <TimeboxCtx.Provider value={tbEnv}>
     <DevOpsWriteCtx.Provider value={devopsWrites.env}>
     <MenuHost env={env}>
+    <DraftEditorCtx.Provider value={setDraftEdit}>
     <div className={`app ${layout}${compact ? " compact" : ""}`}>
       <header className="topbar">
         <div className="brand">
@@ -1464,8 +1471,10 @@ export function App() {
       )}
       {writes.dialog}
       {devopsWrites.dialog}
-      {captureOpen && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} onClose={() => setCaptureOpen(false)} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); reloadQuiet(); }} />}
+      {captureOpen && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
+      {draftEdit && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
     </div>
+    </DraftEditorCtx.Provider>
     </MenuHost>
     </DevOpsWriteCtx.Provider>
     </TimeboxCtx.Provider>

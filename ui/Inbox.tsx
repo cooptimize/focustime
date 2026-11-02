@@ -7,7 +7,7 @@ import { dueOrder } from "../plan/due.ts";
 import type { Capture } from "../plan/types.ts";
 import { call } from "./api.ts";
 import { CaptureBox, captureClients, captureWhen, SortCapture } from "./Capture.tsx";
-import { AddFollowUp, Fading, FollowUpRow } from "./FollowUps.tsx";
+import { Fading, FollowUpRow } from "./FollowUps.tsx";
 
 type Entry = { kind: "follow_up"; at: string; followUp: FollowUpView } | { kind: "capture"; at: string; capture: Capture };
 
@@ -75,9 +75,9 @@ export function Inbox({ data, version, onClose, onChanged, defaultClient = null 
           Back
         </button>
       </div>
-      <p className="muted follow-ups-note">What you owe people (follow-ups) and what you captured but haven't sorted. Nothing is posted anywhere.</p>
-      <section className="co-section">
-        <CaptureBox data={data} onChanged={changed} defaultClient={defaultClient} />
+      <section className="co-section inbox-capture" aria-label="Capture">
+        <p className="inbox-explainer">Capture anything. Sort it now or later: follow-ups are what you owe people; drafts become DevOps items.</p>
+        <CaptureBox data={data} onChanged={changed} defaultClient={defaultClient} large />
       </section>
       {error && <p className="set-problem" role="alert">{error}</p>}
       <Fading text={notice} onGone={clearNotice} />
@@ -117,7 +117,6 @@ export function Inbox({ data, version, onClose, onChanged, defaultClient = null 
       </ul>
       {caps && <DraftsToAdd drafts={caps.drafts} clientName={(k) => name(k) ?? k} onChanged={() => void load()} />}
       <div className="inbox-tools">
-        <AddFollowUp clients={clients} onAdded={changed} />
         <label className="set-check">
           <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} /> Show closed{snoozed && !showClosed ? ` and ${snoozed} snoozed` : ""}
         </label>

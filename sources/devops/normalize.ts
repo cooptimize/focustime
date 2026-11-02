@@ -220,7 +220,12 @@ export type NormalizeContext = {
   timeZone?: string;
   /** Delivery (step 16): the size field to read into `size`. */
   sizeField?: string | null;
+  /** Step 15.3: read area and iteration paths. */
+  paths?: boolean;
 };
+
+/** Step 15.3: the acceptance criteria field (stories), written by Create in DevOps when the type has it. */
+export const ACCEPTANCE_FIELD = "Microsoft.VSTS.Common.AcceptanceCriteria";
 
 const NO_LEVELS: BacklogLevels = { known: false, story: new Set(), portfolio: new Set() };
 
@@ -274,6 +279,7 @@ export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { 
       changedByMe: !!ctx.me && identityEmail(f["System.ChangedBy"]) === ctx.me.toLowerCase(),
       ...(ctx.people ? { assignedTo: identityName(f["System.AssignedTo"]), assignedToMe: !!ctx.me && identityEmail(f["System.AssignedTo"]) === ctx.me.toLowerCase() } : {}),
       ...(ctx.targetFields?.[type] ? { targetDate: dateOnly(f[ctx.targetFields[type]!], ctx.timeZone ?? "UTC") } : {}),
+      ...(ctx.paths ? { areaPath: typeof f["System.AreaPath"] === "string" ? (f["System.AreaPath"] as string) : null, iterationPath: typeof f["System.IterationPath"] === "string" ? (f["System.IterationPath"] as string) : null } : {}),
       ...(ctx.sizeField ? { size: typeof f[ctx.sizeField] === "number" && Number.isFinite(f[ctx.sizeField]) ? (f[ctx.sizeField] as number) : null } : {}),
     });
   }

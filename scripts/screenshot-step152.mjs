@@ -83,10 +83,13 @@ try {
     await shot("capture-chip");
     await page.keyboard.press("Escape");
 
+    // Step 15.3: new follow-ups come from the capture box (Follow-up kind); the separate button is gone.
     await page.keyboard.press("4");
-    await page.getByRole("button", { name: "Add a follow-up" }).first().click();
-    await page.locator("form.follow-up-add").getByLabel("Client").selectOption({ label: "Northwind" });
-    await page.locator(".item-lookup input").fill("export");
+    await page.locator(".cap-box .cap-client").first().click();
+    await page.locator(".cap-choose .chip-btn", { hasText: "Northwind" }).click();
+    await page.locator(".cap-box input[aria-label='Quick capture']").fill("I'll send the export spec");
+    await page.locator(".cap-box-kinds [role=radio]", { hasText: "Follow-up" }).click();
+    await page.locator(".cap-box-fields .item-lookup input").fill("export");
     await page.waitForTimeout(300);
     await shot("follow-up-lookup");
     await page.close();

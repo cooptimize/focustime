@@ -73,6 +73,7 @@ export const ACTIONS = [
   { name: "draft.add_feature", title: "Draft a feature", group: "Work items", target: "portfolio", summary: "A local feature under an epic (Plan the week), to add in DevOps" },
   { name: "draft.set_parent", title: "Choose a parent for a draft", group: "Work items", target: "portfolio", summary: "Put a draft under an open feature (or a draft feature under an epic) before creating it in DevOps" },
   { name: "draft.remove", title: "Delete a draft", group: "Work items", target: "portfolio", summary: "Delete a local draft no pick uses; DevOps isn't touched" },
+  { name: "draft.update", title: "Edit a draft", group: "Work items", target: "portfolio", summary: "Title, description, acceptance criteria, client, parent, size or dates of a local draft; saved locally" },
   { name: "draft.add_story", title: "Add a draft story", group: "Work items", target: "portfolio", summary: "A local story under an epic or feature, or under none yet" },
   { name: "ui.set_theme", title: "Change theme", group: "Display", target: "theme", summary: "Cooptimize Dark, Cooptimize Light or Neutral; saved in config" },
   { name: "demo.set", title: "Demo mode", group: "Display", target: "none", summary: "Swap every source for fictional sample data to demo safely; nothing leaves Coopilot and your plan isn't touched" },

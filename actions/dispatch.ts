@@ -728,6 +728,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "draft.add_story":
     case "draft.set_parent":
     case "draft.remove":
+    case "draft.update":
       return planAction(
         {
           plan: ctx.plan,

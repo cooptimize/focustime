@@ -7,7 +7,7 @@
 // come from devopsTargets(keys, { withPat: false }). Nothing is ever deleted except a comment Coopilot added (undo).
 import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { AC_FIELD, BATCH_LIMIT, completedState, createOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
+import { AC_FIELD, BATCH_LIMIT, START_FIELD, completedState, createOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
 import { dateOnly, detectTargetField, htmlToText, identityEmail, portfolioTiers, workItemUrl } from "../sources/devops/normalize.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
@@ -323,14 +323,29 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
       const parentStates = await writer.states(org, pat, project, parent.type);
       const pcat = parentStates.find((s) => s.name === parent.state)?.category ?? "InProgress";
       if (!isOpenCategory(pcat)) throw new Refused(`#${parent.id} is ${parent.state}; Coopilot adds items only under open parents`, 409);
-      const acField = draft.level === "story" && (await writer.typeFields(org, pat, project, type)).has(AC_FIELD);
-      const description = str(o.description, "description", 8000, true);
-      const acceptance = str(o.acceptance, "acceptance", 8000, true);
+      const typeHas = await writer.typeFields(org, pat, project, type);
+      const acField = draft.level === "story" && typeHas.has(AC_FIELD);
+      // Step 15.3: the draft editor's values; an explicit input (older callers) still wins.
+      const description = o.description !== undefined ? str(o.description, "description", 8000, true) : (draft.description ?? null);
+      const acceptance = o.acceptance !== undefined ? str(o.acceptance, "acceptance", 8000, true) : (draft.acceptance ?? null);
+      let startDate: { field: string; date: string } | null = null;
+      let targetDate: { field: string; date: string } | null = null;
+      if (draft.level === "feature" && (draft.startDate || draft.targetDate)) {
+        if (draft.startDate) {
+          if (!typeHas.has(START_FIELD)) throw new Refused(`${type} has no start date field in this process. Clear the start date in the draft, then create it`, 409);
+          startDate = { field: START_FIELD, date: draft.startDate };
+        }
+        if (draft.targetDate) {
+          const field = detectTargetField(await writer.fields(org, pat, project), typeHas);
+          if (!field) throw new Refused(`${type} has no target date field in this process. Clear the target date in the draft, then create it`, 409);
+          targetDate = { field, date: draft.targetDate };
+        }
+      }
       const area = String(parent.fields["System.AreaPath"] ?? "");
       const iteration = String(parent.fields["System.IterationPath"] ?? "");
       if (!area || !iteration) throw new Refused(`#${parent.id} has no area or iteration to copy`, 409);
-      const ops = createOps({ org, title: draft.title, description, acceptance, acField, assignedTo: env.me.email, areaPath: area, iterationPath: iteration, parentId: parent.id });
-      const after: Record<string, string | null> = { Type: type, Title: draft.title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}), "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area, Iteration: iteration, Parent: `#${parent.id} ${parent.title}` };
+      const ops = createOps({ org, title: draft.title, description, acceptance, acField, assignedTo: env.me.email, areaPath: area, iterationPath: iteration, parentId: parent.id, startDate, targetDate, timeZone: tz });
+      const after: Record<string, string | null> = { Type: type, Title: draft.title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}), ...(draft.level === "feature" ? { "Start date": startDate?.date ?? null, "Target date": targetDate?.date ?? null } : {}), "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area, Iteration: iteration, Parent: `#${parent.id} ${parent.title}` };
       return { ...base(env), ...none, op: "create", itemId: null, parentId: parent.id, title: draft.title, ops, rev: null, before: {}, after, draftId: draft.id, type };
     }
     case "undo": {

@@ -2235,3 +2235,48 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .item-lookup-tag { margin-left: auto; flex: none; font-size: 11px; color: var(--text-muted); }
 .follow-up-item { font-size: 13px; }
 .follow-up-add .item-lookup { min-width: 280px; }
+
+/* Step 15.3: one capture flow. Kind chips under the box (the suggestion highlighted), each kind's fields inline. */
+.cap-box-kinds .chip-btn[aria-checked="true"] { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, var(--surface)); color: var(--text); }
+.cap-kind-hint { font-size: 12px; margin-left: 4px; }
+.cap-box-fields { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cap-box-fields .item-lookup:not(.linked) { display: block; }
+.cap-box-fields .item-lookup input { width: 100%; }
+.cap-blocked { grid-column: 1 / -1; font-size: 12px; }
+.cap-box input:focus-visible, .cap-box select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.inbox-capture { padding: 14px 16px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); display: grid; gap: 10px; }
+.inbox-explainer { margin: 0; font-size: 13.5px; color: var(--text-muted); }
+.cap-box.large .cap-input > input { font-size: 18px !important; padding: 12px 14px !important; border-radius: 10px !important; }
+.cap-box.large .cap-input > input:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+.cap-box.large .cap-client { font-size: 13.5px; padding: 4px 12px; }
+
+/* Step 15.3: the draft editor. */
+.draft-editor form { display: grid; gap: 10px; }
+.draft-editor textarea { font: inherit; font-size: 13px; color: inherit; background: var(--raised); border: 1px solid var(--border-strong); border-radius: 7px; padding: 6px 8px; resize: vertical; }
+.draft-editor textarea:focus-visible, .draft-editor input:focus-visible, .draft-editor select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.draft-editor .set-field { display: grid; gap: 4px; }
+.draft-editor .item-lookup:not(.linked) { display: block; }
+.draft-editor .item-lookup input { width: 100%; }
+.draft-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: end; }
+.draft-row .set-field { flex: 1 1 160px; }
+.draft-inherit { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; margin: 0; padding: 8px 10px; border: 1px dashed var(--border-strong); border-radius: 8px; font-size: 12.5px; }
+.draft-inherit dt { color: var(--text-muted); }
+.draft-inherit dd { margin: 0; overflow-wrap: anywhere; }
+.draft-actions { flex-wrap: wrap; }
+.draft-actions .danger { color: var(--risk); }
+.link-btn.draft-title { color: var(--text); text-align: left; text-decoration: underline dotted; text-underline-offset: 3px; }
+.link-btn.draft-title:hover { text-decoration-style: solid; }
+.pw-draft-child { color: var(--text-muted); }
+
+/* Step 15.3: while a right-pane row is dragged, the week's other days as drop targets. */
+.pd2-weekstrip { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 50; max-width: calc(100vw - 32px); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 14px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-dialog); }
+.pd2-weekstrip-label { font-size: 12.5px; font-weight: 650; color: var(--text-muted); }
+.pd2-weekday { display: flex; align-items: center; gap: 4px; }
+.pd2-weekday-name { font-size: 12px; font-weight: 650; margin-right: 2px; }
+.pd2-weekcard { display: inline-flex; gap: 4px; align-items: baseline; padding: 6px 10px; border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 8px; background: var(--raised); font-size: 12.5px; }
+.pd2-weekcard.other { border-style: dashed; border-left-style: solid; }
+.pd2-weekcard.disabled { opacity: 0.5; }
+.pd2-weekcard.drop { box-shadow: 0 0 0 2px var(--focus); background: var(--selected); }
+@media (max-width: 900px) {
+  .cap-box-fields { grid-template-columns: minmax(0, 1fr); }
+}

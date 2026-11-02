@@ -229,6 +229,9 @@ export type WorkItem = {
   targetDate?: IsoDate | null;
   /** Delivery (step 16): the size field's value, when one was read. */
   size?: number | null;
+  /** Step 15.3: area and iteration paths (portfolio reads only), shown read-only in the draft editor. */
+  areaPath?: string | null;
+  iterationPath?: string | null;
 };
 
 /** A child of a feature or epic in Plan the week (step 8): any state, any assignee (display name only). */
@@ -254,6 +257,9 @@ export type PortfolioItem = {
   why: ("assigned" | "parent" | "above")[];
   /** One level down, every state, board order. */
   children: PortfolioChild[];
+  /** Step 15.3: what a draft under it inherits (shown read-only in the draft editor). Missing in older caches. */
+  areaPath?: string | null;
+  iterationPath?: string | null;
 };
 
 /** One client's features and epics (step 8). Fetched, failing and cached per client like its work items. */
@@ -270,6 +276,8 @@ export type ClientPortfolio = {
   targetFields: Record<string, string>;
   /** Step 16 (D279): the size field read on stories (StoryPoints, Effort or Size), null when the project has none. */
   sizeField?: string | null;
+  /** Step 15.3: the story type has an acceptance criteria field (the draft editor shows it only then). */
+  acceptanceField?: boolean;
 };
 
 export type ClientWorkStatus = "ok" | "identity_missing" | "not_set_up" | "auth_failed" | "no_access" | "unreachable" | "error";

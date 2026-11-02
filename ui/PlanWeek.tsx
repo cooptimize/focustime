@@ -4,6 +4,7 @@ import type React from "react";
 // (dependencies); the block grid on top previews pins and each client's must count. Fit per client counts musts
 // against that client's free blocks. DevOps health sits on top, folded to a count. DevOps is read-only; the week
 // plan lives only in the local plan store. A past week is a review.
+import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps, DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { blocksStep, blocksText, weekItemMenu, type MenuStep, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
@@ -562,7 +563,7 @@ function ClientList(p: ListsProps & { k: string }) {
           <h4>Draft stories <span className="muted">Not in DevOps yet; add them there to plan them</span></h4>
           <ul className="pw-drafts">
             {loose.map((d) => (
-              <li key={d.id}><span className="pw-draft-tag">Draft</span> {d.title} <span className="muted">{d.size}</span> <CreateInDevOps drafts={[d]} /></li>
+              <li key={d.id}><span className="pw-draft-tag">Draft</span> <DraftTitle draft={d} /> <span className="muted">{d.size}</span> <CreateInDevOps drafts={[d]} /></li>
             ))}
           </ul>
         </div>
@@ -703,7 +704,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, open, toggle, ops
         {i.done && <span className="pw-done">{DONE_WORD[i.done]}</span>}
       </span>
       {i.level === "feature" ? (
-        <button type="button" className="pw-chip-btn" aria-expanded={open} onClick={toggle} disabled={!stories.length} title={stories.length ? "Show its stories" : "No stories yet: Copy Coop brief is in ⋯"}>
+        <button type="button" className="pw-chip-btn" aria-expanded={open} onClick={toggle} disabled={!stories.length && !drafts.length} title={stories.length || drafts.length ? "Show its stories and drafts" : "No stories yet: Copy Coop brief is in ⋯"}>
           {stories.length ? `${openStories} of ${stories.length} stor${stories.length === 1 ? "y" : "ies"} open` : "No stories yet"}
           {drafts.length > 0 && ` · ${drafts.length} draft${drafts.length === 1 ? "" : "s"}`}
         </button>
@@ -719,11 +720,16 @@ function ItemRow({ i, first, last, past, info, drafts, places, open, toggle, ops
           ⋯
         </button>
       )}
-      {open && feature && (
+      {open && (feature || drafts.length > 0) && (
         <ul className="pw-children">
-          {feature.children.map((c) => (
+          {(feature?.children ?? []).map((c) => (
             <li key={c.id} className={c.open ? "" : "closed"}>
               <WorkLink clientKey={k} url={c.url}>{c.title}</WorkLink> <span className="muted">{c.state} · {c.mine ? "you" : c.assignedTo ?? "unassigned"}</span>
+            </li>
+          ))}
+          {drafts.map((d) => (
+            <li key={`d${d.id}`} className="pw-draft-child">
+              <span className="pw-draft-tag">Draft</span> <DraftTitle draft={d} /> <span className="muted">{d.size} · not in DevOps yet</span>
             </li>
           ))}
         </ul>

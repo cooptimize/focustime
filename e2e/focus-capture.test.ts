@@ -52,10 +52,10 @@ describe.skipIf(!CHROMIUM)("Top bar Focus and Quick capture (browser, demo mode)
   it("Quick capture: one client chip; @nickname sets it and leaves the text; a click changes it; the tip shows once", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("n");
-    await expect(page.locator(".cap-box input").getAttribute("placeholder")).resolves.toBe("Capture anything…");
+    await expect(page.locator(".cap-box input[aria-label='Quick capture']").getAttribute("placeholder")).resolves.toBe("Capture anything…");
     expect(await page.locator(".cap-box select").count()).toBe(0);
     await expect(page.locator(".cap-tip").count()).resolves.toBe(1);
-    const input = page.locator(".cap-box input");
+    const input = page.locator(".cap-box input[aria-label='Quick capture']");
     await input.pressSequentially("ask @harbor about the intake form");
     await expect(page.locator(".cap-client").textContent()).resolves.toContain("Harbor");
     await expect(input.inputValue()).resolves.toBe("ask about the intake form");
@@ -64,10 +64,13 @@ describe.skipIf(!CHROMIUM)("Top bar Focus and Quick capture (browser, demo mode)
     await expect(page.locator(".cap-client").textContent()).resolves.toContain("Atlas");
     await page.locator(".cap-tip .link-btn").click();
     await input.press("Enter");
-    await expect(page.locator(".cap-saved").textContent()).resolves.toContain("Atlas");
+    // Step 15.3: Sort later (nothing the rules recognize) saves it unsorted, with the chosen client.
+    await expect.poll(() => page.locator(".cap-box .co-notice").textContent()).toBe("Saved to the inbox to sort later");
+    const inbox = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "capture.load", input: {} }) }).then((r) => r.json()));
+    expect(inbox.data.inbox.find((c: { text: string }) => c.text === "ask about the intake form")).toMatchObject({ clientKey: "Atlas" });
     await page.keyboard.press("Escape");
     await page.keyboard.press("n");
-    await page.locator(".cap-box input").waitFor();
+    await page.locator(".cap-box input[aria-label='Quick capture']").waitFor();
     expect(await page.locator(".cap-tip").count()).toBe(0);
     await page.close();
   }, T);

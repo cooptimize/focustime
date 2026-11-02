@@ -34,7 +34,7 @@ const FIELDS = [
   { referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria", name: "Acceptance Criteria", type: "html" },
 ];
 
-export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; now?: () => string } = {}) {
+export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; startDate?: boolean; now?: () => string } = {}) {
   const clock = opts.now ?? (() => new Date().toISOString());
   const org = opts.org ?? "cooptimize";
   const identities = opts.identities ?? { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "avery@cooptimize.example" }, [basic(OTHER_PAT)]: { id: "22222222-2222-4222-8222-222222222222", name: "Dana Ruiz", email: "dana@cooptimize.example" } };
@@ -85,7 +85,7 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     let m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/states$/);
     if (m) return json({ value: STATES[m[1]!] ?? [] });
     m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/fields$/);
-    if (m) return json({ value: [{ referenceName: "System.Title" }, ...(m[1] === "Feature" || m[1] === "Epic" ? [{ referenceName: "Microsoft.VSTS.Scheduling.TargetDate" }] : []), ...(m[1] === "User Story" && opts.acceptance !== false ? [{ referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria" }] : [])] });
+    if (m) return json({ value: [{ referenceName: "System.Title" }, ...(m[1] === "Feature" || m[1] === "Epic" ? [{ referenceName: "Microsoft.VSTS.Scheduling.TargetDate" }, ...(opts.startDate !== false ? [{ referenceName: "Microsoft.VSTS.Scheduling.StartDate" }] : [])] : []), ...(m[1] === "User Story" && opts.acceptance !== false ? [{ referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria" }] : [])] });
     if (rest === "_apis/wit/wiql") {
       const q = String(body.query);
       const parent = Number(q.match(/\[System\.Parent\] = (\d+)/)?.[1]);

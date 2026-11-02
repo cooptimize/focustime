@@ -14,10 +14,17 @@ export const WeekItems = createContext<readonly { clientKey: string; itemId: num
 export type ItemValue = { itemId: number | null; title: string | null; url: string | null; text: string };
 export const NO_ITEM: ItemValue = { itemId: null, title: null, url: null, text: "" };
 
-export function ItemLookup({ clientKey, value, onChange, label = "Work item", name }: { clientKey: string | null; value: ItemValue; onChange: (v: ItemValue) => void; label?: string; name?: string }) {
+/** Step 15.3: features or epics (from capture.features) as a lookup pool, for a draft's parent. */
+export function parentPool(choices: readonly { id: number; title: string; state: string; type?: string; url?: string }[] | undefined, tier: "feature" | "epic"): { items: WorkItem[]; children: WorkItem[] } | undefined {
+  if (!choices) return undefined;
+  const items = choices.map((c): WorkItem => ({ id: c.id, title: c.title, type: c.type ?? (tier === "epic" ? "Epic" : "Feature"), state: c.state, stateCategory: "InProgress", level: "portfolio", tier, order: null, parentId: null, changedAt: "", url: c.url ?? "" }));
+  return { items, children: [] };
+}
+
+export function ItemLookup({ clientKey, value, onChange, label = "Work item", name, pool, placeholder, autoFocus, onEnterText, only }: { clientKey: string | null; value: ItemValue; onChange: (v: ItemValue) => void; label?: string; name?: string; /** Step 15.3: search these instead of the client's loaded work items (a draft's parent). */ pool?: { items: readonly WorkItem[]; children: readonly WorkItem[] } | undefined; placeholder?: string | undefined; autoFocus?: boolean; /** Step 15.3: Enter on text that links nothing (the intention box adds it as plain text). */ onEnterText?: (text: string) => void; /** Only offer these (the intention box: pickable items). */ only?: (i: WorkItem) => boolean }) {
   const work = useContext(DevOpsWork);
   const week = useContext(WeekItems);
-  const cw = clientKey ? work.get(clientKey) : undefined;
+  const cw = pool ?? (clientKey ? work.get(clientKey) : undefined);
   const priorities = useMemo(() => {
     const ids = new Set(week.filter((w) => w.clientKey === clientKey).map((w) => w.itemId));
     for (const c of cw?.children ?? []) if (c.parentId !== null && ids.has(c.parentId)) ids.add(c.id);
@@ -25,16 +32,20 @@ export function ItemLookup({ clientKey, value, onChange, label = "Work item", na
   }, [week, clientKey, cw]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
-  const results = useMemo(() => (open ? lookupItems(value.text, cw, priorities) : []), [open, value.text, cw, priorities]);
+  const searched = useMemo(() => {
+    if (!only || !cw) return cw;
+    const c = cw as { items: readonly WorkItem[]; children: readonly WorkItem[]; committed?: readonly WorkItem[] };
+    return { items: c.items.filter(only), children: c.children.filter(only), committed: (c.committed ?? []).filter(only) };
+  }, [cw, only]);
+  const results = useMemo(() => (open ? lookupItems(value.text, searched, priorities) : []), [open, value.text, searched, priorities]);
   const listId = useId();
   const input = useRef<HTMLInputElement>(null);
   // Changing the client clears the link (an item belongs to one client).
-  const first = useRef(true);
+  // (By the previous client, not a first-render flag: React's dev double effects would clear a starting link.)
+  const prevClient = useRef(clientKey);
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
+    if (prevClient.current === clientKey) return;
+    prevClient.current = clientKey;
     if (value.itemId !== null) onChange({ ...NO_ITEM });
   }, [clientKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -48,11 +59,14 @@ export function ItemLookup({ clientKey, value, onChange, label = "Work item", na
       e.preventDefault();
       setOpen(true);
       if (results.length) setActive((a) => (e.key === "ArrowDown" ? (a + 1) % results.length : (a - 1 + results.length) % results.length));
-    } else if (e.key === "Enter" && open) {
+    } else if (e.key === "Enter" && (open || onEnterText)) {
       e.preventDefault();
-      const hit = results[active] ?? (parseItemRef(value.text) !== null ? results.find((r) => r.id === parseItemRef(value.text)) : undefined);
+      const hit = open ? (results[active] ?? (parseItemRef(value.text) !== null ? results.find((r) => r.id === parseItemRef(value.text)) : undefined)) : undefined;
       if (hit) link(hit);
-      else setOpen(false); // Enter keeps the plain text.
+      else {
+        setOpen(false); // Enter keeps the plain text.
+        if (onEnterText && value.text.trim()) onEnterText(value.text.trim());
+      }
     } else if (e.key === "Escape" && open) {
       e.preventDefault();
       e.stopPropagation();
@@ -65,7 +79,7 @@ export function ItemLookup({ clientKey, value, onChange, label = "Work item", na
       <span className="item-lookup linked">
         {name && <input type="hidden" name={name} value={value.itemId} />}
         <span className="pr-type">#{value.itemId}</span>
-        {clientKey && value.url ? <WorkLink clientKey={clientKey} url={value.url}>{value.title ?? `Item ${value.itemId}`}</WorkLink> : <span>{value.title ?? `Item ${value.itemId}`}</span>}
+        {clientKey && value.url && value.url.startsWith("https://dev.azure.com/") ? <WorkLink clientKey={clientKey} url={value.url}>{value.title ?? `Item ${value.itemId}`}</WorkLink> : <span>{value.title ?? `Item ${value.itemId}`}</span>}
         <button type="button" className="mini quiet" onClick={() => (onChange({ ...NO_ITEM }), setTimeout(() => input.current?.focus(), 0))} aria-label={`Unlink #${value.itemId}`} title="Unlink, or choose another">
           ×
         </button>
@@ -83,7 +97,8 @@ export function ItemLookup({ clientKey, value, onChange, label = "Work item", na
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         onKeyDown={onKey}
-        placeholder={disabled ? "Choose a client first" : cw ? "Search by title or #id" : "Type it (DevOps isn't loaded for this client)"}
+        autoFocus={autoFocus}
+        placeholder={disabled ? "Choose a client first" : (placeholder ?? (cw ? "Search by title or #id" : "Type it (DevOps isn't loaded for this client)"))}
         aria-label={label}
         role="combobox"
         aria-expanded={open && results.length > 0}

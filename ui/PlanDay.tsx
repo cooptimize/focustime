@@ -2,9 +2,11 @@
 // with its picks as clean rows and one calm fit line. Right, "Add to <Client> <Morning>": this week's priorities, the
 // client's follow-ups, then everything else. One "+" per row; every other action is in a row's ⋯ menu. Everything
 // here is local: the actions only write Coopilot's plan store.
+import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
+import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps } from "./DevOpsWrite.tsx";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { blockClient, draftOffer } from "../plan/rules.ts";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { blockClient, draftOffer, isPickable } from "../plan/rules.ts";
 import { agendaOf, offerAfterTimebox, planMyDay, smallerSize, type DayPlacement, type DidntFit, type Unplaced } from "../plan/agenda.ts";
 import { addSections, defaultBlock, doneAction, type PriorityRow } from "../plan/addpane.ts";
 import { dayTotals, fitWords, planFit, planMinutes, trimCandidates } from "../plan/fit.ts";
@@ -24,7 +26,7 @@ import { call } from "./api.ts";
 import { copy, DueBadge } from "./FollowUps.tsx";
 import { dueOrder } from "../plan/due.ts";
 import { isTypingTarget, topOverlay } from "./keys.ts";
-import { itemMenu, pickMenu, possessive, spanText } from "./menu.ts";
+import { halfLabel, itemMenu, pickMenu, possessive, spanText, weekTargets } from "./menu.ts";
 import { MenuCtx, MenuRow, useMenu } from "./Menus.tsx";
 import { TimeboxDetails, useTimeboxes } from "./Timeboxes.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
@@ -89,6 +91,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   const firstSel = () => defaultBlock(blocks.map((b) => ({ half: b.half, ended: b.ended, fit: b.words.kind })), start?.half) ?? halves[0] ?? "AM";
   const [sel, setSel] = useState<Half>(firstSel);
   const [focusItem, setFocusItem] = useState<number | null>(start?.focus ?? null);
+  const [dragging, setDragging] = useState<AddDrag | null>(null);
   useEffect(() => setSel(firstSel()), [day.date]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!start) return;
@@ -237,6 +240,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
             <PastDay halves={[...new Set<Half>(["AM", "PM", ...dayPicks.filter((p) => p.half === "EVE").map((p) => p.half)])]} picks={dayPicks.filter((p) => p.status !== "moved")} act={act} />
           </div>
         ) : (
+          <AddDragCtx.Provider value={setDragging}>
           <div className="pd2-panes">
             <div className="pd2-left" aria-label={`Your ${weekdayOf(day.date)}`}>
               <h3 className="pd2-pane-title">Your {weekdayOf(day.date)}</h3>
@@ -250,6 +254,8 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
               <AddPane key={`${day.date}${selBlock.half}`} slot={selBlock.slot} picks={selBlock.picks} overflow={day.kind !== "work" && selBlock.half !== "EVE"} state={state} picked={picked} here={new Set(selBlock.picks.map(pickedKey))} clients={clients} colors={colors} act={act} focus={focusItem} clearFocus={() => setFocusItem(null)} />
             )}
           </div>
+          {dragging && <WeekDropStrip drag={dragging} planDate={day.date} colors={colors} name={name} act={act} onDone={() => setDragging(null)} />}
+          </AddDragCtx.Provider>
         )}
         {myDay && (
           <TimeboxMyDay
@@ -460,7 +466,7 @@ function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, 
                   {loose.map((d) => (
                     <AddRow key={`d${d.id}`} k={`d${d.id}`} drag={{ clientKey, title: d.title, input: { draftId: d.id, size: d.size } }} onAdd={() => add({ draftId: d.id, size: d.size })} label={`Add draft: ${d.title}`}>
                       <span className="pr-type">Draft</span>
-                      <span className="pr-title">{d.title}</span>
+                      <DraftTitle draft={d} className="pr-title" />
                     </AddRow>
                   ))}
                   {s!.rest.map((r) =>
@@ -491,6 +497,72 @@ function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, 
 
 /** Step 15.2: keys of what is planned in the selected block, so its rows say "Already planned here". */
 const HereCtx = createContext<ReadonlySet<string>>(new Set());
+/** Step 15.3: the row being dragged from the right pane, so the week's other blocks can show as drop targets. */
+const AddDragCtx = createContext<(d: AddDrag | null) => void>(() => {});
+
+/**
+ * Step 15.3: while a right-pane row is dragged, the week's other days as small cards (Plan the day and the Week view
+ * are never on screen together, D263). Dropping on one adds it there: the 15.2 targets, so a day off, a full block or
+ * one that already has it says why, and another client's block asks first.
+ */
+function WeekDropStrip({ drag, planDate, colors, name, act, onDone }: { drag: AddDrag; planDate: string; colors: Record<string, string>; name: (k: string | null) => string; act: PlanDayAct; onDone: () => void }) {
+  const menus = useContext(MenuCtx);
+  const env = menus.env;
+  const [over, setOver] = useState<string | null>(null);
+  if (!env) return null;
+  const inp = drag.input as { itemId?: number; draftId?: number; followUpId?: number };
+  const ref = inp.itemId ? { itemId: inp.itemId } : inp.draftId ? { draftId: inp.draftId } : inp.followUpId ? { followUpId: inp.followUpId } : {};
+  const targets = weekTargets(env, drag.clientKey, ref).filter((t) => t.date !== planDate);
+  const days = [...new Set(targets.map((t) => t.date))].sort();
+  const owner = (t: (typeof targets)[number]) => t.otherClient ?? (t.group === "open" ? null : drag.clientKey);
+  const drop = (e: DragEvent, t: (typeof targets)[number]) => {
+    e.preventDefault();
+    setOver(null);
+    onDone();
+    const input = { date: t.date, half: t.half, clientKey: drag.clientKey, ...drag.input };
+    if (t.otherClient)
+      menus.open({ x: e.clientX, y: e.clientY }, {
+        title: `Add ${name(drag.clientKey)} work to ${possessive(name(t.otherClient))} block?`,
+        items: [
+          { id: "yes", label: `Add "${drag.title}" anyway`, hint: "Different client", run: () => act("pick.add", input) },
+          { id: "no", label: "Cancel", run: () => undefined },
+        ],
+      });
+    else void act("pick.add", input);
+  };
+  return (
+    <div className="pd2-weekstrip" role="group" aria-label="Drop on another day this week">
+      <span className="pd2-weekstrip-label">Or drop on another day</span>
+      {days.length === 0 && <span className="muted">No other block this week can take it</span>}
+      {days.map((d) => (
+        <div key={d} className="pd2-weekday">
+          <span className="pd2-weekday-name">{Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", day: "numeric" })}</span>
+          {targets
+            .filter((t) => t.date === d)
+            .map((t) => {
+              const k = `${t.date}${t.half}`;
+              const o = owner(t);
+              return (
+                <span
+                  key={k}
+                  className={`pd2-weekcard${t.disabled ? " disabled" : ""}${over === k ? " drop" : ""}${t.otherClient ? " other" : ""}`}
+                  style={{ "--c": clientColor(o ?? undefined, colors) } as CSSProperties}
+                  title={t.disabled ?? (t.otherClient ? `${name(t.otherClient)}'s block: asks first` : `Add to ${halfLabel(t.half)}`)}
+                  aria-disabled={!!t.disabled}
+                  data-drop={k}
+                  onDragOver={(e) => !t.disabled && e.dataTransfer.types.includes(ADD_DRAG) && (e.preventDefault(), setOver(k))}
+                  onDragLeave={() => setOver((x) => (x === k ? null : x))}
+                  onDrop={(e) => !t.disabled && drop(e, t)}
+                >
+                  {halfLabel(t.half)} <span className="muted">{o ? name(o) : env.week.days.find((x) => x.date === t.date)?.kind === "overflow" ? "Catch-up" : "Open"}</span>
+                </span>
+              );
+            })}
+        </div>
+      ))}
+    </div>
+  );
+}
 /** A right-pane row dragged onto a block on the left (step 15.2). */
 export const ADD_DRAG = "application/x-coopilot-add";
 type AddDrag = { clientKey: string; title: string; input: Record<string, unknown> };
@@ -498,6 +570,7 @@ type AddDrag = { clientKey: string; title: string; input: Record<string, unknown
 /** A row with one "+" that adds it to the selected block; drag it onto any block instead. Once added: a check. */
 function AddRow({ onAdd, label, children, menu, k, drag }: { onAdd: () => void; label: string; children: ReactNode; menu?: ReturnType<typeof useMenu> | undefined; k?: string; drag?: AddDrag }) {
   const here = useContext(HereCtx);
+  const setDragging = useContext(AddDragCtx);
   const planned = !!k && here.has(k);
   const canDrag = !!drag && !planned;
   return (
@@ -505,7 +578,8 @@ function AddRow({ onAdd, label, children, menu, k, drag }: { onAdd: () => void; 
       className={`pd2-add${planned ? " planned" : ""}`}
       onContextMenu={menu?.onContextMenu}
       draggable={canDrag}
-      onDragStart={canDrag ? (e) => (e.dataTransfer.setData(ADD_DRAG, JSON.stringify(drag)), (e.dataTransfer.effectAllowed = "copy")) : undefined}
+      onDragStart={canDrag ? (e) => (e.dataTransfer.setData(ADD_DRAG, JSON.stringify(drag)), (e.dataTransfer.effectAllowed = "copy"), setTimeout(() => setDragging(drag!), 0)) : undefined}
+      onDragEnd={canDrag ? () => setDragging(null) : undefined}
       title={canDrag ? "Drag onto a block to add it there" : undefined}
     >
       {planned ? (
@@ -559,7 +633,7 @@ function Priority({ p, clientKey, date, add, act, startOpen, picked }: { p: Prio
           {p.drafts.map((d) => (
             <AddRow key={`d${d.id}`} k={`d${d.id}`} drag={{ clientKey, title: d.title, input: { draftId: d.id, size: d.size } }} onAdd={() => void add({ draftId: d.id, size: d.size })} label={`Add draft: ${d.title}`}>
               <span className="pr-type">Draft</span>
-              <span className="pr-title">{d.title}</span>
+              <DraftTitle draft={d} className="pr-title" />
               <CreateInDevOps drafts={[d]} label="Create in DevOps" />
             </AddRow>
           ))}
@@ -622,18 +696,34 @@ function DraftLink({ label, clientKey, parents, act, parent: fixed }: { label: s
   );
 }
 
+/**
+ * "Or type what you'll do" (step 15.3: the shared lookup). Choosing a result adds that DevOps item; Enter on text that
+ * matches nothing adds it as a plain intention.
+ */
 function Intention({ clientKey, clientName, half, date, act }: { clientKey: string; clientName: string; half: Half; date: string; act: PlanDayAct }) {
-  const [text, setText] = useState("");
+  const [value, setValue] = useState<ItemValue>(NO_ITEM);
+  // Pickable items not already planned in this block.
+  const here = useContext(HereCtx);
+  const only = useCallback((i: WorkItem) => isPickable(i) && !here.has(`i${clientKey}:${i.id}`), [here, clientKey]);
   return (
-    <form
-      className="intention"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (text.trim() && (await act("pick.add", { date, half, clientKey, intention: text }))) setText("");
-      }}
-    >
-      <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Or type what you'll do for ${clientName}, then Enter`} aria-label={`Something else for ${halfName(half)}`} maxLength={200} />
-    </form>
+    <div className="intention">
+      <ItemLookup
+        clientKey={clientKey}
+        value={value}
+        label={`Something else for ${halfName(half)}`}
+        placeholder={`Or type what you'll do for ${clientName}, then Enter`}
+        only={only}
+        onChange={(v) => {
+          if (v.itemId !== null) {
+            setValue(NO_ITEM);
+            void act("pick.add", { date, half, clientKey, itemId: v.itemId });
+          } else setValue(v);
+        }}
+        onEnterText={async (text) => {
+          if (await act("pick.add", { date, half, clientKey, intention: text })) setValue(NO_ITEM);
+        }}
+      />
+    </div>
   );
 }
 

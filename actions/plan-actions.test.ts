@@ -470,6 +470,40 @@ describe("focused time in Plan the day (step 6d)", () => {
   });
 });
 
+describe("draft editor (step 15.3): draft.update", () => {
+  it("edits title, description, acceptance criteria, size and parent of a story, and keeps them", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const { draft } = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: null, title: "Loose story", size: "S" });
+    const r = await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: draft.id, title: "Export the report", description: "Line one\nLine two", acceptance: "Given a week, then a CSV", size: "L", parentItemId: 130 });
+    expect(r.draft).toMatchObject({ title: "Export the report", description: "Line one\nLine two", acceptance: "Given a week, then a CSV", size: "L", parentItemId: 130 });
+    expect(t.plan.getDraft(draft.id)).toMatchObject({ title: "Export the report", parentItemId: 130 });
+    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: draft.id, parentItemId: null, description: "" })).draft).toMatchObject({ parentItemId: null, description: null });
+  });
+  it("a feature takes start and target dates; a story doesn't; start can't be after target", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const f = t.plan.addDraft({ clientKey: "Adatum", parentItemId: null, title: "Loose feature", size: "M", level: "feature" });
+    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: f.id, startDate: "2026-11-09", targetDate: "2026-11-27", parentItemId: 120 })).draft).toMatchObject({ startDate: "2026-11-09", targetDate: "2026-11-27", parentItemId: 120 });
+    expect((await t.fail("draft.update", { id: f.id, startDate: "2026-12-01" })).status).toBe(422);
+    const s = t.plan.addDraft({ clientKey: "Adatum", parentItemId: null, title: "Story", size: "M" });
+    expect((await t.fail("draft.update", { id: s.id, targetDate: "2026-11-27" })).status).toBe(422);
+    expect((await t.fail("draft.update", { id: f.id, parentItemId: 130 })).error).toMatch(/epic/i);
+  });
+  it("a new client clears the parent; refused while a pick uses the draft", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const d = t.plan.addDraft({ clientKey: "Adatum", parentItemId: 130, title: "Story", size: "M" });
+    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: d.id, clientKey: "T&S" })).draft).toMatchObject({ clientKey: "T&S", parentItemId: null });
+    await t.run("pick.add", { date: D, half: "AM", clientKey: "T&S", draftId: d.id });
+    expect((await t.fail("draft.update", { id: d.id, clientKey: "Adatum" })).status).toBe(409);
+    expect((await t.fail("draft.update", { id: d.id, title: "" })).status).toBe(400);
+    // A new title shows on the planned pick (Plan it, then edit).
+    await t.run("draft.update", { id: d.id, title: "Story, renamed" });
+    expect(t.plan.picksFor(D).find((p) => p.draftId === d.id)).toMatchObject({ title: "Story, renamed", itemType: "Draft story" });
+  });
+});
+
 describe("drafts: choose a parent, and delete (step 14.5, D257)", () => {
   it("a story draft with no parent gets an open feature of its own client; nothing else", async () => {
     const t = setup();

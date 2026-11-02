@@ -154,3 +154,16 @@ export function suggest(text: string, clientKey: string | null, today: IsoDate, 
   const title = clean(feature ? text.replace(FEATURE, "") : text.replace(WORK_LEAD, "").replace(LEADS, ""));
   return { kind, clientKey, who, what, due: due?.date ?? null, title, others: (["follow_up", "draft", "draft_feature"] as const).filter((k) => k !== kind) };
 }
+
+/** Step 15.3: a kind chip under the capture box, or "later" (save it unsorted, as before). */
+export type BoxKind = CaptureKind | "later";
+/**
+ * The chip the capture box highlights while I type: the routing rules when they recognize something (a promise or a
+ * due date after "by", feature words, work words like "story:", "todo" or "need to"), otherwise Sort later.
+ */
+export function boxKind(text: string, clientKey: string | null, today: IsoDate, clients: readonly CaptureClient[]): BoxKind {
+  if (!text.trim()) return "later";
+  const s = suggest(text, clientKey, today, clients);
+  if (s.kind !== "draft") return s.kind;
+  return WORK_LEAD.test(text) ? "draft" : "later";
+}

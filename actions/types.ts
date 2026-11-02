@@ -270,9 +270,9 @@ export type WeekPlanState = {
 // ---- Quick capture (step 9) ----
 /** What Capture shows: the inbox (newest first). Notes were removed in step 13.5. */
 export type CaptureState = { today: IsoDate; inbox: Capture[]; inboxCount: number; /** Step 14: drafts not yet created in DevOps, for Create in DevOps. */ drafts: DraftStory[] };
-export type FeatureChoice = { id: number; title: string; state: string };
+export type FeatureChoice = { id: number; title: string; state: string; /** Step 15.3: for the shared lookup and the draft editor (area and iteration shown read-only). */ type?: string; url?: string; areaPath?: string | null; iterationPath?: string | null };
 /** A client's open features for "under a feature"; "unavailable" when DevOps can't say (a draft then saves without one). */
-export type CaptureFeatures = { clientKey: string; status: "ok" | "unavailable"; message?: string; features: FeatureChoice[]; /** Step 13.5: open epics, for a draft feature. */ epics: FeatureChoice[] };
+export type CaptureFeatures = { clientKey: string; status: "ok" | "unavailable"; message?: string; features: FeatureChoice[]; /** Step 13.5: open epics, for a draft feature. */ epics: FeatureChoice[]; /** Step 15.3: the story type has acceptance criteria (the draft editor shows the field only then). */ acceptanceField?: boolean };
 
 // ---- Step 12: timeboxes and the write framework ----
 /** One field of a write preview: before and after (null where there is none), and whether it changes. */

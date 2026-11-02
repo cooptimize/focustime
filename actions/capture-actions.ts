@@ -53,7 +53,7 @@ const optClient = (v: unknown): string | null => {
 };
 const date = (v: unknown): IsoDate | null => {
   if (v === undefined || v === null || v === "") return null;
-  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Invalid("due must be YYYY-MM-DD");
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Invalid("A date must be YYYY-MM-DD");
   try {
     return Temporal.PlainDate.from(v, { overflow: "reject" }).toString();
   } catch {
@@ -79,9 +79,9 @@ async function featuresOf(ctx: CaptureContext, cfg: AppConfig | null, key: strin
     const ref = refs.find((r) => r.clientKey === key);
     if (!ref) return { clientKey: key, status: "unavailable", message: `No DevOps for ${key}`, features: [], epics: [] };
     const [p] = await ctx.devops(cfg).portfolio([ref]);
-    const of = (tier: "feature" | "epic") => (p?.items ?? []).filter((i) => i.tier === tier).map((i) => ({ id: i.id, title: i.title, state: i.state }));
+    const of = (tier: "feature" | "epic") => (p?.items ?? []).filter((i) => i.tier === tier).map((i) => ({ id: i.id, title: i.title, state: i.state, type: i.type, url: i.url, areaPath: i.areaPath ?? null, iterationPath: i.iterationPath ?? null }));
     if (!p || p.status !== "ok") return { clientKey: key, status: "unavailable", message: p?.message ?? `DevOps unavailable for ${key}`, features: of("feature"), epics: of("epic") };
-    return { clientKey: key, status: "ok", features: of("feature"), epics: of("epic") };
+    return { clientKey: key, status: "ok", features: of("feature"), epics: of("epic"), acceptanceField: !!p.acceptanceField };
   } catch {
     return { clientKey: key, status: "unavailable", message: `DevOps unavailable for ${key}`, features: [], epics: [] };
   }
@@ -123,12 +123,19 @@ export async function captureAction(ctx: CaptureContext, action: CaptureAction, 
         return { ok: true, data: await featuresOf(ctx, await ctx.config().catch(() => null), key) };
       }
       case "capture.route": {
-        const o = fields(input, ["id", "as"], ["clientKey", "who", "what", "due", "title", "size", "parentItemId", "channel"]);
+        const o = fields(input, ["id", "as"], ["clientKey", "who", "what", "due", "title", "size", "parentItemId", "channel", "itemId", "targetDate"]);
         const capId = id(o.id, "id");
         let route: CaptureRoute;
+        // Step 15.3: a follow-up's linked item (needs a client) and a draft feature's target date; nothing else takes them.
+        if (o.itemId !== undefined && o.itemId !== null && o.as !== "follow_up") throw new Invalid("Only a follow-up links a work item here");
+        if (o.targetDate !== undefined && o.targetDate !== null && o.as !== "draft_feature") throw new Invalid("A target date is for a draft feature");
         switch (o.as) {
           case "follow_up":
             route = { as: "follow_up", clientKey: optClient(o.clientKey), who: text(o.who ?? "", "who", 100), what: text(o.what, "what", 200), due: date(o.due), channel: o.channel === undefined || o.channel === null || o.channel === "" ? null : (["teams", "email", "devops", "call"].includes(String(o.channel)) ? String(o.channel) : (() => { throw new Invalid("channel must be teams, email, devops or call"); })()) };
+            if (o.itemId !== undefined && o.itemId !== null) {
+              if (!route.clientKey) throw new Invalid("A linked work item needs a client");
+              route.itemId = id(o.itemId, "itemId");
+            }
             break;
           case "draft": {
             const key = optClient(o.clientKey);
@@ -148,7 +155,7 @@ export async function captureAction(ctx: CaptureContext, action: CaptureAction, 
             if (!key) throw new Invalid("A draft feature needs a client");
             const parentItemId = await epicOf(ctx, key, o.parentItemId);
             if (typeof parentItemId === "object" && parentItemId !== null) return parentItemId;
-            route = { as: "draft_feature", clientKey: key, parentItemId, title: text(o.title, "title", 200) };
+            route = { as: "draft_feature", clientKey: key, parentItemId, title: text(o.title, "title", 200), targetDate: date(o.targetDate) };
             break;
           }
           case "dismissed":

@@ -148,7 +148,7 @@ export type MenuEnv = {
   /** Plan the week (step 8): open it (next week by default), and the week it is open on. */
   openPlanWeek: (weekStart?: IsoDate) => void;
   /** Quick capture (step 9): the capture box anywhere, and the Capture view (inbox and notes). */
-  openCapture: () => void;
+  openCapture: (kind?: import("../plan/capture.ts").BoxKind) => void;
   openCaptures: () => void;
   /** The Plan button (step 10): the ritual for the moment. */
   openRitual: () => void;
@@ -337,12 +337,8 @@ function plannedHere(env: MenuEnv, date: string, half: Half, clientKey: string, 
   return alreadyPlanned(env.planWeek?.[date]?.picks ?? [], { clientKey, itemId }, date, half) ? { disabled: "Already planned here" } : {};
 }
 
-/**
- * Where to add a work item (step 15.2, plan/addtargets.ts): the block selected in Plan the day first, then this client's
- * blocks on the day being planned, its other blocks this week, Open half-days, and other clients' blocks last, labeled
- * "Different client" and confirmed first. A day off, a full block, or one that already has the item says why.
- */
-export function addStep(env: MenuEnv, clientKey: string, item: WorkItem): MenuStep {
+/** Step 15.3: the week's blocks that could take this work, in the 15.2 order (shared by "Add to the plan" and the drop strip). */
+export function weekTargets(env: MenuEnv, clientKey: string, ref: { itemId?: number; draftId?: number; followUpId?: number }): AddTarget[] {
   const blocks: TargetBlock[] = env.week.days.flatMap((d) =>
     ([d.am, d.pm, ...(d.eve ? [d.eve] : [])] as const).map((sl) => ({
       date: d.date,
@@ -357,11 +353,23 @@ export function addStep(env: MenuEnv, clientKey: string, item: WorkItem): MenuSt
   );
   const picks = env.week.days.flatMap((d) => env.planWeek?.[d.date]?.picks ?? []);
   const planDate = env.planState?.date ?? env.selection.date;
-  const targets = addTargets({ blocks, clientKey, planDate, selected: env.planState ? { date: env.selection.date, half: env.selection.half } : null, today: env.today, picks, ref: { clientKey, itemId: item.id } });
+  return addTargets({ blocks, clientKey, planDate, selected: env.planState ? { date: env.selection.date, half: env.selection.half } : null, today: env.today, picks, ref: { clientKey, ...ref } });
+}
+
+/**
+ * Where to add a work item (step 15.2, plan/addtargets.ts): the block selected in Plan the day first, then this client's
+ * blocks on the day being planned, its other blocks this week, Open half-days, and other clients' blocks last, labeled
+ * "Different client" and confirmed first. A day off, a full block, or one that already has the item says why.
+ */
+export function addStep(env: MenuEnv, clientKey: string, item: WorkItem | { draftId: number; title: string; size?: string }): MenuStep {
+  // Step 15.3: a draft's "Plan it" uses the same targets, keyed by the draft.
+  const draftId = "draftId" in item ? item.draftId : null;
+  const planDate = env.planState?.date ?? env.selection.date;
+  const targets = weekTargets(env, clientKey, draftId !== null ? { draftId } : { itemId: (item as WorkItem).id });
   const clientName = (k: string) => env.work.get(k)?.clientName ?? env.week.days.flatMap((d) => [d.am, d.pm]).find((sl) => sl.focus[0]?.clientKey === k)?.focus[0]?.clientName ?? k;
   const own = clientName(clientKey);
   const heading: Record<TargetGroup, string> = { here: `${own} on ${weekday(planDate)}`, client: `Other ${own} blocks`, open: "Open half-days", other: "Different client" };
-  const add = (t: AddTarget) => () => env.runPlan("pick.add", { date: t.date, half: t.half, clientKey, itemId: item.id });
+  const add = (t: AddTarget) => () => env.runPlan("pick.add", { date: t.date, half: t.half, clientKey, ...(draftId !== null ? { draftId, ...("size" in item && item.size ? { size: item.size } : {}) } : { itemId: (item as WorkItem).id }) });
   const items = targets.map<MenuItem>((t) => {
     const fri = env.week.days.find((d) => d.date === t.date)?.kind === "overflow";
     const label = `${dayName(t.date)} ${halfLabel(t.half)}${t.otherClient ? ` · ${clientName(t.otherClient)}` : fri ? " (Friday catch-up)" : ""}`;
@@ -932,6 +940,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "draft.add_story": return { next: () => chooseItem(env, "Draft a story under which epic or feature?", (i) => i.level === "portfolio", (k, i) => draftPrompt(env, k, i)) };
     case "draft.set_parent": return { run: () => env.setView("inbox") };
     case "draft.remove": return { run: () => env.setView("inbox") };
+    case "draft.update": return { run: () => env.setView("inbox") };
     case "ui.set_theme": return { next: () => themeStep(env) };
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
     case "ui.set_timelines": return { next: () => ({ title: "Show timelines on cards", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.timelines === on, action: "ui.set_timelines", run: () => env.saveTimelines(on) })) }) };
@@ -973,7 +982,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "closeout.commit": return env.closeOutDate ? { run: env.commitCloseOut } : { disabled: "Open Close out first" };
     case "pick.make_up": return { next: () => choosePick(env, "Make up which pick?", (p) => makeUpStep(env, p)) };
     case "note.set": return { run: () => env.openCloseOut() };
-    case "followup.add": return { next: () => followUpForm(env) };
+    // Step 15.3: the capture box is the one way to add something new; this opens it with Follow-up chosen.
+    case "followup.add": return { run: () => env.openCapture("follow_up") };
     case "borrow.pay": {
       const unpaid = env.borrowed.filter((b) => !b.paidAt);
       if (!unpaid.length) return { disabled: "No unpaid borrowed time" };
@@ -1043,7 +1053,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.retry":
     case "devops.log":
       return { run: () => env.openSettings("data") };
-    case "capture.add": return { run: env.openCapture };
+    case "capture.add": return { run: () => env.openCapture() };
     // Sorting and a client's features and epics are handled in the Inbox.
     case "capture.load":
     case "capture.route":

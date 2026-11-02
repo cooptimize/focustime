@@ -14,15 +14,23 @@ describe.skipIf(!CHROMIUM)("Work item lookup (browser, demo mode)", () => {
 
   const lookup = (page: Page) => page.locator(".item-lookup").first();
 
-  it("follow-up form: disabled without a client, searches the client's items, links one, a new client clears it", async () => {
-    const { page, errors } = await freshPage(h);
+  // Step 15.3: the follow-up form for new ones is the capture box's Follow-up kind (the separate button is gone).
+  async function followUpBox(page: Page, client: string) {
     await page.keyboard.press("4");
-    await page.getByRole("button", { name: "Add a follow-up" }).first().click();
-    const form = page.locator("form.follow-up-add");
-    await form.getByLabel("Client").selectOption({ label: "No client" });
+    await page.locator(".cap-box .cap-client").first().click();
+    await page.locator(".cap-choose .chip-btn", { hasText: client }).click();
+    await page.locator(".cap-box input[aria-label='Quick capture']").fill("I'll send the export spec");
+    await page.locator(".cap-box-kinds [role=radio]", { hasText: "Follow-up" }).click();
+    return page.locator(".cap-box-fields");
+  }
+
+  it("capture box follow-up: disabled without a client, searches the client's items, links one, a new client clears it", async () => {
+    const { page, errors } = await freshPage(h);
+    const form = await followUpBox(page, "No client");
     await expect(lookup(page).locator("input").isDisabled()).resolves.toBe(true);
-    await form.getByLabel("Client").selectOption({ label: "Northwind" });
-    const box = lookup(page).locator("input");
+    await page.locator(".cap-box .cap-client").first().click();
+    await page.locator(".cap-choose .chip-btn", { hasText: "Northwind" }).click();
+    const box = form.locator(".item-lookup input");
     await box.fill("export");
     const results = page.locator(".item-lookup-list [role=option]");
     await expect.poll(() => results.count()).toBeGreaterThan(0);
@@ -30,14 +38,16 @@ describe.skipIf(!CHROMIUM)("Work item lookup (browser, demo mode)", () => {
     await box.press("ArrowDown");
     await box.press("Enter");
     await expect(page.locator(".item-lookup.linked").textContent()).resolves.toContain(first.split("#")[0]!.replace(/^\S+\s/, "").trim());
-    await form.getByLabel("Client").selectOption({ label: "Harbor" });
-    await expect(page.locator(".item-lookup.linked").count()).resolves.toBe(0);
-    await form.getByLabel("Client").selectOption({ label: "Northwind" });
+    await page.locator(".cap-box .cap-client").first().click();
+    await page.locator(".cap-choose .chip-btn", { hasText: "Harbor" }).click();
+    await expect.poll(() => page.locator(".item-lookup.linked").count()).toBe(0);
+    await page.locator(".cap-box .cap-client").first().click();
+    await page.locator(".cap-choose .chip-btn", { hasText: "Northwind" }).click();
     await box.fill("export");
     await box.press("ArrowDown");
     await box.press("Enter");
-    await form.locator("input[required]").fill("Send the export spec");
-    await form.getByRole("button", { name: "Add" }).click();
+    await page.locator(".cap-box input[aria-label='Quick capture']").fill("I'll send the export spec");
+    await page.locator(".cap-box input[aria-label='Quick capture']").press("Enter");
     await expect.poll(() => page.locator(".follow-up", { hasText: "Send the export spec" }).locator(".follow-up-item a").count()).toBe(1);
     expect(errors).toEqual([]);
     await page.close();
@@ -45,11 +55,8 @@ describe.skipIf(!CHROMIUM)("Work item lookup (browser, demo mode)", () => {
 
   it("Enter on text that matches nothing keeps the plain text", async () => {
     const { page } = await freshPage(h);
-    await page.keyboard.press("4");
-    await page.getByRole("button", { name: "Add a follow-up" }).first().click();
-    const form = page.locator("form.follow-up-add");
-    await form.getByLabel("Client").selectOption({ label: "Northwind" });
-    const box = lookup(page).locator("input");
+    const form = await followUpBox(page, "Northwind");
+    const box = form.locator(".item-lookup input");
     await box.fill("the pallet labels");
     await box.press("Enter");
     await expect(box.inputValue()).resolves.toBe("the pallet labels");

@@ -6,14 +6,14 @@ import { carryTarget, dayLabel, dayRule, upcomingStart, type DayRule, type HasHo
 import { alreadyPlanned } from "../plan/dup.ts";
 import { sessionEnd, unpickableReason } from "../plan/rules.ts";
 import { DEFAULT_SIZE, SIZES, type Pick as PlanPick, type PlanDayState, type Size } from "../plan/types.ts";
-import { PlanError, type NewPick, type PlanStore } from "../store/plan-store.ts";
+import { PlanError, type DraftPatch, type NewPick, type PlanStore } from "../store/plan-store.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
 import { dayEndOf, hoursOn, noHoursPrompt, type TimeModel } from "../week/hours.ts";
 import type { PtoDay } from "../week/pto.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const PLAN_ACTIONS = ["planday.start", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "draft.add_story", "draft.set_parent", "draft.remove"] as const;
+export const PLAN_ACTIONS = ["planday.start", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
 export const isPlanAction = (a: unknown): a is PlanAction => typeof a === "string" && (PLAN_ACTIONS as readonly string[]).includes(a);
 
@@ -211,7 +211,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           if (!draft || draft.clientKey !== base.clientKey) return bad("No such draft story for this client", 404);
           const dup = alreadyPlanned(plan.picksFor(base.date), { clientKey: base.clientKey, draftId: draft.id }, base.date, base.half);
           if (dup) return dupRefusal(dup.half, base.half);
-          p = { ...base, kind: "draft", draftId: draft.id, title: draft.title, itemType: "Draft story" };
+          p = { ...base, kind: "draft", draftId: draft.id, title: draft.title, itemType: draft.level === "feature" ? "Draft feature" : "Draft story" };
         } else if (o.followUpId !== undefined) {
           const f = plan.getFollowUp(id(o.followUpId, "followUpId"));
           if (!f) return bad("No such follow-up", 404);
@@ -301,6 +301,47 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (parent.level !== "portfolio" || (parent.tier ?? "feature") !== want) return bad(draft.level === "feature" ? "A draft feature goes under an epic" : "A draft story goes under a feature", 422);
         if (parent.stateCategory === "Completed" || parent.stateCategory === "Removed") return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
         return { ok: true, data: { draft: plan.setDraftParent(draft.id, parentItemId) } };
+      }
+      case "draft.update": {
+        // Step 15.3: the draft editor. Local only; Create in DevOps writes these values later.
+        const o = fields(input, ["id"], ["title", "description", "acceptance", "clientKey", "parentItemId", "size", "startDate", "targetDate"]);
+        const draft = plan.getDraft(id(o.id));
+        if (!draft || draft.devopsId) return bad("No such draft, or it is already in DevOps", 404);
+        const patch: DraftPatch = {};
+        if (o.title !== undefined) patch.title = text(o.title, "title");
+        const long = (v: unknown, name: string) => {
+          if (v === null || v === "") return null;
+          if (typeof v !== "string" || v.length > 8000) throw new Invalid(`${name} must be text of at most 8000 characters`);
+          return v.trim() || null;
+        };
+        if (o.description !== undefined) patch.description = long(o.description, "description");
+        if (o.acceptance !== undefined) {
+          if (draft.level !== "story" && o.acceptance) return bad("Acceptance criteria are for stories", 422);
+          patch.acceptance = long(o.acceptance, "acceptance");
+        }
+        if (o.size !== undefined) patch.size = size(o.size);
+        if (o.clientKey !== undefined) patch.clientKey = clientKey(o.clientKey);
+        for (const k of ["startDate", "targetDate"] as const) {
+          if (o[k] === undefined) continue;
+          if (draft.level !== "feature" && o[k]) return bad("Start and target dates are for features", 422);
+          patch[k] = o[k] === null || o[k] === "" ? null : date(o[k]);
+        }
+        const start = patch.startDate !== undefined ? patch.startDate : (draft.startDate ?? null);
+        const target = patch.targetDate !== undefined ? patch.targetDate : (draft.targetDate ?? null);
+        if (start && target && start > target) return bad("The start date is after the target date", 422);
+        if (o.parentItemId !== undefined && o.parentItemId !== null) {
+          const parentItemId = id(o.parentItemId, "parentItemId");
+          const key = patch.clientKey ?? draft.clientKey;
+          const cfg = await ctx.config();
+          if (!cfg) return bad("Fix the config first", 409);
+          const parent = ctx.devops(cfg).lookup(key, parentItemId);
+          if (!parent) return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${key}. Refresh and try again`, 409);
+          const want = draft.level === "feature" ? "epic" : "feature";
+          if (parent.level !== "portfolio" || (parent.tier ?? "feature") !== want) return bad(draft.level === "feature" ? "A draft feature goes under an epic" : "A draft story goes under a feature", 422);
+          if (parent.stateCategory === "Completed" || parent.stateCategory === "Removed") return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
+          patch.parentItemId = parentItemId;
+        } else if (o.parentItemId === null) patch.parentItemId = null;
+        return { ok: true, data: { draft: plan.updateDraft(draft.id, patch) } };
       }
       case "draft.remove": {
         const o = fields(input, ["id"]);

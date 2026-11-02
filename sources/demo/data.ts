@@ -209,8 +209,9 @@ export function demoPortfolio(k: DemoClientKey, fetchedAt: string): ClientPortfo
       targetDate: i.targetDate ?? null, assignedTo: i.assignedTo ?? null, mine: !!i.assignedToMe,
       why: i.assignedToMe ? ["assigned"] : ["parent"],
       children: all.filter((c) => c.parentId === i.id).map(child),
+      areaPath: client(k).project, iterationPath: `${client(k).project}\\Sprint 23`,
     }));
-  return { clientKey: k, clientName: client(k).name, status: "ok", fetchedAt, fromCache: false, items, targetFields: { Feature: "Microsoft.VSTS.Scheduling.TargetDate", Epic: "Microsoft.VSTS.Scheduling.TargetDate" }, sizeField: "Microsoft.VSTS.Scheduling.StoryPoints" };
+  return { clientKey: k, clientName: client(k).name, status: "ok", fetchedAt, fromCache: false, items, targetFields: { Feature: "Microsoft.VSTS.Scheduling.TargetDate", Epic: "Microsoft.VSTS.Scheduling.TargetDate" }, sizeField: "Microsoft.VSTS.Scheduling.StoryPoints", acceptanceField: true };
 }
 
 export const isDemoClient = (k: string): k is DemoClientKey => DEMO_CLIENTS.some((c) => c.key === k);
