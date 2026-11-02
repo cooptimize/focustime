@@ -95,7 +95,7 @@ describe("Done", () => {
 
 describe("mustsSummary", () => {
   it("reads client done/musts, skipping clients without musts", () => {
-    const names: Record<string, string> = { coop: "Cooptimize", wc: "W&C", csc: "CSC", q: "Quiddity" };
-    expect(mustsSummary([{ clientKey: "coop", musts: 2, done: 0 }, { clientKey: "wc", musts: 1, done: 0 }, { clientKey: "q", musts: 0, done: 0 }, { clientKey: "csc", musts: 1, done: 1 }], (k) => names[k]!)).toBe("Cooptimize 0/2 · W&C 0/1 · CSC 1/1");
+    const names: Record<string, string> = { coop: "Cooptimize", wc: "T&S", adatum: "Adatum", q: "Proseware" };
+    expect(mustsSummary([{ clientKey: "coop", musts: 2, done: 0 }, { clientKey: "wc", musts: 1, done: 0 }, { clientKey: "q", musts: 0, done: 0 }, { clientKey: "adatum", musts: 1, done: 1 }], (k) => names[k]!)).toBe("Cooptimize 0/2 · T&S 0/1 · Adatum 1/1");
   });
 });

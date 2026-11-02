@@ -1,4 +1,4 @@
-// Musts per client for a week (step 11): "CSC: 2 of 4 musts done" from DevOps state, local done marks and done picks,
+// Musts per client for a week (step 11): "Fabrikam: 2 of 4 musts done" from DevOps state, local done marks and done picks,
 // against the current list (not the original). In this week, the on-track question: musts left against the client's
 // blocks left, worded as a question. In Check-in, "Anything shifted?" swaps musts in or out in one click each.
 import { useContext, useState, type CSSProperties } from "react";

@@ -97,7 +97,7 @@ describe("demo mode (D272)", () => {
   it("writes nothing to disk: config, data and cache folders stay empty, and the real store is untouched", async () => {
     const realPath = join(dirs.data, "real", "plan.db");
     const real = createPlanStore({ path: realPath, now: () => Temporal.Now.zonedDateTimeISO("America/New_York") });
-    real.addPick({ date: "2026-11-02", half: "AM", clientKey: "CSC", kind: "intention", title: "Real work", size: "M" } as never);
+    real.addPick({ date: "2026-11-02", half: "AM", clientKey: "Adatum", kind: "intention", title: "Real work", size: "M" } as never);
     const before = JSON.stringify(real.picksBetween("2026-10-01", "2026-12-31"));
     real.close();
     const bytes = readFileSync(realPath);

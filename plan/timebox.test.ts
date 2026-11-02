@@ -33,10 +33,10 @@ describe("timebox capacity math", () => {
   it("a pick boxed in the afternoon counts nothing in the morning (its time is in the PM)", () => expect(plannedWithTimeboxes(picks, SIZES, [tb("13:00", "14:00", 1)], SLOT)).toBe(60));
 });
 
-const fields = outlookFields({ title: "#4512 Import mapping", url: "https://dev.azure.com/csc/p/_workitems/edit/4512", start: "2026-11-03T09:00:00-06:00", end: "2026-11-03T10:30:00-06:00" }, "CSC");
+const fields = outlookFields({ title: "#4512 Import mapping", url: "https://dev.azure.com/adatum/p/_workitems/edit/4512", start: "2026-11-03T09:00:00-06:00", end: "2026-11-03T10:30:00-06:00" }, "Adatum");
 describe("Outlook fields", () => {
   it("Busy, no reminder, '<client>: <title>', the DevOps link in the body, UTC times", () => {
-    expect(fields).toEqual({ subject: "CSC: #4512 Import mapping", body: "https://dev.azure.com/csc/p/_workitems/edit/4512\n\nTimebox planned in Coopilot.", start: "2026-11-03T15:00:00Z", end: "2026-11-03T16:30:00Z", showAs: "busy", reminder: false });
+    expect(fields).toEqual({ subject: "Adatum: #4512 Import mapping", body: "https://dev.azure.com/adatum/p/_workitems/edit/4512\n\nTimebox planned in Coopilot.", start: "2026-11-03T15:00:00Z", end: "2026-11-03T16:30:00Z", showAs: "busy", reminder: false });
   });
 });
 

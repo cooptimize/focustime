@@ -14,21 +14,21 @@ import { dispatch, type ActionContext } from "./dispatch.ts";
 const NOW = "2026-11-02T14:00:00Z";
 const base = STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"').replace('my_email = ""', 'my_email = "me@example.com"');
 const COOP = "Cooptimize";
-const CSC = "CSC";
+const Adatum = "Adatum";
 
 function setup(opts: { email?: string | null; acceptance?: boolean } = {}) {
   clearDevopsPreviews();
   const dv = fakeDevOpsWrite({ now: () => NOW, ...(opts.acceptance === false ? { acceptance: false } : {}) });
-  dv.add(437, { "System.WorkItemType": "Feature", "System.Title": "Need Features Here", "System.State": "Active", "System.AssignedTo": { uniqueName: "tanner@cooptimize.example" } });
-  dv.add(500, { "System.WorkItemType": "User Story", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: "tanner@cooptimize.example" } }, 437);
-  dv.add(600, { "System.WorkItemType": "Epic", "System.Title": "Platform", "System.State": "Active", "System.AssignedTo": { uniqueName: "tanner@cooptimize.example" } });
+  dv.add(437, { "System.WorkItemType": "Feature", "System.Title": "Need Features Here", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
+  dv.add(500, { "System.WorkItemType": "User Story", "System.Title": "Import mapping", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } }, 437);
+  dv.add(600, { "System.WorkItemType": "Epic", "System.Title": "Platform", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
   dv.add(601, { "System.WorkItemType": "Feature", "System.Title": "Dana's feature", "System.State": "Active", "System.AssignedTo": { uniqueName: "dana@cooptimize.example" } }, 600);
   const logs: unknown[] = [];
   const writer = createDevOpsWriter({ fetch: dv.fetch, log: (e) => void logs.push(e) });
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
   const keyring = new Map<string, string>();
   const targetCalls: { keys: string[]; withPat: boolean | undefined }[] = [];
-  const target = (clientKey: string, org: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org, project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: clientKey === COOP ? (opts.email === undefined ? "tanner@cooptimize.example" : opts.email) : "tanner@csc.example", pat: withPat ? new Pat(COMPANY_PAT) : null });
+  const target = (clientKey: string, org: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org, project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: clientKey === COOP ? (opts.email === undefined ? "avery@cooptimize.example" : opts.email) : "avery@adatum.example", pat: withPat ? new Pat(COMPANY_PAT) : null });
   const forgotten: string[] = [];
   const waits: number[] = [];
   const c: ActionContext = {
@@ -37,7 +37,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean } = {}) {
       devopsTargets: async (keys: string[], o: { withPat?: boolean } = {}) => {
         targetCalls.push({ keys, withPat: o.withPat });
         const withPat = o.withPat !== false;
-        return { ok: true, targets: keys.map((k) => target(k, k === COOP ? "cooptimize" : "cscorg", withPat)) };
+        return { ok: true, targets: keys.map((k) => target(k, k === COOP ? "cooptimize" : "adatumorg", withPat)) };
       },
     }) as never,
     makeOutlook: () => { throw new Error("n/a"); },
@@ -91,8 +91,8 @@ describe("pure request shapes", () => {
   it("identity: anonymous or unshaped is null; match ignores case", () => {
     expect(identityFrom({ authenticatedUser: { id: "aa442b8a-0cd8-4c3e-a0b5-9b0f84d5f0bc", properties: { Account: { $value: "a@b" } } } })).toBeNull();
     expect(identityFrom({})).toBeNull();
-    expect(identityMatches({ id: "1", name: "T", email: "Tanner@X.com" }, "tanner@x.com")).toBe(true);
-    expect(identityMatches({ id: "1", name: "T", email: "tanner@x.org" }, "tanner@x.com")).toBe(false);
+    expect(identityMatches({ id: "1", name: "T", email: "Avery@X.com" }, "avery@x.com")).toBe(true);
+    expect(identityMatches({ id: "1", name: "T", email: "avery@x.org" }, "avery@x.com")).toBe(false);
     expect(identityMatches(null, "a@b")).toBe(false);
   });
   it("URLs are checked against the org host", () => {
@@ -113,7 +113,7 @@ describe("write identity", () => {
   beforeEach(() => (s = setup()));
   it("checks the PAT with a read-only call and keeps it only when it is my identity for that client", async () => {
     const r = await s.enable() as { write: { name: string; email: string } };
-    expect(r.write).toMatchObject({ name: "Sam Tester", email: "tanner@cooptimize.example" });
+    expect(r.write).toMatchObject({ name: "Sam Tester", email: "avery@cooptimize.example" });
     expect(s.keyring.get(COOP)).toBe(WRITE_PAT);
     expect(s.dv.seen.map((x) => `${x.method} ${new URL(x.url).pathname}`)).toEqual(["GET /cooptimize/_apis/connectionData"]);
     expect(JSON.stringify(r)).not.toContain(WRITE_PAT);
@@ -168,7 +168,7 @@ describe("each write", () => {
   });
   it("state: preview names org, project, item, before and after, identity and visibility; confirm sends the rev test and reads back", async () => {
     const p = await s.preview({ kind: "state", itemId: 500, state: "Closed", comment: "Shipped" });
-    expect(p).toMatchObject({ system: "DevOps", org: "cooptimize", project: "Cooptimize Project", item: "#500 Import mapping", identity: "Sam Tester <tanner@cooptimize.example>" });
+    expect(p).toMatchObject({ system: "DevOps", org: "cooptimize", project: "Cooptimize Project", item: "#500 Import mapping", identity: "Sam Tester <avery@cooptimize.example>" });
     expect(p.fields).toContainEqual({ label: "State", before: "Active", after: "Closed", changed: true });
     expect(p.visibility).toContain("Visible to everyone");
     expect(s.dv.writes()).toHaveLength(0);
@@ -211,7 +211,7 @@ describe("each write", () => {
     const post = s.dv.writes().find((w) => w.method === "POST")!;
     expect(new URL(post.url).pathname).toBe("/cooptimize/Cooptimize%20Project/_apis/wit/workitems/$User%20Story");
     const ops = post.body as { path: string; value: unknown }[];
-    expect(ops).toContainEqual({ op: "add", path: "/fields/System.AssignedTo", value: "tanner@cooptimize.example" });
+    expect(ops).toContainEqual({ op: "add", path: "/fields/System.AssignedTo", value: "avery@cooptimize.example" });
     expect(ops).toContainEqual({ op: "add", path: "/fields/System.AreaPath", value: "Cooptimize\\Ops" });
     expect(ops).toContainEqual({ op: "add", path: "/fields/System.IterationPath", value: "Cooptimize\\Sprint 9" });
     expect(ops.find((o) => o.path === "/relations/-")!.value).toEqual({ rel: "System.LinkTypes.Hierarchy-Reverse", url: "https://dev.azure.com/cooptimize/_apis/wit/workItems/437" });
@@ -286,10 +286,10 @@ describe("guardrails", () => {
   });
   it("client isolation: a client without its own write PAT can't be written, and Cooptimize's PAT never goes to its org", async () => {
     s.dv.seen.length = 0;
-    expect(await s.fail("devops.preview", { clientKey: CSC, change: { kind: "state", itemId: 500, state: "Closed" } })).toMatchObject({ code: "no_write_pat" });
+    expect(await s.fail("devops.preview", { clientKey: Adatum, change: { kind: "state", itemId: 500, state: "Closed" } })).toMatchObject({ code: "no_write_pat" });
     expect(s.dv.seen).toHaveLength(0);
     const r = await s.write({ kind: "comment", itemId: 500, text: "x" });
-    expect(await s.fail("devops.preview", { clientKey: CSC, change: { kind: "undo", writeId: r.entry.id } })).toMatchObject({ code: "no_write_pat" });
+    expect(await s.fail("devops.preview", { clientKey: Adatum, change: { kind: "undo", writeId: r.entry.id } })).toMatchObject({ code: "no_write_pat" });
     // Every request went to Cooptimize's own org.
     expect(s.dv.seen.every((x) => new URL(x.url).pathname.startsWith("/cooptimize/"))).toBe(true);
   });

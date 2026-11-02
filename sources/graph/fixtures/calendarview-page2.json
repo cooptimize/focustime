@@ -4,7 +4,7 @@
     {
       "@odata.etag": "W/\"DwAAABYAAAB1\"",
       "id": "AAMkAGFAKE006",
-      "subject": "Canceled: CSC sync",
+      "subject": "Canceled: Adatum sync",
       "isAllDay": false,
       "isCancelled": true,
       "showAs": "free",
@@ -37,7 +37,7 @@
     {
       "@odata.etag": "W/\"DwAAABYAAAB4\"",
       "id": "AAMkAGFAKE009",
-      "subject": "Quiddity stakeholder sync",
+      "subject": "Proseware stakeholder sync",
       "isAllDay": false,
       "isCancelled": false,
       "showAs": "busy",

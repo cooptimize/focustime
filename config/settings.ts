@@ -37,7 +37,7 @@ const int = (v: unknown, field: string): number => {
   return v;
 };
 
-/** Client keys may be any Dataverse nickname ("W&C"); TOML quotes them. */
+/** Client keys may be any Dataverse nickname ("A&B"); TOML quotes them. */
 const clientKey = (v: unknown) => {
   const k = str(v, "key", 100);
   if (!k) throw new SettingsInputError("key", "Missing client");

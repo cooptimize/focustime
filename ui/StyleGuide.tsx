@@ -21,7 +21,7 @@ const NOW = "2026-11-02T10:10:00-05:00";
 const model = legacyHours({ start: "09:00", split: "12:30", end: "17:00", timeZone: NY });
 model.weekdays.tue = [{ start: "09:00", end: "16:00" }, { start: "20:00", end: "22:00" }];
 model.lunch = { start: "12:00", end: "12:30" };
-const flex: FlexSession = { id: 1, clientKey: "csc", start: "2026-11-02T19:00:00-05:00", end: "2026-11-02T21:00:00-05:00", itemId: null, itemTitle: null, itemUrl: null, note: "Finish the import mapping" };
+const flex: FlexSession = { id: 1, clientKey: "adatum", start: "2026-11-02T19:00:00-05:00", end: "2026-11-02T21:00:00-05:00", itemId: null, itemTitle: null, itemUrl: null, note: "Finish the import mapping" };
 const week = buildWeek({
   weekStart: SAMPLE_WEEK,
   patterns: samplePatterns,
@@ -31,7 +31,7 @@ const week = buildWeek({
   unavailable: [{ id: 1, title: "Unavailable", start: "2026-11-04T14:00:00-05:00", end: "2026-11-04T15:30:00-05:00", note: null }],
   flex: [flex],
 });
-const colors = { quiddity: "var(--client-violet)", csc: "var(--client-ochre)", internal: "var(--client-slate)", wc: "var(--client-teal)" };
+const colors = { proseware: "var(--client-violet)", adatum: "var(--client-ochre)", internal: "var(--client-slate)", wc: "var(--client-teal)" };
 
 let n = 0;
 const pick = (half: Pick["half"], clientKey: string, title: string, size: Pick["size"], status: Pick["status"] = "planned"): Pick => ({
@@ -41,7 +41,7 @@ const pick = (half: Pick["half"], clientKey: string, title: string, size: Pick["
 const plan: PlanWeek = {
   [SAMPLE_WEEK]: {
     committedAt: "2026-11-02T08:40:00-05:00[America/New_York]",
-    picks: [pick("AM", "quiddity", "Review the intake form", "S", "done"), pick("AM", "quiddity", "Draft the release notes", "L"), pick("PM", "csc", "Pair on the import job", "M")],
+    picks: [pick("AM", "proseware", "Review the intake form", "S", "done"), pick("AM", "proseware", "Draft the release notes", "L"), pick("PM", "adatum", "Pair on the import job", "M")],
   },
 };
 
@@ -54,13 +54,13 @@ const sources: SourceSummary[] = [
   { source: "google", status: "unreachable", fetchedAt: "2026-11-02T08:00:00-05:00", fromCache: true, itemCount: 3, sample: true, message: "Could not reach Google. Showing data from 8:00 AM", cause: "network" },
 ];
 
-const base: Strip = { kind: "slot", half: "AM", title: "Quiddity focus", until: "12:00", untilMinutes: 110, event: { title: "Design review", at: "11:00", minutes: 50, now: false }, picks: { done: 1, total: 3 }, overBy: 95, nextPick: "Draft the release notes", next: null, flex: false, draft: false };
+const base: Strip = { kind: "slot", half: "AM", title: "Proseware focus", until: "12:00", untilMinutes: 110, event: { title: "Design review", at: "11:00", minutes: 50, now: false }, picks: { done: 1, total: 3 }, overBy: 95, nextPick: "Draft the release notes", next: null, flex: false, draft: false };
 const strips: [string, Strip][] = [
   ["In a block, over by", base],
   ["Before work", { ...base, kind: "before", title: "Work starts", until: "09:00", untilMinutes: 30, overBy: null, event: null }],
   ["Not committed yet", { ...base, draft: true, overBy: null, picks: { done: 0, total: 3 } }],
   ["In a meeting", { ...base, event: { title: "Standup", at: "10:30", minutes: 20, now: true }, overBy: null }],
-  ["Flex session", { ...base, half: "EVE", title: "Flex session: CSC", until: "21:00", flex: true, event: null, overBy: null, nextPick: "Finish the import mapping" }],
+  ["Flex session", { ...base, half: "EVE", title: "Flex session: Adatum", until: "21:00", flex: true, event: null, overBy: null, nextPick: "Finish the import mapping" }],
   ["PTO", { ...base, kind: "pto", half: null, title: "PTO today", until: null, event: null, picks: null, overBy: null, nextPick: null, next: "2026-11-09" }],
   ["No work today", { ...base, kind: "off", half: null, title: "No work today", until: null, event: null, picks: null, overBy: null, nextPick: null, next: "2026-11-09" }],
 ];
@@ -285,7 +285,7 @@ export function StyleGuide() {
           {timers.map(([label, t]) => (
             <div key={label} className="sg-strip">
               <span className="muted">{label}</span>
-              <TopTimer t={t} nowMs={Date.parse(NOW)} color="var(--accent)" client="W&C" onClick={noop} />
+              <TopTimer t={t} nowMs={Date.parse(NOW)} color="var(--accent)" client="T&S" onClick={noop} />
             </div>
           ))}
         </div>

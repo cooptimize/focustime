@@ -383,7 +383,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
           clientKey: key,
           clientName: key,
           org: row.coop_devopsorg?.trim() || null,
-          // Name first: it is set on every account, while some stored project IDs are blank or stale (CSC's is wrong).
+          // Name first: it is set on every account, while some stored project IDs are blank or stale (one client's is wrong).
           project: row.coop_devopsprojectname?.trim() || row.coop_devopsprojectid?.trim() || null,
           projectName: row.coop_devopsprojectname?.trim() || null,
           email: emailByAccount.get(row.accountid.toLowerCase()) ?? null,

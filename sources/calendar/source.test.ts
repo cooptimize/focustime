@@ -60,9 +60,9 @@ describe("Outlook source requests", () => {
     const { source } = setup("outlook", "ok");
     const titles = (await source.load(WEEK)).items.map((e) => e.title);
     expect(titles).toContain("Out of office");
-    expect(titles).toContain("Quiddity stakeholder sync");
+    expect(titles).toContain("Proseware stakeholder sync");
     expect(titles).not.toContain("Vendor webinar");
-    expect(titles).not.toContain("Canceled: CSC sync");
+    expect(titles).not.toContain("Canceled: Adatum sync");
   });
 });
 

@@ -42,18 +42,18 @@ const json = (status: number, body: unknown) =>
 const leakyError = (status: number, code: string) =>
   json(status, { error: { code, message: `Echo: Authorization: Bearer ${FAKE_TOKEN} secret=${FAKE_SECRET}` } });
 
-export const FAKE_PAT_CSC = "FAKE-DV-PAT-CSC-0d9e";
+export const FAKE_PAT_Adatum = "FAKE-DV-PAT-Adatum-0d9e";
 export const FAKE_PAT_WC = "FAKE-DV-PAT-WC-41aa";
-export const ACCT = { csc: "a0000000-0000-4000-8000-00000000c5c0", wc: "a0000000-0000-4000-8000-0000000000dc", hme: "a0000000-0000-4000-8000-000000000e1e" };
+export const ACCT = { adatum: "a0000000-0000-4000-8000-00000000c5c0", wc: "a0000000-0000-4000-8000-0000000000dc", hme: "a0000000-0000-4000-8000-000000000e1e" };
 export const accountWorkers = {
   value: [
-    { _coop_account_value: ACCT.csc, coop_devopsemail: "me@contoso.example" },
+    { _coop_account_value: ACCT.adatum, coop_devopsemail: "me@contoso.example" },
     { _coop_account_value: ACCT.wc, coop_devopsemail: null },
     { _coop_account_value: ACCT.hme, coop_devopsemail: "c.someone@hme.example" },
   ],
 };
 /**
- * W&C focus time for me that starts the week after the test week (Nov 9), so the fixture weeks are unchanged.
+ * T&S focus time for me that starts the week after the test week (Nov 9), so the fixture weeks are unchanged.
  * Returned only when the query's dates include it, as Dataverse would: the following read (step 6d) sees it, a
  * week read for Nov 2 doesn't.
  */
@@ -63,11 +63,11 @@ export const WC_FOCUS = {
   coop_mondaydaypart: null, coop_tuesdaydaypart: 2, coop_wednesdaydaypart: null, coop_thursdaydaypart: null, statecode: 0,
   coop_AccountWorker: { _coop_user_value: ME, _coop_account_value: ACCT.wc, coop_accountworkerid: "a0000000-0000-4000-8000-000000000009" },
 };
-const WC_ACCOUNT = { accountid: ACCT.wc, name: "Woodard and Curran", coop_reportingnickname: "W&C" };
+const WC_ACCOUNT = { accountid: ACCT.wc, name: "Tailspin & Sons", coop_reportingnickname: "T&S" };
 export const devopsAccounts = {
   value: [
-    { accountid: ACCT.csc, name: "CSC Example Corp", coop_reportingnickname: "CSC", coop_devopsorg: "contoso", coop_devopsprojectid: "11111111-2222-4333-8444-555555555555", coop_devopsprojectname: "Project Ada", coop_devopstoken: FAKE_PAT_CSC },
-    { accountid: ACCT.wc, name: "Woodard and Curran", coop_reportingnickname: "W&C", coop_devopsorg: "cooptimize", coop_devopsprojectid: null, coop_devopsprojectname: "WC Project", coop_devopstoken: FAKE_PAT_WC },
+    { accountid: ACCT.adatum, name: "Adatum Example Corp", coop_reportingnickname: "Adatum", coop_devopsorg: "contoso", coop_devopsprojectid: "11111111-2222-4333-8444-555555555555", coop_devopsprojectname: "Project Ada", coop_devopstoken: FAKE_PAT_Adatum },
+    { accountid: ACCT.wc, name: "Tailspin & Sons", coop_reportingnickname: "T&S", coop_devopsorg: "cooptimize", coop_devopsprojectid: null, coop_devopsprojectname: "WC Project", coop_devopstoken: FAKE_PAT_WC },
     { accountid: ACCT.hme, name: "HM Electronics", coop_reportingnickname: null, coop_devopsorg: "hme", coop_devopsprojectid: null, coop_devopsprojectname: "DW", coop_devopstoken: "FAKE-DV-PAT-HME-UNNEEDED" },
   ],
 };

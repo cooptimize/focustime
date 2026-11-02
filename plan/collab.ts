@@ -253,7 +253,7 @@ export function suggestSlots(o: SuggestInput): Slot[] {
 
 // ---------- the invite ----------
 
-/** "W&C: help on #4512 Import mapping", the DevOps link and an optional note, the chosen people, Teams or not. */
+/** "Fabrikam: help on #4512 Import mapping", the DevOps link and an optional note, the chosen people, Teams or not. */
 export function inviteFields(o: { clientName: string; itemTitle: string; url: string | null; note: string | null; start: string; end: string; people: readonly Attendee[]; teams: boolean }): Fields {
   return {
     subject: `${o.clientName}: help on ${o.itemTitle}`.slice(0, 255),

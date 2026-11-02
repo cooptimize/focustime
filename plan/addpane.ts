@@ -97,7 +97,7 @@ export function addSections<R extends Ref, F extends FollowLike>(i: AddInput<R, 
 /** What Done does: the first one commits the day (heads-up rules start from it), later ones only close. */
 export const doneAction = (committedAt: string | null): "commit" | "close" => (committedAt ? "close" : "commit");
 
-/** The context line's musts: "Cooptimize 0/2 · W&C 0/1", clients with musts only. */
+/** The context line's musts: "Cooptimize 0/2 · Fabrikam 0/1", clients with musts only. */
 export function mustsSummary(rows: readonly Pick<Progress, "clientKey" | "musts" | "done">[], name: (clientKey: string) => string): string {
   return rows
     .filter((r) => r.musts > 0)

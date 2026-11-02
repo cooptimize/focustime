@@ -3,11 +3,11 @@ import { buildWeek } from "./build.ts";
 import { allDayPersonal, meeting, noStanding, pattern, personal } from "./test-helpers.ts";
 import type { CalEvent, Risk } from "./types.ts";
 
-// Tue Nov 3, 2026: CSC all day. AM is 09:00-12:30 (210 min), PM is 12:30-17:00 (270 min).
-const csc = pattern({ clientKey: "csc", clientName: "CSC", days: { Tue: "AllDay" } });
+// Tue Nov 3, 2026: Adatum all day. AM is 09:00-12:30 (210 min), PM is 12:30-17:00 (270 min).
+const adatum = pattern({ clientKey: "adatum", clientName: "Adatum", days: { Tue: "AllDay" } });
 
 function risks(events: CalEvent[], half: "AM" | "PM"): Risk[] {
-  const w = buildWeek({ weekStart: "2026-11-02", patterns: [csc], events, config: noStanding });
+  const w = buildWeek({ weekStart: "2026-11-02", patterns: [adatum], events, config: noStanding });
   const day = w.days[1]!;
   return (half === "AM" ? day.am : day.pm).risks;
 }
@@ -28,7 +28,7 @@ describe("rule 1: meeting load", () => {
 
   it("names the time and the block in the reason", () => {
     const [r] = risks([meeting(T("12:30"), T("14:00"))], "PM");
-    expect(r?.reason).toBe("1h 30m of meetings inside the CSC block");
+    expect(r?.reason).toBe("1h 30m of meetings inside the Adatum block");
   });
 
   it("counts overlapping meetings once", () => {
@@ -58,7 +58,7 @@ describe("rule 1: meeting load", () => {
       "PM",
     );
     expect(summary(rs)).toEqual(["meeting_load:at_risk", "no_focus_window:at_risk"]);
-    expect(rs[0]?.reason).toBe("3h 15m of meetings inside the CSC block");
+    expect(rs[0]?.reason).toBe("3h 15m of meetings inside the Adatum block");
   });
 });
 
@@ -66,7 +66,7 @@ describe("rule 2: personal conflict", () => {
   it("flags a timed personal event inside the block as at risk with its time", () => {
     const rs = risks([personal(T("15:30"), T("16:00"), { title: "School pickup" })], "PM");
     expect(summary(rs)).toEqual(["personal_conflict:at_risk"]);
-    expect(rs[0]?.reason).toBe("School pickup 3:30–4:00 PM overlaps the CSC block");
+    expect(rs[0]?.reason).toBe("School pickup 3:30–4:00 PM overlaps the Adatum block");
   });
 
   it("does not flag an event that ends exactly when the block starts", () => {
@@ -94,7 +94,7 @@ describe("rule 2: personal conflict", () => {
 
   it("formats a range across noon with both meridiems", () => {
     const [r] = risks([personal(T("11:30"), T("12:15"), { title: "Dentist" })], "AM");
-    expect(r?.reason).toBe("Dentist 11:30 AM–12:15 PM overlaps the CSC block");
+    expect(r?.reason).toBe("Dentist 11:30 AM–12:15 PM overlaps the Adatum block");
   });
 });
 
@@ -103,7 +103,7 @@ describe("rule 3: no focus window", () => {
     // AM gaps: 9:00-10:00 (60), 10:30-11:30 (60), 12:00-12:30 (30)
     const rs = risks([meeting(T("10:00"), T("10:30")), meeting(T("11:30"), T("12:00"))], "AM");
     expect(summary(rs)).toEqual(["no_focus_window:at_risk"]);
-    expect(rs[0]?.reason).toBe("Longest free stretch is 1h, under 1h 30m, in the CSC block");
+    expect(rs[0]?.reason).toBe("Longest free stretch is 1h, under 1h 30m, in the Adatum block");
   });
 
   it("accepts a free stretch of exactly 90 minutes", () => {
@@ -142,14 +142,14 @@ describe("Outlook out of office and all-day events (Q7)", () => {
     const evs = [allDayOutlook("Vacation", "oof")];
     expect(summary(risks(evs, "AM"))).toEqual(["out_of_office:at_risk"]);
     expect(summary(risks(evs, "PM"))).toEqual(["out_of_office:at_risk"]);
-    expect(risks(evs, "AM")[0]?.reason).toBe("Out of office (Vacation) covers the CSC block");
+    expect(risks(evs, "AM")[0]?.reason).toBe("Out of office (Vacation) covers the Adatum block");
   });
 
   it("puts only the overlapped half at risk for a timed out-of-office event", () => {
     const evs = [meeting(T("13:00"), T("14:00"), { title: "Doctor", showAs: "oof" })];
     expect(summary(risks(evs, "AM"))).toEqual([]);
     expect(summary(risks(evs, "PM"))).toContain("out_of_office:at_risk");
-    expect(risks(evs, "PM").find((r) => r.rule === "out_of_office")?.reason).toBe("Out of office (Doctor) 1:00–2:00 PM overlaps the CSC block");
+    expect(risks(evs, "PM").find((r) => r.rule === "out_of_office")?.reason).toBe("Out of office (Doctor) 1:00–2:00 PM overlaps the Adatum block");
   });
 
   it("flags an all-day busy Outlook event as watch", () => {

@@ -21,8 +21,8 @@ describe("config text edits keep the file readable", () => {
     expect(setValue("[risk]\nx = 1\n", "ui", "theme", "neutral", "Display")).toBe("[risk]\nx = 1\n\n# Display\n[ui]\ntheme = \"neutral\"\n");
   });
   it("quotes keys and escapes strings so the result parses back to the same values", () => {
-    const t = setValue("[clients]\n", "clients", "W&C", 'say "hi"\\now');
-    expect(t).toContain('"W&C" = "say \\"hi\\"\\\\now"');
+    const t = setValue("[clients]\n", "clients", "T&S", 'say "hi"\\now');
+    expect(t).toContain('"T&S" = "say \\"hi\\"\\\\now"');
     expect(tomlValue({ start: "09:00", list: [1, true] })).toBe('{ start = "09:00", list = [1, true] }');
   });
   it("removes a key, replaces a section body and replaces array tables", () => {

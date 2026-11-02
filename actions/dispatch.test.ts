@@ -40,7 +40,7 @@ describe("action dispatcher", () => {
     const r = await dispatch(ctx("ok"), { action: "week.load", input: { weekStart: "2026-11-02" } });
     if (!r.ok) throw new Error(r.error);
     const data = r.data as { week: { days: { am: { focus: { clientName: string }[] } }[] }; sources: { source: string; status: string; sample?: boolean; itemCount: number }[] };
-    expect(data.week.days[0]!.am.focus.map((f) => f.clientName)).toEqual(["Quiddity", "Cooptimize"]);
+    expect(data.week.days[0]!.am.focus.map((f) => f.clientName)).toEqual(["Proseware", "Cooptimize"]);
     expect(data.sources.map((s) => [s.source, s.status, Boolean(s.sample)])).toEqual([
       ["dataverse", "ok", false],
       ["pto", "ok", false],

@@ -15,7 +15,7 @@ export function pattern(over: Partial<FocusPattern> & Pick<FocusPattern, "days">
   return {
     id: "p1",
     clientKey: "wc",
-    clientName: "Woodard & Curran",
+    clientName: "Tailspin & Sons",
     startDate: "2026-01-05",
     endDate: null,
     active: true,

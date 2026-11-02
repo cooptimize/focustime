@@ -121,7 +121,7 @@ export function progress<T extends Pick<ListItem, "clientKey" | "tier" | "blocks
   return [...out.values()];
 }
 
-/** "CSC: 2 of 4 musts done". */
+/** "Fabrikam: 2 of 4 musts done". */
 export const progressLabel = (p: Pick<Progress, "musts" | "done">) => (p.musts ? `${p.done} of ${p.musts} must${p.musts === 1 ? "" : "s"} done` : "No musts");
 
 /** A block's free share still ahead of `now`: whole when it hasn't started, the part left when under way. */

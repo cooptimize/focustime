@@ -7,10 +7,10 @@ const cw = (clientKey: string, ids: number[], over: Partial<ClientWork> = {}): C
 
 describe("work shown on a block", () => {
   it("looks up only the block's own client, by exact key", () => {
-    const m = workByClient([cw("CSC", [1, 2]), cw("W&C", [3])]);
-    expect(m.get("CSC")?.items.map((i) => i.id)).toEqual([1, 2]);
-    expect(m.get("csc")).toBeUndefined();
-    expect(m.get("Quiddity")).toBeUndefined();
+    const m = workByClient([cw("Adatum", [1, 2]), cw("T&S", [3])]);
+    expect(m.get("Adatum")?.items.map((i) => i.id)).toEqual([1, 2]);
+    expect(m.get("adatum")).toBeUndefined();
+    expect(m.get("Proseware")).toBeUndefined();
   });
 
   it("top 3 in board order plus +N more", () => {

@@ -45,6 +45,18 @@ describe("timeChoices: + time and the editor's gap list", () => {
     const g = c.find((x) => x.kind === "gap" && hm(x.start) === "09:30")!;
     expect(hm(g.end)).toBe("10:15");
   });
+  it("never offers a gap shorter than the pick's shortest useful time, and never trims below it (step 16, D285)", () => {
+    // Free 8:00–9:00 (60m) and 9:30–12:00 (150m), with a timebox at 8:00–8:15: 8:15–9:00 is 45m.
+    const busy = [tb(2, "08:00", "08:15")];
+    const M = timeChoices(am, busy, { id: 7, size: "M" }, SIZES, undefined, { S: 30, M: 60, L: 90 });
+    expect(M.map((x) => [hm(x.start), hm(x.end), x.trimmed])).toEqual([["09:30", "11:00", false]]);
+    // An S pick (30m minimum) still gets the 45 minute gap.
+    const S = timeChoices(am, busy, { id: 7, size: "S" }, SIZES, undefined, { S: 30, M: 60, L: 90 });
+    expect(S.map((x) => hm(x.start))).toEqual(["08:15", "09:30"]);
+    // An L pick (180m, minimum 90) is trimmed to the 150 minute gap, not offered the 45 minute one.
+    const L = timeChoices(am, busy, { id: 7, size: "L" }, SIZES, undefined, { S: 30, M: 60, L: 90 });
+    expect(L.map((x) => [hm(x.start), hm(x.end), x.trimmed])).toEqual([["09:30", "12:00", true]]);
+  });
   it("from now on today", () => {
     const c = timeChoices(am, [], { id: 7, size: "S" }, SIZES, T("10:05"));
     expect(c.map((x) => hm(x.start))).toEqual(["10:05"]);

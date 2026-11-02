@@ -13,8 +13,8 @@ describe("sample week fixture", () => {
   it("has the four ongoing patterns in their half-days, Thu PM Open", () => {
     const shown = slots.filter((s) => s.focus.length).map((s) => `${s.date.slice(8)} ${s.half} ${s.focus[0]!.clientName}`);
     expect(shown).toEqual([
-      "02 AM Quiddity", "02 PM CSC", "03 AM Internal", "03 PM CSC",
-      "04 AM Woodard & Curran", "04 PM Woodard & Curran", "05 AM Woodard & Curran",
+      "02 AM Proseware", "02 PM Adatum", "03 AM Internal", "03 PM Adatum",
+      "04 AM Tailspin & Sons", "04 PM Tailspin & Sons", "05 AM Tailspin & Sons",
     ]);
     expect(slots.filter((s) => s.open).map((s) => `${s.date} ${s.half}`)).toEqual(["2026-11-05 PM"]);
   });

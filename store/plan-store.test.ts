@@ -12,7 +12,7 @@ const fresh = () => {
   const path = join(mkdtempSync(join(tmpdir(), "coopilot-plan-")), "data", "plan.db");
   return { path, store: createPlanStore({ path, now }) };
 };
-const item = { half: "AM" as const, clientKey: "CSC", kind: "item" as const, itemId: 101, title: "Story", itemType: "User Story", itemUrl: "https://dev.azure.com/x/y/_workitems/edit/101", size: "M" as const };
+const item = { half: "AM" as const, clientKey: "Adatum", kind: "item" as const, itemId: 101, title: "Story", itemType: "User Story", itemUrl: "https://dev.azure.com/x/y/_workitems/edit/101", size: "M" as const };
 
 describe("plan store", () => {
   it("migrates from empty, creates a private file, and records the schema version", () => {
@@ -38,8 +38,8 @@ describe("plan store", () => {
     old.exec("INSERT INTO schema_migrations VALUES (1, 'x'), (2, 'x')");
     old.exec("INSERT INTO day_plans VALUES ('2026-10-29', '2026-10-29T08:00:00-04:00[America/New_York]', 'x', 'x')");
     old.exec(`INSERT INTO picks (id, date, half, client_key, kind, item_id, title, size, status, position, created_at, updated_at)
-              VALUES (1, '2026-10-29', 'AM', 'CSC', 'item', 101, 'Story', 'M', 'done', 0, 'x', 'x'),
-                     (2, '2026-10-29', 'PM', 'CSC', 'intention', NULL, 'Review', 'S', 'planned', 0, 'x', 'x')`);
+              VALUES (1, '2026-10-29', 'AM', 'Adatum', 'item', 101, 'Story', 'M', 'done', 0, 'x', 'x'),
+                     (2, '2026-10-29', 'PM', 'Adatum', 'intention', NULL, 'Review', 'S', 'planned', 0, 'x', 'x')`);
     old.exec("UPDATE picks SET carried_from = 1 WHERE id = 2");
     old.close();
 
@@ -67,7 +67,7 @@ describe("plan store", () => {
     const { store } = fresh();
     const u = store.addUnavailable({ date: "2026-11-03", title: "Dentist", start: "2026-11-03T19:00:00Z", end: "2026-11-03T20:00:00Z" });
     expect(store.unavailableBetween("2026-11-02", "2026-11-08").map((x) => x.id)).toEqual([u.id]);
-    const f = store.addFlex({ date: "2026-11-07", clientKey: "CSC", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z", itemId: 101 });
+    const f = store.addFlex({ date: "2026-11-07", clientKey: "Adatum", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z", itemId: 101 });
     expect(store.flexBetween("2026-11-07", "2026-11-07").map((x) => x.itemId)).toEqual([101]);
     store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T16:00:00Z"));
     expect(store.openFollowUps()).toEqual([]);
@@ -75,8 +75,8 @@ describe("plan store", () => {
     store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T18:00:00Z"));
     const followUps = store.openFollowUps();
     expect(followUps).toHaveLength(1);
-    expect(followUps[0]).toMatchObject({ clientKey: "CSC", sourceKind: "flex", sourceId: f.id });
-    expect(followUps[0]!.what).toMatch(/update to CSC/);
+    expect(followUps[0]).toMatchObject({ clientKey: "Adatum", sourceKind: "flex", sourceId: f.id });
+    expect(followUps[0]!.what).toMatch(/update to Adatum/);
     expect(() => store.removeFlex(f.id)).toThrow();
     expect(store.removeUnavailable(u.id)).toBe(true);
   });
@@ -120,7 +120,7 @@ describe("plan store", () => {
   it("enforces the shape of a pick in the schema too", () => {
     const { store } = fresh();
     expect(() => store.addPick({ date: "2026-11-02", ...item, size: "XL" as never })).toThrow();
-    expect(() => store.addPick({ date: "2026-11-02", half: "AM", clientKey: "CSC", kind: "item", title: "no id", size: "M" })).toThrow();
+    expect(() => store.addPick({ date: "2026-11-02", half: "AM", clientKey: "Adatum", kind: "item", title: "no id", size: "M" })).toThrow();
   });
 
   it("moving to another day carries the pick and settles the original; same day just changes block", () => {
@@ -176,7 +176,7 @@ describe("plan store", () => {
   it("exports everything to JSON", () => {
     const { store } = fresh();
     store.addPick({ date: "2026-11-02", ...item });
-    store.addDraft({ clientKey: "CSC", parentItemId: 130, title: "Split the feature", size: "S" });
+    store.addDraft({ clientKey: "Adatum", parentItemId: 130, title: "Split the feature", size: "S" });
     store.commit("2026-11-02");
     const out = JSON.parse(JSON.stringify(store.exportJson()));
     expect(out.schemaVersion).toBe(MIGRATIONS.length);
@@ -196,7 +196,7 @@ describe("plan store", () => {
 describe("step 6c: follow-ups, timer state, focused time and reset", () => {
   it("closes a follow-up by hand with a note, once", () => {
     const { store } = fresh();
-    const f = store.addFlex({ date: "2026-11-07", clientKey: "CSC", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z" });
+    const f = store.addFlex({ date: "2026-11-07", clientKey: "Adatum", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z" });
     const [followUp] = store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T18:00:00Z"));
     expect(followUp?.sourceId).toBe(f.id);
     const closed = store.closeFollowUp(followUp!.id, "Posted in Teams");
@@ -242,12 +242,12 @@ describe("step 6c: follow-ups, timer state, focused time and reset", () => {
 
 describe("week plan (step 8)", () => {
   const W = "2026-11-09";
-  const f = { weekStart: W, clientKey: "CSC", itemId: 210, title: "Dana's feature", itemType: "Feature", url: "https://dev.azure.com/x/y/_workitems/edit/210" };
+  const f = { weekStart: W, clientKey: "Adatum", itemId: 210, title: "Dana's feature", itemType: "Feature", url: "https://dev.azure.com/x/y/_workitems/edit/210" };
   it("commits features to a week by a number of blocks; 0 blocks takes it off", () => {
     const { store } = fresh();
     expect(store.weekPlan(W)).toEqual({ weekStart: W, committedAt: null, updatedAt: null, features: [] });
     const a = store.setWeekFeature({ ...f, blocks: 2 });
-    expect(a).toMatchObject({ clientKey: "CSC", itemId: 210, blocks: 2, slots: [] });
+    expect(a).toMatchObject({ clientKey: "Adatum", itemId: 210, blocks: 2, slots: [] });
     store.setWeekFeature({ ...f, blocks: 3 });
     store.setWeekFeature({ ...f, itemId: 240, title: "Mine", blocks: 1 });
     expect(store.weekPlan(W).features.map((x) => [x.itemId, x.blocks])).toEqual([[210, 3], [240, 1]]);
@@ -281,13 +281,13 @@ describe("week plan (step 8)", () => {
   });
   it("marks a feature as being broken down (local only), and the reset and export cover the week plan", () => {
     const { store } = fresh();
-    store.markBreakdown("CSC", 240, true);
-    expect(store.breakdownMarks()).toEqual([{ clientKey: "CSC", itemId: 240, markedAt: clock.toString({ smallestUnit: "second" }) }]);
-    store.markBreakdown("CSC", 240, false);
+    store.markBreakdown("Adatum", 240, true);
+    expect(store.breakdownMarks()).toEqual([{ clientKey: "Adatum", itemId: 240, markedAt: clock.toString({ smallestUnit: "second" }) }]);
+    store.markBreakdown("Adatum", 240, false);
     expect(store.breakdownMarks()).toEqual([]);
     store.setWeekFeature({ ...f, blocks: 2 });
     store.commitWeek(W);
-    store.markBreakdown("CSC", 240, true);
+    store.markBreakdown("Adatum", 240, true);
     const e = store.exportJson();
     expect(e.weekPlans).toHaveLength(1);
     expect(e.weekFeatures).toHaveLength(1);
@@ -300,7 +300,7 @@ describe("week plan (step 8)", () => {
 
 describe("week plan by client (step 11)", () => {
   const W = "2026-11-09";
-  const base = { weekStart: W, clientKey: "CSC", title: "T", itemType: "Feature", url: null };
+  const base = { weekStart: W, clientKey: "Adatum", title: "T", itemType: "Feature", url: null };
   it("migration 8 turns committed features into musts and placements into pins, ids kept, with a backup first", () => {
     const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
     const path = join(dir, "plan.db");
@@ -312,8 +312,8 @@ describe("week plan by client (step 11)", () => {
     }
     old.exec("INSERT INTO week_plans VALUES ('2026-11-09', '2026-11-06T16:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T16:00:00-05:00[America/New_York]')");
     old.exec(`INSERT INTO week_features (id, week_start, client_key, item_id, title, item_type, url, blocks, position, created_at, updated_at) VALUES
-              (7, '2026-11-09', 'CSC', 210, 'Export', 'Feature', NULL, 3, 1, '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]'),
-              (9, '2026-11-09', 'W&C', 300, 'Paging', 'Feature', NULL, 1, 2, '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]')`);
+              (7, '2026-11-09', 'Adatum', 210, 'Export', 'Feature', NULL, 3, 1, '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]'),
+              (9, '2026-11-09', 'T&S', 300, 'Paging', 'Feature', NULL, 1, 2, '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]')`);
     old.exec("INSERT INTO week_feature_slots VALUES (7, '2026-11-10', 'PM'), (7, '2026-11-11', 'AM')");
     old.close();
     const store = createPlanStore({ path, now });
@@ -351,15 +351,15 @@ describe("week plan by client (step 11)", () => {
   it("keeps a local order per client and tier, resets to DevOps order, and a tier change drops the position", () => {
     const { store } = fresh();
     const ids = [210, 220, 230].map((itemId) => store.addWeekItem({ ...base, itemId, level: "feature" }).id);
-    store.addWeekItem({ ...base, clientKey: "W&C", itemId: 300, level: "feature" });
-    store.reorderWeekItems(W, "CSC", "must", [{ itemId: 230, position: 1 }, { itemId: 210, position: 2 }]);
+    store.addWeekItem({ ...base, clientKey: "T&S", itemId: 300, level: "feature" });
+    store.reorderWeekItems(W, "Adatum", "must", [{ itemId: 230, position: 1 }, { itemId: 210, position: 2 }]);
     const pos = () => Object.fromEntries(store.weekPlan(W).features.map((x) => [x.itemId, x.position]));
     expect(pos()).toEqual({ 210: 2, 220: null, 230: 1, 300: null });
-    expect(() => store.reorderWeekItems(W, "CSC", "nice", [{ itemId: 230, position: 1 }])).toThrow(/nice to have/);
-    expect(() => store.reorderWeekItems(W, "W&C", "must", [{ itemId: 210, position: 1 }])).toThrow();
+    expect(() => store.reorderWeekItems(W, "Adatum", "nice", [{ itemId: 230, position: 1 }])).toThrow(/nice to have/);
+    expect(() => store.reorderWeekItems(W, "T&S", "must", [{ itemId: 210, position: 1 }])).toThrow();
     store.setWeekItemTier(ids[2]!, "nice");
     expect(pos()[230]).toBeNull();
-    store.reorderWeekItems(W, "CSC", "must", null);
+    store.reorderWeekItems(W, "Adatum", "must", null);
     expect(pos()).toEqual({ 210: null, 220: null, 230: null, 300: null });
   });
 });
@@ -375,37 +375,37 @@ describe("quick capture (step 9)", () => {
       old.prepare("INSERT INTO schema_migrations VALUES (?, 'x')").run(v);
     }
     old.exec("INSERT INTO day_plans (date, created_at, updated_at) VALUES ('2026-10-29', 'x', 'x')");
-    old.exec("INSERT INTO draft_stories VALUES (5, 'CSC', 210, 'Draft under 210', 'M', 'x', 'x')");
+    old.exec("INSERT INTO draft_stories VALUES (5, 'Adatum', 210, 'Draft under 210', 'M', 'x', 'x')");
     old.exec(`INSERT INTO picks (id, date, half, client_key, kind, draft_id, title, size, status, position, created_at, updated_at)
-              VALUES (1, '2026-10-29', 'AM', 'CSC', 'draft', 5, 'Draft under 210', 'M', 'planned', 0, 'x', 'x')`);
+              VALUES (1, '2026-10-29', 'AM', 'Adatum', 'draft', 5, 'Draft under 210', 'M', 'planned', 0, 'x', 'x')`);
     old.close();
     const store = createPlanStore({ path, now });
     expect(store.schemaVersion()).toBe(MIGRATIONS.length);
     expect(store.drafts()).toEqual([expect.objectContaining({ id: 5, parentItemId: 210, title: "Draft under 210" })]);
     expect(store.picksFor("2026-10-29")[0]).toMatchObject({ kind: "draft", draftId: 5 });
-    expect(store.addDraft({ clientKey: "CSC", parentItemId: null, title: "No feature yet", size: "S" }).parentItemId).toBeNull();
+    expect(store.addDraft({ clientKey: "Adatum", parentItemId: null, title: "No feature yet", size: "S" }).parentItemId).toBeNull();
     expect(readdirSync(dir).filter((f) => f.startsWith("plan.db.bak-v6-"))).toHaveLength(1);
     store.close();
   });
 
   it("saves captures to the inbox and routes each once to a follow-up, a draft story, a note, or dismisses it", () => {
     const { store } = fresh();
-    const a = store.addCapture({ text: "  Told Dana I'd send the export by Thursday  ", clientKey: "CSC" });
-    expect(a).toMatchObject({ text: "Told Dana I'd send the export by Thursday", clientKey: "CSC", routedAt: null });
-    const b = store.addCapture({ text: "need to add paging", clientKey: "W&C" });
+    const a = store.addCapture({ text: "  Told Dana I'd send the export by Thursday  ", clientKey: "Adatum" });
+    expect(a).toMatchObject({ text: "Told Dana I'd send the export by Thursday", clientKey: "Adatum", routedAt: null });
+    const b = store.addCapture({ text: "need to add paging", clientKey: "T&S" });
     const c = store.addCapture({ text: "their CFO prefers email", clientKey: null });
     const d = store.addCapture({ text: "never mind", clientKey: null });
     expect(() => store.addCapture({ text: "   ", clientKey: null })).toThrow(/Type something/);
     expect(store.inbox().map((x) => x.id)).toEqual([d.id, c.id, b.id, a.id]);
     expect(store.inboxCount()).toBe(4);
 
-    const la = store.routeCapture(a.id, { as: "follow_up", clientKey: "CSC", who: "Dana", what: "Send the export", due: "2026-11-05" });
+    const la = store.routeCapture(a.id, { as: "follow_up", clientKey: "Adatum", who: "Dana", what: "Send the export", due: "2026-11-05" });
     expect(la).toMatchObject({ routedAs: "follow_up" });
-    expect(store.openFollowUps().find((l) => l.id === la.routedId)).toMatchObject({ kind: "capture", who: "Dana", what: "Send the export", due: "2026-11-05", clientKey: "CSC" });
-    const db = store.routeCapture(b.id, { as: "draft", clientKey: "W&C", parentItemId: null, title: "Add paging", size: "M" });
-    expect(store.getDraft(db.routedId!)).toMatchObject({ clientKey: "W&C", parentItemId: null, title: "Add paging", size: "M" });
-    const nc = store.routeCapture(c.id, { as: "draft", clientKey: "Quiddity", parentItemId: null, title: "Their CFO prefers email", size: "S" });
-    expect(store.getDraft(nc.routedId!)).toMatchObject({ level: "story", clientKey: "Quiddity" });
+    expect(store.openFollowUps().find((l) => l.id === la.routedId)).toMatchObject({ kind: "capture", who: "Dana", what: "Send the export", due: "2026-11-05", clientKey: "Adatum" });
+    const db = store.routeCapture(b.id, { as: "draft", clientKey: "T&S", parentItemId: null, title: "Add paging", size: "M" });
+    expect(store.getDraft(db.routedId!)).toMatchObject({ clientKey: "T&S", parentItemId: null, title: "Add paging", size: "M" });
+    const nc = store.routeCapture(c.id, { as: "draft", clientKey: "Proseware", parentItemId: null, title: "Their CFO prefers email", size: "S" });
+    expect(store.getDraft(nc.routedId!)).toMatchObject({ level: "story", clientKey: "Proseware" });
     store.routeCapture(d.id, { as: "dismissed" });
     expect(store.inboxCount()).toBe(0);
     expect(() => store.routeCapture(a.id, { as: "dismissed" })).toThrow(/already sorted/);
@@ -426,13 +426,13 @@ describe("quick capture (step 9)", () => {
     }
     const at = "2026-10-30T16:00:00-04:00[America/New_York]";
     old.exec(`INSERT INTO loops (id, kind, client_key, who, what, opened_at) VALUES (2, 'manual', NULL, 'Dana', 'Send it', '${at}')`);
-    old.exec(`INSERT INTO loops (id, kind, client_key, who, what, opened_at, closed_at, close_note, closed_by, rule_key) VALUES (1, 'slip', 'W&C', 'W&C', 'Heads-up', '${at}', '${at}', 'told', 'me', 'slip:x')`);
-    old.exec(`INSERT INTO resume_notes (client_key, date, note, created_at, updated_at) VALUES ('CSC', '2026-10-30', 'Left off at mapping', '${at}', '${at}')`);
+    old.exec(`INSERT INTO loops (id, kind, client_key, who, what, opened_at, closed_at, close_note, closed_by, rule_key) VALUES (1, 'slip', 'T&S', 'T&S', 'Heads-up', '${at}', '${at}', 'told', 'me', 'slip:x')`);
+    old.exec(`INSERT INTO resume_notes (client_key, date, note, created_at, updated_at) VALUES ('Adatum', '2026-10-30', 'Left off at mapping', '${at}', '${at}')`);
     old.exec(`INSERT INTO captures (id, text, client_key, created_at, routed_at, routed_as, routed_id) VALUES
-              (1, 'CSC wants Git', 'CSC', '${at}', '${at}', 'note', 1), (2, 'caching idea', NULL, '${at}', '${at}', 'note', 2),
+              (1, 'Adatum wants Git', 'Adatum', '${at}', '${at}', 'note', 1), (2, 'caching idea', NULL, '${at}', '${at}', 'note', 2),
               (3, 'told Dana', NULL, '${at}', '${at}', 'loop', 2), (4, 'never mind', NULL, '${at}', '${at}', 'dismissed', NULL), (5, 'to sort', NULL, '${at}', NULL, NULL, NULL)`);
     old.exec(`INSERT INTO notes (id, client_key, text, capture_id, created_at, updated_at) VALUES
-              (1, 'CSC', 'CSC wants Git', 1, '${at}', '${at}'), (2, NULL, 'caching idea', 2, '${at}', '${at}'), (3, 'W&C', 'Mark approves timesheets', NULL, '${at}', '${at}'), (4, NULL, 'Read the docs', NULL, '${at}', '${at}')`);
+              (1, 'Adatum', 'Adatum wants Git', 1, '${at}', '${at}'), (2, NULL, 'caching idea', 2, '${at}', '${at}'), (3, 'T&S', 'Mark approves timesheets', NULL, '${at}', '${at}'), (4, NULL, 'Read the docs', NULL, '${at}', '${at}')`);
     old.close();
     const store = createPlanStore({ path, now });
     expect(store.schemaVersion()).toBe(MIGRATIONS.length);
@@ -440,8 +440,8 @@ describe("quick capture (step 9)", () => {
     // Loops are follow-ups now, ids kept; a closed one counts as done.
     expect(store.allFollowUps().map((f) => [f.id, f.kind, f.outcome, f.byHand]).sort()).toEqual([[1, "slip", "done", false], [2, "manual", null, true]]);
     // Notes with a client join that client's left-off line on their day; appended to one already there.
-    expect(store.latestNotes("2026-10-31").CSC?.note).toBe("Left off at mapping · CSC wants Git");
-    expect(store.latestNotes("2026-10-31")["W&C"]?.note).toBe("Mark approves timesheets");
+    expect(store.latestNotes("2026-10-31").Adatum?.note).toBe("Left off at mapping · Adatum wants Git");
+    expect(store.latestNotes("2026-10-31")["T&S"]?.note).toBe("Mark approves timesheets");
     // Notes with no client go back to the inbox: their own capture un-sorted, or a new capture.
     expect(store.inbox().map((c) => c.text).sort()).toEqual(["Read the docs", "caching idea", "to sort"]);
     const ex = store.exportJson() as Record<string, unknown>;
@@ -453,16 +453,16 @@ describe("quick capture (step 9)", () => {
 
   it("routes a capture to a draft feature, optionally under an epic", () => {
     const { store } = fresh();
-    const c = store.addCapture({ text: "feature: onboarding", clientKey: "CSC" });
-    const r = store.routeCapture(c.id, { as: "draft_feature", clientKey: "CSC", parentItemId: 900, title: "Onboarding" });
+    const c = store.addCapture({ text: "feature: onboarding", clientKey: "Adatum" });
+    const r = store.routeCapture(c.id, { as: "draft_feature", clientKey: "Adatum", parentItemId: 900, title: "Onboarding" });
     expect(r.routedAs).toBe("draft_feature");
     expect(store.getDraft(r.routedId!)).toMatchObject({ level: "feature", parentItemId: 900, title: "Onboarding", size: "M" });
   });
 });
 
 describe("timeboxes, own Outlook events and the write log (step 12)", () => {
-  const F = { subject: "CSC: Story", body: "x", start: "2026-11-03T14:00:00Z", end: "2026-11-03T15:00:00Z", showAs: "busy" as const, reminder: false as const };
-  const box = { date: "2026-11-03", clientKey: "CSC", title: "Story", start: "2026-11-03T09:00:00-05:00", end: "2026-11-03T10:00:00-05:00", outlook: false };
+  const F = { subject: "Adatum: Story", body: "x", start: "2026-11-03T14:00:00Z", end: "2026-11-03T15:00:00Z", showAs: "busy" as const, reminder: false as const };
+  const box = { date: "2026-11-03", clientKey: "Adatum", title: "Story", start: "2026-11-03T09:00:00-05:00", end: "2026-11-03T10:00:00-05:00", outlook: false };
 
   it("keeps timeboxes across reopen, with a stable uid", () => {
     const { path, store } = fresh();

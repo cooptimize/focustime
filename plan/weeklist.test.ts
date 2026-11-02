@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ClientWork, WorkItem } from "../week/types.ts";
 import { blocksLeft, devopsStateFrom, headsUpKey, pickDoneFrom, weekHeadsUpDraft, weekList, itemDone, moveWithin, offersHeadsUp, onTrack, orderList, progress, progressLabel, stackRank, validBlocks, type ListItem } from "./weeklist.ts";
 
-const item = (o: Partial<ListItem> & { itemId: number }): ListItem => ({ clientKey: "CSC", level: "feature", tier: "must", blocks: 1, position: null, doneAt: null, slots: [], createdAt: "2026-11-05T10:00:00-05:00[America/New_York]", ...o });
+const item = (o: Partial<ListItem> & { itemId: number }): ListItem => ({ clientKey: "Adatum", level: "feature", tier: "must", blocks: 1, position: null, doneAt: null, slots: [], createdAt: "2026-11-05T10:00:00-05:00[America/New_York]", ...o });
 const wi = (id: number, stateCategory = "InProgress"): WorkItem => ({ id, title: `#${id}`, type: "User Story", state: "x", stateCategory, level: "story", order: id, parentId: null, changedAt: "2026-11-01T00:00:00Z", url: "" });
-const work = (o: Partial<ClientWork> = {}): ClientWork => ({ clientKey: "CSC", clientName: "CSC", status: "ok", fetchedAt: "x", fromCache: false, items: [], children: [], ...o });
+const work = (o: Partial<ClientWork> = {}): ClientWork => ({ clientKey: "Adatum", clientName: "Adatum", status: "ok", fetchedAt: "x", fromCache: false, items: [], children: [], ...o });
 
 describe("tiers and order", () => {
   it("musts come before nice-to-haves, in DevOps stack rank unless placed by hand", () => {
@@ -15,7 +15,7 @@ describe("tiers and order", () => {
     expect(orderList(moved, rank).map((i) => i.itemId)).toEqual([10, 30, 99, 20]); // placed by hand first, the rest by rank
   });
   it("keeps clients apart and in the order they come", () => {
-    const list = [item({ itemId: 1, clientKey: "W&C" }), item({ itemId: 2 }), item({ itemId: 3, clientKey: "W&C", tier: "nice" }), item({ itemId: 4, clientKey: "W&C" })];
+    const list = [item({ itemId: 1, clientKey: "T&S" }), item({ itemId: 2 }), item({ itemId: 3, clientKey: "T&S", tier: "nice" }), item({ itemId: 4, clientKey: "T&S" })];
     expect(orderList(list, () => null).map((i) => i.itemId)).toEqual([1, 4, 3, 2]);
   });
   it("moving one item renumbers the whole group", () => {
@@ -23,9 +23,9 @@ describe("tiers and order", () => {
     expect(moveWithin([30, 10, 99], 30, 9).map((x) => x.itemId)).toEqual([10, 99, 30]);
   });
   it("stack rank comes from the portfolio's and the work read's board order", () => {
-    const r = stackRank([work({ items: [wi(7), wi(5)], children: [wi(9)] })], [{ clientKey: "CSC", items: [{ id: 40, order: 3 }, { id: 41, order: 1 }] }]);
-    expect([40, 41, 7, 5, 9].map((id) => r("CSC", id))).toEqual([0, 1, 1_000_000, 1_000_001, 1_000_002]);
-    expect(r("CSC", 1)).toBeNull();
+    const r = stackRank([work({ items: [wi(7), wi(5)], children: [wi(9)] })], [{ clientKey: "Adatum", items: [{ id: 40, order: 3 }, { id: 41, order: 1 }] }]);
+    expect([40, 41, 7, 5, 9].map((id) => r("Adatum", id))).toEqual([0, 1, 1_000_000, 1_000_001, 1_000_002]);
+    expect(r("Adatum", 1)).toBeNull();
   });
   it("blocks are half-block steps from 0.5 to 20", () => {
     expect([0.5, 1, 2.5, 20].every(validBlocks)).toBe(true);
@@ -36,9 +36,9 @@ describe("tiers and order", () => {
 describe("done and progress against the current plan", () => {
   const devops = devopsStateFrom([work({ items: [wi(1)], watched: [wi(2, "Completed"), wi(3, "Removed")] })]);
   it("reads DevOps state from fresh results only", () => {
-    expect([1, 2, 3, 4].map((id) => devops("CSC", id))).toEqual(["open", "done", "removed", null]);
-    expect(devopsStateFrom([work({ fromCache: true, watched: [wi(2, "Completed")] })])("CSC", 2)).toBeNull();
-    expect(devopsStateFrom([work({ status: "unreachable" })])("CSC", 1)).toBeNull();
+    expect([1, 2, 3, 4].map((id) => devops("Adatum", id))).toEqual(["open", "done", "removed", null]);
+    expect(devopsStateFrom([work({ fromCache: true, watched: [wi(2, "Completed")] })])("Adatum", 2)).toBeNull();
+    expect(devopsStateFrom([work({ status: "unreachable" })])("Adatum", 1)).toBeNull();
   });
   it("done is a local mark, DevOps Completed, or a story's pick ticked done", () => {
     const noPick = () => false;
@@ -49,11 +49,11 @@ describe("done and progress against the current plan", () => {
     expect(itemDone(item({ itemId: 1 }), devops, noPick)).toBeNull();
   });
   it("counts musts done of musts on the list now, and the blocks the open ones need", () => {
-    const list = [item({ itemId: 1, doneAt: "x" }), item({ itemId: 2, blocks: 2 }), item({ itemId: 3, blocks: 0.5 }), item({ itemId: 4, tier: "nice" }), item({ itemId: 5, clientKey: "W&C" })];
+    const list = [item({ itemId: 1, doneAt: "x" }), item({ itemId: 2, blocks: 2 }), item({ itemId: 3, blocks: 0.5 }), item({ itemId: 4, tier: "nice" }), item({ itemId: 5, clientKey: "T&S" })];
     const p = progress(list, (i) => !!i.doneAt);
     expect(p).toEqual([
-      { clientKey: "CSC", musts: 3, done: 1, left: 2, leftBlocks: 2.5, nice: 1 },
-      { clientKey: "W&C", musts: 1, done: 0, left: 1, leftBlocks: 1, nice: 0 },
+      { clientKey: "Adatum", musts: 3, done: 1, left: 2, leftBlocks: 2.5, nice: 1 },
+      { clientKey: "T&S", musts: 1, done: 0, left: 1, leftBlocks: 1, nice: 0 },
     ]);
     expect(progressLabel(p[0]!)).toBe("1 of 3 musts done");
     // A must swapped out no longer counts: progress follows the current plan.
@@ -90,20 +90,20 @@ describe("heads-up on a dropped must", () => {
 
 describe("heads-up for a dropped must", () => {
   it("is one follow-up per week, client and item, with a plain draft", () => {
-    expect(headsUpKey("2026-11-09", "CSC", 210)).toBe("slip:week:2026-11-09:CSC:210");
-    expect(weekHeadsUpDraft("CSC Steel", "2026-11-09", { itemId: 210, title: "Export" })).toBe("Hi CSC Steel, a quick heads-up: #210 Export won't be finished the week of Mon, Nov 9 as I planned.\nI'll let you know where it lands.");
+    expect(headsUpKey("2026-11-09", "Adatum", 210)).toBe("slip:week:2026-11-09:Adatum:210");
+    expect(weekHeadsUpDraft("Adatum Steel", "2026-11-09", { itemId: 210, title: "Export" })).toBe("Hi Adatum Steel, a quick heads-up: #210 Export won't be finished the week of Mon, Nov 9 as I planned.\nI'll let you know where it lands.");
   });
 });
 
 describe("weekList (every view's order, done and progress)", () => {
   it("orders by tier, local position then stack rank, marks done from DevOps, a local mark or a done pick, and counts progress", () => {
     const wi = (id: number, stateCategory = "InProgress", level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `#${id}`, type: "User Story", state: "Active", stateCategory, level, order: null, parentId: null, changedAt: "x", url: "u" });
-    const work: ClientWork[] = [{ clientKey: "CSC", clientName: "CSC", status: "ok", fetchedAt: "x", fromCache: false, items: [wi(3), wi(1)], children: [], watched: [wi(2, "Completed")], committed: [] }];
+    const work: ClientWork[] = [{ clientKey: "Adatum", clientName: "Adatum", status: "ok", fetchedAt: "x", fromCache: false, items: [wi(3), wi(1)], children: [], watched: [wi(2, "Completed")], committed: [] }];
     const f = [item({ itemId: 1, level: "story" }), item({ itemId: 2, level: "story" }), item({ itemId: 3, level: "story", tier: "nice" }), item({ itemId: 4, level: "story", doneAt: "x" }), item({ itemId: 5, level: "story" })];
-    const days = { "2026-11-10": { picks: [{ clientKey: "CSC", itemId: 5, status: "done" }] } };
+    const days = { "2026-11-10": { picks: [{ clientKey: "Adatum", itemId: 5, status: "done" }] } };
     const r = weekList(f, work, [], pickDoneFrom(days));
     expect(r.items.map((i) => [i.itemId, i.done])).toEqual([[1, null], [2, "devops"], [4, "local"], [5, "pick"], [3, null]]);
-    expect(r.progress).toEqual([{ clientKey: "CSC", musts: 4, done: 3, left: 1, leftBlocks: 1, nice: 1 }]);
+    expect(r.progress).toEqual([{ clientKey: "Adatum", musts: 4, done: 3, left: 1, leftBlocks: 1, nice: 1 }]);
   });
 });
 
@@ -117,9 +117,9 @@ describe("on-track wording", () => {
 describe("Resolved counts as done (Q65)", () => {
   it("a Resolved item is done for the week, shown as resolved; an open one isn't", () => {
     const wi = (id: number, stateCategory: string): WorkItem => ({ id, title: `#${id}`, type: "User Story", state: "x", stateCategory, level: "story", order: null, parentId: null, changedAt: "x", url: "u" });
-    const work: ClientWork[] = [{ clientKey: "CSC", clientName: "CSC", status: "ok", fetchedAt: "x", fromCache: false, items: [wi(1, "Resolved"), wi(2, "InProgress")], children: [], watched: [], committed: [] }];
+    const work: ClientWork[] = [{ clientKey: "Adatum", clientName: "Adatum", status: "ok", fetchedAt: "x", fromCache: false, items: [wi(1, "Resolved"), wi(2, "InProgress")], children: [], watched: [], committed: [] }];
     const st = devopsStateFrom(work);
-    expect([st("CSC", 1), st("CSC", 2)]).toEqual(["resolved", "open"]);
+    expect([st("Adatum", 1), st("Adatum", 2)]).toEqual(["resolved", "open"]);
     expect(itemDone(item({ itemId: 1, level: "story" }), st, () => false)).toBe("resolved");
     expect(weekList([item({ itemId: 1 }), item({ itemId: 2 })], work).progress[0]).toMatchObject({ musts: 2, done: 1 });
   });

@@ -302,6 +302,12 @@ describe("Timebox a pick into a free gap (step 13.6, D245)", () => {
     const full = { ...(tbx as object), start: "2026-11-03T09:00:00-05:00", end: "2026-11-03T12:30:00-05:00" } as never;
     expect(items(timeboxStep(env({ timeboxes: [full] }).e, pick))[0]).toMatchObject({ label: "No free time left in this block", disabled: expect.any(String) });
   });
+  it("+ time says when only gaps shorter than the pick's shortest useful time are left (step 16, D285)", () => {
+    // 9:00–12:30 with a timebox 9:00–12:00 leaves 30 minutes: too short for an M pick (60 minutes at least).
+    const most = { ...(tbx as object), start: "2026-11-03T09:00:00-05:00", end: "2026-11-03T12:00:00-05:00" } as never;
+    const m = timeStep(env({ timeboxes: [most] }).e, { ...pick, size: "M" });
+    expect(items(m)[0]).toMatchObject({ label: expect.stringMatching(/^No free stretch of 1h or more$/), disabled: expect.any(String) });
+  });
   it("the pick menu's Timebox opens this step", () => {
     const m = pickMenu(env().e, pick);
     expect(find(m, "Timebox").next).toBeDefined();

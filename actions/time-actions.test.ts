@@ -17,7 +17,7 @@ function setup() {
   const c: ActionContext = {
     loadConfig: async () => ({ path, parsed: parseConfig(readFileSync(path, "utf8")) }),
     makeDataverse: no, makeOutlook: no, makeGoogle: no,
-    makeDevOps: () => ({ lookup: (k: string, id: number) => (k === "CSC" && id === 101 ? { title: "Story 101", url: "https://dev.azure.com/o/p/_workitems/edit/101" } : null) }) as never,
+    makeDevOps: () => ({ lookup: (k: string, id: number) => (k === "Adatum" && id === 101 ? { title: "Story 101", url: "https://dev.azure.com/o/p/_workitems/edit/101" } : null) }) as never,
     saveSystemUserId: async () => {},
     now: () => "2026-11-02T14:00:00Z",
     writeConfig: (edit: (t: string) => string) => writeConfig(path, edit),
@@ -75,15 +75,15 @@ describe("time model actions (step 6b)", () => {
   it("adds a flex session, names its DevOps item, and keeps it once it has ended", async () => {
     const t = setup();
     // Q34 (step 6c): an overlap with working hours is allowed and reported; a session all inside them is not flex.
-    const over = await t.run("flex.add", { date: "2026-11-02", clientKey: "CSC", start: "16:00", end: "18:00" });
+    const over = await t.run("flex.add", { date: "2026-11-02", clientKey: "Adatum", start: "16:00", end: "18:00" });
     expect(over).toMatchObject({ ok: true, data: { overlapMinutes: 60 } });
-    expect(await t.run("flex.add", { date: "2026-11-02", clientKey: "CSC", start: "10:00", end: "11:00" })).toMatchObject({ ok: false, status: 422, error: expect.stringMatching(/inside working hours/) });
-    expect(await t.run("flex.add", { date: "2026-11-07", clientKey: "CSC", start: "10:00", end: "12:00", itemId: 999 })).toMatchObject({ ok: false, status: 409 });
-    const r = await t.run("flex.add", { date: "2026-11-07", clientKey: "CSC", start: "10:00", end: "12:00", itemId: 101, note: "Finish the import" });
+    expect(await t.run("flex.add", { date: "2026-11-02", clientKey: "Adatum", start: "10:00", end: "11:00" })).toMatchObject({ ok: false, status: 422, error: expect.stringMatching(/inside working hours/) });
+    expect(await t.run("flex.add", { date: "2026-11-07", clientKey: "Adatum", start: "10:00", end: "12:00", itemId: 999 })).toMatchObject({ ok: false, status: 409 });
+    const r = await t.run("flex.add", { date: "2026-11-07", clientKey: "Adatum", start: "10:00", end: "12:00", itemId: 101, note: "Finish the import" });
     expect(r.ok).toBe(true);
     const f = (r as { data: { flex: { id: number; itemTitle: string } } }).data.flex;
     expect(f.itemTitle).toBe("Story 101");
-    const evening = await t.run("flex.add", { date: "2026-11-02", clientKey: "CSC", start: "19:00", end: "20:00" });
+    const evening = await t.run("flex.add", { date: "2026-11-02", clientKey: "Adatum", start: "19:00", end: "20:00" });
     const e = (evening as { data: { flex: { id: number } } }).data.flex;
     t.plan.openFlexFollowUps(Temporal.Instant.from("2026-11-03T02:00:00Z"));
     expect(await t.run("flex.remove", { id: e.id })).toMatchObject({ ok: false, status: 409 });

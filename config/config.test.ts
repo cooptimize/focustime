@@ -215,13 +215,13 @@ describe("[edge] link profiles (step 5.5)", () => {
     expect(r.ok && r.config.edge).toEqual({ command: [], profiles: {}, fallbackCommand: ["omarchy-launch-browser"] });
   });
   it("reads the launch command and client profiles", () => {
-    const r = parseConfig(`${valid}\n[edge]\ncommand = ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]\n[edge.profiles]\nCSC = "Profile 3"\n"W&C" = "Default"\n`);
-    expect(r.ok && r.config.edge).toEqual({ command: ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"], profiles: { CSC: "Profile 3", "W&C": "Default" }, fallbackCommand: ["omarchy-launch-browser"] });
+    const r = parseConfig(`${valid}\n[edge]\ncommand = ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]\n[edge.profiles]\nAdatum = "Profile 3"\n"T&S" = "Default"\n`);
+    expect(r.ok && r.config.edge).toEqual({ command: ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"], profiles: { Adatum: "Profile 3", "T&S": "Default" }, fallbackCommand: ["omarchy-launch-browser"] });
   });
   it("names bad values: a shell string, a flag as a profile, profiles with no command", () => {
     expect(fields(`${valid}\n[edge]\ncommand = "microsoft-edge-stable --x"\n`)).toEqual(["edge.command"]);
-    expect(fields(`${valid}\n[edge]\ncommand = ["edge"]\n[edge.profiles]\nCSC = "--user-data-dir=/tmp"\n`)).toEqual(["edge.profiles.CSC"]);
-    expect(fields(`${valid}\n[edge.profiles]\nCSC = "Default"\n`)).toEqual(["edge.command"]);
+    expect(fields(`${valid}\n[edge]\ncommand = ["edge"]\n[edge.profiles]\nAdatum = "--user-data-dir=/tmp"\n`)).toEqual(["edge.profiles.Adatum"]);
+    expect(fields(`${valid}\n[edge.profiles]\nAdatum = "Default"\n`)).toEqual(["edge.command"]);
     expect(fields(`${valid}\n[edge]\nbrowser = "x"\n`)).toEqual(["edge.browser"]);
   });
   it("the starter file mentions it, commented out", () => {

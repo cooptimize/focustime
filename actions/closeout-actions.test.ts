@@ -19,7 +19,7 @@ const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
 
 const MON = "2026-11-02";
 const item = (over: Partial<WorkItem> = {}): WorkItem => ({ id: 101, title: "Export report", type: "User Story", state: "Active", stateCategory: "InProgress", level: "story", order: 1, parentId: null, changedAt: "2026-11-01T12:00:00Z", url: "https://dev.azure.com/contoso/P/_workitems/edit/101", tags: [], blocked: false, ...over });
-const csc = (items: WorkItem[], watched: WorkItem[] = []): ClientWork => ({ clientKey: "CSC", clientName: "CSC", status: "ok", fetchedAt: "x", fromCache: false, items, children: [], watched });
+const adatum = (items: WorkItem[], watched: WorkItem[] = []): ClientWork => ({ clientKey: "Adatum", clientName: "Adatum", status: "ok", fetchedAt: "x", fromCache: false, items, children: [], watched });
 
 function setup(start = "2026-11-02T15:00:00Z") {
   let clock = start;
@@ -60,7 +60,7 @@ function setup(start = "2026-11-02T15:00:00Z") {
     if (r.ok) throw new Error("expected failure");
     return r;
   };
-  const add = (p: Partial<NewPick> = {}) => plan.addPick({ date: MON, half: "PM", clientKey: "CSC", kind: "intention", title: "Review the mapping", size: "M", ...p });
+  const add = (p: Partial<NewPick> = {}) => plan.addPick({ date: MON, half: "PM", clientKey: "Adatum", kind: "intention", title: "Review the mapping", size: "M", ...p });
   return { run, fail, plan, add, watches, setDevOps: (w: ClientWork[]) => void (next = w), at: (t: string) => void (clock = t) };
 }
 
@@ -70,25 +70,25 @@ describe("follow-ups through week.load (step 7)", () => {
     const p = t.add({ kind: "item", itemId: 101, title: "Export report" });
     t.plan.commit(MON);
     t.plan.setDone(p.id, true);
-    t.setDevOps([csc([item()])]);
+    t.setDevOps([adatum([item()])]);
     await t.run("week.load", { weekStart: MON });
-    expect(t.plan.openFollowUps().map((l) => [l.kind, l.who, l.what, l.itemId])).toEqual([["devops_update", "CSC", "Update DevOps #101: Export report", 101]]);
+    expect(t.plan.openFollowUps().map((l) => [l.kind, l.who, l.what, l.itemId])).toEqual([["devops_update", "Adatum", "Update DevOps #101: Export report", 101]]);
     expect((await t.run<WeekLoadData>("week.load", { weekStart: MON })).openFollowUps).toBe(1);
     // The next load asks DevOps for #101 by id; it is now Closed.
     t.at("2026-11-02T23:00:00Z");
-    t.setDevOps([csc([], [item({ state: "Closed", stateCategory: "Completed", changedAt: "2026-11-02T22:30:00Z" })])]);
+    t.setDevOps([adatum([], [item({ state: "Closed", stateCategory: "Completed", changedAt: "2026-11-02T22:30:00Z" })])]);
     await t.run("week.load", { weekStart: MON });
-    expect(t.watches.at(-1)).toEqual({ CSC: [101] });
+    expect(t.watches.at(-1)).toEqual({ Adatum: [101] });
     expect(t.plan.openFollowUps()).toEqual([]);
     expect(t.plan.allFollowUps()[0]).toMatchObject({ closedBy: "signal", closeNote: "DevOps #101 is Closed" });
   });
 
   it("a blocked item assigned to me opens 'Nudge on blocker'; unblocked, it closes", async () => {
     const t = setup();
-    t.setDevOps([csc([item({ id: 202, title: "Waiting on API keys", tags: ["Blocked"], blocked: true })])]);
+    t.setDevOps([adatum([item({ id: 202, title: "Waiting on API keys", tags: ["Blocked"], blocked: true })])]);
     await t.run("week.load", { weekStart: MON });
     expect(t.plan.openFollowUps().map((l) => l.what)).toEqual(["Nudge on blocker for #202: Waiting on API keys"]);
-    t.setDevOps([csc([item({ id: 202, title: "Waiting on API keys" })])]);
+    t.setDevOps([adatum([item({ id: 202, title: "Waiting on API keys" })])]);
     await t.run("week.load", { weekStart: MON });
     expect(t.plan.openFollowUps()).toEqual([]);
   });
@@ -106,14 +106,14 @@ describe("Close out (step 7)", () => {
     let st = await t.run<CloseOutState>("closeout.load", { date: MON });
     expect(st).toMatchObject({ date: MON, today: MON, access: "today", carryTo: "2026-11-03", closedOutAt: null });
     expect(st.focused[a.id]).toBe(2700);
-    expect(st.worked).toEqual([{ clientKey: "CSC", clientName: "CSC" }]);
+    expect(st.worked).toEqual([{ clientKey: "Adatum", clientName: "Adatum" }]);
 
     await t.run("pick.move", { id: a.id, date: st.carryTo, half: "PM" });
     await t.run("pick.move", { id: b.id, date: "2026-11-04", half: "AM" });
     st = await t.run<CloseOutState>("closeout.load", { date: MON });
     expect(st.movedTo[a.id]).toEqual({ date: "2026-11-03", half: "PM" });
     const slip = st.followUps.find((l) => l.kind === "slip")!;
-    expect(slip).toMatchObject({ who: "CSC", what: "Heads-up to CSC about the slip (2 items)", isNew: true });
+    expect(slip).toMatchObject({ who: "Adatum", what: "Heads-up to Adatum about the slip (2 items)", isNew: true });
     expect(slip.draft).toContain("- #101 Export report: moving to Tue, Nov 3 (afternoon)");
     expect(slip.draft).toContain("- Review the mapping: moving to Wed, Nov 4 (morning)");
     // Mark as told closes it by hand.
@@ -180,29 +180,29 @@ describe("borrowed time (step 7)", () => {
 describe("resume notes (step 7)", () => {
   it("one line per client and day; the latest wins and shows in Plan the day and the week; history is kept", async () => {
     const t = setup("2026-11-02T22:15:00Z");
-    await t.run("note.set", { clientKey: "CSC", date: "2026-10-29", note: "Started the export" });
-    await t.run("note.set", { clientKey: "CSC", date: MON, note: "Mapping half done" });
-    await t.run("note.set", { clientKey: "CSC", date: MON, note: "Mapping half done, next: lookups" });
+    await t.run("note.set", { clientKey: "Adatum", date: "2026-10-29", note: "Started the export" });
+    await t.run("note.set", { clientKey: "Adatum", date: MON, note: "Mapping half done" });
+    await t.run("note.set", { clientKey: "Adatum", date: MON, note: "Mapping half done, next: lookups" });
     t.at("2026-11-03T14:00:00Z");
     const pd = await t.run<{ resumeNotes: Record<string, { note: string; date: string }> }>("planday.start", { date: "2026-11-03" });
-    expect(pd.resumeNotes.CSC).toEqual({ clientKey: "CSC", date: MON, note: "Mapping half done, next: lookups" });
+    expect(pd.resumeNotes.Adatum).toEqual({ clientKey: "Adatum", date: MON, note: "Mapping half done, next: lookups" });
     const w = await t.run<WeekLoadData>("week.load", { weekStart: MON });
-    expect(w.resumeNotes.CSC?.note).toBe("Mapping half done, next: lookups");
-    expect(t.plan.noteHistory("CSC").map((n) => n.date)).toEqual([MON, "2026-10-29"]);
+    expect(w.resumeNotes.Adatum?.note).toBe("Mapping half done, next: lookups");
+    expect(t.plan.noteHistory("Adatum").map((n) => n.date)).toEqual([MON, "2026-10-29"]);
     // Planning an earlier day shows the note that was latest then.
-    expect(t.plan.latestNotes("2026-10-30").CSC?.note).toBe("Started the export");
+    expect(t.plan.latestNotes("2026-10-30").Adatum?.note).toBe("Started the export");
     // An empty note removes that day's; the earlier one is latest again.
-    await t.run("note.set", { clientKey: "CSC", date: MON, note: "" });
-    expect(t.plan.latestNotes().CSC?.note).toBe("Started the export");
-    expect((await t.fail("note.set", { clientKey: "CSC", date: "2026-11-09", note: "x" })).status).toBe(422);
-    expect((await t.fail("note.set", { clientKey: "CSC", date: MON, note: "x".repeat(201) })).status).toBe(400);
+    await t.run("note.set", { clientKey: "Adatum", date: MON, note: "" });
+    expect(t.plan.latestNotes().Adatum?.note).toBe("Started the export");
+    expect((await t.fail("note.set", { clientKey: "Adatum", date: "2026-11-09", note: "x" })).status).toBe(422);
+    expect((await t.fail("note.set", { clientKey: "Adatum", date: MON, note: "x".repeat(201) })).status).toBe(400);
   });
 });
 
 describe("follow-ups (step 7, step 13.5)", () => {
   it("adds one with an optional who and client; lists overdue and due soon first", async () => {
     const t = setup();
-    await t.run("followup.add", { who: "Dana at CSC", what: "Send the mapping notes", due: "2026-11-04", clientKey: "CSC", channel: "teams" });
+    await t.run("followup.add", { who: "Dana at Adatum", what: "Send the mapping notes", due: "2026-11-04", clientKey: "Adatum", channel: "teams" });
     t.at("2026-11-02T16:00:00Z");
     await t.run("followup.add", { what: "Answer the pump question" });
     await t.run("followup.add", { what: "Late one", due: "2026-10-30" });
@@ -212,7 +212,7 @@ describe("follow-ups (step 7, step 13.5)", () => {
       ["Send the mapping notes", "Due Wed, Nov 4"],
       ["Answer the pump question", null],
     ]);
-    expect(followUps[1]).toMatchObject({ who: "Dana at CSC", kind: "manual", byHand: true, channel: "teams" });
+    expect(followUps[1]).toMatchObject({ who: "Dana at Adatum", kind: "manual", byHand: true, channel: "teams" });
     expect(followUps[2]).toMatchObject({ hasWho: false });
     expect((await t.fail("followup.add", { what: "" })).status).toBe(400);
     expect((await t.fail("followup.add", { what: "y", due: "soon" })).status).toBe(400);
@@ -245,7 +245,7 @@ describe("follow-ups (step 7, step 13.5)", () => {
   it("Delete is only for ones I added; Coopilot's own say to use Not needed", async () => {
     const t = setup();
     const a = (await t.run<{ followUp: { id: number } }>("followup.add", { what: "Mine" })).followUp;
-    const rule = t.plan.openRuleFollowUp({ kind: "slip", ruleKey: "slip:x", clientKey: "CSC", who: "CSC", what: "Heads-up to CSC" })!;
+    const rule = t.plan.openRuleFollowUp({ kind: "slip", ruleKey: "slip:x", clientKey: "Adatum", who: "Adatum", what: "Heads-up to Adatum" })!;
     await t.run("followup.delete", { id: a.id });
     const r = await t.fail("followup.delete", { id: rule.id });
     expect(r.status).toBe(409);
@@ -256,6 +256,6 @@ describe("follow-ups (step 7, step 13.5)", () => {
   it("Edit changes client, who, what, channel and due", async () => {
     const t = setup();
     const a = (await t.run<{ followUp: { id: number } }>("followup.add", { what: "Send notes" })).followUp;
-    expect((await t.run<{ followUp: unknown }>("followup.edit", { id: a.id, clientKey: "CSC", who: "Dana", channel: "call", due: "2026-11-03" })).followUp).toMatchObject({ clientKey: "CSC", who: "Dana", channel: "call", due: "2026-11-03", what: "Send notes", dueState: { text: "Due tomorrow" } });
+    expect((await t.run<{ followUp: unknown }>("followup.edit", { id: a.id, clientKey: "Adatum", who: "Dana", channel: "call", due: "2026-11-03" })).followUp).toMatchObject({ clientKey: "Adatum", who: "Dana", channel: "call", due: "2026-11-03", what: "Send notes", dueState: { text: "Due tomorrow" } });
   });
 });

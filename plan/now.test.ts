@@ -15,11 +15,11 @@ const model: TimeModel = {
   overrides: [{ date: "2026-11-03", segments: [span("09:00", "16:00"), span("20:00", "22:00")] }],
 };
 const config: WeekConfig = { hours: model, thresholds: { meetingWatchMinutes: 90, meetingAtRiskMinutes: 150, minFocusWindowMinutes: 90 }, standingBlocks: [] };
-const flex: FlexSession = { id: 1, clientKey: "csc", start: "2026-11-06T10:00:00-05:00", end: "2026-11-06T12:00:00-05:00", itemId: 7, itemTitle: "Fix export", itemUrl: null, note: null };
+const flex: FlexSession = { id: 1, clientKey: "adatum", start: "2026-11-06T10:00:00-05:00", end: "2026-11-06T12:00:00-05:00", itemId: 7, itemTitle: "Fix export", itemUrl: null, note: null };
 
 const week = buildWeek({
   weekStart: WEEK,
-  patterns: [pattern({ clientKey: "csc", clientName: "CSC", days: { Mon: "AM", Tue: "AM" } })],
+  patterns: [pattern({ clientKey: "adatum", clientName: "Adatum", days: { Mon: "AM", Tue: "AM" } })],
   events: [meeting("2026-11-02T10:00", "2026-11-02T10:30", { title: "Standup" }), meeting("2026-11-02T14:00", "2026-11-02T15:00", { title: "Review", showAs: "free" })],
   config,
   flex: [flex],
@@ -28,7 +28,7 @@ const day = (date: string): Day => week.days.find((d) => d.date === date)!;
 
 let id = 0;
 const pick = (half: Pick["half"], title: string, over: Partial<Pick> = {}): Pick => ({
-  id: ++id, date: "2026-11-02", half, clientKey: "csc", kind: "intention", itemId: null, draftId: null, title, itemType: null, itemUrl: null,
+  id: ++id, date: "2026-11-02", half, clientKey: "adatum", kind: "intention", itemId: null, draftId: null, title, itemType: null, itemUrl: null,
   size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, followUpId: null, notes: null, position: id, createdAt: "", updatedAt: "", ...over,
 });
 
@@ -41,7 +41,7 @@ const input = (local: string, over: Partial<NowInput> = {}): NowInput => {
 describe("Now strip", () => {
   it("names the current block, the next event and time left", () => {
     const s = nowStrip(input("2026-11-02T09:40"));
-    expect(s).toMatchObject({ kind: "slot", half: "AM", title: "CSC focus", until: "12:00" });
+    expect(s).toMatchObject({ kind: "slot", half: "AM", title: "Adatum focus", until: "12:00" });
     expect(s.event).toEqual({ title: "Standup", at: "10:00", minutes: 20, now: false });
   });
 
@@ -84,7 +84,7 @@ describe("Now strip", () => {
 
   it("names a flex session and its item", () => {
     const s = nowStrip(input("2026-11-06T10:15"));
-    expect(s).toMatchObject({ kind: "slot", title: "Flex session: CSC", until: "12:00", nextPick: "Fix export", flex: true });
+    expect(s).toMatchObject({ kind: "slot", title: "Flex session: ADATUM", until: "12:00", nextPick: "Fix export", flex: true });
     expect(["AM", "EVE"]).toContain(s.half);
   });
 

@@ -24,18 +24,18 @@ describe("focus blocks per half-day", () => {
   it("lets a Dataverse client block win over the standing block and flags it double-booked", () => {
     const w = buildWeek({
       weekStart: WEEK,
-      patterns: [pattern({ clientKey: "quiddity", clientName: "Quiddity", days: { Mon: "AM" } })],
+      patterns: [pattern({ clientKey: "proseware", clientName: "Proseware", days: { Mon: "AM" } })],
       events: [],
       config,
     });
     const mon = slot(w.days, 0, "AM");
     expect(mon.focus.map((f) => [f.clientName, f.source])).toEqual([
-      ["Quiddity", "dataverse"],
+      ["Proseware", "dataverse"],
       ["Internal", "config"],
     ]);
     const risk = mon.risks.find((r) => r.rule === "double_booked_block");
     expect(risk?.severity).toBe("at_risk");
-    expect(risk?.reason).toContain("Quiddity");
+    expect(risk?.reason).toContain("Proseware");
     expect(risk?.reason).toContain("Internal");
   });
 
@@ -56,8 +56,8 @@ describe("focus blocks per half-day", () => {
     const w = buildWeek({
       weekStart: WEEK,
       patterns: [
-        pattern({ id: "a", clientKey: "csc", clientName: "CSC", days: { Tue: "AM" } }),
-        pattern({ id: "b", clientKey: "wc", clientName: "Woodard & Curran", days: { Tue: "AllDay" } }),
+        pattern({ id: "a", clientKey: "adatum", clientName: "Adatum", days: { Tue: "AM" } }),
+        pattern({ id: "b", clientKey: "wc", clientName: "Tailspin & Sons", days: { Tue: "AllDay" } }),
       ],
       events: [],
       config: noStanding,
@@ -243,7 +243,7 @@ describe("PTO in the week (step 6)", () => {
 
 describe("flex sessions overlapping working hours (step 6c, Q34)", () => {
   it("counts only the part outside working hours and notes the overlap", () => {
-    const f = { id: 1, clientKey: "csc", start: "2026-11-02T16:00:00-05:00", end: "2026-11-02T18:30:00-05:00", itemId: null, itemTitle: null, itemUrl: null, note: null };
+    const f = { id: 1, clientKey: "adatum", start: "2026-11-02T16:00:00-05:00", end: "2026-11-02T18:30:00-05:00", itemId: null, itemTitle: null, itemUrl: null, note: null };
     const w = buildWeek({ weekStart: WEEK, patterns: [], events: [], config: noStanding, flex: [f] });
     const mon = w.days[0]!;
     expect(mon.flexMinutes).toBe(90);

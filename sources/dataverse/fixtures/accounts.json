@@ -1,8 +1,8 @@
 {
   "@odata.context": "https://example.crm.dynamics.com/api/data/v9.2/$metadata#accounts(accountid,name,coop_reportingnickname)",
   "value": [
-    { "@odata.etag": "W/\"3000001\"", "accountid": "c0000000-0000-4000-8000-000000000001", "name": "Quiddity Example Co", "coop_reportingnickname": "Quiddity" },
-    { "@odata.etag": "W/\"3000002\"", "accountid": "c0000000-0000-4000-8000-000000000002", "name": "Example Services Corp", "coop_reportingnickname": "CSC" },
+    { "@odata.etag": "W/\"3000001\"", "accountid": "c0000000-0000-4000-8000-000000000001", "name": "Proseware Example Co", "coop_reportingnickname": "Proseware" },
+    { "@odata.etag": "W/\"3000002\"", "accountid": "c0000000-0000-4000-8000-000000000002", "name": "Example Services Corp", "coop_reportingnickname": "Adatum" },
     { "@odata.etag": "W/\"3000003\"", "accountid": "c0000000-0000-4000-8000-000000000003", "name": "Cooptimize Example", "coop_reportingnickname": "Internal" },
     { "@odata.etag": "W/\"3000004\"", "accountid": "c0000000-0000-4000-8000-000000000004", "name": "Example Engineering Partners", "coop_reportingnickname": null }
   ]

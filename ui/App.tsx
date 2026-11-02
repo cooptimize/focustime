@@ -117,7 +117,7 @@ export function App() {
   }, []);
   const [busy, setBusy] = useState<"outlook" | "google" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  // Notices from work item links (e.g. "No Edge profile set for W&C"), shown for a few seconds.
+  // Notices from work item links (e.g. "No Edge profile set for Fabrikam"), shown for a few seconds.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const on = (e: Event) => {

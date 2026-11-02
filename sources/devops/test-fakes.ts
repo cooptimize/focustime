@@ -41,17 +41,17 @@ const MINE = [110, 101, 120, 130];
  * Mine (open, assigned to me): 201, 202, 203, 204, 240, 250.
  */
 export const PLANWEEK: Record<number, [string, string, number | null, string, string | null, string | null]> = {
-  201: ["User Story", "Active", 210, "My story under Dana's feature", "Tanner S", null],
-  202: ["User Story", "New", 220, "My story under an unassigned feature", "Tanner S", null],
-  203: ["Task", "Active", 201, "My task under my story", "Tanner S", null],
-  204: ["User Story", "Active", null, "My story with no parent", "Tanner S", null],
+  201: ["User Story", "Active", 210, "My story under Dana's feature", "Avery S", null],
+  202: ["User Story", "New", 220, "My story under an unassigned feature", "Avery S", null],
+  203: ["Task", "Active", 201, "My task under my story", "Avery S", null],
+  204: ["User Story", "Active", null, "My story with no parent", "Avery S", null],
   210: ["Feature", "Active", 230, "Dana's feature", "Dana Ruiz", "2026-11-20T05:00:00Z"],
   211: ["User Story", "Closed", 210, "Done story", "Dana Ruiz", null],
   212: ["User Story", "New", 210, "Unassigned story", null, null],
   220: ["Feature", "New", null, "Unassigned feature", null, null],
   230: ["Epic", "Active", null, "Dana's epic", "Dana Ruiz", null],
-  240: ["Feature", "Active", null, "My feature with no stories", "Tanner S", null],
-  250: ["Epic", "New", null, "My epic", "Tanner S", null],
+  240: ["Feature", "Active", null, "My feature with no stories", "Avery S", null],
+  250: ["Epic", "New", null, "My epic", "Avery S", null],
   251: ["Feature", "Closed", 250, "Finished feature", "Dana Ruiz", null],
 };
 const PLANWEEK_MINE = [240, 201, 202, 250, 203, 204];
@@ -128,7 +128,7 @@ export function fakeDevOps(orgs: Record<string, OrgScenario>, opts: { ids?: numb
             "System.Id": id, "System.Title": title, "System.WorkItemType": type, "System.State": state, "System.ChangedDate": "2026-10-30T15:00:00Z",
             "Microsoft.VSTS.Common.StackRank": id, "System.Description": id === 210 ? "<div>Export the <b>weekly</b> report &amp; email it.</div><ul><li>CSV</li></ul>" : "",
             ...(parent ? { "System.Parent": parent } : {}),
-            ...(who ? { "System.AssignedTo": { displayName: who, uniqueName: who === "Tanner S" ? `tanner@${org}.example` : "dana@client.example" } } : {}),
+            ...(who ? { "System.AssignedTo": { displayName: who, uniqueName: who === "Avery S" ? `avery@${org}.example` : "dana@client.example" } } : {}),
             ...(target ? { "Microsoft.VSTS.Scheduling.TargetDate": target } : {}),
             ...(id === 201 ? { "Microsoft.VSTS.Scheduling.StoryPoints": 3 } : {}),
           };
@@ -189,7 +189,7 @@ export function target(clientKey: string, org: string, over: Partial<DevOpsTarge
     org,
     project: `${clientKey} Project`,
     projectName: `${clientKey} Project`,
-    email: `tanner@${org}.example`,
+    email: `avery@${org}.example`,
     pat: new Pat(fakePat(clientKey)),
     ...over,
   };

@@ -17,8 +17,8 @@ describe("normalizeFocusTimes on the recorded response", () => {
 
   it("keeps my four patterns and drops the row whose Account Worker is someone else", () => {
     expect(patterns.map((p) => [p.clientName, p.days])).toEqual([
-      ["Quiddity", { Mon: "AM" }],
-      ["CSC", { Mon: "PM", Tue: "PM" }],
+      ["Proseware", { Mon: "AM" }],
+      ["Adatum", { Mon: "PM", Tue: "PM" }],
       ["Internal", { Tue: "AM" }],
       ["Example Engineering Partners", { Wed: "AllDay", Thu: "AM" }],
     ]);
@@ -26,7 +26,7 @@ describe("normalizeFocusTimes on the recorded response", () => {
   });
 
   it("uses the reporting nickname as the client key and name, with the full name kept", () => {
-    expect(patterns[1]).toMatchObject({ clientKey: "CSC", clientName: "CSC", clientFullName: "Example Services Corp" });
+    expect(patterns[1]).toMatchObject({ clientKey: "Adatum", clientName: "Adatum", clientFullName: "Example Services Corp" });
   });
 
   it("falls back to the account name when there is no nickname", () => {
@@ -46,10 +46,10 @@ describe("Account Worker fallback", () => {
   const OTHER = "d0000000-0000-4000-8000-00000000000b";
 
   it.each([
-    ["Account Worker user and account win over Focus Time columns", row({ _coop_systemuser_value: OTHER, _coop_account_value: C2, coop_AccountWorker: aw(ME, C1) }), "Quiddity"],
-    ["no Account Worker: Focus Time columns are used", row({ _coop_systemuser_value: ME, _coop_account_value: C2, coop_AccountWorker: null }), "CSC"],
-    ["Account Worker without user: Focus Time person is used", row({ _coop_systemuser_value: ME, coop_AccountWorker: aw(null, C1) }), "Quiddity"],
-    ["Account Worker without account: Focus Time account is used", row({ _coop_account_value: C2, coop_AccountWorker: aw(ME, null) }), "CSC"],
+    ["Account Worker user and account win over Focus Time columns", row({ _coop_systemuser_value: OTHER, _coop_account_value: C2, coop_AccountWorker: aw(ME, C1) }), "Proseware"],
+    ["no Account Worker: Focus Time columns are used", row({ _coop_systemuser_value: ME, _coop_account_value: C2, coop_AccountWorker: null }), "Adatum"],
+    ["Account Worker without user: Focus Time person is used", row({ _coop_systemuser_value: ME, coop_AccountWorker: aw(null, C1) }), "Proseware"],
+    ["Account Worker without account: Focus Time account is used", row({ _coop_account_value: C2, coop_AccountWorker: aw(ME, null) }), "Adatum"],
   ])("%s", (_label, r, client) => {
     expect(normalizeFocusTimes([r], accts, ME).patterns.map((p) => p.clientName)).toEqual([client]);
   });

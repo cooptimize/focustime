@@ -13,18 +13,18 @@ const NOW = "2026-11-02T13:00:00Z"; // 8:00 New York
 const item = (id: number): WorkItem => ({ id, title: `Item ${id}`, type: "User Story", state: "New", stateCategory: "Proposed", level: "story", order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
 const ITEMS = [1, 2, 3, 4, 5].map(item);
 let nextId = 1;
-const pick = (over: Partial<Pick> & { size?: Size } = {}): Pick => ({ id: nextId++, date: "2026-11-02", half: "AM", clientKey: "CSC", kind: "item", itemId: 1, draftId: null, title: "Item 1", itemType: "User Story", itemUrl: null, size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, followUpId: null, notes: null, position: 1, createdAt: "", updatedAt: "", ...over });
+const pick = (over: Partial<Pick> & { size?: Size } = {}): Pick => ({ id: nextId++, date: "2026-11-02", half: "AM", clientKey: "Adatum", kind: "item", itemId: 1, draftId: null, title: "Item 1", itemType: "User Story", itemUrl: null, size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, followUpId: null, notes: null, position: 1, createdAt: "", updatedAt: "", ...over });
 const plan = (picks: Pick[], committed = true): PlanWeek => ({ "2026-11-02": { committedAt: committed ? "2026-11-02T08:10:00-05:00[America/New_York]" : null, picks } });
 
 describe("a card's plan (step 6.1)", () => {
   it("before commit: no picks, every item, not collapsed (the step 6 card)", () => {
-    const cp = cardPlan(plan([pick({ itemId: 2 })], false), slot, "CSC", ITEMS, NOW);
+    const cp = cardPlan(plan([pick({ itemId: 2 })], false), slot, "Adatum", ITEMS, NOW);
     expect(cp).toEqual({ picks: [], fit: null, items: ITEMS, collapsed: false });
-    expect(cardPlan(null, slot, "CSC", ITEMS, NOW).collapsed).toBe(false);
+    expect(cardPlan(null, slot, "Adatum", ITEMS, NOW).collapsed).toBe(false);
   });
 
   it("committed: the picks, their fit against the block's free time, and the list collapsed", () => {
-    const cp = cardPlan(plan([pick({ itemId: 2, size: "M" }), pick({ kind: "intention", itemId: null, size: "S" })]), slot, "CSC", ITEMS, NOW);
+    const cp = cardPlan(plan([pick({ itemId: 2, size: "M" }), pick({ kind: "intention", itemId: null, size: "S" })]), slot, "Adatum", ITEMS, NOW);
     expect(cp.picks).toHaveLength(2);
     expect(cp.fit).toEqual({ kind: "fits", spare: 30 }); // 210 free − (120 + 60)
     expect(fitLabel(cp.fit!)).toBe("fits, 30m to spare");
@@ -32,62 +32,62 @@ describe("a card's plan (step 6.1)", () => {
   });
 
   it("tight under 30 minutes spare, over by the excess", () => {
-    expect(fitLabel(cardPlan(plan([pick({ size: "L" })]), slot, "CSC", ITEMS, NOW).fit!)).toBe("just fits, no time to spare"); // 210 of 210
-    expect(fitLabel(cardPlan(plan([pick({ size: "L" }), pick({ itemId: 3, size: "S" })]), slot, "CSC", ITEMS, NOW).fit!)).toBe("too much: 1h more than the free time");
+    expect(fitLabel(cardPlan(plan([pick({ size: "L" })]), slot, "Adatum", ITEMS, NOW).fit!)).toBe("just fits, no time to spare"); // 210 of 210
+    expect(fitLabel(cardPlan(plan([pick({ size: "L" }), pick({ itemId: 3, size: "S" })]), slot, "Adatum", ITEMS, NOW).fit!)).toBe("too much: 1h more than the free time");
   });
 
   it("an item picked here is not listed again; another client's pick with the same id is", () => {
-    const cp = cardPlan(plan([pick({ itemId: 2 }), pick({ itemId: 4, clientKey: "W&C" })]), slot, "CSC", ITEMS, NOW);
+    const cp = cardPlan(plan([pick({ itemId: 2 }), pick({ itemId: 4, clientKey: "T&S" })]), slot, "Adatum", ITEMS, NOW);
     expect(cp.items.map((i) => i.id)).toEqual([1, 3, 4, 5]);
   });
 
   it("done picks still count as picked; dropped and moved ones do not show", () => {
-    const cp = cardPlan(plan([pick({ itemId: 2, status: "done" }), pick({ itemId: 3, status: "dropped" }), pick({ itemId: 5, status: "moved" })]), slot, "CSC", ITEMS, NOW);
+    const cp = cardPlan(plan([pick({ itemId: 2, status: "done" }), pick({ itemId: 3, status: "dropped" }), pick({ itemId: 5, status: "moved" })]), slot, "Adatum", ITEMS, NOW);
     expect(cp.picks.map((p) => p.itemId)).toEqual([2]);
     expect(cp.items.map((i) => i.id)).toEqual([1, 3, 4, 5]);
     expect(cp.fit).toBeNull(); // nothing left to do, so no fit to show
   });
 
   it("a block that has ended shows no fit (a past day)", () => {
-    expect(cardPlan(plan([pick({ size: "L" }), pick({ itemId: 3, size: "S" })]), slot, "CSC", ITEMS, "2026-11-03T13:00:00Z").fit).toBeNull();
+    expect(cardPlan(plan([pick({ size: "L" }), pick({ itemId: 3, size: "S" })]), slot, "Adatum", ITEMS, "2026-11-03T13:00:00Z").fit).toBeNull();
   });
 
   it("committed with no picks in this half: no fit, the list still collapses", () => {
-    const cp = cardPlan(plan([pick({ half: "PM" })]), slot, "CSC", ITEMS, NOW);
+    const cp = cardPlan(plan([pick({ half: "PM" })]), slot, "Adatum", ITEMS, NOW);
     expect(cp).toMatchObject({ picks: [], fit: null, collapsed: true, items: ITEMS });
   });
 });
 
 describe("resume notes on the week (step 7)", () => {
-  // CSC on Mon PM and Wed PM; W&C on Tue AM.
+  // Adatum on Mon PM and Wed PM; T&S on Tue AM.
   const days = buildWeek({
     weekStart: "2026-11-02",
-    patterns: [pattern({ clientKey: "CSC", clientName: "CSC", days: { Mon: "PM", Wed: "PM" } }), pattern({ id: "p2", clientKey: "W&C", clientName: "W&C", days: { Tue: "AM" } })],
+    patterns: [pattern({ clientKey: "Adatum", clientName: "Adatum", days: { Mon: "PM", Wed: "PM" } }), pattern({ id: "p2", clientKey: "T&S", clientName: "T&S", days: { Tue: "AM" } })],
     events: [],
     config: noStanding,
   }).days;
   it("shows each client's latest note on its next block after the note's day, from today on", () => {
-    const notes = { CSC: { clientKey: "CSC", date: "2026-11-02", note: "Mapping half done" }, "W&C": { clientKey: "W&C", date: "2026-10-29", note: "Pump curves next" } };
+    const notes = { Adatum: { clientKey: "Adatum", date: "2026-11-02", note: "Mapping half done" }, "T&S": { clientKey: "T&S", date: "2026-10-29", note: "Pump curves next" } };
     expect(Object.keys(resumeSlots(days, notes, "2026-11-02")).sort()).toEqual(["2026-11-03:AM", "2026-11-04:PM"]);
-    // Later in the week the W&C block has passed: nothing shown for it.
+    // Later in the week the T&S block has passed: nothing shown for it.
     expect(Object.keys(resumeSlots(days, notes, "2026-11-04"))).toEqual(["2026-11-04:PM"]);
   });
 });
 
 describe("week items on a block (step 11)", () => {
   type F = { clientKey: string; itemId: number; title: string; blocks: number; slots: { date: string; half: "AM" | "PM" }[]; tier?: "must" | "nice"; doneAt?: string | null };
-  const f = (over: Partial<F>): F => ({ clientKey: "W&C", itemId: 1, title: "Export", blocks: 2, slots: [], ...over });
+  const f = (over: Partial<F>): F => ({ clientKey: "T&S", itemId: 1, title: "Export", blocks: 2, slots: [], ...over });
   it("shows what is pinned to this block, then the client's unpinned musts that aren't done", () => {
     const placed = f({ itemId: 1, title: "Pinned here", slots: [{ date: "2026-11-09", half: "PM" }] });
     const floating = f({ itemId: 2, title: "Unpinned must" });
     const elsewhere = f({ itemId: 3, title: "Pinned elsewhere", slots: [{ date: "2026-11-10", half: "AM" }] });
     const nice = f({ itemId: 5, title: "Nice", tier: "nice" });
     const done = f({ itemId: 6, title: "Done", doneAt: "x" });
-    const other = f({ clientKey: "CSC", itemId: 4, title: "CSC's" });
+    const other = f({ clientKey: "Adatum", itemId: 4, title: "Adatum's" });
     const all = [elsewhere, floating, placed, nice, done, other];
-    expect(featuresOn(all, "2026-11-09", "PM", "W&C").map((x) => x.title)).toEqual(["Pinned here", "Unpinned must"]);
+    expect(featuresOn(all, "2026-11-09", "PM", "T&S").map((x) => x.title)).toEqual(["Pinned here", "Unpinned must"]);
     // An Open half-day shows only what is pinned to it.
     expect(featuresOn(all, "2026-11-09", "PM", null).map((x) => x.title)).toEqual(["Pinned here"]);
-    expect(featuresOn(all, "2026-11-11", "AM", "CSC").map((x) => x.title)).toEqual(["CSC's"]);
+    expect(featuresOn(all, "2026-11-11", "AM", "Adatum").map((x) => x.title)).toEqual(["Adatum's"]);
   });
 });

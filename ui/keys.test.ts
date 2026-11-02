@@ -45,12 +45,12 @@ describe("F6 regions", () => {
 
 describe("O opens the focused work item", () => {
   it("from any element inside a row that carries a work item", () => {
-    expect(openTarget(row({ "data-item-client": "CSC", "data-item-url": URL }))).toEqual({ clientKey: "CSC", url: URL });
+    expect(openTarget(row({ "data-item-client": "Adatum", "data-item-url": URL }))).toEqual({ clientKey: "Adatum", url: URL });
   });
 
   it("nothing for a row without one, or a link that isn't Azure DevOps", () => {
     expect(openTarget(row(null))).toBeNull();
-    expect(openTarget(row({ "data-item-client": "CSC", "data-item-url": "https://example.com/x" }))).toBeNull();
+    expect(openTarget(row({ "data-item-client": "Adatum", "data-item-url": "https://example.com/x" }))).toBeNull();
     expect(openTarget(row({ "data-item-url": URL }))).toBeNull();
     expect(openTarget(null)).toBeNull();
   });
@@ -82,9 +82,9 @@ describe("the keyboard legend and the command menu agree", () => {
 
   it("O in the command menu opens the item focused when it opened, or says to focus one", () => {
     const calls: unknown[] = [];
-    const withItem = commandList({ ...env, focusedItem: { clientKey: "CSC", url: URL }, openLink: (k, u) => calls.push([k, u]) }).find((c) => c.action === "ui.open_focused")!;
+    const withItem = commandList({ ...env, focusedItem: { clientKey: "Adatum", url: URL }, openLink: (k, u) => calls.push([k, u]) }).find((c) => c.action === "ui.open_focused")!;
     void withItem.run?.();
-    expect(calls).toEqual([["CSC", URL]]);
+    expect(calls).toEqual([["Adatum", URL]]);
     expect(commands.find((c) => c.action === "ui.open_focused")!.disabled).toBe("Focus a work item first (Tab to it)");
   });
 });

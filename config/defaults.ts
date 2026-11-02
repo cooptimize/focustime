@@ -5,11 +5,11 @@ import { legacyHours } from "./schema.ts";
 
 export type ClientStyle = { key: string; name: string; shortName: string; color: string };
 
-/** Default client colors until Tanner picks his own (open question). */
+/** Default client colors for the sample week (fictional clients); real colors come from config. */
 export const clients: Record<string, ClientStyle> = {
-  wc: { key: "wc", name: "Woodard & Curran", shortName: "WC", color: "#1f9e8f" },
-  quiddity: { key: "quiddity", name: "Quiddity", shortName: "Quiddity", color: "#7b68ee" },
-  csc: { key: "csc", name: "CSC", shortName: "CSC", color: "#d2892a" },
+  wc: { key: "wc", name: "Tailspin & Sons", shortName: "TS", color: "#1f9e8f" },
+  proseware: { key: "proseware", name: "Proseware", shortName: "Proseware", color: "#7b68ee" },
+  adatum: { key: "adatum", name: "Adatum", shortName: "Adatum", color: "#d2892a" },
   internal: { key: "internal", name: "Internal", shortName: "Internal", color: "#4a7fd4" },
 };
 

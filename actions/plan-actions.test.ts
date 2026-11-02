@@ -67,9 +67,9 @@ describe("Plan the day actions", () => {
 
     const start = await t.run<PlanDayState>("planday.start", { date: D });
     expect(start.plan.committedAt).toBeNull();
-    const a = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
+    const a = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
     expect(a.pick).toMatchObject({ kind: "item", title: "Story assigned to me", size: "M", status: "planned" });
-    const child = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 122, size: "S" });
+    const child = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 122, size: "S" });
     expect(child.pick.title).toBe("Story two levels down");
     await t.run("pick.add", { date: D, half: "PM", clientKey: "Cooptimize", intention: "  Review the  planning copy " });
     await t.run("pick.set_size", { id: a.pick.id, size: "L" });
@@ -90,7 +90,7 @@ describe("Plan the day actions", () => {
   it("story level is enforced on the server: epics and features can't be picked", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const r = await t.fail("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 110 });
+    const r = await t.fail("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 110 });
     expect(r).toMatchObject({ status: 422 });
     expect(r.ok ? "" : r.error).toMatch(/Pick one of its child items, or add a draft story/);
   });
@@ -98,10 +98,10 @@ describe("Plan the day actions", () => {
   it("a feature with no children gets draft stories, which can then be picked", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const { draft } = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "CSC", parentItemId: 130, title: "First slice of the feature", size: "S" });
-    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", draftId: draft.id });
+    const { draft } = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: 130, title: "First slice of the feature", size: "S" });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", draftId: draft.id });
     expect(pick).toMatchObject({ kind: "draft", title: "First slice of the feature", itemType: "Draft story" });
-    expect((await t.fail("draft.add_story", { clientKey: "CSC", parentItemId: 101, title: "x" })).status).toBe(422);
+    expect((await t.fail("draft.add_story", { clientKey: "Adatum", parentItemId: 101, title: "x" })).status).toBe(422);
     expect((await t.fail("pick.add", { date: D, half: "AM", clientKey: "Cooptimize", draftId: draft.id })).status).toBe(404);
   });
 
@@ -109,7 +109,7 @@ describe("Plan the day actions", () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
     expect((await t.fail("pick.add", { date: D, half: "AM", clientKey: "Cooptimize", itemId: 122 })).status).toBe(409);
-    expect((await t.fail("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 99999 })).status).toBe(409);
+    expect((await t.fail("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 99999 })).status).toBe(409);
   });
 
   it("rejects bad input plainly, including sizes above L", async () => {
@@ -119,21 +119,21 @@ describe("Plan the day actions", () => {
       const r = await t.fail(action, input);
       return r.ok ? "" : r.error;
     };
-    expect(await err({ date: D, half: "AM", clientKey: "CSC", intention: "x", size: "XL" })).toMatch(/split it first/);
-    expect(await err({ date: D, half: "NIGHT", clientKey: "CSC", intention: "x" })).toMatch(/AM, PM or EVE/);
-    expect(await err({ date: "2026-02-30", half: "AM", clientKey: "CSC", intention: "x" })).toMatch(/real date/);
-    expect(await err({ date: D, half: "AM", clientKey: "CSC" })).toMatch(/exactly one/);
-    expect(await err({ date: D, half: "AM", clientKey: "CSC", intention: "x", itemId: 101 })).toMatch(/exactly one/);
-    expect(await err({ date: D, half: "AM", clientKey: "CSC", intention: "   " })).toMatch(/empty/);
-    expect(await err({ date: D, half: "AM", clientKey: "CSC", intention: "x", extra: 1 })).toMatch(/unknown input field/);
+    expect(await err({ date: D, half: "AM", clientKey: "Adatum", intention: "x", size: "XL" })).toMatch(/split it first/);
+    expect(await err({ date: D, half: "NIGHT", clientKey: "Adatum", intention: "x" })).toMatch(/AM, PM or EVE/);
+    expect(await err({ date: "2026-02-30", half: "AM", clientKey: "Adatum", intention: "x" })).toMatch(/real date/);
+    expect(await err({ date: D, half: "AM", clientKey: "Adatum" })).toMatch(/exactly one/);
+    expect(await err({ date: D, half: "AM", clientKey: "Adatum", intention: "x", itemId: 101 })).toMatch(/exactly one/);
+    expect(await err({ date: D, half: "AM", clientKey: "Adatum", intention: "   " })).toMatch(/empty/);
+    expect(await err({ date: D, half: "AM", clientKey: "Adatum", intention: "x", extra: 1 })).toMatch(/unknown input field/);
     expect(await err({ id: 1.5, size: "S" }, "pick.set_size")).toMatch(/whole number/);
   });
 
   it("a duplicate pick of the same item on the same day is refused", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    await t.run("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
-    expect((await t.fail("pick.add", { date: D, half: "PM", clientKey: "CSC", itemId: 101 })).status).toBe(409);
+    await t.run("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
+    expect((await t.fail("pick.add", { date: D, half: "PM", clientKey: "Adatum", itemId: 101 })).status).toBe(409);
   });
 
   it("the automatic open happens once per day and never for a committed day", async () => {
@@ -151,7 +151,7 @@ describe("Plan the day actions", () => {
     const mon = "2026-11-02";
     // Monday was planned on Monday; now it is Tuesday morning.
     t.at("2026-11-02T14:00:00Z");
-    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: mon, half: "PM", clientKey: "CSC", itemId: 101 });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: mon, half: "PM", clientKey: "Adatum", itemId: 101 });
     await t.run("planday.commit", { date: mon });
     t.at(NOW);
     const s = await t.run<PlanDayState>("planday.start", { date: D });
@@ -164,7 +164,7 @@ describe("Plan the day actions", () => {
   it("moving a pick to a weekend day with no working hours asks first; Move anyway moves it (step 13.5)", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
     const r = await t.fail("pick.move", { id: pick.id, date: "2026-11-07", half: "AM" });
     expect(r).toMatchObject({ status: 409, code: "no_hours", error: "Saturday has no working hours. Add hours for that day?" });
     expect(t.plan.getPick(pick.id)!.date).toBe(D);
@@ -177,7 +177,7 @@ describe("Plan the day actions", () => {
   it("moving a pick to Friday never asks: it is catch-up work on the overflow day (step 13.6, Q78, D238)", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
     const fri = (await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: "2026-11-06", half: "AM" })).pick;
     expect(fri).toMatchObject({ date: "2026-11-06", half: "AM", status: "planned" });
     // It counts in the week: the week's picks include it.
@@ -189,8 +189,8 @@ describe("Plan the day actions", () => {
     const mon = "2026-11-02";
     t.at("2026-11-02T22:15:00Z"); // Mon 5:15 PM, after the workday: the next workday (Tue) is the carry-over day
     await t.run("week.load", { weekStart: "2026-11-02" });
-    await t.run("flex.add", { date: mon, clientKey: "CSC", start: "20:00", end: "22:00" });
-    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: mon, half: "EVE", clientKey: "CSC", intention: "Make up the export" });
+    await t.run("flex.add", { date: mon, clientKey: "Adatum", start: "20:00", end: "22:00" });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: mon, half: "EVE", clientKey: "Adatum", intention: "Make up the export" });
     const tue = "2026-11-03";
     expect((await t.run<PlanDayState>("planday.start", { date: tue })).carryOver).toEqual([]);
     t.at("2026-11-03T02:30:00Z"); // Mon 9:30 PM: still under way
@@ -215,11 +215,11 @@ describe("Plan the day actions", () => {
     // After the week is loaded, plan actions make no DevOps call, and in Dataverse only the PTO reads
     // that check a day isn't a full PTO day (step 6).
     await t.run("planday.start", { date: D });
-    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
     await t.run("pick.set_size", { id: pick.id, size: "S" });
     await t.run("pick.move", { id: pick.id, date: "2026-11-06", half: "AM", anyway: true });
-    const { draft } = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "CSC", parentItemId: 130, title: "Draft" });
-    const p2 = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "PM", clientKey: "CSC", draftId: draft.id });
+    const { draft } = await t.run<{ draft: { id: number } }>("draft.add_story", { clientKey: "Adatum", parentItemId: 130, title: "Draft" });
+    const p2 = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "PM", clientKey: "Adatum", draftId: draft.id });
     await t.run("planday.commit", { date: D });
     await t.run("pick.mark_done", { id: p2.pick.id, done: true });
     await t.run("pick.remove", { id: p2.pick.id });
@@ -267,10 +267,10 @@ describe("PTO and Plan the day (step 6)", () => {
   it("picks are refused on a PTO day, by add or by move; other days still take them", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const r = await t.fail("pick.add", { date: "2026-11-05", half: "AM", clientKey: "CSC", intention: "x" });
+    const r = await t.fail("pick.add", { date: "2026-11-05", half: "AM", clientKey: "Adatum", intention: "x" });
     expect(r).toMatchObject({ status: 422 });
     expect(r.ok ? "" : r.error).toBe("Thu, Nov 5 is a PTO day (Watch Kids). Nothing can be planned on it");
-    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-03", half: "AM", clientKey: "CSC", intention: "fine on a normal day" });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-03", half: "AM", clientKey: "Adatum", intention: "fine on a normal day" });
     expect((await t.fail("pick.move", { id: pick.id, date: "2026-11-05", half: "PM" })).status).toBe(422);
   });
 
@@ -280,14 +280,14 @@ describe("PTO and Plan the day (step 6)", () => {
     expect(w.sources.find((s) => s.source === "pto")).toMatchObject({ status: "auth_required" });
     expect(w.week.days[3]!.pto).toBeNull();
     expect(w.week.days[0]!.am.focus.length).toBeGreaterThan(0);
-    await t.run("pick.add", { date: "2026-11-05", half: "AM", clientKey: "CSC", intention: "PTO unknown, so allowed" });
+    await t.run("pick.add", { date: "2026-11-05", half: "AM", clientKey: "Adatum", intention: "PTO unknown, so allowed" });
   });
 
   it("Plan the day can target the next workday from the weekend", async () => {
     const t = setup();
     const s = await t.run<PlanDayLike>("planday.start", { date: "2026-11-09" });
     expect(s.date).toBe("2026-11-09");
-    await t.run("pick.add", { date: "2026-11-09", half: "AM", clientKey: "CSC", intention: "Monday first thing" });
+    await t.run("pick.add", { date: "2026-11-09", half: "AM", clientKey: "Adatum", intention: "Monday first thing" });
     expect((await t.run<PlanDayLike>("planday.commit", { date: "2026-11-09" })).plan.committedAt).toBeTruthy();
   });
 });
@@ -301,7 +301,7 @@ describe("Plan any day", () => {
   async function mondayPlanned(t: ReturnType<typeof setup>, n = 3) {
     t.at("2026-11-02T14:00:00Z");
     const picks: Pick[] = [];
-    for (let i = 0; i < n; i++) picks.push((await t.run<{ pick: Pick }>("pick.add", { date: MON, half: "AM", clientKey: "CSC", intention: `Monday ${i + 1}` })).pick);
+    for (let i = 0; i < n; i++) picks.push((await t.run<{ pick: Pick }>("pick.add", { date: MON, half: "AM", clientKey: "Adatum", intention: `Monday ${i + 1}` })).pick);
     await t.run("planday.commit", { date: MON });
     t.at(NOW);
     return picks;
@@ -314,7 +314,7 @@ describe("Plan any day", () => {
       const d = "2026-11-12";
       const s = await t.run<PlanDayState>("planday.start", { date: d });
       expect(s.access).toBe("plan");
-      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: d, half: "AM", clientKey: "CSC", itemId: 101 });
+      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: d, half: "AM", clientKey: "Adatum", itemId: 101 });
       await t.run("pick.set_size", { id: pick.id, size: "L" });
       await t.run("pick.move", { id: pick.id, date: d, half: "PM" });
       expect((await t.run<PlanDayState>("planday.commit", { date: d })).picks).toMatchObject([{ half: "PM", size: "L", status: "planned" }]);
@@ -341,9 +341,9 @@ describe("Plan any day", () => {
       const t = setup({ text: text.replace("fri = []", 'fri = ["09:00-12:00"]') });
       expect((await t.run<PlanDayState>("planday.start", { date: "2026-11-06" })).access).toBe("plan");
       expect((await t.fail("planday.start", { date: "2026-11-07" })).status).toBe(422);
-      t.plan.addFlex({ date: "2026-11-07", clientKey: "CSC", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z" });
+      t.plan.addFlex({ date: "2026-11-07", clientKey: "Adatum", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z" });
       expect((await t.run<PlanDayState>("planday.start", { date: "2026-11-07" })).access).toBe("plan");
-      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-07", half: "EVE", clientKey: "CSC", intention: "Saturday catch-up" });
+      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-11-07", half: "EVE", clientKey: "Adatum", intention: "Saturday catch-up" });
       expect(pick.half).toBe("EVE");
     });
 
@@ -360,7 +360,7 @@ describe("Plan any day", () => {
       const t = setup();
       const [a, b] = await mondayPlanned(t);
       const refused = [
-        await t.fail("pick.add", { date: MON, half: "PM", clientKey: "CSC", intention: "late" }),
+        await t.fail("pick.add", { date: MON, half: "PM", clientKey: "Adatum", intention: "late" }),
         await t.fail("pick.set_size", { id: a!.id, size: "S" }),
         await t.fail("planday.commit", { date: MON }),
         await t.fail("pick.move", { id: b!.id, date: MON, half: "PM" }),
@@ -379,7 +379,7 @@ describe("Plan any day", () => {
       expect(r.state.picks.find((p) => p.id === b!.id)?.status).toBe("dropped");
 
       t.at("2026-10-29T14:00:00Z");
-      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-10-29", half: "AM", clientKey: "CSC", intention: "never committed" });
+      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: "2026-10-29", half: "AM", clientKey: "Adatum", intention: "never committed" });
       t.at(NOW);
       expect((await t.run<{ result: string }>("pick.remove", { id: pick.id })).result).toBe("dropped");
       expect(t.plan.getPick(pick.id)?.status).toBe("dropped");
@@ -427,14 +427,14 @@ describe("Plan any day", () => {
     it("a carried pick is offered nowhere else, and a future day's picks are not carry-over", async () => {
       const t = setup();
       const [a] = await mondayPlanned(t, 1);
-      await t.run("pick.add", { date: WED, half: "AM", clientKey: "CSC", intention: "planned ahead" });
+      await t.run("pick.add", { date: WED, half: "AM", clientKey: "Adatum", intention: "planned ahead" });
       await t.run("pick.move", { id: a!.id, date: D, half: "AM" });
       for (const d of [D, WED, "2026-11-09"]) expect((await t.run<PlanDayState>("planday.start", { date: d })).carryOver, d).toEqual([]);
     });
 
     it("after the usual end of day, today's unfinished picks go to the next day that can be planned", async () => {
       const t = setup();
-      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "PM", clientKey: "CSC", intention: "Tuesday work" });
+      const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "PM", clientKey: "Adatum", intention: "Tuesday work" });
       await t.run("planday.commit", { date: D });
       t.at("2026-11-03T23:30:00Z"); // Tue 18:30 New York
       const tue = await t.run<PlanDayState>("planday.start", { date: D });
@@ -447,7 +447,7 @@ describe("Plan any day", () => {
 describe("flex follow-ups open by the server's clock (step 6c)", () => {
   it("a week read with a later ?now does not open a follow-up for a session that hasn't ended yet", async () => {
     const t = setup();
-    t.plan.addFlex({ date: "2026-11-03", clientKey: "CSC", start: "2026-11-03T23:00:00Z", end: "2026-11-04T01:00:00Z" });
+    t.plan.addFlex({ date: "2026-11-03", clientKey: "Adatum", start: "2026-11-03T23:00:00Z", end: "2026-11-04T01:00:00Z" });
     await t.run("week.load", { weekStart: "2026-11-02", now: "2026-11-05T14:00:00Z" });
     expect(t.plan.openFollowUps()).toEqual([]);
     t.at("2026-11-04T02:00:00Z");
@@ -460,7 +460,7 @@ describe("focused time in Plan the day (step 6d)", () => {
   it("planday.start returns seconds focused per pick, for past days too", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const { pick: p } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", intention: "Write it" });
+    const { pick: p } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", intention: "Write it" });
     t.plan.addFocus({ pickId: p.id, label: "Write it", startedAt: "2026-11-03T14:00:00Z", endedAt: "2026-11-03T14:25:00Z", seconds: 1500 });
     t.plan.addFocus({ pickId: p.id, label: "Write it", startedAt: "2026-11-03T15:00:00Z", endedAt: "2026-11-03T15:20:00Z", seconds: 1200 });
     expect((await t.run<PlanDayState>("planday.start", { date: D })).focused).toEqual({ [p.id]: 2700 });
@@ -474,7 +474,7 @@ describe("drafts: choose a parent, and delete (step 14.5, D257)", () => {
   it("a story draft with no parent gets an open feature of its own client; nothing else", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const { draft } = await t.run<{ draft: { id: number; parentItemId: number | null } }>("draft.add_story", { clientKey: "CSC", parentItemId: null, title: "Loose story", size: "S" });
+    const { draft } = await t.run<{ draft: { id: number; parentItemId: number | null } }>("draft.add_story", { clientKey: "Adatum", parentItemId: null, title: "Loose story", size: "S" });
     expect((await t.fail("draft.set_parent", { id: draft.id, parentItemId: 120 })).error).toMatch(/feature/i);
     expect((await t.fail("draft.set_parent", { id: draft.id, parentItemId: 101 })).status).toBe(422);
     expect((await t.fail("draft.set_parent", { id: draft.id, parentItemId: 99999 })).status).toBe(409);
@@ -484,16 +484,16 @@ describe("drafts: choose a parent, and delete (step 14.5, D257)", () => {
   it("a draft feature takes an epic", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const d = t.plan.addDraft({ clientKey: "CSC", parentItemId: null, title: "Loose feature", size: "M", level: "feature" });
+    const d = t.plan.addDraft({ clientKey: "Adatum", parentItemId: null, title: "Loose feature", size: "M", level: "feature" });
     expect((await t.fail("draft.set_parent", { id: d.id, parentItemId: 130 })).error).toMatch(/epic/i);
     expect((await t.run<{ draft: { parentItemId: number } }>("draft.set_parent", { id: d.id, parentItemId: 120 })).draft.parentItemId).toBe(120);
   });
   it("delete removes a draft no pick uses; a picked one says to drop the pick first", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const a = t.plan.addDraft({ clientKey: "CSC", parentItemId: 130, title: "Unused", size: "S" });
-    const b = t.plan.addDraft({ clientKey: "CSC", parentItemId: 130, title: "Picked", size: "S" });
-    await t.run("pick.add", { date: D, half: "AM", clientKey: "CSC", draftId: b.id });
+    const a = t.plan.addDraft({ clientKey: "Adatum", parentItemId: 130, title: "Unused", size: "S" });
+    const b = t.plan.addDraft({ clientKey: "Adatum", parentItemId: 130, title: "Picked", size: "S" });
+    await t.run("pick.add", { date: D, half: "AM", clientKey: "Adatum", draftId: b.id });
     await t.run("draft.remove", { id: a.id });
     expect(t.plan.getDraft(a.id)).toBeNull();
     expect((await t.fail("draft.remove", { id: b.id })).error).toMatch(/drop the pick/i);
@@ -505,25 +505,25 @@ describe("duplicate picks (step 15.1, D277)", () => {
   it("adding the same item to the same block again says 'Already planned here'", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    await t.run("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
-    const r = await t.fail("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
+    await t.run("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
+    const r = await t.fail("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
     expect(r).toMatchObject({ status: 409, code: "duplicate", error: "Already planned here" });
     // The other half of the same day keeps its own refusal.
-    expect((await t.fail("pick.add", { date: D, half: "PM", clientKey: "CSC", itemId: 101 })).error).toBe("Already planned for the morning that day");
+    expect((await t.fail("pick.add", { date: D, half: "PM", clientKey: "Adatum", itemId: 101 })).error).toBe("Already planned for the morning that day");
   });
   it("moving a pick into a block that already has that item is refused (how one item got planned three times)", async () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
-    const first = (await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 })).pick;
+    const first = (await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 })).pick;
     const wed = (await t.run<{ pick: Pick }>("pick.move", { id: first.id, date: "2026-11-04", half: "AM" })).pick;
     // With the first copy on Wednesday, the item can be added to Tuesday again.
-    await t.run("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
+    await t.run("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
     const r = await t.fail("pick.move", { id: wed.id, date: D, half: "AM" });
     expect(r).toMatchObject({ status: 409, code: "duplicate", error: "Already planned here" });
     expect(t.plan.getPick(wed.id)).toMatchObject({ date: "2026-11-04", status: "planned" });
     expect(t.plan.picksFor(D).filter((p) => p.itemId === 101 && p.status === "planned")).toHaveLength(1);
     // Moving a pick within its own block's day to the other half is still fine.
-    const other = (await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 122 })).pick;
+    const other = (await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 122 })).pick;
     expect((await t.run<{ pick: Pick }>("pick.move", { id: other.id, date: D, half: "PM" })).pick.half).toBe("PM");
   });
 });

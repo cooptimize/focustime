@@ -36,7 +36,7 @@ export function fakeGraph(opts: { owner?: string } = {}) {
     id: e.id, subject: e.subject, start: { dateTime: e.start.replace(/Z$/, ".0000000"), timeZone: "UTC" }, end: { dateTime: e.end.replace(/Z$/, ".0000000"), timeZone: "UTC" },
     showAs: e.showAs, isReminderOn: e.isReminderOn, isCancelled: e.isCancelled ?? false,
     responseStatus: { response: e.response ?? ((e.isOrganizer ?? true) ? "organizer" : "notResponded"), time: "0001-01-01T00:00:00Z" },
-    organizer: { emailAddress: e.organizer ?? { name: "Tanner", address: "tanner@cooptimize.example" } }, allowNewTimeProposals: e.allowNewTimeProposals ?? true,
+    organizer: { emailAddress: e.organizer ?? { name: "Avery", address: "avery@cooptimize.example" } }, allowNewTimeProposals: e.allowNewTimeProposals ?? true,
     isOrganizer: e.isOrganizer ?? true, attendees: (e.attendees ?? []).map((a) => ({ emailAddress: a, type: "required" })), type: e.type ?? "singleInstance", isAllDay: e.isAllDay ?? false,
     isOnlineMeeting: e.online ?? false, webLink: `https://outlook.office365.com/owa/?itemid=${encodeURIComponent(e.id)}&exvsurl=1&path=/calendar/item`,
     ...(withMarker ? { singleValueExtendedProperties: e.marker ? [{ id: MARKER_PROP, value: e.marker }] : [] } : {}),
@@ -91,7 +91,7 @@ export function fakeGraph(opts: { owner?: string } = {}) {
       }
       return json(202, null);
     }
-    if (path === "me/calendar") return json(200, { name: "Calendar", owner: { name: "Tanner", address: opts.owner ?? "tanner@cooptimize.example" } });
+    if (path === "me/calendar") return json(200, { name: "Calendar", owner: { name: "Avery", address: opts.owner ?? "avery@cooptimize.example" } });
     if (path === "me/events" && method === "GET") {
       const f = u.searchParams.get("$filter") ?? "";
       const m = /ep\/value eq '(.*)'\)$/.exec(f);

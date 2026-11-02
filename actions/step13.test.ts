@@ -19,14 +19,14 @@ const D = "2026-11-10"; // Tue
 const ME_ID = "00000000-0000-4000-8000-000000000001";
 const toml = STARTER_TOML
   .replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"')
-  .replace('my_email = ""', 'my_email = "tanner@cooptimize.org"')
+  .replace('my_email = ""', 'my_email = "avery@cooptimize.org"')
   .replace('my_systemuserid = ""', `my_systemuserid = "${ME_ID}"`)
   .replace(/time_zone = "[^"]*"/, 'time_zone = "America/Chicago"');
 
 function setup() {
   clearPreviews();
   clearSyncMemo();
-  const g = fakeGraph({ owner: "tanner@cooptimize.org" });
+  const g = fakeGraph({ owner: "avery@cooptimize.org" });
   const logs: LogRecord[] = [];
   const log = (r: LogRecord) => void logs.push(r);
   const access: WriteAccess = { status: "write" };
@@ -36,12 +36,12 @@ function setup() {
   const parsed = parseConfig(toml);
   if (!parsed.ok) throw new Error(JSON.stringify(parsed.errors));
   const team = [
-    { id: ME_ID, name: "Tanner", email: "tanner@cooptimize.org" },
+    { id: ME_ID, name: "Avery", email: "avery@cooptimize.org" },
     { id: "00000000-0000-4000-8000-0000000000a1", name: "Ana", email: "ana@cooptimize.org" },
     { id: "00000000-0000-4000-8000-0000000000b2", name: "Ben", email: "ben@cooptimize.org" },
   ];
   const dv = {
-    myClients: async () => [{ clientKey: "W&C", clientName: "W&C", devops: true, devopsEmail: null }],
+    myClients: async () => [{ clientKey: "T&S", clientName: "T&S", devops: true, devopsEmail: null }],
     teammates: async () => ({ ok: true as const, people: team }),
     clientTeam: async () => ({ ok: true as const, accountId: "x", patterns: [{ userId: team[1]!.id, startDate: "2026-01-01", endDate: null, days: { Tue: "AM" as const } }], workers: [team[2]!.id] }),
     teamPto: async () => ({ ok: true as const, away: [{ userId: team[2]!.id, date: "2026-11-11" }] }),
@@ -69,9 +69,9 @@ function setup() {
     return r;
   };
   const confirm = (p: WritePreview) => run<WriteResult>("write.confirm", { previewId: p.previewId });
-  const sync = () => syncWeek({ plan, ow: { access: async () => access, writer }, cfg: parsed.config, weekStart: WEEK, refresh: true, now: () => NOW, clients: [{ key: "W&C", name: "W&C" }] });
+  const sync = () => syncWeek({ plan, ow: { access: async () => access, writer }, cfg: parsed.config, weekStart: WEEK, refresh: true, now: () => NOW, clients: [{ key: "T&S", name: "T&S" }] });
   const box = async (s = "09:00", e = "10:30") => {
-    const r = await run<{ timebox: { id: number; uid: string } }>("timebox.add", { date: D, start: `${D}T${s}:00-06:00`, end: `${D}T${e}:00-06:00`, clientKey: "W&C", title: "#4512 Import mapping", url: "https://dev.azure.com/wc/p/_workitems/edit/4512", outlook: true });
+    const r = await run<{ timebox: { id: number; uid: string } }>("timebox.add", { date: D, start: `${D}T${s}:00-06:00`, end: `${D}T${e}:00-06:00`, clientKey: "T&S", title: "#4512 Import mapping", url: "https://dev.azure.com/wc/p/_workitems/edit/4512", outlook: true });
     const p = (await run<{ preview: WritePreview }>("write.preview", { uid: r.timebox.uid })).preview;
     expect((await confirm(p)).confirmed).toBe(true);
     return r.timebox;
@@ -124,10 +124,10 @@ describe("editing tier: Coopilot events (the event and its timebox are one thing
     const r = await t.run<{ sync: string }>("timebox.update", { id: tb.id, title: "Import mapping, part 2", showAs: "tentative" });
     expect(r.sync).toBe("update");
     const p = (await t.run<{ preview: WritePreview }>("write.preview", { uid: tb.uid })).preview;
-    expect(p.fields.find((f) => f.label === "Title")).toMatchObject({ before: "W&C: #4512 Import mapping", after: "W&C: Import mapping, part 2", changed: true });
+    expect(p.fields.find((f) => f.label === "Title")).toMatchObject({ before: "T&S: #4512 Import mapping", after: "T&S: Import mapping, part 2", changed: true });
     expect(p.fields.find((f) => f.label === "Show as")).toMatchObject({ before: "Busy", after: "Tentative", changed: true });
     expect((await t.confirm(p)).confirmed).toBe(true);
-    expect(t.g.events.get(t.plan.ownEvent(tb.uid)!.eventId)).toMatchObject({ subject: "W&C: Import mapping, part 2", showAs: "tentative" });
+    expect(t.g.events.get(t.plan.ownEvent(tb.uid)!.eventId)).toMatchObject({ subject: "T&S: Import mapping, part 2", showAs: "tentative" });
     expect((await t.fail("timebox.update", { id: tb.id, showAs: "invisible" })).error).toMatch(/showAs/);
   });
 });
@@ -139,7 +139,7 @@ describe("two-way sync for Coopilot events", () => {
     const ev = t.g.events.get(t.plan.ownEvent(tb.uid)!.eventId)!;
     ev.start = "2026-11-10T19:00:00Z"; // 1:00 PM Chicago
     ev.end = "2026-11-10T20:00:00Z";
-    ev.subject = "W&C: Import mapping (moved)";
+    ev.subject = "T&S: Import mapping (moved)";
     const r = await t.sync();
     expect(r.changed).toBe(1);
     const now = t.plan.timebox(tb.id)!;
@@ -202,14 +202,14 @@ describe("two-way sync for Coopilot events", () => {
     const tb = await t.box();
     const id = t.plan.ownEvent(tb.uid)!.eventId;
     await t.run("timebox.update", { id: tb.id, start: `${D}T10:00:00-06:00`, end: `${D}T11:00:00-06:00` });
-    t.g.events.get(id)!.subject = "W&C: renamed in Outlook";
+    t.g.events.get(id)!.subject = "T&S: renamed in Outlook";
     const writes = t.g.calls.filter((c) => c.method !== "GET").length;
     const r = await t.sync();
     expect(r.conflicts).toBe(1);
     expect(t.g.calls.filter((c) => c.method !== "GET").length).toBe(writes);
     const c = t.plan.timebox(tb.id)!;
-    expect(c).toMatchObject({ start: `${D}T10:00:00-06:00`, conflict: { changed: ["title"], outlook: { subject: "W&C: renamed in Outlook" } } });
-    expect(t.g.events.get(id)!.subject).toBe("W&C: renamed in Outlook");
+    expect(c).toMatchObject({ start: `${D}T10:00:00-06:00`, conflict: { changed: ["title"], outlook: { subject: "T&S: renamed in Outlook" } } });
+    expect(t.g.events.get(id)!.subject).toBe("T&S: renamed in Outlook");
     expect((await t.fail("write.preview", { uid: tb.uid })).error).toMatch(/choose which version/);
     // A second sync doesn't log the same conflict again.
     const before = (await t.run<WriteLogView>("write.log", {})).entries.length;
@@ -220,7 +220,7 @@ describe("two-way sync for Coopilot events", () => {
     const k = await t.run<{ sync: string; timebox: { conflict: unknown } }>("timebox.resolve", { id: tb.id, keep: "coopilot" });
     expect(k).toMatchObject({ sync: "update", timebox: { conflict: null } });
     const p = (await t.run<{ preview: WritePreview }>("write.preview", { uid: tb.uid })).preview;
-    expect(p.fields.find((f) => f.label === "Title")).toMatchObject({ before: "W&C: renamed in Outlook", after: "W&C: #4512 Import mapping" });
+    expect(p.fields.find((f) => f.label === "Title")).toMatchObject({ before: "T&S: renamed in Outlook", after: "T&S: #4512 Import mapping" });
   });
 
   it("Use Outlook's: the timebox takes Outlook's version, nothing is written", async () => {
@@ -241,11 +241,11 @@ describe("Q69: a Coopilot-marked event without a local record", () => {
   it("is rebuilt from its marker (record and timebox), hidden as a meeting, and logged from Outlook", async () => {
     const t = setup();
     const uid = "tb-0b6c1d2e-3f40-4152-8a6b-7c8d9e0f1a2b";
-    const id = t.g.seed({ subject: "W&C: #4512 Import mapping", start: "2026-11-10T15:00:00Z", end: "2026-11-10T16:00:00Z", marker: uid, isReminderOn: false });
+    const id = t.g.seed({ subject: "T&S: #4512 Import mapping", start: "2026-11-10T15:00:00Z", end: "2026-11-10T16:00:00Z", marker: uid, isReminderOn: false });
     const r = await t.sync();
     expect(r.rebuilt).toBe(1);
     expect(t.plan.ownEvent(uid)).toMatchObject({ eventId: id, deletedAt: null });
-    expect(t.plan.timeboxByUid(uid)).toMatchObject({ clientKey: "W&C", title: "#4512 Import mapping", date: D, start: `${D}T09:00:00-06:00`, outlook: true, outlookNote: "Rebuilt from Outlook" });
+    expect(t.plan.timeboxByUid(uid)).toMatchObject({ clientKey: "T&S", title: "#4512 Import mapping", date: D, start: `${D}T09:00:00-06:00`, outlook: true, outlookNote: "Rebuilt from Outlook" });
     expect(r.facts[`outlook:${id}`]).toMatchObject({ marker: uid });
     // A second scan finds it in step.
     expect((await t.sync()).rebuilt).toBe(0);
@@ -263,16 +263,16 @@ describe("the collaboration finder", () => {
 
   it("ranks candidates in tiers, Cooptimize staff only, PTO as away", async () => {
     const t = setup();
-    const c = await t.run<CandidatesData>("collab.candidates", { clientKey: "W&C", from: "2026-11-10", to: "2026-11-11" });
+    const c = await t.run<CandidatesData>("collab.candidates", { clientKey: "T&S", from: "2026-11-10", to: "2026-11-11" });
     expect(c.candidates.map((x) => [x.name, x.tier, x.away])).toEqual([["Ana", 1, []], ["Ben", 2, ["2026-11-11"]]]);
     expect(JSON.stringify(c)).not.toMatch(/0000000000a1/); // no user ids out
-    expect((await t.fail("collab.candidates", { clientKey: "CSC" })).status).toBe(403);
+    expect((await t.fail("collab.candidates", { clientKey: "Adatum" })).status).toBe(403);
   });
 
   it("suggests slots from free/busy without keeping or logging any event details", async () => {
     const t = setup();
     t.g.sw.schedule = body("0".repeat(500));
-    const s = await t.run<SuggestData>("collab.suggest", { clientKey: "W&C", from: "2026-11-10", to: "2026-11-10", minutes: 30 });
+    const s = await t.run<SuggestData>("collab.suggest", { clientKey: "T&S", from: "2026-11-10", to: "2026-11-10", minutes: 30 });
     expect(s.slots.length).toBeGreaterThan(0);
     expect(s.slots[0]).toMatchObject({ date: "2026-11-10", tier: 1, people: [{ name: "Ana" }] });
     const sched = t.g.calls.find((c) => c.path.includes("getSchedule"))!;
@@ -280,18 +280,18 @@ describe("the collaboration finder", () => {
     expect(JSON.stringify(s)).not.toMatch(/SECRET/);
     expect(JSON.stringify(t.logs)).not.toMatch(/SECRET|FAKE-READ-TOKEN|FAKE-WRITE/);
     expect(JSON.stringify(t.plan.exportJson())).not.toMatch(/SECRET/);
-    expect((await t.fail("collab.suggest", { clientKey: "W&C", minutes: 30, people: ["pat@client.example"] })).status).toBe(422);
+    expect((await t.fail("collab.suggest", { clientKey: "T&S", minutes: 30, people: ["pat@client.example"] })).status).toBe(422);
   });
 
   it("previews an invite naming every attendee, sends it only on confirm, reads it back, tracks it and opens a follow-up", async () => {
     const t = setup();
-    const r = await t.run<{ preview: WritePreview }>("collab.preview_invite", { clientKey: "W&C", title: "#4512 Import mapping", itemId: 4512, url: "https://dev.azure.com/wc/p/_workitems/edit/4512", start: `${D}T13:00:00-06:00`, end: `${D}T13:30:00-06:00`, people: ["ana@cooptimize.org", "ben@cooptimize.org"], note: "Stuck on the lookup" });
+    const r = await t.run<{ preview: WritePreview }>("collab.preview_invite", { clientKey: "T&S", title: "#4512 Import mapping", itemId: 4512, url: "https://dev.azure.com/wc/p/_workitems/edit/4512", start: `${D}T13:00:00-06:00`, end: `${D}T13:30:00-06:00`, people: ["ana@cooptimize.org", "ben@cooptimize.org"], note: "Stuck on the lookup" });
     const p = r.preview;
     expect(p).toMatchObject({ kind: "invite", op: "create", summary: "Send a help invite", attendees: [{ name: "Ana", email: "ana@cooptimize.org" }, { name: "Ben", email: "ben@cooptimize.org" }] });
     expect(p.visibility).toMatch(/Ana, Ben will each receive an invite by email from you/);
     expect(p.fields.find((f) => f.label === "Attendees")!.after).toBe("Ana <ana@cooptimize.org>, Ben <ben@cooptimize.org>");
     expect(p.fields.find((f) => f.label === "Teams meeting")!.after).toBe("Yes");
-    expect(p.fields.find((f) => f.label === "Title")!.after).toBe("W&C: help on #4512 Import mapping");
+    expect(p.fields.find((f) => f.label === "Title")!.after).toBe("T&S: help on #4512 Import mapping");
     expect(p.fields.find((f) => f.label === "Body")!.after).toMatch(/_workitems\/edit\/4512\n\nStuck on the lookup/);
     expect(t.g.calls.some((c) => c.method === "POST" && c.path === "/v1.0/me/events")).toBe(false);
     const done = await t.confirm(p);
@@ -299,7 +299,7 @@ describe("the collaboration finder", () => {
     const post = t.g.calls.find((c) => c.method === "POST" && c.path === "/v1.0/me/events")!.body as Record<string, unknown>;
     expect(post).toMatchObject({ isOnlineMeeting: true, onlineMeetingProvider: "teamsForBusiness", attendees: [{ emailAddress: { address: "ana@cooptimize.org", name: "Ana" }, type: "required" }, { emailAddress: { address: "ben@cooptimize.org" } }] });
     const inv = t.plan.invitesFrom("2026-11-01")[0]!;
-    expect(inv).toMatchObject({ status: "sent", itemId: 4512, clientKey: "W&C", eventId: done.entry.eventId });
+    expect(inv).toMatchObject({ status: "sent", itemId: 4512, clientKey: "T&S", eventId: done.entry.eventId });
     const followUp = t.plan.getFollowUp(inv.followUpId!)!;
     expect(followUp).toMatchObject({ kind: "help", what: "Help session with Ana and Ben on #4512 Import mapping", closedAt: null });
     // The follow-up closes once the meeting is over.
@@ -309,7 +309,7 @@ describe("the collaboration finder", () => {
 
   it("limits attendee domains at preview and in the writer", async () => {
     const t = setup();
-    const r = await t.fail("collab.preview_invite", { clientKey: "W&C", title: "x", start: `${D}T13:00:00-06:00`, end: `${D}T13:30:00-06:00`, people: ["pat@wc-client.example"] });
+    const r = await t.fail("collab.preview_invite", { clientKey: "T&S", title: "x", start: `${D}T13:00:00-06:00`, end: `${D}T13:30:00-06:00`, people: ["pat@wc-client.example"] });
     expect([r.status, r.error]).toEqual([422, "Invites go only to Cooptimize addresses"]);
     const w = createGraphWriter({ fetch: t.g.fetch, token: async () => FAKE_WRITE_TOKEN, invalidate: () => {}, log: () => {} });
     await expect(w.createInvite({ subject: "s", body: "", start: "2026-11-10T19:00:00Z", end: "2026-11-10T19:30:00Z", showAs: "busy", reminder: false, attendees: [{ name: "P", email: "pat@evil.example" }] }, "inv-x", "t", ["cooptimize.org"])).rejects.toThrow(/Cooptimize addresses/);
@@ -318,8 +318,8 @@ describe("the collaboration finder", () => {
 
   it("a test invite to myself only, then undo cancels it after a preview that says attendees get a cancellation", async () => {
     const t = setup();
-    const p = (await t.run<{ preview: WritePreview }>("collab.preview_invite", { clientKey: "W&C", title: "Invite path check", start: `${D}T13:00:00-06:00`, end: `${D}T13:15:00-06:00`, people: ["tanner@cooptimize.org"], teams: false })).preview;
-    expect(p.attendees).toEqual([{ name: "You", email: "tanner@cooptimize.org" }]);
+    const p = (await t.run<{ preview: WritePreview }>("collab.preview_invite", { clientKey: "T&S", title: "Invite path check", start: `${D}T13:00:00-06:00`, end: `${D}T13:15:00-06:00`, people: ["avery@cooptimize.org"], teams: false })).preview;
+    expect(p.attendees).toEqual([{ name: "You", email: "avery@cooptimize.org" }]);
     const done = await t.confirm(p);
     expect(done.confirmed).toBe(true);
     const log = await t.run<WriteLogView>("write.log", {});

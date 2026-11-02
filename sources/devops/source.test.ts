@@ -41,31 +41,31 @@ const ids = (c: ClientWork) => c.items.map((i) => i.id);
 
 describe("items read by id for open follow-ups (step 7)", () => {
   it("reads only watched ids that aren't among my open items, completed ones kept, with the same fields", async () => {
-    const s = setup({ contoso: "agile" }, [target("CSC", "contoso")]);
-    const r = await s.src.load([ref("CSC")], { watch: { CSC: [104, 101] } });
+    const s = setup({ contoso: "agile" }, [target("Adatum", "contoso")]);
+    const r = await s.src.load([ref("Adatum")], { watch: { Adatum: [104, 101] } });
     const batches = s.calls.filter((c) => c.url.includes("workitemsbatch")).map((c) => JSON.parse(c.body!) as { ids: number[]; fields: string[] });
     expect(batches.at(-1)).toEqual({ ids: [104], fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "System.ChangedBy", "Microsoft.VSTS.Common.StackRank"], errorPolicy: "omit" });
-    expect(byKey(r, "CSC").watched?.map((i) => [i.id, i.state, i.stateCategory])).toEqual([[104, "Closed", "Completed"]]);
-    expect(ids(byKey(r, "CSC"))).not.toContain(104);
+    expect(byKey(r, "Adatum").watched?.map((i) => [i.id, i.state, i.stateCategory])).toEqual([[104, "Closed", "Completed"]]);
+    expect(ids(byKey(r, "Adatum"))).not.toContain(104);
   });
   it("makes no extra call when nothing is watched", async () => {
-    const s = setup({ contoso: "agile" }, [target("CSC", "contoso")]);
-    const r = await s.src.load([ref("CSC")]);
+    const s = setup({ contoso: "agile" }, [target("Adatum", "contoso")]);
+    const r = await s.src.load([ref("Adatum")]);
     expect(s.calls.filter((c) => c.url.includes("workitemsbatch"))).toHaveLength(1);
-    expect(byKey(r, "CSC").watched).toEqual([]);
+    expect(byKey(r, "Adatum").watched).toEqual([]);
   });
 });
 
 describe("DevOps work items per client", () => {
   it("fetches each client from its own org with its own PAT and shows items in board order", async () => {
-    const s = setup({ contoso: "agile", fabrikam: "scrum" }, [target("CSC", "contoso"), target("Quiddity", "fabrikam")]);
-    const r = await s.src.load([ref("CSC"), ref("Quiddity")]);
-    expect(byKey(r, "CSC")).toMatchObject({ status: "ok", fromCache: false, fetchedAt: "2026-11-02T08:02:00-05:00" });
-    expect(ids(byKey(r, "CSC"))).toEqual([102, 101, 105, 103]);
-    expect(ids(byKey(r, "Quiddity"))).toEqual([202, 201]);
+    const s = setup({ contoso: "agile", fabrikam: "scrum" }, [target("Adatum", "contoso"), target("Proseware", "fabrikam")]);
+    const r = await s.src.load([ref("Adatum"), ref("Proseware")]);
+    expect(byKey(r, "Adatum")).toMatchObject({ status: "ok", fromCache: false, fetchedAt: "2026-11-02T08:02:00-05:00" });
+    expect(ids(byKey(r, "Adatum"))).toEqual([102, 101, 105, 103]);
+    expect(ids(byKey(r, "Proseware"))).toEqual([202, 201]);
     for (const c of s.calls) {
       const org = new URL(c.url).pathname.split("/")[1];
-      const expected = org === "contoso" ? fakePat("CSC") : fakePat("Quiddity");
+      const expected = org === "contoso" ? fakePat("Adatum") : fakePat("Proseware");
       expect(c.authorization).toBe(`Basic ${Buffer.from(`:${expected}`).toString("base64")}`);
       expect(c.url).toMatch(/api-version=7\.1/);
       expect(c.redirect).toBe("manual");
@@ -73,8 +73,8 @@ describe("DevOps work items per client", () => {
   });
 
   it("asks WIQL for me (the client's DevOps email), and the batch for only the fields used", async () => {
-    const s = setup({ contoso: "agile" }, [target("CSC", "contoso", { email: "me@contoso.example", project: "11111111-2222-4333-8444-555555555555", projectName: "Project Ada" })]);
-    const r = await s.src.load([ref("CSC")]);
+    const s = setup({ contoso: "agile" }, [target("Adatum", "contoso", { email: "me@contoso.example", project: "11111111-2222-4333-8444-555555555555", projectName: "Project Ada" })]);
+    const r = await s.src.load([ref("Adatum")]);
     const wiql = s.calls.find((c) => c.url.includes("/_apis/wit/wiql"))!;
     expect(wiql.url).toContain("https://dev.azure.com/contoso/11111111-2222-4333-8444-555555555555/_apis/wit/wiql?$top=1000&api-version=7.1");
     expect(JSON.parse(wiql.body!).query).toContain("[System.AssignedTo] = 'me@contoso.example'");
@@ -84,12 +84,12 @@ describe("DevOps work items per client", () => {
       fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "System.ChangedBy", "Microsoft.VSTS.Common.StackRank"],
       errorPolicy: "omit",
     });
-    expect(byKey(r, "CSC").items[0]!.url).toBe("https://dev.azure.com/contoso/Project%20Ada/_workitems/edit/102");
+    expect(byKey(r, "Adatum").items[0]!.url).toBe("https://dev.azure.com/contoso/Project%20Ada/_workitems/edit/102");
   });
 
   it("reads states per type when the types list has none (Scrum fixture)", async () => {
-    const s = setup({ fabrikam: "scrum" }, [target("Quiddity", "fabrikam")]);
-    await s.src.load([ref("Quiddity")]);
+    const s = setup({ fabrikam: "scrum" }, [target("Proseware", "fabrikam")]);
+    await s.src.load([ref("Proseware")]);
     expect(s.calls.filter((c) => c.url.includes("/states?")).map((c) => decodeURIComponent(new URL(c.url).pathname.split("/").at(-2)!))).toEqual(["Product Backlog Item", "Task"]);
   });
 
@@ -103,21 +103,21 @@ describe("DevOps work items per client", () => {
 
 describe("client isolation", () => {
   it("one client failing leaves the others live and intact", async () => {
-    const s = setup({ contoso: "agile", fabrikam: "pat_expired", coop: "scrum" }, [target("CSC", "contoso"), target("Quiddity", "fabrikam"), target("Cooptimize", "coop")]);
-    const r = await s.src.load([ref("CSC"), ref("Quiddity"), ref("Cooptimize")]);
-    expect(byKey(r, "CSC").status).toBe("ok");
+    const s = setup({ contoso: "agile", fabrikam: "pat_expired", coop: "scrum" }, [target("Adatum", "contoso"), target("Proseware", "fabrikam"), target("Cooptimize", "coop")]);
+    const r = await s.src.load([ref("Adatum"), ref("Proseware"), ref("Cooptimize")]);
+    expect(byKey(r, "Adatum").status).toBe("ok");
     expect(byKey(r, "Cooptimize").status).toBe("ok");
-    expect(byKey(r, "Quiddity")).toMatchObject({ status: "auth_failed", items: [] });
-    expect(ids(byKey(r, "CSC"))).toEqual([102, 101, 105, 103]);
+    expect(byKey(r, "Proseware")).toMatchObject({ status: "auth_failed", items: [] });
+    expect(ids(byKey(r, "Adatum"))).toEqual([102, 101, 105, 103]);
     expect(ids(byKey(r, "Cooptimize"))).toEqual([202, 201]);
   });
 
   it("items never cross clients, even when two clients share an org", async () => {
-    const s = setup({ cooptimize: "agile" }, [target("W&C", "cooptimize", { project: "WC Project", projectName: "WC Project" }), target("Cooptimize", "cooptimize", { project: "Cooptimize Internal", projectName: "Cooptimize Internal" })]);
-    const r = await s.src.load([ref("W&C"), ref("Cooptimize")]);
-    expect(byKey(r, "W&C").items.every((i) => i.url.includes("/WC%20Project/"))).toBe(true);
+    const s = setup({ cooptimize: "agile" }, [target("T&S", "cooptimize", { project: "WC Project", projectName: "WC Project" }), target("Cooptimize", "cooptimize", { project: "Cooptimize Internal", projectName: "Cooptimize Internal" })]);
+    const r = await s.src.load([ref("T&S"), ref("Cooptimize")]);
+    expect(byKey(r, "T&S").items.every((i) => i.url.includes("/WC%20Project/"))).toBe(true);
     expect(byKey(r, "Cooptimize").items.every((i) => i.url.includes("/Cooptimize%20Internal/"))).toBe(true);
-    expect(r.map((c) => c.clientKey)).toEqual(["W&C", "Cooptimize"]);
+    expect(r.map((c) => c.clientKey)).toEqual(["T&S", "Cooptimize"]);
   });
 
   it("a slow or failing org does not stop the others from returning", async () => {
@@ -140,18 +140,18 @@ describe("client isolation", () => {
   });
 
   it("refuses two accounts that share a client key rather than mixing them", async () => {
-    const s = setup({ a: "agile" }, [target("CSC", "a", { pat: null, problem: "More than one account is named CSC in Dataverse" })]);
-    const r = await s.src.load([ref("CSC")]);
-    expect(byKey(r, "CSC")).toMatchObject({ status: "error", message: "More than one account is named CSC in Dataverse. No cached items yet", items: [] });
+    const s = setup({ a: "agile" }, [target("Adatum", "a", { pat: null, problem: "More than one account is named Adatum in Dataverse" })]);
+    const r = await s.src.load([ref("Adatum")]);
+    expect(byKey(r, "Adatum")).toMatchObject({ status: "error", message: "More than one account is named Adatum in Dataverse. No cached items yet", items: [] });
     expect(s.calls).toHaveLength(0);
   });
 });
 
 describe("setup problems are stated, never guessed", () => {
   it("identity missing: says so, makes no DevOps call, shows no cached items", async () => {
-    const s = setup({ cooptimize: "agile" }, [target("W&C", "cooptimize", { email: null })]);
-    const r = await s.src.load([ref("W&C")]);
-    expect(byKey(r, "W&C")).toEqual({ clientKey: "W&C", clientName: "W&C", status: "identity_missing", message: "DevOps identity missing for W&C", fetchedAt: null, fromCache: false, items: [], children: [] });
+    const s = setup({ cooptimize: "agile" }, [target("T&S", "cooptimize", { email: null })]);
+    const r = await s.src.load([ref("T&S")]);
+    expect(byKey(r, "T&S")).toEqual({ clientKey: "T&S", clientName: "T&S", status: "identity_missing", message: "DevOps identity missing for T&S", fetchedAt: null, fromCache: false, items: [], children: [] });
     expect(s.calls).toHaveLength(0);
   });
 
@@ -296,7 +296,7 @@ describe("PAT never leaks", () => {
   it("no identity email in the cache either", async () => {
     const s = setup({ a: "agile" }, [target("A", "a")]);
     await s.src.load([ref("A")]);
-    expect(readFileSync(join(s.cacheDir, "devops", `${cacheKey("A")}.json`), "utf8")).not.toContain("tanner@");
+    expect(readFileSync(join(s.cacheDir, "devops", `${cacheKey("A")}.json`), "utf8")).not.toContain("avery@");
   });
 });
 
@@ -316,26 +316,26 @@ describe("Pat wrapper", () => {
 
 describe("cache keys", () => {
   it("are safe file names and differ per client", () => {
-    expect(cacheKey("W&C")).toMatch(/^w-c-[0-9a-f]{8}$/);
-    expect(cacheKey("W&C")).not.toBe(cacheKey("W C"));
+    expect(cacheKey("T&S")).toMatch(/^t-s-[0-9a-f]{8}$/);
+    expect(cacheKey("T&S")).not.toBe(cacheKey("T S"));
     expect(cacheKey("../../etc")).toMatch(/^etc-[0-9a-f]{8}$/);
   });
 });
 
 describe("story level: children of epics and features (step 5)", () => {
   it("levels come from the process backlog categories, and portfolio items bring their open children two levels down", async () => {
-    const s = setup({ contoso: "portfolio" }, [target("CSC", "contoso")]);
-    const [csc] = await s.src.load([ref("CSC")]);
-    expect(csc!.status).toBe("ok");
-    const level = Object.fromEntries([...csc!.items, ...csc!.children].map((i) => [i.id, i.level]));
+    const s = setup({ contoso: "portfolio" }, [target("Adatum", "contoso")]);
+    const [adatum] = await s.src.load([ref("Adatum")]);
+    expect(adatum!.status).toBe("ok");
+    const level = Object.fromEntries([...adatum!.items, ...adatum!.children].map((i) => [i.id, i.level]));
     expect(level).toMatchObject({ 101: "story", 110: "portfolio", 120: "portfolio", 130: "portfolio", 111: "story", 112: "story", 121: "portfolio", 122: "story" });
-    expect(csc!.children.map((c) => c.id).sort()).toEqual([111, 112, 121, 122]);
-    expect(csc!.children.find((c) => c.id === 122)!.parentId).toBe(121);
+    expect(adatum!.children.map((c) => c.id).sort()).toEqual([111, 112, 121, 122]);
+    expect(adatum!.children.find((c) => c.id === 122)!.parentId).toBe(121);
   });
 
   it("children are read with WIQL and the batch call only (no write endpoints), and the parent filter replaces the assignee", async () => {
-    const s = setup({ contoso: "portfolio" }, [target("CSC", "contoso")]);
-    await s.src.load([ref("CSC")]);
+    const s = setup({ contoso: "portfolio" }, [target("Adatum", "contoso")]);
+    await s.src.load([ref("Adatum")]);
     for (const c of s.calls) {
       if (c.method === "POST") expect(c.url).toMatch(/\/_apis\/wit\/(wiql|workitemsbatch)\?/);
       else expect(c.method).toBe("GET");
@@ -348,27 +348,27 @@ describe("story level: children of epics and features (step 5)", () => {
   });
 
   it("lookup finds my items and children for the right client only", async () => {
-    const s = setup({ contoso: "portfolio", cooptimize: "agile" }, [target("CSC", "contoso"), target("Cooptimize", "cooptimize")]);
-    await s.src.load([ref("CSC"), ref("Cooptimize")]);
-    expect(s.src.lookup("CSC", 122)?.title).toBe("Story two levels down");
+    const s = setup({ contoso: "portfolio", cooptimize: "agile" }, [target("Adatum", "contoso"), target("Cooptimize", "cooptimize")]);
+    await s.src.load([ref("Adatum"), ref("Cooptimize")]);
+    expect(s.src.lookup("Adatum", 122)?.title).toBe("Story two levels down");
     expect(s.src.lookup("Cooptimize", 122)).toBeNull();
-    expect(s.src.lookup("CSC", 999)).toBeNull();
+    expect(s.src.lookup("Adatum", 999)).toBeNull();
   });
 
   it("children are cached with the items and come back on failure", async () => {
     const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-devops-"));
-    await setup({ contoso: "portfolio" }, [target("CSC", "contoso")], { cacheDir }).src.load([ref("CSC")]);
-    const [csc] = await setup({ contoso: "offline" }, [target("CSC", "contoso")], { cacheDir }).src.load([ref("CSC")]);
-    expect(csc!.fromCache).toBe(true);
-    expect(csc!.children.map((c) => c.id).sort()).toEqual([111, 112, 121, 122]);
+    await setup({ contoso: "portfolio" }, [target("Adatum", "contoso")], { cacheDir }).src.load([ref("Adatum")]);
+    const [adatum] = await setup({ contoso: "offline" }, [target("Adatum", "contoso")], { cacheDir }).src.load([ref("Adatum")]);
+    expect(adatum!.fromCache).toBe(true);
+    expect(adatum!.children.map((c) => c.id).sort()).toEqual([111, 112, 121, 122]);
   });
 });
 
 describe("pickable portfolio types from config (Q20)", () => {
   it("a listed portfolio type is pickable and is not opened into children", async () => {
-    const s = setup({ contoso: "portfolio" }, [target("CSC", "contoso")], { pickableTypes: ["feature"] });
-    const [csc] = await s.src.load([ref("CSC")]);
-    const level = Object.fromEntries(csc!.items.map((i) => [i.id, i.level]));
+    const s = setup({ contoso: "portfolio" }, [target("Adatum", "contoso")], { pickableTypes: ["feature"] });
+    const [adatum] = await s.src.load([ref("Adatum")]);
+    const level = Object.fromEntries(adatum!.items.map((i) => [i.id, i.level]));
     expect(level).toMatchObject({ 110: "story", 130: "story", 120: "portfolio" });
     const queries = s.calls.filter((c) => c.url.includes("/_apis/wit/wiql")).map((c) => (JSON.parse(c.body!) as { query: string }).query);
     expect(queries[1]).toContain("[System.Parent] IN (120)");
@@ -377,38 +377,38 @@ describe("pickable portfolio types from config (Q20)", () => {
 
 describe("Plan the week: features and epics (step 8)", () => {
   it("finds portfolio items assigned to me and the parents of my stories, with their children in every state", async () => {
-    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
-    const [csc] = await s.src.portfolio([ref("CSC")]);
-    expect(csc!.status).toBe("ok");
+    const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")]);
+    const [adatum] = await s.src.portfolio([ref("Adatum")]);
+    expect(adatum!.status).toBe("ok");
     // Board order (StackRank = id here). Q49: 230 is the epic above Dana's feature, read by following parent links up.
-    expect(csc!.items.map((i) => [i.id, i.tier, i.why])).toEqual([
+    expect(adatum!.items.map((i) => [i.id, i.tier, i.why])).toEqual([
       [210, "feature", ["parent"]],
       [220, "feature", ["parent"]],
       [230, "epic", ["above"]],
       [240, "feature", ["assigned"]],
       [250, "epic", ["assigned"]],
     ]);
-    expect(csc!.items.find((i) => i.id === 230)!.children.map((c) => [c.id, c.open, c.level])).toEqual([[210, true, "portfolio"]]);
-    const dana = csc!.items.find((i) => i.id === 210)!;
-    expect(dana).toMatchObject({ title: "Dana's feature", state: "Active", targetDate: "2026-11-20", assignedTo: "Dana Ruiz", mine: false, url: "https://dev.azure.com/planweek/CSC%20Project/_workitems/edit/210" });
-    expect(dana.children.map((c) => [c.id, c.open, c.assignedTo, c.mine])).toEqual([[201, true, "Tanner S", true], [211, false, "Dana Ruiz", false], [212, true, null, false]]);
-    expect(csc!.items.find((i) => i.id === 240)!.children).toEqual([]);
+    expect(adatum!.items.find((i) => i.id === 230)!.children.map((c) => [c.id, c.open, c.level])).toEqual([[210, true, "portfolio"]]);
+    const dana = adatum!.items.find((i) => i.id === 210)!;
+    expect(dana).toMatchObject({ title: "Dana's feature", state: "Active", targetDate: "2026-11-20", assignedTo: "Dana Ruiz", mine: false, url: "https://dev.azure.com/planweek/Adatum%20Project/_workitems/edit/210" });
+    expect(dana.children.map((c) => [c.id, c.open, c.assignedTo, c.mine])).toEqual([[201, true, "Avery S", true], [211, false, "Dana Ruiz", false], [212, true, null, false]]);
+    expect(adatum!.items.find((i) => i.id === 240)!.children).toEqual([]);
     // The epic's only feature is closed.
-    expect(csc!.items.find((i) => i.id === 250)!.children.map((c) => [c.id, c.open, c.level])).toEqual([[251, false, "portfolio"]]);
-    expect(csc!.targetFields).toEqual({ Feature: "Microsoft.VSTS.Scheduling.TargetDate" });
+    expect(adatum!.items.find((i) => i.id === 250)!.children.map((c) => [c.id, c.open, c.level])).toEqual([[251, false, "portfolio"]]);
+    expect(adatum!.targetFields).toEqual({ Feature: "Microsoft.VSTS.Scheduling.TargetDate" });
     // Nobody's email is kept.
-    expect(JSON.stringify(csc)).not.toMatch(/@/);
+    expect(JSON.stringify(adatum)).not.toMatch(/@/);
   });
   it("reads each story's size and last change for Delivery (step 16), from the project's size field", async () => {
-    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
-    const [csc] = await s.src.portfolio([ref("CSC")]);
-    expect(csc!.sizeField).toBe("Microsoft.VSTS.Scheduling.StoryPoints");
-    const kids = csc!.items.find((i) => i.id === 210)!.children;
+    const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")]);
+    const [adatum] = await s.src.portfolio([ref("Adatum")]);
+    expect(adatum!.sizeField).toBe("Microsoft.VSTS.Scheduling.StoryPoints");
+    const kids = adatum!.items.find((i) => i.id === 210)!.children;
     expect(kids.map((c) => [c.id, c.size, c.changedAt])).toEqual([[201, 3, "2026-10-30T15:00:00Z"], [211, null, "2026-10-30T15:00:00Z"], [212, null, "2026-10-30T15:00:00Z"]]);
   });
   it("reads only: metadata and field lists with GET, items with WIQL and the batch call; no description unless asked", async () => {
-    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
-    await s.src.portfolio([ref("CSC")]);
+    const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")]);
+    await s.src.portfolio([ref("Adatum")]);
     for (const c of s.calls) {
       if (c.method === "POST") expect(c.url).toMatch(/\/_apis\/wit\/(wiql|workitemsbatch)\?/);
       else expect(c.method).toBe("GET");
@@ -418,28 +418,28 @@ describe("Plan the week: features and epics (step 8)", () => {
   });
   it("caches for five minutes, and falls back to the last snapshot when DevOps fails", async () => {
     const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-devops-"));
-    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")], { cacheDir });
-    await s.src.portfolio([ref("CSC")]);
+    const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")], { cacheDir });
+    await s.src.portfolio([ref("Adatum")]);
     const n = s.calls.length;
-    await s.src.portfolio([ref("CSC")]);
+    await s.src.portfolio([ref("Adatum")]);
     expect(s.calls.length).toBe(n);
-    const [off] = await setup({ planweek: "offline" }, [target("CSC", "planweek")], { cacheDir }).src.portfolio([ref("CSC")]);
+    const [off] = await setup({ planweek: "offline" }, [target("Adatum", "planweek")], { cacheDir }).src.portfolio([ref("Adatum")]);
     expect(off!.fromCache).toBe(true);
     expect(off!.items.map((i) => i.id)).toEqual([210, 220, 230, 240, 250]);
   });
   it("Q47: a project whose backlog levels give no story level is a clear per-client error, never a guess", async () => {
-    const s = setup({ planweek: "planweek", nostory: "no_story_level" }, [target("CSC", "planweek"), target("W&C", "nostory")]);
-    const [csc, wc] = await s.src.load([ref("CSC"), ref("W&C")]);
-    expect(csc!.status).toBe("ok");
+    const s = setup({ planweek: "planweek", nostory: "no_story_level" }, [target("Adatum", "planweek"), target("T&S", "nostory")]);
+    const [adatum, wc] = await s.src.load([ref("Adatum"), ref("T&S")]);
+    expect(adatum!.status).toBe("ok");
     expect(wc).toMatchObject({ status: "error", items: [] });
     expect(wc!.message).toMatch(/no story level/i);
-    expect(wc!.message).toMatch(/W&C Project/);
-    const [, pw] = await s.src.portfolio([ref("CSC"), ref("W&C")]);
+    expect(wc!.message).toMatch(/T&S Project/);
+    const [, pw] = await s.src.portfolio([ref("Adatum"), ref("T&S")]);
     expect(pw).toMatchObject({ status: "error", items: [] });
   });
   it("reads one feature's description on demand as plain text, never cached", async () => {
-    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
-    const d = await s.src.description("CSC", 210);
+    const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")]);
+    const d = await s.src.description("Adatum", 210);
     expect(d).toBe("Export the weekly report & email it.\n- CSV");
     expect(await s.src.description("Other", 210)).toBeNull();
   });
@@ -447,22 +447,22 @@ describe("Plan the week: features and epics (step 8)", () => {
 
 describe("committed features in the usual read (step 8, Plan the day)", () => {
   it("reads committed features by id with their open children, so their stories can be offered", async () => {
-    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
-    const [csc] = await s.src.load([ref("CSC")], { features: { CSC: [210, 240] } });
+    const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")]);
+    const [adatum] = await s.src.load([ref("Adatum")], { features: { Adatum: [210, 240] } });
     // 240 is mine already; 210 isn't, so it comes back as committed.
-    expect(csc!.committed?.map((i) => i.id)).toEqual([210]);
+    expect(adatum!.committed?.map((i) => i.id)).toEqual([210]);
     // Open children of 210 (any assignee); 201 is mine and already among my items; the closed one is left out.
-    expect(csc!.children.map((c) => c.id)).toContain(212);
-    expect(csc!.children.map((c) => c.id)).not.toContain(211);
+    expect(adatum!.children.map((c) => c.id)).toContain(212);
+    expect(adatum!.children.map((c) => c.id)).not.toContain(211);
   });
   it("a cached result is reused only when it was read with the same committed features", async () => {
-    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
-    await s.src.load([ref("CSC")]);
+    const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")]);
+    await s.src.load([ref("Adatum")]);
     const n = s.calls.length;
-    await s.src.load([ref("CSC")]);
+    await s.src.load([ref("Adatum")]);
     expect(s.calls.length).toBe(n);
-    const [csc] = await s.src.load([ref("CSC")], { features: { CSC: [210] } });
+    const [adatum] = await s.src.load([ref("Adatum")], { features: { Adatum: [210] } });
     expect(s.calls.length).toBeGreaterThan(n);
-    expect(csc!.committed?.map((i) => i.id)).toEqual([210]);
+    expect(adatum!.committed?.map((i) => i.id)).toEqual([210]);
   });
 });

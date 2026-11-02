@@ -35,7 +35,7 @@ function setup() {
   };
 }
 const flush = () => new Promise((r) => setTimeout(r, 0));
-const pickAt = (plan: ReturnType<typeof createPlanStore>, title: string, size: "S" | "M" | "L" = "S") => plan.addPick({ date: "2026-11-02", half: "AM", clientKey: "CSC", kind: "intention", title, size });
+const pickAt = (plan: ReturnType<typeof createPlanStore>, title: string, size: "S" | "M" | "L" = "S") => plan.addPick({ date: "2026-11-02", half: "AM", clientKey: "Adatum", kind: "intention", title, size });
 
 describe("focus timer on the server (step 6c)", () => {
   it("keeps its state across a restart of the store", async () => {

@@ -35,15 +35,15 @@ describe("due urgency (step 13.5)", () => {
 
 describe("follow-ups on the week's cards (step 13.5)", () => {
   const f = (id: number, clientKey: string | null, due: string | null = null) => ({ id, clientKey, due, openedAt: `2026-11-01T1${id}:00:00Z` });
-  const slots = [{ half: "AM", clientKey: "CSC", working: true }, { half: "PM", clientKey: "CSC", working: true }];
+  const slots = [{ half: "AM", clientKey: "Adatum", working: true }, { half: "PM", clientKey: "Adatum", working: true }];
   it("puts a client's open follow-ups on that client's first block of the day, once", () => {
-    const m = followUpsOnDay("2026-11-03", slots, [f(1, "CSC"), f(2, "W&C")], "2026-11-02");
+    const m = followUpsOnDay("2026-11-03", slots, [f(1, "Adatum"), f(2, "T&S")], "2026-11-02");
     expect(m.get("AM")?.map((x) => x.id)).toEqual([1]);
     expect(m.get("PM")).toBeUndefined();
   });
   it("a dated follow-up also shows on its due day; overdue ones on today", () => {
-    const fus = [f(2, "W&C", "2026-11-04"), f(3, null, "2026-10-30"), f(4, "CSC", "2026-11-04")];
-    expect(followUpsOnDay("2026-11-04", [{ half: "AM", clientKey: null, working: true }, { half: "PM", clientKey: "CSC", working: true }], fus, "2026-11-02").get("AM")?.map((x) => x.id)).toEqual([2]);
+    const fus = [f(2, "T&S", "2026-11-04"), f(3, null, "2026-10-30"), f(4, "Adatum", "2026-11-04")];
+    expect(followUpsOnDay("2026-11-04", [{ half: "AM", clientKey: null, working: true }, { half: "PM", clientKey: "Adatum", working: true }], fus, "2026-11-02").get("AM")?.map((x) => x.id)).toEqual([2]);
     expect(followUpsOnDay("2026-11-02", [{ half: "AM", clientKey: null, working: true }], fus, "2026-11-02").get("AM")?.map((x) => x.id)).toEqual([3]);
     // Not on a day with no working card.
     expect(followUpsOnDay("2026-11-04", [{ half: "AM", clientKey: null, working: false }], fus, "2026-11-02").size).toBe(0);

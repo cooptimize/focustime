@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../config/starter.ts";
 import { createDataverseSource } from "../sources/dataverse/source.ts";
-import { dvConfig, FAKE_PAT_CSC, FAKE_PAT_WC, FAKE_SECRET, fakeFetch } from "../sources/dataverse/test-fakes.ts";
+import { dvConfig, FAKE_PAT_Adatum, FAKE_PAT_WC, FAKE_SECRET, fakeFetch } from "../sources/dataverse/test-fakes.ts";
 import { createDevOpsSource } from "../sources/devops/source.ts";
 import { fakeDevOps, type OrgScenario } from "../sources/devops/test-fakes.ts";
 import type { WeekLoadData } from "./types.ts";
@@ -48,10 +48,10 @@ describe("week.load with DevOps", () => {
     const d = await load(ctx().c);
     const keys = weekClients(d.week).map((c) => c.clientKey);
     expect(keys).toContain("Cooptimize");
-    // This week's clients first, then the other followed clients with DevOps set up (step 6d): W&C has focus time
+    // This week's clients first, then the other followed clients with DevOps set up (step 6d): T&S has focus time
     // starting next week; HM Electronics has DevOps but no focus time, so it isn't followed.
-    expect(d.devops!.map((c) => c.clientKey)).toEqual([...keys, "W&C"]);
-    expect(d.planClients.map((c) => c.clientKey)).toEqual([...keys, "CSC", "W&C"].filter((k, i, a) => a.indexOf(k) === i));
+    expect(d.devops!.map((c) => c.clientKey)).toEqual([...keys, "T&S"]);
+    expect(d.planClients.map((c) => c.clientKey)).toEqual([...keys, "Adatum", "T&S"].filter((k, i, a) => a.indexOf(k) === i));
   });
 
   it("a client that isn't followed gets no PAT read and no DevOps call (step 6d)", async () => {
@@ -59,8 +59,8 @@ describe("week.load with DevOps", () => {
     const d = await load(c);
     expect(d.devops!.some((x) => x.clientKey === "HM Electronics")).toBe(false);
     expect(ado.calls.some((x) => x.url.includes("dev.azure.com/hme/"))).toBe(false);
-    // W&C is followed (its focus time starts next week): checked, though its fixture has no DevOps email.
-    expect(d.devops!.find((x) => x.clientKey === "W&C")?.status).toBe("identity_missing");
+    // T&S is followed (its focus time starts next week): checked, though its fixture has no DevOps email.
+    expect(d.devops!.find((x) => x.clientKey === "T&S")?.status).toBe("identity_missing");
     // The PAT query names only followed clients.
     const patReads = dv.calls.filter((x) => x.url.includes("coop_devopstoken")).map((x) => decodeURIComponent(x.url));
     expect(patReads.length).toBeGreaterThan(0);
@@ -68,7 +68,7 @@ describe("week.load with DevOps", () => {
   });
 
   it("Keep following brings a client back", async () => {
-    const kept = text.replace('"W&C" = "#1f9e8f"', '"W&C" = "#1f9e8f"\n"HM Electronics" = { follow = true }');
+    const kept = text.replace('"T&S" = "#1f9e8f"', '"T&S" = "#1f9e8f"\n"HM Electronics" = { follow = true }');
     const { c, ado } = ctx({ contoso: "agile", cooptimize: "agile", hme: "agile" }, { text: kept });
     const d = await load(c);
     expect(d.devops!.map((x) => x.clientKey)).toContain("HM Electronics");
@@ -76,13 +76,13 @@ describe("week.load with DevOps", () => {
     expect(ado.calls.some((x) => x.url.includes("dev.azure.com/hme/"))).toBe(true);
   });
 
-  it("CSC shows its own items; clients without DevOps settings say why and show none", async () => {
+  it("Adatum shows its own items; clients without DevOps settings say why and show none", async () => {
     const d = await load(ctx().c);
-    const csc = d.devops!.find((c) => c.clientKey === "CSC")!;
-    expect(csc.status).toBe("ok");
-    expect(csc.items.map((i) => i.id)).toEqual([102, 101, 105, 103]);
+    const adatum = d.devops!.find((c) => c.clientKey === "Adatum")!;
+    expect(adatum.status).toBe("ok");
+    expect(adatum.items.map((i) => i.id)).toEqual([102, 101, 105, 103]);
     const week = weekClients(d.week).map((c) => c.clientKey);
-    for (const other of d.devops!.filter((c) => c.clientKey !== "CSC" && week.includes(c.clientKey))) {
+    for (const other of d.devops!.filter((c) => c.clientKey !== "Adatum" && week.includes(c.clientKey))) {
       expect(other.items).toEqual([]);
       expect(other.status).toBe("not_set_up");
     }
@@ -91,7 +91,7 @@ describe("week.load with DevOps", () => {
   it("the response never contains a PAT or the Authorization header", async () => {
     const { c } = ctx({ contoso: "pat_expired" });
     const body = JSON.stringify(await dispatch(c, { action: "week.load", input: { weekStart: "2026-11-02" } }));
-    for (const s of [FAKE_PAT_CSC, FAKE_PAT_WC, "FAKE-DV-PAT", "Basic "]) expect(body).not.toContain(s);
+    for (const s of [FAKE_PAT_Adatum, FAKE_PAT_WC, "FAKE-DV-PAT", "Basic "]) expect(body).not.toContain(s);
   });
 
   it("a DevOps crash only drops DevOps; the week still loads", async () => {

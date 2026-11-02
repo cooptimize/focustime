@@ -7,12 +7,12 @@ export const SAMPLE_WEEK = "2026-11-02";
 /** Four ongoing Focus Time patterns, as they would look after normalizing Dataverse rows. */
 export const samplePatterns: FocusPattern[] = [
   // Mon AM collides with the standing Monday AM Internal block: double-booked.
-  { id: "ft-quiddity", clientKey: "quiddity", clientName: "Quiddity", startDate: "2026-03-02", endDate: null, active: true, days: { Mon: "AM" } },
-  { id: "ft-csc", clientKey: "csc", clientName: "CSC", startDate: "2026-01-05", endDate: null, active: true, days: { Mon: "PM", Tue: "PM" } },
+  { id: "ft-proseware", clientKey: "proseware", clientName: "Proseware", startDate: "2026-03-02", endDate: null, active: true, days: { Mon: "AM" } },
+  { id: "ft-adatum", clientKey: "adatum", clientName: "Adatum", startDate: "2026-01-05", endDate: null, active: true, days: { Mon: "PM", Tue: "PM" } },
   { id: "ft-internal", clientKey: "internal", clientName: "Internal", startDate: "2026-06-01", endDate: null, active: true, days: { Tue: "AM" } },
-  { id: "ft-wc", clientKey: "wc", clientName: "Woodard & Curran", startDate: "2025-09-08", endDate: null, active: true, days: { Wed: "AllDay", Thu: "AM" } },
+  { id: "ft-wc", clientKey: "wc", clientName: "Tailspin & Sons", startDate: "2025-09-08", endDate: null, active: true, days: { Wed: "AllDay", Thu: "AM" } },
   // An old pattern that ended before this week: must not show.
-  { id: "ft-old", clientKey: "csc", clientName: "CSC", startDate: "2025-01-06", endDate: "2026-02-26", active: true, days: { Thu: "PM" } },
+  { id: "ft-old", clientKey: "adatum", clientName: "Adatum", startDate: "2025-01-06", endDate: "2026-02-26", active: true, days: { Thu: "PM" } },
 ];
 
 const o = (id: string, title: string, start: string, end: string, extra: Partial<CalEvent> = {}): CalEvent => ({
@@ -25,23 +25,23 @@ const g = (id: string, title: string, start: string, end: string, extra: Partial
 });
 
 export const sampleOutlook: CalEvent[] = [
-  // Mon: Quiddity AM (double-booked with standing Internal), CSC PM (90 min of meetings: watch)
+  // Mon: Proseware AM (double-booked with standing Internal), Adatum PM (90 min of meetings: watch)
   o("1", "Cooptimize weekly standup", "02T09:00", "02T09:30"),
-  o("2", "Quiddity sprint planning", "02T10:00", "02T11:00"),
-  o("3", "CSC data model review", "02T13:00", "02T14:00"),
+  o("2", "Proseware sprint planning", "02T10:00", "02T11:00"),
+  o("3", "Adatum data model review", "02T13:00", "02T14:00"),
   o("4", "Sales pipeline sync", "02T15:00", "02T15:30", { showAs: "tentative", responseStatus: "tentative" }),
-  // Tue: Internal AM (healthy), CSC PM (3h 15m of meetings, no focus window: at risk)
+  // Tue: Internal AM (healthy), Adatum PM (3h 15m of meetings, no focus window: at risk)
   o("5", "1:1 with Dana", "03T09:30", "03T10:00"),
-  o("6", "CSC Power BI walkthrough", "03T13:00", "03T14:30"),
-  o("7", "CSC backlog refinement", "03T14:30", "03T15:30", { showAs: "tentative", responseStatus: "tentative" }),
-  o("8", "Quiddity stakeholder sync", "03T15:45", "03T16:30"),
+  o("6", "Adatum Power BI walkthrough", "03T13:00", "03T14:30"),
+  o("7", "Adatum backlog refinement", "03T14:30", "03T15:30", { showAs: "tentative", responseStatus: "tentative" }),
+  o("8", "Proseware stakeholder sync", "03T15:45", "03T16:30"),
   // Wed: WC all day. Lunch and learn spans the AM/PM split.
   o("9", "WC weekly status", "04T09:00", "04T10:00"),
   o("10", "Lunch and learn: Copilot Studio", "04T12:00", "04T13:00", { showAs: "tentative", responseStatus: "tentative" }),
   o("11", "WC model review", "04T13:30", "04T14:30"),
   // Thu: WC AM, PM Open
   o("12", "WC Dataverse migration workshop", "05T09:00", "05T10:30"),
-  o("13", "Quiddity invoice question", "05T14:00", "05T14:30"),
+  o("13", "Proseware invoice question", "05T14:00", "05T14:30"),
   o("14", "Hold: expense reports", "05T16:00", "05T16:30", { showAs: "free", responseStatus: "organizer" }),
   // Fri: overflow day
   o("15", "Cooptimize all hands", "06T11:00", "06T11:30"),

@@ -7,6 +7,7 @@ import { THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
 import { hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { canAddWork, dayRule } from "../plan/days.ts";
 import { pickTime, timeChoices } from "../plan/picktime.ts";
+import { DEFAULT_MIN_SIZES, openGaps } from "../plan/agenda.ts";
 import { REMOVED_IN_OUTLOOK } from "../plan/outlooksync.ts";
 import { formatDuration } from "../week/format.ts";
 import { isPickable } from "../plan/rules.ts";
@@ -559,13 +560,13 @@ export function timeStep(env: MenuEnv, p: Pick): MenuStep {
   const slot = day ? (p.half === "AM" ? day.am : p.half === "PM" ? day.pm : day.eve) : undefined;
   const all = env.timeboxes ?? [];
   const { timebox: t } = pickTime(p.id, all);
-  const choices = slot ? timeChoices(slot, all, p, env.planning.sizes, p.date === env.today ? env.now : undefined) : [];
+  const choices = slot ? timeChoices(slot, all, p, env.planning.sizes, p.date === env.today ? env.now : undefined, env.planning.minSizes ?? DEFAULT_MIN_SIZES) : [];
   const custom: MenuItem = { id: "custom", label: "Custom time…", hint: "start and length", action: "timebox.add", run: () => env.openTimebox({ pickId: p.id, date: p.date }) };
   if (!t) {
     const gaps: MenuItem[] = choices.map((c, i) => ({ id: `gap${i}`, label: `Free ${spanText(c.gapStart, c.gapEnd, tz)} · ${formatDuration(c.gapMinutes)}`, hint: c.trimmed ? `trimmed to ${formatDuration(c.minutes)}` : `${formatDuration(c.minutes)} from ${spanText(c.start, c.end, tz).split("–")[0]}`, action: "timebox.add", run: () => env.timeboxChange("timebox.add", { pickId: p.id, date: p.date, start: c.start, end: c.end }) }));
     return {
       title: `Time for "${p.title}"`,
-      items: [...(gaps.length ? gaps : [{ id: "none", label: slot ? "No free time left in this block" : "This day isn't in the week shown", action: "timebox.add", disabled: "Use Custom time, or free up the block" } satisfies MenuItem]), custom],
+      items: [...(gaps.length ? gaps : [{ id: "none", label: !slot ? "This day isn't in the week shown" : openGaps(slot, all, p.date === env.today ? env.now : undefined).length ? `No free stretch of ${formatDuration(Math.min((env.planning.minSizes ?? DEFAULT_MIN_SIZES)[p.size], env.planning.sizes[p.size]))} or more` : "No free time left in this block", action: "timebox.add", disabled: "Use Custom time, or free up the block" } satisfies MenuItem]), custom],
     };
   }
   const len = minutesOfBox(t);

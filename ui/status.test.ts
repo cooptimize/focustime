@@ -70,7 +70,7 @@ describe("actions a source offers", () => {
 
 describe("DevOps names the true cause", () => {
   it("a locked keyring reads as keyring locked, not unreachable", () => {
-    expect(workStatusLabel(lockedClient("Quiddity"))).toBe("cached (keyring locked)");
+    expect(workStatusLabel(lockedClient("Proseware"))).toBe("cached (keyring locked)");
     expect(workStatusLabel(client("A", { status: "unreachable", cause: "network", fromCache: true }))).toBe("cached (offline)");
     expect(workStatusLabel(client("A", { status: "auth_failed", fromCache: true }))).toBe("cached (PAT expired or invalid)");
   });

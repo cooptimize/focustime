@@ -31,7 +31,7 @@ function seedCache(cacheDir: string) {
   mkdirSync(join(cacheDir, "dataverse"), { recursive: true });
   writeFileSync(
     join(cacheDir, "dataverse", `${WEEK}.json`),
-    JSON.stringify({ fetchedAt: "2026-11-02T08:02:00-05:00", items: [{ id: "cached", clientKey: "CSC", clientName: "CSC", startDate: "2026-01-05", endDate: null, active: true, days: { Mon: "PM" } }] }),
+    JSON.stringify({ fetchedAt: "2026-11-02T08:02:00-05:00", items: [{ id: "cached", clientKey: "Adatum", clientName: "Adatum", startDate: "2026-01-05", endDate: null, active: true, days: { Mon: "PM" } }] }),
   );
 }
 
@@ -40,7 +40,7 @@ describe("Dataverse source: success", () => {
     const { source } = setup("ok");
     const r = await source.load(WEEK);
     expect(r).toMatchObject({ source: "dataverse", status: "ok", fromCache: false, fetchedAt: "2026-11-02T08:02:00-05:00" });
-    expect(r.items.map((p) => p.clientName)).toEqual(["Quiddity", "CSC", "Internal", "Example Engineering Partners"]);
+    expect(r.items.map((p) => p.clientName)).toEqual(["Proseware", "Adatum", "Internal", "Example Engineering Partners"]);
   });
 
   it("asks for a client-credentials token for the environment scope", async () => {

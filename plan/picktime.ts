@@ -2,7 +2,7 @@
 // time editor offer the block's free gaps; an already-timed pick's own timebox counts as free, so the list never says
 // "no free time" because of it, and "Keep current" comes first. Drag math for the card timelines. Pure.
 import type { Slot } from "../week/types.ts";
-import { openGaps, placeInGap, type AgendaTimebox } from "./agenda.ts";
+import { DEFAULT_MIN_SIZES, openGaps, placeInGap, type AgendaTimebox } from "./agenda.ts";
 import { minutesOf, TIMEBOX_MIN, TIMEBOX_SNAP } from "./timebox.ts";
 import type { Size } from "./types.ts";
 
@@ -20,9 +20,10 @@ export type TimeChoice = { kind: "keep" | "gap"; start: string; end: string; min
 /**
  * Where the pick can go in its block: "Keep current" (when timed), then each free gap with the pick placed at its
  * start. The pick's own timebox is left out of the busy time; a timed pick keeps its length, an untimed one takes its
- * size from Settings. From `now` on today.
+ * size from Settings. From `now` on today. Step 16 (D285): a gap shorter than the pick's shortest useful time (the same
+ * rule as Timebox my day, D273) isn't offered, and a pick is never trimmed below it. Custom time stays free.
  */
-export function timeChoices(slot: Slot, timeboxes: readonly Box[], pick: { id: number; size: Size }, sizes: Readonly<Record<Size, number>>, now?: string): TimeChoice[] {
+export function timeChoices(slot: Slot, timeboxes: readonly Box[], pick: { id: number; size: Size }, sizes: Readonly<Record<Size, number>>, now?: string, minSizes: Readonly<Record<Size, number>> = DEFAULT_MIN_SIZES): TimeChoice[] {
   const own = timeboxes.find((t) => t.pickId === pick.id && !t.removedAt) ?? null;
   const others = timeboxes.filter((t) => t !== own);
   const want = own ? minutesOf(own) : sizes[pick.size];
@@ -33,7 +34,7 @@ export function timeChoices(slot: Slot, timeboxes: readonly Box[], pick: { id: n
     // The gap's start, and (when the pick sits in this gap now) right after its current end.
     const starts = [g.start, ...(own && ms(own.end) > ms(g.start) && ms(own.end) < ms(g.end) ? [own.end] : [])];
     for (const s of starts) {
-      const at = placeInGap({ start: s, end: g.end, minutes: Math.round((ms(g.end) - ms(s)) / 60_000) }, want);
+      const at = placeInGap({ start: s, end: g.end, minutes: Math.round((ms(g.end) - ms(s)) / 60_000) }, want, minSizes[pick.size]);
       if (!at || seen.has(ms(at.start))) continue;
       seen.add(ms(at.start));
       out.push({ kind: "gap", start: at.start, end: at.end, minutes: at.minutes, trimmed: at.trimmed, gapStart: g.start, gapEnd: g.end, gapMinutes: g.minutes });

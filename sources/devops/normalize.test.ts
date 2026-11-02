@@ -53,9 +53,9 @@ describe("state categories from each project's metadata", () => {
 
 describe("WIQL for my open work", () => {
   it("filters per type on that type's done states, for me, in this project, in board order", () => {
-    const q = buildWiql("tanner@client.com", categoriesFrom(typesWithStates("agile")), "Microsoft.VSTS.Common.StackRank");
+    const q = buildWiql("avery@client.com", categoriesFrom(typesWithStates("agile")), "Microsoft.VSTS.Common.StackRank");
     expect(q).toBe(
-      "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.AssignedTo] = 'tanner@client.com' AND (" +
+      "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.AssignedTo] = 'avery@client.com' AND (" +
         "([System.WorkItemType] = 'Bug' AND [System.State] NOT IN ('closed')) OR " +
         "([System.WorkItemType] = 'Epic' AND [System.State] NOT IN ('closed', 'removed')) OR " +
         "([System.WorkItemType] = 'Feature' AND [System.State] NOT IN ('closed', 'removed')) OR " +
@@ -111,20 +111,20 @@ describe("work item normalization", () => {
     expect(items.map((i) => [i.id, i.tags, i.blocked])).toEqual([[1, ["Blocked", "Data"], true], [2, [], false]]);
   });
   it("reduces System.ChangedBy to changedByMe against my identity for the client, keeping no one's identity (Q42)", () => {
-    const me = { ...agileCtx, me: "Tanner@Fabrikam.example" };
+    const me = { ...agileCtx, me: "Avery@Fabrikam.example" };
     const { items } = normalizeWorkItems(
       [
-        { id: 1, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.ChangedBy": { displayName: "Tanner S", uniqueName: "tanner@fabrikam.example", id: "x" } } },
+        { id: 1, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.ChangedBy": { displayName: "Avery S", uniqueName: "avery@fabrikam.example", id: "x" } } },
         { id: 2, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.ChangedBy": { displayName: "Dana", uniqueName: "dana@fabrikam.example" } } },
-        { id: 3, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.ChangedBy": "Tanner S <TANNER@fabrikam.example>" } },
+        { id: 3, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.ChangedBy": "Avery S <AVERY@fabrikam.example>" } },
         { id: 4, fields: { "System.WorkItemType": "User Story", "System.State": "Active" } },
       ],
       me,
     );
     expect(items.map((i) => [i.id, i.changedByMe])).toEqual([[1, true], [2, false], [3, true], [4, false]]);
-    expect(JSON.stringify(items)).not.toMatch(/dana|Dana|tanner@/i);
+    expect(JSON.stringify(items)).not.toMatch(/dana|Dana|avery@/i);
     // Without my identity nothing counts as mine.
-    expect(normalizeWorkItems([{ id: 1, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.ChangedBy": { uniqueName: "tanner@fabrikam.example" } } }], agileCtx).items[0]!.changedByMe).toBe(false);
+    expect(normalizeWorkItems([{ id: 1, fields: { "System.WorkItemType": "User Story", "System.State": "Active", "System.ChangedBy": { uniqueName: "avery@fabrikam.example" } } }], agileCtx).items[0]!.changedByMe).toBe(false);
   });
   it("Agile: only the fields used, closed items dropped, board order with unranked last", () => {
     const { items, skipped } = normalizeWorkItems(fx("agile-batch").value, agileCtx);
@@ -261,16 +261,16 @@ describe("Plan the week: portfolio tiers and target dates (step 8)", () => {
     expect(q).toBe("SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.Parent] IN (210, 220) ORDER BY [Microsoft.VSTS.Common.StackRank] ASC, [System.Id] ASC");
   });
   it("keeps assignee display names (never emails) and the target date when asked", () => {
-    const ctx = { org: "o", projectName: "p", orderField: null, categories: categoriesFrom(typesWithStates("agile")), me: "tanner@o.example", people: true, targetFields: { Feature: "Microsoft.VSTS.Scheduling.TargetDate" }, timeZone: "America/New_York", keepDone: true };
+    const ctx = { org: "o", projectName: "p", orderField: null, categories: categoriesFrom(typesWithStates("agile")), me: "avery@o.example", people: true, targetFields: { Feature: "Microsoft.VSTS.Scheduling.TargetDate" }, timeZone: "America/New_York", keepDone: true };
     const { items } = normalizeWorkItems(
       [
         { id: 1, fields: { "System.WorkItemType": "Feature", "System.State": "Active", "System.AssignedTo": { displayName: "Dana Ruiz", uniqueName: "dana@o.example" }, "Microsoft.VSTS.Scheduling.TargetDate": "2026-11-20T05:00:00Z" } },
-        { id: 2, fields: { "System.WorkItemType": "User Story", "System.State": "Closed", "System.AssignedTo": { displayName: "Tanner S", uniqueName: "Tanner@o.example" } } },
+        { id: 2, fields: { "System.WorkItemType": "User Story", "System.State": "Closed", "System.AssignedTo": { displayName: "Avery S", uniqueName: "Avery@o.example" } } },
         { id: 3, fields: { "System.WorkItemType": "User Story", "System.State": "New" } },
       ],
       ctx,
     );
-    expect(items.map((i) => [i.id, i.assignedTo, i.assignedToMe, i.targetDate ?? null])).toEqual([[1, "Dana Ruiz", false, "2026-11-20"], [2, "Tanner S", true, null], [3, null, false, null]]);
+    expect(items.map((i) => [i.id, i.assignedTo, i.assignedToMe, i.targetDate ?? null])).toEqual([[1, "Dana Ruiz", false, "2026-11-20"], [2, "Avery S", true, null], [3, null, false, null]]);
     expect(JSON.stringify(items)).not.toContain("@o.example");
   });
 });

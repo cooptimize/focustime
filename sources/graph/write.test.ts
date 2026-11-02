@@ -4,7 +4,7 @@ import { HttpError } from "../calendar/http.ts";
 import { FAKE_WRITE_TOKEN, fakeGraph } from "./test-fakes.ts";
 import { createBody, createGraphWriter, MARKER_PROP, matches, OwnershipError, type OutlookFields } from "./write.ts";
 
-const F: OutlookFields = { subject: "CSC: #4512 Import mapping", body: "https://dev.azure.com/csc/p/_workitems/edit/4512", start: "2026-11-03T15:00:00Z", end: "2026-11-03T16:30:00Z", showAs: "busy", reminder: false };
+const F: OutlookFields = { subject: "Adatum: #4512 Import mapping", body: "https://dev.azure.com/adatum/p/_workitems/edit/4512", start: "2026-11-03T15:00:00Z", end: "2026-11-03T16:30:00Z", showAs: "busy", reminder: false };
 function setup() {
   const g = fakeGraph();
   const logs: LogRecord[] = [];

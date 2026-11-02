@@ -9,7 +9,7 @@ export type FakeComment = { id: number; text: string; isDeleted: boolean; create
 export type Seen = { method: string; url: string; authorization: string | null; contentType: string | null; body: unknown };
 
 /** The PAT each fake identity uses (Basic base64(":" + PAT)). */
-export const WRITE_PAT = fakePat("tannerwrite");
+export const WRITE_PAT = fakePat("averywrite");
 export const OTHER_PAT = fakePat("someoneelse");
 export const COMPANY_PAT = fakePat("companyread");
 export const basic = (pat: string) => new Pat(pat).basicAuth();
@@ -37,7 +37,7 @@ const FIELDS = [
 export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; now?: () => string } = {}) {
   const clock = opts.now ?? (() => new Date().toISOString());
   const org = opts.org ?? "cooptimize";
-  const identities = opts.identities ?? { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "tanner@cooptimize.example" }, [basic(OTHER_PAT)]: { id: "22222222-2222-4222-8222-222222222222", name: "Dana Ruiz", email: "dana@cooptimize.example" } };
+  const identities = opts.identities ?? { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "avery@cooptimize.example" }, [basic(OTHER_PAT)]: { id: "22222222-2222-4222-8222-222222222222", name: "Dana Ruiz", email: "dana@cooptimize.example" } };
   const items = new Map<number, FakeItem>();
   const comments = new Map<number, FakeComment[]>();
   const seen: Seen[] = [];

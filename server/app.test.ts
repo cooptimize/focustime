@@ -103,7 +103,7 @@ describe("local server", () => {
     const r = await api({ weekStart: "2026-11-02" });
     expect(r.status).toBe(200);
     const data = JSON.parse(r.body).data;
-    expect(data.week.days[0].am.focus[0].clientName).toBe("Quiddity");
+    expect(data.week.days[0].am.focus[0].clientName).toBe("Proseware");
     expect(r.body).not.toContain(FAKE_SECRET);
     expect(r.body).not.toContain(FAKE_TOKEN);
     const logged = JSON.stringify(logs);

@@ -3,7 +3,7 @@ import { focusPick, urgentFollowUps } from "./today.ts";
 import type { Pick } from "./types.ts";
 
 const pick = (id: number, half: Pick["half"], position: number, status: Pick["status"] = "planned") =>
-  ({ id, half, position, status, date: "2026-11-02", clientKey: "W&C", kind: "intention", title: `p${id}`, size: "M" }) as Pick;
+  ({ id, half, position, status, date: "2026-11-02", clientKey: "T&S", kind: "intention", title: `p${id}`, size: "M" }) as Pick;
 
 describe("Today", () => {
   it("Start focus takes the first planned pick of the half-day under way, then later ones, then any left", () => {

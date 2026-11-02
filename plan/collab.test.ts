@@ -3,9 +3,9 @@ import { defaultRange, domainAllowed, freeFor, helpFollowUpText, isExcluded, inv
 import { zoneOf } from "./timezones.ts";
 
 const TZ = "America/Chicago";
-const ME = { id: "00000000-0000-4000-8000-000000000001", email: "tanner@cooptimize.org" };
+const ME = { id: "00000000-0000-4000-8000-000000000001", email: "avery@cooptimize.org" };
 const team: Teammate[] = [
-  { id: ME.id, name: "Tanner", email: ME.email },
+  { id: ME.id, name: "Avery", email: ME.email },
   { id: "u-ana", name: "Ana", email: "ana@cooptimize.org" },
   { id: "u-ben", name: "Ben", email: "Ben@Cooptimize.org" },
   { id: "u-cy", name: "Cy", email: "cy@cooptimize.org" },
@@ -162,8 +162,8 @@ describe("slot suggestions", () => {
 
 describe("the invite and its range", () => {
   it("names the client and item, carries the DevOps link and note, lowercases attendee emails", () => {
-    const f = inviteFields({ clientName: "W&C", itemTitle: "#4512 Import mapping", url: "https://dev.azure.com/wc/p/_workitems/edit/4512", note: "  stuck on the lookup  ", start: "2026-11-10T09:00:00-06:00", end: "2026-11-10T09:30:00-06:00", people: [{ name: "Ana", email: "Ana@cooptimize.org" }], teams: true });
-    expect(f).toMatchObject({ subject: "W&C: help on #4512 Import mapping", start: "2026-11-10T15:00:00Z", attendees: [{ name: "Ana", email: "ana@cooptimize.org" }], teams: true, showAs: "busy" });
+    const f = inviteFields({ clientName: "T&S", itemTitle: "#4512 Import mapping", url: "https://dev.azure.com/wc/p/_workitems/edit/4512", note: "  stuck on the lookup  ", start: "2026-11-10T09:00:00-06:00", end: "2026-11-10T09:30:00-06:00", people: [{ name: "Ana", email: "Ana@cooptimize.org" }], teams: true });
+    expect(f).toMatchObject({ subject: "T&S: help on #4512 Import mapping", start: "2026-11-10T15:00:00Z", attendees: [{ name: "Ana", email: "ana@cooptimize.org" }], teams: true, showAs: "busy" });
     expect(f.body).toBe("https://dev.azure.com/wc/p/_workitems/edit/4512\n\nstuck on the lookup\n\nHelp session planned in Coopilot.");
     expect(helpFollowUpText(["Ana", "Ben", "Cy"], "#4512 Import mapping")).toBe("Help session with Ana, Ben and Cy on #4512 Import mapping");
   });

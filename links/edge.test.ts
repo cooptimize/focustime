@@ -34,13 +34,13 @@ describe("Edge install detection", () => {
 describe("Edge profiles from Local State", () => {
   it("keeps only directory and display name, and drops anything that could be a flag", () => {
     const state = JSON.stringify({
-      profile: { info_cache: { Default: { name: "Cooptimize", user_name: "me@x.com", gaia_id: "1" }, "Profile 3": { name: "CSC" }, "--evil": { name: "x" } }, last_used: "Default" },
+      profile: { info_cache: { Default: { name: "Cooptimize", user_name: "me@x.com", gaia_id: "1" }, "Profile 3": { name: "Adatum" }, "--evil": { name: "x" } }, last_used: "Default" },
       os_crypt: { encrypted_key: "SECRET" },
     });
     const out = profilesFromLocalState(state);
     expect(out).toEqual([
       { directory: "Default", name: "Cooptimize" },
-      { directory: "Profile 3", name: "CSC" },
+      { directory: "Profile 3", name: "Adatum" },
     ]);
     expect(JSON.stringify(out)).not.toMatch(/SECRET|me@x\.com|gaia/);
     expect(profilesFromLocalState("not json")).toEqual([]);
@@ -78,20 +78,20 @@ describe("work item link validation", () => {
 });
 
 describe("launch arguments", () => {
-  const native: EdgeConfig = { command: ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"], profiles: { CSC: "Profile 3", Cooptimize: "Default" }, fallbackCommand: ["omarchy-launch-browser"] };
+  const native: EdgeConfig = { command: ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"], profiles: { Adatum: "Profile 3", Cooptimize: "Default" }, fallbackCommand: ["omarchy-launch-browser"] };
   const url = "https://dev.azure.com/contoso/P/_workitems/edit/1";
   it("a mapped client: the Edge command, its profile directory as one argument, then the link", () => {
-    expect(launchPlan(native, "CSC", "CSC", url)).toEqual({ argv: ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable", "--profile-directory=Profile 3", url], profile: "Profile 3", notice: null });
+    expect(launchPlan(native, "Adatum", "Adatum", url)).toEqual({ argv: ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable", "--profile-directory=Profile 3", url], profile: "Profile 3", notice: null });
   });
   it("a Flatpak install puts the profile after the app id", () => {
     const flat = { ...native, command: ["flatpak", "run", "com.microsoft.Edge"] };
     expect(launchPlan(flat, "Cooptimize", "Cooptimize", url).argv).toEqual(["flatpak", "run", "com.microsoft.Edge", "--profile-directory=Default", url]);
   });
   it("an unmapped client opens in the default browser with a notice", () => {
-    expect(launchPlan(native, "W&C", "W&C", url)).toEqual({ argv: ["omarchy-launch-browser", url], profile: null, notice: "No Edge profile set for W&C" });
+    expect(launchPlan(native, "T&S", "T&S", url)).toEqual({ argv: ["omarchy-launch-browser", url], profile: null, notice: "No Edge profile set for T&S" });
     expect(launchPlan(native, "toString", "toString", url).profile).toBeNull();
   });
   it("no Edge command at all also falls back", () => {
-    expect(launchPlan({ ...native, command: [] }, "CSC", "CSC", url).notice).toBe("No Edge profile set for CSC");
+    expect(launchPlan({ ...native, command: [] }, "Adatum", "Adatum", url).notice).toBe("No Edge profile set for Adatum");
   });
 });

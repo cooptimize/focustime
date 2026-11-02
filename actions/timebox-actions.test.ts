@@ -43,7 +43,7 @@ function setup(opts: { access?: WriteAccess["status"]; toml?: string } = {}) {
     return r;
   };
   const box = (over: Record<string, unknown> = {}) =>
-    run<{ timebox: { id: number; uid: string }; sync: string | null }>("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:30:00-05:00`, clientKey: "CSC", title: "#4512 Import mapping", url: "https://dev.azure.com/csc/p/_workitems/edit/4512", outlook: true, ...over });
+    run<{ timebox: { id: number; uid: string }; sync: string | null }>("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:30:00-05:00`, clientKey: "Adatum", title: "#4512 Import mapping", url: "https://dev.azure.com/adatum/p/_workitems/edit/4512", outlook: true, ...over });
   const preview = (input: Record<string, unknown>) => run<{ preview?: WritePreview; nothing?: true }>("write.preview", input);
   const confirm = (p: WritePreview) => run<WriteResult>("write.confirm", { previewId: p.previewId });
   const put = async (uid: string) => confirm((await preview({ uid })).preview!);
@@ -53,12 +53,12 @@ function setup(opts: { access?: WriteAccess["status"]; toml?: string } = {}) {
 describe("timeboxes (local)", () => {
   it("validates times and takes a pick's client, title and link from the pick", async () => {
     const t = setup();
-    const p = t.plan.addPick({ date: D, half: "AM", clientKey: "CSC", kind: "item", itemId: 4512, title: "Import mapping", itemType: "User Story", itemUrl: "https://dev.azure.com/csc/p/_workitems/edit/4512", size: "M" });
+    const p = t.plan.addPick({ date: D, half: "AM", clientKey: "Adatum", kind: "item", itemId: 4512, title: "Import mapping", itemType: "User Story", itemUrl: "https://dev.azure.com/adatum/p/_workitems/edit/4512", size: "M" });
     const r = await t.run<{ timebox: { clientKey: string; title: string; url: string; outlook: boolean } }>("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, pickId: p.id });
-    expect(r.timebox).toMatchObject({ clientKey: "CSC", title: "Import mapping", url: p.itemUrl, outlook: false });
+    expect(r.timebox).toMatchObject({ clientKey: "Adatum", title: "Import mapping", url: p.itemUrl, outlook: false });
     expect((await t.fail("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T09:05:00-05:00`, pickId: p.id })).error).toMatch(/at least 15/);
     expect((await t.fail("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, pickId: p.id, title: "x" })).error).toMatch(/from the pick/);
-    expect((await t.fail("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, clientKey: "CSC", title: "x", url: "https://evil.example/" })).error).toMatch(/DevOps link/);
+    expect((await t.fail("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, clientKey: "Adatum", title: "x", url: "https://evil.example/" })).error).toMatch(/DevOps link/);
   });
 
   it("Put on Outlook follows Settings by default", async () => {
@@ -88,14 +88,14 @@ describe("write framework: preview", () => {
     const t = setup();
     const { timebox } = await t.box();
     const { preview } = await t.preview({ uid: timebox.uid });
-    expect(preview).toMatchObject({ op: "create", system: "Outlook", account: "tanner@cooptimize.example", calendar: "Calendar", summary: "Create an Outlook event", auto: false });
+    expect(preview).toMatchObject({ op: "create", system: "Outlook", account: "avery@cooptimize.example", calendar: "Calendar", summary: "Create an Outlook event", auto: false });
     expect(preview!.fields.map((f) => [f.label, f.after])).toEqual([
-      ["Title", "CSC: #4512 Import mapping"],
+      ["Title", "Adatum: #4512 Import mapping"],
       ["When", "Tue, Nov 3, 9:00 AM to 10:30 AM"],
       ["Show as", "Busy"],
       ["Reminder", "None"],
       ["Attendees", "None"],
-      ["Body", "https://dev.azure.com/csc/p/_workitems/edit/4512\n\nTimebox planned in Coopilot."],
+      ["Body", "https://dev.azure.com/adatum/p/_workitems/edit/4512\n\nTimebox planned in Coopilot."],
     ]);
     expect(preview!.visibility).toMatch(/nobody is invited/);
     expect(t.g.events.size).toBe(0);
@@ -132,13 +132,13 @@ describe("write framework: write, read back, log", () => {
     const r = await t.put(timebox.uid);
     expect(r).toMatchObject({ confirmed: true, message: "On Outlook" });
     const [ev] = [...t.g.events.values()];
-    expect(ev).toMatchObject({ subject: "CSC: #4512 Import mapping", showAs: "busy", isReminderOn: false, marker: timebox.uid });
+    expect(ev).toMatchObject({ subject: "Adatum: #4512 Import mapping", showAs: "busy", isReminderOn: false, marker: timebox.uid });
     expect(t.g.calls.filter((c) => c.method === "POST")[0]!.body).toMatchObject({ attendees: [], singleValueExtendedProperties: [{ id: MARKER_PROP, value: timebox.uid }] });
     // Read back after writing.
     const posted = t.g.calls.findIndex((c) => c.method === "POST");
     expect(t.g.calls.slice(posted + 1).some((c) => c.method === "GET" && c.path.includes(`me/events/${ev!.id}`))).toBe(true);
     const log = await t.run<WriteLogView>("write.log", {});
-    expect(log.entries).toMatchObject([{ op: "create", uid: timebox.uid, eventId: ev!.id, status: "confirmed", account: "tanner@cooptimize.example", calendar: "Calendar", before: null, undoable: true }]);
+    expect(log.entries).toMatchObject([{ op: "create", uid: timebox.uid, eventId: ev!.id, status: "confirmed", account: "avery@cooptimize.example", calendar: "Calendar", before: null, undoable: true }]);
     expect((await t.run<{ sync: string | null }>("timebox.set_outlook", { id: timebox.id, on: true })).sync).toBeNull();
   });
 
@@ -237,7 +237,7 @@ describe("write framework: undo", () => {
     await t.put(uid);
     expect(t.g.events.size).toBe(0);
     await t.confirm((await t.preview({ undo: (await latest()).id })).preview!);
-    expect([...t.g.events.values()]).toMatchObject([{ marker: uid, subject: "CSC: #4512 Import mapping" }]);
+    expect([...t.g.events.values()]).toMatchObject([{ marker: uid, subject: "Adatum: #4512 Import mapping" }]);
     expect(t.plan.timebox(id)).toMatchObject({ removedAt: null, outlook: true });
   });
 
@@ -283,7 +283,7 @@ describe("reset leaves Coopilot's events findable", () => {
     await t.put(timebox.uid);
     t.plan.reset();
     const log = await t.run<WriteLogView>("write.log", {});
-    expect(log.orphans).toMatchObject([{ uid: timebox.uid, title: "CSC: #4512 Import mapping" }]);
+    expect(log.orphans).toMatchObject([{ uid: timebox.uid, title: "Adatum: #4512 Import mapping" }]);
     const { preview } = await t.preview({ uid: timebox.uid });
     expect(preview!.op).toBe("delete");
     await t.confirm(preview!);
@@ -298,7 +298,7 @@ describe("de-duplication in the week view", () => {
     await t.put(timebox.uid);
     const eventId = t.plan.ownEvent(timebox.uid)!.eventId;
     const ev = (id: string, subject: string) => ({ id: `outlook:${id}`, source: "outlook", title: subject, start: "2026-11-03T09:00:00-05:00", end: "2026-11-03T10:30:00-05:00", allDay: false, showAs: "busy", responseStatus: "organizer", kind: "meeting", isCancelled: false });
-    const outlook = { source: "outlook", status: "ok", fetchedAt: "x", fromCache: false, items: [ev(eventId, "CSC: #4512 Import mapping"), ev("OTHER", "Standup")] };
+    const outlook = { source: "outlook", status: "ok", fetchedAt: "x", fromCache: false, items: [ev(eventId, "Adatum: #4512 Import mapping"), ev("OTHER", "Standup")] };
     const ctx: ActionContext = {
       loadConfig: async () => ({ path: "/x", parsed: parseConfig(base) }),
       makeDataverse: () => ({ resolveUserId: async () => ({ ok: false, message: "n/a" }) }) as never,
@@ -324,7 +324,7 @@ describe("de-duplication in the week view", () => {
 describe("focus timer from a timebox", () => {
   it("starts on the timebox's pick, default length its duration", async () => {
     const t = setup();
-    const p = t.plan.addPick({ date: D, half: "AM", clientKey: "CSC", kind: "item", itemId: 4512, title: "Import mapping", itemType: "User Story", itemUrl: "https://dev.azure.com/csc/p/_workitems/edit/4512", size: "S" });
+    const p = t.plan.addPick({ date: D, half: "AM", clientKey: "Adatum", kind: "item", itemId: 4512, title: "Import mapping", itemType: "User Story", itemUrl: "https://dev.azure.com/adatum/p/_workitems/edit/4512", size: "S" });
     const { timebox } = await t.run<{ timebox: { id: number } }>("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:30:00-05:00`, pickId: p.id });
     const r = await t.run<{ timer: { pickId: number | null; plannedMinutes: number } }>("timer.start", { timeboxId: timebox.id });
     expect(r.timer).toMatchObject({ pickId: p.id, plannedMinutes: 90 });
@@ -336,7 +336,7 @@ describe("focus timer from a timebox", () => {
 
 describe("Timebox my day (step 13.6, D246)", () => {
   const pickOn = (t: ReturnType<typeof setup>, title: string, half: "AM" | "PM" = "AM") =>
-    t.plan.addPick({ date: D, half, clientKey: "CSC", kind: "item", itemId: Math.floor(Math.random() * 9000) + 1000, title, itemType: "User Story", itemUrl: null, size: "M" });
+    t.plan.addPick({ date: D, half, clientKey: "Adatum", kind: "item", itemId: Math.floor(Math.random() * 9000) + 1000, title, itemType: "User Story", itemUrl: null, size: "M" });
   it("adds every placement in one go, each with its own Put on Outlook", async () => {
     const t = setup();
     const a = pickOn(t, "Import mapping"), b = pickOn(t, "Export");
@@ -376,7 +376,7 @@ describe("combined Outlook preview (step 13.6, D247)", () => {
     const b = (await t.box({ start: `${D}T11:00:00-05:00`, end: `${D}T12:00:00-05:00`, title: "#4513 Export" })).timebox;
     const c = (await t.box({ start: `${D}T13:00:00-05:00`, end: `${D}T14:00:00-05:00`, outlook: false })).timebox;
     const r = await t.run<{ previews: WritePreview[]; nothing: string[]; alreadyGone: string[] }>("write.preview", { uids: [a.uid, b.uid, c.uid] });
-    expect(r.previews.map((p) => [p.op, p.fields.find((f) => f.label === "Title")?.after])).toEqual([["create", "CSC: #4512 Import mapping"], ["create", "CSC: #4513 Export"]]);
+    expect(r.previews.map((p) => [p.op, p.fields.find((f) => f.label === "Title")?.after])).toEqual([["create", "Adatum: #4512 Import mapping"], ["create", "Adatum: #4513 Export"]]);
     expect(r.nothing).toEqual([c.uid]);
     expect(t.g.calls.filter((x) => x.method !== "GET")).toEqual([]);
   });
@@ -441,7 +441,7 @@ describe("read-back resilience (step 14.5, D255)", () => {
 describe("the row's Put on Outlook toggle and its undo (step 14.5, D259)", () => {
   it("on: a preview then the event; undo removes the event and turns Put on Outlook back off", async () => {
     const t = setup();
-    const p = t.plan.addPick({ date: D, half: "AM", clientKey: "CSC", kind: "item", itemId: 4512, title: "Import mapping", itemType: "User Story", itemUrl: "https://dev.azure.com/csc/p/_workitems/edit/4512", size: "M" });
+    const p = t.plan.addPick({ date: D, half: "AM", clientKey: "Adatum", kind: "item", itemId: 4512, title: "Import mapping", itemType: "User Story", itemUrl: "https://dev.azure.com/adatum/p/_workitems/edit/4512", size: "M" });
     const { timebox } = await t.run<{ timebox: { id: number; uid: string } }>("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, pickId: p.id, outlook: false });
     const on = await t.run<{ sync: string | null }>("timebox.set_outlook", { id: timebox.id, on: true });
     expect(on.sync).toBe("create");

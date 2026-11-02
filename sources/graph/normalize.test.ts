@@ -12,7 +12,7 @@ describe("normalizeGraphEvents (sanitized recorded calendarView, two pages)", ()
 
   it("drops declined and cancelled events", () => {
     expect(byTitle("Vendor webinar")).toEqual([]);
-    expect(byTitle("Canceled: CSC sync")).toEqual([]);
+    expect(byTitle("Canceled: Adatum sync")).toEqual([]);
     expect(skipped).toBe(0);
   });
 
@@ -31,7 +31,7 @@ describe("normalizeGraphEvents (sanitized recorded calendarView, two pages)", ()
   });
 
   it("handles an event that came back in UTC", () => {
-    expect(byTitle("Quiddity stakeholder sync")[0]).toMatchObject({ start: "2026-11-03T15:45:00-05:00", end: "2026-11-03T16:30:00-05:00", responseStatus: "notResponded" });
+    expect(byTitle("Proseware stakeholder sync")[0]).toMatchObject({ start: "2026-11-03T15:45:00-05:00", end: "2026-11-03T16:30:00-05:00", responseStatus: "notResponded" });
   });
 
   it("keeps each recurring instance as its own event", () => {

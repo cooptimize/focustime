@@ -61,9 +61,9 @@ client = "Cooptimize"
 # Client colors, keyed by the account's reporting nickname
 # (or the account name when it has no nickname).
 [clients]
-"W&C" = "#1f9e8f"
-Quiddity = "#7b68ee"
-CSC = "#d2892a"
+"T&S" = "#1f9e8f"
+Proseware = "#7b68ee"
+Adatum = "#d2892a"
 Cooptimize = "#4a7fd4"
 
 # Plan the day. Epics, features and other portfolio types can't be picked,

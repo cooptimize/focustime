@@ -13,7 +13,7 @@ let nextId = 1;
 function pick(over: Partial<Pick> = {}): Pick {
   const id = nextId++;
   return {
-    id, date: "2026-11-02", half: "AM", clientKey: "CSC", kind: "intention", itemId: null, draftId: null, title: `pick ${id}`,
+    id, date: "2026-11-02", half: "AM", clientKey: "Adatum", kind: "intention", itemId: null, draftId: null, title: `pick ${id}`,
     itemType: null, itemUrl: null, size: "M", status: "planned", carriedFrom: null, carriedFromDate: null, followUpId: null, notes: null,
     position: id, createdAt: "", updatedAt: "", ...over,
   };
@@ -87,19 +87,19 @@ describe("carry-over", () => {
 
 describe("block client", () => {
   it("a focus block keeps its client; another client's pick is allowed but flagged", () => {
-    expect(blockClient("CSC", [pick({ clientKey: "CSC" })])).toEqual({ clientKey: "CSC", mixed: false, clients: ["CSC"] });
-    expect(blockClient("CSC", [pick({ clientKey: "CSC" }), pick({ clientKey: "Cooptimize" })])).toMatchObject({ clientKey: "CSC", mixed: true });
-    expect(blockClient("CSC", [pick({ clientKey: "Quiddity" })])).toMatchObject({ clientKey: "CSC", mixed: true });
+    expect(blockClient("Adatum", [pick({ clientKey: "Adatum" })])).toEqual({ clientKey: "Adatum", mixed: false, clients: ["Adatum"] });
+    expect(blockClient("Adatum", [pick({ clientKey: "Adatum" }), pick({ clientKey: "Cooptimize" })])).toMatchObject({ clientKey: "Adatum", mixed: true });
+    expect(blockClient("Adatum", [pick({ clientKey: "Proseware" })])).toMatchObject({ clientKey: "Adatum", mixed: true });
   });
   it("an Open half-day takes the client of its first pick", () => {
     expect(blockClient(null, [])).toEqual({ clientKey: null, mixed: false, clients: [] });
-    const second = pick({ clientKey: "CSC", position: 2 });
+    const second = pick({ clientKey: "Adatum", position: 2 });
     const first = pick({ clientKey: "Cooptimize", position: 1 });
-    expect(blockClient(null, [second, first])).toEqual({ clientKey: "Cooptimize", mixed: true, clients: ["Cooptimize", "CSC"] });
+    expect(blockClient(null, [second, first])).toEqual({ clientKey: "Cooptimize", mixed: true, clients: ["Cooptimize", "Adatum"] });
     expect(blockClient(null, [first])).toMatchObject({ clientKey: "Cooptimize", mixed: false });
   });
   it("dropped and moved picks don't set or mix the client", () => {
-    expect(blockClient(null, [pick({ clientKey: "CSC", status: "moved", position: 0 }), pick({ clientKey: "W&C", position: 1 })])).toMatchObject({ clientKey: "W&C", mixed: false });
+    expect(blockClient(null, [pick({ clientKey: "Adatum", status: "moved", position: 0 }), pick({ clientKey: "T&S", position: 1 })])).toMatchObject({ clientKey: "T&S", mixed: false });
   });
 });
 
@@ -152,7 +152,7 @@ describe("Plan the day offers committed features first (step 8)", () => {
   const item = (id: number, type: string, level: WorkItem["level"], parentId: number | null = null): WorkItem => ({
     id, title: `${type} ${id}`, type, state: "New", stateCategory: "Proposed", level, order: null, parentId, changedAt: "", url: "",
   });
-  const f = (itemId: number, slots: { date: string; half: "AM" | "PM" }[] = [], clientKey = "W&C") => ({ clientKey, itemId, title: `F ${itemId}`, url: null, slots });
+  const f = (itemId: number, slots: { date: string; half: "AM" | "PM" }[] = [], clientKey = "T&S") => ({ clientKey, itemId, title: `F ${itemId}`, url: null, slots });
   const work = {
     // Board: my story 1 under feature 10, my story 2 with no committed parent, my feature 30.
     items: [item(1, "User Story", "story", 10), item(2, "User Story", "story", 99), item(30, "Feature", "portfolio")],
@@ -161,7 +161,7 @@ describe("Plan the day offers committed features first (step 8)", () => {
     committed: [item(10, "Feature", "portfolio")],
   };
   it("lists the client's committed features, placed-here first, with anyone's open stories; the rest of the board follows", () => {
-    const r = committedFirst(work, [f(30), f(10, [{ date: "2026-11-09", half: "PM" }]), f(50, [], "CSC")], "W&C", "2026-11-09", "PM");
+    const r = committedFirst(work, [f(30), f(10, [{ date: "2026-11-09", half: "PM" }]), f(50, [], "Adatum")], "T&S", "2026-11-09", "PM");
     expect(r.committed.map((c) => [c.feature.itemId, c.placedHere, c.item?.id ?? null, c.kids.map((k) => k.id)])).toEqual([
       [10, true, 10, [1, 11]],
       [30, false, 30, []],
@@ -171,12 +171,12 @@ describe("Plan the day offers committed features first (step 8)", () => {
   });
   it("my own stories under a committed feature (in the board list, not its children list) show under it", () => {
     const w = { items: [item(5, "User Story", "story", 10), item(6, "Bug", "story", 7)], children: [item(11, "User Story", "story", 10)], committed: [item(10, "Feature", "portfolio")] };
-    const r = committedFirst(w, [f(10)], "W&C", "2026-11-09", "AM");
+    const r = committedFirst(w, [f(10)], "T&S", "2026-11-09", "AM");
     expect(r.committed[0]!.kids.map((k) => k.id)).toEqual([5, 11]);
     expect(r.rest.map((i) => i.id)).toEqual([6]);
   });
   it("a committed feature DevOps can't show right now still comes first, with no stories", () => {
-    const r = committedFirst(undefined, [f(10)], "W&C", "2026-11-09", "AM");
+    const r = committedFirst(undefined, [f(10)], "T&S", "2026-11-09", "AM");
     expect(r.committed).toEqual([{ feature: f(10), tier: "must", level: "feature", placedHere: false, pinnedToday: false, item: null, kids: [] }]);
     expect(r.rest).toEqual([]);
   });
@@ -184,18 +184,18 @@ describe("Plan the day offers committed features first (step 8)", () => {
     const D = "2026-11-10";
     const refs = [
       { ...f(30), tier: "must" as const },
-      { ...f(2, [], "W&C"), level: "story" as const, tier: "nice" as const },
+      { ...f(2, [], "T&S"), level: "story" as const, tier: "nice" as const },
       { ...f(10, [{ date: D, half: "AM" }]), tier: "must" as const }, // pinned to another half today
       { ...f(40), tier: "must" as const, done: true }, // done: not offered
       { ...f(50, [{ date: D, half: "PM" }]), tier: "nice" as const }, // pinned here
     ];
-    const r = weekFirst(work, refs, "W&C", D, "PM");
+    const r = weekFirst(work, refs, "T&S", D, "PM");
     expect(r.musts.map((e) => [e.feature.itemId, e.pinnedToday, e.placedHere])).toEqual([[10, true, false], [30, false, false]]);
     expect(r.nice.map((e) => [e.feature.itemId, e.level, e.item?.id ?? null, e.kids.length])).toEqual([[50, "feature", null, 0], [2, "story", 2, 0]]);
     // Story 2 is on the list (as a story), story 1 is under feature 10: neither repeats in the rest.
     expect(r.rest.map((i) => i.id)).toEqual([]);
     // A done must's own item stays out of the rest too.
-    expect(weekFirst({ items: [item(40, "Feature", "portfolio"), item(7, "User Story", "story")], children: [] }, [{ ...f(40), done: true }], "W&C", D, "AM").rest.map((i) => i.id)).toEqual([7]);
+    expect(weekFirst({ items: [item(40, "Feature", "portfolio"), item(7, "User Story", "story")], children: [] }, [{ ...f(40), done: true }], "T&S", D, "AM").rest.map((i) => i.id)).toEqual([7]);
   });
 });
 

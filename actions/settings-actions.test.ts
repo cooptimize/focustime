@@ -15,7 +15,7 @@ import type { SettingsData } from "./types.ts";
 
 const SECRET = "FAKE-SETTINGS-SECRET-5d1e";
 const HOME = "/home/test";
-const LOCAL_STATE = JSON.stringify({ profile: { info_cache: { Default: { name: "Personal", other: "ignored" }, "Profile 2": { name: "CSC work" } } } });
+const LOCAL_STATE = JSON.stringify({ profile: { info_cache: { Default: { name: "Personal", other: "ignored" }, "Profile 2": { name: "Adatum work" } } } });
 const files: Record<string, string> = {
   [`${HOME}/.local/share/applications/chromium.desktop`]: "[Desktop Entry]\nExec=/usr/bin/chromium %U\n",
   [`${HOME}/.config/chromium/Local State`]: LOCAL_STATE,
@@ -24,7 +24,7 @@ const files: Record<string, string> = {
 function setup(text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"')) {
   const dir = mkdtempSync(join(tmpdir(), "c-settings-"));
   const path = join(dir, "config.toml");
-  writeFileSync(path, `# my own note at the top\n${text.replace('"W&C" = "#1f9e8f"', '# W&C keeps its old color form\n"W&C" = "#1f9e8f"')}`);
+  writeFileSync(path, `# my own note at the top\n${text.replace('"T&S" = "#1f9e8f"', '# T&S keeps its old color form\n"T&S" = "#1f9e8f"')}`);
   const no = () => { throw new Error("n/a"); };
   const stored: { account: string; value: string }[] = [];
   const c: ActionContext = {
@@ -47,8 +47,8 @@ describe("Settings (step 6b)", () => {
     expect(r.ok).toBe(true);
     const d = (r as { data: SettingsData }).data;
     expect(d.hours?.weekdays.mon).toEqual([{ start: "09:00", end: "17:00" }]);
-    expect(d.clients.map((c) => c.key)).toContain("W&C");
-    expect(d.browsers.chromium).toEqual({ found: true, profiles: [{ directory: "Default", name: "Personal" }, { directory: "Profile 2", name: "CSC work" }] });
+    expect(d.clients.map((c) => c.key)).toContain("T&S");
+    expect(d.browsers.chromium).toEqual({ found: true, profiles: [{ directory: "Default", name: "Personal" }, { directory: "Profile 2", name: "Adatum work" }] });
     expect(JSON.stringify(d)).not.toContain("ignored");
     expect(d.dataverseReached).toBe(false);
     expect(d.secrets.map((s) => [s.account, s.state])).toEqual([["dataverse-client-secret", "missing"], ["google-client-secret", "missing"]]);
@@ -56,19 +56,19 @@ describe("Settings (step 6b)", () => {
 
   it("saves a client as a table, keeps comments and the other clients, and sets Chromium up when chosen", async () => {
     const t = setup();
-    const r = await t.run("settings.save", { section: "client", values: { key: "CSC", name: "CSC Steel", color: "ochre", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"] } });
+    const r = await t.run("settings.save", { section: "client", values: { key: "Adatum", name: "Adatum Steel", color: "ochre", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"] } });
     expect(r.ok).toBe(true);
     const text = readFileSync(t.path, "utf8");
     expect(text).toContain("# my own note at the top");
-    expect(text).toContain("# W&C keeps its old color form");
-    expect(text).toContain('"W&C" = "#1f9e8f"');
-    expect(text).toContain('CSC = { color = "ochre", name = "CSC Steel", browser = "chromium", profile = "Profile 2", open_states = ["Resolved"] }');
+    expect(text).toContain("# T&S keeps its old color form");
+    expect(text).toContain('"T&S" = "#1f9e8f"');
+    expect(text).toContain('Adatum = { color = "ochre", name = "Adatum Steel", browser = "chromium", profile = "Profile 2", open_states = ["Resolved"] }');
     expect(text).toContain('[chromium]\ncommand = ["/usr/bin/chromium"]');
     const cfg = parseConfig(text);
-    expect(cfg.ok && cfg.config.clientSettings.CSC).toEqual({ color: "ochre", name: "CSC Steel", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"], follow: false });
-    expect(cfg.ok && cfg.config.clients.CSC).toBe("var(--client-ochre)");
+    expect(cfg.ok && cfg.config.clientSettings.Adatum).toEqual({ color: "ochre", name: "Adatum Steel", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"], follow: false });
+    expect(cfg.ok && cfg.config.clients.Adatum).toBe("var(--client-ochre)");
     // Round trip: saving the same values again changes nothing but the backup.
-    await t.run("settings.save", { section: "client", values: { key: "CSC", name: "CSC Steel", color: "ochre", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"] } });
+    await t.run("settings.save", { section: "client", values: { key: "Adatum", name: "Adatum Steel", color: "ochre", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"] } });
     expect(readFileSync(t.path, "utf8")).toBe(text);
   });
 
@@ -81,8 +81,8 @@ describe("Settings (step 6b)", () => {
     expect(hours.ok).toBe(false);
     const fields = (hours as { fields: { field: string }[] }).fields.map((f) => f.field);
     expect(fields).toEqual(expect.arrayContaining(["hours.time_zone", "hours.mon[0]"]));
-    const color = await t.run("settings.save", { section: "client", values: { key: "CSC", color: "purple", browser: "edge" } });
-    expect(color).toMatchObject({ ok: false, fields: [{ field: "clients.CSC.color" }] });
+    const color = await t.run("settings.save", { section: "client", values: { key: "Adatum", color: "purple", browser: "edge" } });
+    expect(color).toMatchObject({ ok: false, fields: [{ field: "clients.Adatum.color" }] });
     expect(await t.run("settings.save", { section: "nope", values: {} })).toMatchObject({ ok: false, status: 400 });
     expect(readFileSync(t.path, "utf8")).toBe(before);
   });
@@ -175,7 +175,7 @@ describe("Settings > Clients follow state (step 6d)", () => {
     const by = (cs: SettingsData["clients"], k: string) => cs.find((c) => c.key === k)?.follow;
     let cs = await load();
     expect(by(cs, "Cooptimize")).toEqual({ active: true, why: "internal" });
-    expect(by(cs, "W&C")).toEqual({ active: true, why: "ongoing" });
+    expect(by(cs, "T&S")).toEqual({ active: true, why: "ongoing" });
     expect(by(cs, "HM Electronics")).toEqual({ active: false, why: "none" });
     expect((await t.run("settings.save", { section: "client", values: { key: "HM Electronics", follow: true } })).ok).toBe(true);
     expect(readFileSync(t.path, "utf8")).toMatch(/"HM Electronics" = \{[^}]*follow = true/);

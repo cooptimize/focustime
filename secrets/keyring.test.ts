@@ -107,7 +107,7 @@ describe("DevOps write PATs (step 14)", () => {
     expect(seen[0]!.stdin).toBe(SECRET);
     expect(seen[0]!.args.join(" ")).not.toContain(SECRET);
     expect(seen[0]!.args).toContain(writePatAccount("Cooptimize"));
-    expect(writePatAccount("Cooptimize")).not.toBe(writePatAccount("CSC"));
+    expect(writePatAccount("Cooptimize")).not.toBe(writePatAccount("Adatum"));
   });
   it("reads back only wrapped in Pat, which never prints the value", async () => {
     const { getWritePat } = await import("./keyring.ts");
