@@ -145,7 +145,7 @@ export function LumenLoading({ height = 200 }: { height?: number }) {
  * Mon AM; a crossfade into the exact mark-week; then Lumen hops in an arc into Mon AM, its beam fading.
  * `close` plays it backwards; `paused` holds its first frame. Reduced motion: no animation, the end state shows and onDone runs at once.
  */
-export function Unroll({ direction, height = 200, paused = false, onDone, svgRef }: { direction: "open" | "close"; height?: number; /** Hold the first frame. */ paused?: boolean; onDone?: (() => void) | undefined; svgRef?: React.Ref<SVGSVGElement> }) {
+export function Unroll({ direction, height = 200, paused = false, pose, onDone, svgRef }: { direction: "open" | "close"; height?: number; /** Hold the first frame. */ paused?: boolean; /** Lumen's pose where it stands (Close out's moment: bob). */ pose?: "still" | "bob" | undefined; onDone?: (() => void) | undefined; svgRef?: React.Ref<SVGSVGElement> }) {
   const reduced = useReducedMotion();
   const segs = useRef<(SVGPathElement | null)[]>([]);
   const fin = useRef<SVGGElement>(null);
@@ -221,7 +221,9 @@ export function Unroll({ direction, height = 200, paused = false, onDone, svgRef
         ))}
       </g>
       <g ref={lumen} className="unroll-lumen">
-        <LumenBody beamId={beamId} />
+        <g className={`unroll-lumen-pose${pose === "bob" && !reduced ? " pose-bob" : ""}`} {...(pose ? { "data-lumen": reduced ? "still" : pose } : {})}>
+          <LumenBody beamId={beamId} />
+        </g>
       </g>
     </svg>
   );

@@ -34,15 +34,18 @@ span.brand-svg > svg { display: block; width: 100%; height: auto; }
 .lumen.pose-bob .lumen-beam, .lumen.pose-bob .lumen-bar { animation: lumen-glow 3s ease-in-out 0.7s infinite; }
 @keyframes lumen-sway { 0%, 100% { transform: rotate(-1.5deg); } 50% { transform: rotate(1.5deg); } }
 @keyframes lumen-glow { 0%, 100% { opacity: 1; } 50% { opacity: 0.72; } }
+.unroll-lumen-pose { transform-box: fill-box; transform-origin: 50% 100%; }
+.unroll-lumen-pose.pose-bob { animation: lumen-bob 0.7s cubic-bezier(0.3, 0.7, 0.3, 1) both, lumen-sway 6s ease-in-out 0.7s infinite; }
+@keyframes lumen-bob { 0% { transform: translateY(0); } 30% { transform: translateY(4%); } 60% { transform: translateY(-14%); } 100% { transform: translateY(0); } }
 @keyframes lumen-settle { 0% { transform: translateY(-14%); opacity: 0; } 45% { transform: translateY(0); opacity: 1; } 70% { transform: translateY(-6%); } 100% { transform: translateY(0); } }
 
 .loading-sweep { animation: lumen-sweep 2.5s linear infinite; }
 @keyframes lumen-sweep { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .lumen .lumen-pose, .lumen .lumen-beam, .lumen .lumen-bar, .loading-sweep { animation: none !important; }
+  .lumen .lumen-pose, .lumen .lumen-beam, .lumen .lumen-bar, .loading-sweep, .unroll-lumen-pose { animation: none !important; }
 }
-:root[data-reduce-motion] .lumen .lumen-pose, :root[data-reduce-motion] .lumen .lumen-beam, :root[data-reduce-motion] .lumen .lumen-bar, :root[data-reduce-motion] .loading-sweep { animation: none !important; }
+:root[data-reduce-motion] .lumen .lumen-pose, :root[data-reduce-motion] .lumen .lumen-beam, :root[data-reduce-motion] .lumen .lumen-bar, :root[data-reduce-motion] .loading-sweep, :root[data-reduce-motion] .unroll-lumen-pose { animation: none !important; }
 
 /* The opening and Close out overlays: full screen, the page's background. */
 .brand-stage {

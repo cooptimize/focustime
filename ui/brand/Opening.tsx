@@ -177,10 +177,8 @@ export function CloseReverse({ musts, onDone }: { musts: boolean; onDone: () => 
     <div className="brand-stage blocking" role="status" aria-live="polite" data-close={phase} onClick={end}>
       <div className={`brand-stage-bg${phase === "out" ? " gone" : ""}`} />
       <div className={`brand-stage-body${phase === "out" ? " gone" : ""}`}>
-        {phase === "moment" ? (
-          <Lumen pose="bob" size={64} />
-        ) : (
-          <Unroll direction="close" paused={phase === "in"} height={STAGE_H} svgRef={(el) => void (svg.current = el)} onDone={phase === "unroll" ? () => setPhase(musts ? "moment" : "out") : undefined} />
+        {(
+          <Unroll direction="close" paused={phase === "in"} pose={phase === "moment" ? "bob" : undefined} height={STAGE_H} svgRef={(el) => void (svg.current = el)} onDone={phase === "unroll" ? () => setPhase(musts ? "moment" : "out") : undefined} />
         )}
         {musts && <p className={`brand-moment-line${phase === "moment" ? "" : " gone"}`}>Musts done. See you tomorrow.</p>}
       </div>

@@ -11,16 +11,18 @@ const call = (page: Page, action: string, input: unknown) =>
 
 /** Records, from the first paint, whether the loader, the unroll and the sweep ever appeared. */
 const WATCH = () => {
-  const seen = { loader: false, unroll: false, sweep: false, lumen: [] as string[] };
+  const seen = { loader: false, unroll: false, sweep: false, lumen: [] as string[], close: [] as string[] };
   (window as unknown as { __seen: typeof seen }).__seen = seen;
   new MutationObserver(() => {
     if (document.querySelector('[data-opening="loader"]')) seen.loader = true;
     if (document.querySelector(".unroll")) seen.unroll = true;
     if (document.querySelector(".loading-sweep")) seen.sweep = true;
     document.querySelectorAll("[data-lumen]").forEach((e) => seen.lumen.push(e.getAttribute("data-lumen")!));
+    const c = document.querySelector("[data-close]")?.getAttribute("data-close");
+    if (c && seen.close.at(-1) !== c) seen.close.push(c);
   }).observe(document, { subtree: true, childList: true, attributes: true });
 };
-const seen = (page: Page) => page.evaluate(() => (window as unknown as { __seen: { loader: boolean; unroll: boolean; sweep: boolean; lumen: string[] } }).__seen);
+const seen = (page: Page) => page.evaluate(() => (window as unknown as { __seen: { loader: boolean; unroll: boolean; sweep: boolean; lumen: string[]; close: string[] } }).__seen);
 
 /** A new page whose first week loads take `delay` ms (so the loader shows), with the opening watched. */
 async function slowOpen(ctx: BrowserContext, delay: number): Promise<Page> {
@@ -99,7 +101,7 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
     await page.keyboard.press("Space"); // any key skips
     await page.waitForSelector(".brand-stage", { state: "detached" });
     const s = await seen(page);
-    expect(s.unroll).toBe(false);
+    expect(s.close).toEqual(["moment"]); // straight to the moment: no flight in, no reverse
     expect(s.lumen.every((p) => p === "still")).toBe(true);
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/today");
     await ctx.close();
