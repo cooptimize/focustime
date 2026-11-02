@@ -610,3 +610,15 @@ No new source, no new external write (Create in DevOps is the step 14 create fro
 - **From 15.2 (D300, D301).** Right-pane rows drag onto the week's other days (a strip while dragging). The intention box links an item through the shared lookup; Enter keeps plain text.
 - **Verification on real data.** Every add path was clicked once on a copy of the real config, plan store and cache in scratch directories (a separate server; the real service and store untouched; nothing confirmed in DevOps or Outlook; the copy deleted after).
 - **Rollback:** revert the step 15.3 commit, rebuild, restart. Migration 16 only adds nullable columns; older builds ignore them (a backup `plan.db.bak-v15-*` is written before migrating).
+
+## 39. Step 15.4: Microsoft sign-in for the app, my Azure VM, small follow-ups (authorized Nov 2)
+
+New source: Azure Resource Manager and Resource Graph, delegated (the signed-in person's own Azure RBAC). New external writes, only through the write framework: start, deallocate, and the confirmed VM's auto-shutdown schedule. One store migration (17). api-versions (checked on Microsoft Learn, Nov 2): Compute `2026-04-01`, Resource Graph `2024-04-01`, DevTestLab schedules `2018-09-15`; Entra v2.0 authorize and token endpoints. Contract changes:
+
+- **One Microsoft sign-in (D303 to D306).** `auth.status` → `{configured, state: signed_in | signed_out | unavailable, person, message}`; `auth.sign_in {azure?}` (default true; keeps calendar changes if allowed; prefills my account when known); `auth.sign_out`. `auth.connect_microsoft` is the same sign-in; `auth.disconnect {source: outlook}` also signs out. `OAuthClient` gains `identity()` and token kinds `id` and `arm`; `connect` takes `{write?, azure?, loginHint?}`. Keyring account unchanged (`outlook-refresh-token`). "Me" from the sign-in; config's my_email is the fallback.
+- **My VM (D307 to D311).** `vm.find {tag?, value?}`, `vm.choose {vmId | null}`, `vm.status {fresh?}` (chip, label, power, transition, canStart, canStop, schedule, change, stillChanged, prompt, refreshMs, needsConsent, error), `vm.preview {op: start | deallocate | delay60 | delay120 | skip | restore, vmId?}`, `vm.confirm {previewId}`, `vm.restore {vmId?}`, `vm.dismiss_prompt`, `vm.log`. Config `[azure] owner_tag`, `owner_value` (optional). Store: `azure_write_log`, `account_state`.
+- **Morning prompt (D312)** on Today and a notification at work start; never starts automatically.
+- **Small follow-ups (D312).** Q84, Q85, Inbox kind chips.
+- **Demo (D313)** fictional person and VM, simulated.
+- **Not done here.** Dataverse stays app-only (Q89). No VM start at work start. No other VM, no other Azure resource, no resize, no disks.
+- **Rollback:** revert the step 15.4 commit, rebuild, restart. Migration 17 only adds two tables (backup `plan.db.bak-v16-*` written first). The keyring entry is the same one as before, so Outlook keeps working on the older build.

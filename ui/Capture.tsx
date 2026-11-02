@@ -41,11 +41,16 @@ function ClientSelect({ value, clients, onChange, required, label }: { value: st
   );
 }
 
-/** The routing choice for one capture: the suggestion preselected, the other two one click away, fields editable. */
-export function SortCapture({ capture, clients, today, onDone, startOpen = false }: { capture: Capture; clients: CaptureClient[]; today: IsoDate; onDone: (msg: string) => void; startOpen?: boolean }) {
+/**
+ * Sorting one capture in the Inbox (step 15.4): the same kind chips as the capture box (Sort later · Follow-up · Draft
+ * story · Draft feature), the rules' choice highlighted, and each kind's fields inline, as in the box. Sort later
+ * leaves it in the Inbox.
+ */
+export function SortCapture({ capture, clients, today, onDone }: { capture: Capture; clients: CaptureClient[]; today: IsoDate; onDone: (msg: string) => void }) {
   const s = useMemo(() => suggest(capture.text, capture.clientKey, today, clients), [capture.text, capture.clientKey, today, clients]);
-  const [kind, setKind] = useState<CaptureKind>(s.kind);
-  const [edit, setEdit] = useState(startOpen);
+  const suggested = useMemo(() => boxKind(capture.text, capture.clientKey, today, clients), [capture.text, capture.clientKey, today, clients]);
+  const [chosen, setChosen] = useState<BoxKind | null>(null);
+  const kind = chosen ?? suggested;
   const [client, setClient] = useState<string | null>(capture.clientKey);
   const [who, setWho] = useState(s.who);
   const [what, setWhat] = useState(s.what);
@@ -53,33 +58,24 @@ export function SortCapture({ capture, clients, today, onDone, startOpen = false
   const [title, setTitle] = useState(s.title);
   const [size, setSize] = useState<Size>("M");
   const [channel, setChannel] = useState("");
-  const [feature, setFeature] = useState<number | null>(null);
-  const [features, setFeatures] = useState<CaptureFeatures | null>(null);
+  const [item, setItem] = useState<ItemValue>(NO_ITEM);
+  const [parent, setParent] = useState<ItemValue>(NO_ITEM);
+  const [target, setTarget] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
+  const features = useClientFeatures(client, kind === "draft" || kind === "draft_feature");
+  const pool = useMemo(() => parentPool(kind === "draft_feature" ? features?.epics : features?.features, kind === "draft_feature" ? "epic" : "feature"), [features, kind]);
+  useEffect(() => setParent(NO_ITEM), [client, kind]);
   const whoId = useRef(`cap-who-${capture.id}`);
-  // A draft's features (or a draft feature's epics) come from DevOps (read-only) for the chosen client; none to pick
-  // when DevOps can't say.
-  useEffect(() => {
-    setFeature(null);
-    setFeatures(null);
-    if (kind === "follow_up" || !client) return;
-    let live = true;
-    call<CaptureFeatures>("capture.features", { clientKey: client }).then((f) => live && setFeatures(f), () => live && setFeatures({ clientKey: client, status: "unavailable", features: [], epics: [] }));
-    return () => {
-      live = false;
-    };
-  }, [kind, client]);
 
   const save = async (as: CaptureKind | "dismissed") => {
     setBusy(true);
     setError(null);
     try {
       const input =
-        as === "follow_up" ? { who, what, ...(due ? { due } : {}), clientKey: client, ...(channel ? { channel } : {}) } :
-        as === "draft" ? { clientKey: client, title, size, ...(feature ? { parentItemId: feature } : {}) } :
-        as === "draft_feature" ? { clientKey: client, title, ...(feature ? { parentItemId: feature } : {}) } : {};
+        as === "follow_up" ? { who, what, ...(due ? { due } : {}), clientKey: client, ...(channel ? { channel } : {}), ...(client && item.itemId ? { itemId: item.itemId } : {}) } :
+        as === "draft" ? { clientKey: client, title, size, ...(parent.itemId ? { parentItemId: parent.itemId } : {}) } :
+        as === "draft_feature" ? { clientKey: client, title, ...(parent.itemId ? { parentItemId: parent.itemId } : {}), ...(target ? { targetDate: target } : {}) } : {};
       await call("capture.route", { id: capture.id, as, ...input });
       const cname = clients.find((c) => c.clientKey === client)?.clientName ?? client;
       onDone(as === "dismissed" ? "Dismissed" : as === "follow_up" ? `Follow-up saved${who ? `: owed to ${who}` : ""}${due ? `, due ${plainDay(due)}` : ""}` : as === "draft" ? `Draft story saved for ${cname}` : `Draft feature saved for ${cname}`);
@@ -89,35 +85,26 @@ export function SortCapture({ capture, clients, today, onDone, startOpen = false
       setBusy(false);
     }
   };
-  const blocked = kind !== "follow_up" && !client ? `Choose a client for the ${KIND_NAME[kind].toLowerCase()}` : kind === "follow_up" && !what.trim() ? "Say what you owe" : null;
-  const cn = client ? `${clients.find((c) => c.clientKey === client)?.clientName ?? client}: ` : "Client to choose: ";
-  const summary =
-    kind === "follow_up" ? `${who ? `Owed to ${who}: ` : ""}${what}${due ? ` · due ${plainDay(due)}` : ""}` :
-    kind === "draft" ? `${cn}${title} · ${size}` : `${cn}${title}`;
-  const parents = kind === "draft" ? features?.features : features?.epics;
+  const blocked = kind === "later" ? null : kind !== "follow_up" && !client ? `Choose a client for the ${BOX_NAME[kind].toLowerCase()}` : kind === "follow_up" && !what.trim() ? "Say what you owe" : null;
   const parentWord = kind === "draft" ? "feature" : "epic";
 
   return (
     <div className="cap-sort">
-      <div className="cap-kinds" role="group" aria-label="Sort as">
-        {(["follow_up", "draft", "draft_feature"] as const).map((k) => (
-          <button key={k} type="button" className="chip-btn" aria-pressed={kind === k} onClick={() => setKind(k)} title={k === s.kind ? "Suggested by the rules" : undefined}>
-            {KIND_NAME[k]}
-            {k === s.kind && <span className="cap-suggested">suggested</span>}
+      <div className="cap-kinds cap-box-kinds" role="radiogroup" aria-label="Sort as">
+        {BOX_KINDS.map((k) => (
+          <button key={k} type="button" role="radio" className="chip-btn" aria-checked={kind === k} data-kind={k} onClick={() => setChosen(k)} title={k === suggested && !chosen ? "Suggested by the rules" : undefined}>
+            {BOX_NAME[k]}
+            {k === suggested && !chosen && k !== "later" && <span className="cap-suggested">suggested</span>}
           </button>
         ))}
-        <button type="button" className="mini quiet" onClick={() => setEdit((x) => !x)} aria-expanded={edit}>
-          {edit ? "Hide details" : "Change details"}
-        </button>
       </div>
-      {!edit && <p className="cap-summary">{summary}</p>}
-      {edit && (
-        <div className="cap-fields">
-          {kind === "follow_up" && (
+      {kind !== "later" && (
+        <div className="cap-fields cap-box-fields" role="group" aria-label={`${BOX_NAME[kind]} details`}>
+          <label>Client <ClientSelect label="Client" value={client} clients={kind === "follow_up" ? formClients(clients) : clients} onChange={setClient} required={kind !== "follow_up"} /></label>
+          {kind === "follow_up" ? (
             <>
-              <label>Client <ClientSelect label="Client" value={client} clients={formClients(clients)} onChange={setClient} /></label>
-              <label>Who <WhoInput value={who} onChange={setWho} clientKey={client} id={whoId.current} /></label>
               <label className="wide">What <input value={what} onChange={(e) => setWhat(e.target.value)} maxLength={200} /></label>
+              <label>Who <WhoInput value={who} onChange={setWho} clientKey={client} id={whoId.current} /></label>
               <label>
                 Channel{" "}
                 <select aria-label="Channel" value={channel} onChange={(e) => setChannel(e.target.value)}>
@@ -125,40 +112,39 @@ export function SortCapture({ capture, clients, today, onDone, startOpen = false
                   {CLOSE_HOW.map((h) => <option key={h} value={h}>{HOW_LABEL[h]}</option>)}
                 </select>
               </label>
-              <label>Due <input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
+              <label>Due <input type="date" aria-label="Due" value={due} onChange={(e) => setDue(e.target.value)} /></label>
+              <label className="wide">Linked item <ItemLookup clientKey={client} value={item} onChange={setItem} label="Linked item" /></label>
             </>
-          )}
-          {kind !== "follow_up" && (
+          ) : (
             <>
-              <label>Client <ClientSelect label="Client" value={client} clients={clients} onChange={setClient} required /></label>
               <label className="wide">Title <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} /></label>
-              {kind === "draft" && (
+              <label className="wide">
+                Under {parentWord}{" "}
+                <ItemLookup clientKey={client} value={parent} onChange={setParent} label={`Parent ${parentWord}`} pool={(features?.status === "ok" ? pool : undefined) ?? NO_POOL} placeholder={!client ? undefined : !features ? `Loading ${parentWord}s…` : features.status !== "ok" ? `No ${parentWord} (DevOps unavailable)` : `Search open ${parentWord}s, or leave empty`} />
+              </label>
+              {kind === "draft" ? (
                 <span className="cap-size" role="group" aria-label="Size">
                   {(["S", "M", "L"] as const).map((z) => (
                     <button key={z} type="button" className="mini" aria-pressed={size === z} onClick={() => setSize(z)}>{z}</button>
                   ))}
                 </span>
-              )}
-              {client && (
-                <label className="wide">
-                  Under {parentWord}{" "}
-                  <select aria-label={`Under ${parentWord}`} value={feature ?? ""} onChange={(e) => setFeature(e.target.value ? Number(e.target.value) : null)} disabled={!features || features.status !== "ok"}>
-                    <option value="">{!features ? `Loading ${parentWord}s…` : features.status !== "ok" ? `No ${parentWord} (DevOps unavailable)` : `No ${parentWord}`}</option>
-                    {features?.status === "ok" && parents?.map((f) => <option key={f.id} value={f.id}>#{f.id} {f.title}</option>)}
-                  </select>
-                </label>
+              ) : (
+                <label>Target date <input type="date" aria-label="Target date" value={target} onChange={(e) => setTarget(e.target.value)} /></label>
               )}
             </>
           )}
         </div>
       )}
       <div className="cap-acts">
-        <button type="button" className="top-btn primary" disabled={busy || !!blocked} title={blocked ?? undefined} onClick={() => void save(kind)} data-cap-save>
-          {SAVE_AS[kind]}
-        </button>
+        {kind !== "later" ? (
+          <button type="button" className="top-btn primary" disabled={busy || !!blocked} title={blocked ?? undefined} onClick={() => void save(kind)} data-cap-save>
+            {SAVE_AS[kind]}
+          </button>
+        ) : (
+          <span className="muted">Stays in the Inbox until you sort it.</span>
+        )}
         <button type="button" className="mini quiet" disabled={busy} onClick={() => void save("dismissed")}>Dismiss</button>
-        {blocked && edit && <span className="muted">{blocked}</span>}
-        {blocked && !edit && <button type="button" className="mini" onClick={() => setEdit(true)}>{blocked}</button>}
+        {blocked && <span className="muted">{blocked}</span>}
         {error && <span className="set-problem" role="alert">{error}</span>}
       </div>
     </div>

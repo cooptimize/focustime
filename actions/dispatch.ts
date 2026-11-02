@@ -43,6 +43,9 @@ import { deliveryAction } from "./delivery-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import type { ActionResponse, HostBrowsers, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
+import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
+import { vmAction, type VmContext } from "./vm-actions.ts";
+import type { AzureClient } from "../sources/azure/client.ts";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
@@ -74,6 +77,12 @@ export type ActionContext = {
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
   demo?: { on: boolean; set: (on: boolean) => Promise<void> };
+  /**
+   * Step 15.4: the Microsoft sign-in for a config (null without an [outlook] app registration), and an Azure Resource
+   * Manager client on a token. Absent: no sign-in here (tests that don't need it), and the config's "me" is used.
+   */
+  account?: (cfg: AppConfig) => MicrosoftAccount | null;
+  azure?: (token: () => Promise<string>) => AzureClient;
 };
 
 /** Actions that reach outside Coopilot or change secrets: refused while demo mode is on (D272). */
@@ -81,6 +90,7 @@ export const DEMO_REFUSED: readonly ActionName[] = [
   "link.open", "outlook.open", "playlist.open", "data.export", "secret.set",
   "auth.connect_microsoft", "auth.connect_google", "auth.connect_outlook_write", "auth.disconnect",
   "write.confirm", "write.retry", "devops.confirm", "devops.retry", "devops.set_write_pat", "devops.clear_write_pat",
+  "auth.sign_in", "auth.sign_out",
 ];
 export const DEMO_REFUSAL = "Demo data: nothing leaves Coopilot in demo mode";
 
@@ -403,11 +413,52 @@ async function connect(ctx: ActionContext, which: "outlook" | "google") {
   return cfg.google ? ctx.makeGoogle(cfg.google, tz).connect() : { status: "failed", message: "Add google.client_id to config first" };
 }
 
+/** The context with config's "me" taken from the sign-in, and a found Dataverse user kept with the sign-in. */
+function withSignedIn(ctx: ActionContext): ActionContext {
+  const me = storedIdentity(ctx.plan);
+  if (!me) return ctx;
+  return {
+    ...ctx,
+    loadConfig: async () => {
+      const r = await ctx.loadConfig();
+      return { ...r, parsed: withMe(r.parsed, storedIdentity(ctx.plan)) };
+    },
+    saveSystemUserId: async (id) => {
+      const cur = storedIdentity(ctx.plan);
+      const r = await ctx.loadConfig();
+      const email = r.parsed.ok ? withMe(r.parsed, cur) : null;
+      if (cur && email?.ok) ctx.plan!.setAccountState(IDENTITY_KEY, { ...cur, systemUserId: id, systemUserEmail: email.config.dataverse.myEmail } satisfies StoredIdentity);
+      else await ctx.saveSystemUserId(id);
+    },
+  };
+}
+
+/** The pieces the account and VM actions need. */
+async function accountOf(ctx: ActionContext): Promise<MicrosoftAccount | null> {
+  const cfg = await configured(ctx);
+  return cfg && ctx.account ? ctx.account(cfg) : null;
+}
+export async function vmContext(ctx: ActionContext): Promise<VmContext> {
+  const account = await accountOf(ctx);
+  return {
+    ...(ctx.plan ? { plan: ctx.plan } : {}),
+    config: () => configured(ctx),
+    account,
+    azure: ctx.azure ?? null,
+    now: ctx.now,
+    ...(ctx.sleep ? { sleep: ctx.sleep } : {}),
+    focusRunning: () => !!ctx.plan?.getState<TimerState>(TIMER_KEY)?.runningSince,
+    workday: async (cfg, date) => hasHoursOn(ctx.plan, cfg.week.hours, date) && !(await ptoOn(ctx, cfg, date)),
+  };
+}
+
 export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<ActionResponse> {
   // Only registered actions (actions/registry.ts). The switch below is exhaustive over them: an action added
   // to the registry without a case, or a case for a name not in the registry, fails the type check.
   if (!isActionName(req.action)) return bad("unknown action");
   const action: ActionName = req.action;
+  // Step 15.4: "me" comes from the Microsoft sign-in (config's my_email stays the fallback); Settings shows the file as is.
+  if (action !== "settings.load" && action !== "settings.save") ctx = withSignedIn(ctx);
   if (ctx.demo?.on && DEMO_REFUSED.includes(action)) return { ok: false, status: 403, error: DEMO_REFUSAL, code: "demo" };
   switch (action) {
     case "demo.set": {
@@ -500,10 +551,27 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         action,
         req.input,
       );
+    case "auth.status":
+    case "auth.sign_in":
+    case "auth.sign_out":
+      return accountAction({ ...(ctx.plan ? { plan: ctx.plan } : {}), account: await accountOf(ctx), now: ctx.now }, action, req.input);
+    case "vm.find":
+    case "vm.choose":
+    case "vm.status":
+    case "vm.preview":
+    case "vm.confirm":
+    case "vm.restore":
+    case "vm.dismiss_prompt":
+    case "vm.log":
+      return vmAction(await vmContext(ctx), action, req.input);
     case "auth.connect_microsoft":
+      // Step 15.4: Outlook's connect is the one Microsoft sign-in.
+      if (!noInput(req.input)) return bad(`${req.action} takes no input`);
+      if (ctx.account) return accountAction({ ...(ctx.plan ? { plan: ctx.plan } : {}), account: await accountOf(ctx), now: ctx.now }, "auth.sign_in", {});
+      return { ok: true, data: await connect(ctx, "outlook") };
     case "auth.connect_google": {
       if (!noInput(req.input)) return bad(`${req.action} takes no input`);
-      return { ok: true, data: await connect(ctx, req.action === "auth.connect_microsoft" ? "outlook" : "google") };
+      return { ok: true, data: await connect(ctx, "google") };
     }
     case "auth.disconnect": {
       const input = req.input as { source?: unknown } | undefined;
@@ -516,6 +584,8 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (!section) return { ok: true, data: { status: "not_configured" } };
       const src = input.source === "outlook" ? ctx.makeOutlook(section as OutlookConfig, tz) : ctx.makeGoogle(section as GoogleConfig, tz);
       await src.disconnect();
+      // Outlook's token is the Microsoft sign-in (step 15.4): disconnecting it signs out.
+      if (input.source === "outlook") ctx.plan?.setAccountState(IDENTITY_KEY, null);
       return { ok: true, data: { status: "disconnected" } };
     }
     case "week.load": {

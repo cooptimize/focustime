@@ -1,6 +1,6 @@
 # Coopilot demo (about 5 minutes)
 
-A scripted walkthrough in demo mode, verified end to end at 1920x1080 on Nov 1, 2026 (step 15) and again on Nov 2 (steps 15.2 and 15.3) with `scripts/demo-walkthrough.mjs`. Since step 15.3, Close out (step 13) shows the capture box with Follow-up chosen for anything new I owe. Screenshots are in `docs/demo/`.
+A scripted walkthrough in demo mode, verified end to end at 1920x1080 on Nov 1, 2026 (step 15) and again on Nov 2 (steps 15.2 and 15.3) with `scripts/demo-walkthrough.mjs`. Since step 15.3, Close out (step 13) shows the capture box with Follow-up chosen for anything new I owe. Since step 15.4 the demo is signed in as a fictional person (Alex Rivera) with a fictional VM: the VM chip in the top bar and on Today, "Your VM is off. Start it?", Start (about 20 seconds to Running), Delay shutdown and Restore all work on a simulated Azure, with no Azure calls. Screenshots are in `docs/demo/`.
 
 ## Before you start
 1. Turn on demo mode: Settings (`,`) > Display > "Show demo data", or Ctrl+K > "Demo mode". The top bar shows **Demo data**.

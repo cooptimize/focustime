@@ -20,8 +20,8 @@ describe.skipIf(!CHROMIUM)("Work item lookup (browser, demo mode)", () => {
     await page.locator(".cap-box .cap-client").first().click();
     await page.locator(".cap-choose .chip-btn", { hasText: client }).click();
     await page.locator(".cap-box input[aria-label='Quick capture']").fill("I'll send the export spec");
-    await page.locator(".cap-box-kinds [role=radio]", { hasText: "Follow-up" }).click();
-    return page.locator(".cap-box-fields");
+    await page.locator(".cap-box .cap-box-kinds [role=radio]", { hasText: "Follow-up" }).click();
+    return page.locator(".cap-box .cap-box-fields");
   }
 
   it("capture box follow-up: disabled without a client, searches the client's items, links one, a new client clears it", async () => {

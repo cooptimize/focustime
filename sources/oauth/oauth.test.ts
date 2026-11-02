@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { LogRecord } from "../../log/logger.ts";
-import { createOAuthClient, microsoftProvider, googleProvider, AuthFailure } from "./oauth.ts";
+import { createOAuthClient, microsoftProvider, googleProvider, AuthFailure, needsInteraction } from "./oauth.ts";
+import { parseIdToken, workEmail } from "./idtoken.ts";
 import {
-  FAKE_ACCESS, FAKE_AUTH_CODE, FAKE_CLIENT_SECRET, FAKE_REFRESH, FAKE_REFRESH_ROTATED,
+  FAKE_ACCESS, FAKE_AUTH_CODE, FAKE_CLIENT_SECRET, FAKE_PERSON, FAKE_REFRESH, FAKE_REFRESH_ROTATED, fakeIdToken,
   fakeBrowser, fakeTokenEndpoint, memoryKeyring, type TokenBehavior,
 } from "./test-fakes.ts";
 
@@ -13,10 +14,10 @@ const MS_TOKEN = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`
 const G_CLIENT = "123-abc.apps.googleusercontent.com";
 const G_TOKEN = "https://oauth2.googleapis.com/token";
 
-function ms(opts: { exchange?: TokenBehavior; refresh?: TokenBehavior; consented?: string[]; grantFewer?: boolean; keyring?: ReturnType<typeof memoryKeyring>; browser?: ReturnType<typeof fakeBrowser>; signInTimeoutMs?: number } = {}) {
+function ms(opts: { exchange?: TokenBehavior; refresh?: TokenBehavior; consented?: string[]; grantFewer?: boolean; interaction?: boolean; keyring?: ReturnType<typeof memoryKeyring>; browser?: ReturnType<typeof fakeBrowser>; signInTimeoutMs?: number } = {}) {
   const tok = fakeTokenEndpoint(MS_TOKEN, opts);
   const keyring = opts.keyring ?? memoryKeyring();
-  const browser = opts.browser ?? fakeBrowser({ kind: "approve" });
+  const browser = opts.browser ?? fakeBrowser({ kind: "approve" }, tok.authorize);
   const logs: LogRecord[] = [];
   const client = createOAuthClient(microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }), {
     fetch: tok.fetch, keyring, openBrowser: browser.open, log: (r) => logs.push(r), signInTimeoutMs: opts.signInTimeoutMs ?? 2000,
@@ -37,13 +38,13 @@ function google(opts: { exchange?: TokenBehavior; refresh?: TokenBehavior; keyri
 describe("sign-in (auth code + PKCE over loopback)", () => {
   it("Microsoft: sends a PKCE S256 challenge, redirects to localhost, stores the refresh token", async () => {
     const { client, tok, keyring, browser } = ms();
-    expect(await client.connect()).toEqual({ status: "connected" });
+    expect(await client.connect()).toMatchObject({ status: "connected" });
 
     const auth = browser.seen[0]!;
     expect(auth.origin + auth.pathname).toBe(`https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/authorize`);
     expect(auth.searchParams.get("client_id")).toBe(MS_CLIENT);
     expect(auth.searchParams.get("response_type")).toBe("code");
-    expect(auth.searchParams.get("scope")).toBe("offline_access https://graph.microsoft.com/Calendars.ReadBasic");
+    expect(auth.searchParams.get("scope")).toBe("openid profile email offline_access https://graph.microsoft.com/Calendars.ReadBasic");
     expect(auth.searchParams.get("code_challenge_method")).toBe("S256");
     expect(auth.searchParams.get("redirect_uri")).toMatch(/^http:\/\/localhost:\d+\/$/);
 
@@ -61,7 +62,7 @@ describe("sign-in (auth code + PKCE over loopback)", () => {
 
   it("Google: asks for offline access with consent, uses 127.0.0.1 and the keyring client secret", async () => {
     const { client, tok, keyring, browser } = google();
-    expect(await client.connect()).toEqual({ status: "connected" });
+    expect(await client.connect()).toMatchObject({ status: "connected" });
     const auth = browser.seen[0]!;
     expect(auth.origin + auth.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
     expect(auth.searchParams.get("scope")).toBe("https://www.googleapis.com/auth/calendar.events.readonly");
@@ -86,7 +87,7 @@ describe("sign-in (auth code + PKCE over loopback)", () => {
   it("ignores a callback with the wrong state and still completes with the right one", async () => {
     const browser = fakeBrowser({ kind: "wrong_state_then_approve" });
     const { client } = ms({ browser });
-    expect(await client.connect()).toEqual({ status: "connected" });
+    expect(await client.connect()).toMatchObject({ status: "connected" });
     await new Promise((r) => setTimeout(r, 50));
     expect(browser.hits).toEqual([400, 200]);
   });
@@ -181,7 +182,7 @@ describe("write access (step 12, optional)", () => {
 
   it("connect with write asks for both scopes; then write and read tokens are separate", async () => {
     const { client, tok, browser } = ms({ consented: [READ] });
-    expect(await client.connect({ write: true })).toEqual({ status: "connected" });
+    expect(await client.connect({ write: true })).toMatchObject({ status: "connected" });
     const asked = browser.seen[0]!.searchParams.get("scope")!.split(" ");
     expect(asked).toEqual(expect.arrayContaining(["offline_access", "https://graph.microsoft.com/Calendars.ReadBasic", "https://graph.microsoft.com/Calendars.ReadWrite"]));
     expect(await client.writeAccess()).toEqual({ status: "write" });
@@ -194,7 +195,7 @@ describe("write access (step 12, optional)", () => {
   it("a plain connect does not ask for write", async () => {
     const { client, browser } = ms({ consented: [READ] });
     await client.connect();
-    expect(browser.seen[0]!.searchParams.get("scope")).toBe("offline_access https://graph.microsoft.com/Calendars.ReadBasic");
+    expect(browser.seen[0]!.searchParams.get("scope")).toBe("openid profile email offline_access https://graph.microsoft.com/Calendars.ReadBasic");
     expect((await client.writeAccess()).status).toBe("read_only");
   });
 
@@ -225,5 +226,71 @@ describe("oauth never leaks", () => {
     await g.client.accessToken().catch((e: unknown) => out.push(String(e), (e as Error).stack ?? ""));
     const all = [...out, JSON.stringify(m.logs)].join("\n");
     for (const s of [FAKE_REFRESH, FAKE_REFRESH_ROTATED, FAKE_ACCESS, FAKE_AUTH_CODE, FAKE_CLIENT_SECRET]) expect(all).not.toContain(s);
+  });
+});
+
+describe("one Microsoft sign-in (step 15.4)", () => {
+  const READ = "Calendars.ReadBasic";
+  const ARM = "https://management.azure.com/user_impersonation";
+  it("signs in once: the browser visit asks for OpenID, Graph and Azure; the code redeems Graph only; who signed in comes back", async () => {
+    const { client, tok, browser, keyring } = ms({ consented: [] });
+    const r = await client.connect({ azure: true });
+    expect(r).toEqual({ status: "connected", identity: { oid: FAKE_PERSON.oid, tid: FAKE_PERSON.tid, name: "Pat Example", username: "pat@example.com", email: "pat@example.com" } });
+    expect(browser.seen[0]!.searchParams.get("scope")!.split(" ")).toEqual(["openid", "profile", "email", "offline_access", "https://graph.microsoft.com/Calendars.ReadBasic", ARM]);
+    expect(browser.seen[0]!.searchParams.get("prompt")).toBe("select_account");
+    // One resource per token request (AADSTS28000 otherwise).
+    expect(tok.calls[0]!.body.get("scope")).not.toContain("management.azure.com");
+    expect(keyring.store.get("outlook-refresh-token")).toBe(FAKE_REFRESH);
+    // The Azure token is redeemed later from the same refresh token, on its own.
+    expect(await client.accessToken("arm")).toBe(FAKE_ACCESS);
+    expect(tok.calls.at(-1)!.body.get("scope")).toBe(`offline_access ${ARM}`);
+    expect(await client.identity()).toMatchObject({ username: "pat@example.com" });
+  });
+
+  it("an older Outlook sign-in keeps working and learns who it is without a new consent", async () => {
+    const { client, tok, browser } = ms({ consented: [READ], keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
+    expect(await client.accessToken()).toBe(FAKE_ACCESS);
+    expect(await client.identity()).toMatchObject({ oid: FAKE_PERSON.oid, name: "Pat Example" });
+    expect(tok.calls.at(-1)!.body.get("scope")).toBe("openid profile email offline_access https://graph.microsoft.com/Calendars.ReadBasic");
+    expect(browser.seen).toHaveLength(0);
+  });
+
+  it("Azure not consented yet: the token says consent (an incremental sign-in fixes it), reading is untouched", async () => {
+    const { client, browser } = ms({ consented: [READ], keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
+    await expect(client.accessToken("arm")).rejects.toMatchObject({ kind: "consent" });
+    expect(await client.accessToken()).toBe(FAKE_ACCESS);
+    // Incremental consent: the same account prefilled, no account picker, Azure added.
+    expect(await client.connect({ azure: true, loginHint: "pat@example.com" })).toMatchObject({ status: "connected" });
+    const u = browser.seen[0]!;
+    expect(u.searchParams.get("login_hint")).toBe("pat@example.com");
+    expect(u.searchParams.get("prompt")).toBeNull();
+    expect(u.searchParams.get("scope")).toContain(ARM);
+    expect(await client.accessToken("arm")).toBe(FAKE_ACCESS);
+  });
+
+  it("MFA or consent asked by the tenant is a consent failure, never 'expired'", async () => {
+    const { client } = ms({ interaction: true, keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
+    await expect(client.accessToken("arm")).rejects.toMatchObject({ kind: "consent" });
+    expect(needsInteraction({ error: "invalid_grant", error_codes: [65001] })).toBe(true);
+    expect(needsInteraction({ error: "interaction_required" })).toBe(true);
+    expect(needsInteraction({ error: "invalid_grant", error_codes: [70008] })).toBe(false);
+  });
+
+  it("sign out forgets who signed in along with the token", async () => {
+    const { client, keyring } = ms({ consented: [] });
+    await client.connect({ azure: true });
+    await client.disconnect();
+    expect(keyring.store.has("outlook-refresh-token")).toBe(false);
+    await expect(client.identity()).rejects.toMatchObject({ kind: "not_connected" });
+  });
+
+  it("ID tokens: keeps oid, tid, name, username and email; refuses anything malformed", () => {
+    expect(parseIdToken(fakeIdToken())).toMatchObject({ oid: FAKE_PERSON.oid, email: "pat@example.com" });
+    expect(parseIdToken(fakeIdToken({ oid: "x", tid: "y", preferred_username: "u@example.com" }))).toEqual({ oid: "x", tid: "y", name: "u@example.com", username: "u@example.com", email: null });
+    expect(parseIdToken(fakeIdToken({ tid: "y", preferred_username: "u@example.com" }))).toBeNull();
+    expect(parseIdToken("not.a-token")).toBeNull();
+    expect(parseIdToken("a.b")).toBeNull();
+    expect(workEmail({ oid: "o", tid: "t", name: "n", username: "Pat@Example.com", email: null })).toBe("pat@example.com");
+    expect(workEmail({ oid: "o", tid: "t", name: "n", username: "pat", email: null })).toBeNull();
   });
 });

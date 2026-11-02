@@ -44,7 +44,12 @@ export type AppConfig = {
   timebox: TimeboxSettings;
   /** The collaboration finder (step 13): help session length, Teams, days to search, invite domains. */
   collab: CollabSettings;
+  /** My VM (step 15.4): the tag that marks a VM as mine. The chosen VM itself is per signed-in person, in the plan store. */
+  azure: AzureSettings;
 };
+/** `ownerValue` empty means the signed-in person's display name. */
+export type AzureSettings = { ownerTag: string; ownerValue: string };
+export const DEFAULT_AZURE: AzureSettings = { ownerTag: "Owner", ownerValue: "" };
 /** `domains` empty means my work email's domain. */
 /** Step 13.5: `exclude` lists people (names or addresses) who are never candidates or Who suggestions, like bots. */
 export type CollabSettings = { meetingMinutes: number; teams: boolean; daysAhead: number; domains: string[]; exclude: string[] };
@@ -189,7 +194,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -545,6 +550,23 @@ export function parseConfig(text: string): ParseResult {
     }
   }
 
+  // [azure] (optional, step 15.4): owner_tag (default Owner), owner_value (default: the signed-in person's name)
+  const azure: AzureSettings = { ...DEFAULT_AZURE };
+  if (raw.azure !== undefined) {
+    const t = isTable(raw.azure) ? raw.azure : (err("azure", "Must be an [azure] table"), null);
+    if (t) {
+      for (const k of Object.keys(t)) if (!["owner_tag", "owner_value"].includes(k)) err(`azure.${k}`, "Unknown field");
+      if (t.owner_tag !== undefined) {
+        if (typeof t.owner_tag !== "string" || !/^[^<>%&\\?/'"]{1,128}$/.test(t.owner_tag)) err("azure.owner_tag", "Must be a tag name of 1 to 128 characters");
+        else azure.ownerTag = t.owner_tag;
+      }
+      if (t.owner_value !== undefined) {
+        if (typeof t.owner_value !== "string" || t.owner_value.length > 256 || /[\r\n]/.test(t.owner_value)) err("azure.owner_value", "Must be one line of up to 256 characters");
+        else azure.ownerValue = t.owner_value.trim();
+      }
+    }
+  }
+
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
   if (raw.outlook !== undefined) {
@@ -594,6 +616,7 @@ export function parseConfig(text: string): ParseResult {
       focus,
       timebox,
       collab,
+      azure,
     },
   };
 }

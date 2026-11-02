@@ -11,7 +11,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { cacheRoot, configPath, loadConfigFile, planDbPath, saveSystemUserId } from "../config/load.ts";
 import { writeConfig } from "../config/edit.ts";
-import type { DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
+import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
+import type { MicrosoftAccount } from "../actions/account.ts";
+import { vmContext } from "../actions/dispatch.ts";
+import { restoreTick, vmAction, type VmStatus } from "../actions/vm-actions.ts";
+import { createAzureClient } from "../sources/azure/client.ts";
+import { localToday } from "../week/dates.ts";
 import { stderrLogger } from "../log/logger.ts";
 import { clearWritePat, deleteSecret, getSecret, getWritePat, secretState, setAppSecret, setSecret, setWritePat } from "../secrets/keyring.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
@@ -75,14 +80,30 @@ const openBrowser = async (url: string) => {
   spawn("xdg-open", [url], { detached: true, stdio: "ignore" }).unref();
 };
 const calendars = new Map<string, CalendarSource>();
-function memo(kind: "outlook" | "google", cfg: OutlookConfig | GoogleConfig, timeZone: string, make: () => CalendarSource) {
+function memo<T extends CalendarSource>(kind: "outlook" | "google", cfg: OutlookConfig | GoogleConfig, timeZone: string, make: () => T): T {
   const key = JSON.stringify([kind, cfg, timeZone]);
-  let s = calendars.get(key);
+  let s = calendars.get(key) as T | undefined;
   if (!s) calendars.set(key, (s = make()));
   return s;
 }
 const calendarDeps = (timeZone: string) => ({ fetch, keyring, openBrowser, cacheDir: cacheRoot(), log, timeZone });
 const makeOutlook = (cfg: OutlookConfig, timeZone: string) => memo("outlook", cfg, timeZone, () => createOutlookSource({ ...calendarDeps(timeZone), config: cfg }));
+/**
+ * Step 15.4: the Microsoft sign-in is the Outlook source's auth client (one refresh token, one keyring entry); the
+ * app's user, the calendar and the Azure token all come from it.
+ */
+const accountFor = (cfg: AppConfig): MicrosoftAccount | null => {
+  if (!cfg.outlook) return null;
+  const src = makeOutlook(cfg.outlook, cfg.week.hours.timeZone);
+  return {
+    signIn: (o) => src.connect(o),
+    identity: () => src.auth.identity(),
+    armToken: () => src.auth.accessToken("arm"),
+    writeAccess: () => src.auth.writeAccess(),
+    signOut: () => src.disconnect(),
+  };
+};
+const azureFor = (token: () => Promise<string>) => createAzureClient({ fetch, token, log });
 const makeGoogle = (cfg: GoogleConfig, timeZone: string) => memo("google", cfg, timeZone, () => createGoogleSource({ ...calendarDeps(timeZone), config: cfg }));
 
 // DevOps: one source per Dataverse config. PATs come from Dataverse per fetch (devopsTargets) and are not kept.
@@ -181,6 +202,8 @@ const liveCtx: ActionContext = {
     // Step 14: personal DevOps write PATs (keyring, stdin only) and the writer (dev.azure.com of one client per call).
     writePats: { get: (k) => getWritePat(k), set: (k, v) => setWritePat(k, v), clear: (k) => clearWritePat(k) },
     devopsWriter: createDevOpsWriter({ fetch, log }),
+    account: accountFor,
+    azure: azureFor,
     // Browser .desktop entries and Local State only; profile names are all that is kept.
     host: createHostBrowsers({
       readText: (path) => {
@@ -296,11 +319,33 @@ if (plan) {
       },
     }).catch(() => log({ source: "plan", op: "week_nudge", kind: "failed" }));
   };
+  // My VM (step 15.4): put back a changed auto-shutdown the next morning (first run after midnight, retried, and at work
+  // start), and once a workday at work start say so when the VM is off. Never starts anything by itself.
+  const vmTick = async () => {
+    const c = await configOrNull();
+    if (!c) return;
+    const tz = c.week.hours.timeZone;
+    const n = zonedNow(tz);
+    const today = localToday(instantNow().toString(), tz);
+    const ws = hoursOn(c.week.hours, today).segments[0]?.start ?? null;
+    const afterStart = !!ws && n.toPlainTime().toString().slice(0, 5) >= ws;
+    const vc = await vmContext(liveCtx);
+    if (!vc.account) return;
+    const atWorkStart = afterStart && store.markOnce("vm_restore_workstart", today);
+    const r = await restoreTick(vc, { atWorkStart });
+    if (r) log({ source: "azure", op: "shutdown_restore", kind: r });
+    if (r === "failed" && atWorkStart) notifySend("Coopilot", "Auto-shutdown is still changed on your VM. Open Coopilot to restore it.");
+    if (afterStart && store.markOnce("vm_prompt_notice", today)) {
+      const st = await vmAction(vc, "vm.status", {});
+      if (st.ok && (st.data as VmStatus).prompt) notifySend("Coopilot", "Your VM is off. Open Coopilot to start it.");
+    }
+  };
   // No reminders while demo mode is on (D272): the demo shouldn't pop real nudges.
   setInterval(() => {
     if (demoCtx) return;
     void tick();
     dayReminders();
+    void vmTick().catch(() => log({ source: "azure", op: "vm_tick", kind: "failed" }));
   }, 30_000).unref();
   void tick();
 

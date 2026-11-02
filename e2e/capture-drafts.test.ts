@@ -11,7 +11,7 @@ const api = <R = unknown>(page: Page, action: string, input: unknown) =>
     ([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()),
     [action, input] as const,
   ) as Promise<{ ok: boolean; data: R }>;
-const kindChip = (page: Page, name: string) => page.locator(".cap-box-kinds [role=radio]", { hasText: name });
+const kindChip = (page: Page, name: string) => page.locator(".cap-box .cap-box-kinds [role=radio]", { hasText: name });
 const checked = (page: Page) => page.locator(".cap-box-kinds [role=radio][aria-checked=true]").first().textContent();
 const box = (page: Page) => page.locator(".cap-box input[aria-label='Quick capture']").first();
 async function chooseClient(page: Page, name: string) {
@@ -47,10 +47,10 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await expect(kindChip(page, "Follow-up").locator(".cap-suggested").count()).resolves.toBe(1);
     await box(page).press("Tab");
     await expect(checked(page)).resolves.toContain("Draft story");
-    await expect(page.locator(".cap-box-fields[aria-label='Draft story details']").count()).resolves.toBe(1);
+    await expect(page.locator(".cap-box .cap-box-fields[aria-label='Draft story details']").count()).resolves.toBe(1);
     await kindChip(page, "Draft feature").click();
     await expect(checked(page)).resolves.toContain("Draft feature");
-    await expect(page.locator(".cap-box-fields input[aria-label='Target date']").count()).resolves.toBe(1);
+    await expect(page.locator(".cap-box .cap-box-fields input[aria-label='Target date']").count()).resolves.toBe(1);
     await box(page).fill("feature: bulk import");
     await expect(checked(page)).resolves.toContain("Draft feature"); // my choice sticks while I type
     await page.close();
@@ -62,7 +62,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await chooseClient(page, "Northwind");
     await box(page).fill("told Dana I'd send the export by Friday");
     await expect.poll(() => checked(page)).toContain("Follow-up");
-    const f = page.locator(".cap-box-fields");
+    const f = page.locator(".cap-box .cap-box-fields");
     await expect(f.getByLabel("Who").inputValue()).resolves.toBe("Dana");
     await expect(f.getByLabel("Due").inputValue()).resolves.toBe("2026-11-06");
     await f.getByLabel("Channel").selectOption("email");
@@ -90,7 +90,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await box(page).press("Enter");
     await expect(page.locator(".cap-box .set-problem").textContent()).resolves.toMatch(/needs a client/);
     await chooseClient(page, "Northwind");
-    const f = page.locator(".cap-box-fields");
+    const f = page.locator(".cap-box .cap-box-fields");
     const look = f.locator(".item-lookup input");
     await expect.poll(() => look.getAttribute("placeholder")).toMatch(/Search open features/);
     await look.fill("");
@@ -110,7 +110,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await chooseClient(page, "Atlas");
     await box(page).fill("feature: carrier rate cards");
     await expect.poll(() => checked(page)).toContain("Draft feature");
-    await page.locator(".cap-box-fields").getByLabel("Target date").fill("2026-11-27");
+    await page.locator(".cap-box .cap-box-fields").getByLabel("Target date").fill("2026-11-27");
     await box(page).press("Enter");
     await expect.poll(async () => (await drafts(page)).find((d) => d.title.toLowerCase() === "carrier rate cards")).toMatchObject({ level: "feature", targetDate: "2026-11-27" });
     await box(page).fill("pallet labels look odd");

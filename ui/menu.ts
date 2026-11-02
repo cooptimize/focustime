@@ -123,6 +123,8 @@ export type MenuEnv = {
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
   /** Opens Settings, at a section when given (step 6b). */
   openSettings: (section?: string) => void;
+  /** Step 15.4: the VM chip's menu (start, stop, delay shutdown). */
+  openVm: () => void;
   exportPlan: () => void;
   /** Step 15.2: the pick Focus suggests (today's next planned pick), or null. */
   focusNext?: Pick | null;
@@ -1053,6 +1055,20 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "devops.retry":
     case "devops.log":
       return { run: () => env.openSettings("data") };
+    // Step 15.4: who's signed in and my VM live in Settings > You; the VM chip has the changes.
+    case "auth.status":
+    case "auth.sign_in":
+    case "auth.sign_out":
+    case "vm.find":
+    case "vm.choose":
+      return { run: () => env.openSettings("you") };
+    case "vm.status":
+    case "vm.preview":
+    case "vm.confirm":
+    case "vm.restore":
+    case "vm.dismiss_prompt":
+      return { run: env.openVm };
+    case "vm.log": return { run: () => env.openSettings("data") };
     case "capture.add": return { run: () => env.openCapture() };
     // Sorting and a client's features and epics are handled in the Inbox.
     case "capture.load":

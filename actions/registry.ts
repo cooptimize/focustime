@@ -24,13 +24,14 @@ export type ActionTarget =
   | "timebox" // one timebox
   | "write" // one entry in the write log
   | "event" // one calendar event (step 13)
-  | "devops"; // a DevOps change (step 14)
+  | "devops" // a DevOps change (step 14)
+  | "vm"; // my Azure VM (step 15.4)
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -40,7 +41,18 @@ export type ActionSpec = {
 export const ACTIONS = [
   { name: "week.load", title: "Refresh all sources", group: "Week", target: "none", shortcut: "R", summary: "Reload focus blocks, PTO, calendars and DevOps" },
   { name: "source.status", title: "Show source status", group: "Sources", target: "none", summary: "Each source's state in one line" },
-  { name: "auth.connect_microsoft", title: "Connect Outlook", group: "Sources", target: "none", summary: "Sign in to Microsoft in your browser (read-only calendar)" },
+  { name: "auth.connect_microsoft", title: "Connect Outlook", group: "Sources", target: "none", summary: "Sign in with Microsoft in your browser (the same sign-in as the app's)" },
+  { name: "auth.status", title: "Who's signed in", group: "Settings", target: "none", summary: "The Microsoft account Coopilot works for" },
+  { name: "auth.sign_in", title: "Sign in with Microsoft", group: "Settings", target: "none", summary: "One sign-in for you, your calendar and your Azure VM (in your browser)" },
+  { name: "auth.sign_out", title: "Sign out", group: "Settings", target: "none", summary: "Forget the Microsoft sign-in on this computer; the local plan stays" },
+  { name: "vm.status", title: "My VM", group: "My VM", target: "none", summary: "Your VM's state and auto-shutdown time" },
+  { name: "vm.find", title: "Find my VM", group: "My VM", target: "none", summary: "VMs tagged as yours (Owner tag) in every Azure subscription you can see" },
+  { name: "vm.choose", title: "Choose my VM", group: "My VM", target: "vm", summary: "Confirm which VM is yours, or enter its resource ID" },
+  { name: "vm.preview", title: "Start, stop or delay shutdown", group: "My VM", target: "vm", summary: "Start or stop (deallocate) your VM, or delay or skip tonight's auto-shutdown, after a preview" },
+  { name: "vm.confirm", title: "Confirm a VM change", group: "My VM", target: "vm", summary: "Do the change shown in the preview, then follow it until Azure shows it" },
+  { name: "vm.restore", title: "Restore auto-shutdown", group: "My VM", target: "vm", summary: "Put back the auto-shutdown schedule Coopilot changed" },
+  { name: "vm.dismiss_prompt", title: "Not today (VM prompt)", group: "My VM", target: "none", summary: "Don't ask to start the VM again today" },
+  { name: "vm.log", title: "Show the Azure write log", group: "My VM", target: "none", summary: "Every start, stop and auto-shutdown change: when, the result and what it was before" },
   { name: "auth.connect_google", title: "Connect Google Calendar", group: "Sources", target: "none", summary: "Sign in to Google in your browser (read-only calendar)" },
   { name: "auth.disconnect", title: "Disconnect a calendar", group: "Sources", target: "calendar", summary: "Forget a calendar sign-in and its cached events" },
   { name: "delivery.load", title: "Delivery", group: "Work items", target: "none", shortcut: "5", summary: "Features and epics you own: stories done and open, who's on them, and whether they're on track for the target date" },

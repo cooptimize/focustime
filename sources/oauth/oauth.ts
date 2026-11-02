@@ -6,6 +6,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { GoogleConfig, OutlookConfig } from "../../config/schema.ts";
 import type { Logger } from "../../log/logger.ts";
+import { parseIdToken, type IdClaims } from "./idtoken.ts";
 import { SecretError, type AppSecretAccount, type RefreshTokenAccount, type SecretAccount } from "../../secrets/keyring.ts";
 
 export type OAuthProvider = {
@@ -25,9 +26,20 @@ export type OAuthProvider = {
    * access token is separate from the read token and kept in memory only. Reads never ask for it.
    */
   writeScope?: string;
+  /**
+   * Step 15.4: more scope sets on the same sign-in (Microsoft only). "id" is the read scope plus OpenID (openid profile
+   * email), so a refresh returns an ID token with who signed in; "arm" is Azure Resource Manager (user_impersonation).
+   * One token request covers one resource, so each set names one resource plus OpenID scopes.
+   */
+  kinds?: Partial<Record<"id" | "arm", string>>;
   clientSecretAccount?: AppSecretAccount;
   refreshAccount: RefreshTokenAccount;
 };
+
+/** OpenID scopes: who signed in (ID token claims), allowed alongside any one resource. */
+export const OIDC = "openid profile email";
+/** Azure Resource Manager, delegated (step 15.4): acts as the signed-in user, limited by their Azure RBAC. */
+export const ARM_SCOPE = "https://management.azure.com/user_impersonation";
 
 export function microsoftProvider(cfg: OutlookConfig): OAuthProvider {
   const base = `https://login.microsoftonline.com/${cfg.tenantId}/oauth2/v2.0`;
@@ -39,6 +51,7 @@ export function microsoftProvider(cfg: OutlookConfig): OAuthProvider {
     clientId: cfg.clientId,
     scope: "offline_access https://graph.microsoft.com/Calendars.ReadBasic",
     writeScope: "offline_access https://graph.microsoft.com/Calendars.ReadWrite",
+    kinds: { id: `${OIDC} offline_access https://graph.microsoft.com/Calendars.ReadBasic`, arm: `offline_access ${ARM_SCOPE}` },
     redirectHost: "localhost",
     extraAuthParams: { response_mode: "query", prompt: "select_account" },
     scopeOnTokenRequests: true,
@@ -62,7 +75,8 @@ export function googleProvider(cfg: GoogleConfig): OAuthProvider {
   };
 }
 
-export type AuthFailureKind = "not_connected" | "expired" | "network" | "misconfigured" | "keyring" | "error";
+/** "consent": this scope needs an interactive sign-in first (not consented yet, or the tenant asks for MFA). */
+export type AuthFailureKind = "not_connected" | "expired" | "consent" | "network" | "misconfigured" | "keyring" | "error";
 
 /** A safe, plain-language auth failure. Never carries tokens or provider error text. */
 export class AuthFailure extends Error {
@@ -90,10 +104,18 @@ export type OAuthDeps = {
   signInTimeoutMs?: number;
 };
 
-export type ConnectResult = { status: "connected" } | { status: "cancelled" | "failed"; message: string };
+export type ConnectResult = { status: "connected"; identity?: IdClaims } | { status: "cancelled" | "failed"; message: string };
+export type ConnectOptions = {
+  /** Calendar changes (step 12). */
+  write?: boolean;
+  /** Azure Resource Manager (step 15.4): asked for in the same browser visit, redeemed later on its own. */
+  azure?: boolean;
+  /** Prefills the account (an incremental consent for someone already signed in). */
+  loginHint?: string;
+};
 /** Whether this sign-in can write (step 12): "write" only when a write token was granted with the write scope. */
 export type WriteAccess = { status: "write" } | { status: "read_only" | "not_connected" | "unavailable"; message: string };
-type TokenKind = "read" | "write";
+type TokenKind = "read" | "write" | "id" | "arm";
 
 const DONE_PAGE = (ok: boolean) => `<!doctype html><meta charset="utf-8"><title>Coopilot</title>
 <body style="font:16px system-ui;padding:40px;max-width:560px">
@@ -105,7 +127,9 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
   const timeoutMs = deps.timeoutMs ?? 20_000;
   // One access token per scope set, memory only.
   const access = new Map<TokenKind, { token: string; expiresAt: number; scope: string }>();
-  const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : p.scope);
+  // Who signed in, from the last ID token (memory only; the caller keeps what it needs).
+  let lastIdentity: IdClaims | null = null;
+  const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : (k === "id" || k === "arm") && p.kinds?.[k] ? p.kinds[k]! : p.scope);
   const log = (op: string, extra: { status?: number; kind?: string; durationMs?: number } = {}) => deps.log({ source: p.source, op, ...extra });
 
   async function clientSecret(): Promise<string | undefined> {
@@ -139,13 +163,16 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
       throw new AuthFailure("network", `${p.label} unreachable`);
     }
     log(op, { status: res.status, durationMs: performance.now() - started });
-    const json = (await res.json().catch(() => ({}))) as { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown; error?: unknown; scope?: unknown };
+    const json = (await res.json().catch(() => ({}))) as { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown; error?: unknown; scope?: unknown; id_token?: unknown; suberror?: unknown; error_codes?: unknown };
     if (!res.ok || typeof json.access_token !== "string") {
+      // Only the error code, sub-error and numeric codes are read; the description can echo request values.
+      if (needsInteraction(json)) throw new AuthFailure("consent", `${p.label} needs you to sign in again to allow this`);
       if (json.error === "invalid_grant") throw new AuthFailure("expired", `${p.label} needs reconnecting`);
       if (json.error === "invalid_client" || json.error === "unauthorized_client" || json.error === "invalid_request")
         throw new AuthFailure("misconfigured", `${p.label} sign-in was rejected: check ${p.source}.client_id in config`);
       throw new AuthFailure("error", `${p.label} sign-in failed (HTTP ${res.status})`);
     }
+    if (typeof json.id_token === "string") lastIdentity = parseIdToken(json.id_token) ?? lastIdentity;
     // The granted scopes (Microsoft's non-standard field; absent means what was asked for).
     access.set(kind, { token: json.access_token, expiresAt: now() + (typeof json.expires_in === "number" ? json.expires_in : 3599) * 1000, scope: typeof json.scope === "string" ? json.scope : scope });
     return { refreshToken: typeof json.refresh_token === "string" ? json.refresh_token : null };
@@ -224,9 +251,12 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
     });
   }
 
-  async function connect(opts: { write?: boolean } = {}): Promise<ConnectResult> {
-    // With write: the read and write scopes together, so later refreshes may ask for either (a subset).
-    const scope = opts.write && p.writeScope ? [...new Set([...p.scope.split(" "), ...p.writeScope.split(" ")])].join(" ") : p.scope;
+  async function connect(opts: ConnectOptions = {}): Promise<ConnectResult> {
+    // The browser visit asks for every scope set at once (it may span resources), so later refreshes for any of them
+    // are a subset of what was consented. The code exchange redeems one resource: Graph, with OpenID for who it is.
+    const join = (...sets: (string | undefined | false)[]) => [...new Set(sets.filter((x): x is string => !!x).flatMap((x) => x.split(" ")))].join(" ");
+    const graph = join(p.kinds?.id, p.scope, opts.write && p.writeScope);
+    const scope = join(graph, opts.azure && p.kinds?.arm);
     const verifier = randomBytes(48).toString("base64url");
     const challenge = createHash("sha256").update(verifier).digest("base64url");
     const state = randomBytes(24).toString("base64url");
@@ -251,6 +281,11 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
         code_challenge_method: "S256",
         ...p.extraAuthParams,
       };
+      // Someone already signed in: prefill the account and skip the account picker.
+      if (opts.loginHint) {
+        params.login_hint = opts.loginHint;
+        delete params.prompt;
+      }
       for (const [k, v] of Object.entries(params)) auth.searchParams.set(k, v);
 
       const waiting = waitForCode(server, port, state);
@@ -265,7 +300,8 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
       }
 
       access.clear();
-      const r = await tokenRequest("token_exchange", { grant_type: "authorization_code", code: result.code, redirect_uri: redirectUri, code_verifier: verifier }, "read", scope);
+      lastIdentity = null;
+      const r = await tokenRequest("token_exchange", { grant_type: "authorization_code", code: result.code, redirect_uri: redirectUri, code_verifier: verifier }, "read", graph);
       // The exchange token carries both scopes when write was asked for; reads ask for their own on refresh.
       access.clear();
       if (!r.refreshToken) {
@@ -273,7 +309,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
       }
       await storeRefresh(r.refreshToken);
       log("sign_in", { kind: "connected" });
-      return { status: "connected" };
+      return lastIdentity ? { status: "connected", identity: lastIdentity } : { status: "connected" };
     } catch (e) {
       access.clear();
       return { status: "failed", message: e instanceof AuthFailure ? e.message : `${p.label} sign-in failed` };
@@ -285,10 +321,37 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
 
   async function disconnect(): Promise<void> {
     access.clear();
+    lastIdentity = null;
     await deps.keyring.delete(p.refreshAccount);
   }
 
-  return { provider: p, connect, accessToken, writeAccess, disconnect, invalidate: () => access.clear() };
+  /**
+   * Who is signed in (step 15.4): the claims from the last ID token, or a refresh with the OpenID scopes added. An
+   * older sign-in (before step 15.4) gets its identity this way without a new consent: openid, profile and email
+   * need none. Throws AuthFailure like accessToken.
+   */
+  async function identity(): Promise<IdClaims> {
+    if (lastIdentity) return lastIdentity;
+    if (!p.kinds?.id) throw new AuthFailure("error", `${p.label} sign-in has no identity`);
+    access.delete("id");
+    await accessToken("id");
+    if (!lastIdentity) throw new AuthFailure("error", `${p.label} did not say who signed in`);
+    return lastIdentity;
+  }
+
+  return { provider: p, connect, accessToken, writeAccess, identity, disconnect, invalidate: () => access.clear() };
 }
 
 export type OAuthClient = ReturnType<typeof createOAuthClient>;
+export type { IdClaims };
+
+/**
+ * A token error that a browser sign-in fixes (incremental consent): consent_required or interaction_required, or
+ * Entra's invalid_grant with sub-error consent_required or AADSTS65001 (consent) / 50076, 50079 (MFA).
+ */
+export function needsInteraction(json: { error?: unknown; suberror?: unknown; error_codes?: unknown }): boolean {
+  if (json.error === "consent_required" || json.error === "interaction_required") return true;
+  if (json.suberror === "consent_required") return true;
+  const codes = Array.isArray(json.error_codes) ? json.error_codes : [];
+  return codes.some((c) => c === 65001 || c === 50076 || c === 50079);
+}

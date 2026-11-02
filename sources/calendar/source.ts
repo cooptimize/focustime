@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { readSnapshot, writeSnapshot } from "../../cache/snapshots.ts";
 import type { Logger } from "../../log/logger.ts";
 import type { CalEvent, FailureCause, SourceResult } from "../../week/types.ts";
-import { AuthFailure, type ConnectResult, type OAuthClient } from "../oauth/oauth.ts";
+import { AuthFailure, type ConnectOptions, type ConnectResult, type OAuthClient } from "../oauth/oauth.ts";
 import { formatFetchedAt } from "../when.ts";
 import { ForeignLinkError, HttpError, NetworkError, PartialError } from "./http.ts";
 
@@ -48,6 +48,7 @@ export function createCalendarSource(d: CalendarSourceDeps) {
       switch (e.kind) {
         case "not_connected": return { status: "auth_required", message: `${L} is not connected yet`, fixAction: d.connectAction, useCache: false };
         case "expired": return { status: "auth_required", message: `${L} needs reconnecting`, fixAction: d.connectAction, useCache: true };
+        case "consent": return { status: "auth_required", message: `${L} needs you to sign in again`, fixAction: d.connectAction, useCache: true };
         case "network": return { status: "unreachable", message: `${L} unreachable`, useCache: true, cause: "network" };
         case "keyring": return { status: "error", message: e.message, useCache: true, cause: "keyring" };
         case "misconfigured": return { status: "misconfigured", message: e.message, fixAction: "open_settings", useCache: true };
@@ -108,7 +109,7 @@ export function createCalendarSource(d: CalendarSourceDeps) {
     return result;
   }
 
-  async function connect(opts: { write?: boolean } = {}): Promise<ConnectResult> {
+  async function connect(opts: ConnectOptions = {}): Promise<ConnectResult> {
     const r = await d.auth.connect(opts);
     memory.clear();
     return r;

@@ -25,6 +25,7 @@ import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type Selection } from "./WeekGrid.tsx";
 import { ContextLine, TopTimer } from "./NowStrip.tsx";
+import { PersonChip, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
 import { sound } from "./sound.ts";
 import type { TimerView } from "../actions/types.ts";
@@ -1041,6 +1042,7 @@ export function App() {
         closePlanDay();
         setSettingsAt("data");
       },
+      openVm: () => window.dispatchEvent(new Event(VM_MENU_EVENT)),
       openSettings: (section) => {
         closePlanDay();
         setDetailsOpen(false);
@@ -1154,6 +1156,7 @@ export function App() {
     <TimeboxCtx.Provider value={tbEnv}>
     <DevOpsWriteCtx.Provider value={devopsWrites.env}>
     <MenuHost env={env}>
+    <VmProvider onSettings={() => setSettingsAt("you")}>
     <DraftEditorCtx.Provider value={setDraftEdit}>
     <div className={`app ${layout}${compact ? " compact" : ""}`}>
       <header className="topbar">
@@ -1216,6 +1219,7 @@ export function App() {
           )}
         </nav>
         <div className="top-actions">
+          <VmChip />
           {/* Step 15.2: Focus is always here. Idle it opens the start menu (next pick first); running it is the countdown. */}
           {data.timer ? (
             <TopTimer
@@ -1248,6 +1252,7 @@ export function App() {
           <button type="button" className="top-btn" aria-current={view === "settings" ? "page" : undefined} onClick={() => (settingsAt === null ? setSettingsAt("you") : setSettingsAt(null))} title="Settings (,)">
             Settings <kbd>,</kbd>
           </button>
+          <PersonChip onOpen={() => setSettingsAt("you")} />
         </div>
       </header>
       {view !== "today" && view !== "focus" && (
@@ -1475,6 +1480,7 @@ export function App() {
       {draftEdit && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
     </div>
     </DraftEditorCtx.Provider>
+    </VmProvider>
     </MenuHost>
     </DevOpsWriteCtx.Provider>
     </TimeboxCtx.Provider>

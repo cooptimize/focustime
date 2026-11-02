@@ -1,6 +1,7 @@
 // Settings (step 6b): every setting Coopilot owns, read from and written to the same validated config file. Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
+import { AzureWriteLog, YouAccount } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -186,14 +187,19 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
   const d = p.data;
   switch (p.section) {
     case "you":
-      return d.you ? (
+      return (
+        <>
+        <YouAccount />
+        {d.you && (
         <div className="set-grid">
-          <ReadOnly label="Email" value={d.you.email} where="Identifies you in Dataverse. Set in config.toml ([dataverse] my_email)" />
+          <ReadOnly label="Email when signed out" value={d.you.email} where="Signed in, Coopilot finds you in Dataverse by your Microsoft account. Signed out, by this ([dataverse] my_email in config.toml)" />
           <ReadOnly label="Dataverse user" value={d.you.systemUserId ? "Found" : "Not found yet"} where="Your Dataverse user record, found from the email. Change it in Dataverse" />
           <ReadOnly label="Environment" value={d.you.environmentUrl} where="Set in config.toml ([dataverse] environment_url)" />
           <ReadOnly label="Time zone" value={d.you.timeZone} where="Change it under Working hours" />
         </div>
-      ) : null;
+        )}
+        </>
+      );
     case "hours":
       return d.hours ? <HoursForm {...p} /> : null;
     case "standing":
@@ -1066,6 +1072,7 @@ function DataSection(p: Props & { data: SettingsData }) {
     <div className="set-form">
       <WriteLog />
       <DevOpsWriteLog />
+      <AzureWriteLog tz={p.data.you?.timeZone ?? "UTC"} />
       <div className="set-grid">
         <div className="set-field">
           <span className="set-label">Export the plan</span>

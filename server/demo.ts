@@ -8,6 +8,7 @@ import { createDemoSources } from "../sources/demo/sources.ts";
 import { DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { mondayOf } from "../week/dates.ts";
+import { createDemoAzure, DEMO_VM_ID } from "../sources/demo/azure.ts";
 
 export type DemoControl = { on: boolean; set: (on: boolean) => Promise<void> };
 
@@ -15,6 +16,8 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl }
   let text = DEMO_CONFIG;
   const sources = createDemoSources(opts.now);
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ) });
+  // Step 15.4: a fictional signed-in person and VM, simulated (no Azure calls).
+  const demoAzure = createDemoAzure();
   return {
     loadConfig: async () => ({ path: "Demo data (in memory, not your config file)", parsed: parseConfig(text) }),
     // Theme or view changes in demo mode stay in memory: the real config file is never touched.
@@ -33,6 +36,8 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl }
     now: opts.now,
     plan,
     demo: opts.demo,
+    account: () => demoAzure.account,
+    azure: demoAzure.azure,
   };
 }
 
@@ -51,6 +56,9 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
     if (!r.ok) throw new Error(`demo seed ${action}: ${r.error}`);
     return r.data as Record<string, unknown>;
   };
+  // Signed in as the fictional person, with the demo VM confirmed as theirs.
+  await run("auth.status", {});
+  await run("vm.choose", { vmId: DEMO_VM_ID });
   await run("week.load", { weekStart });
   await run("weekplan.load", { weekStart });
   const list: [string, number, "must" | "nice", number][] = [

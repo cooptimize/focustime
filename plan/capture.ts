@@ -127,7 +127,7 @@ const clean = (s: string) => cap(squash(s.replace(/^[\s:,-]+|[\s:,.-]+$/g, "")))
 export type CaptureSuggestion = {
   kind: CaptureKind;
   clientKey: string | null;
-  /** Follow-up: who it's owed to (a name after "told"/"promised", else the client's name, else empty). */
+  /** Follow-up: who it's owed to (a name after "told"/"promised"/"owe"/"asked"), else empty. */
   who: string;
   /** Follow-up: what was promised, without the lead-in or the due phrase. */
   what: string;
@@ -143,13 +143,13 @@ export type CaptureSuggestion = {
  * "by"/"due") is a follow-up; a leading "feature", "new feature" or "epic needs" is a draft feature; anything else is
  * a draft story (step 13.5: notes are gone).
  */
-export function suggest(text: string, clientKey: string | null, today: IsoDate, clients: readonly CaptureClient[]): CaptureSuggestion {
+export function suggest(text: string, clientKey: string | null, today: IsoDate, _clients: readonly CaptureClient[]): CaptureSuggestion {
   const due = parseDue(text, today);
-  const name = clientKey ? (clients.find((c) => c.clientKey === clientKey)?.clientName ?? clientKey) : "";
   const promise = PROMISE.test(text) || (!!due && /^(?:by|due|before|until)\b/i.test(due.phrase));
   const feature = !promise && FEATURE.test(text);
   const kind: CaptureKind = promise ? "follow_up" : feature ? "draft_feature" : "draft";
-  const who = WHO.exec(text)?.[1] ?? name;
+  // Step 15.4 (Q84): only a name in the text; no name leaves Who empty (never the client or "Cooptimize").
+  const who = WHO.exec(text)?.[1] ?? "";
   const what = clean((due ? text.replace(due.phrase, " ") : text).replace(LEADS, ""));
   const title = clean(feature ? text.replace(FEATURE, "") : text.replace(WORK_LEAD, "").replace(LEADS, ""));
   return { kind, clientKey, who, what, due: due?.date ?? null, title, others: (["follow_up", "draft", "draft_feature"] as const).filter((k) => k !== kind) };

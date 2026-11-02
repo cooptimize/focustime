@@ -1,5 +1,6 @@
 // Today (step 10): the default view. What's now and next, today's picks by block with the week's committed
 // features as context, one large Start focus, and anything urgent. Everything else is a click away.
+import { VmChip, VmToday } from "./Account.tsx";
 import { DueBadge } from "./FollowUps.tsx";
 import { useContext, useState } from "react";
 import type { FollowUpView, WeekLoadData } from "../actions/types.ts";
@@ -65,6 +66,7 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
       <header className="today-head">
         <h1>{longDate(date)}</h1>
         <p className="today-now">{nowLine(strip, workday, target)}</p>
+        <VmChip big />
       </header>
       <FlowHint />
 
@@ -94,6 +96,7 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
         </section>
       )}
 
+      <VmToday />
       <section className="today-focus" aria-label="Focus">
         {t ? (
           <button type="button" className="today-start running" onClick={onFocusScreen}>

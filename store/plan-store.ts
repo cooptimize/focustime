@@ -466,7 +466,37 @@ export const MIGRATIONS: readonly string[] = [
    ALTER TABLE draft_stories ADD COLUMN acceptance TEXT;
    ALTER TABLE draft_stories ADD COLUMN start_date TEXT;
    ALTER TABLE draft_stories ADD COLUMN target_date TEXT;`,
+  // 17: step 15.4, my VM: the Azure audit log (power actions and auto-shutdown changes, no undo) and account state
+  // (who signed in, my VM, a changed schedule to put back), kept by Reset local plan.
+  `CREATE TABLE azure_write_log (
+     id INTEGER PRIMARY KEY,
+     at TEXT NOT NULL,
+     op TEXT NOT NULL CHECK (op IN ('start', 'deallocate', 'shutdown_change', 'shutdown_restore')),
+     vm_id TEXT NOT NULL,
+     vm_name TEXT NOT NULL,
+     before TEXT,
+     after TEXT,
+     status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'failed', 'timed_out', 'refused')),
+     message TEXT,
+     auto INTEGER NOT NULL DEFAULT 0,
+     attempts INTEGER NOT NULL DEFAULT 1,
+     updated_at TEXT NOT NULL
+   );
+   CREATE TABLE account_state (
+     key TEXT PRIMARY KEY,
+     value TEXT NOT NULL,
+     updated_at TEXT NOT NULL
+   );`,
 ];
+
+import type { AzureWriteEntry } from "../actions/account-types.ts";
+export type { AzureWriteEntry };
+export type NewAzureWrite = { op: AzureWriteEntry["op"]; vmId: string; vmName: string; before: unknown; after: unknown; auto: boolean };
+const toAzureWrite = (r: Row): AzureWriteEntry => ({
+  id: r.id as number, at: r.at as string, op: r.op as AzureWriteEntry["op"], vmId: r.vm_id as string, vmName: r.vm_name as string,
+  before: r.before ? JSON.parse(r.before as string) : null, after: r.after ? JSON.parse(r.after as string) : null,
+  status: r.status as AzureWriteEntry["status"], message: (r.message as string | null) ?? null, auto: !!r.auto, attempts: r.attempts as number, updatedAt: r.updated_at as string,
+});
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
 const RESET_TABLES = ["timeboxes", "captures", "week_feature_slots", "week_features", "week_plans", "breakdown_marks", "borrowed", "resume_notes", "focus_log", "kv", "follow_ups", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
@@ -1222,6 +1252,38 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       const r = db.prepare(`${PICK_SELECT} WHERE p.carried_from = ? ORDER BY p.id DESC`).get(id) as Row | undefined;
       return r ? toPick(r) : null;
     },
+    // ---- my VM and who signed in (step 15.4) ----
+    logAzureWrite(w: NewAzureWrite): AzureWriteEntry {
+      const at = stamp();
+      const r = db
+        .prepare("INSERT INTO azure_write_log (at, op, vm_id, vm_name, before, after, status, message, auto, attempts, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?, 1, ?)")
+        .run(at, w.op, w.vmId, w.vmName, w.before === null ? null : JSON.stringify(w.before), w.after === null ? null : JSON.stringify(w.after), w.auto ? 1 : 0, at);
+      return this.azureWrite(Number(r.lastInsertRowid))!;
+    },
+    azureWrite(id: number): AzureWriteEntry | null {
+      const r = db.prepare("SELECT * FROM azure_write_log WHERE id = ?").get(id) as Row | undefined;
+      return r ? toAzureWrite(r) : null;
+    },
+    settleAzureWrite(id: number, s: { status: AzureWriteEntry["status"]; message?: string | null; after?: unknown; retry?: boolean }): AzureWriteEntry {
+      const w = this.azureWrite(id);
+      if (!w) throw new PlanError("No such write");
+      db.prepare("UPDATE azure_write_log SET status = ?, message = ?, after = ?, attempts = attempts + ?, updated_at = ? WHERE id = ?").run(
+        s.status, s.message ?? null, s.after === undefined ? (w.after === null ? null : JSON.stringify(w.after)) : JSON.stringify(s.after), s.retry ? 1 : 0, stamp(), id,
+      );
+      return this.azureWrite(id)!;
+    },
+    azureWriteLog(limit = 100): AzureWriteEntry[] {
+      return (db.prepare("SELECT * FROM azure_write_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toAzureWrite);
+    },
+    /** Account state (step 15.4): who signed in, my VM, a changed schedule. Not emptied by Reset local plan. null removes. */
+    accountState<T>(key: string): T | null {
+      const r = db.prepare("SELECT value FROM account_state WHERE key = ?").get(key) as Row | undefined;
+      return r ? (JSON.parse(r.value as string) as T) : null;
+    },
+    setAccountState(key: string, value: unknown): void {
+      if (value === null) db.prepare("DELETE FROM account_state WHERE key = ?").run(key);
+      else db.prepare("INSERT INTO account_state (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").run(key, JSON.stringify(value), stamp());
+    },
     /** Small JSON state that survives restarts (the focus timer). null removes it. */
     getState<T>(key: string): T | null {
       const r = db.prepare("SELECT value FROM kv WHERE key = ?").get(key) as Row | undefined;
@@ -1405,6 +1467,10 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       const r = db.prepare("INSERT INTO markers (kind, date, at) VALUES (?, ?, ?) ON CONFLICT(kind, date) DO NOTHING").run(kind, date, stamp());
       return Number(r.changes) === 1;
     },
+    /** Whether (kind, date) was marked (step 15.4: the morning VM prompt dismissed for the day). */
+    marked(kind: string, date: IsoDate): boolean {
+      return !!db.prepare("SELECT 1 FROM markers WHERE kind = ? AND date = ?").get(kind, date);
+    },
     week(dates: IsoDate[]): PlanWeek {
       const out: PlanWeek = {};
       for (const d of dates) {
@@ -1585,6 +1651,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         invites: (db.prepare("SELECT * FROM invites ORDER BY id").all() as Row[]).map(toInvite),
         devopsIdentities: this.devopsIdentities(),
         devopsWriteLog: (db.prepare("SELECT * FROM devops_write_log ORDER BY id").all() as Row[]).map(toDevopsWrite),
+        azureWriteLog: (db.prepare("SELECT * FROM azure_write_log ORDER BY id").all() as Row[]).map(toAzureWrite),
       };
     },
     close: () => db.close(),

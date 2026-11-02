@@ -84,7 +84,8 @@ export function createOutlookSource(deps: CalendarDeps<OutlookConfig>) {
   const schedule = createScheduleReader({ fetch: deps.fetch, token: () => auth.accessToken(), invalidate: () => auth.invalidate(), log: deps.log, timeoutMs });
   // Who suggestions for follow-ups (step 13.5): attendees in a client's domain, on the read token.
   const people = createPeopleReader({ fetch: deps.fetch, token: () => auth.accessToken(), invalidate: () => auth.invalidate(), log: deps.log, timeoutMs });
-  return { ...base, write, schedule, people };
+  // Step 15.4: the same Microsoft sign-in is the app's identity and carries the Azure token.
+  return { ...base, write, schedule, people, auth };
 }
 
 /** The write side: whether this sign-in may write, and the marker-checked writer. */

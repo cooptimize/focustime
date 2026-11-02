@@ -37,7 +37,11 @@ November 1, 2026. Planning-chat record. The repo's docs/ folder is the living so
 
 13.6. **Planning visibility, Plan panel fixes and timeboxing redesign**: Plan / Planned ✓ in each day header, "+ Add work" on blocks and key A, Friday as catch-up without a prompt, three follow-ups per card, a fixed-height Plan panel that scrolls on its own, Draft feature for epics, a per-block agenda with free gaps instead of the day strip, one-click Timebox into a gap, Timebox my day, and one combined Outlook preview
 
-In progress: nothing. Step 13.6 is built; open questions Q73 and Q75 in docs/open-questions.md.
+Since then (Nov 1 to 2): steps 14 (DevOps writes), 14.5, 15 (Plan the day two panes, demo mode), 15.1, 16 (Delivery, RSVP), 15.2, 15.3 (one capture flow, editable drafts) and:
+
+15.4. **Microsoft sign-in and my VM** (Nov 2): one Microsoft sign-in is the app's user (sign-in screen, the person in the top bar, Sign out; the existing Outlook connection carried over with no new consent; Azure added incrementally). My Azure VM found by its Owner tag and confirmed once; a VM chip with its state and auto-shutdown time; Start and Stop (deallocate) through the write framework with polling and read-back; delay or skip tonight's auto-shutdown, put back the next morning with a Today warning if it can't be; "Your VM is off. Start it?" on workdays.
+
+In progress: nothing.
 
 ## Calendar editing rule (agreed Nov 1, built in step 13)
 
@@ -61,9 +65,13 @@ We plan, track and show work in DevOps. If it isn't in DevOps, it isn't planned 
 13. ~~Collaboration finder~~ (built): "Needs help from…" ranks Cooptimizers (1) on the client that same day per Focus Time, (2) on the client per Account Worker, (3) anyone else; PTO shown as "away" only; Graph free/busy finds real overlap within each person's working hours and time zone; invites only after preview and confirm. Reads teammates' focus time and PTO (decided: not sensitive at Cooptimize).
 14. DevOps writes: update state, comment, drafts become real stories.
 
-Later: schedule a meeting for an item (pre-filled Outlook first); chat panel on the same actions as the command menu; Ownership area (epics/features I own, contributors, target-date risk); browser access from machines that can't run Moonlight; Remmina launch/resume.
+Later: schedule a meeting for an item (pre-filled Outlook first); chat panel on the same actions as the command menu; Ownership area (epics/features I own, contributors, target-date risk); browser access from machines that can't run Moonlight.
+
+Dropped (Nov 2): Remmina launch and resume. The VM is reached the usual way; Coopilot only manages its power and auto-shutdown (step 15.4).
 
 ## Direction: hosted for other Cooptimizers (later, needs buy-in)
+
+Updated Nov 2: Coopilot will likely become an Azure-hosted web app for any Cooptimizer. Each person has one VM with a Windows profile per client. Groundwork in step 15.4: one Microsoft sign-in per person on the shared app registration (no per-person registrations), identity and VM features keyed by the signed-in person, delegated Azure access so each person's own RBAC applies, OS-specific code kept in the host. Still to revisit for hosting: Dataverse read delegated per user instead of the app-only identity (Q89), a server-side token store instead of the OS keyring, and a confidential-client redirect instead of loopback.
 
 Interest from other Cooptimizers. A hosted version would use Azure with per-user Entra sign-in, Key Vault for secrets, a per-user database, and normal link opening (Edge profile switching would need an optional local helper). Cost estimate and secure design to be explored in a separate thread before any resources are created. Rule from now (a principle in CLAUDE.md since step 11): nothing machine-specific in the core modules; OS integrations stay behind thin host adapters.
 

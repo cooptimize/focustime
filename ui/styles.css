@@ -2280,3 +2280,47 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 900px) {
   .cap-box-fields { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---- Step 15.4: sign-in, the person and VM chips, VM banners and preview, Settings > You ---- */
+.signin { min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--text); }
+.signin-card { max-width: 440px; width: 100%; display: grid; gap: 14px; justify-items: start; padding: 32px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-panel); }
+.signin-card h1 { margin: 0; font-size: 24px; }
+.signin-card p { margin: 0; line-height: 1.5; }
+.signin-logo { width: 36px; height: 36px; }
+.signin-btn { font-size: 16px; padding: 10px 18px; background: var(--action); color: var(--on-action); border-color: var(--action); }
+.signin-btn:disabled { opacity: 0.75; }
+.signin-skip { font-size: 13px; padding: 0; }
+.person-chip { width: 30px; height: 30px; flex: none; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--raised); color: var(--text); font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; display: inline-grid; place-items: center; cursor: pointer; }
+.person-chip:hover { border-color: var(--accent); }
+.vm-chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.vm-chip:hover { border-color: var(--accent); }
+.vm-word { font-weight: 700; color: var(--text-muted); font-size: 11px; letter-spacing: 0.06em; }
+.vm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); flex: none; }
+.vm-ok .vm-dot { background: var(--ok); }
+.vm-warn .vm-dot { background: var(--watch); }
+.vm-warn { border-color: color-mix(in oklab, var(--watch) 50%, var(--border)); }
+.vm-busy .vm-dot { background: var(--accent); animation: vm-pulse 1.2s ease-in-out infinite; }
+@keyframes vm-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .vm-busy .vm-dot { animation: none; } }
+.vm-sched { color: var(--text-muted); font-size: 12px; }
+.vm-chip.big { font-size: 14px; padding: 6px 12px; margin-top: 6px; }
+.narrow .topbar .vm-word { display: none; }
+.vm-banner { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 14px; margin: 0 0 12px; border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--border)); border-radius: 8px; background: color-mix(in oklab, var(--accent) 7%, var(--surface)); }
+.vm-banner-warn { border-color: color-mix(in oklab, var(--watch) 60%, var(--border)); background: color-mix(in oklab, var(--watch) 12%, var(--surface)); }
+.vm-banner strong { font-size: 15px; }
+.vm-error { margin: 0 0 12px; font-size: 13px; }
+.vm-preview { max-width: 520px; }
+.vm-warning { margin: 0 0 10px; padding: 8px 12px; border-radius: 6px; border: 1px solid color-mix(in oklab, var(--risk) 55%, var(--border)); background: color-mix(in oklab, var(--risk) 10%, var(--surface)); color: var(--text); font-weight: 600; }
+.vm-change { margin: 6px 0; display: grid; gap: 6px; }
+.vm-change div { display: flex; gap: 12px; align-items: baseline; }
+.vm-change dt { color: var(--text-muted); min-width: 110px; }
+.vm-change dd { margin: 0; }
+.vm-notes { margin: 6px 0 12px; padding-left: 18px; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
+.commit.danger { background: var(--risk); border-color: var(--risk); color: var(--bg); }
+.set-account { display: grid; gap: 16px; margin-bottom: 20px; }
+.set-account .set-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.vm-found ul { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 6px; }
+.vm-found li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.vm-manual { display: flex; gap: 8px; flex-wrap: wrap; max-width: 720px; }
+.vm-manual input { flex: 1 1 320px; min-width: 0; font-family: ui-monospace, monospace; font-size: 12px; }
+.vm-found p { font-size: 14px; margin: 4px 0; }

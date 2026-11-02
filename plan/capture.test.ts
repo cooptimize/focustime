@@ -76,8 +76,9 @@ describe("routing suggestions (rules, no AI)", () => {
     expect(suggest("Told Dana I'd send the export by Thursday", null, WED, clients)).toMatchObject({ kind: "follow_up", who: "Dana", what: "Send the export", due: "2026-11-05" });
     expect(suggest("I'll review Mark's PR tomorrow", null, WED, clients)).toMatchObject({ kind: "follow_up", due: "2026-11-05", what: "Review Mark's PR" });
     expect(suggest("promised Priya the numbers", "Adatum", WED, clients)).toMatchObject({ kind: "follow_up", who: "Priya", clientKey: "Adatum" });
-    // A due date alone ("by Friday") reads as a commitment; who falls back to the tagged client.
-    expect(suggest("status update by Friday", "T&S", WED, clients)).toMatchObject({ kind: "follow_up", who: "Tailspin & Sons", due: "2026-11-06" });
+    // A due date alone ("by Friday") reads as a commitment; with no name, Who stays empty (Q84), even with a client.
+    expect(suggest("status update by Friday", "T&S", WED, clients)).toMatchObject({ kind: "follow_up", who: "", clientKey: "T&S", due: "2026-11-06" });
+    expect(suggest("I'll send the release notes @coop", "Cooptimize", WED, clients).who).toBe("");
     expect(suggest("I will call the vendor", null, WED, clients)).toMatchObject({ kind: "follow_up", who: "", due: null });
   });
   it("work to do for a client becomes a draft story", () => {
