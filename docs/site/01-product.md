@@ -1,6 +1,6 @@
 # 01. Product
 
-Coopilot is built around one person's week. It answers three questions: what is my week, what fits in each block, and what do I owe people. It is built for one Cooptimizer today, with nothing person-specific in code ([docs/roadmap.md](../../docs/roadmap.md#built-for-any-cooptimizer)).
+Coopilot is built around one person's week. It answers three questions: what is my week, what fits in each block, and what do I owe people. It is built for one Cooptimizer today. The goal is nothing person-specific in code; the exceptions are the install files in `system/`, which hard-code the author's paths ([docs/roadmap.md](../../docs/roadmap.md#built-for-any-cooptimizer)).
 
 ## The daily rhythm
 
@@ -46,7 +46,7 @@ These come from [CLAUDE.md](../../CLAUDE.md#principles) and the hard rules there
 
 **The core works without AI.** Every view and rule is deterministic code: risk rules ([week/risks.ts](../../week/risks.ts)), follow-up rules ([plan/followups.ts](../../plan/followups.ts)), capture routing ([plan/capture.ts](../../plan/capture.ts)).
 
-**Client boundaries.** Client data stays scoped to its client in views and drafts. A pick, week item, draft, follow-up and timebox each carry a `client_key` ([store/plan-store.ts](../../store/plan-store.ts) migrations). DevOps reads and writes go to one client's org per call with that client's PAT ([sources/devops/source.ts](../../sources/devops/source.ts), [sources/devops/write.ts](../../sources/devops/write.ts)). Two Dataverse accounts with the same client key are refused rather than merged ([sources/dataverse/source.ts](../../sources/dataverse/source.ts) `devopsTargets`). See [07-security-and-privacy.md](07-security-and-privacy.md#client-isolation).
+**Client boundaries.** Client data stays scoped to its client in views and drafts. Picks, week items, drafts and timeboxes each carry a `client_key` (optional on follow-ups and captures) ([store/plan-store.ts](../../store/plan-store.ts) migrations). DevOps reads and writes go to one client's org per call with that client's PAT ([sources/devops/source.ts](../../sources/devops/source.ts), [sources/devops/write.ts](../../sources/devops/write.ts)). Two Dataverse accounts with the same client key are refused rather than merged ([sources/dataverse/source.ts](../../sources/dataverse/source.ts) `devopsTargets`). See [07-security-and-privacy.md](07-security-and-privacy.md#client-isolation).
 
 **Nothing machine-specific in core modules.** `week/`, `plan/`, `actions/` and `sources/` avoid OS calls. Keyring, browser launch, notify-send, playerctl and Hyprland sit behind host adapters in `secrets/`, `server/` and `system/` ([CLAUDE.md](../../CLAUDE.md#principles)). One known exception: `actions/` imports the pure Edge launch-argument builder in `links/edge.ts` (open question Q63).
 

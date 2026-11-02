@@ -23,7 +23,7 @@ A Focus Time row in Dataverse is a weekly **pattern**: for each weekday Mon to T
 
 ## PTO
 
-My PTO comes from Dataverse Time Off Tracker rows, dates only. Every PTO day is a whole day off: no risks, no picks, skipped as a planning target, zero free time. Hours are not used (decisions D105, D106; [week/pto.ts](../../week/pto.ts), [week/free.ts](../../week/free.ts)). When a tracker has detail rows, those dates are used; with none, every weekday from start to end (D109). Teammates' PTO shows only as "away".
+My PTO comes from Dataverse Time Off Tracker rows: dates and the tracker title, never hours. Every PTO day is a whole day off: no risks, no picks, skipped as a planning target, zero free time. Hours are not used (decisions D105, D106; [week/pto.ts](../../week/pto.ts), [week/free.ts](../../week/free.ts)). When a tracker has detail rows, those dates are used; with none, every weekday from start to end (D109). Teammates' PTO shows only as "away".
 
 ## Friday overflow
 
@@ -96,7 +96,7 @@ One capture box, saved at once to the local store ([plan/capture.ts](../../plan/
 
 ## Worked example (demo week)
 
-The demo data is fictional ([sources/demo/data.ts](../../sources/demo/data.ts)). Hours are 09:00 to 17:00 Mon to Thu with the split at 12:30, so AM is 210 minutes and PM is 270. Thursday is PTO. Thresholds are 90, 150 and 90. I worked these numbers by hand from the code's rules; they were not read from a running demo (Not verified against the UI).
+The demo data is fictional ([sources/demo/data.ts](../../sources/demo/data.ts)). Hours are 09:00 to 17:00 Mon to Thu with the split at 12:30, so AM is 210 minutes and PM is 270. Thursday is PTO. Thresholds are 90, 150 and 90. I worked these numbers by hand from the code's rules and an independent reviewer recomputed them; they were not read from a running demo (Not verified against the UI). An event is clipped into every half-day it overlaps ([week/placement.ts](../../week/placement.ts)).
 
 Patterns: Northwind Mon PM and all of Wednesday; Harbor Tue AM and Thu AM; Atlas Tue PM and Thu PM; a standing Cooptimize block Mon AM.
 
@@ -106,8 +106,8 @@ Patterns: Northwind Mon PM and all of Wednesday; Harbor Tue AM and Thu AM; Atlas
 | Mon PM Northwind | Dentist 12:30 to 13:00; status 13:00 to 13:30; data model review 15:00 to 16:00 | 150 min, longest 90 | Meeting load 1h 30m (watch); personal conflict (at risk) | Yes |
 | Tue AM Harbor | Standup; sprint planning 10:00 to 11:00 | 135 min, longest 90 | None | Yes |
 | Tue PM Atlas | Refinement 13:00 to 14:00; demo 14:00 to 15:30 (tentative, so busy); school pickup (personal) 15:30 to 16:00 | 90 min, longest 60 | Meeting load 2h 30m (at risk); personal conflict (at risk); no focus window (at risk) | No: mostly meetings |
-| Wed AM Northwind | Standup; workshop 9:30 to 11:30 | 75 min, longest 60 | Meeting load 2h 15m (watch); no focus window (at risk) | No: mostly meetings |
-| Wed PM Northwind | Lunch and learn 12:30 to 12:45 (tentative) | 255 min | None | Yes |
+| Wed AM Northwind | Standup; workshop 9:30 to 11:30; lunch and learn 12:00 to 12:30 (tentative, so busy) | 45 min, longest 30 | Meeting load 2h 45m (at risk); no focus window (at risk) | No: mostly meetings |
+| Wed PM Northwind | Lunch and learn 12:00 to 12:45, of which 12:30 to 12:45 is in PM (tentative) | 255 min | None | Yes |
 | Thu AM Harbor, Thu PM Atlas | PTO | 0 | None (PTO days have no risks) | No: day off |
 
 Budgets: Northwind 2 blocks (Mon PM, Wed PM), Harbor 1 block (Tue AM), Atlas 0 ("No blocks this week"). If Northwind has a 2-block feature as a must plus two loose M stories as musts, planned is 2 + 1 = 3 and the status reads "3 planned, 2 available". The two M stories make 4 quarters, one block.

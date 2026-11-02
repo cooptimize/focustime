@@ -8,7 +8,7 @@ Only to the systems it came from, and only what is needed to read it back or mak
 
 ### What can it change in DevOps and Outlook? Can it delete anything?
 
-DevOps: state (with an optional comment), add a comment, create a story or feature from a local draft, and set target and start dates on my own features and epics. Outlook: create, move and remove events it created (marked), move or change show as on my own events with no other attendees, send help invites to Cooptimize addresses, and RSVP to meetings others invited me to. Every write has a preview, confirm, read back, audit log and undo. It never deletes a DevOps work item (undo of a create sets it to Removed). It deletes only its own marked Outlook events, cancels only help invites it sent, and on undo deletes a DevOps comment it added itself. It never edits or cancels a meeting someone else is on. See [06](06-write-framework.md#every-action-that-writes-outside-the-machine).
+DevOps: state (with an optional comment), add a comment, create a story or feature from a local draft, and set target and start dates on my own features and epics. Outlook: create, move and remove events it created (marked), move or change show as on my own events with no other attendees, send help invites to Cooptimize addresses, and RSVP to meetings others invited me to. Every write is a named action and is logged; most also have a preview, read back and undo. The exceptions (VM power has no undo, the morning Start and Teams status have no preview) are listed in 06. It never deletes a DevOps work item (undo of a create sets it to Removed). It deletes only its own marked Outlook events, cancels only help invites it sent, and on undo deletes a DevOps comment it added itself. It never edits or cancels a meeting someone else is on. See [06](06-write-framework.md#every-action-that-writes-outside-the-machine).
 
 ### Where are credentials stored?
 
@@ -58,7 +58,7 @@ Coopilot is this planning app on a Cooptimizer's laptop. Coop is Cooptimize's co
 
 **How long is data kept?** Plan data until reset; Roadmap daily counts 120 days; photos 7 days; presence and teammates' calendar details never. See [04 What is kept](04-data-and-persistence.md#what-is-kept-and-for-how-long).
 
-**How does it avoid mixing clients?** Every row carries a client key; DevOps calls are per client org and PAT; duplicate client keys in Dataverse are refused. See [07 Client isolation](07-security-and-privacy.md#client-isolation).
+**How does it avoid mixing clients?** Every client-scoped row carries a client key; DevOps calls are per client org and PAT; duplicate client keys in Dataverse are refused. See [07 Client isolation](07-security-and-privacy.md#client-isolation).
 
 **How is the budget calculated?** A client's half-days in the week, minus PTO, minus half-days with under 2 hours free, minus borrowed time, in whole blocks. See [05 Client weekly budget](05-planning-model.md#client-weekly-budget).
 
@@ -66,4 +66,4 @@ Coopilot is this planning app on a Cooptimizer's laptop. Coop is Cooptimize's co
 
 **Can it be audited?** Every outside write is in a local audit log with before and after values, and can be exported as JSON. See [04 Export](04-data-and-persistence.md#export-and-reset).
 
-**What happens to an Azure VM it doesn't own?** It refuses. Only the one VM the person confirmed, read from the local store, is ever changed, and only start, deallocate and the auto-shutdown time. See [06](06-write-framework.md#every-action-that-writes-outside-the-machine).
+**What happens to an Azure VM it doesn't own?** It refuses. Only the one VM the person confirmed, read from the local store, is ever changed, and only start, deallocate and the auto-shutdown schedule's daily time and on/off status. See [06](06-write-framework.md#every-action-that-writes-outside-the-machine).

@@ -1,6 +1,6 @@
 # 04. Data and persistence
 
-Everything Coopilot keeps lives in four places under the user's home folder, all private to that user. Nothing is kept on a server.
+Everything Coopilot keeps lives in these places under the user's home folder, all private to that user. Nothing is kept on a server.
 
 | What | Where | Mode | Source |
 |---|---|---|---|
@@ -147,9 +147,9 @@ The config holds identifiers (tenant id, client ids, environment URL, email) but
 | Subfolder | Holds | Written when |
 |---|---|---|
 | `dataverse/<week>.json` | My normalized focus patterns | Each good live read |
-| `pto/<key>.json` | My PTO dates | Each good live read |
+| `pto/<key>.json` | My PTO dates and titles | Each good live read |
 | `outlook/<week>.json`, `google/<week>.json` | Normalized events for the week | Each good live read |
-| `devops/<client-slug>.json` | Normalized work items and detected field names per client | Each good live read |
+| `devops/<client-slug>-<hash>.json` | Normalized work items and detected field names per client | Each good live read |
 | `photos/<hash>.json` and image | Profile photos, 96 px, file names hashed from the Entra object id | On read; kept 7 days |
 
 Snapshots hold normalized fields only, never tokens, PATs or raw bodies ([cache/snapshots.ts](../../cache/snapshots.ts), [sources/devops/source.ts](../../sources/devops/source.ts) header). Disconnecting a calendar deletes its cache folder ([sources/calendar/source.ts](../../sources/calendar/source.ts) `disconnect`). Signing out clears the Outlook cache and the photo cache ([actions/account.ts](../../actions/account.ts)).

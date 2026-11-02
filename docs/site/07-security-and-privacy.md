@@ -13,7 +13,7 @@ From [server/guard.ts](../../server/guard.ts) and [server/app.ts](../../server/a
 - **Launch link.** The URL with the token is written to `$XDG_RUNTIME_DIR/coopilot/launch.json` (0600), never printed. `coopilot-open` reads it and hands it straight to the browser without `eval` ([system/coopilot-open](../../system/coopilot-open)).
 - **Response headers.** `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy: same-origin`, and for the built UI a Content Security Policy of `default-src 'self'` with no frames, no forms and no base URI.
 - **Request limits.** `/api/action` takes POST with `application/json` only, bodies up to 64 KB. Static file paths are normalized and kept inside the build folder.
-- **Reopen endpoint.** `POST /api/reopen` passes Host and Origin checks but not the token, takes no input and returns nothing; it is rate limited to once every 5 seconds.
+- **Reopen endpoint.** `POST /api/reopen` passes Host and Origin checks but not the token, takes no input and returns only whether a window was opened (`{opened}`, 202 or 503); it is rate limited to once every 5 seconds.
 
 The OAuth loopback listener is separate: a random port on `127.0.0.1`, open only during a sign-in, accepting one GET with the matching `state` and a loopback Host, closed after 5 minutes ([sources/oauth/oauth.ts](../../sources/oauth/oauth.ts) `waitForCode`).
 
@@ -27,22 +27,22 @@ All in the OS keyring (Secret Service), service `coopilot`, through the `secret-
 | `google-client-secret` | Google desktop client secret | Settings (masked entry) |
 | `outlook-refresh-token` | The one Microsoft sign-in's refresh token | Sign-in; deleted on sign-out |
 | `google-refresh-token` | Google refresh token | Google connect; deleted on disconnect |
-| `devops-write-pat:<client-slug>` | My personal DevOps write PAT for one client | Settings > Clients, after an identity check |
+| `devops-write-pat:<client-slug>-<hash>` | My personal DevOps write PAT for one client | Settings > Clients, after an identity check |
 
 - **Access tokens** live in memory only, one per scope set, renewed 5 minutes before expiry ([sources/oauth/oauth.ts](../../sources/oauth/oauth.ts)).
 - **The ID token** is read for who signed in and not stored; only name, address, object id and tenant id are kept, in `account_state`. It is read but not signature-validated, because it is used for display and to find "me", never to authorize (decision D305).
 - **DevOps PATs** are wrapped in a `Pat` class that prints as `[PAT]` under `String()`, `JSON.stringify` and `util.inspect`. Only the HTTP client calls `basicAuth()` at the request ([sources/devops/pat.ts](../../sources/devops/pat.ts)). The company read PAT is read from Dataverse per fetch and not kept.
-- Coopilot can read but not overwrite pre-existing keyring entries outside its own accounts; `setSecret` and `deleteSecret` accept only the refresh-token accounts ([secrets/keyring.ts](../../secrets/keyring.ts) `WRITABLE`).
+- Coopilot reads and writes only its own named accounts; each setter accepts only its own account type (refresh tokens, the two app secrets, write PATs), so other keyring entries are never read or changed ([secrets/keyring.ts](../../secrets/keyring.ts) `ACCOUNTS`, `WRITABLE`).
 
 ## What is never logged
 
 The logger has a closed set of fields: source, op, status, duration, count, kind. There is no field for headers, bodies, tokens, URLs or free objects, so they can't be logged by accident ([log/logger.ts](../../log/logger.ts)). Logs go to stderr (the systemd journal under the service).
 
-Never logged, cached, exported or returned to the UI: tokens, secrets, PATs, Authorization headers, raw HTTP bodies, provider error descriptions (only error codes are read), Azure error messages, teammates' presence, profile photos and the people they belong to ([CLAUDE.md](../../CLAUDE.md#hard-rules); headers of [sources/oauth/oauth.ts](../../sources/oauth/oauth.ts), [sources/azure/client.ts](../../sources/azure/client.ts), [actions/photo-actions.ts](../../actions/photo-actions.ts)). Tests pass a fake token through code paths and assert it never appears in logs or errors ([server/app.test.ts](../../server/app.test.ts), [actions/dispatch.test.ts](../../actions/dispatch.test.ts), [sources/dataverse/source.test.ts](../../sources/dataverse/source.test.ts)); PAT masking is tested in [secrets/keyring.test.ts](../../secrets/keyring.test.ts) and [sources/devops/source.test.ts](../../sources/devops/source.test.ts).
+Never logged, cached, exported or returned to the UI: tokens, secrets, PATs, Authorization headers, raw HTTP bodies, provider error descriptions (only error codes are read) and Azure error messages. Teammates' presence is shown on screen but never logged or stored. Profile photos are never logged; they are cached 7 days under hashed names and cleared on sign-out ([CLAUDE.md](../../CLAUDE.md#hard-rules); headers of [sources/oauth/oauth.ts](../../sources/oauth/oauth.ts), [sources/azure/client.ts](../../sources/azure/client.ts), [actions/photo-actions.ts](../../actions/photo-actions.ts)). Tests pass a fake token through code paths and assert it never appears in logs or errors ([server/app.test.ts](../../server/app.test.ts), [actions/dispatch.test.ts](../../actions/dispatch.test.ts), [sources/dataverse/source.test.ts](../../sources/dataverse/source.test.ts)); PAT masking is tested in [secrets/keyring.test.ts](../../secrets/keyring.test.ts) and [sources/devops/source.test.ts](../../sources/devops/source.test.ts).
 
 ## Client isolation
 
-- Every plan row carries its `client_key` ([store/plan-store.ts](../../store/plan-store.ts)).
+- Every client-scoped row (picks, week items, drafts, timeboxes, flex sessions, resume notes, borrowed time, invites, DevOps write log) carries a `client_key`; on follow-ups and captures it is optional. Day-level tables such as `day_plans` and `unavailable` have none ([store/plan-store.ts](../../store/plan-store.ts)).
 - DevOps reads and writes go to one client's org with that client's PAT per call; a write for one client can't target another client's org, and a draft for one client can't be created under another client's parent ([actions/devops-write-actions.ts](../../actions/devops-write-actions.ts) refusals "That draft belongs to another client", "That write belongs to another client").
 - Two Dataverse accounts with the same client key are both refused ([sources/dataverse/source.ts](../../sources/dataverse/source.ts) `devopsTargets`).
 - Who suggestions show only people whose email is in that client's domain ([sources/graph/people.ts](../../sources/graph/people.ts)).

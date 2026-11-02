@@ -1,12 +1,12 @@
 # 03. Sources and auth
 
-Coopilot reads from five outside systems and writes to four of them in narrow, named ways. Each source fails on its own: one source down never blanks the others ([sources/calendar/source.ts](../../sources/calendar/source.ts), [sources/dataverse/source.ts](../../sources/dataverse/source.ts), [sources/devops/source.ts](../../sources/devops/source.ts)).
+Coopilot reads from five outside systems and writes to three of them (Graph, DevOps and Azure Resource Manager) in narrow, named ways. Each source fails on its own: one source down never blanks the others ([sources/calendar/source.ts](../../sources/calendar/source.ts), [sources/dataverse/source.ts](../../sources/dataverse/source.ts), [sources/devops/source.ts](../../sources/devops/source.ts)).
 
 ## Summary
 
 | System | Identity | Reads | Writes | Fresh for | Offline |
 |---|---|---|---|---|---|
-| Dataverse | App-only (client credentials) as an application user | My focus time, my PTO dates, my client list and their DevOps settings, teammates (name, work email, Entra object ID), who works on a client, teammates' PTO dates | None | 5 min in memory, then last good snapshot on disk | Last snapshot, marked as cached |
+| Dataverse | App-only (client credentials) as an application user | My focus time, my PTO (dates and title), my client list and their DevOps settings, teammates (name, work email, Entra object ID), who works on a client, teammates' PTO dates | None | 5 min in memory, then last good snapshot on disk | Last snapshot, marked as cached |
 | Microsoft Graph (Outlook) | Delegated, the signed-in person | My calendar for the week; attendees of my meetings in a client's domain; free/busy and working hours of teammates | Coopilot's own events, my own no-attendee events, help invites, RSVPs | 5 min in memory, then snapshot | Last snapshot |
 | Microsoft Graph (Teams, photos) | Delegated, same sign-in | My presence; teammates' presence for people on screen; profile photos | My own preferred presence during focus | Presence never kept; photos 7 days | Initials instead of photos; no presence |
 | Google Calendar | Delegated, desktop OAuth | Events in the configured calendars for the week | None | 5 min in memory, then snapshot | Last snapshot |
@@ -28,10 +28,10 @@ All tokens are held in memory only. Refresh tokens and app secrets live in the O
 | My focus patterns | Focus Time | id, account, system user, account worker, start and end date, Mon to Thu day part, state | Rows linked to me, overlapping the week |
 | Client names | Account | account id, name, reporting nickname | Accounts on my patterns |
 | DevOps targets | Account Worker, Account | DevOps email; DevOps org, project id and name, and the DevOps token column (reads only) | Accounts I am an active Account Worker on |
-| My PTO | Time Off Tracker and detail rows | dates only, never hours or titles (D105) | My rows |
+| My PTO | Time Off Tracker and detail rows | dates and title, never hours (D105) | My rows |
 | Teammates | User | system user id, full name, work email, Entra object ID | Enabled, licensed, not application users, with an email |
 | Client team | Focus Time, Account Worker | user, account, dates, day parts | One of my clients |
-| Team PTO | Time Off Tracker | employee, start and end date (no title) | Teammates |
+| Team PTO | Time Off Tracker and detail rows | employee, start and end date, detail dates (no title) | Every active tracker in the date range; only who and date are kept |
 | Resolve me | User | system user id | My work email from config |
 
 **Writes.** None. No code path sends a write to Dataverse.
@@ -89,7 +89,7 @@ The browser visit asks for every enabled scope set at once; later refreshes ask 
 
 **Auth, reads.** The company read PAT per client, from Dataverse, used only to build a Basic Authorization header to `https://dev.azure.com/<client-devops-org>/`, then dropped. It prints as `[PAT]` everywhere ([sources/devops/pat.ts](../../sources/devops/pat.ts), [sources/devops/source.ts](../../sources/devops/source.ts)).
 
-**Auth, writes.** My personal write PAT per client (scope Work Items, Read and write), entered in Settings > Clients, stored in keyring account `devops-write-pat:<client-slug>`, and checked against my DevOps identity (`_apis/connectionData`) before it is saved. Without it the client stays read-only ([secrets/keyring.ts](../../secrets/keyring.ts), [actions/devops-write-actions.ts](../../actions/devops-write-actions.ts), decisions D250 and D258).
+**Auth, writes.** My personal write PAT per client (scope Work Items, Read and write), entered in Settings > Clients, stored in keyring account `devops-write-pat:<client-slug>-<hash>`, and checked against my DevOps identity (`_apis/connectionData`) before it is saved. Without it the client stays read-only ([secrets/keyring.ts](../../secrets/keyring.ts), [actions/devops-write-actions.ts](../../actions/devops-write-actions.ts), decisions D250 and D258).
 
 **What is read** (API version 7.1) ([sources/devops/source.ts](../../sources/devops/source.ts), [sources/devops/normalize.ts](../../sources/devops/normalize.ts)):
 
@@ -99,7 +99,7 @@ The browser visit asks for every enabled scope set at once; later refreshes ask 
 
 Only clients I follow are fetched (decision D144). Each client is fetched, fails and is cached on its own.
 
-**Caching.** Results 5 minutes in memory (a forced refresh at most once a minute), metadata 1 hour, last good snapshot in `~/.cache/coopilot/devops/<client-slug>.json`.
+**Caching.** Results 5 minutes in memory (a forced refresh at most once a minute), metadata 1 hour, last good snapshot in `~/.cache/coopilot/devops/<client-slug>-<hash>.json`.
 
 **Failures.** Per client: "DevOps PAT expired or invalid", "No access to DevOps project", Dataverse unreachable, and so on, each on that client's row. Other clients are unaffected.
 
