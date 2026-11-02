@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDue, parseTag, suggest, type CaptureClient } from "./capture.ts";
+import { parseDue, parseTag, suggest, takeTag, type CaptureClient } from "./capture.ts";
 
 // Sunday Nov 1, 2026 is "today" unless a test says otherwise; Thu Nov 5 is PTO in real life but rules don't care.
 const SUN = "2026-11-01";
@@ -54,6 +54,20 @@ describe("client tags", () => {
     expect(parseTag("@nobody hello", clients)).toEqual({ clientKey: null, text: "@nobody hello" });
     expect(parseTag("@c hello", clients)).toEqual({ clientKey: null, text: "@c hello" }); // too short to be sure
     expect(parseTag("email me at avery@example.com", clients)).toEqual({ clientKey: null, text: "email me at avery@example.com" });
+  });
+});
+
+describe("takeTag: a finished @tag sets the client chip while typing (step 15.2)", () => {
+  it("takes a known tag out once a space follows it, keeping the rest and the trailing space", () => {
+    expect(takeTag("@adatum ", clients)).toEqual({ clientKey: "Adatum", text: "" });
+    expect(takeTag("ask @adatum ", clients)).toEqual({ clientKey: "Adatum", text: "ask " });
+    expect(takeTag("ask @T&S about ", clients)).toEqual({ clientKey: "T&S", text: "ask about " });
+  });
+  it("waits while the tag is still being typed, and leaves unknown tags and email addresses alone", () => {
+    expect(takeTag("ask @adat", clients)).toBeNull();
+    expect(takeTag("ask @nobody ", clients)).toBeNull();
+    expect(takeTag("mail avery@example.com ", clients)).toBeNull();
+    expect(takeTag("plain text ", clients)).toBeNull();
   });
 });
 

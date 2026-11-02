@@ -83,6 +83,20 @@ export function parseTag(text: string, clients: readonly CaptureClient[]): { cli
   return { clientKey: null, text };
 }
 
+/**
+ * Step 15.2: while typing, a finished @tag (followed by a space) that names one client becomes the client chip: the
+ * client, and the text without the tag. Null while the tag is still being typed, or when it names no single client.
+ */
+export function takeTag(text: string, clients: readonly CaptureClient[]): { clientKey: string; text: string } | null {
+  const m = /(^|\s)@([^\s@]+)\s/.exec(text);
+  if (!m) return null;
+  const key = matchClient(m[2]!.replace(/[.,;:!?)]+$/, ""), clients);
+  if (!key) return null;
+  const start = m.index + m[1]!.length;
+  const rest = `${text.slice(0, start)}${text.slice(start + 1 + m[2]!.length + 1)}`;
+  return { clientKey: key, text: rest.replace(/^\s+/, "").replace(/\s{2,}/g, " ") };
+}
+
 export function matchClient(word: string, clients: readonly CaptureClient[]): string | null {
   const w = word.toLowerCase();
   const flat = (s: string) => s.toLowerCase().replace(/\s+/g, "");

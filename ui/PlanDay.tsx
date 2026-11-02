@@ -3,7 +3,7 @@
 // client's follow-ups, then everything else. One "+" per row; every other action is in a row's ⋯ menu. Everything
 // here is local: the actions only write Coopilot's plan store.
 import { CreateInDevOps } from "./DevOpsWrite.tsx";
-import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { blockClient, draftOffer } from "../plan/rules.ts";
 import { agendaOf, offerAfterTimebox, planMyDay, smallerSize, type DayPlacement, type DidntFit, type Unplaced } from "../plan/agenda.ts";
 import { addSections, defaultBlock, doneAction, type PriorityRow } from "../plan/addpane.ts";
@@ -24,8 +24,8 @@ import { call } from "./api.ts";
 import { copy, DueBadge } from "./FollowUps.tsx";
 import { dueOrder } from "../plan/due.ts";
 import { isTypingTarget, topOverlay } from "./keys.ts";
-import { itemMenu, pickMenu, spanText } from "./menu.ts";
-import { MenuRow, useMenu } from "./Menus.tsx";
+import { itemMenu, pickMenu, possessive, spanText } from "./menu.ts";
+import { MenuCtx, MenuRow, useMenu } from "./Menus.tsx";
 import { TimeboxDetails, useTimeboxes } from "./Timeboxes.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { PickRow, PICK_DRAG } from "./PickRow.tsx";
@@ -59,6 +59,8 @@ type Props = {
   start?: { half: Half; n: number; focus?: number | null } | null;
   /** The ritual chips (Plan the day, Check-in, Close out, Plan the week), shown in this view's header (D268). */
   rituals?: ReactNode;
+  /** Step 15.2: the selected block, so ⋯ menus add to it (null when the view closes). */
+  onSelectBlock?: (half: Half | null) => void;
 };
 
 const inPlay = (p: Pick) => p.status === "planned" || p.status === "done";
@@ -66,7 +68,7 @@ const pickedKey = (p: Pick) => (p.itemId !== null ? `i${p.clientKey}:${p.itemId}
 const weekdayOf = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long" });
 const titleDate = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long", month: "short", day: "numeric" });
 
-export function PlanDay({ day, state, which, now, tz, colors, clients, error, act, onCommit, onClose, onStep, nextDay = null, start, justCommitted = false, onCommitSeen, rituals }: Props) {
+export function PlanDay({ day, state, which, now, tz, colors, clients, error, act, onCommit, onClose, onStep, nextDay = null, start, justCommitted = false, onCommitSeen, rituals, onSelectBlock }: Props) {
   const past = state.access === "past";
   const off = day.pto;
   const ref = useRef<HTMLElement>(null);
@@ -93,6 +95,8 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
     if (halves.includes(start.half)) setSel(start.half);
     setFocusItem(start.focus ?? null);
   }, [start?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => onSelectBlock?.(sel), [sel]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onSelectBlock?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [myDay, setMyDay] = useState(false);
   /** Step 15.1 (D274): what didn't fit after Timebox my day ran, until it's acted on or closed. */
   const [didntFit, setDidntFit] = useState<{ text: string; picks: DidntFit[] } | null>(null);
@@ -128,6 +132,19 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
       onStep(e.key === "ArrowLeft" ? -1 : 1);
     }
   };
+  // Step 15.2: when focus falls to the page (a "+" became a check, a dialog closed), ← → C Esc still reach this view.
+  const keyRef = useRef(onKey);
+  keyRef.current = onKey;
+  useEffect(() => {
+    const lost = (e: globalThis.KeyboardEvent) => {
+      if (e.defaultPrevented || (document.activeElement && document.activeElement !== document.body) || topOverlay(document) !== "none") return;
+      if (!["ArrowLeft", "ArrowRight", "Escape", "c", "C"].includes(e.key)) return;
+      ref.current?.focus({ preventScroll: true });
+      keyRef.current(e as unknown as KeyboardEvent);
+    };
+    window.addEventListener("keydown", lost);
+    return () => window.removeEventListener("keydown", lost);
+  }, []);
   const inner = { ...pv, focused: { ...pv.focused, ...state.focused }, resumeNotes: state.resumeNotes };
   const selBlock = blocks.find((b) => b.half === sel) ?? blocks[0];
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? k ?? "";
@@ -230,7 +247,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
               ))}
             </div>
             {selBlock && (
-              <AddPane key={`${day.date}${selBlock.half}`} slot={selBlock.slot} picks={selBlock.picks} overflow={day.kind !== "work" && selBlock.half !== "EVE"} state={state} picked={picked} clients={clients} colors={colors} act={act} focus={focusItem} clearFocus={() => setFocusItem(null)} />
+              <AddPane key={`${day.date}${selBlock.half}`} slot={selBlock.slot} picks={selBlock.picks} overflow={day.kind !== "work" && selBlock.half !== "EVE"} state={state} picked={picked} here={new Set(selBlock.picks.map(pickedKey))} clients={clients} colors={colors} act={act} focus={focusItem} clearFocus={() => setFocusItem(null)} />
             )}
           </div>
         )}
@@ -260,6 +277,7 @@ type BlockView = { half: Half; slot: Slot; picks: Pick[]; fit: ReturnType<typeof
 
 /** One block in the left pane: name, time, one fit line, its picks as rows. Click selects it; drop a pick to move it here. */
 function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act, hintPick, weekFeatures }: { b: BlockView; selected: boolean; onSelect: () => void; overflow: boolean; tz: string; now: string; colors: Record<string, string>; name: (k: string | null) => string; act: PlanDayAct; hintPick: number | null; weekFeatures: PlanDayState["weekFeatures"] }) {
+  const menus = useContext(MenuCtx);
   const { slot, picks, words } = b;
   const pv = useContext(PlanCtx);
   const work = useContext(DevOpsWork);
@@ -281,8 +299,26 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
   const meetings = slot.events.filter((e) => !e.event.isPersonal && e.event.showAs !== "free").length;
   const personal = slot.events.filter((e) => e.event.isPersonal).length;
   const onDrop = (e: DragEvent) => {
-    const id = Number(e.dataTransfer.getData(PICK_DRAG));
     setOver(false);
+    // Step 15.2: a row dragged from the right pane adds it here; another client's block asks first.
+    const raw = e.dataTransfer.getData(ADD_DRAG);
+    if (raw) {
+      e.preventDefault();
+      const d = JSON.parse(raw) as AddDrag;
+      const input = { date: slot.date, half: slot.half, clientKey: d.clientKey, ...d.input };
+      const owner = focus?.clientKey ?? null;
+      if (owner && owner !== d.clientKey)
+        menus.open({ x: e.clientX, y: e.clientY }, {
+          title: `Add ${name(d.clientKey)} work to ${possessive(name(owner))} block?`,
+          items: [
+            { id: "yes", label: `Add "${d.title}" anyway`, hint: "Different client", run: () => act("pick.add", input) },
+            { id: "no", label: "Cancel", run: () => undefined },
+          ],
+        });
+      else void act("pick.add", input);
+      return;
+    }
+    const id = Number(e.dataTransfer.getData(PICK_DRAG));
     if (!id) return;
     e.preventDefault();
     void act("pick.move", { id, date: slot.date, half: slot.half });
@@ -293,7 +329,7 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
       style={{ "--c": clientColor(bc.clientKey ?? undefined, colors) } as CSSProperties}
       aria-label={`${halfName(slot.half)}: ${title}`}
       onClick={onSelect}
-      onDragOver={(e) => e.dataTransfer.types.includes(PICK_DRAG) && (e.preventDefault(), setOver(true))}
+      onDragOver={(e) => (e.dataTransfer.types.includes(PICK_DRAG) || e.dataTransfer.types.includes(ADD_DRAG)) && (e.preventDefault(), setOver(true))}
       onDragLeave={() => setOver(false)}
       onDrop={onDrop}
     >
@@ -345,7 +381,7 @@ function RowNote({ p, bc, name }: { p: Pick; bc: string | null; name: (k: string
 }
 
 /** The right pane: "Add to <Client> <Morning>". Priorities, follow-ups, everything else; one "+" per row. */
-function AddPane({ slot, picks, overflow, state, picked, clients, colors, act, focus, clearFocus }: { slot: Slot; picks: Pick[]; overflow: boolean; state: PlanDayState; picked: Set<string>; clients: { clientKey: string; clientName: string }[]; colors: Record<string, string>; act: PlanDayAct; focus: number | null; clearFocus: () => void }) {
+function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, act, focus, clearFocus }: { slot: Slot; picks: Pick[]; overflow: boolean; state: PlanDayState; picked: Set<string>; here: Set<string>; clients: { clientKey: string; clientName: string }[]; colors: Record<string, string>; act: PlanDayAct; focus: number | null; clearFocus: () => void }) {
   const block = overflow ? null : (slot.focus[0] ?? null);
   const bc = blockClient(block?.clientKey ?? null, picks);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -358,11 +394,12 @@ function AddPane({ slot, picks, overflow, state, picked, clients, colors, act, f
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? k ?? "";
   const listed = useMemo(() => weekList(state.weekFeatures, work ? [work] : null).items.map((f) => ({ ...f, clientKey: f.clientKey, done: !!f.done })), [state.weekFeatures, work]);
   const fus = clientKey ? dueOrder((pv.followUps ?? []).filter((f) => f.clientKey === clientKey), slot.date, (f) => f.due, (f) => f.openedAt) : [];
-  const s = clientKey ? addSections({ clientKey, date: slot.date, half: slot.half, work, week: listed, followUps: fus, drafts: state.drafts, picked, focus, query }) : null;
+  const s = clientKey ? addSections({ clientKey, date: slot.date, half: slot.half, work, week: listed, followUps: fus, drafts: state.drafts, picked, here, focus, query }) : null;
   const add = (input: Record<string, unknown>) => act("pick.add", { date: slot.date, half: slot.half, clientKey, ...input });
   const loose = clientKey ? state.drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === null && d.level === "story" && d.devopsId == null && !picked.has(`d${d.id}`)) : [];
   const features = s?.priorities.filter((p) => p.level === "feature" && p.item) ?? [];
   return (
+    <HereCtx.Provider value={here}>
     <div className="pd2-right" style={{ "--c": clientColor(clientKey ?? undefined, colors) } as CSSProperties} aria-label="Add work">
       <h3 className="pd2-pane-title">
         Add to {clientKey ? name(clientKey) : "this block"} <span className="muted">{halfName(slot.half)}</span>
@@ -402,7 +439,7 @@ function AddPane({ slot, picks, overflow, state, picked, clients, colors, act, f
             ) : (
               <ul className="pd2-list">
                 {s!.followUps.map((f) => (
-                  <AddRow key={f.id} onAdd={() => add({ followUpId: f.id })} label={`Add follow-up: ${f.what}`}>
+                  <AddRow key={f.id} k={`f${f.id}`} drag={{ clientKey, title: f.what, input: { followUpId: f.id } }} onAdd={() => add({ followUpId: f.id })} label={`Add follow-up: ${f.what}`}>
                     <span className="pr-title">{f.hasWho ? `${f.who}: ` : ""}{f.what}</span>
                     <DueBadge l={f} />
                   </AddRow>
@@ -421,7 +458,7 @@ function AddPane({ slot, picks, overflow, state, picked, clients, colors, act, f
                 <input className="pd2-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by title or #id" aria-label={`Search ${name(clientKey)}'s work`} />
                 <ul className="pd2-list">
                   {loose.map((d) => (
-                    <AddRow key={`d${d.id}`} onAdd={() => add({ draftId: d.id, size: d.size })} label={`Add draft: ${d.title}`}>
+                    <AddRow key={`d${d.id}`} k={`d${d.id}`} drag={{ clientKey, title: d.title, input: { draftId: d.id, size: d.size } }} onAdd={() => add({ draftId: d.id, size: d.size })} label={`Add draft: ${d.title}`}>
                       <span className="pr-type">Draft</span>
                       <span className="pr-title">{d.title}</span>
                     </AddRow>
@@ -448,15 +485,36 @@ function AddPane({ slot, picks, overflow, state, picked, clients, colors, act, f
         </>
       )}
     </div>
+    </HereCtx.Provider>
   );
 }
 
-/** A row with one "+" that adds it to the selected block. */
-function AddRow({ onAdd, label, children, menu }: { onAdd: () => void; label: string; children: ReactNode; menu?: ReturnType<typeof useMenu> | undefined }) {
+/** Step 15.2: keys of what is planned in the selected block, so its rows say "Already planned here". */
+const HereCtx = createContext<ReadonlySet<string>>(new Set());
+/** A right-pane row dragged onto a block on the left (step 15.2). */
+export const ADD_DRAG = "application/x-coopilot-add";
+type AddDrag = { clientKey: string; title: string; input: Record<string, unknown> };
+
+/** A row with one "+" that adds it to the selected block; drag it onto any block instead. Once added: a check. */
+function AddRow({ onAdd, label, children, menu, k, drag }: { onAdd: () => void; label: string; children: ReactNode; menu?: ReturnType<typeof useMenu> | undefined; k?: string; drag?: AddDrag }) {
+  const here = useContext(HereCtx);
+  const planned = !!k && here.has(k);
+  const canDrag = !!drag && !planned;
   return (
-    <li className="pd2-add" onContextMenu={menu?.onContextMenu}>
-      <button type="button" className="pd2-plus" onClick={onAdd} aria-label={label} title="Add to this block">+</button>
+    <li
+      className={`pd2-add${planned ? " planned" : ""}`}
+      onContextMenu={menu?.onContextMenu}
+      draggable={canDrag}
+      onDragStart={canDrag ? (e) => (e.dataTransfer.setData(ADD_DRAG, JSON.stringify(drag)), (e.dataTransfer.effectAllowed = "copy")) : undefined}
+      title={canDrag ? "Drag onto a block to add it there" : undefined}
+    >
+      {planned ? (
+        <span className="pd2-plus done" role="img" aria-label="Already planned here" title="Already planned here">✓</span>
+      ) : (
+        <button type="button" className="pd2-plus" onClick={onAdd} aria-label={label} title="Add to this block">+</button>
+      )}
       {children}
+      {planned && <span className="pd2-here">Already planned here</span>}
       {menu?.button(`More for ${label}`)}
     </li>
   );
@@ -465,7 +523,7 @@ function AddRow({ onAdd, label, children, menu }: { onAdd: () => void; label: st
 function ItemAdd({ item, clientKey, add }: { item: WorkItem; clientKey: string; add: (i: Record<string, unknown>) => Promise<boolean> }) {
   const menu = useMenu((env) => itemMenu(env, clientKey, item));
   return (
-    <AddRow onAdd={() => void add({ itemId: item.id })} label={`Add ${item.title}`} menu={menu}>
+    <AddRow k={`i${clientKey}:${item.id}`} drag={{ clientKey, title: item.title, input: { itemId: item.id } }} onAdd={() => void add({ itemId: item.id })} label={`Add ${item.title}`} menu={menu}>
       <span className="pr-type">{typeTag(item.type)}</span>
       <span className="pr-title" title={`${item.type} ${item.id} · ${item.state}`}>
         <WorkLink clientKey={clientKey} url={item.url}>{item.title}</WorkLink>
@@ -484,7 +542,9 @@ function Priority({ p, clientKey, date, add, act, startOpen, picked }: { p: Prio
     ) : (
       <li className="pd2-add static"><span className="pr-title">{p.ref.title}</span>{tier}<span className="muted">DevOps isn't loaded</span></li>
     );
-  const count = p.allPicked ? "all on the plan" : p.breakDown ? "no stories yet" : `${p.stories.length + p.drafts.length} to add`;
+  const here = useContext(HereCtx);
+  const left = p.stories.filter((x) => !here.has(`i${clientKey}:${x.id}`)).length + p.drafts.filter((d) => !here.has(`d${d.id}`)).length;
+  const count = p.allPicked ? "all on the plan" : p.breakDown ? "no stories yet" : `${left} to add`;
   return (
     <li className="pd2-feature">
       <button type="button" className="pd2-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
@@ -497,7 +557,7 @@ function Priority({ p, clientKey, date, add, act, startOpen, picked }: { p: Prio
         <ul>
           {p.stories.map((k) => <ItemAdd key={k.id} item={k} clientKey={clientKey} add={add} />)}
           {p.drafts.map((d) => (
-            <AddRow key={`d${d.id}`} onAdd={() => void add({ draftId: d.id, size: d.size })} label={`Add draft: ${d.title}`}>
+            <AddRow key={`d${d.id}`} k={`d${d.id}`} drag={{ clientKey, title: d.title, input: { draftId: d.id, size: d.size } }} onAdd={() => void add({ draftId: d.id, size: d.size })} label={`Add draft: ${d.title}`}>
               <span className="pr-type">Draft</span>
               <span className="pr-title">{d.title}</span>
               <CreateInDevOps drafts={[d]} label="Create in DevOps" />
@@ -513,7 +573,7 @@ function Priority({ p, clientKey, date, add, act, startOpen, picked }: { p: Prio
 function ItemRowWithTier({ item, clientKey, add, tier }: { item: WorkItem; clientKey: string; add: (i: Record<string, unknown>) => Promise<boolean>; tier: ReactNode }) {
   const menu = useMenu((env) => itemMenu(env, clientKey, item));
   return (
-    <AddRow onAdd={() => void add({ itemId: item.id })} label={`Add ${item.title}`} menu={menu}>
+    <AddRow k={`i${clientKey}:${item.id}`} drag={{ clientKey, title: item.title, input: { itemId: item.id } }} onAdd={() => void add({ itemId: item.id })} label={`Add ${item.title}`} menu={menu}>
       <span className="pr-type">{typeTag(item.type)}</span>
       <span className="pr-title"><WorkLink clientKey={clientKey} url={item.url}>{item.title}</WorkLink></span>
       {tier}

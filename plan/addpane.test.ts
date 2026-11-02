@@ -57,6 +57,18 @@ describe("addSections", () => {
     expect(s.followUps.map((f) => f.id)).toEqual([3]);
     expect(s.rest.map((r) => r.item.id)).toEqual([40]);
   });
+  it("keeps what is planned in this block, so the row can say Already planned here (step 15.2)", () => {
+    const here = new Set(["inw:11", "inw:30", "f1", "inw:31"]);
+    const s = addSections(base({ picked: here, here }));
+    expect(s.priorities.map((p) => p.ref.itemId)).toEqual([10, 30, 20]);
+    expect(s.priorities[0]!.stories.map((x) => x.id)).toEqual([11, 12]);
+    expect(s.followUps.map((f) => f.id)).toEqual([1, 3]);
+    expect(s.rest.map((r) => r.item.id)).toEqual([31, 40]);
+    // Planned in the other half of the day: still left out.
+    const other = addSections(base({ picked: new Set(["inw:11", "inw:12"]), here: new Set(["inw:11"]) }));
+    expect(other.priorities[0]!.stories.map((x) => x.id)).toEqual([11]);
+    expect(other.priorities[0]).toMatchObject({ allPicked: true });
+  });
   it("marks a feature whose stories are all on the plan, without offering a breakdown", () => {
     const s = addSections(base({ picked: new Set(["inw:11", "inw:12"]) }));
     expect(s.priorities[0]).toMatchObject({ allPicked: true, breakDown: false });

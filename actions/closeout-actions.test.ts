@@ -219,6 +219,17 @@ describe("follow-ups (step 7, step 13.5)", () => {
     expect((await t.fail("followup.add", { what: "y", channel: "fax" })).status).toBe(400);
   });
 
+  it("links a DevOps item by id on add and edit; a new client clears it (step 15.2)", async () => {
+    const t = setup();
+    const a = (await t.run<{ followUp: { id: number; itemId: number | null } }>("followup.add", { what: "Send the spec", clientKey: "Adatum", itemId: 101 })).followUp;
+    expect(a.itemId).toBe(101);
+    expect((await t.run<{ followUp: { itemId: number | null } }>("followup.edit", { id: a.id, itemId: null })).followUp.itemId).toBeNull();
+    expect((await t.run<{ followUp: { itemId: number | null } }>("followup.edit", { id: a.id, itemId: 102 })).followUp.itemId).toBe(102);
+    expect((await t.run<{ followUp: { itemId: number | null } }>("followup.edit", { id: a.id, clientKey: "T&S" })).followUp.itemId).toBeNull();
+    expect((await t.fail("followup.add", { what: "y", itemId: "abc" })).status).toBe(400);
+    expect((await t.fail("followup.add", { what: "y", itemId: 5 })).status).toBe(400); // no client to own the item
+  });
+
   it("Close the loop records how and a note; Not needed closes quietly and isn't counted done", async () => {
     const t = setup();
     const a = (await t.run<{ followUp: { id: number } }>("followup.add", { what: "Send notes" })).followUp;

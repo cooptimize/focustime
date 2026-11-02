@@ -20,7 +20,7 @@ export function inboxOrder(followUps: readonly FollowUpView[], captures: readonl
   return dueOrder(all, today, (e) => (e.kind === "follow_up" ? e.followUp.due : null), (e) => e.at);
 }
 
-export function Inbox({ data, version, onClose, onChanged }: { data: WeekLoadData; version: number; onClose: () => void; onChanged: () => void }) {
+export function Inbox({ data, version, onClose, onChanged, defaultClient = null }: { data: WeekLoadData; version: number; onClose: () => void; onChanged: () => void; defaultClient?: string | null }) {
   const clients = useMemo(() => captureClients(data), [data]);
   const [followUps, setFollowUps] = useState<FollowUpView[] | null>(null);
   const [caps, setCaps] = useState<CaptureState | null>(null);
@@ -77,7 +77,7 @@ export function Inbox({ data, version, onClose, onChanged }: { data: WeekLoadDat
       </div>
       <p className="muted follow-ups-note">What you owe people (follow-ups) and what you captured but haven't sorted. Nothing is posted anywhere.</p>
       <section className="co-section">
-        <CaptureBox data={data} onChanged={changed} />
+        <CaptureBox data={data} onChanged={changed} defaultClient={defaultClient} />
       </section>
       {error && <p className="set-problem" role="alert">{error}</p>}
       <Fading text={notice} onGone={clearNotice} />

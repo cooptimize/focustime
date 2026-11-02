@@ -8,6 +8,7 @@ import { COLLAB_LENGTHS, type CollabSettings } from "../config/schema.ts";
 import { formatDuration } from "../week/format.ts";
 import { call } from "./api.ts";
 import type { HelpTarget } from "./menu.ts";
+import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 const dayShort = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -31,6 +32,13 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
   const [teams, setTeams] = useState(settings.teams);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Step 15.2: what the help is about, through the shared lookup (starts on the target's item, when it has one).
+  const [about, setAbout] = useState<ItemValue>(() => (target.itemId ? { itemId: target.itemId, title: target.title.replace(/^#\d+\s+/, ""), url: target.url, text: "" } : { ...NO_ITEM }));
+  const subject =
+    about.itemId !== null && about.itemId !== target.itemId ? { title: `#${about.itemId} ${about.title ?? ""}`.trim(), url: about.url, itemId: about.itemId }
+    : about.itemId === null && target.itemId !== null && !about.text.trim() ? { title: target.title.replace(/^#\d+\s+/, ""), url: null, itemId: null }
+    : about.itemId === null && about.text.trim() ? { title: about.text.trim(), url: null, itemId: null }
+    : { title: target.title, url: target.url, itemId: target.itemId };
 
   const loadCandidates = async (r?: { from: string; to: string }) => {
     setBusy("Reading who works on it…");
@@ -69,8 +77,8 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
     setError(null);
     try {
       const r = await call<{ preview: WritePreview }>("collab.preview_invite", {
-        clientKey: target.clientKey, title: target.title, start: slot.start, end: slot.end, people: slot.people.map((p) => p.email), teams,
-        ...(target.url ? { url: target.url } : {}), ...(target.itemId ? { itemId: target.itemId } : {}), ...(target.pickId ? { pickId: target.pickId } : {}), ...(target.timeboxId ? { timeboxId: target.timeboxId } : {}), ...(note.trim() ? { note: note.trim() } : {}),
+        clientKey: target.clientKey, title: subject.title, start: slot.start, end: slot.end, people: slot.people.map((p) => p.email), teams,
+        ...(subject.url ? { url: subject.url } : {}), ...(subject.itemId ? { itemId: subject.itemId } : {}), ...(target.pickId ? { pickId: target.pickId } : {}), ...(target.timeboxId ? { timeboxId: target.timeboxId } : {}), ...(note.trim() ? { note: note.trim() } : {}),
       });
       onClose();
       onPreview(r.preview);
@@ -106,10 +114,14 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
         <div className="cap-dialog-head">
           <h2>Needs help from…</h2>
           <span className="muted">
-            {clientName}: {target.title}
+            {clientName}: {subject.title}
           </span>
         </div>
 
+        <div className="help-row">
+          <span className="help-label">About</span>
+          <ItemLookup clientKey={target.clientKey} value={about} onChange={setAbout} label="What the help is about" />
+        </div>
         <div className="help-row">
           <span className="help-label">Length</span>
           <div className="chips" role="radiogroup" aria-label="Length">

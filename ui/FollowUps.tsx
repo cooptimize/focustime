@@ -3,7 +3,11 @@
 // and note. Not needed closes one quietly; Snooze hides one until a day; Delete is only for ones I added. Local only:
 // nothing is posted anywhere; heads-up drafts are copied by hand.
 import { DevOpsAction } from "./DevOpsWrite.tsx";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
+import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
+import { parseItemRef } from "../plan/lookup.ts";
+import { DevOpsWork } from "./work.ts";
+import { WorkLink } from "./WorkLink.tsx";
 import type { FollowUpView, PeopleData } from "../actions/types.ts";
 import type { CaptureClient } from "../plan/capture.ts";
 import { CLOSE_HOW, type CloseHow } from "../plan/types.ts";
@@ -96,6 +100,7 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged }: { l: Fol
         {l.isNew && !l.closedAt && <span className="follow-up-new">New today</span>}
         <span className="follow-up-who">{l.hasWho ? l.who : "No one named"}</span>
         <span className="follow-up-what">{l.what}</span>
+        {l.kind === "manual" && <LinkedItem l={l} />}
         <span className="muted follow-up-when">
           {l.clientName && l.who !== l.clientName ? `${l.clientName} · ` : ""}
           {l.session ? `Flex session ${span(l.session, timeZone)} · ` : ""}opened {when(l.openedAt, timeZone)}
@@ -236,6 +241,14 @@ export function FollowUpForm({ clients, initial, defaultClient = null, onSaved, 
   const [what, setWhat] = useState(initial?.what ?? "");
   const [channel, setChannel] = useState<string>(initial?.channel ?? "");
   const [due, setDue] = useState(initial?.due ?? "");
+  // Step 15.2: the item this follow-up is about, through the shared lookup.
+  const work = useContext(DevOpsWork);
+  const [item, setItem] = useState<ItemValue>(() => {
+    if (!initial?.itemId) return { ...NO_ITEM };
+    const cw = initial.clientKey ? work.get(initial.clientKey) : undefined;
+    const w = [...(cw?.items ?? []), ...(cw?.children ?? []), ...(cw?.watched ?? [])].find((x) => x.id === initial.itemId);
+    return { itemId: initial.itemId, title: w?.title ?? null, url: w?.url ?? null, text: "" };
+  });
   const [error, setError] = useState<string | null>(null);
   const formId = useRef(`fu-who-${Math.random().toString(36).slice(2, 8)}`);
   return (
@@ -243,7 +256,10 @@ export function FollowUpForm({ clients, initial, defaultClient = null, onSaved, 
       className="follow-up-add"
       onSubmit={async (e) => {
         e.preventDefault();
-        const input = { clientKey, who: who.trim() || null, what, channel: channel || null, due: due || null };
+        const typed = item.itemId ?? (clientKey ? parseItemRef(item.text) : null);
+        // Plain text that isn't an item stays with what I owe.
+        const extra = !typed && item.text.trim() ? ` · ${item.text.trim()}` : "";
+        const input = { clientKey, who: who.trim() || null, what: `${what}${extra}`.slice(0, 200), channel: channel || null, due: due || null, ...(typed || initial ? { itemId: typed } : {}) };
         const err = await act(initial ? "followup.edit" : "followup.add", initial ? { id: initial.id, ...input } : input);
         setError(err);
         if (!err) onSaved();
@@ -272,10 +288,26 @@ export function FollowUpForm({ clients, initial, defaultClient = null, onSaved, 
       <label>
         Due <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
       </label>
+      <label className="wide">
+        Work item <ItemLookup clientKey={clientKey} value={item} onChange={setItem} />
+      </label>
       <button type="submit" className="mini primary">{initial ? "Save" : "Add"}</button>
       <button type="button" className="mini" onClick={onCancel}>Cancel</button>
       {error && <span className="set-problem">{error}</span>}
     </form>
+  );
+}
+
+/** Step 15.2: the DevOps item a follow-up I added is about, as a link when the item is loaded. */
+function LinkedItem({ l }: { l: FollowUpView }) {
+  const work = useContext(DevOpsWork);
+  if (!l.itemId || !l.clientKey) return null;
+  const cw = work.get(l.clientKey);
+  const w = [...(cw?.items ?? []), ...(cw?.children ?? []), ...(cw?.watched ?? [])].find((x) => x.id === l.itemId);
+  return (
+    <span className="follow-up-item">
+      {w ? <WorkLink clientKey={l.clientKey} url={w.url}>#{w.id} {w.title}</WorkLink> : `#${l.itemId}`}
+    </span>
   );
 }
 

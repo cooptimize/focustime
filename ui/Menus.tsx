@@ -1,7 +1,8 @@
 // The command menu (Ctrl+K) and the "⋯" / right-click popup menus (step 6). Both render menu steps from
 // ui/menu.ts: arrow keys move, Enter chooses, Backspace on an empty search or Left goes back, Esc closes.
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { filterCommands, type MenuEnv, type MenuItem, type MenuStep } from "./menu.ts";
+import { filterCommands, type FormField, type MenuEnv, type MenuItem, type MenuStep } from "./menu.ts";
+import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { useScopedTab } from "./scope.ts";
 
@@ -62,6 +63,10 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList }: {
     setActive(Math.max(0, shown.findIndex((i) => !i.disabled)));
   }, [step, query]); // eslint-disable-line react-hooks/exhaustive-deps
   const formRef = useRef<HTMLFormElement>(null);
+  // Item lookups (step 15.2) follow the client chosen in their form's select.
+  const [formClients, setFormClients] = useState<Record<string, string>>({});
+  const [itemValues, setItemValues] = useState<Record<string, ItemValue>>({});
+  useEffect(() => (setFormClients({}), setItemValues({})), [step]);
   useEffect(() => {
     if ("prompt" in step) inputRef.current?.focus();
     else if ("fields" in step) formRef.current?.querySelector<HTMLElement>("input, select")?.focus();
@@ -74,6 +79,7 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList }: {
 
   if ("fields" in step) {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && (e.preventDefault(), canBack ? back() : onDone());
+    const clientOf = (f: FormField) => (f.client ? (formClients[f.client] ?? step.fields.find((x) => x.key === f.client)?.value ?? null) : null) || null;
     return (
       <form
         ref={formRef}
@@ -81,7 +87,8 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList }: {
         onSubmit={async (e) => {
           e.preventDefault();
           const data = new FormData(e.currentTarget);
-          const values = Object.fromEntries(step.fields.map((f) => [f.key, String(data.get(f.key) ?? "").trim()]));
+          const values: Record<string, string> = Object.fromEntries(step.fields.map((f) => [f.key, String(data.get(f.key) ?? "").trim()]));
+          for (const f of step.fields) if (f.type === "item") values[`${f.key}Text`] = (itemValues[f.key]?.text ?? "").trim();
           if (step.fields.some((f) => !f.optional && !values[f.key])) return;
           const r = await step.save(values);
           if (r !== false) onDone();
@@ -93,8 +100,10 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList }: {
               {f.label}
               {f.optional && <span className="muted"> (optional)</span>}
             </span>
-            {f.type === "select" ? (
-              <select name={f.key} defaultValue={f.value ?? ""} required={!f.optional} onKeyDown={esc}>
+            {f.type === "item" ? (
+              <ItemLookup name={f.key} label={f.label} clientKey={clientOf(f)} value={itemValues[f.key] ?? NO_ITEM} onChange={(v) => setItemValues((m) => ({ ...m, [f.key]: v }))} />
+            ) : f.type === "select" ? (
+              <select name={f.key} defaultValue={f.value ?? ""} required={!f.optional} onKeyDown={esc} onChange={(e) => setFormClients((m) => ({ ...m, [f.key]: e.target.value }))}>
                 {(f.options ?? []).map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}

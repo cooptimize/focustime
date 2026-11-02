@@ -80,6 +80,11 @@ function editable(o: Obj): Partial<FollowUpFields> {
   }
   if (o.channel !== undefined) out.channel = channel(o.channel);
   if (o.due !== undefined) out.due = day(o.due, "due");
+  // Step 15.2: a linked DevOps item (its id), or null to unlink.
+  if (o.itemId !== undefined) {
+    if (o.itemId !== null && (typeof o.itemId !== "number" || !Number.isInteger(o.itemId) || o.itemId < 1)) throw new Invalid("itemId must be a positive whole number or null");
+    out.itemId = o.itemId as number | null;
+  }
   return out;
 }
 
@@ -104,13 +109,14 @@ export async function followUpAction(ctx: FollowUpContext, action: FollowUpActio
         return { ok: true, data: { followUps: [...dueOrder(open, today, (f) => f.due, (f) => f.openedAt), ...closed].map(view), snoozed } };
       }
       case "followup.add": {
-        const o = fields(input, ["what"], ["who", "due", "clientKey", "channel"]);
+        const o = fields(input, ["what"], ["who", "due", "clientKey", "channel", "itemId"]);
         const f = editable(o);
-        const added = plan.addFollowUp({ who: f.who ?? null, what: f.what!, due: f.due ?? null, clientKey: f.clientKey ?? null, channel: f.channel ?? null });
+        if (f.itemId && !f.clientKey) throw new Invalid("A work item needs the client it belongs to");
+        const added = plan.addFollowUp({ who: f.who ?? null, what: f.what!, due: f.due ?? null, clientKey: f.clientKey ?? null, channel: f.channel ?? null, itemId: f.itemId ?? null });
         return { ok: true, data: { followUp: view(added) } };
       }
       case "followup.edit": {
-        const o = fields(input, ["id"], ["who", "what", "due", "clientKey", "channel"]);
+        const o = fields(input, ["id"], ["who", "what", "due", "clientKey", "channel", "itemId"]);
         return { ok: true, data: { followUp: view(plan.editFollowUp(id(o.id), editable(o))) } };
       }
       case "followup.close": {

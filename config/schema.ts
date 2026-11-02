@@ -30,7 +30,7 @@ export type AppConfig = {
   clientSettings: Record<string, ClientSetting>;
   /** Chromium for client links (step 6b). Empty: not set up. */
   chromium: { command: string[] };
-  /** Expiry dates Tanner entered for keyring secrets (the keyring doesn't know them). */
+  /** Expiry dates I entered for keyring secrets (the keyring doesn't know them). */
   secretExpiry: Partial<Record<"dataverse-client-secret" | "google-client-secret", string>>;
   /** Plan settings (step 5). */
   plan: PlanConfig;

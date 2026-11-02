@@ -1466,6 +1466,10 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .cap-box { display: grid; gap: 8px; }
 .cap-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .cap-input > input { font-size: 15px !important; padding: 8px 10px !important; }
+.cap-client { align-self: stretch; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-client.none { color: var(--text-muted); border-style: dashed; }
+.cap-choose { margin-top: -2px; }
+.cap-tip { margin: 0; font-size: 12px; color: var(--text-muted); }
 .cap-complete { list-style: none; margin: -4px 0 0; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); box-shadow: var(--shadow-menu); display: grid; gap: 2px; max-width: 420px; }
 .cap-complete button { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-size: 13px; }
 .cap-complete [aria-selected="true"] button, .cap-complete button:hover { background: var(--selected); }
@@ -1562,7 +1566,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .top-timer.paused .top-timer-dot { background: transparent; border: 2px solid var(--c); width: 5px; height: 5px; }
 .top-timer-count { font-variant-numeric: tabular-nums; font-size: 15px; }
 .top-timer-state { font-size: 11px; color: var(--text-muted); }
-.top-timer-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 13px; color: var(--text-muted); }
+.top-timer-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 13px; color: color-mix(in oklab, var(--c) 45%, var(--text)); }
+.top-timer-count { color: color-mix(in oklab, var(--c) 30%, var(--text)); }
 .top-timer.ended { border-color: var(--watch); }
 .inbox { flex: 1; overflow: auto; padding: 8px 24px 32px; }
 .inbox .follow-ups-head, .inbox .co-section, .inbox .follow-ups-note, .inbox-list, .inbox-tools { max-width: 1100px; }
@@ -2047,12 +2052,16 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pd2-add { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 4px; border-radius: 6px; font-size: 14px; }
 .pd2-add:hover { background: var(--raised); }
 .pd2-add.static { color: var(--text-muted); }
+.pd2-add[draggable="true"] { cursor: grab; }
+.pd2-add.planned .pr-title { color: var(--text-muted); }
+.pd2-here { margin-left: auto; flex: none; font-size: 12px; color: var(--text-muted); }
 .pd2-plus {
   flex: none; width: 24px; height: 24px; padding: 0; border-radius: 6px; border: 1px solid var(--border-strong);
   background: var(--surface); color: var(--accent); font: inherit; font-size: 16px; font-weight: 600; line-height: 1; cursor: pointer;
 }
 .pd2-plus:hover { background: var(--action); border-color: var(--action); color: var(--on-action); }
 .pd2-plus.done { display: inline-grid; place-items: center; border-color: transparent; color: var(--ok); }
+.pd2-plus.done:hover { background: transparent; border-color: transparent; color: var(--ok); }
 .pd2-toggle { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 4px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .pd2-toggle:hover { background: var(--raised); }
 .pd2-sec h4 .pd2-toggle { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 0; }
@@ -2214,3 +2223,15 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .dl-row { flex-wrap: wrap; }
   .dl-trend { width: auto; }
 }
+
+/* Step 15.2: the shared work item lookup (flex session, follow-up, Needs help from…). */
+.item-lookup { position: relative; display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 260px; }
+.item-lookup > input:not([type="hidden"]) { width: 100%; min-width: 0; }
+.item-lookup.linked { padding: 3px 4px 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); font-size: 13px; }
+.item-lookup.linked > a, .item-lookup.linked > span:not(.pr-type) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.item-lookup-list { position: absolute; top: calc(100% + 2px); left: 0; min-width: max(100%, 380px); max-width: min(560px, 90vw); z-index: 40; list-style: none; margin: 0; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); box-shadow: var(--shadow-menu); display: grid; gap: 2px; max-height: 280px; overflow: auto; }
+.item-lookup-list button { display: flex; align-items: baseline; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; gap: 6px; width: 100%; text-align: left; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-size: 13px; }
+.item-lookup-list [aria-selected="true"] button, .item-lookup-list button:hover { background: var(--selected); }
+.item-lookup-tag { margin-left: auto; flex: none; font-size: 11px; color: var(--text-muted); }
+.follow-up-item { font-size: 13px; }
+.follow-up-add .item-lookup { min-width: 280px; }

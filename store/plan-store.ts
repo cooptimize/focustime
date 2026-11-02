@@ -505,7 +505,7 @@ export type FollowUp = {
 };
 import { CLOSE_HOW, type CloseHow, type FollowUpOrigin } from "../plan/types.ts";
 export { CLOSE_HOW, type CloseHow, type FollowUpOrigin };
-export type FollowUpFields = { clientKey: string | null; who: string | null; what: string; channel: string | null; due: IsoDate | null };
+export type FollowUpFields = { clientKey: string | null; who: string | null; what: string; channel: string | null; due: IsoDate | null; itemId: number | null };
 export type NewRuleFollowUp = { kind: string; ruleKey: string; clientKey: string | null; who: string; what: string; itemId?: number | null; refAt?: string | null; draft?: string | null; detail?: { picks?: number[] } | null; origin?: FollowUpOrigin | null };
 export type ResumeNote = { id: number; clientKey: string; date: IsoDate; note: string; updatedAt: string };
 /** Borrowed time (step 7): planned focus that slipped, to be made up on a payback day. */
@@ -1038,9 +1038,12 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         if (!r) throw new PlanError(`No follow-up ${id}`);
         const f = toFollowUp(r);
         if (f.closedAt) throw new PlanError("That follow-up is already closed");
-        const n = { clientKey: f.clientKey, who: f.who, what: f.what, channel: f.channel, due: f.due, ...patch };
+        // Step 15.2: a new client clears the linked item (an item belongs to one client).
+        const moved = patch.clientKey !== undefined && patch.clientKey !== f.clientKey && patch.itemId === undefined;
+        const n = { clientKey: f.clientKey, who: f.who, what: f.what, channel: f.channel, due: f.due, itemId: moved ? null : f.itemId, ...patch };
         if (!n.what.trim()) throw new PlanError("Say what you owe");
-        db.prepare("UPDATE follow_ups SET client_key = ?, who = ?, what = ?, channel = ?, due = ? WHERE id = ?").run(n.clientKey, n.who, n.what, n.channel, n.due, id);
+        if (n.itemId && !n.clientKey) throw new PlanError("A work item needs the client it belongs to");
+        db.prepare("UPDATE follow_ups SET client_key = ?, who = ?, what = ?, channel = ?, due = ?, item_id = ? WHERE id = ?").run(n.clientKey, n.who, n.what, n.channel, n.due, n.itemId, id);
         return toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row);
       });
     },
@@ -1098,8 +1101,8 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         return toCapture(db.prepare("SELECT * FROM captures WHERE id = ?").get(id) as Row);
       });
     },
-    addFollowUp(l: { who: string | null; what: string; due: IsoDate | null; clientKey?: string | null; channel?: string | null }): FollowUp {
-      const r = db.prepare("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, opened_at) VALUES ('manual', ?, ?, ?, ?, ?, ?)").run(l.clientKey ?? null, l.who || null, l.what, l.due, l.channel ?? null, stamp());
+    addFollowUp(l: { who: string | null; what: string; due: IsoDate | null; clientKey?: string | null; channel?: string | null; itemId?: number | null }): FollowUp {
+      const r = db.prepare("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, item_id, opened_at) VALUES ('manual', ?, ?, ?, ?, ?, ?, ?)").run(l.clientKey ?? null, l.who || null, l.what, l.due, l.channel ?? null, l.itemId ?? null, stamp());
       return toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
     },
     // ---- Close out, resume notes and borrowed time (step 7) ----

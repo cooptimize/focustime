@@ -1,4 +1,4 @@
-// Edits to config.toml that keep the file Tanner can read (step 6b, D121): comments, order and every other line
+// Edits to config.toml that keep the file I can read (step 6b, D121): comments, order and every other line
 // stay as they are. Pure text functions here; writeConfig does the safe write (validate, back up, atomic rename).
 import { chmod, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";

@@ -1,6 +1,6 @@
 # Coopilot demo (about 5 minutes)
 
-A scripted walkthrough in demo mode, verified end to end at 1920x1080 on Nov 1, 2026 (step 15) with `scripts/demo-walkthrough.mjs`. Screenshots are in `docs/demo/`.
+A scripted walkthrough in demo mode, verified end to end at 1920x1080 on Nov 1, 2026 (step 15) and again on Nov 2 (step 15.2) with `scripts/demo-walkthrough.mjs`. Screenshots are in `docs/demo/`.
 
 ## Before you start
 1. Turn on demo mode: Settings (`,`) > Display > "Show demo data", or Ctrl+K > "Demo mode". The top bar shows **Demo data**.
@@ -19,11 +19,11 @@ To run the script yourself against a running Coopilot: `node scripts/demo-walkth
 | 4 | Click ⋯ on a row | "Everything else about an item lives here: reorder, blocks, pin, mark done, get help, target date, Coop brief." | `04-plan-week-menu.png` |
 | 5 | Click the "Plan the day" chip | "Plan the day: my Monday on the left, what I can add on the right." | `05-plan-day.png` |
 | 6 | Click the Northwind block | "Select a block and the right pane follows: this week's priorities first, then follow-ups, then everything else." | `06-plan-day-northwind.png` |
-| 7 | Click "+" on two stories | "One click each. The block's fit updates: About 1h 30m over, in amber, with a trim link. Nothing is red unless it's a real problem." | `07-plan-day-added.png` |
+| 7 | Click "+" on two stories | "One click each. Each row turns into a check, Already planned here. The block's fit updates: About 1h 30m over, in amber, with a trim link. Nothing is red unless it's a real problem." | `07-plan-day-added.png` |
 | 8 | Click **Done** | "Done saves the plan. It offers to timebox the day." | `08-plan-day-done.png` |
 | 9 | Click "Timebox my day" | "Each pick goes into a free gap. Outlook is optional, and off in demo mode." | `09-timebox-my-day.png` |
 | 10 | Click "Timebox 2 picks" | "Now the picks have times on their own rows." | `10-plan-day-timed.png` |
-| 11 | Press `1` | "Back on Today, the next pick is one big Start focus." | `11-today-planned.png` |
+| 11 | Press `1` | "Back on Today, the next pick is one big Start focus. Focus is also always in the top bar (F)." | `11-today-planned.png` |
 | 12 | Click Start focus | "The focus screen: a countdown, the one pick, the next meeting, and focus sounds." | `12-focus.png` |
 | 13 | Stop, Esc, then press `E` | "At the end of the day, Close out: what got done, where I left off, and the follow-ups I owe." | `13-close-out.png` |
 | 14 | On Jordan Lee's follow-up: Close the loop, Teams | "I answered Jordan on Teams, so I close the loop." | `14-close-the-loop.png` |

@@ -2,6 +2,9 @@
 // picks and work items. One model: a menu step is a titled list of items, or a text prompt; an item either runs
 // or opens the next step. The command menu is built from the action registry, so every action appears.
 import { alreadyPlanned } from "../plan/dup.ts";
+import { addTargets, type AddTarget, type TargetBlock, type TargetGroup } from "../plan/addtargets.ts";
+import { freeMinutes } from "../week/free.ts";
+import { parseItemRef } from "../plan/lookup.ts";
 import { ACTIONS, type ActionName, type ActionSpec } from "../actions/registry.ts";
 import { THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
 import { hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
@@ -61,7 +64,10 @@ export type MenuStep =
 export type FormField = {
   key: string;
   label: string;
-  type: "text" | "time" | "select" | "date";
+  /** "item": the shared work item lookup (step 15.2) for the client chosen in the field named by `client`. */
+  type: "text" | "time" | "select" | "date" | "item";
+  /** For an item field: the key of the select that holds its client. Saved as `<key>` (the id, or "") and `<key>Text`. */
+  client?: string;
   value?: string;
   optional?: boolean;
   placeholder?: string;
@@ -118,6 +124,8 @@ export type MenuEnv = {
   /** Opens Settings, at a section when given (step 6b). */
   openSettings: (section?: string) => void;
   exportPlan: () => void;
+  /** Step 15.2: the pick Focus suggests (today's next planned pick), or null. */
+  focusNext?: Pick | null;
   /** The focus timer (step 6c) and its actions (timer.*); false with a notice on refusal. */
   timer: TimerView | null;
   runTimer: (action: string, input?: Record<string, unknown>) => Promise<boolean>;
@@ -181,6 +189,9 @@ export type HelpTarget = { clientKey: string; title: string; url: string | null;
 /** What a timebox is for: a pick (its client, title and link), or a work item or week list item on a date. */
 export type TimeboxTarget = { pickId: number; date: IsoDate } | { clientKey: string; itemId: number | null; title: string; url: string | null; date: IsoDate };
 
+/** "Harbor's", "Northwind Foods'". */
+export const possessive = (name: string) => (name.endsWith("s") ? `${name}'` : `${name}'s`);
+const weekday = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long" });
 const dayName = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
 
@@ -326,20 +337,50 @@ function plannedHere(env: MenuEnv, date: string, half: Half, clientKey: string, 
   return alreadyPlanned(env.planWeek?.[date]?.picks ?? [], { clientKey, itemId }, date, half) ? { disabled: "Already planned here" } : {};
 }
 
-/** Where to add a work item: the selected half-day first, then every half-day of the week. */
-function addStep(env: MenuEnv, clientKey: string, item: WorkItem): MenuStep {
-  const sel = env.selection;
-  const all = halfDays(env);
-  const first = all.find((h) => h.date === sel.date && h.half === sel.half);
-  const rest = all.filter((h) => h !== first);
-  const items = [first, ...rest].filter((h): h is NonNullable<typeof h> => !!h).map<MenuItem>((h) => ({
-    id: `add-${h.date}-${h.half}`,
-    label: h === first ? `${h.label} (selected)` : h.label,
-    action: "pick.add",
-    ...(h.disabled ? { disabled: h.disabled } : plannedHere(env, h.date, h.half, clientKey, item.id)),
-    run: () => env.runPlan("pick.add", { date: h.date, half: h.half, clientKey, itemId: item.id }),
-  }));
-  return { title: `Add "${item.title}" to`, items };
+/**
+ * Where to add a work item (step 15.2, plan/addtargets.ts): the block selected in Plan the day first, then this client's
+ * blocks on the day being planned, its other blocks this week, Open half-days, and other clients' blocks last, labeled
+ * "Different client" and confirmed first. A day off, a full block, or one that already has the item says why.
+ */
+export function addStep(env: MenuEnv, clientKey: string, item: WorkItem): MenuStep {
+  const blocks: TargetBlock[] = env.week.days.flatMap((d) =>
+    ([d.am, d.pm, ...(d.eve ? [d.eve] : [])] as const).map((sl) => ({
+      date: d.date,
+      half: sl.half,
+      focusClient: d.kind === "overflow" ? null : (sl.focus[0]?.clientKey ?? null),
+      flexClients: sl.flex.map((f) => f.clientKey),
+      overflow: d.kind === "overflow",
+      pto: !!d.pto,
+      off: sl.off,
+      freeMinutes: freeMinutes(sl),
+    })),
+  );
+  const picks = env.week.days.flatMap((d) => env.planWeek?.[d.date]?.picks ?? []);
+  const planDate = env.planState?.date ?? env.selection.date;
+  const targets = addTargets({ blocks, clientKey, planDate, selected: env.planState ? { date: env.selection.date, half: env.selection.half } : null, today: env.today, picks, ref: { clientKey, itemId: item.id } });
+  const clientName = (k: string) => env.work.get(k)?.clientName ?? env.week.days.flatMap((d) => [d.am, d.pm]).find((sl) => sl.focus[0]?.clientKey === k)?.focus[0]?.clientName ?? k;
+  const own = clientName(clientKey);
+  const heading: Record<TargetGroup, string> = { here: `${own} on ${weekday(planDate)}`, client: `Other ${own} blocks`, open: "Open half-days", other: "Different client" };
+  const add = (t: AddTarget) => () => env.runPlan("pick.add", { date: t.date, half: t.half, clientKey, itemId: item.id });
+  const items = targets.map<MenuItem>((t) => {
+    const fri = env.week.days.find((d) => d.date === t.date)?.kind === "overflow";
+    const label = `${dayName(t.date)} ${halfLabel(t.half)}${t.otherClient ? ` · ${clientName(t.otherClient)}` : fri ? " (Friday catch-up)" : ""}`;
+    const base: MenuItem = { id: `add-${t.date}-${t.half}`, label, group: t.selected ? "This block" : heading[t.group], action: "pick.add", ...(t.disabled ? { disabled: t.disabled } : {}) };
+    if (t.disabled) return base;
+    if (t.otherClient)
+      return {
+        ...base,
+        next: () => ({
+          title: `Add ${own} work to ${possessive(clientName(t.otherClient!))} block?`,
+          items: [
+            { id: "yes", label: `Add to ${dayName(t.date)} ${halfLabel(t.half)} anyway`, action: "pick.add", run: add(t) },
+            { id: "no", label: "Cancel", run: () => undefined },
+          ],
+        }),
+      };
+    return { ...base, run: add(t) };
+  });
+  return { title: `Add "${item.title}" to`, items: items.length ? items : [{ id: "none", label: "No block can take it this week", disabled: "Past days and days without working hours are left out" }] };
 }
 
 function draftPrompt(env: MenuEnv, clientKey: string, item: WorkItem): MenuStep {
@@ -725,11 +766,16 @@ export function flexForm(env: MenuEnv, date: IsoDate): MenuStep {
       { key: "clientKey", label: "Client", type: "select", options: clients, value: block?.clientKey ?? clients[0]?.value ?? "" },
       { key: "start", label: "From", type: "time", value: h.segments.at(-1)?.end ?? "" },
       { key: "end", label: "To", type: "time" },
-      { key: "itemId", label: "DevOps item number", type: "text", optional: true, placeholder: "e.g. 1234" },
+      { key: "itemId", label: "DevOps item", type: "item", client: "clientKey", optional: true },
       { key: "note", label: "Note", type: "text", optional: true },
     ],
-    save: (v) =>
-      env.runTime("flex.add", { date, clientKey: v.clientKey, start: v.start, end: v.end, ...(v.itemId ? { itemId: Number(v.itemId) } : {}), ...(v.note ? { note: v.note } : {}) }),
+    save: (v) => {
+      // A linked item, or "#123" typed; any other text goes into the note.
+      const typed = v.itemIdText ? parseItemRef(v.itemIdText) : null;
+      const itemId = v.itemId ? Number(v.itemId) : typed;
+      const note = [itemId === null ? v.itemIdText : "", v.note].filter(Boolean).join(" · ");
+      return env.runTime("flex.add", { date, clientKey: v.clientKey, start: v.start, end: v.end, ...(itemId ? { itemId } : {}), ...(note ? { note } : {}) });
+    },
   };
 }
 
@@ -834,15 +880,19 @@ export function lengthStep(title: string, suggested: number, start: (minutes: nu
 export function timerStep(env: MenuEnv): MenuStep {
   const t = env.timer;
   const p = env.planning;
-  if (!t)
+  if (!t) {
+    // Step 15.2: the Focus button suggests the next planned pick first, then a plain timer.
+    const nx = env.focusNext ?? null;
     return {
-      title: "Focus timer",
+      title: "Start focus",
       items: [
-        { id: "focus", label: "Focus", hint: `${p.focusMinutes} min`, action: "timer.start", next: () => lengthStep("Focus for", p.focusMinutes, (m) => env.runTimer("timer.start", { minutes: m })) },
+        ...(nx ? [{ id: "next", label: `Start focus: ${nx.title}`, hint: `${suggestMinutes(nx.size, p.sizes)} min`, action: "timer.start", run: () => env.runTimer("timer.start", { pickId: nx.id }) } as MenuItem] : []),
+        { id: "focus", label: nx ? "Plain timer" : "Focus", hint: `${p.focusMinutes} min`, action: "timer.start", next: () => lengthStep("Focus for", p.focusMinutes, (m) => env.runTimer("timer.start", { minutes: m })) },
         { id: "break", label: "Break", hint: p.breakMinutes ? `${p.breakMinutes} min` : "off", action: "timer.start", ...(p.breakMinutes ? {} : { disabled: "Breaks are set to 0 minutes in Settings > Planning" }), run: () => env.runTimer("timer.start", { kind: "break" }) },
-        { id: "pick", label: "Timebox a pick…", action: "timer.start", next: () => choosePick(env, "Focus on which pick?", (pk) => () => env.runTimer("timer.start", { pickId: pk.id })) },
+        { id: "pick", label: nx ? "Another pick…" : "Timebox a pick…", action: "timer.start", next: () => choosePick(env, "Focus on which pick?", (pk) => () => env.runTimer("timer.start", { pickId: pk.id })) },
       ],
     };
+  }
   return {
     title: t.pickId ? `Focus: ${t.label}` : t.kind === "break" ? "Break timer" : "Focus timer",
     items: [

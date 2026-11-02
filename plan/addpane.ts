@@ -57,6 +57,8 @@ export type AddInput<R extends Ref, F extends FollowLike> = {
   drafts: readonly DraftStory[];
   /** Keys of what is already on the day: "i<client>:<id>", "d<draftId>", "f<followUpId>". */
   picked: ReadonlySet<string>;
+  /** Keys planned in this block (step 15.2): kept in the lists so the row can say "Already planned here". */
+  here?: ReadonlySet<string>;
   /** From a card's "This week: <feature>": only that item in priorities. */
   focus?: number | null;
   query?: string;
@@ -64,7 +66,11 @@ export type AddInput<R extends Ref, F extends FollowLike> = {
 
 /** The right pane: priorities (musts, then nice to haves), the client's follow-ups (due order), then everything else in DevOps order. */
 export function addSections<R extends Ref, F extends FollowLike>(i: AddInput<R, F>): AddSections<R, F> {
-  const free = (w: WorkItem) => !i.picked.has(`i${i.clientKey}:${w.id}`);
+  const here = i.here ?? new Set<string>();
+  /** Not on the day yet, or on it in this block (shown as already planned here). */
+  const shown = (k: string) => !i.picked.has(k) || here.has(k);
+  const free = (w: WorkItem) => shown(`i${i.clientKey}:${w.id}`);
+  const open = (k: string) => !i.picked.has(k);
   const first = i.half === "EVE" ? { musts: [], nice: [], rest: [...(i.work?.items ?? [])] } : weekFirst(i.work, i.week, i.clientKey, i.date, i.half);
   const draftsUnder = (id: number) => i.drafts.filter((d) => d.clientKey === i.clientKey && d.parentItemId === id && d.level === "story" && d.devopsId == null);
   const priorities: PriorityRow<R>[] = [];
@@ -77,11 +83,12 @@ export function addSections<R extends Ref, F extends FollowLike>(i: AddInput<R, 
     }
     const allDrafts = draftsUnder(e.feature.itemId);
     const stories = e.kids.filter(free);
-    const drafts = allDrafts.filter((d) => !i.picked.has(`d${d.id}`));
+    const drafts = allDrafts.filter((d) => shown(`d${d.id}`));
     const breakDown = !!i.work && e.kids.length === 0 && allDrafts.length === 0;
-    priorities.push({ ref: e.feature, tier: e.tier, level: "feature", item: e.item, stories, drafts, breakDown, allPicked: !breakDown && stories.length === 0 && drafts.length === 0, pinnedHere: e.placedHere });
+    const left = stories.filter((x) => open(`i${i.clientKey}:${x.id}`)).length + drafts.filter((d) => open(`d${d.id}`)).length;
+    priorities.push({ ref: e.feature, tier: e.tier, level: "feature", item: e.item, stories, drafts, breakDown, allPicked: !breakDown && left === 0, pinnedHere: e.placedHere });
   }
-  const followUps = i.followUps.filter((f) => f.clientKey === i.clientKey && !i.picked.has(`f${f.id}`));
+  const followUps = i.followUps.filter((f) => f.clientKey === i.clientKey && shown(`f${f.id}`));
   const pool = i.work ? [...i.work.items, ...i.work.children] : [];
   const kidsOf = (id: number) => pool.filter((c) => c.parentId === id && isPickable(c) && free(c));
   const rest: RestRow[] = [];

@@ -3,7 +3,7 @@
 // captures wait in the Inbox.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import type { CaptureFeatures, WeekLoadData } from "../actions/types.ts";
-import { parseTag, suggest, tagCompletions, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
+import { parseTag, suggest, tagCompletions, takeTag, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
 import { CLOSE_HOW, type Capture, type Size } from "../plan/types.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
@@ -164,11 +164,26 @@ export function SortCapture({ capture, clients, today, onDone, startOpen = false
   );
 }
 
-/** The capture box: Enter saves at once; @ completes a followed client; the saved capture can be sorted right away. */
-export function CaptureBox({ data, onChanged, autoFocus }: { data: WeekLoadData; onChanged: () => void; autoFocus?: boolean }) {
+const TIP_KEY = "coopilot.hint.capturetag";
+const tipSeen = () => {
+  try {
+    return localStorage.getItem(TIP_KEY) === "1";
+  } catch {
+    return true;
+  }
+};
+
+/**
+ * The capture box: Enter saves at once. One client chip (step 15.2): pre-filled from the selected block, @nickname sets
+ * it and leaves the text, a click chooses another client. The saved capture can be sorted right away.
+ */
+export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null }: { data: WeekLoadData; onChanged: () => void; autoFocus?: boolean; defaultClient?: string | null }) {
   const clients = useMemo(() => captureClients(data), [data]);
+  const known = (k: string | null) => (k && clients.some((c) => c.clientKey === k) ? k : null);
   const [text, setText] = useState("");
-  const [client, setClient] = useState<string | null>(null);
+  const [client, setClient] = useState<string | null>(() => known(defaultClient));
+  const [choosing, setChoosing] = useState(false);
+  const [tip, setTip] = useState(() => !tipSeen());
   const [saved, setSaved] = useState<Capture | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -182,18 +197,35 @@ export function CaptureBox({ data, onChanged, autoFocus }: { data: WeekLoadData;
   useEffect(() => setPick(0), [done.length]);
 
   const complete = (c: CaptureClient) => {
-    setText((t) => t.replace(/@([^\s@]*)$/, `@${c.clientKey.includes(" ") ? c.clientName.split(/\s+/)[0] : c.clientKey} `));
+    setClient(c.clientKey);
+    setText((t) => t.replace(/(^|\s)@[^\s@]*$/, "$1"));
     input.current?.focus();
   };
+  const onText = (v: string) => {
+    const t = takeTag(v, clients);
+    if (t) {
+      setClient(t.clientKey);
+      setText(t.text);
+    } else setText(v);
+  };
+  const dismissTip = () => {
+    setTip(false);
+    try {
+      localStorage.setItem(TIP_KEY, "1");
+    } catch {
+      /* the tip shows again next time */
+    }
+  };
+  const clientName = (k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k;
   const submit = async () => {
     const tagged = parseTag(text, clients);
     const body = tagged.text.trim();
     if (!body) return;
     try {
-      const r = await call<{ capture: Capture }>("capture.add", { text: body, ...((client ?? tagged.clientKey) ? { clientKey: client ?? tagged.clientKey } : {}) });
+      const r = await call<{ capture: Capture }>("capture.add", { text: body, ...((tagged.clientKey ?? client) ? { clientKey: tagged.clientKey ?? client } : {}) });
       setSaved(r.capture);
       setText("");
-      setClient(null);
+      setClient(known(defaultClient));
       setError(null);
       setNotice("Saved to the inbox");
       onChanged();
@@ -221,16 +253,44 @@ export function CaptureBox({ data, onChanged, autoFocus }: { data: WeekLoadData;
         <input
           ref={input}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => onText(e.target.value)}
           onKeyDown={onKey}
           maxLength={1000}
-          placeholder="Capture anything. @client to tag. Enter saves."
+          placeholder="Capture anything…"
           aria-label="Quick capture"
           aria-autocomplete="list"
           aria-expanded={done.length > 0}
         />
-        <ClientSelect label="Tag a client" value={client} clients={clients} onChange={setClient} />
+        <button
+          type="button"
+          className={`chip-btn cap-client${client ? "" : " none"}`}
+          style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}
+          aria-expanded={choosing}
+          aria-label={client ? `Client: ${clientName(client)}. Change` : "Choose a client"}
+          title={client ? "Change the client" : "Tag a client (or type @ and a nickname)"}
+          onClick={() => setChoosing((x) => !x)}
+        >
+          {client ? <><span className="swatch" /> {clientName(client)}</> : "No client"}
+        </button>
       </div>
+      {choosing && (
+        <div className="client-chooser cap-choose" role="group" aria-label="Client">
+          {clients.map((c) => (
+            <button key={c.clientKey} type="button" className="chip-btn" aria-pressed={client === c.clientKey} style={{ "--c": clientColor(c.clientKey, data.clients) } as CSSProperties} onClick={() => (setClient(c.clientKey), setChoosing(false), input.current?.focus())}>
+              <span className="swatch" />
+              {c.clientName}
+            </button>
+          ))}
+          <button type="button" className="chip-btn" aria-pressed={!client} onClick={() => (setClient(null), setChoosing(false), input.current?.focus())}>
+            No client
+          </button>
+        </div>
+      )}
+      {tip && !saved && (
+        <p className="cap-tip">
+          Tip: type @ and a client's nickname to tag it. <button type="button" className="link-btn" onClick={dismissTip}>Got it</button>
+        </p>
+      )}
       {done.length > 0 && (
         <ul className="cap-complete" role="listbox" aria-label="Clients">
           {done.map((c, i) => (
@@ -258,7 +318,7 @@ export function CaptureBox({ data, onChanged, autoFocus }: { data: WeekLoadData;
 }
 
 /** The capture box over any view (N, the top-bar button, the command menu, or the global key via coopilot-open). */
-export function CaptureDialog({ data, onClose, onChanged, onOpenView }: { data: WeekLoadData; onClose: () => void; onChanged: () => void; onOpenView: () => void }) {
+export function CaptureDialog({ data, onClose, onChanged, onOpenView, defaultClient = null }: { data: WeekLoadData; onClose: () => void; onChanged: () => void; onOpenView: () => void; defaultClient?: string | null }) {
   const back = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null);
   useEffect(() => () => back.current?.focus?.(), []);
   return (
@@ -285,7 +345,7 @@ export function CaptureDialog({ data, onClose, onChanged, onOpenView }: { data: 
           </button>
           <button type="button" className="mini quiet" onClick={onClose} aria-label="Close">Esc</button>
         </div>
-        <CaptureBox data={data} onChanged={onChanged} autoFocus />
+        <CaptureBox data={data} onChanged={onChanged} autoFocus defaultClient={defaultClient} />
       </div>
     </div>
   );

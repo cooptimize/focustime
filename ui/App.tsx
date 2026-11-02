@@ -52,6 +52,7 @@ import { SAMPLE_WEEK } from "../fixtures/sample-week.ts";
 import { useLayout } from "./viewport.ts";
 import { commandList, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
+import { WeekItems } from "./ItemLookup.tsx";
 import { NoHoursPrompt } from "./NoHoursPrompt.tsx";
 import { KeyLegend } from "./KeyLegend.tsx";
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
@@ -133,6 +134,8 @@ export function App() {
   }, []);
   const [clock, setClock] = useState(() => Date.now());
   const [pd, setPd] = useState<PlanDayState | null>(null);
+  /** Step 15.2: the block selected in Plan the day, so menus add to it. */
+  const [pdHalf, setPdHalf] = useState<Half | null>(null);
   const [justCommitted, setJustCommitted] = useState(false);
   useEffect(() => setJustCommitted(false), [pd?.date]);
   // Step 13.6: "+ Add work" and A open Plan the day on one block's picker.
@@ -915,6 +918,7 @@ export function App() {
   }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, base, captureOpen, layout, timelines, switchTimelines]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
+  const weekItems = useMemo(() => (data?.weekFeatures ?? []).filter((f) => f.weekStart === data?.weekStart).map((f) => ({ clientKey: f.clientKey, itemId: f.itemId })), [data?.weekFeatures, data?.weekStart]);
 
   const env = useMemo<MenuEnv | null>(() => {
     if (!data || !target) return null;
@@ -926,9 +930,15 @@ export function App() {
     };
     return {
       week: data.week,
-      selection: { date: day.date, half: sel.half, clientKey: (sel.half === "AM" ? day.am : sel.half === "PM" ? day.pm : day.eve)?.focus[0]?.clientKey ?? null },
+      // Step 15.2: while Plan the day is open, its selected block is the selection (⋯ → Add to the plan targets it).
+      selection: (() => {
+        const pdDay = pd ? data.week.days.find((d) => d.date === pd.date) : undefined;
+        const at = pdDay && pdHalf ? { d: pdDay, half: pdHalf } : { d: day, half: sel.half };
+        return { date: at.d.date, half: at.half, clientKey: (at.half === "AM" ? at.d.am : at.half === "PM" ? at.d.pm : at.d.eve)?.focus[0]?.clientKey ?? null };
+      })(),
       planWeek: data.plan,
       planState: pd,
+      focusNext: focusPick(data.plan?.[data.planDay.date]?.picks ?? [], strip?.half ?? null),
       planTarget: target,
       today: data.planDay.date,
       work,
@@ -1064,7 +1074,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, pd, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, openRitual, connectWrite, addWork]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, openRitual, connectWrite, addWork]); // eslint-disable-line react-hooks/exhaustive-deps
   openSettingsRef.current = env?.openSettings ?? null;
 
   if (state.kind === "session") {
@@ -1133,6 +1143,7 @@ export function App() {
   return (
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={work}>
+    <WeekItems.Provider value={weekItems}>
     <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, minSizes: data.planning.minSizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date }}>
     <TimeboxCtx.Provider value={tbEnv}>
     <DevOpsWriteCtx.Provider value={devopsWrites.env}>
@@ -1198,7 +1209,8 @@ export function App() {
           )}
         </nav>
         <div className="top-actions">
-          {data.timer && (
+          {/* Step 15.2: Focus is always here. Idle it opens the start menu (next pick first); running it is the countdown. */}
+          {data.timer ? (
             <TopTimer
               t={data.timer}
               nowMs={secondMs}
@@ -1206,6 +1218,19 @@ export function App() {
               client={timerClient}
               onClick={() => setView("focus")}
             />
+          ) : (
+            <button
+              type="button"
+              className="top-btn timer-btn"
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setTimerMenuAt({ x: r.right, y: r.bottom + 4 });
+              }}
+              title="Start focus: the next pick, or a plain timer (F)"
+              aria-haspopup="menu"
+            >
+              Focus <kbd>F</kbd>
+            </button>
           )}
           <button type="button" className="top-btn capture-btn" onClick={() => setCaptureOpen(true)} title="Quick capture: one line, saved at once (N)">
             Capture <kbd>N</kbd>
@@ -1222,7 +1247,7 @@ export function App() {
         <ContextLine
           strip={strip}
           onSelect={selectNow}
-          onStartFocus={strip && !data.timer && (strip.kind === "slot" || strip.kind === "before" || strip.kind === "lunch") ? () => startFocus(focusPick(data.plan?.[data.planDay.date]?.picks ?? [], strip.half ?? null)) : null}
+          onStartFocus={strip?.nextPick && !data.timer ? () => startFocus(focusPick(data.plan?.[data.planDay.date]?.picks ?? [], strip.half ?? null)) : null}
           borrowed={borrowWeek.unpaid ? { unpaid: borrowWeek.unpaid, minutes: borrowWeek.unpaidMinutes } : null}
           musts={weekMusts(data, pd ? mondayOf(pd.date) : data.weekStart, null).rows}
           colors={data.clients}
@@ -1279,7 +1304,7 @@ export function App() {
       ) : planWeekAt !== null && settingsAt === null ? (
         <PlanWeek rituals={ritualChips} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => setPlanWeekAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : followUpsOpen && settingsAt === null ? (
-        <Inbox data={data} version={captureVersion} onClose={() => setFollowUpsOpen(false)} onChanged={reloadQuiet} />
+        <Inbox data={data} version={captureVersion} onClose={() => setFollowUpsOpen(false)} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} />
       ) : closeOutAt !== null && settingsAt === null ? (
         <CloseOut rituals={ritualChips} key={closeOutAt} date={closeOutAt} data={data} onDate={setCloseOutAt} onClose={() => setCloseOutAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : checkInOpen && settingsAt === null ? (
@@ -1356,6 +1381,7 @@ export function App() {
                       onClose={closePlanDay}
                       onStep={(dir) => void stepPlanDay(dir)}
                       start={pdStart}
+                      onSelectBlock={setPdHalf}
                     />
           );
         })()
@@ -1438,12 +1464,13 @@ export function App() {
       )}
       {writes.dialog}
       {devopsWrites.dialog}
-      {captureOpen && <CaptureDialog data={data} onClose={() => setCaptureOpen(false)} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); reloadQuiet(); }} />}
+      {captureOpen && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} onClose={() => setCaptureOpen(false)} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); reloadQuiet(); }} />}
     </div>
     </MenuHost>
     </DevOpsWriteCtx.Provider>
     </TimeboxCtx.Provider>
     </PlanCtx.Provider>
+    </WeekItems.Provider>
     </DevOpsWork.Provider>
     </SampleSources.Provider>
   );

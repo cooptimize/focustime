@@ -137,13 +137,16 @@ describe("⋯ menus", () => {
     expect(find(feature, "Add to the plan").disabled).toMatch(/above story level/);
     expect(find(feature, "Add a draft story")).toBeTruthy();
   });
-  it("adding a work item lists each half-day once, the selected one first", () => {
+  it("adding a work item lists each half-day once, leaves out past days and says why a block can't take it (step 15.2)", () => {
     const { e, calls } = env();
     const add = items(find(itemMenu(e, "internal", item(1)), "Add to the plan").next!());
-    expect(add.map((i) => i.label).slice(0, 2)).toEqual(["Mon, Nov 2 AM (selected)", "Mon, Nov 2 PM"]);
+    expect(add.some((i) => i.id.startsWith("add-2026-11-02"))).toBe(false);
     expect(new Set(add.map((i) => i.id)).size).toBe(add.length);
-    void add[0]!.run!();
-    expect(calls).toEqual([["pick.add", { date: "2026-11-02", half: "AM", clientKey: "internal", itemId: 1 }]]);
+    expect(add.find((i) => i.id === "add-2026-11-05-AM")!.disabled).toBe("Day off");
+    const first = add.find((i) => !i.disabled)!;
+    expect(first.label).toBe("Wed, Nov 4 AM");
+    void first.run!();
+    expect(calls).toEqual([["pick.add", { date: "2026-11-04", half: "AM", clientKey: "internal", itemId: 1 }]]);
   });
   it("a block card on a full PTO day can't take picks", () => {
     const m = slotMenu(env().e, "2026-11-05", "AM", "internal", "Internal");
@@ -229,6 +232,14 @@ describe("focus timer menus (step 6c)", () => {
     expect(items(running).map((i) => i.label)).toEqual(["Pause", "+15 min", "Done (tick the pick)", "Next pick", "Stop"]);
     const ended = timerStep(env({ timer: { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 25, remainingMs: 0, running: false, ended: true, endsAt: null } }).e);
     expect(items(ended).map((i) => i.label)).toEqual(["+15 min", "Done", "Next pick", "Stop"]);
+  });
+
+  it("the Focus button suggests the next pick first, then a plain timer (step 15.2)", async () => {
+    const t = env({ focusNext: pick });
+    const step = timerStep(t.e);
+    expect(items(step).map((i) => i.label)).toEqual([`Start focus: ${pick.title}`, "Plain timer", "Break", "Another pick…"]);
+    await items(step)[0]!.run!();
+    expect(t.calls).toEqual([["timer.start", { pickId: pick.id }]]);
   });
 });
 
@@ -377,7 +388,7 @@ describe("duplicate picks in menus (step 15.1, D277)", () => {
     const { e } = env();
     const add = items(find(itemMenu(e, "internal", item(1)), "Add to the plan").next!());
     expect(add.find((i) => i.id === "add-2026-11-03-AM")!.disabled).toBe("Already planned here");
-    expect(add.find((i) => i.id === "add-2026-11-03-PM")!.disabled).toBeUndefined();
+    expect(add.find((i) => i.id === "add-2026-11-03-PM")!.disabled).toBe("Already planned for the morning that day");
     const inSlot = items(find(slotMenu(e, "2026-11-03", "AM", "internal", "Internal"), "Add a work item").next!());
     expect(inSlot.find((i) => i.id === "i1")!.disabled).toBe("Already planned here");
   });

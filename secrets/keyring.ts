@@ -6,7 +6,7 @@ import { Pat } from "../sources/devops/pat.ts";
 import { cacheKey } from "../sources/devops/source.ts";
 
 export const KEYRING_SERVICE = "coopilot";
-/** App secrets set up by Tanner outside Coopilot: read-only here. */
+/** App secrets set up by me outside Coopilot: read-only here. */
 export type AppSecretAccount = "dataverse-client-secret" | "google-client-secret";
 /** Refresh tokens Coopilot writes after sign-in and clears on disconnect. */
 export type RefreshTokenAccount = "outlook-refresh-token" | "google-refresh-token";

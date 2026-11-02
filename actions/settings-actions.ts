@@ -1,5 +1,5 @@
 // Settings actions (step 6b): load everything Settings shows, save one section, store an app secret in the keyring,
-// export the plan store. Secrets are never returned: only whether they are set and an expiry date Tanner entered.
+// export the plan store. Secrets are never returned: only whether they are set and an expiry date I entered.
 import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { join } from "node:path";
 import { DEFAULT_TIMEBOX, CLIENT_SLOTS, colorCss, DEFAULT_PLAN, inviteDomains, DEFAULT_COLLAB, type AppConfig, type ParseResult } from "../config/schema.ts";
