@@ -2920,3 +2920,64 @@ button.att-chip { cursor: pointer; }
 .detail-panel .follow-up-main { gap: 2px 8px; }
 .detail-panel .follow-up-what { flex-basis: 100%; font-size: var(--fs-3); }
 .detail-panel .follow-up .mini, .detail-panel .follow-up button { font-size: var(--fs-2); }
+
+/* ---------- U3: the type scale on Today and Week (D385, style guide section 4) ----------
+   Four sizes (--fs-1 11, --fs-2 12, --fs-3 13, --fs-4 15) and three weights (400, 500, 600). Uppercase only for
+   section labels. What each step is for:
+   15/600 titles (brand, page and card titles), and the ⋯ and ‹ › glyphs;
+   13/600 names (client, weekday, the active mode, Start focus); 13/500 buttons and tabs; 13/400 body text;
+   12/500 pills, badges and chips; 12/400 meta (times, counts, small buttons, the status bar);
+   11/500 the time rail; 11/600 uppercase section labels. */
+.brand .name { font-size: var(--fs-4); font-weight: 600; }
+.demo-tag { font-size: var(--fs-2); font-weight: 500; }
+.view-tab { font-size: var(--fs-3); font-weight: 500; }
+.view-tab .count { font-size: var(--fs-2); font-weight: 500; }
+.view-tab .count.nudge { font-weight: 500; }
+.vm-word { font-size: var(--fs-2); font-weight: 500; letter-spacing: 0.02em; }
+.vm-chip, .vm-label { font-size: var(--fs-3); font-weight: 400; }
+.topbar .top-btn { font-size: var(--fs-3); font-weight: 500; }
+.topbar .top-btn.top-more, .more-btn, .day-head .more-btn, .work-items li .more-btn, .checklist li .more-btn, .work-list li .more-btn { font-size: var(--fs-4); font-weight: 600; }
+.mode-switch .ms-btn { font-size: var(--fs-3); font-weight: 500; }
+.mode-switch .ms-btn[aria-current="page"] { font-weight: 600; }
+.page-head h2, .today-head h1 { font-size: var(--fs-4); font-weight: 600; letter-spacing: 0; }
+.today-head h1 .muted, .today-head .ph-title h1 .muted { font-size: var(--fs-3); font-weight: 400; }
+.pd-step button { font-size: var(--fs-4); font-weight: 600; }
+.mini { font-size: var(--fs-2); font-weight: 400; }
+.refresh, .status-quiet { font-size: var(--fs-2); font-weight: 400; }
+.status-pill, .today-block header .status-pill { font-size: var(--fs-2); font-weight: 500; }
+.due-badge, .due-open .due-badge, .week-fus .due-badge { font-size: var(--fs-2); font-weight: 500; }
+.today-pill, .day-head .today-pill, .day-head .pto-pill { font-size: var(--fs-2); font-weight: 500; }
+.size-chip, .pick-row.dens-week .size-chip, .dp-picks .pick-row .size-chip { font-size: var(--fs-1); font-weight: 500; }
+.pt-add, .pt-time { font-size: var(--fs-2); font-weight: 400; }
+.pr-id { font-size: var(--fs-2); font-weight: 400; }
+.cal-tag { font-size: var(--fs-1); font-weight: 600; }
+.card-feats .needs { font-size: var(--fs-2); font-weight: 400; }
+.ruler .r-hour span, .ruler .r-ev, .ruler .r-free span, .ruler .tbox-label, .ruler .tbox-time { font-size: var(--fs-1); font-weight: 500; }
+.timeline .hour span, .timeline .gap span { font-size: var(--fs-1); font-weight: 500; }
+/* Today › Now. */
+.today-view.u2 .today-block h2 { font-size: var(--fs-4); font-weight: 600; }
+.today-view.u2 .tb-when { font-size: var(--fs-3); font-weight: 400; }
+.today-view.u2 .tb-count { font-size: var(--fs-2); font-weight: 400; }
+.today-view.u2 .pick-row.dens-today { font-size: var(--fs-3); }
+.today-view.u2 .pick-row.dens-today.next .pr-title { font-weight: 400; }
+.today-view.u2 .start-focus { font-size: var(--fs-3); font-weight: 600; }
+.today-view.u2 .att-tag { font-size: var(--fs-2); font-weight: 500; }
+.today-view.u2 .att-chip, .today-view.u2 .att-names { font-size: var(--fs-3); font-weight: 400; }
+.today-view.u2 .tw-label { font-size: var(--fs-1); font-weight: 600; }
+.today-view.u2 .tw-chip { font-size: var(--fs-3); font-weight: 400; }
+.today-view.u2 .tw-chip .feat-link { font-weight: 400; }
+.today-view.u2 .tw-count { font-size: var(--fs-2); font-weight: 400; }
+.today-view.u2 .tw-needs { font-size: var(--fs-3); font-weight: 600; }
+.today-view.u2 .tw-chip .link-btn { font-size: var(--fs-3); font-weight: 400; }
+.today-view.u2 .today-rows > li, .today-view.u2 .today-rows .ev-time, .today-view.u2 .today-rows .ev-title { font-size: var(--fs-3); font-weight: 400; }
+.today-view.u2 .today-resume { font-size: var(--fs-2); font-weight: 400; }
+.today-view.u2 .day-allday, .today-view.u2 .outside-line { font-size: var(--fs-2); }
+/* 3840: Week's hour timelines and Today's day timeline on the same scale. */
+.event { font-size: var(--fs-3); }
+.event .ev-time { font-size: var(--fs-2); font-weight: 500; }
+.event .ev-title { font-size: var(--fs-3); font-weight: 600; }
+.event .ev-meta, .event.show-oof .ev-meta { font-size: var(--fs-2); font-weight: 400; }
+.day-timeline h2 { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.dt-item { font-size: var(--fs-2); font-weight: 400; }
+.dt-item .ev-title { font-weight: 500; }
+.dt-now, .dt-now span { font-size: var(--fs-1); font-weight: 500; }
