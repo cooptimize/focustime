@@ -3,10 +3,10 @@
 // and Today's 3840 pick detail. Contents: client and time range with the risk reasons, the block's agenda with free
 // gaps (as Plan the day's), the picks as full rows, the client's features this week with story counts and Needs
 // stories actions, the client's follow-ups, DevOps items assigned to me there and not planned yet, and the ⋯ actions.
-import { useContext, useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { useContext, useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import { rankRisks } from "../week/risks.ts";
-import type { Day, IsoDate, Slot, WorkItem } from "../week/types.ts";
+import type { Day, IsoDate, Slot } from "../week/types.ts";
 import type { Pick } from "../plan/types.ts";
 import { mondayOf } from "../week/dates.ts";
 import { captureClients } from "./Capture.tsx";
@@ -73,19 +73,7 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
   const note = client ? data.resumeNotes[client] : undefined;
   const area = useRef<HTMLTextAreaElement>(null);
 
-  // Esc closes the panel (not while a menu or dialog sits above it, and not while typing in it).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || topOverlay(document) !== "none") return;
-      const t = e.target as HTMLElement | null;
-      if (t && ref.current?.contains(t) && t.matches("input:not([type=checkbox]), textarea, select")) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      onClose();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+  usePanelEsc(ref, onClose);
 
   // Opened on a section: bring it into view.
   const focusSel = !focus ? null : focus.kind === "features" ? '[data-panel-focus="features"]' : focus.kind === "pick" ? `[data-pick="${focus.id}"]` : `[data-follow-up="${focus.id}"]`;
@@ -254,8 +242,51 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
   );
 }
 
+/** Esc closes a panel (not while a menu or dialog sits above it, and not while typing in it). */
+function usePanelEsc(ref: RefObject<HTMLElement | null>, onClose: () => void) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || topOverlay(document) !== "none") return;
+      const t = e.target as HTMLElement | null;
+      if (t && ref.current?.contains(t) && t.matches("input:not([type=checkbox]), textarea, select")) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [ref, onClose]);
+}
+
+/**
+ * U4: the same panel for other subjects (Plan the week's feature, client budget and DevOps health): the title with an
+ * optional swatch, a muted line, an optional ⋯, the close button and Esc; the body scrolls on its own.
+ */
+export function PanelShell({ title, sub, color, menu, label, onClose, children }: { title: ReactNode; sub?: ReactNode; color?: string | undefined; menu?: ReactNode; label: string; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLElement>(null);
+  usePanelEsc(ref, onClose);
+  return (
+    <aside ref={ref} className="detail-panel" aria-label={label} style={color ? ({ "--c": color } as CSSProperties) : undefined}>
+      <header className="dp-head">
+        <div className="dp-title">
+          <h2>
+            {color && <span className="swatch" aria-hidden="true" />}
+            {title}
+          </h2>
+          {sub && <span className="dp-when">{sub}</span>}
+        </div>
+        {menu}
+        <button type="button" className="dp-close" onClick={onClose} aria-label="Close details (Esc)" title="Close (Esc)">
+          ×
+        </button>
+      </header>
+      <div className="dp-body">{children}</div>
+    </aside>
+  );
+}
+
 /** Draft stories under a feature (the draft story prompt), from Today's This week chips and the panel. */
-export function DraftStories({ clientKey, item }: { clientKey: string; item: WorkItem }) {
+export function DraftStories({ clientKey, item }: { clientKey: string; item: { id: number; title: string } }) {
   const menu = useMenu((env) => draftPrompt(env, clientKey, item));
   return (
     <button type="button" className="link-btn tw-draft" onClick={menu.onContextMenu}>

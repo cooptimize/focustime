@@ -116,3 +116,13 @@ export function migrateBlocks(level: "feature" | "story", blocks: number): { blo
   if (level === "story") return { blocks: Math.max(1, Math.ceil(blocks)), size: blocks <= 0.5 ? "M" : "L" };
   return { blocks: Math.min(MAX_BLOCKS, Math.max(1, Math.ceil(blocks))), size: null };
 }
+
+/**
+ * U4: the one amber line under a client's musts when they need more blocks than it has: "2 blocks of musts, 1 block
+ * free. Move one to nice to have, or borrow Friday." Friday is offered only when the week has a catch-up day.
+ */
+export function overLine(budget: number, planned: number, friday: boolean): string | null {
+  if (planned <= budget) return null;
+  const free = budget ? `${blocksWord(budget)} free` : "no blocks free";
+  return `${blocksWord(planned)} of musts, ${free}. Move one to nice to have${friday ? ", or borrow Friday" : ""}.`;
+}

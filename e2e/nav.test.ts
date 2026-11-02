@@ -85,10 +85,10 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual(["Week", expect.stringMatching(/^Plan the week/)]);
     await page.keyboard.press("p");
     await expect.poll(() => hash(page)).toBe("#/week/plan");
-    await expect.poll(() => page.locator(".planweek h2").first().textContent()).toBe("Plan the week of Nov 9 · next week");
+    await expect.poll(() => page.locator(".planweek h2").first().textContent()).toBe("Plan the week of Nov 9");
     await page.locator(".planweek .co-step button[aria-label='Previous week']").click();
     await expect.poll(() => hash(page)).toBe("#/week/plan/2026-11-02");
-    await expect.poll(() => page.locator(".planweek h2").first().textContent()).toBe("Plan the week of Nov 2 · this week");
+    await expect.poll(() => page.locator(".planweek h2").first().textContent()).toBe("Plan the week of Nov 2");
     await page.keyboard.press("w");
     await expect.poll(() => mode(page)).toBe("Week");
     await page.close();

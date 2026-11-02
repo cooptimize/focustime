@@ -396,7 +396,7 @@ export function addStep(env: MenuEnv, clientKey: string, item: WorkItem | { draf
   return { title: `Add "${item.title}" to`, items: items.length ? items : [{ id: "none", label: "No block can take it this week", disabled: "Past days and days without working hours are left out" }] };
 }
 
-export function draftPrompt(env: MenuEnv, clientKey: string, item: WorkItem): MenuStep {
+export function draftPrompt(env: MenuEnv, clientKey: string, item: { id: number; title: string }): MenuStep {
   return { title: `Draft story under "${item.title}"`, prompt: "Story title (stays local until a write step)", placeholder: "First slice of the feature", submit: (title) => env.runPlan("draft.add_story", { clientKey, parentItemId: item.id, title }) };
 }
 

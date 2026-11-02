@@ -191,11 +191,16 @@ export const planWeekOf = (asked: IsoDate | null, thisWeek: IsoDate): IsoDate =>
 
 /** Plan the week's header: "Plan the week of Nov 9 · next week". */
 export function planWeekTitle(weekStart: IsoDate, thisWeek: IsoDate): string {
+  const { title, when } = planWeekParts(weekStart, thisWeek);
+  return `${title} · ${when}`;
+}
+/** U4: the header's two parts: "Plan the week of Nov 9" and the muted "next week". */
+export function planWeekParts(weekStart: IsoDate, thisWeek: IsoDate): { title: string; when: string } {
   const d = Temporal.PlainDate.from(weekStart);
   const rel = Temporal.PlainDate.compare(d, Temporal.PlainDate.from(thisWeek));
   const diff = d.since(Temporal.PlainDate.from(thisWeek)).days / 7;
   const when = rel === 0 ? "this week" : diff === 1 ? "next week" : rel < 0 ? "review" : `in ${diff} weeks`;
-  return `Plan the week of ${d.toLocaleString("en-US", { month: "short", day: "numeric" })} · ${when}`;
+  return { title: `Plan the week of ${d.toLocaleString("en-US", { month: "short", day: "numeric" })}`, when };
 }
 
 /** Today's Plan header: "Plan today" or "Plan Tuesday, Nov 3" (a past day: "Review Friday, Oct 30"). */

@@ -26,9 +26,10 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
   it("each client: its whole blocks, a plain status, and why a half-day doesn't count", async () => {
     const { page, errors } = await planWeek();
     const northwind = page.locator('.pw-client[aria-label="Northwind"] h3');
-    await expect.poll(() => northwind.textContent()).toMatch(/Northwind · 2 blocks3 planned, 2 available/);
-    await expect(northwind.textContent()).resolves.toContain("Not counted: Wed AM: mostly meetings");
-    await expect(page.locator('.pw-client[aria-label="Cooptimize"] h3').textContent()).resolves.toMatch(/· 1 block.*All 1 planned/);
+    await expect.poll(() => northwind.textContent()).toMatch(/Northwind2 blocks3 planned, 2 available/);
+    // U4: why a half-day doesn't count is on hover over the blocks number (and in the client's panel).
+    await expect(northwind.locator(".pw-budget").getAttribute("title")).resolves.toContain("Not counted: Wed AM: mostly meetings");
+    await expect(page.locator('.pw-client[aria-label="Cooptimize"] h3').textContent()).resolves.toMatch(/1 block.*All 1 planned/);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

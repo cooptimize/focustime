@@ -1416,10 +1416,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   border: 1px solid var(--border-strong); border-radius: 7px; padding: 4px 8px; min-width: 0;
 }
 .view-tab .count.nudge { color: var(--watch); font-weight: 600; }
-.pw-state { font-size: 13px; color: var(--text-muted); }
-.pw-state.changed { color: var(--watch); }
-.pw-summary { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; margin: 10px 0 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; color: var(--text-muted); max-width: 1400px; }
-.pw-summary strong { color: var(--text); font-weight: 600; margin-right: 4px; }
 .planweek .co-section { max-width: 1400px; }
 .pw-ready { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .pw-flag { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; align-items: center; gap: 6px 14px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; }
@@ -1428,16 +1424,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pw-flag-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pw-acts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pw-brief textarea { width: 100%; font-family: ui-monospace, monospace; font-size: 12px; }
-.pw-board { display: grid; gap: 4px; }
-.pw-day, .pw-half { font-size: 12px; color: var(--text-muted); font-weight: 600; }
-.pw-half { align-self: center; padding-right: 6px; }
-.pw-cell { min-height: 54px; padding: 6px 8px; border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 7px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.pw-cell.open { border-style: dashed; border-left-color: var(--border-strong); }
-.pw-cell.none { background: var(--sunken); border-left-color: var(--border); color: var(--text-faint); }
-.pw-cell.over { outline: 2px solid var(--focus); outline-offset: 1px; }
-.pw-who { font-size: 12px; font-weight: 600; color: var(--text-muted); }
-.pw-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 1px 4px 1px 8px; border-radius: 99px; background: var(--sunken); color: var(--text); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pw-chip .mini { padding: 0 5px; }
 .pw-client h3 { align-items: center; }
 .pw-swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
 .pw-fit { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--border); }
@@ -1468,7 +1454,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 1100px) {
   .pw-flag { grid-template-columns: minmax(0, 1fr); }
   .pw-feature { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "kids" "blocks" "placed" "children"; }
-  .pw-board { overflow-x: auto; }
 }
 .planweek .follow-ups-head { max-width: 1400px; justify-content: flex-start; }
 .planweek .follow-ups-head .top-btn.primary + .top-btn { margin-left: 0; }
@@ -1617,40 +1602,12 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Step 10 slice 3: Plan the week. The block grid sits on top (pinned while the list scrolls) and is larger; the
    feature list is a right-hand panel when the window is wide enough, below the grid otherwise. */
 .planweek .follow-ups-head, .planweek .co-section, .pw-summary { max-width: none; }
-.pw-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
-.pw-board-wrap { position: sticky; top: -8px; z-index: 2; background: var(--bg); padding-bottom: 8px; margin-top: 8px; }
-.pw-board { gap: 6px; }
-.pw-cell { min-height: 84px; padding: 8px 10px; }
-.pw-cell .pw-who { font-size: 13px; color: var(--text); }
-.pw-cell.can { cursor: pointer; }
-.pw-cell.can:hover { border-color: var(--border-strong); }
-.pw-cell.picked { outline: 2px solid var(--focus); outline-offset: 1px; background: var(--raised); }
-.pw-cell:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.pw-readiness > summary { cursor: pointer; list-style: none; }
-.pw-readiness > summary::-webkit-details-marker { display: none; }
-.pw-readiness > summary h3::before { content: "▸ "; color: var(--text-muted); }
-.pw-readiness[open] > summary h3::before { content: "▾ "; }
 .pw-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 4px 0 10px; }
 .pw-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-.pw-target { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 99px; border: 1px solid var(--focus); font-size: 13px; font-weight: 600; }
 .planweek input.pw-search { margin-left: auto; min-width: 220px; }
-.pw-place-here { border-color: var(--focus); }
-.pw-side .pw-feature { grid-template-columns: minmax(220px, 1fr) auto auto minmax(150px, auto); }
-@media (min-width: 2400px) {
-  .pw-layout { grid-template-columns: minmax(0, 1.25fr) minmax(640px, 1fr); }
-  .pw-board-wrap { top: 0; margin-top: 0; }
-  .pw-cell { min-height: 140px; }
-  .pw-side { max-height: calc(100vh - 220px); overflow: auto; padding-right: 4px; }
-  .pw-side .pw-feature { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title title" "kids blocks" "placed placed" "children children"; }
-  .pw-side .pw-feature .pw-placed { justify-content: flex-start; }
-  .pw-side .pw-feature .pw-kids { justify-self: start; }
-}
 
 /* Step 11: Plan the week by client. Must and Nice to have lists per client, musts per client above the grid, the
    on-track question, the heads-up offer. */
-.pw-musts { display: flex; flex-wrap: wrap; gap: 6px 16px; list-style: none; margin: 0 0 8px; padding: 0; font-size: 13px; color: var(--text-muted); }
-.pw-musts li { display: inline-flex; align-items: center; gap: 6px; }
-.pw-musts strong { color: var(--text); font-weight: 600; }
 .pw-progress { font-size: 13px; font-weight: 600; color: var(--text); }
 .pw-track { margin: 0 0 8px; font-size: 13px; color: var(--text-muted); }
 .pw-track.at_risk { color: var(--text); }
@@ -1663,13 +1620,10 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pw-item .pw-row-acts { grid-area: acts; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .pw-item.done .pw-title a { color: var(--text-muted); }
 .pw-done { color: var(--ok); font-weight: 600; }
-.pw-chip.done { color: var(--text-muted); text-decoration: line-through; }
 .pw-addrow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title placed"; cursor: default; border-style: dashed; }
 .pw-addrow .pw-acts { grid-area: placed; }
 .pw-add { margin-top: 10px; }
 .pw-add h4 { margin: 4px 0 6px; font-size: 13px; }
-.pw-add-toggle { margin-bottom: 6px; }
-.pw-reset { margin-top: 6px; }
 .pw-under h4 { margin: 10px 0 6px; font-size: 12px; color: var(--text-muted); }
 .pw-drafts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
 .pw-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -1677,9 +1631,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 1100px) {
   .pw-item { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "kids" "blocks" "placed" "acts" "children"; }
   .pw-item .pw-row-acts { justify-content: flex-start; }
-}
-@media (min-width: 2400px) {
-  .pw-side .pw-item { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title title" "kids blocks" "placed acts" "children children"; }
 }
 
 /* Step 11: musts per client (Today, Week, Plan the day) and Check-in's "Anything shifted?". */
@@ -2130,7 +2081,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .pw-row .pw-title { flex: 1 1 280px; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
 .pw-row .pw-title a { font-weight: 600; }
-.pw-state { font-size: 12px; color: var(--text-muted); }
 .pw-chip-btn, .pw-chip-static { padding: 1px 10px; border-radius: 99px; border: 1px solid var(--border-strong); background: transparent; color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; }
 .pw-chip-static { cursor: default; border-style: dashed; }
 .pw-chip-btn:hover:not(:disabled) { color: var(--text); }
@@ -2438,7 +2388,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Step 16.4: Plan the week in whole blocks: the budget, the stepper, stories in their feature, fill words. */
 .pw-budget { font-weight: 500; color: var(--text-muted); margin-left: 4px; }
-.pw-why { display: block; font-size: 12px; font-weight: 400; margin-top: 2px; }
 .pw-fit2.all { color: var(--ok); font-weight: 600; }
 .pw-stepper { display: inline-flex; align-items: center; gap: 2px; }
 .pw-stepper .mini { min-width: 22px; padding: 0 4px; }
@@ -2986,3 +2935,117 @@ button.att-chip { cursor: pointer; }
 .sg-type { display: grid; gap: 6px; }
 .sg-type-row { display: flex; align-items: baseline; gap: 16px; }
 .sg-type-spec { width: 110px; color: var(--text-muted); font-size: var(--fs-2); }
+
+/* ---------- U4: Plan the week (D391 to D395) ----------
+   Header: ‹ ›, title, a muted state, DevOps health as a link, ⋯, Done and the mode switch. One strip of block chips
+   (drag a row onto one to pin it; the chips grow while dragging). One card per client in a grid. The U3 type scale. */
+.mode-area .done-btn { font-size: var(--fs-3); font-weight: 600; }
+.planweek { padding: 8px 24px 32px; font-size: var(--fs-3); }
+.planweek.with-panel { padding-right: 464px; }
+@media (min-width: 3000px) { .planweek.with-panel { padding-right: 584px; } }
+.planweek .pw-head { gap: 10px; flex-wrap: wrap; max-width: none; }
+.planweek .pw-head h2 { font-size: var(--fs-4); font-weight: 600; }
+.planweek .pw-head .mode-area { margin-left: 0; }
+.planweek .pw-head .co-step { display: inline-flex; gap: 4px; }
+.planweek .pw-head .co-step .mini { font-size: var(--fs-4); font-weight: 600; padding: 0 8px; }
+.pw-when { font-size: var(--fs-3); color: var(--text-muted); }
+.pw-when.changed { color: var(--watch); }
+.pw-health-link { margin-left: auto; font-size: var(--fs-3); font-weight: 400; color: var(--text-muted); }
+.pw-health-link.some { color: var(--watch); }
+.planweek .pw-more { font-size: var(--fs-4); font-weight: 600; }
+.pw-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 10px; }
+.pw-strip-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-right: 4px; }
+.pw-blk { font: inherit; font-size: var(--fs-2); font-weight: 400; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--c, var(--border)); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: padding 0.12s ease; }
+.pw-blk:hover { border-color: var(--border-strong); border-left-color: var(--c, var(--border-strong)); }
+.pw-blk.dashed { border-style: dashed; border-left-width: 1px; color: var(--text-muted); background: transparent; cursor: default; }
+.pw-blk.on { background: var(--raised); }
+.pw-blk.over { outline: 2px solid var(--focus); outline-offset: 1px; }
+.pw-blk-off, .pw-blk-pins { color: var(--text-muted); }
+.pw-strip.dragging .pw-blk:not(.dashed) { padding: 16px 12px; }
+.planweek .pw-filter { margin: 0 0 10px; }
+.planweek .chip-btn { font-size: var(--fs-3); font-weight: 500; }
+.planweek input.pw-search { font-size: var(--fs-3); }
+.pw-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+@media (max-width: 1399px) { .pw-cards { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 3000px) { .pw-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.planweek .pw-client { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: none; margin: 0; }
+.planweek .pw-card-head { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: var(--fs-3); font-weight: 400; }
+.pw-name { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: var(--fs-4); font-weight: 600; color: var(--text); background: none; border: 0; padding: 0; cursor: pointer; }
+.pw-name:hover { text-decoration: underline; }
+.pw-name .pw-swatch { align-self: center; }
+.planweek .pw-card-head .pw-budget { color: var(--text-muted); margin: 0; font-weight: 400; cursor: help; }
+.planweek .pw-card-head .pw-fit2 { margin-left: auto; font-size: var(--fs-3); font-weight: 500; color: var(--text-muted); }
+.planweek .pw-fit2.all { color: var(--ok); }
+.planweek .pw-fit2.over { color: var(--watch); }
+.pw-src { font-size: var(--fs-2); color: var(--text-muted); }
+.planweek .pw-tier { margin: 0; }
+.planweek .pw-tier h4, .planweek .pw-add h4, .planweek .pw-under h4 { margin: 0 0 6px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.pw-add-n { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; font-size: var(--fs-2); }
+.planweek .pw-add { margin: 0; padding-top: 10px; border-top: 1px solid var(--border); }
+.planweek .pw-under { margin-top: 6px; }
+.planweek .pw-features { display: flex; flex-direction: column; gap: 4px; }
+.planweek .pw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font-size: var(--fs-3); cursor: default; }
+.planweek .pw-row.needs { border-color: color-mix(in oklab, var(--watch) 55%, var(--border)); background: color-mix(in oklab, var(--watch) 10%, var(--bg)); }
+.planweek .pw-row.nested { border: 0; background: none; padding: 2px 0; }
+.planweek .pw-row.done .pw-open, .planweek .pw-row.done .pw-title a { color: var(--text-muted); }
+.pw-handle { color: var(--text-faint); cursor: grab; font-size: var(--fs-2); letter-spacing: -2px; user-select: none; }
+.planweek .pw-row .pw-title { flex: 1 1 180px; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.pw-open { font: inherit; font-weight: 500; color: var(--text); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.pw-open:hover { text-decoration: underline; }
+.planweek .pw-row .pw-title a { font-weight: 500; color: var(--text); text-decoration: none; }
+.planweek .pw-row .pw-title a:hover { text-decoration: underline; }
+.pw-count { font: inherit; font-size: var(--fs-2); color: var(--text-muted); background: none; border: 0; padding: 0; cursor: pointer; }
+.pw-count:hover { color: var(--text); }
+.pw-needs { display: inline-flex; gap: 10px; align-items: baseline; font-size: var(--fs-2); }
+.pw-needs-word { color: var(--watch); font-weight: 500; }
+.pw-needs .link-btn { font-size: var(--fs-2); font-weight: 400; }
+.planweek .pw-chip-btn { font-size: var(--fs-2); font-weight: 500; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-strong); color: var(--text); background: transparent; }
+.planweek .pw-step { font-size: var(--fs-2); font-weight: 400; }
+.planweek .pw-row > .pw-stepper .pw-step, .planweek .pw-row > .more { opacity: 0; transition: opacity 0.1s; }
+.planweek .pw-row:hover > .pw-stepper .pw-step, .planweek .pw-row:focus-within > .pw-stepper .pw-step, .planweek .pw-row:hover > .more, .planweek .pw-row:focus-within > .more { opacity: 1; }
+.planweek .pw-row > .more { font-size: var(--fs-4); font-weight: 600; }
+.planweek .pw-pin { font-size: var(--fs-2); }
+.planweek .pw-parent { font-size: var(--fs-2); color: var(--text-muted); flex-basis: 100%; padding-left: 22px; }
+.planweek .pw-parent .link-btn { font-size: var(--fs-2); }
+.planweek .pw-fill { font-size: var(--fs-2); padding-left: 22px; color: var(--text-muted); }
+.planweek .pw-raise { color: var(--watch); font-weight: 500; }
+.planweek .pw-progress-blocks { font-weight: 400; }
+.planweek .pw-nested { margin: 2px 0 0 22px; padding-left: 10px; }
+.pw-kids { flex-basis: 100%; font-size: var(--fs-2); color: var(--text-muted); padding-left: 22px; }
+.pw-done { color: var(--ok); font-weight: 500; }
+.pw-over { margin: 6px 0 0; color: var(--watch); font-size: var(--fs-3); }
+.pw-fold { font: inherit; font-size: var(--fs-3); color: var(--text-muted); background: none; border: 0; padding: 0; cursor: pointer; }
+.pw-fold:hover { color: var(--text); }
+.pw-nice .pw-features { margin-top: 6px; }
+.planweek .pw-addrow { display: flex; align-items: center; gap: 8px; padding: 3px 8px; border: 0; background: none; }
+.planweek .pw-addrow .pw-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.planweek .pw-addrow .pw-title a { font-weight: 400; color: var(--text); text-decoration: none; }
+.planweek .pw-addrow .pw-title a:hover { text-decoration: underline; }
+.pw-meta { font-size: var(--fs-2); color: var(--text-muted); }
+.pw-flagword { font-size: var(--fs-2); color: var(--watch); }
+.planweek .pw-must { border: 1px solid var(--border-strong); font-size: var(--fs-2); font-weight: 500; }
+.planweek .pw-nice-btn { font-size: var(--fs-2); }
+.pw-show-more { font-size: var(--fs-2); font-weight: 400; color: var(--text-muted); margin: 4px 0 0 8px; }
+.pw-empty-line { margin: 0; font-size: var(--fs-2); color: var(--text-muted); }
+.pw-draft-tag { font-size: var(--fs-1); font-weight: 600; }
+.planweek .pw-drafts { font-size: var(--fs-3); }
+.planweek .pw-epics li { font-size: var(--fs-3); }
+.planweek .co-notice, .planweek .set-problem { font-size: var(--fs-3); }
+.planweek .pw-brief h3 { font-size: var(--fs-3); font-weight: 600; }
+/* Plan the week in the detail panel: health flags, a client's blocks, a feature's stories. */
+.detail-panel .pw-ready { gap: 6px; }
+.detail-panel .pw-flag { grid-template-columns: minmax(0, 1fr); padding: 8px 10px; font-size: var(--fs-3); gap: 4px; }
+.detail-panel .pw-kind { font-size: var(--fs-2); font-weight: 600; }
+.detail-panel .pw-flag-what { white-space: normal; }
+.detail-panel .pw-acts .mini { font-size: var(--fs-2); }
+.pw-pblocks, .pw-pstories, .pw-pdone { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: var(--fs-3); }
+.pw-pblocks li { display: flex; justify-content: space-between; gap: 10px; }
+.pw-pblocks li.off { color: var(--text-muted); }
+.pw-pblocks .muted, .pw-pstories .muted, .pw-pdone .muted { font-size: var(--fs-2); }
+.pw-pstories li.closed a { color: var(--text-faint); text-decoration: line-through; }
+.pw-pacts { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: var(--fs-2); }
+.pw-pacts .link-btn, .pw-pacts .mini { font-size: var(--fs-2); }
+.planweek .pw-row.nested { padding: 0; min-height: 26px; }
+.planweek .pw-row.nested .pw-chip-btn { line-height: 18px; }
+.pw-health-link, .pw-show-more { text-decoration: none; }
+.pw-health-link:hover, .pw-show-more:hover { text-decoration: underline; }

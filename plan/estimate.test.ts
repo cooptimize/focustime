@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blocksFor, budgetWords, estimate, fillWords, migrateBlocks, plannedBlocks, progressWords, tierOf, validWholeBlocks, type EstItem } from "./estimate.ts";
+import { blocksFor, budgetWords, estimate, fillWords, migrateBlocks, overLine, plannedBlocks, progressWords, tierOf, validWholeBlocks, type EstItem } from "./estimate.ts";
 
 const f = (itemId: number, blocks: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "W&C", itemId, level: "feature", tier: "must", blocks, ...o });
 const s = (itemId: number, size: "S" | "M" | "L", parentId: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "W&C", itemId, level: "story", tier: "must", blocks: null, size, parentId, ...o });
@@ -91,5 +91,14 @@ describe("migrating half-block week plans", () => {
     expect(migrateBlocks("feature", 3)).toEqual({ blocks: 3, size: null });
     expect(migrateBlocks("story", 0.5)).toEqual({ blocks: 1, size: "M" });
     expect(migrateBlocks("story", 1.5)).toEqual({ blocks: 2, size: "L" });
+  });
+});
+
+describe("overLine (U4): one amber line when musts need more blocks than the client has", () => {
+  it("says the numbers and the two ways out; Friday only when there is one", () => {
+    expect(overLine(1, 2, true)).toBe("2 blocks of musts, 1 block free. Move one to nice to have, or borrow Friday.");
+    expect(overLine(0, 1, false)).toBe("1 block of musts, no blocks free. Move one to nice to have.");
+    expect(overLine(2, 2, true)).toBeNull();
+    expect(overLine(3, 1, true)).toBeNull();
   });
 });
