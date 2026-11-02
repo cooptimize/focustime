@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 90" width="200" height="90" role="img"><title>Coopilot mark, unrolled week</title><desc>Four columns Mon to Thu, AM over PM, Mon AM hollow.</desc><style>
+:root{--brand-am:#1E3A55;--brand-pm:#4FA3DD;--accent:#9CC24F;--lime:#B2D235;--ghost:#2B3A4D}
+</style><rect x="9.5" y="9.5" width="37" height="23" rx="5" fill="none" stroke="var(--accent)" stroke-width="3"/>
+<rect x="8" y="50" width="40" height="32" rx="6" fill="var(--brand-pm)"/>
+<rect x="56" y="8" width="40" height="26" rx="6" fill="var(--brand-am)"/>
+<rect x="56" y="50" width="40" height="32" rx="6" fill="var(--brand-pm)"/>
+<rect x="104" y="8" width="40" height="26" rx="6" fill="var(--brand-am)"/>
+<rect x="104" y="50" width="40" height="32" rx="6" fill="var(--brand-pm)"/>
+<rect x="152" y="8" width="40" height="26" rx="6" fill="var(--brand-am)"/>
+<rect x="152" y="50" width="40" height="32" rx="6" fill="var(--brand-pm)"/></svg>

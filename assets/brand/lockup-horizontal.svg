@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 92" width="300" height="92" role="img"><title>Coopilot lockup</title><desc>Bent mark, Lumen, wordmark and by-line.</desc><style>
+:root{--brand-am:#1E3A55;--brand-pm:#4FA3DD;--accent:#9CC24F;--lime:#B2D235;--ghost:#2B3A4D}
+</style><g transform="translate(0,6) scale(0.34)"><path d="M67.05 115.75 A51.0 51.0 0 0 1 154.06 81.94" fill="none" stroke="var(--ghost)" stroke-width="3.5999999999999996" stroke-dasharray="6 5" stroke-linecap="butt"/>
+<path d="M154.06 154.06 A51.0 51.0 0 0 1 67.05 120.25" fill="none" stroke="var(--brand-pm)" stroke-width="19.2" />
+<path d="M49.04 115.75 A69.0 69.0 0 0 1 166.79 69.21" fill="none" stroke="var(--brand-am)" stroke-width="13.799999999999999" />
+<path d="M166.79 166.79 A69.0 69.0 0 0 1 49.04 120.25" fill="none" stroke="var(--brand-pm)" stroke-width="13.799999999999999" />
+<path d="M33.53 115.75 A84.5 84.5 0 0 1 177.75 58.25" fill="none" stroke="var(--brand-am)" stroke-width="14.04" />
+<path d="M177.75 177.75 A84.5 84.5 0 0 1 33.53 120.25" fill="none" stroke="var(--brand-pm)" stroke-width="14.04" />
+<path d="M18.03 115.75 A100.0 100.0 0 0 1 188.71 47.29" fill="none" stroke="var(--brand-am)" stroke-width="14.04" />
+<path d="M188.71 188.71 A100.0 100.0 0 0 1 18.03 120.25" fill="none" stroke="var(--brand-pm)" stroke-width="14.04" /><g transform="rotate(12 221.0 118.0)">
+<path d="M206 118.0 L149.0 101.5 L149.0 134.5 Z" fill="var(--lime)" opacity="0.22"/>
+<rect x="206" y="103" width="30" height="30" rx="6.0" fill="var(--accent)"/>
+<rect x="206" y="111.25" width="4.5" height="13.5" rx="1.5" fill="var(--lime)"/>
+</g></g><text x="100" y="52" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="600" font-size="40" letter-spacing="-1" fill="currentColor">Coopilot</text><text x="101" y="74" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="400" font-size="14" fill="currentColor" opacity="0.6">by Cooptimize</text></svg>

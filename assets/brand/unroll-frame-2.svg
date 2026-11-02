@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 236" width="260" height="236" role="img"><title>Unroll frame 2</title><desc>flatten=0.5</desc><style>
+:root{--brand-am:#1E3A55;--brand-pm:#4FA3DD;--accent:#9CC24F;--lime:#B2D235;--ghost:#2B3A4D}
+</style><path d="M-11.52 -360.31 A280.5 280.5 0 0 1 247.52 -360.31" fill="none" stroke="var(--brand-am)" stroke-width="16.0" />
+<path d="M247.52 596.31 A280.5 280.5 0 0 1 -11.52 596.31" fill="none" stroke="var(--brand-pm)" stroke-width="16.0" />
+<path d="M-57.23 -529.12 A379.5 379.5 0 0 1 293.23 -529.12" fill="none" stroke="var(--brand-am)" stroke-width="11.5" />
+<path d="M293.23 765.12 A379.5 379.5 0 0 1 -57.23 765.12" fill="none" stroke="var(--brand-pm)" stroke-width="11.5" />
+<path d="M-96.60 -674.49 A464.75 464.75 0 0 1 332.60 -674.49" fill="none" stroke="var(--brand-am)" stroke-width="11.7" />
+<path d="M332.60 910.49 A464.75 464.75 0 0 1 -96.60 910.49" fill="none" stroke="var(--brand-pm)" stroke-width="11.7" />
+<path d="M-135.96 -819.86 A550.0 550.0 0 0 1 371.96 -819.86" fill="none" stroke="var(--brand-am)" stroke-width="11.7" />
+<path d="M371.96 1055.86 A550.0 550.0 0 0 1 -135.96 1055.86" fill="none" stroke="var(--brand-pm)" stroke-width="11.7" /></svg>

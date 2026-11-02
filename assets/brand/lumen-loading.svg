@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 236 236" width="236" height="236" role="img"><title>Lumen loading</title><desc>Lumen at the ring centre with a sweeping light; stops under reduced motion.</desc><style>
+:root{--brand-am:#1E3A55;--brand-pm:#4FA3DD;--accent:#9CC24F;--lime:#B2D235;--ghost:#2B3A4D}
+</style><path d="M67.05 115.75 A51.0 51.0 0 0 1 154.06 81.94" fill="none" stroke="var(--brand-am)" stroke-width="16.0" />
+<path d="M154.06 154.06 A51.0 51.0 0 0 1 67.05 120.25" fill="none" stroke="var(--brand-pm)" stroke-width="16.0" />
+<path d="M49.04 115.75 A69.0 69.0 0 0 1 166.79 69.21" fill="none" stroke="var(--brand-am)" stroke-width="11.5" />
+<path d="M166.79 166.79 A69.0 69.0 0 0 1 49.04 120.25" fill="none" stroke="var(--brand-pm)" stroke-width="11.5" />
+<path d="M33.53 115.75 A84.5 84.5 0 0 1 177.75 58.25" fill="none" stroke="var(--brand-am)" stroke-width="11.7" />
+<path d="M177.75 177.75 A84.5 84.5 0 0 1 33.53 120.25" fill="none" stroke="var(--brand-pm)" stroke-width="11.7" />
+<path d="M18.03 115.75 A100.0 100.0 0 0 1 188.71 47.29" fill="none" stroke="var(--brand-am)" stroke-width="11.7" />
+<path d="M188.71 188.71 A100.0 100.0 0 0 1 18.03 120.25" fill="none" stroke="var(--brand-pm)" stroke-width="11.7" /><g style="animation:sweep 2.5s linear infinite;transform-origin:118px 118px">
+<path d="M118 118 L158 105 A42 42 0 0 0 158 131 Z" fill="var(--lime)" opacity="0.35"/></g>
+<style>@keyframes sweep{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){g[style]{animation:none!important}}</style><g transform="rotate(0 118.0 118.0)">
+<rect x="103" y="103" width="30" height="30" rx="6.0" fill="var(--accent)"/>
+<rect x="103" y="111.25" width="4.5" height="13.5" rx="1.5" fill="var(--lime)"/>
+</g></svg>

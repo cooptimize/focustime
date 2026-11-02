@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" width="120" height="100" role="img"><title>Lumen</title><desc>A rounded block with a light bar, light cast to the left.</desc><g transform="rotate(-6 50.0 50.0)">
+<path d="M20 50.0 L-94.0 17.0 L-94.0 83.0 Z" fill="#B2D235" opacity="0.22"/>
+<rect x="20" y="20" width="60" height="60" rx="12.0" fill="#9CC24F"/>
+<rect x="20" y="36.5" width="9.0" height="27.0" rx="3.0" fill="#B2D235"/>
+</g></svg>

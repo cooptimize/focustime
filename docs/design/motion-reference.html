@@ -1,0 +1,399 @@
+<title>Lumen Motion Preview</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column of stage cards, each a dark/light "surface" showing one motion with its controls under it. Dark-first (Coopilot default). */
+:root{
+  --surface:#0E1620; --raised:#162130; --border:#2B3A4D; --text:#E6ECF2; --muted:#9AAABB;
+  --primary:#4FA3DD; --brand-am:#1E3A55; --brand-pm:#4FA3DD; --accent:#9CC24F; --lime:#B2D235; --ghost:#2B3A4D;
+  --chip-ok:#17301f; --chip-ok-fg:#a8d5b6; --chip-proto:#3a2f14; --chip-proto-fg:#f5cf73;
+  --sans:"IBM Plex Sans", system-ui, sans-serif; --mono:"IBM Plex Mono", ui-monospace, monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){
+  --surface:#F5F7FA; --raised:#FFFFFF; --border:#D3DBE4; --text:#14212E; --muted:#56687A;
+  --primary:#00416B; --brand-am:#7FA6C9; --brand-pm:#00416B; --accent:#42783C; --ghost:#B9C6D3;
+  --chip-ok:#e3f1e6; --chip-ok-fg:#2c5a33; --chip-proto:#fbf0d4; --chip-proto-fg:#7a5a10;
+  color-scheme:light; } }
+:root[data-theme="light"]{
+  --surface:#F5F7FA; --raised:#FFFFFF; --border:#D3DBE4; --text:#14212E; --muted:#56687A;
+  --primary:#00416B; --brand-am:#7FA6C9; --brand-pm:#00416B; --accent:#42783C; --ghost:#B9C6D3;
+  --chip-ok:#e3f1e6; --chip-ok-fg:#2c5a33; --chip-proto:#fbf0d4; --chip-proto-fg:#7a5a10;
+  color-scheme:light; }
+body{background:var(--surface);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.5}
+.wrap{max-width:980px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:22px}
+header{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:flex-end;justify-content:space-between}
+h1{margin:0;font-size:26px;font-weight:600;letter-spacing:-0.01em;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;max-width:62ch}
+.toggles{display:flex;gap:8px;flex-wrap:wrap}
+button,.seg label{font:inherit;font-size:14px;color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:7px 13px;cursor:pointer}
+button:hover{border-color:var(--primary)}
+button:focus-visible,input:focus-visible{outline:2px solid #F2C94C;outline-offset:2px}
+button[aria-pressed="true"]{background:var(--primary);color:var(--surface);border-color:var(--primary)}
+.card{background:var(--raised);border:1px solid var(--border);border-radius:14px;padding:18px 20px;display:grid;gap:14px;min-width:0}
+.card h2{margin:0;font-size:17px;font-weight:600;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chip{font-size:12px;font-weight:500;padding:2px 9px;border-radius:12px}
+.chip.ok{background:var(--chip-ok);color:var(--chip-ok-fg)} .chip.proto{background:var(--chip-proto);color:var(--chip-proto-fg)}
+.note{color:var(--muted);font-size:14px;margin:0;max-width:70ch}
+.stage{background:var(--surface);border-radius:10px;display:flex;align-items:center;justify-content:center;padding:18px;min-height:220px;overflow:hidden}
+.stage svg{max-width:100%;height:auto}
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.controls .mono{font-family:var(--mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:7ch}
+input[type=range]{flex:1 1 200px;accent-color:var(--primary)}
+.poses{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.pose{display:grid;gap:8px;justify-items:center}
+.pose .stage{width:100%;min-height:150px}
+.pose span{font-size:13px;color:var(--muted)}
+.kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--border);border-radius:4px;padding:0 5px}
+/* app-open demo */
+.app{width:100%;max-width:720px;aspect-ratio:16/8;background:var(--surface);border:1px solid var(--border);border-radius:10px;position:relative;overflow:hidden}
+.app .bar{position:absolute;inset:0 0 auto;display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);opacity:0;transition:opacity .35s}
+.app .bar b{font-weight:600;letter-spacing:-0.02em;font-size:17px}
+.app .tabs{display:flex;gap:4px;margin-left:18px;font-size:13px;color:var(--muted)}
+.app .tabs span{padding:4px 10px;border-radius:6px}.app .tabs span:first-child{background:var(--border);color:var(--text)}
+.app .body{position:absolute;inset:52px 16px 16px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;opacity:0;transition:opacity .35s .1s}
+.app .body div{background:var(--raised);border:1px solid var(--border);border-radius:8px}
+.app .center{position:absolute;inset:0;display:grid;place-items:center;align-content:center;gap:10px;transition:opacity .25s}
+.app .center p{margin:0;font-size:14px;color:var(--muted);text-align:center}
+.app .center ul{list-style:none;margin:0;padding:0;display:flex;gap:14px;font-size:12px;color:var(--muted);font-family:var(--mono);flex-wrap:wrap;justify-content:center}
+.app.revealed .bar,.app.revealed .body{opacity:1}
+/* Lumen motion */
+@keyframes sweep{to{transform:rotate(360deg)}}
+@keyframes glow{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes tilt{0%,100%{transform:rotate(-1.5deg)}50%{transform:rotate(1.5deg)}}
+@keyframes bob{0%{transform:translateY(0)}35%{transform:translateY(-7px)}65%{transform:translateY(1px)}100%{transform:translateY(0)}}
+.sweep{animation:sweep 2.5s linear infinite;transform-origin:118px 118px}
+.idle .body{animation:tilt 6s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+.idle .bar{animation:glow 3s ease-in-out infinite}
+.bob{animation:bob .7s cubic-bezier(.3,.7,.3,1) 1}
+.reduced .sweep,.reduced .idle .body,.reduced .idle .bar,.reduced .bob{animation:none!important}
+@media (prefers-reduced-motion:reduce){.sweep,.idle .body,.idle .bar,.bob{animation:none!important}}
+</style>
+
+<div class="wrap" id="root">
+  <header>
+    <div>
+      <h1>Lumen and the unroll</h1>
+      <p class="sub">The loader is the drawn asset. The unroll, idle and bob are prototypes built for this preview so you can judge timing; Claude Code builds the real ones in step 17.5.</p>
+    </div>
+    <div class="toggles">
+      <button id="themeBtn" type="button">Switch to light</button>
+      <button id="rmBtn" type="button" aria-pressed="false">Reduce motion</button>
+    </div>
+  </header>
+
+  <section class="card" aria-labelledby="h-load">
+    <h2 id="h-load">Loading <span class="chip ok">Drawn</span></h2>
+    <div class="stage"><svg id="loadSvg" viewBox="0 0 236 236" width="236" height="236" role="img" aria-label="Lumen at the ring center, light sweeping"></svg></div>
+    <p class="note">Lumen at the center of the bent week, light passing over the eight segments once every 2.5 seconds. Shown full screen only when opening takes longer than 400 ms.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-unroll">
+    <h2 id="h-unroll">Opening the app: the unroll <span class="chip proto">Prototype</span></h2>
+    <div class="stage"><svg id="unrollSvg" viewBox="0 0 300 236" width="420" height="330" role="img" aria-label="Bent week unrolling into the four-by-two grid"></svg></div>
+    <div class="controls" role="group" aria-label="Ending">
+      <span class="note" style="margin-right:4px">Ending</span>
+      <button type="button" class="endBtn" data-end="handoff" aria-pressed="false">Hand off</button>
+      <button type="button" class="endBtn" data-end="home" aria-pressed="true">Back into Mon AM</button>
+      <button type="button" class="endBtn" data-end="beside" aria-pressed="false">Rest beside</button>
+    </div>
+    <div class="controls">
+      <button id="playOpen" type="button">Play open</button>
+      <button id="playClose" type="button">Play close</button>
+      <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub the unroll">
+      <span class="mono" id="tLabel">0 ms</span>
+    </div>
+    <p class="note" id="endNote"></p>
+    <p class="note">Two beats, about 1.5 s in all. First each ring straightens where it is, outer ring leading. Then the bars shrink and slide into their day, AM over PM, and the dashed inner piece becomes the hollow Mon AM block. Close plays it backwards. Drag the slider to stop anywhere.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-poses">
+    <h2 id="h-poses">Lumen poses</h2>
+    <div class="poses">
+      <div class="pose"><div class="stage" id="poseStill"></div><span>Still <span class="chip ok">Drawn</span></span></div>
+      <div class="pose"><div class="stage" id="poseIdle"></div><span>Idle, empty states <span class="chip proto">Prototype</span></span></div>
+      <div class="pose"><div class="stage" id="poseBob"></div><span>Fun moment <span class="chip proto">Prototype</span> <button id="bobBtn" type="button">Replay</button></span></div>
+    </div>
+    <p class="note">Still is the reduced-motion fallback. Idle: light bar breathes, body tilts 1.5 degrees. Fun moment: one settle and bob, then still.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-app">
+    <h2 id="h-app">App open, end to end <span class="chip proto">Prototype</span></h2>
+    <div class="stage" style="padding:12px">
+      <div class="app" id="app">
+        <div class="center" id="appCenter">
+          <svg id="appSvg" viewBox="0 0 300 236" width="240" height="190" aria-hidden="true"></svg>
+          <p id="appMsg">Loading your week</p>
+          <ul id="appSources"><li data-s="0">Dataverse …</li><li data-s="1">Outlook …</li><li data-s="2">Google …</li><li data-s="3">DevOps …</li></ul>
+        </div>
+        <div class="bar"><svg viewBox="0 0 200 90" width="40" height="18" id="barMark" aria-hidden="true"></svg><b>Coopilot</b><div class="tabs"><span>Today</span><span>Week</span><span>Roadmap</span><span>Inbox</span></div></div>
+        <div class="body"><div></div><div></div><div></div><div></div></div>
+      </div>
+    </div>
+    <div class="controls"><button id="appPlay" type="button">Replay</button><span class="note">Slow load simulated: sources finish one by one, then the unroll, then the week shrinks into the top bar as the app appears.</span></div>
+  </section>
+</div>
+<style>
+.app .center p,.app .center ul{transition:opacity .25s}
+.app.flying .center p,.app.flying .center ul{opacity:0}
+#appSvg{transform-origin:0 0;transition:transform .55s cubic-bezier(.22,.8,.24,1),opacity .2s}
+#barMark{opacity:0;transition:opacity .15s}
+:root{--blend:screen}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--blend:multiply}}
+:root[data-theme="light"]{--blend:multiply}
+:root[data-theme="dark"]{--blend:screen}
+.wedge{mix-blend-mode:var(--blend)}
+.app.revealed #barMark{opacity:1}
+</style>
+<script>
+(function(){
+const NS="http://www.w3.org/2000/svg";
+const root=document.documentElement, rootDiv=document.getElementById('root');
+let reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let ending='home';
+
+/* ---------- theme + reduced motion ---------- */
+const themeBtn=document.getElementById('themeBtn');
+function isDark(){const t=root.getAttribute('data-theme'); if(t) return t==='dark'; return !matchMedia('(prefers-color-scheme: light)').matches;}
+function syncThemeBtn(){themeBtn.textContent=isDark()?'Switch to light':'Switch to dark';}
+themeBtn.onclick=()=>{root.setAttribute('data-theme',isDark()?'light':'dark');syncThemeBtn();};
+syncThemeBtn();
+const rmBtn=document.getElementById('rmBtn');
+function syncRm(){rmBtn.setAttribute('aria-pressed',String(reduced));rootDiv.classList.toggle('reduced',reduced);}
+rmBtn.onclick=()=>{reduced=!reduced;syncRm();if(reduced)setT(TOTAL);};
+syncRm();
+
+/* ---------- helpers ---------- */
+const clamp=x=>Math.min(1,Math.max(0,x));
+const win=(x,a,b)=>clamp((x-a)/(b-a));
+const io=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;         // ease in-out cubic
+const out=t=>1-Math.pow(1-t,3);
+const lerp=(a,b,e)=>a+(b-a)*e;
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const a in attrs)e.setAttribute(a,attrs[a]);if(parent)parent.appendChild(e);return e;}
+let gradN=0;
+function beamGrad(svg,attrs,radial){const id='beam'+(++gradN);const defs=el('defs',{},svg);const g=el(radial?'radialGradient':'linearGradient',Object.assign({id,gradientUnits:'userSpaceOnUse'},attrs),defs);el('stop',{offset:0,'stop-color':'var(--lime)','stop-opacity':0.85},g);el('stop',{offset:0.55,'stop-color':'var(--lime)','stop-opacity':0.25},g);el('stop',{offset:1,'stop-color':'var(--lime)','stop-opacity':0},g);return `url(#${id})`;}
+/* clean beam: level, symmetric about the light bar, fading out */
+const BEAM='M0 6 L-70 -12 L-70 42 L0 24 Z';
+
+/* ---------- geometry (from the drawn marks) ---------- */
+const C=118, R=[51,69,84.5,100], W=[16,11.5,11.7,11.7];
+const S=1.2, OX=8, OY=64;                    // mark-week placed at 1.2x
+const cols=[8,56,104,152], BW=40, RX=6;
+const AM={y:8,h:26}, PM={y:50,h:32};
+const segs=[];
+for(let k=0;k<4;k++) for(const half of ['am','pm']){
+  const r=R[k], sx=C-Math.sqrt(r*r-2.25*2.25);
+  const a0=half==='am'?Math.atan2(-2.25,sx-C):Math.PI/4;
+  const a1=half==='am'?-Math.PI/4:Math.atan2(2.25,sx-C);
+  const phi=(a0+a1)/2, L0=r*Math.abs(a1-a0);
+  const sgn=half==='am'?-1:1;
+  const row=half==='am'?AM:PM;
+  const ghost=(k===0&&half==='am');
+  segs.push({k,half,r,ghost,
+    M0:[C+r*Math.cos(phi),C+r*Math.sin(phi)],
+    th0:Math.atan2(Math.cos(phi),-Math.sin(phi)),
+    th1:half==='am'?0:-Math.PI,
+    P1:[128,C+sgn*0.93*r],                     // beat 1: straight bar where the ring was
+    L0, Lm:L0*0.7,
+    M1:[OX+(cols[k]+BW/2)*S, OY+(row.y+row.h/2)*S],
+    L1:ghost?BW*S-3:(BW-2*RX)*S,
+    w0:ghost?0:W[k]/2,
+    h1:ghost?row.h*S/2-1.5:(row.h/2-RX)*S,
+    rx:RX*S, color:half==='am'?'var(--brand-am)':'var(--brand-pm)'});
+}
+
+/* ---------- timeline (ms) ---------- */
+const GRID=1050, TAIL=480, TOTAL=GRID+TAIL;
+function segState(g,s){
+  const d=(3-s.k)*0.06;                        // outer ring leads
+  const e1=io(win(g,d,d+0.5));                 // beat 1: straighten in place
+  const s2=win(g,0.34+d,0.82+d);               // beat 2: shrink + slide into the day
+  const ex=io(win(s2,0,0.8)), ey=io(win(s2,0.2,1)), eL=io(win(s2,0,0.65)), eT=io(win(s2,0.25,1));
+  const kap=(1/s.r)*Math.pow(1-e1,1.6);
+  const th=lerp(s.th0,s.th1,e1);
+  const mx=lerp(lerp(s.M0[0],s.P1[0],e1),s.M1[0],ex);
+  const my=lerp(lerp(s.M0[1],s.P1[1],e1),s.M1[1],ey);
+  const L=lerp(lerp(s.L0,s.Lm,e1),s.L1,eL);
+  const hw=lerp(s.w0,s.h1,eT);
+  return {kap,th,mx,my,L,hw,e2:eT};
+}
+function pts(st){
+  const T=[Math.cos(st.th),Math.sin(st.th)], N=[-T[1],T[0]], n=36, a=[],b=[];
+  for(let i=0;i<=n;i++){
+    const u=-st.L/2+st.L*i/n; let px,py,tx,ty;
+    if(st.kap<1e-7){px=u;py=0;tx=1;ty=0;} else {px=Math.sin(st.kap*u)/st.kap;py=(1-Math.cos(st.kap*u))/st.kap;tx=Math.cos(st.kap*u);ty=Math.sin(st.kap*u);}
+    const cx=st.mx+T[0]*px+N[0]*py, cy=st.my+T[1]*px+N[1]*py;
+    const dx=T[0]*tx+N[0]*ty, dy=T[1]*tx+N[1]*ty;
+    a.push([cx-dy*st.hw,cy+dx*st.hw]); b.push([cx+dy*st.hw,cy-dx*st.hw]);
+  }
+  return a.concat(b.reverse()).map(p=>p[0].toFixed(2)+','+p[1].toFixed(2)).join(' ');
+}
+
+/* Lumen poses along the path */
+const BENT={x:206,y:103,rot:0,s:1}, BESIDE={x:262,y:103,rot:0,s:1};
+const slot=segs[0].M1, HOME={x:slot[0]-10,y:slot[1]-10,rot:0,s:20/30};
+function lumenState(t){
+  const g=clamp(t/GRID), u=clamp((t-GRID)/TAIL);
+  const e=io(win(g,0.25,1));
+  let x=lerp(BENT.x,BESIDE.x,e), y=lerp(BENT.y,BESIDE.y,e)-5*Math.sin(Math.PI*e), rot=lerp(BENT.rot,BESIDE.rot,e), sc=1;
+  let wedge=lerp(0.22,0.14,e), op=1;
+  if(ending==='beside'){
+    const eu=out(u); wedge=lerp(wedge,0,eu); y-=2.5*Math.sin(Math.PI*eu);
+  } else if(ending==='home'){
+    const eu=io(u); wedge=lerp(wedge,0,clamp(u*3));
+    x=lerp(x,HOME.x,eu); y=lerp(y,HOME.y,eu)-34*Math.sin(Math.PI*eu); sc=lerp(1,HOME.s,eu);
+  } else { // handoff: light passes over the week, then Lumen steps out
+    wedge=lerp(wedge,0.32,io(win(u,0,0.4))); wedge=lerp(wedge,0,io(win(u,0.4,0.85)));
+    op=1-io(win(u,0.45,1)); x+=10*io(win(u,0.45,1));
+  }
+  return {x,y,rot,sc,wedge,op};
+}
+
+/* ---------- build a stage ---------- */
+function buildStage(svg){
+  svg.innerHTML='';
+  const st={polys:[],final:null,lumen:null,wedge:null,gridBox:null};
+  for(const s of segs){
+    const p=el('polygon',{'stroke-linejoin':'round'},svg);
+    if(s.ghost){p.setAttribute('fill','none');p.setAttribute('stroke-width','3');}
+    else {p.setAttribute('fill',s.color);p.setAttribute('stroke',s.color);}
+    st.polys.push(p);
+  }
+  const f=el('g',{transform:`translate(${OX} ${OY}) scale(${S})`,opacity:0},svg);
+  el('rect',{x:9.5,y:9.5,width:37,height:23,rx:5,fill:'none',stroke:'var(--accent)','stroke-width':3/S*1.2},f);
+  for(let i=0;i<4;i++){ if(i) el('rect',{x:cols[i],y:AM.y,width:BW,height:AM.h,rx:RX,fill:'var(--brand-am)'},f); el('rect',{x:cols[i],y:PM.y,width:BW,height:PM.h,rx:RX,fill:'var(--brand-pm)'},f);}
+  st.final=f;
+  st.gridBox=el('rect',{x:OX+8*S,y:OY+8*S,width:184*S,height:74*S,fill:'none',stroke:'none'},svg);
+  const g=el('g',{},svg);
+  st.wedge=el('path',{class:'wedge',d:BEAM,fill:beamGrad(svg,{x1:0,y1:0,x2:-70,y2:0})},g);
+  el('rect',{x:0,y:0,width:30,height:30,rx:6,fill:'var(--accent)'},g);
+  el('rect',{x:0,y:8.25,width:4.5,height:13.5,rx:1.5,fill:'var(--lime)'},g);
+  st.lumen=g;
+  return st;
+}
+function render(t,st){
+  const g=clamp(t/GRID);
+  const fin=io(win(g,0.9,1));
+  segs.forEach((s,i)=>{
+    const ss=segState(g,s), p=st.polys[i];
+    p.setAttribute('points',pts(ss));
+    p.setAttribute('opacity',(1-fin).toFixed(3));
+    if(s.ghost){
+      p.style.stroke=`color-mix(in srgb, var(--accent) ${Math.round(ss.e2*100)}%, var(--ghost))`;
+      p.setAttribute('stroke-dasharray',`6 ${(5*(1-ss.e2)).toFixed(2)}`);
+    } else p.setAttribute('stroke-width',(2*s.rx*ss.e2).toFixed(2));
+  });
+  st.final.setAttribute('opacity',fin.toFixed(3));
+  const l=lumenState(t);
+  st.lumen.setAttribute('transform',`translate(${l.x.toFixed(2)} ${l.y.toFixed(2)}) scale(${l.sc.toFixed(3)}) rotate(${l.rot.toFixed(2)} 15 15)`);
+  st.lumen.setAttribute('opacity',l.op.toFixed(3));
+  st.wedge.setAttribute('opacity',Math.min(1,l.wedge*2.6).toFixed(3));
+}
+
+/* ---------- loading ring ---------- */
+function drawLoading(svg){
+  svg.innerHTML='';
+  for(let k=0;k<4;k++){
+    const r=R[k], sx=C-Math.sqrt(r*r-2.25*2.25), ex=C+r*Math.SQRT1_2, ey=C-r*Math.SQRT1_2;
+    el('path',{d:`M${sx.toFixed(2)} 115.75 A${r} ${r} 0 0 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`,fill:'none',stroke:'var(--brand-am)','stroke-width':W[k]},svg);
+    el('path',{d:`M${ex.toFixed(2)} ${(236-ey).toFixed(2)} A${r} ${r} 0 0 1 ${sx.toFixed(2)} 120.25`,fill:'none',stroke:'var(--brand-pm)','stroke-width':W[k]},svg);
+  }
+  const g=el('g',{class:'sweep'},svg);
+  el('path',{class:'wedge',d:'M118 118 L157 99.8 A43 43 0 0 1 157 136.2 Z',fill:beamGrad(svg,{cx:118,cy:118,r:44},true),opacity:'0.9'},g);
+  const l=el('g',{transform:'translate(103 103)'},svg);
+  el('rect',{x:0,y:0,width:30,height:30,rx:6,fill:'var(--accent)'},l);
+  el('rect',{x:0,y:8.25,width:4.5,height:13.5,rx:1.5,fill:'var(--lime)'},l);
+}
+drawLoading(document.getElementById('loadSvg'));
+
+/* ---------- unroll section ---------- */
+const unrollSvg=document.getElementById('unrollSvg'), uState=buildStage(unrollSvg);
+const scrub=document.getElementById('scrub'), tLabel=document.getElementById('tLabel');
+let curT=0, anim=null;
+function setT(t){curT=t;render(t,uState);scrub.value=Math.round(t/TOTAL*1000);tLabel.textContent=Math.round(t)+' ms';}
+function play(from,to,fn,done){
+  cancelAnimationFrame(anim);
+  if(reduced){fn(to);done&&done();return;}
+  const start=performance.now(), dur=Math.abs(to-from);
+  const step=now=>{const p=Math.min(1,(now-start)/dur);fn(from+(to-from)*p);if(p<1)anim=requestAnimationFrame(step);else done&&done();};
+  anim=requestAnimationFrame(step);
+}
+document.getElementById('playOpen').onclick=()=>play(0,TOTAL,setT);
+document.getElementById('playClose').onclick=()=>play(TOTAL,0,setT);
+scrub.oninput=()=>{cancelAnimationFrame(anim);setT(scrub.value/1000*TOTAL);};
+const notes={
+  handoff:'Hand off: Lumen shines once across the finished week, then steps out of frame. The last frame is exactly the in-app mark, so in the app the week can shrink straight into the top bar.',
+  home:'Back into Mon AM (chosen): Lumen hops back into the hollow Monday morning block it came from. In the app, Lumen fades as the week shrinks into the top bar, so the top-bar mark and icon stay hollow.',
+  beside:'Rest beside: Lumen settles next to the grid and its light dims to nothing. Closest to the brief, but it leaves Lumen parked in the corner.'
+};
+document.querySelectorAll('.endBtn').forEach(b=>b.onclick=()=>{
+  ending=b.dataset.end;
+  document.querySelectorAll('.endBtn').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+  document.getElementById('endNote').textContent=notes[ending];
+  play(0,TOTAL,setT);
+});
+document.getElementById('endNote').textContent=notes[ending];
+setT(0);
+
+/* ---------- poses ---------- */
+function poseSvg(host,cls){
+  const svg=el('svg',{viewBox:'-50 0 150 100',width:'180',height:'120','aria-hidden':'true'});
+  const outer=el('g',{transform:'translate(20 20) scale(2)'},svg);
+  const wrap=el('g',{class:cls||''},outer);
+  const body=el('g',{class:'body'},wrap);
+  el('path',{class:'wedge',d:'M0 6 L-40 -6 L-40 36 L0 24 Z',fill:beamGrad(svg,{x1:0,y1:0,x2:-40,y2:0}),opacity:'0.6'},body);
+  el('rect',{x:0,y:0,width:30,height:30,rx:6,fill:'var(--accent)'},body);
+  el('rect',{class:'bar',x:0,y:8.25,width:4.5,height:13.5,rx:1.5,fill:'var(--lime)'},body);
+  host.appendChild(svg); return wrap;
+}
+poseSvg(document.getElementById('poseStill'));
+poseSvg(document.getElementById('poseIdle'),'idle');
+const bobG=poseSvg(document.getElementById('poseBob'));
+document.getElementById('bobBtn').onclick=()=>{bobG.classList.remove('bob');void bobG.getBBox();bobG.classList.add('bob');};
+
+/* ---------- top bar mark ---------- */
+(function(){
+  const s=document.getElementById('barMark');
+  el('rect',{x:9.5,y:9.5,width:37,height:23,rx:5,fill:'none',stroke:'var(--accent)','stroke-width':3},s);
+  for(let i=0;i<4;i++){ if(i) el('rect',{x:cols[i],y:8,width:40,height:26,rx:6,fill:'var(--brand-am)'},s); el('rect',{x:cols[i],y:50,width:40,height:32,rx:6,fill:'var(--brand-pm)'},s);}
+})();
+
+/* ---------- app open, end to end ---------- */
+const app=document.getElementById('app'), appSvg=document.getElementById('appSvg');
+let timers=[], aAnim=null;
+function appRun(){
+  timers.forEach(clearTimeout);timers=[];cancelAnimationFrame(aAnim);
+  app.classList.remove('revealed','flying');
+  appSvg.style.transition='none';appSvg.style.transform='';appSvg.style.opacity=1;void appSvg.offsetWidth;appSvg.style.transition='';
+  document.getElementById('appMsg').textContent='Loading your week';
+  appSvg.setAttribute('viewBox','-32 0 300 236'); drawLoading(appSvg);
+  const names=['Dataverse','Outlook','Google','DevOps'];
+  document.querySelectorAll('#appSources li').forEach((li,i)=>{li.textContent=names[i]+' …';li.style.color='';});
+  const R0=reduced?0:1;
+  [600,1100,1500,2300].forEach((t,i)=>timers.push(setTimeout(()=>{const li=document.querySelector(`#appSources li[data-s="${i}"]`);li.textContent=names[i]+(i===2?' needs reconnecting':' done');li.style.color=i===2?'var(--chip-proto-fg)':'var(--text)';},t*R0)));
+  timers.push(setTimeout(()=>{
+    appSvg.setAttribute('viewBox','0 0 300 236');
+    const st=buildStage(appSvg);
+    app.classList.add('flying');
+    const fly=()=>{
+      st.lumen.style.transition='opacity .2s';st.lumen.style.opacity=0;
+      app.classList.add('flying');
+      const b=st.gridBox.getBoundingClientRect(), sv=appSvg.getBoundingClientRect(), bar=document.getElementById('barMark').getBoundingClientRect();
+      const sc=(bar.width*184/200)/b.width;
+      const tx=(bar.left+bar.width*8/200)-sv.left-(b.left-sv.left)*sc;
+      const ty=(bar.top+bar.height*8/90)-sv.top-(b.top-sv.top)*sc;
+      if(reduced){appSvg.style.transition='none';}
+      appSvg.style.transform=`translate(${tx}px,${ty}px) scale(${sc})`;
+      timers.push(setTimeout(()=>{app.classList.add('revealed');appSvg.style.opacity=0;},reduced?0:520));
+    };
+    if(reduced){render(TOTAL,st);fly();return;}
+    const start=performance.now();
+    const step=now=>{const t=Math.min(TOTAL,now-start);render(t,st);if(t<TOTAL)aAnim=requestAnimationFrame(step);else fly();};
+    aAnim=requestAnimationFrame(step);
+  },2600*R0));
+}
+document.getElementById('appPlay').onclick=appRun;
+appRun();
+})();
+</script>
