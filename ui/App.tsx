@@ -45,8 +45,6 @@ import { Roadmap } from "./Roadmap.tsx";
 import { PlanAhead } from "./PlanAhead.tsx";
 import { Today } from "./Today.tsx";
 import type { DraftStory, Pick } from "../plan/types.ts";
-import { CloseOut } from "./CloseOut.tsx";
-import { CheckIn } from "./CheckIn.tsx";
 import { PlanWeek } from "./PlanWeek.tsx";
 import { weekMusts } from "./WeekMusts.tsx";
 import { CaptureDialog } from "./Capture.tsx";
@@ -54,7 +52,7 @@ import { DraftEditor, DraftEditorCtx } from "./DraftEditor.tsx";
 import type { BoxKind } from "../plan/capture.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
 import { formatDuration } from "../week/format.ts";
-import { PopupMenu } from "./Menus.tsx";
+import { MoreButton, PopupMenu } from "./Menus.tsx";
 import { borrowStep, timerStep } from "./menu.ts";
 import { nowStrip } from "../plan/now.ts";
 import { cardHalves, slotOf, validHalf } from "./halves.ts";
@@ -162,6 +160,8 @@ export function App() {
   const [draftEdit, setDraftEdit] = useState<DraftStory | null>(null);
   const [captureVersion, setCaptureVersion] = useState(0);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
+  /** U2: Week's ⋯ (the hours shown, and the compact timelines in the medium layout), moved from the status bar. */
+  const [weekMoreAt, setWeekMoreAt] = useState<{ x: number; y: number } | null>(null);
   /** The focus timer menu (F or the top bar Focus button), anchored where it was opened. */
   const [timerMenuAt, setTimerMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** Step 16.2: the top bar's ⋯ menu (Commands, keyboard shortcuts) and the initials menu (Settings, Sign out). */
@@ -579,7 +579,7 @@ export function App() {
   }, [wantPlanDate, pd, closePlanDay, loadPlanDay]);
 
   // The week each place shows: Week its week (this week by default), Plan the week its week, Today and Check-in today's.
-  const wantWeek = !data ? null : nav.tab === "week" ? (planWeekAt ?? nav.week ?? data.today.weekStart) : nav.tab === "today" && (nav.mode === "now" || nav.mode === "checkin") && !loc.overlay ? data.today.weekStart : null;
+  const wantWeek = !data ? null : nav.tab === "week" ? (planWeekAt ?? nav.week ?? data.today.weekStart) : nav.tab === "today" && (nav.mode === "now" || nav.mode === "checkin" || nav.mode === "closeout") && !loc.overlay ? data.today.weekStart : null;
   useEffect(() => {
     if (!data || !wantWeek || wantWeek === weekRef.current) return;
     void load({ weekStart: wantWeek }, { selectToday: wantWeek === data.today.weekStart });
@@ -1395,10 +1395,6 @@ export function App() {
         <PlanWeek switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : followUpsOpen ? (
         <Inbox data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
-      ) : closeOutAt !== null ? (
-        <CloseOut switcher={switches.today} key={closeOutAt} date={closeOutAt} data={data} onDate={(d) => goNav(navOf.today("closeout", d))} onClose={(msg) => (msg && setNotice(msg), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} onClosedOut={(st) => setClosing({ musts: st.date === st.today && mustsDone(st.picks, data.weekFeatures) })} />
-      ) : checkInOpen ? (
-        <CheckIn switcher={switches.today} data={data} now={now ?? new Date(clock).toISOString()} onClose={leavePlanning} onChanged={reloadQuiet} />
       ) : roadmapOpen ? (
         nav.tab === "roadmap" && nav.mode === "ahead" ? <PlanAhead data={data} switcher={switches.roadmap} onDone={leavePlanning} onChanged={reloadQuiet} /> : <Roadmap switcher={switches.roadmap} data={data} onChanged={reloadQuiet} />
       ) : nav.tab === "today" && nav.mode === "plan" ? (
@@ -1453,15 +1449,24 @@ export function App() {
           target={target}
           now={now ?? new Date(clock).toISOString()}
           nowMs={secondMs}
+          mode={nav.tab === "today" && (nav.mode === "checkin" || nav.mode === "closeout") ? nav.mode : "now"}
+          closeOutDate={closeOutAt}
+          wide={layout === "wide"}
           onStart={startFocus}
-          onPlanFeature={(d, h, id) => addWork(d, h, id)}
           onFocusScreen={() => setView("focus")}
+          onTimer={(a) => void runTimer(a)}
           onPlan={(d) => openPlanDay(d)}
+          onPlanWeek={() => openPlanWeek(data.today.weekStart)}
           switcher={switches.today}
           onInbox={() => setView("inbox")}
-          onWeek={() => setView("week")}
+          onCaptures={() => setView("inbox")}
+          onRetry={() => auto.trigger("button")}
           onFix={() => setSettingsAt("connections")}
           onSettings={(section) => setSettingsAt(section as never)}
+          onChanged={reloadQuiet}
+          onLeave={(msg) => (msg && setNotice(msg), leavePlanning())}
+          onCloseOutDate={(d) => goNav(navOf.today("closeout", d))}
+          onClosedOut={(st) => setClosing({ musts: st.date === st.today && mustsDone(st.picks, data.weekFeatures) })}
         />
       ) : (
         <>
@@ -1492,6 +1497,13 @@ export function App() {
                 </button>
               )}
               <MustsSummary musts={weekMusts(data, data.weekStart, null).rows} colors={data.clients} onPlanWeek={() => openPlanWeek(data.weekStart)} />
+              <MoreButton
+                label="View options for Week"
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setWeekMoreAt({ x: r.left, y: r.bottom + 4 });
+                }}
+              />
             </div>
             <ModeArea>{switches.week}</ModeArea>
           </header>
@@ -1527,9 +1539,6 @@ export function App() {
         sampleWeek={SAMPLE_WEEK}
         isSampleWeek={data.weekStart === SAMPLE_WEEK}
         hours={data.hours}
-        range={data.week.range}
-        onRange={(r) => void setViewRange(r)}
-        timelines={layout === "medium" ? { on: timelines, toggle: () => switchTimelines(!timelines) } : null}
         loading={loading}
         busy={busy}
         notice={notice ?? (state.kind === "ready" ? state.refreshError ?? null : null)}
@@ -1556,6 +1565,19 @@ export function App() {
         />
       )}
       {personMenu && <PopupMenu at={personMenu.at} step={personMenu.step} onClose={() => setPersonMenu(null)} />}
+      {weekMoreAt && (
+        <PopupMenu
+          at={weekMoreAt}
+          step={{
+            title: "Week",
+            items: [
+              ...VIEW_RANGES.map((r) => ({ id: `range-${r}`, label: `Show ${VIEW_RANGE_NAMES[r].toLowerCase()}`, group: "Hours on the timelines", checked: data.week.range.mode === r, ...(data.week.range.mode === r ? {} : { hint: "H" }), run: () => void setViewRange(r) })),
+              ...(layout === "medium" ? [{ id: "timelines", label: "Timelines on cards", group: "Cards", checked: timelines, hint: "V", run: () => switchTimelines(!timelines) }] : []),
+            ],
+          }}
+          onClose={() => setWeekMoreAt(null)}
+        />
+      )}
       {borrowMenuAt && <PopupMenu at={borrowMenuAt} step={borrowStep(env, data.borrowed)} onClose={() => setBorrowMenuAt(null)} />}
       {keysOpen && <KeyLegend onClose={() => setKeysOpen(false)} />}
       <NoHoursPrompt

@@ -305,9 +305,15 @@ export function VmChip() {
   );
 }
 
+/** U2: whether Today's attention line has a VM prompt to show (VmToday renders it). */
+export function vmNeedsToday(status: VmApi["status"]): boolean {
+  return !!status?.vm && ((!!status.stillChanged && !!status.change) || !!status.prompt);
+}
+
 /**
- * Today (step 16.3): only the prompts that need me now. The morning "Your VM is off. Start it?" box, and the
- * "Auto-shutdown is still changed" warning after a restore failed. Everything else is on the header chip.
+ * Today (step 16.3, U2): only the prompts that need me now, as chips in the attention line. The morning "VM is off.
+ * Start?" and "Auto-shutdown is still changed" after a restore failed (the hard rule: a changed schedule is put back
+ * or shown on Today). Everything else is on the header chip.
  */
 export function VmToday() {
   const { status, refresh, act } = useContext(VmCtx);
@@ -316,12 +322,12 @@ export function VmToday() {
   return (
     <>
       {status.stillChanged && status.change && (
-        <div className="vm-banner vm-banner-warn" role="alert">
-          <strong>Auto-shutdown is still changed</strong>
-          <span>{status.change.text}.{status.change.message ? ` Coopilot couldn't put it back: ${status.change.message}.` : ""}</span>
+        <span className="att-chip vm warn" role="alert" title={`${status.change.text}.${status.change.message ? ` Coopilot couldn't put it back: ${status.change.message}.` : ""}`}>
+          <span className="att-tag">Auto-shutdown is still changed</span>
+          <span>{status.change.text}</span>
           <button
             type="button"
-            className="mini primary"
+            className="mini"
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -338,18 +344,17 @@ export function VmToday() {
           >
             Restore
           </button>
-        </div>
+        </span>
       )}
       {status.prompt && (
-        <div className="vm-banner">
-          <strong>Your VM is off. Start it?</strong>
-          <span className="muted">{status.vm.name} · {status.label}</span>
+        <span className="att-chip vm" title={`${status.vm.name} · ${status.label}`}>
+          <span className="att-tag">VM is off</span>
           <button
             type="button"
-            className="mini primary"
+            className="mini"
             disabled={busy}
             onClick={async () => {
-              // Step 15.5 (Q87): one click when Settings > You says so (this box names the VM and says it starts; the
+              // Step 15.5 (Q87): one click when Settings > You says so (the chip names the VM and says it starts; the
               // start is logged and read back like any other); else the usual preview.
               if (!status.startWithoutAsking) return act("start");
               setBusy(true);
@@ -369,7 +374,7 @@ export function VmToday() {
             Start
           </button>
           <button type="button" className="mini quiet" onClick={() => void call("vm.dismiss_prompt", {}).then(() => refresh())}>Not today</button>
-        </div>
+        </span>
       )}
     </>
   );
