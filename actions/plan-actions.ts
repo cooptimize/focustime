@@ -3,6 +3,7 @@
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { carryTarget, dayLabel, dayRule, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
+import { alreadyPlanned } from "../plan/dup.ts";
 import { sessionEnd, unpickableReason } from "../plan/rules.ts";
 import { DEFAULT_SIZE, SIZES, type Pick as PlanPick, type PlanDayState, type Size } from "../plan/types.ts";
 import { PlanError, type NewPick, type PlanStore } from "../store/plan-store.ts";
@@ -69,6 +70,10 @@ async function pastRefusal(ctx: PlanContext, d: IsoDate): Promise<string | null>
 }
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
+const HALF_WORD: Record<Half, string> = { AM: "the morning", PM: "the afternoon", EVE: "the evening" };
+/** Step 15.1 (D277): the same item in the same block is "Already planned here"; in the other half of the day, say which. */
+const dupRefusal = (has: Half, want: Half): ActionResponse =>
+  has === want ? { ok: false, status: 409, error: "Already planned here", code: "duplicate" } : bad(`Already planned for ${HALF_WORD[has]} that day`, 409);
 class Invalid extends Error {}
 
 type Obj = Record<string, unknown>;
@@ -199,18 +204,20 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           const why = unpickableReason(item);
           if (why) return bad(why, 422);
           const dup = plan.picksFor(base.date).find((x) => x.itemId === itemId && x.clientKey === base.clientKey && (x.status === "planned" || x.status === "done"));
-          if (dup) return bad(`Item ${itemId} is already picked for ${dup.half} that day`, 409);
+          if (dup) return dupRefusal(dup.half, base.half);
           p = { ...base, kind: "item", itemId, title: item.title, itemType: item.type, itemUrl: item.url.startsWith("https://dev.azure.com/") ? item.url : null };
         } else if (o.draftId !== undefined) {
           const draft = plan.getDraft(id(o.draftId, "draftId"));
           if (!draft || draft.clientKey !== base.clientKey) return bad("No such draft story for this client", 404);
+          const dup = alreadyPlanned(plan.picksFor(base.date), { clientKey: base.clientKey, draftId: draft.id }, base.date, base.half);
+          if (dup) return dupRefusal(dup.half, base.half);
           p = { ...base, kind: "draft", draftId: draft.id, title: draft.title, itemType: "Draft story" };
         } else if (o.followUpId !== undefined) {
           const f = plan.getFollowUp(id(o.followUpId, "followUpId"));
           if (!f) return bad("No such follow-up", 404);
           if (f.closedAt) return bad("That follow-up is already closed", 409);
           const dup = plan.picksFor(base.date).find((x) => x.followUpId === f.id && (x.status === "planned" || x.status === "done"));
-          if (dup) return bad(`That follow-up is already picked for ${dup.half} that day`, 409);
+          if (dup) return dupRefusal(dup.half, base.half);
           p = { ...base, kind: "intention", title: f.what.slice(0, 200), itemType: "Follow-up", followUpId: f.id };
         } else {
           p = { ...base, kind: "intention", title: text(o.intention, "intention") };
@@ -254,6 +261,8 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const cfgNow = await ctx.config().catch(() => null);
         const ask = o.anyway === true || !cfgNow ? null : noHoursPrompt(cfgNow.week.hours, to, Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(cfgNow.week.hours.timeZone).toPlainDate().toString());
         if (ask) return { ok: false, status: 409, error: ask, code: "no_hours" };
+        // Step 15.1 (D277): never two copies of one item in a block.
+        if (alreadyPlanned(plan.picksFor(to), before, to, h, pid)) return { ok: false, status: 409, error: "Already planned here", code: "duplicate" };
         const pick = plan.move(pid, to, h);
         return { ok: true, data: { pick, state: await state(ctx, plan, before.date) } };
       }

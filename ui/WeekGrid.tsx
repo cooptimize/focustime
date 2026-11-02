@@ -1,4 +1,4 @@
-import { useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { createContext, useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { TimeboxBands, TimeboxList } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
 import { worstSeverity } from "../week/risks.ts";
@@ -11,7 +11,7 @@ import { canAddWork, planButton } from "../plan/days.ts";
 import { dayMenu, eventMenu, slotMenu } from "./menu.ts";
 import { MenuCtx, useMenu } from "./Menus.tsx";
 import { PickRow } from "./PickRow.tsx";
-import { hourMarks, labelHere, layoutEvents } from "./layout.ts";
+import { hourMarks, labelHere, layoutEvents, rulerSpan, showRuler } from "./layout.ts";
 import { DevOpsWork } from "./work.ts";
 import { clientColor, eventRange, halfTag, SampleSources, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 import { cardHalves, eveOnly, slotOf } from "./halves.ts";
@@ -22,6 +22,9 @@ import { blockStatus } from "../plan/blockstatus.ts";
 import { HalfScope } from "./scope.ts";
 
 export type Selection = { dayIndex: number; half: Half };
+
+/** Step 15.1 (D276): the layout and the timelines switch, for the compact time ruler on each card. */
+const RulerCtx = createContext<{ layout: Layout; on: boolean }>({ layout: "wide", on: false });
 
 type Props = {
   week: Week;
@@ -38,6 +41,8 @@ type Props = {
   layout: Layout;
   /** Half-days as compact cards (medium, and narrow windows too thin for rail plus timeline). */
   compact: boolean;
+  /** Step 15.1 (D276): compact timelines on medium cards (the switch; showRuler decides per card). */
+  timelines?: boolean | undefined;
   /** Plan the day: this day's column becomes the planning panel; the rest of the week is dimmed. */
   planDay?: { dayIndex: number; node: ReactNode } | undefined;
   /** Step 13.6: the day header's Plan button, "+ Add work" on a block and Friday's "Add hours" link. */
@@ -46,7 +51,15 @@ type Props = {
   onAddHours?: ((date: string) => void) | undefined;
 };
 
-export function WeekGrid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact, planDay, onPlanDay, onAddWork, onAddHours }: Props) {
+export function WeekGrid(props: Props) {
+  return (
+    <RulerCtx.Provider value={{ layout: props.layout, on: props.timelines ?? false }}>
+      <Grid {...props} />
+    </RulerCtx.Provider>
+  );
+}
+
+function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact, planDay, onPlanDay, onAddWork, onAddHours }: Props) {
   const column = (day: Day, i: number) =>
     planDay?.dayIndex === i ? (
       <div key={day.date} className="pd-cell">
@@ -286,6 +299,8 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, offDay, tag,
       </ul>
     </div>
   );
+  const rc = useContext(RulerCtx);
+  const ruler = compact && !ptoOff && showRuler(rc.layout, rc.on, slot);
   const style = { "--c": clientColor(primary?.clientKey, colors), ...(compact ? {} : { flexGrow: minutesOf(slot) }) } as CSSProperties;
   const state = eve ? "eve" : overflow ? "overflow" : slot.open ? "open" : slot.off ? "off" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
@@ -408,7 +423,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, offDay, tag,
   return (
     <div
       ref={refFn}
-      className={`half ${state} ${tag ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""} ${ptoOff ? "pto-off" : ""}`}
+      className={`half ${state} ${tag ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""}${ruler ? " has-ruler" : ""} ${ptoOff ? "pto-off" : ""}`}
       style={style}
       tabIndex={selected ? 0 : -1}
       role="button"
@@ -424,7 +439,10 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, offDay, tag,
     >
       <HalfScope.Provider value={selected}>
       {compact ? (
-        <CardBody tag={tag} slot={slot} tz={tz} overflow={overflow && !eve} who={who} badge={badge} checklist={checklist} summary={summary} more={more_} flex={flexList} add={addBtn} />
+        <>
+          <CardBody tag={tag} slot={slot} tz={tz} overflow={overflow && !eve} who={who} badge={badge} checklist={checklist} summary={summary} more={more_} flex={flexList} add={addBtn} />
+          {ruler && <Ruler slot={slot} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} />}
+        </>
       ) : (
         <>
       {overflow && !eve && checklist && (
@@ -581,6 +599,52 @@ function Timeline({ slot, tz, showGaps, minFocusWindow, earlier }: { slot: Slot;
           <EventCard key={placed.event.id} placed={placed} tz={tz} label={labelHere(placed, earlier)} style={{ top: pct(top), height: pct(height), left: `calc(${pct(lane / lanes)} + 4px)`, width: `calc(${pct(1 / lanes)} - 8px)` }} />
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Step 15.1 (D276): a narrow time ruler on the right edge of a compact card, covering only the block's working hours:
+ * free stretches, meetings, personal events and unavailable time, and timed picks as bands in client color. A pick
+ * band opens the time editor; an event opens its menu. The list on the left is unchanged.
+ */
+function Ruler({ slot, tz, label }: { slot: Slot; tz: string; label: string }) {
+  const bounds = { start: slot.start, end: slot.end };
+  const span = Math.max(1, ms(slot.end) - ms(slot.start));
+  const pos = (iso: string) => (ms(iso) - ms(slot.start)) / span;
+  const marks = hourMarks(slot.start, slot.end, tz);
+  const laid = layoutEvents(slot.events.filter((p) => !p.event.allDay), slot.start, slot.end);
+  return (
+    <div className="ruler" aria-label={`Timeline for ${label}, ${slotRange(slot, tz)}`} onDoubleClick={(e) => e.stopPropagation()}>
+      {marks.map((m) => (
+        <div key={m.label} className="r-hour" style={{ top: pct(m.at) }} aria-hidden="true">
+          <span>{m.label.replace(/ (AM|PM)$/, "")}</span>
+        </div>
+      ))}
+      {slot.freeGaps.map((g) => {
+        const at = rulerSpan(slot, g.start, g.end);
+        return at && (
+          <div key={`f-${g.start}`} className="r-free" style={{ top: pct(at.top), height: pct(at.height) }} title={`Free · ${formatDuration(g.minutes)}`} aria-hidden="true">
+            {g.minutes >= 45 && <span>{formatDuration(g.minutes)}</span>}
+          </div>
+        );
+      })}
+      {laid.map(({ placed, lane, lanes }) => {
+        const at = rulerSpan(slot, placed.clipStart, placed.clipEnd);
+        return at && <RulerEvent key={placed.event.id} e={placed.event} tz={tz} style={{ top: pct(at.top), height: `max(${pct(at.height)}, 6px)`, left: `calc(${pct(lane / lanes)} + 2px)`, width: `calc(${pct(1 / lanes)} - 4px)` }} />;
+      })}
+      <TimeboxBands slot={slot} pos={pos} bounds={bounds} />
+    </div>
+  );
+}
+
+function RulerEvent({ e, tz, style }: { e: CalEvent; tz: string; style: CSSProperties }) {
+  const samples = useContext(SampleSources);
+  const menu = useEventMenu(e);
+  const kind = e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting";
+  return (
+    <div className={`r-ev ${kind} show-${e.showAs ?? "busy"}`} style={style} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}`} {...menu}>
+      <span>{e.title}</span>
     </div>
   );
 }

@@ -2114,3 +2114,63 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .status-pill.too_much { color: var(--watch); border-color: color-mix(in oklab, var(--watch) 45%, var(--border)); }
 .status-pill.tight, .status-pill.fits { color: var(--text-muted); border-color: var(--border); }
 .pick-row:has(.pt-hint) { flex-wrap: wrap; row-gap: 4px; }
+
+/* ---------- Compact timelines on medium cards (step 15.1, D276) ---------- */
+/* A narrow ruler on the card's right edge for the block's working hours. The list on the left keeps its content. */
+.half.card.has-ruler { --ruler-w: 76px; container-type: inline-size; }
+.half.card.has-ruler .card-body { margin-right: var(--ruler-w); }
+.ruler {
+  position: absolute; top: 8px; bottom: 8px; right: 6px; width: calc(var(--ruler-w) - 12px);
+  border-left: 1px solid var(--border);
+  background: color-mix(in oklab, var(--sunken) 55%, transparent);
+  border-radius: 0 8px 8px 0;
+}
+.ruler .r-hour { position: absolute; left: 0; right: 0; border-top: 1px solid color-mix(in oklab, var(--text-faint) 22%, transparent); pointer-events: none; }
+.ruler .r-hour span { position: absolute; left: -16px; top: -7px; font-size: 10px; line-height: 1; color: var(--text-faint); }
+.ruler .r-free {
+  position: absolute; left: 2px; right: 2px;
+  border: 1px dashed color-mix(in oklab, var(--c) 45%, transparent); border-radius: 5px;
+  background: color-mix(in oklab, var(--c) 6%, transparent);
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.ruler .r-free span { font-size: 10.5px; font-weight: 600; color: color-mix(in oklab, var(--c) 40%, var(--text-muted)); }
+.ruler .r-ev {
+  position: absolute; z-index: 1; overflow: hidden;
+  padding: 1px 4px; border-radius: 4px;
+  background: var(--event-surface); border: 1px solid var(--border-strong); border-left: 3px solid var(--text-faint);
+  font-size: 10.5px; line-height: 1.25; font-weight: 600; color: var(--text);
+  cursor: pointer;
+}
+.ruler .r-ev span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ruler .r-ev.personal { border-left-color: var(--personal); background: color-mix(in oklab, var(--personal) 12%, var(--event-surface)); }
+.ruler .r-ev.unavailable { border-left-color: var(--text-muted); background: repeating-linear-gradient(45deg, transparent 0 4px, color-mix(in oklab, var(--text-muted) 16%, transparent) 4px 6px), var(--event-surface); cursor: default; }
+.ruler .r-ev.show-tentative { border-left-style: dashed; opacity: 0.85; }
+.ruler .r-ev.show-free { background: transparent; border-style: dashed; opacity: 0.55; }
+.ruler .r-ev:hover, .ruler .r-ev:focus-visible { border-color: var(--focus); }
+.ruler .tbox { left: 2px; right: 2px; padding: 1px 4px; border-radius: 4px; z-index: 2; border-style: solid; border-left: 3px solid var(--c); }
+.ruler .tbox-label { font-size: 10.5px; line-height: 1.25; }
+.ruler .tbox-time { font-size: 10px; }
+/* Narrower cards (the 1366 class): a slimmer ruler. */
+@container (max-width: 320px) {
+  .ruler { width: 46px; }
+  .half.card.has-ruler .card-body { margin-right: 52px; }
+  .ruler .r-ev, .ruler .tbox { padding: 1px 3px; }
+  .ruler .r-ev span, .ruler .tbox-label, .ruler .r-free span { font-size: 9.5px; }
+}
+/* Too narrow for a ruler (Plan the day open beside the week, very thin cards): the card looks as without it. */
+@container (max-width: 230px) {
+  .ruler { display: none; }
+  .half.card.has-ruler .card-body { margin-right: 0; }
+}
+.timelines-toggle { white-space: nowrap; }
+.timelines-toggle[aria-pressed="false"] { color: var(--text-faint); }
+.view-controls { display: inline-flex; align-items: center; gap: 6px; }
+.statusbar.quiet .view-controls { margin-left: auto; margin-right: 8px; }
+/* Step 15.1 (D274): what didn't fit after Timebox my day, with one-click fixes. */
+.pd-didnt-fit { margin: 10px 20px 0; padding: 10px 14px; border: 1px solid color-mix(in oklab, var(--watch) 45%, var(--border)); border-radius: 10px; background: var(--raised); display: grid; gap: 6px; }
+.pd-didnt-fit p { margin: 0; font-size: 13.5px; }
+.pd-didnt-fit ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.pd-didnt-fit li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; }
+.pd-didnt-fit .df-title { flex: 0 1 auto; min-width: 0; margin-right: 6px; }
+.pd-didnt-fit .df-close { justify-self: start; }

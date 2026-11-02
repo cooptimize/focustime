@@ -49,6 +49,9 @@ type Props = {
   setTheme: (t: Theme) => void;
   viewRange: ViewRange;
   setViewRange: (r: ViewRange) => void;
+  /** Step 15.1 (D276): the saved default for compact timelines on medium cards. */
+  showTimelines: boolean;
+  setShowTimelines: (on: boolean) => void;
   /** Step 15 (D272): demo mode and its switch. */
   demo: boolean;
   setDemo: (on: boolean) => void;
@@ -242,6 +245,13 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
             <span className="set-hint">Saved as your default. H in the week changes it until you close Coopilot. Timelines widen to show anything planned outside it.</span>
           </fieldset>
           <fieldset className="set-choice">
+            <legend>Timelines on cards</legend>
+            <label>
+              <input type="checkbox" checked={p.showTimelines} onChange={(e) => p.setShowTimelines(e.target.checked)} /> Show timelines on cards
+            </label>
+            <span className="set-hint">At medium widths, a narrow time ruler on each card's right edge: meetings, events, timed picks and free time. Saved as your default. V in the week switches it until you close Coopilot.</span>
+          </fieldset>
+          <fieldset className="set-choice">
             <legend>Demo mode</legend>
             <label>
               <input type="checkbox" checked={p.demo} onChange={(e) => p.setDemo(e.target.checked)} /> Show demo data
@@ -381,7 +391,7 @@ function StandingForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
 function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
   const pl = p.data.planning;
   const [types, setTypes] = useState(pl.pickablePortfolioTypes.join(", "));
-  const [v, setV] = useState({ S: pl.sizes.S, M: pl.sizes.M, L: pl.sizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes, focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes, checkinReminderMinutes: pl.checkinReminderMinutes });
+  const [v, setV] = useState({ S: pl.sizes.S, M: pl.sizes.M, L: pl.sizes.L, minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes, focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes, checkinReminderMinutes: pl.checkinReminderMinutes });
   const [nudges, setNudges] = useState({ weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon });
   const { problems, status, save } = useSave(p.onSavedData);
   const num = (k: Exclude<keyof typeof v, "endSound">, label: string, field: string, hint: string, step = 5, max = 480) => (
@@ -398,6 +408,7 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
         void save("planning", {
           pickablePortfolioTypes: types.split(",").map((x) => x.trim()).filter(Boolean),
           sizes: { S: v.S, M: v.M, L: v.L },
+          minSizes: { S: v.minS, M: v.minM, L: v.minL },
           carryDays: v.carryDays,
           reminderOffsetMinutes: v.reminderOffsetMinutes,
           focusMinutes: v.focusMinutes,
@@ -415,6 +426,9 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
         {num("S", "Size S (minutes)", "plan.size_s", "A small pick. In steps of 5.")}
         {num("M", "Size M (minutes)", "plan.size_m", "More than S.")}
         {num("L", "Size L (minutes)", "plan.size_l", "More than M. Nothing above L: split it first.")}
+        {num("minS", "Shortest useful time, S (minutes)", "plan.min_s", "Timebox my day never gives an S pick less time than this. At most size S.")}
+        {num("minM", "Shortest useful time, M (minutes)", "plan.min_m", "The same for M. At most size M.")}
+        {num("minL", "Shortest useful time, L (minutes)", "plan.min_l", "The same for L. At most size L.")}
         <Field label="Portfolio types that can be picked" hint='Work item types above story level that you still pick directly, like "Recurring".'>
           <input value={types} onChange={(e) => setTypes(e.target.value)} />
           <Problems all={problems} field="plan.pickable_portfolio_types" />

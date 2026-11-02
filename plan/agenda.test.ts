@@ -96,12 +96,11 @@ describe("planMyDay", () => {
     expect(r.placed.map((p) => [p.pickId, p.start.slice(11, 16), p.end.slice(11, 16)])).toEqual([
       [4, "13:00", "13:30"],
       [2, "15:00", "17:00"],
-      [3, "13:30", "14:00"],
+      [1, "13:30", "14:00"],
     ]);
-    // M (60) didn't fit whole anywhere after 4 and 2: the largest gap left (13:30–14:00) trimmed.
-    expect(r.placed.find((p) => p.pickId === 3)!.trimmed).toBe(true);
-    expect(r.unplaced.map((u) => u.pickId)).toEqual([1]);
-    expect(r.unplaced[0]!.reason).toBe("No free time left in PM");
+    // M (60) doesn't fit whole after 4 and 2, and the 30 minutes left are under its shortest useful time (D273).
+    expect(r.unplaced.map((u) => u.pickId)).toEqual([3]);
+    expect(r.unplaced[0]!.reason).toBe("No gap of 1h or more left in the afternoon");
   });
   it("keeps each pick in its own block and skips timeboxed, done and dropped picks", () => {
     const done = { ...pick(5, "AM", "S"), status: "done" as const };

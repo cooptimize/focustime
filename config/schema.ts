@@ -59,8 +59,9 @@ export const DEFAULT_TIMEBOX: TimeboxSettings = { outlookDefault: false, confirm
 export const THEMES = ["cooptimize-dark", "cooptimize-light", "neutral"] as const;
 export type Theme = (typeof THEMES)[number];
 export const THEME_NAMES: Record<Theme, string> = { "cooptimize-dark": "Cooptimize Dark", "cooptimize-light": "Cooptimize Light", neutral: "Neutral" };
-export type UiConfig = { theme: Theme; viewRange: ViewRange };
-export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business" };
+/** showTimelines (step 15.1, D276): the compact time ruler on medium-width cards. */
+export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean };
+export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: true };
 
 /** The style guide's client palette (tokens --client-<slot> in every theme). */
 export const CLIENT_SLOTS = ["teal", "violet", "ochre", "blue", "rose", "earth", "green", "slate"] as const;
@@ -101,6 +102,8 @@ export type PlanConfig = {
   pickablePortfolioTypes: string[];
   /** Minutes per pick size (step 6c, Q36). */
   sizes: { S: number; M: number; L: number };
+  /** Shortest useful time per size (step 15.1, D273): Timebox my day never places or trims a pick below it. */
+  minSizes: { S: number; M: number; L: number };
   /** How many days back unfinished picks are offered again; 0 turns carry-over off. */
   carryDays: number;
   /** The "not planned yet" reminder: minutes after the day's start it can first fire. */
@@ -122,8 +125,8 @@ export type PlanConfig = {
   weekNudgeMon: string;
 };
 
-export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes"> = { sizes: { S: 60, M: 120, L: 210 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0, weekNudgeThu: "14:00", weekNudgeFri: "09:00", weekNudgeMon: "08:30" };
-const PLAN_KEYS = ["pickable_portfolio_types", "size_s", "size_m", "size_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes", "week_nudge_thu", "week_nudge_fri", "week_nudge_mon"];
+export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes"> = { sizes: { S: 60, M: 120, L: 210 }, minSizes: { S: 30, M: 60, L: 90 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0, weekNudgeThu: "14:00", weekNudgeFri: "09:00", weekNudgeMon: "08:30" };
+const PLAN_KEYS = ["pickable_portfolio_types", "size_s", "size_m", "size_l", "min_s", "min_m", "min_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes", "week_nudge_thu", "week_nudge_fri", "week_nudge_mon"];
 
 export type FieldError = { field: string; message: string };
 /** `legacyDayShape`: the file still has the old [day_shape] section (read as hours; migrated on load, D124). */
@@ -341,7 +344,7 @@ export function parseConfig(text: string): ParseResult {
 
   // [plan] (optional)
   const pickablePortfolioTypes: string[] = [];
-  const planOpts = { ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } };
+  const planOpts = { ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes }, minSizes: { ...DEFAULT_PLAN.minSizes } };
   if (raw.plan !== undefined) {
     const t = isTable(raw.plan) ? raw.plan : (err("plan", "Must be a [plan] table"), null);
     if (t) for (const k of Object.keys(t)) if (!PLAN_KEYS.includes(k)) err(`plan.${k}`, "Unknown field");
@@ -361,6 +364,17 @@ export function parseConfig(text: string): ParseResult {
     if (sL !== undefined) planOpts.sizes.L = sL;
     if (planOpts.sizes.M <= planOpts.sizes.S) err("plan.size_m", "Must be more than S");
     if (planOpts.sizes.L <= planOpts.sizes.M) err("plan.size_l", "Must be more than M");
+    for (const z of ["S", "M", "L"] as const) {
+      const key = `min_${z.toLowerCase()}`;
+      const v = minutes(key, 15, 480);
+      if (v === undefined) {
+        // Without its own value, a minimum never exceeds a smaller configured size.
+        planOpts.minSizes[z] = Math.min(planOpts.minSizes[z], planOpts.sizes[z]);
+        continue;
+      }
+      if (v > planOpts.sizes[z]) err(`plan.${key}`, `Must be at most size ${z} (${planOpts.sizes[z]})`);
+      else planOpts.minSizes[z] = v;
+    }
     const cd = minutes("carry_days", 0, 30, 1);
     if (cd !== undefined) planOpts.carryDays = cd;
     const ro = minutes("reminder_offset_minutes", 0, 240);
@@ -424,7 +438,12 @@ export function parseConfig(text: string): ParseResult {
   const ui: UiConfig = { ...DEFAULT_UI };
   if (raw.ui !== undefined) {
     const t = isTable(raw.ui) ? raw.ui : (err("ui", "Must be a [ui] table"), null);
-    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range"].includes(k)) err(`ui.${k}`, "Unknown field");
+    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines"].includes(k)) err(`ui.${k}`, "Unknown field");
+    const st = t?.show_timelines;
+    if (st !== undefined) {
+      if (typeof st !== "boolean") err("ui.show_timelines", "Must be true or false");
+      else ui.showTimelines = st;
+    }
     const vr = t?.view_range;
     if (vr !== undefined) {
       if (typeof vr !== "string" || !(VIEW_RANGES as readonly string[]).includes(vr)) err("ui.view_range", `Must be one of ${VIEW_RANGES.map((x) => `"${x}"`).join(", ")}`);

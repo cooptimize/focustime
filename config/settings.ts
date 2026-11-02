@@ -90,7 +90,7 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
       return (text) => setValue(setValue(setValue(text, "risk", "meeting_watch_minutes", watch), "risk", "meeting_at_risk_minutes", atRisk), "risk", "min_focus_window_minutes", window);
     }
     case "planning": {
-      const keys = ["pickablePortfolioTypes", "sizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
+      const keys = ["pickablePortfolioTypes", "sizes", "minSizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
       only(v, keys, "plan");
       const types = strList(v.pickablePortfolioTypes ?? [], "plan.pickable_portfolio_types").filter(Boolean);
       // Each value is written as given; parseConfig checks ranges and order per field (plan.size_m etc.).
@@ -99,6 +99,11 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
         const sz = obj(v.sizes, "plan.sizes");
         only(sz, ["S", "M", "L"], "plan.sizes");
         for (const k of ["S", "M", "L"] as const) if (sz[k] !== undefined) values.push([`size_${k.toLowerCase()}`, int(sz[k], `plan.size_${k.toLowerCase()}`)]);
+      }
+      if (v.minSizes !== undefined) {
+        const mz = obj(v.minSizes, "plan.min_sizes");
+        only(mz, ["S", "M", "L"], "plan.min_sizes");
+        for (const k of ["S", "M", "L"] as const) if (mz[k] !== undefined) values.push([`min_${k.toLowerCase()}`, int(mz[k], `plan.min_${k.toLowerCase()}`)]);
       }
       const num: [string, string][] = [["carryDays", "carry_days"], ["reminderOffsetMinutes", "reminder_offset_minutes"], ["focusMinutes", "focus_minutes"], ["breakMinutes", "break_minutes"], ["followGraceDays", "follow_grace_days"], ["closeoutReminderMinutes", "closeout_reminder_minutes"], ["checkinReminderMinutes", "checkin_reminder_minutes"]];
       for (const [k, toml] of num) if (v[k] !== undefined) values.push([toml, int(v[k], `plan.${toml}`)]);
@@ -163,10 +168,15 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "focus", k, val, i === 0 ? "Focus sounds and playlists (step 10). Sounds are made in the app; playlists open in Spotify or the browser." : undefined), text);
     }
     case "display": {
-      only(v, ["theme", "viewRange"], "ui");
+      only(v, ["theme", "viewRange", "showTimelines"], "ui");
       const theme = str(v.theme, "ui.theme", 40);
       const range = str(v.viewRange, "ui.view_range", 20);
-      return (text) => setValue(setValue(text, "ui", "theme", theme), "ui", "view_range", range);
+      if (v.showTimelines !== undefined && typeof v.showTimelines !== "boolean") throw new SettingsInputError("ui.show_timelines", "Must be true or false");
+      const timelines = v.showTimelines as boolean | undefined;
+      return (text) => {
+        const t = setValue(setValue(text, "ui", "theme", theme), "ui", "view_range", range);
+        return timelines === undefined ? t : setValue(t, "ui", "show_timelines", timelines);
+      };
     }
     case "client": {
       only(v, ["key", "color", "name", "browser", "profile", "openStates", "follow"], "clients");

@@ -16,6 +16,8 @@ type Props = {
   /** The week's timeline range, and whether it was widened to show planned time outside it. */
   range: { mode: ViewRange; start: string; end: string; expanded: boolean };
   onRange: (r: ViewRange) => void;
+  /** Step 15.1 (D276): the compact timelines switch, shown in the medium layout only. */
+  timelines: { on: boolean; toggle: () => void } | null;
   loading: boolean;
   busy: Calendar | null;
   notice: string | null;
@@ -33,7 +35,7 @@ function when(iso: string, tz: string): string {
   return z.toPlainDate().equals(today) ? t : `${shortDate(z.toPlainDate().toString())} ${t}`;
 }
 
-export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, range, onRange, loading, busy, notice, clock, onRefresh, onConnect, onDisconnect }: Props) {
+export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, range, onRange, timelines, loading, busy, notice, clock, onRefresh, onConnect, onDisconnect }: Props) {
   const samples = sources.filter((s) => s.sample);
   const shape = { timeZone: hours.timeZone };
   const nextRange = VIEW_RANGES[(VIEW_RANGES.indexOf(range.mode) + 1) % VIEW_RANGES.length]!;
@@ -52,6 +54,32 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, ra
         {busy === f.calendar ? "Waiting for sign-in…" : `${f.kind === "connect" ? "Connect" : "Reconnect"} ${SOURCE_NAMES[f.calendar]}`}
       </button>
     );
+  // The view range and (medium layout) the timelines switch sit together, in the quiet line too (step 15.1, D276).
+  const viewControls = (
+    <span className="view-controls">
+      <button
+        type="button"
+        className="mini quiet range-toggle"
+        onClick={() => onRange(nextRange)}
+        title={`Timelines show ${range.start}–${range.end}${range.expanded ? ", widened to show planned time" : ""}. Click for ${VIEW_RANGE_NAMES[nextRange]} (H)`}
+        aria-label={`View range: ${VIEW_RANGE_NAMES[range.mode]}. Change to ${VIEW_RANGE_NAMES[nextRange]}`}
+      >
+        {VIEW_RANGE_NAMES[range.mode]}
+        {range.expanded && <span className="muted"> +</span>}
+      </button>
+      {timelines && (
+        <button
+          type="button"
+          className="mini quiet timelines-toggle"
+          aria-pressed={timelines.on}
+          onClick={timelines.toggle}
+          title={`Time rulers on the cards are ${timelines.on ? "on" : "off"}. Click to turn them ${timelines.on ? "off" : "on"} (V). Settings > Display sets the default`}
+        >
+          Timelines {timelines.on ? "on" : "off"}
+        </button>
+      )}
+    </span>
+  );
   if (fine && !open)
     return (
       <footer className="statusbar quiet" aria-label="Source status">
@@ -60,6 +88,7 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, ra
             <span className="dot" aria-hidden="true" />
             All sources live{oldest ? ` · ${updatedAgo(oldest, clock, shape.timeZone)}` : ""}
           </button>
+          {viewControls}
           <button type="button" className="refresh mini quiet" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources" title="Refresh all sources (R)">
             {loading ? "Loading…" : "Refresh"}
           </button>
@@ -116,16 +145,7 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, ra
         <span className="muted shape" title={`Working hours. Change them in Settings or a day's menu. Times in ${hours.timeZone}`}>
           {hoursSummary(hours)}
         </span>
-        <button
-          type="button"
-          className="mini quiet range-toggle"
-          onClick={() => onRange(nextRange)}
-          title={`Timelines show ${range.start}–${range.end}${range.expanded ? ", widened to show planned time" : ""}. Click for ${VIEW_RANGE_NAMES[nextRange]} (H)`}
-          aria-label={`View range: ${VIEW_RANGE_NAMES[range.mode]}. Change to ${VIEW_RANGE_NAMES[nextRange]}`}
-        >
-          {VIEW_RANGE_NAMES[range.mode]}
-          {range.expanded && <span className="muted"> +</span>}
-        </button>
+        {viewControls}
         <button type="button" className="refresh" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources">
           {loading ? "Loading…" : "Refresh"}
         </button>

@@ -347,3 +347,14 @@ describe("one row per pick: + time and the time editor (step 14.5, D259)", () =>
     expect(calls.at(-1)).toEqual(["timebox.update", { id: 5, start: "2026-11-03T10:00:00-05:00", end: "2026-11-03T11:00:00-05:00" }]);
   });
 });
+
+describe("duplicate picks in menus (step 15.1, D277)", () => {
+  it("shows a block that already has the item as 'Already planned here' instead of adding it again", () => {
+    const { e } = env();
+    const add = items(find(itemMenu(e, "internal", item(1)), "Add to the plan").next!());
+    expect(add.find((i) => i.id === "add-2026-11-03-AM")!.disabled).toBe("Already planned here");
+    expect(add.find((i) => i.id === "add-2026-11-03-PM")!.disabled).toBeUndefined();
+    const inSlot = items(find(slotMenu(e, "2026-11-03", "AM", "internal", "Internal"), "Add a work item").next!());
+    expect(inSlot.find((i) => i.id === "i1")!.disabled).toBe("Already planned here");
+  });
+});

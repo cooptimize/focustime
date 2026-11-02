@@ -26,7 +26,7 @@ describe("ui.set_theme (step 6b)", () => {
   it("saves the theme in [ui] and returns it; the file keeps its comments", async () => {
     const t = setup();
     const r = await dispatch(t.c, { action: "ui.set_theme", input: { theme: "cooptimize-light" } });
-    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business" } } });
+    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: true } } });
     const text = readFileSync(t.path, "utf8");
     expect(text).toContain('[ui]\ntheme = "cooptimize-light"');
     expect(text).toContain("# Coopilot configuration.");
@@ -38,5 +38,19 @@ describe("ui.set_theme (step 6b)", () => {
   });
   it("says so when settings can't be saved", async () => {
     expect(await dispatch(setup(false).c, { action: "ui.set_theme", input: { theme: "neutral" } })).toMatchObject({ ok: false, status: 503 });
+  });
+});
+
+describe("ui.set_timelines (step 15.1, D276)", () => {
+  it("saves the default for compact timelines in [ui]", async () => {
+    const t = setup();
+    expect(await dispatch(t.c, { action: "ui.set_timelines", input: { on: false } })).toEqual({ ok: true, data: { ui: { theme: "cooptimize-dark", viewRange: "business", showTimelines: false } } });
+    expect(readFileSync(t.path, "utf8")).toContain("show_timelines = false");
+    expect((await dispatch(t.c, { action: "ui.set_timelines", input: { on: true } }) as { data: { ui: { showTimelines: boolean } } }).data.ui.showTimelines).toBe(true);
+  });
+  it("refuses anything but { on: boolean }", async () => {
+    const t = setup();
+    expect(await dispatch(t.c, { action: "ui.set_timelines", input: { on: "yes" } })).toMatchObject({ ok: false, status: 400 });
+    expect(await dispatch(t.c, { action: "ui.set_timelines", input: { on: true, x: 1 } })).toMatchObject({ ok: false, status: 400 });
   });
 });

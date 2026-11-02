@@ -121,6 +121,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["]"], does: "Next week", command: "week.next" },
   { keys: ["R"], does: "Refresh all sources", command: "week.load" },
   { keys: ["H"], does: "Change the view range: business hours, 12 hours, 24 hours", command: "ui.set_view_range" },
+  { keys: ["V"], does: "Timelines on cards on or off (medium widths), until you close Coopilot", command: "ui.set_timelines" },
   { keys: ["Ctrl K"], does: "Command menu" },
   { keys: ["F"], does: "Focus timer: start one, or pause, +15, done, next pick or stop", command: "timer.start" },
   { keys: ["M"], does: "Check-in: what still fits today (midday)", command: "view.checkin" },

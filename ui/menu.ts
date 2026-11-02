@@ -1,6 +1,7 @@
 // Menus for everything (step 6, D102): the command menu (Ctrl+K), the "⋯" and right-click menus on block cards,
 // picks and work items. One model: a menu step is a titled list of items, or a text prompt; an item either runs
 // or opens the next step. The command menu is built from the action registry, so every action appears.
+import { alreadyPlanned } from "../plan/dup.ts";
 import { ACTIONS, type ActionName, type ActionSpec } from "../actions/registry.ts";
 import { THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
 import { hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
@@ -106,6 +107,9 @@ export type MenuEnv = {
   /** The view range (saved in config) and the usual working hours. */
   viewRange: ViewRange;
   setViewRange: (r: ViewRange) => void;
+  /** Step 15.1 (D276): compact timelines on medium cards, for this session; saveTimelines also saves the default. */
+  timelines: boolean;
+  saveTimelines: (on: boolean) => void;
   hours: TimeModel;
   /** Runs a time model action (hours for a day, unavailable time, flex sessions); false with a notice on refusal. */
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
@@ -313,6 +317,11 @@ export function followUpForm(env: MenuEnv): MenuStep {
 
 // ---------- work items ----------
 
+/** Step 15.1 (D277): a work item already planned (or done) in this block is shown disabled, not added again. */
+function plannedHere(env: MenuEnv, date: string, half: Half, clientKey: string, itemId: number): { disabled?: string } {
+  return alreadyPlanned(env.planWeek?.[date]?.picks ?? [], { clientKey, itemId }, date, half) ? { disabled: "Already planned here" } : {};
+}
+
 /** Where to add a work item: the selected half-day first, then every half-day of the week. */
 function addStep(env: MenuEnv, clientKey: string, item: WorkItem): MenuStep {
   const sel = env.selection;
@@ -323,7 +332,7 @@ function addStep(env: MenuEnv, clientKey: string, item: WorkItem): MenuStep {
     id: `add-${h.date}-${h.half}`,
     label: h === first ? `${h.label} (selected)` : h.label,
     action: "pick.add",
-    ...(h.disabled ? { disabled: h.disabled } : {}),
+    ...(h.disabled ? { disabled: h.disabled } : plannedHere(env, h.date, h.half, clientKey, item.id)),
     run: () => env.runPlan("pick.add", { date: h.date, half: h.half, clientKey, itemId: item.id }),
   }));
   return { title: `Add "${item.title}" to`, items };
@@ -456,7 +465,7 @@ export function slotMenu(env: MenuEnv, date: IsoDate, half: Half, clientKey: str
         label: "Add a work item",
         action: "pick.add",
         ...(off ? { disabled: off } : !pickable.length ? { disabled: clientKey ? `No story-level items loaded for ${clientName}` : "Open half-day: plan it in Plan the day to choose a client" } : {}),
-        next: () => ({ title: `Add to ${dayName(date)} ${half}`, items: pickable.map((i) => ({ id: `i${i.id}`, label: i.title, hint: `${i.type} ${i.id}`, action: "pick.add", run: () => env.runPlan("pick.add", { date, half, clientKey, itemId: i.id }) })) }),
+        next: () => ({ title: `Add to ${dayName(date)} ${half}`, items: pickable.map((i) => ({ id: `i${i.id}`, label: i.title, hint: `${i.type} ${i.id}`, action: "pick.add", ...(clientKey ? plannedHere(env, date, half, clientKey, i.id) : {}), run: () => env.runPlan("pick.add", { date, half, clientKey, itemId: i.id }) })) }),
       },
     ],
   };
@@ -814,6 +823,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "draft.remove": return { run: () => env.setView("inbox") };
     case "ui.set_theme": return { next: () => themeStep(env) };
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
+    case "ui.set_timelines": return { next: () => ({ title: "Show timelines on cards", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.timelines === on, action: "ui.set_timelines", run: () => env.saveTimelines(on) })) }) };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };
     case "settings.save": return { run: () => env.openSettings() };

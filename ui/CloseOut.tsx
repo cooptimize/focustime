@@ -122,7 +122,10 @@ export function CloseOut({ rituals, date, data, onDate, onClose, onChanged, onCa
         <button
           type="button"
           className="top-btn primary"
+          title={st.closedOutAt ? "Back (Esc)" : "Close out this day"}
           onClick={async () => {
+            // Step 15.1 (D275): once closed out, Done just goes back; nothing is saved again.
+            if (st.closedOutAt) return onClose();
             try {
               setSt(await call<CloseOutState>("closeout.commit", { date }));
               setNotice("Closed out. Nice work.");
@@ -132,11 +135,13 @@ export function CloseOut({ rituals, date, data, onDate, onClose, onChanged, onCa
             }
           }}
         >
-          {st.closedOutAt ? "Save again" : "Done for the day"}
+          {st.closedOutAt ? "Done" : "Done for the day"}
         </button>
-        <button type="button" className="top-btn" onClick={onClose} title="Back (Esc)">
-          Back
-        </button>
+        {!st.closedOutAt && (
+          <button type="button" className="top-btn" onClick={onClose} title="Back (Esc)">
+            Back
+          </button>
+        )}
       </div>
       {error && <p className="set-problem" role="alert">{error}</p>}
       <Fading text={notice} onGone={clearNotice} />

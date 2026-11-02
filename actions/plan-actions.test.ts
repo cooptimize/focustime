@@ -500,3 +500,30 @@ describe("drafts: choose a parent, and delete (step 14.5, D257)", () => {
     expect(t.plan.getDraft(b.id)).not.toBeNull();
   });
 });
+
+describe("duplicate picks (step 15.1, D277)", () => {
+  it("adding the same item to the same block again says 'Already planned here'", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    await t.run("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
+    const r = await t.fail("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
+    expect(r).toMatchObject({ status: 409, code: "duplicate", error: "Already planned here" });
+    // The other half of the same day keeps its own refusal.
+    expect((await t.fail("pick.add", { date: D, half: "PM", clientKey: "CSC", itemId: 101 })).error).toBe("Already planned for the morning that day");
+  });
+  it("moving a pick into a block that already has that item is refused (how one item got planned three times)", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const first = (await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 })).pick;
+    const wed = (await t.run<{ pick: Pick }>("pick.move", { id: first.id, date: "2026-11-04", half: "AM" })).pick;
+    // With the first copy on Wednesday, the item can be added to Tuesday again.
+    await t.run("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 101 });
+    const r = await t.fail("pick.move", { id: wed.id, date: D, half: "AM" });
+    expect(r).toMatchObject({ status: 409, code: "duplicate", error: "Already planned here" });
+    expect(t.plan.getPick(wed.id)).toMatchObject({ date: "2026-11-04", status: "planned" });
+    expect(t.plan.picksFor(D).filter((p) => p.itemId === 101 && p.status === "planned")).toHaveLength(1);
+    // Moving a pick within its own block's day to the other half is still fine.
+    const other = (await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "CSC", itemId: 122 })).pick;
+    expect((await t.run<{ pick: Pick }>("pick.move", { id: other.id, date: D, half: "PM" })).pick.half).toBe("PM");
+  });
+});

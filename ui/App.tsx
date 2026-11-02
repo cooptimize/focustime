@@ -183,6 +183,23 @@ export function App() {
       setNotice(`Default not saved: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }, []);
+  /** Step 15.1 (D276): compact timelines on medium cards. V and the status bar switch them for the session; Settings saves the default. */
+  const [timelinesNow, setTimelinesNow] = useState<boolean | null>(null);
+  const timelines = timelinesNow ?? data?.ui.showTimelines ?? true;
+  const switchTimelines = useCallback((on: boolean) => {
+    setTimelinesNow(on);
+    setNotice(`Timelines on cards ${on ? "on" : "off"} for now. Settings > Display sets the default`);
+  }, []);
+  const saveTimelines = useCallback(async (on: boolean) => {
+    try {
+      await call("ui.set_timelines", { on });
+      setTimelinesNow(on);
+      setNotice(`Timelines on cards: ${on ? "on" : "off"} by default`);
+      reloadRef.current();
+    } catch (e) {
+      setNotice(`Default not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  }, []);
   /** Time model actions (hours for a day, unavailable time, flex sessions): run, then reload the week quietly. */
   const runTime = useCallback(async (action: string, input: Record<string, unknown>): Promise<boolean> => {
     try {
@@ -851,6 +868,13 @@ export function App() {
           e.preventDefault();
           void setViewRange(VIEW_RANGES[(VIEW_RANGES.indexOf(data.week.range.mode) + 1) % VIEW_RANGES.length]!);
           return;
+        case "v":
+        case "V":
+          // Step 15.1 (D276): only where the compact timelines exist (medium layout).
+          if (layout !== "medium") return;
+          e.preventDefault();
+          switchTimelines(!timelines);
+          return;
         case "Enter":
         case " ":
           e.preventDefault();
@@ -875,7 +899,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, base, captureOpen]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, base, captureOpen, layout, timelines, switchTimelines]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
 
@@ -926,6 +950,8 @@ export function App() {
       setTheme: (t) => void setTheme(t),
       viewRange: data.week.range.mode,
       setViewRange: (r) => void setViewRange(r),
+      timelines,
+      saveTimelines: (on) => void saveTimelines(on),
       hours: data.hours,
       runTime,
       planning: data.planning,
@@ -1093,7 +1119,7 @@ export function App() {
   return (
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={work}>
-    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date }}>
+    <PlanCtx.Provider value={{ week: data.plan, toggle, sizes: data.planning.sizes, minSizes: data.planning.minSizes, focused: data.focused, timer: data.timer, nowMs: secondMs, resumeNotes: data.resumeNotes, resumeOn: resumeSlots(week.days, data.resumeNotes, data.planDay.date), weekFeatures: data.weekFeatures, timeboxes: data.timeboxes, followUps: data.followUps, today: data.planDay.date }}>
     <TimeboxCtx.Provider value={tbEnv}>
     <DevOpsWriteCtx.Provider value={devopsWrites.env}>
     <MenuHost env={env}>
@@ -1258,6 +1284,8 @@ export function App() {
           setTheme={(t) => void setTheme(t)}
           viewRange={data.ui.viewRange}
           setViewRange={(r) => void saveViewRange(r)}
+          showTimelines={data.ui.showTimelines}
+          setShowTimelines={(on) => void saveTimelines(on)}
           demo={data.demo}
           setDemo={(on) => void switchDemo(on)}
           runTime={runTime}
@@ -1291,6 +1319,12 @@ export function App() {
                       state={pd}
                       which={pd.date === localToday ? "Today" : pd.date === target.date && !target.isToday ? "Next workday" : null}
                       friday={fri === pd.date ? null : fri}
+                      nextDay={(() => {
+                        const next = stepDay(pd.date, 1, new Set([...data.ptoAhead, ...week.days.filter((d) => d.pto).map((d) => d.date)]), hasHours);
+                        if (!next) return null;
+                        const label = Temporal.PlainDate.from(pd.date).add({ days: 1 }).toString() === next ? "tomorrow" : Temporal.PlainDate.from(next).toLocaleString("en-US", { weekday: "short" });
+                        return { date: next, label };
+                      })()}
                       now={now ?? new Date(clock).toISOString()}
                       tz={week.timeZone}
                       colors={data.clients}
@@ -1318,6 +1352,7 @@ export function App() {
         cellRefs={cellRefs.current}
         layout={layout}
         compact={compact}
+        timelines={timelines}
         onPlanDay={(d) => void openPlanDay(d)}
         onAddWork={addWork}
         onAddHours={() => {
@@ -1343,6 +1378,7 @@ export function App() {
         hours={data.hours}
         range={data.week.range}
         onRange={(r) => void setViewRange(r)}
+        timelines={layout === "medium" ? { on: timelines, toggle: () => switchTimelines(!timelines) } : null}
         loading={loading}
         busy={busy}
         notice={notice ?? (state.kind === "ready" ? state.refreshError ?? null : null)}

@@ -15,6 +15,8 @@ export type PlanView = {
   week: PlanWeek | null;
   toggle: (id: number, done: boolean) => void;
   sizes: Readonly<Record<Size, number>>;
+  /** Step 15.1 (D273): the shortest useful time per size, for Timebox my day. */
+  minSizes?: Readonly<Record<Size, number>>;
   focused: Readonly<Record<number, number>>;
   timer: { pickId: number | null; runningSince: string | null } | null;
   nowMs: number;

@@ -57,3 +57,19 @@ export function hourMarks(slotStart: string, slotEnd: string, timeZone: string):
 export function labelHere(placed: Pick<PlacedEvent, "continuesBefore" | "event">, earlier: ReadonlySet<string>): boolean {
   return !(placed.continuesBefore && earlier.has(placed.event.id));
 }
+
+/**
+ * Step 15.1 (D276): the compact time ruler shows on medium-width cards only, when switched on and the block has
+ * working hours. Wide cards have the full timeline; narrow ones never show it.
+ */
+export function showRuler(layout: "wide" | "medium" | "narrow", on: boolean, slot: { off: boolean }): boolean {
+  return layout === "medium" && on && !slot.off;
+}
+
+/** A band's place on the ruler, as fractions of the block's working hours (slot.start to slot.end); null outside them. */
+export function rulerSpan(slot: { start: string; end: string }, start: string, end: string): { top: number; height: number } | null {
+  const a = ms(slot.start), b = ms(slot.end);
+  const s = Math.max(a, ms(start)), e = Math.min(b, ms(end));
+  if (b <= a || e <= s) return null;
+  return { top: (s - a) / (b - a), height: (e - s) / (b - a) };
+}

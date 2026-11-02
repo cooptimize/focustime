@@ -57,7 +57,7 @@ describe("time model actions (step 6b)", () => {
 
   it("saves the view range in [ui]", async () => {
     const t = setup();
-    expect(await t.run("ui.set_view_range", { range: "24h" })).toEqual({ ok: true, data: { ui: { theme: "cooptimize-dark", viewRange: "24h" } } });
+    expect(await t.run("ui.set_view_range", { range: "24h" })).toEqual({ ok: true, data: { ui: { theme: "cooptimize-dark", viewRange: "24h", showTimelines: true } } });
     expect(await t.run("ui.set_view_range", { range: "48h" })).toMatchObject({ ok: false, status: 400 });
   });
 

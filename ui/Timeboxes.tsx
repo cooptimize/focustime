@@ -655,15 +655,16 @@ export function InviteChips({ match }: { match: (i: InviteView) => boolean }): R
  * Timeboxes inside a card's timeline, in client color (Coopilot's own Outlook events show only here, once). Step 13:
  * drag to move, the bottom edge to resize (15 minute steps); right-click or Enter for its menu (by tier).
  */
-export function TimeboxBands({ slot, pos }: { slot: Slot; pos: (iso: string) => number }): ReactNode {
+/** Timed picks and timeboxes as bands; `bounds` is what the strip covers (the view range, or the block's working hours on the compact ruler, D276). */
+export function TimeboxBands({ slot, pos, bounds = slot.view }: { slot: Slot; pos: (iso: string) => number; bounds?: { start: string; end: string } }): ReactNode {
   const env = useTimeboxes();
   if (!env || !env.settings.enabled) return null;
-  const a = ms(slot.view.start), b = ms(slot.view.end);
+  const a = ms(bounds.start), b = ms(bounds.end);
   const here = env.timeboxes.filter((t) => t.date === slot.date && !t.removedAt && ms(t.end) > a && ms(t.start) < b);
-  return here.map((t) => <Band key={`tb-${t.id}`} t={t} env={env} slot={slot} pos={pos} />);
+  return here.map((t) => <Band key={`tb-${t.id}`} t={t} env={env} bounds={bounds} pos={pos} />);
 }
 
-function Band({ t, env, slot, pos }: { t: TimeboxView; env: TimeboxEnv; slot: Slot; pos: (iso: string) => number }) {
+function Band({ t, env, bounds, pos }: { t: TimeboxView; env: TimeboxEnv; bounds: { start: string; end: string }; pos: (iso: string) => number }) {
   // Step 14.5 (D259): a pick's timebox opens the same time editor as its row; others keep the timebox menu.
   const menu = useMenu((m) => {
     const p = t.pickId !== null ? m.planWeek?.[t.date]?.picks.find((x) => x.id === t.pickId) : undefined;
@@ -671,7 +672,7 @@ function Band({ t, env, slot, pos }: { t: TimeboxView; env: TimeboxEnv; slot: Sl
   });
   const [drag, setDrag] = useState<{ mode: DragMode; y0: number; h: number; d: number } | null>(null);
   const moved = useRef(false);
-  const a = ms(slot.view.start), b = ms(slot.view.end);
+  const a = ms(bounds.start), b = ms(bounds.end);
   const spanMin = (b - a) / 60_000;
   const live = drag ? dragTimes(drag.mode, t.start, t.end, drag.d) ?? { start: t.start, end: t.end } : { start: t.start, end: t.end };
   const top = pos(new Date(Math.max(ms(live.start), a)).toISOString()), bottom = pos(new Date(Math.min(ms(live.end), b)).toISOString());
@@ -679,7 +680,7 @@ function Band({ t, env, slot, pos }: { t: TimeboxView; env: TimeboxEnv; slot: Sl
     if (ev.button !== 0) return;
     ev.stopPropagation();
     moved.current = false;
-    const parent = (ev.currentTarget as HTMLElement).closest(".timeline") as HTMLElement | null;
+    const parent = (ev.currentTarget as HTMLElement).closest(".timeline, .ruler") as HTMLElement | null;
     (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
     setDrag({ mode, y0: ev.clientY, h: parent?.getBoundingClientRect().height ?? 1, d: 0 });
   };
