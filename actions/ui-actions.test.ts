@@ -27,7 +27,7 @@ describe("ui.set_theme (step 6b)", () => {
   it("saves the theme in [ui] and returns it; the file keeps its comments", async () => {
     const t = setup();
     const r = await dispatch(t.c, { action: "ui.set_theme", input: { theme: "cooptimize-light" } });
-    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: true, reduceMotion: false } } });
+    expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: true, reduceMotion: false, textSize: "default" } } });
     const text = readFileSync(t.path, "utf8");
     expect(text).toContain('[ui]\ntheme = "cooptimize-light"');
     expect(text).toContain("# Coopilot configuration.");
@@ -48,6 +48,23 @@ describe("ui.set_reduce_motion (step 17.5)", () => {
     expect(await dispatch(t.c, { action: "ui.set_reduce_motion", input: { on: true } })).toMatchObject({ ok: true, data: { ui: { reduceMotion: true } } });
     expect(readFileSync(t.path, "utf8")).toContain("reduce_motion = true");
     expect(await dispatch(t.c, { action: "ui.set_reduce_motion", input: { on: "yes" } })).toMatchObject({ ok: false, status: 400 });
+  });
+});
+
+describe("ui.set_text_size (U5)", () => {
+  it("saves the text size in [ui] text_size, read back by the config; refuses anything but the three presets", async () => {
+    const t = setup();
+    expect(await dispatch(t.c, { action: "ui.set_text_size", input: { size: "larger" } })).toMatchObject({ ok: true, data: { ui: { textSize: "larger" } } });
+    expect(readFileSync(t.path, "utf8")).toContain('text_size = "larger"');
+    expect(parseConfig(readFileSync(t.path, "utf8"))).toMatchObject({ ok: true, config: { ui: { textSize: "larger" } } });
+    for (const input of [{ size: "huge" }, { size: 17 }, { size: "large", x: 1 }, null])
+      expect(await dispatch(t.c, { action: "ui.set_text_size", input })).toMatchObject({ ok: false, status: 400 });
+  });
+  it("a config with no text_size reads as Default, and a bad one is a config error", () => {
+    const base = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"');
+    expect(parseConfig(base)).toMatchObject({ ok: true, config: { ui: { textSize: "default" } } });
+    const bad = parseConfig(base.replace("[ui]\n", '[ui]\ntext_size = "tiny"\n'));
+    expect(bad.ok ? [] : bad.errors.map((e) => e.field)).toContain("ui.text_size");
   });
 });
 

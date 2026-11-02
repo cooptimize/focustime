@@ -7,6 +7,8 @@ import { ActionRefusal, call, connectSource, disconnectSource, planAction, Sessi
 import { dayEndOf, hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type ViewRange } from "../week/hours.ts";
 import { applyTheme, initialTheme } from "./theme.ts";
 import { rememberReduceMotion } from "./brand/motion.ts";
+import { applyTextSize, stepTextSize, storedTextSize, TEXT_SIZE_NAMES, textSizeKey } from "./textsize.ts";
+import type { TextSize } from "../config/schema.ts";
 import { WeekMark } from "./brand/Brand.tsx";
 import { CloseReverse, MomentOverlay, Opening } from "./brand/Opening.tsx";
 import { mustsDone, sourceLines } from "./brand/opening.ts";
@@ -272,6 +274,41 @@ export function App() {
       setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }, []);
+  /** U5 (D401): text size. Applied at once, then saved in [ui] text_size; the config wins when the week loads. */
+  const [textSize, setTextSize] = useState<TextSize>(storedTextSize);
+  const textSizeRef = useRef(textSize);
+  textSizeRef.current = textSize;
+  useEffect(() => {
+    if (!data) return;
+    setTextSize(data.ui.textSize);
+    applyTextSize(data.ui.textSize);
+  }, [data?.ui.textSize]);
+  const saveTextSize = useCallback(async (s: TextSize) => {
+    const before = textSizeRef.current;
+    if (s === before) return setNotice(`Text size: ${TEXT_SIZE_NAMES[s]}`);
+    setTextSize(s);
+    applyTextSize(s);
+    try {
+      await call("ui.set_text_size", { size: s });
+      setNotice(`Text size: ${TEXT_SIZE_NAMES[s]}`);
+    } catch (e) {
+      setTextSize(before);
+      applyTextSize(before);
+      setNotice(`Text size not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  }, []);
+  // Ctrl+plus, Ctrl+minus, Ctrl+0: step the text size, only when no text field has focus and no dialog is on top
+  // (then the browser's own zoom keys do what they always do).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const d = textSizeKey(e);
+      if (!d || isTypingTarget(e.target as HTMLElement | null) || topOverlay(document) === "modal") return;
+      e.preventDefault();
+      void saveTextSize(d === "reset" ? "default" : stepTextSize(textSizeRef.current, d === "up" ? 1 : -1));
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [saveTextSize]);
   /** Time model actions (hours for a day, unavailable time, flex sessions): run, then reload the week quietly. */
   const runTime = useCallback(async (action: string, input: Record<string, unknown>): Promise<boolean> => {
     try {
@@ -1001,6 +1038,8 @@ export function App() {
       setViewRange: (r) => void setViewRange(r),
       reduceMotion: data.ui.reduceMotion,
       saveReduceMotion: (on) => void saveReduceMotion(on),
+      textSize,
+      saveTextSize: (s) => void saveTextSize(s),
       hours: data.hours,
       runTime,
       planning: data.planning,
@@ -1329,6 +1368,8 @@ export function App() {
           setViewRange={(r) => void saveViewRange(r)}
           reduceMotion={data.ui.reduceMotion}
           setReduceMotion={(on) => void saveReduceMotion(on)}
+          textSize={textSize}
+          setTextSize={(s) => void saveTextSize(s)}
           demo={data.demo}
           setDemo={(on) => void switchDemo(on)}
           runTime={runTime}

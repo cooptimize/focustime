@@ -6,6 +6,7 @@
 //   Close out: a side panel over the dimmed cards (numbers, where you left off, DevOps updates owed, follow-ups due).
 // At 3840 wide a day timeline sits on the left (drop a pick onto a free gap to timebox it) and a detail panel under
 // the cards. Lumen never appears here.
+import { useTextScale } from "./textsize.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
 import { DueBadge, Fading, FollowUpRow, copy } from "./FollowUps.tsx";
@@ -962,7 +963,7 @@ function CommentOwed({ clientKey, itemId }: { clientKey: string; itemId: number 
   );
 }
 
-const PX_PER_MIN = 2.2;
+const PX_PER_MIN_BASE = 2.2;
 
 /**
  * 3840: the day as one timeline (like Week's rail): hours, meetings, timeboxes with the focus timer, the free gaps.
@@ -970,6 +971,7 @@ const PX_PER_MIN = 2.2;
  * now on, never below its shortest useful time.
  */
 function DayTimeline({ day, blocks, data, picks, now, nowMs, events, onNotice }: { day: Day; blocks: Slot[]; data: WeekLoadData; picks: Pick[]; now: string; nowMs: number; events: DayEvent[]; onNotice: (m: string) => void }) {
+  const PX_PER_MIN = PX_PER_MIN_BASE * useTextScale();
   const { env } = useContext(MenuCtx);
   const [over, setOver] = useState<string | null>(null);
   const tz = data.hours.timeZone;

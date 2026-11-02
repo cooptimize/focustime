@@ -125,6 +125,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["R"], does: "Refresh all sources", command: "week.load" },
   { keys: ["H"], does: "Week: change the hours shown (business hours, 12 hours, 24 hours); also in Week's ⋯", command: "ui.set_view_range" },
   { keys: ["Ctrl K"], does: "Command menu" },
+  { keys: ["Ctrl +", "Ctrl −", "Ctrl 0"], does: "Text size: larger, smaller, or back to Default (not while typing)", command: "ui.set_text_size" },
   { keys: ["F"], does: "Focus timer: start one, or pause, +15, done, next pick or stop", command: "timer.start" },
   { keys: ["M"], does: "Today › Check-in: today's cards show what still fits, with one suggested move each; again to go back", command: "view.checkin" },
   { keys: ["E"], does: "Today › Close out: the side panel (where you left off, DevOps updates, follow-ups due); again to go back", command: "closeout.load" },

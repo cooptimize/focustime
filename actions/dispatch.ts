@@ -4,7 +4,7 @@ import { clearPhotos, photoAction } from "./photo-actions.ts";
 import type { PhotoCache } from "../cache/photos.ts";
 import { expiringSoon } from "../plan/expiry.ts";
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
-import { DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
+import { DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, TEXT_SIZES, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
 import { setValue, type WriteResult } from "../config/edit.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
@@ -714,6 +714,16 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "on") || typeof i.on !== "boolean") return bad("input must be { on: true or false }");
       if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
       const r = await ctx.writeConfig((text) => setValue(text, "ui", "reduce_motion", i.on as boolean, "Display (step 17.5): no opening and closing animation."));
+      if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
+      return { ok: true, data: { ui: r.parsed.config.ui } };
+    }
+    case "ui.set_text_size": {
+      // U5 (D401): Settings > Display "Text size", Ctrl+plus, Ctrl+minus and Ctrl+0. Saved in [ui] text_size.
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "size") || typeof i.size !== "string" || !(TEXT_SIZES as readonly string[]).includes(i.size))
+        return bad(`input must be { size: ${TEXT_SIZES.map((x) => `"${x}"`).join(" | ")} }`);
+      if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
+      const r = await ctx.writeConfig((text) => setValue(text, "ui", "text_size", i.size as string, "Display (U5): text size, default, large or larger."));
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }

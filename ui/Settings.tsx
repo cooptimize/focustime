@@ -6,7 +6,8 @@ import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { FieldProblem, SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
-import { COLLAB_LENGTHS, THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
+import { COLLAB_LENGTHS, TEXT_SIZES, THEME_NAMES, THEMES, type TextSize, type Theme } from "../config/schema.ts";
+import { TEXT_SIZE_NAMES } from "./textsize.ts";
 import type { ClientWork } from "../week/types.ts";
 import type { FollowState } from "../week/follow.ts";
 import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS, type ViewRange } from "../week/hours.ts";
@@ -64,6 +65,9 @@ type Props = {
   /** Step 17.5: no opening and closing animation, no moving Lumen. */
   reduceMotion: boolean;
   setReduceMotion: (on: boolean) => void;
+  /** U5 (D401): Default, Large or Larger. */
+  textSize: TextSize;
+  setTextSize: (s: TextSize) => void;
   /** Step 15 (D272): demo mode and its switch. */
   demo: boolean;
   setDemo: (on: boolean) => void;
@@ -256,6 +260,15 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
               </label>
             ))}
             <span className="set-hint">Applies at once and is saved in config.</span>
+          </fieldset>
+          <fieldset className="set-choice">
+            <legend>Text size</legend>
+            {TEXT_SIZES.map((s) => (
+              <label key={s}>
+                <input type="radio" name="text-size" checked={p.textSize === s} onChange={() => p.setTextSize(s)} /> {TEXT_SIZE_NAMES[s]}
+              </label>
+            ))}
+            <span className="set-hint">Ctrl + and Ctrl − change it; Ctrl 0 resets.</span>
           </fieldset>
           <fieldset className="set-choice">
             <legend>Default view range</legend>

@@ -8,9 +8,11 @@ import "./fonts.css";
 import "./styles.css";
 import { applyTheme, initialTheme } from "./theme.ts";
 import { applyReduceMotion } from "./brand/motion.ts";
+import { applyTextSize, storedTextSize } from "./textsize.ts";
 
 applyTheme(initialTheme());
 applyReduceMotion();
+applyTextSize(storedTextSize());
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -6,7 +6,8 @@ import { addTargets, type AddTarget, type TargetBlock, type TargetGroup } from "
 import { freeMinutes } from "../week/free.ts";
 import { parseItemRef } from "../plan/lookup.ts";
 import { ACTIONS, type ActionName, type ActionSpec } from "../actions/registry.ts";
-import { THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
+import { TEXT_SIZES, THEME_NAMES, THEMES, type TextSize, type Theme } from "../config/schema.ts";
+import { TEXT_SIZE_NAMES } from "./textsize.ts";
 import { hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { canAddWork, dayRule } from "../plan/days.ts";
 import { pickTime, timeChoices } from "../plan/picktime.ts";
@@ -121,6 +122,8 @@ export type MenuEnv = {
   /** Step 17.5: Settings > Display "Reduce motion" (saved). */
   reduceMotion: boolean;
   saveReduceMotion: (on: boolean) => void;
+  textSize: TextSize;
+  saveTextSize: (size: TextSize) => void;
   hours: TimeModel;
   /** Runs a time model action (hours for a day, unavailable time, flex sessions); false with a notice on refusal. */
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
@@ -951,6 +954,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "draft.update": return { run: () => env.setView("inbox") };
     case "ui.set_theme": return { next: () => themeStep(env) };
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
+    case "ui.set_text_size": return { next: () => ({ title: "Text size", items: TEXT_SIZES.map((s) => ({ id: s, label: TEXT_SIZE_NAMES[s], checked: env.textSize === s, action: "ui.set_text_size", run: () => env.saveTextSize(s) })) }) };
     case "ui.first_launch": return { disabled: "Runs on its own the first time Coopilot opens" };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
