@@ -817,6 +817,25 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       const r = db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row | undefined;
       return r ? toDraft(r) : null;
     },
+    /** Step 14.5 (D257): a parent for a draft before it is created in DevOps. Checked by the caller. */
+    setDraftParent(id: number, parentItemId: number): DraftStory {
+      return tx(() => {
+        const r = db.prepare("UPDATE draft_stories SET parent_item_id = ?, updated_at = ? WHERE id = ? AND devops_id IS NULL").run(parentItemId, stamp(), id);
+        if (!r.changes) throw new PlanError("No such draft, or it is already in DevOps");
+        return toDraft(db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row);
+      });
+    },
+    /** Step 14.5: delete a local draft no pick uses (local only; DevOps is never touched). */
+    removeDraft(id: number): void {
+      tx(() => {
+        const d = db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row | undefined;
+        if (!d) throw new PlanError("No such draft");
+        if (d.devops_id != null) throw new PlanError("That draft is already in DevOps");
+        const used = db.prepare("SELECT COUNT(*) AS n FROM picks WHERE draft_id = ?").get(id) as { n: number };
+        if (used.n > 0) throw new PlanError("A pick uses this draft. Drop the pick first, then delete the draft");
+        db.prepare("DELETE FROM draft_stories WHERE id = ?").run(id);
+      });
+    },
     /** Drafts not yet created in DevOps (step 14: a created one leaves every draft list). */
     drafts: (): DraftStory[] => (db.prepare("SELECT * FROM draft_stories WHERE devops_id IS NULL ORDER BY id").all() as Row[]).map(toDraft),
     /**

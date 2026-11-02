@@ -469,3 +469,34 @@ describe("focused time in Plan the day (step 6d)", () => {
     expect(past).toMatchObject({ access: "past", focused: { [p.id]: 2700 } });
   });
 });
+
+describe("drafts: choose a parent, and delete (step 14.5, D257)", () => {
+  it("a story draft with no parent gets an open feature of its own client; nothing else", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const { draft } = await t.run<{ draft: { id: number; parentItemId: number | null } }>("draft.add_story", { clientKey: "CSC", parentItemId: null, title: "Loose story", size: "S" });
+    expect((await t.fail("draft.set_parent", { id: draft.id, parentItemId: 120 })).error).toMatch(/feature/i);
+    expect((await t.fail("draft.set_parent", { id: draft.id, parentItemId: 101 })).status).toBe(422);
+    expect((await t.fail("draft.set_parent", { id: draft.id, parentItemId: 99999 })).status).toBe(409);
+    const r = await t.run<{ draft: { parentItemId: number } }>("draft.set_parent", { id: draft.id, parentItemId: 130 });
+    expect(r.draft.parentItemId).toBe(130);
+  });
+  it("a draft feature takes an epic", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const d = t.plan.addDraft({ clientKey: "CSC", parentItemId: null, title: "Loose feature", size: "M", level: "feature" });
+    expect((await t.fail("draft.set_parent", { id: d.id, parentItemId: 130 })).error).toMatch(/epic/i);
+    expect((await t.run<{ draft: { parentItemId: number } }>("draft.set_parent", { id: d.id, parentItemId: 120 })).draft.parentItemId).toBe(120);
+  });
+  it("delete removes a draft no pick uses; a picked one says to drop the pick first", async () => {
+    const t = setup();
+    await t.run("week.load", { weekStart: "2026-11-02" });
+    const a = t.plan.addDraft({ clientKey: "CSC", parentItemId: 130, title: "Unused", size: "S" });
+    const b = t.plan.addDraft({ clientKey: "CSC", parentItemId: 130, title: "Picked", size: "S" });
+    await t.run("pick.add", { date: D, half: "AM", clientKey: "CSC", draftId: b.id });
+    await t.run("draft.remove", { id: a.id });
+    expect(t.plan.getDraft(a.id)).toBeNull();
+    expect((await t.fail("draft.remove", { id: b.id })).error).toMatch(/drop the pick/i);
+    expect(t.plan.getDraft(b.id)).not.toBeNull();
+  });
+});

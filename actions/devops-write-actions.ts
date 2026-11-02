@@ -5,6 +5,7 @@
 // again, and Undo. Writes use the client's personal write PAT from the keyring, checked against my DevOps identity
 // for that client, and go only to that client's org. The company read PAT from Dataverse is never read here: targets
 // come from devopsTargets(keys, { withPat: false }). Nothing is ever deleted except a comment Coopilot added (undo).
+import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { AC_FIELD, BATCH_LIMIT, completedState, createOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
 import { dateOnly, detectTargetField, htmlToText, identityEmail, portfolioTiers, workItemUrl } from "../sources/devops/normalize.ts";
@@ -26,6 +27,8 @@ export type DevOpsWriteContext = {
   config: () => Promise<AppConfig | null>;
   /** Dataverse DevOps settings without the company PAT (withPat: false). */
   targets: (cfg: AppConfig, clientKeys: string[]) => Promise<TargetsResult>;
+  /** Waits before a second read-back (D255); tests pass an instant one. */
+  sleep?: Sleep;
   writer: DevOpsWriter | null;
   pats: WritePats | null;
   devops: ((cfg: AppConfig) => DevOpsSource) | null;
@@ -403,6 +406,8 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     return { entry: e, confirmed: status === "confirmed", message, ...extra };
   };
   const forget = () => ctx.devops?.(env.cfg).forget(env.clientKey);
+  // D255: a read-back that fails on the network is tried once more after a short wait.
+  const again = <T,>(read: () => Promise<T>) => readBack(read, (e) => e instanceof WriteFailure && e.kind === "network", ctx.sleep);
   try {
     if (entry.op === "comment") {
       const text = (entry.ops as { text: string }).text;
@@ -411,7 +416,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       if (retry) posted = (await writer.comments(org, pat, project, entry.itemId!)).find((c) => !c.isDeleted && c.createdBy?.toLowerCase() === env.me.email.toLowerCase() && sameText(c.text, text) && (!c.createdDate || Temporal.Instant.compare(Temporal.Instant.from(c.createdDate), Temporal.Instant.from(entry.at).subtract({ hours: 1 })) >= 0)) ?? null;
       const made = posted ?? (await writer.addComment(org, pat, project, entry.itemId!, text));
       plan.settleDevopsWrite(entry.id, { status: "pending", commentId: made.id });
-      const back = await writer.getComment(org, pat, project, entry.itemId!, made.id);
+      const back = await again(() => writer.getComment(org, pat, project, entry.itemId!, made.id));
       if (back.isDeleted || !sameText(back.text, text)) return settle("unconfirmed", "DevOps didn't show the comment yet. Retry checks first and won't post it twice", { commentId: made.id });
       forget();
       return settle("confirmed", posted ? "Already in DevOps (found on retry)" : "Comment added in DevOps", { commentId: made.id });
@@ -419,7 +424,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     if (entry.op === "undo_comment") {
       const before = await writer.getComment(org, pat, project, entry.itemId!, entry.commentId!);
       if (!before.isDeleted) await writer.deleteComment(org, pat, project, entry.itemId!, entry.commentId!);
-      const back = await writer.getComment(org, pat, project, entry.itemId!, entry.commentId!);
+      const back = await again(() => writer.getComment(org, pat, project, entry.itemId!, entry.commentId!));
       if (!back.isDeleted) return settle("unconfirmed", "DevOps still shows the comment. Retry to delete it again");
       plan.markDevopsUndone(entry.undoOf!, entry.id);
       forget();
@@ -440,7 +445,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
         id = made.id;
         plan.settleDevopsWrite(entry.id, { status: "pending", itemId: id });
       }
-      const back = await writer.item(org, pat, project, id);
+      const back = await again(() => writer.item(org, pat, project, id!));
       const ok = back.title === entry.title && back.parentId === entry.parentId && identityEmail(back.fields["System.AssignedTo"]) === env.me.email.toLowerCase();
       if (!ok) return settle("unconfirmed", `DevOps didn't show #${id} as asked yet (title, parent or assignee). Retry checks first and won't create another`, { itemId: id });
       const url = workItemUrl(org, env.projectName, id);
@@ -469,7 +474,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       }
       if (entry.op === "state") plan.settleDevopsWrite(entry.id, { status: "pending", commentId: wrote.commentId });
     }
-    const back = await writer.item(org, pat, project, itemId);
+    const back = await again(() => writer.item(org, pat, project, itemId));
     if (!applied(entry, current(entry, back, tz))) return settle("unconfirmed", "DevOps didn't show the change yet. Retry checks first and won't write twice", { revAfter: back.rev });
     if (entry.op === "undo_state" && entry.commentId !== null) {
       // The comment that came with the original change goes too.

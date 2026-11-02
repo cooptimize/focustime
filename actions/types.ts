@@ -72,6 +72,8 @@ export type WeekLoadData = {
   collab: import("../config/schema.ts").CollabSettings;
   /** Step 14: clients with a checked DevOps write PAT (everything else stays read-only). */
   devopsWrite: string[];
+  /** Step 14.5 (D256): write PATs and app secrets expiring within 14 days (or expired), soonest first. */
+  expiring: { key: string; text: string; days: number; section: string }[];
   ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
 };

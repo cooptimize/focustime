@@ -4,6 +4,7 @@
 // back and only then reports success, an audit log entry with the prior values, and undo. Coopilot only changes events
 // that carry its marker. Nothing writes on a single click: the UI previews, the person confirms (or, for changes to
 // their own timebox events with confirm_own off, the confirm follows the preview, still logged and undoable).
+import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { DEFAULT_TIMEBOX, inviteDomains } from "../config/schema.ts";
 import {
@@ -31,6 +32,8 @@ export type TimeboxContext = {
   /** Outlook's write side, or null when Outlook isn't set up. */
   outlook: (cfg: AppConfig) => OutlookWrite | null;
   now: () => string;
+  /** Waits before a second read-back after a network error (D255); tests pass an instant one. */
+  sleep?: Sleep;
 };
 
 /** How long a preview stays valid. */
@@ -221,7 +224,7 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
     if (!ow) return bad("Outlook isn't set up", 409);
     if (held.kind === "invite" && held.op === "create" && held.invite) plan.addInvite({ uid: held.uid, ...held.invite, start: toLocal(held.after!.start, tz), end: toLocal(held.after!.end, tz), attendees: held.after!.attendees ?? [], teams: !!held.after!.teams });
     const entry = plan.logWrite({ op: held.op, kind: held.kind, uid: held.uid, eventId: held.eventId, account: held.account, calendar: held.calendar, before: held.before, after: held.after, localBefore: held.localBefore, localAfter: held.localAfter, auto: held.auto, undoOf: held.undoOf });
-    return { ok: true, data: await attempt(plan, ow, entry, false, { domains: inviteDomains(cfg), now: ctx.now }) };
+    return { ok: true, data: await attempt(plan, ow, entry, false, { domains: inviteDomains(cfg), now: ctx.now, ...(ctx.sleep ? { sleep: ctx.sleep } : {}) }) };
   };
 
   switch (action) {
@@ -438,7 +441,7 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
       if (!ow) return bad("Outlook isn't set up", 409);
       const access = await ow.access();
       if (access.status !== "write") return bad(access.status === "unavailable" ? access.message : NO_WRITE, 409);
-      return { ok: true, data: await attempt(plan, ow, entry, true, { domains: inviteDomains(cfg), now: ctx.now }) };
+      return { ok: true, data: await attempt(plan, ow, entry, true, { domains: inviteDomains(cfg), now: ctx.now, ...(ctx.sleep ? { sleep: ctx.sleep } : {}) }) };
     }
   }
 }
@@ -484,14 +487,18 @@ async function writeState(ctx: TimeboxContext, cfg: AppConfig): Promise<WriteSta
  * One attempt at a logged write, safe to repeat: a create first looks for an event with the marker (no duplicates);
  * an update or delete reads the event and refuses one without the marker. Success only after reading it back.
  */
-async function attempt(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, retry: boolean, env: { domains: readonly string[]; now: () => string }): Promise<WriteResult> {
+type AttemptEnv = { domains: readonly string[]; now: () => string; sleep?: Sleep };
+/** D255: a read-back that fails on the network is tried once more after a short wait. */
+const again = <T,>(env: { sleep?: Sleep }, read: () => Promise<T>) => readBack(read, (e) => e instanceof NetworkError, env.sleep);
+
+async function attempt(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, retry: boolean, env: AttemptEnv): Promise<WriteResult> {
   const settle = (status: WriteEntry["status"], message: string, more: { eventId?: string | null; before?: Fields | null } = {}): WriteResult => {
     const e = plan.settleWrite(entry.id, { status, message, retry, ...more });
     return { entry: e, confirmed: status === "confirmed", message };
   };
   if (entry.kind === "event" || entry.kind === "invite") {
     try {
-      return entry.kind === "event" ? await attemptOwn(plan, ow, entry, settle) : await attemptInvite(plan, ow, entry, settle, env);
+      return entry.kind === "event" ? await attemptOwn(plan, ow, entry, settle, env) : await attemptInvite(plan, ow, entry, settle, env);
     } catch (e) {
       return failed(e, settle);
     }
@@ -511,7 +518,7 @@ async function attempt(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, ret
       const r = await ow.writer.create(entry.after!, entry.uid, `${entry.uid}:${entry.id}`);
       eventId = r.id;
       plan.settleWrite(entry.id, { status: "pending", eventId });
-      const now = await ow.writer.get(eventId);
+      const now = await again(env, () => ow.writer.get(eventId!));
       if (r.existed && now && !matches(now, entry.after!, entry.uid).ok) await ow.writer.update(eventId, entry.uid, entry.after!, true);
     } else if (entry.op === "update") {
       const was = await ow.writer.update(eventId!, entry.uid, entry.after!, entry.before?.body !== entry.after!.body);
@@ -521,7 +528,7 @@ async function attempt(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, ret
       return alreadyGone();
     }
     // Read back before reporting success.
-    const back = await ow.writer.get(eventId!);
+    const back = await again(env, () => ow.writer.get(eventId!));
     if (entry.op === "delete") {
       if (back) return settle("unconfirmed", "Outlook still shows the event. Retry to delete it again", {});
       plan.markOwnDeleted(entry.uid);
@@ -553,11 +560,11 @@ function failed(e: unknown, settle: Settle): WriteResult {
 }
 
 /** My own event (step 13): time and show as only, after the tier check in the writer; read back before success. */
-async function attemptOwn(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, settle: Settle): Promise<WriteResult> {
+async function attemptOwn(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, settle: Settle, env: AttemptEnv): Promise<WriteResult> {
   const after = entry.after!;
   const was = await ow.writer.updateOwn(entry.eventId!, { start: after.start, end: after.end, showAs: after.showAs });
   if (entry.attempts === 1 && entry.undoOf === null) plan.settleWrite(entry.id, { status: "pending", before: { ...(entry.before ?? after), subject: was.subject, start: was.start, end: was.end } });
-  const back = await ow.writer.ownEditable(entry.eventId!);
+  const back = await again(env, () => ow.writer.ownEditable(entry.eventId!));
   const ok = !!back && sameInstant(back.start, after.start) && sameInstant(back.end, after.end) && back.showAs.toLowerCase() === after.showAs.toLowerCase();
   if (!ok) return settle("unconfirmed", "Outlook didn't show the change yet. Retry to check and fix it");
   if (entry.undoOf !== null) plan.markUndone(entry.undoOf, entry.id);
@@ -569,13 +576,13 @@ async function attemptOwn(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, 
  * attendees; then the invite is kept on the item and its follow-up opens. Undo cancels it (attendees get a
  * cancellation) and it is read back as gone from the calendar.
  */
-async function attemptInvite(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, settle: Settle, env: { domains: readonly string[]; now: () => string }): Promise<WriteResult> {
+async function attemptInvite(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry, settle: Settle, env: AttemptEnv): Promise<WriteResult> {
   const inv = plan.invite(entry.uid);
   if (entry.op === "create") {
     const f = entry.after!;
     const r = await ow.writer.createInvite(f, entry.uid, `${entry.uid}:${entry.id}`, env.domains);
     plan.settleWrite(entry.id, { status: "pending", eventId: r.id });
-    const back = await ow.writer.getInvite(r.id);
+    const back = await again(env, () => ow.writer.getInvite(r.id));
     const m = inviteMatches(back, f, entry.uid);
     if (!m.ok) return settle("unconfirmed", `Outlook didn't show the invite as sent yet (${m.differs.join(", ")}). Retry checks first and won't send a second one`, { eventId: r.id });
     if (inv) {
@@ -587,7 +594,7 @@ async function attemptInvite(plan: PlanStore, ow: OutlookWrite, entry: WriteEntr
   // Undo: cancel.
   const before = entry.before ?? null;
   await ow.writer.cancel(entry.eventId!, entry.uid, "Cancelled from Coopilot.");
-  const back = await ow.writer.get(entry.eventId!);
+  const back = await again(env, () => ow.writer.get(entry.eventId!));
   const still = back && before ? (await ow.writer.scan(before.start, before.end)).some((e) => e.id === entry.eventId) : !!back;
   if (still) return settle("unconfirmed", "Outlook still shows the meeting. Retry to cancel it again");
   if (inv) {

@@ -127,3 +127,14 @@ export function undoTops(log: readonly DevOpsWriteEntry[]): Map<string, number> 
   return out;
 }
 export const VISIBILITY = (project: string) => `Visible to everyone with access to the ${project} project in DevOps. People following the item may get a notification from DevOps.`;
+
+/**
+ * Step 14.5 (D257): where a draft with no parent can go before it is created: open features for a story, open epics
+ * for a draft feature, of its own client's loaded items, in stack rank order then id.
+ */
+export function parentChoices<T extends { id: number; level: string; tier?: "feature" | "epic"; stateCategory: string; order: number | null }>(items: readonly T[], draftLevel: "story" | "feature"): T[] {
+  const want = draftLevel === "feature" ? "epic" : "feature";
+  return items
+    .filter((i) => i.level === "portfolio" && (i.tier ?? "feature") === want && isOpenCategory(i.stateCategory))
+    .sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || a.id - b.id);
+}

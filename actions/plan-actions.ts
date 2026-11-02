@@ -12,7 +12,7 @@ import type { PtoDay } from "../week/pto.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const PLAN_ACTIONS = ["planday.start", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "draft.add_story"] as const;
+export const PLAN_ACTIONS = ["planday.start", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "draft.add_story", "draft.set_parent", "draft.remove"] as const;
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
 export const isPlanAction = (a: unknown): a is PlanAction => typeof a === "string" && (PLAN_ACTIONS as readonly string[]).includes(a);
 
@@ -276,6 +276,27 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (!parent) return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${key}. Refresh and try again`, 409);
         if (parent.level !== "portfolio") return bad("Draft stories go under an epic or feature; this item can be picked directly", 422);
         return { ok: true, data: { draft: plan.addDraft({ clientKey: key, parentItemId, title, size: sz }) } };
+      }
+      case "draft.set_parent": {
+        // Step 14.5 (D257): a draft needs a parent before it can be created in DevOps. A story goes under an open
+        // feature, a draft feature under an open epic, of the draft's own client, from the loaded DevOps items.
+        const o = fields(input, ["id", "parentItemId"]);
+        const draft = plan.getDraft(id(o.id));
+        if (!draft || draft.devopsId) return bad("No such draft, or it is already in DevOps", 404);
+        const parentItemId = id(o.parentItemId, "parentItemId");
+        const cfg = await ctx.config();
+        if (!cfg) return bad("Fix the config first", 409);
+        const parent = ctx.devops(cfg).lookup(draft.clientKey, parentItemId);
+        if (!parent) return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${draft.clientKey}. Refresh and try again`, 409);
+        const want = draft.level === "feature" ? "epic" : "feature";
+        if (parent.level !== "portfolio" || (parent.tier ?? "feature") !== want) return bad(draft.level === "feature" ? "A draft feature goes under an epic" : "A draft story goes under a feature", 422);
+        if (parent.stateCategory === "Completed" || parent.stateCategory === "Removed") return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
+        return { ok: true, data: { draft: plan.setDraftParent(draft.id, parentItemId) } };
+      }
+      case "draft.remove": {
+        const o = fields(input, ["id"]);
+        plan.removeDraft(id(o.id));
+        return { ok: true, data: { removed: true } };
       }
     }
   } catch (e) {

@@ -1,5 +1,6 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import { expiringSoon } from "../plan/expiry.ts";
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import { DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
 import { setValue, type WriteResult } from "../config/edit.ts";
@@ -52,6 +53,8 @@ export type ActionContext = {
   makeDevOps: (cfg: DataverseConfig, timeZone: string) => DevOpsSource;
   saveSystemUserId: (id: string) => Promise<void>;
   now: () => string;
+  /** Waits before a second read-back after a network error (D255); tests pass an instant one. */
+  sleep?: (ms: number) => Promise<void>;
   /** The local plan store (step 5); absent when it could not be opened. */
   plan?: PlanStore;
   /** Safe config write (config/edit.ts writeConfig): validate, back up, atomic replace. Absent: settings are read-only. */
@@ -356,6 +359,14 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     invites: ctx.plan ? ctx.plan.invitesFrom(Temporal.PlainDate.from(weekStart).subtract({ days: 7 }).toString()).map((i, _n, _a, log = ctx.plan!.writeLog(1000)) => ({ writeId: log.find((e) => e.uid === i.uid && e.op === "create" && e.status === "confirmed" && !e.undoneBy)?.id ?? null, uid: i.uid, clientKey: i.clientKey, itemId: i.itemId, pickId: i.pickId, timeboxId: i.timeboxId, title: i.title, start: i.start, end: i.end, names: i.attendees.map((a) => a.name), teams: i.teams, status: i.status })) : [],
     collab: cfg?.collab ?? DEFAULT_COLLAB,
     devopsWrite: ctx.plan && ctx.devopsWriter && ctx.writePats ? ctx.plan.devopsIdentities().map((i) => i.clientKey) : [],
+    // Step 14.5 (D256): write PATs and app secrets that expire within 14 days, for Today.
+    expiring: expiringSoon(
+      [
+        ...(ctx.plan ? ctx.plan.devopsIdentities() : []).filter((i) => i.expires).map((i) => ({ key: `pat:${i.clientKey}`, label: `${nameOf(cfg, (k) => names.get(k))(i.clientKey)} DevOps write access`, expires: i.expires!, section: "clients" })),
+        ...Object.entries(cfg?.secretExpiry ?? {}).map(([k, v]) => ({ key: `secret:${k}`, label: k === "dataverse-client-secret" ? "The Dataverse app secret" : "The Google app secret", expires: v!, section: "connections" })),
+      ],
+      serverToday,
+    ),
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
   };
@@ -438,7 +449,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "write.retry":
     case "write.log":
       return timeboxAction(
-        { plan: ctx.plan, config: () => configured(ctx), outlook: (cfg) => (cfg.outlook ? ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).write ?? null : null), now: ctx.now },
+        { plan: ctx.plan, config: () => configured(ctx), outlook: (cfg) => (cfg.outlook ? ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).write ?? null : null), now: ctx.now, ...(ctx.sleep ? { sleep: ctx.sleep } : {}) },
         action,
         req.input,
       );
@@ -460,6 +471,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
           pats: ctx.writePats ?? null,
           devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
           now: ctx.now,
+          ...(ctx.sleep ? { sleep: ctx.sleep } : {}),
         },
         action,
         req.input,
@@ -664,6 +676,8 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "pick.move":
     case "pick.mark_done":
     case "draft.add_story":
+    case "draft.set_parent":
+    case "draft.remove":
       return planAction(
         {
           plan: ctx.plan,

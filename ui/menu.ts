@@ -747,6 +747,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "pick.mark_done": return { next: () => choosePick(env, "Mark which pick done or not done?", (p) => () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" })) };
     case "pick.remove": return { next: () => choosePick(env, "Drop which pick?", (p) => () => env.runPlan("pick.remove", { id: p.id })) };
     case "draft.add_story": return { next: () => chooseItem(env, "Draft a story under which epic or feature?", (i) => i.level === "portfolio", (k, i) => draftPrompt(env, k, i)) };
+    case "draft.set_parent": return { run: () => env.setView("inbox") };
+    case "draft.remove": return { run: () => env.setView("inbox") };
     case "ui.set_theme": return { next: () => themeStep(env) };
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
     case "settings.load": return { run: () => env.openSettings() };

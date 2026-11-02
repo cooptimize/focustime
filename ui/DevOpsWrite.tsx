@@ -6,6 +6,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { DevOpsLogView, DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import type { StateInfo } from "../plan/devopswrite.ts";
 import type { DraftStory } from "../plan/types.ts";
+import { parentChoices } from "../plan/devopswrite.ts";
+import { DevOpsWork } from "./work.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 
@@ -367,22 +369,54 @@ export function DevOpsAction({ clientKey, label, onRun, className = "mini" }: { 
   );
 }
 
-/** "Create in DevOps" for one draft (or several under one parent); a draft with no parent says what it needs first. */
+/**
+ * "Create in DevOps" for one draft (or several under one parent). A draft with no parent first asks for one (D257):
+ * that client's open features for a story, open epics for a draft feature. Nothing is created without a parent.
+ */
 export function CreateInDevOps({ drafts, label }: { drafts: DraftStory[]; label?: string }): ReactNode {
   const env = useDevOpsWrite();
+  const work = useContext(DevOpsWork);
+  const [choosing, setChoosing] = useState(false);
   const d0 = drafts[0];
   if (!env || !d0) return null;
-  if (drafts.some((d) => d.parentItemId === null))
-    return (
-      <span className="muted dw-hint" title="Area and iteration come from the parent, and DevOps first means it sits in the backlog">
-        Put it under {d0.level === "feature" ? "an epic" : "a feature"} to create it in DevOps
-      </span>
-    );
-  return <DevOpsAction clientKey={d0.clientKey} label={label ?? "Create in DevOps"} onRun={(w) => w.create(d0.clientKey, drafts)} />;
+  const loose = drafts.filter((d) => d.parentItemId === null);
+  if (loose.length && drafts.length > 1) return null;
+  if (!loose.length) return <DevOpsAction clientKey={d0.clientKey} label={label ?? "Create in DevOps"} onRun={(w) => w.create(d0.clientKey, drafts)} />;
+  const kind = d0.level === "feature" ? "epic" : "feature";
+  if (!choosing) return <DevOpsAction clientKey={d0.clientKey} label={label ?? "Create in DevOps"} onRun={() => setChoosing(true)} />;
+  const options = parentChoices(work.get(d0.clientKey)?.items ?? [], d0.level === "feature" ? "feature" : "story");
+  const choose = async (parentItemId: number) => {
+    try {
+      const r = await call<{ draft: DraftStory }>("draft.set_parent", { id: d0.id, parentItemId });
+      setChoosing(false);
+      env.create(d0.clientKey, [r.draft]);
+    } catch (e) {
+      notify(errText(e));
+    }
+  };
+  return (
+    <span className="dw-parent" role="group" aria-label={`Choose a parent for ${d0.title}`}>
+      {options.length ? (
+        <select autoFocus aria-label={`Parent ${kind}`} value="" onChange={(e) => e.target.value && void choose(Number(e.target.value))}>
+          <option value="">Choose a parent {kind}…</option>
+          {options.map((i) => (
+            <option key={i.id} value={i.id}>
+              #{i.id} {i.title}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="muted dw-hint">No open {kind}s for this client in DevOps yet. Add one there first</span>
+      )}
+      <button type="button" className="mini quiet" onClick={() => setChoosing(false)}>
+        Cancel
+      </button>
+    </span>
+  );
 }
 
 /** Drafts not yet in DevOps, per client, each with Create in DevOps (the Inbox). */
-export function DraftsToAdd({ drafts, clientName }: { drafts: DraftStory[]; clientName: (k: string) => string }): ReactNode {
+export function DraftsToAdd({ drafts, clientName, onChanged }: { drafts: DraftStory[]; clientName: (k: string) => string; onChanged: () => void }): ReactNode {
   if (!drafts.length) return null;
   return (
     <section className="co-section dw-drafts-section" aria-label="Drafts to add in DevOps">
@@ -402,6 +436,22 @@ export function DraftsToAdd({ drafts, clientName }: { drafts: DraftStory[]; clie
               </span>
             </p>
             <CreateInDevOps drafts={[d]} />
+            <button
+              type="button"
+              className="mini quiet"
+              title="Delete this local draft (DevOps isn't touched)"
+              onClick={async () => {
+                try {
+                  await call("draft.remove", { id: d.id });
+                  notify(`Draft deleted: ${d.title}`);
+                  onChanged();
+                } catch (e) {
+                  notify(errText(e));
+                }
+              }}
+            >
+              Delete
+            </button>
           </li>
         ))}
       </ul>

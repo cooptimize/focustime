@@ -17,6 +17,9 @@ export function fakeGraph(opts: { owner?: string } = {}) {
     failNext: null as null | { method: string; status: number },
     /** The next POST is applied but its response is lost (network error). */
     loseCreateResponse: false,
+    /** Step 14.5: after the next write (POST, PATCH, DELETE) lands, this many GETs of an event fail at the network. */
+    dropAfterWrite: 0,
+    dropGets: 0,
     /** PATCH is accepted but not applied (read-back mismatch). */
     ignorePatch: false,
     /** Step 13: what getSchedule answers (the raw Graph body). */
@@ -48,6 +51,10 @@ export function fakeGraph(opts: { owner?: string } = {}) {
       const s = sw.failNext.status;
       sw.failNext = null;
       return json(s, { error: { code: "Fail", message: `echo ${FAKE_WRITE_TOKEN}` } });
+    }
+    if (method !== "GET" && sw.dropAfterWrite > 0) {
+      sw.dropGets = sw.dropAfterWrite;
+      sw.dropAfterWrite = 0;
     }
     const path = u.pathname.replace("/v1.0/", "");
     const withMarker = (u.searchParams.get("$expand") ?? "").includes(MARKER_PROP);
@@ -90,6 +97,10 @@ export function fakeGraph(opts: { owner?: string } = {}) {
     const id = decodeURIComponent(path.replace(/^me\/events\//, ""));
     const e = events.get(id);
     if (!e) return json(404, {});
+    if (method === "GET" && sw.dropGets > 0) {
+      sw.dropGets--;
+      throw new TypeError("fetch failed");
+    }
     if (method === "GET") return json(200, out(e, withMarker));
     if (method === "PATCH") {
       if (!sw.ignorePatch) {

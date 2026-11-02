@@ -1226,6 +1226,7 @@ export function App() {
           onInbox={() => setView("inbox")}
           onWeek={() => setView("week")}
           onFix={() => setSettingsAt("connections")}
+          onSettings={(section) => setSettingsAt(section as never)}
         />
       ) : (
       <>

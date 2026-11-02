@@ -33,6 +33,8 @@ type Props = {
   onInbox: () => void;
   onWeek: () => void;
   onFix: () => void;
+  /** Opens Settings at a section (an expiring PAT or secret). */
+  onSettings: (section: string) => void;
 };
 
 const hm = (t: string) => {
@@ -40,7 +42,7 @@ const hm = (t: string) => {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 || h === 24 ? "AM" : "PM"}`;
 };
 
-export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen, onPlan, onInbox, onWeek, onFix }: Props) {
+export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen, onPlan, onInbox, onWeek, onFix, onSettings }: Props) {
   const date = data.planDay.date;
   const day = data.week.days.find((d) => d.date === date) ?? null;
   const plan = data.plan?.[date];
@@ -63,7 +65,7 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
       </header>
       <FlowHint />
 
-      {(due.length > 0 || down.length > 0) && (
+      {(due.length > 0 || down.length > 0 || data.expiring.length > 0) && (
         <section className="today-urgent" aria-label="Needs attention">
           {due.map((l) => (
             <button key={`l${l.id}`} type="button" className="today-alert" onClick={onInbox}>
@@ -72,6 +74,12 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
                 {l.hasWho ? `${l.who}: ` : ""}
                 {l.what}
               </span>
+            </button>
+          ))}
+          {data.expiring.map((x) => (
+            <button key={x.key} type="button" className={`today-alert expiry${x.days < 0 ? " expired" : ""}`} onClick={() => onSettings(x.section)}>
+              <span className="today-alert-tag">{x.days < 0 ? "Expired" : "Expires"}</span>
+              <span>{x.text}</span>
             </button>
           ))}
           {down.map((c) => (

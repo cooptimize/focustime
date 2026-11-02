@@ -115,7 +115,7 @@ export function Inbox({ data, version, onClose, onChanged }: { data: WeekLoadDat
           ),
         )}
       </ul>
-      {caps && <DraftsToAdd drafts={caps.drafts} clientName={(k) => name(k) ?? k} />}
+      {caps && <DraftsToAdd drafts={caps.drafts} clientName={(k) => name(k) ?? k} onChanged={() => void load()} />}
       <div className="inbox-tools">
         <AddFollowUp clients={clients} onAdded={changed} />
         <label className="set-check">

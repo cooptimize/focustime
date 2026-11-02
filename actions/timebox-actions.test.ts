@@ -28,8 +28,10 @@ function setup(opts: { access?: WriteAccess["status"]; toml?: string } = {}) {
     makeDevOps: () => { throw new Error("n/a"); },
     saveSystemUserId: async () => {},
     now: () => NOW,
+    sleep: async (ms) => void waits.push(ms),
     plan,
   };
+  const waits: number[] = [];
   const run = async <T = unknown>(action: string, input: unknown): Promise<T> => {
     const r = await dispatch(c, { action, input });
     if (!r.ok) throw new Error(`${r.status} ${r.error}`);
@@ -45,7 +47,7 @@ function setup(opts: { access?: WriteAccess["status"]; toml?: string } = {}) {
   const preview = (input: Record<string, unknown>) => run<{ preview?: WritePreview; nothing?: true }>("write.preview", input);
   const confirm = (p: WritePreview) => run<WriteResult>("write.confirm", { previewId: p.previewId });
   const put = async (uid: string) => confirm((await preview({ uid })).preview!);
-  return { g, plan, run, fail, box, preview, confirm, put, setAccess: (a: WriteAccess) => void (access = a) };
+  return { g, plan, run, fail, box, preview, confirm, put, waits, setAccess: (a: WriteAccess) => void (access = a) };
 }
 
 describe("timeboxes (local)", () => {
@@ -407,5 +409,31 @@ describe("combined Outlook preview (step 13.6, D247)", () => {
     expect((await t.fail("write.preview", { uid: "a", uids: ["b"] })).error).toMatch(/takes/);
     expect((await t.fail("write.preview", { uids: Array.from({ length: 21 }, (_, i) => `u${i}`) })).error).toMatch(/20/);
     expect((await t.fail("write.confirm", { previewId: "x", previewIds: ["y"] })).error).toMatch(/previewId/);
+  });
+});
+
+describe("read-back resilience (step 14.5, D255)", () => {
+  it("an update lands but the first read-back fails on the network: wait, read again, confirmed", async () => {
+    const t = setup();
+    const { timebox } = await t.box();
+    await t.put(timebox.uid);
+    await t.run("timebox.update", { id: timebox.id, start: `${D}T13:00:00-05:00`, end: `${D}T14:00:00-05:00` });
+    const p = (await t.preview({ uid: timebox.uid })).preview!;
+    t.g.sw.dropAfterWrite = 1;
+    const r = await t.confirm(p);
+    expect(r.confirmed).toBe(true);
+    expect(t.waits).toEqual([1500]);
+    expect(t.g.calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
+  });
+  it("two network failures in a row: Not confirmed, Retry confirms without a duplicate", async () => {
+    const t = setup();
+    const { timebox } = await t.box();
+    const p = (await t.preview({ uid: timebox.uid })).preview!;
+    t.g.sw.dropAfterWrite = 2;
+    const r = await t.confirm(p);
+    expect(r).toMatchObject({ confirmed: false, entry: { status: "unconfirmed" } });
+    const again = await t.run<WriteResult>("write.retry", { id: r.entry.id });
+    expect(again.confirmed).toBe(true);
+    expect(t.g.events.size).toBe(1);
   });
 });

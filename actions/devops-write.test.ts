@@ -30,6 +30,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean } = {}) {
   const targetCalls: { keys: string[]; withPat: boolean | undefined }[] = [];
   const target = (clientKey: string, org: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org, project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: clientKey === COOP ? (opts.email === undefined ? "tanner@cooptimize.example" : opts.email) : "tanner@csc.example", pat: withPat ? new Pat(COMPANY_PAT) : null });
   const forgotten: string[] = [];
+  const waits: number[] = [];
   const c: ActionContext = {
     loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(base) }),
     makeDataverse: () => ({
@@ -44,6 +45,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean } = {}) {
     makeDevOps: () => ({ forget: (k: string) => void forgotten.push(k) }) as never,
     saveSystemUserId: async () => {},
     now: () => NOW,
+    sleep: async (ms) => void waits.push(ms),
     plan,
     devopsWriter: writer,
     writePats: { get: async (k) => { const v = keyring.get(k); if (!v) throw new Error("not found"); return new Pat(v); }, set: async (k, v) => void keyring.set(k, v), clear: async (k) => void keyring.delete(k) },
@@ -62,7 +64,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean } = {}) {
   const preview = async (change: Record<string, unknown>, clientKey = COOP) => (await run<{ preview: DevOpsPreview }>("devops.preview", { clientKey, change })).preview;
   const confirm = (p: DevOpsPreview) => run<DevOpsResult>("devops.confirm", { previewId: p.previewId });
   const write = async (change: Record<string, unknown>) => confirm(await preview(change));
-  return { dv, plan, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten };
+  return { dv, plan, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten, waits };
 }
 type S = ReturnType<typeof setup>;
 const patches = (s: S) => s.dv.writes().filter((w) => w.method === "PATCH");
@@ -351,5 +353,59 @@ describe("undo of each kind", () => {
     const r = await s.write({ kind: "state", itemId: 500, state: "Closed", followUpId: f.id });
     expect(r.confirmed).toBe(true);
     expect(s.plan.getFollowUp(f.id)).toMatchObject({ outcome: "done", closeHow: "devops" });
+  });
+});
+
+describe("read-back resilience (step 14.5, D255)", () => {
+  it("the write lands, the first read-back fails on the network: wait, read again, confirmed with one PATCH", async () => {
+    const s = setup();
+    await s.enable();
+    const p = await s.preview({ kind: "state", itemId: 500, state: "Resolved" });
+    s.dv.fail("GET", /workitems\/500$/i, "network");
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    expect(s.waits).toEqual([1500]);
+    expect(patches(s)).toHaveLength(1);
+  });
+  it("two network failures in a row: Not confirmed, and Retry adopts it without a second PATCH", async () => {
+    const s = setup();
+    await s.enable();
+    const p = await s.preview({ kind: "state", itemId: 500, state: "Resolved" });
+    s.dv.fail("GET", /workitems\/500$/i, "network");
+    s.dv.fail("GET", /workitems\/500$/i, "network");
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(false);
+    expect(r.entry.status).toBe("unconfirmed");
+    const again = await s.run<DevOpsResult>("devops.retry", { id: r.entry.id });
+    expect(again.confirmed).toBe(true);
+    expect(patches(s)).toHaveLength(1);
+  });
+  it("a create's read-back is retried the same way", async () => {
+    const s = setup();
+    await s.enable();
+    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "Retry me", size: "S" });
+    const p = await s.preview({ kind: "create", draftId: d.id });
+    s.dv.fail("GET", /workitems\/\d+$/i, "network");
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    expect(s.dv.writes().filter((w) => w.method === "POST" && w.url.includes("$"))).toHaveLength(1);
+  });
+});
+
+describe("parent first (step 14.5, D257)", () => {
+  const it_ = (id: number, tier: "feature" | "epic" | undefined, stateCategory = "InProgress", order: number | null = null) => ({ id, level: "portfolio", ...(tier ? { tier } : {}), stateCategory, order });
+  it("a story goes under an open feature, a draft feature under an open epic", async () => {
+    const { parentChoices } = await import("../plan/devopswrite.ts");
+    const items = [it_(3, "feature", "Completed"), it_(2, "feature", "Proposed", 5), it_(1, undefined, "InProgress", 2), it_(9, "epic"), { id: 7, level: "requirement", stateCategory: "Proposed", order: 1 }];
+    expect(parentChoices(items, "story").map((i) => i.id)).toEqual([1, 2]);
+    expect(parentChoices(items, "feature").map((i) => i.id)).toEqual([9]);
+  });
+  it("the server never creates a draft without a parent", async () => {
+    const s = setup();
+    await s.enable();
+    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: null, title: "No parent", size: "S" });
+    const r = await s.fail("devops.preview", { clientKey: COOP, change: { kind: "create", draftId: d.id } });
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(s.dv.writes()).toHaveLength(0);
   });
 });
