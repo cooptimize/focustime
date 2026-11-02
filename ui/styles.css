@@ -13,6 +13,13 @@
 /* Fonts: IBM Plex Sans and Plex Mono, self-hosted from @fontsource (ui/fonts.css, step 17.5). */
 
 :root {
+  /* Type scale (U3, D385; style guide section 4): four sizes and three weights (400, 500, 600) on Today and Week.
+     The 3840 ultrawide is 1080 px tall like 1920x1080, so the same pixel sizes hold there. */
+  --fs-1: 11px; /* section labels, rail labels, small counts */
+  --fs-2: 12px; /* meta: times, pills, badges, status bar */
+  --fs-3: 13px; /* body: picks, rows, buttons */
+  --fs-4: 15px; /* titles: page and panel titles */
+
   /* 1. Primitives: Cooptimize (brand, style guide section 3.1) */
   --p-navy-900: #00416b;
   --p-navy-300: #6fb0e3;
@@ -2770,3 +2777,146 @@ button.att-chip { cursor: pointer; }
 /* The cards stay readable beside the panel: Today moves left of it. */
 .today-view.u2.mode-closeout { max-width: none; margin: 0; padding-right: calc(min(520px, 42vw) + 32px); }
 .today-view.u2.wide.mode-closeout { padding-right: calc(min(720px, 30vw) + 48px); }
+
+/* ---------- U3: Week (day headers, cards, the time rail, whole-day cells) ---------- */
+.day-head { align-items: center; gap: 8px; height: 26px; }
+.day-head .dow, .grid.medium .dow { font-size: var(--fs-3); font-weight: 600; letter-spacing: 0; }
+.day-head .date, .grid.medium .date { font-size: var(--fs-3); font-weight: 400; color: var(--text-muted); }
+.day-head .today-pill { font-size: var(--fs-1); font-weight: 600; padding: 1px 7px; }
+.day-head .pto-pill { font-size: var(--fs-1); font-weight: 600; padding: 1px 7px; color: var(--surface); background: var(--pto); cursor: help; }
+.day-head .day-gap { flex: 1; }
+.day-head .day-plan { margin-left: 0; height: 20px; padding: 0 10px; font-size: var(--fs-2); font-weight: 500; }
+.day-head .day-addhours { margin-left: 0; font-size: var(--fs-2); }
+/* The day's ⋯: on hover, and when the day holds the selection or focus. */
+.day-head .more-btn { opacity: 0; transition: opacity 0.12s; }
+.day:hover .day-head .more-btn, .day.sel-day .day-head .more-btn, .day-head:focus-within .more-btn, .day-head .more-btn[aria-expanded="true"] { opacity: 1; }
+@media (hover: none) { .day-head .more-btn { opacity: 1; } }
+
+.day-allday { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; padding: 0 2px; }
+.day-allday .chip { font-size: var(--fs-2); font-weight: 400; padding: 1px 8px; white-space: nowrap; max-width: 100%; }
+.day-out { min-width: 0; padding: 0 6px; font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-out .out-time, .whole-lines .out-time { color: var(--text-faint); font-weight: 500; }
+.day-out .personal .ev-title { color: color-mix(in oklab, var(--personal) 60%, var(--text)); }
+.day-allday.empty, .day-out.empty { height: 0; min-height: 0; padding: 0; overflow: hidden; }
+.grid:not(.medium) .day-allday.empty, .grid:not(.medium) .day-out.empty { display: none; }
+
+/* A card: header (swatch, client, muted time range, the one status, ⋯ on hover), picks, the features line. */
+.half .card-body, .half .card-main .card-body { display: flex; flex-direction: column; gap: 4px; padding: 9px 10px 9px 12px; min-width: 0; flex: 1; }
+.card-main { width: 300px; flex: none; display: flex; border-right: 1px solid var(--border); min-height: 0; overflow: hidden; }
+.card-head { display: flex; align-items: center; gap: 6px; min-width: 0; height: 20px; }
+.card-status { display: flex; min-width: 0; }
+.card-head .swatch { width: 9px; height: 9px; border-radius: 3px; }
+.half.open .card-head .swatch, .half.off .card-head .swatch, .half.overflow .card-head .swatch { display: none; }
+.card-client { font-size: var(--fs-3); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.card-client.open-label { color: var(--text-muted); }
+.card-when { font-size: var(--fs-2); color: var(--text-faint); white-space: nowrap; }
+.card-head .status-pill { font-size: var(--fs-2); font-weight: 500; padding: 0 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.card-head .card-more { margin-left: auto; display: inline-flex; opacity: 0; transition: opacity 0.12s; }
+.half:hover .card-more, .half.selected .card-more, .card-more:focus-within, .card-more:has([aria-expanded="true"]) { opacity: 1; }
+@media (hover: none) { .card-head .card-more { opacity: 1; } }
+.card-head .more-btn { height: 20px; line-height: 14px; }
+.half .also { font-size: var(--fs-2); padding: 1px 6px; margin-top: 0; }
+.card-due { display: flex; flex-wrap: wrap; gap: 4px; }
+.due-open { border: 0; background: none; padding: 0; cursor: pointer; }
+.due-open .due-badge { font-size: var(--fs-1); font-weight: 600; }
+.half .checklist { margin: 2px 0 0; font-size: var(--fs-3); gap: 1px; }
+.pick-row.dens-week { padding: 2px 2px; gap: 6px; font-size: var(--fs-3); }
+.pick-row.dens-week .pr-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
+.pick-row.dens-week .size-chip { font-size: var(--fs-1); font-weight: 500; min-width: 18px; padding: 0 4px; line-height: 16px; }
+.pick-row.dens-week .pt-add, .pick-row.dens-week .pt-time { font-size: var(--fs-2); font-weight: 500; }
+.pick-row.dens-week .pr-hover { display: none; opacity: 1; }
+.pick-row.dens-week:hover .pr-hover, .pick-row.dens-week:focus-within .pr-hover, .pick-row.dens-week .pr-hover:has([aria-expanded="true"]) { display: inline-flex; }
+@media (hover: none) { .pick-row.dens-week .pr-hover { display: inline-flex; } }
+.card-done { font-size: var(--fs-2); color: var(--text-faint); padding-left: 4px; }
+.half .add-work { font-size: var(--fs-2); font-weight: 500; }
+.card-feats { margin-top: auto; align-self: flex-start; border: 0; background: none; padding: 2px 0 0; font: inherit; font-size: var(--fs-2); color: var(--text-muted); cursor: pointer; text-align: left; }
+.card-feats:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.card-feats .needs { color: var(--watch); }
+.half .flex-list { font-size: var(--fs-2); }
+
+/* The time rail (U3, D383): the one home for meetings, personal events and timeboxes on a compact card. */
+.half.card.has-ruler { --ruler-w: 186px; }
+.ruler { top: 8px; bottom: 8px; }
+.ruler .r-hour span { left: 3px; top: 1px; font-size: var(--fs-1); }
+.ruler .r-lanes { position: absolute; top: 0; bottom: 0; left: 22px; right: 2px; }
+.ruler .r-ev { font-size: var(--fs-1); font-weight: 500; }
+.ruler .r-free span { font-size: var(--fs-1); font-weight: 500; }
+.ruler .tbox-label { font-size: var(--fs-1); }
+.ruler .tbox-time { font-size: var(--fs-1); }
+@container (max-width: 380px) {
+  .half.card.has-ruler { --ruler-w: 140px; }
+}
+@container (max-width: 300px) {
+  .ruler { width: calc(var(--ruler-w) - 12px); }
+  .half.card.has-ruler { --ruler-w: 96px; }
+  .half.card.has-ruler .card-body { margin-right: var(--ruler-w); }
+  .ruler .r-ev span, .ruler .tbox-label, .ruler .r-free span { font-size: var(--fs-1); }
+}
+
+/* Whole-day cells: PTO hatched, Friday's catch-up dashed. Span the AM and PM rows. */
+.half.whole { flex-direction: column; gap: 6px; padding: 10px 12px; flex: 1 1 0; cursor: default; box-shadow: none; }
+.grid.medium .half.whole { grid-row: span 2; }
+.grid.medium.has-eve .half.whole { grid-row: span 3; }
+.half.whole.pto { border-style: solid; }
+.half.whole.catchup { background: transparent; border: 1px dashed var(--border-strong); }
+.half.whole.selected { box-shadow: 0 0 0 2.5px var(--selected); }
+.whole-label { font-size: var(--fs-3); font-weight: 600; color: var(--text-muted); }
+.whole-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-2); color: var(--text-muted); }
+.whole-lines li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day.pto-full .half.whole { opacity: 1; }
+.cl-musts-btn { display: inline-flex; align-items: center; gap: 10px; font-size: var(--fs-2); }
+.cl-musts-btn .cl-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 0; }
+.cl-must { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); font-weight: 500; }
+.cl-must .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
+.cl-must.tight { color: var(--watch); }
+
+/* ---------- U3: the shared detail panel (Week and Today) ---------- */
+.detail-panel {
+  position: fixed; top: 57px; right: 0; bottom: 32px; width: 440px; z-index: 20;
+  display: flex; flex-direction: column; box-sizing: border-box;
+  background: var(--surface); border-left: 1px solid var(--border-strong); box-shadow: var(--shadow-panel);
+  font-size: var(--fs-3);
+}
+@media (min-width: 3000px) { .detail-panel { width: 560px; } }
+.dp-head { display: flex; align-items: flex-start; gap: 8px; padding: 14px 16px 10px 18px; border-bottom: 1px solid var(--border); }
+.dp-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dp-title h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-4); font-weight: 600; }
+.dp-title h2 .swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+.dp-when { font-size: var(--fs-2); color: var(--text-muted); }
+.dp-close { border: 0; background: none; color: var(--text-muted); font-size: var(--fs-4); line-height: 1; padding: 2px 6px; border-radius: 6px; cursor: pointer; }
+.dp-close:hover { background: var(--raised); color: var(--text); }
+.dp-body { flex: 1; overflow: auto; padding: 10px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+.dp-section { display: flex; flex-direction: column; gap: 6px; }
+.dp-section h3 { margin: 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.dp-src { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.dp-line { margin: 0; color: var(--text-muted); font-size: var(--fs-3); }
+.dp-empty { margin: 0; color: var(--text-faint); font-size: var(--fs-2); }
+.dp-risks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; color: var(--text-muted); }
+.dp-risks .status-pill { font-size: var(--fs-2); font-weight: 500; padding: 0 8px; margin-right: 4px; }
+.dp-picks, .dp-fus, .dp-feats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.dp-picks .pick-row { font-size: var(--fs-3); }
+.dp-picks .pick-row .pr-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-picks .pick-row .size-chip { font-size: var(--fs-1); font-weight: 500; }
+.dp-picks .pt-add, .dp-picks .pt-time { font-size: var(--fs-2); }
+.dp-start { font-size: var(--fs-2); font-weight: 500; }
+.detail-panel .dp-focused { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in oklab, var(--accent) 8%, transparent); }
+.dp-feats li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.dp-feats .feat-link { font-weight: 500; color: var(--text); }
+.dp-count { font-size: var(--fs-2); color: var(--text-muted); }
+.dp-needs { display: inline-flex; gap: 10px; font-size: var(--fs-2); }
+.dp-needs .tw-needs { color: var(--watch); }
+.dp-needs .link-btn { font-size: var(--fs-2); }
+.dp-note { font-size: var(--fs-2); }
+.detail-panel .pd-agenda ol { margin: 0; }
+.detail-panel .work-list { margin: 0; padding: 0; font-size: var(--fs-3); }
+.detail-panel .wi-id { color: var(--text-faint); font-size: var(--fs-2); margin-right: 6px; }
+.detail-panel .wi-state { font-size: var(--fs-2); color: var(--text-muted); }
+.detail-panel .follow-up { font-size: var(--fs-3); }
+.detail-panel .work-list li { padding: 2px 0; }
+.detail-panel .work-list .wi-link { display: flex; align-items: baseline; gap: 8px; min-width: 0; color: var(--text); text-decoration: none; }
+.detail-panel .work-list .wi-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-panel .work-list .wi-link:hover .wi-title { text-decoration: underline; }
+.detail-panel .follow-up { padding: 6px 10px; gap: 8px; flex-wrap: nowrap; }
+.detail-panel .follow-up-main { gap: 2px 8px; }
+.detail-panel .follow-up-what { flex-basis: 100%; font-size: var(--fs-3); }
+.detail-panel .follow-up .mini, .detail-panel .follow-up button { font-size: var(--fs-2); }

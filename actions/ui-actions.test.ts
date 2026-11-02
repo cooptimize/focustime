@@ -42,20 +42,6 @@ describe("ui.set_theme (step 6b)", () => {
   });
 });
 
-describe("ui.set_timelines (step 15.1, D276)", () => {
-  it("saves the default for compact timelines in [ui]", async () => {
-    const t = setup();
-    expect(await dispatch(t.c, { action: "ui.set_timelines", input: { on: false } })).toEqual({ ok: true, data: { ui: { theme: "cooptimize-dark", viewRange: "business", showTimelines: false, reduceMotion: false } } });
-    expect(readFileSync(t.path, "utf8")).toContain("show_timelines = false");
-    expect((await dispatch(t.c, { action: "ui.set_timelines", input: { on: true } }) as { data: { ui: { showTimelines: boolean } } }).data.ui.showTimelines).toBe(true);
-  });
-  it("refuses anything but { on: boolean }", async () => {
-    const t = setup();
-    expect(await dispatch(t.c, { action: "ui.set_timelines", input: { on: "yes" } })).toMatchObject({ ok: false, status: 400 });
-    expect(await dispatch(t.c, { action: "ui.set_timelines", input: { on: true, x: 1 } })).toMatchObject({ ok: false, status: 400 });
-  });
-});
-
 describe("ui.set_reduce_motion (step 17.5)", () => {
   it("saves Reduce motion in [ui], read back by the config", async () => {
     const t = setup();

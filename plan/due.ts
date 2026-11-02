@@ -66,3 +66,25 @@ export const CARD_FOLLOW_UPS = 3;
 export function capFollowUps<T>(list: readonly T[], max = CARD_FOLLOW_UPS): { shown: T[]; more: number } {
   return { shown: list.slice(0, max), more: Math.max(0, list.length - max) };
 }
+
+/**
+ * U3 (D386): due badges on Week's cards. Only follow-ups due this week (or already overdue), each once in the week:
+ * on its due day (an overdue one on today), on that day's first working block of its client, else the day's first
+ * working block. Days not in `days` (another week, or before today for an overdue one) show nothing. Keys "date:half".
+ */
+export function weekDueBadges<T extends CardFollowUp>(days: readonly { date: IsoDate; slots: readonly DaySlot[] }[], followUps: readonly T[], today: IsoDate): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  const last = days[days.length - 1]?.date;
+  if (!last) return out;
+  for (const f of dueOrder(followUps, today, (x) => x.due, (x) => x.openedAt)) {
+    if (!f.due || f.due > last) continue;
+    const on = f.due < today ? today : f.due;
+    const day = days.find((d) => d.date === on);
+    if (!day) continue;
+    const slot = day.slots.find((s) => s.working && s.clientKey !== null && s.clientKey === f.clientKey) ?? day.slots.find((s) => s.working);
+    if (!slot) continue;
+    const k = `${on}:${slot.half}`;
+    out.set(k, [...(out.get(k) ?? []), f]);
+  }
+  return out;
+}

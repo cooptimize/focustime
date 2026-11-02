@@ -118,9 +118,6 @@ export type MenuEnv = {
   /** The view range (saved in config) and the usual working hours. */
   viewRange: ViewRange;
   setViewRange: (r: ViewRange) => void;
-  /** Step 15.1 (D276): compact timelines on medium cards, for this session; saveTimelines also saves the default. */
-  timelines: boolean;
-  saveTimelines: (on: boolean) => void;
   /** Step 17.5: Settings > Display "Reduce motion" (saved). */
   reduceMotion: boolean;
   saveReduceMotion: (on: boolean) => void;
@@ -956,7 +953,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
     case "ui.first_launch": return { disabled: "Runs on its own the first time Coopilot opens" };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
-    case "ui.set_timelines": return { next: () => ({ title: "Show timelines on cards", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.timelines === on, action: "ui.set_timelines", run: () => env.saveTimelines(on) })) }) };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };
     case "settings.save": return { run: () => env.openSettings() };

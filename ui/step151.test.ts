@@ -5,14 +5,13 @@ import { rulerSpan, showRuler } from "./layout.ts";
 const slot = (extra: Partial<{ off: boolean; start: string; end: string }> = {}) => ({ off: false, start: "2026-11-02T12:30:00-05:00", end: "2026-11-02T17:00:00-05:00", ...extra });
 
 describe("showRuler", () => {
-  it("shows on medium cards when switched on and the block has working hours", () => {
-    expect(showRuler("medium", true, slot())).toBe(true);
+  it("always shows on medium cards with working hours (U3: the one home for meetings, no switch)", () => {
+    expect(showRuler("medium", slot())).toBe(true);
   });
-  it("hides when switched off, on blocks with no working hours, and never at wide or narrow widths", () => {
-    expect(showRuler("medium", false, slot())).toBe(false);
-    expect(showRuler("medium", true, slot({ off: true }))).toBe(false);
-    expect(showRuler("wide", true, slot())).toBe(false);
-    expect(showRuler("narrow", true, slot())).toBe(false);
+  it("hides on blocks with no working hours, and never at wide or narrow widths", () => {
+    expect(showRuler("medium", slot({ off: true }))).toBe(false);
+    expect(showRuler("wide", slot())).toBe(false);
+    expect(showRuler("narrow", slot())).toBe(false);
   });
 });
 

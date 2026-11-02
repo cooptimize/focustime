@@ -4,7 +4,6 @@ import type { NowStrip as Strip } from "../plan/now.ts";
 import { formatDuration } from "../week/format.ts";
 import { clientColor, halfName } from "./labels.ts";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { mustsSummary } from "../plan/addpane.ts";
 import { progressLabel } from "../plan/weeklist.ts";
 
 /** "13:05" as "1:05 PM", like the rest of the UI. */
@@ -109,7 +108,7 @@ function StripLine({ strip: s, onSelect }: { strip: Strip; onSelect: () => void 
   );
 }
 
-type MustsRow = { clientKey: string; name: string; musts: number; done: number; left: number; leftBlocks: number; nice: number };
+type MustsRow = { clientKey: string; name: string; musts: number; done: number; left: number; leftBlocks: number; nice: number; track?: { kind: string; text: string } | null };
 
 /**
  * Step 15 (D268): one context line under the top bar instead of the Now strip, the ritual chips and the Musts strip:
@@ -136,19 +135,25 @@ export function MustsSummary({ musts, colors, onPlanWeek }: { musts: MustsRow[];
       document.removeEventListener("keydown", close);
     };
   }, [open]);
-  const names = new Map(musts.map((m) => [m.clientKey, m.name]));
-  const summary = mustsSummary(musts, (k) => names.get(k) ?? k);
-  if (!summary) return null;
+  const shown = musts.filter((m) => m.musts > 0);
+  if (!shown.length) return null;
+  // U3: musts once, as a swatch and "0/2" per client; amber when the on-track question says tight, muted otherwise.
   return (
     <div className="cl-musts" ref={pop}>
-      <button type="button" className="cl-musts-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)} title="Musts done this week, per client">
-        <span className="cl-label">Musts</span> {summary}
+      <button type="button" className="cl-musts-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)} title="Musts done this week, per client" aria-label={`Musts: ${shown.map((m) => `${m.name} ${m.done} of ${m.musts}${m.track?.kind === "at_risk" ? ", tight" : ""}`).join(", ")}`}>
+        <span className="cl-label">Musts</span>
+        {shown.map((m) => (
+          <span key={m.clientKey} className={`cl-must${m.track?.kind === "at_risk" ? " tight" : ""}`} style={{ "--c": clientColor(m.clientKey, colors) } as CSSProperties} title={`${m.name}${m.track ? ` · ${m.track.text}` : ""}`}>
+            <span className="swatch" aria-hidden="true" />
+            {m.done}/{m.musts}
+          </span>
+        ))}
       </button>
       {open && (
         <div className="cl-pop" role="dialog" aria-label="Musts this week">
           <h3>Musts this week</h3>
           <ul>
-            {musts.filter((m) => m.musts > 0).map((m) => (
+            {shown.map((m) => (
               <li key={m.clientKey} style={{ "--c": clientColor(m.clientKey, colors) } as CSSProperties}>
                 <span className="swatch" aria-hidden="true" />
                 <strong>{m.name}</strong> {progressLabel(m)}

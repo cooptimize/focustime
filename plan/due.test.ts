@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capFollowUps, dueOrder, dueState, followUpsOnDay } from "./due.ts";
+import { capFollowUps, dueOrder, dueState, followUpsOnDay, weekDueBadges } from "./due.ts";
 
 describe("due urgency (step 13.5)", () => {
   const today = "2026-11-03"; // a Tuesday
@@ -68,5 +68,26 @@ describe("follow-ups per card (step 13.6, Q76, D239)", () => {
     const c = capFollowUps(day);
     expect(c.shown.map((f) => f.id)).toEqual([3, 4, 2]);
     expect(c.more).toBe(2);
+  });
+});
+
+describe("weekDueBadges (U3): each follow-up due this week once, on its day's client block", () => {
+  const days = [
+    { date: "2026-11-02", slots: [{ half: "AM", clientKey: "A", working: true }, { half: "PM", clientKey: "B", working: true }] },
+    { date: "2026-11-03", slots: [{ half: "AM", clientKey: "B", working: true }, { half: "PM", clientKey: "A", working: true }] },
+    { date: "2026-11-05", slots: [{ half: "AM", clientKey: null, working: false }, { half: "PM", clientKey: null, working: false }] },
+  ];
+  const f = (id: number, clientKey: string | null, due: string | null) => ({ id, clientKey, due, openedAt: "2026-10-30T09:00:00-05:00[America/Chicago]" });
+  it("puts overdue ones on today, dated ones on their day, on the client's block, and skips later weeks and undated ones", () => {
+    const m = weekDueBadges(days, [f(1, "B", "2026-10-29"), f(2, "A", "2026-11-03"), f(3, "B", "2026-11-12"), f(4, "A", null), f(5, "Z", "2026-11-03")], "2026-11-02");
+    expect(m.get("2026-11-02:PM")?.map((x) => x.id)).toEqual([1]);
+    expect(m.get("2026-11-03:PM")?.map((x) => x.id)).toEqual([2]);
+    // Another client's follow-up on a day with no block of its own goes on the day's first working block.
+    expect(m.get("2026-11-03:AM")?.map((x) => x.id)).toEqual([5]);
+    expect([...m.values()].flat().map((x) => x.id).sort()).toEqual([1, 2, 5]);
+  });
+  it("shows nothing on a day without working time, or for an overdue one when today isn't in the week", () => {
+    expect(weekDueBadges(days, [f(1, "A", "2026-11-05")], "2026-11-02").size).toBe(0);
+    expect(weekDueBadges(days, [f(1, "A", "2026-10-20")], "2026-11-09").size).toBe(0);
   });
 });

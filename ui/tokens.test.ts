@@ -25,8 +25,8 @@ const root = block(":root {");
 const light = block(':root[data-theme="cooptimize-light"]');
 const neutral = block(':root[data-theme="neutral"] {');
 const neutralDark = block("@media (prefers-color-scheme: dark)");
-/** Tokens every theme assigns: semantic and domain, not primitives, the font or the fallback mapping. */
-const themeTokens = [...declared(root)].filter((v) => !v.startsWith("--p-") && !v.startsWith("--font") && !v.startsWith("--client-fallback-"));
+/** Tokens every theme assigns: semantic and domain, not primitives, the font, the type scale (U3) or the fallback mapping. */
+const themeTokens = [...declared(root)].filter((v) => !v.startsWith("--p-") && !v.startsWith("--font") && !v.startsWith("--fs-") && !v.startsWith("--client-fallback-"));
 
 describe("design tokens", () => {
   it("components use no raw colors and no primitives", () => {

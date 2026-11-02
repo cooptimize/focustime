@@ -34,7 +34,7 @@ describe("F6 regions", () => {
 
   it("finds the region of the focused element; Plan the day counts as the panel although it sits in the grid", () => {
     expect(regionOf(inside(".planday", ".grid"))).toBe("panel");
-    expect(regionOf(inside("dialog.details"))).toBe("panel");
+    expect(regionOf(inside(".detail-panel"))).toBe("panel");
     expect(regionOf(inside(".grid"))).toBe("grid");
     expect(regionOf(inside(".topbar"))).toBe("top");
     expect(regionOf(inside(".statusbar"))).toBe("status");

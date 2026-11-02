@@ -17,12 +17,12 @@ import { aboutHours, planFit } from "../plan/fit.ts";
 import { PICK_DRAG, PickRow } from "./PickRow.tsx";
 import { urgentFollowUps } from "../plan/today.ts";
 import type { Pick } from "../plan/types.ts";
-import type { Day, FreeGap, Half, IsoDate, Slot, WorkItem } from "../week/types.ts";
+import type { Day, FreeGap, Half, IsoDate, Slot } from "../week/types.ts";
 import { clientColor, halfName, longDate, slotRange } from "./labels.ts";
 import { countdown, timerLeft } from "./NowStrip.tsx";
 import { clientNames, featuresOn, PlanCtx, useFocused } from "./planview.ts";
 import { causeLines } from "./status.ts";
-import { openWorkItem, WorkLink } from "./WorkLink.tsx";
+import { WorkLink } from "./WorkLink.tsx";
 import { weekMusts } from "./WeekMusts.tsx";
 import { mondayOf } from "../week/dates.ts";
 import { dayCalendar, splitByBlocks, type DayEvent } from "../plan/todaycal.ts";
@@ -39,12 +39,14 @@ import { captureClients } from "./Capture.tsx";
 import { DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { DevOpsWork } from "./work.ts";
 import { dayName, FlexOfferBar, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
-import { draftPrompt, pickMenu, spanText } from "./menu.ts";
-import { MenuCtx, useMenu } from "./Menus.tsx";
+import { spanText } from "./menu.ts";
+import { MenuCtx } from "./Menus.tsx";
 import { DEFAULT_MIN_SIZES, openGaps } from "../plan/agenda.ts";
 import { timeChoices } from "../plan/picktime.ts";
 import { updatedAgo } from "./refresh.ts";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
+import { DetailPanel, DraftStories, interactive } from "./DetailPanel.tsx";
+import type { PanelFocus } from "./WeekGrid.tsx";
 
 export type TodayMode = "now" | "checkin" | "closeout";
 
@@ -114,7 +116,9 @@ export function Today(props: Props) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [offer, setOffer] = useState<{ offer: FlexOffer; pick: Pick } | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
+  // U3: the shared detail panel, opened from a block card (the pick it opened on, if any).
+  const [panel, setPanel] = useState<{ half: Half; focus: PanelFocus | null } | null>(null);
+  const closePanel = useCallback(() => setPanel(null), []);
   const clearNotice = useCallback(() => setNotice(null), []);
   const nextDay = data.week.days.find((d) => d.date > date && d.hours.segments.length > 0 && !d.pto)?.date ?? null;
 
@@ -216,7 +220,7 @@ export function Today(props: Props) {
     );
 
   const attention = mode === "now" ? <Attention data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
-  const selPick = wide && selected !== null ? picks.find((p) => p.id === selected) ?? null : null;
+  const panelSlot = panel ? blocks.find((s) => s.half === panel.half) ?? null : null;
 
   return (
     <main className={`today-view u2 mode-${mode}${wide ? " wide" : ""}`} aria-label="Today">
@@ -278,8 +282,8 @@ export function Today(props: Props) {
                   ended={ended(s)}
                   later={blocks.filter((b) => b.half !== s.half && !ended(b) && ms(b.start) > ms(s.start)).map((b) => ({ half: b.half, clientKey: b.focus[0]?.clientKey ?? null }))}
                   carryTo={mode === "closeout" ? (st?.carryTo ?? null) : nextDay}
-                  selected={selected}
-                  onSelect={wide ? setSelected : undefined}
+                  selected={panel?.half === s.half && panel.focus?.kind === "pick" ? panel.focus.id : null}
+                  onOpen={mode === "closeout" ? undefined : (focus) => setPanel({ half: s.half, focus: focus ?? null })}
                   act={act}
                   makeUp={makeUp}
                   props={props}
@@ -289,11 +293,13 @@ export function Today(props: Props) {
             {mode !== "checkin" && split && !wide && <OutsideLine label="After your blocks" events={split.after} tz={tz} />}
             {mode === "now" && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} onNotice={setNotice} onError={setError} />}
             {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} />}
-            {wide && mode === "now" && selPick && <PickDetail pick={selPick} data={data} nameOf={nameOf} onClose={() => setSelected(null)} />}
           </div>
         </div>
       )}
 
+      {panel && panelSlot && day && mode !== "closeout" && (
+        <DetailPanel data={data} day={day} slot={panelSlot} focus={panel.focus} now={now} onClose={closePanel} onStart={props.onStart} onChanged={props.onChanged} onNotice={setNotice} />
+      )}
       {mode === "closeout" && (
         <CloseOutPanel
           date={closeDate ?? date}
@@ -402,7 +408,8 @@ type BlockProps = {
   later: { half: Half; clientKey: string | null }[];
   carryTo: IsoDate | null;
   selected: number | null;
-  onSelect: ((id: number) => void) | undefined;
+  /** U3: opens the detail panel on this block (a click on the card body; on a pick row, focused on that pick). */
+  onOpen: ((focus?: PanelFocus) => void) | undefined;
   act: (a: string, i: Record<string, unknown>) => Promise<boolean>;
   makeUp: (p: Pick, i: { when: "tonight" | "friday" | "day"; date?: IsoDate; half?: Half }) => Promise<boolean>;
   props: Props;
@@ -424,11 +431,12 @@ function BlockCard(b: BlockProps) {
   const t = data.timer;
   const cls = `today-block${ended ? " ended" : ""}${status.kind === "at_risk" && mode === "now" ? " at-risk" : ""}`;
   const style = { "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties;
-  const select = b.onSelect;
-  const onRowClick = select
+  const open = b.onOpen;
+  const onCardClick = open
     ? (e: React.MouseEvent) => {
+        if (interactive(e)) return;
         const li = (e.target as HTMLElement).closest<HTMLElement>("[data-pick]");
-        if (li && !(e.target as HTMLElement).closest("button, a, input")) select(Number(li.dataset.pick));
+        open(li ? { kind: "pick", id: Number(li.dataset.pick) } : undefined);
       }
     : undefined;
 
@@ -458,13 +466,13 @@ function BlockCard(b: BlockProps) {
       return !!f && f.due !== null && f.due <= data.planDay.date;
     };
     return (
-      <article className={`${cls} ci`} style={style} aria-label={title}>
+      <article className={`${cls} ci`} style={style} aria-label={title} onClick={onCardClick}>
         <header>
           <h2>{title}</h2>
           <span className="tb-when">{head}</span>
           <span className="tb-count">{done.length} done</span>
         </header>
-        <ul className="today-picks" onClick={onRowClick}>
+        <ul className="today-picks">
           {left.map(({ pick: p, fits, focusedMinutes }) => {
             const move = !fits || ended ? suggestedMove(p, { owedToday: owed(p), later: b.later, carryTo: b.carryTo }) : null;
             return row(p, {
@@ -521,7 +529,7 @@ function BlockCard(b: BlockProps) {
   const note = client ? data.resumeNotes[client] : undefined;
   const pill = status.kind === "at_risk" ? `At risk${status.short ? ` · ${status.short}` : ""}` : status.label;
   return (
-    <article className={cls} style={style} aria-label={title}>
+    <article className={cls} style={style} aria-label={title} onClick={onCardClick}>
       <header>
         <h2>{title}</h2>
         <span className="tb-when">{slotRange(slot, tz)}</span>
@@ -531,7 +539,7 @@ function BlockCard(b: BlockProps) {
           </span>
         )}
       </header>
-      <ul className="today-picks today-rows" onClick={onRowClick}>
+      <ul className="today-picks today-rows">
         {b.rows.map((r) =>
           r.kind === "event" ? (
             <DayEventRow key={`e${r.event.event.id}${r.event.start}`} e={r.event} tz={tz} />
@@ -635,15 +643,6 @@ function ThisWeek({ data, blocks, picks: _today, nameOf, onNotice, onError }: { 
       </ul>
       <textarea ref={area} className="sr-only" aria-hidden="true" tabIndex={-1} readOnly />
     </section>
-  );
-}
-
-function DraftStories({ clientKey, item }: { clientKey: string; item: WorkItem }) {
-  const menu = useMenu((env) => draftPrompt(env, clientKey, item));
-  return (
-    <button type="button" className="link-btn tw-draft" onClick={menu.onContextMenu}>
-      Draft stories
-    </button>
   );
 }
 
@@ -960,37 +959,6 @@ function CommentOwed({ clientKey, itemId }: { clientKey: string; itemId: number 
       <button type="submit" className="mini primary">Preview</button>
       <button type="button" className="mini" onClick={() => setText(null)}>Cancel</button>
     </form>
-  );
-}
-
-/** 3840: the selected pick in one place: its feature, client, DevOps state and focused time, with Open in DevOps and ⋯. */
-function PickDetail({ pick, data, nameOf, onClose }: { pick: Pick; data: WeekLoadData; nameOf: (k: string) => string; onClose: () => void }) {
-  const work = useContext(DevOpsWork).get(pick.clientKey);
-  const focused = useFocused()(pick.id);
-  const menu = useMenu((env) => pickMenu(env, pick));
-  const all = work ? [...work.items, ...work.children] : [];
-  const item = pick.itemId !== null ? all.find((i) => i.id === pick.itemId) ?? null : null;
-  const parent = item?.parentId ? (all.find((i) => i.id === item.parentId) ?? data.weekFeatures.find((f) => f.clientKey === pick.clientKey && f.itemId === item.parentId) ?? null) : null;
-  const facts = [pick.itemId !== null ? `#${pick.itemId}` : pick.kind === "intention" ? "Intention" : "Draft story", parent?.title, nameOf(pick.clientKey), item ? `${item.state} in DevOps` : null, `${pick.size}`, focused >= 60 ? `${formatDuration(Math.floor(focused / 60))} focused` : null].filter(Boolean);
-  return (
-    <section className="pick-detail" aria-label="Details">
-      <div className="pd-row">
-        <strong>{pick.title}</strong>
-        <span className="muted">{facts.join(" · ")}</span>
-        <span className="pd-actions">
-          {pick.itemUrl && (
-            <button type="button" className="link-btn" onClick={() => void openWorkItem(pick.clientKey, pick.itemUrl!)}>
-              Open in DevOps
-            </button>
-          )}
-          {menu.button(`More for ${pick.title}`)}
-          <button type="button" className="mini quiet" onClick={onClose} aria-label="Close details">
-            ×
-          </button>
-        </span>
-      </div>
-      {item?.tags?.length ? <p className="muted">Tags: {item.tags.join(", ")}</p> : null}
-    </section>
   );
 }
 

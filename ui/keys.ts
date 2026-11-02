@@ -23,7 +23,7 @@ export function nextRegion(current: Region | null, available: readonly Region[],
 
 /** Selectors per region. The panel is checked before the grid: Plan the day sits inside the grid's element. */
 export const REGION_SELECTORS: readonly [Region, string][] = [
-  ["panel", ".planday, dialog.details"],
+  ["panel", ".planday, .detail-panel"],
   ["top", ".topbar"],
   ["grid", ".grid"],
   ["status", ".statusbar"],
@@ -122,7 +122,6 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["]"], does: "Next week", command: "week.next" },
   { keys: ["R"], does: "Refresh all sources", command: "week.load" },
   { keys: ["H"], does: "Week: change the hours shown (business hours, 12 hours, 24 hours); also in Week's ⋯", command: "ui.set_view_range" },
-  { keys: ["V"], does: "Week: timelines on cards on or off (medium widths), until you close Coopilot; also in Week's ⋯", command: "ui.set_timelines" },
   { keys: ["Ctrl K"], does: "Command menu" },
   { keys: ["F"], does: "Focus timer: start one, or pause, +15, done, next pick or stop", command: "timer.start" },
   { keys: ["M"], does: "Today › Check-in: today's cards show what still fits, with one suggested move each; again to go back", command: "view.checkin" },

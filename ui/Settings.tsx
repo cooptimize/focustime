@@ -61,9 +61,6 @@ type Props = {
   setTheme: (t: Theme) => void;
   viewRange: ViewRange;
   setViewRange: (r: ViewRange) => void;
-  /** Step 15.1 (D276): the saved default for compact timelines on medium cards. */
-  showTimelines: boolean;
-  setShowTimelines: (on: boolean) => void;
   /** Step 17.5: no opening and closing animation, no moving Lumen. */
   reduceMotion: boolean;
   setReduceMotion: (on: boolean) => void;
@@ -268,13 +265,6 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
               </label>
             ))}
             <span className="set-hint">Saved as your default. H in the week changes it until you close Coopilot. Timelines widen to show anything planned outside it.</span>
-          </fieldset>
-          <fieldset className="set-choice">
-            <legend>Timelines on cards</legend>
-            <label>
-              <input type="checkbox" checked={p.showTimelines} onChange={(e) => p.setShowTimelines(e.target.checked)} /> Show timelines on cards
-            </label>
-            <span className="set-hint">At medium widths, a narrow time ruler on each card's right edge: meetings, events, timed picks and free time. Saved as your default. V in the week switches it until you close Coopilot.</span>
           </fieldset>
           <fieldset className="set-choice">
             <legend>Motion</legend>

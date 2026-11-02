@@ -4,7 +4,7 @@ import { createContext, useContext } from "react";
 import { liveFocused } from "../plan/focus.ts";
 import { SIZE_MINUTES, type Pick, type PlanWeek, type Size, type WeekFeature } from "../plan/types.ts";
 import type { Half, IsoDate, Slot, WorkItem } from "../week/types.ts";
-import { type Fit } from "../plan/rules.ts";
+import { isPickable, type Fit } from "../plan/rules.ts";
 import { planFit } from "../plan/fit.ts";
 
 /**
@@ -128,4 +128,35 @@ export function clientNames(data: { planClients: readonly { clientKey: string; c
   for (const c of data.devops ?? []) m.set(c.clientKey, c.clientName);
   for (const c of data.planClients) m.set(c.clientKey, c.clientName);
   return (k) => m.get(k) ?? k;
+}
+
+/**
+ * U3: a client's features on this week's list (feature level, one per item), for a card's features line and the
+ * detail panel. Stories on the list are not features.
+ */
+export function clientFeatures<T extends { weekStart: IsoDate; clientKey: string; itemId: number; level: "feature" | "story" }>(features: readonly T[], weekStart: IsoDate, clientKey: string | null): T[] {
+  if (!clientKey) return [];
+  const seen = new Set<number>();
+  return features.filter((f) => {
+    if (f.weekStart !== weekStart || f.clientKey !== clientKey || f.level !== "feature" || seen.has(f.itemId)) return false;
+    seen.add(f.itemId);
+    return true;
+  });
+}
+
+/** U3: a feature's pickable stories in DevOps (the same rule as Today's This week chips); none means "needs stories". */
+export function storiesUnder(work: { items: readonly WorkItem[]; children: readonly WorkItem[] } | undefined, itemId: number): WorkItem[] {
+  if (!work) return [];
+  const seen = new Set<number>();
+  return [...work.items, ...work.children].filter((i) => {
+    if (i.parentId !== itemId || !isPickable(i) || seen.has(i.id)) return false;
+    seen.add(i.id);
+    return true;
+  });
+}
+
+/** U3: "3 features" or "3 features · 1 needs stories". */
+export function featuresLine(total: number, needs: number): string {
+  if (!total) return "";
+  return `${total} feature${total === 1 ? "" : "s"}${needs ? ` · ${needs} need${needs === 1 ? "s" : ""} stories` : ""}`;
 }

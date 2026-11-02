@@ -821,7 +821,7 @@ const isTodayIn = (date: string, now: string, tz: string) => Temporal.Instant.fr
  * A block's agenda (D244): meetings, personal events, unavailable time and timeboxes in time order, with the free gaps
  * between ("Free 9:00–11:00 · 2h"). A timebox row opens its details (show as, Put on Outlook, Removed in Outlook).
  */
-function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: ReadonlyMap<string, DayEventWhen>; slot: Slot; now: string; tz: string; clientName: (k: string | null) => string; pickRow: (pickId: number) => ReactNode }) {
+export function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: ReadonlyMap<string, DayEventWhen>; slot: Slot; now: string; tz: string; clientName: (k: string | null) => string; pickRow: (pickId: number) => ReactNode }) {
   const env = useTimeboxes();
   const [open, setOpen] = useState<number | null>(null);
   if (!env) return null;

@@ -9,6 +9,8 @@ import { pickMenu } from "./menu.ts";
 import { MenuCtx, useMenu } from "./Menus.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { PickTime } from "./PickTime.tsx";
+import { pickTime } from "../plan/picktime.ts";
+import { useTimeboxes } from "./Timeboxes.tsx";
 import { useFocused } from "./planview.ts";
 import { WorkLink } from "./WorkLink.tsx";
 
@@ -35,8 +37,8 @@ type Props = {
   draggable?: boolean;
   tabIndex?: number;
   className?: string;
-  /** U2: "today" for Today's Now, Check-in and Close out. */
-  density?: "default" | "today";
+  /** U2: "today" for Today's Now, Check-in and Close out. U3: "week" for Week's cards (size, + time and ⋯ on hover). */
+  density?: "default" | "today" | "week";
   /** U2: the next pick: highlighted, its controls always shown. */
   next?: boolean;
   /** U2: on the right before the hover controls (a due badge, "45m focused", the fit word). */
@@ -47,6 +49,9 @@ type Props = {
 
 export function PickRow({ pick, toggle, link = false, canTick = true, timeEditable = true, hint = false, highlight = false, extra, readOnly = false, draggable = false, tabIndex, className = "", density = "default", next = false, badge, actions }: Props) {
   const today = density === "today";
+  const week = density === "week";
+  const tbs = useTimeboxes();
+  const timed = week && !!tbs && tbs.settings.enabled && pickTime(pick.id, tbs.timeboxes).state !== "untimed";
   const menu = useMenu((env) => pickMenu(env, pick));
   const { env } = useContext(MenuCtx);
   const focused = focusLabel(useFocused()(pick.id), pick.size);
@@ -64,7 +69,7 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
       </button>
     );
   return (
-    <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
+    <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
       <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} disabled={!canTick || pick.status === "dropped"} onChange={(e) => toggle(pick.id, e.target.checked)} onClick={stop} onDoubleClick={stop} aria-label={`Done: ${pick.title}`} />
       <span className="pr-title" title={pick.title}>
         {link && pick.itemUrl ? (
@@ -83,6 +88,16 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
           {actions}
           <span className="pr-hover">
             <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
+            {menu.button(`More for ${pick.title}`)}
+          </span>
+        </>
+      ) : week ? (
+        <>
+          {badge}
+          {timed && <PickTime pick={pick} editable={timeEditable && !readOnly} />}
+          <span className="pr-hover">
+            {sizeChip}
+            {!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} />}
             {menu.button(`More for ${pick.title}`)}
           </span>
         </>

@@ -26,10 +26,10 @@ import { dayRolledOver } from "./planday.ts";
 import { PlanCtx, resumeSlots } from "./planview.ts";
 import { DevOpsWork, workByClient } from "./work.ts";
 import { afterLoad, createAutoRefresh, type LoadState, type RefreshTrigger } from "./refresh.ts";
-import { Details } from "./Details.tsx";
+import { DetailPanel } from "./DetailPanel.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
-import { WeekGrid, type Selection } from "./WeekGrid.tsx";
+import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { MustsSummary, TopTimer } from "./NowStrip.tsx";
 import { PersonChip, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
 import { afterDone, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
@@ -114,6 +114,8 @@ export function App() {
     call<{ first: boolean }>("ui.first_launch", {}).then((r) => r.first && setWelcome(true), () => {});
   }, []);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  /** U3: where the detail panel opened (the features list, a follow-up or a pick), or the block itself. */
+  const [panelFocus, setPanelFocus] = useState<PanelFocus | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   /**
@@ -251,23 +253,6 @@ export function App() {
       await call("ui.set_view_range", { range: r });
       rangeRef.current = null;
       setNotice(`Timelines default: ${VIEW_RANGE_NAMES[r]}`);
-      reloadRef.current();
-    } catch (e) {
-      setNotice(`Default not saved: ${e instanceof Error ? e.message : "unknown error"}`);
-    }
-  }, []);
-  /** Step 15.1 (D276): compact timelines on medium cards. V and the status bar switch them for the session; Settings saves the default. */
-  const [timelinesNow, setTimelinesNow] = useState<boolean | null>(null);
-  const timelines = timelinesNow ?? data?.ui.showTimelines ?? true;
-  const switchTimelines = useCallback((on: boolean) => {
-    setTimelinesNow(on);
-    setNotice(`Timelines on cards ${on ? "on" : "off"} for now. Settings > Display sets the default`);
-  }, []);
-  const saveTimelines = useCallback(async (on: boolean) => {
-    try {
-      await call("ui.set_timelines", { on });
-      setTimelinesNow(on);
-      setNotice(`Timelines on cards: ${on ? "on" : "off"} by default`);
       reloadRef.current();
     } catch (e) {
       setNotice(`Default not saved: ${e instanceof Error ? e.message : "unknown error"}`);
@@ -778,8 +763,8 @@ export function App() {
   }, [clock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!detailsOpen && !pd && !cmdOpen && !keysOpen) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
-  }, [sel, detailsOpen, data?.weekStart, layout, pd, cmdOpen, keysOpen]);
+    if (!pd && !cmdOpen && !keysOpen) cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true });
+  }, [sel, data?.weekStart, layout, pd, cmdOpen, keysOpen]);
 
   useEffect(() => {
     const on = (e: FocusEvent) => {
@@ -795,7 +780,7 @@ export function App() {
   const focusRegion = useCallback(
     (r: Region) => {
       if (r === "grid") return cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus();
-      const root = document.querySelector<HTMLElement>(r === "panel" ? (detailsOpen ? "dialog.details" : ".planday") : r === "top" ? ".topbar" : ".statusbar");
+      const root = document.querySelector<HTMLElement>(r === "panel" ? (detailsOpen ? ".detail-panel" : ".planday") : r === "top" ? ".topbar" : ".statusbar");
       if (!root) return;
       const last = lastInRegion.current.get(r);
       if (last?.isConnected && root.contains(last) && !last.matches(":disabled")) return last.focus();
@@ -859,7 +844,7 @@ export function App() {
       if (cmdOpen || keysOpen) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document))) return;
       const typing = isTypingTarget(e.target as HTMLElement | null);
-      const free = !typing && !detailsOpen && !captureOpen;
+      const free = !typing && !captureOpen;
       const k = e.key;
       if (loc.overlay && k === "Escape" && !captureOpen) {
         // The focus screen and Settings sit over a place; Esc goes back to it (the timer keeps running).
@@ -892,10 +877,10 @@ export function App() {
       } else if ((k === "m" || k === "M") && free && settingsAt === null) {
         e.preventDefault();
         goNav(checkInOpen ? navOf.today() : navOf.today("checkin"));
-      } else if ((e.key === "n" || e.key === "N") && !typing && !detailsOpen && !captureOpen) {
+      } else if ((e.key === "n" || e.key === "N") && !typing && !captureOpen) {
         e.preventDefault();
         setCaptureOpen(true);
-      } else if ((e.key === "f" || e.key === "F") && !typing && !detailsOpen) {
+      } else if ((e.key === "f" || e.key === "F") && !typing) {
         e.preventDefault();
         // Under the Focus button when it is on screen (it hides on narrow widths).
         const r = document.querySelector(".top-btn.timer-btn")?.getBoundingClientRect();
@@ -908,7 +893,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (base !== "week" || focusOpen || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || detailsOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (base !== "week" || focusOpen || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       const days = data.week.days;
@@ -930,13 +915,6 @@ export function App() {
         case "h":
           e.preventDefault();
           void setViewRange(VIEW_RANGES[(VIEW_RANGES.indexOf(data.week.range.mode) + 1) % VIEW_RANGES.length]!);
-          return;
-        case "v":
-        case "V":
-          // Step 15.1 (D276): only where the compact timelines exist (medium layout).
-          if (layout !== "medium") return;
-          e.preventDefault();
-          switchTimelines(!timelines);
           return;
         case "Enter":
         case " ":
@@ -962,7 +940,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, base, captureOpen, layout, timelines, switchTimelines]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, base, captureOpen, layout]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
   const weekItems = useMemo(() => (data?.weekFeatures ?? []).filter((f) => f.weekStart === data?.weekStart).map((f) => ({ clientKey: f.clientKey, itemId: f.itemId })), [data?.weekFeatures, data?.weekStart]);
@@ -1021,8 +999,6 @@ export function App() {
       setTheme: (t) => void setTheme(t),
       viewRange: data.week.range.mode,
       setViewRange: (r) => void setViewRange(r),
-      timelines,
-      saveTimelines: (on) => void saveTimelines(on),
       reduceMotion: data.ui.reduceMotion,
       saveReduceMotion: (on) => void saveReduceMotion(on),
       hours: data.hours,
@@ -1351,8 +1327,6 @@ export function App() {
           setTheme={(t) => void setTheme(t)}
           viewRange={data.ui.viewRange}
           setViewRange={(r) => void saveViewRange(r)}
-          showTimelines={data.ui.showTimelines}
-          setShowTimelines={(on) => void saveTimelines(on)}
           reduceMotion={data.ui.reduceMotion}
           setReduceMotion={(on) => void saveReduceMotion(on)}
           demo={data.demo}
@@ -1496,7 +1470,7 @@ export function App() {
                   {borrowWeek.unpaid ? `${formatDuration(borrowWeek.unpaidMinutes)} to make up` : `Borrowed ${formatDuration(borrowWeek.totalMinutes)}, paid`}
                 </button>
               )}
-              <MustsSummary musts={weekMusts(data, data.weekStart, null).rows} colors={data.clients} onPlanWeek={() => openPlanWeek(data.weekStart)} />
+              <MustsSummary musts={weekMusts(data, data.weekStart, data.weekStart === data.today.weekStart ? (now ?? new Date(clock).toISOString()) : null).rows} colors={data.clients} onPlanWeek={() => openPlanWeek(data.weekStart)} />
               <MoreButton
                 label="View options for Week"
                 onClick={(e) => {
@@ -1517,7 +1491,6 @@ export function App() {
         cellRefs={cellRefs.current}
         layout={layout}
         compact={compact}
-        timelines={timelines}
         onPlanDay={(d) => goNav(planDayNav(d))}
         onAddWork={addWork}
         onAddHours={() => {
@@ -1525,8 +1498,9 @@ export function App() {
           setSettingsAt("hours");
         }}
         onSelect={(s) => setSel(s)}
-        onOpen={(s) => {
+        onOpen={(s, focus) => {
           setSel(s);
+          setPanelFocus(focus ?? null);
           setDetailsOpen(true);
         }}
       />
@@ -1548,7 +1522,9 @@ export function App() {
         onDisconnect={(src) => void disconnect(src)}
       />
 
-      <Details open={detailsOpen} day={day} slot={slot} timeZone={week.timeZone} colors={data.clients} now={now ?? new Date(clock).toISOString()} onClose={() => setDetailsOpen(false)} />
+      {detailsOpen && base === "week" && !planWeekAt && !pd && (
+        <DetailPanel data={data} day={day} slot={slot} focus={panelFocus} now={now ?? new Date(clock).toISOString()} onClose={() => (setDetailsOpen(false), setPanelFocus(null), cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true }))} onStart={startFocus} onChanged={reloadQuiet} onNotice={setNotice} />
+      )}
       {cmdOpen && <CommandMenu commands={commandList(env)} onClose={() => setCmdOpen(false)} />}
       {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}
       {moreAt && (
@@ -1572,7 +1548,6 @@ export function App() {
             title: "Week",
             items: [
               ...VIEW_RANGES.map((r) => ({ id: `range-${r}`, label: `Show ${VIEW_RANGE_NAMES[r].toLowerCase()}`, group: "Hours on the timelines", checked: data.week.range.mode === r, ...(data.week.range.mode === r ? {} : { hint: "H" }), run: () => void setViewRange(r) })),
-              ...(layout === "medium" ? [{ id: "timelines", label: "Timelines on cards", group: "Cards", checked: timelines, hint: "V", run: () => switchTimelines(!timelines) }] : []),
             ],
           }}
           onClose={() => setWeekMoreAt(null)}

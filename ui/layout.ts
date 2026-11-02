@@ -59,11 +59,11 @@ export function labelHere(placed: Pick<PlacedEvent, "continuesBefore" | "event">
 }
 
 /**
- * Step 15.1 (D276): the compact time ruler shows on medium-width cards only, when switched on and the block has
- * working hours. Wide cards have the full timeline; narrow ones never show it.
+ * Step 15.1 (D276), U3 (D384): the time rail shows on medium-width cards whenever the block has working hours (it is
+ * the one home for meetings on Week, so it has no switch). Wide cards have the full timeline; narrow ones never show it.
  */
-export function showRuler(layout: "wide" | "medium" | "narrow", on: boolean, slot: { off: boolean }): boolean {
-  return layout === "medium" && on && !slot.off;
+export function showRuler(layout: "wide" | "medium" | "narrow", slot: { off: boolean }): boolean {
+  return layout === "medium" && !slot.off;
 }
 
 /** A band's place on the ruler, as fractions of the block's working hours (slot.start to slot.end); null outside them. */
