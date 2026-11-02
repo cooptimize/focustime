@@ -227,10 +227,12 @@ export type WorkItem = {
   assignedToMe?: boolean;
   /** Plan the week: the process's target date field as a date, when the type has one. */
   targetDate?: IsoDate | null;
+  /** Delivery (step 16): the size field's value, when one was read. */
+  size?: number | null;
 };
 
 /** A child of a feature or epic in Plan the week (step 8): any state, any assignee (display name only). */
-export type PortfolioChild = { id: number; title: string; type: string; state: string; stateCategory: string; open: boolean; level: WorkItem["level"]; order: number | null; url: string; assignedTo: string | null; mine: boolean };
+export type PortfolioChild = { id: number; title: string; type: string; state: string; stateCategory: string; open: boolean; level: WorkItem["level"]; order: number | null; url: string; assignedTo: string | null; mine: boolean; /** Step 16 (D279): the last change, and the size from the project's size field (null: not sized). Missing in older caches. */ changedAt?: string; size?: number | null };
 
 /** A feature or epic for Plan the week (step 8): assigned to me, or the parent of a story assigned to me. */
 export type PortfolioItem = {
@@ -266,6 +268,8 @@ export type ClientPortfolio = {
   items: PortfolioItem[];
   /** The target date field detected per portfolio type (reference names, not secret). */
   targetFields: Record<string, string>;
+  /** Step 16 (D279): the size field read on stories (StoryPoints, Effort or Size), null when the project has none. */
+  sizeField?: string | null;
 };
 
 export type ClientWorkStatus = "ok" | "identity_missing" | "not_set_up" | "auth_failed" | "no_access" | "unreachable" | "error";

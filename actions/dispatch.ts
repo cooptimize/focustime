@@ -39,6 +39,7 @@ import { watchedIds } from "../plan/followups.ts";
 import { isActionName, type ActionName } from "./registry.ts";
 import { captureAction } from "./capture-actions.ts";
 import { followUpAction } from "./followup-actions.ts";
+import { deliveryAction } from "./delivery-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import type { ActionResponse, HostBrowsers, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
@@ -664,6 +665,23 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
             const today = localToday(ctx.now(), cfg.week.hours.timeZone);
             const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).load(weekStart, {}).catch(() => null) : null;
             return (await devopsClients(ctx, cfg, weekStart, today, {}, dv?.items ?? [])).fetch;
+          },
+          now: ctx.now,
+        },
+        action,
+        req.input,
+      );
+    case "delivery.load":
+      // Step 16 (D278): read-only; the same followed clients and portfolio read as Plan the week, for this week.
+      return deliveryAction(
+        {
+          plan: ctx.plan,
+          config: () => configured(ctx),
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
+          clients: async (cfg, weekStart, refresh) => {
+            const today = localToday(ctx.now(), cfg.week.hours.timeZone);
+            const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).load(weekStart, refresh ? { refresh } : {}).catch(() => null) : null;
+            return (await devopsClients(ctx, cfg, weekStart, today, refresh ? { refresh } : {}, dv?.items ?? [])).fetch;
           },
           now: ctx.now,
         },

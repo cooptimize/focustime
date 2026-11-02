@@ -325,3 +325,32 @@ export type DevOpsPreview = {
 };
 export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
 export type DevOpsLogView = { entries: (import("../plan/devopswrite.ts").DevOpsWriteEntry & { undoable: boolean; retryable: boolean })[] };
+
+/** Step 16 (D278 to D282): one feature or epic I own, as the Delivery view shows it. */
+export type DeliveryRow = {
+  id: number;
+  title: string;
+  type: string;
+  tier: "feature" | "epic";
+  state: string;
+  url: string;
+  targetDate: string | null;
+  done: number;
+  open: number;
+  /** Who works on its open stories: display names with counts, never emails. */
+  people: { name: string; count: number }[];
+  unassigned: number;
+  /** Null when the project has no size field. */
+  unsized: number | null;
+  /** Open ones with no change in 14 days. */
+  stale: number;
+  /** Daily snapshots of the last 21 days, oldest first. */
+  trend: { date: string; done: number; open: number }[];
+  signal: { level: "on_track" | "watch" | "at_risk" | null; reason: string };
+  /** Plan the week's readiness rules (D164). */
+  flags: ("needs_breakdown" | "needs_features" | "no_target_date")[];
+  /** On this week's plan already (step 8 week list). */
+  onWeek: boolean;
+};
+export type DeliveryClient = { clientKey: string; clientName: string; status: import("../week/types.ts").ClientWorkStatus; message?: string; fetchedAt: string | null; fromCache: boolean; rows: DeliveryRow[] };
+export type DeliveryState = { today: string; weekStart: string; clients: DeliveryClient[] };

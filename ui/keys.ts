@@ -112,6 +112,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["2"], does: "Week: every half-day of the week", command: "view.week" },
   { keys: ["3"], does: "Plan: the ritual for now (Plan the day, Check-in, Close out or Plan the week)", command: "view.plan" },
   { keys: ["4", "L"], does: "Inbox: follow-ups you owe and captures to sort", command: "view.inbox" },
+  { keys: ["5"], does: "Delivery: features and epics you own, and whether they're on track", command: "delivery.load" },
   { keys: ["N"], does: "Quick capture: one line, saved at once; then sort it into a follow-up, a draft story or a note", command: "capture.add" },
   { keys: ["W"], does: "Plan the week: each client's features (next week by default)", command: "view.planweek" },
   { keys: ["P"], does: "Plan the day, from anywhere (I also works)", command: "view.planday" },

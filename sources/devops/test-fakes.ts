@@ -60,6 +60,7 @@ const PLANWEEK_FIELDS = [
   { referenceName: "Microsoft.VSTS.Scheduling.StartDate", name: "Start Date", type: "dateTime" },
   { referenceName: "Microsoft.VSTS.Scheduling.TargetDate", name: "Target Date", type: "dateTime" },
   { referenceName: "Microsoft.VSTS.Common.ClosedDate", name: "Closed Date", type: "dateTime" },
+  { referenceName: "Microsoft.VSTS.Scheduling.StoryPoints", name: "Story Points", type: "double" },
 ];
 
 const fx = (name: string) => readFileSync(join(import.meta.dirname, "fixtures", `${name}.json`), "utf8");
@@ -129,6 +130,7 @@ export function fakeDevOps(orgs: Record<string, OrgScenario>, opts: { ids?: numb
             ...(parent ? { "System.Parent": parent } : {}),
             ...(who ? { "System.AssignedTo": { displayName: who, uniqueName: who === "Tanner S" ? `tanner@${org}.example` : "dana@client.example" } } : {}),
             ...(target ? { "Microsoft.VSTS.Scheduling.TargetDate": target } : {}),
+            ...(id === 201 ? { "Microsoft.VSTS.Scheduling.StoryPoints": 3 } : {}),
           };
           // Only the fields asked for, like DevOps.
           return { id, fields: Object.fromEntries(Object.entries(all).filter(([k]) => body.fields.includes(k))) };

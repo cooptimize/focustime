@@ -7,7 +7,7 @@ import { readSnapshot, writeSnapshot } from "../../cache/snapshots.ts";
 import type { Logger } from "../../log/logger.ts";
 import type { ClientPortfolio, ClientWork, ClientWorkStatus, FailureCause, PortfolioItem, WorkItem } from "../../week/types.ts";
 import { formatFetchedAt } from "../when.ts";
-import { withOpenStates, allowPortfolio, backlogLevels, batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, categoriesFrom, detectOrderField, detectTargetField, DONE_CATEGORIES, htmlToText, normalizeWorkItems, portfolioTiers, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
+import { withOpenStates, allowPortfolio, backlogLevels, batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, categoriesFrom, detectOrderField, detectSizeField, detectTargetField, DONE_CATEGORIES, htmlToText, normalizeWorkItems, portfolioTiers, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
 import type { Pat } from "./pat.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
 
@@ -58,7 +58,7 @@ class DevOpsFailure extends Error {
 type Metadata = { orderField: string | null; categories: StateCategories; levels: BacklogLevels; /** Plan the week (step 8): portfolio tiers from the backlog levels. */ tiers: { feature: Set<string>; epic: Set<string> } };
 
 /** What the cache file holds for Plan the week per client: normalized portfolio items only (no descriptions). */
-type PortfolioSnapshot = { fetchedAt: string; items: PortfolioItem[]; targetFields: Record<string, string> };
+type PortfolioSnapshot = { fetchedAt: string; items: PortfolioItem[]; targetFields: Record<string, string>; sizeField?: string | null };
 
 /** What the cache file holds per client: normalized items only. */
 type WorkSnapshot = { fetchedAt: string; items: WorkItem[]; children?: WorkItem[] };
@@ -223,18 +223,23 @@ export function createDevOpsSource(d: DevOpsDeps) {
 
   // ---- Plan the week (step 8): features and epics, read-only ----
   const portfolioMemory = new Map<string, { at: number; result: ClientPortfolio }>();
-  const targetFieldMemory = new Map<string, { at: number; fields: Record<string, string> }>();
+  const targetFieldMemory = new Map<string, { at: number; fields: Record<string, string>; size: string | null }>();
 
-  /** The target date field per portfolio type for a project (cached like the metadata). None found: no target dates. */
-  async function targetFieldsFor(c: Ctx, project: string, types: readonly string[]): Promise<Record<string, string>> {
+  /**
+   * The target date field per portfolio type for a project, and (step 16) the size field on stories, cached like the
+   * metadata. None found: no target dates, no sizes.
+   */
+  async function targetFieldsFor(c: Ctx, project: string, types: readonly string[]): Promise<{ fields: Record<string, string>; size: string | null }> {
     const key = `${c.org.toLowerCase()}/${project.toLowerCase()}`;
     const hit = targetFieldMemory.get(key);
     const t = now().epochMilliseconds;
-    if (hit && t - hit.at < metaTtl) return hit.fields;
+    if (hit && t - hit.at < metaTtl) return { fields: hit.fields, size: hit.size };
     const p = encodeURIComponent(project);
     const out: Record<string, string> = {};
+    let size: string | null = null;
     try {
       const all = await call<{ value?: FieldInfo[] }>(c, "fields", `${p}/_apis/wit/fields`);
+      size = detectSizeField(all.value ?? []);
       for (const type of types) {
         const tf = await call<{ value?: { referenceName?: unknown }[] }>(c, "typefields", `${p}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields`);
         const has = new Set((tf.value ?? []).map((f) => f.referenceName).filter((r): r is string => typeof r === "string"));
@@ -245,13 +250,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
       // A refused field list only means no target dates; a bad PAT fails the reads that follow anyway.
       if (e instanceof DevOpsFailure && e.status === "auth_failed") throw e;
       log("target_fields", { kind: "unavailable" });
-      return {};
+      return { fields: {}, size: null };
     }
-    targetFieldMemory.set(key, { at: t, fields: out });
-    return out;
+    targetFieldMemory.set(key, { at: t, fields: out, size });
+    return { fields: out, size };
   }
 
-  async function fetchPortfolio(ref: ClientRef, target: DevOpsTarget, mine: readonly WorkItem[]): Promise<{ items: PortfolioItem[]; targetFields: Record<string, string> }> {
+  async function fetchPortfolio(ref: ClientRef, target: DevOpsTarget, mine: readonly WorkItem[]): Promise<{ items: PortfolioItem[]; targetFields: Record<string, string>; sizeField: string | null }> {
     const { ctx, project } = contextOf(ref, target);
     const raw = await loadMetadata(ctx, project);
     needStoryLevel(raw, ctx, project);
@@ -261,10 +266,10 @@ export function createDevOpsSource(d: DevOpsDeps) {
     const assigned = new Set(mine.filter((i) => portfolioTypes.has(i.type)).map((i) => i.id));
     const parents = new Set(mine.filter((i) => raw.levels.story.has(i.type) && i.parentId !== null).map((i) => i.parentId!));
     const ids = [...new Set([...assigned, ...parents])].slice(0, MAX_PARENTS);
-    if (!ids.length) return { items: [], targetFields: {} };
-    const targetFields = await targetFieldsFor(ctx, project, [...portfolioTypes]);
-    const fields = [...batchFields(raw.orderField), "System.AssignedTo", ...new Set(Object.values(targetFields))];
-    const n = { orderField: raw.orderField, categories, levels: raw.levels, keepDone: true, me: ctx.me, people: true, targetFields, timeZone: d.timeZone };
+    if (!ids.length) return { items: [], targetFields: {}, sizeField: null };
+    const { fields: targetFields, size: sizeField } = await targetFieldsFor(ctx, project, [...portfolioTypes]);
+    const fields = [...batchFields(raw.orderField), "System.AssignedTo", ...new Set(Object.values(targetFields)), ...(sizeField ? [sizeField] : [])];
+    const n = { orderField: raw.orderField, categories, levels: raw.levels, keepDone: true, me: ctx.me, people: true, targetFields, timeZone: d.timeZone, sizeField };
     const found = (await readByIds(ctx, project, ids, fields, n)).filter((i) => portfolioTypes.has(i.type) && !DONE_CATEGORIES.has(i.stateCategory));
     // Q49: follow parent links up to the top portfolio level, so the epics above my features are read too.
     const above = new Set<number>();
@@ -300,9 +305,9 @@ export function createDevOpsSource(d: DevOpsDeps) {
       assignedTo: i.assignedTo ?? null,
       mine: !!i.assignedToMe,
       why: [...(assigned.has(i.id) ? ["assigned" as const] : []), ...(parents.has(i.id) ? ["parent" as const] : []), ...(above.has(i.id) && !assigned.has(i.id) && !parents.has(i.id) ? ["above" as const] : [])],
-      children: kids.filter((k) => k.parentId === i.id).map((k) => ({ id: k.id, title: k.title, type: k.type, state: k.state, stateCategory: k.stateCategory, open: !DONE_CATEGORIES.has(k.stateCategory), level: k.level, order: k.order, url: k.url, assignedTo: k.assignedTo ?? null, mine: !!k.assignedToMe })),
+      children: kids.filter((k) => k.parentId === i.id).map((k) => ({ id: k.id, title: k.title, type: k.type, state: k.state, stateCategory: k.stateCategory, open: !DONE_CATEGORIES.has(k.stateCategory), level: k.level, order: k.order, url: k.url, assignedTo: k.assignedTo ?? null, mine: !!k.assignedToMe, changedAt: k.changedAt, size: k.size ?? null })),
     }));
-    return { items, targetFields };
+    return { items, targetFields, sizeField };
   }
 
   /** Features and epics per followed client (step 8), after the usual read of my items. Cached for five minutes. */
@@ -330,17 +335,17 @@ export function createDevOpsSource(d: DevOpsDeps) {
           const fallback = async (status: ClientWorkStatus, message: string, cause?: FailureCause): Promise<ClientPortfolio> => {
             const snap = (await readSnapshot<PortfolioItem>(d.cacheDir, "devops", key)) as PortfolioSnapshot | null;
             const msg = snap ? `${message}. Showing features from ${formatFetchedAt(snap.fetchedAt, d.timeZone, now())}` : message;
-            return { clientKey: ref.clientKey, clientName: ref.clientName, status, message: msg, ...(cause ? { cause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [], targetFields: snap?.targetFields ?? {} };
+            return { clientKey: ref.clientKey, clientName: ref.clientName, status, message: msg, ...(cause ? { cause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [], targetFields: snap?.targetFields ?? {}, sizeField: snap?.sizeField ?? null };
           };
           if (w.status !== "ok" || w.fromCache) return fallback(w.status, w.message ?? `DevOps unavailable for ${ref.clientName}`, w.cause);
           try {
             const target = targets.ok ? targets.targets.find((x) => x.clientKey === ref.clientKey) : undefined;
             const pre = precheck(ref, target);
             if (pre) throw pre;
-            const { items, targetFields } = await fetchPortfolio(ref, target!, w.items);
+            const { items, targetFields, sizeField } = await fetchPortfolio(ref, target!, w.items);
             const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
-            await writeSnapshot(d.cacheDir, "devops", key, { fetchedAt, items, targetFields } as unknown as WorkSnapshot).catch(() => log("cache_write", { kind: "failed" }));
-            return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, targetFields };
+            await writeSnapshot(d.cacheDir, "devops", key, { fetchedAt, items, targetFields, sizeField } as unknown as WorkSnapshot).catch(() => log("cache_write", { kind: "failed" }));
+            return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, targetFields, sizeField };
           } catch (e) {
             if (!(e instanceof DevOpsFailure)) log("portfolio", { kind: "unexpected" });
             const f = e instanceof DevOpsFailure ? e : new DevOpsFailure("error", `DevOps load failed for ${ref.clientName}`);

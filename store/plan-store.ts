@@ -423,6 +423,15 @@ export const MIGRATIONS: readonly string[] = [
      attempts INTEGER NOT NULL DEFAULT 1,
      updated_at TEXT NOT NULL
    );`,
+  // 14: step 16 (D280), Delivery: one snapshot of done and open stories per owned feature or epic per day.
+  `CREATE TABLE delivery_snapshots (
+     client_key TEXT NOT NULL,
+     item_id INTEGER NOT NULL CHECK (item_id > 0),
+     date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     done INTEGER NOT NULL CHECK (done >= 0),
+     open INTEGER NOT NULL CHECK (open >= 0),
+     PRIMARY KEY (client_key, item_id, date)
+   );`,
 ];
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
@@ -1474,6 +1483,27 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       return n;
     },
     /** The audit log, newest first. */
+    /**
+     * Step 16 (D280): today's done and open counts per item, one row per item per day (a later load that day
+     * replaces it); rows older than 120 days are dropped.
+     */
+    recordSnapshots(date: IsoDate, rows: readonly { clientKey: string; itemId: number; done: number; open: number }[]): void {
+      tx(() => {
+        const put = db.prepare("INSERT INTO delivery_snapshots (client_key, item_id, date, done, open) VALUES (?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id, date) DO UPDATE SET done = excluded.done, open = excluded.open");
+        for (const r of rows) put.run(r.clientKey, r.itemId, date, r.done, r.open);
+        db.prepare("DELETE FROM delivery_snapshots WHERE date < ?").run(Temporal.PlainDate.from(date).subtract({ days: 120 }).toString());
+      });
+    },
+    /** Snapshots from a date on, per item ("<client>:<id>"), oldest first. */
+    snapshotsFrom(from: IsoDate): Map<string, { date: IsoDate; done: number; open: number }[]> {
+      const out = new Map<string, { date: IsoDate; done: number; open: number }[]>();
+      for (const r of db.prepare("SELECT * FROM delivery_snapshots WHERE date >= ? ORDER BY date").all(from) as Row[]) {
+        const k = `${r.client_key as string}:${r.item_id as number}`;
+        if (!out.has(k)) out.set(k, []);
+        out.get(k)!.push({ date: r.date as string, done: r.done as number, open: r.open as number });
+      }
+      return out;
+    },
     writeLog(limit = 100): WriteEntry[] {
       return (db.prepare("SELECT * FROM write_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toWrite);
     },

@@ -399,6 +399,13 @@ describe("Plan the week: features and epics (step 8)", () => {
     // Nobody's email is kept.
     expect(JSON.stringify(csc)).not.toMatch(/@/);
   });
+  it("reads each story's size and last change for Delivery (step 16), from the project's size field", async () => {
+    const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
+    const [csc] = await s.src.portfolio([ref("CSC")]);
+    expect(csc!.sizeField).toBe("Microsoft.VSTS.Scheduling.StoryPoints");
+    const kids = csc!.items.find((i) => i.id === 210)!.children;
+    expect(kids.map((c) => [c.id, c.size, c.changedAt])).toEqual([[201, 3, "2026-10-30T15:00:00Z"], [211, null, "2026-10-30T15:00:00Z"], [212, null, "2026-10-30T15:00:00Z"]]);
+  });
   it("reads only: metadata and field lists with GET, items with WIQL and the batch call; no description unless asked", async () => {
     const s = setup({ planweek: "planweek" }, [target("CSC", "planweek")]);
     await s.src.portfolio([ref("CSC")]);

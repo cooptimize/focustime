@@ -66,7 +66,7 @@ export type FormField = {
   options?: { value: string; label: string }[];
 };
 
-export type View = "today" | "week" | "inbox" | "focus" | "capture" | "planday" | "planweek" | "settings" | "follow_ups" | "checkin" | "closeout";
+export type View = "today" | "week" | "inbox" | "delivery" | "focus" | "capture" | "planday" | "planweek" | "settings" | "follow_ups" | "checkin" | "closeout";
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
@@ -881,6 +881,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "plan.reset": return { run: env.resetPlan };
     case "link.open": return { next: () => chooseItem(env, "Open which work item?", () => true, (k, i) => () => env.openLink(k, i.url)) };
     case "weekplan.load": return { run: () => env.openPlanWeek() };
+    case "delivery.load": return { run: () => env.setView("delivery") };
     case "weekplan.commit": return env.planWeekOpen ? { run: env.commitWeek } : { disabled: "Open Plan the week first" };
     // Features are chosen in Plan the week itself.
     case "weekplan.set_feature":
@@ -1074,6 +1075,25 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
         : []),
       ...(f.drafts > 0 ? [{ id: "create", label: `Create ${f.drafts === 1 ? "the draft" : `${f.drafts} drafts`} in DevOps`, ...writes("create"), action: "devops.preview", ...closed, run: f.canWrite ? ops.createDrafts : ops.enableWrites } as MenuItem] : []),
       { id: "remove", label: "Take off the week", danger: true, action: "weekplan.remove", ...closed, run: ops.remove },
+    ],
+  };
+}
+
+/** Step 16 (D282): what a Delivery row's ⋯ menu needs to know. */
+export type DeliveryRowFacts = { title: string; tier: "feature" | "epic"; targetDate: string | null; open: number; onWeek: boolean; canWrite: boolean; hasLink: boolean };
+export type DeliveryRowOps = { open: () => void; brief: () => void; help: () => void; addToWeek: () => void; targetDate: () => void; enableWrites: () => void };
+
+/** A Delivery row's ⋯ menu (D282). Only Set target date writes, through the DevOps write flow. */
+export function deliveryRowMenu(f: DeliveryRowFacts, ops: DeliveryRowOps): MenuStep {
+  const epic = f.tier === "epic";
+  return {
+    title: f.title,
+    items: [
+      { id: "open", label: "Open in browser", hint: "O", ...(f.hasLink ? {} : { disabled: "No link for this item" }), run: ops.open },
+      { id: "brief", label: "Copy Coop brief", action: "feature.brief", ...(epic ? { disabled: "Briefs are for features" } : { hint: f.open ? `${f.open} open ${f.open === 1 ? "story" : "stories"} already` : "ask Coop for stories" }), run: ops.brief },
+      { id: "help", label: "Needs help from…", hint: "Cooptimizers who are free", action: "collab.candidates", run: ops.help },
+      { id: "week", label: "Add to this week's plan", action: "weekplan.add", ...(epic ? { disabled: "Add its features instead" } : f.onWeek ? { disabled: "Already on this week's plan" } : { hint: "as a nice to have" }), run: ops.addToWeek },
+      { id: "target", label: f.targetDate ? "Change target date" : "Set target date", action: "devops.preview", ...(f.canWrite ? {} : { hint: "Enable DevOps writes first" }), run: f.canWrite ? ops.targetDate : ops.enableWrites },
     ],
   };
 }

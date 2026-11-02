@@ -143,6 +143,9 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
     [2211, "User Story", "Active", 2210, "Insurance card upload", ME],
     [2212, "User Story", "New", 2210, "Validate date of birth", ME],
     [2213, "User Story", "New", 2210, "Intake form accessibility review", "Sam Ortiz"],
+    [2214, "User Story", "Closed", 2210, "Intake form layout", ME],
+    [2215, "User Story", "Closed", 2210, "Save a draft intake", "Sam Ortiz"],
+    [2216, "User Story", "Closed", 2210, "Intake confirmation email", ME],
     [2220, "Feature", "Active", null, "Appointment reminders", "Priya Shah"],
     [2221, "User Story", "New", 2220, "SMS reminder template", ME],
     [2230, "User Story", "New", null, "Power BI refresh schedule", ME],
@@ -155,6 +158,10 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
     [3330, "User Story", "New", null, "Rate table import", ME],
   ],
 };
+
+/** Step 16 (Delivery): stories with no change in a while, and stories with no size yet. */
+const QUIET = new Set([4412, 1112]);
+const UNSIZED = new Set([1113, 2213]);
 
 const client = (k: DemoClientKey) => DEMO_CLIENTS.find((c) => c.key === k)!;
 const urlOf = (k: DemoClientKey, id: number) => `https://dev.azure.com/${client(k).org}/${encodeURIComponent(client(k).project)}/_workitems/edit/${id}`;
@@ -182,7 +189,10 @@ export function demoWork(k: DemoClientKey, fetchedAt: string): ClientWork {
 /** One client's features and epics for Plan the week, with every child (any state). */
 export function demoPortfolio(k: DemoClientKey, fetchedAt: string): ClientPortfolio {
   const all = ITEMS[k].map((r, n) => item(k, r, n + 1));
-  const child = (c: WorkItem): PortfolioChild => ({ id: c.id, title: c.title, type: c.type, state: c.state, stateCategory: c.stateCategory, open: c.stateCategory !== "Completed", level: c.level, order: c.order, url: c.url, assignedTo: c.assignedTo ?? null, mine: !!c.assignedToMe });
+  const child = (c: WorkItem): PortfolioChild => ({
+    id: c.id, title: c.title, type: c.type, state: c.state, stateCategory: c.stateCategory, open: c.stateCategory !== "Completed", level: c.level, order: c.order, url: c.url, assignedTo: c.assignedTo ?? null, mine: !!c.assignedToMe,
+    changedAt: QUIET.has(c.id) ? "2026-10-09T15:00:00Z" : c.changedAt, size: UNSIZED.has(c.id) ? null : 3,
+  });
   const items: PortfolioItem[] = all
     .filter((i) => i.level === "portfolio")
     .map((i) => ({
@@ -191,7 +201,7 @@ export function demoPortfolio(k: DemoClientKey, fetchedAt: string): ClientPortfo
       why: i.assignedToMe ? ["assigned"] : ["parent"],
       children: all.filter((c) => c.parentId === i.id).map(child),
     }));
-  return { clientKey: k, clientName: client(k).name, status: "ok", fetchedAt, fromCache: false, items, targetFields: { Feature: "Microsoft.VSTS.Scheduling.TargetDate", Epic: "Microsoft.VSTS.Scheduling.TargetDate" } };
+  return { clientKey: k, clientName: client(k).name, status: "ok", fetchedAt, fromCache: false, items, targetFields: { Feature: "Microsoft.VSTS.Scheduling.TargetDate", Epic: "Microsoft.VSTS.Scheduling.TargetDate" }, sizeField: "Microsoft.VSTS.Scheduling.StoryPoints" };
 }
 
 export const isDemoClient = (k: string): k is DemoClientKey => DEMO_CLIENTS.some((c) => c.key === k);

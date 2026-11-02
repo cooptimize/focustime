@@ -31,6 +31,7 @@ import type { TimerView } from "../actions/types.ts";
 import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
 import { Inbox } from "./Inbox.tsx";
+import { Delivery } from "./Delivery.tsx";
 import { Today } from "./Today.tsx";
 import { ritualFor, RITUAL_NAMES, type Ritual } from "../plan/ritual.ts";
 import type { Pick } from "../plan/types.ts";
@@ -85,6 +86,8 @@ export function App() {
   const [base, setBase] = useState<"today" | "week">("today");
   /** The Inbox (step 10): open follow-ups and unsorted captures, in the base view's place. Replaces Follow-ups and Capture. */
   const [followUpsOpen, setFollowUpsOpen] = useState(false);
+  /** Delivery (step 16, D278): features and epics I own, in the base view's place. */
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   /** Close out (step 7) for a day, and Check-in for today, take the week's place too. */
   const [closeOutAt, setCloseOutAt] = useState<IsoDate | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
@@ -546,6 +549,7 @@ export function App() {
       setFollowUpsOpen(false);
       setCloseOutAt(null);
       setCheckInOpen(false);
+      setDeliveryOpen(false);
       setPlanWeekAt(w);
       if (w !== weekRef.current) void load({ weekStart: w });
     },
@@ -558,7 +562,14 @@ export function App() {
       setCheckInOpen(false);
       setPlanWeekAt(null);
       setFocusOpen(false);
-      if (v === "inbox" || v === "follow_ups" || v === "capture") {
+      setDeliveryOpen(false);
+      if (v === "delivery") {
+        closePlanDay();
+        setDetailsOpen(false);
+        setSettingsAt(null);
+        setFollowUpsOpen(false);
+        setDeliveryOpen(true);
+      } else if (v === "inbox" || v === "follow_ups" || v === "capture") {
         closePlanDay();
         setDetailsOpen(false);
         setSettingsAt(null);
@@ -788,9 +799,10 @@ export function App() {
       if (cmdOpen || keysOpen) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document))) return;
       const typing = isTypingTarget(e.target as HTMLElement | null);
-      if ((settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || focusOpen) && e.key === "Escape" && !captureOpen) {
+      if ((settingsAt !== null || followUpsOpen || deliveryOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || focusOpen) && e.key === "Escape" && !captureOpen) {
         e.preventDefault();
         if (focusOpen) setBase("today");
+        setDeliveryOpen(false);
         setPlanWeekAt(null);
         setFocusOpen(false);
         setSettingsAt(null);
@@ -804,12 +816,13 @@ export function App() {
         setCheckInOpen(false);
         setPlanWeekAt(null);
         setSettingsAt("you");
-      } else if (["1", "2", "3", "4", "t", "T"].includes(e.key) && !typing && !detailsOpen && !captureOpen) {
-        // Step 10: the four places in the top bar. T keeps going to Today.
+      } else if (["1", "2", "3", "4", "5", "t", "T"].includes(e.key) && !typing && !detailsOpen && !captureOpen) {
+        // Step 10: the places in the top bar (step 16 adds Delivery, 5). T keeps going to Today.
         e.preventDefault();
         if (e.key === "1" || e.key === "t" || e.key === "T") setView("today");
         else if (e.key === "2") setView("week");
         else if (e.key === "3") openRitual();
+        else if (e.key === "5") setView(deliveryOpen ? base : "delivery");
         else setView(followUpsOpen ? base : "inbox");
       } else if ((e.key === "p" || e.key === "P" || e.key === "i" || e.key === "I") && !typing && !pd && !detailsOpen && settingsAt === null && !captureOpen) {
         e.preventDefault();
@@ -841,7 +854,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, captureOpen, cmdOpen, keysOpen, pd, detailsOpen, setView, openRitual, base]);
+  }, [settingsAt, followUpsOpen, deliveryOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, captureOpen, cmdOpen, keysOpen, pd, detailsOpen, setView, openRitual, base]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1073,7 +1086,7 @@ export function App() {
   // The real date only: on a weekend the Today key shows next week, but no day there is badged "Today".
   const today = week.days.some((d) => d.date === localToday) ? localToday : "";
   const weekendNote = Temporal.PlainDate.from(localToday).dayOfWeek >= 6 && data.weekStart === data.today.weekStart ? `Today is ${shortDay(localToday)} · showing next week` : null;
-  const view: View = settingsAt !== null ? "settings" : focusOpen ? "focus" : planWeekAt !== null ? "planweek" : followUpsOpen ? "inbox" : closeOutAt !== null ? "closeout" : checkInOpen ? "checkin" : pd ? "planday" : base;
+  const view: View = settingsAt !== null ? "settings" : focusOpen ? "focus" : planWeekAt !== null ? "planweek" : followUpsOpen ? "inbox" : closeOutAt !== null ? "closeout" : checkInOpen ? "checkin" : pd ? "planday" : deliveryOpen ? "delivery" : base;
   const ritualOpen: Ritual | null = view === "planday" || view === "checkin" || view === "closeout" || view === "planweek" ? view : null;
   const suggested = ritualNow();
   const inboxCount = data.openFollowUps + data.captures;
@@ -1146,6 +1159,9 @@ export function App() {
           </button>
           <button type="button" className="view-tab" aria-current={view === "inbox" ? "page" : undefined} onClick={() => setView(view === "inbox" ? base : "inbox")} title="Follow-ups you owe and captures to sort (4 or L)">
             Inbox{inboxCount > 0 && <span className="count" aria-label={`${inboxCount} waiting`}>{inboxCount}</span>}
+          </button>
+          <button type="button" className="view-tab" aria-current={view === "delivery" ? "page" : undefined} onClick={() => setView(view === "delivery" ? base : "delivery")} title="Features and epics you own: on track for the target date? (5)">
+            Delivery
           </button>
         </nav>
         <nav className="weeknav" aria-label="Week" hidden={!showWeekNav}>
@@ -1290,6 +1306,8 @@ export function App() {
           setDemo={(on) => void switchDemo(on)}
           runTime={runTime}
         />
+      ) : deliveryOpen && !pd ? (
+        <Delivery data={data} onClose={() => setDeliveryOpen(false)} onChanged={reloadQuiet} />
       ) : base === "today" && !pd ? (
         <Today
           data={data}

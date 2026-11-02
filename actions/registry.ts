@@ -43,6 +43,7 @@ export const ACTIONS = [
   { name: "auth.connect_microsoft", title: "Connect Outlook", group: "Sources", target: "none", summary: "Sign in to Microsoft in your browser (read-only calendar)" },
   { name: "auth.connect_google", title: "Connect Google Calendar", group: "Sources", target: "none", summary: "Sign in to Google in your browser (read-only calendar)" },
   { name: "auth.disconnect", title: "Disconnect a calendar", group: "Sources", target: "calendar", summary: "Forget a calendar sign-in and its cached events" },
+  { name: "delivery.load", title: "Delivery", group: "Work items", target: "none", shortcut: "5", summary: "Features and epics you own: stories done and open, who's on them, and whether they're on track for the target date" },
   { name: "weekplan.load", title: "Plan the week", group: "Plan the week", target: "week", shortcut: "W", summary: "Each client's week: musts and nice to haves from DevOps (next week by default); a past week is a review" },
   { name: "weekplan.set_feature", title: "Commit a feature to the week", group: "Plan the week", target: "feature", summary: "Give a feature a number of your blocks; 0 takes it off" },
   { name: "weekplan.place", title: "Pin to a block", group: "Plan the week", target: "feature", summary: "Pin a week item to one of its client's blocks or an Open half-day (optional, for dependencies)" },

@@ -169,6 +169,11 @@ export const prioritiesKey = (weekStart: IsoDate, clientKey: string) => `priorit
  * stories, anyone's ("Needs breakdown"); an epic with no open features ("Needs features"); a committed feature with
  * no target date ("No target date", soft). Anything DevOps can't say right now (not loaded, failed, cached) isn't flagged.
  */
+/** A feature with no open story-level child needs breaking down (D164); shared with Delivery (step 16). */
+export const needsBreakdown = (item: Pick<PortfolioItem, "children">) => !item.children.some((c) => c.open && c.level === "story");
+/** An epic with no open feature needs features (step 13.5); shared with Delivery (step 16). */
+export const needsFeatures = (item: Pick<PortfolioItem, "children">) => !item.children.some((c) => c.open && c.level === "portfolio");
+
 export function readiness(i: ReadinessInput): ReadinessFlag[] {
   const out: ReadinessFlag[] = [];
   const find = (clientKey: string, id: number): PortfolioItem | undefined => i.portfolios.find((p) => p.clientKey === clientKey)?.items.find((x) => x.id === id);
@@ -185,7 +190,7 @@ export function readiness(i: ReadinessInput): ReadinessFlag[] {
   for (const f of i.features.filter(isFeature)) {
     const item = find(f.clientKey, f.itemId);
     if (!item) continue;
-    if (!item.children.some((c) => c.open && c.level === "story"))
+    if (needsBreakdown(item))
       out.push({
         kind: "needs_breakdown", clientKey: f.clientKey, itemId: f.itemId, title: item.title, url: item.url, soft: false,
         markedAt: i.marks.find((m) => m.clientKey === f.clientKey && m.itemId === f.itemId)?.markedAt ?? null,
@@ -194,7 +199,7 @@ export function readiness(i: ReadinessInput): ReadinessFlag[] {
   }
   for (const p of i.portfolios)
     for (const e of p.items.filter((x) => x.tier === "epic"))
-      if (!e.children.some((c) => c.open && c.level === "portfolio"))
+      if (needsFeatures(e))
         out.push({ kind: "needs_features", clientKey: p.clientKey, itemId: e.id, title: e.title, url: e.url, soft: false, drafts: (i.drafts ?? []).filter((d) => d.clientKey === p.clientKey && d.parentItemId === e.id && d.level === "feature").length });
   // Step 11: musts (features) with no target date; a nice-to-have isn't a promise yet.
   for (const f of i.features.filter((x) => isFeature(x) && isMust(x))) {

@@ -81,6 +81,13 @@ export function detectTargetField(fields: readonly FieldInfo[], typeHas: Readonl
   return null;
 }
 
+/** Step 16 (D279): the size field on stories, by process: Story Points (Agile), Effort (Scrum, Basic), Size (CMMI). */
+export const SIZE_FIELDS = ["Microsoft.VSTS.Scheduling.StoryPoints", "Microsoft.VSTS.Scheduling.Effort", "Microsoft.VSTS.Scheduling.Size"] as const;
+export function detectSizeField(fields: readonly FieldInfo[]): string | null {
+  const have = new Set(fields.map((f) => f.referenceName).filter((r): r is string => typeof r === "string"));
+  return SIZE_FIELDS.find((r) => have.has(r)) ?? null;
+}
+
 /** A DevOps date field as a calendar date: stored at midnight UTC, that date; else the date in the local zone. */
 export function dateOnly(value: unknown, timeZone: string): string | null {
   if (typeof value !== "string") return null;
@@ -211,6 +218,8 @@ export type NormalizeContext = {
   /** The target date field per type (Plan the week), and the zone its dates are read in. */
   targetFields?: Readonly<Record<string, string>>;
   timeZone?: string;
+  /** Delivery (step 16): the size field to read into `size`. */
+  sizeField?: string | null;
 };
 
 const NO_LEVELS: BacklogLevels = { known: false, story: new Set(), portfolio: new Set() };
@@ -265,6 +274,7 @@ export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { 
       changedByMe: !!ctx.me && identityEmail(f["System.ChangedBy"]) === ctx.me.toLowerCase(),
       ...(ctx.people ? { assignedTo: identityName(f["System.AssignedTo"]), assignedToMe: !!ctx.me && identityEmail(f["System.AssignedTo"]) === ctx.me.toLowerCase() } : {}),
       ...(ctx.targetFields?.[type] ? { targetDate: dateOnly(f[ctx.targetFields[type]!], ctx.timeZone ?? "UTC") } : {}),
+      ...(ctx.sizeField ? { size: typeof f[ctx.sizeField] === "number" && Number.isFinite(f[ctx.sizeField]) ? (f[ctx.sizeField] as number) : null } : {}),
     });
   }
   items.sort(byBoardOrder);

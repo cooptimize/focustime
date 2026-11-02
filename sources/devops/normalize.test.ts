@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { allowPortfolio, backlogLevels, buildAllChildrenWiql, dateOnly, detectTargetField, levelOf, batchFields, buildWiql, categoriesFrom, detectOrderField, normalizeWorkItems, portfolioTiers, type StateCategories } from "./normalize.ts";
+import { detectSizeField } from "./normalize.ts";
 
 const fx = (name: string) => JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", `${name}.json`), "utf8"));
 const typesWithStates = (name: string) => fx(`${name}-workitemtypes`).value as { name: string; states: { name: string; category: string }[] }[];
@@ -271,5 +272,14 @@ describe("Plan the week: portfolio tiers and target dates (step 8)", () => {
     );
     expect(items.map((i) => [i.id, i.assignedTo, i.assignedToMe, i.targetDate ?? null])).toEqual([[1, "Dana Ruiz", false, "2026-11-20"], [2, "Tanner S", true, null], [3, null, false, null]]);
     expect(JSON.stringify(items)).not.toContain("@o.example");
+  });
+});
+
+describe("size field (step 16, D279)", () => {
+  const f = (referenceName: string, name: string, type = "double") => ({ referenceName, name, type });
+  it("takes Story Points, then Effort, then Size, from the project's field list", () => {
+    expect(detectSizeField([f("Microsoft.VSTS.Scheduling.Effort", "Effort"), f("Microsoft.VSTS.Scheduling.StoryPoints", "Story Points")])).toBe("Microsoft.VSTS.Scheduling.StoryPoints");
+    expect(detectSizeField([f("Microsoft.VSTS.Scheduling.Size", "Size"), f("Microsoft.VSTS.Scheduling.Effort", "Effort")])).toBe("Microsoft.VSTS.Scheduling.Effort");
+    expect(detectSizeField([f("Custom.Points", "Points")])).toBeNull();
   });
 });

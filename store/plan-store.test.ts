@@ -525,3 +525,17 @@ describe("timeboxes, own Outlook events and the write log (step 12)", () => {
     expect([e.timeboxes.length, e.outlookEvents.length, e.writeLog.length]).toEqual([1, 0, 0]);
   });
 });
+
+describe("Delivery snapshots (step 16, D280)", () => {
+  it("keeps one row per item per day, the latest of the day, and drops rows older than 120 days", () => {
+    const s = createPlanStore({ path: ":memory:", now: () => Temporal.ZonedDateTime.from("2026-11-02T09:00:00-06:00[America/Chicago]") });
+    s.recordSnapshots("2026-06-01", [{ clientKey: "Fabrikam", itemId: 10, done: 0, open: 9 }]);
+    s.recordSnapshots("2026-10-26", [{ clientKey: "Fabrikam", itemId: 10, done: 2, open: 7 }, { clientKey: "Contoso", itemId: 10, done: 1, open: 1 }]);
+    s.recordSnapshots("2026-11-02", [{ clientKey: "Fabrikam", itemId: 10, done: 3, open: 6 }]);
+    s.recordSnapshots("2026-11-02", [{ clientKey: "Fabrikam", itemId: 10, done: 4, open: 5 }]);
+    const all = s.snapshotsFrom("2026-01-01");
+    expect(all.get("Fabrikam:10")).toEqual([{ date: "2026-10-26", done: 2, open: 7 }, { date: "2026-11-02", done: 4, open: 5 }]);
+    expect(all.get("Contoso:10")).toEqual([{ date: "2026-10-26", done: 1, open: 1 }]);
+    expect(s.snapshotsFrom("2026-11-01").get("Fabrikam:10")).toHaveLength(1);
+  });
+});
