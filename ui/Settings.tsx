@@ -208,7 +208,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
         <div className="set-clients">
           {d.clients.length === 0 && <p className="muted">No clients yet: they come from Dataverse (your Account Worker records) and from config.</p>}
           {d.clients.map((c) => (
-            <div key={c.key} className="set-client-wrap">
+            <div key={c.key} className="set-client-wrap" style={{ "--c": c.setting.color ? (c.setting.color.startsWith("#") ? c.setting.color : `var(--client-${c.setting.color})`) : "var(--client-none)" } as CSSProperties}>
               <ClientForm client={c} data={d} onSavedData={p.onSavedData} />
               {c.devops && <WriteAccess client={c} onDone={p.reload} />}
             </div>
@@ -945,7 +945,7 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
         }
       }}
     >
-      <strong>DevOps write access</strong>
+      <strong>DevOps write access for {c.setting.name ?? c.dataverseName ?? c.key}</strong>
       <span className={`state ${w ? "live" : "muted"}`}>{w ? "On" : "Off, read-only"}</span>
       {w ? (
         <span className="muted">

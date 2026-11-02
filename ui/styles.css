@@ -1919,7 +1919,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* ---------- step 14: DevOps writes and Timebox my day after commit ---------- */
 .set-client-wrap + .set-client-wrap { margin-top: 12px; }
-.set-client-wrap > .devops-write { margin-top: 6px; }
+
 .devops-write .set-hint, .devops-write .muted { font-size: 12.5px; }
 .write-dialog.devops { max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; }
 .dw-rows { display: grid; gap: 10px; }
@@ -1936,3 +1936,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pd-committed { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; margin: 8px 0 4px; padding: 8px 12px; border: 1px solid color-mix(in oklab, var(--ok) 45%, var(--border)); border-radius: 10px; background: var(--raised); }
 .pd-committed p { margin: 0; flex: 1 1 260px; font-size: 13.5px; }
 .pd-committed .primary { background: var(--action); border-color: var(--action); color: var(--on-action); font-weight: 650; }
+.set-client-wrap > .devops-write { margin-top: 0; border-top: 1px dashed var(--border); border-left: 4px solid var(--c); border-radius: 0 0 10px 10px; padding-left: 16px; }
+.set-client-wrap:has(> .devops-write) > .set-client { border-bottom: 0; border-radius: 10px 10px 0 0; }
+.devops-write strong { min-width: 0; }
