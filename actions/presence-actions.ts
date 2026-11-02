@@ -159,7 +159,9 @@ export async function presenceAction(ctx: PresenceContext, action: PresenceActio
       return { ok: true, data: view };
     }
     case "presence.people": {
-      if (!onlyKeys(input, ["emails", "names"])) return bad("presence.people takes { emails?, names? }");
+      if (!onlyKeys(input, ["emails", "names", "me"])) return bad("presence.people takes { emails?, names?, me? }");
+      const wantMe = (input as { me?: unknown } | null)?.me;
+      if (wantMe !== undefined && typeof wantMe !== "boolean") return bad("me must be true or false");
       let emails: string[];
       let names: string[];
       try {
@@ -172,7 +174,18 @@ export async function presenceAction(ctx: PresenceContext, action: PresenceActio
       const none = (reason: TeamsAccess): ActionResponse => ({ ok: true, data: { available: false, reason, people: [] } satisfies PresencePeopleData });
       const client = ctx.account?.presence ?? null;
       if (!client || !storedIdentity(ctx.plan)) return none("signed_out");
-      if (!emails.length && !names.length) return { ok: true, data: { available: true, reason: null, people: [] } satisfies PresencePeopleData };
+      // Step 16.4: my own presence for the top bar (GET /me/presence; availability and activity only).
+      let me: PresencePeopleData["me"];
+      if (wantMe) {
+        try {
+          const m = await client.mine();
+          me = presenceWord(m.availability, m.activity);
+        } catch (e) {
+          return none(accessOf(e).access);
+        }
+      }
+      const withMe = (d: PresencePeopleData): PresencePeopleData => (wantMe ? { ...d, me: me ?? null } : d);
+      if (!emails.length && !names.length) return { ok: true, data: withMe({ available: true, reason: null, people: [] }) };
       const cfg = await ctx.config().catch(() => null);
       const team = cfg ? await ctx.team(cfg).catch(() => null) : null;
       if (!team) return none("unavailable");
@@ -191,7 +204,7 @@ export async function presenceAction(ctx: PresenceContext, action: PresenceActio
         const t = byName.get(n);
         if (t?.aadId) wanted.set(t.aadId, t);
       }
-      if (!wanted.size) return { ok: true, data: { available: true, reason: null, people: [] } satisfies PresencePeopleData };
+      if (!wanted.size) return { ok: true, data: withMe({ available: true, reason: null, people: [] }) };
       let raw: Awaited<ReturnType<PresenceClient["people"]>>;
       try {
         raw = await client.people([...wanted.keys()]);
@@ -204,7 +217,7 @@ export async function presenceAction(ctx: PresenceContext, action: PresenceActio
         const word = p ? presenceWord(p.availability, p.activity) : null;
         if (word) people.push({ email: t.email, name: t.name, word });
       }
-      return { ok: true, data: { available: true, reason: null, people } satisfies PresencePeopleData };
+      return { ok: true, data: withMe({ available: true, reason: null, people }) };
     }
     case "presence.log": {
       if (!onlyKeys(input, [])) return bad("presence.log takes no input");

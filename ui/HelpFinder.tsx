@@ -10,7 +10,7 @@ import { call } from "./api.ts";
 import type { HelpTarget } from "./menu.ts";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
 import { availableFirst } from "../plan/presence.ts";
-import { PresenceDot, usePresence } from "./Presence.tsx";
+import { Avatar, usePhotos, usePresence } from "./Presence.tsx";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 const dayShort = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -97,6 +97,7 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
   };
   // Step 16.3: presence for everyone listed (one read, every 2 minutes while open); Available now first in each tier.
   const presence = usePresence({ emails: (cands?.candidates ?? []).map((c) => c.email) });
+  const photos = usePhotos({ emails: (cands?.candidates ?? []).map((c) => c.email) });
   const byTier = ([1, 2, 3] as const).map((t) => ({ t, list: availableFirst((cands?.candidates ?? []).filter((c) => c.tier === t), (c) => presence.wordFor(c)) })).filter((g) => g.list.length);
 
   return (
@@ -159,7 +160,7 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
                 {list.map((c) => (
                   <li key={c.email}>
                     <label>
-                      <input type="checkbox" checked={chosen.includes(c.email)} onChange={() => toggle(c.email)} /> <PresenceDot word={presence.wordFor(c)} />{c.name}{" "}
+                      <input type="checkbox" checked={chosen.includes(c.email)} onChange={() => toggle(c.email)} /> <Avatar name={c.name} photo={photos.photoFor(c.email)} word={presence.wordFor(c)} />{c.name}{" "}
                       <span className="muted">{who(c, clientName)}</span>
                     </label>
                   </li>
@@ -198,7 +199,7 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
                     {s.people.map((p, i) => (
                       <span key={p.email}>
                         {i > 0 && ", "}
-                        <PresenceDot word={presence.wordFor(p)} />
+                        <Avatar name={p.name} photo={photos.photoFor(p.email)} word={presence.wordFor(p)} size={20} />
                         {p.hoursUnknown ? `${p.name} (hours unknown)` : p.name}
                       </span>
                     ))}{" "}

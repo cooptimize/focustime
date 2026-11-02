@@ -7,6 +7,7 @@ import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { briefMarkdown, prioritiesKey, withCurrentTitles } from "../plan/weekplan.ts";
 import { headsUpKey, offersHeadsUp, validBlocks, weekHeadsUpDraft, type ItemLevel, type Tier } from "../plan/weeklist.ts";
+import { validStorySize, type StorySize } from "../plan/estimate.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { PlanError, type PlanStore, type WeekFeature, type WeekPlanRecord } from "../store/plan-store.ts";
 import { mondayOf } from "../week/dates.ts";
@@ -22,6 +23,7 @@ export type WeekPlanAction =
   | "weekplan.add"
   | "weekplan.set_tier"
   | "weekplan.set_blocks"
+  | "weekplan.set_size"
   | "weekplan.reorder"
   | "weekplan.remove"
   | "weekplan.mark_done"
@@ -84,7 +86,11 @@ function tier(v: unknown): Tier {
   return v;
 }
 function blocks(v: unknown): number {
-  if (!validBlocks(v)) throw new Invalid("blocks must be 0.5 to 20 in half steps");
+  if (!validBlocks(v)) throw new Invalid("blocks must be a whole number from 1 to 20");
+  return v;
+}
+function size(v: unknown): StorySize {
+  if (!validStorySize(v)) throw new Invalid("size must be S, M or L");
   return v;
 }
 function bool(v: unknown, name: string): boolean {
@@ -124,16 +130,19 @@ async function featureOf(ctx: WeekPlanContext, cfg: AppConfig, weekStart: IsoDat
  * A story of the client's as DevOps shows it now (step 11): one of my items or a child read with them (work read), or
  * a story under one of the client's features (portfolio read). Features and epics are not stories.
  */
-async function storyOf(ctx: WeekPlanContext, cfg: AppConfig, weekStart: IsoDate, key: string, itemId: number): Promise<{ title: string; type: string; url: string } | null> {
+async function storyOf(ctx: WeekPlanContext, cfg: AppConfig, weekStart: IsoDate, key: string, itemId: number): Promise<{ title: string; type: string; url: string; parentId: number | null } | null> {
   const w = ctx.devops(cfg).last(key);
   const fromWork = w ? [...w.items, ...w.children, ...(w.committed ?? []), ...(w.watched ?? [])].find((i) => i.id === itemId && i.level === "story") : undefined;
-  if (fromWork) return { title: fromWork.title, type: fromWork.type, url: fromWork.url };
+  if (fromWork) return { title: fromWork.title, type: fromWork.type, url: fromWork.url, parentId: fromWork.parentId ?? null };
   const clients = await ctx.clients(cfg, weekStart, false);
   const ref = clients.find((c) => c.clientKey === key);
   if (!ref) return null;
   const [portfolio] = await ctx.devops(cfg).portfolio([ref]);
-  const kid = portfolio?.items.flatMap((i) => i.children).find((c) => c.id === itemId && c.level === "story");
-  return kid ? { title: kid.title, type: kid.type, url: kid.url } : null;
+  for (const f of portfolio?.items ?? []) {
+    const kid = f.children.find((c) => c.id === itemId && c.level === "story");
+    if (kid) return { title: kid.title, type: kid.type, url: kid.url, parentId: f.id };
+  }
+  return null;
 }
 
 /** Where a feature can go: that client's own blocks, or an Open half-day (Mon to Thu, no focus block). */
@@ -169,6 +178,20 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const followUps = plan.allFollowUps().filter((l) => l.kind === "priorities" && l.ruleKey?.startsWith(`priorities:${weekStart}:`)).map((l) => followUpView(plan, l, today, clientName));
         // Q51: current DevOps titles (this read's features, then fresh work items in memory); stored titles otherwise.
         const fromWork = titleFrom(clients.map((c) => ctx.devops(cfg).last(c.clientKey)).filter((w): w is ClientWork => !!w));
+        // Step 16.4: stories nest under their feature; keep each listed story's parent as DevOps says now.
+        if (weekStart >= thisWeek) {
+          const works = clients.map((c) => ctx.devops(cfg).last(c.clientKey)).filter((w): w is ClientWork => !!w && w.status === "ok" && !w.fromCache);
+          const parents: { clientKey: string; itemId: number; parentId: number | null }[] = [];
+          for (const f of plan.weekPlan(weekStart).features.filter((x) => x.level === "story")) {
+            const port = portfolios.find((p) => p.clientKey === f.clientKey && p.status === "ok" && !p.fromCache);
+            const fromPort = port?.items.find((i) => i.children.some((c) => c.id === f.itemId))?.id;
+            const w = works.find((x) => x.clientKey === f.clientKey);
+            const fromWork = w ? [...w.items, ...w.children, ...(w.committed ?? []), ...(w.watched ?? [])].find((i) => i.id === f.itemId) : undefined;
+            const parentId = fromPort ?? (fromWork ? fromWork.parentId : undefined);
+            if (parentId !== undefined) parents.push({ clientKey: f.clientKey, itemId: f.itemId, parentId });
+          }
+          if (parents.length) plan.setWeekItemParents(weekStart, parents);
+        }
         const current = (k: string, id: number) => portfolios.find((p) => p.clientKey === k && p.status === "ok" && !p.fromCache)?.items.find((i) => i.id === id)?.title ?? fromWork(k, id);
         const state: WeekPlanState = { weekStart, thisWeek, today, access: weekStart < thisWeek ? "past" : "plan", plan: withTitles(weekPlanView(plan.weekPlan(weekStart)), current), portfolios, marks: plan.breakdownMarks(), followUps, drafts: plan.drafts(), captures: plan.inboxCount() };
         return { ok: true, data: state };
@@ -215,7 +238,7 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
             const story = found ? null : await storyOf(ctx, cfg, weekStart, key, itemId);
             if (!found && !story) return bad(`#${itemId} isn't one of your features for ${key}`, 422);
             const src = found ? { title: found.item.title, type: found.item.type, url: found.item.url } : story!;
-            feature = plan.addWeekItem({ weekStart, clientKey: key, itemId, title: src.title, itemType: src.type, url: src.url, level: found ? "feature" : "story" });
+            feature = plan.addWeekItem({ weekStart, clientKey: key, itemId, title: src.title, itemType: src.type, url: src.url, level: found ? "feature" : "story", ...(story ? { parentId: story.parentId } : {}) });
           }
         }
         if (!feature) return bad("That feature isn't on this week's plan", 422);
@@ -229,20 +252,23 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         return { ok: true, data: { plan: weekPlanView(plan.commitWeek(weekStart)) } };
       }
       case "weekplan.add": {
-        const o = fields(input, ["weekStart", "clientKey", "itemId"], ["tier", "blocks"]);
+        const o = fields(input, ["weekStart", "clientKey", "itemId"], ["tier", "blocks", "size"]);
         const weekStart = monday(o.weekStart);
         editable(weekStart);
         const key = clientKey(o.clientKey);
         const itemId = id(o.itemId, "itemId");
         const t = o.tier === undefined ? undefined : tier(o.tier);
         const b = o.blocks === undefined ? undefined : blocks(o.blocks);
+        const z = o.size === undefined ? undefined : size(o.size);
         // DevOps first: only what DevOps shows as this client's feature or story now goes on the list.
         const feature = await featureOf(ctx, cfg, weekStart, key, itemId);
         const story = feature ? null : await storyOf(ctx, cfg, weekStart, key, itemId);
         if (!feature && !story) return bad(`#${itemId} isn't one of ${key}'s features or stories in DevOps`, 422);
         const level: ItemLevel = feature ? "feature" : "story";
         const src = feature ? { title: feature.item.title, type: feature.item.type, url: feature.item.url } : story!;
-        const item = plan.addWeekItem({ weekStart, clientKey: key, itemId, title: src.title, itemType: src.type, url: src.url, level, ...(t ? { tier: t } : {}), ...(b !== undefined ? { blocks: b } : {}) });
+        if (level === "story" && b !== undefined) throw new Invalid("A story has a size (S, M or L), not blocks");
+        if (level === "feature" && z !== undefined) throw new Invalid("A feature has blocks, not a size");
+        const item = plan.addWeekItem({ weekStart, clientKey: key, itemId, title: src.title, itemType: src.type, url: src.url, level, ...(t ? { tier: t } : {}), ...(b !== undefined ? { blocks: b } : {}), ...(z ? { size: z } : {}), ...(story ? { parentId: story.parentId } : {}) });
         return { ok: true, data: { item, plan: weekPlanView(plan.weekPlan(weekStart)) } };
       }
       case "weekplan.set_tier":
@@ -251,8 +277,12 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const before = plan.weekItem(id(o.id, "id"));
         if (!before) return bad("That item isn't on a week plan", 422);
         editable(before.weekStart);
-        const committedAt = plan.weekPlan(before.weekStart).committedAt;
+        const week = plan.weekPlan(before.weekStart);
+        const committedAt = week.committedAt;
         const to = action === "weekplan.set_tier" ? tier(o.tier) : null;
+        // Step 16.4: a story under a listed feature takes the feature's tier.
+        if (to && before.level === "story" && before.parentId !== null && week.features.some((f) => f.level === "feature" && f.clientKey === before.clientKey && f.itemId === before.parentId))
+          return bad("Stories take their feature's tier: change the feature's", 422);
         if (to) plan.setWeekItemTier(before.id, to);
         else plan.removeWeekItem(before.id);
         // Dropping a must the week was committed with offers the heads-up follow-up; nothing else is asked (D197).
@@ -264,7 +294,17 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const before = plan.weekItem(id(o.id, "id"));
         if (!before) return bad("That item isn't on a week plan", 422);
         editable(before.weekStart);
+        if (before.level !== "feature") return bad("A story has a size (S, M or L), not blocks", 422);
         const item = plan.setWeekItemBlocks(before.id, blocks(o.blocks));
+        return { ok: true, data: { item, plan: weekPlanView(plan.weekPlan(before.weekStart)) } };
+      }
+      case "weekplan.set_size": {
+        const o = fields(input, ["id", "size"]);
+        const before = plan.weekItem(id(o.id, "id"));
+        if (!before) return bad("That item isn't on a week plan", 422);
+        editable(before.weekStart);
+        if (before.level !== "story") return bad("A feature has blocks, not a size", 422);
+        const item = plan.setWeekItemSize(before.id, size(o.size));
         return { ok: true, data: { item, plan: weekPlanView(plan.weekPlan(before.weekStart)) } };
       }
       case "weekplan.mark_done": {

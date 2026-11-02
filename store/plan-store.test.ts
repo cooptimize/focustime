@@ -328,18 +328,57 @@ describe("week plan by client (step 11)", () => {
     store.close();
   });
 
-  it("adds features and stories as musts or nice to haves, sets tier, blocks in half steps, and a done mark", () => {
+  it("migration 19 rounds half-block features up to whole blocks and gives stories a size, ids and pins kept, with a backup", () => {
+    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const path = join(dir, "plan.db");
+    const old = new DatabaseSync(path);
+    old.exec("PRAGMA foreign_keys = ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+    for (let v = 1; v <= 18; v++) {
+      old.exec(MIGRATIONS[v - 1]!);
+      old.prepare("INSERT INTO schema_migrations VALUES (?, 'x')").run(v);
+    }
+    const at = "'2026-11-06T15:00:00-05:00[America/New_York]'";
+    old.exec(`INSERT INTO week_features (id, week_start, client_key, item_id, level, tier, title, item_type, url, blocks, position, done_at, created_at, updated_at) VALUES
+              (3, '2026-11-09', 'Adatum', 210, 'feature', 'must', 'Export', 'Feature', NULL, 1.5, NULL, NULL, ${at}, ${at}),
+              (4, '2026-11-09', 'Adatum', 220, 'feature', 'nice', 'Paging', 'Feature', NULL, 0.5, 2, NULL, ${at}, ${at}),
+              (5, '2026-11-09', 'Adatum', 230, 'feature', 'must', 'Import', 'Feature', NULL, 2, NULL, NULL, ${at}, ${at}),
+              (6, '2026-11-09', 'Adatum', 501, 'story', 'must', 'Story', 'User Story', NULL, 0.5, NULL, ${at}, ${at}, ${at}),
+              (8, '2026-11-09', 'Adatum', 502, 'story', 'nice', 'Big story', 'User Story', NULL, 1.5, NULL, NULL, ${at}, ${at})`);
+    old.exec("INSERT INTO week_feature_slots VALUES (3, '2026-11-10', 'PM')");
+    old.close();
+    const store = createPlanStore({ path, now });
+    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
+    expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v18-"))).toHaveLength(1);
+    const f = store.weekPlan(W).features;
+    expect(f.map((x) => [x.id, x.level, x.tier, x.blocks, x.size, x.parentId, x.position, !!x.doneAt, x.slots.length])).toEqual([
+      [3, "feature", "must", 2, null, null, null, false, 1],
+      [4, "feature", "nice", 1, null, null, 2, false, 0],
+      [5, "feature", "must", 2, null, null, null, false, 0],
+      [6, "story", "must", null, "M", null, null, true, 0],
+      [8, "story", "nice", null, "L", null, null, false, 0],
+    ]);
+    // No fraction survives anywhere in the week plan.
+    expect(f.every((x) => x.blocks === null || Number.isInteger(x.blocks))).toBe(true);
+    store.close();
+  });
+
+  it("adds features (whole blocks or none) and stories (S, M, L) as musts or nice to haves, sets tier and a done mark", () => {
     const { store } = fresh();
     const a = store.addWeekItem({ ...base, itemId: 210, level: "feature" });
-    expect(a).toMatchObject({ level: "feature", tier: "must", blocks: 1, position: null, doneAt: null });
-    const b = store.addWeekItem({ ...base, itemId: 501, itemType: "User Story", level: "story", tier: "nice" });
-    expect(b).toMatchObject({ level: "story", tier: "nice", blocks: 0.5 });
+    expect(a).toMatchObject({ level: "feature", tier: "must", blocks: null, size: null, position: null, doneAt: null });
+    const b = store.addWeekItem({ ...base, itemId: 501, itemType: "User Story", level: "story", tier: "nice", parentId: 210 });
+    expect(b).toMatchObject({ level: "story", tier: "nice", blocks: null, size: "M", parentId: 210 });
     // Adding again updates it in place.
-    expect(store.addWeekItem({ ...base, itemId: 210, title: "Renamed", level: "feature", tier: "nice", blocks: 2.5 })).toMatchObject({ id: a.id, title: "Renamed", tier: "nice", blocks: 2.5 });
+    expect(store.addWeekItem({ ...base, itemId: 210, title: "Renamed", level: "feature", tier: "nice", blocks: 3 })).toMatchObject({ id: a.id, title: "Renamed", tier: "nice", blocks: 3 });
     expect(store.setWeekItemTier(a.id, "must").tier).toBe("must");
-    expect(store.setWeekItemBlocks(b.id, 1.5).blocks).toBe(1.5);
-    expect(() => store.setWeekItemBlocks(b.id, 0.3)).toThrow(/half steps/);
-    expect(() => store.setWeekItemBlocks(b.id, 21)).toThrow(/blocks/);
+    expect(store.setWeekItemBlocks(a.id, 2).blocks).toBe(2);
+    expect(() => store.setWeekItemBlocks(a.id, 1.5)).toThrow(/whole number/);
+    expect(() => store.setWeekItemBlocks(a.id, 21)).toThrow(/whole number/);
+    expect(() => store.setWeekItemBlocks(b.id, 1)).toThrow(/size/);
+    expect(store.setWeekItemSize(b.id, "L").size).toBe("L");
+    expect(() => store.setWeekItemSize(a.id, "S")).toThrow(/blocks, not a size/);
+    store.setWeekItemParents(W, [{ clientKey: base.clientKey, itemId: 501, parentId: 220 }]);
+    expect(store.weekItem(b.id)?.parentId).toBe(220);
     expect(store.markWeekItemDone(b.id, true).doneAt).toBe(clock.toString({ smallestUnit: "second" }));
     expect(store.markWeekItemDone(b.id, false).doneAt).toBeNull();
     store.removeWeekItem(b.id);

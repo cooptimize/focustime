@@ -348,7 +348,7 @@ export type RoadmapRow = {
   done: number;
   open: number;
   /** Who works on its open stories: display names with counts, never emails. */
-  people: { name: string; count: number }[];
+  people: { name: string; count: number; /** Step 16.4: a matched Cooptimizer's email (by DevOps email, or by name without one); null otherwise. Never shown. */ email: string | null }[];
   unassigned: number;
   /** Null when the project has no size field. */
   unsized: number | null;
@@ -380,4 +380,9 @@ export type TeamsStatusView = {
   error: string | null;
 };
 /** presence.people: a word per Cooptimizer on screen; nothing for anyone presence couldn't be read for. */
-export type PresencePeopleData = { available: boolean; reason: TeamsAccess | null; people: { email: string; name: string; word: import("../plan/presence.ts").PresenceWord }[] };
+export type PresencePeopleData = { available: boolean; reason: TeamsAccess | null; people: { email: string; name: string; word: import("../plan/presence.ts").PresenceWord }[]; /** Step 16.4: my own, when asked (the top bar's avatar). */ me?: import("../plan/presence.ts").PresenceWord | null };
+
+/** Step 16.4: whether profile photos can be read for this sign-in. */
+export type PhotoAccess = "consent" | "signed_out" | "unavailable";
+/** Step 16.4: photos as data URLs (null: initials) for me and the Cooptimizers asked for, by email. */
+export type PhotosData = { available: boolean; reason: PhotoAccess | null; me: string | null; people: { email: string; photo: string | null }[] };

@@ -2,9 +2,10 @@
 // sign-out, the person in the top bar, the VM chip (top bar and Today) with Start, Stop and the auto-shutdown choices,
 // their preview, Today's morning prompt and "still changed" warning, Settings > You (sign out, find and confirm my VM)
 // and the Azure write log in Settings > Data.
+import { Avatar, forgetPhotos, usePhotos, usePresence } from "./Presence.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AuthStatus, AzureWriteEntry, Person, TeamsStatusEntry, VmPreview, VmPreviewOp, VmStatus } from "../actions/account-types.ts";
-import type { TeamsStatusView } from "../actions/types.ts";
+import type { PhotosData, TeamsStatusView } from "../actions/types.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
@@ -15,7 +16,7 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't w
 
 // ---- Sign-in ----
 
-type AuthApi = { status: AuthStatus | null; refresh: () => Promise<void>; signIn: (azure?: boolean, teams?: boolean) => Promise<string | null>; signOut: () => Promise<void> };
+type AuthApi = { status: AuthStatus | null; refresh: () => Promise<void>; signIn: (azure?: boolean, teams?: boolean, photos?: boolean) => Promise<string | null>; signOut: () => Promise<void> };
 export const AuthCtx = createContext<AuthApi>({ status: null, refresh: async () => {}, signIn: async () => null, signOut: async () => {} });
 
 /** Shows the sign-in screen until someone is signed in (when a Microsoft app registration is set up); then the app. */
@@ -33,14 +34,15 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => void refresh(), [refresh]);
   const [offline, setOffline] = useState(false);
-  const signIn = useCallback(async (azure = true, teams = false) => {
-    const r = await call<{ status: string; message?: string; offline?: boolean }>("auth.sign_in", { azure, ...(teams ? { teams } : {}) });
+  const signIn = useCallback(async (azure = true, teams = false, photos = false) => {
+    const r = await call<{ status: string; message?: string; offline?: boolean }>("auth.sign_in", { azure, ...(teams ? { teams } : {}), ...(photos ? { photos } : {}) });
     setOffline(!!r.offline);
     await refresh();
     return r.status === "connected" ? null : (r.message ?? "Sign-in not completed");
   }, [refresh]);
   const signOut = useCallback(async () => {
     await call("auth.sign_out", {});
+    forgetPhotos();
     setSkipped(false);
     await refresh();
   }, [refresh]);
@@ -102,10 +104,13 @@ export function PersonChip({ onOpen, onSettings }: { onOpen: (at: { x: number; y
   const p: Person | null = status?.person ?? null;
   const signedIn = status?.state === "signed_in" || status?.state === "unavailable";
   const label = !status?.configured ? "Settings" : p ? `Signed in as ${p.name}${status.state === "unavailable" ? " (offline)" : ""}` : "Not signed in";
+  // Step 16.4: my Entra photo with my presence on its corner; initials when there's no photo or no permission.
+  const photos = usePhotos({ me: !!p && signedIn });
+  const presence = usePresence({ me: !!p && signedIn });
   return (
     <button
       type="button"
-      className="person-chip"
+      className={`person-chip${p ? " with-avatar" : ""}`}
       aria-haspopup="menu"
       title={p ? `${p.name} (${p.username}): Settings and Sign out` : "Settings (,)"}
       aria-label={`${label}. Menu: Settings${status?.configured ? (signedIn ? ", Sign out" : ", Sign in") : ""}`}
@@ -117,7 +122,7 @@ export function PersonChip({ onOpen, onSettings }: { onOpen: (at: { x: number; y
         onOpen({ x: r.right, y: r.bottom + 4 }, { title: p ? p.name : "You", items });
       }}
     >
-      {p ? p.initials : status?.configured ? "?" : "Me"}
+      {p ? <Avatar name={p.name} initials={p.initials} photo={photos.me} word={presence.me} size={28} /> : status?.configured ? "?" : "Me"}
     </button>
   );
 }
@@ -419,6 +424,12 @@ export function YouAccount() {
         {signedIn && <span className="set-hint">Sign out removes the sign-in from your keyring on this computer. Your local plan stays.</span>}
       </div>
       {signedIn && (
+        <div className="set-field">
+          <span className="set-label">Photos</span>
+          <PhotosAccessLine />
+        </div>
+      )}
+      {signedIn && (
         <div className="set-field set-vm">
           <span className="set-label">My VM</span>
           <span className="set-value">
@@ -554,6 +565,39 @@ export function TeamsStatusLog({ tz }: { tz: string }) {
 }
 
 /** Settings > Focus: whether Coopilot can set my Teams status, and Allow Teams status when it needs consent. */
+/**
+ * Settings > You (step 16.4): whether profile photos show. ProfilePhoto.Read.All needs an admin's consent in Entra;
+ * until then (or with no photo) everyone shows as initials.
+ */
+export function PhotosAccessLine() {
+  const { signIn } = useContext(AuthCtx);
+  const [v, setV] = useState<PhotosData | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const check = useCallback(() => void call<PhotosData>("people.photos", { me: true }).then(setV, () => setV(null)), []);
+  useEffect(check, [check]);
+  if (!v) return <span className="set-hint">Checking photos…</span>;
+  const text = v.available
+    ? v.me ? "Photos show for you and Cooptimizers. Cached for 7 days on this computer, cleared when you sign out." : "Photos are allowed. You have no photo in Microsoft, so your initials show."
+    : v.reason === "consent" ? "Photos need your OK, and an admin's approval in Entra (Profile photos, read). Until then, initials show." : v.reason === "signed_out" ? "Sign in to show photos." : "Photos can't be read right now; initials show.";
+  return (
+    <span className="set-photos-access">
+      <span className="set-hint">{text}</span>
+      {!v.available && v.reason === "consent" && (
+        <button type="button" className="mini primary" disabled={busy} onClick={async () => {
+          setBusy(true);
+          const m = await signIn(true, false, true).catch((e: unknown) => errText(e));
+          setMessage(m);
+          setBusy(false);
+          forgetPhotos();
+          check();
+        }}>Allow photos</button>
+      )}
+      {message && <span className="set-problem" role="alert">{message}</span>}
+    </span>
+  );
+}
+
 export function TeamsAccessLine() {
   const { signIn } = useContext(AuthCtx);
   const [v, setV] = useState<TeamsStatusView | null>(null);

@@ -3,7 +3,7 @@
 // blocks left, worded as a question. In Check-in, "Anything shifted?" swaps musts in or out in one click each.
 import { useContext, useState, type CSSProperties } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
-import { borrowedForWeek, weekFit } from "../plan/weekplan.ts";
+import { borrowedForWeek, weekBudget } from "../plan/weekplan.ts";
 import { blocksLeft, onTrack, pickDoneFrom, progressLabel, weekList } from "../plan/weeklist.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
@@ -18,7 +18,7 @@ export function weekMusts(data: WeekLoadData, weekStart: IsoDate, now: string | 
   const features = data.weekFeatures.filter((f) => f.weekStart === weekStart);
   const loaded = data.weekStart === weekStart;
   const list = weekList(features, data.devops, [], loaded ? pickDoneFrom(data.plan) : undefined);
-  const fits = loaded ? weekFit(data.week, features, { borrowedMinutes: borrowedForWeek(data.borrowed, weekStart) }) : [];
+  const fits = loaded ? weekBudget(data.week, features, { borrowedMinutes: borrowedForWeek(data.borrowed, weekStart) }) : [];
   const names = new Map([...data.planClients.map((c) => [c.clientKey, c.clientName] as const), ...(data.devops ?? []).map((c) => [c.clientKey, c.clientName] as const), ...fits.map((f) => [f.clientKey, f.clientName] as const)]);
   const rows = list.progress
     .filter((p) => p.musts > 0 || p.nice > 0)
@@ -99,7 +99,9 @@ export function AnythingShifted({ data, weekStart, now, onChanged }: { data: Wee
         notice && <p className="co-notice" role="status">{notice}</p>
       )}
       {shown.map((r) => {
-        const mine = items.filter((i) => i.clientKey === r.clientKey && !i.done);
+        // A story under a listed feature takes the feature's tier (step 16.4): only the feature is swapped.
+        const nested = (i: (typeof items)[number]) => i.level === "story" && i.parentId != null && items.some((f) => f.level === "feature" && f.clientKey === i.clientKey && f.itemId === i.parentId);
+        const mine = items.filter((i) => i.clientKey === r.clientKey && !i.done && !nested(i));
         return (
           <div key={r.clientKey} className="shifted-client" style={{ "--c": clientColor(r.clientKey, data.clients) } as CSSProperties}>
             <p className="shifted-head">

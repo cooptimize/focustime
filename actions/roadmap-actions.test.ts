@@ -63,7 +63,7 @@ describe("roadmap.load", () => {
     const row = (await load(ctx)).clients[0]!.rows[0]!;
     expect(row.trend).toEqual(snaps);
     // 1 closed in 14 days is 0.5 a week; 2 open need 4 weeks, 4 weeks left (Nov 30): On track.
-    expect(row.signal).toEqual({ level: "on_track", reason: "2 stories open, about 0.5 closed per week, 4 weeks to target" });
+    expect(row.signal).toEqual({ level: "on_track", reason: "2 stories open, about 1 closed every 2 weeks, 4 weeks to target" });
   });
   it("takes no snapshot from a cached read, and passes refresh through", async () => {
     const { ctx, plan, reads } = setup(undefined, true);

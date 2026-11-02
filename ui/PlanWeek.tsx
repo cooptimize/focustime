@@ -9,15 +9,15 @@ import type React from "react";
 // plan lives only in the local plan store. A past week is a review.
 import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps, DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
-import { blocksStep, blocksText, weekItemMenu, type MenuStep, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
+import { blocksStep, blocksText, storySizeStep, weekItemMenu, type MenuStep, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
 import type { DraftStory, WeekFeature } from "../plan/types.ts";
-import { borrowedForWeek, readiness, weekFit, type ClientFit, type ReadinessFlag } from "../plan/weekplan.ts";
+import { borrowedForWeek, readiness, weekBudget, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
+import { estimate, fillWords, progressWords, type Envelope } from "../plan/estimate.ts";
 import { moveWithin, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
 import { formatDuration } from "../week/format.ts";
-import { weekFitWords } from "../plan/fit.ts";
 import type { ClientWork, IsoDate, PortfolioItem, Slot, WorkItem } from "../week/types.ts";
 import { call } from "./api.ts";
 import { clientColor } from "./labels.ts";
@@ -43,11 +43,6 @@ const stamp = (s: string, tz: string) => {
 };
 /** Fit per client in plain words (step 11): fits, tight, too much. */
 const DONE_WORD: Record<DoneBy, string> = { devops: "Done in DevOps", resolved: "Resolved in DevOps", local: "Done", pick: "Done (picked and ticked)" };
-/** "room for about 1.5 blocks", to the half block (step 10: no "0.8 blocks"). */
-export function roomLabel(available: number): string {
-  const r = Math.round(available * 2) / 2;
-  return r <= 0 ? "no free blocks" : r === 0.5 ? "room for about half a block" : `room for about ${r} ${r === 1 ? "block" : "blocks"}`;
-}
 
 /** Where a client's item can be pinned: its own blocks, or an Open half-day. */
 function placesFor(days: WeekLoadData["week"]["days"], clientKey: string): Place[] {
@@ -134,7 +129,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const items = list.items;
   // Q48: only borrowed time paid back in this week counts against its fit.
   const borrowedMinutes = useMemo(() => borrowedForWeek(data.borrowed, weekStart), [data.borrowed, weekStart]);
-  const fits = useMemo(() => (weekReady ? weekFit(data.week, raw, { borrowedMinutes }) : []), [weekReady, data.week, raw, borrowedMinutes]);
+  const fits = useMemo(() => (weekReady ? weekBudget(data.week, raw, { borrowedMinutes }) : []), [weekReady, data.week, raw, borrowedMinutes]);
   const intentions = useMemo(
     () => Object.entries(data.plan ?? {}).flatMap(([date, d]) => d.picks.filter((p) => p.kind === "intention").map((p) => ({ id: p.id, clientKey: p.clientKey, title: p.title, date, size: p.size, status: p.status }))),
     [data.plan],
@@ -171,7 +166,9 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const ptoDays = data.week.days.filter((d) => d.pto).length;
   const flexCount = data.week.days.reduce((n, d) => n + d.am.flex.length + d.pm.flex.length + (d.eve?.flex.length ?? 0), 0);
 
-  const mustCount = (k: string) => items.filter((i) => i.clientKey === k && i.tier === "must" && !i.done).length;
+  // Step 16.4: a story under a listed feature is part of it, not a must of its own.
+  const nestedIds = new Set(estimate(items).envelopes.flatMap((e) => e.stories.map((x) => x.id)));
+  const mustCount = (k: string) => items.filter((i) => i.clientKey === k && i.tier === "must" && !i.done && !nestedIds.has(i.id)).length;
   const pin = (k: string, itemId: number, date: IsoDate, half: Half, on: boolean) => void act("weekplan.place", { weekStart, clientKey: k, itemId, date, half, on });
   const dropped = (r: { headsUp: HeadsUp | null } | null) => setOffer(r?.headsUp ?? null);
   const ops: Ops = {
@@ -183,6 +180,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     tier: (i, tier) => void act<{ headsUp: HeadsUp | null }>("weekplan.set_tier", { id: i.id, tier }, `#${i.itemId} is now ${tier === "must" ? "a must" : "a nice to have"}`).then(dropped),
     remove: (i) => void act<{ headsUp: HeadsUp | null }>("weekplan.remove", { id: i.id }, `Took #${i.itemId} off the week`).then(dropped),
     blocks: (i, n) => void act("weekplan.set_blocks", { id: i.id, blocks: n }),
+    size: (i, z) => void act("weekplan.set_size", { id: i.id, size: z }),
     done: (i, on) => void act("weekplan.mark_done", { id: i.id, on }, on ? `#${i.itemId} marked done` : undefined),
     move: (i, by) => {
       const group = items.filter((x) => x.clientKey === i.clientKey && x.tier === i.tier).map((x) => x.itemId);
@@ -319,7 +317,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
               return (
                 <li key={k} style={{ "--c": clientColor(k, data.clients) } as CSSProperties}>
                   <span className="pw-swatch" aria-hidden="true" /> {nameOf(k)} <strong>{n}</strong> must{n === 1 ? "" : "s"} left
-                  {f && f.verdict !== "none" && <span className={`pw-fit2 ${weekFitWords(f).kind}`}>{weekFitWords(f).text}</span>}
+                  {f && <span className={`pw-fit2 ${f.status}`}>{f.text}</span>}
                 </li>
               );
             })}
@@ -373,15 +371,22 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   );
 }
 
-function FitChip({ fit }: { fit: ClientFit | undefined }) {
+/** The client's budget line (step 16.4): "W&C · 3 blocks" and "All 3 planned", whole numbers only. */
+function BudgetChip({ fit }: { fit: ClientBudget | undefined }) {
   if (!fit) return null;
-  const w = weekFitWords(fit);
-  const borrowed = fit.borrowedMinutes ? `, after ${formatDuration(fit.borrowedMinutes)} borrowed` : "";
+  const why = budgetWhy(fit);
   return (
-    <span className={`pw-fit2 ${w.kind}`} title={`Musts need ${fit.committedBlocks} of about ${fit.availableBlocks} free blocks (free time after time off, meetings and unavailable time${borrowed}). Nice to haves don't count.`}>
-      {w.text}
-    </span>
+    <>
+      <span className="pw-budget">· {blocksText(fit.budget)}</span>
+      <span className={`pw-fit2 ${fit.status}`} title={why.length ? `Not counted: ${why.join("; ")}` : "Nice to haves don't count against the blocks"}>{fit.text}</span>
+    </>
   );
+}
+const budgetWhy = (fit: ClientBudget) => [...fit.blocks.filter((b) => !b.counts).map((b) => b.reason), ...(fit.borrowedBlocks ? [`${blocksText(fit.borrowedBlocks)} of borrowed time to make up`] : [])];
+/** Why some of the client's half-days don't count: "Not counted: Wed AM: mostly meetings". */
+function BudgetWhy({ fit }: { fit: ClientBudget | undefined }) {
+  const why = fit ? budgetWhy(fit) : [];
+  return why.length ? <span className="pw-why muted">Not counted: {why.join(" · ")}</span> : null;
 }
 
 const KIND: Record<ReadinessFlag["kind"], string> = {
@@ -455,6 +460,7 @@ type Ops = {
   tier: (i: Item, tier: Tier) => void;
   remove: (i: Item) => void;
   blocks: (i: Item, n: number) => void;
+  size: (i: Item, z: "S" | "M" | "L") => void;
   done: (i: Item, on: boolean) => void;
   move: (i: Item, by: -1 | 1) => void;
   /** Drag within a list: put `itemId` where `before` is. */
@@ -469,7 +475,7 @@ type ListsProps = {
   keys: string[];
   items: Item[];
   progress: Progress[];
-  fits: ClientFit[];
+  fits: ClientBudget[];
   days: WeekLoadData["week"]["days"];
   info: (k: string, id: number) => Info | null;
   work: readonly ClientWork[] | null;
@@ -532,7 +538,12 @@ function ClientList(p: ListsProps & { k: string }) {
   const w = p.work?.find((x) => x.clientKey === k);
   const fit = p.fits.find((f) => f.clientKey === k);
   const prog = p.progress.find((x) => x.clientKey === k);
-  const mine = p.items.filter((i) => i.clientKey === k && match({ id: i.itemId, title: i.title }));
+  // Step 16.4: features are envelopes; a story under a listed feature shows inside its row and takes its tier.
+  const est = estimate(p.items.filter((i) => i.clientKey === k));
+  const envOf = new Map(est.envelopes.map((e) => [e.feature.id, e] as const));
+  const nested = new Set(est.envelopes.flatMap((e) => e.stories.map((x) => x.id)));
+  const listedFeatures = new Set(est.envelopes.map((e) => e.feature.itemId));
+  const mine = p.items.filter((i) => i.clientKey === k && !nested.has(i.id) && (match({ id: i.itemId, title: i.title }) || (envOf.get(i.id)?.stories ?? []).some((x) => match({ id: x.itemId, title: x.title }))));
   const musts = mine.filter((i) => i.tier === "must");
   const nice = mine.filter((i) => i.tier === "nice");
   const places = placesFor(p.days, k);
@@ -556,14 +567,16 @@ function ClientList(p: ListsProps & { k: string }) {
   const addOpen = emptyList || p.open.has(`add:${k}`);
   const row = (i: Item, n: number, group: Item[]) => (
     <ItemRow key={i.id} i={i} first={n === 0} last={n === group.length - 1} past={p.past} info={p.info(k, i.itemId)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === i.itemId)}
-      places={places} target={target} open={p.open.has(`${k}:${i.itemId}`)} toggle={() => p.toggleOpen(`${k}:${i.itemId}`)} ops={p.ops} />
+      places={places} target={target} open={p.open.has(`${k}:${i.itemId}`)} toggle={() => p.toggleOpen(`${k}:${i.itemId}`)} ops={p.ops}
+      env={envOf.get(i.id) ?? null} parentListed={i.parentId != null && listedFeatures.has(i.parentId)} infoOf={(id) => p.info(k, id)} />
   );
   return (
     <section className="co-section pw-client" style={{ "--c": clientColor(k, p.colors) } as CSSProperties} aria-label={p.nameOf(k)}>
       <h3>
         <span className="pw-swatch" aria-hidden="true" />
-        {p.nameOf(k)} <FitChip fit={fit} />
+        {p.nameOf(k)} <BudgetChip fit={fit} />
         {prog && prog.musts > 0 && <span className="pw-progress">{progressLabel(prog)}</span>}
+        <BudgetWhy fit={fit} />
         {port && port.status !== "ok" && <span className="muted">DevOps: {port.message ?? port.status}</span>}
         {port?.fromCache && <span className="muted">from cache</span>}
       </h3>
@@ -654,8 +667,10 @@ function AddRow({ k, id, title, url, what, ops }: { k: string; id: number; title
   );
 }
 
-function ItemRow({ i, first, last, past, info, drafts, places, open, toggle, ops }: {
+function ItemRow({ i, first, last, past, info, drafts, places, open, toggle, ops, env: envl, parentListed, nestedIn, infoOf }: {
   i: Item; first: boolean; last: boolean; past: boolean; info: Info | null; drafts: DraftStory[]; places: Place[]; target: Place | null; open: boolean; toggle: () => void; ops: Ops;
+  /** Step 16.4: a feature's envelope (its blocks and the stories under it); a story nested in a feature's row. */
+  env?: Envelope<Item> | null; parentListed?: boolean; nestedIn?: Item; infoOf?: (itemId: number) => Info | null;
 }) {
   const k = i.clientKey;
   const feature = info?.feature ?? null;
@@ -665,7 +680,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, open, toggle, ops
   const { env, open: openMenu } = useContext(MenuCtx);
   const dw = useDevOpsWrite();
   const facts: WeekItemFacts = {
-    itemId: i.itemId, title: i.title, tier: i.tier, level: i.level, first, last, past, done: i.done ? (i.done === "local" ? "local" : "other") : null, blocks: i.blocks,
+    itemId: i.itemId, title: i.title, tier: i.tier, level: i.level, first, last, past, done: i.done ? (i.done === "local" ? "local" : "other") : null, blocks: envl?.blocks ?? i.blocks ?? 1, size: i.size, nested: !!nestedIn,
     places: places.map((pl) => ({ date: pl.date, half: pl.half, label: pl.label })), pinned: i.slots, openStories, targetDate: feature?.targetDate ?? null, drafts: drafts.length, canWrite: !!dw?.can(k),
   };
   const wops: WeekItemOps = {
@@ -673,6 +688,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, open, toggle, ops
     tier: () => ops.tier(i, other),
     pin: (date, half, on) => ops.pin(k, i.itemId, date, half, on),
     blocks: (n) => ops.blocks(i, n),
+    size: (z) => ops.size(i, z),
     done: (on) => ops.done(i, on),
     help: () => env?.openHelp({ clientKey: k, title: `#${i.itemId} ${i.title}`, url: i.url, itemId: i.itemId, pinned: i.slots[0]?.date ?? null }),
     targetDate: () => dw?.targetDate({ clientKey: k, itemId: i.itemId, title: i.title, current: feature?.targetDate ?? null }),
@@ -722,14 +738,49 @@ function ItemRow({ i, first, last, past, info, drafts, places, open, toggle, ops
       ) : (
         <span className="pw-chip-static">Story</span>
       )}
-      <button type="button" className="pw-chip-btn" disabled={past} onClick={(e) => show(e, blocksStep(facts, wops))} title="How many of this client's blocks it needs">
-        {blocksText(i.blocks)}
-      </button>
+      {i.level === "feature" ? (
+        <span className="pw-stepper" role="group" aria-label={`Blocks for ${i.title}`}>
+          <button type="button" className="mini" disabled={past || facts.blocks <= 1} aria-label="One block less" onClick={() => ops.blocks(i, facts.blocks - 1)}>−</button>
+          <button type="button" className="pw-chip-btn" disabled={past} onClick={(e) => show(e, blocksStep(facts, wops))} title={envl?.auto ? "What its stories add up to. Choose to set it" : "How many of this client's blocks it needs"}>
+            {blocksText(facts.blocks)}
+          </button>
+          <button type="button" className="mini" disabled={past || facts.blocks >= 20} aria-label="One block more" onClick={() => ops.blocks(i, facts.blocks + 1)}>+</button>
+        </span>
+      ) : (
+        <button type="button" className="pw-chip-btn pw-size" disabled={past} onClick={(e) => show(e, storySizeStep(facts, wops))} title="S about an hour, M a couple of hours, L about a whole block">
+          {i.size ?? "M"}
+        </button>
+      )}
+      {i.level === "story" && !nestedIn && i.parentId != null && !parentListed && (
+        <span className="pw-parent muted">
+          Under {infoOf?.(i.parentId)?.feature?.title ?? `#${i.parentId}`}
+          {!past && <button type="button" className="mini" onClick={() => ops.add(i.clientKey, i.parentId!, i.tier)} title="Put its feature on the list; this story moves under it">Add the feature</button>}
+        </span>
+      )}
       {i.slots.length > 0 && <span className="pw-pin" title="Pinned to this block">{i.slots.map(pinLabel).join(", ")}</span>}
       {env && (
         <button type="button" className="more" aria-label={`More for ${i.title}`} onClick={(e) => show(e, weekItemMenu(facts, wops))}>
           ⋯
         </button>
+      )}
+      {envl && (envl.doneBlocks > 0 || envl.fill !== "filled") && (
+        <span className="pw-fill">
+          {envl.doneBlocks > 0 && <span className="pw-progress-blocks">{progressWords(envl)}</span>}
+          {envl.fill === "needs_stories" && !i.done && <span className="muted">{fillWords(envl)}</span>}
+          {envl.fill === "over" && (
+            <span className="pw-raise" role="status">
+              {fillWords(envl)}{" "}
+              {!past && <button type="button" className="mini primary" onClick={() => ops.blocks(i, envl.raiseTo!)}>Raise to {envl.raiseTo}</button>}
+            </span>
+          )}
+        </span>
+      )}
+      {envl && envl.stories.length > 0 && (
+        <ul className="pw-nested" aria-label={`Stories in ${i.title}`}>
+          {envl.stories.map((x) => (
+            <ItemRow key={x.id} i={x} first last past={past} info={infoOf?.(x.itemId) ?? null} drafts={[]} places={places} target={null} open={false} toggle={() => {}} ops={ops} nestedIn={i} />
+          ))}
+        </ul>
       )}
       {open && (feature || drafts.length > 0) && (
         <ul className="pw-children">

@@ -157,7 +157,7 @@ async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = tru
   const resumeNotes = Object.fromEntries(Object.entries(plan.latestNotes(d)).map(([k, n]) => [k, { clientKey: n.clientKey, date: n.date, note: n.note }]));
   // Committed features of this date's week (step 8).
   const monday = Temporal.PlainDate.from(d).subtract({ days: Temporal.PlainDate.from(d).dayOfWeek - 1 }).toString();
-  const weekFeatures = plan.weekPlan(monday).features.map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, url: f.url, slots: f.slots, level: f.level, tier: f.tier, blocks: f.blocks, position: f.position, doneAt: f.doneAt }));
+  const weekFeatures = plan.weekPlan(monday).features.map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, url: f.url, slots: f.slots, level: f.level, tier: f.tier, blocks: f.blocks, size: f.size, parentId: f.parentId, position: f.position, doneAt: f.doneAt }));
   return { date: d, plan: day, picks, carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: plan.drafts(), opened, focused, resumeNotes, weekFeatures };
 }
 

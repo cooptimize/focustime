@@ -28,23 +28,21 @@ describe("planFit: the whole block, not the time left", () => {
   });
 });
 
-describe("fitWords thresholds", () => {
+describe("fitWords thresholds (plain words, step 16.4)", () => {
   it("nothing planned says nothing", () => expect(fitWords({ kind: "empty" }).text).toBe(""));
-  it("under 30m spare is Fits", () => {
+  it("under 45m spare is Fits", () => {
     expect(fitWords({ kind: "tight", spare: 0 })).toEqual({ kind: "fits", text: "Fits", tone: "neutral" });
-    expect(fitWords({ kind: "tight", spare: 29 }).text).toBe("Fits");
+    expect(fitWords({ kind: "fits", spare: 44 }).text).toBe("Fits");
   });
-  it("30m or more spare is Room for about, rounded down to 15m", () => {
-    expect(fitWords({ kind: "fits", spare: 30 }).text).toBe("Room for about 30m more");
-    expect(fitWords({ kind: "fits", spare: 59 }).text).toBe("Room for about 45m more");
-    expect(fitWords({ kind: "fits", spare: 135 })).toEqual({ kind: "room", text: "Room for about 2h 15m more", tone: "neutral" });
+  it("more spare is room in whole hours", () => {
+    expect(fitWords({ kind: "fits", spare: 45 }).text).toBe("Room for about an hour more");
+    expect(fitWords({ kind: "fits", spare: 135 })).toEqual({ kind: "room", text: "Room for about 2 hours more", tone: "neutral" });
   });
   it("over by 10m or less still Fits", () => expect(fitWords({ kind: "over", by: 10 }).text).toBe("Fits"));
-  it("over by more is amber, rounded to the nearest 15m, at least 15m", () => {
-    expect(fitWords({ kind: "over", by: 11 })).toEqual({ kind: "over", text: "About 15m over", tone: "watch" });
-    expect(fitWords({ kind: "over", by: 52 }).text).toBe("About 45m over");
-    expect(fitWords({ kind: "over", by: 60 }).text).toBe("About 1h over");
-    expect(fitWords({ kind: "over", by: 195 }).text).toBe("About 3h 15m over");
+  it("over by more is amber, in plain words", () => {
+    expect(fitWords({ kind: "over", by: 11 })).toEqual({ kind: "over", text: "A little over", tone: "watch" });
+    expect(fitWords({ kind: "over", by: 60 }).text).toBe("About an hour over");
+    expect(fitWords({ kind: "over", by: 195 }).text).toBe("About 3 hours over");
   });
   it("never uses red", () => {
     for (const f of [{ kind: "over", by: 500 }, { kind: "fits", spare: 5 }] as const) expect(fitWords(f).tone).not.toBe("risk");
@@ -65,17 +63,6 @@ describe("trimCandidates", () => {
 });
 
 describe("dayTotals", () => {
-  it("reads work then free", () => expect(dayTotals([{ planned: 240, free: 210 }, { planned: 180, free: 165 }])).toBe("7h of work · 6h 15m free"));
-  it("says nothing planned yet", () => expect(dayTotals([{ planned: 0, free: 120 }])).toBe("Nothing planned yet · 2h free"));
-});
-
-import { weekFitWords } from "./fit.ts";
-describe("weekFitWords (Plan the week per client)", () => {
-  it("speaks in blocks with the same calm words", () => {
-    expect(weekFitWords({ committedBlocks: 0, availableBlocks: 2, verdict: "none" }).text).toBe("No musts yet");
-    expect(weekFitWords({ committedBlocks: 2, availableBlocks: 1.1, verdict: "over" })).toEqual({ kind: "over", text: "About 1 block over", tone: "watch" });
-    expect(weekFitWords({ committedBlocks: 2, availableBlocks: 1.6, verdict: "over" }).text).toBe("About half a block over");
-    expect(weekFitWords({ committedBlocks: 1, availableBlocks: 1.2, verdict: "tight" }).text).toBe("Fits");
-    expect(weekFitWords({ committedBlocks: 1, availableBlocks: 2.6, verdict: "fits" }).text).toBe("Room for about 1.5 blocks more");
-  });
+  it("reads work then free, in whole hours", () => expect(dayTotals([{ planned: 240, free: 210 }, { planned: 180, free: 165 }])).toBe("About 7 hours of work · about 6 hours free"));
+  it("says nothing planned yet", () => expect(dayTotals([{ planned: 0, free: 120 }])).toBe("Nothing planned yet · about 2 hours free"));
 });

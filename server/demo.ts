@@ -61,16 +61,23 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   await run("vm.choose", { vmId: DEMO_VM_ID });
   await run("week.load", { weekStart });
   await run("weekplan.load", { weekStart });
-  const list: [string, number, "must" | "nice", number][] = [
-    ["Cooptimize", 4410, "must", 0.5],
-    ["Northwind", 1110, "must", 1.5],
-    ["Northwind", 1120, "must", 0.5],
-    ["Northwind", 1130, "nice", 0.5],
-    ["Harbor", 2210, "must", 1],
-    ["Atlas", 3310, "must", 0.5],
-    ["Atlas", 3330, "nice", 0.5],
+  // Step 16.4: features in whole blocks, stories sized S, M or L; stories under a listed feature fill it.
+  const list: [string, number, "must" | "nice", { blocks?: number; size?: "S" | "M" | "L" }][] = [
+    ["Cooptimize", 4410, "must", { blocks: 1 }],
+    ["Cooptimize", 4411, "must", { size: "M" }],
+    ["Cooptimize", 4412, "must", { size: "M" }],
+    ["Northwind", 1110, "must", { blocks: 2 }],
+    ["Northwind", 1111, "must", { size: "L" }],
+    ["Northwind", 1112, "must", { size: "M" }],
+    ["Northwind", 1120, "must", {}],
+    ["Northwind", 1130, "nice", { size: "M" }],
+    ["Harbor", 2210, "must", { blocks: 1 }],
+    ["Harbor", 2211, "must", { size: "L" }],
+    ["Harbor", 2212, "must", { size: "S" }],
+    ["Atlas", 3311, "must", { size: "L" }],
+    ["Atlas", 3330, "nice", { size: "S" }],
   ];
-  for (const [clientKey, itemId, tier, blocks] of list) await run("weekplan.add", { weekStart, clientKey, itemId, tier, blocks });
+  for (const [clientKey, itemId, tier, est] of list) await run("weekplan.add", { weekStart, clientKey, itemId, tier, ...est });
   await run("weekplan.place", { weekStart, clientKey: "Cooptimize", itemId: 4410, date: weekStart, half: "AM", on: true });
   await run("weekplan.commit", { weekStart });
   await run("followup.add", { clientKey: "Cooptimize", who: "Jordan Lee", what: "Reply about the proposal timeline", channel: "teams", due: day(-1) });

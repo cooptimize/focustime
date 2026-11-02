@@ -13,7 +13,7 @@ const S31 = wi(31, "Update README", "story");
 const F4 = wi(40, "Reporting", "portfolio", null, { tier: "feature" });
 const S41 = wi(41, "Monthly report", "story", 40);
 const work = { items: [S30, F1, S31, F4, F2], children: [S11, S12, S41] };
-const ref = (itemId: number, title: string, tier: "must" | "nice", level: "feature" | "story" = "feature", slots: { date: string; half: "AM" | "PM" }[] = []) => ({ clientKey: "nw", itemId, title, url: null, slots, tier, level });
+const ref = (itemId: number, title: string, tier: "must" | "nice", level: "feature" | "story" = "feature", slots: { date: string; half: "AM" | "PM" }[] = []) => ({ clientKey: "nw", itemId, title, url: null, slots, tier, level, parentId: null as number | null });
 const draft = (id: number, parentItemId: number | null): DraftStory => ({ id, clientKey: "nw", parentItemId, title: `Draft ${id}`, size: "M", level: "story", createdAt: "" });
 const fu = (id: number, clientKey: string, due: string | null) => ({ id, clientKey, due, openedAt: "2026-11-01" });
 
@@ -36,6 +36,11 @@ describe("defaultBlock", () => {
 });
 
 describe("addSections", () => {
+  it("a story whose feature is on the week list shows only in the feature's row (step 16.4)", () => {
+    const s = addSections(base({ week: [ref(10, "Order history export", "must"), { ...ref(11, "Export to CSV", "must", "story"), parentId: 10 }] }));
+    expect(s.priorities.map((p) => [p.ref.itemId, p.level])).toEqual([[10, "feature"]]);
+    expect(s.priorities[0]!.stories.map((x) => x.id)).toEqual([11, 12]);
+  });
   it("lists priorities (musts then nice to haves), then the client's follow-ups, then everything else in DevOps order", () => {
     const s = addSections(base());
     expect(s.priorities.map((p) => [p.ref.itemId, p.tier])).toEqual([[10, "must"], [30, "must"], [20, "nice"]]);

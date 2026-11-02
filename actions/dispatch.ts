@@ -1,5 +1,7 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import { clearPhotos, photoAction } from "./photo-actions.ts";
+import type { PhotoCache } from "../cache/photos.ts";
 import { expiringSoon } from "../plan/expiry.ts";
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import { DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";
@@ -52,6 +54,8 @@ import type { AzureClient } from "../sources/azure/client.ts";
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
 export type ActionContext = {
+  /** Step 16.4: the profile photo cache (~/.cache/coopilot/photos). Absent: photos aren't cached (demo mode, tests). */
+  photoCache?: PhotoCache;
   /** Step 15.5: the notifier (test and sample notifications). Absent: notifications aren't available here. */
   notifications?: { test: () => Promise<void>; sample: (kind: string, live: boolean, gated: boolean) => Promise<boolean> };
   loadConfig: () => Promise<{ path: string; parsed: ParseResult; created?: boolean }>;
@@ -569,7 +573,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "auth.status":
     case "auth.sign_in":
     case "auth.sign_out":
-      return accountAction({ ...(ctx.plan ? { plan: ctx.plan } : {}), account: await accountOf(ctx), now: ctx.now }, action, req.input);
+      return accountAction({ ...(ctx.plan ? { plan: ctx.plan } : {}), account: await accountOf(ctx), now: ctx.now, clearPhotos: () => clearPhotos(ctx.photoCache ?? null) }, action, req.input);
     case "vm.find":
     case "vm.choose":
     case "vm.status":
@@ -716,6 +720,8 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "presence.people":
     case "presence.log":
       return presenceAction(await presenceContext(ctx), action, req.input);
+    case "people.photos":
+      return photoAction({ ...(await presenceContext(ctx)), cache: ctx.photoCache ?? null }, req.input);
     case "media.status": {
       // Step 10: read-only check for playerctl (MPRIS) and the Spotify app. Nothing is run or installed.
       if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("media.status takes {}");
@@ -794,6 +800,10 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
             return (await devopsClients(ctx, cfg, weekStart, today, refresh ? { refresh } : {}, dv?.items ?? [])).fetch;
           },
           now: ctx.now,
+          team: async (cfg) => {
+            const r = await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).teammates();
+            return r.ok ? r.people : null;
+          },
         },
         action,
         req.input,
@@ -805,6 +815,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "weekplan.add":
     case "weekplan.set_tier":
     case "weekplan.set_blocks":
+    case "weekplan.set_size":
     case "weekplan.reorder":
     case "weekplan.remove":
     case "weekplan.mark_done":

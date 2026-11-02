@@ -1,3 +1,4 @@
+import { aboutHours } from "../plan/fit.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
 // Check-in (step 7): midday, about a minute. For today: each pick's status and focused time, what each block or
@@ -110,8 +111,9 @@ export function CheckIn({ switcher, data, now, onClose, onChanged }: Props) {
       {fit.map((f) => {
         const slot = slots.find((s) => s.half === f.half)!.slot;
         const block = blockClient(slot.focus[0]?.clientKey ?? null, picks.filter((p) => p.half === f.half));
-        const head = f.ended ? "ended" : `${formatDuration(f.leftMinutes) || "no time"} left after meetings`;
-        const verdict = !f.needMinutes ? "nothing planned left" : f.overBy ? `${formatDuration(f.overBy)} more than the time left` : `picks need ${formatDuration(f.needMinutes)}, fits`;
+        // Step 16.4: plain words, whole hours at most ("about an hour over"), never minutes math.
+        const head = f.ended ? "ended" : f.leftMinutes > 0 ? `${aboutHours(f.leftMinutes)} left after meetings` : "no time left after meetings";
+        const verdict = !f.needMinutes ? "nothing planned left" : f.overBy ? (f.overBy < 45 ? "a little more than the time left" : `${aboutHours(f.overBy)} more than the time left`) : "fits";
         return (
           <section key={f.half} className={`co-section ci-slot${f.overBy ? " over" : ""}${f.ended ? " ended" : ""}`} aria-label={HALF_NAMES[f.half]}>
             <h3>
@@ -124,7 +126,7 @@ export function CheckIn({ switcher, data, now, onClose, onChanged }: Props) {
             </h3>
             {f.overBy > 0 && !f.ended && (
               <p className="ci-prompt" role="status">
-                {formatDuration(f.overBy)} more planned than the time left. What should move? Carry over, move, drop or make up one of the picks marked "No longer fits".
+                {f.overBy < 45 ? "A little" : `${aboutHours(f.overBy)[0]!.toUpperCase()}${aboutHours(f.overBy).slice(1)}`} more planned than the time left. What should move? Carry over, move, drop or make up one of the picks marked "No longer fits".
               </p>
             )}
             <ul className="co-picks">

@@ -14,7 +14,7 @@ import { CLOSE_HOW, type CloseHow } from "../plan/types.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
-import { usePresence } from "./Presence.tsx";
+import { Avatar, usePhotos, usePresence } from "./Presence.tsx";
 
 const zoned = (iso: string, tz: string) => (iso.includes("[") ? Temporal.ZonedDateTime.from(iso) : Temporal.Instant.from(iso).toZonedDateTimeISO(tz)).withTimeZone(tz);
 const dayOf = (z: Temporal.ZonedDateTime) => z.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -222,8 +222,12 @@ export function WhoInput({ value, onChange, clientKey, id }: { value: string; on
   // Step 16.3: Cooptimizers' presence as a word on their suggestion (a list can't show the mark).
   const presence = usePresence({ emails: (people?.teammates ?? []).map((x) => x.email) });
   const wordOf = (n: string) => presence.wordFor({ email: people?.teammates.find((x) => x.name === n)?.email ?? null });
+  // Step 16.4: a chosen Cooptimizer shows with their photo and presence mark next to the box.
+  const chosen = people?.teammates.find((x) => x.name.toLowerCase() === value.trim().toLowerCase()) ?? null;
+  const photos = usePhotos({ emails: chosen ? [chosen.email] : [] });
   return (
     <>
+      {chosen && <Avatar name={chosen.name} photo={photos.photoFor(chosen.email)} word={presence.wordFor(chosen)} size={22} />}
       <input value={value} onChange={(e) => onChange(e.target.value)} maxLength={100} placeholder="Name (optional)" list={id} aria-label="Who" />
       <datalist id={id}>
         {ordered.map((n) => {

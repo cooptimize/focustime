@@ -15,7 +15,7 @@ export function defaultBlock(blocks: readonly BlockChoice[], requested?: Half | 
   return (live.find((b) => b.fit !== "over") ?? live[0] ?? blocks[0])?.half ?? null;
 }
 
-type Ref = { clientKey: string; itemId: number; title: string; url: string | null; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; tier?: "must" | "nice"; level?: "feature" | "story"; done?: boolean };
+type Ref = { clientKey: string; itemId: number; title: string; url: string | null; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; tier?: "must" | "nice"; level?: "feature" | "story"; done?: boolean; parentId?: number | null };
 type FollowLike = { id: number; clientKey: string | null; due: string | null; openedAt: string };
 
 /** One row of "This week's priorities": a story to add, or a feature that opens into its stories. */
@@ -74,9 +74,13 @@ export function addSections<R extends Ref, F extends FollowLike>(i: AddInput<R, 
   const first = i.half === "EVE" ? { musts: [], nice: [], rest: [...(i.work?.items ?? [])] } : weekFirst(i.work, i.week, i.clientKey, i.date, i.half);
   const draftsUnder = (id: number) => i.drafts.filter((d) => d.clientKey === i.clientKey && d.parentItemId === id && d.level === "story" && d.devopsId == null);
   const priorities: PriorityRow<R>[] = [];
+  // Step 16.4: a story whose feature is on the week list shows in that feature's row, not again on its own.
+  const listedFeatures = new Set(i.week.filter((w) => w.clientKey === i.clientKey && (w.level ?? "feature") === "feature").map((w) => w.itemId));
   for (const e of [...first.musts, ...first.nice]) {
     if (i.focus != null && e.feature.itemId !== i.focus) continue;
     if (e.level === "story") {
+      const parent = e.feature.parentId ?? e.item?.parentId ?? null;
+      if (parent !== null && listedFeatures.has(parent)) continue;
       if (e.item && (!isPickable(e.item) || !free(e.item))) continue;
       priorities.push({ ref: e.feature, tier: e.tier, level: "story", item: e.item, stories: [], drafts: [], breakDown: false, allPicked: false, pinnedHere: e.placedHere });
       continue;

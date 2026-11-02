@@ -338,7 +338,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, offDay, tag,
   const featList = feats.length > 0 && (
     <ul className="week-feats" aria-label="Features committed this week">
       {feats.map((f) => (
-        <li key={f.id} title={`Planned for this week: ${f.blocks} block${f.blocks === 1 ? "" : "s"}${f.slots.some((x) => x.date === slot.date && x.half === slot.half) ? ", placed here" : ""}`}>
+        <li key={f.id} title={`Planned for this week${f.level === "story" ? `: a story, ${f.size ?? "M"}` : f.blocks ? `: ${f.blocks} block${f.blocks === 1 ? "" : "s"}` : ""}${f.slots.some((x) => x.date === slot.date && x.half === slot.half) ? ", placed here" : ""}`}>
           <span className="feat-tag">This week:</span>{" "}
           {menuEnv?.planFeature && canPlan ? (
             <button type="button" className="link-btn feat-link" tabIndex={selected ? 0 : -1} onClick={(e) => (e.stopPropagation(), menuEnv.planFeature!(slot.date, slot.half, f.itemId))} onDoubleClick={(e) => e.stopPropagation()} title="Plan this block from that feature">

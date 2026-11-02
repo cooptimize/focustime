@@ -8,6 +8,7 @@ import { workEmail, type IdClaims } from "../sources/oauth/idtoken.ts";
 import { AuthFailure, type ConnectOptions, type ConnectResult, type WriteAccess } from "../sources/oauth/oauth.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import type { PresenceClient } from "../sources/graph/presence.ts";
+import type { PhotoClient } from "../sources/graph/photos.ts";
 import type { ActionResponse } from "./types.ts";
 import type { AuthStatus, Person } from "./account-types.ts";
 
@@ -24,6 +25,8 @@ export type MicrosoftAccount = {
   writeAccess: () => Promise<WriteAccess>;
   /** Step 16.3: Teams presence (my status during focus, teammates' presence) on its own token. Absent: not available here. */
   presence?: PresenceClient;
+  /** Step 16.4: profile photos (ProfilePhoto.Read.All) on their own token. Absent: not available here. */
+  photos?: PhotoClient;
   /** Forgets the refresh token and anything in memory; the calendar cache too. */
   signOut: () => Promise<void>;
 };
@@ -61,7 +64,7 @@ export function rememberIdentity(plan: PlanStore | undefined, c: IdClaims, at: s
 }
 export const storedIdentity = (plan: PlanStore | undefined) => plan?.accountState<StoredIdentity>(IDENTITY_KEY) ?? null;
 
-export type AccountContext = { plan?: PlanStore; account: MicrosoftAccount | null; now: () => string };
+export type AccountContext = { plan?: PlanStore; account: MicrosoftAccount | null; now: () => string; /** Step 16.4: cleared on sign-out. */ clearPhotos?: () => Promise<void> };
 
 export async function authStatus(ctx: AccountContext): Promise<AuthStatus> {
   if (!ctx.account) return { configured: false, state: "signed_out", person: null, message: null };
@@ -88,17 +91,20 @@ export async function accountAction(ctx: AccountContext, action: "auth.status" |
       if (!noInputOr(input, [])) return { ok: false, status: 400, error: "auth.status takes no input" };
       return { ok: true, data: await authStatus(ctx) };
     case "auth.sign_in": {
-      if (!noInputOr(input, ["azure", "teams"])) return { ok: false, status: 400, error: "auth.sign_in takes { azure?, teams? }" };
+      if (!noInputOr(input, ["azure", "teams", "photos"])) return { ok: false, status: 400, error: "auth.sign_in takes { azure?, teams?, photos? }" };
       const azure = (input as { azure?: unknown } | null)?.azure;
       if (azure !== undefined && typeof azure !== "boolean") return { ok: false, status: 400, error: "azure must be true or false" };
       // Step 16.3: Allow Teams status adds the presence scopes (asked for only then; consent stays with the account).
       const teams = (input as { teams?: unknown } | null)?.teams;
       if (teams !== undefined && typeof teams !== "boolean") return { ok: false, status: 400, error: "teams must be true or false" };
+      // Step 16.4: Allow photos adds ProfilePhoto.Read.All (asked for only then; it needs an admin's consent in Entra).
+      const photos = (input as { photos?: unknown } | null)?.photos;
+      if (photos !== undefined && typeof photos !== "boolean") return { ok: false, status: 400, error: "photos must be true or false" };
       if (!ctx.account) return { ok: true, data: { status: "failed", message: "Add outlook.client_id (the Coopilot Desktop app registration) to config first" } };
       const stored = storedIdentity(ctx.plan);
       // Keep calendar changes if this sign-in already had them; prefill the account for an incremental consent.
       const write = (await ctx.account.writeAccess().catch(() => null))?.status === "write";
-      const r = await ctx.account.signIn({ azure: azure ?? true, ...(write ? { write } : {}), ...(teams ? { teams } : {}), ...(stored ? { loginHint: stored.username } : {}) });
+      const r = await ctx.account.signIn({ azure: azure ?? true, ...(write ? { write } : {}), ...(teams ? { teams } : {}), ...(photos ? { photos } : {}), ...(stored ? { loginHint: stored.username } : {}) });
       if (r.status !== "connected") return { ok: true, data: r };
       const c = r.identity ?? (await ctx.account.identity().catch(() => null));
       if (!c) return { ok: true, data: { status: "failed", message: "Signed in, but Microsoft didn't say who you are. Try again" } };
@@ -110,6 +116,8 @@ export async function accountAction(ctx: AccountContext, action: "auth.status" |
       // The local plan stays; so do my VM choice (kept per person) and any schedule change still to put back.
       await ctx.account?.signOut();
       ctx.plan?.setAccountState(IDENTITY_KEY, null);
+      // Step 16.4: the photo cache goes with the sign-in.
+      await ctx.clearPhotos?.().catch(() => {});
       return { ok: true, data: { status: "signed_out" } };
     }
   }

@@ -66,7 +66,7 @@ export type PlanDayState = {
   /** The latest resume note per client on or before this date (step 7). */
   resumeNotes: Record<string, { clientKey: string; date: IsoDate; note: string }>;
   /** Features committed to this date's week (step 8): their stories are offered first in their client's blocks. */
-  weekFeatures: { clientKey: string; itemId: number; title: string; url: string | null; slots: WeekFeature["slots"]; level: WeekFeature["level"]; tier: WeekFeature["tier"]; blocks: number; position: number | null; doneAt: ZonedStamp | null }[];
+  weekFeatures: { clientKey: string; itemId: number; title: string; url: string | null; slots: WeekFeature["slots"]; level: WeekFeature["level"]; tier: WeekFeature["tier"]; blocks: number | null; size?: WeekFeature["size"]; parentId?: number | null; position: number | null; doneAt: ZonedStamp | null }[];
 };
 
 /** Committed plans for the days of a week, for the checklist on the week view. */
@@ -90,8 +90,12 @@ export type WeekFeature = {
   /** Step 11: a feature or a story on the client's week list, a must or a nice to have. */
   level: "feature" | "story";
   tier: "must" | "nice";
-  /** The client's week share it needs, in blocks (half steps). */
-  blocks: number;
+  /** Step 16.4: a feature's whole blocks, or null to take what its stories add up to; null for a story. */
+  blocks: number | null;
+  /** Step 16.4: a story's size (S, M or L); null for a feature. */
+  size: "S" | "M" | "L" | null;
+  /** Step 16.4: a story's parent feature in DevOps, when known (nests it under that feature on the list). */
+  parentId: number | null;
   /** Pins: specific blocks (morning or afternoon) it is tied to, in date order. Optional. */
   slots: { date: IsoDate; half: "AM" | "PM" }[];
   /** A local done mark (DevOps state and done picks count too; see plan/weeklist.ts). */

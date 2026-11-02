@@ -314,7 +314,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
       why: [...(assigned.has(i.id) ? ["assigned" as const] : []), ...(parents.has(i.id) ? ["parent" as const] : []), ...(above.has(i.id) && !assigned.has(i.id) && !parents.has(i.id) ? ["above" as const] : [])],
       areaPath: i.areaPath ?? null,
       iterationPath: i.iterationPath ?? null,
-      children: kids.filter((k) => k.parentId === i.id).map((k) => ({ id: k.id, title: k.title, type: k.type, state: k.state, stateCategory: k.stateCategory, open: !DONE_CATEGORIES.has(k.stateCategory), level: k.level, order: k.order, url: k.url, assignedTo: k.assignedTo ?? null, mine: !!k.assignedToMe, changedAt: k.changedAt, size: k.size ?? null })),
+      children: kids.filter((k) => k.parentId === i.id).map((k) => ({ id: k.id, title: k.title, type: k.type, state: k.state, stateCategory: k.stateCategory, open: !DONE_CATEGORIES.has(k.stateCategory), level: k.level, order: k.order, url: k.url, assignedTo: k.assignedTo ?? null, assignedToEmail: k.assignedToEmail ?? null, mine: !!k.assignedToMe, changedAt: k.changedAt, size: k.size ?? null })),
     }));
     return { items, targetFields, sizeField, acceptanceField };
   }

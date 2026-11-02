@@ -5,7 +5,8 @@ import { chmodSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { carryOver } from "../plan/rules.ts";
-import { DEFAULT_BLOCKS, validBlocks, type ItemLevel, type Tier } from "../plan/weeklist.ts";
+import { type ItemLevel, type Tier } from "../plan/weeklist.ts";
+import { DEFAULT_STORY_SIZE, validStorySize, validWholeBlocks, type StorySize } from "../plan/estimate.ts";
 import type { Capture, DayPlan, DraftStory, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
@@ -498,6 +499,37 @@ export const MIGRATIONS: readonly string[] = [
      result TEXT NOT NULL CHECK (result IN ('done', 'failed')),
      message TEXT
    );`,
+  // 19: step 16.4 (D334), simple estimating: features take whole blocks (1 to 20) or none (NULL: what their stories add
+  // up to); stories take a size (S, M or L) instead of blocks; a parent feature id so a story nests under its feature.
+  // Rebuilt with ids kept (pins point at them). Half-block features round up; a story of half a block becomes M, more L.
+  `${FK_OFF}
+   CREATE TABLE week_features_v19 (
+     id INTEGER PRIMARY KEY,
+     week_start TEXT NOT NULL CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     client_key TEXT NOT NULL,
+     item_id INTEGER NOT NULL,
+     level TEXT NOT NULL DEFAULT 'feature' CHECK (level IN ('feature','story')),
+     tier TEXT NOT NULL DEFAULT 'must' CHECK (tier IN ('must','nice')),
+     title TEXT NOT NULL,
+     item_type TEXT,
+     url TEXT,
+     blocks INTEGER CHECK (blocks IS NULL OR (blocks BETWEEN 1 AND 20 AND level = 'feature')),
+     size TEXT CHECK (size IS NULL OR (size IN ('S','M','L') AND level = 'story')),
+     parent_id INTEGER,
+     position INTEGER,
+     done_at TEXT,
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL,
+     UNIQUE (week_start, client_key, item_id)
+   );
+   INSERT INTO week_features_v19 (id, week_start, client_key, item_id, level, tier, title, item_type, url, blocks, size, parent_id, position, done_at, created_at, updated_at)
+     SELECT id, week_start, client_key, item_id, level, tier, title, item_type, url,
+       CASE WHEN level = 'feature' THEN MIN(20, MAX(1, CASE WHEN blocks = CAST(blocks AS INTEGER) THEN CAST(blocks AS INTEGER) ELSE CAST(blocks AS INTEGER) + 1 END)) ELSE NULL END,
+       CASE WHEN level = 'story' THEN (CASE WHEN blocks <= 0.5 THEN 'M' ELSE 'L' END) ELSE NULL END,
+       NULL, position, done_at, created_at, updated_at
+     FROM week_features ORDER BY id;
+   DROP TABLE week_features;
+   ALTER TABLE week_features_v19 RENAME TO week_features;`,
 ];
 
 import type { AzureWriteEntry, TeamsStatusEntry } from "../actions/account-types.ts";
@@ -566,7 +598,7 @@ export type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
 import type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
 
 export type NewWeekFeature = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; blocks: number };
-export type NewWeekItem = Omit<NewWeekFeature, "blocks"> & { level: ItemLevel; tier?: Tier; blocks?: number };
+export type NewWeekItem = Omit<NewWeekFeature, "blocks"> & { level: ItemLevel; tier?: Tier; /** Features: whole blocks, or null for what its stories add up to. */ blocks?: number | null; size?: StorySize; parentId?: number | null };
 
 /** Most blocks one feature can take in a week (ten half-days, a little headroom). */
 export const MAX_FEATURE_BLOCKS = 20;
@@ -1361,7 +1393,9 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         title: r.title as string,
         itemType: (r.item_type as string | null) ?? null,
         url: (r.url as string | null) ?? null,
-        blocks: r.blocks as number,
+        blocks: (r.blocks as number | null) ?? null,
+        size: (r.size as StorySize | null) ?? null,
+        parentId: (r.parent_id as number | null) ?? null,
         slots: slots.filter((x) => x.feature_id === r.id).map((x) => ({ date: x.date as string, half: x.half as "AM" | "PM" })),
         doneAt: (r.done_at as string | null) ?? null,
         position: (r.position as number | null) ?? null,
@@ -1385,22 +1419,28 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
      * tier and blocks when given. New items are musts with the level's default blocks unless told otherwise.
      */
     addWeekItem(f: NewWeekItem): WeekFeature {
-      if (f.blocks !== undefined && !validBlocks(f.blocks)) throw new PlanError(`blocks must be 0.5 to ${MAX_FEATURE_BLOCKS} in half steps`);
+      if (f.level === "feature" && f.blocks != null && !validWholeBlocks(f.blocks)) throw new PlanError(`blocks must be a whole number from 1 to ${MAX_FEATURE_BLOCKS}`);
+      if (f.level === "story" && f.size !== undefined && !validStorySize(f.size)) throw new PlanError("size must be S, M or L");
       return tx(() => {
         const at = stamp();
-        const row = db.prepare("SELECT id, tier FROM week_features WHERE week_start = ? AND client_key = ? AND item_id = ?").get(f.weekStart, f.clientKey, f.itemId) as Row | undefined;
+        const row = db.prepare("SELECT id, tier, level FROM week_features WHERE week_start = ? AND client_key = ? AND item_id = ?").get(f.weekStart, f.clientKey, f.itemId) as Row | undefined;
         touchWeek(f.weekStart, at);
         let id: number;
+        const blocks = f.level === "feature" ? (f.blocks ?? null) : null;
+        const size = f.level === "story" ? (f.size ?? DEFAULT_STORY_SIZE) : null;
         if (row) {
           id = row.id as number;
           db.prepare("UPDATE week_features SET title = ?, item_type = ?, url = ?, level = ?, updated_at = ? WHERE id = ?").run(f.title, f.itemType, f.url, f.level, at, id);
-          if (f.blocks !== undefined) db.prepare("UPDATE week_features SET blocks = ? WHERE id = ?").run(f.blocks, id);
+          if (row.level !== f.level) db.prepare("UPDATE week_features SET blocks = ?, size = ? WHERE id = ?").run(blocks, size, id);
+          else if (f.level === "feature" && f.blocks !== undefined) db.prepare("UPDATE week_features SET blocks = ? WHERE id = ?").run(blocks, id);
+          else if (f.level === "story" && f.size !== undefined) db.prepare("UPDATE week_features SET size = ? WHERE id = ?").run(size, id);
+          if (f.parentId !== undefined) db.prepare("UPDATE week_features SET parent_id = ? WHERE id = ?").run(f.parentId, id);
           if (f.tier && f.tier !== row.tier) db.prepare("UPDATE week_features SET tier = ?, position = NULL WHERE id = ?").run(f.tier, id);
         } else {
           id = Number(
             db
-              .prepare("INSERT INTO week_features (week_start, client_key, item_id, level, tier, title, item_type, url, blocks, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)")
-              .run(f.weekStart, f.clientKey, f.itemId, f.level, f.tier ?? "must", f.title, f.itemType, f.url, f.blocks ?? DEFAULT_BLOCKS[f.level], at, at).lastInsertRowid,
+              .prepare("INSERT INTO week_features (week_start, client_key, item_id, level, tier, title, item_type, url, blocks, size, parent_id, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)")
+              .run(f.weekStart, f.clientKey, f.itemId, f.level, f.tier ?? "must", f.title, f.itemType, f.url, blocks, size, f.parentId ?? null, at, at).lastInsertRowid,
           );
         }
         return this.weekPlan(f.weekStart).features.find((x) => x.id === id)!;
@@ -1411,10 +1451,28 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       const w = weekItemChange(id, (at) => db.prepare("UPDATE week_features SET tier = ?, position = CASE WHEN tier = ? THEN position ELSE NULL END, updated_at = ? WHERE id = ?").run(tier, tier, at, id));
       return this.weekPlan(w).features.find((x) => x.id === id)!;
     },
-    setWeekItemBlocks(id: number, blocks: number): WeekFeature {
-      if (!validBlocks(blocks)) throw new PlanError(`blocks must be 0.5 to ${MAX_FEATURE_BLOCKS} in half steps`);
+    /** A feature's whole blocks, or null to take what its stories add up to (step 16.4). Stories have a size. */
+    setWeekItemBlocks(id: number, blocks: number | null): WeekFeature {
+      if (blocks !== null && !validWholeBlocks(blocks)) throw new PlanError(`blocks must be a whole number from 1 to ${MAX_FEATURE_BLOCKS}`);
+      const row = db.prepare("SELECT level FROM week_features WHERE id = ?").get(id) as Row | undefined;
+      if (row && row.level !== "feature") throw new PlanError("A story has a size (S, M or L), not blocks");
       const w = weekItemChange(id, (at) => db.prepare("UPDATE week_features SET blocks = ?, updated_at = ? WHERE id = ?").run(blocks, at, id));
       return this.weekPlan(w).features.find((x) => x.id === id)!;
+    },
+    /** A story's size on the week list (step 16.4). */
+    setWeekItemSize(id: number, size: StorySize): WeekFeature {
+      if (!validStorySize(size)) throw new PlanError("size must be S, M or L");
+      const row = db.prepare("SELECT level FROM week_features WHERE id = ?").get(id) as Row | undefined;
+      if (row && row.level !== "story") throw new PlanError("A feature has blocks, not a size");
+      const w = weekItemChange(id, (at) => db.prepare("UPDATE week_features SET size = ?, updated_at = ? WHERE id = ?").run(size, at, id));
+      return this.weekPlan(w).features.find((x) => x.id === id)!;
+    },
+    /** Parent features as DevOps says now, for stories on a week's lists (no change to updated_at: not a plan edit). */
+    setWeekItemParents(weekStart: IsoDate, parents: readonly { clientKey: string; itemId: number; parentId: number | null }[]): void {
+      const up = db.prepare("UPDATE week_features SET parent_id = ? WHERE week_start = ? AND client_key = ? AND item_id = ? AND level = 'story' AND parent_id IS NOT ?");
+      tx(() => {
+        for (const p of parents) up.run(p.parentId, weekStart, p.clientKey, p.itemId, p.parentId);
+      });
     },
     /** A local done mark (on) or taking it back (off). */
     markWeekItemDone(id: number, on: boolean): WeekFeature {

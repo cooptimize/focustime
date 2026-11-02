@@ -2,6 +2,7 @@
 // the step 8 portfolio read; the only thing it writes is a local daily snapshot of done and open counts per item, from
 // a live read. Nothing external is written here: the row actions use the existing named actions.
 import type { AppConfig } from "../config/schema.ts";
+import { matchCooptimizer, type Teammate } from "../plan/people.ts";
 import { roadmapSignal, ownedItems, storyCounts, trendRate, TREND_DAYS } from "../plan/roadmap.ts";
 import { needsBreakdown, needsFeatures } from "../plan/weekplan.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
@@ -20,6 +21,8 @@ export type RoadmapContext = {
   /** Followed clients with DevOps this week (Cooptimize always), as week.load fetches them. */
   clients: (cfg: AppConfig, weekStart: IsoDate, refresh: boolean) => Promise<ClientRef[]>;
   now: () => string;
+  /** Step 16.4: Cooptimizers (Dataverse), to match DevOps people by email; null when they can't be read. */
+  team?: (cfg: AppConfig) => Promise<Teammate[] | null>;
 };
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
@@ -44,6 +47,10 @@ export async function roadmapAction(ctx: RoadmapContext, action: RoadmapAction, 
     plan.recordSnapshots(today, ownedItems(p).map((i) => ({ clientKey: p.clientKey, itemId: i.id, ...pick(storyCounts(i, now, false)) })));
   }
   const snaps = plan.snapshotsFrom(Temporal.PlainDate.from(today).subtract({ days: TREND_DAYS }).toString());
+  // Step 16.4: people match Cooptimizers by email (name only without one); only a Cooptimizer's email goes to the view.
+  const team = ctx.team ? await ctx.team(cfg).catch(() => null) : null;
+  const people = (list: { name: string; count: number; email: string | null }[]) =>
+    list.map((x) => ({ name: x.name, count: x.count, email: x.name === "You" ? null : (team ? (matchCooptimizer(team, x)?.email.toLowerCase() ?? null) : null) }));
   const onWeek = new Set(plan.weekPlan(mondayOf(today)).features.map((f) => `${f.clientKey}:${f.itemId}`));
   const out: RoadmapClient[] = portfolios.map((p) => ({
     clientKey: p.clientKey,
@@ -61,7 +68,7 @@ export async function roadmapAction(ctx: RoadmapContext, action: RoadmapAction, 
       if (!i.targetDate) flags.push("no_target_date");
       return {
         id: i.id, title: i.title, type: i.type, tier: i.tier, state: i.state, url: i.url, targetDate: i.targetDate,
-        ...c, trend: t.points,
+        ...c, people: people(c.people), trend: t.points,
         signal: roadmapSignal({ open: c.open, done: c.done, perWeek: t.perWeek, days: t.days, targetDate: i.targetDate, today, noun: i.tier === "epic" ? "features" : "stories" }),
         flags,
         onWeek: onWeek.has(`${p.clientKey}:${i.id}`),

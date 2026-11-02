@@ -2,18 +2,24 @@
 // (committed blocks against that client's available focus blocks), the readiness ladder, the Coop brief and the week
 // nudges. No I/O; the server and UI hand in the week, DevOps results and the plan.
 import { freeMinutes } from "../week/free.ts";
+import { budgetWords, estimate, plannedBlocks, type StorySize } from "./estimate.ts";
 import type { ClientPortfolio, IsoDate, PortfolioItem, Slot, Week, WorkItem } from "../week/types.ts";
 
-/** The week plan's features as these rules need them (the store's WeekFeature fits). */
+/** The week plan's items as these rules need them (the store's WeekFeature fits). */
 export type FeatureLike = {
   clientKey: string;
   itemId: number;
   title: string;
-  blocks: number;
+  /** Step 16.4: whole blocks for a feature, or null to take what its stories add up to. Stories: unused. */
+  blocks: number | null;
   slots: readonly { date: IsoDate; half: "AM" | "PM" }[];
   /** Step 11: must or nice to have (missing: must, as step 8 stored them), and feature or story (missing: feature). */
   tier?: "must" | "nice";
   level?: "feature" | "story";
+  /** Step 16.4: a story's size and parent feature. */
+  size?: StorySize | null;
+  parentId?: number | null;
+  done?: unknown;
 };
 const isMust = (f: FeatureLike) => (f.tier ?? "must") === "must";
 const isFeature = (f: FeatureLike) => (f.level ?? "feature") === "feature";
@@ -31,19 +37,24 @@ export function clientBlocks(week: Week, clientKey: string): Block[] {
   return week.days.flatMap((d) => [d.am, d.pm].filter((s) => s.focus[0]?.clientKey === clientKey).map((s) => blockOf(s, false)));
 }
 
-export type Verdict = "none" | "fits" | "tight" | "over";
+/** A block that counts toward the client's budget, or why it doesn't ("Mon PM: mostly meetings"). */
+export type BudgetBlock = Block & { counts: boolean; reason: string | null };
 
-export type ClientFit = {
+export type ClientBudget = {
   clientKey: string;
   clientName: string;
-  blocks: Block[];
-  /** Blocks' free share (free over working minutes), less unpaid borrowed time, to one decimal. */
-  availableBlocks: number;
-  /** Step 11: the blocks of its musts (nice-to-haves don't count against fit). */
-  committedBlocks: number;
-  niceBlocks: number;
+  blocks: BudgetBlock[];
+  /** Whole blocks: its half-days less days off, mostly-meetings half-days and whole blocks of borrowed time. */
+  budget: number;
+  /** Whole blocks of unpaid borrowed time taken off the budget. */
+  borrowedBlocks: number;
   borrowedMinutes: number;
-  verdict: Verdict;
+  /** Whole blocks of its musts (nice to haves don't count against the budget). */
+  planned: number;
+  nicePlanned: number;
+  status: "none" | "all" | "free" | "over";
+  /** "All 3 planned", "1 block free", "4 planned, 3 available". */
+  text: string;
 };
 
 /**
@@ -69,44 +80,53 @@ export function withCurrentTitles<T extends { clientKey: string; itemId: number;
   });
 }
 
-/** Less than half a block to spare is tight. */
-export const TIGHT_BLOCKS = 0.5;
+/** A half-day with less free time than this after meetings doesn't count toward a budget (step 16.4). */
+export const MIN_BLOCK_FREE_MINUTES = 120;
 /** A block's length when a client has none to average (unpaid borrowed time is still owed). */
 const NOMINAL_BLOCK_MINUTES = 240;
+const halfWord = (b: Pick<Block, "date" | "half">) => `${Temporal.PlainDate.from(b.date).toLocaleString("en-US", { weekday: "short" })} ${b.half}`;
 
-const round1 = (n: number) => Math.round(n * 10) / 10;
+/** Whether a block counts toward a budget, and why not. */
+export function blockCounts(b: Block): { counts: boolean; reason: string | null } {
+  if (b.pto) return { counts: false, reason: `${halfWord(b)}: day off` };
+  if (b.freeMinutes < MIN_BLOCK_FREE_MINUTES) return { counts: false, reason: `${halfWord(b)}: mostly meetings` };
+  return { counts: true, reason: null };
+}
 
 /**
- * Fit per client: committed blocks (the sum of its features' blocks) against its available focus blocks next week,
- * after PTO, meetings and unavailable time (all already in each slot's free time) and the client's unpaid borrowed
- * time. Open half-days a feature is placed on count as that client's blocks. No sizing or forecasting.
+ * The budget per client (step 16.4): a whole number of blocks. Its half-days that week (and Open half-days an item is
+ * pinned to), less days off and half-days with under 2 hours free after meetings (each says why), less whole blocks of
+ * unpaid borrowed time. Planned: whole blocks of its musts, features as envelopes (plan/estimate.ts).
  */
-export function weekFit(week: Week, features: readonly FeatureLike[], o: { borrowedMinutes: Readonly<Record<string, number>> }): ClientFit[] {
+export function weekBudget(week: Week, items: readonly FeatureLike[], o: { borrowedMinutes: Readonly<Record<string, number>> }): ClientBudget[] {
   const names = new Map<string, string>();
   for (const d of week.days) for (const s of [d.am, d.pm]) if (s.focus[0] && !names.has(s.focus[0].clientKey)) names.set(s.focus[0].clientKey, s.focus[0].clientName);
-  for (const f of features) if (!names.has(f.clientKey)) names.set(f.clientKey, f.clientKey);
+  for (const f of items) if (!names.has(f.clientKey)) names.set(f.clientKey, f.clientKey);
   const slotAt = (date: IsoDate, half: "AM" | "PM") => {
     const d = week.days.find((x) => x.date === date);
     return d ? (half === "AM" ? d.am : d.pm) : null;
   };
+  const est = estimate(items.map((i) => ({ ...i, level: i.level ?? "feature", tier: i.tier ?? "must" })));
   return [...names].map(([clientKey, clientName]) => {
-    const mine = features.filter((f) => f.clientKey === clientKey);
+    const mine = items.filter((f) => f.clientKey === clientKey);
     const placedOpen = new Map<string, Block>();
     for (const f of mine)
       for (const p of f.slots) {
         const s = slotAt(p.date, p.half);
         if (s?.open && !placedOpen.has(`${p.date}${p.half}`)) placedOpen.set(`${p.date}${p.half}`, blockOf(s, true));
       }
-    const blocks = [...clientBlocks(week, clientKey), ...placedOpen.values()].sort((a, b) => a.date.localeCompare(b.date) || a.half.localeCompare(b.half));
-    const share = blocks.reduce((n, b) => n + (b.totalMinutes > 0 ? Math.min(1, b.freeMinutes / b.totalMinutes) : 0), 0);
+    const blocks = [...clientBlocks(week, clientKey), ...placedOpen.values()]
+      .sort((a, b) => a.date.localeCompare(b.date) || a.half.localeCompare(b.half))
+      .map((b) => ({ ...b, ...blockCounts(b) }));
     const working = blocks.filter((b) => b.totalMinutes > 0);
     const avg = working.length ? working.reduce((n, b) => n + b.totalMinutes, 0) / working.length : NOMINAL_BLOCK_MINUTES;
     const borrowed = o.borrowedMinutes[clientKey] ?? 0;
-    const availableBlocks = Math.max(0, round1(share - borrowed / avg));
-    const committedBlocks = mine.filter(isMust).reduce((n, f) => n + f.blocks, 0);
-    const niceBlocks = mine.filter((f) => !isMust(f)).reduce((n, f) => n + f.blocks, 0);
-    const verdict: Verdict = committedBlocks === 0 ? "none" : committedBlocks > availableBlocks + 1e-9 ? "over" : committedBlocks > availableBlocks - TIGHT_BLOCKS ? "tight" : "fits";
-    return { clientKey, clientName, blocks, availableBlocks, committedBlocks, niceBlocks, borrowedMinutes: borrowed, verdict };
+    const counted = blocks.filter((b) => b.counts).length;
+    const borrowedBlocks = Math.min(counted, Math.floor(borrowed / avg));
+    const budget = counted - borrowedBlocks;
+    const planned = plannedBlocks(est, clientKey, "must");
+    const w = budgetWords(budget, planned);
+    return { clientKey, clientName, blocks, budget, borrowedBlocks, borrowedMinutes: borrowed, planned, nicePlanned: plannedBlocks(est, clientKey, "nice"), status: w.kind, text: w.text };
   });
 }
 
@@ -247,7 +267,7 @@ export function briefMarkdown(o: { clientName: string; item: PortfolioItem; desc
     "- Title",
     "- Description",
     "- Acceptance criteria (a short checklist)",
-    "- Size: S (about 1 hour), M (about 2 hours) or L (about a half-day block)",
+    "- Size: S (about an hour), M (a couple of hours) or L (about a whole block)",
     "",
     "Keep each story small enough for one focus block; split anything bigger than L.",
     "",

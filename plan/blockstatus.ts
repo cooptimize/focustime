@@ -19,10 +19,3 @@ export function blockStatus(fit: Fit | null, risks: readonly Risk[]): BlockStatu
   if (w.kind === "room") return { kind: "fits", label: w.text, detail: null };
   return { kind: "none", label: "", detail: null };
 }
-
-/** "45 min", "1 h", "1.5 h": to the half hour above an hour, plain minutes below. */
-export function roundHours(minutes: number): string {
-  if (minutes < 60) return `${Math.max(5, Math.round(minutes / 5) * 5)} min`;
-  const h = Math.round(minutes / 30) / 2;
-  return `${h} h`;
-}

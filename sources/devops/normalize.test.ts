@@ -271,7 +271,9 @@ describe("Plan the week: portfolio tiers and target dates (step 8)", () => {
       ctx,
     );
     expect(items.map((i) => [i.id, i.assignedTo, i.assignedToMe, i.targetDate ?? null])).toEqual([[1, "Dana Ruiz", false, "2026-11-20"], [2, "Avery S", true, null], [3, null, false, null]]);
-    expect(JSON.stringify(items)).not.toContain("@o.example");
+    // Step 16.4: the email is kept only in assignedToEmail, to match Cooptimizers; never in the display name.
+    expect(items.map((i) => i.assignedToEmail ?? null)).toEqual(["dana@o.example", "avery@o.example", null]);
+    expect(JSON.stringify(items.map(({ assignedToEmail: _e, ...rest }) => rest))).not.toContain("@o.example");
   });
 });
 

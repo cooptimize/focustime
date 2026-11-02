@@ -3,7 +3,7 @@ import { buildWeek } from "../week/build.ts";
 import { weekConfig } from "../config/defaults.ts";
 import type { ClientPortfolio, FocusPattern, PortfolioItem, WorkItem } from "../week/types.ts";
 import type { WeekFeature } from "../store/plan-store.ts";
-import { withCurrentTitles, borrowedForWeek, briefMarkdown, clientBlocks, readiness, weekFit, weekNudges, type NudgeTimes } from "./weekplan.ts";
+import { withCurrentTitles, borrowedForWeek, briefMarkdown, clientBlocks, readiness, weekBudget, weekNudges, type NudgeTimes } from "./weekplan.ts";
 
 const W = "2026-11-09";
 const pattern = (clientKey: string, days: FocusPattern["days"]): FocusPattern => ({ id: clientKey, clientKey, clientName: clientKey, startDate: "2026-01-01", endDate: null, active: true, days });
@@ -12,8 +12,8 @@ const patterns = [pattern("T&S", { Mon: "PM", Tue: "AllDay", Wed: "PM" }), patte
 const week = (over: Partial<Parameters<typeof buildWeek>[0]> = {}) => buildWeek({ weekStart: W, patterns, events: [], config: weekConfig, ...over });
 
 const feature = (over: Partial<WeekFeature>): WeekFeature => ({
-  id: 1, weekStart: W, clientKey: "T&S", itemId: 210, title: "Export", itemType: "Feature", url: null, blocks: 2, slots: [], position: 1, level: "feature", tier: "must", doneAt: null, createdAt: "", updatedAt: "", ...over,
-});
+  id: 1, weekStart: W, clientKey: "T&S", itemId: 210, title: "Export", itemType: "Feature", url: null, blocks: 2, size: null, parentId: null, slots: [], position: 1, level: "feature", tier: "must", doneAt: null, createdAt: "", updatedAt: "", ...over,
+}) as WeekFeature;
 const pItem = (over: Partial<PortfolioItem>): PortfolioItem => ({
   id: 210, title: "Export", type: "Feature", state: "Active", stateCategory: "InProgress", tier: "feature", order: 1, parentId: null, url: "https://dev.azure.com/o/p/_workitems/edit/210",
   targetDate: "2026-11-20", assignedTo: "Dana Ruiz", mine: false, why: ["parent"], children: [], ...over,
@@ -36,34 +36,46 @@ describe("a client's blocks next week (step 8)", () => {
   });
 });
 
-describe("fit per client: committed blocks against available focus blocks", () => {
-  it("fits, tight or over, after meetings, PTO, unavailable time and unpaid borrowed time", () => {
+describe("the budget per client (step 16.4): whole blocks", () => {
+  const ev = (start: string, end: string) => ({ id: start, source: "outlook" as const, title: "Busy", start, end, allDay: false, showAs: "busy" as const, isPersonal: false, responseStatus: "accepted" as const });
+  it("is the client's half-days, a whole number, and says how the musts compare", () => {
     const w = week();
-    const all = clientBlocks(w, "T&S").length;
-    expect(all).toBe(4);
-    expect(weekFit(w, [feature({ blocks: 2 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")).toMatchObject({ availableBlocks: 4, committedBlocks: 2, verdict: "fits" });
-    expect(weekFit(w, [feature({ blocks: 4 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.verdict).toBe("tight");
-    expect(weekFit(w, [feature({ blocks: 5 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.verdict).toBe("over");
-    // A PTO day takes its block away.
-    const pto = week({ pto: { "2026-11-10": { date: "2026-11-10", titles: ["Off"], entries: [] } as never } });
-    expect(weekFit(pto, [feature({ blocks: 3 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")).toMatchObject({ availableBlocks: 2, verdict: "over" });
-    // Unpaid borrowed time for the client is owed out of its blocks: 4h is about one block.
-    const owed = weekFit(w, [feature({ blocks: 3 })], { borrowedMinutes: { "T&S": 240 } }).find((f) => f.clientKey === "T&S")!;
-    expect(owed.borrowedMinutes).toBe(240);
-    expect(owed.availableBlocks).toBeCloseTo(3, 0);
-    expect(owed.verdict).not.toBe("fits");
+    const b = weekBudget(w, [feature({ blocks: 2 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!;
+    expect(b).toMatchObject({ budget: 4, planned: 2, status: "free", text: "2 blocks free" });
+    expect(weekBudget(w, [feature({ blocks: 4 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.text).toBe("All 4 planned");
+    expect(weekBudget(w, [feature({ blocks: 5 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.text).toBe("5 planned, 4 available");
   });
-  it("counts an Open half-day a feature is placed on as that client's block", () => {
+  it("leaves out days off and half-days with under 2 hours free, and says why", () => {
+    const w = week({
+      pto: { "2026-11-10": { date: "2026-11-10", titles: ["Off"], entries: [] } as never },
+      // Mon PM mostly meetings: 13:00 to 16:00 busy.
+      events: [ev("2026-11-09T13:00:00-05:00", "2026-11-09T16:00:00-05:00")],
+    });
+    const b = weekBudget(w, [feature({ blocks: 1 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!;
+    expect(b.budget).toBe(1);
+    expect(b.blocks.filter((x) => !x.counts).map((x) => x.reason)).toEqual(["Mon PM: mostly meetings", "Tue AM: day off", "Tue PM: day off"]);
+    expect(Number.isInteger(b.budget)).toBe(true);
+  });
+  it("a meeting that leaves 2 hours or more still counts the half-day", () => {
+    const w = week({ events: [ev("2026-11-09T13:00:00-05:00", "2026-11-09T14:00:00-05:00")] });
+    expect(weekBudget(w, [], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.budget).toBe(4);
+  });
+  it("unpaid borrowed time takes whole blocks only", () => {
     const w = week();
-    const thuAm = w.days.find((d) => d.date === "2026-11-12")!.am;
-    expect(thuAm.open).toBe(true);
-    const fit = weekFit(w, [feature({ blocks: 5, slots: [{ date: "2026-11-12", half: "AM" }] })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!;
-    expect(fit.availableBlocks).toBe(5);
-    expect(fit.verdict).toBe("tight");
+    expect(weekBudget(w, [], { borrowedMinutes: { "T&S": 120 } }).find((f) => f.clientKey === "T&S")).toMatchObject({ budget: 4, borrowedBlocks: 0 });
+    expect(weekBudget(w, [], { borrowedMinutes: { "T&S": 600 } }).find((f) => f.clientKey === "T&S")).toMatchObject({ budget: 2, borrowedBlocks: 2 });
   });
-  it("shows every client with blocks or commitments; nothing committed says so", () => {
-    const fit = weekFit(week(), [], { borrowedMinutes: {} });
-    expect(fit.map((f) => [f.clientKey, f.verdict])).toEqual([["internal", "none"], ["T&S", "none"], ["Adatum", "none"]]);
+  it("counts an Open half-day an item is pinned to as that client's block", () => {
+    const w = week();
+    expect(w.days.find((d) => d.date === "2026-11-12")!.am.open).toBe(true);
+    expect(weekBudget(w, [feature({ blocks: 5, slots: [{ date: "2026-11-12", half: "AM" }] })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.text).toBe("All 5 planned");
+  });
+  it("stories under a listed feature fill it and never add to the total", () => {
+    const items = [feature({ itemId: 210, blocks: 2 }), feature({ id: 2, itemId: 211, level: "story", blocks: null, size: "L", parentId: 210 }), feature({ id: 3, itemId: 212, level: "story", blocks: null, size: "L", parentId: 210 }), feature({ id: 4, itemId: 213, level: "story", blocks: null, size: "M", parentId: null })];
+    expect(weekBudget(week(), items, { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.planned).toBe(3);
+  });
+  it("shows every client with blocks or commitments", () => {
+    expect(weekBudget(week(), [], { borrowedMinutes: {} }).map((f) => [f.clientKey, f.status])).toEqual([["internal", "none"], ["T&S", "none"], ["Adatum", "none"]]);
   });
 });
 
@@ -149,13 +161,10 @@ describe("readiness ladder", () => {
   });
 });
 
-describe("fit per client counts musts only (step 11)", () => {
-  it("nice-to-haves are listed but don't count against the client's free blocks", () => {
-    const fit = weekFit(week(), [feature({ itemId: 1, blocks: 2 }), { ...feature({ itemId: 2, blocks: 3 }), tier: "nice" }], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!;
-    expect(fit).toMatchObject({ committedBlocks: 2, niceBlocks: 3 });
-    expect(fit.verdict).not.toBe("none");
-    const onlyNice = weekFit(week(), [{ ...feature({ itemId: 2, blocks: 3 }), tier: "nice" }], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!;
-    expect(onlyNice.verdict).toBe("none");
+describe("the budget counts musts only (step 11)", () => {
+  it("nice-to-haves are listed but don't count against the client's blocks", () => {
+    const b = weekBudget(week(), [feature({ itemId: 1, blocks: 2 }), { ...feature({ itemId: 2, blocks: 3 }), tier: "nice" }], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!;
+    expect(b).toMatchObject({ planned: 2, nicePlanned: 3 });
   });
 });
 
@@ -191,7 +200,7 @@ describe("Coop brief", () => {
     expect(md).toContain("- #212 User Story: Child 212 (Active)");
     expect(md).toMatch(/propose user stories/i);
     expect(md).toContain("Acceptance criteria");
-    expect(md).toContain("S (about 1 hour), M (about 2 hours) or L (about a half-day block)");
+    expect(md).toContain("S (about an hour), M (a couple of hours) or L (about a whole block)");
   });
   it("carries only DevOps fields: no assignees, nothing from the plan", () => {
     const md = briefMarkdown({ clientName: "T&S", item, description: "" });

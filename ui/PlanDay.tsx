@@ -11,7 +11,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { blockClient, draftOffer, isPickable } from "../plan/rules.ts";
 import { agendaOf, offerAfterTimebox, planMyDay, smallerSize, type DayPlacement, type DidntFit, type Unplaced } from "../plan/agenda.ts";
 import { addSections, defaultBlock, doneAction, type PriorityRow } from "../plan/addpane.ts";
-import { dayTotals, fitWords, planFit, planMinutes, trimCandidates } from "../plan/fit.ts";
+import { aboutHours, dayTotals, fitWords, planFit, planMinutes, trimCandidates } from "../plan/fit.ts";
 import { freeMinutes } from "../week/free.ts";
 import { weekList } from "../plan/weeklist.ts";
 import { dayLabel } from "../plan/days.ts";
@@ -366,7 +366,7 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
       {(meetings > 0 || personal > 0 || slot.freeGaps.length > 0) && !slot.off && (
         <div className="pd2-cal">
           <button type="button" className="link-btn" aria-expanded={cal} onClick={(e) => (e.stopPropagation(), setCal((c) => !c))}>
-            {[meetings ? `${meetings} meeting${meetings === 1 ? "" : "s"}` : "", personal ? `${personal} personal` : "", `${formatDuration(freeMinutes(slot))} free`].filter(Boolean).join(" · ")}
+            {[meetings ? `${meetings} meeting${meetings === 1 ? "" : "s"}` : "", personal ? `${personal} personal` : "", `${aboutHours(freeMinutes(slot))} free`].filter(Boolean).join(" · ")}
           </button>
           {cal && <Agenda slot={slot} now={now} tz={tz} clientName={name} pickRow={() => null} />}
         </div>

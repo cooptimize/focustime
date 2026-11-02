@@ -17,6 +17,8 @@ import { presenceContext, vmContext } from "../actions/dispatch.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
 import type { TeamsStatusState } from "../plan/presence.ts";
 import { createPresenceClient, type PresenceClient } from "../sources/graph/presence.ts";
+import { createPhotoClient, type PhotoClient } from "../sources/graph/photos.ts";
+import { createPhotoCache } from "../cache/photos.ts";
 import { restoreTick, vmAction, type VmStatus } from "../actions/vm-actions.ts";
 import { CHECKIN_DONE_MARK } from "../actions/closeout-actions.ts";
 import { createAzureClient } from "../sources/azure/client.ts";
@@ -103,14 +105,19 @@ const makeOutlook = (cfg: OutlookConfig, timeZone: string) => memo("outlook", cf
  * app's user, the calendar and the Azure token all come from it.
  */
 const presenceClients = new WeakMap<object, PresenceClient>();
+const photoClients = new WeakMap<object, PhotoClient>();
 const accountFor = (cfg: AppConfig): MicrosoftAccount | null => {
   if (!cfg.outlook) return null;
   const src = makeOutlook(cfg.outlook, cfg.week.hours.timeZone);
   // Step 16.3: Teams presence on its own token from the same sign-in (one client per sign-in).
   let presence = presenceClients.get(src);
   if (!presence) presenceClients.set(src, (presence = createPresenceClient({ fetch, token: () => src.auth.accessToken("presence"), invalidate: () => src.auth.invalidate(), log })));
+  // Step 16.4: profile photos on their own token (ProfilePhoto.Read.All).
+  let photos = photoClients.get(src);
+  if (!photos) photoClients.set(src, (photos = createPhotoClient({ fetch, token: () => src.auth.accessToken("photo"), invalidate: () => src.auth.invalidate(), log })));
   return {
     presence,
+    photos,
     signIn: (o) => src.connect(o),
     identity: () => src.auth.identity(),
     armToken: () => src.auth.accessToken("arm"),
@@ -220,6 +227,7 @@ const liveCtx: ActionContext = {
     writePats: { get: (k) => getWritePat(k), set: (k, v) => setWritePat(k, v), clear: (k) => clearWritePat(k) },
     devopsWriter: createDevOpsWriter({ fetch, log }),
     account: accountFor,
+    photoCache: createPhotoCache(cacheRoot()),
     azure: azureFor,
     // Browser .desktop entries and Local State only; profile names are all that is kept.
     host: createHostBrowsers({

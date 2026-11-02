@@ -190,6 +190,8 @@ function item(k: DemoClientKey, r: Raw, order: number): WorkItem {
     id, title, type, state, stateCategory: category(state), level: isPortfolio(type) ? "portfolio" : "story", ...(isPortfolio(type) ? { tier: type === "Epic" ? ("epic" as const) : ("feature" as const) } : {}),
     order, parentId: parent, changedAt: "2026-10-30T15:00:00Z", url: urlOf(k, id), tags: [], blocked: false, changedByMe: false,
     assignedTo: who === ME ? "You" : who, assignedToMe: who === ME, targetDate: target ?? null,
+    // Step 16.4: the fictional assignee's email (DevOps uniqueName), matched to the demo team by email.
+    assignedToEmail: who === ME ? "you@example.com" : who ? (DEMO_PEOPLE.find((p) => p.name === who)?.email ?? null) : null,
   };
 }
 
@@ -206,7 +208,7 @@ export function demoWork(k: DemoClientKey, fetchedAt: string): ClientWork {
 export function demoPortfolio(k: DemoClientKey, fetchedAt: string): ClientPortfolio {
   const all = ITEMS[k].map((r, n) => item(k, r, n + 1));
   const child = (c: WorkItem): PortfolioChild => ({
-    id: c.id, title: c.title, type: c.type, state: c.state, stateCategory: c.stateCategory, open: c.stateCategory !== "Completed", level: c.level, order: c.order, url: c.url, assignedTo: c.assignedTo ?? null, mine: !!c.assignedToMe,
+    id: c.id, title: c.title, type: c.type, state: c.state, stateCategory: c.stateCategory, open: c.stateCategory !== "Completed", level: c.level, order: c.order, url: c.url, assignedTo: c.assignedTo ?? null, assignedToEmail: c.assignedToEmail ?? null, mine: !!c.assignedToMe,
     changedAt: QUIET.has(c.id) ? "2026-10-09T15:00:00Z" : c.changedAt, size: UNSIZED.has(c.id) ? null : 3,
   });
   const items: PortfolioItem[] = all

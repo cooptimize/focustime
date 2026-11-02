@@ -2381,3 +2381,34 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .focus-deep { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; color: var(--text-muted); }
 .focus-teams { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .set-teams-access { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+
+/* Step 16.4: a person's photo (or initials) with their presence mark on the corner. */
+.avatar { --av: 24px; position: relative; display: inline-grid; place-items: center; width: var(--av); height: var(--av); flex: none; border-radius: 50%; background: var(--raised); border: 1px solid var(--border); color: var(--text-muted); vertical-align: middle; margin-right: 6px; box-sizing: border-box; }
+.avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.avatar.has-photo { border-color: transparent; }
+.avatar-initials { font-size: calc(var(--av) * 0.4); font-weight: 700; letter-spacing: 0.02em; line-height: 1; }
+.avatar .pres { position: absolute; right: -2px; bottom: -2px; margin: 0; width: calc(max(10px, var(--av) * 0.38)); height: calc(max(10px, var(--av) * 0.38)); box-shadow: 0 0 0 2px var(--surface); vertical-align: baseline; }
+.avatar .pres-available::after { left: calc(50% - 1.5px); top: calc(50% - 3.5px); }
+.avatar .pres-dnd::after { top: calc(50% - 1px); }
+.avatar .pres-away::after { left: calc(50% - 1px); top: calc(50% - 3px); }
+.person-chip.with-avatar { padding: 0; border: none; background: none; width: auto; height: auto; }
+.person-chip.with-avatar .avatar { margin: 0; }
+.person-chip.with-avatar:hover .avatar, .person-chip.with-avatar:focus-visible .avatar { box-shadow: 0 0 0 2px var(--accent); }
+.dl-person { white-space: nowrap; }
+.dl-people .avatar { margin-right: 4px; }
+
+/* Step 16.4: Plan the week in whole blocks: the budget, the stepper, stories in their feature, fill words. */
+.pw-budget { font-weight: 500; color: var(--text-muted); margin-left: 4px; }
+.pw-why { display: block; font-size: 12px; font-weight: 400; margin-top: 2px; }
+.pw-fit2.all { color: var(--ok); font-weight: 600; }
+.pw-stepper { display: inline-flex; align-items: center; gap: 2px; }
+.pw-stepper .mini { min-width: 22px; padding: 0 4px; }
+.pw-size { min-width: 28px; text-align: center; font-weight: 600; }
+.pw-parent { font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+.pw-fill { flex-basis: 100%; display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; padding-left: 2px; }
+.pw-progress-blocks { color: var(--text-muted); font-weight: 600; }
+.pw-raise { color: var(--watch); font-weight: 600; }
+.pw-nested { flex-basis: 100%; list-style: none; margin: 4px 0 0; padding: 0 0 0 16px; border-left: 2px solid color-mix(in srgb, var(--c, var(--accent)) 40%, transparent); }
+.pw-nested > .pw-row { padding: 4px 0; border: none; background: none; }
+.help-people label { display: inline-flex; align-items: center; gap: 2px; }
+.wd-people li { display: flex; align-items: center; gap: 2px; }

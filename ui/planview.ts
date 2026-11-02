@@ -53,7 +53,7 @@ export function resumeSlots(days: readonly { date: IsoDate; am: Slot; pm: Slot }
   }
   return out;
 }
-type FeatureOnWeek = { clientKey: string; itemId: number; title: string; blocks: number; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; tier?: "must" | "nice"; doneAt?: string | null };
+type FeatureOnWeek = { clientKey: string; itemId: number; title: string; blocks: number | null; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; tier?: "must" | "nice"; doneAt?: string | null };
 
 /**
  * Week items to show on a block (step 11): those pinned to it, then (on a client's own block) that client's musts not

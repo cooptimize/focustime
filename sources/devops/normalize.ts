@@ -277,7 +277,7 @@ export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { 
       tags,
       blocked: isBlocked(state, tags),
       changedByMe: !!ctx.me && identityEmail(f["System.ChangedBy"]) === ctx.me.toLowerCase(),
-      ...(ctx.people ? { assignedTo: identityName(f["System.AssignedTo"]), assignedToMe: !!ctx.me && identityEmail(f["System.AssignedTo"]) === ctx.me.toLowerCase() } : {}),
+      ...(ctx.people ? { assignedTo: identityName(f["System.AssignedTo"]), assignedToEmail: identityEmail(f["System.AssignedTo"]), assignedToMe: !!ctx.me && identityEmail(f["System.AssignedTo"]) === ctx.me.toLowerCase() } : {}),
       ...(ctx.targetFields?.[type] ? { targetDate: dateOnly(f[ctx.targetFields[type]!], ctx.timeZone ?? "UTC") } : {}),
       ...(ctx.paths ? { areaPath: typeof f["System.AreaPath"] === "string" ? (f["System.AreaPath"] as string) : null, iterationPath: typeof f["System.IterationPath"] === "string" ? (f["System.IterationPath"] as string) : null } : {}),
       ...(ctx.sizeField ? { size: typeof f[ctx.sizeField] === "number" && Number.isFinite(f[ctx.sizeField]) ? (f[ctx.sizeField] as number) : null } : {}),

@@ -48,7 +48,7 @@ describe("demo mode (D272)", () => {
     expect(Object.values(w.week.days).flatMap((d) => [d.am, d.pm]).flatMap((s) => s.focus.map((f) => f.clientName))).toEqual(expect.arrayContaining(["Cooptimize", "Northwind", "Harbor", "Atlas"]));
     expect(w.week.days.find((d) => d.weekday === "Thu")?.pto).not.toBeNull();
     expect((w.devops ?? []).map((c) => c.clientKey).sort()).toEqual(["Atlas", "Cooptimize", "Harbor", "Northwind"]);
-    expect(w.weekFeatures.filter((f) => f.tier === "must").length).toBe(5);
+    expect(w.weekFeatures.filter((f) => f.tier === "must").length).toBe(11);
     expect(w.followUps.length).toBe(4);
     expect(fetchSpy).not.toHaveBeenCalled();
   });

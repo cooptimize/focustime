@@ -16,7 +16,7 @@ import { call } from "./api.ts";
 import { clientColor } from "./labels.ts";
 import type { TimeboxTarget } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
-import { PresenceDot, usePresence } from "./Presence.tsx";
+import { Avatar, usePhotos, usePresence } from "./Presence.tsx";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -753,13 +753,14 @@ export function TimeboxList({ slot }: { slot: Slot }): ReactNode {
 /** A help invite's people in its preview, with their Teams presence (step 16.3). */
 function InvitePeople({ op, attendees }: { op: string; attendees: { name: string; email: string }[] }) {
   const presence = usePresence({ emails: attendees.map((a) => a.email) });
+  const photos = usePhotos({ emails: attendees.map((a) => a.email) });
   return (
     <div className="wd-people" role="note">
       <strong>{op === "delete" ? "These people get a cancellation:" : "These people get an invite by email:"}</strong>
       <ul>
         {attendees.map((a) => (
           <li key={a.email}>
-            <PresenceDot word={presence.wordFor(a)} />
+            <Avatar name={a.name} photo={photos.photoFor(a.email)} word={presence.wordFor(a)} />
             {a.name} <span className="muted">{a.email}</span>
           </li>
         ))}

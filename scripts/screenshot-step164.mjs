@@ -1,0 +1,98 @@
+// @ts-nocheck
+// Step 16.4 UI inspection in demo mode (--demo turns it on first, so no real data shows): Plan the week in whole blocks
+// (budget per client, steppers, stories in their feature, "needs more stories", "Raise to 2?", "Add the feature"), the
+// top bar avatar, Needs help from… and Roadmap people with generated avatars and presence, Plan the day's and
+// Check-in's plain words, and Settings > You (Photos). Only demo actions; the launch token is never printed.
+// Usage: node scripts/screenshot-step164.mjs <outDir> <light|dark> [--demo] [--runtime <dir>] [--sizes 1920x1080,3840x2160] [--now ISO]
+import { chromium } from "playwright-core";
+import { mkdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const arg = (k) => (process.argv.includes(k) ? process.argv[process.argv.indexOf(k) + 1] : "");
+const runtime = arg("--runtime") || process.env.XDG_RUNTIME_DIR || tmpdir();
+const launch = JSON.parse(readFileSync(join(runtime, "coopilot", "launch.json"), "utf8")).url;
+const url = arg("--now") ? `${launch}${launch.includes("?") ? "&" : "?"}now=${encodeURIComponent(arg("--now"))}` : launch;
+const out = process.argv[2] ?? "screenshots";
+const scheme = process.argv[3] === "light" ? "light" : "dark";
+const demo = process.argv.includes("--demo");
+const sizes = arg("--sizes") ? arg("--sizes").split(",").map((s) => s.split("x").map(Number)) : [[1920, 1080], [3840, 2160]];
+mkdirSync(out, { recursive: true });
+const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--disable-gpu"] });
+const errors = [];
+const post = (page, action, input) =>
+  page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input]);
+try {
+  for (const [w, h] of sizes) {
+    const page = await browser.newPage({ viewport: { width: w, height: h }, colorScheme: scheme, deviceScaleFactor: 1 });
+    page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(`${w} ${scheme}: ${e.message}`));
+    await page.goto(url);
+    await page.waitForSelector(".topbar", { timeout: 60000 });
+    if (demo) {
+      await post(page, "demo.set", { on: false });
+      await post(page, "demo.set", { on: true });
+      await post(page, "ui.set_theme", { theme: scheme === "light" ? "cooptimize-light" : "cooptimize-dark" });
+    }
+    await page.evaluate(() => {
+      localStorage.setItem("coopilot.hint.flow", "dismissed");
+      localStorage.setItem("coopilot.hint.picktime", "1");
+    });
+    await page.reload();
+    await page.waitForSelector(demo ? ".demo-tag" : ".topbar", { timeout: 30000 });
+    const shot = (name) => page.screenshot({ path: `${out}/${w}-${scheme}-${name}.png` });
+    const go = async (hash, ready) => {
+      await page.evaluate((x) => (location.hash = x), hash);
+      await page.waitForSelector(ready, { timeout: 30000 });
+      await page.waitForTimeout(900);
+    };
+
+    // Plan the week (this week has the demo's lists).
+    await go("#/week/plan/2026-11-02", ".planweek .done-btn");
+    await page.locator(".pw-client").first().waitFor({ timeout: 20000 });
+    await page.waitForTimeout(800);
+    await shot("planweek");
+    for (const name of ["Northwind", "Harbor", "Atlas"]) {
+      const sec = page.locator(`.pw-client[aria-label="${name}"]`);
+      if (await sec.count()) {
+        await sec.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(300);
+        await sec.screenshot({ path: `${out}/${w}-${scheme}-planweek-${name.toLowerCase()}.png` });
+      }
+    }
+
+    // Needs help from… with avatars and presence.
+    await page.locator(".pw-row button.more").first().click();
+    await page.getByRole("menuitem", { name: /Needs help from/ }).click();
+    await page.locator(".help-people .avatar").first().waitFor({ timeout: 15000 });
+    await page.waitForTimeout(800);
+    await shot("help-avatars");
+    await page.getByRole("dialog", { name: /Needs help from/ }).getByRole("button", { name: "Cancel" }).click();
+
+    // Roadmap people.
+    await go("#/roadmap", ".roadmap .mode-switch");
+    await page.locator(".dl-person .avatar").first().waitFor({ timeout: 20000 }).catch(() => {});
+    await page.waitForTimeout(1200);
+    await shot("roadmap-avatars");
+
+    // Today with the top bar avatar; Plan the day; Check-in.
+    await go("#/today", ".today-view .mode-switch");
+    await page.waitForTimeout(800);
+    await shot("today");
+    await page.locator(".topbar .person-chip").screenshot({ path: `${out}/${w}-${scheme}-person-chip.png` });
+    await go("#/today/plan", ".pd2-status");
+    await page.waitForTimeout(800);
+    await shot("planday");
+    await go("#/today/checkin", ".today-view, main");
+    await page.waitForTimeout(1200);
+    await shot("checkin");
+
+    // Settings > You: Photos.
+    await go("#/settings/you", ".set-photos-access");
+    await page.waitForTimeout(800);
+    await shot("settings-you");
+    await page.close();
+  }
+} finally {
+  await browser.close();
+}
+console.log(errors.length ? `page errors:\n${errors.join("\n")}` : "no page errors");

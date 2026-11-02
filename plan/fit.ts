@@ -33,14 +33,26 @@ export function hm(minutes: number): string {
   return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`;
 }
 
-/** The fit in a few calm words. Never red: over is amber with "About 1h over". */
+/**
+ * Time in plain words (step 16.4): "under an hour", "about an hour", "about 3 hours". Whole hours only, never "1h 15m"
+ * or a fraction.
+ */
+export function aboutHours(minutes: number): string {
+  if (minutes < 45) return "under an hour";
+  if (minutes < 90) return "about an hour";
+  return `about ${Math.round(minutes / 60)} hours`;
+}
+
+/** The fit in a few calm words. Never red: over is amber with "About an hour over". */
 export function fitWords(f: Fit | null): FitWords {
   if (!f || f.kind === "empty") return { kind: "none", text: "", tone: "neutral" };
   if (f.kind === "over") {
     if (f.by <= OVER_GRACE) return { kind: "fits", text: "Fits", tone: "neutral" };
-    return { kind: "over", text: `About ${hm(Math.max(15, Math.round(f.by / 15) * 15))} over`, tone: "watch" };
+    if (f.by < 45) return { kind: "over", text: "A little over", tone: "watch" };
+    const w = aboutHours(f.by);
+    return { kind: "over", text: `${w[0]!.toUpperCase()}${w.slice(1)} over`, tone: "watch" };
   }
-  if (f.spare >= ROOM_FROM) return { kind: "room", text: `Room for about ${hm(Math.floor(f.spare / 15) * 15)} more`, tone: "neutral" };
+  if (f.spare >= 45) return { kind: "room", text: `Room for ${aboutHours(f.spare)} more`, tone: "neutral" };
   return { kind: "fits", text: "Fits", tone: "neutral" };
 }
 
@@ -66,20 +78,10 @@ export function trimCandidates<P extends PickLike>(picks: readonly P[], overBy: 
   return out;
 }
 
-/** Plan the day's status line: "7h of work · 6h 15m free". */
+/** Plan the day's status line in plain words: "About 7 hours of work · about 6 hours free". */
 export function dayTotals(blocks: readonly { planned: number; free: number }[]): string {
   const work = blocks.reduce((s, b) => s + b.planned, 0);
   const free = blocks.reduce((s, b) => s + b.free, 0);
-  return work ? `${hm(work)} of work · ${hm(free)} free` : `Nothing planned yet · ${hm(free)} free`;
-}
-
-const halves = (n: number) => Math.round(n * 2) / 2;
-const blocksText = (n: number) => (n === 0.5 ? "half a block" : `${n} block${n === 1 ? "" : "s"}`);
-/** Plan the week's fit per client in the same calm words (D266): musts' blocks against the client's free blocks. */
-export function weekFitWords(f: { committedBlocks: number; availableBlocks: number; verdict: string } | undefined): FitWords {
-  if (!f || f.verdict === "none" || f.committedBlocks === 0) return { kind: "none", text: "No musts yet", tone: "neutral" };
-  const diff = f.availableBlocks - f.committedBlocks;
-  if (diff < -0.25) return { kind: "over", text: `About ${blocksText(Math.max(0.5, halves(-diff)))} over`, tone: "watch" };
-  if (diff >= 0.5) return { kind: "room", text: `Room for about ${blocksText(halves(diff))} more`, tone: "neutral" };
-  return { kind: "fits", text: "Fits", tone: "neutral" };
+  const cap = (t: string) => `${t[0]!.toUpperCase()}${t.slice(1)}`;
+  return work ? `${cap(aboutHours(work))} of work · ${aboutHours(free)} free` : `Nothing planned yet · ${aboutHours(free)} free`;
 }

@@ -958,6 +958,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // Step 16.3: deep focus switches the running session; Teams status lives in Settings > Focus; presence shows where Cooptimizers are listed.
     case "timer.deep": return env.timer?.kind === "focus" ? { run: () => env.runTimer("timer.deep", { on: !env.timer!.deep }) } : { next: () => ({ title: "Start deep focus", items: [{ id: "deep", label: "Deep focus", hint: `${env.planning.focusMinutes} min · Teams: Do not disturb`, action: "timer.start", run: () => env.runTimer("timer.start", { deep: true }) }] }) };
     case "presence.status": return { run: () => env.openSettings("focus") };
+    case "people.photos": return { disabled: "Shown wherever you and Cooptimizers appear" };
     case "presence.people": return { disabled: "Shown next to Cooptimizers in Needs help from…, Who and Roadmap" };
     case "presence.log": return { run: () => env.openSettings("data") };
     case "playlist.open": return { run: () => env.openSettings("focus") };
@@ -1022,6 +1023,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "weekplan.add":
     case "weekplan.set_tier":
     case "weekplan.set_blocks":
+    case "weekplan.set_size":
     case "weekplan.reorder":
     case "weekplan.remove":
     case "weekplan.mark_done":
@@ -1164,7 +1166,11 @@ export type WeekItemFacts = {
   past: boolean;
   /** How it is done: "local" (my own mark) can be undone; DevOps or a done pick can't from here. */
   done: "local" | "other" | null;
+  /** Step 16.4: a feature's whole blocks (shown: its count or what its stories add up to); a story's size. */
   blocks: number;
+  size?: "S" | "M" | "L" | null;
+  /** A story under a listed feature: it takes the feature's tier (no tier choice of its own). */
+  nested?: boolean;
   /** Where it can be pinned, and where it is. */
   places: { date: IsoDate; half: "AM" | "PM"; label: string }[];
   pinned: { date: IsoDate; half: "AM" | "PM" }[];
@@ -1181,6 +1187,7 @@ export type WeekItemOps = {
   tier: (to: "must" | "nice") => void;
   pin: (date: IsoDate, half: "AM" | "PM", on: boolean) => void;
   blocks: (n: number) => void;
+  size?: (s: "S" | "M" | "L") => void;
   done: (on: boolean) => void;
   help: () => void;
   targetDate: () => void;
@@ -1190,9 +1197,14 @@ export type WeekItemOps = {
   remove: () => void;
 };
 
-/** Block counts offered for a week item: half steps up to five. */
-export const BLOCK_CHOICES = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5] as const;
+/** Block counts offered for a feature: whole blocks up to ten (step 16.4). */
+export const BLOCK_CHOICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 export const blocksText = (n: number) => `${n} block${n === 1 ? "" : "s"}`;
+export const SIZE_WORDS = { S: "S · about an hour", M: "M · a couple of hours", L: "L · about a whole block" } as const;
+
+export function storySizeStep(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
+  return { title: `Size of "${f.title}"`, items: (["S", "M", "L"] as const).map((z) => ({ id: `s${z}`, label: SIZE_WORDS[z], checked: (f.size ?? "M") === z, action: "weekplan.set_size", run: () => ops.size?.(z) })) };
+}
 
 export function blocksStep(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
   return { title: `Blocks for "${f.title}"`, items: BLOCK_CHOICES.map((n) => ({ id: `b${n}`, label: blocksText(n), checked: f.blocks === n, action: "weekplan.set_blocks", run: () => ops.blocks(n) })) };
@@ -1209,8 +1221,10 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
     items: [
       { id: "up", label: "Move up", action: "weekplan.reorder", ...(f.past ? closed : f.first ? { disabled: "Already first" } : {}), run: () => ops.move(-1) },
       { id: "down", label: "Move down", action: "weekplan.reorder", ...(f.past ? closed : f.last ? { disabled: "Already last" } : {}), run: () => ops.move(1) },
-      { id: "tier", label: other === "nice" ? "Make it a nice to have" : "Make it a must", action: "weekplan.set_tier", ...closed, run: () => ops.tier(other) },
-      { id: "blocks", label: "Blocks", hint: blocksText(f.blocks), action: "weekplan.set_blocks", ...closed, next: () => blocksStep(f, ops) },
+      { id: "tier", label: other === "nice" ? "Make it a nice to have" : "Make it a must", action: "weekplan.set_tier", ...(f.past ? closed : f.nested ? { disabled: "Stories take their feature's tier" } : {}), run: () => ops.tier(other) },
+      f.level === "story"
+        ? { id: "size", label: "Size", hint: f.size ?? "M", action: "weekplan.set_size", ...closed, next: () => storySizeStep(f, ops) }
+        : { id: "blocks", label: "Blocks", hint: blocksText(f.blocks), action: "weekplan.set_blocks", ...closed, next: () => blocksStep(f, ops) },
       {
         id: "pin",
         label: "Pin to a block",

@@ -13,10 +13,10 @@ import { roadmapRowMenu, type MenuStep } from "./menu.ts";
 import { MenuCtx } from "./Menus.tsx";
 import { openWorkItem, WorkLink } from "./WorkLink.tsx";
 import { createContext } from "react";
-import { PresenceDot, usePresence } from "./Presence.tsx";
+import { Avatar, usePhotos, usePresence } from "./Presence.tsx";
 
 /** Step 16.3: presence for the people on the Roadmap (by display name: DevOps gives names only), read once for the view. */
-const PresenceCtx = createContext<(name: string) => import("../plan/presence.ts").PresenceWord | null>(() => null);
+const PresenceCtx = createContext<(p: { name: string; email: string | null }) => { word: import("../plan/presence.ts").PresenceWord | null; photo: string | null }>(() => ({ word: null, photo: null }));
 
 const SIGNAL: Record<NonNullable<RoadmapRow["signal"]["level"]>, string> = { on_track: "On track", watch: "Watch", at_risk: "At risk" };
 const FLAG: Record<RoadmapRow["flags"][number], string> = { needs_breakdown: "Needs stories", needs_features: "Needs features", no_target_date: "" };
@@ -75,8 +75,11 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
 
   const clients = state?.clients ?? [];
   const total = clients.reduce((n, c) => n + c.rows.length, 0);
-  const presence = usePresence({ names: clients.flatMap((c) => c.rows.flatMap((r) => r.people.map((p) => p.name))) });
-  const wordOf = useCallback((name: string) => presence.wordFor({ name }), [presence]);
+  // Step 16.4: people are matched to Cooptimizers on the server, by email (name only without one); only a match has one.
+  const emails = clients.flatMap((c) => c.rows.flatMap((r) => r.people.map((p) => p.email).filter((e): e is string => !!e)));
+  const presence = usePresence({ emails, me: true });
+  const photos = usePhotos({ emails, me: true });
+  const wordOf = useCallback((p: { name: string; email: string | null }) => ({ word: p.name === "You" ? presence.me : p.email ? presence.wordFor({ email: p.email }) : null, photo: p.name === "You" ? photos.me : photos.photoFor(p.email) }), [presence, photos]);
   return (
     <PresenceCtx.Provider value={wordOf}>
     <main className="roadmap" aria-label="Roadmap">
@@ -186,9 +189,9 @@ function Row({ k, r, ops }: { k: string; r: RoadmapRow; ops: Ops }) {
           {r.people.length > 0 && (
             <span className="dl-people" title={`Who has open ${noun[1]}`}>
               {r.people.map((p, i) => (
-                <span key={p.name}>
+                <span key={p.email ?? p.name} className="dl-person">
                   {i > 0 && " · "}
-                  <PresenceDot word={wordOf(p.name)} />
+                  <Avatar name={p.name} photo={wordOf(p).photo} word={wordOf(p).word} size={20} />
                   {p.name} {p.count}
                 </span>
               ))}

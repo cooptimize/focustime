@@ -27,9 +27,9 @@ describe("tiers and order", () => {
     expect([40, 41, 7, 5, 9].map((id) => r("Adatum", id))).toEqual([0, 1, 1_000_000, 1_000_001, 1_000_002]);
     expect(r("Adatum", 1)).toBeNull();
   });
-  it("blocks are half-block steps from 0.5 to 20", () => {
-    expect([0.5, 1, 2.5, 20].every(validBlocks)).toBe(true);
-    expect([0, 0.3, 21, Number.NaN, "1"].some(validBlocks)).toBe(false);
+  it("blocks are whole numbers from 1 to 20 (step 16.4)", () => {
+    expect([1, 2, 20].every(validBlocks)).toBe(true);
+    expect([0, 0.5, 2.5, 21, Number.NaN, "1"].some(validBlocks)).toBe(false);
   });
 });
 
@@ -63,15 +63,16 @@ describe("done and progress against the current plan", () => {
 
 describe("the midweek question", () => {
   const blk = (date: string, half: "AM" | "PM", free = 210) => ({ start: `${date}T${half === "AM" ? "09:00" : "12:30"}:00-05:00`, end: `${date}T${half === "AM" ? "12:30" : "17:00"}:00-05:00`, freeMinutes: free, totalMinutes: half === "AM" ? 210 : 270, pto: false });
-  it("counts the free share of blocks still ahead, part of the one under way", () => {
+  it("counts whole blocks still ahead: not days off, not mostly meetings, the one under way while half is left", () => {
     const blocks = [blk("2026-11-09", "AM"), blk("2026-11-10", "PM", 270), blk("2026-11-11", "AM", 105), { ...blk("2026-11-12", "AM"), pto: true }];
-    expect(blocksLeft(blocks, "2026-11-08T12:00:00Z")).toBe(2.5);
-    expect(blocksLeft(blocks, "2026-11-09T15:45:00Z")).toBe(2); // Mon 10:45, half the morning gone
+    expect(blocksLeft(blocks, "2026-11-08T12:00:00Z")).toBe(2);
+    expect(blocksLeft(blocks, "2026-11-09T15:45:00Z")).toBe(2); // Mon 10:45, half the morning still left
+    expect(blocksLeft(blocks, "2026-11-09T16:30:00Z")).toBe(1); // Mon 11:30, under half left
     expect(blocksLeft(blocks, "2026-11-12T12:00:00Z")).toBe(0);
   });
-  it("asks, never alarms", () => {
+  it("asks, never alarms, in whole blocks", () => {
     expect(onTrack({ musts: 4, left: 3, leftBlocks: 3 }, 2)).toEqual({ kind: "at_risk", text: "3 musts left, 2 blocks left. Still realistic?" });
-    expect(onTrack({ musts: 4, left: 1, leftBlocks: 1 }, 1.5)).toEqual({ kind: "on_track", text: "1 must left, 1.5 blocks left. Looks doable." });
+    expect(onTrack({ musts: 4, left: 1, leftBlocks: 1 }, 1)).toEqual({ kind: "on_track", text: "1 must left, 1 block left. Looks doable." });
     expect(onTrack({ musts: 2, left: 2, leftBlocks: 1 }, 0)).toEqual({ kind: "at_risk", text: "2 musts left, no blocks left. Still realistic?" });
     expect(onTrack({ musts: 2, left: 0, leftBlocks: 0 }, 1).kind).toBe("done");
     expect(onTrack({ musts: 0, left: 0, leftBlocks: 0 }, 3).kind).toBe("none");
@@ -107,10 +108,10 @@ describe("weekList (every view's order, done and progress)", () => {
   });
 });
 
-describe("on-track wording", () => {
-  it("compares at the half block it shows: 0.8 blocks reads as 1 block and doesn't ask for 1 block of musts", () => {
-    expect(onTrack({ musts: 1, left: 1, leftBlocks: 1 }, 0.8)).toEqual({ kind: "on_track", text: "1 must left, 1 block left. Looks doable." });
-    expect(onTrack({ musts: 2, left: 2, leftBlocks: 2 }, 0.6)).toEqual({ kind: "at_risk", text: "2 musts left, half a block left. Still realistic?" });
+describe("progress with features as envelopes (step 16.4)", () => {
+  it("a story under a listed feature is part of it: not its own must, its done share counts toward the feature", () => {
+    const list = [item({ itemId: 1, blocks: 2 }), item({ itemId: 2, level: "story", blocks: null, size: "L", parentId: 1, doneAt: "x" }), item({ itemId: 3, level: "story", blocks: null, size: "M", parentId: null })];
+    expect(progress(list, (i) => !!i.doneAt)).toEqual([{ clientKey: "Adatum", musts: 2, done: 0, left: 2, leftBlocks: 2, nice: 0 }]);
   });
 });
 

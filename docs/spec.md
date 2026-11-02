@@ -670,3 +670,34 @@ Contract changes:
   - Teammates' presence: one batched read for 6 Cooptimizers (`presence_people` 200, count 6), all with a word. Only counts were printed.
 - **Backlog (not built):** a registered internal Teams delivery thread per client, with preview-and-confirm posting; never post to external client threads.
 - **Rollback:** revert the step 16.3 commit, rebuild, restart. Migration 18 only adds a table, which older code ignores (a newer schema number refuses to open, so restore the pre-step backup `plan.db.bak-*` if rolling back the code). The `[focus]` keys `teams_status` and `plain_focus_status` would then be unknown fields: remove them. A status set by a session expires on its own within the session length plus 5 minutes.
+
+
+## 43. Step 16.4: profile photos, reliable person matching, simple estimating (authorized Nov 2)
+
+**Contract changes (explained before building):**
+- Week plan items: `blocks` is now a whole number from 1 to 20 for features, or empty (the feature takes the blocks its stories add up to). Stories no longer have blocks; they have a size, `S`, `M` or `L`, and a `parentId` (their DevOps parent). `weekplan.set_blocks` takes whole numbers only; `weekplan.add` takes `size` for stories and refuses blocks for them; new `weekplan.set_size`. `weekplan.set_tier` on a story nested in its feature is refused ("Stories take their feature's tier").
+- `weekFit` (fractional room) is replaced by `weekBudget` (whole blocks per client, the half-days that don't count with a reason, planned and status words).
+- New read action `people.photos {emails?, me?}`: data URLs for me and the Cooptimizers on screen. `presence.people` takes `me` for my own word (my avatar's corner mark).
+- `auth.sign_in {photos}` asks for ProfilePhoto.Read.All on its own token kind (`photo`).
+- Roadmap people carry the matched Cooptimizer's email (for photo and presence) and nothing more.
+- No new external writes.
+
+**Estimating (two units, whole numbers only):**
+- Block: one half-day of client focus time. Features get a whole number of blocks.
+- Story sizes: S about an hour, M a couple of hours, L about a whole block. Internally a block holds about four S, two M or one L (`plan/estimate.ts`); that math is never shown.
+- Budget per client per week: the client's half-days (plus Open half-days pinned to it), minus PTO days, minus half-days with under 2 hours free after meetings ("Mon PM: mostly meetings"), minus whole blocks of borrowed time paid back this week. Always a whole number. Header: "Northwind · 3 blocks" then "All 3 planned", "1 block free" or "4 planned, 3 available"; musts count, nice to haves don't.
+- Features are envelopes: a story whose parent feature is on the list nests under it (adding the feature later moves it under), fills the feature's blocks and never adds to the client total. Unfilled: "needs more stories". Overfilled: "Stories need more than 2 blocks. Raise to 3?" with one click. No block count: the stories' total, rounded up. A story without its feature on the list stays its own row, "Under <feature> · Add the feature", and counts in whole blocks (rounded up per client and tier). Nested stories take their feature's tier.
+- Progress: done stories count toward their feature ("1 of 2 blocks done", whole blocks only).
+- Everywhere else: no decimals or fractions. Plan the day keeps real minutes internally and shows "about 2 hours free", "Fits", "A little over", "About an hour over". Check-in and Today use the same words. Roadmap's rate reads "2 closed per week" or "1 closed every 3 weeks".
+- Migration 19 (backup `plan.db.bak-v18-*` first): feature blocks rounded up to whole blocks; a story of half a block or less became M, larger ones L. On my plan store: 9 features already whole (none changed), 3 stories of half a block became M. Parents filled in from the next DevOps read.
+
+**Photos and matching:**
+- Graph docs checked Nov 2 (profilePhoto get, v1.0): `GET /me/photos/{size}/$value` and `/users/{id}/photos/{size}/$value`, sizes include 48x48 and 96x96; 404 when there is no photo. ProfilePhoto.Read.All (delegated) needs admin consent; it is requested incrementally with "Allow photos" in Settings > You.
+- 96 px photos for my avatar (top bar, with my presence mark on its corner) and every listed Cooptimizer (Needs help from…, follow-up Who, Roadmap people, invite previews). No photo, no permission or no sign-in: initials.
+- Cache: `~/.cache/coopilot/photos`, file names are hashes, 7 days, older ones shown while read again in the background, a missing photo remembered too; cleared on sign-out. Only people on screen (at most 60 per read), only Cooptimizers with an Entra object ID. Logged with status only. Demo mode: generated avatars, no Graph calls.
+- Person matching: DevOps `uniqueName` (kept as `assignedToEmail`, for matching only) against the Cooptimizer's email first; the display name only when there is no email and exactly one Cooptimizer has it.
+- Q92 accepted as is (D343).
+
+**Verification:** unit and browser tests (1567), including a scan of seven views for decimals and fractions. Real next week (Nov 9, counts only): 4 clients, whole budgets 1, 2, 1 and 3; planned 0, 1, 2 and 3; two with blocks free, one over, one all planned; 2 of 3 stories nested; my photo read. Demo screenshots at 1920 and 3840, dark and light (`docs/demo/164-*.png`).
+
+**Rollback:** revert the step 16.4 commit, rebuild, restart, and restore `plan.db.bak-v18-*` (schema 19 refuses to open in older code). Delete `~/.cache/coopilot/photos`.

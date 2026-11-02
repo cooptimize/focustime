@@ -21,7 +21,8 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
   it("shows who is signed in and the VM chip; the morning prompt asks to start it, Not today hides it", async () => {
     const { page, errors } = await freshPage(h);
     await today(page);
-    await expect(page.locator(".person-chip").textContent()).resolves.toBe("AR");
+    // Step 16.4: my photo (a generated avatar in demo mode) with my presence on its corner.
+    await expect.poll(() => page.locator(".person-chip .avatar img").count(), { timeout: 10_000 }).toBe(1);
     await expect(page.locator(".person-chip").getAttribute("title")).resolves.toContain("Alex Rivera");
     const chip = page.locator(".topbar .vm-chip");
     await expect.poll(() => chip.textContent(), { timeout: 10_000 }).toContain("Stopped (deallocated)");

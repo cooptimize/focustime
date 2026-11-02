@@ -396,8 +396,9 @@ describe("Plan the week: features and epics (step 8)", () => {
     // The epic's only feature is closed.
     expect(adatum!.items.find((i) => i.id === 250)!.children.map((c) => [c.id, c.open, c.level])).toEqual([[251, false, "portfolio"]]);
     expect(adatum!.targetFields).toEqual({ Feature: "Microsoft.VSTS.Scheduling.TargetDate" });
-    // Nobody's email is kept.
-    expect(JSON.stringify(adatum)).not.toMatch(/@/);
+    // Step 16.4: an assignee's email only in assignedToEmail (for matching to Cooptimizers), nowhere else.
+    const strip = (v: unknown): unknown => JSON.parse(JSON.stringify(v, (k, x) => (k === "assignedToEmail" ? undefined : x)));
+    expect(JSON.stringify(strip(adatum))).not.toMatch(/@/);
   });
   it("reads each story's size and last change for Roadmap (step 16), from the project's size field", async () => {
     const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")]);

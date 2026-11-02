@@ -225,6 +225,8 @@ export type WorkItem = {
   /** Plan the week (step 8): the assignee's display name (never an email) and whether it's me. */
   assignedTo?: string | null;
   assignedToMe?: boolean;
+  /** Step 16.4: the assignee's DevOps uniqueName (their sign-in email), only to match them to a Cooptimizer; never shown. */
+  assignedToEmail?: string | null;
   /** Plan the week: the process's target date field as a date, when the type has one. */
   targetDate?: IsoDate | null;
   /** Roadmap (step 16): the size field's value, when one was read. */
@@ -235,7 +237,7 @@ export type WorkItem = {
 };
 
 /** A child of a feature or epic in Plan the week (step 8): any state, any assignee (display name only). */
-export type PortfolioChild = { id: number; title: string; type: string; state: string; stateCategory: string; open: boolean; level: WorkItem["level"]; order: number | null; url: string; assignedTo: string | null; mine: boolean; /** Step 16 (D279): the last change, and the size from the project's size field (null: not sized). Missing in older caches. */ changedAt?: string; size?: number | null };
+export type PortfolioChild = { id: number; title: string; type: string; state: string; stateCategory: string; open: boolean; level: WorkItem["level"]; order: number | null; url: string; assignedTo: string | null; /** Step 16.4: the assignee's email (DevOps uniqueName), for matching only. */ assignedToEmail?: string | null; mine: boolean; /** Step 16 (D279): the last change, and the size from the project's size field (null: not sized). Missing in older caches. */ changedAt?: string; size?: number | null };
 
 /** A feature or epic for Plan the week (step 8): assigned to me, or the parent of a story assigned to me. */
 export type PortfolioItem = {

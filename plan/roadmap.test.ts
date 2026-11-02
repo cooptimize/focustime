@@ -46,7 +46,7 @@ describe("stories done and open (D279)", () => {
   });
   it("names who works on the open stories with counts, most first (me as You), and counts unassigned, unsized and quiet ones", () => {
     const c = storyCounts(f, NOW, true);
-    expect(c.people).toEqual([{ name: "Alex Rivera", count: 2 }, { name: "Sam Lee", count: 1 }, { name: "You", count: 1 }]);
+    expect(c.people).toEqual([{ name: "Alex Rivera", count: 2, email: null }, { name: "Sam Lee", count: 1, email: null }, { name: "You", count: 1, email: null }]);
     expect(c.unassigned).toBe(1);
     expect(c.unsized).toBe(1);
     // No change in 14 days: story 6 (Oct 10) and 7 (Oct 19, 14 days and an hour before now).
@@ -103,7 +103,7 @@ describe("the on-track signal (D281)", () => {
     expect(roadmapSignal({ ...base, days: 4, open: 3, done: 1, perWeek: 1, targetDate: "2026-11-30" })).toEqual({ level: null, reason: "Trend after a week of daily counts (4 days so far)" });
   });
   it("says features for an epic, rates under one with a decimal, and one day or week in the singular", () => {
-    expect(roadmapSignal({ ...base, noun: "features", open: 1, done: 0, perWeek: 0.8, targetDate: "2026-11-09" })).toEqual({ level: "watch", reason: "1 feature open, about 0.8 closed per week, 1 week to target" });
+    expect(roadmapSignal({ ...base, noun: "features", open: 1, done: 0, perWeek: 0.8, targetDate: "2026-11-09" })).toEqual({ level: "watch", reason: "1 feature open, about 1 closed per week, 1 week to target" });
     expect(roadmapSignal({ ...base, open: 1, done: 3, perWeek: 2, targetDate: "2026-11-03" }).reason).toBe("1 story open, about 2 closed per week, 1 day to target");
   });
 });

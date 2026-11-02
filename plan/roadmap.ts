@@ -5,7 +5,7 @@ import type { ClientPortfolio, IsoDate, PortfolioItem } from "../week/types.ts";
 export type RoadmapSnapshot = { date: IsoDate; done: number; open: number };
 export type RoadmapLevel = "on_track" | "watch" | "at_risk";
 export type RoadmapSignal = { level: RoadmapLevel | null; reason: string };
-export type StoryCounts = { done: number; open: number; people: { name: string; count: number }[]; unassigned: number; unsized: number | null; stale: number };
+export type StoryCounts = { done: number; open: number; people: { name: string; count: number; /** The DevOps email, for matching only (never shown); null for me or when unknown. */ email: string | null }[]; unassigned: number; unsized: number | null; stale: number };
 
 /** Days without a change before an open story counts as quiet. */
 export const STALE_DAYS = 14;
@@ -28,17 +28,24 @@ export function storyCounts(item: PortfolioItem, now: string, sizeKnown: boolean
   const level = item.tier === "epic" ? "portfolio" : "story";
   const kids = item.children.filter((c) => c.level === level && c.stateCategory !== "Removed");
   const open = kids.filter((c) => !DONE.has(c.stateCategory));
-  const byName = new Map<string, number>();
+  // Step 16.4: one person per email (DevOps uniqueName) when there is one, so two people with the same display name stay
+  // apart and one person's renamed display name doesn't split them; the display name only when there is no email.
+  const byKey = new Map<string, { name: string; email: string | null; count: number }>();
   // My own stories show as "You", whatever my display name is.
   for (const c of open) {
     const name = c.mine ? "You" : c.assignedTo;
-    if (name) byName.set(name, (byName.get(name) ?? 0) + 1);
+    if (!name) continue;
+    const email = c.mine ? null : (c.assignedToEmail ?? null);
+    const key = c.mine ? "me" : email ? `e:${email}` : `n:${name}`;
+    const p = byKey.get(key) ?? { name, email, count: 0 };
+    p.count++;
+    byKey.set(key, p);
   }
   const cutoff = Temporal.Instant.from(now).subtract({ hours: STALE_DAYS * 24 }).epochMilliseconds;
   return {
     done: kids.length - open.length,
     open: open.length,
-    people: [...byName].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    people: [...byKey.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
     unassigned: open.filter((c) => !c.assignedTo).length,
     // Sizes are for stories: an epic's features have no unsized count.
     unsized: sizeKnown && item.tier === "feature" ? open.filter((c) => c.size === null || c.size === undefined).length : null,
@@ -60,7 +67,8 @@ export function trendRate(snaps: readonly RoadmapSnapshot[], today: IsoDate): { 
 }
 
 const count = (n: number, noun: "stories" | "features") => `${n} ${n === 1 ? (noun === "stories" ? "story" : "feature") : noun}`;
-const rateText = (r: number) => (r < 1 ? String(Math.round(r * 10) / 10) : String(Math.round(r)));
+/** Step 16.4: whole numbers only: "about 2 closed per week", or "about 1 closed every 3 weeks" when slower. */
+const rateText = (r: number) => (r < 0.75 ? `1 closed every ${Math.max(2, Math.round(1 / r))} weeks` : `${Math.round(r)} closed per week`);
 function leftText(days: number): string {
   if (days % 7 === 0) return `${days / 7} ${days === 7 ? "week" : "weeks"}`;
   if (days < 14) return `${days} ${days === 1 ? "day" : "days"}`;
@@ -82,5 +90,5 @@ export function roadmapSignal(i: { open: number; done: number; perWeek: number |
   if (i.perWeek === 0) return { level: left >= 14 ? "watch" : "at_risk", reason: `${count(i.open, i.noun)} open, none closed in the last ${i.days} days, ${target}` };
   const needed = i.open / i.perWeek, weeksLeft = left / 7;
   const level: RoadmapLevel = needed <= weeksLeft ? "on_track" : needed <= 1.5 * weeksLeft ? "watch" : "at_risk";
-  return { level, reason: `${count(i.open, i.noun)} open, about ${rateText(i.perWeek)} closed per week, ${target}` };
+  return { level, reason: `${count(i.open, i.noun)} open, about ${rateText(i.perWeek)}, ${target}` };
 }

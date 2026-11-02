@@ -4,7 +4,24 @@ import type { MicrosoftAccount } from "../../actions/account.ts";
 import { createAzureClient } from "../azure/client.ts";
 import { fakeArm } from "../azure/fake-arm.ts";
 import type { PresenceClient, RawPresence } from "../graph/presence.ts";
-import { DEMO_PRESENCE } from "./data.ts";
+import { DEMO_PEOPLE, DEMO_PRESENCE } from "./data.ts";
+import type { PhotoClient } from "../graph/photos.ts";
+import { demoAvatar } from "../../plan/photos.ts";
+
+/** Step 16.4: generated avatars for the fictional people (one has none, to show initials). No Graph calls. */
+export function demoPhotos(): PhotoClient {
+  const svg = (name: string) => {
+    const b64 = demoAvatar(name).split(",")[1]!;
+    return { type: "image/svg+xml", bytes: Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)) };
+  };
+  return {
+    mine: async () => svg(DEMO_PERSON.name),
+    person: async (oid) => {
+      const p = DEMO_PEOPLE.find((x) => x.aadId === oid.toLowerCase());
+      return p && p.name !== "Alex Kim" ? svg(p.name) : null;
+    },
+  };
+}
 
 /** Step 16.3: Teams presence in demo mode: fictional teammates, and my status kept in memory. No Graph calls. */
 export function demoPresence(): PresenceClient & { mineSet: () => string | null } {
@@ -30,6 +47,7 @@ export function createDemoAzure() {
     armToken: async () => "demo",
     writeAccess: async () => ({ status: "read_only", message: "Demo data" }),
     presence: demoPresence(),
+    photos: demoPhotos(),
     signOut: async () => {},
   };
   return { account, azure: (token: () => Promise<string>) => createAzureClient({ fetch: arm.fetch, token, log: () => {} }), arm };
