@@ -1,7 +1,7 @@
 // Step 15.4: the signed-in person, my VM chip, the morning prompt, auto-shutdown delay and restore, Settings > You and
 // the Inbox's kind chips, clicked in a real browser on demo data (a fictional person and VM, no Azure calls).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness, openSettings } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -73,7 +73,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
 
   it("Settings > You: signed in, Find my VM by the Owner tag, the confirmed VM", async () => {
     const { page, errors } = await freshPage(h);
-    await page.locator(".person-chip").click();
+    await openSettings(page);
     const you = page.locator(".set-account");
     await expect(you.textContent()).resolves.toContain("Alex Rivera");
     await expect(you.getByRole("button", { name: "Sign out" }).count()).resolves.toBe(1);
@@ -106,7 +106,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await today(page);
     const port = new URL(page.url()).port;
     await page.context().addCookies([{ name: `coopilot_${port}`, value: "an-old-token", url: `http://127.0.0.1:${port}/`, httpOnly: true, sameSite: "Strict" }]);
-    await page.locator(".person-chip").click();
+    await openSettings(page);
     const banner = page.locator(".stale-banner");
     await banner.waitFor({ timeout: 15_000 });
     await expect(banner.textContent()).resolves.toContain("Coopilot was restarted, so this window is out of date.");

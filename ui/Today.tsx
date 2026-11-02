@@ -1,5 +1,7 @@
 // Today (step 10): the default view. What's now and next, today's picks by block with the week's committed
 // features as context, one large Start focus, and anything urgent. Everything else is a click away.
+import { ModeArea } from "./ModeSwitch.tsx";
+import type React from "react";
 import { VmChip, VmToday } from "./Account.tsx";
 import { DueBadge } from "./FollowUps.tsx";
 import { useContext, useState } from "react";
@@ -37,6 +39,8 @@ type Props = {
   onFix: () => void;
   /** Opens Settings at a section (an expiring PAT or secret). */
   onSettings: (section: string) => void;
+  /** Step 16.2: Today's mode switch (Now · Plan · Check-in · Close out), at the right of the header. */
+  switcher?: React.ReactNode;
 };
 
 const hm = (t: string) => {
@@ -44,7 +48,7 @@ const hm = (t: string) => {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 || h === 24 ? "AM" : "PM"}`;
 };
 
-export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen, onPlan, onPlanFeature, onInbox, onWeek, onFix, onSettings }: Props) {
+export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen, onPlan, onPlanFeature, onInbox, onWeek, onFix, onSettings, switcher }: Props) {
   const date = data.planDay.date;
   const day = data.week.days.find((d) => d.date === date) ?? null;
   const plan = data.plan?.[date];
@@ -64,9 +68,14 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
   return (
     <main className="today-view" aria-label="Today">
       <header className="today-head">
-        <h1>{longDate(date)}</h1>
-        <p className="today-now">{nowLine(strip, workday, target)}</p>
-        <VmChip big />
+        <div className="ph-title">
+          <h1>
+            Today <span className="muted">{longDate(date)}</span>
+          </h1>
+          <p className="today-now">{nowLine(strip, workday, target)}</p>
+          <VmChip big />
+        </div>
+        <ModeArea>{switcher}</ModeArea>
       </header>
       <FlowHint />
 

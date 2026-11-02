@@ -227,7 +227,7 @@ export type WorkItem = {
   assignedToMe?: boolean;
   /** Plan the week: the process's target date field as a date, when the type has one. */
   targetDate?: IsoDate | null;
-  /** Delivery (step 16): the size field's value, when one was read. */
+  /** Roadmap (step 16): the size field's value, when one was read. */
   size?: number | null;
   /** Step 15.3: area and iteration paths (portfolio reads only), shown read-only in the draft editor. */
   areaPath?: string | null;

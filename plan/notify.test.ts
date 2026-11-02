@@ -1,7 +1,7 @@
 // Step 15.5: notifications: per-kind switches, quiet hours, holding during focus, collapsing, routes, texts.
 import { describe, expect, it } from "vitest";
 import { legacyHours } from "../config/schema.ts";
-import { collapse, DEFAULT_NOTIFY, dueFollowUps, gate, inWorkingHours, notices, parseRoute, routeText, type GateFacts, type NotifyKind } from "./notify.ts";
+import { collapse, DEFAULT_NOTIFY, dueFollowUps, gate, inWorkingHours, noticeDone, notices, parseRoute, routeText, type DoneFacts, type GateFacts, type Notice, type NotifyKind } from "./notify.ts";
 
 const NY = "America/New_York";
 const facts = (over: Partial<GateFacts> = {}, kinds: Partial<Record<NotifyKind, boolean>> = {}): GateFacts => ({
@@ -109,5 +109,36 @@ describe("follow-ups due", () => {
       { id: 2, what: "F2", overdue: true },
       { id: 1, what: "F1", overdue: false },
     ]);
+  });
+});
+
+describe("notifications that no longer apply (step 16.2, Q91)", () => {
+  const at = "2026-11-02T15:00:00Z";
+  const none: DoneFacts = { committed: () => false, checkedIn: () => false, closedOut: () => false, weekCommitted: () => false, followUpOpen: () => true, dueCount: () => 1, timerWaiting: () => true, vmOff: () => true, vmChanged: () => true };
+  const yes = (over: Partial<DoneFacts>) => ({ ...none, ...over });
+  it("each kind closes on its own signal, and not before", () => {
+    const cases: [Notice, Partial<DoneFacts>][] = [
+      [notices.planDay("2026-11-02", at), { committed: (d) => d === "2026-11-02" }],
+      [notices.checkin("2026-11-02", at), { checkedIn: (d) => d === "2026-11-02" }],
+      [notices.checkin("2026-11-02", at), { closedOut: (d) => d === "2026-11-02" }],
+      [notices.closeout("2026-11-02", at), { closedOut: (d) => d === "2026-11-02" }],
+      [notices.week("2026-11-02", true, at), { weekCommitted: (w) => w === "2026-11-02" }],
+      [notices.week("2026-11-09", false, at), { weekCommitted: (w) => w === "2026-11-09" }],
+      [notices.timerEnd(false, "A", "2026-11-02T14:00:00Z", at), { timerWaiting: (s) => s !== "2026-11-02T14:00:00Z" }],
+      [notices.vmOff("2026-11-02", "vm", at), { vmOff: () => false }],
+      [notices.vmChanged("2026-11-02", "Delayed", at), { vmChanged: () => false }],
+      [notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }], at)!, { followUpOpen: (id) => id !== 7 }],
+      [notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }, { id: 8, what: "B", overdue: true }], at)!, { dueCount: () => 0 }],
+    ];
+    for (const [n, f] of cases) {
+      expect(noticeDone(n, none), n.key).toBe(false);
+      expect(noticeDone(n, yes(f)), n.key).toBe(true);
+    }
+  });
+  it("another day's plan doesn't close today's; an unknown VM state never closes; meetings and expiry stay", () => {
+    expect(noticeDone(notices.planDay("2026-11-02", at), yes({ committed: (d) => d === "2026-11-03" }))).toBe(false);
+    expect(noticeDone(notices.vmOff("2026-11-02", "vm", at), yes({ vmOff: () => null }))).toBe(false);
+    expect(noticeDone(notices.meeting(["x"], ["k"], at), yes({ committed: () => true }))).toBe(false);
+    expect(noticeDone(notices.expiry("2026-11-02", [{ text: "x", section: "clients" }], at)!, yes({ dueCount: () => 0 }))).toBe(false);
   });
 });

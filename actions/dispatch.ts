@@ -39,7 +39,8 @@ import { watchedIds } from "../plan/followups.ts";
 import { isActionName, type ActionName } from "./registry.ts";
 import { captureAction } from "./capture-actions.ts";
 import { followUpAction } from "./followup-actions.ts";
-import { deliveryAction } from "./delivery-actions.ts";
+import { roadmapAction } from "./roadmap-actions.ts";
+import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import type { ActionResponse, HostBrowsers, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
@@ -376,9 +377,12 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     resumeNotes: ctx.plan ? Object.fromEntries(Object.entries(ctx.plan.latestNotes()).map(([k, n]) => [k, noteView(n)])) : {},
     borrowed: ctx.plan ? ctx.plan.borrowedFor(weekStart, sunday).map(borrowedView) : [],
     closeOut: { date: todayDate, done: !!todayPlan?.closedOutAt },
+    checkIn: { date: todayDate, done: !!ctx.plan?.marked(CHECKIN_DONE_MARK, todayDate) },
     weekPlan: ctx.plan ? withTitles(weekPlanView(ctx.plan.weekPlan(weekStart)), currentTitle) : null,
     weekFeatures: ctx.plan ? withCurrentTitles(ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate)), currentTitle) : [],
     weekNudge: { badge: ctx.plan && cfg ? weekNudges(Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz), nudgeTimes(cfg), (w) => !!ctx.plan!.weekPlan(w).committedAt).badge : null },
+    // Step 16.2: Planned ✓ on the Week tab's mode switch, for this week, next week and the week shown.
+    weekCommitted: Object.fromEntries([...new Set([mondayOf(todayDate), Temporal.PlainDate.from(mondayOf(todayDate)).add({ days: 7 }).toString(), week.days[0]!.date])].map((w) => [w, !!ctx.plan?.weekPlan(w).committedAt])),
     timeboxes: ctx.plan ? timeboxesFor(ctx.plan, weekStart, sunday).map((t) => timeboxView(t, ctx.plan!, cfg)) : [],
     timeboxSettings: cfg?.timebox ?? DEFAULT_TIMEBOX,
     eventEdit: synced.facts,
@@ -695,6 +699,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     }
     case "closeout.load":
     case "closeout.commit":
+    case "checkin.done":
     case "pick.make_up":
     case "note.set":
     case "borrow.pay":
@@ -752,9 +757,9 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         action,
         req.input,
       );
-    case "delivery.load":
+    case "roadmap.load":
       // Step 16 (D278): read-only; the same followed clients and portfolio read as Plan the week, for this week.
-      return deliveryAction(
+      return roadmapAction(
         {
           plan: ctx.plan,
           config: () => configured(ctx),

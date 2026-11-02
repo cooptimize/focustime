@@ -70,7 +70,8 @@ export type PlanDayState = {
 };
 
 /** Committed plans for the days of a week, for the checklist on the week view. */
-export type PlanWeek = Record<IsoDate, { committedAt: ZonedStamp | null; picks: Pick[] }>;
+/** Step 16.2: closedOutAt too, for the ✓ on Today's Close out mode on any day of the week. */
+export type PlanWeek = Record<IsoDate, { committedAt: ZonedStamp | null; closedOutAt?: ZonedStamp | null; picks: Pick[] }>;
 
 /** S up to about 1 h, M about 2 h, L a whole block (about 3 to 4 h). Nothing above L: split it first. */
 export const SIZE_MINUTES: Record<Size, number> = { S: 60, M: 120, L: 210 };

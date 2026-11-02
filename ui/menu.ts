@@ -74,7 +74,8 @@ export type FormField = {
   options?: { value: string; label: string }[];
 };
 
-export type View = "today" | "week" | "inbox" | "delivery" | "focus" | "capture" | "planday" | "planweek" | "settings" | "follow_ups" | "checkin" | "closeout";
+/** Step 16.2: the places a command opens, as tab and mode (ui/nav.ts viewNav). */
+export type View = import("./nav.ts").ViewName;
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
@@ -981,6 +982,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "timer.done": return env.timer ? { run: () => env.runTimer("timer.done") } : { disabled: "No timer" };
     case "timer.next": return env.timer ? { run: () => env.runTimer("timer.next") } : { disabled: "No timer" };
     case "closeout.load": return { run: () => env.openCloseOut() };
+    case "checkin.done": return { run: env.openCheckIn };
     case "closeout.commit": return env.closeOutDate ? { run: env.commitCloseOut } : { disabled: "Open Close out first" };
     case "pick.make_up": return { next: () => choosePick(env, "Make up which pick?", (p) => makeUpStep(env, p)) };
     case "note.set": return { run: () => env.openCloseOut() };
@@ -1004,7 +1006,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "plan.reset": return { run: env.resetPlan };
     case "link.open": return { next: () => chooseItem(env, "Open which work item?", () => true, (k, i) => () => env.openLink(k, i.url)) };
     case "weekplan.load": return { run: () => env.openPlanWeek() };
-    case "delivery.load": return { run: () => env.setView("delivery") };
+    case "roadmap.load": return { run: () => env.setView("roadmap") };
     case "weekplan.commit": return env.planWeekOpen ? { run: env.commitWeek } : { disabled: "Open Plan the week first" };
     // Features are chosen in Plan the week itself.
     case "weekplan.set_feature":
@@ -1087,16 +1089,18 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
 function uiCommands(env: MenuEnv): MenuItem[] {
   const soon = "Coming soon";
   return [
-    { id: "view.today", action: "view.today", group: "Views", label: "Today", hint: "1", run: () => env.setView("today") },
+    { id: "view.today", action: "view.today", group: "Views", label: "Today › Now", hint: "1", run: () => env.setView("today") },
     { id: "view.week", action: "view.week", group: "Views", label: "Week", hint: "2", run: () => env.setView("week") },
-    { id: "view.plan", action: "view.plan", group: "Views", label: "Plan (the ritual for now)", hint: "3", run: env.openRitual },
+    { id: "view.roadmap", action: "view.roadmap", group: "Views", label: "Roadmap", hint: "3", run: () => env.setView("roadmap") },
     { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: follow-ups and captures", hint: "4", run: () => env.setView("inbox") },
-    { id: "view.planday", action: "view.planday", group: "Views", label: "Plan the day", hint: "P", run: () => env.openPlanDay() },
+    { id: "view.plan", action: "view.plan", group: "Views", label: "Plan mode for this tab, or back", hint: "P", run: env.openRitual },
+    { id: "view.planday", action: "view.planday", group: "Views", label: "Today › Plan (plan the day)", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
-    { id: "view.planweek", action: "view.planweek", group: "Views", label: "Plan the week", hint: "W", run: () => env.openPlanWeek() },
+    { id: "view.planweek", action: "view.planweek", group: "Views", label: "Week › Plan the week", hint: "W", run: () => env.openPlanWeek() },
+    { id: "view.ahead", action: "view.ahead", group: "Views", label: "Roadmap › Plan ahead", run: () => env.setView("ahead") },
     { id: "view.capture", action: "view.capture", group: "Views", label: "Captures to sort (Inbox)", run: env.openCaptures },
-    { id: "view.checkin", action: "view.checkin", group: "Views", label: "Check-in", hint: "M", run: env.openCheckIn },
-    { id: "view.closeout", action: "view.closeout", group: "Views", label: "Close out", hint: "E", run: () => env.openCloseOut() },
+    { id: "view.checkin", action: "view.checkin", group: "Views", label: "Today › Check-in", hint: "M", run: env.openCheckIn },
+    { id: "view.closeout", action: "view.closeout", group: "Views", label: "Today › Close out", hint: "E", run: () => env.openCloseOut() },
     { id: "week.prev", action: "week.prev", group: "Week", label: "Previous week", hint: "[", run: () => env.changeWeek(-1) },
     { id: "week.next", action: "week.next", group: "Week", label: "Next week", hint: "]", run: () => env.changeWeek(1) },
     { id: "week.today", action: "week.today", group: "Week", label: "Back to this week", run: env.goToday },
@@ -1221,12 +1225,12 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
   };
 }
 
-/** Step 16 (D282): what a Delivery row's ⋯ menu needs to know. */
-export type DeliveryRowFacts = { title: string; tier: "feature" | "epic"; targetDate: string | null; open: number; onWeek: boolean; canWrite: boolean; hasLink: boolean };
-export type DeliveryRowOps = { open: () => void; brief: () => void; help: () => void; addToWeek: () => void; targetDate: () => void; enableWrites: () => void };
+/** Step 16 (D282): what a Roadmap row's ⋯ menu needs to know. */
+export type RoadmapRowFacts = { title: string; tier: "feature" | "epic"; targetDate: string | null; open: number; onWeek: boolean; canWrite: boolean; hasLink: boolean };
+export type RoadmapRowOps = { open: () => void; brief: () => void; help: () => void; addToWeek: () => void; targetDate: () => void; enableWrites: () => void };
 
-/** A Delivery row's ⋯ menu (D282). Only Set target date writes, through the DevOps write flow. */
-export function deliveryRowMenu(f: DeliveryRowFacts, ops: DeliveryRowOps): MenuStep {
+/** A Roadmap row's ⋯ menu (D282). Only Set target date writes, through the DevOps write flow. */
+export function roadmapRowMenu(f: RoadmapRowFacts, ops: RoadmapRowOps): MenuStep {
   const epic = f.tier === "epic";
   return {
     title: f.title,

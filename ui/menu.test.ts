@@ -90,12 +90,23 @@ describe("command menu (built from the action registry)", () => {
   });
   it("shows shortcuts; every view is built (Plan the week since step 8)", () => {
     const list = commandList(env().e);
-    expect(list.find((c) => c.action === "planday.start")?.hint).toBe("P");
+    expect(list.find((c) => c.id === "view.plan")?.hint).toBe("P");
+    expect(list.find((c) => c.action === "roadmap.load")?.hint).toBe("3");
     expect(list.find((c) => c.action === "week.load")?.hint).toBe("R");
     for (const id of ["view.checkin", "view.closeout", "view.planweek"]) expect(list.find((c) => c.id === id)?.disabled).toBeUndefined();
     expect(list.find((c) => c.id === "view.planweek")?.hint).toBe("W");
     // Committing the week needs Plan the week open.
     expect(list.find((c) => c.action === "weekplan.commit")?.disabled).toBe("Open Plan the week first");
+  });
+  it("step 16.2: no place lost: every tab and mode is reachable from the command menu", async () => {
+    const t = env();
+    const views: string[] = [];
+    t.e.setView = (v) => void views.push(v);
+    const list = commandList(t.e);
+    for (const id of ["view.today", "view.week", "view.roadmap", "view.inbox", "view.ahead", "view.capture"]) await list.find((c) => c.id === id)!.run!();
+    expect(views).toEqual(["today", "week", "roadmap", "inbox", "ahead"]);
+    for (const id of ["view.plan", "view.planday", "view.planweek", "view.checkin", "view.closeout", "view.planday_date"]) expect(list.find((c) => c.id === id), id).toBeDefined();
+    expect(list.find((c) => c.action === "checkin.done")).toBeDefined();
   });
   it("searches by words in any order", () => {
     const list = commandList(env().e);

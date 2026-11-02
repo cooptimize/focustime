@@ -84,12 +84,12 @@ async function glide(page, loc, click = true) {
 }
 const T = { add: (page) => page.locator(".pd2-right .pd2-sec").first().locator("button.pd2-plus") };
 
-/** Plan the week on this week (the Plan tab, its chip, then back one week from next week). */
+/** Plan the week on this week (Week › Plan the week opens next week, then back one week). Step 16.2. */
 async function openPlanWeek(page) {
   await page.keyboard.press("Escape");
-  await page.locator(".topbar").getByRole("button", { name: /^Plan/ }).first().click();
+  await page.keyboard.press("2");
   await wait(page, 900);
-  await page.locator(".ritual-bar").getByRole("button", { name: /^Plan the week/ }).first().click();
+  await page.locator(".mode-switch").getByRole("button", { name: /^Plan the week/ }).first().click();
   await wait(page, 1500);
   await page.locator(".planweek").getByRole("button", { name: "Previous week" }).click();
   await wait(page, 1500);
@@ -105,7 +105,7 @@ async function planMonday(page, slow = 0) {
   await step("add morning pick", async () => { await glide(page, T.add(page).first()); await wait(page, 600 + slow); });
   await step("select afternoon", async () => { await glide(page, page.locator(".pd2-block").nth(1).locator(".pd2-block-name")); await wait(page, 700 + slow); });
   for (let i = 0; i < 2; i += 1) await step(`add afternoon pick ${i}`, async () => { await glide(page, T.add(page).first()); await wait(page, 700 + slow); });
-  await step("Done", async () => { await glide(page, page.locator(".pd2-done")); await wait(page, 1200 + slow); });
+  await step("Done", async () => { await glide(page, page.locator(".pd2-head .done-btn")); await wait(page, 1200 + slow); });
   await step("Timebox my day", async () => { await glide(page, page.locator(".pd2 button").filter({ hasText: /^Timebox my day$/ }).first()); await wait(page, 1200 + slow); });
   await step("apply timeboxes", async () => { await glide(page, page.locator("[aria-label='Timebox my day'] button.commit").first()); await wait(page, 1200 + slow); });
 }
@@ -171,7 +171,7 @@ async function shots() {
   await shot("13b-planday-trim-highlight");
   await step("smaller", async () => { for (const c of (await page.locator(".pick-row.trim .size-chip").all()).slice(0, 2)) { await c.click(); await wait(page, 400); await c.click(); await wait(page, 500); } });
   await shot("14-planday-fits");
-  await step("Done Tue", async () => { await page.locator(".pd2-done").click(); await wait(page, 1200); });
+  await step("Done Tue", async () => { await page.locator(".pd2-head .done-btn").click(); await wait(page, 1200); });
   await shot("15-planday-done-timebox-my-day-offer");
   await step("Timebox my day", async () => { await page.locator(".pd2 button").filter({ hasText: /^Timebox my day$/ }).first().click(); await wait(page, 1000); });
   await shot("16-timebox-my-day-proposal");
@@ -312,7 +312,7 @@ async function videos() {
     await step("trim", async () => { await glide(p, p.locator(".pd2-fit .link-btn").first()); await wait(p, 3000); });
     await step("smaller", async () => { const c = p.locator(".pick-row.trim .size-chip").first(); await glide(p, c); await wait(p, 800); await c.click(); await wait(p, 2500); });
     await step("follow-up", async () => { await glide(p, p.locator(".pd2-right .pd2-sec").nth(1).locator("button.pd2-plus").first()); await wait(p, 2500); });
-    await step("Done", async () => { await glide(p, p.locator(".pd2-done")); await wait(p, 3500); });
+    await step("Done", async () => { await glide(p, p.locator(".pd2-head .done-btn")); await wait(p, 3500); });
   });
   await clip("04-checkin-closeout", HD, async (p) => {
     await planMonday(p);
@@ -321,7 +321,7 @@ async function videos() {
     await wait(p, 4000);
     await p.mouse.wheel(0, 400);
     await wait(p, 3500);
-    await step("close out chip", async () => { await glide(p, p.locator(".ritual-bar").getByRole("button", { name: /^Close out/ }).first()); });
+    await step("close out chip", async () => { await glide(p, p.locator(".mode-switch").getByRole("button", { name: /^Close out/ }).first()); });
     await wait(p, 4000);
     await p.mouse.wheel(0, 500);
     await wait(p, 3500);

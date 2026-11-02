@@ -169,9 +169,9 @@ export const prioritiesKey = (weekStart: IsoDate, clientKey: string) => `priorit
  * stories, anyone's ("Needs breakdown"); an epic with no open features ("Needs features"); a committed feature with
  * no target date ("No target date", soft). Anything DevOps can't say right now (not loaded, failed, cached) isn't flagged.
  */
-/** A feature with no open story-level child needs breaking down (D164); shared with Delivery (step 16). */
+/** A feature with no open story-level child needs breaking down (D164); shared with Roadmap (step 16). */
 export const needsBreakdown = (item: Pick<PortfolioItem, "children">) => !item.children.some((c) => c.open && c.level === "story");
-/** An epic with no open feature needs features (step 13.5); shared with Delivery (step 16). */
+/** An epic with no open feature needs features (step 13.5); shared with Roadmap (step 16). */
 export const needsFeatures = (item: Pick<PortfolioItem, "children">) => !item.children.some((c) => c.open && c.level === "portfolio");
 
 export function readiness(i: ReadinessInput): ReadinessFlag[] {

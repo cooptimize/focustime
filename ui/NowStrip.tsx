@@ -116,7 +116,12 @@ type MustsRow = { clientKey: string; name: string; musts: number; done: number; 
  * now / next in a few words, then each client's musts ("Northwind 0/2 · Harbor 0/1"); a click on the musts opens
  * the details. No "Still realistic?" here: that question is Check-in's alone.
  */
-export function ContextLine({ strip, onSelect, onStartFocus = null, borrowed = null, musts, colors, onPlanWeek }: Omit<Props, "strip"> & { strip: Strip | null; musts: MustsRow[]; colors: Record<string, string>; onPlanWeek: () => void }) {
+/**
+ * The musts summary (step 11): "Musts 2/5 · Fabrikam 1/2 …" with a popover per client. Step 16.2: in the Week tab's
+ * header (the stacked context line under the top bar is gone; Today's Now mode carries now and next, the Focus
+ * button a running timer).
+ */
+export function MustsSummary({ musts, colors, onPlanWeek }: { musts: MustsRow[]; colors: Record<string, string>; onPlanWeek: () => void }) {
   const [open, setOpen] = useState(false);
   const pop = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -133,40 +138,26 @@ export function ContextLine({ strip, onSelect, onStartFocus = null, borrowed = n
   }, [open]);
   const names = new Map(musts.map((m) => [m.clientKey, m.name]));
   const summary = mustsSummary(musts, (k) => names.get(k) ?? k);
+  if (!summary) return null;
   return (
-    <div className={`context-line ${strip?.kind ?? ""}`}>
-      {strip && <StripLine strip={strip} onSelect={onSelect} />}
-      {borrowed && (
-        <span className="now-borrowed" title="Slipped focus you said you'd make up">
-          {formatDuration(borrowed.minutes)} to make up
-        </span>
-      )}
-      {onStartFocus && (
-        <button type="button" className="mini now-start" onClick={onStartFocus} title="Start focus on the next planned pick">
-          Start focus
-        </button>
-      )}
-      {summary && (
-        <div className="cl-musts" ref={pop}>
-          <button type="button" className="cl-musts-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)} title="Musts done this week, per client">
-            <span className="cl-label">Musts</span> {summary}
+    <div className="cl-musts" ref={pop}>
+      <button type="button" className="cl-musts-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)} title="Musts done this week, per client">
+        <span className="cl-label">Musts</span> {summary}
+      </button>
+      {open && (
+        <div className="cl-pop" role="dialog" aria-label="Musts this week">
+          <h3>Musts this week</h3>
+          <ul>
+            {musts.filter((m) => m.musts > 0).map((m) => (
+              <li key={m.clientKey} style={{ "--c": clientColor(m.clientKey, colors) } as CSSProperties}>
+                <span className="swatch" aria-hidden="true" />
+                <strong>{m.name}</strong> {progressLabel(m)}
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="link-btn" onClick={() => (setOpen(false), onPlanWeek())}>
+            Open Plan the week
           </button>
-          {open && (
-            <div className="cl-pop" role="dialog" aria-label="Musts this week">
-              <h3>Musts this week</h3>
-              <ul>
-                {musts.filter((m) => m.musts > 0).map((m) => (
-                  <li key={m.clientKey} style={{ "--c": clientColor(m.clientKey, colors) } as CSSProperties}>
-                    <span className="swatch" aria-hidden="true" />
-                    <strong>{m.name}</strong> {progressLabel(m)}
-                  </li>
-                ))}
-              </ul>
-              <button type="button" className="link-btn" onClick={() => (setOpen(false), onPlanWeek())}>
-                Open Plan the week
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>

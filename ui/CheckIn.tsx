@@ -1,3 +1,4 @@
+import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
 // Check-in (step 7): midday, about a minute. For today: each pick's status and focused time, what each block or
 // slot has left after meetings, and which picks no longer fit, with move, drop or "make it up". Walk-on work can
@@ -17,14 +18,14 @@ import { AnythingShifted } from "./WeekMusts.tsx";
 import { mondayOf } from "../week/dates.ts";
 import { dayName, FlexOfferBar, FocusVsSize, HALF_NAMES, SlipActions, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 
-type Props = { /** Step 15 (D268): the ritual chips, in this view's header. */ rituals?: React.ReactNode; data: WeekLoadData; now: string; onClose: () => void; onChanged: () => void };
+type Props = { /** Step 16.2: Today's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; data: WeekLoadData; now: string; /** Back to Today › Now. */ onClose: () => void; onChanged: () => void };
 
 const time = (iso: string, tz: string) => {
   const z = Temporal.Instant.from(iso).toZonedDateTimeISO(tz);
   return `${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")} ${z.hour < 12 ? "AM" : "PM"}`;
 };
 
-export function CheckIn({ rituals, data, now, onClose, onChanged }: Props) {
+export function CheckIn({ switcher, data, now, onClose, onChanged }: Props) {
   const tz = data.hours.timeZone;
   const today: IsoDate = data.planDay.date;
   const day = data.week.days.find((d) => d.date === today);
@@ -70,7 +71,11 @@ export function CheckIn({ rituals, data, now, onClose, onChanged }: Props) {
   if (!day)
     return (
       <main className="closeout" aria-label="Check-in">
-        <p className="muted">Today isn't on the week shown. Press T to go to today.</p>
+        <div className="follow-ups-head">
+          <h2 tabIndex={-1}>Check-in</h2>
+          <ModeArea>{switcher}</ModeArea>
+        </div>
+        <p className="muted">Loading today…</p>
       </main>
     );
 
@@ -81,14 +86,22 @@ export function CheckIn({ rituals, data, now, onClose, onChanged }: Props) {
 
   return (
     <main className="closeout checkin" aria-label="Check-in">
-      {rituals}
       <div className="follow-ups-head">
         <h2 tabIndex={-1}>
           Check-in <span className="muted">{dayName(today)}, {time(now, tz)}</span>
         </h2>
-        <button type="button" className="top-btn" onClick={onClose} title="Back (Esc)">
-          Back
-        </button>
+        <ModeArea
+          done={{
+            title: data.checkIn.done ? "Back to Now (Esc)" : "Check-in done: back to Now",
+            onClick: async () => {
+              // Step 16.2: Done marks today checked in (the ✓ on the switch), then goes back to Now.
+              if (!data.checkIn.done && !(await act("checkin.done", { date: today }))) return;
+              onClose();
+            },
+          }}
+        >
+          {switcher}
+        </ModeArea>
       </div>
       {!committed && <p className="co-notice">Today isn't committed yet. Plan the day (P) to make the most of the afternoon.</p>}
       {error && <p className="set-problem" role="alert">{error}</p>}

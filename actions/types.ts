@@ -48,6 +48,8 @@ export type WeekLoadData = {
   borrowed: BorrowedView[];
   /** Whether today is closed out (step 7). */
   closeOut: { date: IsoDate; done: boolean };
+  /** Step 16.2: today's Check-in was done (Done in Check-in). */
+  checkIn: { date: IsoDate; done: boolean };
   /** The loaded week's plan (step 8): committed features per client, with any blocks they are placed on. */
   weekPlan: WeekPlanView | null;
   /** Committed features of the loaded week, this week and next week, for the week cards and Plan the day. */
@@ -58,6 +60,8 @@ export type WeekLoadData = {
   followUps: FollowUpView[];
   /** The Plan the week badge: the week a nudge asked for that still isn't committed (server clock). */
   weekNudge: { badge: IsoDate | null };
+  /** Step 16.2: whether a week (this week, next week, the week shown) is committed, by its Monday. */
+  weekCommitted: Record<IsoDate, boolean>;
   /** Display settings from [ui] (step 6b): the theme. Defaults when the config is invalid. */
   /** Timeboxes on the week (step 12): live ones, plus removed ones whose Outlook event is still to be taken off. */
   timeboxes: TimeboxView[];
@@ -330,8 +334,8 @@ export type DevOpsPreview = {
 export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
 export type DevOpsLogView = { entries: (import("../plan/devopswrite.ts").DevOpsWriteEntry & { undoable: boolean; retryable: boolean })[] };
 
-/** Step 16 (D278 to D282): one feature or epic I own, as the Delivery view shows it. */
-export type DeliveryRow = {
+/** Step 16 (D278 to D282): one feature or epic I own, as the Roadmap view shows it. */
+export type RoadmapRow = {
   id: number;
   title: string;
   type: string;
@@ -356,5 +360,5 @@ export type DeliveryRow = {
   /** On this week's plan already (step 8 week list). */
   onWeek: boolean;
 };
-export type DeliveryClient = { clientKey: string; clientName: string; status: import("../week/types.ts").ClientWorkStatus; message?: string; fetchedAt: string | null; fromCache: boolean; rows: DeliveryRow[] };
-export type DeliveryState = { today: string; weekStart: string; clients: DeliveryClient[] };
+export type RoadmapClient = { clientKey: string; clientName: string; status: import("../week/types.ts").ClientWorkStatus; message?: string; fetchedAt: string | null; fromCache: boolean; rows: RoadmapRow[] };
+export type RoadmapState = { today: string; weekStart: string; clients: RoadmapClient[] };

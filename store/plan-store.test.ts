@@ -547,7 +547,7 @@ describe("timeboxes, own Outlook events and the write log (step 12)", () => {
   });
 });
 
-describe("Delivery snapshots (step 16, D280)", () => {
+describe("Roadmap snapshots (step 16, D280)", () => {
   it("keeps one row per item per day, the latest of the day, and drops rows older than 120 days", () => {
     const s = createPlanStore({ path: ":memory:", now: () => Temporal.ZonedDateTime.from("2026-11-02T09:00:00-06:00[America/Chicago]") });
     s.recordSnapshots("2026-06-01", [{ clientKey: "Fabrikam", itemId: 10, done: 0, open: 9 }]);

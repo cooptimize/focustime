@@ -1,10 +1,10 @@
-// Step 16, slice 1: delivery.load (D278 to D282). Fictional clients and people only.
+// Step 16, slice 1: roadmap.load (D278 to D282). Fictional clients and people only.
 import { describe, expect, it } from "vitest";
-import { deliveryAction, type DeliveryContext } from "./delivery-actions.ts";
+import { roadmapAction, type RoadmapContext } from "./roadmap-actions.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { ClientPortfolio, PortfolioChild, PortfolioItem } from "../week/types.ts";
-import type { DeliveryClient } from "./types.ts";
+import type { RoadmapClient } from "./types.ts";
 
 const cfg = { week: { hours: { timeZone: "America/Chicago" } } } as unknown as AppConfig;
 const kid = (id: number, extra: Partial<PortfolioChild> = {}): PortfolioChild => ({ id, title: `Story ${id}`, type: "User Story", state: "Active", stateCategory: "InProgress", open: true, level: "story", order: id, url: `https://dev.azure.com/fabrikam/P/_workitems/edit/${id}`, assignedTo: "Alex Rivera", mine: false, changedAt: "2026-10-30T12:00:00Z", size: 2, ...extra });
@@ -24,7 +24,7 @@ function setup(now = "2026-11-02T15:00:00Z", fromCache = false) {
     },
     { clientKey: "Contoso", clientName: "Contoso", status: "auth_failed", message: "The DevOps PAT for Contoso was refused", fetchedAt: null, fromCache: false, items: [], targetFields: {} },
   ];
-  const ctx: DeliveryContext = {
+  const ctx: RoadmapContext = {
     plan,
     config: async () => cfg,
     devops: () => ({ portfolio: async (clients, opts) => (reads.push({ clients: clients.map((c) => c.clientKey), refresh: !!opts?.refresh }), portfolios.filter((p) => clients.some((c) => c.clientKey === p.clientKey))) }),
@@ -33,13 +33,13 @@ function setup(now = "2026-11-02T15:00:00Z", fromCache = false) {
   };
   return { plan, ctx, reads };
 }
-const load = async (ctx: DeliveryContext, input: unknown = {}) => {
-  const r = await deliveryAction(ctx, "delivery.load", input);
+const load = async (ctx: RoadmapContext, input: unknown = {}) => {
+  const r = await roadmapAction(ctx, "roadmap.load", input);
   if (!r.ok) throw new Error(r.error);
-  return r.data as { today: string; clients: DeliveryClient[] };
+  return r.data as { today: string; clients: RoadmapClient[] };
 };
 
-describe("delivery.load", () => {
+describe("roadmap.load", () => {
   it("lists only what I own, per client, with counts, people, flags and a signal; a failing client says why", async () => {
     const { ctx } = setup();
     const d = await load(ctx);
@@ -73,6 +73,6 @@ describe("delivery.load", () => {
   });
   it("refuses unknown input", async () => {
     const { ctx } = setup();
-    expect(await deliveryAction(ctx, "delivery.load", { x: 1 })).toMatchObject({ ok: false, status: 400 });
+    expect(await roadmapAction(ctx, "roadmap.load", { x: 1 })).toMatchObject({ ok: false, status: 400 });
   });
 });

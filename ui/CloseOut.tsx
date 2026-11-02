@@ -1,3 +1,4 @@
+import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
 // Close out (step 7): the end of the day in about three minutes. Picks done or not (focused time against size, and
 // what to do with the rest), a one-line resume note per client worked, and the follow-ups to close. Commit at the end.
@@ -15,11 +16,11 @@ import { CaptureBox, captureClients } from "./Capture.tsx";
 import { Fading, FollowUpRow } from "./FollowUps.tsx";
 import { dayName, FlexOfferBar, FocusVsSize, HALF_NAMES, SlipActions, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 
-type Props = { /** Step 15 (D268): the ritual chips, in this view's header. */ rituals?: React.ReactNode; date: IsoDate; data: WeekLoadData; onDate: (d: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
+type Props = { /** Step 16.2: Today's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; date: IsoDate; data: WeekLoadData; onDate: (d: IsoDate) => void; onClose: (notice?: string) => void; onChanged: () => void; onCaptures: () => void };
 
 const PAYBACK: Record<string, string> = { tonight: "tonight", friday: "Friday", day: "" };
 
-export function CloseOut({ rituals, date, data, onDate, onClose, onChanged, onCaptures }: Props) {
+export function CloseOut({ switcher, date, data, onDate, onClose, onChanged, onCaptures }: Props) {
   const [st, setSt] = useState<CloseOutState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -86,7 +87,16 @@ export function CloseOut({ rituals, date, data, onDate, onClose, onChanged, onCa
   };
   // Before the early return below: hooks run in the same order every render.
   const work = useContext(DevOpsWork);
-  if (!st) return <main className="closeout" aria-label="Close out">{error ? <p className="set-problem">{error}</p> : <p className="muted">Loading…</p>}</main>;
+  if (!st)
+    return (
+      <main className="closeout" aria-label="Close out">
+        <div className="follow-ups-head">
+          <h2 tabIndex={-1}>Close out <span className="muted">{dayName(date)}</span></h2>
+          <ModeArea>{switcher}</ModeArea>
+        </div>
+        {error ? <p className="set-problem">{error}</p> : <p className="muted">Loading…</p>}
+      </main>
+    );
   const dueBy = st.followUps.filter((l) => l.due !== null && l.due <= date);
   const rest = st.followUps.filter((l) => !dueBy.includes(l));
 
@@ -108,7 +118,6 @@ export function CloseOut({ rituals, date, data, onDate, onClose, onChanged, onCa
 
   return (
     <main className="closeout" aria-label="Close out">
-      {rituals}
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
           Close out <span className="muted">{dayName(date)}{st.access === "past" ? " (earlier day)" : ""}</span>
@@ -117,32 +126,25 @@ export function CloseOut({ rituals, date, data, onDate, onClose, onChanged, onCa
           <button type="button" className="mini" onClick={() => onDate(prev)} aria-label="Previous day" title="Previous day">‹</button>
           <button type="button" className="mini" onClick={() => onDate(next)} disabled={next > st.today} aria-label="Next day" title="Next day">›</button>
         </span>
-        {st.closedOutAt ? (
-          <span className="co-done">Closed out {clockOf(st.closedOutAt, tz)}</span>
-        ) : null}
-        <button
-          type="button"
-          className="top-btn primary"
-          title={st.closedOutAt ? "Back (Esc)" : "Close out this day"}
-          onClick={async () => {
-            // Step 15.1 (D275): once closed out, Done just goes back; nothing is saved again.
-            if (st.closedOutAt) return onClose();
-            try {
-              setSt(await call<CloseOutState>("closeout.commit", { date }));
-              setNotice("Closed out. Nice work.");
-              onChanged();
-            } catch (e) {
-              setError(e instanceof Error ? e.message : "Couldn't save Close out");
-            }
+        {st.closedOutAt ? <span className="co-done">Closed out {clockOf(st.closedOutAt, tz)}</span> : null}
+        <ModeArea
+          done={{
+            title: st.closedOutAt ? "Back to Now (Esc)" : "Close out this day, then back to Now",
+            onClick: async () => {
+              // Step 15.1 (D275): once closed out, Done just goes back; nothing is saved again. Step 16.2: back to Now.
+              if (st.closedOutAt) return onClose();
+              try {
+                setSt(await call<CloseOutState>("closeout.commit", { date }));
+                onChanged();
+                onClose("Closed out. Nice work.");
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Couldn't save Close out");
+              }
+            },
           }}
         >
-          {st.closedOutAt ? "Done" : "Done for the day"}
-        </button>
-        {!st.closedOutAt && (
-          <button type="button" className="top-btn" onClick={onClose} title="Back (Esc)">
-            Back
-          </button>
-        )}
+          {switcher}
+        </ModeArea>
       </div>
       {error && <p className="set-problem" role="alert">{error}</p>}
       <Fading text={notice} onGone={clearNotice} />

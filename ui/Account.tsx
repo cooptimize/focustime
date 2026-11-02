@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { AuthStatus, AzureWriteEntry, Person, VmPreview, VmPreviewOp, VmStatus } from "../actions/account-types.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
-import type { MenuItem } from "./menu.ts";
+import type { MenuItem, MenuStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
@@ -92,13 +92,31 @@ function SignInScreen({ status, signIn, offline, onSkip }: { status: AuthStatus;
 }
 
 /** The signed-in person in the top bar: initials, name on hover; opens Settings > You. */
-export function PersonChip({ onOpen }: { onOpen: () => void }) {
-  const { status } = useContext(AuthCtx);
+/**
+ * Step 16.2: my initials at the right of the top bar, with a menu: Settings and Sign out (or Sign in). Without a
+ * sign-in configured it still opens Settings, so Settings is always one click away.
+ */
+export function PersonChip({ onOpen, onSettings }: { onOpen: (at: { x: number; y: number }, step: MenuStep) => void; onSettings: () => void }) {
+  const { status, signIn, signOut } = useContext(AuthCtx);
   const p: Person | null = status?.person ?? null;
-  if (!status?.configured) return null;
+  const signedIn = status?.state === "signed_in" || status?.state === "unavailable";
+  const label = !status?.configured ? "Settings" : p ? `Signed in as ${p.name}${status.state === "unavailable" ? " (offline)" : ""}` : "Not signed in";
   return (
-    <button type="button" className="person-chip" onClick={onOpen} title={p ? `Signed in as ${p.name} (${p.username})${status.state === "unavailable" ? ". Offline: showing who was signed in" : ""}` : "Not signed in"} aria-label={p ? `Signed in as ${p.name}. Settings > You` : "Not signed in. Settings > You"}>
-      {p ? p.initials : "?"}
+    <button
+      type="button"
+      className="person-chip"
+      aria-haspopup="menu"
+      title={p ? `${p.name} (${p.username}): Settings and Sign out` : "Settings (,)"}
+      aria-label={`${label}. Menu: Settings${status?.configured ? (signedIn ? ", Sign out" : ", Sign in") : ""}`}
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        const items: MenuItem[] = [{ id: "settings", label: "Settings", hint: ",", run: onSettings }];
+        if (status?.configured && signedIn) items.push({ id: "signout", label: "Sign out", action: "auth.sign_out", run: () => void signOut() });
+        else if (status?.configured) items.push({ id: "signin", label: "Sign in", run: () => void signIn() });
+        onOpen({ x: r.right, y: r.bottom + 4 }, { title: p ? p.name : "You", items });
+      }}
+    >
+      {p ? p.initials : status?.configured ? "?" : "Me"}
     </button>
   );
 }

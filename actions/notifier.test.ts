@@ -152,3 +152,85 @@ describe("notifier", () => {
     expect(t.shown[0]).toMatchObject({ kind: "test", route: "settings:notifications" });
   });
 });
+
+describe("closing notifications that no longer apply (step 16.2, Q91)", () => {
+  function closable(done: (x: Notice) => boolean) {
+    const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(AT).toZonedDateTimeISO("America/New_York") });
+    const f: GateFacts = { settings: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, inHours: true, pto: false, focusRunning: false };
+    const closed: string[] = [];
+    const pending = new Map<string, (k: string | null) => void>();
+    let next = 100;
+    const n = createNotifier({
+      plan,
+      host: {
+        // Stays open until closed (like notify-send waiting on a notification with actions).
+        show: (x, shown) =>
+          new Promise((resolve) => {
+            const h = String(next++);
+            shown?.(h);
+            pending.set(h, resolve);
+            void x;
+          }),
+        close: (h) => {
+          closed.push(h);
+          pending.get(h)?.(null);
+        },
+      },
+      facts: async () => f,
+      now: () => AT,
+      open: () => {},
+      act: async () => {},
+      done,
+    });
+    return { n, plan, closed };
+  }
+
+  it("closes a shown notification once its occasion is handled, marks it handled, and only once", async () => {
+    let planned = false;
+    const t = closable((x) => x.kind === "plan_day" && planned);
+    await t.n.refresh();
+    await t.n.offer(notices.planDay("2026-11-02", AT));
+    await flush();
+    expect(await t.n.sweep()).toBe(0);
+    expect(t.n.onScreen()).toEqual(["plan_day:2026-11-02"]);
+    planned = true;
+    expect(await t.n.sweep()).toBe(1);
+    expect(t.closed).toEqual(["100"]);
+    expect(t.n.handled("plan_day:2026-11-02")).toBe(true);
+    await flush();
+    expect(t.n.onScreen()).toEqual([]);
+    expect(await t.n.sweep()).toBe(0);
+  });
+
+  it("leaves test notifications and plain samples alone", async () => {
+    const t = closable(() => true);
+    await t.n.refresh();
+    await t.n.test();
+    t.n.show({ ...notices.planDay("2026-11-02", AT), key: "sample:plan_day:2026-11-02:x" });
+    await flush();
+    expect(await t.n.sweep()).toBe(0);
+    t.n.show({ ...notices.planDay("2026-11-02", AT), key: "sample:live:plan_day:2026-11-02:x" });
+    await flush();
+    expect(await t.n.sweep()).toBe(1);
+  });
+
+  it("a collapsed one closes only when every notification it lists is handled", async () => {
+    const done = new Set<string>();
+    const t = closable((x) => done.has(x.key));
+    await t.n.refresh();
+    t.plan.setState(HELD_KEY, [notices.planDay("2026-11-02", AT), notices.checkin("2026-11-02", AT)]);
+    expect(await t.n.flush()).toBe(2);
+    await flush();
+    done.add("plan_day:2026-11-02");
+    expect(await t.n.sweep()).toBe(0);
+    done.add("checkin:2026-11-02");
+    expect(await t.n.sweep()).toBe(1);
+  });
+
+  it("without a host that can close, nothing is closed (clicking it opens the view that shows it's done)", async () => {
+    const t = setup();
+    await t.n.refresh();
+    await t.n.offer(notices.planDay("2026-11-02", AT));
+    expect(await t.n.sweep()).toBe(0);
+  });
+});

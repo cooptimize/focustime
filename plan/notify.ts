@@ -87,6 +87,8 @@ export type Notice = {
   route: string;
   /** When it was first due (ISO instant). */
   at: string;
+  /** Step 16.2 (Q91): what the occasion is about (a date, a week, a timer session), to tell when it's handled. */
+  ref?: string;
 };
 
 export type GateFacts = {
@@ -166,9 +168,9 @@ const open = (label: string): NotifyButton => ({ key: "open", label });
 const shortDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
 
 export const notices = {
-  planDay: (date: string, at: string): Notice => ({ kind: "plan_day", key: `plan_day:${date}`, title: "Plan the day", body: "Today isn't planned yet.\nClick to plan the day.", buttons: [open("Plan the day")], route: "planday", at }),
-  checkin: (date: string, at: string): Notice => ({ kind: "checkin", key: `checkin:${date}`, title: "Check-in", body: "Midday check-in: what still fits this afternoon.\nClick to check in.", buttons: [open("Check in")], route: "checkin", at }),
-  closeout: (date: string, at: string): Notice => ({ kind: "closeout", key: `closeout:${date}`, title: "Close out", body: "Time to close out the day: picks, resume notes and follow-ups.\nClick to close out.", buttons: [open("Close out")], route: "closeout", at }),
+  planDay: (date: string, at: string): Notice => ({ kind: "plan_day", key: `plan_day:${date}`, title: "Plan the day", body: "Today isn't planned yet.\nClick to plan the day.", buttons: [open("Plan the day")], route: "planday", at, ref: date }),
+  checkin: (date: string, at: string): Notice => ({ kind: "checkin", key: `checkin:${date}`, title: "Check-in", body: "Midday check-in: what still fits this afternoon.\nClick to check in.", buttons: [open("Check in")], route: "checkin", at, ref: date }),
+  closeout: (date: string, at: string): Notice => ({ kind: "closeout", key: `closeout:${date}`, title: "Close out", body: "Time to close out the day: picks, resume notes and follow-ups.\nClick to close out.", buttons: [open("Close out")], route: "closeout", at, ref: date }),
   /** Monday for this week (Plan the week), Thursday and Friday for next week (Look ahead). */
   week: (weekStart: string, thisWeek: boolean, at: string): Notice => ({
     kind: thisWeek ? "plan_week" : "look_ahead",
@@ -178,6 +180,7 @@ export const notices = {
     buttons: [open("Plan the week")],
     route: `planweek:${weekStart}`,
     at,
+    ref: weekStart,
   }),
   timerEnd: (breakOver: boolean, label: string, startedAt: string, at: string): Notice => ({
     kind: "timer",
@@ -187,10 +190,11 @@ export const notices = {
     buttons: [{ key: "done", label: "Done" }, { key: "extend", label: "+15 min" }, { key: "next", label: "Next pick" }],
     route: "focus",
     at,
+    ref: startedAt,
   }),
   meeting: (labels: string[], keys: string[], at: string): Notice => ({ kind: "meeting", key: `meeting:${keys.join("|")}`.slice(0, 300), title: "In 5 minutes", body: labels.join("\n"), buttons: [], route: "focus", at }),
-  vmOff: (date: string, vmName: string, at: string): Notice => ({ kind: "vm", key: `vm_off:${date}`, title: "Your VM is off", body: `${vmName} is stopped.\nClick to start it.`, buttons: [{ key: "start", label: "Start" }], route: "vm", at }),
-  vmChanged: (date: string, text: string, at: string): Notice => ({ kind: "vm", key: `vm_changed:${date}`, title: "Auto-shutdown is still changed", body: `${text}. Coopilot couldn't put it back.\nClick to restore it.`, buttons: [{ key: "restore", label: "Restore" }], route: "today", at }),
+  vmOff: (date: string, vmName: string, at: string): Notice => ({ kind: "vm", key: `vm_off:${date}`, title: "Your VM is off", body: `${vmName} is stopped.\nClick to start it.`, buttons: [{ key: "start", label: "Start" }], route: "vm", at, ref: date }),
+  vmChanged: (date: string, text: string, at: string): Notice => ({ kind: "vm", key: `vm_changed:${date}`, title: "Auto-shutdown is still changed", body: `${text}. Coopilot couldn't put it back.\nClick to restore it.`, buttons: [{ key: "restore", label: "Restore" }], route: "today", at, ref: date }),
   followUps: (date: string, due: { id: number; what: string; overdue: boolean }[], at: string): Notice | null => {
     if (!due.length) return null;
     const over = due.filter((f) => f.overdue).length;
@@ -218,4 +222,45 @@ export function dueFollowUps(open: readonly { id: number; what: string; due: str
     .filter((f) => !f.closedAt && f.due && f.due <= today && !(f.snoozedUntil && f.snoozedUntil > today))
     .sort((a, b) => a.due!.localeCompare(b.due!) || a.id - b.id)
     .map((f) => ({ id: f.id, what: f.what, overdue: f.due! < today }));
+}
+
+/** Step 16.2 (Q91): what tells whether a sent notification's occasion was handled since. */
+export type DoneFacts = {
+  committed: (date: string) => boolean;
+  checkedIn: (date: string) => boolean;
+  closedOut: (date: string) => boolean;
+  weekCommitted: (weekStart: string) => boolean;
+  /** Whether a follow-up is still open. */
+  followUpOpen: (id: number) => boolean;
+  /** Follow-ups due today or overdue now. */
+  dueCount: () => number;
+  /** Whether the timer still waits on the session that started then (ended, not yet Done, +15 or Next pick). */
+  timerWaiting: (startedAt: string) => boolean;
+  /** My VM: off and needing a start (null: unknown, never closes). */
+  vmOff: () => boolean | null;
+  /** My VM's auto-shutdown is still changed (null: unknown). */
+  vmChanged: () => boolean | null;
+};
+
+/**
+ * Whether a sent notification no longer applies and can be closed (Q91): the day got planned, checked in or closed
+ * out, the week planned, the follow-up closed (or none due any more), the timer answered in the app, the VM started
+ * or its auto-shutdown put back. Meeting warnings, expiring secrets and tests stay until dismissed.
+ */
+export function noticeDone(n: Notice, f: DoneFacts): boolean {
+  const ref = n.ref;
+  switch (n.kind) {
+    case "plan_day": return !!ref && f.committed(ref);
+    case "checkin": return !!ref && (f.checkedIn(ref) || f.closedOut(ref));
+    case "closeout": return !!ref && f.closedOut(ref);
+    case "plan_week":
+    case "look_ahead": return !!ref && f.weekCommitted(ref);
+    case "timer": return !!ref && !f.timerWaiting(ref);
+    case "followups": {
+      const r = parseRoute(n.route);
+      return r?.view === "followup" ? !f.followUpOpen(r.id) : f.dueCount() === 0;
+    }
+    case "vm": return n.key.includes("vm_changed:") ? f.vmChanged() === false : f.vmOff() === false;
+    default: return false;
+  }
 }

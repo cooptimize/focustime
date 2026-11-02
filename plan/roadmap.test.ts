@@ -1,6 +1,6 @@
-// Step 16, slice 1: the Delivery view's rules (D278 to D281). Fictional data only.
+// Step 16, slice 1: the Roadmap view's rules (D278 to D281). Fictional data only.
 import { describe, expect, it } from "vitest";
-import { deliverySignal, ownedItems, storyCounts, trendRate, type DeliverySnapshot } from "./delivery.ts";
+import { roadmapSignal, ownedItems, storyCounts, trendRate, type RoadmapSnapshot } from "./roadmap.ts";
 import type { ClientPortfolio, PortfolioChild, PortfolioItem } from "../week/types.ts";
 
 const NOW = "2026-11-02T15:00:00Z";
@@ -62,7 +62,7 @@ describe("stories done and open (D279)", () => {
 });
 
 describe("trend from daily snapshots (D280)", () => {
-  const s = (date: string, done: number, open: number): DeliverySnapshot => ({ date, done, open });
+  const s = (date: string, done: number, open: number): RoadmapSnapshot => ({ date, done, open });
   it("uses the oldest snapshot of the last 21 days and today's, as stories closed per week", () => {
     const r = trendRate([s("2026-10-05", 0, 20), s("2026-10-12", 2, 14), s("2026-10-19", 3, 12), s("2026-11-02", 9, 9)], "2026-11-02");
     // Oct 5 is 28 days back, outside the window: from Oct 12 (2 done) to Nov 2 (9 done), 21 days.
@@ -80,30 +80,30 @@ describe("trend from daily snapshots (D280)", () => {
 describe("the on-track signal (D281)", () => {
   const base = { today: "2026-11-02", days: 21, noun: "stories" as const };
   it("says On track when what's open fits the weeks left at the current rate", () => {
-    expect(deliverySignal({ ...base, open: 6, done: 9, perWeek: 3, targetDate: "2026-11-16" })).toEqual({ level: "on_track", reason: "6 stories open, about 3 closed per week, 2 weeks to target" });
+    expect(roadmapSignal({ ...base, open: 6, done: 9, perWeek: 3, targetDate: "2026-11-16" })).toEqual({ level: "on_track", reason: "6 stories open, about 3 closed per week, 2 weeks to target" });
   });
   it("says Watch up to one and a half times the weeks left, At risk beyond", () => {
-    expect(deliverySignal({ ...base, open: 9, done: 9, perWeek: 3, targetDate: "2026-11-16" })).toEqual({ level: "watch", reason: "9 stories open, about 3 closed per week, 2 weeks to target" });
-    expect(deliverySignal({ ...base, open: 10, done: 9, perWeek: 3, targetDate: "2026-11-16" }).level).toBe("at_risk");
+    expect(roadmapSignal({ ...base, open: 9, done: 9, perWeek: 3, targetDate: "2026-11-16" })).toEqual({ level: "watch", reason: "9 stories open, about 3 closed per week, 2 weeks to target" });
+    expect(roadmapSignal({ ...base, open: 10, done: 9, perWeek: 3, targetDate: "2026-11-16" }).level).toBe("at_risk");
   });
   it("handles nothing closed in the window by weeks left", () => {
-    expect(deliverySignal({ ...base, open: 4, done: 2, perWeek: 0, targetDate: "2026-11-16" })).toEqual({ level: "watch", reason: "4 stories open, none closed in the last 21 days, 2 weeks to target" });
-    expect(deliverySignal({ ...base, open: 4, done: 2, perWeek: 0, targetDate: "2026-11-12" })).toEqual({ level: "at_risk", reason: "4 stories open, none closed in the last 21 days, 10 days to target" });
+    expect(roadmapSignal({ ...base, open: 4, done: 2, perWeek: 0, targetDate: "2026-11-16" })).toEqual({ level: "watch", reason: "4 stories open, none closed in the last 21 days, 2 weeks to target" });
+    expect(roadmapSignal({ ...base, open: 4, done: 2, perWeek: 0, targetDate: "2026-11-12" })).toEqual({ level: "at_risk", reason: "4 stories open, none closed in the last 21 days, 10 days to target" });
   });
   it("is On track when everything is done, and At risk past the target date", () => {
-    expect(deliverySignal({ ...base, open: 0, done: 7, perWeek: 1, targetDate: "2026-10-01" })).toEqual({ level: "on_track", reason: "All 7 stories done" });
-    expect(deliverySignal({ ...base, open: 3, done: 7, perWeek: 1, targetDate: "2026-10-30" })).toEqual({ level: "at_risk", reason: "Target date passed, 3 stories open" });
+    expect(roadmapSignal({ ...base, open: 0, done: 7, perWeek: 1, targetDate: "2026-10-01" })).toEqual({ level: "on_track", reason: "All 7 stories done" });
+    expect(roadmapSignal({ ...base, open: 3, done: 7, perWeek: 1, targetDate: "2026-10-30" })).toEqual({ level: "at_risk", reason: "Target date passed, 3 stories open" });
   });
   it("gives no signal with nothing under the item yet", () => {
-    expect(deliverySignal({ ...base, open: 0, done: 0, perWeek: null, targetDate: "2026-11-30" })).toEqual({ level: null, reason: "No stories yet" });
-    expect(deliverySignal({ ...base, noun: "features", open: 0, done: 0, perWeek: null, targetDate: null })).toEqual({ level: null, reason: "No features yet" });
+    expect(roadmapSignal({ ...base, open: 0, done: 0, perWeek: null, targetDate: "2026-11-30" })).toEqual({ level: null, reason: "No stories yet" });
+    expect(roadmapSignal({ ...base, noun: "features", open: 0, done: 0, perWeek: null, targetDate: null })).toEqual({ level: null, reason: "No features yet" });
   });
   it("gives no signal without a target date or before a week of snapshots", () => {
-    expect(deliverySignal({ ...base, open: 3, done: 1, perWeek: 1, targetDate: null })).toEqual({ level: null, reason: "No target date" });
-    expect(deliverySignal({ ...base, days: 4, open: 3, done: 1, perWeek: 1, targetDate: "2026-11-30" })).toEqual({ level: null, reason: "Trend after a week of daily counts (4 days so far)" });
+    expect(roadmapSignal({ ...base, open: 3, done: 1, perWeek: 1, targetDate: null })).toEqual({ level: null, reason: "No target date" });
+    expect(roadmapSignal({ ...base, days: 4, open: 3, done: 1, perWeek: 1, targetDate: "2026-11-30" })).toEqual({ level: null, reason: "Trend after a week of daily counts (4 days so far)" });
   });
   it("says features for an epic, rates under one with a decimal, and one day or week in the singular", () => {
-    expect(deliverySignal({ ...base, noun: "features", open: 1, done: 0, perWeek: 0.8, targetDate: "2026-11-09" })).toEqual({ level: "watch", reason: "1 feature open, about 0.8 closed per week, 1 week to target" });
-    expect(deliverySignal({ ...base, open: 1, done: 3, perWeek: 2, targetDate: "2026-11-03" }).reason).toBe("1 story open, about 2 closed per week, 1 day to target");
+    expect(roadmapSignal({ ...base, noun: "features", open: 1, done: 0, perWeek: 0.8, targetDate: "2026-11-09" })).toEqual({ level: "watch", reason: "1 feature open, about 0.8 closed per week, 1 week to target" });
+    expect(roadmapSignal({ ...base, open: 1, done: 3, perWeek: 2, targetDate: "2026-11-03" }).reason).toBe("1 story open, about 2 closed per week, 1 day to target");
   });
 });

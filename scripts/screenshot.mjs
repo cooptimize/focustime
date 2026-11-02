@@ -44,11 +44,11 @@ try {
       // Next week has patterns only
       await page.keyboard.press("]");
       await page.screenshot({ path: `${out}/next-week.png` });
-      await page.keyboard.press("t");
-      await page.waitForFunction(() => document.querySelector(".weeknav h1")?.textContent?.includes("Nov 2"));
-      const label = await page.textContent(".weeknav h1");
+      await page.keyboard.press("2");
+      await page.waitForFunction(() => document.querySelector(".week-head h2")?.textContent?.includes("Nov 2"));
+      const label = await page.textContent(".week-head h2");
       const focused = await page.evaluate(() => document.activeElement?.getAttribute("aria-label"));
-      console.log(`after t: ${label} | focused: ${focused}`);
+      console.log(`after 2: ${label} | focused: ${focused}`);
     }
     await page.close();
   }

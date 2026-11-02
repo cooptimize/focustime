@@ -168,7 +168,7 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
   ],
 };
 
-/** Step 16 (Delivery): stories with no change in a while, and stories with no size yet. */
+/** Step 16 (Roadmap): stories with no change in a while, and stories with no size yet. */
 const QUIET = new Set([4412, 1112]);
 const UNSIZED = new Set([1113, 2213]);
 

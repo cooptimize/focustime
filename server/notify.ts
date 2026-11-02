@@ -63,18 +63,39 @@ export function notifySend(title: string, body: string) {
  * prints the chosen key; resolves null when it is dismissed or expires. Only known keys are passed on (the notifier
  * checks again).
  */
-export function desktopNotify(n: Notice, icon: string | null = null): Promise<string | null> {
+export function desktopNotify(n: Notice, icon: string | null = null, shown?: (handle: string) => void): Promise<string | null> {
   return new Promise((resolve) => {
-    const args = ["--app-name=Coopilot", "--urgency=normal", ...(icon ? [`--icon=${icon}`] : []), `--action=${OPEN_KEY}=Open`, ...n.buttons.map((b) => `--action=${b.key}=${b.label}`), n.title, n.body];
+    // --print-id (Q91): the first line is the notification's id, so it can be closed when its occasion is handled.
+    const args = ["--app-name=Coopilot", "--urgency=normal", "--print-id", ...(icon ? [`--icon=${icon}`] : []), `--action=${OPEN_KEY}=Open`, ...n.buttons.map((b) => `--action=${b.key}=${b.label}`), n.title, n.body];
     const p = spawn("notify-send", args, { stdio: ["ignore", "pipe", "ignore"] });
     let out = "";
-    p.stdout.on("data", (c: Buffer) => (out += c.toString()));
+    let told = false;
+    p.stdout.on("data", (c: Buffer) => {
+      out += c.toString();
+      const first = out.split("\n")[0]!;
+      if (!told && out.includes("\n") && /^\d{1,10}$/.test(first)) {
+        told = true;
+        shown?.(first);
+      }
+    });
     p.on("error", () => resolve(null));
     p.on("close", () => {
-      const key = out.trim();
+      const lines = out.trim().split("\n");
+      const key = (/^\d{1,10}$/.test(lines[0] ?? "") ? lines.slice(1) : lines).join("").trim();
       resolve(key === OPEN_KEY || n.buttons.some((b) => b.key === key) ? key : null);
     });
   });
+}
+
+/**
+ * Q91: withdraws a notification Coopilot showed (freedesktop CloseNotification, fixed arguments, no shell). A
+ * service that ignores it leaves the notification; clicking it then opens a view that shows the thing is done.
+ */
+export function closeDesktopNotification(handle: string) {
+  if (!/^\d{1,10}$/.test(handle)) return;
+  const p = spawn("gdbus", ["call", "--session", "--dest", "org.freedesktop.Notifications", "--object-path", "/org/freedesktop/Notifications", "--method", "org.freedesktop.Notifications.CloseNotification", handle], { stdio: "ignore" });
+  p.on("error", () => {});
+  p.unref();
 }
 
 // ---- Check-in and Close out reminders (step 7): once a day each, near midday and near the end of the day. ----

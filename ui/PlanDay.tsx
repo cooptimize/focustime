@@ -2,6 +2,8 @@
 // with its picks as clean rows and one calm fit line. Right, "Add to <Client> <Morning>": this week's priorities, the
 // client's follow-ups, then everything else. One "+" per row; every other action is in a row's ⋯ menu. Everything
 // here is local: the actions only write Coopilot's plan store.
+import { ModeArea } from "./ModeSwitch.tsx";
+import { planDayTitle } from "./nav.ts";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
 import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps } from "./DevOpsWrite.tsx";
@@ -59,8 +61,10 @@ type Props = {
   nextDay?: { date: string; label: string } | null;
   /** "+ Add work" or A on a block, or a card's "This week: <feature>" (focus): open on that block. */
   start?: { half: Half; n: number; focus?: number | null } | null;
-  /** The ritual chips (Plan the day, Check-in, Close out, Plan the week), shown in this view's header (D268). */
-  rituals?: ReactNode;
+  /** Step 16.2: Today's mode switch, at the right of this view's header. */
+  switcher?: ReactNode;
+  /** Today's date, for the title ("Plan today" or "Plan Tuesday, Nov 3"). */
+  today: string;
   /** Step 15.2: the selected block, so ⋯ menus add to it (null when the view closes). */
   onSelectBlock?: (half: Half | null) => void;
 };
@@ -68,9 +72,8 @@ type Props = {
 const inPlay = (p: Pick) => p.status === "planned" || p.status === "done";
 const pickedKey = (p: Pick) => (p.itemId !== null ? `i${p.clientKey}:${p.itemId}` : p.draftId !== null ? `d${p.draftId}` : p.followUpId !== null ? `f${p.followUpId}` : `t${p.clientKey}:${p.title}`);
 const weekdayOf = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long" });
-const titleDate = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long", month: "short", day: "numeric" });
 
-export function PlanDay({ day, state, which, now, tz, colors, clients, error, act, onCommit, onClose, onStep, nextDay = null, start, justCommitted = false, onCommitSeen, rituals, onSelectBlock }: Props) {
+export function PlanDay({ day, state, which, now, tz, colors, clients, error, act, onCommit, onClose, onStep, nextDay = null, start, justCommitted = false, onCommitSeen, switcher, today, onSelectBlock }: Props) {
   const past = state.access === "past";
   const off = day.pto;
   const ref = useRef<HTMLElement>(null);
@@ -151,37 +154,30 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   const inner = { ...pv, focused: { ...pv.focused, ...state.focused }, resumeNotes: state.resumeNotes };
   const selBlock = blocks.find((b) => b.half === sel) ?? blocks[0];
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? k ?? "";
-  const badge = past ? "Past" : which;
+  const badge = past ? null : which;
 
   return (
     <PlanCtx.Provider value={inner}>
       <section ref={ref} className="planday pd2" tabIndex={-1} aria-label={`Plan ${longDate(day.date)}`} onKeyDown={onKey}>
         <header className="pd2-head">
-          {rituals}
           <div className="pd2-title">
             <h2>
-              {past ? "Review" : "Plan"} {titleDate(day.date)}
-              {badge && <span className={`pd-which ${badge === "Today" ? "today" : badge === "Past" ? "past" : "next"}`}>{badge}</span>}
-              {committed && !past && <span className="pd-planned">Planned</span>}
+              <span className="pd-step" role="group" aria-label="Day">
+                <button type="button" onClick={() => onStep(-1)} aria-label="Previous day (←)" title="Previous day (←)">‹</button>
+                <button type="button" onClick={() => onStep(1)} aria-label="Next day (→)" title="Next day (→)">›</button>
+              </span>
+              {planDayTitle(day.date, today)}
+              {badge && <span className={`pd-which ${badge === "Past" ? "past" : "next"}`}>{badge}</span>}
             </h2>
             <p className="pd2-status">{off ? "Day off" : past ? "Tick what got done, or drop the rest" : dayTotals(blocks.filter((b) => !b.slot.off))}</p>
           </div>
           <div className="pd2-actions">
-            <span className="pd-step" role="group" aria-label="Day">
-              <button type="button" onClick={() => onStep(-1)} aria-label="Previous day (←)" title="Previous day (←)">‹</button>
-              <button type="button" onClick={() => onStep(1)} aria-label="Next day (→)" title="Next day (→)">›</button>
-            </span>
             {!past && !off && committed && timing && unboxed > 0 && (
               <button type="button" onClick={() => setMyDay(true)} title="Give every planned pick a time in its block's free time">
                 Timebox my day
               </button>
             )}
-            <button type="button" className="primary pd2-done" onClick={done} title={past ? "Close (Esc)" : committed ? "Close (C)" : "Save this plan for the day (C)"}>
-              Done
-            </button>
-            <button type="button" className="quiet" onClick={onClose} aria-label="Close (Esc)" title="Close (Esc)">
-              ✕
-            </button>
+            <ModeArea done={{ onClick: done, title: past ? "Back to Now (Esc)" : committed ? "Back to Now (C)" : "Save this plan for the day (C)" }}>{switcher}</ModeArea>
           </div>
         </header>
         {didntFit && !past && (

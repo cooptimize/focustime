@@ -13,7 +13,10 @@ import { hasHoursOn } from "./plan-actions.ts";
 import { applyFollowUpRules, internalClients, followUpView, nameOf, newestFirst, workdayOf } from "./followup-rules.ts";
 import type { ActionResponse, BorrowedView, CloseOutState, ResumeNoteView } from "./types.ts";
 
-export type CloseoutAction = "closeout.load" | "closeout.commit" | "pick.make_up" | "note.set" | "borrow.pay";
+export type CloseoutAction = "closeout.load" | "closeout.commit" | "checkin.done" | "pick.make_up" | "note.set" | "borrow.pay";
+
+/** Step 16.2: the plan store marker for a day whose Check-in was done (Done in Check-in). Local only. */
+export const CHECKIN_DONE_MARK = "checkin_done";
 
 export type CloseoutContext = {
   plan: PlanStore | undefined;
@@ -143,6 +146,13 @@ export async function closeoutAction(ctx: CloseoutContext, action: CloseoutActio
         if (future) return bad(future, 422);
         if (action === "closeout.commit") plan.closeOut(d);
         return { ok: true, data: await closeOutState(ctx, plan, d) };
+      }
+      case "checkin.done": {
+        // Step 16.2: Done in Check-in marks today checked in (the ✓ on the Check-in mode). Only today has a Check-in.
+        const d = date(fields(input, ["date"]).date);
+        if (d !== today) return bad("Check-in is for today", 422);
+        plan.markOnce(CHECKIN_DONE_MARK, d);
+        return { ok: true, data: { date: d, done: true } };
       }
       case "pick.make_up": {
         const o = fields(input, ["id", "when"], ["date", "half", "minutes"]);

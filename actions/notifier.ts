@@ -12,8 +12,13 @@ export const HANDLED_MARK = "notice_handled";
 const SENT_MARK = "notice_sent";
 
 export type NotifyHost = {
-  /** Shows a notification; resolves to the clicked button's key, OPEN_KEY for the notification itself, or null. */
-  show: (n: Notice) => Promise<string | null>;
+  /**
+   * Shows a notification; resolves to the clicked button's key, OPEN_KEY for the notification itself, or null.
+   * `shown` hears the host's handle for it, when the host can close notifications (Q91).
+   */
+  show: (n: Notice, shown?: (handle: string) => void) => Promise<string | null>;
+  /** Withdraws a shown notification (Q91), when the notification service allows it. */
+  close?: (handle: string) => void;
 };
 
 export type OnClick = (key: string) => Promise<void> | void;
@@ -32,6 +37,8 @@ export type NotifierDeps = {
   act: (n: Notice, key: string) => Promise<void>;
   /** Whether a held notification still matters when the session ends (the day may have been planned meanwhile). */
   still?: (n: Notice) => Promise<boolean> | boolean;
+  /** Step 16.2 (Q91): whether a shown notification's occasion was handled since (it is then closed). */
+  done?: (n: Notice) => Promise<boolean> | boolean;
   log?: (op: string, kind: string) => void;
 };
 
@@ -55,6 +62,10 @@ export type Notifier = {
   click: (n: Notice, key: string, held?: readonly Notice[], onClick?: OnClick) => Promise<void>;
   handled: (key: string) => boolean;
   held: () => Notice[];
+  /** Step 16.2 (Q91): closes shown notifications whose occasion was handled; returns how many. */
+  sweep: () => Promise<number>;
+  /** The keys of the notifications on screen now (shown, not yet clicked, dismissed or closed). */
+  onScreen: () => string[];
 };
 
 export function createNotifier(d: NotifierDeps): Notifier {
@@ -73,14 +84,22 @@ export function createNotifier(d: NotifierDeps): Notifier {
     else if (!isOpen(key)) await d.act(n, key);
   };
 
+  // Q91: the notifications on screen, with the host's handle once it is known.
+  const shown = new Map<string, { n: Notice; list: readonly Notice[]; handle: string | null }>();
   const deliver = (n: Notice, list: readonly Notice[] = [], onClick?: OnClick) => {
     log("notify", String(n.kind));
+    const entry = { n, list, handle: null as string | null };
+    shown.set(n.key, entry);
     // Not awaited: a notification with buttons stays until answered.
     void d.host
-      .show(n)
-      .then((key) => (key ? click(n, key, list, onClick) : onClick?.("")))
+      .show(n, (h) => (entry.handle = h))
+      .then((key) => {
+        if (shown.get(n.key) === entry) shown.delete(n.key);
+        return key ? click(n, key, list, onClick) : onClick?.("");
+      })
       .catch(() => log("notify", "failed"));
   };
+  const isDone = async (n: Notice) => (d.done ? await Promise.resolve(d.done(n)).catch(() => false) : false);
 
   const notifier: Notifier = {
     refresh: async () => (facts = await d.facts()),
@@ -122,6 +141,26 @@ export function createNotifier(d: NotifierDeps): Notifier {
       deliver({ kind: "test", key: `test:${d.now()}`, title: "Coopilot", body: "Test notification. Click it to open Settings > Notifications.", buttons: [], route: "settings:notifications", at: d.now() });
     },
     show: (n, onClick) => deliver(n, [], onClick),
+    sweep: async () => {
+      if (!d.host.close || !d.done) return 0;
+      let closed = 0;
+      for (const [key, e] of [...shown]) {
+        if (!e.handle || e.n.kind === "test") continue;
+        // Plain samples stay (they are for looking at); live samples and real ones close.
+        if (key.startsWith("sample:") && !key.startsWith("sample:live:")) continue;
+        const list = e.n.kind === "held" ? e.list : [e.n];
+        let all = list.length > 0;
+        for (const x of list) if (!(await isDone(x))) all = false;
+        if (!all || shown.get(key) !== e) continue;
+        shown.delete(key);
+        for (const x of list) d.plan.markOnce(HANDLED_MARK, x.key);
+        d.host.close(e.handle);
+        log("notify_closed", String(e.n.kind));
+        closed++;
+      }
+      return closed;
+    },
+    onScreen: () => [...shown.keys()],
     click,
     handled,
     held,

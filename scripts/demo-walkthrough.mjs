@@ -1,14 +1,16 @@
-// The scripted demo (docs/demo.md), end to end in demo mode at 1920x1080: Week → Plan the week → Plan the day (select a
-// block, add from the week's priorities, Done, Timebox my day) → Today → Start focus → Close out (close the loop on a
-// follow-up). It turns demo mode on first and refuses to run if the top bar doesn't say "Demo data", so every change it
-// makes lands in the in-memory demo store. The launch token is never printed.
-// Usage: node scripts/demo-walkthrough.mjs <outDir> [light|dark] [--now <ISO>]
+// The scripted demo (docs/demo.md), end to end in demo mode at 1920x1080, in the step 16.2 navigation: Today › Now →
+// Week → Week › Plan the week → a day's Plan chip → Today › Plan (select a block, add from the week's priorities, Done,
+// Timebox my day, Done) → Today › Now → Start focus → Today › Close out (close the loop on a follow-up) → Roadmap. It
+// turns demo mode on first and refuses to run if the top bar doesn't say "Demo data", so every change it makes lands in
+// the in-memory demo store. The launch token is never printed.
+// Usage: node scripts/demo-walkthrough.mjs <outDir> [light|dark] [--now <ISO>] [--runtime <dir>]
 import { chromium } from "playwright-core";
 import { mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const launchUrl = JSON.parse(readFileSync(join(process.env.XDG_RUNTIME_DIR || tmpdir(), "coopilot", "launch.json"), "utf8")).url;
+const runtime = process.argv.includes("--runtime") ? (process.argv[process.argv.indexOf("--runtime") + 1] ?? "") : process.env.XDG_RUNTIME_DIR || tmpdir();
+const launchUrl = JSON.parse(readFileSync(join(runtime, "coopilot", "launch.json"), "utf8")).url;
 const out = process.argv[2] ?? "docs/demo";
 const scheme = process.argv[3] === "light" ? "light" : "dark";
 const nowArg = process.argv.includes("--now") ? process.argv[process.argv.indexOf("--now") + 1] : "";
@@ -21,8 +23,9 @@ const errors = [];
 const steps = [];
 try {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, colorScheme: scheme });
-  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Vite's dev client reports its websocket (HMR is off in the server): not an app error.
+  page.on("console", (m) => m.type() === "error" && !/WebSocket|\[vite\]|Vite server/.test(m.text()) && errors.push(m.text()));
+  page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
   await page.goto(url);
   await page.waitForSelector(".topbar", { timeout: 15000 });
   await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "demo.set", input: { on: true } }) }));
@@ -47,26 +50,36 @@ try {
     }
   };
 
-  await shot("today", "Today in demo mode: now, what's due, Plan today");
+  const at = async (/** @type {string} */ want) => {
+    for (let k = 0; k < 40 && (await page.evaluate(() => location.hash)) !== want; k++) await page.waitForTimeout(100);
+    const h = await page.evaluate(() => location.hash);
+    if (h !== want) throw new Error(`expected ${want}, at ${h}`);
+  };
+
+  await shot("today", "Today › Now: now and next, what's due, and the mode switch (Plan is due this morning)");
   await page.keyboard.press("2");
   await page.waitForTimeout(1200);
-  await shot("week", "The week: focus blocks per client, meetings, follow-ups and this week's features on the cards");
+  await shot("week", "Week: focus blocks per client, meetings, follow-ups and this week's features; musts in the header");
 
-  await page.keyboard.press("3");
-  await page.waitForTimeout(800);
-  await ok("open Plan the week", () => page.getByRole("button", { name: /^Plan the week/ }).first().click());
+  await ok("open Plan the week", () => page.locator(".mode-switch").getByRole("button", { name: /^Plan the week/ }).click());
+  await ok("Plan the week is next week", () => at("#/week/plan"));
   await page.waitForTimeout(1200);
-  await ok("go to this week", () => page.getByRole("button", { name: "Previous week" }).click());
-  await page.waitForTimeout(1200);
-  await shot("plan-week", "Plan the week: musts and nice to haves per client, fit in plain words");
+  await ok("go to this week", () => page.locator(".planweek").getByRole("button", { name: "Previous week" }).click());
+  await page.waitForTimeout(1500);
+  await shot("plan-week", "Week › Plan the week: musts and nice to haves per client, fit in plain words");
   await ok("open a row menu", () => page.locator(".pw-row button.more").nth(1).click());
   await page.waitForTimeout(400);
   await shot("plan-week-menu", "Everything else about a week item lives in its ⋯ menu");
   await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
 
-  await ok("open Plan the day", () => page.getByRole("button", { name: /^Plan the day/ }).first().click());
+  await ok("back to Week", () => page.locator(".mode-switch").getByRole("button", { name: "Week", exact: true }).click());
   await page.waitForTimeout(1200);
-  await shot("plan-day", "Plan the day: your day on the left, what to add on the right");
+  await ok("Monday's Plan chip", () => page.locator(".day-plan").first().click());
+  await ok("Today › Plan on Monday", () => at("#/today/plan/2026-11-02"));
+  await page.waitForSelector(".pd2-left");
+  await page.waitForTimeout(1000);
+  await shot("plan-day", "A day's Plan chip opens Today › Plan: your day on the left, what to add on the right");
   await ok("select the Northwind block", () => page.locator(".pd2-block").nth(1).locator(".pd2-block-name").click());
   await page.waitForTimeout(600);
   await shot("plan-day-northwind", "Select a block: the right pane follows it, the week's priorities first");
@@ -75,9 +88,9 @@ try {
     await page.waitForTimeout(700);
   }
   await shot("plan-day-added", "Two stories added with one click each; the block's fit line updates");
-  await ok("Done", () => page.locator(".pd2-done").click());
+  await ok("Done", () => page.locator(".pd2-head .done-btn").click());
   await page.waitForTimeout(1200);
-  await shot("plan-day-done", "Done commits the day and offers Timebox my day");
+  await shot("plan-day-done", "Done commits the day (Plan ✓ on the switch) and offers Timebox my day");
   await ok("Timebox my day", () => page.locator(".pd2 .pd-committed button, .pd2 button").filter({ hasText: /^Timebox my day$/ }).first().click());
   await page.waitForTimeout(900);
   await shot("timebox-my-day", "Timebox my day: each pick placed into a free gap, shown first");
@@ -85,20 +98,22 @@ try {
   await page.waitForTimeout(1200);
   await shot("plan-day-timed", "Picks now have times on their rows");
 
-  await page.keyboard.press("1");
+  await ok("Done again: back to Now", () => page.locator(".pd2-head .done-btn").click());
+  await ok("Today › Now", () => at("#/today"));
   await page.waitForTimeout(1000);
-  await shot("today-planned", "Today: the planned picks, one large Start focus");
+  await shot("today-planned", "Today › Now: the planned picks, one large Start focus, Plan ✓");
   await ok("Start focus", () => page.locator(".today-start").first().click());
   await page.waitForTimeout(1200);
-  await shot("focus", "The focus screen: countdown, the one pick, next meeting");
+  await shot("focus", "The focus screen: countdown, the one pick, next meeting; the Focus button carries the timer");
   await ok("stop focus", () => page.getByRole("button", { name: /^Stop/ }).first().click());
   await page.waitForTimeout(800);
   await page.keyboard.press("Escape");
   await page.waitForTimeout(500);
 
   await page.keyboard.press("e");
+  await ok("Today › Close out", () => at("#/today/closeout"));
   await page.waitForTimeout(1200);
-  await shot("close-out", "Close out: picks done or not, where you left off, open follow-ups");
+  await shot("close-out", "Today › Close out: picks done or not, where you left off, open follow-ups");
   const row = page.locator(".follow-up-list li").first();
   await row.scrollIntoViewIfNeeded();
   await ok("Close the loop", () => row.getByRole("button", { name: "Close the loop" }).first().click());
@@ -108,6 +123,15 @@ try {
   await ok("confirm close", () => row.locator("button[type=submit]").click());
   await page.waitForTimeout(1000);
   await shot("closed", "The follow-up is closed");
+  await ok("Done for the day", () => page.locator(".closeout .done-btn").click());
+  await ok("back to Now", () => at("#/today"));
+  await page.waitForTimeout(800);
+  await shot("today-closed", "Back on Today › Now: Plan ✓ and Close out ✓ on the switch");
+
+  await page.keyboard.press("3");
+  await ok("Roadmap", () => at("#/roadmap"));
+  await page.waitForTimeout(1500);
+  await shot("roadmap", "Roadmap: features and epics you own, on track for the target date or not; Plan ahead is next");
   const tag = await page.locator(".demo-tag").count();
   if (!tag) throw new Error("demo tag missing at the end");
 } finally {

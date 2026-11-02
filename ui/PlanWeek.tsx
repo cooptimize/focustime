@@ -1,3 +1,6 @@
+import { ModeArea } from "./ModeSwitch.tsx";
+import { planWeekTitle } from "./nav.ts";
+import { mondayOf } from "../week/dates.ts";
 import type React from "react";
 // Plan the week (step 8, by client since step 11): each followed client's week list of DevOps features and stories,
 // split into Must and Nice to have, in DevOps stack rank order unless reordered here. Pins to a block are optional
@@ -22,7 +25,7 @@ import { copy } from "./FollowUps.tsx";
 import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 
-type Props = { /** Step 15 (D268): the ritual chips, in this view's header. */ rituals?: React.ReactNode; weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
+type Props = { /** Step 16.2: the Week tab's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
 type Half = "AM" | "PM";
 type Place = { date: IsoDate; half: Half; label: string };
 type Item = Listed<WeekFeature>;
@@ -31,7 +34,6 @@ type HeadsUp = { weekStart: IsoDate; clientKey: string; itemId: number; title: s
 const DRAG_TYPE = "application/x-coopilot-feature";
 const HALF_WORD: Record<Half, string> = { AM: "morning", PM: "afternoon" };
 const plainDate = (d: IsoDate) => Temporal.PlainDate.from(d);
-const weekLabel = (w: IsoDate) => plainDate(w).toLocaleString("en-US", { month: "short", day: "numeric" });
 const dateShort = (d: IsoDate) => plainDate(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 const dateShortIso = (d: IsoDate) => plainDate(d).toLocaleString("en-US", { month: "short", day: "numeric" });
 const placeLabel = (date: IsoDate, half: Half) => pinLabel({ date, half });
@@ -70,7 +72,7 @@ function infoFor(portfolios: WeekPlanState["portfolios"], work: readonly ClientW
   };
 }
 
-export function PlanWeek({ rituals, weekStart, data, version, onWeek, onClose, onChanged, onCaptures }: Props) {
+export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, onChanged, onCaptures }: Props) {
   const [st, setSt] = useState<WeekPlanState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -146,14 +148,21 @@ export function PlanWeek({ rituals, weekStart, data, version, onWeek, onClose, o
   );
 
   if (!st || !weekReady)
-    return <main className="planweek" aria-label="Plan the week">{error ? <p className="set-problem">{error}</p> : <p className="muted">Loading…</p>}</main>;
+    return (
+      <main className="planweek" aria-label="Plan the week">
+        <div className="follow-ups-head">
+          <h2 tabIndex={-1}>{planWeekTitle(weekStart, mondayOf(data.planDay.date))}</h2>
+          <ModeArea>{switcher}</ModeArea>
+        </div>
+        {error ? <p className="set-problem">{error}</p> : <p className="muted">Loading…</p>}
+      </main>
+    );
 
   const past = st.access === "past";
   const names = new Map<string, string>([...data.planClients.map((c) => [c.clientKey, c.clientName] as const), ...st.portfolios.map((p) => [p.clientKey, p.clientName] as const), ...fits.map((f) => [f.clientKey, f.clientName] as const)]);
   const nameOf = (k: string) => names.get(k) ?? k;
   const prev = plainDate(weekStart).subtract({ days: 7 }).toString();
   const next = plainDate(weekStart).add({ days: 7 }).toString();
-  const isThis = weekStart === st.thisWeek;
   const days = data.week.days.filter((d) => d.kind !== "weekend");
   const info = infoFor(st.portfolios, work);
 
@@ -215,15 +224,13 @@ export function PlanWeek({ rituals, weekStart, data, version, onWeek, onClose, o
     }
   };
 
-  const commitLabel = st.plan.committedAt ? (st.plan.changed ? "Done" : "Planned ✓") : "Done";
   const keys = [...new Set([...fits.map((f) => f.clientKey), ...st.portfolios.map((x) => x.clientKey), ...items.map((i) => i.clientKey)])];
 
   return (
     <main className="planweek" aria-label="Plan the week">
-      {rituals}
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
-          Plan the week <span className="muted">of {weekLabel(weekStart)}{isThis ? " (this week)" : weekStart === plainDate(st.thisWeek).add({ days: 7 }).toString() ? " (next week)" : past ? " (review)" : ""}</span>
+          {planWeekTitle(weekStart, st.thisWeek)}
         </h2>
         <span className="co-step">
           <button type="button" className="mini" onClick={() => onWeek(prev)} aria-label="Previous week" title="Previous week">‹</button>
@@ -234,21 +241,25 @@ export function PlanWeek({ rituals, weekStart, data, version, onWeek, onClose, o
             {st.plan.changed ? `Changed since planned (${stamp(st.plan.committedAt, tz)})` : `Planned ${stamp(st.plan.committedAt, tz)}`}
           </span>
         ) : (
-          !past && <span className="pw-state">Not planned yet</span>
+          !past && <span className="pw-state">Not planned</span>
         )}
         {!past && (
           <button type="button" className="top-btn" onClick={() => void load(true)} title="Read features and stories from DevOps again">
             Refresh DevOps
           </button>
         )}
-        {!past && (
-          <button type="button" className="top-btn primary" disabled={!!st.plan.committedAt && !st.plan.changed} onClick={() => void act("weekplan.commit", { weekStart }, "Week committed")}>
-            {commitLabel}
-          </button>
-        )}
-        <button type="button" className="top-btn" onClick={onClose} title="Back (Esc)">
-          Back
-        </button>
+        <ModeArea
+          done={{
+            title: past || (st.plan.committedAt && !st.plan.changed) ? "Back to the week (Esc)" : "Commit this week's lists, then back to the week",
+            onClick: async () => {
+              // Step 16.2: Done commits (or commits the changes again), then goes back to Week.
+              if (!past && (!st.plan.committedAt || st.plan.changed) && (await act("weekplan.commit", { weekStart }, "Week committed")) === null) return;
+              onClose();
+            },
+          }}
+        >
+          {switcher}
+        </ModeArea>
       </div>
       {error && <p className="set-problem" role="alert">{error} <button type="button" className="mini" onClick={() => setError(null)}>Dismiss</button></p>}
       {offer ? (

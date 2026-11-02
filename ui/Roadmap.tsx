@@ -1,24 +1,25 @@
-// The Delivery view (step 16, D278 to D282): features and epics I own, per followed client, with stories done and open,
+// The Roadmap view (step 16, D278 to D282): features and epics I own, per followed client, with stories done and open,
 // who works on them, a three-week trend from local daily snapshots and a plain on-track signal. Read-only: the row ⋯
 // menu uses existing actions, and the only write it can start is Set target date, through the DevOps write flow.
+import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
 import { useCallback, useContext, useEffect, useRef, useState, type CSSProperties } from "react";
-import type { DeliveryClient, DeliveryRow, DeliveryState, WeekLoadData } from "../actions/types.ts";
+import type { RoadmapClient, RoadmapRow, RoadmapState, WeekLoadData } from "../actions/types.ts";
 import { call } from "./api.ts";
 import { DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { copy } from "./FollowUps.tsx";
 import { clientColor } from "./labels.ts";
-import { deliveryRowMenu, type MenuStep } from "./menu.ts";
+import { roadmapRowMenu, type MenuStep } from "./menu.ts";
 import { MenuCtx } from "./Menus.tsx";
 import { openWorkItem, WorkLink } from "./WorkLink.tsx";
 
-const SIGNAL: Record<NonNullable<DeliveryRow["signal"]["level"]>, string> = { on_track: "On track", watch: "Watch", at_risk: "At risk" };
-const FLAG: Record<DeliveryRow["flags"][number], string> = { needs_breakdown: "Needs stories", needs_features: "Needs features", no_target_date: "" };
+const SIGNAL: Record<NonNullable<RoadmapRow["signal"]["level"]>, string> = { on_track: "On track", watch: "Watch", at_risk: "At risk" };
+const FLAG: Record<RoadmapRow["flags"][number], string> = { needs_breakdown: "Needs stories", needs_features: "Needs features", no_target_date: "" };
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const monthDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
 
-export function Delivery({ data, onClose, onChanged }: { data: WeekLoadData; onClose: () => void; onChanged: () => void }) {
-  const [state, setState] = useState<DeliveryState | null>(null);
+export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; switcher?: React.ReactNode; onChanged: () => void }) {
+  const [state, setState] = useState<RoadmapState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -30,10 +31,10 @@ export function Delivery({ data, onClose, onChanged }: { data: WeekLoadData; onC
   const load = useCallback(async (refresh = false) => {
     setBusy(true);
     try {
-      setState(await call<DeliveryState>("delivery.load", refresh ? { refresh: true } : {}));
+      setState(await call<RoadmapState>("roadmap.load", refresh ? { refresh: true } : {}));
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load Delivery");
+      setError(e instanceof Error ? e.message : "Could not load Roadmap");
     } finally {
       setBusy(false);
     }
@@ -54,7 +55,7 @@ export function Delivery({ data, onClose, onChanged }: { data: WeekLoadData; onC
         setError(e instanceof Error ? e.message : "Could not build the brief");
       }
     },
-    addToWeek: async (k: string, row: DeliveryRow) => {
+    addToWeek: async (k: string, row: RoadmapRow) => {
       if (!state) return;
       try {
         await call("weekplan.add", { weekStart: state.weekStart, clientKey: k, itemId: row.id, tier: "nice" });
@@ -70,17 +71,15 @@ export function Delivery({ data, onClose, onChanged }: { data: WeekLoadData; onC
   const clients = state?.clients ?? [];
   const total = clients.reduce((n, c) => n + c.rows.length, 0);
   return (
-    <main className="delivery" aria-label="Delivery">
+    <main className="roadmap" aria-label="Roadmap">
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
-          Delivery <span className="muted">{state ? (total ? plural(total, "feature or epic", "features and epics") : "Nothing assigned to you") : ""}</span>
+          Roadmap <span className="muted">{state ? (total ? plural(total, "feature or epic", "features and epics") : "Nothing assigned to you") : ""}</span>
         </h2>
         <button type="button" className="top-btn" disabled={busy} onClick={() => void load(true)} title="Read DevOps again">
           {busy ? "Reading…" : "Refresh"}
         </button>
-        <button type="button" className="top-btn" onClick={onClose} title="Back (Esc)">
-          Back
-        </button>
+        <ModeArea>{switcher}</ModeArea>
       </div>
       <p className="muted follow-ups-note">Features and epics assigned to you in DevOps. Counts are saved once a day to show a three-week trend. Nothing here changes DevOps unless you set a target date.</p>
       {error && <p className="error" role="alert">{error}</p>}
@@ -95,9 +94,9 @@ export function Delivery({ data, onClose, onChanged }: { data: WeekLoadData; onC
   );
 }
 
-type Ops = { brief: (k: string, id: number) => Promise<void>; addToWeek: (k: string, row: DeliveryRow) => Promise<void> };
+type Ops = { brief: (k: string, id: number) => Promise<void>; addToWeek: (k: string, row: RoadmapRow) => Promise<void> };
 
-function ClientSection({ c, colors, ops }: { c: DeliveryClient; colors: WeekLoadData["clients"]; ops: Ops }) {
+function ClientSection({ c, colors, ops }: { c: RoadmapClient; colors: WeekLoadData["clients"]; ops: Ops }) {
   const failed = c.status !== "ok";
   return (
     <section className="co-section dl-client" style={{ "--c": clientColor(c.clientKey, colors) } as CSSProperties} aria-label={c.clientName}>
@@ -118,14 +117,14 @@ function ClientSection({ c, colors, ops }: { c: DeliveryClient; colors: WeekLoad
   );
 }
 
-function Row({ k, r, ops }: { k: string; r: DeliveryRow; ops: Ops }) {
+function Row({ k, r, ops }: { k: string; r: RoadmapRow; ops: Ops }) {
   const { env, open: openMenu } = useContext(MenuCtx);
   const dw = useDevOpsWrite();
   const noun = r.tier === "epic" ? ["feature", "features"] as const : ["story", "stories"] as const;
   const total = r.done + r.open;
   const target = () => dw?.targetDate({ clientKey: k, itemId: r.id, title: r.title, current: r.targetDate });
   const menu = (): MenuStep =>
-    deliveryRowMenu(
+    roadmapRowMenu(
       { title: r.title, tier: r.tier, targetDate: r.targetDate, open: r.open, onWeek: r.onWeek, canWrite: !!dw?.can(k), hasLink: !!r.url },
       {
         open: () => void openWorkItem(k, r.url),
@@ -200,11 +199,11 @@ function Progress({ done, total }: { done: number; total: number }) {
 }
 
 /** Open count over the last three weeks, one point per snapshot day (D280). A single series: no legend, the label names it. */
-function Trend({ points, noun }: { points: DeliveryRow["trend"]; noun: string }) {
+function Trend({ points, noun }: { points: RoadmapRow["trend"]; noun: string }) {
   const W = 132, H = 34, P = 4;
   if (points.length < 2)
     return (
-      <span className="dl-trend dl-trend-empty muted" title="One snapshot is saved each day you open Delivery">
+      <span className="dl-trend dl-trend-empty muted" title="One snapshot is saved each day you open Roadmap">
         {points.length ? "Trend starts today" : "No trend yet"}
       </span>
     );
@@ -232,5 +231,18 @@ function Trend({ points, noun }: { points: DeliveryRow["trend"]; noun: string })
       </svg>
       <span className="dl-trend-label muted">Open {noun}, 3 weeks</span>
     </span>
+  );
+}
+
+/** Step 16.2: Roadmap › Plan ahead, a placeholder until step 17. */
+export function PlanAhead({ switcher, onDone }: { switcher?: React.ReactNode; onDone: () => void }) {
+  return (
+    <main className="roadmap" aria-label="Plan ahead">
+      <div className="follow-ups-head">
+        <h2 tabIndex={-1}>Plan ahead</h2>
+        <ModeArea done={{ onClick: onDone, title: "Back to the Roadmap" }}>{switcher}</ModeArea>
+      </div>
+      <p className="plan-ahead-soon">Coming next: plan the next 4 weeks on a timeline.</p>
+    </main>
   );
 }

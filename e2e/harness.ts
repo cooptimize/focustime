@@ -73,10 +73,10 @@ export async function freshPage(h: Harness, viewport = { width: 1920, height: 10
   return { page, errors };
 }
 
-/** Opens Plan the day on today (Monday) from Today. */
+/** Opens Today › Plan on today (Monday): P from Today › Now (step 16.2). */
 export async function openPlanDay(page: Page): Promise<void> {
-  await page.keyboard.press("3");
-  if (!(await page.locator(".pd2-left").count())) await page.getByRole("button", { name: /^Plan the day/ }).first().click();
+  await page.keyboard.press("1");
+  await page.keyboard.press("p");
   await page.waitForSelector(".pd2-left");
 }
 
@@ -88,3 +88,9 @@ export async function selectBlock(page: Page, client: string): Promise<void> {
 
 /** The titles of the picks in a block of the left pane. */
 export const blockPicks = (page: Page, client: string) => page.locator(".pd2-block", { has: page.locator(".pd2-client", { hasText: client }) }).locator(".pd2-picks > li .pr-title").allTextContents();
+
+/** Step 16.2: Settings is in the initials menu (Settings, Sign out). */
+export async function openSettings(page: Page): Promise<void> {
+  await page.locator(".person-chip").click();
+  await page.getByRole("menuitem", { name: /^Settings/ }).click();
+}

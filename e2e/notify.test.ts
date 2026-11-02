@@ -1,7 +1,7 @@
 // Step 15.5: Settings > Notifications (switches, quiet hours, saved), Settings > You's "Start my VM without asking"
 // and the morning box: one click when on, the preview when off. Demo mode (fictional data; no desktop notifications).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, type Harness, openSettings } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -14,7 +14,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
 
   it("Settings > Notifications: a switch per kind and quiet hours, saved", async () => {
     const { page, errors } = await freshPage(h);
-    await page.locator(".person-chip").click();
+    await openSettings(page);
     await page.locator(".set-nav").getByRole("button", { name: "Notifications" }).click();
     const form = page.locator(".set-form", { hasText: "Ritual reminders" });
     await form.waitFor();
@@ -33,7 +33,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
 
   it("Start my VM without asking off: the morning box's Start shows the preview instead", async () => {
     const { page, errors } = await freshPage(h);
-    await page.locator(".person-chip").click();
+    await openSettings(page);
     const toggle = page.locator(".set-field", { hasText: "Start my VM without asking" }).locator("input");
     await toggle.waitFor();
     await expect(toggle.isChecked()).resolves.toBe(true);

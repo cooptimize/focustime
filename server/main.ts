@@ -15,6 +15,7 @@ import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "..
 import type { MicrosoftAccount } from "../actions/account.ts";
 import { vmContext } from "../actions/dispatch.ts";
 import { restoreTick, vmAction, type VmStatus } from "../actions/vm-actions.ts";
+import { CHECKIN_DONE_MARK } from "../actions/closeout-actions.ts";
 import { createAzureClient } from "../sources/azure/client.ts";
 import { localToday } from "../week/dates.ts";
 import { stderrLogger } from "../log/logger.ts";
@@ -42,8 +43,8 @@ import { TIMER_KEY, timerAction, timerLike } from "../actions/timer-actions.ts";
 import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { mediaControl } from "./media.ts";
 import type { TimerState } from "../plan/timer.ts";
-import { checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeoutReminderDue, desktopNotify, notifySend } from "./notify.ts";
-import { DEFAULT_NOTIFY, dueFollowUps, inWorkingHours, notices, parseRoute, type Notice } from "../plan/notify.ts";
+import { checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeDesktopNotification, closeoutReminderDue, desktopNotify, notifySend } from "./notify.ts";
+import { DEFAULT_NOTIFY, dueFollowUps, inWorkingHours, noticeDone, notices, parseRoute, type Notice } from "../plan/notify.ts";
 import { createNotifier } from "../actions/notifier.ts";
 import { expiringFor } from "../actions/dispatch.ts";
 import { mondayOf } from "../week/dates.ts";
@@ -338,9 +339,37 @@ if (plan) {
     }
     return true;
   };
+  /** Q91: whether a shown notification's occasion was handled since (it is then closed). The VM is read at most once a minute. */
+  let vmSeen: { at: number; st: VmStatus | null } | null = null;
+  const vmNow = async () => {
+    if (vmSeen && Date.now() - vmSeen.at < 60_000) return vmSeen.st;
+    const r = await vmAction(await vmCtx(), "vm.status", {}).catch(() => null);
+    vmSeen = { at: Date.now(), st: r?.ok ? (r.data as VmStatus) : null };
+    return vmSeen.st;
+  };
+  const done = async (n: Notice) => {
+    const c = await configOrNull();
+    const today = c ? todayOf(c) : null;
+    const vs = n.kind === "vm" ? await vmNow() : null;
+    return noticeDone(n, {
+      committed: (d) => !!store.day(d)?.committedAt,
+      checkedIn: (d) => store.marked(CHECKIN_DONE_MARK, d),
+      closedOut: (d) => !!store.day(d)?.closedOutAt,
+      weekCommitted: (w) => !!store.weekPlan(w).committedAt,
+      followUpOpen: (id) => store.openFollowUps().some((f) => f.id === id && !f.closedAt),
+      dueCount: () => (today ? dueFollowUps(store.openFollowUps(), today).length : 1),
+      timerWaiting: (startedAt) => {
+        const t = store.getState<TimerState>(TIMER_KEY);
+        return !!t && t.ended && t.startedAt === startedAt;
+      },
+      vmOff: () => (vs ? vs.prompt : null),
+      vmChanged: () => (vs ? !!vs.change : null),
+    });
+  };
   const notifier = createNotifier({
     plan: store,
-    host: { show: (n) => (headless ? Promise.resolve(null) : desktopNotify(n, icon)) },
+    host: { show: (n, shown) => (headless ? Promise.resolve(null) : desktopNotify(n, icon, shown)), close: closeDesktopNotification },
+    done,
     facts: async () => {
       const c = await configOrNull();
       const settings = c?.notify ?? DEFAULT_NOTIFY;
@@ -531,6 +560,8 @@ if (plan) {
     void timerTick();
     warningsTick();
     void flushHeld().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
+    // Q91: close notifications on screen whose occasion was handled (the day planned, the follow-up closed...).
+    if (notifier.onScreen().length) void notifier.sweep().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
   }, 5_000).unref();
   void timerTick();
 }

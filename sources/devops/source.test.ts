@@ -399,7 +399,7 @@ describe("Plan the week: features and epics (step 8)", () => {
     // Nobody's email is kept.
     expect(JSON.stringify(adatum)).not.toMatch(/@/);
   });
-  it("reads each story's size and last change for Delivery (step 16), from the project's size field", async () => {
+  it("reads each story's size and last change for Roadmap (step 16), from the project's size field", async () => {
     const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")]);
     const [adatum] = await s.src.portfolio([ref("Adatum")]);
     expect(adatum!.sizeField).toBe("Microsoft.VSTS.Scheduling.StoryPoints");

@@ -20,7 +20,7 @@ export function inboxOrder(followUps: readonly FollowUpView[], captures: readonl
   return dueOrder(all, today, (e) => (e.kind === "follow_up" ? e.followUp.due : null), (e) => e.at);
 }
 
-export function Inbox({ data, version, onClose, onChanged, defaultClient = null, highlight = null }: { data: WeekLoadData; version: number; onClose: () => void; onChanged: () => void; defaultClient?: string | null; highlight?: number | null }) {
+export function Inbox({ data, version, onChanged, defaultClient = null, highlight = null }: { data: WeekLoadData; version: number; onChanged: () => void; defaultClient?: string | null; highlight?: number | null }) {
   const clients = useMemo(() => captureClients(data), [data]);
   const [followUps, setFollowUps] = useState<FollowUpView[] | null>(null);
   const [caps, setCaps] = useState<CaptureState | null>(null);
@@ -82,9 +82,6 @@ export function Inbox({ data, version, onClose, onChanged, defaultClient = null,
         <h2 ref={head} tabIndex={-1}>
           Inbox <span className="muted">{followUps && caps ? (entries.length ? `${entries.length} open` : "All clear") : ""}</span>
         </h2>
-        <button type="button" className="top-btn" onClick={onClose} title="Back (Esc)">
-          Back
-        </button>
       </div>
       <section className="co-section inbox-capture" aria-label="Capture">
         <p className="inbox-explainer">Capture anything. Sort it now or later: follow-ups are what you owe people; drafts become DevOps items.</p>

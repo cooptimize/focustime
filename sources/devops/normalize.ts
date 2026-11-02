@@ -218,7 +218,7 @@ export type NormalizeContext = {
   /** The target date field per type (Plan the week), and the zone its dates are read in. */
   targetFields?: Readonly<Record<string, string>>;
   timeZone?: string;
-  /** Delivery (step 16): the size field to read into `size`. */
+  /** Roadmap (step 16): the size field to read into `size`. */
   sizeField?: string | null;
   /** Step 15.3: read area and iteration paths. */
   paths?: boolean;

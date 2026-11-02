@@ -1,10 +1,10 @@
-// The Delivery view (step 16, D278 to D281): features and epics I own, their stories done and open, who works on
+// The Roadmap view (step 16, D278 to D281): features and epics I own, their stories done and open, who works on
 // them, a daily snapshot trend and a plain on-track signal against the target date. Pure: no I/O, no tokens.
 import type { ClientPortfolio, IsoDate, PortfolioItem } from "../week/types.ts";
 
-export type DeliverySnapshot = { date: IsoDate; done: number; open: number };
-export type DeliveryLevel = "on_track" | "watch" | "at_risk";
-export type DeliverySignal = { level: DeliveryLevel | null; reason: string };
+export type RoadmapSnapshot = { date: IsoDate; done: number; open: number };
+export type RoadmapLevel = "on_track" | "watch" | "at_risk";
+export type RoadmapSignal = { level: RoadmapLevel | null; reason: string };
 export type StoryCounts = { done: number; open: number; people: { name: string; count: number }[]; unassigned: number; unsized: number | null; stale: number };
 
 /** Days without a change before an open story counts as quiet. */
@@ -49,7 +49,7 @@ export function storyCounts(item: PortfolioItem, now: string, sizeKnown: boolean
 const daysBetween = (a: IsoDate, b: IsoDate) => Temporal.PlainDate.from(a).until(Temporal.PlainDate.from(b), { largestUnit: "days" }).days;
 
 /** Stories closed per week from the oldest snapshot in the last 21 days to the newest; never negative. */
-export function trendRate(snaps: readonly DeliverySnapshot[], today: IsoDate): { perWeek: number | null; days: number; points: DeliverySnapshot[] } {
+export function trendRate(snaps: readonly RoadmapSnapshot[], today: IsoDate): { perWeek: number | null; days: number; points: RoadmapSnapshot[] } {
   const from = Temporal.PlainDate.from(today).subtract({ days: TREND_DAYS }).toString();
   const points = snaps.filter((s) => s.date >= from && s.date <= today).sort((a, b) => a.date.localeCompare(b.date));
   if (points.length < 2) return { perWeek: null, days: 0, points };
@@ -71,7 +71,7 @@ function leftText(days: number): string {
  * On track, Watch or At risk against the target date, from the simple rate only (D281). No target date, or less than
  * a week of snapshots, gives no signal, only the reason.
  */
-export function deliverySignal(i: { open: number; done: number; perWeek: number | null; days: number; targetDate: IsoDate | null; today: IsoDate; noun: "stories" | "features" }): DeliverySignal {
+export function roadmapSignal(i: { open: number; done: number; perWeek: number | null; days: number; targetDate: IsoDate | null; today: IsoDate; noun: "stories" | "features" }): RoadmapSignal {
   if (i.open === 0 && i.done === 0) return { level: null, reason: `No ${i.noun} yet` };
   if (i.open === 0) return { level: "on_track", reason: `All ${count(i.done, i.noun)} done` };
   if (!i.targetDate) return { level: null, reason: "No target date" };
@@ -81,6 +81,6 @@ export function deliverySignal(i: { open: number; done: number; perWeek: number 
   const target = `${leftText(left)} to target`;
   if (i.perWeek === 0) return { level: left >= 14 ? "watch" : "at_risk", reason: `${count(i.open, i.noun)} open, none closed in the last ${i.days} days, ${target}` };
   const needed = i.open / i.perWeek, weeksLeft = left / 7;
-  const level: DeliveryLevel = needed <= weeksLeft ? "on_track" : needed <= 1.5 * weeksLeft ? "watch" : "at_risk";
+  const level: RoadmapLevel = needed <= weeksLeft ? "on_track" : needed <= 1.5 * weeksLeft ? "watch" : "at_risk";
   return { level, reason: `${count(i.open, i.noun)} open, about ${rateText(i.perWeek)} closed per week, ${target}` };
 }

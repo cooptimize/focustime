@@ -157,7 +157,7 @@ describe.skipIf(!CHROMIUM)("Plan the day: adding work (browser, demo mode)", () 
     await expandAll(page);
     await page.locator(".pd2-right li.pd2-add:not(.planned) button.pd2-plus").first().click();
     await page.locator(".pd2-right li.pd2-add.planned").first().waitFor();
-    await page.locator(".pd2-done").click();
+    await page.locator(".pd2-head .done-btn").click();
     await page.locator(".pd-committed button.primary").click();
     await page.locator("[role=dialog]").last().getByRole("button", { name: /^Timebox/ }).click();
     await expect.poll(() => page.locator("[role=dialog]").count()).toBe(0);

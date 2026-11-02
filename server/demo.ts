@@ -79,8 +79,8 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   await run("followup.add", { clientKey: "Atlas", who: "Morgan Diaz", what: "Share the delay alert mockups", channel: "email", due: day(3) });
   await run("note.set", { clientKey: "Northwind", date: day(0), note: "CSV export works for orders. Next: the date filter." });
   await run("capture.add", { text: "Ask Harbor about single sign-on for the intake form", clientKey: "Harbor" });
-  // Step 16 (Delivery): three weeks of daily counts for the features I own, so the trend and signal show (today's comes
-  // from the first Delivery read).
+  // Step 16 (Roadmap): three weeks of daily counts for the features I own, so the trend and signal show (today's comes
+  // from the first Roadmap read).
   const history: [string, number, [number, number][]][] = [
     ["Northwind", 1110, [[0, 3], [0, 4], [1, 3]]],
     ["Harbor", 2210, [[0, 6], [1, 5], [2, 4]]],

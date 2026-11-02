@@ -423,7 +423,7 @@ export const MIGRATIONS: readonly string[] = [
      attempts INTEGER NOT NULL DEFAULT 1,
      updated_at TEXT NOT NULL
    );`,
-  // 14: step 16 (D280), Delivery: one snapshot of done and open stories per owned feature or epic per day.
+  // 14: step 16 (D280), Roadmap: one snapshot of done and open stories per owned feature or epic per day.
   `CREATE TABLE delivery_snapshots (
      client_key TEXT NOT NULL,
      item_id INTEGER NOT NULL CHECK (item_id > 0),
@@ -1475,7 +1475,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       const out: PlanWeek = {};
       for (const d of dates) {
         const plan = getPlan(d);
-        if (plan) out[d] = { committedAt: plan.committedAt, picks: picksBetween(d, d) };
+        if (plan) out[d] = { committedAt: plan.committedAt, closedOutAt: plan.closedOutAt, picks: picksBetween(d, d) };
       }
       return out;
     },
