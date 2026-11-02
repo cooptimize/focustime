@@ -138,32 +138,30 @@ Checked numerically (WCAG contrast; color-vision simulation with Machado 2009 ma
 
 **Families (step 17.5, D358):** IBM Plex Sans 400, 500 and 600 for everything (`--font-ui`), self-hosted from `@fontsource/ibm-plex-sans` (latin, woff2, OFL 1.1, `ui/fonts.css`); every `font-weight` in the stylesheet is one of those three. Tabular figures (`tnum`) are on for the whole body, so times, durations and counts line up. IBM Plex Mono 400 and 500 (`--font-mono`) only for keyboard hints and shortcut chips (`kbd`). No network fonts. Red Hat Display (step 6b, D120) is gone.
 
-**Type scale (U3, D385).** Today and Week use four sizes and three weights, nothing else (tested in `e2e/week.test.ts`). The same pixel sizes at 3840: the ultrawide is 1080 px tall, so text needs no scaling. Other screens (Plan the day, Plan the week, Roadmap, Settings) still use the older steps below until their own pass.
+**Type scale (U3, D385; app-wide since U5, D400).** Four sizes off one base and three weights, everywhere: Today, Week, Plan the day, Plan the week, Roadmap, Plan ahead, Inbox, Settings, sign-in, the focus screen and every dialog (tested in `e2e/week.test.ts`, `e2e/planning.test.ts` and `e2e/textsize.test.ts`, the last against the active base). The same pixel sizes at 3840 (the ultrawide is 1080 px tall). No literal font sizes in the stylesheet: only the four tokens.
 
-| Token | Size | Weight | Use |
+| Token | Default | Weight | Use |
 |---|---|---|---|
-| `--fs-4` | 15 | 600 | page and panel titles ("Week of Nov 2–6, 2026", the panel's client) |
-| `--fs-3` | 13 | 600 | client names on cards, the next pick's title |
+| `--fs-4` = base + 2 | 15 | 600 | page, panel and dialog titles |
+| `--fs-3` = base | 13 | 600 | client names on cards, the next pick's title |
 | `--fs-3` | 13 | 500 | buttons, Plan chip, + Add work |
-| `--fs-3` | 13 | 400 | body: pick titles, rows, follow-ups |
-| `--fs-2` | 12 | 500 | pills and badges (At risk, Due today, size chips) |
-| `--fs-2` | 12 | 400 | meta: time ranges, counts, features line, status bar |
-| `--fs-1` | 11 | 500 | rail labels and hour marks |
-| `--fs-1` | 11 | 600 | section labels, uppercase +0.06em (MUSTS, THIS WEEK, AGENDA) |
+| `--fs-3` | 13 | 400 | body: pick titles, rows, follow-ups, dialog text |
+| `--fs-2` = base − 1 | 12 | 500 | pills, badges and tags (At risk, Due today, Next, Draft), field labels |
+| `--fs-2` | 12 | 400 | meta: time ranges, counts, hints (muted), status bar |
+| `--fs-1` = base − 2 | 11 | 500 | rail labels and hour marks, size chips |
+| `--fs-1` | 11 | 600 | section labels, uppercase +0.06em (MUSTS, THIS WEEK, AGENDA, BLOCKS) |
 
-Uppercase is for section labels only, never for tags or pills. Fewer than 12 text styles on Today › Now and on Week (U3: 8 and 9).
+Uppercase is for section labels only, never for tags, chips or pills. Headings, `strong`, `b` and `th` are 600, never 700. Under 10 text styles per screen and under 12 with a dialog open (U5 counts: 4 to 10). Exceptions: the focus countdown (a display size), avatar initials (sized by the avatar) and the brand module (`ui/brand/`).
 
-Older steps, still used outside Today and Week:
+**Text size (U5, D401, D402).** `--text-base` is the body size; the steps are fixed offsets from it. Three presets, set on `<html data-text-size>` from Settings › Display, `[ui] text_size`, or Ctrl+plus / Ctrl+minus / Ctrl+0:
 
-| Step | Size / line | Use |
-|---|---|---|
-| `--fs-xs` | 11/14 | group labels, uppercase +0.06em |
-| `--fs-sm` | 12.5/16 | meta lines, work item rows |
-| `--fs-md` | 14/19 | event rows, stats, menu items |
-| `--fs-base` | 15/20 | body, picks |
-| `--fs-lg` | 18/22 | client name on a card |
-| `--fs-xl` | 20/24 | week title, panel titles |
-| `--fs-2xl` | 24/28 | empty-state headline |
+| Preset | `--text-base` | Steps | `--text-scale` |
+|---|---|---|---|
+| Default | 13 | 11 / 12 / 13 / 15 | 1 |
+| Large | 15 | 13 / 14 / 15 / 17 | 1.154 |
+| Larger | 17 | 15 / 16 / 17 / 19 | 1.308 |
+
+`--text-scale` (base / 13) multiplies spacing that pairs with text: pixel line heights, text row heights (`calc(20px * var(--text-scale))`, or `min-height` so rows grow), square text buttons and Today's day timeline. Outer layout widths, the top bar icons and the brand mark never scale. A new row height next to text uses `calc(Npx * var(--text-scale))`; a new font size uses a token, never a number.
 
 **Spacing:** 4 px base: 2, 4, 6, 8, 12, 16, 20, 24, 32. **Radius:** 6 (controls), 10 (menus, pills), 14 (cards, panels). **Hit targets:** 28 px minimum for pointer, the whole card row for menus.
 

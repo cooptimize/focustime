@@ -207,8 +207,8 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
         <VmStartForm {...p} />
         {d.you && (
         <div className="set-grid">
-          <ReadOnly label="Email when signed out" value={d.you.email} where="Signed in, Coopilot finds you in Dataverse by your Microsoft account. Signed out, by this ([dataverse] my_email in config.toml)" />
-          <ReadOnly label="Dataverse user" value={d.you.systemUserId ? "Found" : "Not found yet"} where="Your Dataverse user record, found from the email. Change it in Dataverse" />
+          <ReadOnly label="Email when signed out" value={d.you.email} where="Used only when signed out ([dataverse] my_email in config.toml)" />
+          <ReadOnly label="Dataverse user" value={d.you.systemUserId ? "Found" : "Not found yet"} where="Change this in Dataverse" />
           <ReadOnly label="Environment" value={d.you.environmentUrl} where="Set in config.toml ([dataverse] environment_url)" />
           <ReadOnly label="Time zone" value={d.you.timeZone} where="Change it under Working hours" />
         </div>
@@ -238,7 +238,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
     case "clients":
       return (
         <div className="set-clients">
-          {d.clients.length === 0 && <p className="muted">No clients yet: they come from Dataverse (your Account Worker records) and from config.</p>}
+          {d.clients.length === 0 && <p className="muted">No clients yet: they come from Dataverse and config.</p>}
           {d.clients.map((c) => (
             <div key={c.key} className="set-client-wrap" style={{ "--c": c.setting.color ? (c.setting.color.startsWith("#") ? c.setting.color : `var(--client-${c.setting.color})`) : "var(--client-none)" } as CSSProperties}>
               <ClientForm client={c} data={d} onSavedData={p.onSavedData} />
@@ -259,7 +259,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
                 <input type="radio" name="theme" checked={p.theme === t} onChange={() => p.setTheme(t)} /> {THEME_NAMES[t]}
               </label>
             ))}
-            <span className="set-hint">Applies at once and is saved in config.</span>
+            <span className="set-hint">Applies at once.</span>
           </fieldset>
           <fieldset className="set-choice">
             <legend>Text size</legend>
@@ -277,28 +277,28 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
                 <input type="radio" name="range" checked={p.viewRange === r} onChange={() => p.setViewRange(r)} /> {VIEW_RANGE_NAMES[r]}
               </label>
             ))}
-            <span className="set-hint">Saved as your default. H in the week changes it until you close Coopilot. Timelines widen to show anything planned outside it.</span>
+            <span className="set-hint">H on Week changes it until you close Coopilot.</span>
           </fieldset>
           <fieldset className="set-choice">
             <legend>Motion</legend>
             <label>
               <input type="checkbox" checked={p.reduceMotion} onChange={(e) => p.setReduceMotion(e.target.checked)} /> Reduce motion
             </label>
-            <span className="set-hint">No animation when Coopilot opens or after Close out, and Lumen stays still. Your system's reduced motion setting does the same.</span>
+            <span className="set-hint">No opening or Close out animation; Lumen stays still.</span>
           </fieldset>
           <fieldset className="set-choice">
             <legend>Demo mode</legend>
             <label>
               <input type="checkbox" checked={p.demo} onChange={(e) => p.setDemo(e.target.checked)} /> Show demo data
             </label>
-            <span className="set-hint">Fictional clients, people, work items and meetings, so you can demo Coopilot safely. Nothing leaves Coopilot and your own plan isn't touched. Turn it off to see your data again.</span>
+            <span className="set-hint">Fictional data; your own plan isn't touched.</span>
           </fieldset>
           <div className="set-field">
             <span className="set-label">Style guide</span>
             <a href="/styleguide" target="_blank" rel="noopener">
               Open the style guide
             </a>
-            <span className="set-hint">Tokens and core components, live in each theme.</span>
+            <span className="set-hint">Tokens and components in each theme.</span>
           </div>
         </div>
       );
@@ -333,7 +333,7 @@ function HoursForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
         void save("hours", { timeZone: tz, lunch: lunch.replace(/\s+/g, ""), weekdays: Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, spansIn(days[k] ?? "")])) });
       }}
     >
-      <p className="muted">Working spans per day, like 09:00-17:00. A second span, like 20:00-22:00, becomes an evening that can hold picks. Leave a day empty for a day off. Friday is the overflow day unless you give it hours.</p>
+      <p className="muted">Like 09:00-17:00; a second span is an evening. Empty is a day off.</p>
       <div className="set-days">
         {WEEKDAY_KEYS.map((k) => (
           <Field key={k} label={DAY_NAMES[k]}>
@@ -343,11 +343,11 @@ function HoursForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
         ))}
       </div>
       <div className="set-grid">
-        <Field label="Lunch" hint="Where the morning ends and the afternoon starts, like 12:00-12:30. Empty: the day splits in the middle.">
+        <Field label="Lunch" hint="Like 12:00-12:30. Empty splits the day in the middle.">
           <input value={lunch} placeholder="none" onChange={(e) => setLunch(e.target.value)} />
           <Problems all={problems} field="hours.lunch" />
         </Field>
-        <Field label="Time zone" hint="An IANA zone, like America/New_York.">
+        <Field label="Time zone" hint="Like America/New_York.">
           <input value={tz} onChange={(e) => setTz(e.target.value)} />
           <Problems all={problems} field="hours.time_zone" />
         </Field>
@@ -401,7 +401,7 @@ function StandingForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
         void save("standing", { blocks: rows });
       }}
     >
-      <p className="muted">Half-days you keep for a client every week, shown when Dataverse has no focus block there.</p>
+      <p className="muted">Shown when Dataverse has no focus block there.</p>
       {rows.map((r, i) => (
         <div key={i} className="set-row">
           <select value={r.day} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, day: e.target.value } : x)))} aria-label="Day">
@@ -467,32 +467,32 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
     >
       <h3>Picks</h3>
       <div className="set-grid">
-        {num("S", "Size S (minutes)", "plan.size_s", "A small pick. In steps of 5.")}
+        {num("S", "Size S (minutes)", "plan.size_s", "In steps of 5.")}
         {num("M", "Size M (minutes)", "plan.size_m", "More than S.")}
-        {num("L", "Size L (minutes)", "plan.size_l", "More than M. Nothing above L: split it first.")}
-        {num("minS", "Shortest useful time, S (minutes)", "plan.min_s", "Timebox my day never gives an S pick less time than this. At most size S.")}
-        {num("minM", "Shortest useful time, M (minutes)", "plan.min_m", "The same for M. At most size M.")}
-        {num("minL", "Shortest useful time, L (minutes)", "plan.min_l", "The same for L. At most size L.")}
-        <Field label="Portfolio types that can be picked" hint='Work item types above story level that you still pick directly, like "Recurring".'>
+        {num("L", "Size L (minutes)", "plan.size_l", "More than M.")}
+        {num("minS", "Shortest useful time, S (minutes)", "plan.min_s", "The least Timebox my day gives an S pick.")}
+        {num("minM", "Shortest useful time, M (minutes)", "plan.min_m", "The same for M.")}
+        {num("minL", "Shortest useful time, L (minutes)", "plan.min_l", "The same for L.")}
+        <Field label="Portfolio types that can be picked" hint='Types above story level you pick directly, like "Recurring".'>
           <input value={types} onChange={(e) => setTypes(e.target.value)} />
           <Problems all={problems} field="plan.pickable_portfolio_types" />
         </Field>
-        {num("carryDays", "Carry-over (days back)", "plan.carry_days", "Unfinished picks from this many days back are offered on the next day that isn't planned yet. 0 turns it off.", 1, 30)}
-        {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "plan.reminder_offset_minutes", "When today isn't committed, one reminder from this time, for 90 minutes.", 5, 240)}
+        {num("carryDays", "Carry-over (days back)", "plan.carry_days", "Unfinished picks offered again. 0 turns it off.", 1, 30)}
+        {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "plan.reminder_offset_minutes", "Only when today isn't committed.", 5, 240)}
       </div>
       <h3>Check-in and Close out</h3>
       <div className="set-grid">
-        {num("checkinReminderMinutes", "Check-in reminder (minutes after lunch)", "plan.checkin_reminder_minutes", "One reminder after lunch ends (midday when there is no lunch), only on a committed day. 0 is right at the end of lunch.", 5, 120)}
-        {num("closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "plan.closeout_reminder_minutes", "One reminder this long before the end of the working day, if Close out isn't done.", 5, 120)}
+        {num("checkinReminderMinutes", "Check-in reminder (minutes after lunch)", "plan.checkin_reminder_minutes", "On a committed day. 0 is the end of lunch.", 5, 120)}
+        {num("closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "plan.closeout_reminder_minutes", "Only if Close out isn't done.", 5, 120)}
       </div>
       <h3>Plan the week</h3>
       <div className="set-grid">
         {([
-          ["weekNudgeThu", "week_nudge_thu", "Thursday nudge", "For next week. Leave empty to turn it off."],
-          ["weekNudgeFri", "week_nudge_fri", "Friday nudge", "For next week, if Thursday's didn't get it committed."],
-          ["weekNudgeMon", "week_nudge_mon", "Monday nudge", "For this week, if it still isn't committed."],
+          ["weekNudgeThu", "week_nudge_thu", "Thursday nudge", "For next week. Empty turns it off."],
+          ["weekNudgeFri", "week_nudge_fri", "Friday nudge", "For next week, if still not committed."],
+          ["weekNudgeMon", "week_nudge_mon", "Monday nudge", "For this week, if still not committed."],
         ] as const).map(([k, toml, label, hint]) => (
-          <Field key={k} label={label} hint={`${hint} Each fires once, only while that week isn't committed.`}>
+          <Field key={k} label={label} hint={hint}>
             <input type="time" value={nudges[k]} onChange={(e) => setNudges({ ...nudges, [k]: e.target.value })} />
             <Problems all={problems} field={`plan.${toml}`} />
           </Field>
@@ -500,7 +500,7 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
       </div>
       <h3>Clients followed</h3>
       <div className="set-grid">
-        {num("followGraceDays", "Keep following after focus time ends (days)", "plan.follow_grace_days", "DevOps items and Open half-day choices come only from clients with focus time that is ongoing, ends today or later, or ended within this many days. Cooptimize always counts; Settings > Clients can keep one.", 1, 90)}
+        {num("followGraceDays", "Keep following after focus time ends (days)", "plan.follow_grace_days", "Clients stay followed this long after focus time ends.", 1, 90)}
       </div>
       <h3>Plan ahead rituals</h3>
       <AheadRituals />
@@ -508,7 +508,7 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
       <div className="set-grid">
         {num("focusMinutes", "Focus length (minutes)", "plan.focus_minutes", "The default for a plain timer. A pick suggests its size instead.", 5, 240)}
         {num("breakMinutes", "Break length (minutes)", "plan.break_minutes", "Offered when a session ends. 0 for none.", 5, 60)}
-        <Field label="End sound" hint="A short sound with the desktop notification when a session ends.">
+        <Field label="End sound" hint="With the notification when a session ends.">
           <label className="set-check">
             <input type="checkbox" checked={v.endSound} onChange={(e) => setV({ ...v, endSound: e.target.checked })} /> Play a sound
           </label>
@@ -533,7 +533,7 @@ function AheadRituals() {
       <li>
         <strong>Direction review</strong> (8 to 12 weeks) on the first Thursday of each month. Next: {day(n.direction)}.
       </li>
-      <li className="muted">Both open Roadmap › Plan ahead, wait for the next working day on PTO, and come once. Turn them on or off in Notifications.</li>
+      <li className="muted">Both open Plan ahead; switch them in Notifications.</li>
     </ul>
   );
 }
@@ -552,19 +552,19 @@ function TimeboxForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
     >
       <h3>Timeboxes</h3>
       <div className="set-grid">
-        <Field label="Use timeboxing" hint="Give picks a time of day, optionally on Outlook. Off hides the time controls; existing timeboxes are kept and still count.">
+        <Field label="Use timeboxing" hint="Off hides the time controls; timeboxes are kept.">
           <label className="set-check">
             <input type="checkbox" checked={v.enabled} onChange={(e) => setV({ ...v, enabled: e.target.checked })} /> Use timeboxing
           </label>
           <Problems all={problems} field="timebox.enabled" />
         </Field>
-        <Field label="Put on Outlook" hint="New timeboxes start with Put on Outlook on. Creating an event always shows a preview first.">
+        <Field label="Put on Outlook" hint="Every new event shows a preview first.">
           <label className="set-check">
             <input type="checkbox" checked={v.outlookDefault} onChange={(e) => setV({ ...v, outlookDefault: e.target.checked })} /> On by default
           </label>
           <Problems all={problems} field="timebox.outlook_default" />
         </Field>
-        <Field label="Changes to my own timebox events" hint="Moving, resizing or removing a timebox updates its Outlook event. Off: no question for those; every change is still logged in Data and can be undone.">
+        <Field label="Changes to my own timebox events" hint="Off: no question; every change is still logged and can be undone.">
           <label className="set-check">
             <input type="checkbox" checked={!v.confirmOwn} onChange={(e) => setV({ ...v, confirmOwn: !e.target.checked })} /> Don't ask again for my own timeboxes
           </label>
@@ -592,7 +592,7 @@ function CollabForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
     >
       <h3>Help sessions</h3>
       <div className="set-grid">
-        <Field label="Default length" hint="What Needs help from… starts with. You can pick another length each time.">
+        <Field label="Default length" hint="Where Needs help from… starts.">
           <select value={v.meetingMinutes} onChange={(e) => setV({ ...v, meetingMinutes: Number(e.target.value) })}>
             {COLLAB_LENGTHS.map((m) => (
               <option key={m} value={m}>{m} minutes</option>
@@ -600,17 +600,17 @@ function CollabForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
           </select>
           <Problems all={problems} field="collab.meeting_minutes" />
         </Field>
-        <Field label="Teams meeting" hint="Invites start with a Teams link. You can turn it off per invite.">
+        <Field label="Teams meeting" hint="You can turn it off per invite.">
           <label className="set-check">
             <input type="checkbox" checked={v.teams} onChange={(e) => setV({ ...v, teams: e.target.checked })} /> On by default
           </label>
           <Problems all={problems} field="collab.teams" />
         </Field>
-        <Field label="Days to search" hint="Workdays from today, when the item isn't pinned to a day.">
+        <Field label="Days to search" hint="Workdays from today, for items not pinned to a day.">
           <input type="number" min={1} max={10} step={1} value={v.daysAhead} onChange={(e) => setV({ ...v, daysAhead: Number(e.target.value) })} />
           <Problems all={problems} field="collab.days_ahead" />
         </Field>
-        <Field label="People to exclude" hint="Never suggested in Needs help from… or as Who on a follow-up, e.g. accounts that aren't people. Matched by name or email.">
+        <Field label="People to exclude" hint="Never suggested as helpers or as Who. By name or email.">
           <ul className="set-list">
             {v.exclude.map((x, i) => (
               <li key={`${x}:${i}`}>
@@ -631,7 +631,7 @@ function CollabForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
           </span>
           <Problems all={problems} field="collab.exclude" />
         </Field>
-        <ReadOnly label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where="Cooptimize addresses. Set in config.toml ([collab] domains); default is your work email's domain" />
+        <ReadOnly label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where="Set in config.toml ([collab] domains)" />
       </div>
       <SaveRow status={status} />
     </form>
@@ -670,16 +670,16 @@ function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
       }}
     >
       <h3>Teams status</h3>
-      <p className="muted">While focus runs, Coopilot can set your Teams status, always with an end time (the time left plus 5 minutes), and puts it back to automatic when the session stops, ends or pauses. If you change your status in Teams yourself, Coopilot leaves it alone until the next session.</p>
+      <p className="muted">Set while focus runs, back to automatic after. A change you make in Teams wins.</p>
       <div className="set-grid">
-        <Field label="Set Teams status during focus" hint="Every change is in Settings > Data > Teams status log.">
+        <Field label="Set Teams status during focus" hint="Logged in Data › Teams status log.">
           <label className="set-check">
             <input type="checkbox" checked={v.teamsStatus} onChange={(e) => setV({ ...v, teamsStatus: e.target.checked })} /> Set my status while I focus
           </label>
           <TeamsAccessLine />
           <Problems all={problems} field="focus.teams_status" />
         </Field>
-        <Field label="Plain focus sets" hint="Deep focus (Focus menu or the focus screen) always sets Do not disturb.">
+        <Field label="Plain focus sets" hint="Deep focus always sets Do not disturb.">
           <select value={v.plainFocusStatus} disabled={!v.teamsStatus} onChange={(e) => setV({ ...v, plainFocusStatus: e.target.value as "busy" | "none" })}>
             <option value="busy">Busy</option>
             <option value="none">Nothing: leave my status alone</option>
@@ -688,9 +688,9 @@ function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
         </Field>
       </div>
       <h3>Sound while focusing</h3>
-      <p className="muted">Made in the app, nothing to download. It plays only while focus runs, fades in and out, and goes quiet when you pause, stop or take a break. You can pick another one on the focus screen for a session.</p>
+      <p className="muted">Plays only while focus runs. The focus screen can pick another.</p>
       <div className="set-grid">
-        <Field label="Default sound" hint={BINAURAL[v.sound as SoundKind] ? "Binaural beats need headphones: each ear gets its own tone." : "Brown is deep, pink is brighter, rain is band-limited with a slow swell."}>
+        <Field label="Default sound" hint={BINAURAL[v.sound as SoundKind] ? "Binaural beats need headphones." : "Brown is deep, pink brighter, rain a slow swell."}>
           <span className="set-inline">
             <select value={v.sound} onChange={(e) => setV({ ...v, sound: e.target.value as SoundKind })}>
               {SOUNDS.map((k) => (
@@ -771,7 +771,7 @@ function VmStartForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
   const { problems, status, save } = useSave(p.onSavedData);
   return (
     <div className="set-grid set-vm-start">
-      <Field label="Start my VM without asking" hint={'The Start button in the morning "Your VM is off" box, and on its notification, starts it right away (still logged and checked). Stop and auto-shutdown changes always show a preview first.'}>
+      <Field label="Start my VM without asking" hint={'Start in the morning prompt skips the preview. Stop always previews.'}>
         <label className="set-check">
           <input type="checkbox" checked={on} onChange={(e) => { setOn(e.target.checked); void save("vm", { startWithoutAsking: e.target.checked }); }} /> Start right away
         </label>
@@ -796,13 +796,13 @@ function RoadmapForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
         void save("roadmap", v);
       }}
     >
-      <p className="muted">Each feature and epic on the Roadmap shows one state. These two set when a row reads Stalled or Watch. The pace states (At risk, Watch) wait for a week of daily counts.</p>
+      <p className="muted">When a Roadmap row reads Stalled or Watch.</p>
       <div className="set-grid">
-        <Field label="Stalled after (days)" hint="No story under it changed for this many days. 3 to 60.">
+        <Field label="Stalled after (days)" hint="Days with no story change. 3 to 60.">
           <input type="number" min={3} max={60} step={1} value={v.stalledDays} onChange={(e) => setV({ ...v, stalledDays: Math.round(Number(e.target.value)) })} />
           <Problems all={problems} field="roadmap.stalled_days" />
         </Field>
-        <Field label="Watch within (weeks)" hint="The forecast lands this close to the target date, or closer. 0 to 4; 0 means never Watch, only At risk.">
+        <Field label="Watch within (weeks)" hint="Forecast this close to the target. 0 to 4; 0 is never.">
           <input type="number" min={0} max={4} step={1} value={v.watchWeeks} onChange={(e) => setV({ ...v, watchWeeks: Math.round(Number(e.target.value)) })} />
           <Problems all={problems} field="roadmap.watch_weeks" />
         </Field>
@@ -840,7 +840,7 @@ function NotifyForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
         void save("notify", { kinds, quiet, quietPto });
       }}
     >
-      <p className="muted">Desktop notifications. Click one to open Coopilot on that view. Where your desktop shows notification buttons (Done, Start, Restore), they do what they say. Each is sent once per occasion.</p>
+      <p className="muted">Each is sent once; a click opens Coopilot there.</p>
       <div className="set-notify">
         {group("Ritual reminders", RITUAL_KINDS)}
         {group("While you focus", ["timer", "meeting"])}
@@ -848,7 +848,7 @@ function NotifyForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
       </div>
       <h3>Quiet hours</h3>
       <div className="set-grid">
-        <Field label="Quiet" hint="Quiet means not sent. A reminder still due when quiet hours end is sent then. The focus timer and meeting warnings belong to a session you started, so they always come.">
+        <Field label="Quiet" hint="Focus timer and meeting warnings still come.">
           <select value={quiet} onChange={(e) => setQuiet(e.target.value as QuietMode)}>
             <option value="outside_hours">Outside working hours</option>
             <option value="off">Never quiet</option>
@@ -863,7 +863,7 @@ function NotifyForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
         </Field>
       </div>
       <h3>During a focus session</h3>
-      <p className="muted">Everything except the focus timer and meeting warnings waits until the session ends, then comes as one notification ("While you were focused"). Ones no longer needed by then (the day got planned, say) are dropped.</p>
+      <p className="muted">The rest wait and come as one after the session.</p>
       <div className="set-actions-row">
         <button
           type="button"
@@ -951,9 +951,9 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
         <span className="swatch" /> {c.setting.name ?? c.key}
       </h3>
       <div className="set-grid">
-        <ReadOnly label="Dataverse nickname" value={c.dataverseName ?? c.key} where="The account's reporting nickname. Change it in Dataverse" />
-        <ReadOnly label="Your DevOps identity" value={c.devopsEmail ?? (reached ? null : "unknown until Dataverse connects")} where="Account Worker record (DevOps email). Change it in Dataverse" />
-        <Field label="Shown as" hint="Leave empty to show the Dataverse nickname.">
+        <ReadOnly label="Dataverse nickname" value={c.dataverseName ?? c.key} where="Change this in Dataverse" />
+        <ReadOnly label="Your DevOps identity" value={c.devopsEmail ?? (reached ? null : "unknown until Dataverse connects")} where="Change this in Dataverse" />
+        <Field label="Shown as" hint="Empty shows the Dataverse nickname.">
           <input value={name} placeholder={c.key} maxLength={60} onChange={(e) => setName(e.target.value)} />
           <Problems all={problems} field={`${f}.name`} />
         </Field>
@@ -1003,7 +1003,7 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
           </label>
           <Problems all={problems} field={`${f}.follow`} />
         </Field>
-        <Field label='States treated as open' hint="DevOps states this client still works in, though DevOps files them as done (e.g. Resolved). Applies on the next refresh.">
+        <Field label='States treated as open' hint="Done states this client still works in, like Resolved.">
           <input value={open} placeholder="none" onChange={(e) => setOpen(e.target.value)} />
           <Problems all={problems} field={`${f}.open_states`} />
         </Field>
@@ -1051,7 +1051,7 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
       {p.devops && p.devops.length > 0 && (
         <>
           <h3>DevOps per client</h3>
-          <p className="muted">PATs live on each client's DevOps settings in Dataverse. Coopilot reads them only when it fetches, and never shows them.</p>
+          <p className="muted">Read from Dataverse only when fetching; never shown.</p>
           <ul className="set-list sources">
             {p.devops.map((c) => {
               const ok = c.status === "ok";
@@ -1077,7 +1077,7 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
         </>
       )}
       <h3>Client secrets</h3>
-      <p className="muted">Entered here, they go straight to the keyring (service coopilot). Coopilot never shows them again.</p>
+      <p className="muted">Saved to the keyring; never shown again.</p>
       {p.data.secrets.map((s) => (
         <SecretForm key={s.account} secret={s} onDone={p.reload} />
       ))}
@@ -1183,7 +1183,7 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
           {w.expires ? `, expires ${shortDate(w.expires)}` : ""}
         </span>
       ) : (
-        <span className="muted">Your own PAT with Work Items (Read &amp; write) for this client's DevOps, never the company PAT.</span>
+        <span className="muted">Your own PAT with Work Items (Read &amp; write).</span>
       )}
       {w?.expires && daysLeft !== null && daysLeft < 14 && <span className="field-problem">Expires in {Math.max(0, daysLeft)} days</span>}
       <input ref={ref} type="password" autoComplete="new-password" spellCheck={false} placeholder={w ? "New PAT to replace it" : "Paste your PAT"} aria-label={`DevOps write PAT for ${c.setting.name ?? c.key} (masked)`} />
@@ -1254,7 +1254,7 @@ function ResetPlan({ disabled, onDone }: { disabled: boolean; onDone: () => void
           Reset…
         </button>
       )}
-      <span className="set-hint">{status ?? "Empties picks, drafts, unavailable time, flex sessions, follow-ups, the timer and focused time. A full backup of the plan store is made first. Settings and calendars are not touched."}</span>
+      <span className="set-hint">{status ?? "Empties the plan store after a full backup. Settings and calendars stay."}</span>
     </div>
   );
 }
@@ -1285,9 +1285,9 @@ function DataSection(p: Props & { data: SettingsData }) {
           >
             Export as JSON
           </button>
-          <span className="set-hint">{status ?? "Picks, drafts, unavailable time, flex sessions and follow-ups. Local only."}</span>
+          <span className="set-hint">{status ?? "Picks, drafts, follow-ups and time. Local only."}</span>
         </div>
-        <ReadOnly label="Config file" value={p.data.configPath} where="Backups are kept next to it in backups/ (the last 30)" />
+        <ReadOnly label="Config file" value={p.data.configPath} where="The last 30 backups are in backups/ next to it" />
         <ResetPlan disabled={!p.data.data.planStore} onDone={p.onSaved} />
       </div>
     </div>
@@ -1311,7 +1311,7 @@ function OutlookWriteRow() {
           Reconnect Outlook with calendar changes
         </button>
       )}
-      <p className="set-hint">Reading your calendar keeps its own read-only access either way. Asks for Calendars.ReadWrite only when you reconnect here.</p>
+      <p className="set-hint">Asks for Calendars.ReadWrite only when you reconnect here.</p>
     </div>
   );
 }
@@ -1332,7 +1332,7 @@ function WriteLog() {
   return (
     <section className="write-log" aria-label="Write log">
       <h3>Write log</h3>
-      <p className="muted">Every change Coopilot made outside this computer: what, where, when, the result and the values before it. Undo puts back the latest change to an event.</p>
+      <p className="muted">Every change Coopilot made outside this computer.</p>
       {error && <p className="set-problem">{error}</p>}
       {log && log.orphans.length > 0 && (
         <div className="wl-orphans">

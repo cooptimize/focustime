@@ -83,14 +83,15 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     await page.close();
   }, T);
 
-  it("a row expands to its stories grouped by state with assignees; the legend explains the states", async () => {
+  it("a row expands to its stories grouped by state with assignees; each state says what it means on hover (U5: no legend)", async () => {
     const { page } = await roadmap();
     const row = rowOf(page, "Patient intake form");
     await row.getByRole("button", { name: /Show stories of Patient intake form/ }).click();
     await expect.poll(() => row.locator(".rm-group h4").allTextContents()).toEqual(["Blocked 1", "In progress 1", "Not started 1", "Done 3"]);
     await expect(row.locator(".rm-group.g-blocked li").textContent()).resolves.toContain("Validate date of birth");
-    await page.getByRole("button", { name: "What do these mean?" }).click();
-    await expect(page.locator(".rm-legend dt").count()).resolves.toBe(9);
+    await expect(row.locator(".rm-badge").getAttribute("title")).resolves.toMatch(/\w+ \w+/);
+    await expect(page.locator(".rm-sum").first().getAttribute("title")).resolves.toMatch(/\w+ \w+/);
+    await expect(page.getByRole("button", { name: "What do these mean?" }).count()).resolves.toBe(0);
     await page.close();
   }, T);
 

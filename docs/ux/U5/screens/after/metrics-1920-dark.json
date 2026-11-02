@@ -1,0 +1,2219 @@
+{
+ "now": {
+  "words": {
+   "ui": 78,
+   "titles": 82
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 65,
+    "titles": 82
+   }
+  },
+  "elements": 60,
+  "kinds": {
+   "button": 30,
+   "icon": 1,
+   "badge/chip/tag": 10,
+   "input": 10,
+   "link": 9
+  },
+  "textStyles": 8,
+  "colors": 26,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  ms-btn Now",
+   "12px/400/normal/none/none  mini Start",
+   "13px/400/normal/none/underline  pr-link Timesheet summary qu",
+   "11px/600/normal/uppercase/none  tw-label This week"
+  ],
+  "uiText": [
+   "Today",
+   "Monday, November 2",
+   "Now",
+   "Plan",
+   "Check-in",
+   "Close out",
+   "2 ×4",
+   "follow-up",
+   "s",
+   "due",
+   "VM is off",
+   "Start",
+   "Not today",
+   "Cooptimize",
+   "9:00 AM–12:30 PM",
+   "At risk · Dentist 12:00 ×2",
+   "9:00–9:15",
+   "Start focus",
+   "+ time",
+   "11:00–11:45",
+   "Next",
+   "Overdue 1 day",
+   "12:00–1:00",
+   "Northwind",
+   "12:30–5:00 PM",
+   "1:00–1:30",
+   "3:00–4:00",
+   "This week",
+   "of ×2",
+   "stories ×2",
+   "planned ×2",
+   "3",
+   "Needs stories",
+   "Draft stories",
+   "Coop brief",
+   "Refresh"
+  ]
+ },
+ "week": {
+  "words": {
+   "ui": 115,
+   "titles": 87
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 102,
+    "titles": 87
+   }
+  },
+  "elements": 74,
+  "kinds": {
+   "button": 55,
+   "icon": 1,
+   "badge/chip/tag": 9,
+   "input": 9
+  },
+  "textStyles": 9,
+  "colors": 54,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "11px/600/normal/uppercase/none  cl-label Musts",
+   "13px/600/normal/none/none  ms-btn Week",
+   "12px/400/normal/none/none  card-when 9:00–12:30",
+   "13px/400/normal/none/line-through  pr-title Timesheet summary qu",
+   "11px/500/normal/none/none   10"
+  ],
+  "uiText": [
+   "Week of",
+   "Nov 2–6, 2026",
+   "Musts",
+   "0 ×4",
+   "1 ×3",
+   "2",
+   "Week",
+   "Plan the week",
+   "Mon",
+   "Nov 2",
+   "Today",
+   "Cooptimize",
+   "9:00–12:30 ×3",
+   "At risk · Dentist 12:00 ×2",
+   "Overdue 1 day",
+   "+ Add work",
+   "1 feature ×2",
+   "Northwind ×3",
+   "12:30–5:00 ×3",
+   "Due today",
+   "2 features ×3",
+   "1 needs stories ×3",
+   "Tue",
+   "Nov 3",
+   "Plan ×2",
+   "Harbor",
+   "Due tomorrow",
+   "Atlas",
+   "At risk · 2h 30m of meetings",
+   "Wed",
+   "Nov 4",
+   "At risk · 2h 45m of meetings",
+   "5:30",
+   "Thu",
+   "Nov 5",
+   "PTO ×2",
+   "Fri",
+   "Nov 6",
+   "Catch-up",
+   "11:00",
+   "Refresh"
+  ]
+ },
+ "planweek": {
+  "words": {
+   "ui": 277,
+   "titles": 137
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 264,
+    "titles": 137
+   }
+  },
+  "elements": 115,
+  "kinds": {
+   "button": 91,
+   "icon": 1,
+   "badge/chip/tag": 3,
+   "input": 1,
+   "link": 19
+  },
+  "textStyles": 10,
+  "colors": 25,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [
+   "planweek:1089/985"
+  ],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  done-btn Done",
+   "11px/600/normal/uppercase/none  pw-strip-label Blocks",
+   "12px/400/normal/none/none  pw-blk Mon AM · Cooptimize ",
+   "13px/400/normal/none/underline  link-btn draft-title Export the timesheet",
+   "12px/400/normal/none/underline  link-btn tw-draft Draft stories",
+   "12px/600/normal/none/none  mini primary Raise to 2"
+  ],
+  "uiText": [
+   "Plan the week of Nov 2",
+   "this week",
+   "planned",
+   "DevOps health ·",
+   "6 to look at",
+   "Done",
+   "Week",
+   "Plan the week",
+   "Blocks",
+   "Mon ×2",
+   "AM ×3",
+   "Cooptimize ×3",
+   "1 ×3",
+   "pinned",
+   "PM ×3",
+   "Northwind ×5",
+   "Tue ×2",
+   "Harbor ×3",
+   "Atlas ×3",
+   "mostly meetings ×2",
+   "Wed ×2",
+   "Thu",
+   "· PTO",
+   "Fri",
+   "· Catch-up",
+   "All",
+   "1 block ×5",
+   "All 1 planned ×2",
+   "Must ×4",
+   "2 ×2",
+   "stor ×3",
+   "ies ×3",
+   "Mon AM",
+   "M ×4",
+   "Draft stories ×2",
+   "Draft ×2",
+   "Export the timesheet summary",
+   "S ×2",
+   "Enable DevOps writes ×2",
+   "Filter presets for the export",
+   "Add from DevOps ×4",
+   "3 more of yours",
+   "+ Must ×12",
+   "Nice ×12",
+   "Show 1 more ×3",
+   "2 blocks ×2",
+   "3 planned, 2 available",
+   "3 ×2",
+   "needs more stories",
+   "L ×3",
+   "Needs stories",
+   "Coop brief",
+   "3 blocks of musts, 2 blocks free. Move one to nice to have, or borrow Friday.",
+   "Nice to have · ×2",
+   "5 more of yours",
+   "Show 3 more",
+   "Stories need more than 1 block. Raise to 2?",
+   "Raise to",
+   "4 more of yours ×2",
+   "0 blocks",
+   "1 planned, 0 available",
+   "Under",
+   "Shipment tracking dashboard",
+   "Add the feature",
+   "1 block of musts, no blocks free. Move one to nice to have, or borrow Friday.",
+   "Refresh"
+  ]
+ },
+ "planweek-next": {
+  "words": {
+   "ui": 178,
+   "titles": 96
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 165,
+    "titles": 96
+   }
+  },
+  "elements": 84,
+  "kinds": {
+   "button": 67,
+   "icon": 1,
+   "badge/chip/tag": 3,
+   "input": 1,
+   "link": 12
+  },
+  "textStyles": 8,
+  "colors": 19,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  done-btn Done",
+   "11px/600/normal/uppercase/none  pw-strip-label Blocks",
+   "12px/400/normal/none/none  pw-blk Mon AM · Cooptimize",
+   "13px/400/normal/none/underline  link-btn draft-title Export the timesheet"
+  ],
+  "uiText": [
+   "Plan the week of Nov 9",
+   "next week",
+   "not planned yet",
+   "DevOps health ·",
+   "2 to look at",
+   "Done",
+   "Week",
+   "Plan the week",
+   "Blocks",
+   "Mon ×2",
+   "AM ×3",
+   "Cooptimize ×3",
+   "PM ×3",
+   "Northwind ×5",
+   "Tue ×2",
+   "Harbor ×3",
+   "Atlas ×3",
+   "mostly meetings ×2",
+   "Wed ×2",
+   "Thu",
+   "· PTO",
+   "Fri",
+   "· Catch-up",
+   "All",
+   "1 block ×2",
+   "1 block free ×2",
+   "Draft stories",
+   "Draft ×2",
+   "Export the timesheet summary",
+   "S",
+   "Enable DevOps writes ×2",
+   "Filter presets for the export",
+   "M",
+   "Add from DevOps ×4",
+   "6 more of yours ×2",
+   "+ Must ×12",
+   "Nice ×12",
+   "Show 4 more",
+   "2 blocks",
+   "2 blocks free",
+   "10 more of yours",
+   "Show 9 more",
+   "7 more of yours",
+   "Show 5 more",
+   "0 blocks",
+   "No blocks this week",
+   "Show 3 more",
+   "Refresh"
+  ]
+ },
+ "planday": {
+  "words": {
+   "ui": 107,
+   "titles": 84
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 94,
+    "titles": 84
+   }
+  },
+  "elements": 54,
+  "kinds": {
+   "button": 40,
+   "icon": 1,
+   "link": 8,
+   "badge/chip/tag": 4,
+   "input": 1
+  },
+  "textStyles": 9,
+  "colors": 26,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  done-btn Done",
+   "13px/500/normal/none/underline  link-btn Trim",
+   "12px/400/normal/none/none  pr-handle ✓",
+   "11px/500/normal/none/none  size-chip static M",
+   "11px/600/normal/uppercase/none   This week's musts"
+  ],
+  "uiText": [
+   "Plan today",
+   "about 5 hours free",
+   "about 9 hours over",
+   "Timebox my day",
+   "Done",
+   "Now",
+   "Plan",
+   "Check-in",
+   "Close out",
+   "Cooptimize ×2",
+   "9:00–12:30",
+   "About 5h over",
+   "Trim ×2",
+   "M ×4",
+   "S ×5",
+   "Overdue 1 day ×2",
+   "Agenda ×2",
+   "9:00–9:15",
+   "9:30–11:00",
+   "11:00–11:45",
+   "Next",
+   "11:45–12:00",
+   "12:00–12:30",
+   "Northwind",
+   "12:30–5:00",
+   "About 4h over",
+   "not in DevOps",
+   "· 2 meetings · 1 personal · 2h 30m free",
+   "Add to",
+   "morning",
+   "This week's musts",
+   "2 ×2",
+   "of",
+   "stories",
+   "planned",
+   "Follow-ups",
+   "Everything else",
+   "· 4 in DevOps order",
+   "Enter adds a draft story",
+   ". Shift+Enter adds a plain note.",
+   "Refresh"
+  ]
+ },
+ "roadmap": {
+  "words": {
+   "ui": 414,
+   "titles": 34
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 401,
+    "titles": 34
+   }
+  },
+  "elements": 97,
+  "kinds": {
+   "button": 60,
+   "icon": 8,
+   "badge/chip/tag": 14,
+   "input": 2,
+   "link": 13
+  },
+  "textStyles": 8,
+  "colors": 30,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [
+   "roadmap:1764/985"
+  ],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  ms-btn Roadmap",
+   "13px/600/normal/none/underline   Internal reporting r",
+   "12px/400/normal/none/none   Feature · Active ·",
+   "11px/600/normal/none/none  rm-rel Contributing"
+  ],
+  "uiText": [
+   "Roadmap ×2",
+   "13 features and epics",
+   "Refresh ×2",
+   "Plan ahead",
+   "2 ×8",
+   "Blocked ×3",
+   "1 ×13",
+   "At risk ×2",
+   "Not scoped ×3",
+   "Stalled ×2",
+   "3",
+   "Watch ×4",
+   "Needs a date ×3",
+   "On track ×2",
+   "Done ×2",
+   "Over-booked",
+   "weeks",
+   "Both",
+   "Owned",
+   "Contributing ×3",
+   "Cooptimize ×2",
+   "Northwind Foods ×2",
+   "Harbor Health ×2",
+   "Atlas Freight ×2",
+   "Sort",
+   "2 items",
+   "2 stories open, none closed in the last 21 days, 3 weeks left",
+   "Feature ×11",
+   "Active ×8",
+   "Target ×9",
+   "Nov 20",
+   "· on this week's plan ×4",
+   "0 of 2 stories done ×3",
+   "You ×10",
+   "2 stories open, about 1 closes every 2 weeks, 7 weeks left",
+   "Dec 18 ×2",
+   "2 of 4 stories done",
+   "Jordan Lee",
+   "5 items",
+   "3 stories open, about 1 closes every 3 weeks, 11 days left, needs about 9 weeks",
+   "Nov 13",
+   "1 of 4 stories done",
+   "Priya Shah ×2",
+   "1 without a size ×2",
+   "No stories yet",
+   "New ×5",
+   "No target date ×4",
+   "Enable DevOps writes ×2",
+   "Trend starts today ×6",
+   "2 stories open, none closed in the last 21 days, 6 weeks left",
+   "Dec 11",
+   "1 story open, none closed in the last 21 days, 7 weeks left",
+   "0 of 1 story done ×3",
+   "4 features open, no target date",
+   "Epic ×2",
+   "Trend building ×4",
+   "0 of 4 features done",
+   "4",
+   "3 items ×2",
+   "1 story blocked, 3 stories open",
+   "Nov 27",
+   "3 of 6 stories done",
+   "Sam Ortiz",
+   "1 story open, no target date",
+   "All 2 stories done",
+   "Oct 30",
+   "2 of 2 stories done",
+   "1 story blocked, 1 story open",
+   "Dec 17",
+   "No features yet",
+   "No story changes in 3 weeks, 2 stories open",
+   "Dec 10"
+  ]
+ },
+ "ahead": {
+  "words": {
+   "ui": 248,
+   "titles": 34
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 235,
+    "titles": 34
+   }
+  },
+  "elements": 114,
+  "kinds": {
+   "button": 74,
+   "icon": 1,
+   "badge/chip/tag": 26,
+   "link": 13
+  },
+  "textStyles": 10,
+  "colors": 34,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [
+   "roadmap plan-ahead:1160/985"
+  ],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  done-btn Done",
+   "12px/400/normal/none/none  pa-col-sub 2 weeks ago",
+   "11px/600/normal/none/none  rm-badge st-watch small Watch",
+   "13px/400/normal/none/underline   Internal reporting r",
+   "11px/400/normal/none/none   planned 1,",
+   "13px/600/normal/none/underline   Customer portal rede"
+  ],
+  "uiText": [
+   "Plan ahead ×2",
+   "Nov 2 to Jan 24",
+   "Refresh ×2",
+   "Done ×2",
+   "Roadmap",
+   "Click a week to set its blocks, or drag across weeks. Drag a bar to estimate dates.",
+   "Oct 19",
+   "2 weeks ago",
+   "Oct 26",
+   "Last week",
+   "Nov 2",
+   "This week",
+   "Nov 9",
+   "Nov 16",
+   "Nov 23",
+   "Dec",
+   "Jan",
+   "Cooptimize",
+   "Watch ×3",
+   "1 ×6",
+   "planned 1, ×7",
+   "no focus time ×2",
+   "On track",
+   "Blocks ×4",
+   "nothing planned ×4",
+   "All 1 planned ×2",
+   "1 block free ×6",
+   "5 blocks, 1 feature due",
+   "3 blocks ×3",
+   "Northwind Foods",
+   "Needs a date ×2",
+   "worked about 1 ×6",
+   "planned 2, ×3",
+   "At risk",
+   "2 ×3",
+   "est. ×6",
+   "Not scoped ×2",
+   "3 ×3",
+   "3 planned, 2 available",
+   "2 blocks free ×3",
+   "15 blocks, 2 features due",
+   "9 blocks",
+   "Harbor Health",
+   "Blocked ×2",
+   "worked under a block ×2",
+   "5 blocks",
+   "Atlas Freight",
+   "Stalled",
+   "1 planned, 0 available",
+   "No blocks ×3",
+   "Crowded month",
+   "5 blocks, 2 features due"
+  ]
+ },
+ "inbox": {
+  "words": {
+   "ui": 117,
+   "titles": 28
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 104,
+    "titles": 28
+   }
+  },
+  "elements": 47,
+  "kinds": {
+   "button": 37,
+   "icon": 1,
+   "input": 2,
+   "badge/chip/tag": 7
+  },
+  "textStyles": 9,
+  "colors": 27,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  chip-btn cap-client Cooptimize",
+   "12px/600/normal/none/none  chip-btn Sort later",
+   "12px/400/normal/none/none  muted cap-kind-hint Enter saves",
+   "12px/400/normal/none/underline  link-btn Got it",
+   "13px/400/normal/none/underline  link-btn draft-title Export the timesheet"
+  ],
+  "uiText": [
+   "Inbox",
+   "6 open",
+   "Cooptimize ×4",
+   "Sort later",
+   "Follow-up",
+   "Draft story ×3",
+   "Draft feature",
+   "Enter saves",
+   "Tip: type @ and a client's nickname to tag it.",
+   "Got it",
+   "Overdue 1 day",
+   "Jordan Lee",
+   "Close the loop ×4",
+   "Due today",
+   "Dana Morales",
+   "Due tomorrow",
+   "Chris Park",
+   "Due Thu, Nov 5",
+   "Morgan Diaz",
+   "Enable DevOps writes ×3",
+   "To sort",
+   "Ask Harbor about single sign-on for the intake form",
+   "Harbor",
+   "Sort",
+   "Drafts to add in DevOps",
+   "2",
+   "Export the timesheet summary",
+   "Delete ×2",
+   "Filter presets for the export",
+   "Show closed",
+   "Refresh"
+  ]
+ },
+ "settings-you": {
+  "words": {
+   "ui": 174,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 161,
+    "titles": 0
+   }
+  },
+  "elements": 34,
+  "kinds": {
+   "button": 31,
+   "icon": 1,
+   "input": 2
+  },
+  "textStyles": 6,
+  "colors": 12,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab You",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data ("
+  ],
+  "uiText": [
+   "You ×2",
+   "Working hours",
+   "Standing blocks",
+   "Planning",
+   "Focus",
+   "Notifications",
+   "Roadmap",
+   "Risk rules",
+   "Clients",
+   "Connections",
+   "Display",
+   "Data",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file)",
+   "(a backup is made on every save)",
+   "Signed in",
+   "Alex Rivera",
+   "you@example.com ×2",
+   "One Microsoft sign-in for you, your calendar and your Azure VM.",
+   "Sign out",
+   "Your local plan stays.",
+   "Photos",
+   "Photos show for you and Cooptimizers. Cached for 7 days on this computer, cleared when you sign out.",
+   "My VM",
+   "vm-demo-alex",
+   "rg-demo-dev",
+   "eastus",
+   "Coopilot changes only this VM: start, stop and auto-shutdown.",
+   "Find my VM",
+   "Forget",
+   "Use this VM",
+   "By the Owner tag ([azure] owner_tag in config.toml).",
+   "Start my VM without asking",
+   "Start right away",
+   "Start in the morning prompt skips the preview. Stop always previews.",
+   "Email when signed out",
+   "Used only when signed out ([dataverse] my_email in config.toml)",
+   "Dataverse user",
+   "Found",
+   "Change this in Dataverse",
+   "Environment",
+   "https://demo.crm.dynamics.com",
+   "Set in config.toml ([dataverse] environment_url)",
+   "Time zone",
+   "America/New_York",
+   "Change it under Working hours",
+   "Refresh"
+  ]
+ },
+ "settings-hours": {
+  "words": {
+   "ui": 99,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 86,
+    "titles": 0
+   }
+  },
+  "elements": 38,
+  "kinds": {
+   "button": 28,
+   "icon": 1,
+   "input": 9
+  },
+  "textStyles": 7,
+  "colors": 13,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab Working hours",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data (",
+   "12px/600/normal/none/none  mini primary Save"
+  ],
+  "uiText": [
+   "You",
+   "Working hours ×2",
+   "Standing blocks",
+   "Planning",
+   "Focus",
+   "Notifications",
+   "Roadmap",
+   "Risk rules",
+   "Clients",
+   "Connections",
+   "Display",
+   "Data",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file)",
+   "(a backup is made on every save)",
+   "Like 09:00-17:00; a second span is an evening. Empty is a day off.",
+   "Monday",
+   "Tuesday",
+   "Wednesday",
+   "Thursday",
+   "Friday",
+   "Saturday",
+   "Sunday",
+   "Lunch",
+   "Like 12:00-12:30. Empty splits the day in the middle.",
+   "Time zone",
+   "Like America/New_York.",
+   "Save",
+   "One-day changes",
+   "None. Set a day's own hours from its ⋯ menu in the week.",
+   "Refresh"
+  ]
+ },
+ "settings-standing": {
+  "words": {
+   "ui": 64,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 51,
+    "titles": 0
+   }
+  },
+  "elements": 34,
+  "kinds": {
+   "button": 30,
+   "icon": 1,
+   "input": 3
+  },
+  "textStyles": 7,
+  "colors": 13,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab Standing blocks",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data (",
+   "12px/600/normal/none/none  mini primary Save"
+  ],
+  "uiText": [
+   "You",
+   "Working hours",
+   "Standing blocks ×2",
+   "Planning",
+   "Focus",
+   "Notifications",
+   "Roadmap",
+   "Risk rules",
+   "Clients",
+   "Connections",
+   "Display",
+   "Data",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file)",
+   "(a backup is made on every save)",
+   "Shown when Dataverse has no focus block there.",
+   "Remove",
+   "Add a standing block",
+   "Save",
+   "Refresh"
+  ]
+ },
+ "settings-planning": {
+  "words": {
+   "ui": 420,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 407,
+    "titles": 0
+   }
+  },
+  "elements": 58,
+  "kinds": {
+   "button": 32,
+   "icon": 1,
+   "input": 25
+  },
+  "textStyles": 7,
+  "colors": 13,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [
+   "set-body:1613/967"
+  ],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab Planning",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data (",
+   "12px/600/normal/none/none  mini primary Save"
+  ],
+  "uiText": [
+   "You",
+   "Working hours",
+   "Standing blocks",
+   "Planning ×2",
+   "Focus",
+   "Notifications",
+   "Roadmap",
+   "Risk rules",
+   "Clients",
+   "Connections",
+   "Display",
+   "Data",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file)",
+   "(a backup is made on every save)",
+   "Picks",
+   "Size S (minutes)",
+   "In steps of 5.",
+   "Size M (minutes)",
+   "More than S.",
+   "Size L (minutes)",
+   "More than M.",
+   "Shortest useful time, S (minutes)",
+   "The least Timebox my day gives an S pick.",
+   "Shortest useful time, M (minutes)",
+   "The same for M.",
+   "Shortest useful time, L (minutes)",
+   "The same for L.",
+   "Portfolio types that can be picked",
+   "Types above story level you pick directly, like \"Recurring\".",
+   "Carry-over (days back)",
+   "Unfinished picks offered again. 0 turns it off.",
+   "Reminder (minutes after the day starts)",
+   "Only when today isn't committed.",
+   "Check-in and Close out",
+   "Check-in reminder (minutes after lunch)",
+   "On a committed day. 0 is the end of lunch.",
+   "Close out reminder (minutes before the day ends)",
+   "Only if Close out isn't done.",
+   "Plan the week",
+   "Thursday nudge",
+   "For next week. Empty turns it off.",
+   "Friday nudge",
+   "For next week, if still not committed.",
+   "Monday nudge",
+   "For this week, if still not committed.",
+   "Clients followed",
+   "Keep following after focus time ends (days)",
+   "Clients stay followed this long after focus time ends.",
+   "Plan ahead rituals",
+   "Look ahead 4 weeks",
+   "every other Thursday, offered after Done in Plan the week. Next:",
+   "Thu, Nov 5 ×2",
+   "Direction review",
+   "(8 to 12 weeks) on the first Thursday of each month. Next:",
+   "Both open Plan ahead; switch them in Notifications.",
+   "Focus timer",
+   "Focus length (minutes)",
+   "The default for a plain timer. A pick suggests its size instead.",
+   "Break length (minutes)",
+   "Offered when a session ends. 0 for none.",
+   "End sound",
+   "Play a sound",
+   "With the notification when a session ends.",
+   "Save ×3",
+   "Timeboxes",
+   "Use timeboxing ×2",
+   "Off hides the time controls; timeboxes are kept.",
+   "Put on Outlook",
+   "On by default ×2",
+   "Every new event shows a preview first.",
+   "Changes to my own timebox events",
+   "Don't ask again for my own timeboxes",
+   "Off: no question; every change is still logged and can be undone.",
+   "Help sessions",
+   "Default length",
+   "Where Needs help from… starts.",
+   "Teams meeting",
+   "You can turn it off per invite.",
+   "Days to search",
+   "Workdays from today, for items not pinned to a day.",
+   "People to exclude",
+   "Kat 🤖",
+   "Remove",
+   "Add",
+   "Never suggested as helpers or as Who. By name or email.",
+   "Invites go only to",
+   "example.com",
+   "Set in config.toml ([collab] domains)",
+   "Refresh"
+  ]
+ },
+ "settings-focus": {
+  "words": {
+   "ui": 222,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 209,
+    "titles": 0
+   }
+  },
+  "elements": 38,
+  "kinds": {
+   "button": 30,
+   "icon": 1,
+   "input": 7
+  },
+  "textStyles": 7,
+  "colors": 13,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab Focus",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data (",
+   "12px/600/normal/none/none  mini primary Save"
+  ],
+  "uiText": [
+   "You",
+   "Working hours",
+   "Standing blocks",
+   "Planning",
+   "Focus ×2",
+   "Notifications",
+   "Roadmap",
+   "Risk rules",
+   "Clients",
+   "Connections",
+   "Display",
+   "Data",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file)",
+   "(a backup is made on every save)",
+   "Teams status",
+   "Set while focus runs, back to automatic after. A change you make in Teams wins.",
+   "Set Teams status during focus",
+   "Set my status while I focus",
+   "Teams is connected: focus can set your status, and teammates' presence shows next to their names.",
+   "Logged in Data › Teams status log.",
+   "Plain focus sets",
+   "Deep focus always sets Do not disturb.",
+   "Sound while focusing",
+   "Plays only while focus runs. The focus screen can pick another.",
+   "Default sound",
+   "Try it",
+   "Brown is deep, pink brighter, rain a slow swell.",
+   "Volume (40)",
+   "0 to 100.",
+   "Fade in and out (seconds)",
+   "0 to 30.",
+   "When a break starts",
+   "The sound stops either way.",
+   "Music players",
+   "Pause and resume music",
+   "Pause music when focus ends",
+   "playerctl isn't installed, so Coopilot can't pause or resume music players. Install the playerctl package to use this; nothing is installed for you.",
+   "Playlists",
+   "Save up to",
+   "8",
+   "Spotify or YouTube links. Choosing one on the focus screen opens it:",
+   "in your default browser (the Spotify app isn't installed)",
+   "Add a playlist",
+   "Save",
+   "Refresh"
+  ]
+ },
+ "settings-notifications": {
+  "words": {
+   "ui": 238,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 225,
+    "titles": 0
+   }
+  },
+  "elements": 44,
+  "kinds": {
+   "button": 29,
+   "icon": 1,
+   "input": 14
+  },
+  "textStyles": 7,
+  "colors": 13,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [
+   "set-body:1020/967"
+  ],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab Notifications",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data (",
+   "12px/600/normal/none/none  mini primary Save"
+  ],
+  "uiText": [
+   "You",
+   "Working hours",
+   "Standing blocks",
+   "Planning",
+   "Focus",
+   "Notifications ×2",
+   "Roadmap",
+   "Risk rules",
+   "Clients",
+   "Connections",
+   "Display",
+   "Data",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file)",
+   "(a backup is made on every save)",
+   "Each is sent once; a click opens Coopilot there.",
+   "Ritual reminders",
+   "Plan the day",
+   "At the start of a workday when the day isn't planned yet.",
+   "Check-in",
+   "After lunch on a planned day.",
+   "Close out",
+   "Near the end of the workday until you close out.",
+   "Plan the week",
+   "Monday morning when this week has no plan.",
+   "Look ahead",
+   "Thursday and Friday when next week has no plan.",
+   "Look ahead 4 weeks",
+   "Every other Thursday, once next week is planned.",
+   "Direction review",
+   "The first Thursday of each month.",
+   "While you focus",
+   "Focus timer",
+   "When a focus session or break ends.",
+   "Meeting warnings",
+   "5 minutes before a meeting while a focus session runs.",
+   "Other",
+   "My VM",
+   "VM off at work start, or auto-shutdown not put back.",
+   "Follow-ups due",
+   "Once a workday when follow-ups are due today or overdue.",
+   "Expiring secrets",
+   "Once a workday when a PAT or secret expires within 14 days.",
+   "Quiet hours",
+   "Quiet",
+   "Focus timer and meeting warnings still come.",
+   "Days off",
+   "Quiet on PTO days",
+   "PTO days from Dataverse.",
+   "During a focus session",
+   "The rest wait and come as one after the session.",
+   "Send a test notification",
+   "Save",
+   "Refresh"
+  ]
+ },
+ "settings-roadmap": {
+  "words": {
+   "ui": 84,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 71,
+    "titles": 0
+   }
+  },
+  "elements": 31,
+  "kinds": {
+   "button": 28,
+   "icon": 1,
+   "input": 2
+  },
+  "textStyles": 7,
+  "colors": 13,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab Roadmap",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data (",
+   "12px/600/normal/none/none  mini primary Save"
+  ],
+  "uiText": [
+   "You",
+   "Working hours",
+   "Standing blocks",
+   "Planning",
+   "Focus",
+   "Notifications",
+   "Roadmap ×2",
+   "Risk rules",
+   "Clients",
+   "Connections",
+   "Display",
+   "Data",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file)",
+   "(a backup is made on every save)",
+   "When a Roadmap row reads Stalled or Watch.",
+   "Stalled after (days)",
+   "Days with no story change. 3 to 60.",
+   "Watch within (weeks)",
+   "Forecast this close to the target. 0 to 4; 0 is never.",
+   "Save",
+   "Refresh"
+  ]
+ },
+ "settings-risk": {
+  "words": {
+   "ui": 94,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 81,
+    "titles": 0
+   }
+  },
+  "elements": 32,
+  "kinds": {
+   "button": 28,
+   "icon": 1,
+   "input": 3
+  },
+  "textStyles": 7,
+  "colors": 13,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab Risk rules",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data (",
+   "12px/600/normal/none/none  mini primary Save"
+  ],
+  "uiText": [
+   "You",
+   "Working hours",
+   "Standing blocks",
+   "Planning",
+   "Focus",
+   "Notifications",
+   "Roadmap",
+   "Risk rules ×2",
+   "Clients",
+   "Connections",
+   "Display",
+   "Data",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file)",
+   "(a backup is made on every save)",
+   "Watch at (minutes of meetings)",
+   "A block with this many minutes of meetings is marked Watch.",
+   "At risk at (minutes of meetings)",
+   "At least the Watch value.",
+   "Shortest useful focus window (minutes)",
+   "With no free stretch this long, the block is at risk.",
+   "Save",
+   "Refresh"
+  ]
+ },
+ "settings-clients": {
+  "words": {
+   "ui": 379,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 366,
+    "titles": 0
+   }
+  },
+  "elements": 64,
+  "kinds": {
+   "button": 35,
+   "icon": 1,
+   "input": 28
+  },
+  "textStyles": 7,
+  "colors": 25,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [
+   "set-body:1937/967"
+  ],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab Clients",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data (",
+   "12px/600/normal/none/none   Color"
+  ],
+  "uiText": [
+   "You",
+   "Working hours",
+   "Standing blocks",
+   "Planning",
+   "Focus",
+   "Notifications",
+   "Roadmap",
+   "Risk rules",
+   "Clients ×2",
+   "Connections",
+   "Display",
+   "Data",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file)",
+   "(a backup is made on every save)",
+   "Atlas ×3",
+   "Dataverse nickname ×4",
+   "Change this in Dataverse ×8",
+   "Your DevOps identity ×4",
+   "you@example.com ×4",
+   "Shown as ×4",
+   "Empty shows the Dataverse nickname. ×4",
+   "Color ×4",
+   "Custom color ×4",
+   "#d2892a",
+   "(pick a palette color to use theme-aware colors) ×4",
+   "Open links in ×4",
+   "Profile ×4",
+   "That browser isn't installed. ×4",
+   "Followed ×4",
+   "Keep following ×4",
+   "Followed: focus time is ongoing. ×3",
+   "States treated as open ×4",
+   "Done states this client still works in, like Resolved. ×4",
+   "Save ×8",
+   "DevOps write access for ×4",
+   "Off, read-only ×4",
+   "Your own PAT with Work Items (Read & write). ×4",
+   "Expires (optional) ×4",
+   "Cooptimize ×3",
+   "#4a7fd4",
+   "Always followed (internal).",
+   "Harbor ×3",
+   "#7b68ee",
+   "Northwind ×3",
+   "#1f9e8f",
+   "Refresh"
+  ]
+ },
+ "settings-connections": {
+  "words": {
+   "ui": 164,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 151,
+    "titles": 0
+   }
+  },
+  "elements": 44,
+  "kinds": {
+   "button": 39,
+   "icon": 1,
+   "input": 4
+  },
+  "textStyles": 7,
+  "colors": 16,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab Connections",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data (",
+   "12px/600/normal/none/none  mini primary Save"
+  ],
+  "uiText": [
+   "You",
+   "Working hours",
+   "Standing blocks",
+   "Planning",
+   "Focus",
+   "Notifications",
+   "Roadmap",
+   "Risk rules",
+   "Clients",
+   "Connections ×2",
+   "Display",
+   "Data",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file)",
+   "(a backup is made on every save)",
+   "Dataverse",
+   "live ×4",
+   "3 items ×2",
+   "Retry ×8",
+   "PTO",
+   "1 item",
+   "Outlook",
+   "12 items",
+   "Disconnect ×2",
+   "Google",
+   "Outlook calendar changes",
+   "Allowed: Coopilot can create, change and remove the Outlook events it created (timeboxes), each after a preview. It can't change any other event.",
+   "Asks for Calendars.ReadWrite only when you reconnect here.",
+   "DevOps per client",
+   "Read from Dataverse only when fetching; never shown.",
+   "Cooptimize",
+   "Live ×4",
+   "6 items assigned ×2",
+   "Northwind Foods",
+   "10 items assigned",
+   "Harbor Health",
+   "Atlas Freight",
+   "7 items assigned",
+   "Client secrets",
+   "Saved to the keyring; never shown again.",
+   "Dataverse client secret",
+   "Keyring unavailable ×2",
+   "Save ×2",
+   "Google client secret",
+   "Refresh"
+  ]
+ },
+ "settings-display": {
+  "words": {
+   "ui": 121,
+   "titles": 4
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 108,
+    "titles": 4
+   }
+  },
+  "elements": 40,
+  "kinds": {
+   "button": 27,
+   "icon": 1,
+   "input": 11,
+   "link": 1
+  },
+  "textStyles": 8,
+  "colors": 13,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab Display",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data (",
+   "12px/600/normal/none/none   Theme",
+   "13px/400/normal/none/underline   Open the style guide"
+  ],
+  "uiText": [
+   "You",
+   "Working hours",
+   "Standing blocks",
+   "Planning",
+   "Focus",
+   "Notifications",
+   "Roadmap",
+   "Risk rules",
+   "Clients",
+   "Connections",
+   "Display ×2",
+   "Data",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file)",
+   "(a backup is made on every save)",
+   "Theme",
+   "Cooptimize Dark",
+   "Cooptimize Light",
+   "Neutral",
+   "Applies at once.",
+   "Text size",
+   "Default",
+   "Large",
+   "Larger",
+   "Ctrl + and Ctrl − change it; Ctrl 0 resets.",
+   "Default view range",
+   "Business hours",
+   "12 hours",
+   "24 hours",
+   "H on Week changes it until you close Coopilot.",
+   "Motion",
+   "Reduce motion",
+   "No opening or Close out animation; Lumen stays still.",
+   "Demo mode",
+   "Show demo data",
+   "Fictional data; your own plan isn't touched.",
+   "Style guide",
+   "Tokens and components in each theme.",
+   "Refresh"
+  ]
+ },
+ "settings-data": {
+  "words": {
+   "ui": 210,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 197,
+    "titles": 0
+   }
+  },
+  "elements": 30,
+  "kinds": {
+   "button": 29,
+   "icon": 1
+  },
+  "textStyles": 6,
+  "colors": 12,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab Data",
+   "12px/400/normal/none/none  muted set-path Saved to Demo data ("
+  ],
+  "uiText": [
+   "You",
+   "Working hours",
+   "Standing blocks",
+   "Planning",
+   "Focus",
+   "Notifications",
+   "Roadmap",
+   "Risk rules",
+   "Clients",
+   "Connections",
+   "Display",
+   "Data ×2",
+   "About",
+   "Back",
+   "Saved to",
+   "Demo data (in memory, not your config file) ×2",
+   "(a backup is made on every save)",
+   "Write log",
+   "Every change Coopilot made outside this computer.",
+   "Nothing written yet. ×2",
+   "DevOps write log",
+   "Every change Coopilot made in DevOps, with your write PAT. Nothing is ever deleted: undoing a new item sets it to Removed.",
+   "Nothing written to DevOps yet.",
+   "Azure write log",
+   "Every start, stop and auto-shutdown change on your VM: when, the result and what it was before. Power actions have no undo; the opposite action is in the VM menu.",
+   "Teams status log",
+   "Each time focus set your Teams status (with how long it lasts at most) or put it back to automatic. Only your own status; teammates' presence is never kept.",
+   "Nothing yet.",
+   "Export the plan",
+   "Export as JSON",
+   "Picks, drafts, follow-ups and time. Local only.",
+   "Config file",
+   "The last 30 backups are in backups/ next to it",
+   "Reset local plan",
+   "Reset…",
+   "Empties the plan store after a full backup. Settings and calendars stay.",
+   "Refresh"
+  ]
+ },
+ "settings-about": {
+  "words": {
+   "ui": 47,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 34,
+    "titles": 0
+   }
+  },
+  "elements": 29,
+  "kinds": {
+   "button": 27,
+   "icon": 2
+  },
+  "textStyles": 6,
+  "colors": 12,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  set-tab About",
+   "12px/400/normal/none/none  set-hint Coopilot is made by "
+  ],
+  "uiText": [
+   "You",
+   "Working hours",
+   "Standing blocks",
+   "Planning",
+   "Focus",
+   "Notifications",
+   "Roadmap",
+   "Risk rules",
+   "Clients",
+   "Connections",
+   "Display",
+   "Data",
+   "About ×2",
+   "Back",
+   "Version",
+   "0.1.0",
+   "Coopilot is made by Cooptimize, for planning a week of client focus blocks.",
+   "Refresh"
+  ]
+ },
+ "focus": {
+  "words": {
+   "ui": 21,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 8,
+    "titles": 0
+   }
+  },
+  "elements": 16,
+  "kinds": {
+   "button": 15,
+   "icon": 1
+  },
+  "textStyles": 6,
+  "colors": 13,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "11px/600/normal/uppercase/none  focus-kind Nothing running",
+   "12px/400/normal/none/none  refresh mini quiet Refresh"
+  ],
+  "uiText": [
+   "Nothing running",
+   "Start focus",
+   "Back to Today",
+   "Refresh"
+  ]
+ },
+ "capture": {
+  "words": {
+   "ui": 129,
+   "titles": 82
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 116,
+    "titles": 82
+   }
+  },
+  "elements": 70,
+  "kinds": {
+   "button": 39,
+   "icon": 1,
+   "badge/chip/tag": 10,
+   "input": 11,
+   "link": 9
+  },
+  "textStyles": 10,
+  "colors": 29,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  ms-btn Now",
+   "12px/400/normal/none/none  mini Start",
+   "13px/400/normal/none/underline  pr-link Timesheet summary qu",
+   "11px/600/normal/uppercase/none  tw-label This week",
+   "12px/600/normal/none/none  chip-btn cap-client Cooptimize",
+   "12px/400/normal/none/underline  link-btn Got it"
+  ],
+  "uiText": [
+   "Today",
+   "Monday, November 2",
+   "Now",
+   "Plan",
+   "Check-in",
+   "Close out",
+   "2 ×4",
+   "follow-up",
+   "s",
+   "due",
+   "VM is off",
+   "Start",
+   "Not today",
+   "Cooptimize ×2",
+   "9:00 AM–12:30 PM",
+   "At risk · Dentist 12:00 ×2",
+   "9:00–9:15",
+   "Start focus",
+   "+ time",
+   "11:00–11:45",
+   "Next",
+   "Overdue 1 day",
+   "12:00–1:00",
+   "Northwind ×3",
+   "12:30–5:00 PM",
+   "1:00–1:30",
+   "3:00–4:00",
+   "This week",
+   "of ×2",
+   "stories ×2",
+   "planned ×2",
+   "3",
+   "Needs stories",
+   "Draft stories",
+   "Coop brief",
+   "Refresh",
+   "Quick capture",
+   "Saved at once, even offline. Sort it now with a kind, or later in the Inbox.",
+   "Open Inbox",
+   "(1 to sort)",
+   "Esc",
+   "Sort later",
+   "Follow-up",
+   "Draft story",
+   "Draft feature",
+   "Tab changes the kind · Enter saves",
+   "Tip: type @ and a client's nickname to tag it.",
+   "Got it"
+  ]
+ },
+ "timebox": {
+  "words": {
+   "ui": 133,
+   "titles": 84
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 120,
+    "titles": 84
+   }
+  },
+  "elements": 59,
+  "kinds": {
+   "button": 42,
+   "icon": 1,
+   "link": 8,
+   "badge/chip/tag": 4,
+   "input": 4
+  },
+  "textStyles": 9,
+  "colors": 27,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  done-btn Done",
+   "13px/500/normal/none/underline  link-btn Trim",
+   "12px/400/normal/none/none  pr-handle ✓",
+   "11px/500/normal/none/none  size-chip static M",
+   "11px/600/normal/uppercase/none   This week's musts"
+  ],
+  "uiText": [
+   "Plan today",
+   "about 5 hours free",
+   "about 9 hours over",
+   "Timebox my day",
+   "Done",
+   "Now",
+   "Plan",
+   "Check-in",
+   "Close out",
+   "Cooptimize ×2",
+   "9:00–12:30",
+   "About 5h over",
+   "Trim ×2",
+   "M ×4",
+   "S ×5",
+   "Overdue 1 day ×2",
+   "Agenda ×2",
+   "9:00–9:15",
+   "9:30–11:00",
+   "11:00–11:45",
+   "Next",
+   "11:45–12:00",
+   "12:00–12:30",
+   "Northwind",
+   "12:30–5:00",
+   "About 4h over",
+   "not in DevOps",
+   "· 2 meetings · 1 personal · 2h 30m free",
+   "Add to",
+   "morning",
+   "This week's musts",
+   "2 ×2",
+   "of",
+   "stories",
+   "planned",
+   "Follow-ups",
+   "Everything else",
+   "· 4 in DevOps order",
+   "Enter adds a draft story",
+   ". Shift+Enter adds a plain note.",
+   "Refresh",
+   "Timebox ×2",
+   "Utilization chart",
+   "Monday, Nov 2",
+   "Start",
+   "Length",
+   "Put on Outlook",
+   "a Busy event only you are on, titled with the client and item",
+   "Cancel"
+  ]
+ },
+ "vmpreview": {
+  "words": {
+   "ui": 115,
+   "titles": 82
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 102,
+    "titles": 82
+   }
+  },
+  "elements": 62,
+  "kinds": {
+   "button": 32,
+   "icon": 1,
+   "badge/chip/tag": 10,
+   "input": 10,
+   "link": 9
+  },
+  "textStyles": 8,
+  "colors": 27,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  ms-btn Now",
+   "12px/400/normal/none/none  mini Start",
+   "13px/400/normal/none/underline  pr-link Timesheet summary qu",
+   "11px/600/normal/uppercase/none  tw-label This week"
+  ],
+  "uiText": [
+   "Today",
+   "Monday, November 2",
+   "Now",
+   "Plan",
+   "Check-in",
+   "Close out",
+   "2 ×4",
+   "follow-up",
+   "s",
+   "due",
+   "VM is off",
+   "Start ×2",
+   "Not today",
+   "Cooptimize",
+   "9:00 AM–12:30 PM",
+   "At risk · Dentist 12:00 ×2",
+   "9:00–9:15",
+   "Start focus",
+   "+ time",
+   "11:00–11:45",
+   "Next",
+   "Overdue 1 day",
+   "12:00–1:00",
+   "Northwind",
+   "12:30–5:00 PM",
+   "1:00–1:30",
+   "3:00–4:00",
+   "This week",
+   "of ×2",
+   "stories ×2",
+   "planned ×2",
+   "3",
+   "Needs stories",
+   "Draft stories",
+   "Coop brief",
+   "Refresh",
+   "Start your VM",
+   "vm-demo-alex (rg-demo-dev)",
+   "State",
+   "Stopped (deallocated)",
+   "to",
+   "Running",
+   "Compute billing starts while it runs.",
+   "Coopilot follows it until Azure shows it running.",
+   "Cancel",
+   "Logged in Settings > Data.",
+   "No undo: use the opposite action instead."
+  ]
+ },
+ "draft": {
+  "words": {
+   "ui": 155,
+   "titles": 104
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 142,
+    "titles": 104
+   }
+  },
+  "elements": 81,
+  "kinds": {
+   "button": 57,
+   "icon": 1,
+   "link": 12,
+   "badge/chip/tag": 4,
+   "input": 7
+  },
+  "textStyles": 10,
+  "colors": 27,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  done-btn Done",
+   "13px/500/normal/none/underline  link-btn Trim",
+   "12px/400/normal/none/none  pr-handle ✓",
+   "11px/500/normal/none/none  size-chip static M",
+   "11px/600/normal/uppercase/none   This week's musts",
+   "13px/400/normal/none/underline  link-btn draft-title pr-title Filter presets for t"
+  ],
+  "uiText": [
+   "Plan today",
+   "about 5 hours free",
+   "about 9 hours over",
+   "Timebox my day",
+   "Done ×2",
+   "Now",
+   "Plan",
+   "Check-in",
+   "Close out",
+   "Cooptimize ×2",
+   "9:00–12:30",
+   "About 5h over",
+   "Trim ×2",
+   "M ×5",
+   "S ×6",
+   "Overdue 1 day ×2",
+   "Agenda ×2",
+   "9:00–9:15",
+   "9:30–11:00",
+   "11:00–11:45",
+   "Next",
+   "11:45–12:00",
+   "12:00–12:30",
+   "Northwind",
+   "12:30–5:00",
+   "About 4h over",
+   "not in DevOps",
+   "· 2 meetings · 1 personal · 2h 30m free",
+   "Add to",
+   "morning",
+   "This week's musts",
+   "2 ×2",
+   "of",
+   "stories",
+   "planned",
+   "Follow-ups",
+   "Everything else",
+   "· 4 in DevOps order",
+   "Draft",
+   "Story ×4",
+   "Feature",
+   "Knowledge base search",
+   "Enter adds a draft story",
+   ". Shift+Enter adds a plain note.",
+   "Refresh",
+   "Draft story",
+   "Saved on this computer until you create it in DevOps.",
+   "Title",
+   "Description",
+   "Acceptance criteria",
+   "Client",
+   "Size",
+   "L",
+   "Parent",
+   "feature",
+   "Area",
+   "From the parent ×2",
+   "Iteration",
+   "Plan it",
+   "Enable DevOps writes",
+   "Delete",
+   "Cancel"
+  ]
+ },
+ "signin": {
+  "words": {
+   "ui": 56,
+   "titles": 0
+  },
+  "regions": {
+   "topbar": {
+    "ui": 0,
+    "titles": 0
+   },
+   "body": {
+    "ui": 56,
+    "titles": 0
+   }
+  },
+  "elements": 3,
+  "kinds": {
+   "icon": 1,
+   "button": 2
+  },
+  "textStyles": 4,
+  "colors": 7,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none   Coopilot",
+   "13px/400/normal/none/none   Sign in with your Mi",
+   "12px/400/normal/none/none  set-hint The first time, Micr",
+   "13px/400/normal/none/underline  link-btn muted Try the demo (fictio"
+  ],
+  "uiText": [
+   "Coopilot",
+   "Sign in with your Microsoft work account. Coopilot uses it for your calendar and your Azure VM, and to find you in Dataverse.",
+   "Sign in with Microsoft",
+   "The first time, Microsoft asks you to allow calendar and Azure access for Coopilot Desktop. Tokens stay in your keyring on this computer.",
+   "Try the demo (fictional data)"
+  ]
+ }
+}

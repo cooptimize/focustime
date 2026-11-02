@@ -28,10 +28,11 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("Inbox: the explainer, a prominent box, and no separate Add a follow-up button", async () => {
+  it("Inbox: a prominent box, no explainer (U5: the kind chips say it), and no separate Add a follow-up button", async () => {
     const { page, errors } = await freshPage(h);
     await page.keyboard.press("4");
-    await expect(page.locator(".inbox-explainer").textContent()).resolves.toBe("Capture anything. Sort it now or later: follow-ups are what you owe people; drafts become DevOps items.");
+    await page.locator(".inbox .cap-box").waitFor();
+    await expect(page.locator(".inbox-explainer").count()).resolves.toBe(0);
     await expect(page.locator(".inbox .cap-box.large").count()).resolves.toBe(1);
     await expect(page.getByRole("button", { name: "Add a follow-up" }).count()).resolves.toBe(0);
     expect(errors).toEqual([]);

@@ -92,6 +92,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
   it("Inbox sorting uses the capture box's kind chips", async () => {
     const { page, errors } = await freshPage(h);
     await page.keyboard.press("4");
+    await page.locator(".cap-item").first().getByRole("button", { name: "Sort" }).click();
     const sort = page.locator(".cap-sort").first();
     await sort.waitFor();
     await expect(sort.getByRole("radio").allTextContents()).resolves.toEqual(["Sort later", "Follow-up", "Draft story", "Draft feature"]);

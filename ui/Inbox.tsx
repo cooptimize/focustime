@@ -7,6 +7,8 @@ import { dueOrder } from "../plan/due.ts";
 import type { Capture } from "../plan/types.ts";
 import { call } from "./api.ts";
 import { CaptureBox, captureClients, captureWhen, SortCapture } from "./Capture.tsx";
+import type { CaptureClient } from "../plan/capture.ts";
+import type { IsoDate } from "../week/types.ts";
 import { Fading, FollowUpRow } from "./FollowUps.tsx";
 import { EmptyState } from "./brand/Opening.tsx";
 
@@ -85,7 +87,6 @@ export function Inbox({ data, version, onChanged, defaultClient = null, highligh
         </h2>
       </div>
       <section className="co-section inbox-capture" aria-label="Capture">
-        <p className="inbox-explainer">Capture anything. Sort it now or later: follow-ups are what you owe people; drafts become DevOps items.</p>
         <CaptureBox data={data} onChanged={changed} defaultClient={defaultClient} large />
       </section>
       {error && <p className="set-problem" role="alert">{error}</p>}
@@ -113,18 +114,7 @@ export function Inbox({ data, version, onChanged, defaultClient = null, highligh
           e.kind === "follow_up" ? (
             <FollowUpRow key={`l${e.followUp.id}`} l={e.followUp} timeZone={tz} today={today} clients={clients} onChanged={done} />
           ) : (
-            <li key={`c${e.capture.id}`} className="cap-item">
-              <p className="cap-text">
-                <span className="cap-tag">To sort</span>
-                {e.capture.text}
-                <span className="muted">
-                  {" "}
-                  · {captureWhen(e.capture.createdAt, tz)}
-                  {e.capture.clientKey ? ` · ${name(e.capture.clientKey)}` : ""}
-                </span>
-              </p>
-              <SortCapture capture={e.capture} clients={clients} today={today} onDone={done} />
-            </li>
+            <CaptureRow key={`c${e.capture.id}`} capture={e.capture} when={captureWhen(e.capture.createdAt, tz)} client={e.capture.clientKey ? name(e.capture.clientKey) ?? e.capture.clientKey : null} clients={clients} today={today} onDone={done} onError={setError} />
           ),
         )}
       </ul>
@@ -145,5 +135,45 @@ export function Inbox({ data, version, onChanged, defaultClient = null, highligh
         </section>
       )}
     </main>
+  );
+}
+
+/** One capture not sorted yet (U5): its text, Sort (opens the kind chips and fields) and ⋯ with Dismiss. */
+function CaptureRow({ capture, when, client, clients, today, onDone, onError }: { capture: Capture; when: string; client: string | null; clients: CaptureClient[]; today: IsoDate; onDone: (msg: string) => void; onError: (e: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const dismiss = async () => {
+    setMenu(false);
+    try {
+      await call("capture.route", { id: capture.id, as: "dismissed" });
+      onDone("Dismissed");
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Could not dismiss");
+    }
+  };
+  return (
+    <li className="cap-item" title={`Captured ${when}`}>
+      <div className="cap-row">
+        <p className="cap-text">
+          <span className="cap-tag">To sort</span>
+          {capture.text}
+          {client && <span className="muted"> · {client}</span>}
+        </p>
+        {!open && (
+          <span className="follow-up-actions">
+            <button type="button" className="mini primary" onClick={() => setOpen(true)}>Sort</button>
+            <span className="fu-more">
+              <button type="button" className="mini quiet" aria-haspopup="menu" aria-expanded={menu} aria-label={`More for: ${capture.text}`} onClick={() => setMenu((v) => !v)}>⋯</button>
+              {menu && (
+                <span className="fu-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setMenu(false))}>
+                  <button type="button" role="menuitem" autoFocus onClick={() => void dismiss()}>Dismiss</button>
+                </span>
+              )}
+            </span>
+          </span>
+        )}
+      </div>
+      {open && <SortCapture capture={capture} clients={clients} today={today} onDone={onDone} onCancel={() => setOpen(false)} />}
+    </li>
   );
 }

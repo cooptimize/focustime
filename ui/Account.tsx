@@ -427,7 +427,7 @@ export function YouAccount() {
             <button type="button" className="mini primary" disabled={busy} onClick={() => void run(async () => setMessage(await signIn(true)))}>Sign in with Microsoft</button>
           )}
         </span>
-        {signedIn && <span className="set-hint">Sign out removes the sign-in from your keyring on this computer. Your local plan stays.</span>}
+        {signedIn && <span className="set-hint">Your local plan stays.</span>}
       </div>
       {signedIn && (
         <div className="set-field">
@@ -441,7 +441,7 @@ export function YouAccount() {
           <span className="set-value">
             {vm.status?.vm ? <>{vm.status.vm.name} <span className="muted">{vm.status.vm.resourceGroup} · {vm.status.vm.location}</span></> : <span className="muted">None chosen yet</span>}
           </span>
-          <span className="set-hint">Coopilot only reads its state, starts it, stops (deallocates) it and changes its auto-shutdown, and only for this VM.</span>
+          <span className="set-hint">Coopilot changes only this VM: start, stop and auto-shutdown.</span>
           <span className="set-actions">
             <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setFound(await call<Found>("vm.find", {})))}>Find my VM</button>
             {vm.status?.vm && <button type="button" className="mini quiet" disabled={busy} onClick={() => void choose(null)}>Forget</button>}
@@ -477,7 +477,7 @@ export function YouAccount() {
             <input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="/subscriptions/…/resourceGroups/…/providers/Microsoft.Compute/virtualMachines/…" aria-label="VM resource ID" spellCheck={false} />
             <button type="submit" className="mini" disabled={busy || !manual.trim()}>Use this VM</button>
           </form>
-          <span className="set-hint">Finds VMs by the Owner tag with your display name. Change the tag in config.toml ([azure] owner_tag, owner_value).</span>
+          <span className="set-hint">By the Owner tag ([azure] owner_tag in config.toml).</span>
         </div>
       )}
       {message && <p className="set-problem" role="alert">{message}</p>}

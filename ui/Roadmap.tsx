@@ -55,7 +55,7 @@ function saveFilter(f: RoadmapFilter) {
 /** A state as a badge: the word, a shape mark and the state's full-strength color (never color alone). */
 export function StateBadge({ state, small }: { state: RoadmapStateKind; small?: boolean }) {
   return (
-    <span className={`rm-badge st-${state}${small ? " small" : ""}`}>
+    <span className={`rm-badge st-${state}${small ? " small" : ""}`} title={STATE_MEANING[state]}>
       <span className="rm-mark" aria-hidden="true" />
       {STATE_WORDS[state]}
     </span>
@@ -71,7 +71,6 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
   const [busy, setBusy] = useState(false);
   const [brief, setBrief] = useState<{ id: number; text: string } | null>(null);
   const [filter, setFilterRaw] = useState<RoadmapFilter>(loadFilter);
-  const [legend, setLegend] = useState(false);
   const setFilter = (f: RoadmapFilter) => {
     setFilterRaw(f);
     saveFilter(f);
@@ -149,9 +148,9 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
         <ModeArea>{switcher}</ModeArea>
       </div>
       {state && total > 0 && (
-        <div className="rm-summary" role="group" aria-label="Show only">
+        <div className="rm-summary" role="group" aria-label="Show only" title={`The first state that applies wins, in this order. Stalled after ${state.thresholds.stalledDays} days; Watch within ${plural(state.thresholds.watchWeeks, "week", "weeks")} of the target date (Settings › Roadmap).`}>
           {STATE_ORDER.filter((k) => counts[k] > 0 || filter.states.includes(k)).map((k) => (
-            <button key={k} type="button" className={`rm-sum st-${k}`} aria-pressed={filter.states.includes(k)} onClick={() => setFilter({ ...filter, states: toggle(filter.states, k) })}>
+            <button key={k} type="button" className={`rm-sum st-${k}`} title={STATE_MEANING[k]} aria-pressed={filter.states.includes(k)} onClick={() => setFilter({ ...filter, states: toggle(filter.states, k) })}>
               <span className="rm-sum-n">{counts[k]}</span>
               <span className="rm-sum-w"><span className="rm-mark" aria-hidden="true" />{STATE_WORDS[k]}</span>
             </button>
@@ -194,25 +193,7 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
               Clear filters
             </button>
           ) : null}
-          <button type="button" className="mini quiet" aria-expanded={legend} onClick={() => setLegend(!legend)}>
-            What do these mean?
-          </button>
         </div>
-      )}
-      {legend && (
-        <dl className="rm-legend" aria-label="What the states mean">
-          {STATE_ORDER.map((k) => (
-            <div key={k}>
-              <dt><StateBadge state={k} small /></dt>
-              <dd>{STATE_MEANING[k]}</dd>
-            </div>
-          ))}
-          <div className="wide">
-            <dt><span className="rm-building">Trend building</span></dt>
-            <dd>Fewer than 7 days of daily counts, so no pace yet: only the states that need no pace apply. One count is saved each day you open the Roadmap.</dd>
-          </div>
-          <p className="muted">The first state that applies wins, in this order. Stalled after {state?.thresholds.stalledDays ?? 14} days; Watch within {plural(state?.thresholds.watchWeeks ?? 1, "week", "weeks")} of the target date (Settings › Roadmap).</p>
-        </dl>
       )}
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
@@ -377,7 +358,7 @@ function Progress({ done, total }: { done: number; total: number }) {
   );
 }
 
-/** Open count over the last three weeks, one point per snapshot day (D280). A single series: no legend, the label names it. */
+/** Open count over the last three weeks, one point per snapshot day (D280). A single series: no legend; its title names it (U5). */
 function Trend({ points, noun }: { points: RoadmapRow["trend"]; noun: string }) {
   const W = 132, H = 34, P = 4;
   if (points.length < 2)
@@ -394,7 +375,7 @@ function Trend({ points, noun }: { points: RoadmapRow["trend"]; noun: string }) 
   const line = points.map((p, i) => `${i ? "L" : "M"}${x(p.date).toFixed(1)},${y(p.open).toFixed(1)}`).join(" ");
   const a = points[0]!, b = points[points.length - 1]!;
   return (
-    <span className="dl-trend">
+    <span className="dl-trend" title={`Open ${noun}, last 3 weeks`}>
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Open ${noun}, last three weeks: ${a.open} on ${monthDay(a.date)}, ${b.open} on ${monthDay(b.date)}`}>
         <line className="dl-base" x1={P} x2={W - P} y1={H - P} y2={H - P} />
         <path className="dl-line" d={line} />
@@ -408,7 +389,6 @@ function Trend({ points, noun }: { points: RoadmapRow["trend"]; noun: string }) 
           </g>
         ))}
       </svg>
-      <span className="dl-trend-label muted">Open {noun}, 3 weeks</span>
     </span>
   );
 }

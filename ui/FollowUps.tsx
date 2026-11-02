@@ -94,22 +94,19 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = 
       ? `Not needed · ${when(l.closedAt, timeZone)}`
       : `${l.closedBy === "signal" ? "Closed by DevOps" : "Loop closed"}${l.closeHow ? ` on ${HOW_LABEL[l.closeHow]}` : ""} · ${when(l.closedAt, timeZone)}${l.closeNote ? `: ${l.closeNote}` : ""}`
     : null;
+  // U5: the row says who, what and when it's due; how and when it was opened is on hover. One action shows: Mark
+  // done in DevOps for a DevOps update with an item, else Close the loop; the rest are in ⋯.
+  const meta = [l.clientName && l.who !== l.clientName ? l.clientName : null, KIND_LABEL[l.kind] ?? "Follow-up", l.session ? `Flex session ${span(l.session, timeZone)}` : null, `opened ${when(l.openedAt, timeZone)}`, l.channel && !l.closedAt ? `on ${HOW_LABEL[l.channel as CloseHow] ?? l.channel}` : null].filter(Boolean).join(" · ");
+  const devopsFirst = !l.closedAt && l.kind === "devops_update" && l.itemId !== null && !!l.clientKey;
+  const state = [l.snoozedUntil && !l.closedAt ? `snoozed until ${plainDay(l.snoozedUntil)}` : null, closedText].filter(Boolean).join(" · ");
   return (
-    <li data-follow-up={l.id} className={`follow-up${l.closedAt ? " closed" : ""}${l.isNew && !l.closedAt ? " new" : ""}${l.dueState ? ` due-${l.dueState.level}` : ""}`}>
+    <li title={meta} data-follow-up={l.id} className={`follow-up${l.closedAt ? " closed" : ""}${l.isNew && !l.closedAt ? " new" : ""}${l.dueState ? ` due-${l.dueState.level}` : ""}`}>
       <div className="follow-up-main">
-        {!compact && <span className="follow-up-kind">{KIND_LABEL[l.kind] ?? "Follow-up"}</span>}
         <DueBadge l={l} />
-        {!compact && l.isNew && !l.closedAt && <span className="follow-up-new">New today</span>}
         <span className="follow-up-who">{l.hasWho ? l.who : "No one named"}</span>
         <span className="follow-up-what">{l.what}</span>
         {(l.kind === "manual" || l.kind === "capture") && <LinkedItem l={l} />}
-        {!compact && <span className="muted follow-up-when">
-          {l.clientName && l.who !== l.clientName ? `${l.clientName} · ` : ""}
-          {l.session ? `Flex session ${span(l.session, timeZone)} · ` : ""}opened {when(l.openedAt, timeZone)}
-          {l.channel && !l.closedAt ? ` · on ${HOW_LABEL[l.channel as CloseHow] ?? l.channel}` : ""}
-          {l.snoozedUntil && !l.closedAt ? ` · snoozed until ${plainDay(l.snoozedUntil)}` : ""}
-          {closedText ? ` · ${closedText}` : ""}
-        </span>}
+        {!compact && state && <span className="muted follow-up-when">{state}</span>}
         {!compact && l.origin && (
           <span className="follow-up-origin">
             Why: {l.origin.trigger}
@@ -123,39 +120,32 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = 
         )}
       </div>
       <div className="follow-up-actions">
-        {l.draft && (
-          <>
-            <button type="button" className="mini" aria-expanded={showDraft} onClick={() => setShowDraft((v) => !v)}>
-              {showDraft ? "Hide draft" : "Draft"}
-            </button>
-            <button
-              type="button"
-              className="mini"
-              onClick={async () => {
-                setShowDraft(true);
-                setCopied((await copy(l.draft!, area.current)) ? "Copied" : "Selected, press Ctrl C");
-              }}
-            >
-              {copied ?? "Copy heads-up"}
-            </button>
-          </>
-        )}
-        {!l.closedAt && mode === "none" && l.kind === "devops_update" && l.itemId !== null && l.clientKey && (
+        {copied && <span className="muted">{copied}</span>}
+        {devopsFirst && mode === "none" && (
           // Step 14: one click to the state picker (completed state preselected); the loop closes after read back.
-          <DevOpsAction clientKey={l.clientKey} label="Mark done in DevOps" className="mini primary" onRun={(w) => w.markDone({ clientKey: l.clientKey!, itemId: l.itemId!, title: l.what, followUpId: l.id })} />
+          <DevOpsAction clientKey={l.clientKey!} label="Mark done in DevOps" className="mini primary" onRun={(w) => w.markDone({ clientKey: l.clientKey!, itemId: l.itemId!, title: l.what, followUpId: l.id })} />
         )}
         {!l.closedAt && mode === "none" && (
           <>
-            <button type="button" className={`mini${l.kind === "devops_update" ? "" : " primary"}`} onClick={() => { setMode("close"); setNote(""); }}>
-              Close the loop
-            </button>
+            {!devopsFirst && (
+              <button type="button" className="mini primary" onClick={() => { setMode("close"); setNote(""); }}>
+                Close the loop
+              </button>
+            )}
             <span className="fu-more">
               <button type="button" className="mini quiet" aria-haspopup="menu" aria-expanded={menu} aria-label={`More for: ${l.what}`} onClick={() => setMenu((v) => !v)}>
                 ⋯
               </button>
               {menu && (
                 <span className="fu-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setMenu(false))}>
-                  <button type="button" role="menuitem" autoFocus onClick={() => void run("followup.not_needed", {}, "Closed as not needed")}>Not needed</button>
+                  {devopsFirst && <button type="button" role="menuitem" autoFocus onClick={() => { setMode("close"); setNote(""); setMenu(false); }}>Close the loop…</button>}
+                  {l.draft && <button type="button" role="menuitem" onClick={() => { setShowDraft((v) => !v); setMenu(false); }}>{showDraft ? "Hide the heads-up draft" : "Show the heads-up draft"}</button>}
+                  {l.draft && (
+                    <button type="button" role="menuitem" onClick={async () => { setShowDraft(true); setMenu(false); setCopied((await copy(l.draft!, area.current)) ? "Copied" : "Selected, press Ctrl C"); }}>
+                      Copy heads-up
+                    </button>
+                  )}
+                  <button type="button" role="menuitem" autoFocus={!devopsFirst} onClick={() => void run("followup.not_needed", {}, "Closed as not needed")}>Not needed</button>
                   <button type="button" role="menuitem" onClick={() => { setMode("snooze"); setMenu(false); }}>Snooze…</button>
                   <button type="button" role="menuitem" onClick={() => { setMode("edit"); setMenu(false); }}>Edit…</button>
                   {l.byHand && <button type="button" role="menuitem" className="danger" onClick={() => void run("followup.delete", {}, "Deleted")}>Delete</button>}

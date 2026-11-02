@@ -46,7 +46,8 @@ function ClientSelect({ value, clients, onChange, required, label }: { value: st
  * story · Draft feature), the rules' choice highlighted, and each kind's fields inline, as in the box. Sort later
  * leaves it in the Inbox.
  */
-export function SortCapture({ capture, clients, today, onDone }: { capture: Capture; clients: CaptureClient[]; today: IsoDate; onDone: (msg: string) => void }) {
+/** Sorting one capture in the Inbox; onCancel (U5) folds it back into its row, which has Dismiss in its ⋯. */
+export function SortCapture({ capture, clients, today, onDone, onCancel }: { capture: Capture; clients: CaptureClient[]; today: IsoDate; onDone: (msg: string) => void; onCancel?: () => void }) {
   const s = useMemo(() => suggest(capture.text, capture.clientKey, today, clients), [capture.text, capture.clientKey, today, clients]);
   const suggested = useMemo(() => boxKind(capture.text, capture.clientKey, today, clients), [capture.text, capture.clientKey, today, clients]);
   const [chosen, setChosen] = useState<BoxKind | null>(null);
@@ -141,9 +142,13 @@ export function SortCapture({ capture, clients, today, onDone }: { capture: Capt
             {SAVE_AS[kind]}
           </button>
         ) : (
-          <span className="muted">Stays in the Inbox until you sort it.</span>
+          <span className="muted">Stays in the Inbox until you sort it</span>
         )}
-        <button type="button" className="mini quiet" disabled={busy} onClick={() => void save("dismissed")}>Dismiss</button>
+        {onCancel ? (
+          <button type="button" className="mini quiet" disabled={busy} onClick={onCancel}>Cancel</button>
+        ) : (
+          <button type="button" className="mini quiet" disabled={busy} onClick={() => void save("dismissed")}>Dismiss</button>
+        )}
         {blocked && <span className="muted">{blocked}</span>}
         {error && <span className="set-problem" role="alert">{error}</span>}
       </div>

@@ -140,7 +140,7 @@ export function PlanAhead({ data, switcher, onDone, onChanged }: { data: WeekLoa
         <ModeArea done={{ onClick: onDone, title: "Back to the Roadmap" }}>{switcher}</ModeArea>
       </div>
       <p className="muted follow-ups-note">
-        Weeks 1 to 4: click a week to set its blocks (whole blocks, up to the client's budget), or drag across weeks to give each 1. They are the same blocks as Plan the week. After week 4, months. Drag a bar or its ends to estimate dates; "Save dates" writes them to DevOps after a preview.
+        Click a week to set its blocks, or drag across weeks. Drag a bar to estimate dates.
       </p>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
@@ -163,12 +163,12 @@ export function PlanAhead({ data, switcher, onDone, onChanged }: { data: WeekLoa
 function HeaderRow({ cols, scale, today }: { cols: AheadColumn[]; scale: Scale; today: string }) {
   return (
     <div className="pa-row pa-head" role="row">
-      <div className="pa-label" role="columnheader">Feature or epic</div>
+      <div className="pa-label" role="columnheader" aria-label="Feature or epic" />
       <div className="pa-track" role="presentation">
         {cols.map((c, i) => (
           <div key={c.from} className={`pa-col ${c.kind}`} role="columnheader" style={{ left: scale.colX(i), width: scale.colW(i) }} title={c.kind === "week" ? `Week ${c.index}: ${monthDay(c.from)} to ${monthDay(addDays(c.to, -1))}` : c.kind === "past" ? `${monthDay(c.from)} to ${monthDay(addDays(c.to, -1))}: planned against focused time` : `${c.label}: ${plural(c.weeks.length, "week", "weeks")}, ${monthDay(c.from)} to ${monthDay(addDays(c.to, -1))}`}>
             <span className="pa-col-main">{c.label}</span>
-            <span className="pa-col-sub">{c.kind === "week" ? `Week ${c.index}` : c.kind === "past" ? (i === pastCount(cols) - 1 ? "Last week" : "2 weeks ago") : plural(c.weeks.length, "week", "weeks")}</span>
+            {(c.kind === "past" || (c.kind === "week" && c.index === 1)) && <span className="pa-col-sub">{c.kind === "week" ? "This week" : i === pastCount(cols) - 1 ? "Last week" : "2 weeks ago"}</span>}
           </div>
         ))}
         <span className="pa-today" style={{ left: scale.x(today) }} aria-hidden="true" />
