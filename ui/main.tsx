@@ -4,6 +4,7 @@ import { App } from "./App.tsx";
 import { AuthGate } from "./Account.tsx";
 import { StaleBanner } from "./Reopen.tsx";
 import { StyleGuide } from "./StyleGuide.tsx";
+import "./fonts.css";
 import "./styles.css";
 import { applyTheme, initialTheme } from "./theme.ts";
 

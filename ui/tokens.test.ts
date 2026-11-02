@@ -61,6 +61,8 @@ describe("design tokens", () => {
 
   it("the font is self-hosted: no remote URL anywhere in the stylesheet", () => {
     expect(css).not.toMatch(/url\(\s*["']?(https?:)?\/\//);
-    expect(css).toMatch(/url\("\.\/fonts\/red-hat-display-latin-wght-normal\.woff2"\)/);
+    const fonts = readFileSync(new URL("./fonts.css", import.meta.url), "utf8");
+    expect(fonts).not.toMatch(/url\(\s*["']?(https?:)?\/\//);
+    expect([...fonts.matchAll(/url\("@fontsource\/ibm-plex-(sans|mono)\/files\/[\w-]+-latin-\d+-normal\.woff2"\)/g)].length).toBe(5);
   });
 });
