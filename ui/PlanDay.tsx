@@ -9,6 +9,8 @@ import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps } from "./DevOpsWrite.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { blockClient, draftOffer, isPickable } from "../plan/rules.ts";
+import { dayCalendar, splitByBlocks, type DayEventWhen } from "../plan/todaycal.ts";
+import { AllDayRow, OutsideLine } from "./DayCalendar.tsx";
 import { agendaOf, offerAfterTimebox, planMyDay, smallerSize, type DayPlacement, type DidntFit, type Unplaced } from "../plan/agenda.ts";
 import { addSections, defaultBlock, doneAction, type PriorityRow } from "../plan/addpane.ts";
 import { aboutHours, dayTotals, fitWords, planFit, planMinutes, trimCandidates } from "../plan/fit.ts";
@@ -155,6 +157,11 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   const selBlock = blocks.find((b) => b.half === sel) ?? blocks[0];
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? k ?? "";
   const badge = past ? null : which;
+  // Step 17.6: the day's meetings: each block's agenda shows its own (open by default), with Now and Next on today;
+  // all-day events and meetings outside the blocks in slim lines around them.
+  const cal = dayCalendar(day, isTodayIn(day.date, now, tz) ? now : undefined);
+  const split = splitByBlocks(cal.timed, blocks.filter((b) => !b.slot.off).map((b) => ({ key: b.half, start: b.slot.start, end: b.slot.end })));
+  const whens = new Map(cal.timed.map((e) => [e.event.id, e.when]));
 
   return (
     <PlanCtx.Provider value={inner}>
@@ -240,11 +247,14 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
           <div className="pd2-panes">
             <div className="pd2-left" aria-label={`Your ${weekdayOf(day.date)}`}>
               <h3 className="pd2-pane-title">Your {weekdayOf(day.date)}</h3>
+              <AllDayRow events={cal.allDay} />
+              <OutsideLine label="Before your blocks" events={split.before} tz={tz} />
               {state.carryOver.length > 0 && selBlock && <CarryOver picks={state.carryOver} date={day.date} to={selBlock.half} act={act} />}
               {state.carryTarget && state.carryTarget < day.date && <p className="muted pd-note">Unfinished work from earlier days shows on {dayLabel(state.carryTarget)}.</p>}
               {blocks.map((b) => (
-                <DayBlock key={b.half} b={b} selected={b.half === sel} onSelect={() => setSel(b.half)} overflow={day.kind !== "work" && b.half !== "EVE"} tz={tz} now={now} colors={colors} name={name} act={act} hintPick={hintPick} weekFeatures={state.weekFeatures} />
+                <DayBlock key={b.half} b={b} selected={b.half === sel} onSelect={() => setSel(b.half)} overflow={day.kind !== "work" && b.half !== "EVE"} tz={tz} now={now} colors={colors} name={name} act={act} hintPick={hintPick} weekFeatures={state.weekFeatures} whens={whens} />
               ))}
+              <OutsideLine label="After your blocks" events={split.after} tz={tz} />
             </div>
             {selBlock && (
               <AddPane key={`${day.date}${selBlock.half}`} slot={selBlock.slot} picks={selBlock.picks} overflow={day.kind !== "work" && selBlock.half !== "EVE"} state={state} picked={picked} here={new Set(selBlock.picks.map(pickedKey))} clients={clients} colors={colors} act={act} focus={focusItem} clearFocus={() => setFocusItem(null)} />
@@ -278,7 +288,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
 type BlockView = { half: Half; slot: Slot; picks: Pick[]; fit: ReturnType<typeof planFit>; words: ReturnType<typeof fitWords>; ended: boolean };
 
 /** One block in the left pane: name, time, one fit line, its picks as rows. Click selects it; drop a pick to move it here. */
-function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act, hintPick, weekFeatures }: { b: BlockView; selected: boolean; onSelect: () => void; overflow: boolean; tz: string; now: string; colors: Record<string, string>; name: (k: string | null) => string; act: PlanDayAct; hintPick: number | null; weekFeatures: PlanDayState["weekFeatures"] }) {
+function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act, hintPick, weekFeatures, whens }: { whens: ReadonlyMap<string, DayEventWhen>; b: BlockView; selected: boolean; onSelect: () => void; overflow: boolean; tz: string; now: string; colors: Record<string, string>; name: (k: string | null) => string; act: PlanDayAct; hintPick: number | null; weekFeatures: PlanDayState["weekFeatures"] }) {
   const menus = useContext(MenuCtx);
   const { slot, picks, words } = b;
   const pv = useContext(PlanCtx);
@@ -286,7 +296,8 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
   const focus = overflow ? null : (slot.focus[0] ?? null);
   const bc = blockClient(focus?.clientKey ?? null, picks);
   const [trim, setTrim] = useState(false);
-  const [cal, setCal] = useState(false);
+  // Step 17.6: the agenda is open by default; the summary link folds it.
+  const [cal, setCal] = useState(true);
   const [over, setOver] = useState(false);
   const env = useTimeboxes();
   const start = new Map((env?.timeboxes ?? []).filter((t) => !t.removedAt && t.date === slot.date && t.pickId !== null).map((t) => [t.pickId!, t.start]));
@@ -368,7 +379,7 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
           <button type="button" className="link-btn" aria-expanded={cal} onClick={(e) => (e.stopPropagation(), setCal((c) => !c))}>
             {[meetings ? `${meetings} meeting${meetings === 1 ? "" : "s"}` : "", personal ? `${personal} personal` : "", `${aboutHours(freeMinutes(slot))} free`].filter(Boolean).join(" · ")}
           </button>
-          {cal && <Agenda slot={slot} now={now} tz={tz} clientName={name} pickRow={() => null} />}
+          {cal && <Agenda slot={slot} now={now} tz={tz} clientName={name} pickRow={() => null} whens={whens} />}
         </div>
       )}
     </section>
@@ -810,7 +821,7 @@ const isTodayIn = (date: string, now: string, tz: string) => Temporal.Instant.fr
  * A block's agenda (D244): meetings, personal events, unavailable time and timeboxes in time order, with the free gaps
  * between ("Free 9:00–11:00 · 2h"). A timebox row opens its details (show as, Put on Outlook, Removed in Outlook).
  */
-function Agenda({ slot, now, tz, clientName, pickRow }: { slot: Slot; now: string; tz: string; clientName: (k: string | null) => string; pickRow: (pickId: number) => ReactNode }) {
+function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: ReadonlyMap<string, DayEventWhen>; slot: Slot; now: string; tz: string; clientName: (k: string | null) => string; pickRow: (pickId: number) => ReactNode }) {
   const env = useTimeboxes();
   const [open, setOpen] = useState<number | null>(null);
   if (!env) return null;
@@ -848,12 +859,15 @@ function Agenda({ slot, now, tz, clientName, pickRow }: { slot: Slot; now: strin
                 </button>
               </li>
             );
+          const w = r.eventId ? whens?.get(r.eventId) : undefined;
           return (
-            <li key={`e${r.eventId}${r.start}`} className={`ag-${r.kind}${r.free ? " shown-free" : ""}`}>
+            <li key={`e${r.eventId}${r.start}`} className={`ag-${r.kind} show-${r.showAs ?? "busy"}${r.free ? " shown-free" : ""}${w ? ` when-${w}` : ""}`}>
               <span className="ag-time">{when}</span>
               <span className="ag-title" title={r.title}>
                 {r.title}
               </span>
+              {w === "now" && <span className="cal-tag now">Now</span>}
+              {w === "next" && <span className="cal-tag next">Next</span>}
               {r.free && <span className="muted">shown as free</span>}
             </li>
           );

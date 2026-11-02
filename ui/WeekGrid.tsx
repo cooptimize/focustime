@@ -650,7 +650,7 @@ function RulerEvent({ e, tz, style }: { e: CalEvent; tz: string; style: CSSPrope
 }
 
 /** Step 13: any calendar event opens its menu (click, right-click, Enter): only what its tier allows is enabled. */
-function useEventMenu(e: CalEvent) {
+export function useEventMenu(e: CalEvent) {
   const menu = useMenu((env) => eventMenu(env, e));
   const live = !e.unavailable && e.source !== "coopilot";
   const open = (ev: ReactMouseEvent | KeyboardEvent) => {

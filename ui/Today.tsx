@@ -20,6 +20,8 @@ import { causeLines } from "./status.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { WeekMusts } from "./WeekMusts.tsx";
 import { mondayOf } from "../week/dates.ts";
+import { dayCalendar, splitByBlocks, type DayEvent } from "../plan/todaycal.ts";
+import { AllDayRow, DayEventList, OutsideLine } from "./DayCalendar.tsx";
 
 type Props = {
   data: WeekLoadData;
@@ -64,6 +66,11 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
   const workday = data.planDay.workday && !!day && !day.pto;
   // Step 14.5 (D260): the one-time hint goes on the first planned pick with no time yet.
   const hintPick = committed ? picks.find((p) => p.status === "planned" && !data.timeboxes.some((t) => t.pickId === p.id && !t.removedAt))?.id ?? null : null;
+  // Step 17.6: today's meetings, each in the block it falls in, the rest in slim lines before and after the blocks.
+  const tz = data.hours.timeZone;
+  const blocks = workday && day ? slotsOf(day) : [];
+  const cal = day ? dayCalendar(day, now) : null;
+  const split = cal ? splitByBlocks(cal.timed, blocks.map((s) => ({ key: s.half, start: s.start, end: s.end }))) : null;
 
   return (
     <main className="today-view" aria-label="Today">
@@ -105,6 +112,8 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
       )}
 
       <VmToday />
+      {cal && <AllDayRow events={cal.allDay} />}
+      {split && <OutsideLine label={blocks.length ? "Before your blocks" : "Today's calendar"} events={split.before} tz={tz} />}
       <section className="today-focus" aria-label="Focus">
         {t ? (
           <button type="button" className="today-start running" onClick={onFocusScreen}>
@@ -142,11 +151,12 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
 
       {workday && day && (
         <section className="today-blocks" aria-label="Today's blocks">
-          {slotsOf(day).map((s) => (
-            <TodayBlock key={s.half} slot={s} data={data} picks={picks.filter((p) => p.half === s.half && (p.status === "planned" || p.status === "done"))} committed={committed} now={now} nameOf={nameOf} onStart={onStart} onPlan={() => onPlan(date)} onFeature={onPlanFeature ? (half, itemId) => onPlanFeature(date, half, itemId) : undefined} running={t?.pickId ?? null} hintPick={hintPick} />
+          {blocks.map((s) => (
+            <TodayBlock key={s.half} slot={s} meetings={split?.within.get(s.half) ?? []} data={data} picks={picks.filter((p) => p.half === s.half && (p.status === "planned" || p.status === "done"))} committed={committed} now={now} nameOf={nameOf} onStart={onStart} onPlan={() => onPlan(date)} onFeature={onPlanFeature ? (half, itemId) => onPlanFeature(date, half, itemId) : undefined} running={t?.pickId ?? null} hintPick={hintPick} />
           ))}
         </section>
       )}
+      {split && blocks.length > 0 && <OutsideLine label="After your blocks" events={split.after} tz={tz} />}
 
       <WeekMusts data={data} weekStart={mondayOf(workday ? date : target.date)} now={null} title={workday || mondayOf(target.date) === mondayOf(date) ? "This week" : "Next week"} />
 
@@ -173,7 +183,7 @@ function slotsOf(day: Day): Slot[] {
   return [day.am, day.pm, ...(day.eve ? [day.eve] : [])].filter((s) => !s.off && (s.focus.length > 0 || s.open || s.half === "EVE"));
 }
 
-function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan, onFeature, running, hintPick }: { onFeature?: ((half: Half, itemId: number) => void) | undefined; slot: Slot; data: WeekLoadData; picks: Pick[]; committed: boolean; now: string; nameOf: (k: string) => string; onStart: (p: Pick) => void; onPlan: () => void; running: number | null; hintPick: number | null }) {
+function TodayBlock({ slot, meetings, data, picks, committed, now, nameOf, onStart, onPlan, onFeature, running, hintPick }: { onFeature?: ((half: Half, itemId: number) => void) | undefined; slot: Slot; meetings: DayEvent[]; data: WeekLoadData; picks: Pick[]; committed: boolean; now: string; nameOf: (k: string) => string; onStart: (p: Pick) => void; onPlan: () => void; running: number | null; hintPick: number | null }) {
   const view = useContext(PlanCtx);
   const client = slot.focus[0]?.clientKey ?? null;
   const ended = Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.end)) >= 0;
@@ -215,6 +225,7 @@ function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan
           ))}
         </p>
       )}
+      <DayEventList events={meetings} tz={data.hours.timeZone} label={`${halfName(slot.half)} meetings`} />
       {picks.length ? (
         <ul className="today-picks">
           {picks.map((p) => (

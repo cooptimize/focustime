@@ -1551,6 +1551,33 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .today-blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
 .today-block { padding: 14px 16px; border: 1px solid var(--border); border-left: 5px solid var(--c); border-radius: 10px; background: var(--surface); display: grid; gap: 8px; align-content: start; }
 .today-block.ended { opacity: 0.7; }
+/* Step 17.6: the day's meetings on Today and in Plan the day (ui/DayCalendar.tsx), on the Week list's show-as styles. */
+.ev-list.day-cal { margin: 0; gap: 3px; font-size: 13px; }
+.ev-list.day-cal li { padding: 2px 6px 2px 8px; border-radius: 0 4px 4px 0; cursor: default; }
+.ev-list.day-cal li[role="button"] { cursor: pointer; }
+.ev-list.day-cal li[role="button"]:hover { background: color-mix(in oklab, var(--text) 6%, transparent); }
+.ev-list.day-cal li.personal { border-left-color: var(--personal); }
+.ev-list.day-cal li.unavailable { border-left-color: var(--text-faint); color: var(--text-muted); }
+.ev-list.day-cal .ev-time { min-width: 88px; text-align: left; font-variant-numeric: tabular-nums; }
+.ev-list.day-cal .ev-title { flex: 1; min-width: 0; }
+.ev-list.day-cal li.when-past { opacity: 0.5; }
+.ev-list.day-cal li.when-now { background: color-mix(in oklab, var(--action) 16%, transparent); border-left-color: var(--action); }
+.ev-list.day-cal li.when-now .ev-title { font-weight: 600; }
+.ev-list.day-cal li.when-next .ev-title { font-weight: 600; }
+.cal-tag { flex: none; padding: 0 6px; border-radius: 99px; line-height: 17px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.cal-tag.now { color: var(--on-action); background: var(--action); }
+.cal-tag.next { color: var(--accent); border: 1px solid currentColor; line-height: 15px; }
+.cal-word { flex: none; font-size: 12px; color: var(--text-faint); }
+.day-allday, .day-outside { display: flex; align-items: baseline; gap: 10px; margin: 0; font-size: 13px; }
+.day-outside { align-items: flex-start; }
+.day-outside .ev-list.day-cal { flex: 1; min-width: 0; }
+.day-line-label { flex: none; min-width: 120px; font-size: 12px; font-weight: 600; color: var(--text-muted); padding-top: 2px; }
+.day-allday { flex-wrap: wrap; }
+.day-allday-ev { padding: 1px 8px; border-radius: 4px; border-left: 3px solid var(--text-faint); background: var(--raised); }
+.day-allday-ev.personal { border-left-color: var(--personal); }
+.day-allday-ev.show-free, .day-allday-ev.show-workingElsewhere { border-left-style: dotted; color: var(--text-muted); }
+.day-allday-ev.show-tentative { border-left-style: dashed; }
+.day-allday-ev.show-oof { border-left: 3px double var(--oof); }
 .today-block header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .today-block h2 { margin: 0; font-size: 19px; order: 1; flex-basis: 100%; }
 .today-block-when { font-size: 12px; color: var(--text-muted); }
@@ -1904,6 +1931,13 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .ag-time { flex: none; min-width: 84px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .ag-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ag-meeting { border-left-color: color-mix(in oklab, var(--text-faint) 60%, transparent) !important; background: color-mix(in oklab, var(--text-faint) 8%, transparent); }
+/* Step 17.6: show-as and now / next on the agenda's calendar rows. */
+.pd-agenda li.show-tentative { border-left-style: dashed !important; }
+.pd-agenda li.show-oof { border-left: 3px double var(--oof) !important; }
+.pd-agenda li.show-workingElsewhere { border-left-style: dotted !important; color: var(--text-muted); }
+.pd-agenda li.when-past { opacity: 0.5; }
+.pd-agenda li.when-now { background: color-mix(in oklab, var(--action) 16%, transparent); border-left-color: var(--action) !important; }
+.pd-agenda li.when-now .ag-title, .pd-agenda li.when-next .ag-title { font-weight: 600; }
 .ag-personal { border-left-color: var(--personal) !important; background: color-mix(in oklab, var(--personal) 9%, transparent); }
 .ag-unavailable { border-left-color: var(--text-faint) !important; color: var(--text-muted); }
 .shown-free { opacity: 0.75; }

@@ -756,3 +756,11 @@ The identity from `assets/brand/` in the app, with no layout or domain token cha
 - **UI (`ui/brand/`):** WeekMark in the top bar (to Today); the opening (nothing within 400 ms, else the loader for at least 600 ms with each source waiting, done or didn't load; then the unroll, the hop into Mon AM and the flight into the top bar); Close out's reverse, with "Musts done. See you tomorrow." when today's musts are done; the first launch moment once (`ui.first_launch`); a reconnect moment in Settings > Connections; empty states in Inbox and Close out; About in Settings; Settings > Display "Reduce motion" (`ui.set_reduce_motion`), with the system setting doing the same.
 - **Never:** Lumen in Week, Plan the week, Today › Now, Plan the day, Check-in, Roadmap or Plan ahead, on cards or for inline waits.
 - **Open:** Q93 (the brief's surface palette), Q94 (a zero at-risk week moment, suggested after Done in Plan the week), Q95 (B08 live favicon), Q96 (the icon tile's recipe). B07 stays open.
+
+## 46. Step 17.6: meetings on Today, launcher check (authorized Nov 2)
+
+- **Bug:** Today › Now showed no meetings (never built, D366). Plan the day hid them behind a collapsed link.
+- **Rules (`plan/todaycal.ts`, D367):** one entry per event in time order, declined hidden, tentative and free kept with their show-as, all-day apart, the configured time zone decides the day, Coopilot's own timebox events never shown as meetings, Now and Next on today only.
+- **UI (`ui/DayCalendar.tsx`, D368):** meetings inside each block on Today, all-day row and before/after lines; Plan the day's agendas open by default with Now and Next.
+- **Launcher check:** `system/Coopilot.desktop` passes `desktop-file-validate`; Omarchy 4.0.6's launcher is the quickshell shell (`/usr/share/omarchy/shell`, `services/AppLibrary.qml`, Quickshell `DesktopEntries` over `~/.local/share/applications` and `XDG_DATA_DIRS`), hiding only NoDisplay/Hidden/OnlyShowIn entries and `default/omarchy/launcher.hides`; Coopilot is in neither. No repo change.
+- **Contract change:** none (no new action, source or store change). `AgendaItem` gains an optional `showAs`.

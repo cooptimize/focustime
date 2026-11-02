@@ -1,7 +1,7 @@
 // A block's agenda and its free gaps (step 13.6, D244 to D246): what Plan the day shows per block, where a pick can be
 // timeboxed with one click, and "Timebox my day". Pure: the caller passes the slot (from the week build), the
 // timeboxes and, on today, the clock.
-import type { FreeGap, Half, IsoDate, Slot } from "../week/types.ts";
+import type { FreeGap, Half, IsoDate, ShowAs, Slot } from "../week/types.ts";
 import type { Pick, Size } from "./types.ts";
 import { TIMEBOX_MIN, TIMEBOX_STEP } from "./timebox.ts";
 
@@ -15,6 +15,8 @@ export type AgendaItem = {
   title: string;
   /** An event shown as free or working elsewhere: on the agenda, but it leaves the time free. */
   free?: boolean;
+  /** The event's show-as (step 17.6), for the Week view's styling. */
+  showAs?: ShowAs;
   /** The calendar event id, or the timebox id. */
   eventId?: string;
   timeboxId?: number;
@@ -60,7 +62,7 @@ export function agendaOf(slot: Slot, timeboxes: readonly AgendaTimebox[], now?: 
     if (p.event.allDay || ms(p.clipEnd) <= a || ms(p.clipStart) >= b) continue;
     const kind: AgendaKind = p.event.unavailable ? "unavailable" : p.event.isPersonal ? "personal" : "meeting";
     const free = p.event.showAs === "free" || p.event.showAs === "workingElsewhere";
-    items.push({ kind, start: p.clipStart, end: p.clipEnd, minutes: minutes(ms(p.clipStart), ms(p.clipEnd)), title: p.event.title, eventId: p.event.id, ...(free ? { free: true } : {}) });
+    items.push({ kind, start: p.clipStart, end: p.clipEnd, minutes: minutes(ms(p.clipStart), ms(p.clipEnd)), title: p.event.title, eventId: p.event.id, ...(p.event.showAs ? { showAs: p.event.showAs } : {}), ...(free ? { free: true } : {}) });
   }
   for (const t of live(slot, timeboxes)) items.push({ kind: "timebox", start: t.start, end: t.end, minutes: minutes(ms(t.start), ms(t.end)), title: t.title, timeboxId: t.id });
   for (const g of openGaps(slot, timeboxes, now)) items.push({ kind: "free", start: g.start, end: g.end, minutes: g.minutes, title: "Free" });
