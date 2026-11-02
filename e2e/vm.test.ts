@@ -25,7 +25,8 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await expect(page.locator(".person-chip").getAttribute("title")).resolves.toContain("Alex Rivera");
     const chip = page.locator(".topbar .vm-chip");
     await expect.poll(() => chip.textContent(), { timeout: 10_000 }).toContain("Stopped (deallocated)");
-    await expect(page.locator(".today-view .vm-chip").textContent()).resolves.toContain("Auto-shutdown 7:00 PM");
+    // Step 16.3: the header chip is the one place for VM status; Today has only the prompts.
+    await expect(page.locator(".today-view .vm-chip").count()).resolves.toBe(0);
     const prompt = page.locator(".vm-banner", { hasText: "Your VM is off. Start it?" });
     await prompt.waitFor();
     await prompt.getByRole("button", { name: "Not today" }).click();
@@ -41,7 +42,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await prompt.getByRole("button", { name: "Start" }).click();
     const chip = page.locator(".topbar .vm-chip");
     await expect.poll(() => chip.textContent(), { timeout: 10_000 }).toContain("Starting…");
-    await expect.poll(() => chip.textContent(), { timeout: 45_000, interval: 1000 }).toContain("Running");
+    await expect.poll(() => chip.textContent(), { timeout: 45_000, interval: 1000 }).toContain("Running · off at 7:00 PM");
     await page.keyboard.press(",");
     await page.getByRole("button", { name: "Data", exact: true }).click();
     const log = page.locator('[aria-label="Azure write log"]');
@@ -62,11 +63,11 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await expect(dlg.locator(".vm-change").textContent()).resolves.toMatch(/7:00 PM.*9:00 PM/);
     await expect(dlg.textContent()).resolves.toContain("back to 7:00 PM tomorrow morning");
     await dlg.getByRole("button", { name: "Delay" }).click();
-    await expect.poll(() => page.locator(".today-view .vm-chip").textContent(), { timeout: 10_000 }).toContain("Auto-shutdown set to 9:00 PM; normally 7:00 PM");
+    await expect.poll(() => chip.getAttribute("title"), { timeout: 10_000 }).toContain("Auto-shutdown set to 9:00 PM; normally 7:00 PM");
     await chip.click();
     await page.getByRole("menuitem", { name: /Restore auto-shutdown/ }).click();
     await page.getByRole("dialog", { name: "Restore auto-shutdown" }).getByRole("button", { name: "Restore" }).click();
-    await expect.poll(() => page.locator(".today-view .vm-chip").textContent(), { timeout: 10_000 }).toContain("Auto-shutdown 7:00 PM");
+    await expect.poll(() => chip.getAttribute("title"), { timeout: 10_000 }).not.toContain("normally");
     expect(errors).toEqual([]);
     await page.close();
   }, T);

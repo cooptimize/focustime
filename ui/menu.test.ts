@@ -238,19 +238,33 @@ describe("focus timer menus (step 6c)", () => {
 
   it("F offers focus, break and a pick with no timer; controls when one runs; Done/+15/Next when it ended", () => {
     const none = timerStep(env().e);
-    expect(items(none).map((i) => i.label)).toEqual(["Focus", "Break", "Timebox a pick…"]);
-    const running = timerStep(env({ timer: { kind: "focus", pickId: 7, label: "Story", plannedMinutes: 25, remainingMs: 60_000, running: true, ended: false, endsAt: null } }).e);
-    expect(items(running).map((i) => i.label)).toEqual(["Pause", "+15 min", "Done (tick the pick)", "Next pick", "Stop"]);
-    const ended = timerStep(env({ timer: { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 25, remainingMs: 0, running: false, ended: true, endsAt: null } }).e);
+    expect(items(none).map((i) => i.label)).toEqual(["Focus", "Deep focus", "Break", "Timebox a pick…"]);
+    const running = timerStep(env({ timer: { kind: "focus", pickId: 7, label: "Story", plannedMinutes: 25, remainingMs: 60_000, running: true, ended: false, endsAt: null, deep: false } }).e);
+    expect(items(running).map((i) => i.label)).toEqual(["Pause", "+15 min", "Deep focus", "Done (tick the pick)", "Next pick", "Stop"]);
+    const ended = timerStep(env({ timer: { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 25, remainingMs: 0, running: false, ended: true, endsAt: null, deep: false } }).e);
     expect(items(ended).map((i) => i.label)).toEqual(["+15 min", "Done", "Next pick", "Stop"]);
   });
 
   it("the Focus button suggests the next pick first, then a plain timer (step 15.2)", async () => {
     const t = env({ focusNext: pick });
     const step = timerStep(t.e);
-    expect(items(step).map((i) => i.label)).toEqual([`Start focus: ${pick.title}`, "Plain timer", "Break", "Another pick…"]);
+    expect(items(step).map((i) => i.label)).toEqual([`Start focus: ${pick.title}`, "Plain timer", "Deep focus", "Break", "Another pick…"]);
     await items(step)[0]!.run!();
     expect(t.calls).toEqual([["timer.start", { pickId: pick.id }]]);
+  });
+
+  it("step 16.3: Deep focus starts on the next pick with Teams set to Do not disturb; while running it switches", async () => {
+    const t = env({ focusNext: pick });
+    const deep = items(timerStep(t.e)).find((i) => i.label === "Deep focus")!;
+    expect(deep.hint).toBe("Teams: Do not disturb");
+    const lengths = deep.next!();
+    await items(lengths)[0]!.run!();
+    expect(t.calls[0]).toEqual(["timer.start", expect.objectContaining({ deep: true, pickId: pick.id })]);
+    const r = env({ timer: { kind: "focus", pickId: 7, label: "Story", plannedMinutes: 25, remainingMs: 60_000, running: true, ended: false, endsAt: null, deep: false } });
+    const toggle = items(timerStep(r.e)).find((i) => i.label === "Deep focus")!;
+    expect(toggle.checked).toBe(false);
+    await toggle.run!();
+    expect(r.calls).toEqual([["timer.deep", { on: true }]]);
   });
 });
 

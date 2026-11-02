@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyChoice, canStart, canStop, chipOf, CHIP_LABEL, delayed, morningPrompt, powerFrom, reached, refreshMs, restoreAttemptDue, restoreDue, restorePlan, shutdownFrom, shutdownLabel, stillChanged, type ShutdownChange } from "./vm.ts";
+import { applyChoice, canStart, canStop, chipOf, CHIP_LABEL, chipText, delayed, morningPrompt, powerFrom, reached, refreshMs, restoreAttemptDue, restoreDue, restorePlan, shutdownFrom, shutdownLabel, stillChanged, type ShutdownChange } from "./vm.ts";
 
 describe("power state", () => {
   it("reads PowerState/<x> from instanceView statuses, ignoring provisioning", () => {
@@ -67,8 +67,25 @@ describe("auto-shutdown", () => {
   it("restores from the first run after midnight", () => {
     expect(restoreDue(change, "2026-11-02")).toBe(false);
     expect(restoreDue(change, "2026-11-03")).toBe(true);
-    expect(stillChanged(change, "2026-11-03")).toBe(true);
     expect(stillChanged(null, "2026-11-03")).toBe(false);
+  });
+
+  it("step 16.3: Today warns only when a restore failed (not while one is simply due)", () => {
+    expect(stillChanged(change, "2026-11-03")).toBe(false);
+    expect(stillChanged({ ...change, failedAt: "2026-11-03T05:00:00Z", message: "Azure unreachable" }, "2026-11-03")).toBe(true);
+    expect(stillChanged({ ...change, failedAt: "2026-11-02T23:00:00Z" }, "2026-11-02")).toBe(false);
+  });
+
+  it("step 16.3: the header chip's line: state, plus the auto-shutdown time while it runs or starts", () => {
+    const s = { time: "1930", status: "Enabled" as const, timeZoneId: "Eastern Standard Time" };
+    const z = "America/New_York";
+    expect(chipText("running", s, z, "2026-11-02")).toBe("Running · off at 7:30 PM");
+    expect(chipText("starting", s, z, "2026-11-02")).toBe("Starting… · off at 7:30 PM");
+    expect(chipText("running", { ...s, status: "Disabled" }, z, "2026-11-02")).toBe("Running · auto-shutdown off");
+    expect(chipText("running", null, z, "2026-11-02")).toBe("Running");
+    expect(chipText("deallocated", s, z, "2026-11-02")).toBe(CHIP_LABEL.deallocated);
+    expect(chipText("stopping", s, z, "2026-11-02")).toBe(CHIP_LABEL.stopping);
+    expect(chipText("unknown", s, z, "2026-11-02")).toBe("Unknown");
   });
 
   it("puts back only what Coopilot changed", () => {

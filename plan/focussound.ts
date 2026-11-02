@@ -21,8 +21,12 @@ export type FocusSettings = {
   /** Pause media players when focus ends or a break starts, resume them when the next focus starts (playerctl). */
   pauseMedia: boolean;
   playlists: Playlist[];
+  /** Step 16.3: set my Teams status while focus runs (Busy, or Do not disturb for deep focus). */
+  teamsStatus: boolean;
+  /** Step 16.3: what plain (not deep) focus does to my Teams status: Busy, or leave it alone. */
+  plainFocusStatus: "busy" | "none";
 };
-export const DEFAULT_FOCUS: FocusSettings = { sound: "none", volume: 40, fadeSeconds: 5, onBreak: "silence", pauseMedia: false, playlists: [] };
+export const DEFAULT_FOCUS: FocusSettings = { sound: "none", volume: 40, fadeSeconds: 5, onBreak: "silence", pauseMedia: false, playlists: [], teamsStatus: true, plainFocusStatus: "busy" };
 export const MAX_PLAYLISTS = 8;
 
 /** The part of a timer the sound rules look at. */

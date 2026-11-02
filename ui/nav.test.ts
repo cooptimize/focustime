@@ -106,7 +106,7 @@ describe("notification routes (all 11 kinds of step 15.5)", () => {
     ["timer", notices.timerEnd(false, "A", at, at), { nav: navOf.today(), overlay: { kind: "focus" } }, false],
     ["meeting", notices.meeting(["10:00 Standup"], ["k"], at), { nav: navOf.today(), overlay: { kind: "focus" } }, false],
     ["vm", notices.vmOff("2026-11-02", "vm-demo", at), loc(navOf.today()), true],
-    ["vm_changed", notices.vmChanged("2026-11-02", "Delayed 1h", at), loc(navOf.today()), false],
+    ["vm_changed", notices.vmChanged("2026-11-02", "Delayed 1h", at), loc(navOf.today()), true],
     ["followups (one)", notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }], at)!, loc(navOf.inbox(7)), false],
     ["followups (several)", notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }, { id: 8, what: "B", overdue: true }], at)!, loc(navOf.inbox()), false],
     ["expiry", notices.expiry("2026-11-02", [{ text: "x", section: "clients" }], at)!, { nav: navOf.today(), overlay: { kind: "settings", section: "clients" } }, false],

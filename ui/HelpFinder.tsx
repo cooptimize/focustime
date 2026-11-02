@@ -9,6 +9,8 @@ import { formatDuration } from "../week/format.ts";
 import { call } from "./api.ts";
 import type { HelpTarget } from "./menu.ts";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
+import { availableFirst } from "../plan/presence.ts";
+import { PresenceDot, usePresence } from "./Presence.tsx";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 const dayShort = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -93,7 +95,9 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
     setSlots(null);
     setSlot(null);
   };
-  const byTier = ([1, 2, 3] as const).map((t) => ({ t, list: (cands?.candidates ?? []).filter((c) => c.tier === t) })).filter((g) => g.list.length);
+  // Step 16.3: presence for everyone listed (one read, every 2 minutes while open); Available now first in each tier.
+  const presence = usePresence({ emails: (cands?.candidates ?? []).map((c) => c.email) });
+  const byTier = ([1, 2, 3] as const).map((t) => ({ t, list: availableFirst((cands?.candidates ?? []).filter((c) => c.tier === t), (c) => presence.wordFor(c)) })).filter((g) => g.list.length);
 
   return (
     <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
@@ -155,7 +159,7 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
                 {list.map((c) => (
                   <li key={c.email}>
                     <label>
-                      <input type="checkbox" checked={chosen.includes(c.email)} onChange={() => toggle(c.email)} /> {c.name}{" "}
+                      <input type="checkbox" checked={chosen.includes(c.email)} onChange={() => toggle(c.email)} /> <PresenceDot word={presence.wordFor(c)} />{c.name}{" "}
                       <span className="muted">{who(c, clientName)}</span>
                     </label>
                   </li>
@@ -190,7 +194,15 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
                     <strong>
                       {dayShort(s.date)}, {clock(s.start, tz)} to {clock(s.end, tz)}
                     </strong>{" "}
-                    with {s.people.map((p) => (p.hoursUnknown ? `${p.name} (hours unknown)` : p.name)).join(", ")} <span className="muted">{tierWord(s.tier, clientName)}</span>
+                    with{" "}
+                    {s.people.map((p, i) => (
+                      <span key={p.email}>
+                        {i > 0 && ", "}
+                        <PresenceDot word={presence.wordFor(p)} />
+                        {p.hoursUnknown ? `${p.name} (hours unknown)` : p.name}
+                      </span>
+                    ))}{" "}
+                    <span className="muted">{tierWord(s.tier, clientName)}</span>
                     {s.inFocus && <span className="muted"> · in your {clientName} focus block</span>}
                     {s.alsoFree.length > 0 && <span className="muted"> · also free: {s.alsoFree.join(", ")}</span>}
                     {s.overTimebox > 0 && <span className="help-warn"> · over your timebox by {formatDuration(s.overTimebox)}</span>}

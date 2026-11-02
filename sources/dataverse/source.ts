@@ -556,13 +556,16 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     return { ok: false, message: f?.rootCause === "keyring" ? "Keyring locked" : f?.status === "unreachable" ? "Dataverse unreachable" : f?.status === "auth_required" ? "Dataverse access denied: check the Coopilot role (users, Focus Time, Account Workers, PTO)" : f?.message ?? "Dataverse read failed" };
   };
 
-  /** Cooptimize staff: enabled, licensed users who aren't application users, with a work email. */
-  async function teammates(): Promise<{ ok: true; people: { id: string; name: string; email: string }[] } | TeamFailure> {
+  /**
+   * Cooptimize staff: enabled, licensed users who aren't application users, with a work email. Step 16.3: with their
+   * Entra object ID (aadId), which Teams presence is read by.
+   */
+  async function teammates(): Promise<{ ok: true; people: { id: string; name: string; email: string; aadId: string | null }[] } | TeamFailure> {
     try {
       return await memo("teammates", async () => {
         const filter = "isdisabled eq false and islicensed eq true and applicationid eq null and internalemailaddress ne null";
-        const rows = await getAll<{ systemuserid?: unknown; fullname?: unknown; internalemailaddress?: unknown }>("team_users", `systemusers?$select=systemuserid,fullname,internalemailaddress&$filter=${encodeURIComponent(filter)}`);
-        const people = rows.filter((r) => guid(r.systemuserid) && typeof r.internalemailaddress === "string" && r.internalemailaddress.includes("@")).map((r) => ({ id: (r.systemuserid as string).toLowerCase(), name: typeof r.fullname === "string" && r.fullname.trim() ? r.fullname.trim() : (r.internalemailaddress as string), email: (r.internalemailaddress as string).trim().toLowerCase() }));
+        const rows = await getAll<{ systemuserid?: unknown; fullname?: unknown; internalemailaddress?: unknown; azureactivedirectoryobjectid?: unknown }>("team_users", `systemusers?$select=systemuserid,fullname,internalemailaddress,azureactivedirectoryobjectid&$filter=${encodeURIComponent(filter)}`);
+        const people = rows.filter((r) => guid(r.systemuserid) && typeof r.internalemailaddress === "string" && r.internalemailaddress.includes("@")).map((r) => ({ id: (r.systemuserid as string).toLowerCase(), name: typeof r.fullname === "string" && r.fullname.trim() ? r.fullname.trim() : (r.internalemailaddress as string), email: (r.internalemailaddress as string).trim().toLowerCase(), aadId: guid(r.azureactivedirectoryobjectid) ? (r.azureactivedirectoryobjectid as string).toLowerCase() : null }));
         return { ok: true as const, people };
       });
     } catch (e) {

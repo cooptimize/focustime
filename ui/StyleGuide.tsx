@@ -66,10 +66,10 @@ const strips: [string, Strip][] = [
 ];
 
 const timers: [string, TimerView][] = [
-  ["Focus running", { kind: "focus", pickId: 2, label: "Draft the release notes", plannedMinutes: 50, remainingMs: 23 * 60_000 + 14_000, running: true, ended: false, endsAt: new Date(Date.parse(NOW) + 23 * 60_000 + 14_000).toISOString(), runningSince: new Date(Date.parse(NOW) - 26 * 60_000 - 46_000).toISOString() }],
-  ["Focus paused", { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 25, remainingMs: 9 * 60_000, running: false, ended: false, endsAt: null, runningSince: null }],
-  ["Time's up", { kind: "focus", pickId: 2, label: "Draft the release notes", plannedMinutes: 50, remainingMs: 0, running: false, ended: true, endsAt: null, runningSince: null }],
-  ["Break", { kind: "break", pickId: null, label: "Break", plannedMinutes: 10, remainingMs: 4 * 60_000, running: true, ended: false, endsAt: new Date(Date.parse(NOW) + 4 * 60_000).toISOString(), runningSince: new Date(Date.parse(NOW) - 6 * 60_000).toISOString() }],
+  ["Focus running", { kind: "focus", pickId: 2, label: "Draft the release notes", plannedMinutes: 50, remainingMs: 23 * 60_000 + 14_000, running: true, ended: false, endsAt: new Date(Date.parse(NOW) + 23 * 60_000 + 14_000).toISOString(), runningSince: new Date(Date.parse(NOW) - 26 * 60_000 - 46_000).toISOString(), deep: false }],
+  ["Focus paused", { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 25, remainingMs: 9 * 60_000, running: false, ended: false, endsAt: null, runningSince: null, deep: false }],
+  ["Time's up", { kind: "focus", pickId: 2, label: "Draft the release notes", plannedMinutes: 50, remainingMs: 0, running: false, ended: true, endsAt: null, runningSince: null, deep: false }],
+  ["Break", { kind: "break", pickId: null, label: "Break", plannedMinutes: 10, remainingMs: 4 * 60_000, running: true, ended: false, endsAt: new Date(Date.parse(NOW) + 4 * 60_000).toISOString(), runningSince: new Date(Date.parse(NOW) - 6 * 60_000).toISOString(), deep: false }],
 ];
 
 // Machado et al. 2009, severity 1 (the matrices used in docs/design/style-guide.md).

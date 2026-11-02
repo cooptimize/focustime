@@ -34,6 +34,8 @@ export type VmStatus = {
   vm: ChosenVm | null;
   chip: VmChip | null;
   label: string | null;
+  /** Step 16.3: the header chip's line, "Running · off at 7:30 PM". */
+  text: string | null;
   power: PowerState | null;
   transition: VmTransition | null;
   canStart: boolean;
@@ -67,4 +69,15 @@ export type AzureWriteEntry = {
   auto: boolean;
   attempts: number;
   updatedAt: string;
+};
+
+/** One change to my Teams status during focus (step 16.3): set (Busy or Do not disturb, for minutes), clear, or left as I set it in Teams. */
+export type TeamsStatusEntry = {
+  id: number;
+  at: string;
+  op: "set" | "clear" | "left";
+  status: "Busy" | "DoNotDisturb" | null;
+  minutes: number | null;
+  result: "done" | "failed";
+  message: string | null;
 };

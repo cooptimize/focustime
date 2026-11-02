@@ -3,7 +3,8 @@
 // their preview, Today's morning prompt and "still changed" warning, Settings > You (sign out, find and confirm my VM)
 // and the Azure write log in Settings > Data.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { AuthStatus, AzureWriteEntry, Person, VmPreview, VmPreviewOp, VmStatus } from "../actions/account-types.ts";
+import type { AuthStatus, AzureWriteEntry, Person, TeamsStatusEntry, VmPreview, VmPreviewOp, VmStatus } from "../actions/account-types.ts";
+import type { TeamsStatusView } from "../actions/types.ts";
 import { ActionRefusal, call } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
@@ -14,7 +15,7 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't w
 
 // ---- Sign-in ----
 
-type AuthApi = { status: AuthStatus | null; refresh: () => Promise<void>; signIn: (azure?: boolean) => Promise<string | null>; signOut: () => Promise<void> };
+type AuthApi = { status: AuthStatus | null; refresh: () => Promise<void>; signIn: (azure?: boolean, teams?: boolean) => Promise<string | null>; signOut: () => Promise<void> };
 export const AuthCtx = createContext<AuthApi>({ status: null, refresh: async () => {}, signIn: async () => null, signOut: async () => {} });
 
 /** Shows the sign-in screen until someone is signed in (when a Microsoft app registration is set up); then the app. */
@@ -32,8 +33,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => void refresh(), [refresh]);
   const [offline, setOffline] = useState(false);
-  const signIn = useCallback(async (azure = true) => {
-    const r = await call<{ status: string; message?: string; offline?: boolean }>("auth.sign_in", { azure });
+  const signIn = useCallback(async (azure = true, teams = false) => {
+    const r = await call<{ status: string; message?: string; offline?: boolean }>("auth.sign_in", { azure, ...(teams ? { teams } : {}) });
     setOffline(!!r.offline);
     await refresh();
     return r.status === "connected" ? null : (r.message ?? "Sign-in not completed");
@@ -270,35 +271,40 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
   );
 }
 
-/** The VM chip: state with a colored dot, and the auto-shutdown time. Opens the VM menu. */
-export function VmChip({ big = false }: { big?: boolean }) {
+/**
+ * The VM chip (step 16.3: the single place for VM status, in the header on every tab): "VM Running · off at 7:30 PM".
+ * Opens the VM menu: Start, Stop, Delay 1h / 2h, Skip tonight, Restore, Allow Azure access.
+ */
+export function VmChip() {
   const { status, openMenu } = useContext(VmCtx);
   if (!status?.vm) return null;
   const chip = status.chip ?? "unknown";
-  const sched = status.schedule?.label ?? null;
+  const text = status.text ?? status.label ?? "Unknown";
+  const extra = [status.change?.text, status.needsConsent ? "Coopilot needs your OK to use Azure: open this menu and choose Allow Azure access" : status.error?.message].filter(Boolean).join(". ");
   return (
     <button
       type="button"
-      className={`vm-chip vm-${TONE[chip]}${big ? " big" : ""}`}
+      className={`vm-chip vm-${TONE[chip]}`}
       aria-haspopup="menu"
-      title={`${status.vm.name} (${status.vm.resourceGroup}): ${status.label ?? "Unknown"}${sched ? `. ${sched}` : ""}${status.error ? `. ${status.error.message}` : ""}`}
+      title={`${status.vm.name} (${status.vm.resourceGroup}): ${text}${extra ? `. ${extra}` : ""}`}
       onClick={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
         openMenu({ x: r.left, y: r.bottom + 4 });
       }}
     >
       <span className="vm-dot" aria-hidden="true" />
-      <span className="vm-word">VM</span> <span className="vm-label">{status.label ?? "Unknown"}</span>
-      {big && sched && <span className="vm-sched">{status.change ? status.change.text : sched}</span>}
-      {!big && status.change && <span className="vm-sched" title={status.change.text}>· shutdown changed</span>}
+      <span className="vm-word">VM</span> <span className="vm-label">{text}</span>
+      {status.needsConsent && <span className="vm-attn" aria-hidden="true">!</span>}
     </button>
   );
 }
 
-/** Today: the warning for a schedule still changed, the morning prompt, and Azure access to allow. */
+/**
+ * Today (step 16.3): only the prompts that need me now. The morning "Your VM is off. Start it?" box, and the
+ * "Auto-shutdown is still changed" warning after a restore failed. Everything else is on the header chip.
+ */
 export function VmToday() {
   const { status, refresh, act } = useContext(VmCtx);
-  const { signIn } = useContext(AuthCtx);
   const [busy, setBusy] = useState(false);
   if (!status?.vm) return null;
   return (
@@ -359,14 +365,6 @@ export function VmToday() {
           <button type="button" className="mini quiet" onClick={() => void call("vm.dismiss_prompt", {}).then(() => refresh())}>Not today</button>
         </div>
       )}
-      {status.needsConsent && (
-        <div className="vm-banner">
-          <strong>Coopilot needs your OK to use Azure</strong>
-          <span className="muted">One more sign-in, to allow Azure access for your VM.</span>
-          <button type="button" className="mini primary" onClick={() => void signIn(true).then((m) => void (m ? notify(m) : refresh(true)))}>Allow Azure access</button>
-        </div>
-      )}
-      {status.error && !status.needsConsent && <p className="vm-error muted">{status.error.message}</p>}
     </>
   );
 }
@@ -513,5 +511,77 @@ export function AzureWriteLog({ tz }: { tz: string }) {
         </table>
       )}
     </section>
+  );
+}
+
+// ---- Step 16.3: Teams status during focus ----
+
+const TEAMS_OP: Record<TeamsStatusEntry["op"], string> = { set: "Set", clear: "Cleared (back to automatic)", left: "Left as you set it in Teams" };
+const TEAMS_WORD: Record<string, string> = { Busy: "Busy", DoNotDisturb: "Do not disturb" };
+
+/** Settings > Data: every time focus set or cleared my Teams status. */
+export function TeamsStatusLog({ tz }: { tz: string }) {
+  const [log, setLog] = useState<TeamsStatusEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    call<{ entries: TeamsStatusEntry[] }>("presence.log", {}).then((r) => setLog(r.entries), (e: unknown) => setError(errText(e)));
+  }, []);
+  const stamp = (s: string) => Temporal.Instant.from(s).toZonedDateTimeISO(tz).toPlainDateTime().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return (
+    <section className="write-log" aria-label="Teams status log">
+      <h3>Teams status log</h3>
+      <p className="muted">Each time focus set your Teams status (with how long it lasts at most) or put it back to automatic. Only your own status; teammates' presence is never kept.</p>
+      {error && <p className="set-problem">{error}</p>}
+      {log && !log.length && <p className="muted">Nothing yet.</p>}
+      {log && log.length > 0 && (
+        <table className="wl-table">
+          <thead>
+            <tr><th scope="col">When</th><th scope="col">What</th><th scope="col">Result</th></tr>
+          </thead>
+          <tbody>
+            {log.map((e) => (
+              <tr key={e.id} className={`wl-${e.result === "failed" ? "failed" : "confirmed"}`}>
+                <td>{stamp(e.at)}</td>
+                <td>{TEAMS_OP[e.op]}{e.status && e.op === "set" ? <> <strong>{TEAMS_WORD[e.status]}</strong></> : null}{e.minutes ? <span className="muted"> · for up to {e.minutes} min</span> : null}</td>
+                <td>{e.result === "failed" ? "Failed" : "Done"}{e.message && <div className="muted">{e.message}</div>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+/** Settings > Focus: whether Coopilot can set my Teams status, and Allow Teams status when it needs consent. */
+export function TeamsAccessLine() {
+  const { signIn } = useContext(AuthCtx);
+  const [v, setV] = useState<TeamsStatusView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const check = useCallback(() => void call<TeamsStatusView>("presence.status", { check: true }).then(setV, () => setV(null)), []);
+  useEffect(check, [check]);
+  if (!v) return <span className="set-hint">Checking Teams…</span>;
+  const words: Record<string, string> = {
+    ok: "Teams is connected: focus can set your status, and teammates' presence shows next to their names.",
+    consent: "Coopilot needs your OK to use Teams status and presence. One more sign-in; no admin approval is needed.",
+    signed_out: "Sign in with Microsoft (Settings > You) to use Teams status.",
+    unavailable: "Teams can't be reached right now.",
+    off: "",
+  };
+  return (
+    <span className="set-teams-access">
+      <span className="set-hint">{words[v.access ?? "unavailable"]}</span>
+      {v.access === "consent" && (
+        <button type="button" className="mini primary" disabled={busy} onClick={async () => {
+          setBusy(true);
+          const m = await signIn(true, true).catch((e: unknown) => errText(e));
+          setMessage(m);
+          setBusy(false);
+          check();
+        }}>Allow Teams status</button>
+      )}
+      {message && <span className="set-problem" role="alert">{message}</span>}
+    </span>
   );
 }

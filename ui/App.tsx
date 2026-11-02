@@ -1304,6 +1304,7 @@ export function App() {
           }}
           onStart={() => startFocus(focusPick(data.plan?.[data.planDay.date]?.picks ?? [], strip?.half ?? null))}
           onClose={() => setView("today")}
+          onDeep={(on) => void runTimer("timer.deep", { on })}
           sound={
             <SoundControl
               settings={data.focus}

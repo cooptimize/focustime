@@ -148,7 +148,7 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
     }
     case "focus": {
       // Step 10. Written as given; parseConfig checks values and links per field (focus.playlists[0].url etc.).
-      only(v, ["sound", "volume", "fadeSeconds", "onBreak", "pauseMedia", "playlists"], "focus");
+      only(v, ["sound", "volume", "fadeSeconds", "onBreak", "pauseMedia", "playlists", "teamsStatus", "plainFocusStatus"], "focus");
       const values: [string, TomlValue][] = [];
       if (v.sound !== undefined) values.push(["sound", str(v.sound, "focus.sound", 20)]);
       if (v.volume !== undefined) values.push(["volume", int(v.volume, "focus.volume")]);
@@ -158,6 +158,11 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
         if (typeof v.pauseMedia !== "boolean") throw new SettingsInputError("focus.pause_media", "Must be true or false");
         values.push(["pause_media", v.pauseMedia]);
       }
+      if (v.teamsStatus !== undefined) {
+        if (typeof v.teamsStatus !== "boolean") throw new SettingsInputError("focus.teams_status", "Must be true or false");
+        values.push(["teams_status", v.teamsStatus]);
+      }
+      if (v.plainFocusStatus !== undefined) values.push(["plain_focus_status", str(v.plainFocusStatus, "focus.plain_focus_status", 10)]);
       if (v.playlists !== undefined) {
         if (!Array.isArray(v.playlists)) throw new SettingsInputError("focus.playlists", "Must be a list");
         values.push(["playlists", v.playlists.map((x, i) => {

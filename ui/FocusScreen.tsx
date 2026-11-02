@@ -9,6 +9,7 @@ import { BINAURAL, SOUND_NAMES, SOUNDS, type FocusSettings, type SoundKind } fro
 import { formatDuration } from "../week/format.ts";
 import { countdown, timerLeft } from "./NowStrip.tsx";
 import { WorkLink } from "./WorkLink.tsx";
+import { TeamsFocusLine } from "./Presence.tsx";
 
 type Props = {
   t: TimerView | null;
@@ -24,6 +25,8 @@ type Props = {
   onClose: () => void;
   /** The sound control (slice 5). */
   sound?: ReactNode;
+  /** Step 16.3: switch deep focus (Teams: Do not disturb) on or off for this session. */
+  onDeep?: (on: boolean) => void;
 };
 
 const clock = (hm: string) => {
@@ -31,7 +34,7 @@ const clock = (hm: string) => {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 || h === 24 ? "AM" : "PM"}`;
 };
 
-export function FocusScreen({ t, nowMs, pick, client, color, event, onTimer, onStart, onClose, sound }: Props) {
+export function FocusScreen({ t, nowMs, pick, client, color, event, onTimer, onStart, onClose, sound, onDeep }: Props) {
   const main = useRef<HTMLButtonElement>(null);
   useEffect(() => main.current?.focus(), [t?.kind, t?.ended, !t]);
   const left = t ? timerLeft(t, nowMs) : 0;
@@ -87,6 +90,16 @@ export function FocusScreen({ t, nowMs, pick, client, color, event, onTimer, onS
           Stop
         </button>
       </div>
+      {!brk && (
+        <div className="focus-teams">
+          {onDeep && (
+            <label className="focus-deep" title="Deep focus sets your Teams status to Do not disturb instead of Busy">
+              <input type="checkbox" checked={t.deep} onChange={(e) => onDeep(e.target.checked)} /> Deep focus
+            </label>
+          )}
+          <TeamsFocusLine sessionKey={`${t.runningSince ?? ""}|${t.plannedMinutes}|${t.deep}|${t.running}|${t.ended}`} />
+        </div>
+      )}
       {sound && <div className="focus-sound">{sound}</div>}
       <button type="button" className="link-btn focus-back" onClick={onClose} title="Back to Today (Esc); the timer keeps running">
         Back to Today, the timer keeps running

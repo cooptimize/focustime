@@ -13,7 +13,10 @@ import { cacheRoot, configPath, loadConfigFile, planDbPath, saveSystemUserId } f
 import { writeConfig } from "../config/edit.ts";
 import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
 import type { MicrosoftAccount } from "../actions/account.ts";
-import { vmContext } from "../actions/dispatch.ts";
+import { presenceContext, vmContext } from "../actions/dispatch.ts";
+import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
+import type { TeamsStatusState } from "../plan/presence.ts";
+import { createPresenceClient, type PresenceClient } from "../sources/graph/presence.ts";
 import { restoreTick, vmAction, type VmStatus } from "../actions/vm-actions.ts";
 import { CHECKIN_DONE_MARK } from "../actions/closeout-actions.ts";
 import { createAzureClient } from "../sources/azure/client.ts";
@@ -99,10 +102,15 @@ const makeOutlook = (cfg: OutlookConfig, timeZone: string) => memo("outlook", cf
  * Step 15.4: the Microsoft sign-in is the Outlook source's auth client (one refresh token, one keyring entry); the
  * app's user, the calendar and the Azure token all come from it.
  */
+const presenceClients = new WeakMap<object, PresenceClient>();
 const accountFor = (cfg: AppConfig): MicrosoftAccount | null => {
   if (!cfg.outlook) return null;
   const src = makeOutlook(cfg.outlook, cfg.week.hours.timeZone);
+  // Step 16.3: Teams presence on its own token from the same sign-in (one client per sign-in).
+  let presence = presenceClients.get(src);
+  if (!presence) presenceClients.set(src, (presence = createPresenceClient({ fetch, token: () => src.auth.accessToken("presence"), invalidate: () => src.auth.invalidate(), log })));
   return {
+    presence,
     signIn: (o) => src.connect(o),
     identity: () => src.auth.identity(),
     armToken: () => src.auth.accessToken("arm"),
@@ -562,6 +570,12 @@ if (plan) {
     void flushHeld().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
     // Q91: close notifications on screen whose occasion was handled (the day planned, the follow-up closed...).
     if (notifier.onScreen().length) void notifier.sweep().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
+    // Step 16.3: my Teams status follows focus (set, refreshed on +15, cleared however the session ends, even after a
+    // restart). Only while a timer exists or a status Coopilot set is still to clear.
+    for (const c of demoCtx ? [liveCtx, demoCtx] : [liveCtx]) {
+      if (!c.plan || (!c.plan.getState(TIMER_KEY) && !c.plan.accountState<TeamsStatusState>(TEAMS_STATUS_KEY)?.set)) continue;
+      void presenceContext(c).then(syncTeamsStatus).catch(() => log({ source: "outlook", op: "teams_status", kind: "failed" }));
+    }
   }, 5_000).unref();
   void timerTick();
 }

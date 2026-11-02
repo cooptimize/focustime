@@ -1,7 +1,7 @@
 // Settings (step 6b): every setting Coopilot owns, read from and written to the same validated config file. Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
-import { AzureWriteLog, YouAccount } from "./Account.tsx";
+import { AzureWriteLog, TeamsAccessLine, TeamsStatusLog, YouAccount } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -589,7 +589,7 @@ function CollabForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
 /** Settings > Focus (step 10): the default sound, volume, fade, what a break sounds like, media pause, playlists. */
 function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
   const f = p.data.focus;
-  const [v, setV] = useState({ sound: f.sound, volume: f.volume, fadeSeconds: f.fadeSeconds, onBreak: f.onBreak, pauseMedia: f.pauseMedia });
+  const [v, setV] = useState({ sound: f.sound, volume: f.volume, fadeSeconds: f.fadeSeconds, onBreak: f.onBreak, pauseMedia: f.pauseMedia, teamsStatus: f.teamsStatus, plainFocusStatus: f.plainFocusStatus });
   const [lists, setLists] = useState<Playlist[]>(f.playlists);
   const [media, setMedia] = useState<{ playerctl: boolean; spotify: boolean } | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -617,6 +617,24 @@ function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
         void save("focus", { ...v, playlists: lists.filter((l) => l.name.trim() || l.url.trim()) });
       }}
     >
+      <h3>Teams status</h3>
+      <p className="muted">While focus runs, Coopilot can set your Teams status, always with an end time (the time left plus 5 minutes), and puts it back to automatic when the session stops, ends or pauses. If you change your status in Teams yourself, Coopilot leaves it alone until the next session.</p>
+      <div className="set-grid">
+        <Field label="Set Teams status during focus" hint="Every change is in Settings > Data > Teams status log.">
+          <label className="set-check">
+            <input type="checkbox" checked={v.teamsStatus} onChange={(e) => setV({ ...v, teamsStatus: e.target.checked })} /> Set my status while I focus
+          </label>
+          <TeamsAccessLine />
+          <Problems all={problems} field="focus.teams_status" />
+        </Field>
+        <Field label="Plain focus sets" hint="Deep focus (Focus menu or the focus screen) always sets Do not disturb.">
+          <select value={v.plainFocusStatus} disabled={!v.teamsStatus} onChange={(e) => setV({ ...v, plainFocusStatus: e.target.value as "busy" | "none" })}>
+            <option value="busy">Busy</option>
+            <option value="none">Nothing: leave my status alone</option>
+          </select>
+          <Problems all={problems} field="focus.plain_focus_status" />
+        </Field>
+      </div>
       <h3>Sound while focusing</h3>
       <p className="muted">Made in the app, nothing to download. It plays only while focus runs, fades in and out, and goes quiet when you pause, stop or take a break. You can pick another one on the focus screen for a session.</p>
       <div className="set-grid">
@@ -1166,6 +1184,7 @@ function DataSection(p: Props & { data: SettingsData }) {
       <WriteLog />
       <DevOpsWriteLog />
       <AzureWriteLog tz={p.data.you?.timeZone ?? "UTC"} />
+      <TeamsStatusLog tz={p.data.you?.timeZone ?? "UTC"} />
       <div className="set-grid">
         <div className="set-field">
           <span className="set-label">Export the plan</span>

@@ -268,6 +268,20 @@ describe("one Microsoft sign-in (step 15.4)", () => {
     expect(await client.accessToken("arm")).toBe(FAKE_ACCESS);
   });
 
+  it("step 16.3: Teams presence is its own token; not consented is consent, and Allow Teams status adds it to the Graph scopes", async () => {
+    const { client, browser, tok } = ms({ consented: [READ], keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
+    await expect(client.accessToken("presence")).rejects.toMatchObject({ kind: "consent" });
+    expect(await client.accessToken()).toBe(FAKE_ACCESS);
+    expect(await client.connect({ teams: true, loginHint: "pat@example.com" })).toMatchObject({ status: "connected" });
+    const asked = browser.seen[0]!.searchParams.get("scope")!.split(" ");
+    expect(asked).toEqual(expect.arrayContaining(["https://graph.microsoft.com/Presence.ReadWrite", "https://graph.microsoft.com/Presence.Read.All"]));
+    expect(asked).not.toContain(ARM);
+    // Graph scopes: the code exchange redeems them together.
+    expect(tok.calls.at(-1)!.body.get("scope")).toContain("Presence.ReadWrite");
+    expect(await client.accessToken("presence")).toMatch(new RegExp(`^${FAKE_ACCESS}`));
+    expect(tok.calls.at(-1)!.body.get("scope")).toBe("offline_access https://graph.microsoft.com/Presence.ReadWrite https://graph.microsoft.com/Presence.Read.All");
+  });
+
   it("MFA or consent asked by the tenant is a consent failure, never 'expired'", async () => {
     const { client } = ms({ interaction: true, keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
     await expect(client.accessToken("arm")).rejects.toMatchObject({ kind: "consent" });

@@ -164,6 +164,8 @@ export type TimerView = {
   endsAt: string | null;
   /** When the current run started (null when paused or ended), so the UI can count focused time live (step 6d). */
   runningSince: string | null;
+  /** Step 16.3: deep focus (Teams status Do not disturb). */
+  deep: boolean;
 };
 
 /** A follow-up in the Follow-ups view and Close out (step 6c, step 7): who, what, when, and how it can close. */
@@ -362,3 +364,20 @@ export type RoadmapRow = {
 };
 export type RoadmapClient = { clientKey: string; clientName: string; status: import("../week/types.ts").ClientWorkStatus; message?: string; fetchedAt: string | null; fromCache: boolean; rows: RoadmapRow[] };
 export type RoadmapState = { today: string; weekStart: string; clients: RoadmapClient[] };
+
+// ---- Step 16.3: Teams presence ----
+/** Teams access, in words the UI can act on. */
+export type TeamsAccess = "ok" | "consent" | "signed_out" | "unavailable" | "off";
+/** presence.status: Settings > Focus and the focus screen ("Teams: Busy until 10:45"). */
+export type TeamsStatusView = {
+  enabled: boolean;
+  plainFocus: "busy" | "none";
+  /** Only when asked to check ({ check: true }); otherwise null. */
+  access: TeamsAccess | null;
+  set: import("../plan/presence.ts").FocusStatus | null;
+  until: string | null;
+  manual: boolean;
+  error: string | null;
+};
+/** presence.people: a word per Cooptimizer on screen; nothing for anyone presence couldn't be read for. */
+export type PresencePeopleData = { available: boolean; reason: TeamsAccess | null; people: { email: string; name: string; word: import("../plan/presence.ts").PresenceWord }[] };

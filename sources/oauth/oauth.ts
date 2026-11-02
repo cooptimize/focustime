@@ -31,7 +31,7 @@ export type OAuthProvider = {
    * email), so a refresh returns an ID token with who signed in; "arm" is Azure Resource Manager (user_impersonation).
    * One token request covers one resource, so each set names one resource plus OpenID scopes.
    */
-  kinds?: Partial<Record<"id" | "arm", string>>;
+  kinds?: Partial<Record<"id" | "arm" | "presence", string>>;
   clientSecretAccount?: AppSecretAccount;
   refreshAccount: RefreshTokenAccount;
 };
@@ -40,6 +40,8 @@ export type OAuthProvider = {
 export const OIDC = "openid profile email";
 /** Azure Resource Manager, delegated (step 15.4): acts as the signed-in user, limited by their Azure RBAC. */
 export const ARM_SCOPE = "https://management.azure.com/user_impersonation";
+/** Teams presence (step 16.3): my own status during focus, and teammates' presence. Delegated, no admin consent. */
+export const PRESENCE_SCOPE = "https://graph.microsoft.com/Presence.ReadWrite https://graph.microsoft.com/Presence.Read.All";
 
 export function microsoftProvider(cfg: OutlookConfig): OAuthProvider {
   const base = `https://login.microsoftonline.com/${cfg.tenantId}/oauth2/v2.0`;
@@ -51,7 +53,7 @@ export function microsoftProvider(cfg: OutlookConfig): OAuthProvider {
     clientId: cfg.clientId,
     scope: "offline_access https://graph.microsoft.com/Calendars.ReadBasic",
     writeScope: "offline_access https://graph.microsoft.com/Calendars.ReadWrite",
-    kinds: { id: `${OIDC} offline_access https://graph.microsoft.com/Calendars.ReadBasic`, arm: `offline_access ${ARM_SCOPE}` },
+    kinds: { id: `${OIDC} offline_access https://graph.microsoft.com/Calendars.ReadBasic`, arm: `offline_access ${ARM_SCOPE}`, presence: `offline_access ${PRESENCE_SCOPE}` },
     redirectHost: "localhost",
     extraAuthParams: { response_mode: "query", prompt: "select_account" },
     scopeOnTokenRequests: true,
@@ -110,12 +112,14 @@ export type ConnectOptions = {
   write?: boolean;
   /** Azure Resource Manager (step 15.4): asked for in the same browser visit, redeemed later on its own. */
   azure?: boolean;
+  /** Teams presence (step 16.3): Graph scopes, so they are part of the Graph token the code exchange redeems. */
+  teams?: boolean;
   /** Prefills the account (an incremental consent for someone already signed in). */
   loginHint?: string;
 };
 /** Whether this sign-in can write (step 12): "write" only when a write token was granted with the write scope. */
 export type WriteAccess = { status: "write" } | { status: "read_only" | "not_connected" | "unavailable"; message: string };
-type TokenKind = "read" | "write" | "id" | "arm";
+type TokenKind = "read" | "write" | "id" | "arm" | "presence";
 
 const DONE_PAGE = (ok: boolean) => `<!doctype html><meta charset="utf-8"><title>Coopilot</title>
 <body style="font:16px system-ui;padding:40px;max-width:560px">
@@ -129,7 +133,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
   const access = new Map<TokenKind, { token: string; expiresAt: number; scope: string }>();
   // Who signed in, from the last ID token (memory only; the caller keeps what it needs).
   let lastIdentity: IdClaims | null = null;
-  const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : (k === "id" || k === "arm") && p.kinds?.[k] ? p.kinds[k]! : p.scope);
+  const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : (k === "id" || k === "arm" || k === "presence") && p.kinds?.[k] ? p.kinds[k]! : p.scope);
   const log = (op: string, extra: { status?: number; kind?: string; durationMs?: number } = {}) => deps.log({ source: p.source, op, ...extra });
 
   async function clientSecret(): Promise<string | undefined> {
@@ -255,7 +259,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
     // The browser visit asks for every scope set at once (it may span resources), so later refreshes for any of them
     // are a subset of what was consented. The code exchange redeems one resource: Graph, with OpenID for who it is.
     const join = (...sets: (string | undefined | false)[]) => [...new Set(sets.filter((x): x is string => !!x).flatMap((x) => x.split(" ")))].join(" ");
-    const graph = join(p.kinds?.id, p.scope, opts.write && p.writeScope);
+    const graph = join(p.kinds?.id, p.scope, opts.write && p.writeScope, opts.teams && p.kinds?.presence);
     const scope = join(graph, opts.azure && p.kinds?.arm);
     const verifier = randomBytes(48).toString("base64url");
     const challenge = createHash("sha256").update(verifier).digest("base64url");

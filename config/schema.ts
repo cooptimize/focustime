@@ -468,7 +468,7 @@ export function parseConfig(text: string): ParseResult {
   const focus: FocusSettings = { ...DEFAULT_FOCUS, playlists: [] };
   if (raw.focus !== undefined) {
     const t = isTable(raw.focus) ? raw.focus : (err("focus", "Must be a [focus] table"), null);
-    if (t) for (const k of Object.keys(t)) if (!["sound", "volume", "fade_seconds", "on_break", "pause_media", "playlists"].includes(k)) err(`focus.${k}`, "Unknown field");
+    if (t) for (const k of Object.keys(t)) if (!["sound", "volume", "fade_seconds", "on_break", "pause_media", "playlists", "teams_status", "plain_focus_status"].includes(k)) err(`focus.${k}`, "Unknown field");
     const snd = t?.sound;
     if (snd !== undefined) {
       if (typeof snd !== "string" || !(SOUNDS as readonly string[]).includes(snd)) err("focus.sound", `Must be one of ${SOUNDS.map((x) => `"${x}"`).join(", ")}`);
@@ -492,6 +492,15 @@ export function parseConfig(text: string): ParseResult {
     if (t?.pause_media !== undefined) {
       if (typeof t.pause_media !== "boolean") err("focus.pause_media", "Must be true or false");
       else focus.pauseMedia = t.pause_media;
+    }
+    // Step 16.3: my Teams status during focus.
+    if (t?.teams_status !== undefined) {
+      if (typeof t.teams_status !== "boolean") err("focus.teams_status", "Must be true or false");
+      else focus.teamsStatus = t.teams_status;
+    }
+    if (t?.plain_focus_status !== undefined) {
+      if (t.plain_focus_status !== "busy" && t.plain_focus_status !== "none") err("focus.plain_focus_status", 'Must be "busy" or "none"');
+      else focus.plainFocusStatus = t.plain_focus_status;
     }
     const pl = t?.playlists;
     if (pl !== undefined) {

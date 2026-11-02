@@ -3,6 +3,20 @@
 import type { MicrosoftAccount } from "../../actions/account.ts";
 import { createAzureClient } from "../azure/client.ts";
 import { fakeArm } from "../azure/fake-arm.ts";
+import type { PresenceClient, RawPresence } from "../graph/presence.ts";
+import { DEMO_PRESENCE } from "./data.ts";
+
+/** Step 16.3: Teams presence in demo mode: fictional teammates, and my status kept in memory. No Graph calls. */
+export function demoPresence(): PresenceClient & { mineSet: () => string | null } {
+  let mine: string | null = null;
+  return {
+    setMine: async (_oid, status) => void (mine = status),
+    clearMine: async () => void (mine = null),
+    mine: async (): Promise<RawPresence> => ({ availability: mine ?? "Available", activity: mine ?? "Available" }),
+    people: async (ids) => new Map(ids.map((id) => id.toLowerCase()).filter((id) => DEMO_PRESENCE[id]).map((id) => [id, DEMO_PRESENCE[id]!] as const)),
+    mineSet: () => mine,
+  };
+}
 
 export const DEMO_PERSON = { oid: "00000000-0000-4000-8000-0000000000e1", tid: "00000000-0000-4000-8000-0000000000d1", name: "Alex Rivera", username: "you@example.com", email: "you@example.com" };
 export const DEMO_VM_ID = "/subscriptions/00000000-0000-4000-8000-0000000000f1/resourceGroups/rg-demo-dev/providers/Microsoft.Compute/virtualMachines/vm-demo-alex";
@@ -15,6 +29,7 @@ export function createDemoAzure() {
     identity: async () => DEMO_PERSON,
     armToken: async () => "demo",
     writeAccess: async () => ({ status: "read_only", message: "Demo data" }),
+    presence: demoPresence(),
     signOut: async () => {},
   };
   return { account, azure: (token: () => Promise<string>) => createAzureClient({ fetch: arm.fetch, token, log: () => {} }), arm };

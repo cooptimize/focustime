@@ -17,11 +17,18 @@ export type DemoClientKey = (typeof DEMO_CLIENTS)[number]["key"];
 
 /** Fictional teammates (help finder, Who suggestions). */
 export const DEMO_PEOPLE = [
-  { id: "d3300000-0000-4000-8000-000000000011", name: "Jordan Lee", email: "jordan.lee@example.com" },
-  { id: "d3300000-0000-4000-8000-000000000012", name: "Priya Shah", email: "priya.shah@example.com" },
-  { id: "d3300000-0000-4000-8000-000000000013", name: "Sam Ortiz", email: "sam.ortiz@example.com" },
-  { id: "d3300000-0000-4000-8000-000000000014", name: "Alex Kim", email: "alex.kim@example.com" },
+  { id: "d3300000-0000-4000-8000-000000000011", name: "Jordan Lee", email: "jordan.lee@example.com", aadId: "a4d00000-0000-4000-8000-000000000011" },
+  { id: "d3300000-0000-4000-8000-000000000012", name: "Priya Shah", email: "priya.shah@example.com", aadId: "a4d00000-0000-4000-8000-000000000012" },
+  { id: "d3300000-0000-4000-8000-000000000013", name: "Sam Ortiz", email: "sam.ortiz@example.com", aadId: "a4d00000-0000-4000-8000-000000000013" },
+  { id: "d3300000-0000-4000-8000-000000000014", name: "Alex Kim", email: "alex.kim@example.com", aadId: "a4d00000-0000-4000-8000-000000000014" },
 ];
+/** Step 16.3: their fictional Teams presence (availability, activity). */
+export const DEMO_PRESENCE: Record<string, { availability: string; activity: string }> = {
+  "a4d00000-0000-4000-8000-000000000011": { availability: "Available", activity: "Available" },
+  "a4d00000-0000-4000-8000-000000000012": { availability: "Busy", activity: "InAMeeting" },
+  "a4d00000-0000-4000-8000-000000000013": { availability: "Away", activity: "Away" },
+  "a4d00000-0000-4000-8000-000000000014": { availability: "DoNotDisturb", activity: "DoNotDisturb" },
+};
 
 /** The config the demo runs with (held in memory; never the real file). */
 export const DEMO_CONFIG = `# Coopilot demo configuration (in memory only)

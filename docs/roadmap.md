@@ -112,6 +112,8 @@ Done since the last update:
 - ~~Plan the week layout~~ Built in step 10 (grid pinned on top, right-hand panel when wide, click a block to filter and place, chips and search, readiness folded). Plan the day shows one block's candidates at a time.
 - ~~Focus timer~~ Built in steps 6c/6d (timebox a pick, end notification with Done / +15 / Next, meeting warnings, focused time per pick); step 10 added the focus screen and sounds.
 
+Backlog (step 16.3, not built): a registered internal Teams delivery thread per client, with preview-and-confirm posting. Never post to external client threads.
+
 Open (step 10 questions, see docs/open-questions.md):
 
 - Q57 Install `playerctl` (official repos) so focus can pause and resume music. Not installed yet.

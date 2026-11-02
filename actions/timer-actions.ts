@@ -10,7 +10,7 @@ import { minutesOf as boxMinutes } from "../plan/timebox.ts";
 import { DEFAULT_FOCUS, playlistLink, playlistTarget, type TimerLike } from "../plan/focussound.ts";
 import type { ActionResponse, TimerView } from "./types.ts";
 
-export type TimerAction = "timer.start" | "timer.pause" | "timer.resume" | "timer.stop" | "timer.extend" | "timer.done" | "timer.next" | "playlist.open" | "plan.reset";
+export type TimerAction = "timer.start" | "timer.pause" | "timer.resume" | "timer.stop" | "timer.extend" | "timer.done" | "timer.next" | "timer.deep" | "playlist.open" | "plan.reset";
 
 /** Media control (step 10): playerctl and playlist links; the server's implementation is server/media.ts. */
 export type MediaControl = {
@@ -50,6 +50,7 @@ export function timerView(s: TimerState | null, now: Temporal.Instant): TimerVie
     ended: s.ended,
     endsAt: s.runningSince ? now.add({ milliseconds: remaining }).toString() : null,
     runningSince: s.runningSince,
+    deep: !!s.deep,
   };
 }
 
@@ -109,13 +110,18 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
     save(null);
     return s;
   };
-  const startFor = (p: Pick, minutes?: number) => save(startTimer(now, { kind: "focus", pickId: p.id, label: p.title, minutes: minutes ?? suggestMinutes(p.size, planning.sizes) }));
+  let deep = false;
+  const startFor = (p: Pick, minutes?: number) => save(startTimer(now, { kind: "focus", pickId: p.id, label: p.title, minutes: minutes ?? suggestMinutes(p.size, planning.sizes), deep }));
 
   try {
     switch (action) {
       case "timer.start": {
-        const o = fields(input, ["kind", "minutes", "pickId", "playlist", "timeboxId"]);
+        const o = fields(input, ["kind", "minutes", "pickId", "playlist", "timeboxId", "deep"]);
         const kind: TimerKind = o.kind === undefined ? "focus" : o.kind === "focus" || o.kind === "break" ? o.kind : (() => { throw new Invalid("kind must be focus or break"); })();
+        // Step 16.3: deep focus sets my Teams status to Do not disturb (plain focus: Busy, per Settings > Focus).
+        if (o.deep !== undefined && typeof o.deep !== "boolean") throw new Invalid("deep must be true or false");
+        if (o.deep && kind !== "focus") throw new Invalid("Deep focus is for focus, not a break");
+        deep = o.deep === true;
         const minutes = o.minutes === undefined ? undefined : minutesOf(o.minutes);
         // Step 10: a saved playlist (by name) opens as focus starts: the Spotify app when installed, else the browser.
         let openList: () => Promise<Record<string, unknown>> = async () => ({});
@@ -140,7 +146,7 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
           const m = minutes ?? Math.min(MAX_MINUTES, boxMinutes(tb));
           const p = tb.pickId !== null ? plan.getPick(tb.pickId) : null;
           finish();
-          const started = p && p.status === "planned" ? startFor(p, m) : save(startTimer(now, { kind: "focus", pickId: null, label: tb.title, minutes: m }));
+          const started = p && p.status === "planned" ? startFor(p, m) : save(startTimer(now, { kind: "focus", pickId: null, label: tb.title, minutes: m, deep }));
           return respond(started, await openList());
         }
         if (o.pickId !== undefined) {
@@ -156,7 +162,7 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
         const m = minutes ?? (kind === "focus" ? planning.focusMinutes : planning.breakMinutes);
         if (!m) return bad("Breaks are set to 0 minutes in Settings > Planning", 409);
         finish();
-        const started = save(startTimer(now, { kind, pickId: null, label: kind === "focus" ? "Focus" : "Break", minutes: m }));
+        const started = save(startTimer(now, { kind, pickId: null, label: kind === "focus" ? "Focus" : "Break", minutes: m, deep }));
         return respond(started, await openList());
       }
       case "timer.pause":
@@ -185,8 +191,21 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
           if (s.kind === "focus" && s.pickId !== null && plan.getPick(s.pickId)?.status === "planned") plan.setDone(s.pickId, true);
           return respond(null);
         }
+        // Next pick keeps deep focus as it was.
+        deep = !!s.deep;
         const next = nextPick(plan, today, s.pickId);
         return next ? respond(startFor(next)) : respond(null, { notice: "No planned picks left today" });
+      }
+      case "timer.deep": {
+        // Step 16.3: switch the running focus session between deep (Do not disturb) and plain (Busy).
+        const o = fields(input, ["on"]);
+        if (typeof o.on !== "boolean") throw new Invalid("on must be true or false");
+        const s = current();
+        if (!s || s.kind !== "focus") return bad("No focus session is running", 409);
+        const next: TimerState = { ...s };
+        if (o.on) next.deep = true;
+        else delete next.deep;
+        return respond(save(next));
       }
       case "playlist.open": {
         // Step 10: open a saved playlist now (the focus screen's per-session choice). Spotify or YouTube only.

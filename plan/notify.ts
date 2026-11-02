@@ -194,7 +194,7 @@ export const notices = {
   }),
   meeting: (labels: string[], keys: string[], at: string): Notice => ({ kind: "meeting", key: `meeting:${keys.join("|")}`.slice(0, 300), title: "In 5 minutes", body: labels.join("\n"), buttons: [], route: "focus", at }),
   vmOff: (date: string, vmName: string, at: string): Notice => ({ kind: "vm", key: `vm_off:${date}`, title: "Your VM is off", body: `${vmName} is stopped.\nClick to start it.`, buttons: [{ key: "start", label: "Start" }], route: "vm", at, ref: date }),
-  vmChanged: (date: string, text: string, at: string): Notice => ({ kind: "vm", key: `vm_changed:${date}`, title: "Auto-shutdown is still changed", body: `${text}. Coopilot couldn't put it back.\nClick to restore it.`, buttons: [{ key: "restore", label: "Restore" }], route: "today", at, ref: date }),
+  vmChanged: (date: string, text: string, at: string): Notice => ({ kind: "vm", key: `vm_changed:${date}`, title: "Auto-shutdown is still changed", body: `${text}. Coopilot couldn't put it back.\nClick to restore it.`, buttons: [{ key: "restore", label: "Restore" }], route: "vm", at, ref: date }),
   followUps: (date: string, due: { id: number; what: string; overdue: boolean }[], at: string): Notice | null => {
     if (!due.length) return null;
     const over = due.filter((f) => f.overdue).length;

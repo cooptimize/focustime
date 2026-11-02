@@ -14,6 +14,7 @@ import { CLOSE_HOW, type CloseHow } from "../plan/types.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
+import { usePresence } from "./Presence.tsx";
 
 const zoned = (iso: string, tz: string) => (iso.includes("[") ? Temporal.ZonedDateTime.from(iso) : Temporal.Instant.from(iso).toZonedDateTimeISO(tz)).withTimeZone(tz);
 const dayOf = (z: Temporal.ZonedDateTime) => z.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -218,11 +219,17 @@ export function WhoInput({ value, onChange, clientKey, id }: { value: string; on
   const names = [...new Set([...(people?.attendees ?? []), ...(people?.teammates ?? [])].map((x) => x.name))];
   // Attendees from that client's meetings first when a client is chosen; Cooptimizers first otherwise.
   const ordered = clientKey && clientKey !== INTERNAL_CLIENT ? names : [...new Set([...(people?.teammates ?? []).map((x) => x.name), ...names])];
+  // Step 16.3: Cooptimizers' presence as a word on their suggestion (a list can't show the mark).
+  const presence = usePresence({ emails: (people?.teammates ?? []).map((x) => x.email) });
+  const wordOf = (n: string) => presence.wordFor({ email: people?.teammates.find((x) => x.name === n)?.email ?? null });
   return (
     <>
       <input value={value} onChange={(e) => onChange(e.target.value)} maxLength={100} placeholder="Name (optional)" list={id} aria-label="Who" />
       <datalist id={id}>
-        {ordered.map((n) => <option key={n} value={n} />)}
+        {ordered.map((n) => {
+          const w = wordOf(n);
+          return <option key={n} value={n} {...(w ? { label: w } : {})} />;
+        })}
       </datalist>
     </>
   );

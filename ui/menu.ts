@@ -899,6 +899,8 @@ export function timerStep(env: MenuEnv): MenuStep {
       items: [
         ...(nx ? [{ id: "next", label: `Start focus: ${nx.title}`, hint: `${suggestMinutes(nx.size, p.sizes)} min`, action: "timer.start", run: () => env.runTimer("timer.start", { pickId: nx.id }) } as MenuItem] : []),
         { id: "focus", label: nx ? "Plain timer" : "Focus", hint: `${p.focusMinutes} min`, action: "timer.start", next: () => lengthStep("Focus for", p.focusMinutes, (m) => env.runTimer("timer.start", { minutes: m })) },
+        // Step 16.3: deep focus sets Teams to Do not disturb (plain focus: Busy). On the next pick when there is one.
+        { id: "deep", label: "Deep focus", hint: "Teams: Do not disturb", action: "timer.start", next: () => lengthStep("Deep focus for", nx ? suggestMinutes(nx.size, p.sizes) : p.focusMinutes, (m) => env.runTimer("timer.start", { minutes: m, deep: true, ...(nx ? { pickId: nx.id } : {}) })) },
         { id: "break", label: "Break", hint: p.breakMinutes ? `${p.breakMinutes} min` : "off", action: "timer.start", ...(p.breakMinutes ? {} : { disabled: "Breaks are set to 0 minutes in Settings > Planning" }), run: () => env.runTimer("timer.start", { kind: "break" }) },
         { id: "pick", label: nx ? "Another pick…" : "Timebox a pick…", action: "timer.start", next: () => choosePick(env, "Focus on which pick?", (pk) => () => env.runTimer("timer.start", { pickId: pk.id })) },
       ],
@@ -909,6 +911,7 @@ export function timerStep(env: MenuEnv): MenuStep {
     items: [
       ...(t.ended ? [] : [t.running ? { id: "pause", label: "Pause", action: "timer.pause", run: () => env.runTimer("timer.pause") } : { id: "resume", label: "Resume", action: "timer.resume", run: () => env.runTimer("timer.resume") }]),
       { id: "extend", label: "+15 min", action: "timer.extend", run: () => env.runTimer("timer.extend") },
+      ...(t.kind === "focus" && !t.ended ? [{ id: "deep", label: "Deep focus", hint: "Teams: Do not disturb", checked: t.deep, action: "timer.deep", run: () => env.runTimer("timer.deep", { on: !t.deep }) } as MenuItem] : []),
       { id: "done", label: t.pickId ? "Done (tick the pick)" : "Done", action: "timer.done", run: () => env.runTimer("timer.done") },
       { id: "next", label: "Next pick", action: "timer.next", run: () => env.runTimer("timer.next") },
       { id: "stop", label: "Stop", danger: true, action: "timer.stop", run: () => env.runTimer("timer.stop") },
@@ -952,6 +955,11 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "settings.save": return { run: () => env.openSettings() };
     case "secret.set": return { run: () => env.openSettings("connections") };
     case "media.status": return { run: () => env.openSettings("focus") };
+    // Step 16.3: deep focus switches the running session; Teams status lives in Settings > Focus; presence shows where Cooptimizers are listed.
+    case "timer.deep": return env.timer?.kind === "focus" ? { run: () => env.runTimer("timer.deep", { on: !env.timer!.deep }) } : { next: () => ({ title: "Start deep focus", items: [{ id: "deep", label: "Deep focus", hint: `${env.planning.focusMinutes} min · Teams: Do not disturb`, action: "timer.start", run: () => env.runTimer("timer.start", { deep: true }) }] }) };
+    case "presence.status": return { run: () => env.openSettings("focus") };
+    case "presence.people": return { disabled: "Shown next to Cooptimizers in Needs help from…, Who and Roadmap" };
+    case "presence.log": return { run: () => env.openSettings("data") };
     case "playlist.open": return { run: () => env.openSettings("focus") };
     case "data.export": return { run: env.exportPlan };
     case "hours.set_day": return { next: () => chooseDay(env, "Working hours for which day?", (d) => hoursForm(env, d)) };

@@ -487,9 +487,25 @@ export const MIGRATIONS: readonly string[] = [
      value TEXT NOT NULL,
      updated_at TEXT NOT NULL
    );`,
+  // 18: step 16.3, my Teams status during focus: every set and clear (my own status only; no teammates' presence,
+  // which is never stored). Kept by Reset local plan, like the other write logs.
+  `CREATE TABLE teams_status_log (
+     id INTEGER PRIMARY KEY,
+     at TEXT NOT NULL,
+     op TEXT NOT NULL CHECK (op IN ('set', 'clear', 'left')),
+     status TEXT,
+     minutes INTEGER,
+     result TEXT NOT NULL CHECK (result IN ('done', 'failed')),
+     message TEXT
+   );`,
 ];
 
-import type { AzureWriteEntry } from "../actions/account-types.ts";
+import type { AzureWriteEntry, TeamsStatusEntry } from "../actions/account-types.ts";
+export type { TeamsStatusEntry };
+const toTeamsStatus = (r: Row): TeamsStatusEntry => ({
+  id: r.id as number, at: r.at as string, op: r.op as TeamsStatusEntry["op"], status: (r.status as TeamsStatusEntry["status"]) ?? null,
+  minutes: (r.minutes as number | null) ?? null, result: r.result as TeamsStatusEntry["result"], message: (r.message as string | null) ?? null,
+});
 export type { AzureWriteEntry };
 export type NewAzureWrite = { op: AzureWriteEntry["op"]; vmId: string; vmName: string; before: unknown; after: unknown; auto: boolean };
 const toAzureWrite = (r: Row): AzureWriteEntry => ({
@@ -1275,6 +1291,14 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     azureWriteLog(limit = 100): AzureWriteEntry[] {
       return (db.prepare("SELECT * FROM azure_write_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toAzureWrite);
     },
+    // ---- my Teams status during focus (step 16.3) ----
+    logTeamsStatus(e: Omit<TeamsStatusEntry, "id" | "at">): TeamsStatusEntry {
+      const r = db.prepare("INSERT INTO teams_status_log (at, op, status, minutes, result, message) VALUES (?, ?, ?, ?, ?, ?)").run(stamp(), e.op, e.status, e.minutes, e.result, e.message);
+      return toTeamsStatus(db.prepare("SELECT * FROM teams_status_log WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
+    },
+    teamsStatusLog(limit = 100): TeamsStatusEntry[] {
+      return (db.prepare("SELECT * FROM teams_status_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toTeamsStatus);
+    },
     /** Account state (step 15.4): who signed in, my VM, a changed schedule. Not emptied by Reset local plan. null removes. */
     accountState<T>(key: string): T | null {
       const r = db.prepare("SELECT value FROM account_state WHERE key = ?").get(key) as Row | undefined;
@@ -1652,6 +1676,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         devopsIdentities: this.devopsIdentities(),
         devopsWriteLog: (db.prepare("SELECT * FROM devops_write_log ORDER BY id").all() as Row[]).map(toDevopsWrite),
         azureWriteLog: (db.prepare("SELECT * FROM azure_write_log ORDER BY id").all() as Row[]).map(toAzureWrite),
+        teamsStatusLog: (db.prepare("SELECT * FROM teams_status_log ORDER BY id").all() as Row[]).map(toTeamsStatus),
       };
     },
     close: () => db.close(),

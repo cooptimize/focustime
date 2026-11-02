@@ -12,7 +12,7 @@ import type { IsoDate } from "../week/types.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { AzureError, parseVmId, sameVm, scheduleBody, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
 import {
-  applyChoice, canStart, canStop, chipOf, CHIP_LABEL, morningPrompt, reached, refreshMs, restoreAttemptDue, restorePlan, shutdownFrom, shutdownLabel, shutdownTime, stillChanged,
+  applyChoice, canStart, canStop, chipOf, CHIP_LABEL, chipText, morningPrompt, reached, refreshMs, restoreAttemptDue, restorePlan, shutdownFrom, shutdownLabel, shutdownTime, stillChanged,
   type PowerState, type Shutdown, type ShutdownChange, type ShutdownChoice, type VmOp, type VmTransition,
 } from "../plan/vm.ts";
 import type { AzureWriteEntry, PlanStore } from "../store/plan-store.ts";
@@ -219,7 +219,7 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
   const vm = chosen(ctx);
   const changeRec = vm ? (ctx.plan?.accountState<ShutdownChange>(shutdownKey(vm.id)) ?? null) : null;
   const base: VmStatus = {
-    signedIn: !!me, vm, chip: null, label: null, power: null, transition: null, canStart: false, canStop: false, schedule: null,
+    signedIn: !!me, vm, chip: null, label: null, text: null, power: null, transition: null, canStart: false, canStop: false, schedule: null,
     change: changeRec ? { ...changeRec, text: changeText(changeRec, tz, today) } : null, stillChanged: stillChanged(changeRec, today), prompt: false, startWithoutAsking: cfg?.azure.startWithoutAsking ?? true, refreshMs: 60_000, needsConsent: false, error: null,
   };
   if (!vm || !me) return base;
@@ -242,7 +242,7 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
       memo.set(key, m);
     } catch (e) {
       const err = errOf(e);
-      return { ...base, chip: "unknown", label: CHIP_LABEL.unknown, error: err, needsConsent: err.kind === "consent", refreshMs: 60_000 };
+      return { ...base, chip: "unknown", label: CHIP_LABEL.unknown, text: CHIP_LABEL.unknown, error: err, needsConsent: err.kind === "consent", refreshMs: 60_000 };
     }
   }
   if (!live) settleOrphans(ctx, vm, m.power, t);
@@ -253,7 +253,7 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
   const prompt = cfg ? morningPrompt({ chip, workday: await ctx.workday(cfg, today).catch(() => false), nowMin: local.hour * 60 + local.minute, workStartMin: wsMin, dismissed: !!ctx.plan?.marked(PROMPT_MARKER, today) }) : false;
   const label = shutdownLabel(m.schedule, tz, today);
   return {
-    ...base, chip, label: CHIP_LABEL[chip], power: m.power, transition: live ? { op: live.op, since: live.since } : null, canStart: canStart(chip), canStop: canStop(chip),
+    ...base, chip, label: CHIP_LABEL[chip], text: chipText(chip, m.schedule, tz, today), power: m.power, transition: live ? { op: live.op, since: live.since } : null, canStart: canStart(chip), canStop: canStop(chip),
     schedule: m.schedule && label ? { label, time: m.schedule.time, status: m.schedule.status, timeZoneId: m.schedule.timeZoneId } : null,
     prompt, refreshMs: refreshMs(chip), error: m.scheduleError?.kind === "forbidden" ? m.scheduleError : null,
   };

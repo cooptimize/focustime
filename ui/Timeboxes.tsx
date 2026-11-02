@@ -16,6 +16,7 @@ import { call } from "./api.ts";
 import { clientColor } from "./labels.ts";
 import type { TimeboxTarget } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
+import { PresenceDot, usePresence } from "./Presence.tsx";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -230,18 +231,7 @@ function WriteDialog({ flow, onConfirm, onRetry, onClose }: { flow: Flow; onConf
             {p.system} · {p.account} · {p.calendar}
           </dd>
         </dl>
-        {p.kind === "invite" && p.attendees.length > 0 && (
-          <div className="wd-people" role="note">
-            <strong>{p.op === "delete" ? "These people get a cancellation:" : "These people get an invite by email:"}</strong>
-            <ul>
-              {p.attendees.map((a) => (
-                <li key={a.email}>
-                  {a.name} <span className="muted">{a.email}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {p.kind === "invite" && p.attendees.length > 0 && <InvitePeople op={p.op} attendees={p.attendees} />}
         <table className="wd-fields">
           <thead>
             <tr>
@@ -757,5 +747,23 @@ export function TimeboxList({ slot }: { slot: Slot }): ReactNode {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A help invite's people in its preview, with their Teams presence (step 16.3). */
+function InvitePeople({ op, attendees }: { op: string; attendees: { name: string; email: string }[] }) {
+  const presence = usePresence({ emails: attendees.map((a) => a.email) });
+  return (
+    <div className="wd-people" role="note">
+      <strong>{op === "delete" ? "These people get a cancellation:" : "These people get an invite by email:"}</strong>
+      <ul>
+        {attendees.map((a) => (
+          <li key={a.email}>
+            <PresenceDot word={presence.wordFor(a)} />
+            {a.name} <span className="muted">{a.email}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

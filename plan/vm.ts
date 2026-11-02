@@ -102,6 +102,16 @@ export function shutdownTime(s: Pick<Shutdown, "time" | "timeZoneId">, myZone: s
   return `${h}:${String(t.minute).padStart(2, "0")} ${t.hour < 12 ? "AM" : "PM"}`;
 }
 
+/**
+ * Step 16.3: the header chip's one line, the single place for VM status: "Running · off at 7:30 PM" (the auto-shutdown
+ * time in my zone while it runs or starts and a schedule exists), else the state alone ("Stopped", "Starting…").
+ */
+export function chipText(chip: VmChip, s: Shutdown | null, myZone: string, today: IsoDate): string {
+  const base = CHIP_LABEL[chip];
+  if (!s || (chip !== "running" && chip !== "starting")) return base;
+  return s.status === "Disabled" ? `${base} · auto-shutdown off` : `${base} · off at ${shutdownTime(s, myZone, today)}`;
+}
+
 /** The chip's schedule line. */
 export function shutdownLabel(s: Shutdown | null, myZone: string, today: IsoDate): string | null {
   if (!s) return null;
@@ -153,8 +163,8 @@ export function restoreAttemptDue(c: ShutdownChange, today: IsoDate, nowMs: numb
   return nowMs - Date.parse(c.failedAt) >= RESTORE_RETRY_MS;
 }
 
-/** Today's warning: a change still not put back after its day ended. */
-export const stillChanged = (c: ShutdownChange | null, today: IsoDate) => !!c && restoreDue(c, today);
+/** Today's warning (step 16.3: only when a restore failed): a change still not put back after its day ended. */
+export const stillChanged = (c: ShutdownChange | null, today: IsoDate) => !!c && restoreDue(c, today) && !!c.failedAt;
 
 // ---- Morning prompt ----
 

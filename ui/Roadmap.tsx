@@ -12,6 +12,11 @@ import { clientColor } from "./labels.ts";
 import { roadmapRowMenu, type MenuStep } from "./menu.ts";
 import { MenuCtx } from "./Menus.tsx";
 import { openWorkItem, WorkLink } from "./WorkLink.tsx";
+import { createContext } from "react";
+import { PresenceDot, usePresence } from "./Presence.tsx";
+
+/** Step 16.3: presence for the people on the Roadmap (by display name: DevOps gives names only), read once for the view. */
+const PresenceCtx = createContext<(name: string) => import("../plan/presence.ts").PresenceWord | null>(() => null);
 
 const SIGNAL: Record<NonNullable<RoadmapRow["signal"]["level"]>, string> = { on_track: "On track", watch: "Watch", at_risk: "At risk" };
 const FLAG: Record<RoadmapRow["flags"][number], string> = { needs_breakdown: "Needs stories", needs_features: "Needs features", no_target_date: "" };
@@ -70,7 +75,10 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
 
   const clients = state?.clients ?? [];
   const total = clients.reduce((n, c) => n + c.rows.length, 0);
+  const presence = usePresence({ names: clients.flatMap((c) => c.rows.flatMap((r) => r.people.map((p) => p.name))) });
+  const wordOf = useCallback((name: string) => presence.wordFor({ name }), [presence]);
   return (
+    <PresenceCtx.Provider value={wordOf}>
     <main className="roadmap" aria-label="Roadmap">
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
@@ -91,6 +99,7 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
         <ClientSection key={c.clientKey} c={c} colors={data.clients} ops={ops} />
       ))}
     </main>
+    </PresenceCtx.Provider>
   );
 }
 
@@ -118,6 +127,7 @@ function ClientSection({ c, colors, ops }: { c: RoadmapClient; colors: WeekLoadD
 }
 
 function Row({ k, r, ops }: { k: string; r: RoadmapRow; ops: Ops }) {
+  const wordOf = useContext(PresenceCtx);
   const { env, open: openMenu } = useContext(MenuCtx);
   const dw = useDevOpsWrite();
   const noun = r.tier === "epic" ? ["feature", "features"] as const : ["story", "stories"] as const;
@@ -173,7 +183,17 @@ function Row({ k, r, ops }: { k: string; r: RoadmapRow; ops: Ops }) {
             {total ? `${r.done} of ${plural(total, noun[0], noun[1])} done` : `No ${noun[1]} yet`}
             {total > 0 && <Progress done={r.done} total={total} />}
           </span>
-          {r.people.length > 0 && <span className="dl-people" title={`Who has open ${noun[1]}`}>{r.people.map((p) => `${p.name} ${p.count}`).join(" · ")}</span>}
+          {r.people.length > 0 && (
+            <span className="dl-people" title={`Who has open ${noun[1]}`}>
+              {r.people.map((p, i) => (
+                <span key={p.name}>
+                  {i > 0 && " · "}
+                  <PresenceDot word={wordOf(p.name)} />
+                  {p.name} {p.count}
+                </span>
+              ))}
+            </span>
+          )}
           {extras.length > 0 && <span className="dl-extras muted">{extras.join(" · ")}</span>}
           {flags.map((f) => (
             <span key={f} className="dl-flag">{f}</span>

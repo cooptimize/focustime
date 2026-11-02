@@ -21,6 +21,8 @@ export type TimerState = {
   ended: boolean;
   /** Warning points already sent (their keys). */
   warned: string[];
+  /** Step 16.3: deep focus (my Teams status is Do not disturb instead of Busy). Missing in older states: false. */
+  deep?: boolean;
 };
 
 /** One stretch of focused time, for the focus log. */
@@ -33,8 +35,8 @@ export const WARN_MINUTES = 5;
 
 const ms = (iso: string) => Temporal.Instant.from(iso).epochMilliseconds;
 
-export function startTimer(now: Temporal.Instant, o: { kind: TimerKind; pickId: number | null; label: string; minutes: number }): TimerState {
-  return { kind: o.kind, pickId: o.pickId, label: o.label, plannedMinutes: o.minutes, elapsedMs: 0, runningSince: now.toString(), startedAt: now.toString(), ended: false, warned: [] };
+export function startTimer(now: Temporal.Instant, o: { kind: TimerKind; pickId: number | null; label: string; minutes: number; deep?: boolean }): TimerState {
+  return { kind: o.kind, pickId: o.pickId, label: o.label, plannedMinutes: o.minutes, elapsedMs: 0, runningSince: now.toString(), startedAt: now.toString(), ended: false, warned: [], ...(o.deep && o.kind === "focus" ? { deep: true } : {}) };
 }
 
 export const elapsedMs = (s: TimerState, now: Temporal.Instant) => s.elapsedMs + (s.runningSince ? Math.max(0, now.epochMilliseconds - ms(s.runningSince)) : 0);

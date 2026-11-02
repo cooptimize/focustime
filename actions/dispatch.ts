@@ -46,6 +46,7 @@ import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan
 import type { ActionResponse, HostBrowsers, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
 import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
 import { vmAction, type VmContext } from "./vm-actions.ts";
+import { presenceAction, syncTeamsStatus, type PresenceContext } from "./presence-actions.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
@@ -433,6 +434,20 @@ function withSignedIn(ctx: ActionContext): ActionContext {
   };
 }
 
+/** Step 16.3: Teams presence (my status during focus, teammates' presence). */
+export async function presenceContext(ctx: ActionContext): Promise<PresenceContext> {
+  return {
+    ...(ctx.plan ? { plan: ctx.plan } : {}),
+    config: () => configured(ctx),
+    account: await accountOf(ctx),
+    team: async (cfg) => {
+      const r = await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).teammates();
+      return r.ok ? r.people : null;
+    },
+    now: ctx.now,
+  };
+}
+
 /** The pieces the account and VM actions need. */
 async function accountOf(ctx: ActionContext): Promise<MicrosoftAccount | null> {
   const cfg = await configured(ctx);
@@ -689,9 +704,18 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "timer.extend":
     case "timer.done":
     case "timer.next":
+    case "timer.deep":
     case "playlist.open":
-    case "plan.reset":
-      return timerAction({ plan: ctx.plan, config: () => configured(ctx), now: ctx.now, media: ctx.media }, action, req.input);
+    case "plan.reset": {
+      const r = await timerAction({ plan: ctx.plan, config: () => configured(ctx), now: ctx.now, media: ctx.media }, action, req.input);
+      // Step 16.3: my Teams status follows the session (not waited for; the server's tick also runs it).
+      if (r.ok && action.startsWith("timer.")) void presenceContext(ctx).then(syncTeamsStatus).catch(() => {});
+      return r;
+    }
+    case "presence.status":
+    case "presence.people":
+    case "presence.log":
+      return presenceAction(await presenceContext(ctx), action, req.input);
     case "media.status": {
       // Step 10: read-only check for playerctl (MPRIS) and the Spotify app. Nothing is run or installed.
       if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("media.status takes {}");

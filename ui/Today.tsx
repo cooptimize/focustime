@@ -2,7 +2,7 @@
 // features as context, one large Start focus, and anything urgent. Everything else is a click away.
 import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
-import { VmChip, VmToday } from "./Account.tsx";
+import { VmToday } from "./Account.tsx";
 import { DueBadge } from "./FollowUps.tsx";
 import { useContext, useState } from "react";
 import type { FollowUpView, WeekLoadData } from "../actions/types.ts";
@@ -73,7 +73,6 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
             Today <span className="muted">{longDate(date)}</span>
           </h1>
           <p className="today-now">{nowLine(strip, workday, target)}</p>
-          <VmChip big />
         </div>
         <ModeArea>{switcher}</ModeArea>
       </header>
