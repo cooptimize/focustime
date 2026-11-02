@@ -159,7 +159,7 @@ const loadConfig = async () => {
 await loadConfig().catch(() => null);
 let plan: PlanStore | undefined;
 try {
-  plan = createPlanStore({ path: planDbPath(), now: () => zonedNow(timeZone) });
+  plan = createPlanStore({ path: planDbPath(), now: () => zonedNow(timeZone), log });
 } catch {
   log({ source: "plan", op: "open", kind: "failed" });
 }

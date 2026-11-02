@@ -540,9 +540,32 @@ export const MIGRATIONS: readonly string[] = [
      updated_at TEXT NOT NULL,
      PRIMARY KEY (client_key, item_id)
    );`,
+  // 21: U3 (D388), week plan duplicates. The same item can't be on a week twice under one client key (UNIQUE since 8),
+  // but a client key that only differs in letter case made a second row for the same item. Keep the oldest, move the
+  // pins to it, remove the rest, and log each removal in dedupe_log (read back and counted in the server log at start).
+  `CREATE TABLE dedupe_log (
+     id INTEGER PRIMARY KEY,
+     at TEXT NOT NULL,
+     table_name TEXT NOT NULL,
+     removed_id INTEGER NOT NULL,
+     kept_id INTEGER NOT NULL,
+     week_start TEXT,
+     client_key TEXT,
+     item_id INTEGER
+   );
+   INSERT INTO dedupe_log (at, table_name, removed_id, kept_id, week_start, client_key, item_id)
+     SELECT strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 'week_features', d.id,
+            (SELECT MIN(k.id) FROM week_features k WHERE k.week_start = d.week_start AND lower(k.client_key) = lower(d.client_key) AND k.item_id = d.item_id),
+            d.week_start, d.client_key, d.item_id
+     FROM week_features d
+     WHERE d.id > (SELECT MIN(k.id) FROM week_features k WHERE k.week_start = d.week_start AND lower(k.client_key) = lower(d.client_key) AND k.item_id = d.item_id);
+   INSERT OR IGNORE INTO week_feature_slots (feature_id, date, half)
+     SELECT l.kept_id, s.date, s.half FROM week_feature_slots s JOIN dedupe_log l ON l.table_name = 'week_features' AND l.removed_id = s.feature_id;
+   DELETE FROM week_features WHERE id IN (SELECT removed_id FROM dedupe_log WHERE table_name = 'week_features');`,
 ];
 
 import type { AzureWriteEntry, TeamsStatusEntry } from "../actions/account-types.ts";
+import type { Logger } from "../log/logger.ts";
 export type { TeamsStatusEntry };
 const toTeamsStatus = (r: Row): TeamsStatusEntry => ({
   id: r.id as number, at: r.at as string, op: r.op as TeamsStatusEntry["op"], status: (r.status as TeamsStatusEntry["status"]) ?? null,
@@ -783,12 +806,19 @@ const PICK_SELECT = `SELECT p.*, o.date AS carried_from_date FROM picks p LEFT J
 
 export class PlanError extends Error {}
 
-export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedDateTime }) {
+export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedDateTime; log?: Logger }) {
   if (opts.path !== ":memory:") mkdirSync(dirname(opts.path), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(opts.path);
   if (opts.path !== ":memory:") chmodSync(opts.path, 0o600);
   db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
+  db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+  const before = schemaVersion(db);
   migrate(db, opts.now, opts.path);
+  // U3 (D388): say how many duplicate week items migration 21 removed (counts only; the rows are in dedupe_log).
+  if (before < 21 && opts.log) {
+    const n = (db.prepare("SELECT COUNT(*) AS n FROM dedupe_log WHERE table_name = 'week_features'").get() as { n: number }).n;
+    if (n > 0) opts.log({ source: "plan", op: "dedupe_week_items", count: n });
+  }
 
   const stamp = (): ZonedStamp => opts.now().toString({ smallestUnit: "second" });
   const tx = <T>(fn: () => T): T => {
@@ -1433,7 +1463,8 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       if (f.level === "story" && f.size !== undefined && !validStorySize(f.size)) throw new PlanError("size must be S, M or L");
       return tx(() => {
         const at = stamp();
-        const row = db.prepare("SELECT id, tier, level FROM week_features WHERE week_start = ? AND client_key = ? AND item_id = ?").get(f.weekStart, f.clientKey, f.itemId) as Row | undefined;
+        // U3 (D388): never a second row for the same item, even under a client key in another letter case.
+        const row = db.prepare("SELECT id, tier, level FROM week_features WHERE week_start = ? AND lower(client_key) = lower(?) AND item_id = ? ORDER BY id LIMIT 1").get(f.weekStart, f.clientKey, f.itemId) as Row | undefined;
         touchWeek(f.weekStart, at);
         let id: number;
         const blocks = f.level === "feature" ? (f.blocks ?? null) : null;

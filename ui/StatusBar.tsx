@@ -52,9 +52,9 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, lo
     return (
       <footer className="statusbar quiet" aria-label="Source status">
         <div className="status-row">
-          <button type="button" className="status-quiet" onClick={() => setOpen(true)} title="Every source is live. Click for each source's status">
+          {/* U3: all live is a green dot and Refresh; the time shows only beside a stale or failed source. */}
+          <button type="button" className="status-quiet" onClick={() => setOpen(true)} aria-label="All sources live. Show each source's status" title={`All sources live${oldest ? `, oldest data ${updatedAgo(oldest, clock, shape.timeZone)}` : ""}. Click for each source's status`}>
             <span className="dot" aria-hidden="true" />
-            All sources live{oldest ? ` · ${updatedAgo(oldest, clock, shape.timeZone)}` : ""}
           </button>
           <button type="button" className="refresh mini quiet" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources" title="Refresh all sources (R)">
             {loading ? "Loading…" : "Refresh"}
@@ -81,7 +81,7 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, lo
               <span className="dot" aria-hidden="true" />
               {SOURCE_NAMES[s.source]}
               <span className={`state ${st.cls}`}>{st.label}</span>
-              {s.fetchedAt && (
+              {s.fetchedAt && st.cls !== "live" && (
                 <span className="muted" title={`${s.fromCache ? "Snapshot from" : "Fetched"} ${when(s.fetchedAt, shape.timeZone)}`}>
                   {updatedAgo(s.fetchedAt, clock, shape.timeZone)}
                 </span>

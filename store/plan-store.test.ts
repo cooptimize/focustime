@@ -612,3 +612,51 @@ describe("Roadmap snapshots (step 16, D280)", () => {
     expect([...s.roadmapDates().keys()]).toEqual(["Contoso:10"]);
   });
 });
+
+describe("week plan duplicates (U3, D388)", () => {
+  const W = "2026-11-09";
+  it("migration 21 keeps the oldest row for an item under a client key in another letter case, moves its pins, and logs the removal", () => {
+    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const path = join(dir, "plan.db");
+    const old = new DatabaseSync(path);
+    old.exec("PRAGMA foreign_keys = ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+    for (let v = 1; v <= 20; v++) {
+      const sql = MIGRATIONS[v - 1]!;
+      if (sql.trimStart().startsWith("PRAGMA foreign_keys")) old.exec("PRAGMA foreign_keys = OFF");
+      old.exec(sql);
+      old.exec("PRAGMA foreign_keys = ON");
+      old.prepare("INSERT INTO schema_migrations VALUES (?, 'x')").run(v);
+    }
+    const at = "2026-11-06T15:00:00-05:00[America/New_York]";
+    old.prepare("INSERT INTO week_plans VALUES (?, NULL, ?, ?)").run(W, at, at);
+    const ins = old.prepare("INSERT INTO week_features (id, week_start, client_key, item_id, level, tier, title, item_type, url, blocks, size, parent_id, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, 'feature', 'must', 'Export', 'Feature', NULL, 2, NULL, NULL, NULL, NULL, ?, ?)");
+    ins.run(3, W, "Adatum", 210, at, at);
+    ins.run(5, W, "adatum", 210, at, at);
+    ins.run(6, W, "Adatum", 211, at, at);
+    old.exec("INSERT INTO week_feature_slots VALUES (5, '2026-11-10', 'PM')");
+    old.close();
+    const logged: { op: string; count?: number }[] = [];
+    const store = createPlanStore({ path, now, log: (r) => logged.push(r) });
+    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
+    const p = store.weekPlan(W);
+    expect(p.features.map((f) => [f.id, f.itemId, f.slots.length]).sort()).toEqual([
+      [3, 210, 1],
+      [6, 211, 0],
+    ]);
+    expect(logged).toEqual([{ source: "plan", op: "dedupe_week_items", count: 1 }]);
+    const db = new DatabaseSync(path);
+    expect(db.prepare("SELECT removed_id, kept_id, item_id FROM dedupe_log").all().map((r) => ({ ...r }))).toEqual([{ removed_id: 5, kept_id: 3, item_id: 210 }]);
+    db.close();
+  });
+
+  it("adding an item already on the week (any letter case of the client key) updates that row instead of adding a second", () => {
+    const store = createPlanStore({ path: ":memory:", now });
+    const a = store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 210, title: "Export", itemType: "Feature", url: null, level: "feature" });
+    const b = store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 210, title: "Export v2", itemType: "Feature", url: null, level: "feature" });
+    const c = store.addWeekItem({ weekStart: W, clientKey: "adatum", itemId: 210, title: "Export v3", itemType: "Feature", url: null, level: "feature" });
+    expect(b.id).toBe(a.id);
+    expect(c.id).toBe(a.id);
+    expect(store.weekPlan(W).features).toHaveLength(1);
+    expect(store.weekPlan(W).features[0]!.title).toBe("Export v3");
+  });
+});
