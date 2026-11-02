@@ -118,6 +118,8 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["C"], does: "Done, in Today › Plan", command: "planday.commit" },
   { keys: ["← →"], does: "Previous or next day, in Today › Plan" },
   { keys: ["Drag"], does: "A pick onto a free gap in Today's timeline (widest screens): timebox it there" },
+  { keys: ["Enter", "Shift Enter"], does: "In Today › Plan's type box: a draft story under the chosen feature, or a plain note not in DevOps" },
+  { keys: ["Drag"], does: "In Plan the week: a row by its handle to reorder, or onto a block chip to pin it there" },
   { keys: ["["], does: "Previous week", command: "week.prev" },
   { keys: ["]"], does: "Next week", command: "week.next" },
   { keys: ["R"], does: "Refresh all sources", command: "week.load" },
