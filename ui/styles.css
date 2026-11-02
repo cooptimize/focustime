@@ -3049,3 +3049,80 @@ button.att-chip { cursor: pointer; }
 .planweek .pw-row.nested .pw-chip-btn { line-height: 18px; }
 .pw-health-link, .pw-show-more { text-decoration: none; }
 .pw-health-link:hover, .pw-show-more:hover { text-decoration: underline; }
+
+/* ---------- U4: Plan the day (D396 to D399) ----------
+   Header: ‹ ›, "Plan today", the day's free time and (amber) how far over; Timebox my day (secondary), Done, mode
+   switch. Blocks: swatch, client, a muted range, the fit once on the right; rows with a handle and the size chip; the
+   agenda open on the selected block only. Right pane: musts with stories, follow-ups, everything else, the type box. */
+.pd2 { font-size: var(--fs-3); }
+.pd2-title h2 { font-size: var(--fs-4); font-weight: 600; letter-spacing: 0; }
+.pd2 .pd-which { font-size: var(--fs-2); font-weight: 500; }
+.pd2-head { align-items: center; }
+.pd2-title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.pd2-status { margin: 0; font-size: var(--fs-3); color: var(--text-muted); }
+.pd2-over { color: var(--watch); }
+.pd2-actions button.pd2-secondary { font-size: var(--fs-3); font-weight: 500; padding: 5px 12px; }
+.pd2-block-name { align-items: baseline; }
+.pd2-client { font-size: var(--fs-4); font-weight: 600; }
+.pd2-when { font-size: var(--fs-3); color: var(--text-muted); }
+.pd2-fit { font-size: var(--fs-3); font-weight: 400; }
+.pd2-fit.over { font-weight: 500; }
+.pd2-fit .link-btn { font-size: var(--fs-3); font-weight: 500; color: inherit; }
+.pd2-note, .pd2-empty { font-size: var(--fs-2); }
+.pd2-trim-hint { font-size: var(--fs-2); }
+.pd2-fold { font: inherit; font-size: var(--fs-2); color: var(--text-muted); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.pd2-fold:hover { color: var(--text); }
+.pd2-sec .pd2-fold { font-size: var(--fs-3); padding: 4px 0; }
+.pd2 .pd-agenda ol { font-size: var(--fs-2); }
+.pd2 .ag-free .ag-title, .detail-panel .ag-free .ag-title { font-weight: 500; }
+.pd2 .ag-timebox .ag-title, .pd2 .pd-agenda li.when-now .ag-title, .pd2 .pd-agenda li.when-next .ag-title { font-weight: 500; }
+.pd2 .cal-tag { font-size: var(--fs-1); font-weight: 600; }
+/* Plan the day's rows: handle, title, badge, size chip, + time and ⋯ on hover. */
+.pick-row.dens-plan { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; font-size: var(--fs-3); }
+.pick-row.dens-plan:hover { background: var(--raised); }
+.pick-row.dens-plan .pr-handle { flex: none; width: 14px; text-align: center; color: var(--text-faint); font-size: var(--fs-2); letter-spacing: -2px; cursor: grab; }
+.pick-row.dens-plan.done .pr-handle { color: var(--ok); letter-spacing: 0; }
+.pick-row.dens-plan.done .pr-title { color: var(--text-muted); text-decoration: line-through; }
+.pick-row.dens-plan .pr-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-row.dens-plan .pr-title a { color: inherit; text-decoration: none; }
+.pick-row.dens-plan .pr-title a:hover { text-decoration: underline; }
+.pick-row.dens-plan .pr-note { font-size: var(--fs-2); color: var(--text-muted); flex: none; }
+.pick-row.dens-plan .pr-hover { display: inline-flex; align-items: center; gap: 6px; opacity: 0; transition: opacity 0.1s; }
+.pick-row.dens-plan:hover .pr-hover, .pick-row.dens-plan:focus-within .pr-hover { opacity: 1; }
+.pick-row.dens-plan .more-btn, .pick-row.dens-plan .pr-hover button:last-child { font-size: var(--fs-4); font-weight: 600; }
+.pick-row.dens-plan.trim { background: color-mix(in oklab, var(--watch) 14%, transparent); }
+/* Right pane. */
+.pd2-right { display: flex; flex-direction: column; }
+.pd2-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.pd2-pane-title { font-size: var(--fs-4); font-weight: 600; }
+.pd2-pane-client { color: var(--c, var(--accent)); }
+.pd2-sec h4 { font-size: var(--fs-1); font-weight: 600; margin: 4px 0 2px; }
+.pd2-explain { font-size: var(--fs-2); }
+.pd2-add { font-size: var(--fs-3); }
+.pd2-add .pr-type { font-size: var(--fs-1); font-weight: 600; }
+.pd2-feature { display: flex; flex-direction: column; gap: 2px; }
+.pd2-feat-head { display: flex; align-items: baseline; gap: 10px; padding: 5px 8px; border-radius: 6px; background: var(--raised); }
+.pd2-feature.chosen > .pd2-feat-head { box-shadow: inset 3px 0 0 var(--accent); }
+.pd2-feature.needs > .pd2-feat-head { background: color-mix(in oklab, var(--watch) 12%, var(--surface)); border: 1px solid color-mix(in oklab, var(--watch) 50%, var(--border)); }
+.pd2-feat-name { flex: 1; min-width: 0; font: inherit; font-size: var(--fs-3); font-weight: 600; color: var(--text); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd2-feat-name:hover { text-decoration: underline; }
+.pd2-count { flex: none; font-size: var(--fs-2); color: var(--text-muted); }
+.pd2-nice { flex: none; font-size: var(--fs-2); color: var(--text-muted); }
+.pd2-size { flex: none; font-size: var(--fs-2); color: var(--text-muted); }
+.pd2-needs { flex: none; display: inline-flex; gap: 10px; align-items: baseline; font-size: var(--fs-2); }
+.pd2-needs-word { color: var(--watch); font-weight: 500; }
+.pd2-needs .link-btn { font-size: var(--fs-2); font-weight: 400; }
+.pd2-feature > ul { margin: 2px 0 4px 14px; }
+.pd2-group-title { font-size: var(--fs-2); }
+.pd2-search { font-size: var(--fs-3); }
+.pd2-type { margin-top: auto; padding-top: 10px; }
+.pd2-type input { width: 100%; font-size: var(--fs-3); }
+.pd2-type-hint { margin: 4px 0 0; font-size: var(--fs-2); color: var(--text-muted); }
+.pd2 .pd-committed, .pd2 .pd-didnt-fit { font-size: var(--fs-3); }
+.pd2 .pd-committed button, .pd2 .pd-didnt-fit .mini { font-size: var(--fs-3); font-weight: 500; }
+.pd2-weekstrip { font-size: var(--fs-2); }
+.pd2-carry h4 { font-size: var(--fs-1); }
+.intention.pd2-type { display: block; }
+.pd2-type .item-lookup { display: block; width: 100%; }
+.pd2-plus { font-size: var(--fs-4); font-weight: 600; }
+.pw-handle { font-weight: 400; }

@@ -14,7 +14,7 @@ import { PickRow } from "./PickRow.tsx";
 import { DueBadge } from "./FollowUps.tsx";
 import { hourMarks, labelHere, layoutEvents, rulerSpan, showRuler } from "./layout.ts";
 import { DevOpsWork } from "./work.ts";
-import { clientColor, eventRange, SampleSources, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
+import { clientColor, eventRange, SampleSources, shortDate, shortRange, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 import { cardHalves, eveOnly, slotOf } from "./halves.ts";
 import type { Layout } from "./viewport.ts";
 import { cardPlan, clientFeatures, featuresLine, PlanCtx, storiesUnder, type PlanView } from "./planview.ts";
@@ -367,10 +367,6 @@ type HalfProps = {
   addWork?: (() => void) | undefined;
 };
 
-/** "9:00–12:30": a block's range without AM and PM, muted in the card header (U3). */
-function shortRange(slot: Slot, tz: string): string {
-  return `${startClock(slot.start, tz)}–${startClock(slot.end, tz)}`;
-}
 
 function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, isToday, dueBadges, addWork }: HalfProps) {
   const primary = slot.focus[0];

@@ -189,7 +189,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     await page.close();
   }, T);
 
-  it("Or type what you'll do: a lookup result adds that item; Enter on plain text adds an intention", async () => {
+  it("the type box: a lookup result adds that item; Shift+Enter on plain text adds an intention, not in DevOps", async () => {
     const { page, errors } = await freshPage(h);
     await openPlanDay(page);
     await selectBlock(page, "Northwind");
@@ -202,8 +202,10 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
     const picks = async () => (await api<{ picks: { kind: string; title: string; itemId: number | null }[] }>(page, "planday.start", { date: "2026-11-02" })).data.picks;
     expect((await picks()).some((p) => p.kind === "item" && /export/i.test(p.title))).toBe(true);
     await look.fill("call the warehouse about pallets");
-    await look.press("Enter");
-    await expect.poll(() => page.locator(".pd2-block.selected .pd2-picks > li .pr-title", { hasText: "call the warehouse about pallets" }).count()).toBe(1);
+    await look.press("Shift+Enter");
+    const row = page.locator(".pd2-block.selected .pd2-picks > li", { hasText: "call the warehouse about pallets" });
+    await expect.poll(() => row.count()).toBe(1);
+    await expect(row.locator(".pr-note").textContent()).resolves.toContain("not in DevOps");
     await expect(look.inputValue()).resolves.toBe("");
     expect(errors).toEqual([]);
     await page.close();

@@ -21,7 +21,7 @@ export function parentPool(choices: readonly { id: number; title: string; state:
   return { items, children: [] };
 }
 
-export function ItemLookup({ clientKey, value, onChange, label = "Work item", name, pool, placeholder, autoFocus, onEnterText, only }: { clientKey: string | null; value: ItemValue; onChange: (v: ItemValue) => void; label?: string; name?: string; /** Step 15.3: search these instead of the client's loaded work items (a draft's parent). */ pool?: { items: readonly WorkItem[]; children: readonly WorkItem[] } | undefined; placeholder?: string | undefined; autoFocus?: boolean; /** Step 15.3: Enter on text that links nothing (the intention box adds it as plain text). */ onEnterText?: (text: string) => void; /** Only offer these (the intention box: pickable items). */ only?: (i: WorkItem) => boolean }) {
+export function ItemLookup({ clientKey, value, onChange, label = "Work item", name, pool, placeholder, autoFocus, onEnterText, only }: { clientKey: string | null; value: ItemValue; onChange: (v: ItemValue) => void; label?: string; name?: string; /** Step 15.3: search these instead of the client's loaded work items (a draft's parent). */ pool?: { items: readonly WorkItem[]; children: readonly WorkItem[] } | undefined; placeholder?: string | undefined; autoFocus?: boolean; /** Step 15.3: Enter on text that links nothing (the intention box adds it as plain text). */ onEnterText?: (text: string, how: { shift: boolean }) => void; /** Only offer these (the intention box: pickable items). */ only?: (i: WorkItem) => boolean }) {
   const work = useContext(DevOpsWork);
   const week = useContext(WeekItems);
   const cw = pool ?? (clientKey ? work.get(clientKey) : undefined);
@@ -61,11 +61,11 @@ export function ItemLookup({ clientKey, value, onChange, label = "Work item", na
       if (results.length) setActive((a) => (e.key === "ArrowDown" ? (a + 1) % results.length : (a - 1 + results.length) % results.length));
     } else if (e.key === "Enter" && (open || onEnterText)) {
       e.preventDefault();
-      const hit = open ? (results[active] ?? (parseItemRef(value.text) !== null ? results.find((r) => r.id === parseItemRef(value.text)) : undefined)) : undefined;
+      const hit = open && !e.shiftKey ? (results[active] ?? (parseItemRef(value.text) !== null ? results.find((r) => r.id === parseItemRef(value.text)) : undefined)) : undefined;
       if (hit) link(hit);
       else {
         setOpen(false); // Enter keeps the plain text.
-        if (onEnterText && value.text.trim()) onEnterText(value.text.trim());
+        if (onEnterText && value.text.trim()) onEnterText(value.text.trim(), { shift: e.shiftKey });
       }
     } else if (e.key === "Escape" && open) {
       e.preventDefault();

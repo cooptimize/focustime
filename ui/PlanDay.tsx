@@ -1,25 +1,28 @@
-// Plan the day (step 15, D263 to D266): its own view with two panes, one job each. Left, "Your <Weekday>": each block
-// with its picks as clean rows and one calm fit line. Right, "Add to <Client> <Morning>": this week's priorities, the
-// client's follow-ups, then everything else. One "+" per row; every other action is in a row's ⋯ menu. Everything
-// here is local: the actions only write Coopilot's plan store.
+// Plan the day (step 15, D263 to D266): its own view with two panes, one job each. Left: each block with its picks as
+// rows and its fit said once. Right, "Add to <Client> <morning>": this week's musts with their stories, the client's
+// follow-ups, then everything else, and a type box at the bottom. One "+" per row; every other action is in a row's ⋯
+// menu. U4 (D396 to D399): the U3 type scale; rows without a checkbox (ticking is Today's), the size chip always; the
+// agenda open only on the selected block; Enter in the type box makes a draft story under the chosen feature and plans
+// it, Shift+Enter a plain intention ("not in DevOps"); features aren't picks, so they offer Draft stories instead.
+// Everything here is local: the actions only write Coopilot's plan store.
 import { ModeArea } from "./ModeSwitch.tsx";
 import { planDayTitle } from "./nav.ts";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
 import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps } from "./DevOpsWrite.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { blockClient, draftOffer, isPickable } from "../plan/rules.ts";
+import { blockClient, isPickable } from "../plan/rules.ts";
 import { dayCalendar, splitByBlocks, type DayEventWhen } from "../plan/todaycal.ts";
 import { AllDayRow, OutsideLine } from "./DayCalendar.tsx";
 import { agendaOf, offerAfterTimebox, planMyDay, smallerSize, type DayPlacement, type DidntFit, type Unplaced } from "../plan/agenda.ts";
 import { addSections, defaultBlock, doneAction, type PriorityRow } from "../plan/addpane.ts";
-import { aboutHours, dayTotals, fitWords, planFit, planMinutes, trimCandidates } from "../plan/fit.ts";
+import { blockFitWords, dayHeadline, fitWords, planFit, planMinutes, trimCandidates } from "../plan/fit.ts";
 import { freeMinutes } from "../week/free.ts";
 import { weekList } from "../plan/weeklist.ts";
 import { dayLabel } from "../plan/days.ts";
-import { SIZES, type PlanDayState, type Pick, type Size } from "../plan/types.ts";
+import type { PlanDayState, Pick } from "../plan/types.ts";
 import type { Day, Half, Slot, WorkItem } from "../week/types.ts";
-import { clientColor, halfName, halfTag, longDate, shortDate, slotRange } from "./labels.ts";
+import { clientColor, halfName, halfTag, longDate, shortDate, shortRange } from "./labels.ts";
 import { cardHalves, slotOf } from "./halves.ts";
 import { DevOpsWork, typeTag } from "./work.ts";
 import { PlanCtx, useFocused } from "./planview.ts";
@@ -28,6 +31,7 @@ import { formatDuration } from "../week/format.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { call } from "./api.ts";
 import { copy, DueBadge } from "./FollowUps.tsx";
+import { DraftStories } from "./DetailPanel.tsx";
 import { dueOrder } from "../plan/due.ts";
 import { isTypingTarget, topOverlay } from "./keys.ts";
 import { halfLabel, itemMenu, pickMenu, possessive, spanText, weekTargets } from "./menu.ts";
@@ -35,6 +39,8 @@ import { MenuCtx, MenuRow, useMenu } from "./Menus.tsx";
 import { TimeboxDetails, useTimeboxes } from "./Timeboxes.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { PickRow, PICK_DRAG } from "./PickRow.tsx";
+
+import type { FollowUpView } from "../actions/types.ts";
 
 export type PlanDayAct = (action: string, input: Record<string, unknown>) => Promise<boolean>;
 
@@ -176,11 +182,11 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
               {planDayTitle(day.date, today)}
               {badge && <span className={`pd-which ${badge === "Past" ? "past" : "next"}`}>{badge}</span>}
             </h2>
-            <p className="pd2-status">{off ? "Day off" : past ? "Tick what got done, or drop the rest" : dayTotals(blocks.filter((b) => !b.slot.off))}</p>
+            <p className="pd2-status">{off ? "Day off" : past ? "Tick what got done, or drop the rest" : <Headline h={dayHeadline(blocks.filter((b) => !b.slot.off))} />}</p>
           </div>
           <div className="pd2-actions">
             {!past && !off && committed && timing && unboxed > 0 && (
-              <button type="button" onClick={() => setMyDay(true)} title="Give every planned pick a time in its block's free time">
+              <button type="button" className="pd2-secondary" onClick={() => setMyDay(true)} title="Give every planned pick a time in its block's free time">
                 Timebox my day
               </button>
             )}
@@ -246,7 +252,6 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
           <AddDragCtx.Provider value={setDragging}>
           <div className="pd2-panes">
             <div className="pd2-left" aria-label={`Your ${weekdayOf(day.date)}`}>
-              <h3 className="pd2-pane-title">Your {weekdayOf(day.date)}</h3>
               <AllDayRow events={cal.allDay} />
               <OutsideLine label="Before your blocks" events={split.before} tz={tz} />
               {state.carryOver.length > 0 && selBlock && <CarryOver picks={state.carryOver} date={day.date} to={selBlock.half} act={act} />}
@@ -290,14 +295,18 @@ type BlockView = { half: Half; slot: Slot; picks: Pick[]; fit: ReturnType<typeof
 /** One block in the left pane: name, time, one fit line, its picks as rows. Click selects it; drop a pick to move it here. */
 function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act, hintPick, weekFeatures, whens }: { whens: ReadonlyMap<string, DayEventWhen>; b: BlockView; selected: boolean; onSelect: () => void; overflow: boolean; tz: string; now: string; colors: Record<string, string>; name: (k: string | null) => string; act: PlanDayAct; hintPick: number | null; weekFeatures: PlanDayState["weekFeatures"] }) {
   const menus = useContext(MenuCtx);
-  const { slot, picks, words } = b;
+  const { slot, picks } = b;
   const pv = useContext(PlanCtx);
   const work = useContext(DevOpsWork);
   const focus = overflow ? null : (slot.focus[0] ?? null);
   const bc = blockClient(focus?.clientKey ?? null, picks);
   const [trim, setTrim] = useState(false);
-  // Step 17.6: the agenda is open by default; the summary link folds it.
-  const [cal, setCal] = useState(true);
+  // U4: the agenda is open on the selected block and folded on the others; its fold line toggles it.
+  const [calToggle, setCalToggle] = useState<boolean | null>(null);
+  useEffect(() => setCalToggle(null), [selected]);
+  const cal = calToggle ?? selected;
+  const fw = blockFitWords(b.fit);
+  const dues = pv.followUps ?? [];
   const [over, setOver] = useState(false);
   const env = useTimeboxes();
   const start = new Map((env?.timeboxes ?? []).filter((t) => !t.removedAt && t.date === slot.date && t.pickId !== null).map((t) => [t.pickId!, t.start]));
@@ -347,18 +356,21 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
       onDrop={onDrop}
     >
       <header className="pd2-block-head">
-        <button type="button" className="pd2-block-name" aria-pressed={selected} onClick={onSelect} title="Add work to this block on the right">
+        <button type="button" className="pd2-block-name" aria-pressed={selected} onClick={onSelect} title={`${halfName(slot.half)}: add work to this block on the right`}>
           <span className="swatch" />
           <span className="pd2-client">{title}</span>
-          <span className="muted">{halfName(slot.half)} · {slotRange(slot, tz)}</span>
+          <span className="pd2-when">{shortRange(slot, tz)}</span>
         </button>
-        {words.text && (
-          <span className={`pd2-fit ${words.kind}`}>
-            {words.text}
-            {words.kind === "over" && (
-              <button type="button" className="link-btn" aria-pressed={trim} onClick={(e) => (e.stopPropagation(), setTrim((t) => !t))} title="Show picks you could shrink or move">
-                trim
-              </button>
+        {fw.text && (
+          <span className={`pd2-fit ${fw.kind}`}>
+            {fw.text}
+            {fw.kind === "over" && (
+              <>
+                {" · "}
+                <button type="button" className="link-btn" aria-pressed={trim} onClick={(e) => (e.stopPropagation(), setTrim((t) => !t))} title="Show picks you could shrink or move">
+                  Trim
+                </button>
+              </>
             )}
           </span>
         )}
@@ -367,17 +379,17 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
       {ordered.length > 0 ? (
         <ul className="pd2-picks">
           {ordered.map((p) => (
-            <PickRow key={p.id} pick={p} toggle={(id, d) => void act("pick.mark_done", { id, done: d })} link draggable highlight={marked.has(p.id)} hint={p.id === hintPick} extra={<RowNote p={p} bc={bc.clientKey} name={name} />} />
+            <PickRow key={p.id} pick={p} density="plan" toggle={(id, d) => void act("pick.mark_done", { id, done: d })} link draggable highlight={marked.has(p.id)} hint={p.id === hintPick} extra={<RowNote p={p} bc={bc.clientKey} name={name} />} badge={dueOf(p, dues)} />
           ))}
         </ul>
       ) : (
-        <p className="pd2-empty">{b.ended ? "Nothing planned." : selected ? "Nothing yet. Add from the right." : "Nothing yet."}</p>
+        <p className="pd2-empty">{b.ended ? "Nothing planned." : selected ? "Nothing yet. Add from the right." : ""}</p>
       )}
       {trim && marked.size > 0 && <p className="pd2-trim-hint">Highlighted: make one smaller (click its size) or move it with ⋯.</p>}
       {(meetings > 0 || personal > 0 || slot.freeGaps.length > 0) && !slot.off && (
         <div className="pd2-cal">
-          <button type="button" className="link-btn" aria-expanded={cal} onClick={(e) => (e.stopPropagation(), setCal((c) => !c))}>
-            {[meetings ? `${meetings} meeting${meetings === 1 ? "" : "s"}` : "", personal ? `${personal} personal` : "", `${aboutHours(freeMinutes(slot))} free`].filter(Boolean).join(" · ")}
+          <button type="button" className="pd2-fold" aria-expanded={cal} onClick={(e) => (e.stopPropagation(), setCalToggle(!cal))}>
+            <span aria-hidden="true">{cal ? "▾" : "▸"}</span> Agenda{cal ? "" : ` · ${[meetings ? `${meetings} meeting${meetings === 1 ? "" : "s"}` : "", personal ? `${personal} personal` : "", `${formatDuration(freeMinutes(slot))} free`].filter(Boolean).join(" · ")}`}
           </button>
           {cal && <Agenda slot={slot} now={now} tz={tz} clientName={name} pickRow={() => null} whens={whens} />}
         </div>
@@ -386,14 +398,39 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
   );
 }
 
+/** The day's free time, and how far over the blocks are in amber only when they are (U4). */
+function Headline({ h }: { h: { free: string; over: string | null } }) {
+  return (
+    <>
+      {h.free}
+      {h.over && (
+        <>
+          {" · "}
+          <span className="pd2-over">{h.over}</span>
+        </>
+      )}
+    </>
+  );
+}
+
+/** A follow-up pick's due badge on its row. */
+function dueOf(p: Pick, followUps: readonly FollowUpView[]): ReactNode {
+  if (p.followUpId === null) return undefined;
+  const f = followUps.find((x) => x.id === p.followUpId);
+  return f ? <DueBadge l={f} /> : undefined;
+}
+
 /** A short note after a pick's title: another client's pick, carried from an earlier day, focused time. */
 function RowNote({ p, bc, name }: { p: Pick; bc: string | null; name: (k: string | null) => string }) {
   const focused = focusLabel(useFocused()(p.id), p.size);
-  const bits = [p.clientKey !== bc ? name(p.clientKey) : "", p.carriedFromDate ? `from ${shortDate(p.carriedFromDate)}` : "", focused ? `${focused} focused` : ""].filter(Boolean);
+  const bits = [p.kind === "intention" && p.followUpId === null ? "not in DevOps" : "", p.clientKey !== bc ? name(p.clientKey) : "", p.carriedFromDate ? `from ${shortDate(p.carriedFromDate)}` : "", focused ? `${focused} focused` : ""].filter(Boolean);
   return bits.length ? <span className="pr-note">{bits.join(" · ")}</span> : null;
 }
 
-/** The right pane: "Add to <Client> <Morning>". Priorities, follow-ups, everything else; one "+" per row. */
+/**
+ * The right pane: "Add to <Client> <morning>". This week's musts (each feature with its stories, or Needs stories),
+ * the client's follow-ups when there are any, everything else folded, and the type box at the bottom (U4).
+ */
 function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, act, focus, clearFocus }: { slot: Slot; picks: Pick[]; overflow: boolean; state: PlanDayState; picked: Set<string>; here: Set<string>; clients: { clientKey: string; clientName: string }[]; colors: Record<string, string>; act: PlanDayAct; focus: number | null; clearFocus: () => void }) {
   const block = overflow ? null : (slot.focus[0] ?? null);
   const bc = blockClient(block?.clientKey ?? null, picks);
@@ -404,18 +441,22 @@ function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, 
   const work = clientKey ? allWork.get(clientKey) : undefined;
   const [query, setQuery] = useState("");
   const [restOpen, setRestOpen] = useState(false);
+  // U4: the feature a typed story goes under (Enter in the type box); none means the client, no parent yet.
+  const [feature, setFeature] = useState<number | null>(focus);
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? k ?? "";
   const listed = useMemo(() => weekList(state.weekFeatures, work ? [work] : null).items.map((f) => ({ ...f, clientKey: f.clientKey, done: !!f.done })), [state.weekFeatures, work]);
   const fus = clientKey ? dueOrder((pv.followUps ?? []).filter((f) => f.clientKey === clientKey), slot.date, (f) => f.due, (f) => f.openedAt) : [];
   const s = clientKey ? addSections({ clientKey, date: slot.date, half: slot.half, work, week: listed, followUps: fus, drafts: state.drafts, picked, here, focus, query }) : null;
   const add = (input: Record<string, unknown>) => act("pick.add", { date: slot.date, half: slot.half, clientKey, ...input });
   const loose = clientKey ? state.drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === null && d.level === "story" && d.devopsId == null && !picked.has(`d${d.id}`)) : [];
-  const features = s?.priorities.filter((p) => p.level === "feature" && p.item) ?? [];
+  const chosenTitle = s?.priorities.find((p) => p.level === "feature" && p.ref.itemId === feature)?.ref.title ?? null;
+  const musts = s?.priorities.filter((p) => p.tier === "must") ?? [];
+  const label = musts.length === (s?.priorities.length ?? 0) ? "This week's musts" : "This week";
   return (
     <HereCtx.Provider value={here}>
     <div className="pd2-right" style={{ "--c": clientColor(clientKey ?? undefined, colors) } as CSSProperties} aria-label="Add work">
       <h3 className="pd2-pane-title">
-        Add to {clientKey ? name(clientKey) : "this block"} <span className="muted">{halfName(slot.half)}</span>
+        Add to {clientKey ? <span className="pd2-pane-client">{name(clientKey)}</span> : "this block"} {halfName(slot.half).toLowerCase()}
       </h3>
       {!block && clients.length > 0 && (
         <div className="client-chooser" role="group" aria-label="Which client">
@@ -431,70 +472,70 @@ function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, 
         <p className="muted pd-note">Choose a client for this block first.</p>
       ) : (
         <>
-          <section className="pd2-sec" aria-label="This week's priorities">
-            <h4>This week's priorities</h4>
-            <p className="pd2-explain">From your week plan.{focus !== null && <> Showing one feature. <button type="button" className="link-btn" onClick={clearFocus}>Show all</button></>}</p>
-            {s!.priorities.length === 0 ? (
-              <p className="muted pd-note">{work ? `No priorities for ${name(clientKey)} this week yet. Plan the week sets them.` : "DevOps isn't loaded for this client right now."}</p>
-            ) : (
-              <ul className="pd2-list">
-                {s!.priorities.map((p) => (
-                  <Priority key={p.ref.itemId} p={p} clientKey={clientKey} date={slot.date} add={add} act={act} startOpen={p.pinnedHere || s!.priorities.length === 1 || focus === p.ref.itemId || p.tier === "must"} picked={picked} />
-                ))}
-              </ul>
-            )}
-            {features.length > 0 && <DraftLink label="+ Draft a story" clientKey={clientKey} parents={features.map((f) => ({ id: f.ref.itemId, title: f.ref.title }))} act={act} />}
-          </section>
-          <section className="pd2-sec" aria-label="Follow-ups">
-            <h4>Follow-ups</h4>
-            {s!.followUps.length === 0 ? (
-              <p className="muted pd-note">Nothing owed to {name(clientKey)}.</p>
-            ) : (
-              <ul className="pd2-list">
-                {s!.followUps.map((f) => (
-                  <AddRow key={f.id} k={`f${f.id}`} drag={{ clientKey, title: f.what, input: { followUpId: f.id } }} onAdd={() => add({ followUpId: f.id })} label={`Add follow-up: ${f.what}`}>
-                    <span className="pr-title">{f.hasWho ? `${f.who}: ` : ""}{f.what}</span>
-                    <DueBadge l={f} />
-                  </AddRow>
-                ))}
-              </ul>
-            )}
-          </section>
-          <section className="pd2-sec" aria-label="Everything else">
-            <h4>
-              <button type="button" className="pd2-toggle" aria-expanded={restOpen || !!query} onClick={() => setRestOpen((o) => !o)}>
-                <span aria-hidden="true">{restOpen || query ? "▾" : "▸"}</span> Everything else <span className="muted">{work ? `${s!.rest.length + loose.length} more, in DevOps order` : ""}</span>
-              </button>
-            </h4>
-            {(restOpen || query) && (
-              <>
-                <input className="pd2-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by title or #id" aria-label={`Search ${name(clientKey)}'s work`} />
+          <div className="pd2-scroll">
+            {s!.priorities.length > 0 ? (
+              <section className="pd2-sec" aria-label={label}>
+                <h4>{label}</h4>
+                {focus !== null && (
+                  <p className="pd2-explain">
+                    One feature. <button type="button" className="link-btn" onClick={clearFocus}>Show all</button>
+                  </p>
+                )}
                 <ul className="pd2-list">
-                  {loose.map((d) => (
-                    <AddRow key={`d${d.id}`} k={`d${d.id}`} drag={{ clientKey, title: d.title, input: { draftId: d.id, size: d.size } }} onAdd={() => add({ draftId: d.id, size: d.size })} label={`Add draft: ${d.title}`}>
-                      <span className="pr-type">Draft</span>
-                      <DraftTitle draft={d} className="pr-title" />
+                  {s!.priorities.map((p) => (
+                    <Priority key={p.ref.itemId} p={p} clientKey={clientKey} date={slot.date} add={add} chosen={feature === p.ref.itemId} onChoose={() => setFeature((f) => (f === p.ref.itemId ? null : p.ref.itemId))} />
+                  ))}
+                </ul>
+              </section>
+            ) : (
+              !work && <p className="muted pd-note">DevOps isn't loaded for this client right now.</p>
+            )}
+            {s!.followUps.length > 0 && (
+              <section className="pd2-sec" aria-label="Follow-ups">
+                <h4>Follow-ups</h4>
+                <ul className="pd2-list">
+                  {s!.followUps.map((f) => (
+                    <AddRow key={f.id} k={`f${f.id}`} drag={{ clientKey, title: f.what, input: { followUpId: f.id } }} onAdd={() => add({ followUpId: f.id })} label={`Add follow-up: ${f.what}`}>
+                      <span className="pr-title">{f.hasWho ? `${f.who}: ` : ""}{f.what}</span>
+                      <DueBadge l={f} />
                     </AddRow>
                   ))}
-                  {s!.rest.map((r) =>
-                    r.kids.length ? (
-                      <li key={r.item.id} className="pd2-group">
-                        <span className="pd2-group-title"><span className="pr-type">{typeTag(r.item.type)}</span> {r.item.title}</span>
-                        <ul>
-                          {r.kids.map((k) => <ItemAdd key={k.id} item={k} clientKey={clientKey} add={add} />)}
-                        </ul>
-                      </li>
-                    ) : (
-                      <ItemAdd key={r.item.id} item={r.item} clientKey={clientKey} add={add} />
-                    ),
-                  )}
                 </ul>
-                {query && !s!.rest.length && <p className="muted pd-note">Nothing matches "{query}".</p>}
-                <DraftLink label="+ Draft a story" clientKey={clientKey} parents={[]} act={act} />
-              </>
+              </section>
             )}
-          </section>
-          <Intention clientKey={clientKey} clientName={name(clientKey)} half={slot.half} date={slot.date} act={act} />
+            <section className="pd2-sec" aria-label="Everything else">
+              <button type="button" className="pd2-fold" aria-expanded={restOpen || !!query} onClick={() => setRestOpen((o) => !o)}>
+                <span aria-hidden="true">{restOpen || query ? "▾" : "▸"}</span> Everything else{work ? ` · ${s!.rest.length + loose.length} in DevOps order` : ""}
+              </button>
+              {(restOpen || query) && (
+                <>
+                  <input className="pd2-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by title or #id" aria-label={`Search ${name(clientKey)}'s work`} />
+                  <ul className="pd2-list">
+                    {loose.map((d) => (
+                      <AddRow key={`d${d.id}`} k={`d${d.id}`} drag={{ clientKey, title: d.title, input: { draftId: d.id, size: d.size } }} onAdd={() => add({ draftId: d.id, size: d.size })} label={`Add draft: ${d.title}`}>
+                        <span className="pr-type">Draft</span>
+                        <DraftTitle draft={d} className="pr-title" />
+                      </AddRow>
+                    ))}
+                    {s!.rest.map((r) =>
+                      r.kids.length ? (
+                        <li key={r.item.id} className="pd2-group">
+                          <span className="pd2-group-title"><span className="pr-type">{typeTag(r.item.type)}</span> {r.item.title}</span>
+                          <ul>
+                            {r.kids.map((k) => <ItemAdd key={k.id} item={k} clientKey={clientKey} add={add} tag />)}
+                          </ul>
+                        </li>
+                      ) : (
+                        <ItemAdd key={r.item.id} item={r.item} clientKey={clientKey} add={add} tag />
+                      ),
+                    )}
+                  </ul>
+                  {query && !s!.rest.length && <p className="muted pd-note">Nothing matches "{query}".</p>}
+                </>
+              )}
+            </section>
+          </div>
+          <StoryBox clientKey={clientKey} clientName={name(clientKey)} half={slot.half} date={slot.date} parent={feature} parentTitle={chosenTitle} act={act} />
         </>
       )}
     </div>
@@ -595,130 +636,113 @@ function AddRow({ onAdd, label, children, menu, k, drag }: { onAdd: () => void; 
         <button type="button" className="pd2-plus" onClick={onAdd} aria-label={label} title="Add to this block">+</button>
       )}
       {children}
-      {planned && <span className="pd2-here">Already planned here</span>}
       {menu?.button(`More for ${label}`)}
     </li>
   );
 }
 
-function ItemAdd({ item, clientKey, add }: { item: WorkItem; clientKey: string; add: (i: Record<string, unknown>) => Promise<boolean> }) {
+/** A DevOps item to add. Its type shows only where types mix (Everything else); under a feature they're all stories. */
+function ItemAdd({ item, clientKey, add, tag = false, after }: { item: WorkItem; clientKey: string; add: (i: Record<string, unknown>) => Promise<boolean>; tag?: boolean; after?: ReactNode }) {
   const menu = useMenu((env) => itemMenu(env, clientKey, item));
   return (
     <AddRow k={`i${clientKey}:${item.id}`} drag={{ clientKey, title: item.title, input: { itemId: item.id } }} onAdd={() => void add({ itemId: item.id })} label={`Add ${item.title}`} menu={menu}>
-      <span className="pr-type">{typeTag(item.type)}</span>
+      {tag && <span className="pr-type">{typeTag(item.type)}</span>}
       <span className="pr-title" title={`${item.type} ${item.id} · ${item.state}`}>
         <WorkLink clientKey={clientKey} url={item.url}>{item.title}</WorkLink>
       </span>
+      {after}
     </AddRow>
   );
 }
 
-/** One priority: a story to add, or a feature that opens into its stories (or one "Break it down" row). */
-function Priority({ p, clientKey, date, add, act, startOpen, picked }: { p: PriorityRow; clientKey: string; date: string; add: (i: Record<string, unknown>) => Promise<boolean>; act: PlanDayAct; startOpen: boolean; picked: Set<string> }) {
-  const [open, setOpen] = useState(startOpen);
-  const tier = <span className={`pd2-tier ${p.tier}`}>{p.tier === "must" ? "Must" : "Nice to have"}</span>;
+/**
+ * One priority (U4). A story: one row with "+". A feature: its title with "2 of 3 stories planned" (a click chooses it
+ * for the type box), then its stories, each "+" or ✓ when planned here. A feature with no stories is one amber row:
+ * Needs stories · Draft stories · Coop brief. Features aren't picks, so a feature row can't be added or dragged.
+ */
+function Priority({ p, clientKey, date, add, chosen, onChoose }: { p: PriorityRow; clientKey: string; date: string; add: (i: Record<string, unknown>) => Promise<boolean>; chosen: boolean; onChoose: () => void }) {
+  const nice = p.tier === "nice" ? <span className="pd2-nice">nice to have</span> : null;
   if (p.level === "story")
     return p.item ? (
-      <ItemRowWithTier item={p.item} clientKey={clientKey} add={add} tier={tier} />
+      <ItemAdd item={p.item} clientKey={clientKey} add={add} after={nice} />
     ) : (
-      <li className="pd2-add static"><span className="pr-title">{p.ref.title}</span>{tier}<span className="muted">DevOps isn't loaded</span></li>
+      <li className="pd2-add static"><span className="pr-title">{p.ref.title}</span>{nice}<span className="muted">DevOps isn't loaded</span></li>
     );
-  const here = useContext(HereCtx);
-  const left = p.stories.filter((x) => !here.has(`i${clientKey}:${x.id}`)).length + p.drafts.filter((d) => !here.has(`d${d.id}`)).length;
-  const count = p.allPicked ? "all on the plan" : p.breakDown ? "no stories yet" : `${left} to add`;
   return (
-    <li className="pd2-feature">
-      <button type="button" className="pd2-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span aria-hidden="true">{open ? "▾" : "▸"}</span>
-        <span className="pr-title">{p.ref.title}</span>
-        {tier}
-        <span className="muted">{count}</span>
-      </button>
-      {open && (
+    <li className={`pd2-feature${p.breakDown ? " needs" : ""}${chosen ? " chosen" : ""}`} data-feature={p.ref.itemId}>
+      <div className="pd2-feat-head">
+        <button type="button" className="pd2-feat-name" aria-pressed={chosen} onClick={onChoose} title={chosen ? "Chosen: a story typed below goes under it. Click to unchoose" : "Choose it: a story typed below goes under it"}>
+          {p.ref.title}
+        </button>
+        {nice}
+        {p.breakDown ? <NeedsStories clientKey={clientKey} date={date} feature={{ itemId: p.ref.itemId, title: p.ref.title }} /> : <span className="pd2-count">{p.planned} of {p.total} {p.total === 1 ? "story" : "stories"} planned</span>}
+      </div>
+      {(p.stories.length > 0 || p.drafts.length > 0) && (
         <ul>
           {p.stories.map((k) => <ItemAdd key={k.id} item={k} clientKey={clientKey} add={add} />)}
           {p.drafts.map((d) => (
             <AddRow key={`d${d.id}`} k={`d${d.id}`} drag={{ clientKey, title: d.title, input: { draftId: d.id, size: d.size } }} onAdd={() => void add({ draftId: d.id, size: d.size })} label={`Add draft: ${d.title}`}>
-              <span className="pr-type">Draft</span>
               <DraftTitle draft={d} className="pr-title" />
+              <span className="pd2-size">{d.size} · draft</span>
               <CreateInDevOps drafts={[d]} label="Create in DevOps" />
             </AddRow>
           ))}
-          {p.breakDown && <BreakDown clientKey={clientKey} date={date} feature={{ itemId: p.ref.itemId, title: p.ref.title }} picked={picked} add={add} act={act} epic={p.item ? draftOffer(p.item).kind === "feature" : false} />}
         </ul>
       )}
     </li>
   );
 }
 
-function ItemRowWithTier({ item, clientKey, add, tier }: { item: WorkItem; clientKey: string; add: (i: Record<string, unknown>) => Promise<boolean>; tier: ReactNode }) {
-  const menu = useMenu((env) => itemMenu(env, clientKey, item));
+/** "Needs stories · Draft stories · Coop brief" on a feature with no stories (U4). */
+function NeedsStories({ clientKey, date, feature }: { clientKey: string; date: string; feature: { itemId: number; title: string } }) {
+  const area = useRef<HTMLTextAreaElement>(null);
+  const brief = async () => {
+    let msg: string;
+    try {
+      const r = await call<{ markdown: string }>("feature.brief", { weekStart: date, clientKey, itemId: feature.itemId });
+      msg = (await copy(r.markdown, area.current)) ? `Coop brief for #${feature.itemId} copied` : "Copy didn't work. Open Plan the week to copy it";
+    } catch (e) {
+      msg = e instanceof Error ? e.message : "Couldn't build the brief";
+    }
+    window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: msg }));
+  };
   return (
-    <AddRow k={`i${clientKey}:${item.id}`} drag={{ clientKey, title: item.title, input: { itemId: item.id } }} onAdd={() => void add({ itemId: item.id })} label={`Add ${item.title}`} menu={menu}>
-      <span className="pr-type">{typeTag(item.type)}</span>
-      <span className="pr-title"><WorkLink clientKey={clientKey} url={item.url}>{item.title}</WorkLink></span>
-      {tier}
-    </AddRow>
-  );
-}
-
-/** One "+ Draft a story" link that opens an inline field only when clicked. With parents, a feature to put it under. */
-function DraftLink({ label, clientKey, parents, act, parent: fixed }: { label: string; clientKey: string; parents: { id: number; title: string }[]; act: PlanDayAct; parent?: number }) {
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [size, setSize] = useState<Size>("M");
-  const [parent, setParent] = useState<number | null>(fixed ?? parents[0]?.id ?? null);
-  if (!open)
-    return (
-      <button type="button" className="link-btn pd2-draft-link" onClick={(e) => (e.stopPropagation(), setOpen(true))}>
-        {label}
+    <span className="pd2-needs">
+      <span className="pd2-needs-word">Needs stories</span>
+      <DraftStories clientKey={clientKey} item={{ id: feature.itemId, title: feature.title }} />
+      <button type="button" className="link-btn" onClick={() => void brief()}>
+        Coop brief
       </button>
-    );
-  return (
-    <form
-      className="draft-form pd2-draft"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (!title.trim()) return;
-        if (await act("draft.add_story", { clientKey, parentItemId: parent, title, size })) {
-          setTitle("");
-          setOpen(false);
-        }
-      }}
-    >
-      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Story title (a local draft until it's in DevOps)" aria-label="Draft story title" maxLength={200} />
-      {fixed === undefined && parents.length > 0 && (
-        <select value={parent ?? ""} onChange={(e) => setParent(e.target.value ? Number(e.target.value) : null)} aria-label="Under feature">
-          {parents.map((f) => <option key={f.id} value={f.id}>Under {f.title}</option>)}
-        </select>
-      )}
-      <span className="sizes" role="group" aria-label="Draft size">
-        {SIZES.map((s) => (
-          <button key={s} type="button" className="size" aria-pressed={size === s} onClick={() => setSize(s)}>{s}</button>
-        ))}
-      </span>
-      <button type="submit" className="mini">Add draft</button>
-      <button type="button" className="mini quiet" onClick={() => setOpen(false)}>Cancel</button>
-    </form>
+      <textarea ref={area} className="sr-only" aria-hidden="true" tabIndex={-1} readOnly />
+    </span>
   );
 }
 
 /**
- * "Or type what you'll do" (step 15.3: the shared lookup). Choosing a result adds that DevOps item; Enter on text that
- * matches nothing adds it as a plain intention.
+ * The type box (U4, D398): "Type a story for <client>, then Enter". Enter makes a draft story under the chosen feature
+ * (or under none yet) and plans it here; Shift+Enter keeps it a plain intention, shown as "not in DevOps". Choosing a
+ * search result still adds that DevOps item.
  */
-function Intention({ clientKey, clientName, half, date, act }: { clientKey: string; clientName: string; half: Half; date: string; act: PlanDayAct }) {
+function StoryBox({ clientKey, clientName, half, date, parent, parentTitle, act }: { clientKey: string; clientName: string; half: Half; date: string; parent: number | null; parentTitle: string | null; act: PlanDayAct }) {
   const [value, setValue] = useState<ItemValue>(NO_ITEM);
-  // Pickable items not already planned in this block.
   const here = useContext(HereCtx);
   const only = useCallback((i: WorkItem) => isPickable(i) && !here.has(`i${clientKey}:${i.id}`), [here, clientKey]);
+  const story = async (title: string) => {
+    try {
+      const r = await call<{ draft: { id: number } }>("draft.add_story", { clientKey, parentItemId: parent, title });
+      return act("pick.add", { date, half, clientKey, draftId: r.draft.id });
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: e instanceof Error ? e.message : "Couldn't save the draft story" }));
+      return false;
+    }
+  };
   return (
-    <div className="intention">
+    <div className="intention pd2-type">
       <ItemLookup
         clientKey={clientKey}
         value={value}
-        label={`Something else for ${halfName(half)}`}
-        placeholder={`Or type what you'll do for ${clientName}, then Enter`}
+        label={`A story for ${halfName(half).toLowerCase()}`}
+        placeholder={`Type a story for ${clientName}, then Enter`}
         only={only}
         onChange={(v) => {
           if (v.itemId !== null) {
@@ -726,45 +750,13 @@ function Intention({ clientKey, clientName, half, date, act }: { clientKey: stri
             void act("pick.add", { date, half, clientKey, itemId: v.itemId });
           } else setValue(v);
         }}
-        onEnterText={async (text) => {
-          if (await act("pick.add", { date, half, clientKey, intention: text })) setValue(NO_ITEM);
+        onEnterText={async (text, how) => {
+          const ok = how.shift ? await act("pick.add", { date, half, clientKey, intention: text }) : await story(text);
+          if (ok) setValue(NO_ITEM);
         }}
       />
+      <p className="pd2-type-hint">Enter adds a draft story{parentTitle ? ` under ${parentTitle}` : ""}. Shift+Enter adds a plain note.</p>
     </div>
-  );
-}
-
-/** The pick title for breaking a feature down (step 10). */
-export const breakDownTitle = (f: { itemId: number; title: string }) => `Break down #${f.itemId} ${f.title}`.replace(/\s+/g, " ").trim().slice(0, 200);
-
-/** A feature with no stories: one row, "Break it down": add it as a pick, copy the Coop brief, or draft a story. */
-function BreakDown({ clientKey, date, feature, picked, add, act, epic }: { clientKey: string; date: string; feature: { itemId: number; title: string }; picked: Set<string>; add: (i: Record<string, unknown>) => Promise<boolean>; act: PlanDayAct; epic: boolean }) {
-  const title = breakDownTitle(feature);
-  const [brief, setBrief] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  const area = useRef<HTMLTextAreaElement>(null);
-  const copyBrief = async () => {
-    try {
-      const r = await call<{ markdown: string; descriptionRead: boolean }>("feature.brief", { weekStart: date, clientKey, itemId: feature.itemId });
-      setBrief(r.markdown);
-      await new Promise((res) => setTimeout(res, 0));
-      const ok = await copy(r.markdown, area.current);
-      setNote(ok ? "Coop brief copied" : "Copy didn't work: the brief is selected below, press Ctrl+C");
-      if (ok) setBrief(null);
-    } catch (e) {
-      setNote(e instanceof Error ? e.message : "Couldn't build the brief");
-    }
-  };
-  const already = picked.has(`t${clientKey}:${title}`);
-  return (
-    <li className="pd2-add pd2-breakdown">
-      {already ? <span className="pd2-plus done" aria-hidden="true">✓</span> : <button type="button" className="pd2-plus" onClick={() => void add({ intention: title, size: "M" })} aria-label="Add Break it down as a pick" title="Add to this block (size M)">+</button>}
-      <span className="pr-title">Break it down</span>
-      <button type="button" className="mini" onClick={() => void copyBrief()}>Copy Coop brief</button>
-      {!epic && <DraftLink label="Draft a story" clientKey={clientKey} parents={[]} parent={feature.itemId} act={act} />}
-      {note && <span className="muted" role="status">{note}</span>}
-      {brief && <textarea ref={area} readOnly value={brief} rows={6} aria-label={`Coop brief for #${feature.itemId}`} />}
-    </li>
   );
 }
 

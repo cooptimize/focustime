@@ -13,12 +13,18 @@ describe.skipIf(!CHROMIUM)("Plan the day: adding work (browser, demo mode)", () 
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  const section = (page: Page, name: string) => page.locator(`.pd2-right section[aria-label="${name}"]`);
+  // U4: "This week's musts" (or "This week" when nice to haves are listed too).
+  const section = (page: Page, name: string) => page.locator(name === "This week's priorities" ? `.pd2-right section[aria-label^="This week"]` : `.pd2-right section[aria-label="${name}"]`);
   const expandAll = async (page: Page) => {
+    // U4: a feature's stories always show; nothing to expand.
     const closed = page.locator(".pd2-right .pd2-feature > .pd2-toggle[aria-expanded=false]");
     while (await closed.count()) await closed.first().click();
   };
-  const plannedHere = (page: Page, title: string) => page.locator(".pd2-right li.pd2-add.planned", { hasText: title }).locator(".pd2-here");
+  // U4: a ✓ says it (labelled "Already planned here"), no text.
+  const plannedHere = (page: Page, title: string) => {
+    const mark = page.locator(".pd2-right li.pd2-add.planned", { hasText: title }).locator(".pd2-plus.done");
+    return { count: () => mark.count(), textContent: () => mark.first().getAttribute("aria-label") };
+  };
 
   it("+ in This week's priorities", async () => {
     const { page, errors } = await freshPage(h);
@@ -50,7 +56,7 @@ describe.skipIf(!CHROMIUM)("Plan the day: adding work (browser, demo mode)", () 
     const { page } = await freshPage(h);
     await openPlanDay(page);
     await selectBlock(page, "Cooptimize");
-    await section(page, "Everything else").locator(".pd2-toggle").click();
+    await section(page, "Everything else").locator(".pd2-fold").click();
     const row = section(page, "Everything else").locator("li.pd2-add:not(.planned)").first();
     const title = (await row.locator(".pr-title").textContent())!;
     await row.locator("button.pd2-plus").click();
@@ -64,7 +70,7 @@ describe.skipIf(!CHROMIUM)("Plan the day: adding work (browser, demo mode)", () 
     await openPlanDay(page);
     // The afternoon block, while the Week view still has the morning selected: the bug was adding to the morning.
     await selectBlock(page, "Northwind");
-    await section(page, "Everything else").locator(".pd2-toggle").click();
+    await section(page, "Everything else").locator(".pd2-fold").click();
     const row = section(page, "Everything else").locator("li.pd2-add:not(.planned)").first();
     const title = (await row.locator(".pr-title").textContent())!;
     await row.locator("button.more-btn").click();
@@ -82,7 +88,7 @@ describe.skipIf(!CHROMIUM)("Plan the day: adding work (browser, demo mode)", () 
     const { page } = await freshPage(h);
     await openPlanDay(page);
     await selectBlock(page, "Northwind");
-    await section(page, "Everything else").locator(".pd2-toggle").click();
+    await section(page, "Everything else").locator(".pd2-fold").click();
     const row = section(page, "Everything else").locator("li.pd2-add:not(.planned)").first();
     const title = (await row.locator(".pr-title").textContent())!;
     await row.locator("button.more-btn").click();

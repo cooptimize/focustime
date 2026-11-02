@@ -74,6 +74,10 @@ describe("addSections", () => {
     expect(other.priorities[0]!.stories.map((x) => x.id)).toEqual([11]);
     expect(other.priorities[0]).toMatchObject({ allPicked: true });
   });
+  it("counts a feature's stories planned on the day (U4: \"2 of 3 stories planned\")", () => {
+    const s = addSections(base({ picked: new Set(["inw:11"]), here: new Set(["inw:11"]) }));
+    expect(s.priorities[0]).toMatchObject({ total: 2, planned: 1 });
+  });
   it("marks a feature whose stories are all on the plan, without offering a breakdown", () => {
     const s = addSections(base({ picked: new Set(["inw:11", "inw:12"]) }));
     expect(s.priorities[0]).toMatchObject({ allPicked: true, breakDown: false });

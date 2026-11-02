@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { capacityMinutes } from "./rules.ts";
-import { dayTotals, fitWords, planFit, trimCandidates } from "./fit.ts";
+import { blockFitWords, dayHeadline, dayTotals, fitWords, planFit, trimCandidates } from "./fit.ts";
 
 const SIZES = { S: 60, M: 120, L: 210 };
 const at = (hm: string) => `2026-11-02T${hm}:00-05:00`;
@@ -65,4 +65,20 @@ describe("trimCandidates", () => {
 describe("dayTotals", () => {
   it("reads work then free, in whole hours", () => expect(dayTotals([{ planned: 240, free: 210 }, { planned: 180, free: 165 }])).toBe("About 7 hours of work · about 6 hours free"));
   it("says nothing planned yet", () => expect(dayTotals([{ planned: 0, free: 120 }])).toBe("Nothing planned yet · about 2 hours free"));
+});
+
+describe("U4: a block's fit once, and the day's headline", () => {
+  it("over is amber in short hours; fits says the spare time, muted; never red", () => {
+    expect(blockFitWords({ kind: "over", by: 130 })).toEqual({ kind: "over", text: "About 2h over", tone: "watch" });
+    expect(blockFitWords({ kind: "over", by: 30 })).toMatchObject({ text: "A little over", tone: "watch" });
+    expect(blockFitWords({ kind: "over", by: 5 })).toMatchObject({ text: "Fits", tone: "neutral" });
+    expect(blockFitWords({ kind: "tight", spare: 30 })).toEqual({ kind: "room", text: "Fits · 30m spare", tone: "neutral" });
+    expect(blockFitWords({ kind: "fits", spare: 95 })).toMatchObject({ text: "Fits · 1h 30m spare" });
+    expect(blockFitWords({ kind: "fits", spare: 5 })).toMatchObject({ text: "Fits" });
+    expect(blockFitWords({ kind: "empty" }).text).toBe("");
+  });
+  it("the headline adds each block's overage; no over part when nothing is over", () => {
+    expect(dayHeadline([{ planned: 330, free: 210 }, { planned: 60, free: 90 }])).toEqual({ free: "about 5 hours free", over: "about 2 hours over" });
+    expect(dayHeadline([{ planned: 60, free: 90 }])).toEqual({ free: "about 2 hours free", over: null });
+  });
 });

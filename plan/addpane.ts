@@ -35,6 +35,9 @@ export type PriorityRow<R extends Ref = Ref> = {
   allPicked: boolean;
   /** Pinned to this block in Plan the week. */
   pinnedHere: boolean;
+  /** U4: "2 of 3 stories planned": its stories and drafts, and how many of them are on the day. */
+  total: number;
+  planned: number;
 };
 
 export type RestRow = { item: WorkItem; kids: WorkItem[] };
@@ -82,7 +85,7 @@ export function addSections<R extends Ref, F extends FollowLike>(i: AddInput<R, 
       const parent = e.feature.parentId ?? e.item?.parentId ?? null;
       if (parent !== null && listedFeatures.has(parent)) continue;
       if (e.item && (!isPickable(e.item) || !free(e.item))) continue;
-      priorities.push({ ref: e.feature, tier: e.tier, level: "story", item: e.item, stories: [], drafts: [], breakDown: false, allPicked: false, pinnedHere: e.placedHere });
+      priorities.push({ ref: e.feature, tier: e.tier, level: "story", item: e.item, stories: [], drafts: [], breakDown: false, allPicked: false, pinnedHere: e.placedHere, total: 0, planned: 0 });
       continue;
     }
     const allDrafts = draftsUnder(e.feature.itemId);
@@ -90,7 +93,9 @@ export function addSections<R extends Ref, F extends FollowLike>(i: AddInput<R, 
     const drafts = allDrafts.filter((d) => shown(`d${d.id}`));
     const breakDown = !!i.work && e.kids.length === 0 && allDrafts.length === 0;
     const left = stories.filter((x) => open(`i${i.clientKey}:${x.id}`)).length + drafts.filter((d) => open(`d${d.id}`)).length;
-    priorities.push({ ref: e.feature, tier: e.tier, level: "feature", item: e.item, stories, drafts, breakDown, allPicked: !breakDown && left === 0, pinnedHere: e.placedHere });
+    const total = e.kids.length + allDrafts.length;
+    const planned = e.kids.filter((x) => i.picked.has(`i${i.clientKey}:${x.id}`)).length + allDrafts.filter((d) => i.picked.has(`d${d.id}`)).length;
+    priorities.push({ ref: e.feature, tier: e.tier, level: "feature", item: e.item, stories, drafts, breakDown, allPicked: !breakDown && left === 0, pinnedHere: e.placedHere, total, planned });
   }
   const followUps = i.followUps.filter((f) => f.clientKey === i.clientKey && shown(`f${f.id}`));
   const pool = i.work ? [...i.work.items, ...i.work.children] : [];

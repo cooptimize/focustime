@@ -2,6 +2,8 @@
 // the day. Every other action (move, drop, timebox, open, Needs help from…) is in ⋯ and on right-click.
 // U2: density "today" is the same row on Today's Now, Check-in and Close out: no size chip, the title a link to
 // DevOps with its #id as the cue, "+ time" and ⋯ on hover only (always on the next pick), a badge and actions on the right.
+// U4: density "plan" is Plan the day's row: a drag handle, no checkbox (ticking is Today's job; a done pick shows a ✓
+// and is struck), the title, a due badge, the size chip always (planning is where sizes live), + time and ⋯ on hover.
 import { useContext, type DragEvent, type ReactNode } from "react";
 import { SIZES, type Pick, type Size } from "../plan/types.ts";
 import { focusLabel } from "../plan/focus.ts";
@@ -38,7 +40,7 @@ type Props = {
   tabIndex?: number;
   className?: string;
   /** U2: "today" for Today's Now, Check-in and Close out. U3: "week" for Week's cards (size, + time and ⋯ on hover). */
-  density?: "default" | "today" | "week";
+  density?: "default" | "today" | "week" | "plan";
   /** U2: the next pick: highlighted, its controls always shown. */
   next?: boolean;
   /** U2: on the right before the hover controls (a due badge, "45m focused", the fit word). */
@@ -50,8 +52,9 @@ type Props = {
 export function PickRow({ pick, toggle, link = false, canTick = true, timeEditable = true, hint = false, highlight = false, extra, readOnly = false, draggable = false, tabIndex, className = "", density = "default", next = false, badge, actions }: Props) {
   const today = density === "today";
   const week = density === "week";
+  const planD = density === "plan";
   const tbs = useTimeboxes();
-  const timed = week && !!tbs && tbs.settings.enabled && pickTime(pick.id, tbs.timeboxes).state !== "untimed";
+  const timed = (week || planD) && !!tbs && tbs.settings.enabled && pickTime(pick.id, tbs.timeboxes).state !== "untimed";
   const menu = useMenu((env) => pickMenu(env, pick));
   const { env } = useContext(MenuCtx);
   const focused = focusLabel(useFocused()(pick.id), pick.size);
@@ -69,8 +72,12 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
       </button>
     );
   return (
-    <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
+    <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${planD ? " dens-plan" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
+      {planD ? (
+        <span className="pr-handle" aria-hidden="true">{pick.status === "done" ? "✓" : "⋮⋮"}</span>
+      ) : (
       <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} disabled={!canTick || pick.status === "dropped"} onChange={(e) => toggle(pick.id, e.target.checked)} onClick={stop} onDoubleClick={stop} aria-label={`Done: ${pick.title}`} />
+      )}
       <span className="pr-title" title={pick.title}>
         {link && pick.itemUrl ? (
           <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} className={today ? "pr-link" : undefined} title={today ? `Open #${pick.itemId ?? ""} in DevOps` : undefined}>
@@ -88,6 +95,16 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
           {actions}
           <span className="pr-hover">
             <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
+            {menu.button(`More for ${pick.title}`)}
+          </span>
+        </>
+      ) : planD ? (
+        <>
+          {badge}
+          {timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}
+          {sizeChip}
+          <span className="pr-hover">
+            {!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}
             {menu.button(`More for ${pick.title}`)}
           </span>
         </>

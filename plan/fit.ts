@@ -85,3 +85,30 @@ export function dayTotals(blocks: readonly { planned: number; free: number }[]):
   const cap = (t: string) => `${t[0]!.toUpperCase()}${t.slice(1)}`;
   return work ? `${cap(aboutHours(work))} of work · ${aboutHours(free)} free` : `Nothing planned yet · ${aboutHours(free)} free`;
 }
+
+/** Whole hours in short form for a card's fit (U4): "2h", or "1h 30m" under 2 hours; quarter hours only. */
+function shortHours(minutes: number): string {
+  const q = Math.max(15, Math.round(minutes / 15) * 15);
+  return q >= 120 ? `${Math.round(q / 60)}h` : hm(q);
+}
+
+/**
+ * A Plan the day block's fit, said once on the right of its header (U4): "About 2h over" (amber, with Trim) or
+ * "Fits · 30m spare" (muted). Never red. Nothing for an empty block.
+ */
+export function blockFitWords(f: Fit | null): FitWords {
+  if (!f || f.kind === "empty") return { kind: "none", text: "", tone: "neutral" };
+  if (f.kind === "over" && f.by > OVER_GRACE) return { kind: "over", text: f.by < 45 ? "A little over" : `About ${shortHours(f.by)} over`, tone: "watch" };
+  const spare = f.kind === "over" ? 0 : f.spare;
+  return { kind: spare >= ROOM_FROM ? "room" : "fits", text: spare >= 15 ? `Fits · ${shortHours(spare)} spare` : "Fits", tone: "neutral" };
+}
+
+/**
+ * Plan the day's header line (U4): "about 5 hours free" and, only when some block is over, "about 2 hours over"
+ * (the amber part): the sum of each block's overage, so it agrees with the block fit words.
+ */
+export function dayHeadline(blocks: readonly { planned: number; free: number }[]): { free: string; over: string | null } {
+  const free = blocks.reduce((s, b) => s + b.free, 0);
+  const over = blocks.reduce((s, b) => s + (b.planned - b.free > OVER_GRACE ? b.planned - b.free : 0), 0);
+  return { free: `${aboutHours(free)} free`, over: over > 0 ? `${aboutHours(over)} over` : null };
+}

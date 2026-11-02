@@ -39,6 +39,11 @@ export function slotRange(slot: Slot, tz: string): string {
   return formatRange(toZoned(slot.start, tz), toZoned(slot.end, tz));
 }
 
+/** "9:00–12:30": a block's range without AM and PM (U3 Week cards, U4 Plan the day blocks). */
+export function shortRange(slot: Pick<Slot, "start" | "end">, tz: string): string {
+  return `${startClock(slot.start, tz)}–${startClock(slot.end, tz)}`;
+}
+
 export const halfName = (h: Half) => (h === "AM" ? "Morning" : h === "PM" ? "Afternoon" : "Evening");
 /** The short tag on a card: AM, PM or EVE shown as "Eve". */
 export const halfTag = (h: Half) => (h === "EVE" ? "Eve" : h);
