@@ -18,7 +18,7 @@ const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
   .replace("https://cooptimize.crm.dynamics.com", dvConfig.environmentUrl);
 
 const MON = "2026-11-02";
-const item = (over: Partial<WorkItem> = {}): WorkItem => ({ id: 101, title: "Export report", type: "User Story", state: "Active", stateCategory: "InProgress", level: "story", order: 1, parentId: null, changedAt: "2026-11-01T12:00:00Z", url: "https://dev.azure.com/cscsteel/P/_workitems/edit/101", tags: [], blocked: false, ...over });
+const item = (over: Partial<WorkItem> = {}): WorkItem => ({ id: 101, title: "Export report", type: "User Story", state: "Active", stateCategory: "InProgress", level: "story", order: 1, parentId: null, changedAt: "2026-11-01T12:00:00Z", url: "https://dev.azure.com/contoso/P/_workitems/edit/101", tags: [], blocked: false, ...over });
 const csc = (items: WorkItem[], watched: WorkItem[] = []): ClientWork => ({ clientKey: "CSC", clientName: "CSC", status: "ok", fetchedAt: "x", fromCache: false, items, children: [], watched });
 
 function setup(start = "2026-11-02T15:00:00Z") {
@@ -37,7 +37,7 @@ function setup(start = "2026-11-02T15:00:00Z") {
       return next;
     },
     lookup: (k: string, id: number) => last.find((w) => w.clientKey === k)?.items.find((i) => i.id === id) ?? null,
-    orgOf: () => "cscsteel",
+    orgOf: () => "contoso",
     last: (k: string) => last.find((w) => w.clientKey === k) ?? null,
   } as unknown as DevOpsSource;
   const c: ActionContext = {

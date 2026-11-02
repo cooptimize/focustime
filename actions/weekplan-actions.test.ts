@@ -26,7 +26,7 @@ function setup() {
   const dir = mkdtempSync(join(tmpdir(), "c-week-"));
   const dv = fakeFetch("ok");
   // CSC's DevOps org gets the Plan the week scenario: features of mine, parents of my stories, an epic.
-  const ado = fakeDevOps({ cscsteel: "planweek", cooptimize: "agile" });
+  const ado = fakeDevOps({ contoso: "planweek", cooptimize: "agile" });
   const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, cacheDir: dir, log: () => {} });
   const devops = new Map<string, ReturnType<typeof createDevOpsSource>>();
   const plan = createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(clock).toZonedDateTimeISO("America/New_York") });

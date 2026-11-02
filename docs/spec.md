@@ -510,7 +510,7 @@ Step 14 additive contract changes found during UI wiring: `capture.load` returns
 
 ### Step 14 live verification (Nov 1, Cooptimize org only, each write approved in chat)
 
-- Identity: write PAT saved by Tanner in Settings; `connectionData` (no api-version) answered the identity live: Tanner Spaulding, tanner.spaulding@cooptimize.org, org cooptimize.
+- Identity: write PAT saved by Tanner in Settings; `connectionData` (no api-version) answered the identity live: my name and work address, org cooptimize.
 - Baseline #437: rev 1, New, parent #291, no children.
 - 1 create: #495 "[Coopilot test] safe to remove", User Story, New, under #437, assigned to me, area and iteration from #437. Confirmed. #437 gained only the Hierarchy-Forward link and kept rev 1 (DevOps doesn't add a parent revision; the fake does, harmless).
 - 2 comment (7.1-preview.4): confirmed, id 23514739. A comment moves the item's rev (1 to 2).

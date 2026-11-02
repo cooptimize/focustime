@@ -113,7 +113,7 @@ describe("write identity", () => {
   beforeEach(() => (s = setup()));
   it("checks the PAT with a read-only call and keeps it only when it is my identity for that client", async () => {
     const r = await s.enable() as { write: { name: string; email: string } };
-    expect(r.write).toMatchObject({ name: "Tanner Spaulding", email: "tanner@cooptimize.example" });
+    expect(r.write).toMatchObject({ name: "Sam Tester", email: "tanner@cooptimize.example" });
     expect(s.keyring.get(COOP)).toBe(WRITE_PAT);
     expect(s.dv.seen.map((x) => `${x.method} ${new URL(x.url).pathname}`)).toEqual(["GET /cooptimize/_apis/connectionData"]);
     expect(JSON.stringify(r)).not.toContain(WRITE_PAT);
@@ -168,7 +168,7 @@ describe("each write", () => {
   });
   it("state: preview names org, project, item, before and after, identity and visibility; confirm sends the rev test and reads back", async () => {
     const p = await s.preview({ kind: "state", itemId: 500, state: "Closed", comment: "Shipped" });
-    expect(p).toMatchObject({ system: "DevOps", org: "cooptimize", project: "Cooptimize Project", item: "#500 Import mapping", identity: "Tanner Spaulding <tanner@cooptimize.example>" });
+    expect(p).toMatchObject({ system: "DevOps", org: "cooptimize", project: "Cooptimize Project", item: "#500 Import mapping", identity: "Sam Tester <tanner@cooptimize.example>" });
     expect(p.fields).toContainEqual({ label: "State", before: "Active", after: "Closed", changed: true });
     expect(p.visibility).toContain("Visible to everyone");
     expect(s.dv.writes()).toHaveLength(0);

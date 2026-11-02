@@ -22,7 +22,7 @@ const NOW = "2026-11-05T19:30:00Z"; // Thu Nov 5, 2:30 PM New York
 function setup(o: { offline?: boolean } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "c-cap-"));
   const dv = fakeFetch(o.offline ? "token_network_down" : "ok");
-  const ado = fakeDevOps({ cscsteel: o.offline ? "offline" : "planweek", cooptimize: o.offline ? "offline" : "agile" });
+  const ado = fakeDevOps({ contoso: o.offline ? "offline" : "planweek", cooptimize: o.offline ? "offline" : "agile" });
   const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, cacheDir: dir, log: () => {} });
   let devops: ReturnType<typeof createDevOpsSource> | null = null;
   const plan = createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });

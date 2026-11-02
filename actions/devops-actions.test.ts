@@ -15,7 +15,7 @@ const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
   .replace('my_systemuserid = ""', `my_systemuserid = "${dvConfig.mySystemUserId}"`)
   .replace("https://cooptimize.crm.dynamics.com", dvConfig.environmentUrl);
 
-function ctx(orgs: Record<string, OrgScenario> = { cscsteel: "agile" }, opts: { devopsThrows?: boolean; text?: string } = {}) {
+function ctx(orgs: Record<string, OrgScenario> = { contoso: "agile" }, opts: { devopsThrows?: boolean; text?: string } = {}) {
   const cacheDir = mkdtempSync(join(tmpdir(), "c-"));
   const dv = fakeFetch("ok");
   const dvFetch = dv.fetch;
@@ -55,7 +55,7 @@ describe("week.load with DevOps", () => {
   });
 
   it("a client that isn't followed gets no PAT read and no DevOps call (step 6d)", async () => {
-    const { c, ado, dv } = ctx({ cscsteel: "agile", cooptimize: "agile", hme: "agile" });
+    const { c, ado, dv } = ctx({ contoso: "agile", cooptimize: "agile", hme: "agile" });
     const d = await load(c);
     expect(d.devops!.some((x) => x.clientKey === "HM Electronics")).toBe(false);
     expect(ado.calls.some((x) => x.url.includes("dev.azure.com/hme/"))).toBe(false);
@@ -69,7 +69,7 @@ describe("week.load with DevOps", () => {
 
   it("Keep following brings a client back", async () => {
     const kept = text.replace('"W&C" = "#1f9e8f"', '"W&C" = "#1f9e8f"\n"HM Electronics" = { follow = true }');
-    const { c, ado } = ctx({ cscsteel: "agile", cooptimize: "agile", hme: "agile" }, { text: kept });
+    const { c, ado } = ctx({ contoso: "agile", cooptimize: "agile", hme: "agile" }, { text: kept });
     const d = await load(c);
     expect(d.devops!.map((x) => x.clientKey)).toContain("HM Electronics");
     expect(d.planClients.map((x) => x.clientKey)).toContain("HM Electronics");
@@ -89,7 +89,7 @@ describe("week.load with DevOps", () => {
   });
 
   it("the response never contains a PAT or the Authorization header", async () => {
-    const { c } = ctx({ cscsteel: "pat_expired" });
+    const { c } = ctx({ contoso: "pat_expired" });
     const body = JSON.stringify(await dispatch(c, { action: "week.load", input: { weekStart: "2026-11-02" } }));
     for (const s of [FAKE_PAT_CSC, FAKE_PAT_WC, "FAKE-DV-PAT", "Basic "]) expect(body).not.toContain(s);
   });

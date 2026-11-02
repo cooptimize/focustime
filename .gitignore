@@ -4,3 +4,30 @@ screenshots/
 coopilot-kickoff/
 coopilot-kickoff.zip
 *.log
+
+# Local data and output: never commit (real plans, calendars and screenshots)
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.bak
+*.bak-*
+demo-mode
+coopilot-footage*/
+footage/
+scratch/
+test-results/
+playwright-report/
+# docs/demo/ screenshots are demo data and committed on purpose; other screenshots stay local
+*.webm
+
+# Local config and secrets
+config.toml
+.env
+.env.*
+*.pem
+*.key
+
+# Caches (the cache/ source folder is code and stays tracked)
+.cache/
+.vite/

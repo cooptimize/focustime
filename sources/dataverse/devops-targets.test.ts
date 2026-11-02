@@ -28,11 +28,11 @@ describe("Dataverse → DevOps settings", () => {
     if (!r.ok) return;
     const csc = r.targets.find((t) => t.clientKey === "CSC")!;
     // The project name is used even when an ID is stored: real stored IDs can be stale.
-    expect(csc).toMatchObject({ accountId: ACCT.csc, org: "cscsteel", project: "Project Ada", projectName: "Project Ada", email: "t.spaulding@cscsteel.example" });
+    expect(csc).toMatchObject({ accountId: ACCT.csc, org: "contoso", project: "Project Ada", projectName: "Project Ada", email: "me@contoso.example" });
     expect(csc.pat).toBeInstanceOf(Pat);
     expect(csc.pat!.basicAuth()).toBe(`Basic ${Buffer.from(`:${FAKE_PAT_CSC}`).toString("base64")}`);
     // A blank DevOps email stays null (never guessed).
-    expect(r.targets.find((t) => t.clientKey === "W&C")).toMatchObject({ project: "Woodard Curran", email: null });
+    expect(r.targets.find((t) => t.clientKey === "W&C")).toMatchObject({ project: "WC Project", email: null });
     // HME has an Account Worker but no block this week: not returned.
     expect(r.targets.map((t) => t.clientKey).sort()).toEqual(["CSC", "W&C"]);
 
@@ -90,7 +90,7 @@ describe("my clients for Open half-days (Q21)", () => {
     const src = createDataverseSource({ config: dvConfig, timeZone: "America/New_York", getSecret: async () => FAKE_SECRET, fetch, cacheDir: mkdtempSync(join(tmpdir(), "c-")), log: () => {} });
     const mine = await src.myClients();
     expect(mine).toEqual([
-      { clientKey: "CSC", clientName: "CSC", devops: true, devopsEmail: "t.spaulding@cscsteel.example" },
+      { clientKey: "CSC", clientName: "CSC", devops: true, devopsEmail: "me@contoso.example" },
       { clientKey: "HM Electronics", clientName: "HM Electronics", devops: true, devopsEmail: "c.someone@hme.example" },
       { clientKey: "W&C", clientName: "W&C", devops: true, devopsEmail: null },
     ]);

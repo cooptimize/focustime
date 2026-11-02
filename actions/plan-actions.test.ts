@@ -23,7 +23,7 @@ function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string
   let clock = NOW;
   const dir = mkdtempSync(join(tmpdir(), "c-plan-"));
   const dv = fakeFetch("ok", { pto: opts.pto ?? "ok" });
-  const ado = fakeDevOps({ cscsteel: "portfolio", cooptimize: "agile" });
+  const ado = fakeDevOps({ contoso: "portfolio", cooptimize: "agile" });
   const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, cacheDir: dir, log: () => {} });
   const devopsByKey = new Map<string, ReturnType<typeof createDevOpsSource>>();
   const plan = createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });

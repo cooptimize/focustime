@@ -50,36 +50,36 @@ describe("Edge profiles from Local State", () => {
 describe("work item link validation", () => {
   const ok = (url: string, org: string | null) => checkDevOpsUrl(url, org);
   it("accepts a link in the client's own organization, any case", () => {
-    expect(ok("https://dev.azure.com/cscsteelusa/Project%20Ada/_workitems/edit/101", "cscsteelusa")).toEqual({ ok: true, url: "https://dev.azure.com/cscsteelusa/Project%20Ada/_workitems/edit/101" });
-    expect(ok("https://dev.azure.com/WC-ERP/x/_workitems/edit/1", "wc-erp").ok).toBe(true);
+    expect(ok("https://dev.azure.com/contoso/Project%20Ada/_workitems/edit/101", "contoso")).toEqual({ ok: true, url: "https://dev.azure.com/contoso/Project%20Ada/_workitems/edit/101" });
+    expect(ok("https://dev.azure.com/Fabrikam-ERP/x/_workitems/edit/1", "fabrikam-erp").ok).toBe(true);
   });
   it("refuses another client's organization", () => {
-    expect(ok("https://dev.azure.com/cooptimize/Internal/_workitems/edit/5", "cscsteelusa")).toMatchObject({ ok: false, error: "That link is not in this client's DevOps organization" });
-    expect(ok("https://dev.azure.com/cscsteelusa-other/x", "cscsteelusa").ok).toBe(false);
+    expect(ok("https://dev.azure.com/cooptimize/Internal/_workitems/edit/5", "contoso")).toMatchObject({ ok: false, error: "That link is not in this client's DevOps organization" });
+    expect(ok("https://dev.azure.com/contoso-other/x", "contoso").ok).toBe(false);
   });
   it("refuses anything that is not dev.azure.com over https", () => {
     for (const url of [
-      "http://dev.azure.com/cscsteelusa/x",
-      "https://dev.azure.com.evil.example/cscsteelusa/x",
-      "https://evil.example/https://dev.azure.com/cscsteelusa/x",
-      "https://user:pw@dev.azure.com/cscsteelusa/x",
-      "https://dev.azure.com:8443/cscsteelusa/x",
+      "http://dev.azure.com/contoso/x",
+      "https://dev.azure.com.evil.example/contoso/x",
+      "https://evil.example/https://dev.azure.com/contoso/x",
+      "https://user:pw@dev.azure.com/contoso/x",
+      "https://dev.azure.com:8443/contoso/x",
       "file:///etc/passwd",
       "javascript:alert(1)",
       "--profile-directory=Default",
       "not a url",
     ])
-      expect(ok(url, "cscsteelusa").ok, url).toBe(false);
-    expect(checkDevOpsUrl(42, "cscsteelusa").ok).toBe(false);
+      expect(ok(url, "contoso").ok, url).toBe(false);
+    expect(checkDevOpsUrl(42, "contoso").ok).toBe(false);
   });
   it("refuses when the client's organization is not known", () => {
-    expect(ok("https://dev.azure.com/cscsteelusa/x", null)).toMatchObject({ ok: false, error: expect.stringMatching(/not known yet/) });
+    expect(ok("https://dev.azure.com/contoso/x", null)).toMatchObject({ ok: false, error: expect.stringMatching(/not known yet/) });
   });
 });
 
 describe("launch arguments", () => {
   const native: EdgeConfig = { command: ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"], profiles: { CSC: "Profile 3", Cooptimize: "Default" }, fallbackCommand: ["omarchy-launch-browser"] };
-  const url = "https://dev.azure.com/cscsteelusa/P/_workitems/edit/1";
+  const url = "https://dev.azure.com/contoso/P/_workitems/edit/1";
   it("a mapped client: the Edge command, its profile directory as one argument, then the link", () => {
     expect(launchPlan(native, "CSC", "CSC", url)).toEqual({ argv: ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable", "--profile-directory=Profile 3", url], profile: "Profile 3", notice: null });
   });

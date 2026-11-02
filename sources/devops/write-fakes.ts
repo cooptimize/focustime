@@ -37,7 +37,7 @@ const FIELDS = [
 export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string, { id: string; name: string; email: string }>; acceptance?: boolean; now?: () => string } = {}) {
   const clock = opts.now ?? (() => new Date().toISOString());
   const org = opts.org ?? "cooptimize";
-  const identities = opts.identities ?? { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Tanner Spaulding", email: "tanner@cooptimize.example" }, [basic(OTHER_PAT)]: { id: "22222222-2222-4222-8222-222222222222", name: "Dana Ruiz", email: "dana@cooptimize.example" } };
+  const identities = opts.identities ?? { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "tanner@cooptimize.example" }, [basic(OTHER_PAT)]: { id: "22222222-2222-4222-8222-222222222222", name: "Dana Ruiz", email: "dana@cooptimize.example" } };
   const items = new Map<number, FakeItem>();
   const comments = new Map<number, FakeComment[]>();
   const seen: Seen[] = [];

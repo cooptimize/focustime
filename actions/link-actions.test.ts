@@ -25,7 +25,7 @@ const text =
 function setup(opts: { launchFails?: boolean; noLaunch?: boolean } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "c-link-"));
   const dv = fakeFetch("ok");
-  const ado = fakeDevOps({ cscsteel: "portfolio", cooptimize: "agile" });
+  const ado = fakeDevOps({ contoso: "portfolio", cooptimize: "agile" });
   const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, cacheDir: dir, log: () => {} });
   let devops: ReturnType<typeof createDevOpsSource> | undefined;
   const launched: string[][] = [];
@@ -44,7 +44,7 @@ function setup(opts: { launchFails?: boolean; noLaunch?: boolean } = {}) {
   return { c, open, launched, ado };
 }
 
-const CSC_URL = "https://dev.azure.com/cscsteel/Project%20Ada/_workitems/edit/101";
+const CSC_URL = "https://dev.azure.com/contoso/Project%20Ada/_workitems/edit/101";
 
 describe("link.open", () => {
   it("opens a client's work item in that client's Edge profile, as an argument array", async () => {
@@ -59,7 +59,7 @@ describe("link.open", () => {
     await dispatch(t.c, { action: "week.load", input: { weekStart: "2026-11-02" } });
     const crossClient = await t.open({ clientKey: "CSC", url: "https://dev.azure.com/cooptimize/Internal/_workitems/edit/5" });
     expect(crossClient).toMatchObject({ ok: false, status: 422, error: "That link is not in this client's DevOps organization" });
-    expect(await t.open({ clientKey: "CSC", url: "https://evil.example/cscsteel/x" })).toMatchObject({ ok: false, status: 422 });
+    expect(await t.open({ clientKey: "CSC", url: "https://evil.example/contoso/x" })).toMatchObject({ ok: false, status: 422 });
     expect(await t.open({ clientKey: "CSC", url: "file:///etc/passwd" })).toMatchObject({ ok: false, status: 422 });
     expect(t.launched).toEqual([]);
   });
@@ -68,9 +68,9 @@ describe("link.open", () => {
     const t = setup();
     await dispatch(t.c, { action: "week.load", input: { weekStart: "2026-11-02" } });
     // W&C's organization is known from Dataverse even though its DevOps identity is missing.
-    const r = await t.open({ clientKey: "W&C", url: "https://dev.azure.com/cooptimize/Woodard%20Curran/_workitems/edit/7" });
+    const r = await t.open({ clientKey: "W&C", url: "https://dev.azure.com/cooptimize/WC%20Project/_workitems/edit/7" });
     expect(r).toEqual({ ok: true, data: { opened: "default", notice: "No Edge profile set for W&C" } });
-    expect(t.launched).toEqual([["omarchy-launch-browser", "https://dev.azure.com/cooptimize/Woodard%20Curran/_workitems/edit/7"]]);
+    expect(t.launched).toEqual([["omarchy-launch-browser", "https://dev.azure.com/cooptimize/WC%20Project/_workitems/edit/7"]]);
   });
 
   it("before the client's DevOps settings are loaded, nothing is opened", async () => {

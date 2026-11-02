@@ -113,6 +113,8 @@ Run: `coopilot-open` (starts the service if needed, then opens or focuses the wi
 - Verify current official docs before version-specific integration code.
 - Record decisions in `docs/decisions.md` and open questions in `docs/open-questions.md` as they come up.
 - Plain language in UI copy. No em dashes.
+- Commit and push to `origin` (the private GitHub repo `coopilot`) after each completed step.
+- Never commit secrets (PATs, client secrets, tokens, Authorization headers, keyring values) or real personal or client data (real names, emails, client DevOps orgs or projects, work item titles, calendar subjects, screenshots of real data). Tests and fixtures use fakes (`@example` addresses, `contoso`/`fabrikam` orgs); screenshots in the repo come from demo mode only. Local stores, backups, footage and config stay out of git (`.gitignore`).
 
 ## Completion report per increment
 

@@ -41,7 +41,7 @@ const ids = (c: ClientWork) => c.items.map((i) => i.id);
 
 describe("items read by id for open follow-ups (step 7)", () => {
   it("reads only watched ids that aren't among my open items, completed ones kept, with the same fields", async () => {
-    const s = setup({ cscsteel: "agile" }, [target("CSC", "cscsteel")]);
+    const s = setup({ contoso: "agile" }, [target("CSC", "contoso")]);
     const r = await s.src.load([ref("CSC")], { watch: { CSC: [104, 101] } });
     const batches = s.calls.filter((c) => c.url.includes("workitemsbatch")).map((c) => JSON.parse(c.body!) as { ids: number[]; fields: string[] });
     expect(batches.at(-1)).toEqual({ ids: [104], fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "System.ChangedBy", "Microsoft.VSTS.Common.StackRank"], errorPolicy: "omit" });
@@ -49,7 +49,7 @@ describe("items read by id for open follow-ups (step 7)", () => {
     expect(ids(byKey(r, "CSC"))).not.toContain(104);
   });
   it("makes no extra call when nothing is watched", async () => {
-    const s = setup({ cscsteel: "agile" }, [target("CSC", "cscsteel")]);
+    const s = setup({ contoso: "agile" }, [target("CSC", "contoso")]);
     const r = await s.src.load([ref("CSC")]);
     expect(s.calls.filter((c) => c.url.includes("workitemsbatch"))).toHaveLength(1);
     expect(byKey(r, "CSC").watched).toEqual([]);
@@ -58,14 +58,14 @@ describe("items read by id for open follow-ups (step 7)", () => {
 
 describe("DevOps work items per client", () => {
   it("fetches each client from its own org with its own PAT and shows items in board order", async () => {
-    const s = setup({ cscsteel: "agile", jcerp: "scrum" }, [target("CSC", "cscsteel"), target("Quiddity", "jcerp")]);
+    const s = setup({ contoso: "agile", fabrikam: "scrum" }, [target("CSC", "contoso"), target("Quiddity", "fabrikam")]);
     const r = await s.src.load([ref("CSC"), ref("Quiddity")]);
     expect(byKey(r, "CSC")).toMatchObject({ status: "ok", fromCache: false, fetchedAt: "2026-11-02T08:02:00-05:00" });
     expect(ids(byKey(r, "CSC"))).toEqual([102, 101, 105, 103]);
     expect(ids(byKey(r, "Quiddity"))).toEqual([202, 201]);
     for (const c of s.calls) {
       const org = new URL(c.url).pathname.split("/")[1];
-      const expected = org === "cscsteel" ? fakePat("CSC") : fakePat("Quiddity");
+      const expected = org === "contoso" ? fakePat("CSC") : fakePat("Quiddity");
       expect(c.authorization).toBe(`Basic ${Buffer.from(`:${expected}`).toString("base64")}`);
       expect(c.url).toMatch(/api-version=7\.1/);
       expect(c.redirect).toBe("manual");
@@ -73,22 +73,22 @@ describe("DevOps work items per client", () => {
   });
 
   it("asks WIQL for me (the client's DevOps email), and the batch for only the fields used", async () => {
-    const s = setup({ cscsteel: "agile" }, [target("CSC", "cscsteel", { email: "t.spaulding@cscsteelusa.com", project: "11111111-2222-4333-8444-555555555555", projectName: "Project Ada" })]);
+    const s = setup({ contoso: "agile" }, [target("CSC", "contoso", { email: "me@contoso.example", project: "11111111-2222-4333-8444-555555555555", projectName: "Project Ada" })]);
     const r = await s.src.load([ref("CSC")]);
     const wiql = s.calls.find((c) => c.url.includes("/_apis/wit/wiql"))!;
-    expect(wiql.url).toContain("https://dev.azure.com/cscsteel/11111111-2222-4333-8444-555555555555/_apis/wit/wiql?$top=1000&api-version=7.1");
-    expect(JSON.parse(wiql.body!).query).toContain("[System.AssignedTo] = 't.spaulding@cscsteelusa.com'");
+    expect(wiql.url).toContain("https://dev.azure.com/contoso/11111111-2222-4333-8444-555555555555/_apis/wit/wiql?$top=1000&api-version=7.1");
+    expect(JSON.parse(wiql.body!).query).toContain("[System.AssignedTo] = 'me@contoso.example'");
     const batch = s.calls.find((c) => c.url.includes("workitemsbatch"))!;
     expect(JSON.parse(batch.body!)).toEqual({
       ids: [101, 102, 103, 104, 105],
       fields: ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.Parent", "System.ChangedDate", "System.Tags", "System.ChangedBy", "Microsoft.VSTS.Common.StackRank"],
       errorPolicy: "omit",
     });
-    expect(byKey(r, "CSC").items[0]!.url).toBe("https://dev.azure.com/cscsteel/Project%20Ada/_workitems/edit/102");
+    expect(byKey(r, "CSC").items[0]!.url).toBe("https://dev.azure.com/contoso/Project%20Ada/_workitems/edit/102");
   });
 
   it("reads states per type when the types list has none (Scrum fixture)", async () => {
-    const s = setup({ jcerp: "scrum" }, [target("Quiddity", "jcerp")]);
+    const s = setup({ fabrikam: "scrum" }, [target("Quiddity", "fabrikam")]);
     await s.src.load([ref("Quiddity")]);
     expect(s.calls.filter((c) => c.url.includes("/states?")).map((c) => decodeURIComponent(new URL(c.url).pathname.split("/").at(-2)!))).toEqual(["Product Backlog Item", "Task"]);
   });
@@ -103,7 +103,7 @@ describe("DevOps work items per client", () => {
 
 describe("client isolation", () => {
   it("one client failing leaves the others live and intact", async () => {
-    const s = setup({ cscsteel: "agile", jcerp: "pat_expired", coop: "scrum" }, [target("CSC", "cscsteel"), target("Quiddity", "jcerp"), target("Cooptimize", "coop")]);
+    const s = setup({ contoso: "agile", fabrikam: "pat_expired", coop: "scrum" }, [target("CSC", "contoso"), target("Quiddity", "fabrikam"), target("Cooptimize", "coop")]);
     const r = await s.src.load([ref("CSC"), ref("Quiddity"), ref("Cooptimize")]);
     expect(byKey(r, "CSC").status).toBe("ok");
     expect(byKey(r, "Cooptimize").status).toBe("ok");
@@ -113,9 +113,9 @@ describe("client isolation", () => {
   });
 
   it("items never cross clients, even when two clients share an org", async () => {
-    const s = setup({ cooptimize: "agile" }, [target("W&C", "cooptimize", { project: "Woodard Curran", projectName: "Woodard Curran" }), target("Cooptimize", "cooptimize", { project: "Cooptimize Internal", projectName: "Cooptimize Internal" })]);
+    const s = setup({ cooptimize: "agile" }, [target("W&C", "cooptimize", { project: "WC Project", projectName: "WC Project" }), target("Cooptimize", "cooptimize", { project: "Cooptimize Internal", projectName: "Cooptimize Internal" })]);
     const r = await s.src.load([ref("W&C"), ref("Cooptimize")]);
-    expect(byKey(r, "W&C").items.every((i) => i.url.includes("/Woodard%20Curran/"))).toBe(true);
+    expect(byKey(r, "W&C").items.every((i) => i.url.includes("/WC%20Project/"))).toBe(true);
     expect(byKey(r, "Cooptimize").items.every((i) => i.url.includes("/Cooptimize%20Internal/"))).toBe(true);
     expect(r.map((c) => c.clientKey)).toEqual(["W&C", "Cooptimize"]);
   });
@@ -324,7 +324,7 @@ describe("cache keys", () => {
 
 describe("story level: children of epics and features (step 5)", () => {
   it("levels come from the process backlog categories, and portfolio items bring their open children two levels down", async () => {
-    const s = setup({ cscsteel: "portfolio" }, [target("CSC", "cscsteel")]);
+    const s = setup({ contoso: "portfolio" }, [target("CSC", "contoso")]);
     const [csc] = await s.src.load([ref("CSC")]);
     expect(csc!.status).toBe("ok");
     const level = Object.fromEntries([...csc!.items, ...csc!.children].map((i) => [i.id, i.level]));
@@ -334,7 +334,7 @@ describe("story level: children of epics and features (step 5)", () => {
   });
 
   it("children are read with WIQL and the batch call only (no write endpoints), and the parent filter replaces the assignee", async () => {
-    const s = setup({ cscsteel: "portfolio" }, [target("CSC", "cscsteel")]);
+    const s = setup({ contoso: "portfolio" }, [target("CSC", "contoso")]);
     await s.src.load([ref("CSC")]);
     for (const c of s.calls) {
       if (c.method === "POST") expect(c.url).toMatch(/\/_apis\/wit\/(wiql|workitemsbatch)\?/);
@@ -348,7 +348,7 @@ describe("story level: children of epics and features (step 5)", () => {
   });
 
   it("lookup finds my items and children for the right client only", async () => {
-    const s = setup({ cscsteel: "portfolio", cooptimize: "agile" }, [target("CSC", "cscsteel"), target("Cooptimize", "cooptimize")]);
+    const s = setup({ contoso: "portfolio", cooptimize: "agile" }, [target("CSC", "contoso"), target("Cooptimize", "cooptimize")]);
     await s.src.load([ref("CSC"), ref("Cooptimize")]);
     expect(s.src.lookup("CSC", 122)?.title).toBe("Story two levels down");
     expect(s.src.lookup("Cooptimize", 122)).toBeNull();
@@ -357,8 +357,8 @@ describe("story level: children of epics and features (step 5)", () => {
 
   it("children are cached with the items and come back on failure", async () => {
     const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-devops-"));
-    await setup({ cscsteel: "portfolio" }, [target("CSC", "cscsteel")], { cacheDir }).src.load([ref("CSC")]);
-    const [csc] = await setup({ cscsteel: "offline" }, [target("CSC", "cscsteel")], { cacheDir }).src.load([ref("CSC")]);
+    await setup({ contoso: "portfolio" }, [target("CSC", "contoso")], { cacheDir }).src.load([ref("CSC")]);
+    const [csc] = await setup({ contoso: "offline" }, [target("CSC", "contoso")], { cacheDir }).src.load([ref("CSC")]);
     expect(csc!.fromCache).toBe(true);
     expect(csc!.children.map((c) => c.id).sort()).toEqual([111, 112, 121, 122]);
   });
@@ -366,7 +366,7 @@ describe("story level: children of epics and features (step 5)", () => {
 
 describe("pickable portfolio types from config (Q20)", () => {
   it("a listed portfolio type is pickable and is not opened into children", async () => {
-    const s = setup({ cscsteel: "portfolio" }, [target("CSC", "cscsteel")], { pickableTypes: ["feature"] });
+    const s = setup({ contoso: "portfolio" }, [target("CSC", "contoso")], { pickableTypes: ["feature"] });
     const [csc] = await s.src.load([ref("CSC")]);
     const level = Object.fromEntries(csc!.items.map((i) => [i.id, i.level]));
     expect(level).toMatchObject({ 110: "story", 130: "story", 120: "portfolio" });
