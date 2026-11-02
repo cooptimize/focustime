@@ -28,6 +28,9 @@ import { createDevOpsSource, type DevOpsSource } from "../sources/devops/source.
 import type { Keyring } from "../sources/oauth/oauth.ts";
 import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
 import { createApp } from "./app.ts";
+import { createDemoContext, seedDemo, type DemoControl } from "./demo.ts";
+import type { ActionContext } from "../actions/dispatch.ts";
+import { existsSync } from "node:fs";
 import { calendarRefreshDue, checkTimer, notifyWithActions, playEndSound } from "./timer.ts";
 import { refreshTodayWarnings } from "../actions/warnings.ts";
 import { TIMER_KEY, timerAction, timerLike } from "../actions/timer-actions.ts";
@@ -127,6 +130,31 @@ if (dev) {
 /** Media control for focus (step 10): playerctl when installed, playlist links through xdg-open. */
 const media = mediaControl();
 
+// Demo mode (step 15, D272): a flag file next to the plan store; the demo context is built (and seeded) on demand.
+const demoFlag = join(dirname(planDbPath()), "demo-mode");
+let demoCtx: ActionContext | null = null;
+const demoControl = (on: boolean): DemoControl => ({ on, set: async (v) => setDemo(v) });
+async function setDemo(on: boolean): Promise<void> {
+  if (on) {
+    if (!demoCtx) {
+      const ctx = createDemoContext({ now: () => instantNow().toString(), demo: demoControl(true) });
+      await seedDemo(ctx);
+      demoCtx = ctx;
+    }
+    await mkdir(dirname(demoFlag), { recursive: true, mode: 0o700 });
+    await writeFile(demoFlag, "on\n", { mode: 0o600 });
+    log({ source: "plan", op: "demo", kind: "on" });
+  } else {
+    await rm(demoFlag, { force: true });
+    demoCtx?.plan?.close();
+    demoCtx = null;
+    log({ source: "plan", op: "demo", kind: "off" });
+  }
+}
+if (existsSync(demoFlag)) await setDemo(true).catch(() => log({ source: "plan", op: "demo", kind: "failed" }));
+/** The plan store the timer ticks on: the demo one while demo mode is on. */
+const activePlan = () => demoCtx?.plan ?? plan;
+
 const server = createApp({
   port,
   token,
@@ -134,7 +162,10 @@ const server = createApp({
   // COOPILOT_DIST: a verification build elsewhere, so checking work never swaps the UI the service serves.
   ...(devMiddleware ? { devMiddleware } : { distDir: process.env.COOPILOT_DIST ?? join(root, "dist") }),
   takeOpenRequest: () => takeOpenRequest(runtimeDir),
-  ctx: {
+  ctx: () => demoCtx ?? liveCtx,
+});
+const liveCtx: ActionContext = {
+    demo: demoControl(false),
     loadConfig,
     makeDataverse,
     makeOutlook,
@@ -168,8 +199,7 @@ const server = createApp({
       await chmod(out, 0o600);
       return out;
     },
-  },
-});
+};
 
 /** link.open: start a browser from an argument array (no shell), detached, with no output kept. */
 function launchDetached(argv: string[]): Promise<void> {
@@ -266,7 +296,9 @@ if (plan) {
       },
     }).catch(() => log({ source: "plan", op: "week_nudge", kind: "failed" }));
   };
+  // No reminders while demo mode is on (D272): the demo shouldn't pop real nudges.
   setInterval(() => {
+    if (demoCtx) return;
     void tick();
     dayReminders();
   }, 30_000).unref();
@@ -275,12 +307,12 @@ if (plan) {
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.
   const timerTick = () =>
     checkTimer({
-      plan: store,
+      plan: activePlan() ?? store,
       now: () => instantNow(),
       endSound: async () => (await configOrNull())?.plan.endSound ?? false,
       notify: notifyWithActions,
       sound: playEndSound,
-      act: (action) => timerAction({ plan: store, config: configOrNull, now: () => instantNow().toString(), media }, action, {}),
+      act: (action) => timerAction({ plan: activePlan() ?? store, config: configOrNull, now: () => instantNow().toString(), media }, action, {}),
       // Step 10: a session that ends on its own pauses media too (when Settings > Focus asks for it).
       ended: async (before, after) => void (await media.transition(timerLike(before), timerLike(after), ((await configOrNull())?.focus ?? DEFAULT_FOCUS).pauseMedia)),
     })
@@ -290,6 +322,7 @@ if (plan) {
   // decides whether that is a live call) and recompute today's warning points.
   let lastCalendar: number | null = null;
   const warningsTick = () => {
+    if (demoCtx) return void (lastCalendar = null);
     const s = store.getState<TimerState>(TIMER_KEY);
     const t = Date.now();
     if (!s?.runningSince) return void (lastCalendar = null);

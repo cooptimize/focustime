@@ -160,6 +160,9 @@ export type MenuEnv = {
   timeboxes?: readonly TimeboxView[];
   now?: string;
   addWork?: (date: IsoDate, half: Half) => void;
+  /** Step 15 (D272): demo mode on or off (the server swaps every source and the plan store). */
+  demo?: boolean;
+  setDemo?: (on: boolean) => void;
 };
 
 /** What help is wanted on: a pick, a week list item, a timebox or a work item. `pinned` is its day when it has one. */
@@ -809,6 +812,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "draft.remove": return { run: () => env.setView("inbox") };
     case "ui.set_theme": return { next: () => themeStep(env) };
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
+    case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };
     case "settings.save": return { run: () => env.openSettings() };
     case "secret.set": return { run: () => env.openSettings("connections") };

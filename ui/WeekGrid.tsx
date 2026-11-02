@@ -11,7 +11,7 @@ import { capFollowUps, followUpsOnDay } from "../plan/due.ts";
 import { canAddWork, planButton } from "../plan/days.ts";
 import { dayMenu, eventMenu, pickMenu, slotMenu } from "./menu.ts";
 import { useMenu } from "./Menus.tsx";
-import { hourMarks, layoutEvents } from "./layout.ts";
+import { hourMarks, labelHere, layoutEvents } from "./layout.ts";
 import { DevOpsWork } from "./work.ts";
 import { clientColor, eventRange, halfTag, SampleSources, shortDate, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 import { cardHalves, eveOnly, slotOf } from "./halves.ts";
@@ -211,6 +211,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
           now={props.now}
           ptoOff={!!day.pto}
           followUps={fuOn.get(half) ?? []}
+          earlier={new Set(half === "PM" ? day.am.events.map((p) => p.event.id) : half === "EVE" ? day.pm.events.map((p) => p.event.id) : [])}
           addWork={props.onAddWork && canAddWork({ date: day.date, today: pv.today ?? "", pto: !!day.pto, off: slotOf(day, half)!.off }) ? () => props.onAddWork!(day.date, half) : undefined}
         />
         ),
@@ -237,6 +238,8 @@ function Strip({ kind, label, items }: { kind: string; label: string; items: { k
 }
 
 type HalfProps = {
+  /** Ids of events drawn in the block before this one on the same day (labelHere, D271). */
+  earlier: ReadonlySet<string>;
   slot: Slot;
   colors: Record<string, string>;
   minFocusWindow: number;
@@ -262,7 +265,7 @@ type HalfProps = {
   addWork?: (() => void) | undefined;
 };
 
-function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, ptoOff, followUps, addWork }: HalfProps) {
+function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, offDay, tag, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, ptoOff, followUps, addWork }: HalfProps) {
   const primary = slot.focus[0];
   const sev = worstSeverity(slot.risks);
   const allWork = useContext(DevOpsWork);
@@ -439,7 +442,7 @@ function HalfDay({ slot, colors, minFocusWindow, overflow, offDay, tag, tz, sele
         </aside>
       )}
 
-          <Timeline slot={slot} tz={tz} showGaps={(!overflow || eve) && !slot.open} minFocusWindow={minFocusWindow} />
+          <Timeline slot={slot} tz={tz} earlier={earlier} showGaps={(!overflow || eve) && !slot.open} minFocusWindow={minFocusWindow} />
         </>
       )}
       </HalfScope.Provider>
@@ -549,7 +552,7 @@ function offHours(slot: Slot): { start: number; end: number }[] {
   return out;
 }
 
-function Timeline({ slot, tz, showGaps, minFocusWindow }: { slot: Slot; tz: string; showGaps: boolean; minFocusWindow: number }) {
+function Timeline({ slot, tz, showGaps, minFocusWindow, earlier }: { slot: Slot; tz: string; showGaps: boolean; minFocusWindow: number; earlier: ReadonlySet<string> }) {
   const { start, end } = slot.view;
   const marks = hourMarks(start, end, tz);
   const laid = layoutEvents(slot.events, start, end);
@@ -582,7 +585,7 @@ function Timeline({ slot, tz, showGaps, minFocusWindow }: { slot: Slot; tz: stri
       <TimeboxBands slot={slot} pos={pos} />
       <div className="lanes">
         {laid.map(({ placed, top, height, lane, lanes }) => (
-          <EventCard key={placed.event.id} placed={placed} tz={tz} style={{ top: pct(top), height: pct(height), left: `calc(${pct(lane / lanes)} + 4px)`, width: `calc(${pct(1 / lanes)} - 8px)` }} />
+          <EventCard key={placed.event.id} placed={placed} tz={tz} label={labelHere(placed, earlier)} style={{ top: pct(top), height: pct(height), left: `calc(${pct(lane / lanes)} + 4px)`, width: `calc(${pct(1 / lanes)} - 8px)` }} />
         ))}
       </div>
     </div>
@@ -604,7 +607,7 @@ function useEventMenu(e: CalEvent) {
     : {};
 }
 
-function EventCard({ placed, tz, style }: { placed: PlacedEvent; tz: string; style: CSSProperties }) {
+function EventCard({ placed, tz, style, label = true }: { placed: PlacedEvent; tz: string; style: CSSProperties; label?: boolean }) {
   const e = placed.event;
   const samples = useContext(SampleSources);
   const kind = e.isPersonal ? "personal" : "meeting";
@@ -617,14 +620,14 @@ function EventCard({ placed, tz, style }: { placed: PlacedEvent; tz: string; sty
       title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}${e.unavailable ? "" : "\nClick for what Coopilot can do with it"}`}
       {...menu}
     >
-      <span className="ev-line">
+      {label && <><span className="ev-line">
         <span className="ev-time">{eventRange(e, tz)}</span>
         <span className="ev-title">{e.title}</span>
       </span>
       <span className="ev-meta">
         {e.unavailable ? "Unavailable" : sourceName(e, samples)}
         {show !== "busy" && show !== "unknown" ? ` · ${showAsLabel(e)}` : ""}
-      </span>
+      </span></>}
     </div>
   );
 }

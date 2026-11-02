@@ -78,3 +78,16 @@ export function showAsLabel(e: CalEvent): string {
     default: return "busy";
   }
 }
+
+/**
+ * A stored time as "Nov 1, 2:05 PM" in the given zone (step 15, D271). The plan store stamps zoned times
+ * ("…-05:00[America/New_York]"), which `new Date` can't read; Temporal reads both kinds. "Unknown time" otherwise.
+ */
+export function whenText(stamp: string, tz: string): string {
+  try {
+    const z = stamp.includes("[") ? Temporal.ZonedDateTime.from(stamp).withTimeZone(tz) : Temporal.Instant.from(stamp).toZonedDateTimeISO(tz);
+    return `${z.toPlainDate().toLocaleString("en-US", { month: "short", day: "numeric" })}, ${z.hour % 12 || 12}:${String(z.minute).padStart(2, "0")} ${z.hour < 12 ? "AM" : "PM"}`;
+  } catch {
+    return "Unknown time";
+  }
+}

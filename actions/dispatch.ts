@@ -12,7 +12,7 @@ import { buildWeek } from "../week/build.ts";
 import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
-import type { TimeModel } from "../week/hours.ts";
+import { VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
 import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -71,18 +71,28 @@ export type ActionContext = {
   devopsWriter?: DevOpsWriter;
   /** Media control for focus (step 10): playerctl and playlist links. Absent: none (tests, no desktop). */
   media?: MediaControl;
+  /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
+  demo?: { on: boolean; set: (on: boolean) => Promise<void> };
 };
+
+/** Actions that reach outside Coopilot or change secrets: refused while demo mode is on (D272). */
+export const DEMO_REFUSED: readonly ActionName[] = [
+  "link.open", "outlook.open", "playlist.open", "data.export", "secret.set",
+  "auth.connect_microsoft", "auth.connect_google", "auth.connect_outlook_write", "auth.disconnect",
+  "write.confirm", "write.retry", "devops.confirm", "devops.retry", "devops.set_write_pat", "devops.clear_write_pat",
+];
+export const DEMO_REFUSAL = "Demo data: nothing leaves Coopilot in demo mode";
 
 export type ActionRequest = { action: unknown; input: unknown };
 
 const bad = (error: string): ActionResponse => ({ ok: false, status: 400, error });
 
-type WeekLoadInput = { weekStart?: string; now?: string; refresh?: boolean };
+type WeekLoadInput = { weekStart?: string; now?: string; refresh?: boolean; /** Step 15 (D271): this session's view range, not saved. */ viewRange?: ViewRange };
 
 function validateWeekLoad(input: unknown): WeekLoadInput | string {
   if (typeof input !== "object" || input === null || Array.isArray(input)) return "input must be an object";
   const o = input as Record<string, unknown>;
-  for (const k of Object.keys(o)) if (!["weekStart", "now", "refresh"].includes(k)) return `unknown input field ${k}`;
+  for (const k of Object.keys(o)) if (!["weekStart", "now", "refresh", "viewRange"].includes(k)) return `unknown input field ${k}`;
   const out: WeekLoadInput = {};
   if (o.weekStart !== undefined) {
     if (typeof o.weekStart !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(o.weekStart)) return "weekStart must be YYYY-MM-DD";
@@ -105,6 +115,10 @@ function validateWeekLoad(input: unknown): WeekLoadInput | string {
   if (o.refresh !== undefined) {
     if (typeof o.refresh !== "boolean") return "refresh must be true or false";
     out.refresh = o.refresh;
+  }
+  if (o.viewRange !== undefined) {
+    if (typeof o.viewRange !== "string" || !(VIEW_RANGES as readonly string[]).includes(o.viewRange)) return `viewRange must be one of ${VIEW_RANGES.join(", ")}`;
+    out.viewRange = o.viewRange as ViewRange;
   }
   return out;
 }
@@ -307,7 +321,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const weekendPlanned = new Set(weekDates7(weekStart).slice(5).filter((d) => (ctx.plan?.picksFor(d) ?? []).some((p) => p.status === "planned" || p.status === "done")));
   // Coopilot's own Outlook events show once, as timeboxes, and never count as meetings in risk rules (step 12).
   const own = ctx.plan ? ownEventIds(ctx.plan.ownEvents()) : new Set<string>();
-  const week = buildWeek({ weekStart, patterns: dataverse.items, events: withoutOwn([...outlook.items, ...google.items], own), config: weekConfig, pto, unavailable, flex, viewRange: cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
+  const week = buildWeek({ weekStart, patterns: dataverse.items, events: withoutOwn([...outlook.items, ...google.items], own), config: weekConfig, pto, unavailable, flex, viewRange: input.viewRange ?? cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
   const todayDay = week.days.find((d) => d.date === todayDate);
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
 
@@ -369,6 +383,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     ),
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
+    demo: !!ctx.demo?.on,
   };
 }
 
@@ -392,7 +407,15 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
   // to the registry without a case, or a case for a name not in the registry, fails the type check.
   if (!isActionName(req.action)) return bad("unknown action");
   const action: ActionName = req.action;
+  if (ctx.demo?.on && DEMO_REFUSED.includes(action)) return { ok: false, status: 403, error: DEMO_REFUSAL, code: "demo" };
   switch (action) {
+    case "demo.set": {
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "on") || typeof i.on !== "boolean") return bad("demo.set takes { on: true | false }");
+      if (!ctx.demo) return { ok: false, status: 503, error: "Demo mode isn't available here" };
+      await ctx.demo.set(i.on);
+      return { ok: true, data: { demo: i.on } };
+    }
     case "auth.connect_outlook_write": {
       // Step 12: the same sign-in, asking for Calendars.ReadWrite as well. Reading keeps its own token.
       if (!noInput(req.input)) return bad(`${req.action} takes no input`);

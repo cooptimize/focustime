@@ -76,6 +76,8 @@ export type WeekLoadData = {
   expiring: { key: string; text: string; days: number; section: string }[];
   ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
+  /** Step 15 (D272): demo mode is on: every source is fictional sample data and the plan store is the demo one. */
+  demo: boolean;
 };
 
 /** A value problem on one config field (Settings shows it next to the field). */

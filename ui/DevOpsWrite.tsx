@@ -1,3 +1,4 @@
+import { whenText } from "./labels.ts";
 // DevOps writes in the window (step 14). Every change opens one preview dialog: org, project, item, each field before
 // and after, link changes, the identity it writes as and who can see it. Confirm writes (with the rev test), reads
 // back, and only then says so; a refusal because the item changed offers Reload (a fresh preview), anything not
@@ -493,7 +494,7 @@ export function DevOpsWriteLog(): ReactNode {
           <tbody>
             {log.entries.map((e) => (
               <tr key={e.id} className={`wl-${e.status}`}>
-                <td>{new Date(e.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td>
+                <td>{whenText(e.at, Intl.DateTimeFormat().resolvedOptions().timeZone)}</td>
                 <td>
                   {OP_WORD[e.op] ?? e.op} <strong>{e.itemId !== null ? `#${e.itemId} ` : ""}{e.title}</strong>
                 </td>

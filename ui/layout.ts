@@ -49,3 +49,11 @@ export function hourMarks(slotStart: string, slotEnd: string, timeZone: string):
   }
   return marks;
 }
+
+/**
+ * Step 15 (D271): an event that crosses from one block into the next on the same day keeps its title in the block it
+ * starts in; the later block draws only its unlabelled continuation, so it reads as one event across the seam.
+ */
+export function labelHere(placed: Pick<PlacedEvent, "continuesBefore" | "event">, earlier: ReadonlySet<string>): boolean {
+  return !(placed.continuesBefore && earlier.has(placed.event.id));
+}

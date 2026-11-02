@@ -163,19 +163,26 @@ export function App() {
     [theme],
   );
 
-  /** The view range is saved in config; the week is rebuilt with it (the server widens it around planned time). */
-  const setViewRange = useCallback(
-    async (r: ViewRange) => {
-      try {
-        await call("ui.set_view_range", { range: r });
-        setNotice(`Timelines: ${VIEW_RANGE_NAMES[r]}`);
-        reloadRef.current();
-      } catch (e) {
-        setNotice(`View range not saved: ${e instanceof Error ? e.message : "unknown error"}`);
-      }
-    },
-    [],
-  );
+  /**
+   * Step 15 (D271): H, the menu and the status bar change the view range for this session only; Settings > Display
+   * saves the default (saveViewRange). The week is rebuilt with it (the server widens it around planned time).
+   */
+  const rangeRef = useRef<ViewRange | null>(null);
+  const setViewRange = useCallback(async (r: ViewRange) => {
+    rangeRef.current = r;
+    setNotice(`Timelines: ${VIEW_RANGE_NAMES[r]} for now. Settings > Display sets the default`);
+    reloadRef.current();
+  }, []);
+  const saveViewRange = useCallback(async (r: ViewRange) => {
+    try {
+      await call("ui.set_view_range", { range: r });
+      rangeRef.current = null;
+      setNotice(`Timelines default: ${VIEW_RANGE_NAMES[r]}`);
+      reloadRef.current();
+    } catch (e) {
+      setNotice(`Default not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  }, []);
   /** Time model actions (hours for a day, unavailable time, flex sessions): run, then reload the week quietly. */
   const runTime = useCallback(async (action: string, input: Record<string, unknown>): Promise<boolean> => {
     try {
@@ -214,7 +221,7 @@ export function App() {
       if (input.weekStart) weekRef.current = input.weekStart;
       if (!opts.quiet) setLoading(true);
       try {
-        const d = await weekLoad({ ...input, ...(now ? { now } : {}) });
+        const d = await weekLoad({ ...input, ...(now ? { now } : {}), ...(rangeRef.current ? { viewRange: rangeRef.current } : {}) });
         if (id !== seq.current) return undefined;
         weekRef.current = d.weekStart;
         setState((prev) => afterLoad(prev, { kind: "ok", data: d }));
@@ -1209,8 +1216,8 @@ export function App() {
           onDisconnect={(src) => void disconnect(src)}
           theme={theme}
           setTheme={(t) => void setTheme(t)}
-          viewRange={data.week.range.mode}
-          setViewRange={(r) => void setViewRange(r)}
+          viewRange={data.ui.viewRange}
+          setViewRange={(r) => void saveViewRange(r)}
           runTime={runTime}
         />
       ) : base === "today" && !pd ? (

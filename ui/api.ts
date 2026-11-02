@@ -49,7 +49,7 @@ async function send<T>(action: string, input: unknown): Promise<T> {
   return body.data;
 }
 
-export const weekLoad = (input: { weekStart?: string; now?: string; refresh?: boolean }) => call<WeekLoadData>("week.load", input);
+export const weekLoad = (input: { weekStart?: string; now?: string; refresh?: boolean; viewRange?: string }) => call<WeekLoadData>("week.load", input);
 
 export type ConnectResult = { status: "connected" | "cancelled" | "failed"; message?: string };
 export const connectSource = (source: "outlook" | "google") =>

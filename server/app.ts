@@ -9,7 +9,8 @@ import { checkRequest } from "./guard.ts";
 export type AppOptions = {
   port: number;
   token: string;
-  ctx: ActionContext;
+  /** The action context, or a getter (step 15: the live or the demo one, D272). */
+  ctx: ActionContext | (() => ActionContext);
   log: Logger;
   /** Serve built files from here (production). */
   distDir?: string;
@@ -94,7 +95,7 @@ export function createApp(opts: AppOptions) {
       let out: Awaited<ReturnType<typeof dispatch>>;
       try {
         const body = JSON.parse(await readBody(req)) as { action?: unknown; input?: unknown };
-        out = await dispatch(opts.ctx, { action: body.action, input: body.input });
+        out = await dispatch(typeof opts.ctx === "function" ? opts.ctx() : opts.ctx, { action: body.action, input: body.input });
       } catch {
         out = { ok: false, status: 400, error: "bad request" };
       }
