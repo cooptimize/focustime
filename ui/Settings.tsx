@@ -15,6 +15,7 @@ import { notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar } fro
 import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
 import { sound } from "./sound.ts";
+import { KIND_HINT, KIND_LABEL, RITUAL_KINDS, type NotifyKind, type QuietMode } from "../plan/notify.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import type { WriteLogView } from "../actions/types.ts";
 import type { WriteEntry } from "../plan/timebox.ts";
@@ -25,6 +26,7 @@ export const SETTINGS_SECTIONS = [
   ["standing", "Standing blocks"],
   ["planning", "Planning"],
   ["focus", "Focus"],
+  ["notifications", "Notifications"],
   ["risk", "Risk rules"],
   ["clients", "Clients"],
   ["connections", "Connections"],
@@ -190,6 +192,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
       return (
         <>
         <YouAccount />
+        <VmStartForm {...p} />
         {d.you && (
         <div className="set-grid">
           <ReadOnly label="Email when signed out" value={d.you.email} where="Signed in, Coopilot finds you in Dataverse by your Microsoft account. Signed out, by this ([dataverse] my_email in config.toml)" />
@@ -214,6 +217,8 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
       );
     case "focus":
       return <FocusForm {...p} />;
+    case "notifications":
+      return <NotifyForm {...p} />;
     case "risk":
       return d.risk ? <RiskForm {...p} /> : null;
     case "clients":
@@ -685,6 +690,94 @@ function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
         </button>
       )}
       <Problems all={problems} field="focus.playlists" />
+      <SaveRow status={status} />
+    </form>
+  );
+}
+
+/** Settings > You (step 15.5, Q87): whether the morning box's Start starts the VM at once. */
+function VmStartForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
+  const [on, setOn] = useState(p.data.vm.startWithoutAsking);
+  const { problems, status, save } = useSave(p.onSavedData);
+  return (
+    <div className="set-grid set-vm-start">
+      <Field label="Start my VM without asking" hint={'The Start button in the morning "Your VM is off" box, and on its notification, starts it right away (still logged and checked). Stop and auto-shutdown changes always show a preview first.'}>
+        <label className="set-check">
+          <input type="checkbox" checked={on} onChange={(e) => { setOn(e.target.checked); void save("vm", { startWithoutAsking: e.target.checked }); }} /> Start right away
+        </label>
+        <Problems all={problems} field="azure.start_without_asking" />
+        {status && <span className="set-hint" role="status">{status}</span>}
+      </Field>
+    </div>
+  );
+}
+
+/** Settings > Notifications (step 15.5): a switch per kind, quiet hours, held during focus, a test. */
+function NotifyForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
+  const n = p.data.notify;
+  const [kinds, setKinds] = useState<Record<NotifyKind, boolean>>({ ...n.kinds });
+  const [quiet, setQuiet] = useState(n.quiet);
+  const [quietPto, setQuietPto] = useState(n.quietPto);
+  const [test, setTest] = useState<string | null>(null);
+  const { problems, status, save } = useSave(p.onSavedData);
+  const group = (title: string, list: readonly NotifyKind[]) => (
+    <fieldset className="set-notify-group">
+      <legend>{title}</legend>
+      {list.map((k) => (
+        <label key={k} className="set-notify-row">
+          <input type="checkbox" checked={kinds[k]} onChange={(e) => setKinds({ ...kinds, [k]: e.target.checked })} />
+          <span className="set-notify-name">{KIND_LABEL[k]}</span>
+          <span className="set-hint">{KIND_HINT[k]}</span>
+          <Problems all={problems} field={`notify.${k}`} />
+        </label>
+      ))}
+    </fieldset>
+  );
+  return (
+    <form
+      className="set-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save("notify", { kinds, quiet, quietPto });
+      }}
+    >
+      <p className="muted">Desktop notifications. Click one to open Coopilot on that view. Where your desktop shows notification buttons (Done, Start, Restore), they do what they say. Each is sent once per occasion.</p>
+      <div className="set-notify">
+        {group("Ritual reminders", RITUAL_KINDS)}
+        {group("While you focus", ["timer", "meeting"])}
+        {group("Other", ["vm", "followups", "expiry"])}
+      </div>
+      <h3>Quiet hours</h3>
+      <div className="set-grid">
+        <Field label="Quiet" hint="Quiet means not sent. A reminder still due when quiet hours end is sent then. The focus timer and meeting warnings belong to a session you started, so they always come.">
+          <select value={quiet} onChange={(e) => setQuiet(e.target.value as QuietMode)}>
+            <option value="outside_hours">Outside working hours</option>
+            <option value="off">Never quiet</option>
+          </select>
+          <Problems all={problems} field="notify.quiet" />
+        </Field>
+        <Field label="Days off" hint="PTO days from Dataverse.">
+          <label className="set-check">
+            <input type="checkbox" checked={quietPto} onChange={(e) => setQuietPto(e.target.checked)} /> Quiet on PTO days
+          </label>
+          <Problems all={problems} field="notify.quiet_pto" />
+        </Field>
+      </div>
+      <h3>During a focus session</h3>
+      <p className="muted">Everything except the focus timer and meeting warnings waits until the session ends, then comes as one notification ("While you were focused"). Ones no longer needed by then (the day got planned, say) are dropped.</p>
+      <div className="set-actions-row">
+        <button
+          type="button"
+          className="mini"
+          onClick={() => {
+            setTest("Sending…");
+            void call("notify.test", {}).then(() => setTest("Sent. Click it to come back here."), (e: unknown) => setTest(e instanceof Error ? e.message : "Couldn't send it"));
+          }}
+        >
+          Send a test notification
+        </button>
+        {test && <span className="set-hint" role="status">{test}</span>}
+      </div>
       <SaveRow status={status} />
     </form>
   );

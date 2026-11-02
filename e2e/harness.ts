@@ -31,7 +31,7 @@ export async function startDemo(): Promise<Harness> {
   await writeFile(join(dir, "data", "coopilot", "demo-mode"), "on\n");
   const port = await freePort();
   const root = resolve(import.meta.dirname, "..");
-  const child: ChildProcess = spawn(process.execPath, ["server/main.ts", "--dev", "--no-open", "--no-reopen", "--port", String(port), "--clock", NOW], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+  const child: ChildProcess = spawn(process.execPath, ["server/main.ts", "--dev", "--no-open", "--no-reopen", "--headless", "--port", String(port), "--clock", NOW], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
   let out = "";
   child.stdout?.on("data", (b) => (out += b));
   child.stderr?.on("data", (b) => (out += b));

@@ -2340,3 +2340,22 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   border-bottom: 1px solid color-mix(in oklab, var(--watch) 60%, var(--border));
 }
 .reopen-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Step 15.5: Settings > Notifications, and the sign-in screen's other ways in (Q88). */
+.set-notify { display: grid; gap: 14px; margin: 8px 0 18px; }
+.set-notify-group { border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px 10px; margin: 0; min-width: 0; }
+.set-notify-group legend { padding: 0 6px; font-weight: 600; color: var(--text); }
+.set-notify-row { display: grid; grid-template-columns: auto minmax(120px, 180px) 1fr; align-items: baseline; gap: 4px 10px; padding: 6px 0; border-top: 1px solid var(--border); }
+.set-notify-row:first-of-type { border-top: 0; }
+.set-notify-row input { align-self: center; }
+.set-notify-name { color: var(--text); font-size: 14px; }
+.set-notify-row .field-problem { grid-column: 2 / -1; }
+@media (max-width: 720px) {
+  .set-notify-row { grid-template-columns: auto 1fr; }
+  .set-notify-row .set-hint { grid-column: 2; }
+}
+.set-actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 0 12px; }
+.signin-alt { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 12px; }
+.signin-alt .link-btn { font-size: 13px; padding: 0; }
+.followup-highlight { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.set-vm-start { margin-bottom: 18px; }

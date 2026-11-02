@@ -20,7 +20,7 @@ import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import type { ChosenVm, VmError, VmPreview, VmPreviewOp, VmStatus } from "./account-types.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const VM_ACTIONS = ["vm.find", "vm.choose", "vm.status", "vm.preview", "vm.confirm", "vm.restore", "vm.dismiss_prompt", "vm.log"] as const;
+export const VM_ACTIONS = ["vm.find", "vm.choose", "vm.status", "vm.preview", "vm.confirm", "vm.restore", "vm.dismiss_prompt", "vm.log", "vm.start_now"] as const;
 export type VmAction = (typeof VM_ACTIONS)[number];
 
 export type VmContext = {
@@ -184,6 +184,23 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       if (g) return g;
       return restore(ctx, vm!, today, false);
     }
+    case "vm.start_now": {
+      // Step 15.5 (Q87): the morning box's (or notification's) Start, at once when Settings > You says so. The box
+      // names the VM and says it starts; the start is still logged and followed until Azure shows it running.
+      if (!onlyKeys(input, ["vmId"])) return bad("vm.start_now takes { vmId? }");
+      if (!cfg?.azure.startWithoutAsking) return { ok: false, status: 409, error: "Start asks first: Settings > You > Start my VM without asking is off", code: "ask_first" };
+      const vm = chosen(ctx);
+      const g = guard(vm, isObj(input) ? input.vmId : undefined);
+      if (g) return g;
+      try {
+        const p = await client(ctx).power(refOf(vm!));
+        const chip = chipOf(p, transitions.get(vm!.id.toLowerCase()) ?? null);
+        if (!canStart(chip)) return refuse(`Your VM is ${CHIP_LABEL[chip].toLowerCase()}; there's nothing to start`);
+      } catch (e) {
+        return errResponse(e);
+      }
+      return power(ctx, vm!, "start");
+    }
     case "vm.dismiss_prompt": {
       if (!onlyKeys(input, [])) return bad("vm.dismiss_prompt takes no input");
       ctx.plan?.markOnce(PROMPT_MARKER, today);
@@ -203,7 +220,7 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
   const changeRec = vm ? (ctx.plan?.accountState<ShutdownChange>(shutdownKey(vm.id)) ?? null) : null;
   const base: VmStatus = {
     signedIn: !!me, vm, chip: null, label: null, power: null, transition: null, canStart: false, canStop: false, schedule: null,
-    change: changeRec ? { ...changeRec, text: changeText(changeRec, tz, today) } : null, stillChanged: stillChanged(changeRec, today), prompt: false, refreshMs: 60_000, needsConsent: false, error: null,
+    change: changeRec ? { ...changeRec, text: changeText(changeRec, tz, today) } : null, stillChanged: stillChanged(changeRec, today), prompt: false, startWithoutAsking: cfg?.azure.startWithoutAsking ?? true, refreshMs: 60_000, needsConsent: false, error: null,
   };
   if (!vm || !me) return base;
   const key = vm.id.toLowerCase();

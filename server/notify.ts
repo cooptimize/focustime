@@ -1,6 +1,7 @@
 // One desktop reminder per day with working hours when today isn't committed yet (step 5), only near the day start (Q23). Never
 // repeats: the store keeps a marker per date, so a restart or a second check the same day sends nothing.
 import { spawn } from "node:child_process";
+import { OPEN_KEY, type Notice } from "../plan/notify.ts";
 import { WEEK_NUDGE_MESSAGE, weekNudges, type NudgeTimes } from "../plan/weekplan.ts";
 import { hoursOn, type TimeModel } from "../week/hours.ts";
 
@@ -48,11 +49,32 @@ export async function checkReminder(d: ReminderDeps): Promise<boolean> {
   return true;
 }
 
-/** notify-send with a fixed argument list (no shell). Fire and forget. */
+/** notify-send with a fixed argument list (no shell). Fire and forget: for a line that needs no buttons or click. */
 export function notifySend(title: string, body: string) {
   const p = spawn("notify-send", ["--app-name=Coopilot", "--urgency=normal", title, body], { stdio: "ignore" });
   p.on("error", () => {});
   p.unref();
+}
+
+/**
+ * Step 15.5, the desktop host's notifications (a hosted version would use browser notifications behind the same
+ * NotifyHost): notify-send with a fixed argument list (no shell), the click on the notification itself as the
+ * freedesktop "default" action, and its buttons. notify-send waits while a notification with actions is open and
+ * prints the chosen key; resolves null when it is dismissed or expires. Only known keys are passed on (the notifier
+ * checks again).
+ */
+export function desktopNotify(n: Notice, icon: string | null = null): Promise<string | null> {
+  return new Promise((resolve) => {
+    const args = ["--app-name=Coopilot", "--urgency=normal", ...(icon ? [`--icon=${icon}`] : []), `--action=${OPEN_KEY}=Open`, ...n.buttons.map((b) => `--action=${b.key}=${b.label}`), n.title, n.body];
+    const p = spawn("notify-send", args, { stdio: ["ignore", "pipe", "ignore"] });
+    let out = "";
+    p.stdout.on("data", (c: Buffer) => (out += c.toString()));
+    p.on("error", () => resolve(null));
+    p.on("close", () => {
+      const key = out.trim();
+      resolve(key === OPEN_KEY || n.buttons.some((b) => b.key === key) ? key : null);
+    });
+  });
 }
 
 // ---- Check-in and Close out reminders (step 7): once a day each, near midday and near the end of the day. ----
@@ -111,7 +133,7 @@ export async function checkWeekNudges(d: {
   committed: (weekStart: string) => boolean;
   off: (date: string) => Promise<boolean>;
   once: (key: string, weekStart: string) => boolean;
-  send: (body: string) => void;
+  send: (body: string, weekStart: string) => void;
   /** Today's working start ("HH:MM"), or null with no working time today (Q50: a skipped nudge fires then). */
   workStart?: (date: string) => Promise<string | null>;
 }): Promise<number> {
@@ -129,7 +151,7 @@ export async function checkWeekNudges(d: {
   for (const weekStart of [...new Set(due.map((x) => x.weekStart))]) {
     const fresh = due.filter((x) => x.weekStart === weekStart).map((x) => d.once(x.key, weekStart));
     if (!fresh.some(Boolean)) continue;
-    d.send(WEEK_NUDGE_MESSAGE(weekStart, weekStart === thisWeek));
+    d.send(WEEK_NUDGE_MESSAGE(weekStart, weekStart === thisWeek), weekStart);
     n++;
   }
   return n;

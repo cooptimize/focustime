@@ -1067,7 +1067,12 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "vm.confirm":
     case "vm.restore":
     case "vm.dismiss_prompt":
+    case "vm.start_now":
       return { run: env.openVm };
+    // Step 15.5: Settings > Notifications has the test button; samples are for the live check.
+    case "notify.test":
+    case "notify.sample":
+      return { run: () => env.openSettings("notifications") };
     case "vm.log": return { run: () => env.openSettings("data") };
     case "capture.add": return { run: () => env.openCapture() };
     // Sorting and a client's features and epics are handled in the Inbox.

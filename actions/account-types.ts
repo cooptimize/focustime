@@ -45,6 +45,8 @@ export type VmStatus = {
   stillChanged: boolean;
   /** "Your VM is off. Start it?" */
   prompt: boolean;
+  /** Step 15.5 (Q87): the prompt's Start runs at once (Settings > You), else it shows the preview. */
+  startWithoutAsking: boolean;
   refreshMs: number;
   /** Azure needs an incremental consent (Allow Azure access). */
   needsConsent: boolean;

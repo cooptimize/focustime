@@ -4,8 +4,9 @@
 import { WEEKDAY_KEYS, type WeekdayKey } from "../week/hours.ts";
 import { hoursBody, removeValue, replaceArrayTables, replaceSection, setValue, tomlValue, type TomlValue } from "./edit.ts";
 import { parseConfig } from "./schema.ts";
+import { NOTIFY_KINDS } from "../plan/notify.ts";
 
-export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab"] as const;
+export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export class SettingsInputError extends Error {
@@ -166,6 +167,33 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
         })]);
       }
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "focus", k, val, i === 0 ? "Focus sounds and playlists (step 10). Sounds are made in the app; playlists open in Spotify or the browser." : undefined), text);
+    }
+    case "notify": {
+      // Step 15.5: Settings > Notifications. Written as given; parseConfig checks each value.
+      only(v, ["kinds", "quiet", "quietPto"], "notify");
+      const values: [string, TomlValue][] = [];
+      if (v.kinds !== undefined) {
+        const k = obj(v.kinds, "notify");
+        only(k, [...NOTIFY_KINDS], "notify");
+        for (const kind of NOTIFY_KINDS) {
+          if (k[kind] === undefined) continue;
+          if (typeof k[kind] !== "boolean") throw new SettingsInputError(`notify.${kind}`, "Must be true or false");
+          values.push([kind, k[kind] as boolean]);
+        }
+      }
+      if (v.quiet !== undefined) values.push(["quiet", str(v.quiet, "notify.quiet", 20)]);
+      if (v.quietPto !== undefined) {
+        if (typeof v.quietPto !== "boolean") throw new SettingsInputError("notify.quiet_pto", "Must be true or false");
+        values.push(["quiet_pto", v.quietPto]);
+      }
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "notify", k, val, i === 0 ? "Notifications (step 15.5): a switch per kind and quiet hours. During focus, all but the timer and meeting warnings wait until it ends." : undefined), text);
+    }
+    case "vm": {
+      // Step 15.5 (Q87): Settings > You > "Start my VM without asking".
+      only(v, ["startWithoutAsking"], "azure");
+      if (typeof v.startWithoutAsking !== "boolean") throw new SettingsInputError("azure.start_without_asking", "Must be true or false");
+      const on = v.startWithoutAsking;
+      return (text) => setValue(text, "azure", "start_without_asking", on, "My VM (step 15.4).");
     }
     case "display": {
       only(v, ["theme", "viewRange", "showTimelines"], "ui");

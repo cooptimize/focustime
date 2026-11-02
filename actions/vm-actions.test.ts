@@ -20,7 +20,7 @@ const PAT: IdClaims = { oid: "0f0f0f0f-1111-4222-8333-444455556666", tid: "11111
 const TOML = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"').replace(/(\[outlook\]\ntenant_id = "[^"]*"\n)client_id = ""/, '$1client_id = "44444444-4444-4444-8444-444444444444"');
 
 type AccountOpts = { signedIn?: boolean; arm?: "ok" | "consent"; identityFails?: AuthFailure["kind"] };
-function setup(opts: AccountOpts & { start?: string; forbid?: string[]; failOps?: ("start" | "deallocate")[]; ignorePut?: boolean } = {}) {
+function setup(opts: AccountOpts & { start?: string; forbid?: string[]; failOps?: ("start" | "deallocate")[]; ignorePut?: boolean; toml?: string } = {}) {
   clearVmState();
   let t = Date.parse(opts.start ?? "2026-11-02T14:00:00Z");
   const clock = { now: () => new Date(t).toISOString(), advance: (ms: number) => void (t += ms) };
@@ -53,7 +53,7 @@ function setup(opts: AccountOpts & { start?: string; forbid?: string[]; failOps?
     signOut: async () => void ((state.signedIn = false), signedOut++),
   };
   const c: ActionContext = {
-    loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(TOML) }),
+    loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(opts.toml ?? TOML) }),
     makeDataverse: () => ({ pto: async () => ({ items: [] }) }) as never,
     makeOutlook: () => { throw new Error("n/a"); },
     makeGoogle: () => { throw new Error("n/a"); },
@@ -423,3 +423,40 @@ describe("never leaks", () => {
     expect(out).not.toContain("FAKE-ARM-TOKEN");
   });
 });
+
+describe("one-click Start from the morning box (step 15.5, Q87)", () => {
+  it("starts at once (no preview), logged, followed and read back as running", async () => {
+    const s = await signedInWithVm();
+    const r = await s.run<{ entry: { status: string }; transition: { op: string } }>("vm.start_now", {});
+    expect(r).toMatchObject({ entry: { status: "pending" }, transition: { op: "start" } });
+    expect(s.arm.calls.filter((x) => x.method === "POST" && x.path.endsWith("/start"))).toHaveLength(1);
+    await settled();
+    expect(s.plan.azureWriteLog()[0]).toMatchObject({ op: "start", vmId: VM, status: "confirmed", message: "Read back: Running" });
+  });
+
+  it("asks first when Settings > You turns it off; stop still needs its preview", async () => {
+    const s = await signedInWithVm({ toml: TOML + "\n[azure]\nstart_without_asking = false\n" });
+    const r = await s.fail("vm.start_now", {});
+    expect(r).toMatchObject({ status: 409, code: "ask_first" });
+    expect(s.arm.calls.some((x) => x.method === "POST")).toBe(false);
+    expect(s.plan.azureWriteLog()).toHaveLength(0);
+  });
+
+  it("refuses another VM, and a VM that is already running", async () => {
+    const s = await signedInWithVm();
+    expect((await s.fail("vm.start_now", { vmId: OTHER })).status).toBe(403);
+    await s.run("vm.start_now", {});
+    await settled();
+    expect((await s.fail("vm.start_now", {})).error).toContain("nothing to start");
+    expect(s.arm.calls.filter((x) => x.method === "POST" && x.path.endsWith("/start"))).toHaveLength(1);
+  });
+
+  it("the setting is on by default and saved under [azure] from Settings > You", async () => {
+    expect((parseConfig(TOML) as { ok: true; config: { azure: { startWithoutAsking: boolean } } }).config.azure.startWithoutAsking).toBe(true);
+    const { settingsEdit } = await import("../config/settings.ts");
+    const text = settingsEdit("vm", { startWithoutAsking: false })(TOML);
+    const parsed = parseConfig(text);
+    expect(parsed.ok && parsed.config.azure.startWithoutAsking).toBe(false);
+  });
+});
+

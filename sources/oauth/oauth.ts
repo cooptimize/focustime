@@ -104,7 +104,7 @@ export type OAuthDeps = {
   signInTimeoutMs?: number;
 };
 
-export type ConnectResult = { status: "connected"; identity?: IdClaims } | { status: "cancelled" | "failed"; message: string };
+export type ConnectResult = { status: "connected"; identity?: IdClaims } | { status: "cancelled" | "failed"; message: string; /** Microsoft couldn't be reached (step 15.5, Q88: offline use). */ offline?: boolean };
 export type ConnectOptions = {
   /** Calendar changes (step 12). */
   write?: boolean;
@@ -312,7 +312,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
       return lastIdentity ? { status: "connected", identity: lastIdentity } : { status: "connected" };
     } catch (e) {
       access.clear();
-      return { status: "failed", message: e instanceof AuthFailure ? e.message : `${p.label} sign-in failed` };
+      return e instanceof AuthFailure && e.kind === "network" ? { status: "failed", message: "Microsoft can't be reached. Check your connection", offline: true } : { status: "failed", message: e instanceof AuthFailure ? e.message : `${p.label} sign-in failed` };
     } finally {
       server.closeAllConnections();
       server.close();

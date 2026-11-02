@@ -93,7 +93,7 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged }: { l: Fol
       : `${l.closedBy === "signal" ? "Closed by DevOps" : "Loop closed"}${l.closeHow ? ` on ${HOW_LABEL[l.closeHow]}` : ""} · ${when(l.closedAt, timeZone)}${l.closeNote ? `: ${l.closeNote}` : ""}`
     : null;
   return (
-    <li className={`follow-up${l.closedAt ? " closed" : ""}${l.isNew && !l.closedAt ? " new" : ""}${l.dueState ? ` due-${l.dueState.level}` : ""}`}>
+    <li data-follow-up={l.id} className={`follow-up${l.closedAt ? " closed" : ""}${l.isNew && !l.closedAt ? " new" : ""}${l.dueState ? ` due-${l.dueState.level}` : ""}`}>
       <div className="follow-up-main">
         <span className="follow-up-kind">{KIND_LABEL[l.kind] ?? "Follow-up"}</span>
         <DueBadge l={l} />

@@ -622,3 +622,13 @@ New source: Azure Resource Manager and Resource Graph, delegated (the signed-in 
 - **Demo (D313)** fictional person and VM, simulated.
 - **Not done here.** Dataverse stays app-only (Q89). No VM start at work start. No other VM, no other Azure resource, no resize, no disks.
 - **Rollback:** revert the step 15.4 commit, rebuild, restart. Migration 17 only adds two tables (backup `plan.db.bak-v16-*` written first). The keyring entry is the same one as before, so Outlook keeps working on the older build.
+
+## 40. Step 15.5: notifications made reliable and controllable, step 15.4 decisions (authorized Nov 2)
+
+No new external writes and no new source. Contract changes:
+
+- **Step 15.4 decisions (D316).** `vm.start_now {vmId?}` (the morning box's and its notification's Start; 409 `ask_first` when the setting is off). `VmStatus.startWithoutAsking`. Config `[azure] start_without_asking` (default true), Settings > You. `auth.sign_in` may answer `{status: "failed", offline: true}`; the sign-in screen offers the demo, and Continue offline only when offline.
+- **Notifications (D317 to D321).** Config `[notify]`: one boolean per kind (`plan_day`, `checkin`, `closeout`, `plan_week`, `look_ahead`, `timer`, `meeting`, `vm`, `followups`, `expiry`), `quiet` (`outside_hours` | `off`), `quiet_pto`. Settings section `notify` (Settings > Notifications) and `vm`. New actions `notify.test`, `notify.sample {kind, live?, gated?}`. `/api/open-request` also returns a clicked notification's route. New notifications: follow-ups due, expiring secrets. Texts changed: each says what a click does.
+- **Kept:** each occasion once (the existing markers), plus a key per notification; Reset local plan doesn't touch them.
+- **Not done:** buttons on Omarchy's notification cards (the shell draws none, Q90); withdrawing sent notifications (Q91).
+- **Rollback:** revert the step 15.5 commit, rebuild, restart. `[notify]` and `start_without_asking` in config.toml would then be unknown fields: remove them (the older build says so per field).

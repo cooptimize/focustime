@@ -5,14 +5,15 @@ import { existsSync } from "node:fs";
 import { logSegment, TIMER_KEY } from "../actions/timer-actions.ts";
 import { dueWarnings, tickTimer, type TimerState, type WarnPoint } from "../plan/timer.ts";
 import type { PlanStore } from "../store/plan-store.ts";
+import { notices, type Notice } from "../plan/notify.ts";
 
 export type NotifyAction = { key: string; label: string };
 export type TimerTickDeps = {
   plan: PlanStore;
   now: () => Temporal.Instant;
   endSound: () => Promise<boolean>;
-  /** A desktop notification; with actions, resolves to the chosen key (or null when dismissed). */
-  notify: (title: string, body: string, actions?: NotifyAction[]) => Promise<string | null>;
+  /** A notification (step 15.5: through the notifier); with buttons, resolves to the chosen key (or null). */
+  notify: (n: Notice) => Promise<string | null>;
   sound: () => void;
   /** Runs a timer action as the UI would (timer.done, timer.extend, timer.next). */
   act: (action: "timer.done" | "timer.extend" | "timer.next") => Promise<unknown>;
@@ -20,12 +21,9 @@ export type TimerTickDeps = {
   ended?: (before: TimerState, after: TimerState) => Promise<void>;
 };
 
-export const END_ACTIONS: NotifyAction[] = [
-  { key: "done", label: "Done" },
-  { key: "extend", label: "+15 min" },
-  { key: "next", label: "Next pick" },
-];
-const ACTION_OF = { done: "timer.done", extend: "timer.extend", next: "timer.next" } as const;
+/** A timer notification's buttons and the timer action each runs. */
+export const TIMER_BUTTONS = { done: "timer.done", extend: "timer.extend", next: "timer.next" } as const;
+const ACTION_OF = TIMER_BUTTONS;
 
 /** One check. Returns what it did, for tests and logs. */
 export async function checkTimer(d: TimerTickDeps): Promise<"ended" | "warned" | null> {
@@ -38,10 +36,9 @@ export async function checkTimer(d: TimerTickDeps): Promise<"ended" | "warned" |
     d.plan.setState(TIMER_KEY, t.state);
     if (d.ended) await d.ended(s, t.state).catch(() => {});
     if (await d.endSound().catch(() => false)) d.sound();
-    const title = s.kind === "break" ? "Break over" : "Focus session done";
     // Not awaited: the notification stays until answered; the choice runs the same action as the UI.
     void d
-      .notify(title, s.label, END_ACTIONS)
+      .notify(notices.timerEnd(s.kind === "break", s.label, s.startedAt, now.toString()))
       .then((key) => {
         // Only if the session is still the one that ended (the UI may have answered first).
         const still = d.plan.getState<TimerState>(TIMER_KEY);
@@ -56,7 +53,7 @@ export async function checkTimer(d: TimerTickDeps): Promise<"ended" | "warned" |
   const due = today ? dueWarnings(today.points, now, s.warned) : [];
   if (!due.length) return null;
   d.plan.setState(TIMER_KEY, { ...s, warned: [...s.warned, ...due.map((p) => p.key)] });
-  void d.notify("In 5 minutes", due.map((p) => p.label).join("\n")).catch(() => {});
+  void d.notify(notices.meeting(due.map((p) => p.label), due.map((p) => p.key), now.toString())).catch(() => {});
   return "warned";
 }
 
@@ -66,19 +63,6 @@ export const CALENDAR_REFRESH_MS = 5 * 60_000;
 /** Whether to reload today's calendars now: a running timer, and none done in the last 5 minutes. */
 export function calendarRefreshDue(s: TimerState | null, lastMs: number | null, nowMs: number): boolean {
   return !!s?.runningSince && !s.ended && (lastMs === null || nowMs - lastMs >= CALENDAR_REFRESH_MS);
-}
-
-/** notify-send with actions (fixed argument list, no shell); resolves the chosen key. */
-export function notifyWithActions(title: string, body: string, actions: NotifyAction[] = []): Promise<string | null> {
-  return new Promise((resolve) => {
-    const args = ["--app-name=Coopilot", "--urgency=normal", ...actions.map((a) => `--action=${a.key}=${a.label}`), title, body];
-    const p = spawn("notify-send", args, { stdio: ["ignore", "pipe", "ignore"] });
-    let out = "";
-    p.stdout.on("data", (c: Buffer) => (out += c.toString()));
-    p.on("error", () => resolve(null));
-    p.on("close", () => resolve(out.trim() || null));
-    if (!actions.length) p.unref();
-  });
 }
 
 const SOUND = "/usr/share/sounds/freedesktop/stereo/complete.oga";

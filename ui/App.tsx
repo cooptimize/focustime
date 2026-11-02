@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks, mondayOf } from "../week/dates.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import { ReopenButton } from "./Reopen.tsx";
+import { parseRoute, ROUTE_EVENT } from "../plan/notify.ts";
 import { ActionRefusal, call, connectSource, disconnectSource, planAction, SessionError, setThemeAction, takeOpenRequest, weekLoad } from "./api.ts";
 import { dayEndOf, hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type ViewRange } from "../week/hours.ts";
 import { applyTheme, initialTheme } from "./theme.ts";
@@ -680,12 +681,40 @@ export function App() {
     return () => clearTimeout(id);
   }, [timerEndsAt, skew]);
 
+  // Step 15.5: a clicked notification opens its view (the server hands the route over like the capture request).
+  const [highlightFollowUp, setHighlightFollowUp] = useState<number | null>(null);
+  const openRouteRef = useRef<(route: string) => void>(() => {});
+  openRouteRef.current = (text: string) => {
+    const r = parseRoute(text);
+    if (!r) return;
+    setCmdOpen(false);
+    if (r.view === "planweek") return openPlanWeek(r.weekStart);
+    if (r.view === "followup") {
+      setHighlightFollowUp(r.id);
+      return setView("inbox");
+    }
+    if (r.view === "settings") return openSettingsRef.current?.(r.section);
+    if (r.view === "vm") {
+      setView("today");
+      // The chip's menu, once Today is on screen.
+      return void setTimeout(() => window.dispatchEvent(new Event(VM_MENU_EVENT)), 300);
+    }
+    setView(r.view);
+  };
+
+  // The same routes as a page event (browser notifications in a hosted version, and the browser tests).
+  useEffect(() => {
+    const on = (e: Event) => openRouteRef.current(String((e as CustomEvent).detail ?? ""));
+    window.addEventListener(ROUTE_EVENT, on);
+    return () => window.removeEventListener(ROUTE_EVENT, on);
+  }, []);
+
   // Step 9: coopilot-open --capture leaves a request; take it on load, when the window gains focus, and every few
   // seconds while it has focus (the global key may be pressed while Coopilot is already in front).
   const hasData = !!data;
   useEffect(() => {
     if (!hasData) return;
-    const check = () => void takeOpenRequest().then((v) => v === "capture" && setCaptureOpen(true));
+    const check = () => void takeOpenRequest().then((v) => (v === "capture" ? setCaptureOpen(true) : v ? openRouteRef.current(v) : undefined));
     check();
     const onFocus = () => check();
     window.addEventListener("focus", onFocus);
@@ -1318,7 +1347,7 @@ export function App() {
       ) : planWeekAt !== null && settingsAt === null ? (
         <PlanWeek rituals={ritualChips} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => setPlanWeekAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : followUpsOpen && settingsAt === null ? (
-        <Inbox data={data} version={captureVersion} onClose={() => setFollowUpsOpen(false)} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} />
+        <Inbox data={data} version={captureVersion} onClose={() => { setFollowUpsOpen(false); setHighlightFollowUp(null); }} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={highlightFollowUp} />
       ) : closeOutAt !== null && settingsAt === null ? (
         <CloseOut rituals={ritualChips} key={closeOutAt} date={closeOutAt} data={data} onDate={setCloseOutAt} onClose={() => setCloseOutAt(null)} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : checkInOpen && settingsAt === null ? (

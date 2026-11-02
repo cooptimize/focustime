@@ -139,6 +139,10 @@ export type SettingsData = {
   timebox: AppConfig["timebox"];
   /** Settings > Planning > Help sessions (step 13); domains as used (config, else my work email's). */
   collab: AppConfig["collab"];
+  /** Settings > Notifications (step 15.5). */
+  notify: AppConfig["notify"];
+  /** Settings > You > My VM (step 15.5, Q87). */
+  vm: { startWithoutAsking: boolean };
 };
 
 /** [plan] values the UI uses (step 6c). */

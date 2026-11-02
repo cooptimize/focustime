@@ -4,6 +4,7 @@ import { DEFAULT_PLAN, legacyHours, type AppConfig } from "../config/schema.ts";
 import { startTimer, type TimerState } from "../plan/timer.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { checkTimer, type NotifyAction } from "./timer.ts";
+import type { Notice } from "../plan/notify.ts";
 
 const NY = "America/New_York";
 const T = (hhmm: string) => Temporal.Instant.from(`2026-11-02T${hhmm}:00-05:00`);
@@ -22,7 +23,7 @@ function setup() {
     plan,
     now: () => clock,
     endSound: async () => endSound,
-    notify: async (title: string, body: string, actions?: NotifyAction[]) => (sent.push({ title, body, ...(actions ? { actions } : {}) }), answer),
+    notify: async (n: Notice) => (sent.push({ title: n.title, body: n.body, ...(n.buttons.length ? { actions: n.buttons } : {}) }), answer),
     sound: () => void sounds++,
     act: async (a: "timer.done" | "timer.extend" | "timer.next") => (acted.push(a), run(a)),
   };
@@ -59,7 +60,7 @@ describe("focus timer on the server (step 6c)", () => {
     t.answer("next");
     expect(await checkTimer(t.deps)).toBe("ended");
     await flush();
-    expect(t.sent[0]).toMatchObject({ title: "Focus session done", body: "Write the summary", actions: [{ key: "done" }, { key: "extend" }, { key: "next" }] });
+    expect(t.sent[0]).toMatchObject({ title: "Focus session done", body: "Write the summary\nClick for Done, +15 min or Next pick.", actions: [{ key: "done" }, { key: "extend" }, { key: "next" }] });
     expect(t.acted).toEqual(["timer.next"]);
     expect(t.plan.focusedSeconds([a.id])).toEqual({ [a.id]: 1500 });
     // Next pick: the next planned pick, suggested from its size (S = 60 min).
@@ -93,7 +94,7 @@ describe("focus timer on the server (step 6c)", () => {
     await t.run("timer.start", { minutes: 5 });
     t.at("09:06");
     let release: (k: string | null) => void = () => {};
-    t.deps.notify = (title, body, actions) => (t.sent.push({ title, body, ...(actions ? { actions } : {}) }), new Promise((r) => (release = r)));
+    t.deps.notify = (n: Notice) => (t.sent.push({ title: n.title, body: n.body, actions: n.buttons }), new Promise<string | null>((r) => (release = r)));
     await checkTimer(t.deps);
     await t.run("timer.stop");
     release("extend");

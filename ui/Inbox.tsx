@@ -20,7 +20,7 @@ export function inboxOrder(followUps: readonly FollowUpView[], captures: readonl
   return dueOrder(all, today, (e) => (e.kind === "follow_up" ? e.followUp.due : null), (e) => e.at);
 }
 
-export function Inbox({ data, version, onClose, onChanged, defaultClient = null }: { data: WeekLoadData; version: number; onClose: () => void; onChanged: () => void; defaultClient?: string | null }) {
+export function Inbox({ data, version, onClose, onChanged, defaultClient = null, highlight = null }: { data: WeekLoadData; version: number; onClose: () => void; onChanged: () => void; defaultClient?: string | null; highlight?: number | null }) {
   const clients = useMemo(() => captureClients(data), [data]);
   const [followUps, setFollowUps] = useState<FollowUpView[] | null>(null);
   const [caps, setCaps] = useState<CaptureState | null>(null);
@@ -32,6 +32,17 @@ export function Inbox({ data, version, onClose, onChanged, defaultClient = null 
   const [notice, setNotice] = useState<string | null>(null);
   const head = useRef<HTMLHeadingElement>(null);
   const tz = data.hours.timeZone;
+  // Step 15.5: a follow-up's notification opens it here: scrolled to and outlined.
+  const scrolledTo = useRef<number | null>(null);
+  useEffect(() => {
+    for (const x of document.querySelectorAll(".followup-highlight")) if (x.getAttribute("data-follow-up") !== String(highlight)) x.classList.remove("followup-highlight");
+    if (highlight === null || !followUps) return;
+    const el = document.querySelector<HTMLElement>(`.inbox [data-follow-up="${highlight}"]`);
+    if (!el) return;
+    el.classList.add("followup-highlight");
+    if (scrolledTo.current !== highlight) el.scrollIntoView({ block: "center" });
+    scrolledTo.current = highlight;
+  });
 
   const load = useCallback(async () => {
     try {

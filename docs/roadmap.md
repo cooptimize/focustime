@@ -41,6 +41,8 @@ Since then (Nov 1 to 2): steps 14 (DevOps writes), 14.5, 15 (Plan the day two pa
 
 15.4. **Microsoft sign-in and my VM** (Nov 2): one Microsoft sign-in is the app's user (sign-in screen, the person in the top bar, Sign out; the existing Outlook connection carried over with no new consent; Azure added incrementally). My Azure VM found by its Owner tag and confirmed once; a VM chip with its state and auto-shutdown time; Start and Stop (deallocate) through the write framework with polling and read-back; delay or skip tonight's auto-shutdown, put back the next morning with a Today warning if it can't be; "Your VM is off. Start it?" on workdays.
 
+15.5. **Notifications** (Nov 2): one path for every notification with a switch per kind, quiet hours (outside working hours, PTO days), held during focus and delivered as one after, a click opening the right view, a test button; new: follow-ups due and expiring secrets. Step 15.4 decisions: one-click Start from the morning box (setting), the demo or offline instead of skipping sign-in.
+
 In progress: nothing.
 
 ## Calendar editing rule (agreed Nov 1, built in step 13)
@@ -71,7 +73,7 @@ Dropped (Nov 2): Remmina launch and resume. The VM is reached the usual way; Coo
 
 ## Direction: hosted for other Cooptimizers (later, needs buy-in)
 
-Updated Nov 2: Coopilot will likely become an Azure-hosted web app for any Cooptimizer. Each person has one VM with a Windows profile per client. Groundwork in step 15.4: one Microsoft sign-in per person on the shared app registration (no per-person registrations), identity and VM features keyed by the signed-in person, delegated Azure access so each person's own RBAC applies, OS-specific code kept in the host. Still to revisit for hosting: Dataverse read delegated per user instead of the app-only identity (Q89), a server-side token store instead of the OS keyring, and a confidential-client redirect instead of loopback.
+Updated Nov 2: Coopilot will likely become an Azure-hosted web app for any Cooptimizer. Each person has one VM with a Windows profile per client. Groundwork in step 15.4: one Microsoft sign-in per person on the shared app registration (no per-person registrations), identity and VM features keyed by the signed-in person, delegated Azure access so each person's own RBAC applies, OS-specific code kept in the host. Notifications sit behind the host's `NotifyHost` (browser notifications when hosted). Still to revisit for hosting: Dataverse read delegated per user instead of the app-only identity (Q89), a server-side token store instead of the OS keyring, and a confidential-client redirect instead of loopback.
 
 Interest from other Cooptimizers. A hosted version would use Azure with per-user Entra sign-in, Key Vault for secrets, a per-user database, and normal link opening (Edge profile switching would need an optional local helper). Cost estimate and secure design to be explored in a separate thread before any resources are created. Rule from now (a principle in CLAUDE.md since step 11): nothing machine-specific in the core modules; OS integrations stay behind thin host adapters.
 

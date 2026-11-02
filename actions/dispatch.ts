@@ -14,7 +14,7 @@ import { followOptions } from "./follow.ts";
 import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
 import { VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
-import type { CalEvent, ClientWork, FocusPattern, SourceResult, Week } from "../week/types.ts";
+import type { CalEvent, ClientWork, FocusPattern, IsoDate, SourceResult, Week } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
 import { devopsWriteAction, type WritePats } from "./devops-write-actions.ts";
@@ -50,6 +50,8 @@ import type { AzureClient } from "../sources/azure/client.ts";
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
 export type ActionContext = {
+  /** Step 15.5: the notifier (test and sample notifications). Absent: notifications aren't available here. */
+  notifications?: { test: () => Promise<void>; sample: (kind: string, live: boolean, gated: boolean) => Promise<boolean> };
   loadConfig: () => Promise<{ path: string; parsed: ParseResult; created?: boolean }>;
   makeDataverse: (cfg: DataverseConfig, timeZone: string) => DataverseSource;
   makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource & { write?: OutlookWrite; schedule?: ScheduleReader; people?: PeopleReader };
@@ -385,13 +387,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     collab: cfg?.collab ?? DEFAULT_COLLAB,
     devopsWrite: ctx.plan && ctx.devopsWriter && ctx.writePats ? ctx.plan.devopsIdentities().map((i) => i.clientKey) : [],
     // Step 14.5 (D256): write PATs and app secrets that expire within 14 days, for Today.
-    expiring: expiringSoon(
-      [
-        ...(ctx.plan ? ctx.plan.devopsIdentities() : []).filter((i) => i.expires).map((i) => ({ key: `pat:${i.clientKey}`, label: `${nameOf(cfg, (k) => names.get(k))(i.clientKey)} DevOps write access`, expires: i.expires!, section: "clients" })),
-        ...Object.entries(cfg?.secretExpiry ?? {}).map(([k, v]) => ({ key: `secret:${k}`, label: k === "dataverse-client-secret" ? "The Dataverse app secret" : "The Google app secret", expires: v!, section: "connections" })),
-      ],
-      serverToday,
-    ),
+    expiring: expiringFor(ctx.plan, cfg, serverToday, (k) => names.get(k)),
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
     demo: !!ctx.demo?.on,
@@ -563,7 +559,22 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "vm.restore":
     case "vm.dismiss_prompt":
     case "vm.log":
+    case "vm.start_now":
       return vmAction(await vmContext(ctx), action, req.input);
+    case "notify.test": {
+      if (!noInput(req.input)) return bad("notify.test takes no input");
+      if (!ctx.notifications) return { ok: false, status: 503, error: "Notifications aren't available here" };
+      await ctx.notifications.test();
+      return { ok: true, data: { sent: true } };
+    }
+    case "notify.sample": {
+      const i = req.input as { kind?: unknown; live?: unknown; gated?: unknown } | null;
+      if (!i || typeof i !== "object" || Object.keys(i).some((k) => !["kind", "live", "gated"].includes(k)) || typeof i.kind !== "string" || (i.live !== undefined && typeof i.live !== "boolean") || (i.gated !== undefined && typeof i.gated !== "boolean"))
+        return bad("notify.sample takes { kind, live?, gated? }");
+      if (!ctx.notifications) return { ok: false, status: 503, error: "Notifications aren't available here" };
+      if (!(await ctx.notifications.sample(i.kind, i.live === true, i.gated === true))) return bad("Unknown notification kind");
+      return { ok: true, data: { sent: i.kind } };
+    }
     case "auth.connect_microsoft":
       // Step 15.4: Outlook's connect is the one Microsoft sign-in.
       if (!noInput(req.input)) return bad(`${req.action} takes no input`);
@@ -818,3 +829,13 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
   }
 }
 
+/** Step 14.5 (D256): write PATs and app secrets that expire within 14 days (Today, and step 15.5's notification). */
+export function expiringFor(plan: PlanStore | undefined, cfg: AppConfig | null, today: IsoDate, known: (key: string) => string | undefined = () => undefined) {
+  return expiringSoon(
+    [
+      ...(plan ? plan.devopsIdentities() : []).filter((i) => i.expires).map((i) => ({ key: `pat:${i.clientKey}`, label: `${nameOf(cfg, known)(i.clientKey)} DevOps write access`, expires: i.expires!, section: "clients" })),
+      ...Object.entries(cfg?.secretExpiry ?? {}).map(([k, v]) => ({ key: `secret:${k}`, label: k === "dataverse-client-secret" ? "The Dataverse app secret" : "The Google app secret", expires: v!, section: "connections" })),
+    ],
+    today,
+  );
+}

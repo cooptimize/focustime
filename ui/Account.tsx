@@ -31,8 +31,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
   }, []);
   useEffect(() => void refresh(), [refresh]);
+  const [offline, setOffline] = useState(false);
   const signIn = useCallback(async (azure = true) => {
-    const r = await call<{ status: string; message?: string }>("auth.sign_in", { azure });
+    const r = await call<{ status: string; message?: string; offline?: boolean }>("auth.sign_in", { azure });
+    setOffline(!!r.offline);
     await refresh();
     return r.status === "connected" ? null : (r.message ?? "Sign-in not completed");
   }, [refresh]);
@@ -43,11 +45,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [refresh]);
   const api = useMemo(() => ({ status, refresh, signIn, signOut }), [status, refresh, signIn, signOut]);
   if (!status && !failed) return <div className="center-note"><p>Loading…</p></div>;
-  if (status?.configured && status.state === "signed_out" && !skipped) return <SignInScreen status={status} signIn={signIn} onSkip={() => setSkipped(true)} />;
+  // Q88 (step 15.5): real data needs the sign-in. Without it: the demo, or, when Microsoft can't be reached, offline use.
+  if (status?.configured && status.state === "signed_out" && !skipped)
+    return <SignInScreen status={status} signIn={signIn} offline={offline || (typeof navigator !== "undefined" && navigator.onLine === false)} onSkip={() => setSkipped(true)} />;
   return <AuthCtx.Provider value={api}>{children}</AuthCtx.Provider>;
 }
 
-function SignInScreen({ status, signIn, onSkip }: { status: AuthStatus; signIn: (azure?: boolean) => Promise<string | null>; onSkip: () => void }) {
+function SignInScreen({ status, signIn, offline, onSkip }: { status: AuthStatus; signIn: (azure?: boolean) => Promise<string | null>; offline: boolean; onSkip: () => void }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(status.message);
   return (
@@ -77,7 +81,11 @@ function SignInScreen({ status, signIn, onSkip }: { status: AuthStatus; signIn: 
         {busy && <p className="muted">Your browser opened Microsoft's sign-in page. Come back here when it says you can close the tab.</p>}
         {message && <p className="set-problem" role="alert">{message}</p>}
         <p className="set-hint">The first time, Microsoft asks you to allow calendar and Azure access for Coopilot Desktop. Tokens stay in your keyring on this computer.</p>
-        <button type="button" className="link-btn muted signin-skip" onClick={onSkip}>Continue without signing in</button>
+        <div className="signin-alt">
+          <button type="button" className="link-btn muted" onClick={() => void call("demo.set", { on: true }).then(() => location.reload(), (e: unknown) => setMessage(errText(e)))}>Try the demo (fictional data)</button>
+          {offline && <button type="button" className="link-btn muted signin-skip" onClick={onSkip}>Continue offline</button>}
+        </div>
+        {offline && <p className="set-hint">Offline: Coopilot shows your local plan and what it saved from the last sign-in. Sign in when you're back online.</p>}
       </div>
     </main>
   );
@@ -271,7 +279,7 @@ export function VmChip({ big = false }: { big?: boolean }) {
 
 /** Today: the warning for a schedule still changed, the morning prompt, and Azure access to allow. */
 export function VmToday() {
-  const { status, refresh } = useContext(VmCtx);
+  const { status, refresh, act } = useContext(VmCtx);
   const { signIn } = useContext(AuthCtx);
   const [busy, setBusy] = useState(false);
   if (!status?.vm) return null;
@@ -311,14 +319,17 @@ export function VmToday() {
             className="mini primary"
             disabled={busy}
             onClick={async () => {
-              // One click: this prompt is the preview (what and which VM); the start is logged like any other.
+              // Step 15.5 (Q87): one click when Settings > You says so (this box names the VM and says it starts; the
+              // start is logged and read back like any other); else the usual preview.
+              if (!status.startWithoutAsking) return act("start");
               setBusy(true);
               try {
-                const p = await call<VmPreview>("vm.preview", { op: "start", vmId: status.vm!.id });
-                await call("vm.confirm", { previewId: p.previewId });
+                await call("vm.start_now", { vmId: status.vm!.id });
                 notify(DONE.start);
               } catch (e) {
-                notify(errText(e));
+                // The setting changed since this status was read: show the preview after all.
+                if (e instanceof ActionRefusal && e.code === "ask_first") act("start");
+                else notify(errText(e));
               } finally {
                 setBusy(false);
                 void refresh(true);

@@ -2,6 +2,7 @@
 import { parse, TomlError } from "smol-toml";
 import { PROFILE_DIR } from "../links/edge.ts";
 import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
+import { DEFAULT_NOTIFY, NOTIFY_KINDS, type NotifyKind, type NotifySettings } from "../plan/notify.ts";
 import { DEFAULT_FOCUS, MAX_PLAYLISTS, playlistLink, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
 
@@ -46,10 +47,12 @@ export type AppConfig = {
   collab: CollabSettings;
   /** My VM (step 15.4): the tag that marks a VM as mine. The chosen VM itself is per signed-in person, in the plan store. */
   azure: AzureSettings;
+  /** Settings > Notifications (step 15.5): a switch per kind, quiet hours. */
+  notify: NotifySettings;
 };
-/** `ownerValue` empty means the signed-in person's display name. */
-export type AzureSettings = { ownerTag: string; ownerValue: string };
-export const DEFAULT_AZURE: AzureSettings = { ownerTag: "Owner", ownerValue: "" };
+/** `ownerValue` empty means the signed-in person's display name. `startWithoutAsking` (step 15.5, Q87): the morning box's Start runs at once. */
+export type AzureSettings = { ownerTag: string; ownerValue: string; startWithoutAsking: boolean };
+export const DEFAULT_AZURE: AzureSettings = { ownerTag: "Owner", ownerValue: "", startWithoutAsking: true };
 /** `domains` empty means my work email's domain. */
 /** Step 13.5: `exclude` lists people (names or addresses) who are never candidates or Who suggestions, like bots. */
 export type CollabSettings = { meetingMinutes: number; teams: boolean; daysAhead: number; domains: string[]; exclude: string[] };
@@ -194,7 +197,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -555,7 +558,11 @@ export function parseConfig(text: string): ParseResult {
   if (raw.azure !== undefined) {
     const t = isTable(raw.azure) ? raw.azure : (err("azure", "Must be an [azure] table"), null);
     if (t) {
-      for (const k of Object.keys(t)) if (!["owner_tag", "owner_value"].includes(k)) err(`azure.${k}`, "Unknown field");
+      for (const k of Object.keys(t)) if (!["owner_tag", "owner_value", "start_without_asking"].includes(k)) err(`azure.${k}`, "Unknown field");
+      if (t.start_without_asking !== undefined) {
+        if (typeof t.start_without_asking !== "boolean") err("azure.start_without_asking", "Must be true or false");
+        else azure.startWithoutAsking = t.start_without_asking;
+      }
       if (t.owner_tag !== undefined) {
         if (typeof t.owner_tag !== "string" || !/^[^<>%&\\?/'"]{1,128}$/.test(t.owner_tag)) err("azure.owner_tag", "Must be a tag name of 1 to 128 characters");
         else azure.ownerTag = t.owner_tag;
@@ -563,6 +570,26 @@ export function parseConfig(text: string): ParseResult {
       if (t.owner_value !== undefined) {
         if (typeof t.owner_value !== "string" || t.owner_value.length > 256 || /[\r\n]/.test(t.owner_value)) err("azure.owner_value", "Must be one line of up to 256 characters");
         else azure.ownerValue = t.owner_value.trim();
+      }
+    }
+  }
+
+  // [notify] (optional, step 15.5): one switch per kind, quiet hours (outside working hours, PTO days)
+  const notify: NotifySettings = { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } };
+  if (raw.notify !== undefined) {
+    const t = isTable(raw.notify) ? raw.notify : (err("notify", "Must be a [notify] table"), null);
+    if (t) {
+      for (const k of Object.keys(t)) {
+        if ((NOTIFY_KINDS as readonly string[]).includes(k)) {
+          if (typeof t[k] !== "boolean") err(`notify.${k}`, "Must be true or false");
+          else notify.kinds[k as NotifyKind] = t[k] as boolean;
+        } else if (k === "quiet") {
+          if (t.quiet !== "outside_hours" && t.quiet !== "off") err("notify.quiet", 'Must be "outside_hours" or "off"');
+          else notify.quiet = t.quiet;
+        } else if (k === "quiet_pto") {
+          if (typeof t.quiet_pto !== "boolean") err("notify.quiet_pto", "Must be true or false");
+          else notify.quietPto = t.quiet_pto;
+        } else err(`notify.${k}`, "Unknown field");
       }
     }
   }
@@ -617,6 +644,7 @@ export function parseConfig(text: string): ParseResult {
       timebox,
       collab,
       azure,
+      notify,
     },
   };
 }

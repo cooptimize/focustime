@@ -36,17 +36,23 @@ import { createApp } from "./app.ts";
 import { createDemoContext, seedDemo, type DemoControl } from "./demo.ts";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { existsSync } from "node:fs";
-import { calendarRefreshDue, checkTimer, notifyWithActions, playEndSound } from "./timer.ts";
+import { calendarRefreshDue, checkTimer, playEndSound, TIMER_BUTTONS } from "./timer.ts";
 import { refreshTodayWarnings } from "../actions/warnings.ts";
 import { TIMER_KEY, timerAction, timerLike } from "../actions/timer-actions.ts";
 import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { mediaControl } from "./media.ts";
 import type { TimerState } from "../plan/timer.ts";
-import { CHECKIN_MESSAGE, CLOSEOUT_MESSAGE, checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeoutReminderDue, notifySend } from "./notify.ts";
+import { checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeoutReminderDue, desktopNotify, notifySend } from "./notify.ts";
+import { DEFAULT_NOTIFY, dueFollowUps, inWorkingHours, notices, parseRoute, type Notice } from "../plan/notify.ts";
+import { createNotifier } from "../actions/notifier.ts";
+import { expiringFor } from "../actions/dispatch.ts";
+import { mondayOf } from "../week/dates.ts";
 
 const args = process.argv.slice(2);
 const dev = args.includes("--dev");
 const open = !args.includes("--no-open");
+/** --headless (the browser tests): no desktop notifications and no windows opened by the server. */
+const headless = args.includes("--headless");
 const portArg = args.indexOf("--port");
 const port = portArg >= 0 ? Number(args[portArg + 1]) : 5317;
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("--port must be 1024-65535");
@@ -182,7 +188,8 @@ const server = createApp({
   log,
   // COOPILOT_DIST: a verification build elsewhere, so checking work never swaps the UI the service serves.
   ...(devMiddleware ? { devMiddleware } : { distDir: process.env.COOPILOT_DIST ?? join(root, "dist") }),
-  takeOpenRequest: () => takeOpenRequest(runtimeDir),
+  // The launcher's request (capture), else the view a clicked notification asked for (step 15.5), taken once.
+  takeOpenRequest: async () => (await takeOpenRequest(runtimeDir)) ?? takeRoute(),
   reopen: reopenWindow,
   ctx: () => demoCtx ?? liveCtx,
 });
@@ -226,13 +233,32 @@ const liveCtx: ActionContext = {
 };
 
 /**
+ * Step 15.5: clicking a notification opens Coopilot on its view. The route waits here (validated, 2 minutes) for the
+ * window to take it when it loads or gains focus; coopilot-open focuses the window or opens one.
+ */
+let pendingRoute: { route: string; at: number } | null = null;
+function openRoute(route: string): void {
+  if (!parseRoute(route)) return;
+  pendingRoute = { route, at: Date.now() };
+  log({ source: "plan", op: "notify_route", kind: route.split(":")[0]! });
+  void reopenWindow().then((ok) => log({ source: "plan", op: "notify_window", kind: ok ? "opened" : "unavailable" }));
+}
+function takeRoute(): string | null {
+  const p = pendingRoute;
+  pendingRoute = null;
+  const r = p && Date.now() - p.at < 120_000 ? p.route : null;
+  if (r) log({ source: "plan", op: "notify_route", kind: "taken" });
+  return r;
+}
+
+/**
  * Step 15.4 fix (host adapter): "Reopen Coopilot" from a window whose launch token is old. Under the service,
  * coopilot-open replaces a window opened for an earlier server run; with npm start, a new app window opens with the
  * launch link. --no-reopen (the browser tests) turns it off.
  */
 async function reopenWindow(): Promise<boolean> {
   const script = join(homedir(), ".local", "bin", "coopilot-open");
-  if (args.includes("--no-reopen")) return false;
+  if (headless || args.includes("--no-reopen")) return false;
   const argv = process.env.INVOCATION_ID && existsSync(script) ? [script] : open ? ["chromium", `--app=http://127.0.0.1:${port}/?token=${token}`] : null;
   if (!argv) return false;
   return launchDetached(argv).then(() => true, () => false);
@@ -252,86 +278,176 @@ function launchDetached(argv: string[]): Promise<void> {
   });
 }
 
-// The once-a-day reminder. Checked every 30 s, so it also handles day rollover while running for days.
+// Notifications (step 15.5): every reminder, the timer, my VM, follow-ups due and expiring secrets go through one
+// notifier, which applies Settings > Notifications (switches, quiet hours, holding during focus) and routes clicks.
+// Checked every 30 s (the timer every 5 s), so day rollover is handled while running for days.
 if (plan) {
   const store = plan;
   const configOrNull = async () => {
     const r = await loadConfig();
     return r.parsed.ok ? r.parsed.config : null;
   };
-  const tick = () =>
-    checkReminder({
-      now: () => zonedNow(timeZone),
-      hours: async () => {
-        const r = await loadConfig();
-        return r.parsed.ok ? r.parsed.config.week.hours : null;
-      },
-      offsetMinutes: async () => {
-        const r = await loadConfig();
-        return r.parsed.ok ? r.parsed.config.plan.reminderOffsetMinutes : 0;
-      },
-      committed: (d) => !!store.day(d)?.committedAt,
-      off: async (d) => {
-        const r = await loadConfig();
-        if (!r.parsed.ok || !r.parsed.config.dataverse.mySystemUserId) return false;
-        const pto = await makeDataverse(r.parsed.config.dataverse, r.parsed.config.week.hours.timeZone).pto(d, d);
-        return pto.items.some((e) => e.date === d);
-      },
-      once: (d) => store.markOnce("reminder", d),
-      send: (title, body) => {
-        notifySend(title, body);
-        log({ source: "plan", op: "reminder", kind: "sent" });
-      },
-    }).catch(() => log({ source: "plan", op: "reminder", kind: "failed" }));
-  // Check-in and Close out (step 7): once a day each, the same way.
   const hoursOrNull = async () => (await configOrNull())?.week.hours ?? null;
+  // PTO for a date, kept for 30 minutes (the gate asks every tick; the Dataverse read has its own cache too).
+  const ptoMemo = new Map<string, { at: number; off: boolean }>();
   const ptoOff = async (d: string) => {
+    const hit = ptoMemo.get(d);
+    if (hit && Date.now() - hit.at < 30 * 60_000) return hit.off;
     const c = await configOrNull();
     if (!c?.dataverse.mySystemUserId) return false;
-    return (await makeDataverse(c.dataverse, c.week.hours.timeZone).pto(d, d)).items.some((e) => e.date === d);
+    const off = (await makeDataverse(c.dataverse, c.week.hours.timeZone).pto(d, d)).items.some((e) => e.date === d);
+    ptoMemo.set(d, { at: Date.now(), off });
+    return off;
   };
-  const dayReminders = () => {
-    void checkDayReminder({
+  const focusRunning = () => {
+    const s = store.getState<TimerState>(TIMER_KEY);
+    return !!s && s.kind === "focus" && !s.ended && !!s.runningSince;
+  };
+  const todayOf = (c: AppConfig) => localToday(instantNow().toString(), c.week.hours.timeZone);
+  const vmCtx = () => vmContext(liveCtx);
+  const icon = existsSync(join(root, "system", "coopilot-icon.png")) ? join(root, "system", "coopilot-icon.png") : null;
+
+  /** A button on a notification: the VM's Start and Restore (the timer's buttons go to checkTimer). */
+  const act = async (n: Notice, key: string) => {
+    const sample = n.key.startsWith("sample:");
+    if (n.kind === "vm" && (key === "start" || key === "restore")) {
+      // Samples never touch Azure unless asked for live (notify.sample { live: true }): they open the VM menu.
+      if (sample && !n.key.startsWith("sample:live:")) return openRoute("vm");
+      const r = await vmAction(await vmCtx(), key === "start" ? "vm.start_now" : "vm.restore", {});
+      log({ source: "azure", op: key === "start" ? "notify_start" : "notify_restore", kind: r.ok ? "ok" : (r.code ?? "refused") });
+      // Start asks first (Settings > You), or it couldn't: open the VM menu, where the preview and the reason show.
+      if (!r.ok) {
+        openRoute("vm");
+        if (r.code !== "ask_first") notifySend("Coopilot", `Couldn't ${key === "start" ? "start your VM" : "restore auto-shutdown"}: ${r.error}.`);
+      }
+    }
+  };
+  /** Whether a held notification still matters when focus ends. */
+  const still = async (n: Notice) => {
+    const c = await configOrNull();
+    if (!c) return true;
+    const today = todayOf(c);
+    if (n.kind === "plan_day") return !store.day(today)?.committedAt;
+    if (n.kind === "closeout") return !store.day(today)?.closedOutAt;
+    if (n.kind === "checkin") return !!store.day(today)?.committedAt && !store.day(today)?.closedOutAt;
+    if (n.kind === "plan_week" || n.kind === "look_ahead") return !store.weekPlan(n.route.slice("planweek:".length)).committedAt;
+    if (n.kind === "followups") return dueFollowUps(store.openFollowUps(), today).length > 0;
+    if (n.kind === "vm" && n.key.startsWith("vm_off:")) {
+      const st = await vmAction(await vmCtx(), "vm.status", {});
+      return st.ok && (st.data as VmStatus).prompt;
+    }
+    return true;
+  };
+  const notifier = createNotifier({
+    plan: store,
+    host: { show: (n) => (headless ? Promise.resolve(null) : desktopNotify(n, icon)) },
+    facts: async () => {
+      const c = await configOrNull();
+      const settings = c?.notify ?? DEFAULT_NOTIFY;
+      if (!c) return { settings, inHours: false, pto: false, focusRunning: focusRunning() };
+      const today = todayOf(c);
+      return { settings, inHours: inWorkingHours(c.week.hours, zonedNow(c.week.hours.timeZone)), pto: await ptoOff(today).catch(() => false), focusRunning: focusRunning() };
+    },
+    now: () => instantNow().toString(),
+    open: (route) => openRoute(route),
+    act,
+    still,
+    log: (op, kind) => log({ source: "plan", op, kind }),
+  });
+
+  // Settings > Notifications > Send a test notification, and one sample per kind for the live check.
+  const samples = (c: AppConfig, live: boolean): Record<string, Notice | null> => {
+    const at = instantNow().toString();
+    const today = todayOf(c);
+    const monday = Temporal.PlainDate.from(today).subtract({ days: Temporal.PlainDate.from(today).dayOfWeek - 1 });
+    const pfx = (n: Notice | null): Notice | null => (n ? { ...n, key: `sample:${live ? "live:" : ""}${n.key}:${at}` } : null);
+    const open = dueFollowUps(store.openFollowUps(), today);
+    return {
+      plan_day: pfx(notices.planDay(today, at)),
+      checkin: pfx(notices.checkin(today, at)),
+      closeout: pfx(notices.closeout(today, at)),
+      plan_week: pfx(notices.week(monday.toString(), true, at)),
+      look_ahead: pfx(notices.week(monday.add({ days: 7 }).toString(), false, at)),
+      timer: pfx(notices.timerEnd(false, "Sample: a focus session", at, at)),
+      meeting: pfx(notices.meeting(["Sample: a meeting at 10:00"], ["sample"], at)),
+      vm: pfx(notices.vmOff(today, live ? "Your VM" : "Your VM (sample: Start opens the VM menu)", at)),
+      vm_changed: pfx(notices.vmChanged(today, live ? "Auto-shutdown set to 9:00 PM" : "Sample: auto-shutdown set to 9:00 PM (Restore opens the VM menu)", at)),
+      // With none due, a made-up one that opens the Inbox (there is no follow-up to open).
+      followups: pfx(open.length ? notices.followUps(today, open, at) : { ...notices.followUps(today, [{ id: 1, what: "Sample: reply about the proposal", overdue: false }], at)!, route: "inbox" }),
+      expiry: pfx(notices.expiry(today, [{ text: "Sample: a DevOps write access expires in 9 days. Update in Settings", section: "clients" }], at)),
+    };
+  };
+  liveCtx.notifications = {
+    test: () => notifier.test(),
+    sample: async (kind, live, gated) => {
+      const c = await configOrNull();
+      const n = c ? samples(c, live)[kind] : null;
+      if (!n) return false;
+      // Gated: through Settings > Notifications like a real one (switch, quiet hours, held during focus).
+      if (gated) {
+        await notifier.refresh();
+        log({ source: "plan", op: "notify_sample", kind: await notifier.offer(n) });
+        return true;
+      }
+      // A sample's timer buttons run the real timer actions (local; refused when no timer has ended).
+      notifier.show(n, n.kind === "timer" ? async (key) => void (key in TIMER_BUTTONS && (await timerAction(timerCtx(), TIMER_BUTTONS[key as keyof typeof TIMER_BUTTONS], {}).catch(() => null))) : undefined);
+      return true;
+    },
+  };
+
+  const send = (n: Notice | null) => (n ? notifier.offer(n).catch(() => log({ source: "plan", op: "notify", kind: "failed" })) : undefined);
+  const dayReminders = async () => {
+    const c = await configOrNull();
+    if (!c) return;
+    const at = instantNow().toString();
+    await checkReminder({
       now: () => zonedNow(timeZone),
       hours: hoursOrNull,
-      due: async (n, m) => checkinReminderDue(n, m, !!store.day(n.toPlainDate().toString())?.committedAt, (await configOrNull())?.plan.checkinReminderMinutes ?? 0),
+      offsetMinutes: async () => c.plan.reminderOffsetMinutes,
+      committed: (d) => !!store.day(d)?.committedAt,
       off: ptoOff,
-      once: (d) => store.markOnce("checkin_reminder", d),
-      send: () => {
-        notifySend("Coopilot", CHECKIN_MESSAGE);
-        log({ source: "plan", op: "checkin_reminder", kind: "sent" });
-      },
+      once: (d) => notifier.allows("plan_day") && store.markOnce("reminder", d),
+      send: () => void send(notices.planDay(todayOf(c), at)),
+    }).catch(() => log({ source: "plan", op: "reminder", kind: "failed" }));
+    // Check-in and Close out (step 7): once a day each.
+    await checkDayReminder({
+      now: () => zonedNow(timeZone),
+      hours: hoursOrNull,
+      due: (n, m) => checkinReminderDue(n, m, !!store.day(n.toPlainDate().toString())?.committedAt, c.plan.checkinReminderMinutes),
+      off: ptoOff,
+      once: (d) => notifier.allows("checkin") && store.markOnce("checkin_reminder", d),
+      send: () => void send(notices.checkin(todayOf(c), at)),
     }).catch(() => log({ source: "plan", op: "checkin_reminder", kind: "failed" }));
-    void checkDayReminder({
+    await checkDayReminder({
       now: () => zonedNow(timeZone),
       hours: hoursOrNull,
-      due: async (n, m) => closeoutReminderDue(n, m, !!store.day(n.toPlainDate().toString())?.closedOutAt, (await configOrNull())?.plan.closeoutReminderMinutes ?? 15),
+      due: (n, m) => closeoutReminderDue(n, m, !!store.day(n.toPlainDate().toString())?.closedOutAt, c.plan.closeoutReminderMinutes),
       off: ptoOff,
-      once: (d) => store.markOnce("closeout_reminder", d),
-      send: () => {
-        notifySend("Coopilot", CLOSEOUT_MESSAGE);
-        log({ source: "plan", op: "closeout_reminder", kind: "sent" });
-      },
+      once: (d) => notifier.allows("closeout") && store.markOnce("closeout_reminder", d),
+      send: () => void send(notices.closeout(todayOf(c), at)),
     }).catch(() => log({ source: "plan", op: "closeout_reminder", kind: "failed" }));
-    // Plan the week nudges (step 8): once per nudge and week, while that week isn't committed.
-    void checkWeekNudges({
+    // Plan the week (Monday, this week) and Look ahead (Thursday and Friday, next week), step 8.
+    const thisWeek = mondayOf(todayOf(c));
+    await checkWeekNudges({
       now: () => zonedNow(timeZone),
-      times: async () => {
-        const c = await configOrNull();
-        return c ? { thu: c.plan.weekNudgeThu, fri: c.plan.weekNudgeFri, mon: c.plan.weekNudgeMon } : null;
-      },
+      times: async () => ({ thu: c.plan.weekNudgeThu, fri: c.plan.weekNudgeFri, mon: c.plan.weekNudgeMon }),
       committed: (w) => !!store.weekPlan(w).committedAt,
       off: ptoOff,
-      workStart: async (d) => {
-        const h = await hoursOrNull();
-        return h ? (hoursOn(h, d).segments[0]?.start ?? null) : null;
-      },
-      once: (key, w) => store.markOnce(key, w),
-      send: (body) => {
-        notifySend("Coopilot", body);
-        log({ source: "plan", op: "week_nudge", kind: "sent" });
-      },
+      workStart: async (d) => hoursOn(c.week.hours, d).segments[0]?.start ?? null,
+      once: (key, w) => notifier.allows(w === thisWeek ? "plan_week" : "look_ahead") && store.markOnce(key, w),
+      send: (_body, w) => void send(notices.week(w, w === thisWeek, at)),
     }).catch(() => log({ source: "plan", op: "week_nudge", kind: "failed" }));
+  };
+  // Once a workday from work start (working hours, not PTO): follow-ups due or overdue, and expiring secrets.
+  const workdayNotices = async () => {
+    const c = await configOrNull();
+    if (!c) return;
+    const today = todayOf(c);
+    const ws = hoursOn(c.week.hours, today).segments[0]?.start ?? null;
+    if (!ws || zonedNow(c.week.hours.timeZone).toPlainTime().toString().slice(0, 5) < ws) return;
+    const at = instantNow().toString();
+    if (notifier.allows("followups") && store.markOnce("followups_notice", today)) await send(notices.followUps(today, dueFollowUps(store.openFollowUps(), today), at));
+    if (notifier.allows("expiry") && store.markOnce("expiry_notice", today)) await send(notices.expiry(today, expiringFor(store, c, today), at));
   };
   // My VM (step 15.4): put back a changed auto-shutdown the next morning (first run after midnight, retried, and at work
   // start), and once a workday at work start say so when the VM is off. Never starts anything by itself.
@@ -340,43 +456,63 @@ if (plan) {
     if (!c) return;
     const tz = c.week.hours.timeZone;
     const n = zonedNow(tz);
-    const today = localToday(instantNow().toString(), tz);
+    const today = todayOf(c);
     const ws = hoursOn(c.week.hours, today).segments[0]?.start ?? null;
     const afterStart = !!ws && n.toPlainTime().toString().slice(0, 5) >= ws;
-    const vc = await vmContext(liveCtx);
+    const vc = await vmCtx();
     if (!vc.account) return;
     const atWorkStart = afterStart && store.markOnce("vm_restore_workstart", today);
     const r = await restoreTick(vc, { atWorkStart });
     if (r) log({ source: "azure", op: "shutdown_restore", kind: r });
-    if (r === "failed" && atWorkStart) notifySend("Coopilot", "Auto-shutdown is still changed on your VM. Open Coopilot to restore it.");
-    if (afterStart && store.markOnce("vm_prompt_notice", today)) {
+    const at = instantNow().toString();
+    if (r === "failed" && atWorkStart) {
       const st = await vmAction(vc, "vm.status", {});
-      if (st.ok && (st.data as VmStatus).prompt) notifySend("Coopilot", "Your VM is off. Open Coopilot to start it.");
+      await send(notices.vmChanged(today, st.ok ? ((st.data as VmStatus).change?.text ?? "Auto-shutdown is changed") : "Auto-shutdown is changed", at));
+    }
+    if (afterStart && notifier.allows("vm") && store.markOnce("vm_prompt_notice", today)) {
+      const st = await vmAction(vc, "vm.status", {});
+      if (st.ok && (st.data as VmStatus).prompt) await send(notices.vmOff(today, (st.data as VmStatus).vm?.name ?? "Your VM", at));
     }
   };
   // No reminders while demo mode is on (D272): the demo shouldn't pop real nudges.
-  setInterval(() => {
+  const tick = async () => {
     if (demoCtx) return;
-    void tick();
-    dayReminders();
-    void vmTick().catch(() => log({ source: "azure", op: "vm_tick", kind: "failed" }));
-  }, 30_000).unref();
+    await notifier.refresh().catch(() => null);
+    await dayReminders();
+    await workdayNotices().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
+    await vmTick().catch(() => log({ source: "azure", op: "vm_tick", kind: "failed" }));
+  };
+  setInterval(() => void tick(), 30_000).unref();
   void tick();
 
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.
+  const timerCtx = () => ({ plan: activePlan() ?? store, config: configOrNull, now: () => instantNow().toString(), media });
   const timerTick = () =>
     checkTimer({
       plan: activePlan() ?? store,
       now: () => instantNow(),
       endSound: async () => (await configOrNull())?.plan.endSound ?? false,
-      notify: notifyWithActions,
+      // Through the notifier (its switch); the buttons come back here, where the session is checked.
+      notify: (n) =>
+        demoCtx
+          ? Promise.resolve(null)
+          : new Promise((resolve) => {
+              void notifier.offer(n, (key) => resolve(key || null)).then((g) => g !== "send" && resolve(null), () => resolve(null));
+            }),
       sound: playEndSound,
-      act: (action) => timerAction({ plan: activePlan() ?? store, config: configOrNull, now: () => instantNow().toString(), media }, action, {}),
+      act: (action) => timerAction(timerCtx(), action, {}),
       // Step 10: a session that ends on its own pauses media too (when Settings > Focus asks for it).
       ended: async (before, after) => void (await media.transition(timerLike(before), timerLike(after), ((await configOrNull())?.focus ?? DEFAULT_FOCUS).pauseMedia)),
     })
       .then((did) => did && log({ source: "plan", op: "timer", kind: did }))
       .catch(() => log({ source: "plan", op: "timer", kind: "failed" }));
+  // Held notifications go out once the focus session is over (collapsed into one when there are several).
+  const flushHeld = async () => {
+    if (demoCtx || !notifier.held().length || focusRunning()) return;
+    await notifier.refresh();
+    const n = await notifier.flush();
+    if (n) log({ source: "plan", op: "notify", kind: "held_delivered", count: n });
+  };
   // Fresher warnings (step 6d): while a timer runs, reload today's calendars every 5 minutes (their own cache
   // decides whether that is a live call) and recompute today's warning points.
   let lastCalendar: number | null = null;
@@ -394,6 +530,7 @@ if (plan) {
   setInterval(() => {
     void timerTick();
     warningsTick();
+    void flushHeld().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
   }, 5_000).unref();
   void timerTick();
 }
