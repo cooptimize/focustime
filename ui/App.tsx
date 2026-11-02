@@ -6,6 +6,10 @@ import { parseRoute, ROUTE_EVENT } from "../plan/notify.ts";
 import { ActionRefusal, call, connectSource, disconnectSource, planAction, SessionError, setThemeAction, takeOpenRequest, weekLoad } from "./api.ts";
 import { dayEndOf, hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type ViewRange } from "../week/hours.ts";
 import { applyTheme, initialTheme } from "./theme.ts";
+import { rememberReduceMotion } from "./brand/motion.ts";
+import { WeekMark } from "./brand/Brand.tsx";
+import { CloseReverse, MomentOverlay, Opening } from "./brand/Opening.tsx";
+import { mustsDone, sourceLines } from "./brand/opening.ts";
 import type { Theme } from "../config/schema.ts";
 import { NOTICE_EVENT, openWorkItem } from "./WorkLink.tsx";
 import { DevOpsWriteCtx, useDevOpsWriteFlow } from "./DevOpsWrite.tsx";
@@ -104,6 +108,13 @@ export function App() {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<Selection>({ dayIndex: 0, half: "AM" });
+  // Step 17.5: the welcome moment (the first launch ever, kept in the plan store) and the Close out reverse.
+  const [welcome, setWelcome] = useState(false);
+  const [closing, setClosing] = useState<{ musts: boolean } | null>(null);
+  const [reconnected, setReconnected] = useState<"outlook" | "google" | null>(null);
+  const afterOpening = useCallback(() => {
+    call<{ first: boolean }>("ui.first_launch", {}).then((r) => r.first && setWelcome(true), () => {});
+  }, []);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
@@ -260,6 +271,20 @@ export function App() {
       reloadRef.current();
     } catch (e) {
       setNotice(`Default not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  }, []);
+  /** Step 17.5: Settings > Display "Reduce motion", mirrored locally so the next opening knows before it loads. */
+  useEffect(() => {
+    if (data) rememberReduceMotion(data.ui.reduceMotion);
+  }, [data?.ui.reduceMotion]);
+  const saveReduceMotion = useCallback(async (on: boolean) => {
+    try {
+      await call("ui.set_reduce_motion", { on });
+      rememberReduceMotion(on);
+      setNotice(`Reduce motion: ${on ? "on" : "off"}`);
+      reloadRef.current();
+    } catch (e) {
+      setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }, []);
   /** Time model actions (hours for a day, unavailable time, flex sessions): run, then reload the week quietly. */
@@ -615,8 +640,10 @@ export function App() {
       try {
         const r = await connectSource(src);
         setNotice(r.status === "connected" ? null : (r.message ?? "Sign-in did not finish"));
+        return r.status === "connected";
       } catch {
         setNotice("Sign-in did not finish");
+        return false;
       } finally {
         setBusy(null);
         void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true });
@@ -996,6 +1023,8 @@ export function App() {
       setViewRange: (r) => void setViewRange(r),
       timelines,
       saveTimelines: (on) => void saveTimelines(on),
+      reduceMotion: data.ui.reduceMotion,
+      saveReduceMotion: (on) => void saveReduceMotion(on),
       hours: data.hours,
       runTime,
       planning: data.planning,
@@ -1086,9 +1115,13 @@ export function App() {
   }, [data, target, sel, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, goNav]); // eslint-disable-line react-hooks/exhaustive-deps
   openSettingsRef.current = env?.openSettings ?? null;
 
+  // Step 17.5: the opening (loader, unroll, into the top bar's mark), then the welcome moment on the first launch ever.
+  const opening = <Opening key="opening" ready={state.kind !== "loading"} lines={sourceLines(data?.sources ?? null, data?.devops)} onFinished={afterOpening} />;
+
   if (state.kind === "session") {
     return (
       <div className="center-note">
+        {opening}
         <h1>Reopen Coopilot</h1>
         <p>Coopilot was restarted, so this window is out of date. Reopen it to continue; the new window replaces this one.</p>
         <ReopenButton />
@@ -1096,7 +1129,12 @@ export function App() {
     );
   }
   if (!data || !env || !target) {
-    return <div className="center-note">{state.kind === "failed" ? <p>{state.message}. Is <code>npm start</code> still running?</p> : <p>Loading your week…</p>}</div>;
+    return (
+      <>
+        {opening}
+        {state.kind === "failed" && <div className="center-note"><p>{state.message}. Is <code>npm start</code> still running?</p></div>}
+      </>
+    );
   }
 
   const { week } = data;
@@ -1179,6 +1217,10 @@ export function App() {
   tbEnvRef.current = tbEnv;
 
   return (
+    <>
+    {opening}
+    {welcome && <MomentOverlay line="Welcome to Coopilot. Here's your week." onDone={() => setWelcome(false)} />}
+    {closing && <CloseReverse musts={closing.musts} onDone={() => setClosing(null)} />}
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={work}>
     <WeekItems.Provider value={weekItems}>
@@ -1191,8 +1233,10 @@ export function App() {
     <div className={`app ${layout}${compact ? " compact" : ""}`}>
       <header className="topbar">
         <div className="brand">
-          <span className="logo" aria-hidden="true" />
-          <span className="name">Coopilot</span>
+          <button type="button" className="brand-home" onClick={() => setView("today")} title="Today">
+            <WeekMark height={18} />
+            <span className="name">Coopilot</span>
+          </button>
           {data.demo && (
             <button type="button" className="demo-tag" onClick={() => setSettingsAt("display")} title="Demo mode: fictional data, nothing leaves Coopilot. Turn it off in Settings > Display">
               Demo data
@@ -1292,14 +1336,25 @@ export function App() {
           busy={busy}
           loading={loading}
           onRefresh={() => auto.trigger("button")}
-          onConnect={(src) => void connect(src)}
+          onConnect={(src) => {
+            // Step 17.5: a calendar that was down and reconnects here gets the fun moment.
+            const wasDown = data.sources.some((s) => s.source === src && s.status !== "ok");
+            void connect(src).then((ok) => {
+              if (!ok || !wasDown) return;
+              setReconnected(src);
+              setTimeout(() => setReconnected((r) => (r === src ? null : r)), 6000);
+            });
+          }}
           onDisconnect={(src) => void disconnect(src)}
+          reconnected={reconnected}
           theme={theme}
           setTheme={(t) => void setTheme(t)}
           viewRange={data.ui.viewRange}
           setViewRange={(r) => void saveViewRange(r)}
           showTimelines={data.ui.showTimelines}
           setShowTimelines={(on) => void saveTimelines(on)}
+          reduceMotion={data.ui.reduceMotion}
+          setReduceMotion={(on) => void saveReduceMotion(on)}
           demo={data.demo}
           setDemo={(on) => void switchDemo(on)}
           runTime={runTime}
@@ -1341,7 +1396,7 @@ export function App() {
       ) : followUpsOpen ? (
         <Inbox data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
       ) : closeOutAt !== null ? (
-        <CloseOut switcher={switches.today} key={closeOutAt} date={closeOutAt} data={data} onDate={(d) => goNav(navOf.today("closeout", d))} onClose={(msg) => (msg && setNotice(msg), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
+        <CloseOut switcher={switches.today} key={closeOutAt} date={closeOutAt} data={data} onDate={(d) => goNav(navOf.today("closeout", d))} onClose={(msg) => (msg && setNotice(msg), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} onClosedOut={(st) => setClosing({ musts: st.date === st.today && mustsDone(st.picks, data.weekFeatures) })} />
       ) : checkInOpen ? (
         <CheckIn switcher={switches.today} data={data} now={now ?? new Date(clock).toISOString()} onClose={leavePlanning} onChanged={reloadQuiet} />
       ) : roadmapOpen ? (
@@ -1537,5 +1592,6 @@ export function App() {
     </WeekItems.Provider>
     </DevOpsWork.Provider>
     </SampleSources.Provider>
+    </>
   );
 }

@@ -1,0 +1,79 @@
+/* Step 17.5: the brand module's styles (docs/design/brand.md). Tokens only (brand, semantic); mascot-highlight is
+   used only in ui/brand/. Motion stops under prefers-reduced-motion and Settings > Display "Reduce motion". */
+
+/* The generated SVGs name their colors --brand-am, --brand-pm, --accent, --lime, --ghost and --beam-blend:
+   mapped here to the brand tokens, inside the mark only. */
+.brand-svg {
+  --accent: var(--brand-accent);
+  --lime: var(--mascot-highlight);
+  --ghost: var(--brand-ghost);
+  --beam-blend: var(--brand-beam-blend);
+  display: inline-block;
+  flex: none;
+  overflow: visible;
+}
+span.brand-svg > svg { display: block; width: 100%; height: auto; }
+/* The beam blends with screen on dark and multiply on light. The inlined assets' own style attributes are blocked
+   by the page's CSP (style-src 'self'), so their beams are matched by their gradient fill here. */
+.lumen-beam, .brand-svg path[fill^="url(#beam"] { mix-blend-mode: var(--brand-beam-blend); }
+
+/* Top bar: the mark and the live "Coopilot" text, one button home to Today. */
+.brand-home {
+  display: inline-flex; align-items: center; gap: 9px;
+  border: 0; background: none; padding: 2px 4px; margin: -2px -4px; border-radius: 6px;
+  color: inherit; font: inherit; cursor: pointer;
+}
+.brand-home:hover { background: color-mix(in oklab, var(--text) 6%, transparent); }
+.brand-home:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Lumen's poses. */
+.lumen .lumen-pose { transform-box: fill-box; transform-origin: 50% 100%; }
+.lumen.pose-idle .lumen-pose { animation: lumen-sway 6s ease-in-out infinite; }
+.lumen.pose-idle .lumen-beam, .lumen.pose-idle .lumen-bar { animation: lumen-glow 3s ease-in-out infinite; }
+.lumen.pose-bob .lumen-pose { animation: lumen-settle 0.7s cubic-bezier(0.3, 0.7, 0.3, 1) both, lumen-sway 6s ease-in-out 0.7s infinite; }
+.lumen.pose-bob .lumen-beam, .lumen.pose-bob .lumen-bar { animation: lumen-glow 3s ease-in-out 0.7s infinite; }
+@keyframes lumen-sway { 0%, 100% { transform: rotate(-1.5deg); } 50% { transform: rotate(1.5deg); } }
+@keyframes lumen-glow { 0%, 100% { opacity: 1; } 50% { opacity: 0.72; } }
+@keyframes lumen-settle { 0% { transform: translateY(-14%); opacity: 0; } 45% { transform: translateY(0); opacity: 1; } 70% { transform: translateY(-6%); } 100% { transform: translateY(0); } }
+
+.loading-sweep { animation: lumen-sweep 2.5s linear infinite; }
+@keyframes lumen-sweep { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lumen .lumen-pose, .lumen .lumen-beam, .lumen .lumen-bar, .loading-sweep { animation: none !important; }
+}
+:root[data-reduce-motion] .lumen .lumen-pose, :root[data-reduce-motion] .lumen .lumen-beam, :root[data-reduce-motion] .lumen .lumen-bar, :root[data-reduce-motion] .loading-sweep { animation: none !important; }
+
+/* The opening and Close out overlays: full screen, the page's background. */
+.brand-stage {
+  position: fixed; inset: 0; z-index: 1000;
+  display: grid; place-items: center;
+  pointer-events: none;
+}
+.brand-stage.blocking { pointer-events: auto; cursor: pointer; }
+.brand-stage-bg { position: absolute; inset: 0; background: var(--bg); transition: opacity 450ms ease; }
+.brand-stage-bg.gone { opacity: 0; }
+.brand-stage-body { position: relative; display: flex; flex-direction: column; align-items: center; gap: 18px; transition: opacity 300ms ease; }
+.brand-stage-body.gone { opacity: 0; }
+.brand-stage .unroll, .brand-stage .lumen-loading { transform-origin: 0 0; }
+.brand-stage .unroll.flying { transition: transform 450ms cubic-bezier(0.5, 0, 0.2, 1); }
+.brand-stage .unroll-lumen { transition: opacity 180ms ease; }
+.brand-stage .unroll-lumen.gone { opacity: 0; }
+.brand-loading-text { text-align: center; transition: opacity 300ms ease; min-height: 120px; }
+.brand-loading-text.gone { opacity: 0; }
+.brand-loading-text h1 { font-size: 20px; font-weight: 600; margin: 0 0 10px; color: var(--text); }
+.brand-loading-text ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; color: var(--text-muted); font-size: 14px; }
+.brand-loading-text li[data-state="done"] { color: var(--text); }
+.brand-loading-text li[data-state="failed"] { color: var(--watch); }
+.brand-moment-line { font-size: 20px; font-weight: 600; color: var(--text); margin: 0; text-align: center; transition: opacity 300ms ease; }
+.brand-moment-line.gone { opacity: 0; }
+.brand-skip { font-size: 13px; color: var(--text-faint); margin: 0; }
+
+/* Empty states and inline moments: the idle pose, one plain line, one action. */
+.brand-empty { display: flex; align-items: center; gap: 14px; padding: 14px 0; color: var(--text-muted); }
+.brand-empty p { margin: 0; }
+.brand-empty .brand-empty-text { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+
+/* About in Settings. */
+.brand-about { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.brand-about p { margin: 0; }

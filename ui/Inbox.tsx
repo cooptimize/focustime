@@ -8,6 +8,7 @@ import type { Capture } from "../plan/types.ts";
 import { call } from "./api.ts";
 import { CaptureBox, captureClients, captureWhen, SortCapture } from "./Capture.tsx";
 import { Fading, FollowUpRow } from "./FollowUps.tsx";
+import { EmptyState } from "./brand/Opening.tsx";
 
 type Entry = { kind: "follow_up"; at: string; followUp: FollowUpView } | { kind: "capture"; at: string; capture: Capture };
 
@@ -102,7 +103,11 @@ export function Inbox({ data, version, onChanged, defaultClient = null, highligh
           </ul>
         </section>
       )}
-      {followUps && caps && !entries.length && <p className="follow-ups-empty">Nothing waiting. New captures and follow-ups show up here.</p>}
+      {followUps && caps && !entries.length && (
+        <EmptyState line="Nothing waiting. New captures and follow-ups show up here.">
+          <button type="button" className="mini" onClick={() => document.querySelector<HTMLElement>(".inbox-capture input, .inbox-capture textarea")?.focus()}>Capture something</button>
+        </EmptyState>
+      )}
       <ul className="inbox-list">
         {entries.map((e) =>
           e.kind === "follow_up" ? (

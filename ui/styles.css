@@ -180,12 +180,12 @@
   --client-fallback-6: var(--client-earth);
   --client-fallback-7: var(--client-green);
   --client-fallback-8: var(--client-slate);
-  --brand-mark: radial-gradient(circle at 50% 50%, var(--p-co-red-300) 0 18%, transparent 19%), conic-gradient(from 200deg, var(--p-navy-300), var(--p-green-logo), var(--p-lime-400), var(--p-navy-300));
   --brand-am: var(--p-brand-am-d);
   --brand-pm: var(--p-brand-pm-d);
   --brand-accent: var(--p-brand-accent-d);
   --brand-ghost: var(--p-brand-ghost-d);
   --mascot-highlight: var(--p-lime-400);
+  --brand-beam-blend: screen;
   color-scheme: dark;
 }
 
@@ -236,12 +236,12 @@
   --client-earth: var(--p-slot-earth-l);
   --client-green: var(--p-slot-green-l);
   --client-slate: var(--p-slot-slate-l);
-  --brand-mark: radial-gradient(circle at 50% 50%, var(--p-co-red-700) 0 18%, transparent 19%), conic-gradient(from 200deg, var(--p-navy-900), var(--p-green-brand), var(--p-green-logo), var(--p-navy-900));
   --brand-am: var(--p-brand-am-l);
   --brand-pm: var(--p-navy-900);
   --brand-accent: var(--p-green-brand);
   --brand-ghost: var(--p-brand-ghost-l);
   --mascot-highlight: var(--p-lime-400);
+  --brand-beam-blend: multiply;
   color-scheme: light;
 }
 
@@ -292,12 +292,12 @@
   --client-earth: var(--p-client-8);
   --client-green: var(--p-client-6);
   --client-slate: var(--p-client-7);
-  --brand-mark: linear-gradient(135deg, var(--p-client-1), var(--p-client-4) 55%, var(--p-client-2));
   --brand-am: var(--p-brand-am-l);
   --brand-pm: var(--p-navy-900);
   --brand-accent: var(--p-green-brand);
   --brand-ghost: var(--p-brand-ghost-l);
   --mascot-highlight: var(--p-lime-400);
+  --brand-beam-blend: multiply;
   color-scheme: light;
 }
 
@@ -337,6 +337,7 @@
     --brand-accent: var(--p-brand-accent-d);
     --brand-ghost: var(--p-brand-ghost-d);
     --mascot-highlight: var(--p-lime-400);
+    --brand-beam-blend: screen;
     color-scheme: dark;
   }
 }
@@ -415,10 +416,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   padding: 0 24px;
 }
 .brand { display: flex; align-items: baseline; gap: 10px; }
-.logo {
-  width: 14px; height: 14px; border-radius: 4px; align-self: center;
-  background: var(--brand-mark);
-}
 .brand .name { font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
 .brand .sub { color: var(--text-faint); font-size: 14px; }
 
@@ -1309,7 +1306,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .follow-ups-head h2:focus { outline: none; }
 .follow-ups-head .top-btn { margin-left: auto; }
 .follow-ups-note { margin: 6px 0 14px; font-size: 13px; }
-.follow-ups-empty { color: var(--text-muted); }
 .follow-up-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 1100px; }
 .follow-up { display: flex; align-items: center; gap: 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .follow-up.closed .follow-up-who, .follow-up.closed .follow-up-what { color: var(--text-muted); }
@@ -2286,7 +2282,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .signin-card { max-width: 440px; width: 100%; display: grid; gap: 14px; justify-items: start; padding: 32px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-panel); }
 .signin-card h1 { margin: 0; font-size: 24px; }
 .signin-card p { margin: 0; line-height: 1.5; }
-.signin-logo { width: 36px; height: 36px; }
 .signin-btn { font-size: 16px; padding: 10px 18px; background: var(--action); color: var(--on-action); border-color: var(--action); }
 .signin-btn:disabled { opacity: 0.75; }
 .signin-skip { font-size: 13px; padding: 0; }

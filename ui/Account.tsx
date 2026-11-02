@@ -10,6 +10,7 @@ import { ActionRefusal, call } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
+import { BentMark } from "./brand/Brand.tsx";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -60,7 +61,7 @@ function SignInScreen({ status, signIn, offline, onSkip }: { status: AuthStatus;
   return (
     <main className="signin">
       <div className="signin-card">
-        <span className="logo signin-logo" aria-hidden="true" />
+        <BentMark width={120} />
         <h1>Coopilot</h1>
         <p>Sign in with your Microsoft work account. Coopilot uses it for your calendar and your Azure VM, and to find you in Dataverse.</p>
         <button

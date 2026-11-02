@@ -46,11 +46,15 @@ import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
+
 import type { ActionResponse, HostBrowsers, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
 import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
 import { vmAction, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatus, type PresenceContext } from "./presence-actions.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
+
+/** The plan store marker for the first launch (step 17.5). */
+const FIRST_LAUNCH_MARK = "first_launch";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
@@ -694,6 +698,22 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (typeof i.theme !== "string" || !(THEMES as readonly string[]).includes(i.theme)) return bad(`theme must be one of ${THEMES.join(", ")}`);
       if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
       const r = await ctx.writeConfig((text) => setValue(text, "ui", "theme", i.theme as string, "Display (step 6b). Changed from Settings or the command menu."));
+      if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
+      return { ok: true, data: { ui: r.parsed.config.ui } };
+    }
+    case "ui.first_launch": {
+      // Step 17.5: the welcome moment shows once, ever: the first call marks it in the plan store. Not in demo mode
+      // (its store is in memory, so it would show on every start) and not without a plan store.
+      if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("ui.first_launch takes no input");
+      if (ctx.demo?.on || !ctx.plan) return { ok: true, data: { first: false } };
+      return { ok: true, data: { first: ctx.plan.markOnce(FIRST_LAUNCH_MARK, "once") } };
+    }
+    case "ui.set_reduce_motion": {
+      // Step 17.5: Settings > Display "Reduce motion", besides the system's reduced motion setting.
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "on") || typeof i.on !== "boolean") return bad("input must be { on: true or false }");
+      if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
+      const r = await ctx.writeConfig((text) => setValue(text, "ui", "reduce_motion", i.on as boolean, "Display (step 17.5): no opening and closing animation."));
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }

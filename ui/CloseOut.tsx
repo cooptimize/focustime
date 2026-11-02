@@ -15,12 +15,13 @@ import { call, planAction } from "./api.ts";
 import { CaptureBox, captureClients } from "./Capture.tsx";
 import { Fading, FollowUpRow } from "./FollowUps.tsx";
 import { dayName, FlexOfferBar, FocusVsSize, HALF_NAMES, SlipActions, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
+import { EmptyState } from "./brand/Opening.tsx";
 
-type Props = { /** Step 16.2: Today's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; date: IsoDate; data: WeekLoadData; onDate: (d: IsoDate) => void; onClose: (notice?: string) => void; onChanged: () => void; onCaptures: () => void };
+type Props = { /** Step 16.2: Today's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; date: IsoDate; data: WeekLoadData; onDate: (d: IsoDate) => void; onClose: (notice?: string) => void; onChanged: () => void; onCaptures: () => void; /** Step 17.5: after Done commits, with that day's picks (for the reverse and the musts moment). */ onClosedOut?: (st: CloseOutState) => void };
 
 const PAYBACK: Record<string, string> = { tonight: "tonight", friday: "Friday", day: "" };
 
-export function CloseOut({ switcher, date, data, onDate, onClose, onChanged, onCaptures }: Props) {
+export function CloseOut({ switcher, date, data, onDate, onClose, onChanged, onCaptures, onClosedOut }: Props) {
   const [st, setSt] = useState<CloseOutState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -134,7 +135,9 @@ export function CloseOut({ switcher, date, data, onDate, onClose, onChanged, onC
               // Step 15.1 (D275): once closed out, Done just goes back; nothing is saved again. Step 16.2: back to Now.
               if (st.closedOutAt) return onClose();
               try {
-                setSt(await call<CloseOutState>("closeout.commit", { date }));
+                const done = await call<CloseOutState>("closeout.commit", { date });
+                setSt(done);
+                onClosedOut?.(done);
                 onChanged();
                 onClose("Closed out. Nice work.");
               } catch (e) {
@@ -248,7 +251,11 @@ export function CloseOut({ switcher, date, data, onDate, onClose, onChanged, onC
           3. Follow-ups <span className="muted">{st.followUps.length} open{dueBy.length ? `, ${dueBy.length} due by ${date === st.today ? "today" : dayName(date)} still open` : ""}</span>
         </h3>
         <CaptureBox data={data} initialKind="follow_up" onChanged={() => { void load(); onChanged(); }} />
-        {!st.followUps.length && <p className="muted">No open follow-ups.</p>}
+        {!st.followUps.length && (
+          <EmptyState line="No open follow-ups.">
+            <button type="button" className="mini" onClick={(e) => e.currentTarget.closest("section")?.querySelector<HTMLElement>("input, textarea")?.focus()}>Add a follow-up</button>
+          </EmptyState>
+        )}
         {dueBy.length > 0 && <h4 className="co-due-head">Due {date === st.today ? "today" : `by ${dayName(date)}`}, still open</h4>}
         <ul className="follow-up-list">
           {dueBy.map((l) => (

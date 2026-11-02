@@ -119,6 +119,9 @@ export type MenuEnv = {
   /** Step 15.1 (D276): compact timelines on medium cards, for this session; saveTimelines also saves the default. */
   timelines: boolean;
   saveTimelines: (on: boolean) => void;
+  /** Step 17.5: Settings > Display "Reduce motion" (saved). */
+  reduceMotion: boolean;
+  saveReduceMotion: (on: boolean) => void;
   hours: TimeModel;
   /** Runs a time model action (hours for a day, unavailable time, flex sessions); false with a notice on refusal. */
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
@@ -949,6 +952,8 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "draft.update": return { run: () => env.setView("inbox") };
     case "ui.set_theme": return { next: () => themeStep(env) };
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
+    case "ui.first_launch": return { disabled: "Runs on its own the first time Coopilot opens" };
+    case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "ui.set_timelines": return { next: () => ({ title: "Show timelines on cards", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.timelines === on, action: "ui.set_timelines", run: () => env.saveTimelines(on) })) }) };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };

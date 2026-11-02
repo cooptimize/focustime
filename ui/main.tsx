@@ -7,8 +7,10 @@ import { StyleGuide } from "./StyleGuide.tsx";
 import "./fonts.css";
 import "./styles.css";
 import { applyTheme, initialTheme } from "./theme.ts";
+import { applyReduceMotion } from "./brand/motion.ts";
 
 applyTheme(initialTheme());
+applyReduceMotion();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

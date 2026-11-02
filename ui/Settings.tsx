@@ -20,6 +20,9 @@ import { nextRituals } from "../plan/rituals.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import type { WriteLogView } from "../actions/types.ts";
 import type { WriteEntry } from "../plan/timebox.ts";
+import { version as APP_VERSION } from "../package.json";
+import { InlineMoment } from "./brand/Opening.tsx";
+import { Lockup } from "./brand/Brand.tsx";
 
 export const SETTINGS_SECTIONS = [
   ["you", "You"],
@@ -34,6 +37,7 @@ export const SETTINGS_SECTIONS = [
   ["connections", "Connections"],
   ["display", "Display"],
   ["data", "Data"],
+  ["about", "About"],
 ] as const;
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number][0];
 
@@ -51,6 +55,8 @@ type Props = {
   onRefresh: () => void;
   onConnect: (c: Calendar) => void;
   onDisconnect: (c: Calendar) => void;
+  /** Step 17.5: a calendar that just reconnected here (the fun moment). */
+  reconnected?: Calendar | null;
   theme: Theme;
   setTheme: (t: Theme) => void;
   viewRange: ViewRange;
@@ -58,6 +64,9 @@ type Props = {
   /** Step 15.1 (D276): the saved default for compact timelines on medium cards. */
   showTimelines: boolean;
   setShowTimelines: (on: boolean) => void;
+  /** Step 17.5: no opening and closing animation, no moving Lumen. */
+  reduceMotion: boolean;
+  setReduceMotion: (on: boolean) => void;
   /** Step 15 (D272): demo mode and its switch. */
   demo: boolean;
   setDemo: (on: boolean) => void;
@@ -167,7 +176,7 @@ export function Settings(props: Props) {
         <h2 ref={headRef} tabIndex={-1}>
           {title}
         </h2>
-        {data && <p className="muted set-path">Saved to {data.configPath} (a backup is made on every save)</p>}
+        {data && props.section !== "about" && <p className="muted set-path">Saved to {data.configPath} (a backup is made on every save)</p>}
         {error && <p className="field-problem">{error}</p>}
         {data && data.problems.length > 0 && props.section !== "connections" && props.section !== "data" && (
           <div className="config-banner" role="alert">
@@ -268,6 +277,13 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
             <span className="set-hint">At medium widths, a narrow time ruler on each card's right edge: meetings, events, timed picks and free time. Saved as your default. V in the week switches it until you close Coopilot.</span>
           </fieldset>
           <fieldset className="set-choice">
+            <legend>Motion</legend>
+            <label>
+              <input type="checkbox" checked={p.reduceMotion} onChange={(e) => p.setReduceMotion(e.target.checked)} /> Reduce motion
+            </label>
+            <span className="set-hint">No animation when Coopilot opens or after Close out, and Lumen stays still. Your system's reduced motion setting does the same.</span>
+          </fieldset>
+          <fieldset className="set-choice">
             <legend>Demo mode</legend>
             <label>
               <input type="checkbox" checked={p.demo} onChange={(e) => p.setDemo(e.target.checked)} /> Show demo data
@@ -285,6 +301,15 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
       );
     case "data":
       return <DataSection {...p} />;
+    case "about":
+      // Step 17.5: the lockup, the version and the credit line.
+      return (
+        <div className="brand-about">
+          <Lockup width={280} />
+          <p>Version {APP_VERSION}</p>
+          <p className="set-hint">Coopilot is made by Cooptimize, for planning a week of client focus blocks.</p>
+        </div>
+      );
   }
 }
 
@@ -1018,6 +1043,7 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
           );
         })}
       </ul>
+      {p.reconnected && <InlineMoment line={`${SOURCE_NAMES[p.reconnected]} is connected again.`} />}
       <OutlookWriteRow />
       {p.devops && p.devops.length > 0 && (
         <>

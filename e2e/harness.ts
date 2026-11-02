@@ -70,6 +70,8 @@ export async function freshPage(h: Harness, viewport = { width: 1920, height: 10
   });
   await page.reload();
   await page.waitForSelector(".demo-tag", { timeout: 30_000 });
+  // Step 17.5: a slow first load plays the opening over the app; tests start once it's gone.
+  await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
   return { page, errors };
 }
 
