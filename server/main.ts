@@ -21,6 +21,7 @@ import { createPhotoClient, type PhotoClient } from "../sources/graph/photos.ts"
 import { createPhotoCache } from "../cache/photos.ts";
 import { restoreTick, vmAction, type VmStatus } from "../actions/vm-actions.ts";
 import { CHECKIN_DONE_MARK } from "../actions/closeout-actions.ts";
+import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
 import { createAzureClient } from "../sources/azure/client.ts";
 import { localToday } from "../week/dates.ts";
 import { stderrLogger } from "../log/logger.ts";
@@ -349,6 +350,7 @@ if (plan) {
     if (n.kind === "checkin") return !!store.day(today)?.committedAt && !store.day(today)?.closedOutAt;
     if (n.kind === "plan_week" || n.kind === "look_ahead") return !store.weekPlan(n.route.slice("planweek:".length)).committedAt;
     if (n.kind === "followups") return dueFollowUps(store.openFollowUps(), today).length > 0;
+    if (n.kind === "plan_ahead" || n.kind === "direction") return !n.ref || !store.marked(AHEAD_SEEN_MARK, n.ref);
     if (n.kind === "vm" && n.key.startsWith("vm_off:")) {
       const st = await vmAction(await vmCtx(), "vm.status", {});
       return st.ok && (st.data as VmStatus).prompt;
@@ -380,6 +382,7 @@ if (plan) {
       },
       vmOff: () => (vs ? vs.prompt : null),
       vmChanged: () => (vs ? !!vs.change : null),
+      aheadSeen: (key) => store.marked(AHEAD_SEEN_MARK, key),
     });
   };
   const notifier = createNotifier({
@@ -413,6 +416,8 @@ if (plan) {
       closeout: pfx(notices.closeout(today, at)),
       plan_week: pfx(notices.week(monday.toString(), true, at)),
       look_ahead: pfx(notices.week(monday.add({ days: 7 }).toString(), false, at)),
+      plan_ahead: pfx(notices.planAhead(`plan_ahead:${today}`, at)),
+      direction: pfx(notices.direction(`direction:${today.slice(0, 7)}`, today, at)),
       timer: pfx(notices.timerEnd(false, "Sample: a focus session", at, at)),
       meeting: pfx(notices.meeting(["Sample: a meeting at 10:00"], ["sample"], at)),
       vm: pfx(notices.vmOff(today, live ? "Your VM" : "Your VM (sample: Start opens the VM menu)", at)),
@@ -482,6 +487,22 @@ if (plan) {
       once: (key, w) => notifier.allows(w === thisWeek ? "plan_week" : "look_ahead") && store.markOnce(key, w),
       send: (_body, w) => void send(notices.week(w, w === thisWeek, at)),
     }).catch(() => log({ source: "plan", op: "week_nudge", kind: "failed" }));
+    // Step 17: Look ahead 4 weeks (every other Thursday, once next week is planned) and the direction review (first
+    // Thursday of the month), from work start on a working day; once each; both open Roadmap › Plan ahead.
+    try {
+      const today = todayOf(c);
+      const due = aheadRitualsDue({
+        today,
+        time: zonedNow(timeZone).toPlainTime().toString().slice(0, 5),
+        workStart: hoursOn(c.week.hours, today).segments[0]?.start ?? null,
+        pto: await ptoOff(today).catch(() => true),
+        weekCommitted: (w) => !!store.weekPlan(w).committedAt,
+        seen: (k) => store.marked(AHEAD_SEEN_MARK, k),
+      });
+      for (const r of due) if (notifier.allows(r.kind) && store.markOnce("ahead_notice", r.key)) await send(r.kind === "plan_ahead" ? notices.planAhead(r.key, at) : notices.direction(r.key, r.occasion, at));
+    } catch {
+      log({ source: "plan", op: "ahead_nudge", kind: "failed" });
+    }
   };
   // Once a workday from work start (working hours, not PTO): follow-ups due or overdue, and expiring secrets.
   const workdayNotices = async () => {

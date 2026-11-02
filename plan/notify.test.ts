@@ -1,7 +1,7 @@
 // Step 15.5: notifications: per-kind switches, quiet hours, holding during focus, collapsing, routes, texts.
 import { describe, expect, it } from "vitest";
 import { legacyHours } from "../config/schema.ts";
-import { collapse, DEFAULT_NOTIFY, dueFollowUps, gate, inWorkingHours, noticeDone, notices, parseRoute, routeText, type DoneFacts, type GateFacts, type Notice, type NotifyKind } from "./notify.ts";
+import { collapse, DEFAULT_NOTIFY, dueFollowUps, gate, inWorkingHours, noticeDone, notices, parseRoute, RITUAL_KINDS, routeText, type DoneFacts, type GateFacts, type Notice, type NotifyKind } from "./notify.ts";
 
 const NY = "America/New_York";
 const facts = (over: Partial<GateFacts> = {}, kinds: Partial<Record<NotifyKind, boolean>> = {}): GateFacts => ({
@@ -129,6 +129,9 @@ describe("notifications that no longer apply (step 16.2, Q91)", () => {
       [notices.vmChanged("2026-11-02", "Delayed", at), { vmChanged: () => false }],
       [notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }], at)!, { followUpOpen: (id) => id !== 7 }],
       [notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }, { id: 8, what: "B", overdue: true }], at)!, { dueCount: () => 0 }],
+      // Step 17: closed once Plan ahead was opened for that ritual.
+      [notices.planAhead("plan_ahead:2026-11-05", at), { aheadSeen: (k) => k === "plan_ahead:2026-11-05" }],
+      [notices.direction("direction:2026-12", "2026-12-03", at), { aheadSeen: (k) => k === "direction:2026-12" }],
     ];
     for (const [n, f] of cases) {
       expect(noticeDone(n, none), n.key).toBe(false);
@@ -140,5 +143,21 @@ describe("notifications that no longer apply (step 16.2, Q91)", () => {
     expect(noticeDone(notices.vmOff("2026-11-02", "vm", at), yes({ vmOff: () => null }))).toBe(false);
     expect(noticeDone(notices.meeting(["x"], ["k"], at), yes({ committed: () => true }))).toBe(false);
     expect(noticeDone(notices.expiry("2026-11-02", [{ text: "x", section: "clients" }], at)!, yes({ dueCount: () => 0 }))).toBe(false);
+  });
+});
+
+describe("the Plan ahead rituals (step 17)", () => {
+  it("their own switches, quiet on PTO and outside hours, held during focus; texts in plain words", () => {
+    const settings = { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds, direction: false } };
+    const f = { settings, inHours: true, pto: false, focusRunning: false };
+    expect(gate("plan_ahead", f)).toBe("send");
+    expect(gate("direction", f)).toBe("off");
+    expect(gate("plan_ahead", { ...f, pto: true })).toBe("quiet");
+    expect(gate("plan_ahead", { ...f, inHours: false })).toBe("quiet");
+    expect(gate("plan_ahead", { ...f, focusRunning: true })).toBe("hold");
+    expect(RITUAL_KINDS).toEqual(expect.arrayContaining(["plan_ahead", "direction"]));
+    const n = notices.direction("direction:2026-12", "2026-12-03", "2026-12-03T14:30:00Z");
+    expect([n.title, n.body, n.route]).toEqual(["Direction review", "First Thursday of December: look 8 to 12 weeks ahead.\nClick to open Plan ahead.", "ahead"]);
+    expect(parseRoute("ahead")).toEqual({ view: "ahead" });
   });
 });

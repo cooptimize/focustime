@@ -13,6 +13,7 @@ import type { ActionResponse, RoadmapClient, RoadmapRow, RoadmapState, RoadmapSt
 import type { PortfolioItem, Week } from "../week/types.ts";
 import { aheadColumns, aheadWeeks, pastWeeks, PLAN_WEEKS } from "../plan/ahead.ts";
 import { DEFAULT_PLAN } from "../config/schema.ts";
+import { AHEAD_SEEN_MARK, directionOccasion, lookAheadOccasion } from "../plan/rituals.ts";
 import { borrowedForWeek, weekBudget } from "../plan/weekplan.ts";
 import { estimate } from "../plan/estimate.ts";
 import type { AheadState } from "./types.ts";
@@ -141,8 +142,9 @@ const isoDate = (v: unknown): IsoDate | null => {
  */
 async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionResponse> {
   const o = (input ?? {}) as Record<string, unknown>;
-  if (typeof o !== "object" || Array.isArray(o) || Object.keys(o).some((k) => k !== "refresh")) return bad("roadmap.ahead takes { refresh? }");
+  if (typeof o !== "object" || Array.isArray(o) || Object.keys(o).some((k) => k !== "refresh" && k !== "seen")) return bad("roadmap.ahead takes { refresh?, seen? }");
   if (o.refresh !== undefined && typeof o.refresh !== "boolean") return bad("refresh must be true or false");
+  if (o.seen !== undefined && typeof o.seen !== "boolean") return bad("seen must be true or false");
   const plan = ctx.plan;
   if (!plan) return bad("The local plan store isn't available", 503);
   if (!ctx.weeks) return bad("Plan ahead isn't available here", 503);
@@ -150,6 +152,14 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
   if (!cfg) return bad("Fix the config first", 409);
   const today = localToday(ctx.now(), cfg.week.hours.timeZone);
   const weekStarts = aheadWeeks(mondayOf(today));
+  // Step 17 (slice 4): opening Plan ahead (seen) answers the rituals of the moment: the look ahead once next week is
+  // planned, and this month's direction review. Their dot goes and their notification closes.
+  if (o.seen === true) {
+    const la = lookAheadOccasion(today);
+    if (la && plan.weekPlan(Temporal.PlainDate.from(la).add({ days: 4 }).toString()).committedAt) plan.markOnce(AHEAD_SEEN_MARK, `plan_ahead:${la}`);
+    const dr = directionOccasion(today);
+    if (dr) plan.markOnce(AHEAD_SEEN_MARK, `direction:${dr.slice(0, 7)}`);
+  }
   const past = pastWeeks(weekStarts[0]!);
   const columns = aheadColumns(weekStarts, past);
   const weeks = await ctx.weeks(cfg, weekStarts, PLAN_WEEKS, o.refresh === true);

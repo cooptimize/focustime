@@ -110,6 +110,9 @@ describe("notification routes (all 11 kinds of step 15.5)", () => {
     ["followups (one)", notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }], at)!, loc(navOf.inbox(7)), false],
     ["followups (several)", notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }, { id: 8, what: "B", overdue: true }], at)!, loc(navOf.inbox()), false],
     ["expiry", notices.expiry("2026-11-02", [{ text: "x", section: "clients" }], at)!, { nav: navOf.today(), overlay: { kind: "settings", section: "clients" } }, false],
+    // Step 17: both Plan ahead rituals open Roadmap › Plan ahead.
+    ["plan_ahead", notices.planAhead("plan_ahead:2026-11-05", at), loc(navOf.roadmap("ahead")), false],
+    ["direction", notices.direction("direction:2026-12", "2026-12-03", at), loc(navOf.roadmap("ahead")), false],
   ];
   it("each opens its tab and mode", () => {
     for (const [name, n, want, vmMenu] of all) {

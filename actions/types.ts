@@ -60,6 +60,8 @@ export type WeekLoadData = {
   followUps: FollowUpView[];
   /** The Plan the week badge: the week a nudge asked for that still isn't committed (server clock). */
   weekNudge: { badge: IsoDate | null };
+  /** Step 17: the Plan ahead rituals due now: Look ahead 4 weeks and the direction review (a dot on Plan ahead). */
+  aheadDue: import("../plan/rituals.ts").AheadRitualKind[];
   /** Step 16.2: whether a week (this week, next week, the week shown) is committed, by its Monday. */
   weekCommitted: Record<IsoDate, boolean>;
   /** Display settings from [ui] (step 6b): the theme. Defaults when the config is invalid. */

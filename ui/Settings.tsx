@@ -16,6 +16,7 @@ import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
 import { sound } from "./sound.ts";
 import { KIND_HINT, KIND_LABEL, RITUAL_KINDS, type NotifyKind, type QuietMode } from "../plan/notify.ts";
+import { nextRituals } from "../plan/rituals.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import type { WriteLogView } from "../actions/types.ts";
 import type { WriteEntry } from "../plan/timebox.ts";
@@ -473,6 +474,8 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
       <div className="set-grid">
         {num("followGraceDays", "Keep following after focus time ends (days)", "plan.follow_grace_days", "DevOps items and Open half-day choices come only from clients with focus time that is ongoing, ends today or later, or ended within this many days. Cooptimize always counts; Settings > Clients can keep one.", 1, 90)}
       </div>
+      <h3>Plan ahead rituals</h3>
+      <AheadRituals />
       <h3>Focus timer</h3>
       <div className="set-grid">
         {num("focusMinutes", "Focus length (minutes)", "plan.focus_minutes", "The default for a plain timer. A pick suggests its size instead.", 5, 240)}
@@ -486,6 +489,24 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
       </div>
       <SaveRow status={status} />
     </form>
+  );
+}
+
+/** Step 17: when the Plan ahead rituals come next. Their switches are in Settings > Notifications. */
+function AheadRituals() {
+  const today = Temporal.Now.plainDateISO().toString();
+  const n = nextRituals(today);
+  const day = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return (
+    <ul className="set-rituals">
+      <li>
+        <strong>Look ahead 4 weeks</strong> every other Thursday, offered after Done in Plan the week. Next: {day(n.lookAhead)}.
+      </li>
+      <li>
+        <strong>Direction review</strong> (8 to 12 weeks) on the first Thursday of each month. Next: {day(n.direction)}.
+      </li>
+      <li className="muted">Both open Roadmap › Plan ahead, wait for the next working day on PTO, and come once. Turn them on or off in Notifications.</li>
+    </ul>
   );
 }
 

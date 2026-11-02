@@ -2574,3 +2574,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pa-item .pa-before { top: auto; bottom: 4px; transform: none; }
 .pa-item, .pa-item .pa-track { min-height: 50px; }
 .pa-item .pa-past { top: 1px; bottom: auto; height: 28px; padding: 0 5px; font-size: 10.5px; line-height: 1.15; }
+/* Step 17 slice 4: the Look ahead offer after Done in Plan the week, and the rituals in Settings > Planning. */
+.ahead-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 24px 10px; padding: 10px 14px; border: 1px solid var(--selected); border-radius: 8px; background: color-mix(in oklab, var(--selected) 10%, var(--surface)); color: var(--text); }
+.ahead-offer span { flex: 1 1 280px; font-weight: 600; }
+.set-rituals { margin: 4px 0 12px; padding-left: 18px; display: grid; gap: 4px; font-size: 13.5px; }

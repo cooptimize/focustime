@@ -4,7 +4,7 @@
 import { hoursOn, type TimeModel } from "../week/hours.ts";
 
 /** Every kind of notification Coopilot sends. Each has its own switch in Settings > Notifications, except the test. */
-export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "timer", "meeting", "vm", "followups", "expiry"] as const;
+export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export type AnyKind = NotifyKind | "test" | "held";
 
@@ -14,6 +14,8 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   closeout: "Close out",
   plan_week: "Plan the week",
   look_ahead: "Look ahead",
+  plan_ahead: "Look ahead 4 weeks",
+  direction: "Direction review",
   timer: "Focus timer",
   meeting: "Meeting warnings",
   vm: "My VM",
@@ -26,6 +28,8 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   closeout: "Near the end of the workday until you close out.",
   plan_week: "Monday morning when this week has no plan.",
   look_ahead: "Thursday and Friday when next week has no plan.",
+  plan_ahead: "Every other Thursday, once next week is planned: the 4-week plan in Roadmap › Plan ahead.",
+  direction: "The first Thursday of each month: the 8 to 12 week direction in Roadmap › Plan ahead.",
   timer: "When a focus session or break ends, with Done, +15 min and Next pick.",
   meeting: "5 minutes before a meeting while a focus session runs.",
   vm: "Your VM is off at work start (with Start), or its auto-shutdown couldn't be put back (with Restore).",
@@ -33,7 +37,7 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   expiry: "Once a workday when a PAT or secret expires within 14 days.",
 };
 /** The ritual reminders, shown as one group in Settings. */
-export const RITUAL_KINDS: readonly NotifyKind[] = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead"];
+export const RITUAL_KINDS: readonly NotifyKind[] = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction"];
 
 export type QuietMode = "outside_hours" | "off";
 export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean };
@@ -45,12 +49,12 @@ export const DEFAULT_NOTIFY: NotifySettings = {
 
 /** Where clicking a notification opens Coopilot. */
 export type Route =
-  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" }
+  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" }
   | { view: "planweek"; weekStart: string }
   | { view: "followup"; id: number }
   | { view: "settings"; section: string };
 
-const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox"]);
+const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead"]);
 const SECTION = /^[a-z]{2,20}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -182,6 +186,9 @@ export const notices = {
     at,
     ref: weekStart,
   }),
+  /** Step 17: every other Thursday after Done in Plan the week, and the first Thursday of the month (Roadmap › Plan ahead). */
+  planAhead: (key: string, at: string): Notice => ({ kind: "plan_ahead", key, title: "Look ahead 4 weeks", body: "Next week is planned. Time to look 4 weeks ahead: blocks per week and dates.\nClick to open Plan ahead.", buttons: [open("Plan ahead")], route: "ahead", at, ref: key }),
+  direction: (key: string, occasion: string, at: string): Notice => ({ kind: "direction", key, title: "Direction review", body: `First Thursday of ${Temporal.PlainDate.from(occasion).toLocaleString("en-US", { month: "long" })}: look 8 to 12 weeks ahead.\nClick to open Plan ahead.`, buttons: [open("Plan ahead")], route: "ahead", at, ref: key }),
   timerEnd: (breakOver: boolean, label: string, startedAt: string, at: string): Notice => ({
     kind: "timer",
     key: `timer:${startedAt}`,
@@ -240,6 +247,8 @@ export type DoneFacts = {
   vmOff: () => boolean | null;
   /** My VM's auto-shutdown is still changed (null: unknown). */
   vmChanged: () => boolean | null;
+  /** Step 17: Plan ahead was opened for this ritual (its key). */
+  aheadSeen?: (key: string) => boolean;
 };
 
 /**
@@ -256,6 +265,8 @@ export function noticeDone(n: Notice, f: DoneFacts): boolean {
     case "plan_week":
     case "look_ahead": return !!ref && f.weekCommitted(ref);
     case "timer": return !!ref && !f.timerWaiting(ref);
+    case "plan_ahead":
+    case "direction": return !!ref && !!f.aheadSeen?.(ref);
     case "followups": {
       const r = parseRoute(n.route);
       return r?.view === "followup" ? !f.followUpOpen(r.id) : f.dueCount() === 0;

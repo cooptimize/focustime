@@ -61,7 +61,9 @@ export function PlanAhead({ data, switcher, onDone, onChanged }: { data: WeekLoa
   const load = useCallback(async (refresh = false) => {
     setBusy(true);
     try {
-      const [r, a] = await Promise.all([call<RoadmapState>("roadmap.load", refresh ? { refresh: true } : {}), call<AheadState>("roadmap.ahead", refresh ? { refresh: true } : {})]);
+      // Opening Plan ahead answers its rituals (Look ahead 4 weeks, the direction review): seen.
+      const [r, a] = await Promise.all([call<RoadmapState>("roadmap.load", refresh ? { refresh: true } : {}), call<AheadState>("roadmap.ahead", { seen: true, ...(refresh ? { refresh: true } : {}) })]);
+      onChanged();
       setRm(r);
       setAhead(a);
       setError(null);
@@ -76,6 +78,7 @@ export function PlanAhead({ data, switcher, onDone, onChanged }: { data: WeekLoa
     } finally {
       setBusy(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => void load(), [load, dw?.version]);
   useEffect(() => head.current?.focus(), []);

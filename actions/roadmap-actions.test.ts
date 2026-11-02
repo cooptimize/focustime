@@ -148,6 +148,21 @@ describe("roadmap.ahead and roadmap.set_dates (step 17, slice 2)", () => {
     expect(d.blockMinutes).toBe(210);
     expect(d.cells[0]).toMatchObject({ itemId: 10, blocks: 1, fill: "needs_stories" });
   });
+  it("slice 4: opening Plan ahead (seen) answers this month's direction review, and the look ahead once next week is planned", async () => {
+    const { ctx, plan } = withWeeks();
+    // Nov 5: a look-ahead Thursday and November's first Thursday.
+    ctx.now = () => "2026-11-05T15:00:00Z";
+    await ahead(ctx);
+    expect(plan.marked("ahead_seen", "direction:2026-11")).toBe(false);
+    await ahead(ctx, { seen: true });
+    expect(plan.marked("ahead_seen", "direction:2026-11")).toBe(true);
+    // Next week isn't planned yet: the look ahead stays to offer after Done in Plan the week.
+    expect(plan.marked("ahead_seen", "plan_ahead:2026-11-05")).toBe(false);
+    plan.commitWeek("2026-11-09");
+    await ahead(ctx, { seen: true });
+    expect(plan.marked("ahead_seen", "plan_ahead:2026-11-05")).toBe(true);
+    expect(await roadmapAction(ctx, "roadmap.ahead", { seen: "yes" })).toMatchObject({ ok: false, status: 400 });
+  });
   it("keeps dragged dates locally, clears them, and refuses bad input", async () => {
     const { ctx } = withWeeks();
     const set = (input: unknown) => roadmapAction(ctx, "roadmap.set_dates", input);

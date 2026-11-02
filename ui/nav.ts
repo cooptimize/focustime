@@ -156,6 +156,7 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "focus": return { loc: { nav: navOf.today(), overlay: { kind: "focus" } }, vmMenu: false };
     case "vm": return { loc: { nav: navOf.today(), overlay: null }, vmMenu: true };
     case "inbox": return plain(navOf.inbox());
+    case "ahead": return plain(navOf.roadmap("ahead"));
     case "planweek": return plain(navOf.week("planweek", r.weekStart));
     case "followup": return plain(navOf.inbox(r.id));
     case "settings": return { loc: { nav: navOf.today(), overlay: { kind: "settings", section: r.section } }, vmMenu: false };

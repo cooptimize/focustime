@@ -739,3 +739,8 @@ A 4-week plan and an 8 to 12 week direction view on one timeline, built in four 
 - Rows grew a top band: week cells and the past words sit above the bar, so a bar can be dragged anywhere along it.
 - Allocations: the week cells live in the week plan tables (migrations up to 19); the dragged dates in `roadmap_dates` (migration 20, backup first). No other new tables.
 - Demo: committed week plans for the last 2 weeks and focused time on picks settled as dropped (so nothing carries over and no follow-up opens).
+
+**Slice 4: rituals and nudges.**
+- Look ahead 4 weeks (`plan/rituals.ts`): every other Thursday (from Nov 5 2026, D355), once that Thursday's next week is planned (Done in Plan the week). Due from work start on a working day in the Thursday-to-Wednesday window; a PTO day or a day without hours waits for the next working day's start. After Done in Plan the week, the Week shows an offer "Look ahead 4 weeks" (open Plan ahead, or Not now).
+- Direction review: the first Thursday of each month, due from work start on a working day until the month ends.
+- Both: a desktop notification once per occasion (new kinds `plan_ahead` and `direction`, each with its switch in Settings > Notifications under the ritual reminders, quiet outside hours and on PTO, held during focus), a due dot on Roadmap's Plan ahead, a click opens Roadmap › Plan ahead (route `ahead`). Opening Plan ahead answers them (`roadmap.ahead {seen}`, markers `ahead_seen`): the dot goes and a shown notification closes (Q91). Settings > Planning lists when each comes next.

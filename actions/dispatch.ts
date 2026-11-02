@@ -14,7 +14,7 @@ import { buildWeek } from "../week/build.ts";
 import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import { defaultWeekStart, localToday, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
-import { VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
+import { hoursOn, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
 import type { CalEvent, ClientWork, FocusPattern, IsoDate, SourceResult, Week } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -45,6 +45,7 @@ import { roadmapAction } from "./roadmap-actions.ts";
 import { CHECKIN_DONE_MARK } from "./closeout-actions.ts";
 import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-actions.ts";
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
+import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
 import type { ActionResponse, HostBrowsers, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
 import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
 import { vmAction, type VmContext } from "./vm-actions.ts";
@@ -415,6 +416,10 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     checkIn: { date: todayDate, done: !!ctx.plan?.marked(CHECKIN_DONE_MARK, todayDate) },
     weekPlan: ctx.plan ? withTitles(weekPlanView(ctx.plan.weekPlan(weekStart)), currentTitle) : null,
     weekFeatures: ctx.plan ? withCurrentTitles(ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate)), currentTitle) : [],
+    // Step 17: the Plan ahead rituals due now (a dot on Roadmap's Plan ahead).
+    aheadDue: ctx.plan
+      ? aheadRitualsDue({ today: todayDate, time: Temporal.Instant.from(now).toZonedDateTimeISO(tz).toPlainTime().toString().slice(0, 5), workStart: hoursOn(model, todayDate).segments[0]?.start ?? null, pto: todayOff, weekCommitted: (w) => !!ctx.plan!.weekPlan(w).committedAt, seen: (k) => ctx.plan!.marked(AHEAD_SEEN_MARK, k) }).map((r) => r.kind)
+      : [],
     weekNudge: { badge: ctx.plan && cfg ? weekNudges(Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz), nudgeTimes(cfg), (w) => !!ctx.plan!.weekPlan(w).committedAt).badge : null },
     // Step 16.2: Planned ✓ on the Week tab's mode switch, for this week, next week and the week shown.
     weekCommitted: Object.fromEntries([...new Set([mondayOf(todayDate), Temporal.PlainDate.from(mondayOf(todayDate)).add({ days: 7 }).toString(), week.days[0]!.date])].map((w) => [w, !!ctx.plan?.weekPlan(w).committedAt])),

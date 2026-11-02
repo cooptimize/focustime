@@ -170,6 +170,8 @@ export function App() {
   }, []);
   const [busy, setBusy] = useState<"outlook" | "google" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Step 17: after Done in Plan the week, offer Look ahead 4 weeks when it is due (every other Thursday).
+  const [offerAhead, setOfferAhead] = useState(false);
   // Notices from work item links (e.g. "No Edge profile set for Fabrikam"), shown for a few seconds.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -1152,7 +1154,7 @@ export function App() {
         onMode={(m: ModeName) => goNav(m === "week" ? navOf.week("week") : navOf.week("planweek"))}
       />
     ),
-    roadmap: <ModeSwitch tab="roadmap" current={nav.tab === "roadmap" ? nav.mode : "roadmap"} onMode={(m: ModeName) => goNav(modeNav("roadmap", m))} />,
+    roadmap: <ModeSwitch tab="roadmap" current={nav.tab === "roadmap" ? nav.mode : "roadmap"} status={{ ahead: data.aheadDue.length ? "due" : null }} onMode={(m: ModeName) => goNav(modeNav("roadmap", m))} />,
     inbox: null,
   };
   const leavePlanning = () => goNav(afterDone(nav));
@@ -1267,6 +1269,17 @@ export function App() {
         </div>
       )}
 
+      {offerAhead && nav.tab === "week" && nav.mode === "week" && data.aheadDue.includes("plan_ahead") && (
+        <div className="ahead-offer" role="status">
+          <span>Next week is planned. Look ahead 4 weeks: blocks per week and dates.</span>
+          <button type="button" className="primary" onClick={() => (setOfferAhead(false), goNav(navOf.roadmap("ahead")))}>
+            Look ahead 4 weeks
+          </button>
+          <button type="button" className="quiet" onClick={() => setOfferAhead(false)}>
+            Not now
+          </button>
+        </div>
+      )}
 
       {settingsAt !== null ? (
         <Settings
@@ -1324,7 +1337,7 @@ export function App() {
           }
         />
       ) : planWeekAt !== null ? (
-        <PlanWeek switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={leavePlanning} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
+        <PlanWeek switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : followUpsOpen ? (
         <Inbox data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
       ) : closeOutAt !== null ? (
