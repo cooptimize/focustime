@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Week</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0E1620}
+a{color:#4FA3DD;text-decoration:none}a:hover{color:#8CC6EC}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; background: #0E1620; color: #E6ECF2; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; display: flex; flex-direction: column">
+
+  <header style="display: flex; align-items: center; gap: 20px; padding: 10px 20px; border-bottom: 1px solid #2B3A4D; font-size: 14px">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 8px; color: #E6ECF2; font-weight: 600; font-size: 16px; letter-spacing: -0.02em">
+      <svg viewBox="0 0 200 90" width="36" height="16" aria-hidden="true"><rect x="9.5" y="9.5" width="37" height="23" rx="5" fill="none" stroke="#9CC24F" stroke-width="3"/><rect x="8" y="50" width="40" height="32" rx="6" fill="#4FA3DD"/><rect x="56" y="8" width="40" height="26" rx="6" fill="#2F5F8C"/><rect x="56" y="50" width="40" height="32" rx="6" fill="#4FA3DD"/><rect x="104" y="8" width="40" height="26" rx="6" fill="#2F5F8C"/><rect x="104" y="50" width="40" height="32" rx="6" fill="#4FA3DD"/><rect x="152" y="8" width="40" height="26" rx="6" fill="#2F5F8C"/><rect x="152" y="50" width="40" height="32" rx="6" fill="#4FA3DD"/></svg>
+      Coopilot
+    </a>
+    <nav style="display: flex; gap: 2px; background: #162130; border: 1px solid #2B3A4D; border-radius: 9px; padding: 3px">
+      <a href="Main.dc.html" style="padding: 6px 14px; border-radius: 6px; color: #9AAABB">Today</a>
+      <a href="Week.dc.html" style="padding: 6px 14px; border-radius: 6px; background: #2B3A4D; color: #FFFFFF; font-weight: 500">Week</a>
+      <a href="Main.dc.html" style="padding: 6px 14px; border-radius: 6px; color: #9AAABB">Roadmap</a>
+      <a href="Main.dc.html" style="padding: 6px 14px; border-radius: 6px; color: #9AAABB">Inbox <span style="color: #E6ECF2">6</span></a>
+    </nav>
+    <div style="flex-grow: 1"></div>
+    <span style="font-size: 12px; color: #9AAABB; border: 1px solid #2B3A4D; border-radius: 7px; padding: 5px 10px"><span style="font-family: 'IBM Plex Mono', monospace; color: #E6ECF2">VM</span> Stopped · <a href="Main.dc.html">Start</a></span>
+    <button style="font: inherit; padding: 6px 12px; border-radius: 7px; border: 1px solid #2B3A4D; background: #162130; color: #E6ECF2">Focus</button>
+    <button style="font: inherit; padding: 6px 12px; border-radius: 7px; border: 1px solid #2B3A4D; background: #162130; color: #E6ECF2">Capture</button>
+    <span style="width: 30px; height: 30px; border-radius: 50%; background: #2B3A4D; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600">TS</span>
+  </header>
+
+  <section style="padding: 16px 20px 0; display: flex; align-items: center; gap: 14px">
+    <a href="Week.dc.html" aria-label="Previous week" style="padding: 3px 8px; border-radius: 6px; border: 1px solid #2B3A4D; color: #9AAABB">‹</a>
+    <a href="Week.dc.html" aria-label="Next week" style="padding: 3px 8px; border-radius: 6px; border: 1px solid #2B3A4D; color: #9AAABB">›</a>
+    <h1 style="margin: 0; font-size: 22px; font-weight: 600">Week of Nov 2–6</h1>
+    <span style="display: flex; gap: 12px; align-items: center; font-size: 13px; color: #9AAABB; margin-left: 10px">
+      <span style="text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em">Musts</span>
+      <span><span style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #4F8CFF; margin-right: 5px"></span>0/1</span>
+      <span><span style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #22B3A1; margin-right: 5px"></span><span style="color: #E6B85C">0/2</span></span>
+      <span><span style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #8B7CF6; margin-right: 5px"></span>0/1</span>
+      <span><span style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #F0A03C; margin-right: 5px"></span>0/1</span>
+    </span>
+    <span style="flex-grow: 1"></span>
+    <button aria-label="Week options" style="font: inherit; padding: 4px 9px; border-radius: 6px; border: 1px solid #2B3A4D; background: #162130; color: #9AAABB">⋯</button>
+    <div role="tablist" aria-label="Week modes" style="display: flex; gap: 2px; background: #162130; border: 1px solid #2B3A4D; border-radius: 9px; padding: 3px">
+      <a href="Week.dc.html" style="padding: 6px 12px; border-radius: 6px; background: #2B3A4D; color: #FFFFFF; font-weight: 500">Week</a>
+      <a href="PlanWeek.dc.html" style="padding: 6px 12px; border-radius: 6px; color: #9AAABB">Plan the week</a>
+    </div>
+  </section>
+
+  <section style="padding: 12px 20px 0; display: grid; grid-template-columns: 28px repeat(5, minmax(0, 1fr)); gap: 10px; align-items: start; flex-grow: 1">
+    <div></div>
+    <div style="display: flex; align-items: center; gap: 8px"><b>Mon</b><span style="color: #9AAABB">Nov 2</span><span style="padding: 1px 7px; border-radius: 9px; background: #2B3A4D; font-size: 11px">Today</span><span style="flex-grow: 1"></span><span style="color: #9CC24F; font-size: 12px">Planned ✓</span></div>
+    <div style="display: flex; align-items: center; gap: 8px"><b>Tue</b><span style="color: #9AAABB">Nov 3</span><span style="flex-grow: 1"></span><a href="PlanDay.dc.html" style="padding: 2px 10px; border-radius: 8px; background: #1F4D2E; color: #A8D5B6; font-size: 12px">Plan</a></div>
+    <div style="display: flex; align-items: center; gap: 8px"><b>Wed</b><span style="color: #9AAABB">Nov 4</span><span style="flex-grow: 1"></span><a href="PlanDay.dc.html" style="padding: 2px 10px; border-radius: 8px; background: #1F4D2E; color: #A8D5B6; font-size: 12px">Plan</a></div>
+    <div style="display: flex; align-items: center; gap: 8px"><b>Thu</b><span style="color: #9AAABB">Nov 5</span><span style="padding: 1px 7px; border-radius: 9px; background: #3A2F14; color: #F5CF73; font-size: 11px">Day off</span></div>
+    <div style="display: flex; align-items: center; gap: 8px"><b>Fri</b><span style="color: #9AAABB">Nov 6</span><span style="color: #9AAABB; font-size: 12px">Catch-up</span></div>
+
+    <div style="color: #9AAABB; font-size: 11px; padding-top: 8px">AM</div>
+
+    <article style="background: #162130; border: 1px solid #2B3A4D; border-left: 4px solid #4F8CFF; border-radius: 10px; padding: 10px 10px 10px 12px; display: flex; gap: 10px; min-width: 0; height: 300px; box-sizing: border-box">
+      <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+        <b style="font-size: 14px">Cooptimize</b>
+        <span style="padding: 2px 8px; border-radius: 9px; background: #3A1D1D; color: #F3A6A6; font-size: 11px; align-self: flex-start">At risk · Dentist 12:00</span>
+        <div style="display: flex; gap: 6px; align-items: center; color: #6F8094; text-decoration: line-through"><span style="font-size: 11px">✓</span><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Timesheet summary query</span></div>
+        <div style="display: flex; gap: 6px; align-items: center"><input type="checkbox" aria-label="Utilization chart" style="margin: 0"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Utilization chart</span></div>
+        <div style="display: flex; gap: 6px; align-items: center"><input type="checkbox" aria-label="Onboarding guide" style="margin: 0"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Onboarding guide for new hires</span></div>
+        <div style="display: flex; gap: 6px; align-items: center"><input type="checkbox" aria-label="Reply about proposal" style="margin: 0"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Reply about the proposal timeline</span><span style="padding: 0 6px; border-radius: 8px; background: #3A1D1D; color: #F3A6A6; font-size: 10px">Overdue</span></div>
+        <a href="PlanWeek.dc.html" style="margin-top: auto; font-size: 12px; color: #9AAABB">3 features this week</a>
+      </div>
+      <div style="width: 58px; flex-shrink: 0; position: relative; border-left: 1px solid #2B3A4D; font-size: 10px; color: #6F8094">
+        <span style="position: absolute; left: 4px; top: 0">9</span><span style="position: absolute; left: 4px; top: 80px">10</span><span style="position: absolute; left: 4px; top: 160px">11</span><span style="position: absolute; left: 4px; top: 240px">12</span>
+        <div title="Team standup 9:00–9:15" style="position: absolute; left: 16px; right: 2px; top: 0; height: 20px; border-radius: 4px; background: #2B3A4D; padding: 2px 4px; color: #9AAABB; overflow: hidden; white-space: nowrap">Standup</div>
+        <div style="position: absolute; left: 16px; right: 2px; top: 22px; height: 136px; border-radius: 4px; border: 1px dashed #2F5F8C; display: flex; align-items: center; justify-content: center; color: #4FA3DD">1h 45m</div>
+        <div title="Proposal review with Jordan 11:00–11:45" style="position: absolute; left: 16px; right: 2px; top: 160px; height: 58px; border-radius: 4px; background: #1B2A3D; border-left: 2px solid #4FA3DD; padding: 2px 4px; color: #E6ECF2; overflow: hidden">Proposal review</div>
+        <div title="Dentist 12:00–1:00" style="position: absolute; left: 16px; right: 2px; top: 240px; height: 38px; border-radius: 4px; background: #3A2430; border-left: 2px solid #E8829A; padding: 2px 4px; color: #E6ECF2; overflow: hidden">Dentist</div>
+      </div>
+    </article>
+
+    <article style="background: #162130; border: 1px solid #2B3A4D; border-left: 4px solid #8B7CF6; border-radius: 10px; padding: 10px 10px 10px 12px; display: flex; gap: 10px; min-width: 0; height: 300px; box-sizing: border-box">
+      <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+        <b style="font-size: 14px">Harbor</b>
+        <span style="padding: 0 6px; border-radius: 8px; background: #3A2F14; color: #F5CF73; font-size: 10px; align-self: flex-start">Follow-up due tomorrow</span>
+        <span style="color: #9AAABB; font-size: 12px">Not planned yet</span>
+        <a href="PlanWeek.dc.html" style="margin-top: auto; font-size: 12px; color: #9AAABB">3 features this week</a>
+      </div>
+      <div style="width: 58px; flex-shrink: 0; position: relative; border-left: 1px solid #2B3A4D; font-size: 10px; color: #6F8094">
+        <span style="position: absolute; left: 4px; top: 0">9</span><span style="position: absolute; left: 4px; top: 80px">10</span><span style="position: absolute; left: 4px; top: 160px">11</span><span style="position: absolute; left: 4px; top: 240px">12</span>
+        <div title="Team standup" style="position: absolute; left: 16px; right: 2px; top: 0; height: 20px; border-radius: 4px; background: #2B3A4D; padding: 2px 4px; color: #9AAABB; overflow: hidden">Standup</div>
+        <div title="Harbor sprint planning 10:00–11:00" style="position: absolute; left: 16px; right: 2px; top: 80px; height: 78px; border-radius: 4px; background: #1B2A3D; border-left: 2px solid #4FA3DD; padding: 2px 4px; overflow: hidden">Sprint planning</div>
+        <div style="position: absolute; left: 16px; right: 2px; top: 160px; height: 120px; border-radius: 4px; border: 1px dashed #2F5F8C; display: flex; align-items: center; justify-content: center; color: #4FA3DD">1h 30m</div>
+      </div>
+    </article>
+
+    <article style="background: #162130; border: 1px solid #2B3A4D; border-left: 4px solid #22B3A1; border-radius: 10px; padding: 10px 10px 10px 12px; display: flex; gap: 10px; min-width: 0; height: 300px; box-sizing: border-box">
+      <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+        <b style="font-size: 14px">Northwind</b>
+        <span style="padding: 2px 8px; border-radius: 9px; background: #3A1D1D; color: #F3A6A6; font-size: 11px; align-self: flex-start">At risk · 2h 30m of meetings</span>
+        <span style="color: #9AAABB; font-size: 12px">Not planned yet</span>
+        <a href="PlanWeek.dc.html" style="margin-top: auto; font-size: 12px; color: #9AAABB">4 features · <span style="color: #F5CF73">1 needs stories</span></a>
+      </div>
+      <div style="width: 58px; flex-shrink: 0; position: relative; border-left: 1px solid #2B3A4D; font-size: 10px; color: #6F8094">
+        <span style="position: absolute; left: 4px; top: 0">9</span><span style="position: absolute; left: 4px; top: 80px">10</span><span style="position: absolute; left: 4px; top: 160px">11</span><span style="position: absolute; left: 4px; top: 240px">12</span>
+        <div style="position: absolute; left: 16px; right: 2px; top: 0; height: 20px; border-radius: 4px; background: #2B3A4D; padding: 2px 4px; color: #9AAABB">Standup</div>
+        <div title="Northwind requirements workshop 9:30–11:30" style="position: absolute; left: 16px; right: 2px; top: 40px; height: 158px; border-radius: 4px; background: #1B2A3D; border-left: 2px solid #4FA3DD; padding: 2px 4px; overflow: hidden">Requirements workshop</div>
+        <div title="Lunch and learn 12:00–1:00" style="position: absolute; left: 16px; right: 2px; top: 240px; height: 38px; border-radius: 4px; background: #1B2A3D; border-left: 2px solid #4FA3DD; padding: 2px 4px; overflow: hidden">Lunch &amp; learn</div>
+      </div>
+    </article>
+
+    <article style="background: repeating-linear-gradient(45deg, #121C28, #121C28 8px, #162130 8px, #162130 16px); border: 1px solid #2B3A4D; border-radius: 10px; padding: 10px 12px; min-width: 0; height: 300px; box-sizing: border-box; color: #9AAABB">PTO</article>
+
+    <article style="border: 1px dashed #2B3A4D; border-radius: 10px; padding: 10px 12px; min-width: 0; height: 300px; box-sizing: border-box; color: #9AAABB; display: flex; flex-direction: column; gap: 6px">
+      <span>Catch-up</span>
+      <div style="display: flex; gap: 6px; font-size: 12px"><span style="color: #6F8094">11:00</span><span>Cooptimize all hands</span></div>
+    </article>
+
+    <div style="color: #9AAABB; font-size: 11px; padding-top: 8px">PM</div>
+
+    <article style="background: #162130; border: 1px solid #2B3A4D; border-left: 4px solid #22B3A1; border-radius: 10px; padding: 10px 10px 10px 12px; display: flex; gap: 10px; min-width: 0; height: 300px; box-sizing: border-box">
+      <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+        <b style="font-size: 14px">Northwind</b>
+        <span style="padding: 2px 8px; border-radius: 9px; background: #3A1D1D; color: #F3A6A6; font-size: 11px; align-self: flex-start">At risk · 2h 30m of meetings</span>
+        <div style="display: flex; gap: 6px; align-items: center"><input type="checkbox" aria-label="Export orders" style="margin: 0"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Export orders to CSV</span></div>
+        <div style="display: flex; gap: 6px; align-items: center"><input type="checkbox" aria-label="Filter orders" style="margin: 0"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Filter orders by date range</span></div>
+        <div style="display: flex; gap: 6px; align-items: center"><input type="checkbox" aria-label="Invoice PDF" style="margin: 0"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Invoice PDF totals round wrong</span></div>
+        <div style="display: flex; gap: 6px; align-items: center"><input type="checkbox" aria-label="Review export spec" style="margin: 0"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Review the export spec with Dana</span></div>
+        <a href="PlanWeek.dc.html" style="margin-top: auto; font-size: 12px; color: #9AAABB">4 features · <span style="color: #F5CF73">1 needs stories</span></a>
+      </div>
+      <div style="width: 58px; flex-shrink: 0; position: relative; border-left: 1px solid #2B3A4D; font-size: 10px; color: #6F8094">
+        <span style="position: absolute; left: 4px; top: 0">1</span><span style="position: absolute; left: 4px; top: 70px">2</span><span style="position: absolute; left: 4px; top: 140px">3</span><span style="position: absolute; left: 4px; top: 210px">4</span>
+        <div title="Northwind weekly status 1:00–1:30" style="position: absolute; left: 16px; right: 2px; top: 0; height: 33px; border-radius: 4px; background: #1B2A3D; border-left: 2px solid #4FA3DD; padding: 2px 4px; overflow: hidden">Weekly status</div>
+        <div style="position: absolute; left: 16px; right: 2px; top: 36px; height: 100px; border-radius: 4px; border: 1px dashed #2F5F8C; display: flex; align-items: center; justify-content: center; color: #4FA3DD">1h 30m</div>
+        <div title="Northwind data model review 3:00–4:00" style="position: absolute; left: 16px; right: 2px; top: 140px; height: 68px; border-radius: 4px; background: #1B2A3D; border-left: 2px solid #4FA3DD; padding: 2px 4px; overflow: hidden">Data model review</div>
+        <div style="position: absolute; left: 16px; right: 2px; top: 212px; height: 68px; border-radius: 4px; border: 1px dashed #2F5F8C; display: flex; align-items: center; justify-content: center; color: #4FA3DD">1h</div>
+      </div>
+    </article>
+
+    <article style="background: #162130; border: 1px solid #2B3A4D; border-left: 4px solid #F0A03C; border-radius: 10px; padding: 10px 10px 10px 12px; display: flex; gap: 10px; min-width: 0; height: 300px; box-sizing: border-box">
+      <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+        <b style="font-size: 14px">Atlas</b>
+        <span style="padding: 2px 8px; border-radius: 9px; background: #3A1D1D; color: #F3A6A6; font-size: 11px; align-self: flex-start">At risk · School pickup 3:30</span>
+        <span style="color: #9AAABB; font-size: 12px">Not planned yet</span>
+        <a href="PlanWeek.dc.html" style="margin-top: auto; font-size: 12px; color: #9AAABB">1 feature this week</a>
+      </div>
+      <div style="width: 58px; flex-shrink: 0; position: relative; border-left: 1px solid #2B3A4D; font-size: 10px; color: #6F8094">
+        <span style="position: absolute; left: 4px; top: 0">1</span><span style="position: absolute; left: 4px; top: 70px">2</span><span style="position: absolute; left: 4px; top: 140px">3</span><span style="position: absolute; left: 4px; top: 210px">4</span>
+        <div title="Atlas backlog refinement 1:00–2:00" style="position: absolute; left: 16px; right: 2px; top: 0; height: 68px; border-radius: 4px; background: #1B2A3D; border-left: 2px solid #4FA3DD; padding: 2px 4px; overflow: hidden">Backlog refinement</div>
+        <div title="Atlas stakeholder demo 2:00–3:00" style="position: absolute; left: 16px; right: 2px; top: 70px; height: 68px; border-radius: 4px; background: #1B2A3D; border-left: 2px solid #4FA3DD; padding: 2px 4px; overflow: hidden">Stakeholder demo</div>
+        <div title="School pickup 3:30" style="position: absolute; left: 16px; right: 2px; top: 175px; height: 40px; border-radius: 4px; background: #3A2430; border-left: 2px solid #E8829A; padding: 2px 4px; overflow: hidden">Pickup</div>
+        <div style="position: absolute; left: 16px; right: 2px; top: 218px; height: 62px; border-radius: 4px; border: 1px dashed #2F5F8C; display: flex; align-items: center; justify-content: center; color: #4FA3DD">1h</div>
+      </div>
+    </article>
+
+    <article style="background: #162130; border: 1px solid #2B3A4D; border-left: 4px solid #22B3A1; border-radius: 10px; padding: 10px 10px 10px 12px; display: flex; gap: 10px; min-width: 0; height: 300px; box-sizing: border-box">
+      <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+        <b style="font-size: 14px">Northwind</b>
+        <span style="color: #9AAABB; font-size: 12px">Not planned yet</span>
+        <a href="PlanWeek.dc.html" style="margin-top: auto; font-size: 12px; color: #9AAABB">4 features · <span style="color: #F5CF73">1 needs stories</span></a>
+      </div>
+      <div style="width: 58px; flex-shrink: 0; position: relative; border-left: 1px solid #2B3A4D; font-size: 10px; color: #6F8094">
+        <span style="position: absolute; left: 4px; top: 0">1</span><span style="position: absolute; left: 4px; top: 70px">2</span><span style="position: absolute; left: 4px; top: 140px">3</span><span style="position: absolute; left: 4px; top: 210px">4</span>
+        <div style="position: absolute; left: 16px; right: 2px; top: 0; height: 280px; border-radius: 4px; border: 1px dashed #2F5F8C; display: flex; align-items: center; justify-content: center; color: #4FA3DD">4h 15m</div>
+      </div>
+    </article>
+
+    <article style="background: repeating-linear-gradient(45deg, #121C28, #121C28 8px, #162130 8px, #162130 16px); border: 1px solid #2B3A4D; border-radius: 10px; padding: 10px 12px; min-width: 0; height: 300px; box-sizing: border-box; color: #9AAABB">PTO</article>
+
+    <article style="border: 1px dashed #2B3A4D; border-radius: 10px; padding: 10px 12px; min-width: 0; height: 300px; box-sizing: border-box; color: #9AAABB">Catch-up</article>
+  </section>
+
+  <footer style="margin-top: auto; display: flex; align-items: center; gap: 12px; padding: 8px 20px; font-size: 12px; color: #9AAABB; border-top: 1px solid #2B3A4D">
+    <span style="width: 7px; height: 7px; border-radius: 50%; background: #E6B85C"></span>Google Calendar from 8:02 · <a href="Week.dc.html">Reconnect</a>
+    <span style="flex-grow: 1"></span>
+    <a href="Week.dc.html" style="color: #9AAABB">Refresh</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

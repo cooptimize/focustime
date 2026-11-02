@@ -1,0 +1,25 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-11-02T18:30:00Z"},
+  "title": "Coopilot UX Overhaul",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1440, "h": 900, "title": "Today · Now (1920, pruned)"},
+    "TodayCheckin.dc.html": {"x": 1520, "y": 0, "w": 1440, "h": 900, "title": "Today · Check-in state"},
+    "TodayCloseout.dc.html": {"x": 3040, "y": 0, "w": 1440, "h": 900, "title": "Today · Close out panel"},
+    "PlanDay.dc.html": {"x": 0, "y": 1020, "w": 1440, "h": 900, "title": "Plan the day"},
+    "Week.dc.html": {"x": 1520, "y": 1020, "w": 1440, "h": 900, "title": "Week (rail replaces list)"},
+    "PlanWeek.dc.html": {"x": 3040, "y": 1020, "w": 1440, "h": 900, "title": "Plan the week"},
+    "TodayWide.dc.html": {"x": 0, "y": 2040, "w": 2400, "h": 1000, "title": "Today · Now at 3840 (timeline + cards)"}
+  },
+  "order": ["Main.dc.html", "TodayCheckin.dc.html", "TodayCloseout.dc.html", "PlanDay.dc.html", "Week.dc.html", "PlanWeek.dc.html", "TodayWide.dc.html"],
+  "notes": {
+    "t1": {"x": 0, "y": -300, "text": "Today in three states: Now, Check-in, Close out", "kind": "title1", "maxW": 4480},
+    "t2": {"x": 0, "y": 720, "text": "Planning and the week", "kind": "title1", "maxW": 4480},
+    "t3": {"x": 0, "y": 1740, "text": "Today on the ultrawide", "kind": "title1", "maxW": 2400},
+    "s1": {"x": 2480, "y": 2040, "w": 560, "fill": "blue", "text": "Rules applied on every screen\n\n• Quiet when healthy: risk, failed source, due follow-ups only when they exist.\n• One primary action per card: Start focus on the next pick only.\n• Risk says why on the card.\n• Meetings live on the rail or agenda, never twice.\n• Features never sit above stories; a feature without stories is a Needs stories row at the bottom.\n• Counts over lists: 2 done, 3 more, 6 to add.\n• Fit is amber, one line per block, never red.\n• Check-in and Close out change Today's state instead of rebuilding the plan as forms."},
+    "s2": {"x": 3080, "y": 2040, "w": 560, "fill": "green", "text": "Estimated after pruning (UI words / elements)\n\nToday › Now: 157 / 87 → about 55 / 30\nCheck-in: 348 / 77 → about 70 / 22\nClose out: 330 / 86 → about 90 / 28\nPlan the day: 136 / 78 → about 85 / 55\nWeek: 280 / 185 → about 95 / 80\nPlan the week: 476 / 140 → about 150 / 60\n\nClicks: start focus 1, mark done 1, add work to a block 2, move a pick 1 drag, see why at risk 0, add a must 3, finish Plan the week 2."}
+  },
+  "designSystems": []
+}
