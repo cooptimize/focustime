@@ -54,7 +54,7 @@ Browser tests need Chromium at `/usr/bin/chromium`, `/usr/bin/chromium-browser` 
 
 ## How live writes are kept out of tests
 
-There are no automated tests that write to a real Outlook, DevOps or Azure. Every write path is tested against the fakes above. In demo mode every confirm and retry is refused ([actions/dispatch.ts](../../actions/dispatch.ts) `DEMO_REFUSED`), and Azure is simulated.
+There are no automated tests that write to a real Outlook, DevOps or Azure. Every write path is tested against the fakes above. In demo mode Outlook and DevOps confirms and retries are refused ([actions/dispatch.ts](../../actions/dispatch.ts) `DEMO_REFUSED`), and Azure is simulated.
 
 Live checks were done by hand, once per write feature, with each write approved in chat: for example the Outlook create, move and undo check on a test event (decision D216) and the DevOps create, state, comment and undo check on a test item in the Cooptimize org only ([docs/spec.md](../../docs/spec.md), "Step 14 live verification").
 

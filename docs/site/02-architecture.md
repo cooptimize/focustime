@@ -1,6 +1,6 @@
 # 02. Architecture
 
-One process, one codebase, one person's machine. A Node 26 server (TypeScript run directly by Node, no build step for the server) listens on `127.0.0.1` and serves a React UI built by Vite. The UI talks to the server through one endpoint, `POST /api/action`, which runs named actions. Actions call pure planning code and source adapters, and read and write a local SQLite plan store. Sources: [server/main.ts](../../server/main.ts), [server/app.ts](../../server/app.ts), [package.json](../../package.json).
+One process, one codebase, one person's machine. A Node 26 server (TypeScript run directly by Node, no build step for the server) listens on `127.0.0.1` and serves a React UI built by Vite. The UI talks to the server through `POST /api/action`, which runs named actions, plus two small endpoints: `/api/open-request` (the launcher's one-shot "open capture") and `/api/reopen` (open a fresh window). Actions call pure planning code and source adapters, and read and write a local SQLite plan store. Sources: [server/main.ts](../../server/main.ts), [server/app.ts](../../server/app.ts), [package.json](../../package.json).
 
 Runtime dependencies are three: `react`, `react-dom` and `smol-toml` (config parsing). SQLite is Node's built-in `node:sqlite`; HTTP is built-in `fetch`; OAuth is hand-written on `crypto` and `http` with no MSAL or Google library ([package.json](../../package.json), [sources/oauth/oauth.ts](../../sources/oauth/oauth.ts), decision D48 in [docs/decisions.md](../../docs/decisions.md)).
 

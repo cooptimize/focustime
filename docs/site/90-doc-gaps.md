@@ -1,6 +1,6 @@
 # 90. Doc gaps
 
-Where the existing docs or code comments disagree with the code, what I could not confirm, and questions for Tanner. The code wins in every page of this site; this list is where the disagreements are recorded instead of being resolved silently.
+Where the existing docs or code comments disagree with the code, what I could not confirm, and questions for the author. The code wins in every page of this site; this list is where the disagreements are recorded instead of being resolved silently.
 
 ## Mismatches between docs or comments and code
 
@@ -19,6 +19,7 @@ Where the existing docs or code comments disagree with the code, what I could no
 | 11 | [docs/demo.md](../../docs/demo.md) | Roadmap: "Plan ahead (coming next)" | Plan ahead was built in step 17 ([ui/PlanAhead.tsx](../../ui/PlanAhead.tsx)) |
 | 12 | [docs/roadmap.md](../../docs/roadmap.md#rhythm-and-naming-agreed-oct-31-built) | "the top-bar Plan button (3) opens whichever of these fits" | Replaced by the mode switch and four tabs in step 16.2 (D324); key 3 is Roadmap ([ui/nav.ts](../../ui/nav.ts)) |
 | 13 | [docs/spec.md](../../docs/spec.md) section 38 (step 15.3) | No separate "Add a follow-up" | `followup.add` is still in the registry and used by the follow-up form and Plan ahead's "ask owner" ([ui/FollowUps.tsx](../../ui/FollowUps.tsx), [ui/PlanAhead.tsx](../../ui/PlanAhead.tsx)). Probably fine: the form is reached from capture, not a separate entry point. Not verified which entry points the UI shows |
+| 14 | [server/guard.ts](../../server/guard.ts), comment on `/api/reopen` | "takes no input and returns nothing" | It returns `{opened}` with status 202, or 503 when no window could be opened ([server/app.ts](../../server/app.ts)). Nothing sensitive, but the comment is out of date |
 
 ## Not verified
 
@@ -44,7 +45,7 @@ Claims in these pages that I could not confirm from code alone:
 
 All 8 Mermaid diagrams in this site (3 in 02, 2 in 03, 2 in 04, 1 in 06) were rendered with Mermaid CLI (`mmdc`) using the system Chromium, from a scratch folder outside the repo. None failed. At natural size the largest is about 1530 by 960 px; renderers scale them to the page width.
 
-## Questions for Tanner
+## Questions for the author
 
 1. Item 1 above: should the CLAUDE.md DevOps rule say "never deletes work items; undo deletes only a comment Coopilot added", or should undo of a comment soft-hide it some other way?
 2. Items 2 and 3: fix the comment and the key legend text in a code step, or leave them?

@@ -11,11 +11,11 @@ Every change Coopilot makes outside the machine goes through one pattern. Nothin
 5. **Revision check.** DevOps patches start with a JSON Patch `test` on `/rev`, so a change made by someone else since the preview fails with "Changed in DevOps since you loaded it" instead of overwriting it ([plan/devopswrite.ts](../../plan/devopswrite.ts), [sources/devops/write.ts](../../sources/devops/write.ts)). Outlook update and delete re-read the event and refuse unless the marker matches ([sources/graph/write.ts](../../sources/graph/write.ts)).
 6. **Write.**
 7. **Read back.** The target is read again and compared with what was meant. Only then is the write reported as done. If the read back fails on a network error, Coopilot waits 1.5 s and reads once more before settling it as "Not confirmed" ([actions/readback.ts](../../actions/readback.ts), decision D255).
-8. **Audit log.** Every attempt is recorded with when, where, before and after values, status (pending, confirmed, unconfirmed, failed, refused) and attempt count ([store/plan-store.ts](../../store/plan-store.ts) `write_log`, `devops_write_log`, `azure_write_log`, `teams_status_log`). Settings > Data shows them with Undo and Retry.
+8. **Audit log.** Every attempt is recorded with when, where, before and after values, status (pending, confirmed, unconfirmed, failed, refused) and attempt count ([store/plan-store.ts](../../store/plan-store.ts) `write_log`, `devops_write_log`, `azure_write_log`, `teams_status_log`). Settings > Data shows the Outlook and DevOps logs with Undo and Retry; the Azure and Teams logs are in Settings > You (the Azure log has a `timed_out` status and no undo; the Teams log records a result, not before and after).
 9. **Retry.** Retry checks the target first, so a write that actually landed is not done twice. Outlook creates carry a transaction id for the same reason ([sources/graph/write.ts](../../sources/graph/write.ts) `createBody`).
 10. **Undo.** An undo is itself a previewed, confirmed, logged write. Undo is a stack per target: the newest change must be undone first. An undo is refused if the target changed after Coopilot's change, because it would overwrite someone else's work ([actions/devops-write-actions.ts](../../actions/devops-write-actions.ts) undo section; open question Q68).
 
-In demo mode, every confirm and retry is refused ([actions/dispatch.ts](../../actions/dispatch.ts) `DEMO_REFUSED`).
+In demo mode, Outlook and DevOps confirms and retries are refused ([actions/dispatch.ts](../../actions/dispatch.ts) `DEMO_REFUSED`); VM actions run against a simulated Azure and Teams status against a simulated presence client ([server/demo.ts](../../server/demo.ts), [sources/demo/azure.ts](../../sources/demo/azure.ts)).
 
 ## Sequence: one write, end to end (Put a timebox on Outlook)
 
@@ -49,7 +49,7 @@ sequenceDiagram
 
 | Action (registry) | Target | What it changes | Guardrails | Undo |
 |---|---|---|---|---|
-| Put a timebox on Outlook (`write.preview` / `write.confirm`, kind timebox) | Outlook, my calendar | Creates one Busy event "<client>: <item>", no attendees, no reminder, with the Coopilot marker | Write scope must be granted; preview and confirm | Deletes that event (marker checked) |
+| Put a timebox on Outlook (`write.preview` / `write.confirm`, kind timebox) | Outlook, my calendar | Creates one event "<client>: <item>" (Busy by default; a timebox can carry another show as), no attendees, no reminder, with the Coopilot marker | Write scope must be granted; preview and confirm | Deletes that event (marker checked) |
 | Move, resize or remove a Coopilot event (kind timebox, sync) | Outlook | Time, show as, or delete, only on events with the marker | Marker must match on re-read; conflict when both sides changed | Puts it back (a sync from Outlook, kind sync, has no undo) |
 | Change my own event (kind event) | Outlook | Time and show as of an event I organize with no other attendees | Not repeating, not all-day; marker never added; preview first (can be skipped with `confirm_own` off, still logged) | Puts the old values back |
 | Send a help invite (`collab.preview_invite`, kind invite) | Outlook | Creates a meeting "<client>: help on <item>" with chosen Cooptimizers | Attendees only in allowed domains (`[collab] domains`, else my email's domain); marker `inv-...` | Cancels the meeting (sends a cancellation) |
