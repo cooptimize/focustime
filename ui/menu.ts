@@ -5,14 +5,15 @@ import { ACTIONS, type ActionName, type ActionSpec } from "../actions/registry.t
 import { THEME_NAMES, THEMES, type Theme } from "../config/schema.ts";
 import { hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { canAddWork, dayRule } from "../plan/days.ts";
-import { openGaps, placeInGap } from "../plan/agenda.ts";
+import { pickTime, timeChoices } from "../plan/picktime.ts";
+import { REMOVED_IN_OUTLOOK } from "../plan/outlooksync.ts";
 import { formatDuration } from "../week/format.ts";
 import { isPickable } from "../plan/rules.ts";
 import { SIZES, type Pick, type PlanDayState, type PlanWeek } from "../plan/types.ts";
 import type { ClientWork, Half, IsoDate, Week, WorkItem } from "../week/types.ts";
 import type { PlanningSettings, TimerView, BorrowedView, TimeboxView, InviteView } from "../actions/types.ts";
 import { eventEdit, type EditAction, type EditFacts } from "../plan/caltier.ts";
-import { SHOW_AS_LABEL, SHOW_AS_VALUES, type OutlookShowAs } from "../plan/timebox.ts";
+import { minutesOf as minutesOfBox, SHOW_AS_LABEL, SHOW_AS_VALUES, type OutlookShowAs } from "../plan/timebox.ts";
 import type { CalEvent } from "../week/types.ts";
 import { PRESETS, suggestMinutes } from "../plan/timer.ts";
 import { sizeNote } from "./planview.ts";
@@ -470,20 +471,77 @@ export function spanText(start: string, end: string, tz: string): string {
  * (trimmed to the gap), then "Custom time…" for the dialog.
  */
 export function timeboxStep(env: MenuEnv, p: Pick): MenuStep {
+  return timeStep(env, p);
+}
+
+/**
+ * A pick's time (step 14.5, D259): "+ time" on an untimed pick lists its block's free gaps (one click sets it) and
+ * Custom time. On a timed pick it is the time editor: Keep current, other free places (its own time counts as free,
+ * so it never says "no free time" because of itself), start and length, Put on Outlook (previewed), show as, Remove.
+ */
+export function timeStep(env: MenuEnv, p: Pick): MenuStep {
+  const tz = env.tz;
   const day = env.week.days.find((d) => d.date === p.date);
   const slot = day ? (p.half === "AM" ? day.am : p.half === "PM" ? day.pm : day.eve) : undefined;
-  const gaps = slot ? openGaps(slot, env.timeboxes ?? [], p.date === env.today ? env.now : undefined) : [];
-  const want = env.planning.sizes[p.size];
-  const items: MenuItem[] = gaps.flatMap((g, i) => {
-    const at = placeInGap(g, want);
-    if (!at) return [];
-    return [{ id: `gap${i}`, label: `Free ${spanText(g.start, g.end, env.tz)} · ${formatDuration(g.minutes)}`, hint: at.trimmed ? `trimmed to ${formatDuration(at.minutes)}` : `${formatDuration(at.minutes)} from ${spanText(at.start, at.end, env.tz).split("–")[0]}`, action: "timebox.add", run: () => env.timeboxChange("timebox.add", { pickId: p.id, date: p.date, start: at.start, end: at.end }) } satisfies MenuItem];
-  });
+  const all = env.timeboxes ?? [];
+  const { timebox: t } = pickTime(p.id, all);
+  const choices = slot ? timeChoices(slot, all, p, env.planning.sizes, p.date === env.today ? env.now : undefined) : [];
+  const custom: MenuItem = { id: "custom", label: "Custom time…", hint: "start and length", action: "timebox.add", run: () => env.openTimebox({ pickId: p.id, date: p.date }) };
+  if (!t) {
+    const gaps: MenuItem[] = choices.map((c, i) => ({ id: `gap${i}`, label: `Free ${spanText(c.gapStart, c.gapEnd, tz)} · ${formatDuration(c.gapMinutes)}`, hint: c.trimmed ? `trimmed to ${formatDuration(c.minutes)}` : `${formatDuration(c.minutes)} from ${spanText(c.start, c.end, tz).split("–")[0]}`, action: "timebox.add", run: () => env.timeboxChange("timebox.add", { pickId: p.id, date: p.date, start: c.start, end: c.end }) }));
+    return {
+      title: `Time for "${p.title}"`,
+      items: [...(gaps.length ? gaps : [{ id: "none", label: slot ? "No free time left in this block" : "This day isn't in the week shown", action: "timebox.add", disabled: "Use Custom time, or free up the block" } satisfies MenuItem]), custom],
+    };
+  }
+  const len = minutesOfBox(t);
+  const blocked = t.conflict ? "Changed in Coopilot and in Outlook: choose a version first" : undefined;
+  const change = (input: Record<string, unknown>) => env.timeboxChange("timebox.update", { id: t.id, ...input });
+  const conflict: MenuItem[] = t.conflict
+    ? [
+        { id: "keepmine", label: "Keep Coopilot's version", hint: t.conflict.changed.join(", "), action: "timebox.resolve", run: () => env.timeboxChange("timebox.resolve", { id: t.id, keep: "coopilot" }) },
+        { id: "theirs", label: t.conflict.outlook ? "Use Outlook's version" : "Remove (deleted in Outlook)", action: "timebox.resolve", run: () => env.timeboxChange("timebox.resolve", { id: t.id, keep: "outlook" }) },
+      ]
+    : [];
+  const removed: MenuItem[] = t.outlookNote === REMOVED_IN_OUTLOOK && !t.conflict
+    ? [
+        { id: "keeplocal", label: "Removed in Outlook: keep it here", action: "timebox.resolve", run: () => env.timeboxChange("timebox.resolve", { id: t.id, keep: "local" }) },
+      ]
+    : [];
+  const moves: MenuItem[] = choices.map((c, i) =>
+    c.kind === "keep"
+      ? { id: "keep", label: `Keep ${spanText(c.start, c.end, tz)}`, hint: formatDuration(c.minutes), checked: true, run: () => undefined }
+      : { id: `move${i}`, label: `Move to ${spanText(c.start, c.end, tz)}`, hint: c.trimmed ? `trimmed to ${formatDuration(c.minutes)}` : `free ${formatDuration(c.gapMinutes)}`, action: "timebox.update", ...(blocked ? { disabled: blocked } : {}), run: () => change({ start: c.start, end: c.end }) },
+  );
+  const lengths = [15, 30, 45, 60, 90, 120, 150, 180, 240];
   return {
-    title: `Timebox "${p.title}"`,
+    title: `"${p.title}" · ${spanText(t.start, t.end, tz)}${t.onOutlook ? " · on Outlook" : ""}${t.outlookNote && t.outlookNote !== REMOVED_IN_OUTLOOK ? ` · ${t.outlookNote}` : ""}`,
     items: [
-      ...(items.length ? items : [{ id: "none", label: slot ? "No free time left in this block" : "This day isn't in the week shown", action: "timebox.add", disabled: "Use Custom time, or free up the block" } satisfies MenuItem]),
-      { id: "custom", label: "Custom time…", hint: "start and length", action: "timebox.add", run: () => env.openTimebox({ pickId: p.id, date: p.date }) },
+      ...conflict,
+      ...removed,
+      ...moves,
+      {
+        id: "edit",
+        label: "Start and length…",
+        action: "timebox.update",
+        ...(blocked ? { disabled: blocked } : {}),
+        next: () => ({
+          title: `Time for "${p.title}"`,
+          button: "Save",
+          fields: [
+            { key: "start", label: "Starts at", type: "time", value: hhmm(t.start, tz) },
+            { key: "length", label: "Length", type: "select", value: String(lengths.includes(len) ? len : 60), options: [...new Set([...lengths, len])].sort((a, b) => a - b).map((m) => ({ value: String(m), label: formatDuration(m) })) },
+          ],
+          save: (v) => {
+            const s = atTime(t.date, v.start!, tz);
+            change({ start: s, end: Temporal.Instant.from(s).add({ minutes: Number(v.length) }).toZonedDateTimeISO(tz).toString({ timeZoneName: "never", smallestUnit: "second" }) });
+          },
+        }),
+      },
+      { id: "outlook", label: "Put on Outlook", checked: t.outlook, hint: t.outlook ? "on: a Busy event only you are on" : "after a preview", action: "timebox.set_outlook", ...(blocked ? { disabled: blocked } : {}), run: () => env.timeboxChange("timebox.set_outlook", { id: t.id, on: !t.outlook }) },
+      ...(t.outlook ? [{ id: "show", label: "Show as", hint: SHOW_AS_LABEL[t.showAs], action: "timebox.update", ...(blocked ? { disabled: blocked } : {}), next: () => ({ title: `Show "${p.title}" as`, items: SHOW_AS_VALUES.map((v) => ({ id: v, label: SHOW_AS_LABEL[v], checked: t.showAs === v, run: () => change({ showAs: v }) })) }) } satisfies MenuItem] : []),
+      { id: "focus", label: "Start focus", action: "timer.start", ...(t.date !== env.today ? { disabled: "Only today's timeboxes" } : {}), run: () => env.startTimeboxFocus(t) },
+      { id: "remove", label: "Remove time", danger: true, action: "timebox.remove", hint: t.onOutlook ? "and its Outlook event, after a preview" : "the pick stays planned", run: () => env.timeboxChange("timebox.remove", { id: t.id }) },
     ],
   };
 }

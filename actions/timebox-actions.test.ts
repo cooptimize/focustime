@@ -213,7 +213,7 @@ describe("write framework: undo", () => {
   it("undo of a create deletes the event Coopilot created and turns Put on Outlook off", async () => {
     const e = await latest();
     const { preview } = await t.preview({ undo: e.id });
-    expect(preview).toMatchObject({ op: "delete", undo: true, summary: "Undo: delete an outlook event coopilot created" });
+    expect(preview).toMatchObject({ op: "delete", undo: true, summary: "Undo: delete an Outlook event Coopilot created" });
     expect((await t.confirm(preview!)).confirmed).toBe(true);
     expect(t.g.events.size).toBe(0);
     expect(t.plan.timebox(id)).toMatchObject({ outlook: false, removedAt: null });
@@ -435,5 +435,42 @@ describe("read-back resilience (step 14.5, D255)", () => {
     const again = await t.run<WriteResult>("write.retry", { id: r.entry.id });
     expect(again.confirmed).toBe(true);
     expect(t.g.events.size).toBe(1);
+  });
+});
+
+describe("the row's Put on Outlook toggle and its undo (step 14.5, D259)", () => {
+  it("on: a preview then the event; undo removes the event and turns Put on Outlook back off", async () => {
+    const t = setup();
+    const p = t.plan.addPick({ date: D, half: "AM", clientKey: "CSC", kind: "item", itemId: 4512, title: "Import mapping", itemType: "User Story", itemUrl: "https://dev.azure.com/csc/p/_workitems/edit/4512", size: "M" });
+    const { timebox } = await t.run<{ timebox: { id: number; uid: string } }>("timebox.add", { date: D, start: `${D}T09:00:00-05:00`, end: `${D}T10:00:00-05:00`, pickId: p.id, outlook: false });
+    const on = await t.run<{ sync: string | null }>("timebox.set_outlook", { id: timebox.id, on: true });
+    expect(on.sync).toBe("create");
+    const r = await t.put(timebox.uid);
+    expect(r.confirmed).toBe(true);
+    expect(t.g.events.size).toBe(1);
+    const u = (await t.preview({ undo: r.entry.id })).preview!;
+    expect(u.op).toBe("delete");
+    expect((await t.confirm(u)).confirmed).toBe(true);
+    expect(t.g.events.size).toBe(0);
+    expect(t.plan.timebox(timebox.id)).toMatchObject({ outlook: false, removedAt: null });
+  });
+});
+
+describe("drag on the card timeline (step 14.5, D259)", () => {
+  it("moving by the top edge updates the timebox; Outlook follows only after a preview", async () => {
+    const { dragTimes } = await import("../plan/picktime.ts");
+    const t = setup();
+    const { timebox } = await t.box();
+    await t.put(timebox.uid);
+    const tb = t.plan.timebox(timebox.id)!;
+    const next = dragTimes("start", tb.start, tb.end, -30)!;
+    const r = await t.run<{ sync: string | null }>("timebox.update", { id: timebox.id, ...next });
+    expect(r.sync).toBe("update");
+    const before = [...t.g.events.values()][0]!;
+    expect(Date.parse(before.start)).toBe(Date.parse(`${D}T09:00:00-05:00`));
+    const p = (await t.preview({ uid: timebox.uid })).preview!;
+    expect(p.op).toBe("update");
+    expect((await t.confirm(p)).confirmed).toBe(true);
+    expect(Date.parse([...t.g.events.values()][0]!.start)).toBe(Date.parse(`${D}T08:30:00-05:00`));
   });
 });

@@ -112,9 +112,9 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
     }
     case "timebox": {
       // Step 12: two switches.
-      only(v, ["outlookDefault", "confirmOwn"], "timebox");
+      only(v, ["outlookDefault", "confirmOwn", "enabled"], "timebox");
       const values: [string, boolean][] = [];
-      for (const [f, k] of [["outlookDefault", "outlook_default"], ["confirmOwn", "confirm_own"]] as const) {
+      for (const [f, k] of [["outlookDefault", "outlook_default"], ["confirmOwn", "confirm_own"], ["enabled", "enabled"]] as const) {
         if (v[f] === undefined) continue;
         if (typeof v[f] !== "boolean") throw new SettingsInputError(`timebox.${k}`, "Must be true or false");
         values.push([k, v[f]]);

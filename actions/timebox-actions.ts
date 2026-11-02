@@ -45,6 +45,8 @@ const previews = new Map<string, Held>();
 
 class Invalid extends Error {}
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
+/** "Delete an Outlook event" → "delete an Outlook event": only the first letter, so names keep their capitals. */
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 type Obj = Record<string, unknown>;
 function fields(input: unknown, required: string[], optional: string[] = []): Obj {
   if (typeof input !== "object" || input === null || Array.isArray(input)) throw new Invalid("input must be an object");
@@ -457,7 +459,7 @@ export async function hold(ow: OutlookWrite, held: Omit<Held, "id" | "expiresAt"
   return {
     previewId: id, expiresAt: new Date(expiresAt).toISOString(), op: held.op, kind: held.kind, undo: held.undoOf !== null, auto: held.auto,
     system: "Outlook", account: cal.owner || "Your Microsoft account", calendar: cal.name,
-    summary: held.undoOf !== null && held.kind !== "invite" ? `Undo: ${summaryOf(held.kind, held.op).toLowerCase()}` : summaryOf(held.kind, held.op),
+    summary: held.undoOf !== null && held.kind !== "invite" ? `Undo: ${lowerFirst(summaryOf(held.kind, held.op))}` : summaryOf(held.kind, held.op),
     fields: previewFields(held.op, held.before, held.after, tz, held.kind), visibility: visibility(held.kind, held.op, subject),
     attendees: held.kind === "invite" ? (subject?.attendees ?? []).map((a) => ({ ...a })) : [],
   };

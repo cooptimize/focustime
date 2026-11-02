@@ -53,8 +53,8 @@ export const DEFAULT_COLLAB: CollabSettings = { meetingMinutes: 30, teams: true,
 export const COLLAB_LENGTHS = [15, 30, 45, 60, 90] as const;
 /** The domains invites may go to: config, else my work email's. */
 export const inviteDomains = (cfg: Pick<AppConfig, "collab" | "dataverse">) => (cfg.collab.domains.length ? cfg.collab.domains : [cfg.dataverse.myEmail.split("@")[1] ?? ""].filter(Boolean)).map((d) => d.toLowerCase());
-export type TimeboxSettings = { outlookDefault: boolean; confirmOwn: boolean };
-export const DEFAULT_TIMEBOX: TimeboxSettings = { outlookDefault: false, confirmOwn: true };
+export type TimeboxSettings = { outlookDefault: boolean; confirmOwn: boolean; /** Step 14.5 (D261): "Use timeboxing"; off hides time controls, timeboxes are kept. */ enabled: boolean };
+export const DEFAULT_TIMEBOX: TimeboxSettings = { outlookDefault: false, confirmOwn: true, enabled: true };
 
 export const THEMES = ["cooptimize-dark", "cooptimize-light", "neutral"] as const;
 export type Theme = (typeof THEMES)[number];
@@ -488,8 +488,8 @@ export function parseConfig(text: string): ParseResult {
   if (raw.timebox !== undefined) {
     const t = isTable(raw.timebox) ? raw.timebox : (err("timebox", "Must be a [timebox] table"), null);
     if (t) {
-      for (const k of Object.keys(t)) if (!["outlook_default", "confirm_own"].includes(k)) err(`timebox.${k}`, "Unknown field");
-      for (const [k, f] of [["outlook_default", "outlookDefault"], ["confirm_own", "confirmOwn"]] as const) {
+      for (const k of Object.keys(t)) if (!["outlook_default", "confirm_own", "enabled"].includes(k)) err(`timebox.${k}`, "Unknown field");
+      for (const [k, f] of [["outlook_default", "outlookDefault"], ["confirm_own", "confirmOwn"], ["enabled", "enabled"]] as const) {
         if (t[k] === undefined) continue;
         if (typeof t[k] !== "boolean") err(`timebox.${k}`, "Must be true or false");
         else timebox[f] = t[k];

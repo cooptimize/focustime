@@ -5,7 +5,7 @@ import type { Pick } from "../plan/types.ts";
 import { buildWeek } from "../week/build.ts";
 import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
-import { eventMenu, timerStep, timeboxStep, commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
+import { eventMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm } from "./menu.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -305,5 +305,45 @@ describe("+ Add work entry points (step 13.6, D241)", () => {
     expect(find(slotMenu(e, "2026-11-02", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/Past day/);
     expect(find(slotMenu(e, "2026-11-05", "AM", "internal", "Internal"), "Add work…").disabled).toMatch(/PTO/);
     expect(find(slotMenu(e, "2026-11-07", "AM", null, null), "Add work…").disabled).toBe("No working hours in this block");
+  });
+});
+
+describe("one row per pick: + time and the time editor (step 14.5, D259)", () => {
+  const own = (extra: Record<string, unknown> = {}) => ({ id: 5, uid: "u5", date: "2026-11-03", clientKey: "internal", pickId: 7, itemId: null, title: "x", url: null, start: "2026-11-03T09:00:00-05:00", end: "2026-11-03T12:30:00-05:00", outlook: false, onOutlook: false, showAs: "busy", removedAt: null, conflict: null, outlookNote: null, sync: null, ...extra }) as never;
+  it("a timed pick that fills its block: Keep current first, never 'no free time'", () => {
+    const s = timeStep(env({ timeboxes: [own()] }).e, pick);
+    expect(items(s)[0]).toMatchObject({ id: "keep", checked: true });
+    expect(items(s).some((i) => /No free time/.test(i.label))).toBe(false);
+    expect(items(s).map((i) => i.id)).toEqual(expect.arrayContaining(["edit", "outlook", "remove"]));
+  });
+  it("Start and length saves through timebox.update", async () => {
+    const { e, calls } = env({ timeboxes: [own()] });
+    const step = find(timeStep(e, pick), "Start and length…").next!();
+    expect("fields" in step && step.fields.map((f) => f.key)).toEqual(["start", "length"]);
+    if ("fields" in step) await step.save({ start: "10:00", length: "90" });
+    expect(calls.at(-1)).toEqual(["timebox.update", { id: 5, start: "2026-11-03T10:00:00-05:00", end: "2026-11-03T11:30:00-05:00" }]);
+  });
+  it("Put on Outlook toggles through timebox.set_outlook (the preview follows); checked when on", async () => {
+    const { e, calls } = env({ timeboxes: [own()] });
+    const off = items(timeStep(e, pick)).find((i) => i.id === "outlook")!;
+    expect(off.checked).toBe(false);
+    await off.run!();
+    expect(calls.at(-1)).toEqual(["timebox.set_outlook", { id: 5, on: true }]);
+    const on = items(timeStep(env({ timeboxes: [own({ outlook: true, onOutlook: true })] }).e, pick)).find((i) => i.id === "outlook")!;
+    expect(on.checked).toBe(true);
+  });
+  it("Remove time removes the timebox; the pick stays planned", async () => {
+    const { e, calls } = env({ timeboxes: [own()] });
+    const r = find(timeStep(e, pick), "Remove time");
+    expect(r.hint).toBe("the pick stays planned");
+    await r.run!();
+    expect(calls.at(-1)).toEqual(["timebox.remove", { id: 5 }]);
+  });
+  it("moving to another free place keeps the length", async () => {
+    const { e, calls } = env({ timeboxes: [own({ end: "2026-11-03T10:00:00-05:00" })] });
+    const m = items(timeStep(e, pick)).find((i) => i.id.startsWith("move"))!;
+    expect(m.label).toBe("Move to 10:00–11:00");
+    await m.run!();
+    expect(calls.at(-1)).toEqual(["timebox.update", { id: 5, start: "2026-11-03T10:00:00-05:00", end: "2026-11-03T11:00:00-05:00" }]);
   });
 });

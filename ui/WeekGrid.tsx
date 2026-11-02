@@ -1,5 +1,6 @@
 import { useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { TimeboxBands, TimeboxList } from "./Timeboxes.tsx";
+import { PickTime } from "./PickTime.tsx";
 import { formatDuration } from "../week/format.ts";
 import { worstSeverity } from "../week/risks.ts";
 import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types.ts";
@@ -468,6 +469,7 @@ function PickRow({ pick, toggle }: { pick: Pick; toggle: (id: number, done: bool
         <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} onChange={(e) => toggle(pick.id, e.target.checked)} />
         <span className="ck-title" title={pick.title}>{pick.title}</span>
       </label>
+      <PickTime pick={pick} />
       {menu.button(`Actions for ${pick.title}`)}
     </li>
   );

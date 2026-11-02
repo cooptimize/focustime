@@ -62,7 +62,7 @@ export type WeekLoadData = {
   /** Timeboxes on the week (step 12): live ones, plus removed ones whose Outlook event is still to be taken off. */
   timeboxes: TimeboxView[];
   /** [timebox]: Put on Outlook by default, and whether changes to my own timebox events ask first. */
-  timeboxSettings: { outlookDefault: boolean; confirmOwn: boolean };
+  timeboxSettings: { outlookDefault: boolean; confirmOwn: boolean; enabled: boolean };
   /** Step 13: edit facts per Outlook event id ("outlook:<id>") from the write-token scan (no attendee addresses). */
   eventEdit: Record<string, import("../plan/caltier.ts").EditFacts>;
   /** Whether Coopilot may write to Outlook (the tiers only matter with it). */

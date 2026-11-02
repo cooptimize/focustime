@@ -23,9 +23,10 @@ import { call } from "./api.ts";
 import { copy, DueBadge } from "./FollowUps.tsx";
 import { dueOrder } from "../plan/due.ts";
 import { isTypingTarget, ITEM_ATTRS, topOverlay } from "./keys.ts";
-import { itemMenu, pickMenu, spanText, timeboxStep } from "./menu.ts";
+import { itemMenu, pickMenu, spanText } from "./menu.ts";
 import { MenuRow, useMenu } from "./Menus.tsx";
 import { TimeboxDetails, useTimeboxes } from "./Timeboxes.tsx";
+import { PickTime } from "./PickTime.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 
 export type PlanDayAct = (action: string, input: Record<string, unknown>) => Promise<boolean>;
@@ -99,8 +100,10 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
   }, []);
   const [myDay, setMyDay] = useState(false);
   const tbEnv = useTimeboxes();
+  const timing = tbEnv?.settings.enabled !== false;
   const boxed = new Set((tbEnv?.timeboxes ?? []).filter((t) => t.date === day.date && !t.removedAt).map((t) => t.pickId));
   const unboxed = state.picks.filter((p) => p.date === day.date && p.status === "planned" && !boxed.has(p.id)).length;
+  const hintHalf = (["AM", "PM", "EVE"] as Half[]).find((h) => state.picks.some((p) => p.date === day.date && p.half === h && p.status === "planned" && !boxed.has(p.id))) ?? null;
   const committed = state.plan.committedAt;
 
   const onKey = (e: KeyboardEvent) => {
@@ -170,7 +173,7 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
               ›
             </button>
           </span>
-          {!past && !off && committed && !justCommitted && (
+          {!past && !off && committed && !justCommitted && timing && (
             <button type="button" onClick={() => setMyDay(true)} title="Place every planned pick without a timebox into its block's free time">
               Timebox my day
             </button>
@@ -189,9 +192,9 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
         <div className="pd-committed" role="status">
           <p>
             <strong>Committed.</strong>{" "}
-            {unboxed > 0 && !off ? `${unboxed} planned pick${unboxed === 1 ? " has" : "s have"} no time yet. Timebox them into the free gaps now?` : "Every planned pick has its time."}
+            {!timing ? "Changes are saved as you go." : unboxed > 0 && !off ? `${unboxed} planned pick${unboxed === 1 ? " has" : "s have"} no time yet. Timebox them into the free gaps now?` : "Every planned pick has its time."}
           </p>
-          {unboxed > 0 && !off && (
+          {unboxed > 0 && !off && timing && (
             <button type="button" className="primary" onClick={() => (onCommitSeen?.(), setMyDay(true))}>
               Timebox my day
             </button>
@@ -259,6 +262,7 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
             colors={colors}
             clients={clients}
             act={act}
+            hintFor={hintHalf}
           />
         ))}
       </div>}
@@ -271,12 +275,46 @@ export function PlanDay({ day, state, which, friday, now, tz, colors, clients, e
 
 /** "45m of M" when a pick has a minute or more of focused time (step 6d); the size alone otherwise. */
 /** "9:30" when a pick is timeboxed today (its time counts instead of its size). */
-function TimeboxChip({ pickId }: { pickId: number }) {
-  const env = useTimeboxes();
-  const mine = env?.timeboxes.filter((t) => t.pickId === pickId && !t.removedAt) ?? [];
-  if (!env || !mine.length) return null;
-  const f = (s: string) => Temporal.Instant.from(s).toZonedDateTimeISO(env.tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
-  return <span className="tb-chip" title="Timeboxed: its timebox counts as planned time instead of its size">{mine.map((t) => f(t.start)).join(", ")}</span>;
+/** One pick, one row (step 14.5, D259): in the block's list, or in its agenda at its time when it has one. */
+function PickLine({ p, bc, name, other, friday, act, inAgenda = false, hint }: { p: Pick; bc: { clientKey: string | null }; name: (k: string | null) => string; other: Half; friday: string | null; act: PlanDayAct; inAgenda?: boolean; hint: boolean }) {
+  return (
+    <MenuRow build={(env) => pickMenu(env, p)} label={`Actions for ${p.title}`} item={{ clientKey: p.clientKey, url: p.itemUrl }} className={`${p.clientKey !== bc.clientKey ? "other-client" : ""}${inAgenda ? " ag-pick" : ""}`}>
+              <span className="wi-type">{p.kind === "intention" ? "Note" : typeTag(p.itemType ?? "")}</span>
+              <span className="pick-title" title={p.title}>
+                {p.kind === "item" && p.itemUrl ? (
+                  <WorkLink clientKey={p.clientKey} url={p.itemUrl} className="pick-link">
+                    {p.title}
+                  </WorkLink>
+                ) : (
+                  p.title
+                )}
+                {p.clientKey !== bc.clientKey && <span className="muted"> · {name(p.clientKey)}</span>}
+                {p.carriedFromDate && <span className="muted"> · from {shortDate(p.carriedFromDate)}</span>}
+              </span>
+              <PickTime pick={p} hint={hint} />
+              <FocusNote pick={p} />
+              <span className="sizes" role="group" aria-label="Size">
+                {SIZES.map((s) => (
+                  <button key={s} type="button" className="size" aria-pressed={p.size === s} onClick={() => p.size !== s && act("pick.set_size", { id: p.id, size: s })}>
+                    {s}
+                  </button>
+                ))}
+              </span>
+              <span className="row-actions">
+                <button type="button" className="mini" onClick={() => act("pick.move", { id: p.id, date: p.date, half: other })} aria-label={`Move to ${halfTag(other)}`}>
+                  To {halfTag(other)}
+                </button>
+                {friday && (
+                  <button type="button" className="mini" onClick={() => act("pick.move", { id: p.id, date: friday, half: "AM" })} aria-label="Move to Friday">
+                    To Fri
+                  </button>
+                )}
+                <button type="button" className="mini quiet" onClick={() => act("pick.remove", { id: p.id })} aria-label={`Drop ${p.title}`}>
+                  Drop
+                </button>
+              </span>
+            </MenuRow>
+  );
 }
 
 function SizeTag({ pick }: { pick: Pick }) {
@@ -368,6 +406,8 @@ function CarryOver({ picks, date, act }: { picks: Pick[]; date: string; act: Pla
 
 type BlockProps = {
   dataHalf: Half;
+  /** Step 14.5 (D260): the block whose first untimed pick carries the one-time hint. */
+  hintFor: Half | null;
   /** Shows the candidates (step 10: one block at a time). */
   active: boolean;
   onActivate: () => void;
@@ -386,7 +426,7 @@ type BlockProps = {
   act: PlanDayAct;
 };
 
-function Block({ dataHalf, slot, active, onActivate, overflow, picks, drafts, weekFeatures, picked, other, friday, now, tz, colors, clients, act }: BlockProps) {
+function Block({ dataHalf, hintFor, slot, active, onActivate, overflow, picks, drafts, weekFeatures, picked, other, friday, now, tz, colors, clients, act }: BlockProps) {
   const focus = overflow ? null : slot.focus[0] ?? null;
   const bc = blockClient(focus?.clientKey ?? null, picks);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -400,6 +440,13 @@ function Block({ dataHalf, slot, active, onActivate, overflow, picks, drafts, we
   // Where I left off with this block's client (step 7): the latest resume note up to this day.
   const notes = useContext(PlanCtx).resumeNotes;
   const note = (focus?.clientKey ?? bc.clientKey) ? notes?.[(focus?.clientKey ?? bc.clientKey)!] : undefined;
+  // Step 14.5 (D259): a timed pick shows in the agenda at its time, as its own row; the rest follow, untimed.
+  const tbEnv = useTimeboxes();
+  const timing = !!tbEnv?.settings.enabled && !slot.off;
+  const timedIds = new Set(timing ? agendaOf(slot, tbEnv!.timeboxes).filter((r) => r.kind === "timebox").map((r) => tbEnv!.timeboxes.find((t) => t.id === r.timeboxId)?.pickId).filter((x): x is number => x != null && picks.some((p) => p.id === x)) : []);
+  const untimed = picks.filter((p) => !timedIds.has(p.id));
+  const line = { bc, name, other, friday, act };
+  const hintPick = hintFor === slot.half ? untimed.find((p) => p.status === "planned")?.id ?? null : null;
 
   return (
     <section className={`pd-block fit-${fit.kind} ${focus ? "focus" : "open"}${active ? " active" : " idle"}`} style={style} aria-label={`${slot.half} block`} data-half={dataHalf}>
@@ -424,7 +471,7 @@ function Block({ dataHalf, slot, active, onActivate, overflow, picks, drafts, we
           <span className={`fit ${fit.kind}`}>{fitLabel(fit)}</span>
         </div>
       </header>
-      {!slot.off && <Agenda slot={slot} now={now} tz={tz} clientName={name} />}
+      {!slot.off && <Agenda slot={slot} now={now} tz={tz} clientName={name} pickRow={(id) => { const p = picks.find((x) => x.id === id); return p ? <PickLine key={`p${p.id}`} p={p} {...line} inAgenda hint={false} /> : null; }} />}
       {bc.mixed && <p className="pd-flag">Mixed clients in one block: {bc.clients.map(name).join(", ")}</p>}
       {fit.kind === "over" && (
         <p className="pd-flag over">
@@ -433,46 +480,10 @@ function Block({ dataHalf, slot, active, onActivate, overflow, picks, drafts, we
         </p>
       )}
 
-      {picks.length > 0 && (
-        <ol className="pd-picks">
-          {picks.map((p) => (
-            <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`Actions for ${p.title}`} item={{ clientKey: p.clientKey, url: p.itemUrl }} className={p.clientKey !== bc.clientKey ? "other-client" : ""}>
-              <span className="wi-type">{p.kind === "intention" ? "Note" : typeTag(p.itemType ?? "")}</span>
-              <TimeboxChip pickId={p.id} />
-              <span className="pick-title" title={p.title}>
-                {p.kind === "item" && p.itemUrl ? (
-                  <WorkLink clientKey={p.clientKey} url={p.itemUrl} className="pick-link">
-                    {p.title}
-                  </WorkLink>
-                ) : (
-                  p.title
-                )}
-                {p.clientKey !== bc.clientKey && <span className="muted"> · {name(p.clientKey)}</span>}
-                {p.carriedFromDate && <span className="muted"> · from {shortDate(p.carriedFromDate)}</span>}
-              </span>
-              <FocusNote pick={p} />
-              <span className="sizes" role="group" aria-label="Size">
-                {SIZES.map((s) => (
-                  <button key={s} type="button" className="size" aria-pressed={p.size === s} onClick={() => p.size !== s && act("pick.set_size", { id: p.id, size: s })}>
-                    {s}
-                  </button>
-                ))}
-              </span>
-              <span className="row-actions">
-                {p.status === "planned" && !slot.off && <TimeboxButton pick={p} />}
-                <button type="button" className="mini" onClick={() => act("pick.move", { id: p.id, date: p.date, half: other })} aria-label={`Move to ${halfTag(other)}`}>
-                  To {halfTag(other)}
-                </button>
-                {friday && (
-                  <button type="button" className="mini" onClick={() => act("pick.move", { id: p.id, date: friday, half: "AM" })} aria-label="Move to Friday">
-                    To Fri
-                  </button>
-                )}
-                <button type="button" className="mini quiet" onClick={() => act("pick.remove", { id: p.id })} aria-label={`Drop ${p.title}`}>
-                  Drop
-                </button>
-              </span>
-            </MenuRow>
+      {untimed.length > 0 && (
+        <ol className="pd-picks" aria-label={timedIds.size ? "No time yet" : "Picks"}>
+          {untimed.map((p) => (
+            <PickLine key={p.id} p={p} {...line} hint={p.id === hintPick} />
           ))}
         </ol>
       )}
@@ -800,11 +811,12 @@ const isTodayIn = (date: string, now: string, tz: string) => Temporal.Instant.fr
  * A block's agenda (D244): meetings, personal events, unavailable time and timeboxes in time order, with the free gaps
  * between ("Free 9:00–11:00 · 2h"). A timebox row opens its details (show as, Put on Outlook, Removed in Outlook).
  */
-function Agenda({ slot, now, tz, clientName }: { slot: Slot; now: string; tz: string; clientName: (k: string | null) => string }) {
+function Agenda({ slot, now, tz, clientName, pickRow }: { slot: Slot; now: string; tz: string; clientName: (k: string | null) => string; pickRow: (pickId: number) => ReactNode }) {
   const env = useTimeboxes();
   const [open, setOpen] = useState<number | null>(null);
   if (!env) return null;
-  const rows = agendaOf(slot, env.timeboxes, isTodayIn(slot.date, now, tz) ? now : undefined);
+  // With timeboxing off (D261), timeboxes stay but the agenda shows only the calendar and free time.
+  const rows = agendaOf(slot, env.settings.enabled ? env.timeboxes : [], isTodayIn(slot.date, now, tz) ? now : undefined);
   if (!rows.length) return null;
   const sel = open !== null ? env.timeboxes.find((t) => t.id === open && !t.removedAt) ?? null : null;
   return (
@@ -820,6 +832,9 @@ function Agenda({ slot, now, tz, clientName }: { slot: Slot; now: string; tz: st
                 <span className="ag-title">Free · {formatDuration(r.minutes)}</span>
               </li>
             );
+          // Step 14.5 (D259): a pick's timebox is the pick's own row, at its time.
+          const asPick = tb && tb.pickId !== null ? pickRow(tb.pickId) : null;
+          if (asPick) return asPick;
           if (tb)
             return (
               <li key={`t${tb.id}`} className={`ag-timebox${tb.outlookNote ? " noted" : ""}${tb.conflict ? " conflict" : ""}`} style={{ "--c": clientColor(tb.clientKey, env.colors) } as CSSProperties}>
@@ -847,18 +862,6 @@ function Agenda({ slot, now, tz, clientName }: { slot: Slot; now: string; tz: st
       </ol>
       {sel && <TimeboxDetails tb={sel} env={env} clientName={clientName(sel.clientKey)} today={isTodayIn(sel.date, now, tz)} onRemoved={() => setOpen(null)} />}
     </div>
-  );
-}
-
-/** A pick's Timebox (D245): its block's free gaps (one click places it), then Custom time. Hidden once it has one. */
-function TimeboxButton({ pick }: { pick: Pick }) {
-  const env = useTimeboxes();
-  const menu = useMenu((m) => timeboxStep(m, pick));
-  if (!env || env.timeboxes.some((t) => t.pickId === pick.id && !t.removedAt)) return null;
-  return (
-    <button type="button" className="mini" aria-haspopup="menu" onClick={menu.onContextMenu} title="Place it in a free gap of this block">
-      Timebox
-    </button>
   );
 }
 

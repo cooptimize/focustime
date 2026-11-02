@@ -1,6 +1,6 @@
 // Today (step 10): the default view. What's now and next, today's picks by block with the week's committed
 // features as context, one large Start focus, and anything urgent. Everything else is a click away.
-import { useTimeboxes } from "./Timeboxes.tsx";
+import { PickTime } from "./PickTime.tsx";
 import { DueBadge } from "./FollowUps.tsx";
 import { useContext, useState } from "react";
 import type { FollowUpView, WeekLoadData } from "../actions/types.ts";
@@ -56,6 +56,8 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
   const pick = focusPick(picks, strip?.half ?? null);
   const t = data.timer;
   const workday = data.planDay.workday && !!day && !day.pto;
+  // Step 14.5 (D260): the one-time hint goes on the first planned pick with no time yet.
+  const hintPick = committed ? picks.find((p) => p.status === "planned" && !data.timeboxes.some((t) => t.pickId === p.id && !t.removedAt))?.id ?? null : null;
 
   return (
     <main className="today-view" aria-label="Today">
@@ -129,7 +131,7 @@ export function Today({ data, strip, target, now, nowMs, onStart, onFocusScreen,
       {workday && day && (
         <section className="today-blocks" aria-label="Today's blocks">
           {slotsOf(day).map((s) => (
-            <TodayBlock key={s.half} slot={s} data={data} picks={picks.filter((p) => p.half === s.half && (p.status === "planned" || p.status === "done"))} committed={committed} now={now} nameOf={nameOf} onStart={onStart} onPlan={() => onPlan(date)} running={t?.pickId ?? null} />
+            <TodayBlock key={s.half} slot={s} data={data} picks={picks.filter((p) => p.half === s.half && (p.status === "planned" || p.status === "done"))} committed={committed} now={now} nameOf={nameOf} onStart={onStart} onPlan={() => onPlan(date)} running={t?.pickId ?? null} hintPick={hintPick} />
           ))}
         </section>
       )}
@@ -159,7 +161,7 @@ function slotsOf(day: Day): Slot[] {
   return [day.am, day.pm, ...(day.eve ? [day.eve] : [])].filter((s) => !s.off && (s.focus.length > 0 || s.open || s.half === "EVE"));
 }
 
-function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan, running }: { slot: Slot; data: WeekLoadData; picks: Pick[]; committed: boolean; now: string; nameOf: (k: string) => string; onStart: (p: Pick) => void; onPlan: () => void; running: number | null }) {
+function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan, running, hintPick }: { slot: Slot; data: WeekLoadData; picks: Pick[]; committed: boolean; now: string; nameOf: (k: string) => string; onStart: (p: Pick) => void; onPlan: () => void; running: number | null; hintPick: number | null }) {
   const view = useContext(PlanCtx);
   const client = slot.focus[0]?.clientKey ?? null;
   const ended = Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.end)) >= 0;
@@ -168,10 +170,6 @@ function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan
   const status = blockStatus(fit, slot.risks);
   const features = slot.half === "EVE" ? [] : featuresOn(data.weekFeatures, slot.date, slot.half as Half, client);
   const title = client ? nameOf(client) : slot.open ? "Open" : halfName(slot.half);
-  // Step 14 (D254): the block that is running now offers Timebox on its picks with no time yet.
-  const tb = useTimeboxes();
-  const current = !ended && Temporal.Instant.compare(Temporal.Instant.from(now), Temporal.Instant.from(slot.start)) >= 0;
-  const boxed = new Set((tb?.timeboxes ?? []).filter((t) => t.date === slot.date && !t.removedAt).map((t) => t.pickId));
   return (
     <article className={`today-block${ended ? " ended" : ""}`} style={{ "--c": clientColor(client ?? undefined, data.clients) } as React.CSSProperties}>
       <header>
@@ -211,11 +209,7 @@ function TodayBlock({ slot, data, picks, committed, now, nameOf, onStart, onPlan
                 </button>
               )}
               {running === p.id && <span className="today-running">Focusing</span>}
-              {current && committed && tb && p.status === "planned" && !boxed.has(p.id) && (
-                <button type="button" className="mini quiet" onClick={() => tb.open({ pickId: p.id, date: slot.date })} title="Give this pick a stretch of the block's free time">
-                  Timebox
-                </button>
-              )}
+              {committed && <PickTime pick={p} editable={!ended} hint={p.id === hintPick} />}
             </li>
           ))}
         </ul>

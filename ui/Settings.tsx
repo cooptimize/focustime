@@ -464,6 +464,12 @@ function TimeboxForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
     >
       <h3>Timeboxes</h3>
       <div className="set-grid">
+        <Field label="Use timeboxing" hint="Give picks a time of day, optionally on Outlook. Off hides the time controls; existing timeboxes are kept and still count.">
+          <label className="set-check">
+            <input type="checkbox" checked={v.enabled} onChange={(e) => setV({ ...v, enabled: e.target.checked })} /> Use timeboxing
+          </label>
+          <Problems all={problems} field="timebox.enabled" />
+        </Field>
         <Field label="Put on Outlook" hint="New timeboxes start with Put on Outlook on. Creating an event always shows a preview first.">
           <label className="set-check">
             <input type="checkbox" checked={v.outlookDefault} onChange={(e) => setV({ ...v, outlookDefault: e.target.checked })} /> On by default

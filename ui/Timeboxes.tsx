@@ -5,10 +5,11 @@
 // right after the preview, still logged and undoable.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import type { InviteView, TimeboxView, WritePreview, WriteResult, WriteState } from "../actions/types.ts";
-import { minutesOf, SHOW_AS_LABEL, SHOW_AS_VALUES, snap, TIMEBOX_MIN, TIMEBOX_SNAP, type OutlookShowAs } from "../plan/timebox.ts";
+import { minutesOf, SHOW_AS_LABEL, SHOW_AS_VALUES, TIMEBOX_SNAP, type OutlookShowAs } from "../plan/timebox.ts";
 import { REMOVED_IN_OUTLOOK } from "../plan/outlooksync.ts";
 import { useMenu } from "./Menus.tsx";
-import { timeboxMenu, type HelpTarget } from "./menu.ts";
+import { timeboxMenu, timeStep, type HelpTarget } from "./menu.ts";
+import { dragTimes, type DragMode } from "../plan/picktime.ts";
 import type { IsoDate, Slot } from "../week/types.ts";
 import { formatDuration } from "../week/format.ts";
 import { call } from "./api.ts";
@@ -22,7 +23,7 @@ const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
 
 export type TimeboxEnv = {
   timeboxes: readonly TimeboxView[];
-  settings: { outlookDefault: boolean; confirmOwn: boolean };
+  settings: { outlookDefault: boolean; confirmOwn: boolean; enabled: boolean };
   colors: Record<string, string>;
   tz: string;
   /** Write access, read once when needed (null until known). */
@@ -656,53 +657,62 @@ export function InviteChips({ match }: { match: (i: InviteView) => boolean }): R
  */
 export function TimeboxBands({ slot, pos }: { slot: Slot; pos: (iso: string) => number }): ReactNode {
   const env = useTimeboxes();
-  if (!env) return null;
+  if (!env || !env.settings.enabled) return null;
   const a = ms(slot.view.start), b = ms(slot.view.end);
   const here = env.timeboxes.filter((t) => t.date === slot.date && !t.removedAt && ms(t.end) > a && ms(t.start) < b);
   return here.map((t) => <Band key={`tb-${t.id}`} t={t} env={env} slot={slot} pos={pos} />);
 }
 
 function Band({ t, env, slot, pos }: { t: TimeboxView; env: TimeboxEnv; slot: Slot; pos: (iso: string) => number }) {
-  const menu = useMenu((m) => timeboxMenu(m, t));
-  const [drag, setDrag] = useState<{ mode: "move" | "end"; y0: number; h: number; d: number } | null>(null);
+  // Step 14.5 (D259): a pick's timebox opens the same time editor as its row; others keep the timebox menu.
+  const menu = useMenu((m) => {
+    const p = t.pickId !== null ? m.planWeek?.[t.date]?.picks.find((x) => x.id === t.pickId) : undefined;
+    return p ? timeStep(m, p) : timeboxMenu(m, t);
+  });
+  const [drag, setDrag] = useState<{ mode: DragMode; y0: number; h: number; d: number } | null>(null);
+  const moved = useRef(false);
   const a = ms(slot.view.start), b = ms(slot.view.end);
   const spanMin = (b - a) / 60_000;
-  const shift = drag ? drag.d : 0;
-  const s0 = ms(t.start), e0 = ms(t.end);
-  const s = drag?.mode === "move" ? s0 + shift * 60_000 : s0;
-  const e = e0 + shift * 60_000 * (drag ? 1 : 0);
-  const top = pos(new Date(Math.max(s, a)).toISOString()), bottom = pos(new Date(Math.min(drag?.mode === "end" ? Math.max(e, s0 + TIMEBOX_MIN * 60_000) : e, b)).toISOString());
-  const down = (ev: PointerEvent, mode: "move" | "end") => {
+  const live = drag ? dragTimes(drag.mode, t.start, t.end, drag.d) ?? { start: t.start, end: t.end } : { start: t.start, end: t.end };
+  const top = pos(new Date(Math.max(ms(live.start), a)).toISOString()), bottom = pos(new Date(Math.min(ms(live.end), b)).toISOString());
+  const down = (ev: PointerEvent, mode: DragMode) => {
     if (ev.button !== 0) return;
     ev.stopPropagation();
+    moved.current = false;
     const parent = (ev.currentTarget as HTMLElement).closest(".timeline") as HTMLElement | null;
     (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
     setDrag({ mode, y0: ev.clientY, h: parent?.getBoundingClientRect().height ?? 1, d: 0 });
   };
-  const move = (ev: PointerEvent) => drag && setDrag({ ...drag, d: snap(((ev.clientY - drag.y0) / drag.h) * spanMin) });
+  const move = (ev: PointerEvent) => {
+    if (!drag) return;
+    const d = ((ev.clientY - drag.y0) / drag.h) * spanMin;
+    if (Math.abs(d) >= TIMEBOX_SNAP / 2) moved.current = true;
+    setDrag({ ...drag, d });
+  };
   const up = () => {
     if (!drag) return;
-    const d = drag.d;
+    const next = dragTimes(drag.mode, t.start, t.end, drag.d);
     setDrag(null);
-    if (!d) return;
-    const iso = (x: number) => Temporal.Instant.fromEpochMilliseconds(x).toZonedDateTimeISO(env.tz).toString({ timeZoneName: "never", smallestUnit: "second" });
-    if (drag.mode === "move") void timeboxChange(env, "timebox.update", { id: t.id, start: iso(s0 + d * 60_000), end: iso(e0 + d * 60_000) });
-    else void timeboxChange(env, "timebox.update", { id: t.id, end: iso(Math.max(s0 + TIMEBOX_MIN * 60_000, e0 + d * 60_000)) });
+    if (next) void timeboxChange(env, "timebox.update", { id: t.id, start: next.start, end: next.end });
   };
-  const label = `Timebox: ${t.title}, ${range(t, env.tz)}${t.onOutlook ? ", on Outlook" : ""}${t.conflict ? ", changed in both places" : t.outlookNote ? `, ${t.outlookNote}` : ""}`;
+  const label = `${t.pickId !== null ? "" : "Timebox: "}${t.title}, ${range(t, env.tz)}${t.onOutlook ? ", on Outlook" : ""}${t.conflict ? ", changed in both places" : t.outlookNote ? `, ${t.outlookNote}` : ""}`;
   return (
     <div
-      className={`tbox${drag ? " dragging" : ""}${t.conflict ? " conflict" : ""}${t.sync ? " out-of-step" : ""}`}
+      className={`tbox${drag ? " dragging" : ""}${t.conflict ? " conflict" : ""}${t.sync ? " out-of-step" : ""}${t.outlook ? " on-outlook" : ""}`}
       role="button"
       tabIndex={0}
       aria-label={label}
       style={{ top: `${top * 100}%`, height: `${(bottom - top) * 100}%`, "--c": clientColor(t.clientKey, env.colors) } as CSSProperties}
-      title={`${label}\nDrag to move, the bottom edge to resize. Right-click for more.`}
+      title={`${label}\nClick to change the time. Drag to move, either edge to resize.`}
       onPointerDown={(ev) => down(ev, "move")}
       onPointerMove={move}
       onPointerUp={up}
       onPointerCancel={() => setDrag(null)}
-      onClick={(ev) => ev.stopPropagation()}
+      onClick={(ev) => {
+        ev.stopPropagation();
+        if (moved.current) moved.current = false;
+        else menu.onContextMenu(ev);
+      }}
       onDoubleClick={(ev) => ev.stopPropagation()}
       onContextMenu={menu.onContextMenu}
       onKeyDown={(ev) => {
@@ -714,22 +724,26 @@ function Band({ t, env, slot, pos }: { t: TimeboxView; env: TimeboxEnv; slot: Sl
         }
       }}
     >
+      <span className="tbox-edge top" onPointerDown={(ev) => down(ev, "start")} aria-hidden="true" />
       <span className="tbox-label">
         {t.conflict ? "⚠ " : ""}
         {t.title}
       </span>
-      {drag && <span className="tbox-time">{range({ start: new Date(s).toISOString(), end: new Date(drag.mode === "end" ? Math.max(e, s0 + TIMEBOX_MIN * 60_000) : e).toISOString() }, env.tz)}</span>}
+      {(drag || t.outlook) && <span className="tbox-time">{drag ? range(live, env.tz) : "Outlook"}</span>}
       <span className="tbox-edge" onPointerDown={(ev) => down(ev, "end")} aria-hidden="true" />
     </div>
   );
 }
 
-/** Compact cards (no timeline): the timeboxes that start in this half-day, as a short list in client color. */
+/**
+ * Compact cards (no timeline): timeboxes without a pick that start in this half-day (week list items, plain client
+ * time). A pick's timebox shows on the pick's own row instead (step 14.5, D259).
+ */
 export function TimeboxList({ slot }: { slot: Slot }): ReactNode {
   const env = useTimeboxes();
-  if (!env) return null;
+  if (!env || !env.settings.enabled) return null;
   const a = ms(slot.view.start), b = ms(slot.view.end);
-  const here = env.timeboxes.filter((t) => t.date === slot.date && !t.removedAt && ms(t.start) >= a && ms(t.start) < b);
+  const here = env.timeboxes.filter((t) => t.pickId === null && t.date === slot.date && !t.removedAt && ms(t.start) >= a && ms(t.start) < b);
   if (!here.length) return null;
   return (
     <ul className="ev-list tb-list" aria-label="Timeboxes">
