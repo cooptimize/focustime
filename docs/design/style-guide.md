@@ -138,10 +138,27 @@ Checked numerically (WCAG contrast; color-vision simulation with Machado 2009 ma
 
 **Families (step 17.5, D358):** IBM Plex Sans 400, 500 and 600 for everything (`--font-ui`), self-hosted from `@fontsource/ibm-plex-sans` (latin, woff2, OFL 1.1, `ui/fonts.css`); every `font-weight` in the stylesheet is one of those three. Tabular figures (`tnum`) are on for the whole body, so times, durations and counts line up. IBM Plex Mono 400 and 500 (`--font-mono`) only for keyboard hints and shortcut chips (`kbd`). No network fonts. Red Hat Display (step 6b, D120) is gone.
 
+**Type scale (U3, D385).** Today and Week use four sizes and three weights, nothing else (tested in `e2e/week.test.ts`). The same pixel sizes at 3840: the ultrawide is 1080 px tall, so text needs no scaling. Other screens (Plan the day, Plan the week, Roadmap, Settings) still use the older steps below until their own pass.
+
+| Token | Size | Weight | Use |
+|---|---|---|---|
+| `--fs-4` | 15 | 600 | page and panel titles ("Week of Nov 2–6, 2026", the panel's client) |
+| `--fs-3` | 13 | 600 | client names on cards, the next pick's title |
+| `--fs-3` | 13 | 500 | buttons, Plan chip, + Add work |
+| `--fs-3` | 13 | 400 | body: pick titles, rows, follow-ups |
+| `--fs-2` | 12 | 500 | pills and badges (At risk, Due today, size chips) |
+| `--fs-2` | 12 | 400 | meta: time ranges, counts, features line, status bar |
+| `--fs-1` | 11 | 500 | rail labels and hour marks |
+| `--fs-1` | 11 | 600 | section labels, uppercase +0.06em (MUSTS, THIS WEEK, AGENDA) |
+
+Uppercase is for section labels only, never for tags or pills. Fewer than 12 text styles on Today › Now and on Week (U3: 8 and 9).
+
+Older steps, still used outside Today and Week:
+
 | Step | Size / line | Use |
 |---|---|---|
-| `--fs-xs` | 11/14 | group labels (ALL DAY, BEFORE 9), uppercase +0.06em |
-| `--fs-sm` | 12.5/16 | meta lines, work item rows, status bar |
+| `--fs-xs` | 11/14 | group labels, uppercase +0.06em |
+| `--fs-sm` | 12.5/16 | meta lines, work item rows |
 | `--fs-md` | 14/19 | event rows, stats, menu items |
 | `--fs-base` | 15/20 | body, picks |
 | `--fs-lg` | 18/22 | client name on a card |
@@ -177,11 +194,12 @@ Components (`ui/brand/`, docs/design/brand.md): `WeekMark` (top bar, about 18 px
 
 | Component | Anatomy | States | Notes |
 |---|---|---|---|
-| **Half-day block** | label row (AM/PM, time range, ⋯), body (focus card or Open), summary line | default, hover, selected (focus ring), at risk (outline + badge), PTO (hatch, dimmed, "PTO · nothing planned"), past (faint) | the selected block is the keyboard cursor |
-| **Focus block card** | client rail (4 px, slot color), swatch + name, stats "2h meetings · 2h 15m free · longest 1h", risk badge, picks, meetings, work items | normal, double-booked ("Also booked: X" with second swatch), standing (dotted rail) | the client name is always text |
+| **Day header (Week)** | weekday and date, Today pill, PTO pill (reason on hover), Plan chip only when not planned, ⋯ on hover or selection; all-day chips and before/after lines only when present | default, today, PTO | no ALL DAY, BEFORE or AFTER labels (U3) |
+| **Half-day block (Week card)** | header: swatch, client, muted "9:00–12:30", ⋯ on hover; the status pill with its reason; picks (size chip, + time and ⋯ on hover; a timed pick shows its time); "N done" off today; due badges; + Add work on hover; the features line; the rail on the right | default, hover, selected (focus ring), at risk (pill with reason), past (faint); PTO day as one hatched cell, Friday as one dashed Catch-up column | no AM/PM labels; the rail is the one home for meetings; the selected block is the keyboard cursor (U3) |
+| **Detail panel** | title (swatch, client, date), range, ⋯, close; risks; agenda with free gaps; picks as full rows; where you left off; features with story counts, Draft stories, Coop brief; follow-ups; assigned and not planned | open on a block; focused section highlighted | 440 px at 1920, 560 px at 3840; Week and Today; Esc closes; not modal (U3) |
 | **Pick card** | checkbox, title, size chip (S/M/L), ⋯ | planned, done (strike + faint), carried over ("from Tue"), other client (warning tag) | size chip: S about 1 h, M about 2 h, L a block |
-| **Risk badge** | dot + "At risk:" / "Watch:" + rule name, "+N more" | at risk, watch | text always present; click opens details at the risk section |
-| **Source status bar** | per source: dot, name, state word, time, count, fix button | live, cached (time), failed (cause), sample, needs sign-in | identical failures are grouped into one line with one fix |
+| **Risk pill** | "At risk · <short reason>" | at risk, too much planned (amber), fits | the reason is on the pill (0 clicks); full sentences in the detail panel |
+| **Source status bar** | all live: a green dot and Refresh only; otherwise per cause: dot, name, state word, its data's age, fix button | live (quiet), cached (age), failed (cause), sample, needs sign-in | identical failures are grouped into one line with one fix; age only beside a stale or failed source (U3) |
 | **Top nav** | glyph, views (Week, Plan the day, Plan the week / Check-in / Close out as "soon"), week nav, Now strip, Refresh, Commands, Settings | active view (underline in `--action`), disabled "soon" | |
 | **Command menu** | search, grouped list (views, week, sources, Plan the day, picks, work items), shortcut on the right, steps for targets | empty ("Nothing matches"), step with back | built from the action registry |
 | **Buttons** | primary (`--action`), secondary (outline), quiet (text), mini | hover, active (pressed 1 px), disabled (40%, cursor default), busy (spinner + label) | one primary per panel |

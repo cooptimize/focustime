@@ -2981,3 +2981,8 @@ button.att-chip { cursor: pointer; }
 .dt-item { font-size: var(--fs-2); font-weight: 400; }
 .dt-item .ev-title { font-weight: 500; }
 .dt-now, .dt-now span { font-size: var(--fs-1); font-weight: 500; }
+
+/* /styleguide: the type scale (U3) */
+.sg-type { display: grid; gap: 6px; }
+.sg-type-row { display: flex; align-items: baseline; gap: 16px; }
+.sg-type-spec { width: 110px; color: var(--text-muted); font-size: var(--fs-2); }

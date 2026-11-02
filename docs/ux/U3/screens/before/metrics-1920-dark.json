@@ -1,0 +1,95 @@
+{
+ "week": {
+  "words": {
+   "ui": 289,
+   "titles": 233
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 276,
+    "titles": 233
+   }
+  },
+  "elements": 184,
+  "kinds": {
+   "button": 120,
+   "icon": 1,
+   "badge/chip/tag": 55,
+   "input": 8
+  },
+  "textStyles": 23,
+  "colors": 56,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [
+   "grid medium  :989/929"
+  ],
+  "uiText": [
+   "Week of",
+   "Nov 2–6, 2026",
+   "Musts",
+   "Cooptimize 0/1 · Northwind 0/2 · Harbor 0/1 · Atlas 0/1",
+   "Week",
+   "Plan the week",
+   "Mon",
+   "Nov 2",
+   "Today",
+   "Planned ✓",
+   "All day ×5",
+   "Before 9 AM ×5",
+   "AM ×5",
+   "9:00 AM–12:30 PM ×5",
+   "Cooptimize",
+   "This week: ×19",
+   "Follow-up ×8",
+   "Overdue 1 day",
+   "At risk ×4",
+   "Dentist 12:00–1:00 PM overlaps the Cooptimize block",
+   "M ×3",
+   "S ×5",
+   "+ time ×7",
+   "9:00 ×3",
+   "11:00 ×2",
+   "12:00 ×4",
+   "+ Add work",
+   "PM ×5",
+   "12:30–5:00 PM ×5",
+   "Northwind ×3",
+   "Due today ×2",
+   "Dentist 12:00–1:00 PM overlaps the Northwind block",
+   "1:00 ×2",
+   "3:00",
+   "After 5 PM ×5",
+   "Tue",
+   "Nov 3",
+   "Plan ×2",
+   "Harbor ×2",
+   "Due tomorrow ×2",
+   "10:00",
+   "Atlas ×2",
+   "2h 30m of meetings inside the Atlas block",
+   "2:00",
+   "3:30",
+   "Wed",
+   "Nov 4",
+   "2h 45m of meetings inside the Northwind block",
+   "9:30",
+   "5:30",
+   "Run club",
+   "Thu",
+   "Nov 5",
+   "PTO · Day off",
+   "PTO · nothing planned ×2",
+   "Fri",
+   "Nov 6",
+   "Not a working day ×2",
+   "All sources live",
+   "· updated 4 h ago",
+   "Refresh"
+  ]
+ }
+}

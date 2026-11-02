@@ -138,6 +138,18 @@ function readTokens(): { layer: string; tokens: Token[] }[] {
   ];
 }
 
+/** The U3 type scale (D385), as docs/design/style-guide.md section 4 lists it. */
+const TYPE_SCALE: [string, number, string, boolean][] = [
+  ["--fs-4", 600, "Page and panel titles", false],
+  ["--fs-3", 600, "Client names, the next pick", false],
+  ["--fs-3", 500, "Buttons and chips", false],
+  ["--fs-3", 400, "Body: picks, rows, follow-ups", false],
+  ["--fs-2", 500, "Pills and badges", false],
+  ["--fs-2", 400, "Meta: times, counts, status bar", false],
+  ["--fs-1", 500, "Rail labels and hour marks", false],
+  ["--fs-1", 600, "Section labels", true],
+];
+
 export function StyleGuide() {
   const [theme, setTheme] = useState<Theme>(() => {
     const q = new URLSearchParams(location.search).get("theme");
@@ -231,6 +243,19 @@ export function StyleGuide() {
                   </span>
                 ))}
               </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="sg-section">
+        <h2>Type scale</h2>
+        <p className="muted">Today and Week: four sizes and three weights. Uppercase only for section labels.</p>
+        <div className="sg-type">
+          {TYPE_SCALE.map(([fs, w, use, upper]) => (
+            <div key={`${fs}-${w}`} className="sg-type-row">
+              <span className="sg-type-spec">{`${fs.replace("--fs-", "fs-")} · ${w}`}</span>
+              <span style={{ fontSize: `var(${fs})`, fontWeight: w, ...(upper ? { textTransform: "uppercase", letterSpacing: "0.06em" } : {}) }}>{use}</span>
             </div>
           ))}
         </div>
