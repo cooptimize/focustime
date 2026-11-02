@@ -151,7 +151,7 @@ for k, f in enumerate([0, 0.25, 0.5, 0.75, 1.0]):
 
 # ---------- wordmark and lockup ----------
 word = '<text x="0" y="44" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="600" font-size="48" letter-spacing="-1.2" fill="currentColor">Coopilot</text>'
-write("wordmark.svg", svg(230, 60, word, "Coopilot wordmark", "Set in IBM Plex Sans 600; outline with the real font before shipping.", tokens=False))
+write("wordmark.svg", svg(230, 60, word, "Coopilot wordmark", "IBM Plex Sans 600, outlined to paths by tools/outline.mjs.", tokens=False))
 
 lock = f'<g transform="translate(0,6) scale(0.34)">{ring_segments(CX, CY, "var(--brand-am)", "var(--brand-pm)", "var(--ghost)", w_scale=1.2)}{lumen(206, 103, 30, "var(--accent)", "var(--lime)", light=True, gid="beam-lockup")}</g>'
 lock += '<text x="100" y="52" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="600" font-size="40" letter-spacing="-1" fill="currentColor">Coopilot</text>'
