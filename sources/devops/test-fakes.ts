@@ -131,6 +131,9 @@ export function fakeDevOps(orgs: Record<string, OrgScenario>, opts: { ids?: numb
             ...(who ? { "System.AssignedTo": { displayName: who, uniqueName: who === "Avery S" ? `avery@${org}.example` : "dana@client.example" } } : {}),
             ...(target ? { "Microsoft.VSTS.Scheduling.TargetDate": target } : {}),
             ...(id === 201 ? { "Microsoft.VSTS.Scheduling.StoryPoints": 3 } : {}),
+            // Step 17: a start date on one feature, a blocked tag on one story.
+            ...(id === 240 ? { "Microsoft.VSTS.Scheduling.StartDate": "2026-11-09T00:00:00Z" } : {}),
+            ...(id === 212 ? { "System.Tags": "Blocked; UX" } : {}),
           };
           // Only the fields asked for, like DevOps.
           return { id, fields: Object.fromEntries(Object.entries(all).filter(([k]) => body.fields.includes(k))) };

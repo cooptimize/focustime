@@ -142,9 +142,15 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
     [4411, "User Story", "Active", 4410, "Timesheet summary query", ME],
     [4412, "User Story", "New", 4410, "Utilization chart", ME],
     [4420, "User Story", "New", null, "Onboarding guide for new hires", ME],
+    // Step 17: on track (two of four done, target well ahead).
+    [4430, "Feature", "Active", null, "Knowledge base search", ME, "2026-12-18"],
+    [4431, "User Story", "Closed", 4430, "Index the wiki pages", ME],
+    [4432, "User Story", "Closed", 4430, "Search box in the portal", "Jordan Lee"],
+    [4433, "User Story", "Active", 4430, "Rank results by team", ME],
+    [4434, "User Story", "New", 4430, "Search analytics", "Jordan Lee"],
   ],
   Northwind: [
-    [1100, "Epic", "Active", null, "Customer portal 2.0", "Jordan Lee"],
+    [1100, "Epic", "Active", null, "Customer portal redesign", "Jordan Lee"],
     [1110, "Feature", "Active", 1100, "Order history export", ME, "2026-11-13"],
     [1111, "User Story", "Active", 1110, "Export orders to CSV", ME],
     [1112, "User Story", "New", 1110, "Filter orders by date range", ME],
@@ -153,6 +159,12 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
     [1120, "Feature", "New", 1100, "Supplier onboarding", ME, null],
     [1130, "User Story", "Active", null, "Fix login timeout on mobile", ME],
     [1131, "Bug", "Active", null, "Invoice PDF totals round wrong", ME],
+    // Step 17: two more features targeting December (a crowded month in Plan ahead).
+    [1140, "Feature", "New", 1100, "Loyalty points", ME, "2026-12-11"],
+    [1141, "User Story", "New", 1140, "Earn points on orders", ME],
+    [1142, "User Story", "New", 1140, "Points balance page", "Priya Shah"],
+    [1150, "Feature", "New", 1100, "Store locator", ME, "2026-12-18"],
+    [1151, "User Story", "New", 1150, "Map of stores", ME],
   ],
   Harbor: [
     [2210, "Feature", "Active", null, "Patient intake form", ME, "2026-11-27"],
@@ -165,6 +177,10 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
     [2220, "Feature", "Active", null, "Appointment reminders", "Priya Shah"],
     [2221, "User Story", "New", 2220, "SMS reminder template", ME],
     [2230, "User Story", "New", null, "Power BI refresh schedule", ME],
+    // Step 17: done (every story closed), the feature itself not closed yet.
+    [2240, "Feature", "Active", null, "Patient portal login", ME, "2026-10-30"],
+    [2241, "User Story", "Closed", 2240, "Sign in with a one-time code", ME],
+    [2242, "User Story", "Closed", 2240, "Remember this device", "Sam Ortiz"],
   ],
   Atlas: [
     [3310, "Feature", "Active", null, "Shipment tracking dashboard", ME, null],
@@ -175,8 +191,12 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
   ],
 };
 
-/** Step 16 (Roadmap): stories with no change in a while, and stories with no size yet. */
-const QUIET = new Set([4412, 1112]);
+/** Step 16 (Roadmap): stories with no change in a while, and stories with no size yet. Step 17: Atlas's dashboard is stalled. */
+const QUIET = new Set([4412, 1112, 3311, 3312]);
+/** Step 17: a story blocked by a tag (Harbor's intake form reads Blocked). */
+const BLOCKED = new Set([2212]);
+/** Step 17: DevOps Start Date on some features (the demo process has the field); the rest are estimated in Plan ahead. */
+const START: Record<number, IsoDate> = { 4410: "2026-10-26", 1110: "2026-10-19", 2210: "2026-10-12", 4430: "2026-11-09" };
 const UNSIZED = new Set([1113, 2213]);
 
 const client = (k: DemoClientKey) => DEMO_CLIENTS.find((c) => c.key === k)!;
@@ -209,18 +229,18 @@ export function demoPortfolio(k: DemoClientKey, fetchedAt: string): ClientPortfo
   const all = ITEMS[k].map((r, n) => item(k, r, n + 1));
   const child = (c: WorkItem): PortfolioChild => ({
     id: c.id, title: c.title, type: c.type, state: c.state, stateCategory: c.stateCategory, open: c.stateCategory !== "Completed", level: c.level, order: c.order, url: c.url, assignedTo: c.assignedTo ?? null, assignedToEmail: c.assignedToEmail ?? null, mine: !!c.assignedToMe,
-    changedAt: QUIET.has(c.id) ? "2026-10-09T15:00:00Z" : c.changedAt, size: UNSIZED.has(c.id) ? null : 3,
+    changedAt: QUIET.has(c.id) ? "2026-10-09T15:00:00Z" : c.changedAt, size: UNSIZED.has(c.id) ? null : 3, blocked: BLOCKED.has(c.id),
   });
   const items: PortfolioItem[] = all
     .filter((i) => i.level === "portfolio")
     .map((i) => ({
       id: i.id, title: i.title, type: i.type, state: i.state, stateCategory: i.stateCategory, tier: i.tier ?? "feature", order: i.order, parentId: i.parentId, url: i.url,
-      targetDate: i.targetDate ?? null, assignedTo: i.assignedTo ?? null, mine: !!i.assignedToMe,
+      targetDate: i.targetDate ?? null, startDate: START[i.id] ?? null, assignedTo: i.assignedTo ?? null, mine: !!i.assignedToMe,
       why: i.assignedToMe ? ["assigned"] : ["parent"],
       children: all.filter((c) => c.parentId === i.id).map(child),
       areaPath: client(k).project, iterationPath: `${client(k).project}\\Sprint 23`,
     }));
-  return { clientKey: k, clientName: client(k).name, status: "ok", fetchedAt, fromCache: false, items, targetFields: { Feature: "Microsoft.VSTS.Scheduling.TargetDate", Epic: "Microsoft.VSTS.Scheduling.TargetDate" }, sizeField: "Microsoft.VSTS.Scheduling.StoryPoints", acceptanceField: true };
+  return { clientKey: k, clientName: client(k).name, status: "ok", fetchedAt, fromCache: false, items, targetFields: { Feature: "Microsoft.VSTS.Scheduling.TargetDate", Epic: "Microsoft.VSTS.Scheduling.TargetDate" }, startFields: { Feature: "Microsoft.VSTS.Scheduling.StartDate", Epic: "Microsoft.VSTS.Scheduling.StartDate" }, sizeField: "Microsoft.VSTS.Scheduling.StoryPoints", acceptanceField: true };
 }
 
 export const isDemoClient = (k: string): k is DemoClientKey => DEMO_CLIENTS.some((c) => c.key === k);

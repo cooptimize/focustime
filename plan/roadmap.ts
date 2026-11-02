@@ -3,8 +3,6 @@
 import type { ClientPortfolio, IsoDate, PortfolioItem } from "../week/types.ts";
 
 export type RoadmapSnapshot = { date: IsoDate; done: number; open: number };
-export type RoadmapLevel = "on_track" | "watch" | "at_risk";
-export type RoadmapSignal = { level: RoadmapLevel | null; reason: string };
 export type StoryCounts = { done: number; open: number; people: { name: string; count: number; /** The DevOps email, for matching only (never shown); null for me or when unknown. */ email: string | null }[]; unassigned: number; unsized: number | null; stale: number };
 
 /** Days without a change before an open story counts as quiet. */
@@ -67,28 +65,157 @@ export function trendRate(snaps: readonly RoadmapSnapshot[], today: IsoDate): { 
 }
 
 const count = (n: number, noun: "stories" | "features") => `${n} ${n === 1 ? (noun === "stories" ? "story" : "feature") : noun}`;
-/** Step 16.4: whole numbers only: "about 2 closed per week", or "about 1 closed every 3 weeks" when slower. */
-const rateText = (r: number) => (r < 0.75 ? `1 closed every ${Math.max(2, Math.round(1 / r))} weeks` : `${Math.round(r)} closed per week`);
-function leftText(days: number): string {
-  if (days % 7 === 0) return `${days / 7} ${days === 7 ? "week" : "weeks"}`;
+/** Whole numbers only (step 16.4): "about 3 close a week", or "about 1 closes every 3 weeks" when slower. */
+export const paceText = (r: number) => (r < 0.75 ? `about 1 closes every ${Math.max(2, Math.round(1 / r))} weeks` : `about ${Math.round(r)} close a week`);
+/** "2 weeks", "10 days", "1 day": weeks once two or more, whole. */
+export function leftText(days: number): string {
+  if (days % 7 === 0 && days > 0) return `${days / 7} ${days === 7 ? "week" : "weeks"}`;
   if (days < 14) return `${days} ${days === 1 ? "day" : "days"}`;
   return `${Math.round(days / 7)} weeks`;
 }
 
+// ---- Step 17: one state per row ----
+
+/** The states, in the order they are evaluated: the first that applies wins (D344). */
+export const STATE_ORDER = ["blocked", "at_risk", "not_scoped", "stalled", "watch", "needs_date", "on_track", "done"] as const;
+export type RoadmapStateKind = (typeof STATE_ORDER)[number];
+export const STATE_WORDS: Record<RoadmapStateKind, string> = {
+  blocked: "Blocked", at_risk: "At risk", not_scoped: "Not scoped", stalled: "Stalled", watch: "Watch", needs_date: "Needs a date", on_track: "On track", done: "Done",
+};
+/** What each state means, for "What do these mean?". */
+export const STATE_MEANING: Record<RoadmapStateKind, string> = {
+  blocked: "A story under it is blocked (Blocked state or tag).",
+  at_risk: "At the pace stories close, it won't finish by its target date, or the date has passed.",
+  not_scoped: "It has no stories yet (an epic: no features yet).",
+  stalled: "No story under it has changed for a while.",
+  watch: "At the pace stories close, it finishes close to its target date.",
+  needs_date: "It has open stories and no target date.",
+  on_track: "At the pace stories close, it finishes before its target date (or the trend is still building).",
+  done: "Every story under it is done or resolved.",
+};
+/** Settings > Roadmap (D345): whole numbers. */
+export type RoadmapThresholds = { stalledDays: number; watchWeeks: number };
+export const DEFAULT_THRESHOLDS: RoadmapThresholds = { stalledDays: STALE_DAYS, watchWeeks: 1 };
+
+export type RowStateInput = {
+  open: number;
+  done: number;
+  /** Open children that are blocked. */
+  blocked: number;
+  /** The latest change of any child (ISO instant), null when unknown or none. */
+  lastActivity: string | null;
+  perWeek: number | null;
+  /** Days of snapshot history behind perWeek. */
+  days: number;
+  targetDate: IsoDate | null;
+  today: IsoDate;
+  now: string;
+  noun: "stories" | "features";
+  th?: RoadmapThresholds;
+};
+export type RowState = {
+  state: RoadmapStateKind;
+  reason: string;
+  /** Under a week of daily counts: rule-based states only, no pace (D346). */
+  trendBuilding: boolean;
+  /** When the open work finishes at the current pace (whole days from today); null without a pace. */
+  forecastEnd: IsoDate | null;
+};
+
+/** The day the open work finishes at `perWeek`, rounded up to a whole day; null without a pace. */
+export function forecastEnd(open: number, perWeek: number | null, today: IsoDate): IsoDate | null {
+  if (perWeek === null || perWeek <= 0 || open <= 0) return null;
+  return Temporal.PlainDate.from(today).add({ days: Math.ceil((open / perWeek) * 7) }).toString();
+}
+
 /**
- * On track, Watch or At risk against the target date, from the simple rate only (D281). No target date, or less than
- * a week of snapshots, gives no signal, only the reason.
+ * One state per row (step 17, D344), evaluated in STATE_ORDER. The pace rules (At risk, Watch) need a week of daily
+ * counts; before that only the rules that need no pace apply (a passed target date is still At risk).
  */
-export function roadmapSignal(i: { open: number; done: number; perWeek: number | null; days: number; targetDate: IsoDate | null; today: IsoDate; noun: "stories" | "features" }): RoadmapSignal {
-  if (i.open === 0 && i.done === 0) return { level: null, reason: `No ${i.noun} yet` };
-  if (i.open === 0) return { level: "on_track", reason: `All ${count(i.done, i.noun)} done` };
-  if (!i.targetDate) return { level: null, reason: "No target date" };
-  const left = daysBetween(i.today, i.targetDate);
-  if (left < 0) return { level: "at_risk", reason: `Target date passed, ${count(i.open, i.noun)} open` };
-  if (i.perWeek === null || i.days < MIN_HISTORY_DAYS) return { level: null, reason: `Trend after a week of daily counts (${i.days} ${i.days === 1 ? "day" : "days"} so far)` };
-  const target = `${leftText(left)} to target`;
-  if (i.perWeek === 0) return { level: left >= 14 ? "watch" : "at_risk", reason: `${count(i.open, i.noun)} open, none closed in the last ${i.days} days, ${target}` };
-  const needed = i.open / i.perWeek, weeksLeft = left / 7;
-  const level: RoadmapLevel = needed <= weeksLeft ? "on_track" : needed <= 1.5 * weeksLeft ? "watch" : "at_risk";
-  return { level, reason: `${count(i.open, i.noun)} open, about ${rateText(i.perWeek)}, ${target}` };
+export function rowState(i: RowStateInput): RowState {
+  const th = i.th ?? DEFAULT_THRESHOLDS;
+  const total = i.open + i.done;
+  const building = i.perWeek === null || i.days < MIN_HISTORY_DAYS;
+  const fc = building ? null : forecastEnd(i.open, i.perWeek, i.today);
+  const out = (state: RoadmapStateKind, reason: string): RowState => ({ state, reason, trendBuilding: building, forecastEnd: fc });
+  const open = `${count(i.open, i.noun)} open`;
+  const left = i.targetDate ? daysBetween(i.today, i.targetDate) : null;
+  const leftWords = left === null ? null : left === 0 ? "due today" : `${leftText(left)} left`;
+  const pace = building ? null : i.perWeek === 0 ? `none closed in the last ${i.days} days` : paceText(i.perWeek!);
+  const sentence = (...parts: (string | null)[]) => parts.filter(Boolean).join(", ");
+
+  if (total === 0) return out("not_scoped", `No ${i.noun} yet`);
+  if (i.open === 0) return out("done", `All ${count(i.done, i.noun)} done`);
+  if (i.blocked > 0) return out("blocked", `${count(i.blocked, i.noun)} blocked, ${open}`);
+  // At risk: the date has passed, or the pace won't make it.
+  let paced: "at_risk" | "watch" | null = null;
+  let needed: string | null = null;
+  if (left !== null && left < 0) return out("at_risk", `Target date passed ${leftText(-left)} ago, ${open}`);
+  if (left !== null && !building) {
+    if (i.perWeek === 0) paced = left < 14 ? "at_risk" : "watch";
+    else {
+      const late = daysBetween(i.targetDate!, fc!);
+      if (late > 0) {
+        paced = "at_risk";
+        needed = `needs about ${leftText(daysBetween(i.today, fc!))}`;
+      } else if (-late < th.watchWeeks * 7) paced = "watch";
+    }
+  }
+  if (paced === "at_risk") return out("at_risk", sentence(open, pace, leftWords, needed));
+  const quietDays = i.lastActivity ? Math.floor((Temporal.Instant.from(i.now).epochMilliseconds - Temporal.Instant.from(i.lastActivity).epochMilliseconds) / 86_400_000) : null;
+  if (quietDays === null || quietDays >= th.stalledDays) return out("stalled", quietDays === null ? `No story changes seen, ${open}` : `No story changes in ${leftText(quietDays)}, ${open}`);
+  if (paced === "watch") return out("watch", sentence(open, pace, leftWords));
+  if (!i.targetDate) return out("needs_date", sentence(open, pace, "no target date"));
+  return out("on_track", sentence(open, pace, leftWords));
+}
+
+/** The latest change among an item's children (stories, or an epic's features), Removed left out. */
+export function lastActivity(item: PortfolioItem): string | null {
+  let best: string | null = null;
+  for (const c of item.children) {
+    if (c.stateCategory === "Removed" || !c.changedAt) continue;
+    if (!best || Temporal.Instant.compare(Temporal.Instant.from(c.changedAt), Temporal.Instant.from(best)) > 0) best = c.changedAt;
+  }
+  return best;
+}
+
+/** Open children that are blocked (one level down, Removed left out). */
+export function blockedCount(item: PortfolioItem): number {
+  const level = item.tier === "epic" ? "portfolio" : "story";
+  return item.children.filter((c) => c.level === level && c.stateCategory !== "Removed" && !DONE.has(c.stateCategory) && c.blocked).length;
+}
+
+/** Features and epics I contribute to: the parent of a story assigned to me, not assigned to me (D347). */
+export function contributingItems(p: ClientPortfolio): PortfolioItem[] {
+  return p.items.filter((i) => !i.why.includes("assigned") && i.why.includes("parent"));
+}
+
+// ---- Step 17: the status board's filters (they combine; empty lists mean all) ----
+
+export type RoadmapSort = "risk" | "target";
+export type RoadmapFilter = { relation: "both" | "owned" | "contributing"; states: RoadmapStateKind[]; clients: string[]; q: string; sort: RoadmapSort; overbooked?: boolean };
+export const DEFAULT_FILTER: RoadmapFilter = { relation: "both", states: [], clients: [], q: "", sort: "risk" };
+type FilterRow = { id: number; title: string; relation: "owned" | "contributing"; targetDate: IsoDate | null; status: { state: RoadmapStateKind } };
+
+const textMatch = (r: FilterRow, q: string) => {
+  const t = q.trim().toLowerCase().replace(/^#/, "");
+  return !t || r.title.toLowerCase().includes(t) || String(r.id) === t;
+};
+/** Every filter but the state ones: what the summary bar counts, so its numbers stay true while states are chosen. */
+export function baseMatch(clientKey: string, r: FilterRow, f: RoadmapFilter): boolean {
+  return (f.relation === "both" || r.relation === f.relation) && (!f.clients.length || f.clients.includes(clientKey)) && textMatch(r, f.q);
+}
+/** The rows to show for one client, in the chosen order: risk (state order, then target date) or target date. */
+export function filterRows<R extends FilterRow>(clientKey: string, rows: readonly R[], f: RoadmapFilter, extra: (r: R) => boolean = () => true): R[] {
+  const rank = (r: R) => STATE_ORDER.indexOf(r.status.state);
+  const date = (r: R) => r.targetDate ?? "9999-12-31";
+  return rows
+    .filter((r) => baseMatch(clientKey, r, f) && (!f.states.length || f.states.includes(r.status.state)) && extra(r))
+    .sort((a, b) => (f.sort === "risk" ? rank(a) - rank(b) || date(a).localeCompare(date(b)) : date(a).localeCompare(date(b)) || rank(a) - rank(b)) || a.title.localeCompare(b.title));
+}
+/** State counts for the summary bar, over the rows the other filters keep. */
+export function stateCounts(clients: readonly { clientKey: string; rows: readonly FilterRow[] }[], f: RoadmapFilter): Record<RoadmapStateKind, number> {
+  const out = Object.fromEntries(STATE_ORDER.map((k) => [k, 0])) as Record<RoadmapStateKind, number>;
+  for (const c of clients) for (const r of c.rows) if (baseMatch(c.clientKey, r, f)) out[r.status.state]++;
+  return out;
 }

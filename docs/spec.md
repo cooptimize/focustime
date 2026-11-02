@@ -701,3 +701,22 @@ Contract changes:
 **Verification:** unit and browser tests (1567), including a scan of seven views for decimals and fractions. Real next week (Nov 9, counts only): 4 clients, whole budgets 1, 2, 1 and 3; planned 0, 1, 2 and 3; two with blocks free, one over, one all planned; 2 of 3 stories nested; my photo read. Demo screenshots at 1920 and 3840, dark and light (`docs/demo/164-*.png`).
 
 **Rollback:** revert the step 16.4 commit, rebuild, restart, and restore `plan.db.bak-v18-*` (schema 19 refuses to open in older code). Delete `~/.cache/coopilot/photos`.
+
+
+## 44. Step 17: Plan ahead in the Roadmap tab (authorized Nov 2)
+
+A 4-week plan and an 8 to 12 week direction view on one timeline, built in four slices, each committed. The only new external write extends the existing Set target date write to Start Date (slice 2). Estimating rules from step 16.4 apply everywhere: whole blocks, S/M/L, no decimals, plain-word rates.
+
+**Contract changes (explained before building):**
+- `roadmap.load` lists features and epics I own and those I contribute to (the parent of a story assigned to me), owned first. Each row: `relation` (owned or contributing), `parentId` (the epic above, when listed), `startDate` and `hasStartField`, `blocked`, `lastActivity`, `status` ({ state, reason, trendBuilding, forecastEnd }, replacing the three-level `signal`), `stories` (one level down, Removed left out, each with group blocked, active, new or done, the assignee and a matched Cooptimizer's email for the photo only). The state also carries `thresholds`.
+- The DevOps portfolio read adds the process's Start Date (`Microsoft.VSTS.Scheduling.StartDate`) per type where the type has it (`ClientPortfolio.startFields`, `PortfolioItem.startDate`), and a `blocked` flag on children (Blocked state or tag, as the step 7 rule). Reads only.
+- Config `[roadmap]`: `stalled_days` (3 to 60, default 14) and `watch_weeks` (0 to 4, default 1); Settings > Roadmap.
+
+**Slice 1: Roadmap (the status board).**
+- One state per row, evaluated in order: Blocked (an open story is blocked), At risk (the target date passed, or the pace forecast lands after it), Not scoped (no stories; an epic: no features), Stalled (no story change in `stalled_days`), Watch (the forecast lands within `watch_weeks` of the target; with nothing closed in the window and 2 weeks or more left), Needs a date (open work, no target date), On track, Done (every story done or resolved). The rules that need open work apply only with open work, so a finished feature reads Done, never Stalled or Needs a date (D344).
+- Pace: stories closed per week from the daily snapshots of the last 21 days. The forecast is today plus the open count over that pace, rounded up to a whole day. Reasons in whole words: "9 stories open, about 3 close a week, 2 weeks left", "about 1 closes every 3 weeks", "…, needs about 5 weeks" when it overshoots, "Target date passed 1 week ago, 3 stories open", "No story changes in 3 weeks, 4 stories open".
+- Trend building: under 7 days of counts, no pace and no pace-based state; the row shows "Trend building" and the reason leaves the pace out (D346).
+- Summary bar: a card per state with its count (the counts follow the other filters, not the state filter), each a toggle. Toggle Both / Owned / Contributing, client chips, search (title or #id), sort by risk (state order, then target date; default) or target date. Filters combine and last for the session (sessionStorage), never beyond. "What do these mean?" shows each state's meaning and the order.
+- Rows expand (▸) to their stories grouped Blocked, In progress, Not started, Done, with the assignee's photo, presence and name. Row ⋯ as before (Open in browser, Copy Coop brief, Needs help from…, Add to this week's plan, Set target date); Set target date is offered only on rows I own.
+- Look: a 5 px state-colored edge, a solid state badge (word, a shape mark per state and the state color, never color alone), the reason in bold.
+- Demo: fictional features so every state shows (Harbor's intake form Blocked by a tagged story, Northwind's export At risk, Supplier onboarding Not scoped, Atlas's dashboard Stalled, Knowledge base search On track, Patient portal login Done, two December features for a crowded month). The demo epic "Customer portal 2.0" is now "Customer portal redesign" so the no-decimals scan stays strict.

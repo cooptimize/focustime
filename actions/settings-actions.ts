@@ -1,5 +1,6 @@
 // Settings actions (step 6b): load everything Settings shows, save one section, store an app secret in the keyring,
 // export the plan store. Secrets are never returned: only whether they are set and an expiry date I entered.
+import { DEFAULT_THRESHOLDS } from "../plan/roadmap.ts";
 import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { join } from "node:path";
 import { DEFAULT_TIMEBOX, CLIENT_SLOTS, colorCss, DEFAULT_PLAN, inviteDomains, DEFAULT_COLLAB, type AppConfig, type ParseResult } from "../config/schema.ts";
@@ -54,7 +55,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
   );
   const base = { configPath: loaded.path, palette: CLIENT_SLOTS, browsers: browsers(ctx), secrets, data: { planStore: !!ctx.plan } };
   if (!loaded.parsed.ok)
-    return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX }, collab: { ...DEFAULT_COLLAB, domains: [] }, notify: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, vm: { startWithoutAsking: DEFAULT_AZURE.startWithoutAsking } };
+    return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX }, collab: { ...DEFAULT_COLLAB, domains: [] }, notify: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, vm: { startWithoutAsking: DEFAULT_AZURE.startWithoutAsking }, roadmap: { ...DEFAULT_THRESHOLDS } };
   const cfg = loaded.parsed.config;
   const tz = cfg.week.hours.timeZone;
   const dv = cfg.dataverse.mySystemUserId ? ctx.makeDataverse(cfg.dataverse, tz) : null;
@@ -95,6 +96,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
     collab: { ...cfg.collab, domains: inviteDomains(cfg) },
     notify: cfg.notify,
     vm: { startWithoutAsking: cfg.azure.startWithoutAsking },
+    roadmap: cfg.roadmap,
   };
 }
 

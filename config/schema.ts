@@ -2,6 +2,7 @@
 import { parse, TomlError } from "smol-toml";
 import { PROFILE_DIR } from "../links/edge.ts";
 import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
+import { DEFAULT_THRESHOLDS, type RoadmapThresholds } from "../plan/roadmap.ts";
 import { DEFAULT_NOTIFY, NOTIFY_KINDS, type NotifyKind, type NotifySettings } from "../plan/notify.ts";
 import { DEFAULT_FOCUS, MAX_PLAYLISTS, playlistLink, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
@@ -49,6 +50,8 @@ export type AppConfig = {
   azure: AzureSettings;
   /** Settings > Notifications (step 15.5): a switch per kind, quiet hours. */
   notify: NotifySettings;
+  /** Step 17: Settings > Roadmap thresholds (whole numbers). */
+  roadmap: RoadmapThresholds;
 };
 /** `ownerValue` empty means the signed-in person's display name. `startWithoutAsking` (step 15.5, Q87): the morning box's Start runs at once. */
 export type AzureSettings = { ownerTag: string; ownerValue: string; startWithoutAsking: boolean };
@@ -197,7 +200,7 @@ export function parseConfig(text: string): ParseResult {
   };
 
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -603,6 +606,24 @@ export function parseConfig(text: string): ParseResult {
     }
   }
 
+  // [roadmap] (optional, step 17): stalled_days (3 to 60), watch_weeks (0 to 4)
+  const roadmap: RoadmapThresholds = { ...DEFAULT_THRESHOLDS };
+  if (raw.roadmap !== undefined) {
+    const t = isTable(raw.roadmap) ? raw.roadmap : (err("roadmap", "Must be a [roadmap] table"), null);
+    if (t) {
+      for (const k of Object.keys(t)) if (!["stalled_days", "watch_weeks"].includes(k)) err(`roadmap.${k}`, "Unknown field");
+      const sd = t.stalled_days, ww = t.watch_weeks;
+      if (sd !== undefined) {
+        if (typeof sd !== "number" || !Number.isInteger(sd) || sd < 3 || sd > 60) err("roadmap.stalled_days", "Must be a whole number from 3 to 60");
+        else roadmap.stalledDays = sd;
+      }
+      if (ww !== undefined) {
+        if (typeof ww !== "number" || !Number.isInteger(ww) || ww < 0 || ww > 4) err("roadmap.watch_weeks", "Must be a whole number from 0 to 4");
+        else roadmap.watchWeeks = ww;
+      }
+    }
+  }
+
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
   if (raw.outlook !== undefined) {
@@ -654,6 +675,7 @@ export function parseConfig(text: string): ParseResult {
       collab,
       azure,
       notify,
+      roadmap,
     },
   };
 }

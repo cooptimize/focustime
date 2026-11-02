@@ -1248,7 +1248,7 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
 }
 
 /** Step 16 (D282): what a Roadmap row's ⋯ menu needs to know. */
-export type RoadmapRowFacts = { title: string; tier: "feature" | "epic"; targetDate: string | null; open: number; onWeek: boolean; canWrite: boolean; hasLink: boolean };
+export type RoadmapRowFacts = { title: string; tier: "feature" | "epic"; targetDate: string | null; open: number; onWeek: boolean; canWrite: boolean; hasLink: boolean; /** Step 17: assigned to me (a contributing row can't have its dates set). */ owned?: boolean };
 export type RoadmapRowOps = { open: () => void; brief: () => void; help: () => void; addToWeek: () => void; targetDate: () => void; enableWrites: () => void };
 
 /** A Roadmap row's ⋯ menu (D282). Only Set target date writes, through the DevOps write flow. */
@@ -1261,7 +1261,7 @@ export function roadmapRowMenu(f: RoadmapRowFacts, ops: RoadmapRowOps): MenuStep
       { id: "brief", label: "Copy Coop brief", action: "feature.brief", ...(epic ? { disabled: "Briefs are for features" } : { hint: f.open ? `${f.open} open ${f.open === 1 ? "story" : "stories"} already` : "ask Coop for stories" }), run: ops.brief },
       { id: "help", label: "Needs help from…", hint: "Cooptimizers who are free", action: "collab.candidates", run: ops.help },
       { id: "week", label: "Add to this week's plan", action: "weekplan.add", ...(epic ? { disabled: "Add its features instead" } : f.onWeek ? { disabled: "Already on this week's plan" } : { hint: "as a nice to have" }), run: ops.addToWeek },
-      { id: "target", label: f.targetDate ? "Change target date" : "Set target date", action: "devops.preview", ...(f.canWrite ? {} : { hint: "Enable DevOps writes first" }), run: f.canWrite ? ops.targetDate : ops.enableWrites },
+      { id: "target", label: f.targetDate ? "Change target date" : "Set target date", action: "devops.preview", ...(f.owned === false ? { disabled: "Only on features and epics assigned to you" } : f.canWrite ? {} : { hint: "Enable DevOps writes first" }), run: f.canWrite ? ops.targetDate : ops.enableWrites },
     ],
   };
 }

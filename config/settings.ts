@@ -6,7 +6,7 @@ import { hoursBody, removeValue, replaceArrayTables, replaceSection, setValue, t
 import { parseConfig } from "./schema.ts";
 import { NOTIFY_KINDS } from "../plan/notify.ts";
 
-export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm"] as const;
+export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export class SettingsInputError extends Error {
@@ -192,6 +192,14 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
         values.push(["quiet_pto", v.quietPto]);
       }
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "notify", k, val, i === 0 ? "Notifications (step 15.5): a switch per kind and quiet hours. During focus, all but the timer and meeting warnings wait until it ends." : undefined), text);
+    }
+    case "roadmap": {
+      // Step 17: Settings > Roadmap. Written as given; parseConfig checks the ranges.
+      only(v, ["stalledDays", "watchWeeks"], "roadmap");
+      const values: [string, number][] = [];
+      if (v.stalledDays !== undefined) values.push(["stalled_days", int(v.stalledDays, "roadmap.stalled_days")]);
+      if (v.watchWeeks !== undefined) values.push(["watch_weeks", int(v.watchWeeks, "roadmap.watch_weeks")]);
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "roadmap", k, val, i === 0 ? "Roadmap states (step 17): Stalled after this many days without a story change; Watch when the forecast lands within this many weeks of the target date." : undefined), text);
     }
     case "vm": {
       // Step 15.5 (Q87): Settings > You > "Start my VM without asking".

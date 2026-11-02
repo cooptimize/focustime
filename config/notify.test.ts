@@ -29,3 +29,20 @@ describe("[notify]", () => {
     if (!bad.ok) expect(bad.errors.map((e) => e.field).sort()).toEqual(["notify.checkin", "notify.quiet"]);
   });
 });
+
+describe("[roadmap] (step 17)", () => {
+  it("Stalled after 14 days and Watch within 1 week by default; Settings writes whole numbers in range", () => {
+    const p = parseConfig(TOML);
+    expect(p.ok && p.config.roadmap).toEqual({ stalledDays: 14, watchWeeks: 1 });
+    const text = settingsEdit("roadmap", { stalledDays: 21, watchWeeks: 2 })(TOML);
+    const q = parseConfig(text);
+    expect(q.ok && q.config.roadmap).toEqual({ stalledDays: 21, watchWeeks: 2 });
+  });
+  it("refuses fractions, out of range values and unknown fields", () => {
+    expect(() => settingsEdit("roadmap", { stalledDays: 1.5 })).toThrow();
+    expect(() => settingsEdit("roadmap", { pace: 2 })).toThrow();
+    const bad = parseConfig(TOML + "\n[roadmap]\nstalled_days = 2\nwatch_weeks = 9\nother = 1\n");
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.errors.map((e) => e.field).sort()).toEqual(["roadmap.other", "roadmap.stalled_days", "roadmap.watch_weeks"]);
+  });
+});

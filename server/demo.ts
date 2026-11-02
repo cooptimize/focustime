@@ -92,6 +92,10 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
     ["Northwind", 1110, [[0, 3], [0, 4], [1, 3]]],
     ["Harbor", 2210, [[0, 6], [1, 5], [2, 4]]],
     ["Cooptimize", 4410, [[0, 2], [0, 2], [0, 2]]],
+    ["Cooptimize", 4430, [[0, 4], [1, 3], [2, 2]]],
+    ["Northwind", 1140, [[0, 2], [0, 2], [0, 2]]],
+    ["Northwind", 1150, [[0, 1], [0, 1], [0, 1]]],
+    ["Harbor", 2240, [[0, 2], [1, 1], [2, 0]]],
   ];
   [-21, -14, -7].forEach((n, i) => ctx.plan?.recordSnapshots(day(n), history.map(([clientKey, itemId, c]) => ({ clientKey, itemId, done: c[i]![0], open: c[i]![1] }))));
 }

@@ -147,6 +147,8 @@ export type SettingsData = {
   notify: AppConfig["notify"];
   /** Settings > You > My VM (step 15.5, Q87). */
   vm: { startWithoutAsking: boolean };
+  /** Settings > Roadmap (step 17): state thresholds. */
+  roadmap: AppConfig["roadmap"];
 };
 
 /** [plan] values the UI uses (step 6c). */
@@ -336,7 +338,19 @@ export type DevOpsPreview = {
 export type DevOpsResult = { entry: import("../plan/devopswrite.ts").DevOpsWriteEntry; confirmed: boolean; message: string; changed?: { field: string; was: string | null; now: string | null }[]; itemId?: number | null; url?: string | null };
 export type DevOpsLogView = { entries: (import("../plan/devopswrite.ts").DevOpsWriteEntry & { undoable: boolean; retryable: boolean })[] };
 
-/** Step 16 (D278 to D282): one feature or epic I own, as the Roadmap view shows it. */
+/** Step 17: one story (or an epic's feature) under a Roadmap row, grouped by state. */
+export type RoadmapStory = {
+  id: number;
+  title: string;
+  state: string;
+  group: "blocked" | "active" | "new" | "done";
+  /** Display name ("You" for me), null when unassigned. */
+  assignee: string | null;
+  /** A matched Cooptimizer's email (photo and presence only); null otherwise. Never shown. */
+  email: string | null;
+  url: string;
+};
+/** Step 16 (D278 to D282), step 17 (D344 to D347): a feature or epic I own or contribute to, as the Roadmap shows it. */
 export type RoadmapRow = {
   id: number;
   title: string;
@@ -344,9 +358,17 @@ export type RoadmapRow = {
   tier: "feature" | "epic";
   state: string;
   url: string;
+  /** Owned: assigned to me. Contributing: the parent of a story assigned to me (D347). */
+  relation: "owned" | "contributing";
+  /** The epic above it, when that epic is on the Roadmap too (Plan ahead nests it). */
+  parentId: number | null;
   targetDate: string | null;
+  /** DevOps Start Date; null when unset or when the process has none (`hasStartField`). */
+  startDate: string | null;
+  hasStartField: boolean;
   done: number;
   open: number;
+  blocked: number;
   /** Who works on its open stories: display names with counts, never emails. */
   people: { name: string; count: number; /** Step 16.4: a matched Cooptimizer's email (by DevOps email, or by name without one); null otherwise. Never shown. */ email: string | null }[];
   unassigned: number;
@@ -354,16 +376,21 @@ export type RoadmapRow = {
   unsized: number | null;
   /** Open ones with no change in 14 days. */
   stale: number;
+  /** The latest change of any child; null when none. */
+  lastActivity: string | null;
   /** Daily snapshots of the last 21 days, oldest first. */
   trend: { date: string; done: number; open: number }[];
-  signal: { level: "on_track" | "watch" | "at_risk" | null; reason: string };
+  /** One state, its plain reason, whether the trend is still building, and the pace forecast. */
+  status: import("../plan/roadmap.ts").RowState;
+  /** Stories (an epic: features), Removed left out, grouped by state. */
+  stories: RoadmapStory[];
   /** Plan the week's readiness rules (D164). */
   flags: ("needs_breakdown" | "needs_features" | "no_target_date")[];
   /** On this week's plan already (step 8 week list). */
   onWeek: boolean;
 };
 export type RoadmapClient = { clientKey: string; clientName: string; status: import("../week/types.ts").ClientWorkStatus; message?: string; fetchedAt: string | null; fromCache: boolean; rows: RoadmapRow[] };
-export type RoadmapState = { today: string; weekStart: string; clients: RoadmapClient[] };
+export type RoadmapState = { today: string; weekStart: string; clients: RoadmapClient[]; thresholds: import("../plan/roadmap.ts").RoadmapThresholds };
 
 // ---- Step 16.3: Teams presence ----
 /** Teams access, in words the UI can act on. */

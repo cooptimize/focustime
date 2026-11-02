@@ -27,6 +27,7 @@ export const SETTINGS_SECTIONS = [
   ["planning", "Planning"],
   ["focus", "Focus"],
   ["notifications", "Notifications"],
+  ["roadmap", "Roadmap"],
   ["risk", "Risk rules"],
   ["clients", "Clients"],
   ["connections", "Connections"],
@@ -219,6 +220,8 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
       return <FocusForm {...p} />;
     case "notifications":
       return <NotifyForm {...p} />;
+    case "roadmap":
+      return <RoadmapForm {...p} />;
     case "risk":
       return d.risk ? <RiskForm {...p} /> : null;
     case "clients":
@@ -731,6 +734,35 @@ function VmStartForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
 }
 
 /** Settings > Notifications (step 15.5): a switch per kind, quiet hours, held during focus, a test. */
+/** Settings > Roadmap (step 17): when a row reads Stalled or Watch. Whole numbers. */
+function RoadmapForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
+  const r = p.data.roadmap;
+  const [v, setV] = useState({ stalledDays: r.stalledDays, watchWeeks: r.watchWeeks });
+  const { problems, status, save } = useSave(p.onSavedData);
+  return (
+    <form
+      className="set-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save("roadmap", v);
+      }}
+    >
+      <p className="muted">Each feature and epic on the Roadmap shows one state. These two set when a row reads Stalled or Watch. The pace states (At risk, Watch) wait for a week of daily counts.</p>
+      <div className="set-grid">
+        <Field label="Stalled after (days)" hint="No story under it changed for this many days. 3 to 60.">
+          <input type="number" min={3} max={60} step={1} value={v.stalledDays} onChange={(e) => setV({ ...v, stalledDays: Math.round(Number(e.target.value)) })} />
+          <Problems all={problems} field="roadmap.stalled_days" />
+        </Field>
+        <Field label="Watch within (weeks)" hint="The forecast lands this close to the target date, or closer. 0 to 4; 0 means never Watch, only At risk.">
+          <input type="number" min={0} max={4} step={1} value={v.watchWeeks} onChange={(e) => setV({ ...v, watchWeeks: Math.round(Number(e.target.value)) })} />
+          <Problems all={problems} field="roadmap.watch_weeks" />
+        </Field>
+      </div>
+      <SaveRow status={status} />
+    </form>
+  );
+}
+
 function NotifyForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
   const n = p.data.notify;
   const [kinds, setKinds] = useState<Record<NotifyKind, boolean>>({ ...n.kinds });

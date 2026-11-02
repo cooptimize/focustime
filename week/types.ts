@@ -229,6 +229,8 @@ export type WorkItem = {
   assignedToEmail?: string | null;
   /** Plan the week: the process's target date field as a date, when the type has one. */
   targetDate?: IsoDate | null;
+  /** Step 17: the process's Start Date, when the type has it. */
+  startDate?: IsoDate | null;
   /** Roadmap (step 16): the size field's value, when one was read. */
   size?: number | null;
   /** Step 15.3: area and iteration paths (portfolio reads only), shown read-only in the draft editor. */
@@ -237,7 +239,7 @@ export type WorkItem = {
 };
 
 /** A child of a feature or epic in Plan the week (step 8): any state, any assignee (display name only). */
-export type PortfolioChild = { id: number; title: string; type: string; state: string; stateCategory: string; open: boolean; level: WorkItem["level"]; order: number | null; url: string; assignedTo: string | null; /** Step 16.4: the assignee's email (DevOps uniqueName), for matching only. */ assignedToEmail?: string | null; mine: boolean; /** Step 16 (D279): the last change, and the size from the project's size field (null: not sized). Missing in older caches. */ changedAt?: string; size?: number | null };
+export type PortfolioChild = { id: number; title: string; type: string; state: string; stateCategory: string; open: boolean; level: WorkItem["level"]; order: number | null; url: string; assignedTo: string | null; /** Step 16.4: the assignee's email (DevOps uniqueName), for matching only. */ assignedToEmail?: string | null; mine: boolean; /** Step 16 (D279): the last change, and the size from the project's size field (null: not sized). Missing in older caches. */ changedAt?: string; size?: number | null; /** Step 17: Blocked state or tag. Missing in older caches. */ blocked?: boolean };
 
 /** A feature or epic for Plan the week (step 8): assigned to me, or the parent of a story assigned to me. */
 export type PortfolioItem = {
@@ -253,6 +255,8 @@ export type PortfolioItem = {
   url: string;
   /** From the process's target date field for this type, when it has one and it is set. */
   targetDate: IsoDate | null;
+  /** Step 17: the process's Start Date, when the type has it (see ClientPortfolio.startFields) and it is set. */
+  startDate?: IsoDate | null;
   assignedTo: string | null;
   mine: boolean;
   /** "above" (Q49): only an ancestor of one listed, read by following parent links up. */
@@ -276,6 +280,8 @@ export type ClientPortfolio = {
   items: PortfolioItem[];
   /** The target date field detected per portfolio type (reference names, not secret). */
   targetFields: Record<string, string>;
+  /** Step 17: the portfolio types whose process has Start Date (Microsoft.VSTS.Scheduling.StartDate). Missing in older caches. */
+  startFields?: Record<string, string>;
   /** Step 16 (D279): the size field read on stories (StoryPoints, Effort or Size), null when the project has none. */
   sizeField?: string | null;
   /** Step 15.3: the story type has an acceptance criteria field (the draft editor shows it only then). */

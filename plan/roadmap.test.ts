@@ -1,6 +1,6 @@
 // Step 16, slice 1: the Roadmap view's rules (D278 to D281). Fictional data only.
 import { describe, expect, it } from "vitest";
-import { roadmapSignal, ownedItems, storyCounts, trendRate, type RoadmapSnapshot } from "./roadmap.ts";
+import { blockedCount, contributingItems, DEFAULT_FILTER, filterRows, forecastEnd, lastActivity, ownedItems, paceText, rowState, stateCounts, storyCounts, trendRate, type RoadmapSnapshot, type RoadmapStateKind, type RowStateInput } from "./roadmap.ts";
 import type { ClientPortfolio, PortfolioChild, PortfolioItem } from "../week/types.ts";
 
 const NOW = "2026-11-02T15:00:00Z";
@@ -77,33 +77,98 @@ describe("trend from daily snapshots (D280)", () => {
   });
 });
 
-describe("the on-track signal (D281)", () => {
-  const base = { today: "2026-11-02", days: 21, noun: "stories" as const };
-  it("says On track when what's open fits the weeks left at the current rate", () => {
-    expect(roadmapSignal({ ...base, open: 6, done: 9, perWeek: 3, targetDate: "2026-11-16" })).toEqual({ level: "on_track", reason: "6 stories open, about 3 closed per week, 2 weeks to target" });
+describe("one state per row, in order (step 17, D344)", () => {
+  const NOWI = "2026-11-02T15:00:00Z";
+  const base: RowStateInput = { today: "2026-11-02", now: NOWI, days: 21, noun: "stories", blocked: 0, lastActivity: "2026-10-30T12:00:00Z", perWeek: 3, open: 6, done: 9, targetDate: "2026-11-23" };
+  const st = (o: Partial<RowStateInput> = {}) => rowState({ ...base, ...o });
+  it("On track: the forecast lands before the target date with room", () => {
+    // 6 open at 3 a week: 2 weeks, Nov 16; target Nov 23 is a week later.
+    expect(st()).toEqual({ state: "on_track", reason: "6 stories open, about 3 close a week, 3 weeks left", trendBuilding: false, forecastEnd: "2026-11-16" });
   });
-  it("says Watch up to one and a half times the weeks left, At risk beyond", () => {
-    expect(roadmapSignal({ ...base, open: 9, done: 9, perWeek: 3, targetDate: "2026-11-16" })).toEqual({ level: "watch", reason: "9 stories open, about 3 closed per week, 2 weeks to target" });
-    expect(roadmapSignal({ ...base, open: 10, done: 9, perWeek: 3, targetDate: "2026-11-16" }).level).toBe("at_risk");
+  it("Watch: the forecast lands within the Watch margin of the target", () => {
+    expect(st({ targetDate: "2026-11-20" })).toMatchObject({ state: "watch", reason: "6 stories open, about 3 close a week, 3 weeks left" });
+    // A margin of 0 weeks: never Watch, only On track or At risk.
+    expect(st({ targetDate: "2026-11-20", th: { stalledDays: 14, watchWeeks: 0 } }).state).toBe("on_track");
   });
-  it("handles nothing closed in the window by weeks left", () => {
-    expect(roadmapSignal({ ...base, open: 4, done: 2, perWeek: 0, targetDate: "2026-11-16" })).toEqual({ level: "watch", reason: "4 stories open, none closed in the last 21 days, 2 weeks to target" });
-    expect(roadmapSignal({ ...base, open: 4, done: 2, perWeek: 0, targetDate: "2026-11-12" })).toEqual({ level: "at_risk", reason: "4 stories open, none closed in the last 21 days, 10 days to target" });
+  it("At risk: the pace won't fit the target date (the forecast overshoots), or the date has passed", () => {
+    expect(st({ targetDate: "2026-11-13" })).toMatchObject({ state: "at_risk", reason: "6 stories open, about 3 close a week, 11 days left, needs about 2 weeks", forecastEnd: "2026-11-16" });
+    expect(st({ targetDate: "2026-10-26" })).toMatchObject({ state: "at_risk", reason: "Target date passed 1 week ago, 6 stories open" });
   });
-  it("is On track when everything is done, and At risk past the target date", () => {
-    expect(roadmapSignal({ ...base, open: 0, done: 7, perWeek: 1, targetDate: "2026-10-01" })).toEqual({ level: "on_track", reason: "All 7 stories done" });
-    expect(roadmapSignal({ ...base, open: 3, done: 7, perWeek: 1, targetDate: "2026-10-30" })).toEqual({ level: "at_risk", reason: "Target date passed, 3 stories open" });
+  it("nothing closed: At risk under two weeks left, otherwise Watch", () => {
+    expect(st({ perWeek: 0, targetDate: "2026-11-12" })).toMatchObject({ state: "at_risk", reason: "6 stories open, none closed in the last 21 days, 10 days left" });
+    expect(st({ perWeek: 0, targetDate: "2026-11-30" })).toMatchObject({ state: "watch", forecastEnd: null });
   });
-  it("gives no signal with nothing under the item yet", () => {
-    expect(roadmapSignal({ ...base, open: 0, done: 0, perWeek: null, targetDate: "2026-11-30" })).toEqual({ level: null, reason: "No stories yet" });
-    expect(roadmapSignal({ ...base, noun: "features", open: 0, done: 0, perWeek: null, targetDate: null })).toEqual({ level: null, reason: "No features yet" });
+  it("Blocked comes first, even ahead of a passed target date", () => {
+    expect(st({ blocked: 2, targetDate: "2026-10-26" })).toMatchObject({ state: "blocked", reason: "2 stories blocked, 6 stories open" });
   });
-  it("gives no signal without a target date or before a week of snapshots", () => {
-    expect(roadmapSignal({ ...base, open: 3, done: 1, perWeek: 1, targetDate: null })).toEqual({ level: null, reason: "No target date" });
-    expect(roadmapSignal({ ...base, days: 4, open: 3, done: 1, perWeek: 1, targetDate: "2026-11-30" })).toEqual({ level: null, reason: "Trend after a week of daily counts (4 days so far)" });
+  it("Not scoped with nothing under it; Done when all is done or resolved", () => {
+    expect(st({ open: 0, done: 0 })).toMatchObject({ state: "not_scoped", reason: "No stories yet" });
+    expect(st({ open: 0, done: 0, noun: "features" }).reason).toBe("No features yet");
+    expect(st({ open: 0, done: 7, targetDate: "2026-10-01", lastActivity: "2026-09-01T00:00:00Z" })).toMatchObject({ state: "done", reason: "All 7 stories done" });
   });
-  it("says features for an epic, rates under one with a decimal, and one day or week in the singular", () => {
-    expect(roadmapSignal({ ...base, noun: "features", open: 1, done: 0, perWeek: 0.8, targetDate: "2026-11-09" })).toEqual({ level: "watch", reason: "1 feature open, about 1 closed per week, 1 week to target" });
-    expect(roadmapSignal({ ...base, open: 1, done: 3, perWeek: 2, targetDate: "2026-11-03" }).reason).toBe("1 story open, about 2 closed per week, 1 day to target");
+  it("Stalled: no story change for the threshold, after the pace rules", () => {
+    expect(st({ lastActivity: "2026-10-12T12:00:00Z" })).toMatchObject({ state: "stalled", reason: "No story changes in 3 weeks, 6 stories open" });
+    expect(st({ lastActivity: "2026-10-12T12:00:00Z", th: { stalledDays: 30, watchWeeks: 1 } }).state).toBe("on_track");
+    expect(st({ lastActivity: null }).state).toBe("stalled");
+    // At risk is evaluated first.
+    expect(st({ lastActivity: "2026-10-12T12:00:00Z", targetDate: "2026-11-13" }).state).toBe("at_risk");
+  });
+  it("Needs a date: open work and no target date (after Stalled and Watch)", () => {
+    expect(st({ targetDate: null })).toMatchObject({ state: "needs_date", reason: "6 stories open, about 3 close a week, no target date" });
+  });
+  it("Trend building: under 7 days of counts, rule-based states only and no pace in words", () => {
+    // The pace would say At risk; without a week of counts it can't.
+    expect(st({ days: 4, targetDate: "2026-11-13" })).toEqual({ state: "on_track", reason: "6 stories open, 11 days left", trendBuilding: true, forecastEnd: null });
+    expect(st({ perWeek: null, days: 0, targetDate: null })).toMatchObject({ state: "needs_date", reason: "6 stories open, no target date", trendBuilding: true });
+    // A passed date is still At risk: no pace needed.
+    expect(st({ days: 2, targetDate: "2026-10-30" }).state).toBe("at_risk");
+  });
+  it("pace in whole words: never a decimal", () => {
+    expect(paceText(0.8)).toBe("about 1 close a week");
+    expect(paceText(2.6)).toBe("about 3 close a week");
+    expect(paceText(0.3)).toBe("about 1 closes every 3 weeks");
+    expect(st({ open: 1, perWeek: 7, targetDate: "2026-11-03" }).reason).toBe("1 story open, about 7 close a week, 1 day left");
+    expect(st({ targetDate: "2026-11-02", perWeek: 7 }).reason).toBe("6 stories open, about 7 close a week, due today, needs about 6 days");
+    for (const r of [0.1, 0.4, 0.74, 0.76, 1.49, 3.33]) expect(paceText(r)).not.toMatch(/\d[.,]\d/);
+  });
+  it("the forecast rounds up to a whole day", () => {
+    expect(forecastEnd(5, 3, "2026-11-02")).toBe("2026-11-14");
+    expect(forecastEnd(5, 0, "2026-11-02")).toBeNull();
+    expect(forecastEnd(0, 3, "2026-11-02")).toBeNull();
+  });
+});
+
+describe("blocked, last activity and contributing (step 17)", () => {
+  it("counts open blocked children only and finds the latest change", () => {
+    const f = item(1, { children: [kid(2, { blocked: true }), kid(3, { blocked: true, stateCategory: "Completed", open: false }), kid(4, { changedAt: "2026-11-01T09:00:00Z" }), kid(5, { stateCategory: "Removed", changedAt: "2026-11-02T09:00:00Z" })] });
+    expect(blockedCount(f)).toBe(1);
+    expect(lastActivity(f)).toBe("2026-11-01T09:00:00Z");
+    expect(lastActivity(item(9))).toBeNull();
+  });
+  it("contributing: the parent of my story, not assigned to me", () => {
+    const p = portfolio([item(1), item(2, { why: ["parent"], mine: false }), item(3, { why: ["assigned", "parent"] }), item(4, { why: ["above"] })]);
+    expect(contributingItems(p).map((i) => i.id)).toEqual([2]);
+  });
+});
+
+describe("the status board's filters (step 17)", () => {
+  type R = { id: number; title: string; relation: "owned" | "contributing"; targetDate: string | null; status: { state: RoadmapStateKind } };
+  const r = (id: number, state: RoadmapStateKind, relation: "owned" | "contributing" = "owned", targetDate: string | null = null): R => ({ id, title: `Item ${id}`, relation, targetDate, status: { state } });
+  const rows = [r(1, "on_track", "owned", "2026-11-20"), r(2, "blocked", "contributing", "2026-12-04"), r(3, "at_risk", "owned", "2026-11-13"), r(4, "needs_date"), r(5, "done", "owned", "2026-11-01")];
+  it("sorts by risk (state order, then target date) by default, or by target date", () => {
+    expect(filterRows("A", rows, DEFAULT_FILTER).map((x) => x.id)).toEqual([2, 3, 4, 1, 5]);
+    expect(filterRows("A", rows, { ...DEFAULT_FILTER, sort: "target" }).map((x) => x.id)).toEqual([5, 3, 1, 2, 4]);
+  });
+  it("combines states, relation, clients and search", () => {
+    const f = { ...DEFAULT_FILTER, states: ["blocked", "at_risk"] as RoadmapStateKind[] };
+    expect(filterRows("A", rows, f).map((x) => x.id)).toEqual([2, 3]);
+    expect(filterRows("A", rows, { ...f, relation: "owned" }).map((x) => x.id)).toEqual([3]);
+    expect(filterRows("A", rows, { ...f, clients: ["B"] })).toEqual([]);
+    expect(filterRows("A", rows, { ...DEFAULT_FILTER, q: "item 4" }).map((x) => x.id)).toEqual([4]);
+    expect(filterRows("A", rows, { ...DEFAULT_FILTER, q: "#5" }).map((x) => x.id)).toEqual([5]);
+  });
+  it("counts states over what the other filters keep, so choosing a state doesn't zero the others", () => {
+    const c = stateCounts([{ clientKey: "A", rows }, { clientKey: "B", rows: [r(9, "blocked")] }], { ...DEFAULT_FILTER, states: ["done"], clients: ["A"] });
+    expect(c).toMatchObject({ blocked: 1, at_risk: 1, needs_date: 1, on_track: 1, done: 1, stalled: 0 });
   });
 });

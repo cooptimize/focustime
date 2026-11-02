@@ -62,6 +62,8 @@ export function portfolioTiers(processConfig: unknown): { feature: Set<string>; 
 export type FieldInfo = { referenceName?: unknown; name?: unknown; type?: unknown };
 
 const TARGET_FIELD = "Microsoft.VSTS.Scheduling.TargetDate";
+/** Step 17: the standard Start Date (Agile, Scrum, CMMI portfolio types have it; a custom process may not). */
+export const START_DATE_FIELD = "Microsoft.VSTS.Scheduling.StartDate";
 /** Names a client process may give its target date, best first. */
 const TARGET_NAMES = [/\btarget\b/i, /estimated\s+(completion|end|finish|delivery)/i, /\bdue\b/i, /\b(finish|delivery|go-?live)\s+date\b/i];
 /** Dates that record what happened, never a promise. */
@@ -217,6 +219,8 @@ export type NormalizeContext = {
   people?: boolean;
   /** The target date field per type (Plan the week), and the zone its dates are read in. */
   targetFields?: Readonly<Record<string, string>>;
+  /** Step 17: the Start Date field per type, when the process has it. */
+  startFields?: Readonly<Record<string, string>>;
   timeZone?: string;
   /** Roadmap (step 16): the size field to read into `size`. */
   sizeField?: string | null;
@@ -279,6 +283,7 @@ export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { 
       changedByMe: !!ctx.me && identityEmail(f["System.ChangedBy"]) === ctx.me.toLowerCase(),
       ...(ctx.people ? { assignedTo: identityName(f["System.AssignedTo"]), assignedToEmail: identityEmail(f["System.AssignedTo"]), assignedToMe: !!ctx.me && identityEmail(f["System.AssignedTo"]) === ctx.me.toLowerCase() } : {}),
       ...(ctx.targetFields?.[type] ? { targetDate: dateOnly(f[ctx.targetFields[type]!], ctx.timeZone ?? "UTC") } : {}),
+      ...(ctx.startFields?.[type] ? { startDate: dateOnly(f[ctx.startFields[type]!], ctx.timeZone ?? "UTC") } : {}),
       ...(ctx.paths ? { areaPath: typeof f["System.AreaPath"] === "string" ? (f["System.AreaPath"] as string) : null, iterationPath: typeof f["System.IterationPath"] === "string" ? (f["System.IterationPath"] as string) : null } : {}),
       ...(ctx.sizeField ? { size: typeof f[ctx.sizeField] === "number" && Number.isFinite(f[ctx.sizeField]) ? (f[ctx.sizeField] as number) : null } : {}),
     });

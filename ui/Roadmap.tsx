@@ -4,7 +4,8 @@
 import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
 import { useCallback, useContext, useEffect, useRef, useState, type CSSProperties } from "react";
-import type { RoadmapClient, RoadmapRow, RoadmapState, WeekLoadData } from "../actions/types.ts";
+import type { RoadmapClient, RoadmapRow, RoadmapState, RoadmapStory, WeekLoadData } from "../actions/types.ts";
+import { DEFAULT_FILTER, filterRows, stateCounts, STATE_MEANING, STATE_ORDER, STATE_WORDS, type RoadmapFilter, type RoadmapSort, type RoadmapStateKind } from "../plan/roadmap.ts";
 import { call } from "./api.ts";
 import { DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { copy } from "./FollowUps.tsx";
@@ -18,17 +19,60 @@ import { Avatar, usePhotos, usePresence } from "./Presence.tsx";
 /** Step 16.3: presence for the people on the Roadmap (by display name: DevOps gives names only), read once for the view. */
 const PresenceCtx = createContext<(p: { name: string; email: string | null }) => { word: import("../plan/presence.ts").PresenceWord | null; photo: string | null }>(() => ({ word: null, photo: null }));
 
-const SIGNAL: Record<NonNullable<RoadmapRow["signal"]["level"]>, string> = { on_track: "On track", watch: "Watch", at_risk: "At risk" };
-const FLAG: Record<RoadmapRow["flags"][number], string> = { needs_breakdown: "Needs stories", needs_features: "Needs features", no_target_date: "" };
+const FLAG: Record<RoadmapRow["flags"][number], string> = { needs_breakdown: "", needs_features: "", no_target_date: "" };
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const monthDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
+const GROUP_WORDS: Record<RoadmapStory["group"], string> = { blocked: "Blocked", active: "In progress", new: "Not started", done: "Done" };
+const FILTER_KEY = "coopilot.roadmap.filter";
 
-export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; switcher?: React.ReactNode; onChanged: () => void }) {
+/** Step 17: the filters persist for the session (per window), never beyond it. */
+function loadFilter(): RoadmapFilter {
+  try {
+    const raw = sessionStorage.getItem(FILTER_KEY);
+    if (!raw) return DEFAULT_FILTER;
+    const v = JSON.parse(raw) as Partial<RoadmapFilter>;
+    return {
+      relation: v.relation === "owned" || v.relation === "contributing" ? v.relation : "both",
+      states: Array.isArray(v.states) ? v.states.filter((x): x is RoadmapStateKind => (STATE_ORDER as readonly string[]).includes(x)) : [],
+      clients: Array.isArray(v.clients) ? v.clients.filter((x): x is string => typeof x === "string") : [],
+      q: typeof v.q === "string" ? v.q.slice(0, 200) : "",
+      sort: v.sort === "target" ? "target" : "risk",
+      overbooked: v.overbooked === true,
+    };
+  } catch {
+    return DEFAULT_FILTER;
+  }
+}
+function saveFilter(f: RoadmapFilter) {
+  try {
+    sessionStorage.setItem(FILTER_KEY, JSON.stringify(f));
+  } catch {
+    /* private window: the filter just doesn't persist */
+  }
+}
+
+/** A state as a badge: the word, a shape mark and the state's full-strength color (never color alone). */
+export function StateBadge({ state, small }: { state: RoadmapStateKind; small?: boolean }) {
+  return (
+    <span className={`rm-badge st-${state}${small ? " small" : ""}`}>
+      <span className="rm-mark" aria-hidden="true" />
+      {STATE_WORDS[state]}
+    </span>
+  );
+}
+
+export function Roadmap({ data, switcher, onChanged, extraSummary, overbooked }: { data: WeekLoadData; switcher?: React.ReactNode; onChanged: () => void; extraSummary?: React.ReactNode; overbooked?: (clientKey: string, id: number) => boolean }) {
   const [state, setState] = useState<RoadmapState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [brief, setBrief] = useState<{ id: number; text: string } | null>(null);
+  const [filter, setFilterRaw] = useState<RoadmapFilter>(loadFilter);
+  const [legend, setLegend] = useState(false);
+  const setFilter = (f: RoadmapFilter) => {
+    setFilterRaw(f);
+    saveFilter(f);
+  };
   const briefArea = useRef<HTMLTextAreaElement>(null);
   const head = useRef<HTMLHeadingElement>(null);
   const dw = useDevOpsWrite();
@@ -48,7 +92,7 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
   useEffect(() => void load(), [load, dw?.version]);
   useEffect(() => head.current?.focus(), []);
 
-  const ops = {
+  const ops: Ops = {
     brief: async (k: string, id: number) => {
       try {
         const r = await call<{ markdown: string; descriptionRead: boolean }>("feature.brief", { clientKey: k, itemId: id });
@@ -74,33 +118,98 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
   };
 
   const clients = state?.clients ?? [];
+  const counts = stateCounts(clients, filter);
+  const extra = (k: string) => (r: RoadmapRow) => !filter.overbooked || !overbooked || overbooked(k, r.id);
+  const shown = clients.map((c) => ({ c, rows: filterRows(c.clientKey, c.rows, filter, extra(c.clientKey)) }));
   const total = clients.reduce((n, c) => n + c.rows.length, 0);
+  const visible = shown.reduce((n, x) => n + x.rows.length, 0);
+  const anyFilter = filter.states.length || filter.clients.length || filter.q.trim() || filter.relation !== "both" || filter.overbooked;
   // Step 16.4: people are matched to Cooptimizers on the server, by email (name only without one); only a match has one.
-  const emails = clients.flatMap((c) => c.rows.flatMap((r) => r.people.map((p) => p.email).filter((e): e is string => !!e)));
+  const emails = [...new Set(clients.flatMap((c) => c.rows.flatMap((r) => [...r.people.map((p) => p.email), ...r.stories.map((s) => s.email)]).filter((e): e is string => !!e)))];
   const presence = usePresence({ emails, me: true });
   const photos = usePhotos({ emails, me: true });
   const wordOf = useCallback((p: { name: string; email: string | null }) => ({ word: p.name === "You" ? presence.me : p.email ? presence.wordFor({ email: p.email }) : null, photo: p.name === "You" ? photos.me : photos.photoFor(p.email) }), [presence, photos]);
+  const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   return (
     <PresenceCtx.Provider value={wordOf}>
     <main className="roadmap" aria-label="Roadmap">
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
-          Roadmap <span className="muted">{state ? (total ? plural(total, "feature or epic", "features and epics") : "Nothing assigned to you") : ""}</span>
+          Roadmap <span className="muted">{state ? (total ? (visible === total ? plural(total, "feature or epic", "features and epics") : `${visible} of ${total} shown`) : "Nothing of yours yet") : ""}</span>
         </h2>
         <button type="button" className="top-btn" disabled={busy} onClick={() => void load(true)} title="Read DevOps again">
           {busy ? "Reading…" : "Refresh"}
         </button>
         <ModeArea>{switcher}</ModeArea>
       </div>
-      <p className="muted follow-ups-note">Features and epics assigned to you in DevOps. Counts are saved once a day to show a three-week trend. Nothing here changes DevOps unless you set a target date.</p>
+      {state && total > 0 && (
+        <div className="rm-summary" role="group" aria-label="Show only">
+          {STATE_ORDER.filter((k) => counts[k] > 0 || filter.states.includes(k)).map((k) => (
+            <button key={k} type="button" className={`rm-sum st-${k}`} aria-pressed={filter.states.includes(k)} onClick={() => setFilter({ ...filter, states: toggle(filter.states, k) })}>
+              <span className="rm-sum-n">{counts[k]}</span>
+              <span className="rm-sum-w"><span className="rm-mark" aria-hidden="true" />{STATE_WORDS[k]}</span>
+            </button>
+          ))}
+          {extraSummary}
+        </div>
+      )}
+      {state && total > 0 && (
+        <div className="rm-filters">
+          <span className="rm-seg" role="group" aria-label="Whose">
+            {(["both", "owned", "contributing"] as const).map((r) => (
+              <button key={r} type="button" aria-pressed={filter.relation === r} onClick={() => setFilter({ ...filter, relation: r })}>
+                {r === "both" ? "Both" : r === "owned" ? "Owned" : "Contributing"}
+              </button>
+            ))}
+          </span>
+          <span className="rm-chips" role="group" aria-label="Clients">
+            {clients.map((c) => (
+              <button key={c.clientKey} type="button" className="rm-chip" style={{ "--c": clientColor(c.clientKey, data.clients) } as CSSProperties} aria-pressed={filter.clients.includes(c.clientKey)} onClick={() => setFilter({ ...filter, clients: toggle(filter.clients, c.clientKey) })}>
+                <span className="dl-swatch" aria-hidden="true" />
+                {c.clientName}
+              </button>
+            ))}
+          </span>
+          <input className="rm-search" type="search" placeholder="Search titles or #id" aria-label="Search the Roadmap" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} />
+          <label className="rm-sort">
+            Sort
+            <select value={filter.sort} onChange={(e) => setFilter({ ...filter, sort: e.target.value as RoadmapSort })}>
+              <option value="risk">By risk</option>
+              <option value="target">By target date</option>
+            </select>
+          </label>
+          {anyFilter ? (
+            <button type="button" className="mini quiet" onClick={() => setFilter({ ...DEFAULT_FILTER, sort: filter.sort })}>
+              Clear filters
+            </button>
+          ) : null}
+          <button type="button" className="mini quiet" aria-expanded={legend} onClick={() => setLegend(!legend)}>
+            What do these mean?
+          </button>
+        </div>
+      )}
+      {legend && (
+        <dl className="rm-legend" aria-label="What the states mean">
+          {STATE_ORDER.map((k) => (
+            <div key={k}>
+              <dt><StateBadge state={k} small /></dt>
+              <dd>{STATE_MEANING[k]}</dd>
+            </div>
+          ))}
+          <div className="wide">
+            <dt><span className="rm-building">Trend building</span></dt>
+            <dd>Fewer than 7 days of daily counts, so no pace yet: only the states that need no pace apply. One count is saved each day you open the Roadmap.</dd>
+          </div>
+          <p className="muted">The first state that applies wins, in this order. Stalled after {state?.thresholds.stalledDays ?? 14} days; Watch within {plural(state?.thresholds.watchWeeks ?? 1, "week", "weeks")} of the target date (Settings › Roadmap).</p>
+        </dl>
+      )}
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
       {brief && <textarea ref={briefArea} className="brief-text" readOnly value={brief.text} aria-label={`Coop brief for #${brief.id}`} rows={6} />}
       {!state && !error && <p className="muted">Reading DevOps…</p>}
       {state && !clients.length && <p className="muted">No followed clients with DevOps this week.</p>}
-      {clients.map((c) => (
-        <ClientSection key={c.clientKey} c={c} colors={data.clients} ops={ops} />
-      ))}
+      {state && total > 0 && visible === 0 && <p className="muted">Nothing matches these filters.</p>}
+      {shown.map(({ c, rows }) => (rows.length || (!anyFilter && (c.status !== "ok" || !c.rows.length)) ? <ClientSection key={c.clientKey} c={c} rows={rows} colors={data.clients} ops={ops} /> : null))}
     </main>
     </PresenceCtx.Provider>
   );
@@ -108,19 +217,19 @@ export function Roadmap({ data, switcher, onChanged }: { data: WeekLoadData; swi
 
 type Ops = { brief: (k: string, id: number) => Promise<void>; addToWeek: (k: string, row: RoadmapRow) => Promise<void> };
 
-function ClientSection({ c, colors, ops }: { c: RoadmapClient; colors: WeekLoadData["clients"]; ops: Ops }) {
+function ClientSection({ c, rows, colors, ops }: { c: RoadmapClient; rows: RoadmapRow[]; colors: WeekLoadData["clients"]; ops: Ops }) {
   const failed = c.status !== "ok";
   return (
     <section className="co-section dl-client" style={{ "--c": clientColor(c.clientKey, colors) } as CSSProperties} aria-label={c.clientName}>
       <h3>
         <span className="dl-swatch" aria-hidden="true" />
-        {c.clientName} <span className="muted">{failed ? "" : c.rows.length ? plural(c.rows.length, "item", "items") : "none assigned to you"}</span>
+        {c.clientName} <span className="muted">{failed ? "" : c.rows.length ? plural(rows.length, "item", "items") : "nothing of yours"}</span>
         {c.fromCache && !failed && <span className="muted dl-cached">from the last good read</span>}
       </h3>
       {failed && <p className="muted">{c.message ?? "DevOps couldn't be read for this client"}</p>}
-      {c.rows.length > 0 && (
+      {rows.length > 0 && (
         <ul className="dl-list">
-          {c.rows.map((r) => (
+          {rows.map((r) => (
             <Row key={r.id} k={c.clientKey} r={r} ops={ops} />
           ))}
         </ul>
@@ -133,12 +242,14 @@ function Row({ k, r, ops }: { k: string; r: RoadmapRow; ops: Ops }) {
   const wordOf = useContext(PresenceCtx);
   const { env, open: openMenu } = useContext(MenuCtx);
   const dw = useDevOpsWrite();
+  const [open, setOpen] = useState(false);
   const noun = r.tier === "epic" ? ["feature", "features"] as const : ["story", "stories"] as const;
   const total = r.done + r.open;
+  const owned = r.relation === "owned";
   const target = () => dw?.targetDate({ clientKey: k, itemId: r.id, title: r.title, current: r.targetDate });
   const menu = (): MenuStep =>
     roadmapRowMenu(
-      { title: r.title, tier: r.tier, targetDate: r.targetDate, open: r.open, onWeek: r.onWeek, canWrite: !!dw?.can(k), hasLink: !!r.url },
+      { title: r.title, tier: r.tier, targetDate: r.targetDate, open: r.open, onWeek: r.onWeek, canWrite: !!dw?.can(k), hasLink: !!r.url, owned },
       {
         open: () => void openWorkItem(k, r.url),
         brief: () => void ops.brief(k, r.id),
@@ -154,60 +265,94 @@ function Row({ k, r, ops }: { k: string; r: RoadmapRow; ops: Ops }) {
     const b = (e.currentTarget as HTMLElement).getBoundingClientRect();
     openMenu(e.type === "click" ? { x: b.right, y: b.bottom + 4 } : { x: e.clientX, y: e.clientY }, menu());
   };
-  const extras = [
-    r.unassigned ? `${r.unassigned} unassigned` : "",
-    r.unsized ? `${r.unsized} without a size` : "",
-    r.stale ? `${r.stale} quiet for 14 days` : "",
-  ].filter(Boolean);
+  const extras = [r.unassigned ? `${r.unassigned} unassigned` : "", r.unsized ? `${r.unsized} without a size` : ""].filter(Boolean);
   const flags = r.flags.map((f) => FLAG[f]).filter(Boolean);
-  // The meta line already says "No target date" and the count line "No stories yet": no need to repeat them.
-  const quietReason = !r.signal.level && (r.signal.reason === "No target date" || total === 0);
+  const groups = (["blocked", "active", "new", "done"] as const).map((g) => ({ g, list: r.stories.filter((s) => s.group === g) })).filter((x) => x.list.length);
+  const storiesId = `rm-stories-${k}-${r.id}`;
   return (
-    <li className="dl-row" onContextMenu={(e) => env && show(e)}>
-      <div className="dl-main">
-        <span className="dl-title">
-          {r.signal.level && <span className={`status-pill ${r.signal.level}`}>{SIGNAL[r.signal.level]}</span>}
-          <WorkLink clientKey={k} url={r.url}>{r.title}</WorkLink>
-        </span>
-        <span className="dl-meta muted">
-          <span>{r.type} · {r.state} ·</span>
-          {r.targetDate ? (
-            <span>Target {monthDay(r.targetDate)}</span>
-          ) : (
-            <>
-              <span>No target date</span> <DevOpsAction clientKey={k} label="Set target date" onRun={() => target()} />
-            </>
-          )}
-          {r.onWeek && <span>· on this week's plan</span>}
-        </span>
-        {!quietReason && <span className="dl-reason">{r.signal.reason}</span>}
-        <span className="dl-facts">
-          <span className="dl-count">
-            {total ? `${r.done} of ${plural(total, noun[0], noun[1])} done` : `No ${noun[1]} yet`}
-            {total > 0 && <Progress done={r.done} total={total} />}
-          </span>
-          {r.people.length > 0 && (
-            <span className="dl-people" title={`Who has open ${noun[1]}`}>
-              {r.people.map((p, i) => (
-                <span key={p.email ?? p.name} className="dl-person">
-                  {i > 0 && " · "}
-                  <Avatar name={p.name} photo={wordOf(p).photo} word={wordOf(p).word} size={20} />
-                  {p.name} {p.count}
-                </span>
-              ))}
-            </span>
-          )}
-          {extras.length > 0 && <span className="dl-extras muted">{extras.join(" · ")}</span>}
-          {flags.map((f) => (
-            <span key={f} className="dl-flag">{f}</span>
-          ))}
-        </span>
-      </div>
-      <Trend points={r.trend} noun={noun[1]} />
-      {env && (
-        <button type="button" className="more" aria-label={`More for ${r.title}`} onClick={show}>
-          ⋯
+    <li className={`dl-row rm-row st-${r.status.state}`} onContextMenu={(e) => env && show(e)}>
+      <div className="rm-top">
+        <button type="button" className="rm-expand" aria-expanded={open} aria-controls={storiesId} aria-label={`${open ? "Hide" : "Show"} ${noun[1]} of ${r.title}`} onClick={() => setOpen(!open)} disabled={!r.stories.length}>
+          {open ? "▾" : "▸"}
         </button>
+        <StateBadge state={r.status.state} />
+        <div className="dl-main">
+          <span className="dl-title">
+            <WorkLink clientKey={k} url={r.url}>{r.title}</WorkLink>
+            {!owned && <span className="rm-rel" title="The parent of a story assigned to you">Contributing</span>}
+          </span>
+          <span className="rm-reason">{r.status.reason}</span>
+          <span className="dl-meta muted">
+            <span>{r.type} · {r.state} ·</span>
+            {r.targetDate ? (
+              <span>Target {monthDay(r.targetDate)}</span>
+            ) : owned ? (
+              <>
+                <span>No target date</span> <DevOpsAction clientKey={k} label="Set target date" onRun={() => target()} />
+              </>
+            ) : (
+              <span>No target date</span>
+            )}
+            {r.onWeek && <span>· on this week's plan</span>}
+            {r.status.trendBuilding && r.open > 0 && <span className="rm-building" title="Fewer than 7 days of daily counts: no pace yet">Trend building</span>}
+          </span>
+          <span className="dl-facts">
+            {total > 0 && (
+              <span className="dl-count">
+                {`${r.done} of ${plural(total, noun[0], noun[1])} done`}
+                <Progress done={r.done} total={total} />
+              </span>
+            )}
+            {r.people.length > 0 && (
+              <span className="dl-people" title={`Who has open ${noun[1]}`}>
+                {r.people.map((p, i) => (
+                  <span key={p.email ?? p.name} className="dl-person">
+                    {i > 0 && " · "}
+                    <Avatar name={p.name} photo={wordOf(p).photo} word={wordOf(p).word} size={20} />
+                    {p.name} {p.count}
+                  </span>
+                ))}
+              </span>
+            )}
+            {extras.length > 0 && <span className="dl-extras muted">{extras.join(" · ")}</span>}
+            {flags.map((f) => (
+              <span key={f} className="dl-flag">{f}</span>
+            ))}
+          </span>
+        </div>
+        <Trend points={r.trend} noun={noun[1]} />
+        {env && (
+          <button type="button" className="more" aria-label={`More for ${r.title}`} onClick={show}>
+            ⋯
+          </button>
+        )}
+      </div>
+      {open && (
+        <div id={storiesId} className="rm-stories">
+          {groups.map(({ g, list }) => (
+            <div key={g} className={`rm-group g-${g}`}>
+              <h4>{GROUP_WORDS[g]} <span className="muted">{list.length}</span></h4>
+              <ul>
+                {list.map((s) => (
+                  <li key={s.id}>
+                    <span className="rm-story-title"><WorkLink clientKey={k} url={s.url}>{s.title}</WorkLink></span>
+                    <span className="muted rm-story-state">{s.state}</span>
+                    <span className="rm-story-who">
+                      {s.assignee ? (
+                        <>
+                          <Avatar name={s.assignee} photo={wordOf({ name: s.assignee, email: s.email }).photo} word={wordOf({ name: s.assignee, email: s.email }).word} size={18} />
+                          {s.assignee}
+                        </>
+                      ) : (
+                        <span className="muted">Unassigned</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       )}
     </li>
   );

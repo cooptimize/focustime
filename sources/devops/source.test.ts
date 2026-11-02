@@ -407,6 +407,14 @@ describe("Plan the week: features and epics (step 8)", () => {
     const kids = adatum!.items.find((i) => i.id === 210)!.children;
     expect(kids.map((c) => [c.id, c.size, c.changedAt])).toEqual([[201, 3, "2026-10-30T15:00:00Z"], [211, null, "2026-10-30T15:00:00Z"], [212, null, "2026-10-30T15:00:00Z"]]);
   });
+  it("step 17: Start Date where the process has it (per type), and which stories are blocked", async () => {
+    const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")]);
+    const [adatum] = await s.src.portfolio([ref("Adatum")]);
+    expect(adatum!.startFields).toEqual({ Feature: "Microsoft.VSTS.Scheduling.StartDate", Epic: "Microsoft.VSTS.Scheduling.StartDate" });
+    expect(adatum!.items.find((i) => i.id === 240)!.startDate).toBe("2026-11-09");
+    expect(adatum!.items.find((i) => i.id === 210)!.startDate).toBeNull();
+    expect(adatum!.items.find((i) => i.id === 210)!.children.map((c) => [c.id, c.blocked])).toEqual([[201, false], [211, false], [212, true]]);
+  });
   it("reads only: metadata and field lists with GET, items with WIQL and the batch call; no description unless asked", async () => {
     const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")]);
     await s.src.portfolio([ref("Adatum")]);
