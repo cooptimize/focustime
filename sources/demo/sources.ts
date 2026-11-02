@@ -35,7 +35,8 @@ export function createDemoSources(now: () => string) {
     const a = Temporal.Instant.from(startIso), b = Temporal.Instant.from(endIso);
     for (let m = Temporal.PlainDate.from(startIso.slice(0, 10)).subtract({ days: 7 }); Temporal.PlainDate.compare(m, Temporal.PlainDate.from(endIso.slice(0, 10))) <= 0; m = m.add({ days: 7 })) {
       const monday = m.subtract({ days: m.dayOfWeek - 1 }).toString();
-      for (const e of demoOutlook(monday)) if (Temporal.Instant.compare(Temporal.Instant.from(e.start), b) < 0 && Temporal.Instant.compare(Temporal.Instant.from(e.end), a) > 0 && !out.some((x) => x.id === e.id)) out.push(e);
+      // Timed meetings only: an all-day event (dates, not instants) has nothing to answer or move here.
+      for (const e of demoOutlook(monday)) if (!e.allDay && Temporal.Instant.compare(Temporal.Instant.from(e.start), b) < 0 && Temporal.Instant.compare(Temporal.Instant.from(e.end), a) > 0 && !out.some((x) => x.id === e.id)) out.push(e);
     }
     return out;
   };

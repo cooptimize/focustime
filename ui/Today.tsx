@@ -41,7 +41,7 @@ import { DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { DevOpsWork } from "./work.ts";
 import { dayName, FlexOfferBar, type FlexOffer, type MakeUpResult } from "./PickReview.tsx";
 import { spanText } from "./menu.ts";
-import { MenuCtx } from "./Menus.tsx";
+import { MenuCtx, MoreButton, PopupMenu } from "./Menus.tsx";
 import { DEFAULT_MIN_SIZES, openGaps } from "../plan/agenda.ts";
 import { timeChoices } from "../plan/picktime.ts";
 import { updatedAgo } from "./refresh.ts";
@@ -64,6 +64,9 @@ type Props = {
   closeOutDate: IsoDate | null;
   /** U2: the 3840 layout: day timeline on the left, detail panel under the cards. */
   wide: boolean;
+  /** U5.1 (D408): personal events shown, and the switch (Today's ⋯ and G). */
+  showPersonal: boolean;
+  onShowPersonal: (show: boolean) => void;
   /** Starts focus on a pick (null: a plain focus timer). */
   onStart: (pick: Pick | null) => void;
   onFocusScreen: () => void;
@@ -116,6 +119,7 @@ export function Today(props: Props) {
   const focused = useFocused();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [moreAt, setMoreAt] = useState<{ x: number; y: number } | null>(null);
   const [offer, setOffer] = useState<{ offer: FlexOffer; pick: Pick } | null>(null);
   // U3: the shared detail panel, opened from a block card (the pick it opened on, if any).
   const [panel, setPanel] = useState<{ half: Half; focus: PanelFocus | null } | null>(null);
@@ -229,6 +233,13 @@ export function Today(props: Props) {
       <header className="today-head">
         <div className="ph-title">{headTitle}</div>
         {wide && attention}
+        <MoreButton
+          label="View options for Today"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setMoreAt({ x: r.left, y: r.bottom + 4 });
+          }}
+        />
         <ModeArea
           done={
             mode === "checkin"
@@ -246,6 +257,13 @@ export function Today(props: Props) {
           {switcher}
         </ModeArea>
       </header>
+      {moreAt && (
+        <PopupMenu
+          at={moreAt}
+          step={{ title: "Today", items: [{ id: "personal", label: "Personal events", group: "Show", checked: props.showPersonal, hint: "G", run: () => props.onShowPersonal(!props.showPersonal) }] }}
+          onClose={() => setMoreAt(null)}
+        />
+      )}
       {!wide && attention}
       {error && <p className="set-problem" role="alert">{error}</p>}
       <Fading text={notice} onGone={clearNotice} />

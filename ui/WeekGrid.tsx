@@ -218,7 +218,8 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
         <HalfScope.Provider value={daySelected}>{menu.button(`Actions for ${dayLabel}`)}</HalfScope.Provider>
       </header>
 
-      <AllDay events={whole ? [] : day.allDay} />
+      {/* U5.1 (D406): one chip per day an all-day event covers, PTO and Catch-up days too; the chip is its one home. */}
+      <AllDay events={day.allDay} />
       <OutLine kind="early" items={whole ? [] : day.early.map((p) => p.event)} tz={tz} />
 
       {whole ? (
@@ -266,7 +267,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
   );
 }
 
-/** U3: all-day events as chips under the day header, only when there are some (the row stays for alignment). */
+/** U3: all-day events as chips under the day header, only when there are some (the row stays for alignment); two or more stack. */
 function AllDay({ events }: { events: readonly CalEvent[] }) {
   const samples = useContext(SampleSources);
   return (
@@ -296,13 +297,14 @@ function OutLine({ kind, items, tz }: { kind: "early" | "late"; items: readonly 
 }
 
 /**
- * U3 (D387): a PTO day is one hatched cell labeled PTO, with its calendar items as plain lines; a day with no working
+ * U3 (D387): a PTO day is one hatched cell labeled PTO, with its timed calendar items as plain lines (all-day ones are chips, D406); a day with no working
  * hours (Friday) is one dashed "Catch-up" column with the work moved there and its calendar items.
  */
 function WholeDay({ day, kind, tz, selected, refAm, refPm, onOpen, dayLabel }: { day: Day; kind: "pto" | "catchup"; tz: string; selected: boolean; refAm: (el: HTMLDivElement | null) => void; refPm: (el: HTMLDivElement | null) => void; onOpen: (focus?: PanelFocus) => void; dayLabel: string }) {
   const plan = useContext(PlanCtx);
   const samples = useContext(SampleSources);
-  const events = [...day.allDay.map((e) => ({ e, start: e.start })), ...[...day.early, ...day.am.events, ...day.pm.events, ...day.evening].map((p) => ({ e: p.event, start: p.event.start }))];
+  // All-day events are chips under the day header (D406); the cell lists only timed events.
+  const events = [...day.early, ...day.am.events, ...day.pm.events, ...day.evening].map((p) => ({ e: p.event, start: p.event.start }));
   const seen = new Set<string>();
   const lines = events.filter(({ e }) => !seen.has(e.id) && !!seen.add(e.id));
   const picks = kind === "catchup" ? [...catchUp(plan.week, day.am), ...catchUp(plan.week, day.pm)] : [];
@@ -331,7 +333,7 @@ function WholeDay({ day, kind, tz, selected, refAm, refPm, onOpen, dayLabel }: {
         <ul className="whole-lines">
           {lines.map(({ e }) => (
             <li key={e.id} className={e.isPersonal ? "personal" : undefined} title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)}`}>
-              <span className="out-time">{e.allDay ? "All day" : startClock(e.start, tz)}</span> <span className="ev-title">{e.title}</span>
+              <span className="out-time">{startClock(e.start, tz)}</span> <span className="ev-title">{e.title}</span>
             </li>
           ))}
         </ul>
@@ -585,13 +587,19 @@ function Timeline({ slot, tz, showGaps, minFocusWindow, earlier }: { slot: Slot;
  * band opens the time editor; an event opens its menu. The list on the left is unchanged.
  */
 function Ruler({ slot, tz, label }: { slot: Slot; tz: string; label: string }) {
-  const bounds = { start: slot.start, end: slot.end };
-  const span = Math.max(1, ms(slot.end) - ms(slot.start));
-  const pos = (iso: string) => (ms(iso) - ms(slot.start)) / span;
-  const marks = hourMarks(slot.start, slot.end, tz);
-  const laid = layoutEvents(slot.events.filter((p) => !p.event.allDay), slot.start, slot.end);
+  // U5.1 (D407): the rail covers the Timelines range (slot.view: business hours, 12 hours or 24 hours), with the time
+  // outside working windows shaded, as the wide timeline does.
+  const bounds = { start: slot.view.start, end: slot.view.end };
+  const span = Math.max(1, ms(bounds.end) - ms(bounds.start));
+  const pos = (iso: string) => (ms(iso) - ms(bounds.start)) / span;
+  const posMs = (n: number) => (n - ms(bounds.start)) / span;
+  const marks = hourMarks(bounds.start, bounds.end, tz);
+  const laid = layoutEvents(slot.events.filter((p) => !p.event.allDay), bounds.start, bounds.end);
   return (
     <div className="ruler" aria-label={`Timeline for ${label}, ${slotRange(slot, tz)}`} onDoubleClick={(e) => e.stopPropagation()}>
+      {offHours(slot).map((o) => (
+        <div key={`off-${o.start}`} className="r-off" style={{ top: pct(posMs(o.start)), height: pct(posMs(o.end) - posMs(o.start)) }} aria-hidden="true" />
+      ))}
       {marks.map((m) => (
         <div key={m.label} className="r-hour" style={{ top: pct(m.at) }} aria-hidden="true">
           <span>{m.label.replace(/ (AM|PM)$/, "")}</span>
@@ -599,7 +607,7 @@ function Ruler({ slot, tz, label }: { slot: Slot; tz: string; label: string }) {
       ))}
       <div className="r-lanes">
       {slot.freeGaps.map((g) => {
-        const at = rulerSpan(slot, g.start, g.end);
+        const at = rulerSpan(bounds, g.start, g.end);
         return at && (
           <div key={`f-${g.start}`} className="r-free" style={{ top: pct(at.top), height: pct(at.height) }} title={`Free · ${formatDuration(g.minutes)}`} aria-hidden="true">
             {g.minutes >= 45 && <span>{formatDuration(g.minutes)}</span>}
@@ -607,7 +615,7 @@ function Ruler({ slot, tz, label }: { slot: Slot; tz: string; label: string }) {
         );
       })}
       {laid.map(({ placed, lane, lanes }) => {
-        const at = rulerSpan(slot, placed.clipStart, placed.clipEnd);
+        const at = rulerSpan(bounds, placed.clipStart, placed.clipEnd);
         return at && <RulerEvent key={placed.event.id} e={placed.event} tz={tz} style={{ top: pct(at.top), height: `max(${pct(at.height)}, 6px)`, left: `calc(${pct(lane / lanes)} + 2px)`, width: `calc(${pct(1 / lanes)} - 4px)` }} />;
       })}
       <TimeboxBands slot={slot} pos={pos} bounds={bounds} />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { SourceSummary } from "../actions/types.ts";
 import type { ClientWork } from "../week/types.ts";
 import { hoursSummary, type TimeModel } from "../week/hours.ts";
@@ -16,6 +16,8 @@ type Props = {
   loading: boolean;
   busy: Calendar | null;
   notice: string | null;
+  /** U5.1: more chips for the bar's row (the "2 personal hidden" switch). */
+  extra?: ReactNode;
   /** Wall clock, ticking every 30 s, for "updated N min ago". */
   clock: number;
   onRefresh: () => void;
@@ -30,7 +32,7 @@ function when(iso: string, tz: string): string {
   return z.toPlainDate().equals(today) ? t : `${shortDate(z.toPlainDate().toString())} ${t}`;
 }
 
-export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, loading, busy, notice, clock, onRefresh, onConnect, onDisconnect }: Props) {
+export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, loading, busy, notice, extra, clock, onRefresh, onConnect, onDisconnect }: Props) {
   const samples = sources.filter((s) => s.sample);
   const shape = { timeZone: hours.timeZone };
   const lines = causeLines(sources, devops);
@@ -41,6 +43,7 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, lo
   // U5.1: notices are chips inside the bar's one row, never lines under it.
   const chips = (
     <span className="status-chips">
+      {extra}
       {notice && (
         <span className="status-chip notice" role="status" title={notice}>
           {notice}

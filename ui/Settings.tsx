@@ -68,6 +68,9 @@ type Props = {
   /** U5 (D401): Default, Large or Larger. */
   textSize: TextSize;
   setTextSize: (s: TextSize) => void;
+  /** U5.1 (D408): personal events shown on Week and Today. */
+  showPersonal: boolean;
+  setShowPersonal: (show: boolean) => void;
   /** Step 15 (D272): demo mode and its switch. */
   demo: boolean;
   setDemo: (on: boolean) => void;
@@ -271,13 +274,20 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
             <span className="set-hint">Ctrl + and Ctrl − change it; Ctrl 0 resets.</span>
           </fieldset>
           <fieldset className="set-choice">
-            <legend>Default view range</legend>
+            <legend>Timelines</legend>
             {VIEW_RANGES.map((r) => (
               <label key={r}>
                 <input type="radio" name="range" checked={p.viewRange === r} onChange={() => p.setViewRange(r)} /> {VIEW_RANGE_NAMES[r]}
               </label>
             ))}
-            <span className="set-hint">H on Week changes it until you close Coopilot.</span>
+            <span className="set-hint">The default. V on Week changes it until you close Coopilot.</span>
+          </fieldset>
+          <fieldset className="set-choice">
+            <legend>Personal events</legend>
+            <label>
+              <input type="checkbox" checked={p.showPersonal} onChange={(e) => p.setShowPersonal(e.target.checked)} /> Show personal events on Week and Today
+            </label>
+            <span className="set-hint">Hidden ones still count in risk and free time. G switches it.</span>
           </fieldset>
           <fieldset className="set-choice">
             <legend>Motion</legend>

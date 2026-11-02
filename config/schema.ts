@@ -75,8 +75,9 @@ export const THEME_NAMES: Record<Theme, string> = { "cooptimize-dark": "Cooptimi
 export const TEXT_SIZES = ["default", "large", "larger"] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
 /** reduceMotion (step 17.5): no sweep, unroll, hop or bob; the still pose shows and open and close cut straight to the result. */
-export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; reduceMotion: boolean; textSize: TextSize };
-export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: true, reduceMotion: false, textSize: "default" };
+/** showPersonal (U5.1, D408): personal (Google) events shown on Week and Today; hidden ones still count in risk and free time. */
+export type UiConfig = { theme: Theme; viewRange: ViewRange; showTimelines: boolean; reduceMotion: boolean; textSize: TextSize; showPersonal: boolean };
+export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "business", showTimelines: true, reduceMotion: false, textSize: "default", showPersonal: true };
 
 /** The style guide's client palette (tokens --client-<slot> in every theme). */
 export const CLIENT_SLOTS = ["teal", "violet", "ochre", "blue", "rose", "earth", "green", "slate"] as const;
@@ -453,7 +454,7 @@ export function parseConfig(text: string): ParseResult {
   const ui: UiConfig = { ...DEFAULT_UI };
   if (raw.ui !== undefined) {
     const t = isTable(raw.ui) ? raw.ui : (err("ui", "Must be a [ui] table"), null);
-    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "reduce_motion", "text_size"].includes(k)) err(`ui.${k}`, "Unknown field");
+    if (t) for (const k of Object.keys(t)) if (!["theme", "view_range", "show_timelines", "reduce_motion", "text_size", "show_personal"].includes(k)) err(`ui.${k}`, "Unknown field");
     const rm = t?.reduce_motion;
     if (rm !== undefined) {
       if (typeof rm !== "boolean") err("ui.reduce_motion", "Must be true or false");
@@ -463,6 +464,11 @@ export function parseConfig(text: string): ParseResult {
     if (ts !== undefined) {
       if (typeof ts !== "string" || !(TEXT_SIZES as readonly string[]).includes(ts)) err("ui.text_size", `Must be one of ${TEXT_SIZES.map((x) => `"${x}"`).join(", ")}`);
       else ui.textSize = ts as TextSize;
+    }
+    const sp = t?.show_personal;
+    if (sp !== undefined) {
+      if (typeof sp !== "boolean") err("ui.show_personal", "Must be true or false");
+      else ui.showPersonal = sp;
     }
     const st = t?.show_timelines;
     if (st !== undefined) {

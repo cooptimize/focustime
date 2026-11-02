@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks, mondayOf } from "../week/dates.ts";
+import { hidePersonal, personalCount } from "../week/personal.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import { ReopenButton } from "./Reopen.tsx";
 import { parseRoute, ROUTE_EVENT } from "../plan/notify.ts";
@@ -297,6 +298,27 @@ export function App() {
       setNotice(`Text size not saved: ${e instanceof Error ? e.message : "unknown error"}`);
     }
   }, []);
+  /**
+   * U5.1 (D408): the Personal events switch (G, Week's and Today's ⋯, Settings > Display). Hidden personal events
+   * still count in risk and free time; only Week's and Today's rows, chips and rail blocks leave (hidePersonal).
+   */
+  const [showPersonal, setShowPersonal] = useState(true);
+  const showPersonalRef = useRef(showPersonal);
+  showPersonalRef.current = showPersonal;
+  useEffect(() => {
+    if (data) setShowPersonal(data.ui.showPersonal ?? true);
+  }, [data?.ui.showPersonal]); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveShowPersonal = useCallback(async (show: boolean) => {
+    setShowPersonal(show);
+    try {
+      await call("ui.set_show_personal", { show });
+      if (show) setNotice("Personal events shown");
+    } catch (e) {
+      setShowPersonal(!show);
+      setNotice(`Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  }, []);
+  const shownData = useMemo(() => (data && !showPersonal ? { ...data, week: hidePersonal(data.week) } : data), [data, showPersonal]);
   // Ctrl+plus, Ctrl+minus, Ctrl+0: step the text size, only when no text field has focus and no dialog is on top
   // (then the browser's own zoom keys do what they always do).
   useEffect(() => {
@@ -902,6 +924,10 @@ export function App() {
         // P toggles the current tab's planning mode (I stays an alias).
         e.preventDefault();
         togglePlanning();
+      } else if ((k === "g" || k === "G") && free && settingsAt === null && !loc.overlay && (nav.tab === "week" || nav.tab === "today") && !isPlanning(nav)) {
+        // U5.1 (D408): show or hide personal events on Week and Today (saved in config).
+        e.preventDefault();
+        void saveShowPersonal(!showPersonalRef.current);
       } else if ((k === "l" || k === "L") && free && settingsAt === null) {
         e.preventDefault();
         openTab("inbox");
@@ -949,7 +975,10 @@ export function App() {
         case "ArrowRight": return move(sel.dayIndex + 1, sel.half);
         case "ArrowUp": return step(-1);
         case "ArrowDown": return step(1);
+        case "v":
+        case "V":
         case "h":
+          // U5.1 (D407): V (H stays an alias) cycles the hours the rails and timelines show, for now.
           e.preventDefault();
           void setViewRange(VIEW_RANGES[(VIEW_RANGES.indexOf(data.week.range.mode) + 1) % VIEW_RANGES.length]!);
           return;
@@ -1039,6 +1068,8 @@ export function App() {
       reduceMotion: data.ui.reduceMotion,
       saveReduceMotion: (on) => void saveReduceMotion(on),
       textSize,
+      showPersonal,
+      saveShowPersonal: (show) => void saveShowPersonal(show),
       saveTextSize: (s) => void saveTextSize(s),
       hours: data.hours,
       runTime,
@@ -1152,7 +1183,7 @@ export function App() {
     );
   }
 
-  const { week } = data;
+  const { week } = shownData ?? data;
   const day = week.days[Math.min(sel.dayIndex, week.days.length - 1)]!;
   const slot = slotOf(day, validHalf(day, sel.half)) ?? day.am;
   // Weekend: "Today" shows the coming week (D36), so say so.
@@ -1368,6 +1399,8 @@ export function App() {
           setViewRange={(r) => void saveViewRange(r)}
           reduceMotion={data.ui.reduceMotion}
           setReduceMotion={(on) => void saveReduceMotion(on)}
+          showPersonal={showPersonal}
+          setShowPersonal={(show) => void saveShowPersonal(show)}
           textSize={textSize}
           setTextSize={(s) => void saveTextSize(s)}
           demo={data.demo}
@@ -1459,7 +1492,7 @@ export function App() {
         )
       ) : base === "today" ? (
         <Today
-          data={data}
+          data={shownData ?? data}
           strip={strip}
           target={target}
           now={now ?? new Date(clock).toISOString()}
@@ -1467,6 +1500,8 @@ export function App() {
           mode={nav.tab === "today" && (nav.mode === "checkin" || nav.mode === "closeout") ? nav.mode : "now"}
           closeOutDate={closeOutAt}
           wide={layout === "wide"}
+          showPersonal={showPersonal}
+          onShowPersonal={(show) => void saveShowPersonal(show)}
           onStart={startFocus}
           onFocusScreen={() => setView("focus")}
           onTimer={(a) => void runTimer(a)}
@@ -1557,6 +1592,17 @@ export function App() {
         loading={loading}
         busy={busy}
         notice={notice ?? (state.kind === "ready" ? state.refreshError ?? null : null)}
+        extra={
+          !showPersonal && (base === "week" || base === "today") && !planWeekAt && !pd ? (() => {
+            // Week counts the week's personal events, Today today's.
+            const n = personalCount(base === "today" ? data.week.days.filter((d) => d.date === data.planDay.date) : data.week.days);
+            return (
+              <button type="button" className="status-chip personal-hidden" onClick={() => void saveShowPersonal(true)} title="Personal events are hidden on Week and Today. They still count in risk and free time. Click or press G to show them">
+                {n} personal hidden
+              </button>
+            );
+          })() : null
+        }
         clock={clock}
         onRefresh={() => auto.trigger("button")}
         onConnect={(src) => void connect(src)}
@@ -1588,7 +1634,9 @@ export function App() {
           step={{
             title: "Week",
             items: [
-              ...VIEW_RANGES.map((r) => ({ id: `range-${r}`, label: `Show ${VIEW_RANGE_NAMES[r].toLowerCase()}`, group: "Hours on the timelines", checked: data.week.range.mode === r, ...(data.week.range.mode === r ? {} : { hint: "H" }), run: () => void setViewRange(r) })),
+              // U5.1 (D407): Timelines, the hours the rails and timelines show (V cycles them).
+              ...VIEW_RANGES.map((r) => ({ id: `range-${r}`, label: VIEW_RANGE_NAMES[r], group: "Timelines", checked: data.week.range.mode === r, ...(data.week.range.mode === r ? {} : { hint: "V" }), run: () => void setViewRange(r) })),
+              { id: "personal", label: "Personal events", group: "Show", checked: showPersonal, hint: "G", run: () => void saveShowPersonal(!showPersonal) },
             ],
           }}
           onClose={() => setWeekMoreAt(null)}

@@ -3171,3 +3171,8 @@ button.att-chip { cursor: pointer; }
 .card-head .card-client { flex: 0 1 auto; line-height: calc(20px * var(--text-scale)); }
 .card-head .card-when { flex: none; line-height: calc(20px * var(--text-scale)); }
 .card-head .card-more { position: absolute; right: 0; top: 0; margin-left: 0; }
+/* U5.1 (D407): the rail covers the Timelines range; time outside working windows is shaded. */
+.ruler .r-off { position: absolute; left: 0; right: 0; background: color-mix(in oklab, var(--sunken) 70%, transparent); pointer-events: none; }
+/* U5.1 (D406): all-day chips, one per day covered, the same on every day; two or more stack; the title truncates. */
+section.day > .day-allday { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
+section.day > .day-allday .chip { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }

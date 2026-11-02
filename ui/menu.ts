@@ -124,6 +124,9 @@ export type MenuEnv = {
   saveReduceMotion: (on: boolean) => void;
   textSize: TextSize;
   saveTextSize: (size: TextSize) => void;
+  /** U5.1 (D408): personal events shown on Week and Today (G). */
+  showPersonal: boolean;
+  saveShowPersonal: (show: boolean) => void;
   hours: TimeModel;
   /** Runs a time model action (hours for a day, unavailable time, flex sessions); false with a notice on refusal. */
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
@@ -796,7 +799,7 @@ export function flexForm(env: MenuEnv, date: IsoDate): MenuStep {
 }
 
 export function viewRangeStep(env: MenuEnv): MenuStep {
-  return { title: "View range", items: VIEW_RANGES.map((r) => ({ id: r, label: VIEW_RANGE_NAMES[r], checked: env.viewRange === r, action: "ui.set_view_range", run: () => env.setViewRange(r) })) };
+  return { title: "Timelines", items: VIEW_RANGES.map((r) => ({ id: r, label: VIEW_RANGE_NAMES[r], checked: env.viewRange === r, action: "ui.set_view_range", run: () => env.setViewRange(r) })) };
 }
 
 /** Days of the week on screen, for actions that ask for a day (selected day first). */
@@ -955,6 +958,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.set_theme": return { next: () => themeStep(env) };
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
     case "ui.set_text_size": return { next: () => ({ title: "Text size", items: TEXT_SIZES.map((s) => ({ id: s, label: TEXT_SIZE_NAMES[s], checked: env.textSize === s, action: "ui.set_text_size", run: () => env.saveTextSize(s) })) }) };
+    case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
     case "ui.first_launch": return { disabled: "Runs on its own the first time Coopilot opens" };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };

@@ -727,6 +727,15 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
     }
+    case "ui.set_show_personal": {
+      // U5.1 (D408): G, Week's and Today's ⋯ and Settings > Display "Personal events". Saved in [ui] show_personal.
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "show") || typeof i.show !== "boolean") return bad("input must be { show: boolean }");
+      if (!ctx.writeConfig) return { ok: false, status: 503, error: "Settings can't be saved here" };
+      const r = await ctx.writeConfig((text) => setValue(text, "ui", "show_personal", i.show as boolean, "Display (U5.1): show personal events on Week and Today."));
+      if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
+      return { ok: true, data: { ui: r.parsed.config.ui } };
+    }
     case "settings.load":
     case "settings.save":
     case "secret.set":

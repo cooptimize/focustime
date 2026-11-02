@@ -104,6 +104,8 @@ export function demoOutlook(monday: IsoDate): CalEvent[] {
     o("nwshop", 2, "Northwind requirements workshop", "09:30", "11:30"),
     o("lunch", 2, "Lunch and learn: Power Automate", "12:00", "12:45", { showAs: "tentative", responseStatus: "tentative" }),
     o("allhands", 4, "Cooptimize all hands", "11:00", "11:30"),
+    // U5.1: a three-day all-day event (Wed to Fri, end exclusive), shown as free: a chip on each day it covers.
+    { id: `outlook:demo-summit-${plus(monday, 2)}`, source: "outlook", title: "Fabrikam partner summit 2026", start: plus(monday, 2), end: plus(monday, 5), allDay: true, showAs: "free", isPersonal: false, responseStatus: "accepted" },
   ];
 }
 
