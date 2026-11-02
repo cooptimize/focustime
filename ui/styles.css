@@ -2324,3 +2324,19 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .vm-manual { display: flex; gap: 8px; flex-wrap: wrap; max-width: 720px; }
 .vm-manual input { flex: 1 1 320px; min-width: 0; font-family: ui-monospace, monospace; font-size: 12px; }
 .vm-found p { font-size: 14px; margin: 4px 0; }
+
+/* Step 15.4 fix: the window is out of date (Coopilot was restarted). */
+.stale-banner {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 1000;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: color-mix(in oklab, var(--watch) 14%, var(--surface));
+  color: var(--text);
+  border-bottom: 1px solid color-mix(in oklab, var(--watch) 60%, var(--border));
+}
+.reopen-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }

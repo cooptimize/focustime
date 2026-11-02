@@ -35,6 +35,10 @@ beforeAll(async () => {
     token: TOKEN,
     log: (r) => logs.push(r),
     distDir: dist,
+    reopen: async () => {
+      reopened++;
+      return true;
+    },
     takeOpenRequest: async () => {
       const v = openRequest;
       openRequest = null;
@@ -55,6 +59,7 @@ beforeAll(async () => {
 });
 afterAll(() => close());
 let openRequest: string | null = "capture";
+let reopened = 0;
 
 type Res = { status: number; headers: Record<string, string | string[] | undefined>; body: string };
 function send(path: string, headers: Record<string, string> = {}, method = "GET", body?: string): Promise<Res> {
@@ -122,5 +127,27 @@ describe("local server", () => {
   it("rejects unknown actions", async () => {
     const r = await send("/api/action", { cookie: cookie(), origin: `http://127.0.0.1:${port}`, "content-type": "application/json" }, "POST", JSON.stringify({ action: "dataverse.write", input: {} }));
     expect(r.status).toBe(400);
+  });
+
+  it("says an old launch token apart from an action's refusal, as JSON with code launch_token (step 15.4 fix)", async () => {
+    const r = await api({}, { cookie: `coopilot_${port}=an-old-token` });
+    expect(r.status).toBe(401);
+    expect(JSON.parse(r.body)).toMatchObject({ ok: false, code: "launch_token" });
+    expect(r.body).not.toContain("Session expired");
+  });
+
+  it("opens a fresh window for a window with an old token: same origin only, POST only, once per 5 seconds", async () => {
+    const reopen = (headers: Record<string, string> = {}, method = "POST") =>
+      send("/api/reopen", { cookie: `coopilot_${port}=an-old-token`, origin: `http://127.0.0.1:${port}`, "content-type": "application/json", ...headers }, method, method === "POST" ? "{}" : undefined);
+    expect((await reopen({ origin: "http://evil.example" })).status).toBe(403);
+    expect((await reopen({ host: "evil.example" })).status).toBe(403);
+    expect((await send("/api/reopen", { "content-type": "application/json" }, "POST", "{}")).status).toBe(403);
+    expect(reopened).toBe(0);
+    const first = await reopen();
+    expect(first.status).toBe(202);
+    expect(JSON.parse(first.body)).toEqual({ opened: true });
+    expect(reopened).toBe(1);
+    expect((await reopen()).status).toBe(503);
+    expect(reopened).toBe(1);
   });
 });

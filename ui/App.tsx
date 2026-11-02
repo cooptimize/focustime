@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks, mondayOf } from "../week/dates.ts";
 import type { Half, IsoDate } from "../week/types.ts";
+import { ReopenButton } from "./Reopen.tsx";
 import { ActionRefusal, call, connectSource, disconnectSource, planAction, SessionError, setThemeAction, takeOpenRequest, weekLoad } from "./api.ts";
 import { dayEndOf, hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type ViewRange } from "../week/hours.ts";
 import { applyTheme, initialTheme } from "./theme.ts";
@@ -1088,8 +1089,9 @@ export function App() {
   if (state.kind === "session") {
     return (
       <div className="center-note">
-        <h1>Coopilot needs a fresh launch link</h1>
-        <p>The server was restarted, so this window's access token is no longer valid. Open Coopilot again from the launcher or with Super + Alt + C. It replaces this window.</p>
+        <h1>Reopen Coopilot</h1>
+        <p>Coopilot was restarted, so this window is out of date. Reopen it to continue; the new window replaces this one.</p>
+        <ReopenButton />
       </div>
     );
   }

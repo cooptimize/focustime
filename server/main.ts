@@ -1,5 +1,5 @@
 // Start Coopilot: local server on 127.0.0.1, per-launch token, opens a Chromium app window.
-// Usage: node server/main.ts [--dev] [--no-open] [--port 5317] [--clock <ISO instant>]
+// Usage: node server/main.ts [--dev] [--no-open] [--no-reopen] [--port 5317] [--clock <ISO instant>]
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
 import { createHostBrowsers } from "./host.ts";
 import { hoursOn } from "../week/hours.ts";
@@ -183,6 +183,7 @@ const server = createApp({
   // COOPILOT_DIST: a verification build elsewhere, so checking work never swaps the UI the service serves.
   ...(devMiddleware ? { devMiddleware } : { distDir: process.env.COOPILOT_DIST ?? join(root, "dist") }),
   takeOpenRequest: () => takeOpenRequest(runtimeDir),
+  reopen: reopenWindow,
   ctx: () => demoCtx ?? liveCtx,
 });
 const liveCtx: ActionContext = {
@@ -223,6 +224,19 @@ const liveCtx: ActionContext = {
       return out;
     },
 };
+
+/**
+ * Step 15.4 fix (host adapter): "Reopen Coopilot" from a window whose launch token is old. Under the service,
+ * coopilot-open replaces a window opened for an earlier server run; with npm start, a new app window opens with the
+ * launch link. --no-reopen (the browser tests) turns it off.
+ */
+async function reopenWindow(): Promise<boolean> {
+  const script = join(homedir(), ".local", "bin", "coopilot-open");
+  if (args.includes("--no-reopen")) return false;
+  const argv = process.env.INVOCATION_ID && existsSync(script) ? [script] : open ? ["chromium", `--app=http://127.0.0.1:${port}/?token=${token}`] : null;
+  if (!argv) return false;
+  return launchDetached(argv).then(() => true, () => false);
+}
 
 /** link.open: start a browser from an argument array (no shell), detached, with no output kept. */
 function launchDetached(argv: string[]): Promise<void> {

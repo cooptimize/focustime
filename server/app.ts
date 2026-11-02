@@ -4,7 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 import { dispatch, type ActionContext } from "../actions/dispatch.ts";
 import type { Logger } from "../log/logger.ts";
-import { checkRequest } from "./guard.ts";
+import { checkRequest, REOPEN_PATH } from "./guard.ts";
 
 export type AppOptions = {
   port: number;
@@ -18,7 +18,12 @@ export type AppOptions = {
   devMiddleware?: (req: IncomingMessage, res: ServerResponse, next: () => void) => void;
   /** Step 9: the view coopilot-open asked for (e.g. "capture"), taken once; null when none. */
   takeOpenRequest?: () => Promise<string | null>;
+  /** Step 15.4 fix: open a fresh window with the current launch link (the host's coopilot-open); false when it can't. */
+  reopen?: () => Promise<boolean>;
 };
+
+/** Step 15.4 fix: an API call refused by the guard says why in a shape the UI tells apart from an action's refusal. */
+export const LAUNCH_TOKEN_CODE = "launch_token";
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -33,7 +38,7 @@ const TYPES: Record<string, string> = {
 const SESSION_PAGE = `<!doctype html><meta charset="utf-8"><title>Coopilot</title>
 <body style="font:16px system-ui;padding:40px;max-width:640px">
 <h1 style="font-size:20px">Coopilot needs a fresh launch link</h1>
-<p>This page is protected by a token that changes every time Coopilot starts. Start it again with <code>npm start</code> (it opens the window for you), or open the link in the launch file it reports.</p>`;
+<p>This page is protected by a token that changes every time Coopilot starts. Open Coopilot again from the launcher, with Super + Alt + C, or with <code>coopilot-open</code>. It replaces this window.</p>`;
 
 function baseHeaders(res: ServerResponse, csp: boolean) {
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -56,6 +61,7 @@ async function readBody(req: IncomingMessage, limit = 64 * 1024): Promise<string
 }
 
 export function createApp(opts: AppOptions) {
+  let lastReopen = 0;
   const handler = async (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? "/", "http://placeholder");
     const header = (n: string) => {
@@ -74,14 +80,26 @@ export function createApp(opts: AppOptions) {
         res.writeHead(401, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
         return res.end(SESSION_PAGE);
       }
+      if (url.pathname.startsWith("/api/")) {
+        res.writeHead(g.status, { "content-type": "application/json", "cache-control": "no-store" });
+        return res.end(JSON.stringify(g.status === 401 ? { ok: false, status: 401, code: LAUNCH_TOKEN_CODE, error: "Coopilot was restarted, so this window is out of date" } : { ok: false, status: 403, code: "forbidden", error: "Forbidden" }));
+      }
       res.writeHead(g.status, { "content-type": "text/plain; charset=utf-8" });
-      return res.end(g.status === 401 ? "Session expired: restart Coopilot" : "Forbidden");
+      return res.end(g.status === 401 ? "Coopilot was restarted: open it again" : "Forbidden");
     }
     if (g.action === "redirect") {
       res.writeHead(302, { location: g.location, "set-cookie": g.setCookie, "cache-control": "no-store" });
       return res.end();
     }
 
+    if (url.pathname === REOPEN_PATH) {
+      // At most once every 5 seconds, so a stuck page can't open windows in a loop.
+      const now = Date.now();
+      const ok = !!opts.reopen && now - lastReopen > 5000 && (lastReopen = now) > 0 && (await opts.reopen().catch(() => false));
+      opts.log({ source: "server", op: "reopen", kind: ok ? "opened" : "unavailable" });
+      res.writeHead(ok ? 202 : 503, { "content-type": "application/json", "cache-control": "no-store" });
+      return res.end(JSON.stringify({ opened: ok }));
+    }
     if (url.pathname === "/api/action") {
       if (req.method !== "POST") {
         res.writeHead(405, { allow: "POST" });

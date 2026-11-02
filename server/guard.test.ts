@@ -49,4 +49,13 @@ describe("request guard", () => {
     expect(check({ method: "POST", path: "/api/action" })).toMatchObject({ action: "deny", status: 403 });
     expect(check({ method: "POST", path: "/api/action", origin: "http://127.0.0.1:5317" })).toEqual({ action: "allow" });
   });
+
+  it("lets a window with an old token ask to reopen, and nothing else (step 15.4 fix)", () => {
+    const old = { cookie: "coopilot_5317=old", origin: "http://127.0.0.1:5317" };
+    expect(check({ ...old, method: "POST", path: "/api/reopen" })).toEqual({ action: "allow" });
+    expect(check({ ...old, method: "GET", path: "/api/reopen" })).toMatchObject({ action: "deny", status: 401 });
+    expect(check({ ...old, method: "POST", path: "/api/action" })).toMatchObject({ action: "deny", status: 401 });
+    expect(check({ ...old, method: "POST", path: "/api/reopen", origin: "http://evil.example" })).toMatchObject({ action: "deny", status: 403 });
+    expect(check({ cookie: "coopilot_5317=old", method: "POST", path: "/api/reopen" })).toMatchObject({ action: "deny", status: 403 });
+  });
 });

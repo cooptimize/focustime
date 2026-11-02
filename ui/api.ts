@@ -2,7 +2,45 @@
 import type { ActionResponse, FieldProblem, WeekLoadData } from "../actions/types.ts";
 import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
 
+/**
+ * The window's launch token is old (Coopilot was restarted): only the server's guard says this, with code
+ * "launch_token". An action's own refusal is never one, whatever its status (step 15.4 fix: missing Azure consent
+ * is a 401 refusal with code "consent").
+ */
 export class SessionError extends Error {}
+export const STALE_MESSAGE = "Coopilot was restarted, so this window is out of date. Reopen Coopilot to continue";
+
+/** Who shows "Reopen Coopilot" when a call finds the window out of date (set by the root). */
+let onStale: (() => void) | null = null;
+export const setStaleListener = (f: typeof onStale) => void (onStale = f);
+
+/** What a response from /api/action means: data, an action's refusal, or an out-of-date window. */
+export async function readResponse<T>(res: Response): Promise<T> {
+  let body: (ActionResponse<T> & { code?: string }) | null = null;
+  try {
+    body = (await res.json()) as ActionResponse<T> & { code?: string };
+  } catch {
+    body = null;
+  }
+  if (body && typeof body === "object" && "ok" in body) {
+    if (body.ok) return body.data;
+    if (body.code !== "launch_token") throw new ActionRefusal(body.error, body.status, body.fields ?? [], body.code);
+  } else if (res.status !== 401) {
+    throw new ActionRefusal(res.status === 403 ? "Coopilot refused that request" : `Coopilot answered ${res.status}`, res.status);
+  }
+  onStale?.();
+  throw new SessionError(STALE_MESSAGE);
+}
+
+/** Asks the host to open a fresh window (coopilot-open replaces this one). False when it can't. */
+export async function reopenCoopilot(): Promise<boolean> {
+  try {
+    const r = await fetch("/api/reopen", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: "{}" });
+    return r.status === 202;
+  } catch {
+    return false;
+  }
+}
 /** A refusal from an action, with its HTTP status (422: the day can't be planned, 409: not allowed now). */
 export class ActionRefusal extends Error {
   constructor(
@@ -43,10 +81,7 @@ async function send<T>(action: string, input: unknown): Promise<T> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ action, input }),
   });
-  if (res.status === 401 || res.status === 403) throw new SessionError("Session expired");
-  const body = (await res.json()) as ActionResponse<T>;
-  if (!body.ok) throw new ActionRefusal(body.error, body.status, body.fields ?? [], body.code);
-  return body.data;
+  return readResponse<T>(res);
 }
 
 export const weekLoad = (input: { weekStart?: string; now?: string; refresh?: boolean; viewRange?: string }) => call<WeekLoadData>("week.load", input);
