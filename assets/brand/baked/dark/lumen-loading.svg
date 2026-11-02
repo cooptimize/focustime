@@ -5,9 +5,9 @@
 <path d="M33.53 115.75 A84.5 84.5 0 0 1 177.75 58.25" fill="none" stroke="#1E3A55" stroke-width="11.7" />
 <path d="M177.75 177.75 A84.5 84.5 0 0 1 33.53 120.25" fill="none" stroke="#4FA3DD" stroke-width="11.7" />
 <path d="M18.03 115.75 A100.0 100.0 0 0 1 188.71 47.29" fill="none" stroke="#1E3A55" stroke-width="11.7" />
-<path d="M188.71 188.71 A100.0 100.0 0 0 1 18.03 120.25" fill="none" stroke="#4FA3DD" stroke-width="11.7" /><g style="animation:sweep 2.5s linear infinite;transform-origin:118px 118px">
-<path d="M118 118 L158 105 A42 42 0 0 0 158 131 Z" fill="#B2D235" opacity="0.35"/></g>
-<style>@keyframes sweep{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){g[style]{animation:none!important}}</style><g transform="rotate(0 118.0 118.0)">
-<rect x="103" y="103" width="30" height="30" rx="6.0" fill="#9CC24F"/>
-<rect x="103" y="111.25" width="4.5" height="13.5" rx="1.5" fill="#B2D235"/>
-</g></svg>
+<path d="M188.71 188.71 A100.0 100.0 0 0 1 18.03 120.25" fill="none" stroke="#4FA3DD" stroke-width="11.7" /><defs><radialGradient id="sweep-fade" gradientUnits="userSpaceOnUse" cx="118" cy="118" r="44">
+<stop offset="0" stop-color="#B2D235" stop-opacity="0.85"/><stop offset="0.55" stop-color="#B2D235" stop-opacity="0.3"/><stop offset="1" stop-color="#B2D235" stop-opacity="0"/></radialGradient></defs>
+<g style="animation:sweep 2.5s linear infinite;transform-origin:118px 118px">
+<path d="M118 118 L156.97 99.83 A43 43 0 0 1 156.97 136.17 Z" fill="url(#sweep-fade)" style="mix-blend-mode:screen"/></g>
+<style>@keyframes sweep{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){g[style]{animation:none!important}}</style><rect x="103" y="103" width="30" height="30" rx="6.0" fill="#9CC24F"/>
+<rect x="103" y="111.25" width="4.5" height="13.5" rx="1.5" fill="#B2D235"/></svg>

@@ -5,7 +5,5 @@
 <path d="M33.53 115.75 A84.5 84.5 0 0 1 177.75 58.25" fill="none" stroke="#14212E" stroke-width="11.7" />
 <path d="M177.75 177.75 A84.5 84.5 0 0 1 33.53 120.25" fill="none" stroke="#14212E" stroke-width="11.7" />
 <path d="M18.03 115.75 A100.0 100.0 0 0 1 188.71 47.29" fill="none" stroke="#14212E" stroke-width="11.7" />
-<path d="M188.71 188.71 A100.0 100.0 0 0 1 18.03 120.25" fill="none" stroke="#14212E" stroke-width="11.7" /><g transform="rotate(12 221.0 118.0)">
-<rect x="206" y="103" width="30" height="30" rx="6.0" fill="#14212E"/>
-<rect x="206" y="111.25" width="4.5" height="13.5" rx="1.5" fill="#14212E"/>
-</g></svg>
+<path d="M188.71 188.71 A100.0 100.0 0 0 1 18.03 120.25" fill="none" stroke="#14212E" stroke-width="11.7" /><rect x="206" y="103" width="30" height="30" rx="6.0" fill="#14212E"/>
+<rect x="206" y="111.25" width="4.5" height="13.5" rx="1.5" fill="#14212E"/></svg>

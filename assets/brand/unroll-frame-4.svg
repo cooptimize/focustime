@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 236" width="260" height="236" role="img"><title>Unroll frame 4</title><desc>flatten=1.0</desc><style>
-:root{--brand-am:#1E3A55;--brand-pm:#4FA3DD;--accent:#9CC24F;--lime:#B2D235;--ghost:#2B3A4D}
+:root{--brand-am:#1E3A55;--brand-pm:#4FA3DD;--accent:#9CC24F;--lime:#B2D235;--ghost:#2B3A4D;--beam-blend:screen}
 </style><path d="M29.44 -843.25 A510.0 510.0 0 0 1 206.56 -843.25" fill="none" stroke="var(--brand-am)" stroke-width="16.0" />
 <path d="M206.56 1079.25 A510.0 510.0 0 0 1 29.44 1079.25" fill="none" stroke="var(--brand-pm)" stroke-width="16.0" />
 <path d="M-1.82 -1182.52 A690.0 690.0 0 0 1 237.82 -1182.52" fill="none" stroke="var(--brand-am)" stroke-width="11.5" />

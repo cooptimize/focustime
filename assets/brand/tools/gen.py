@@ -1,6 +1,6 @@
 """Generate the Coopilot identity SVGs from measured Cooptimize geometry."""
 import math, os
-OUT = "/home/claude/brand/assets"
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")  # assets/brand/
 os.makedirs(OUT, exist_ok=True)
 
 # Measured from Cooptimize Logo_Icon-Color.png (1175 px), normalized to outer ring mid-radius = 100
@@ -11,7 +11,7 @@ OPEN = 45          # opening half-angle, degrees, parent is +-45 around the righ
 CUT = GUTTER       # linear gap at the horizontal centerline
 
 TOKENS = """<style>
-:root{--brand-am:#1E3A55;--brand-pm:#4FA3DD;--accent:#9CC24F;--lime:#B2D235;--ghost:#2B3A4D}
+:root{--brand-am:#1E3A55;--brand-pm:#4FA3DD;--accent:#9CC24F;--lime:#B2D235;--ghost:#2B3A4D;--beam-blend:screen}
 </style>"""
 
 def pt(cx, cy, r, deg):
@@ -40,18 +40,28 @@ def ring_segments(cx, cy, am, pm, ghost, inner_am_ghost=True, w_scale=1.0):
         out.append(arc(cx, cy, r, OPEN, 180 - gap_deg, pm, w*w_scale))
     return "\n".join(out)
 
-def lumen(x, y, size, body, bar, tilt=0, light=True, light_dir=-1):
-    """A rounded block with a light bar on the edge facing light_dir (-1 left, +1 right)."""
+def beam_grad(gid, x0, x1):
+    """Lime fading to transparent along the beam (step 17.5): 0.85 at the bar, 0.25 just past half, 0 at the far end."""
+    return (f'<defs><linearGradient id="{gid}" gradientUnits="userSpaceOnUse" x1="{x0:.2f}" y1="0" x2="{x1:.2f}" y2="0">'
+            f'<stop offset="0" stop-color="var(--lime)" stop-opacity="0.85"/><stop offset="0.55" stop-color="var(--lime)" stop-opacity="0.25"/>'
+            f'<stop offset="1" stop-color="var(--lime)" stop-opacity="0"/></linearGradient></defs>')
+
+def lumen(x, y, size, body, bar, light=True, light_dir=-1, gid="beam"):
+    """Lumen: an upright rounded block with a light bar on the edge facing light_dir (-1 left, +1 right).
+    The beam is level and symmetric about the bar: as tall as the bar where it leaves it, about 1.8x Lumen's
+    height at the far end, about 2.3x Lumen's width long, lime fading out, blended with screen (dark) or multiply (light)."""
     r = size*0.2; bw = size*0.15; bh = size*0.45
     bx = x if light_dir < 0 else x + size - bw
-    g = [f'<g transform="rotate({tilt} {x+size/2} {y+size/2})">']
+    cy = y + size/2
+    g = []
     if light:
         tip = x if light_dir < 0 else x + size
-        far = tip + light_dir*size*1.9
-        g.append(f'<path d="M{tip} {y+size/2} L{far} {y+size/2-size*0.55} L{far} {y+size/2+size*0.55} Z" fill="{bar}" opacity="0.22"/>')
+        far = tip + light_dir*size*2.3
+        g.append(beam_grad(gid, tip, far))
+        g.append(f'<path d="M{tip:.2f} {cy-bh/2:.2f} L{far:.2f} {cy-size*0.9:.2f} L{far:.2f} {cy+size*0.9:.2f} L{tip:.2f} {cy+bh/2:.2f} Z" '
+                 f'fill="url(#{gid})" style="mix-blend-mode:var(--beam-blend)"/>')
     g.append(f'<rect x="{x}" y="{y}" width="{size}" height="{size}" rx="{r}" fill="{body}"/>')
     g.append(f'<rect x="{bx}" y="{y+(size-bh)/2}" width="{bw}" height="{bh}" rx="{bw/3}" fill="{bar}"/>')
-    g.append("</g>")
     return "\n".join(g)
 
 def svg(w, h, body, title, desc, tokens=True):
@@ -64,12 +74,12 @@ def write(name, content):
 # ---------- mark-bent ----------
 CX, CY = 118, 118
 bent_color = ring_segments(CX, CY, "var(--brand-am)", "var(--brand-pm)", "var(--ghost)")
-bent_color += lumen(206, 103, 30, "var(--accent)", "var(--lime)", tilt=12, light=True, light_dir=-1)
+bent_color += lumen(206, 103, 30, "var(--accent)", "var(--lime)", light=True, light_dir=-1, gid="beam-bent")
 write("mark-bent.svg", svg(260, 236, bent_color, "Coopilot mark, bent week",
       "Eight ring segments opening right, AM above PM, inner AM segment ghosted; Lumen stands outside the opening, light pointing in."))
 
 bent_mono = ring_segments(CX, CY, "currentColor", "currentColor", "currentColor")
-bent_mono += lumen(206, 103, 30, "currentColor", "currentColor", tilt=12, light=False)
+bent_mono += lumen(206, 103, 30, "currentColor", "currentColor", light=False)
 write("mark-bent-mono.svg", svg(260, 236, bent_mono, "Coopilot mark, bent week, mono", "Single color form.", tokens=False))
 
 # ---------- mark-week ----------
@@ -103,15 +113,20 @@ for c in range(4):
 write("coopilot-symbolic.svg", svg(16, 16, "\n".join(sym), "Coopilot symbolic icon", "16 px grid, one hollow block.", tokens=False))
 
 # ---------- lumen ----------
-write("lumen.svg", svg(120, 100, lumen(20, 20, 60, "var(--accent)", "var(--lime)", tilt=-6, light=True, light_dir=-1),
+write("lumen.svg", svg(240, 120, lumen(160, 30, 60, "var(--accent)", "var(--lime)", light=True, light_dir=-1, gid="beam-lumen"),
       "Lumen", "A rounded block with a light bar, light cast to the left."))
 
 # lumen-loading: Lumen at ring centre, light sweeping around
-sweep = f'''<g style="animation:sweep 2.5s linear infinite;transform-origin:{CX}px {CY}px">
-<path d="M{CX} {CY} L{CX+40} {CY-13} A42 42 0 0 0 {CX+40} {CY+13} Z" fill="var(--lime)" opacity="0.35"/></g>
+# The sweep: a radial fade about 50 degrees wide (25 each side of the beam), lime at Lumen fading out at the inner ring.
+SW = 25; SR = 43
+sx, sy0 = pt(CX, CY, SR, -SW); _, sy1 = pt(CX, CY, SR, SW)
+sweep = f'''<defs><radialGradient id="sweep-fade" gradientUnits="userSpaceOnUse" cx="{CX}" cy="{CY}" r="{SR+1}">
+<stop offset="0" stop-color="var(--lime)" stop-opacity="0.85"/><stop offset="0.55" stop-color="var(--lime)" stop-opacity="0.3"/><stop offset="1" stop-color="var(--lime)" stop-opacity="0"/></radialGradient></defs>
+<g style="animation:sweep 2.5s linear infinite;transform-origin:{CX}px {CY}px">
+<path d="M{CX} {CY} L{sx:.2f} {sy0:.2f} A{SR} {SR} 0 0 1 {sx:.2f} {sy1:.2f} Z" fill="url(#sweep-fade)" style="mix-blend-mode:var(--beam-blend)"/></g>
 <style>@keyframes sweep{{to{{transform:rotate(360deg)}}}}@media(prefers-reduced-motion:reduce){{g[style]{{animation:none!important}}}}</style>'''
 loading = ring_segments(CX, CY, "var(--brand-am)", "var(--brand-pm)", "var(--brand-am)", inner_am_ghost=False)
-loading += sweep + lumen(CX-15, CY-15, 30, "var(--accent)", "var(--lime)", tilt=0, light=False)
+loading += sweep + lumen(CX-15, CY-15, 30, "var(--accent)", "var(--lime)", light=False)
 write("lumen-loading.svg", svg(236, 236, loading, "Lumen loading", "Lumen at the ring centre with a sweeping light; stops under reduced motion."))
 
 # ---------- unroll: keyframed as the radius growing, drawn as 5 explicit frames for preview ----------
@@ -138,7 +153,7 @@ for k, f in enumerate([0, 0.25, 0.5, 0.75, 1.0]):
 word = '<text x="0" y="44" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="600" font-size="48" letter-spacing="-1.2" fill="currentColor">Coopilot</text>'
 write("wordmark.svg", svg(230, 60, word, "Coopilot wordmark", "Set in IBM Plex Sans 600; outline with the real font before shipping.", tokens=False))
 
-lock = f'<g transform="translate(0,6) scale(0.34)">{ring_segments(CX, CY, "var(--brand-am)", "var(--brand-pm)", "var(--ghost)", w_scale=1.2)}{lumen(206, 103, 30, "var(--accent)", "var(--lime)", tilt=12, light=True)}</g>'
+lock = f'<g transform="translate(0,6) scale(0.34)">{ring_segments(CX, CY, "var(--brand-am)", "var(--brand-pm)", "var(--ghost)", w_scale=1.2)}{lumen(206, 103, 30, "var(--accent)", "var(--lime)", light=True, gid="beam-lockup")}</g>'
 lock += '<text x="100" y="52" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="600" font-size="40" letter-spacing="-1" fill="currentColor">Coopilot</text>'
 lock += '<text x="101" y="74" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="400" font-size="14" fill="currentColor" opacity="0.6">by Cooptimize</text>'
 write("lockup-horizontal.svg", svg(300, 92, lock, "Coopilot lockup", "Bent mark, Lumen, wordmark and by-line."))
