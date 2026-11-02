@@ -32,8 +32,7 @@ sequenceDiagram
   A-->>W: preview id, fields before/after,<br/>account, calendar, who sees it
   U->>W: Confirm
   W->>A: write.confirm {previewId}
-  A->>A: preview still valid?<br/>local state unchanged?
-  A->>L: entry: pending
+  A->>A: preview valid, state unchanged?<br/>log entry: pending
   A->>G: POST /me/events (marker,<br/>transaction id)
   G-->>A: event id
   A->>G: read back event
