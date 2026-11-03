@@ -32,7 +32,8 @@ const span = (s: Span) => `${s.start}-${s.end}`;
 /** The day screen's values: Outlook's working hours when it has them, else the saved hours; lunch is always the saved one. */
 export function prefillFrom(cfg: AppConfig, wh: WorkingHours | null): SetupPrefill {
   const h = cfg.week.hours;
-  const lunch = h.lunch ? span(h.lunch) : "";
+  // A split with no break (start equals end) reads as the one time, "12:00"; the screen saves it back the same way.
+  const lunch = h.lunch ? (h.lunch.start === h.lunch.end ? h.lunch.start : span(h.lunch)) : "";
   if (wh && wh.start < wh.end)
     return { from: "outlook", timeZone: wh.zone, lunch, note: null, weekdays: Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, wh.days.includes(FULL_DAY[k]!) ? [`${wh.start}-${wh.end}`] : []])) };
   return {

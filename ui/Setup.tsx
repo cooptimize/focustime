@@ -105,6 +105,12 @@ export function SetupFlow(p: Props) {
 }
 
 /** One screen: its title and words, the content, and Back, Skip and the primary button. Enter submits. */
+/** Lunch as typed: "12:00-12:30", or one time ("12:00") for a split with no break. */
+const lunchValue = (v: string) => {
+  const t = v.replace(/\s+/g, "");
+  return /^\d{1,2}:\d{2}$/.test(t) ? `${t}-${t}` : t;
+};
+
 function Screen(o: { title: string; intro: ReactNode; children?: ReactNode; onSubmit: () => void | Promise<void>; primary: string; onSkip?: () => void; onBack?: (() => void) | undefined; busy?: boolean; status?: string | null; ready?: boolean }) {
   const form = useRef<HTMLFormElement>(null);
   const ready = o.ready ?? true;
@@ -189,7 +195,7 @@ function DayStep({ onSaved, onSkip }: { onSaved: () => Promise<void>; onSkip: ()
     try {
       // The main span on each working day; any evening span already saved stays.
       const weekdays = Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, days[k] ? [`${start}-${end}`, ...(pre?.weekdays[k] ?? []).slice(1)] : []]));
-      await call("settings.save", { section: "hours", values: { timeZone: zone, lunch: lunch.replace(/\s+/g, ""), weekdays } });
+      await call("settings.save", { section: "hours", values: { timeZone: zone, lunch: lunchValue(lunch), weekdays } });
       await onSaved();
     } catch (e) {
       setStatus(`Not saved: ${errText(e)}`);

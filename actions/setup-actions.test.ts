@@ -86,7 +86,10 @@ describe("Your day's values", () => {
     const p = await s.run<SetupPrefill>("setup.prefill");
     expect(p).toMatchObject({ from: "outlook", timeZone: "America/Chicago", note: null });
     expect(p.weekdays).toMatchObject({ mon: ["08:00-16:30"], thu: ["08:00-16:30"], fri: [], sat: [] });
-    expect(p.lunch).toBe(cfg.week.hours.lunch ? `${cfg.week.hours.lunch.start}-${cfg.week.hours.lunch.end}` : "");
+    const l = cfg.week.hours.lunch;
+    // A split with no break reads as one time ("12:00"), not "12:00-12:00".
+    expect(p.lunch).toBe(l ? (l.start === l.end ? l.start : `${l.start}-${l.end}`) : "");
+    expect(p.lunch).not.toMatch(/^(\d\d:\d\d)-\1$/);
   });
 
   it("when Graph fails: the saved settings, with a plain note", async () => {
