@@ -668,7 +668,7 @@ function CollabForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
           </span>
           <Problems all={problems} field="collab.exclude" />
         </Field>
-        <ReadOnly label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where="Set in config.toml ([collab] domains)" />
+        <ReadOnly label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where={c.domainsByAdmin ? "Set by your FocusTime admin" : "Your work email's domain"} />
       </div>
       <SaveRow status={status} />
     </form>

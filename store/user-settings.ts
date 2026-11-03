@@ -15,6 +15,8 @@ export type AppKeys = {
   dataverse: { environmentUrl: string; tenantId: string; clientId: string } | null;
   entra: { tenantId: string; clientId: string } | null;
   google: { clientId: string } | null;
+  /** A5: invite domains set by the FocusTime admin for everyone; they replace a person's own. Absent or empty: theirs. */
+  inviteDomains?: string[];
 };
 
 /** Who the settings are for, as the users table has them. */
@@ -70,7 +72,12 @@ export function createUserSettings(o: {
     return t;
   }
 
-  const parse = (t: string): ParseResult => parseConfig(t, { defaultZone: o.defaultZone });
+  const admin = (o.app.inviteDomains ?? []).map((d) => d.toLowerCase());
+  const parse = (t: string): ParseResult => {
+    const r = parseConfig(t, { defaultZone: o.defaultZone });
+    if (!r.ok || !admin.length) return r;
+    return { ...r, config: { ...r.config, collab: { ...r.config.collab, domains: [...admin], domainsByAdmin: true } } };
+  };
 
   return {
     /** Whether the person has settings yet (a first sign-in has none until seeded). */

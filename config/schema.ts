@@ -54,7 +54,7 @@ export type AzureSettings = { ownerTag: string; ownerValue: string; startWithout
 export const DEFAULT_AZURE: AzureSettings = { ownerTag: "Owner", ownerValue: "", startWithoutAsking: true };
 /** `domains` empty means my work email's domain. */
 /** Step 13.5: `exclude` lists people (names or addresses) who are never candidates or Who suggestions, like bots. */
-export type CollabSettings = { meetingMinutes: number; teams: boolean; daysAhead: number; domains: string[]; exclude: string[] };
+export type CollabSettings = { meetingMinutes: number; teams: boolean; daysAhead: number; domains: string[]; exclude: string[]; /** A5: the domains come from the app (FOCUSTIME_INVITE_DOMAINS), not the person. */ domainsByAdmin?: boolean };
 export const DEFAULT_EXCLUDE: readonly string[] = ["Kat 🤖"];
 export const DEFAULT_COLLAB: CollabSettings = { meetingMinutes: 30, teams: true, daysAhead: 3, domains: [], exclude: [...DEFAULT_EXCLUDE] };
 export const COLLAB_LENGTHS = [15, 30, 45, 60, 90] as const;

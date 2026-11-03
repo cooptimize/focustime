@@ -259,7 +259,7 @@ const planFor = (who: Person): PlanStore => {
   if (!p) plans.set(who.userId, (p = planStoreOn(db, { userId: who.userId, now: () => zonedNow(who.zone), ...(opened.backup ? { path: planPath, backup: opened.backup } : {}) })));
   return p;
 };
-const appKeys: AppKeys = { dataverse: app.dataverse, entra: app.entra, google: app.google };
+const appKeys: AppKeys = { dataverse: app.dataverse, entra: app.entra, google: app.google, inviteDomains: app.inviteDomains };
 const settingsFor = (userId: string): UserSettings =>
   createUserSettings({
     db,

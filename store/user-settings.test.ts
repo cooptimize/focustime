@@ -116,4 +116,17 @@ await forEachDriver("a person's settings in the store (A2)", ({ open }) => {
     expect(l.parsed.ok && l.parsed.config.outlook).toBeNull();
     expect(l.parsed.ok && l.parsed.config.google).toBeNull();
   });
+
+  it("A5: invite domains set by the admin replace a person's own, and say so", async () => {
+    const t = await setup(open, { ...APP, inviteDomains: ["Cooptimize.example"] });
+    const s = t.make("ana");
+    await s.seed(setValue(STARTER_TOML, "collab", "domains", ["fabrikam.example"]));
+    const l = await s.load();
+    expect(l.parsed.ok && l.parsed.config.collab).toMatchObject({ domains: ["cooptimize.example"], domainsByAdmin: true });
+    const plain = await setup(open);
+    const b = plain.make("ben");
+    await b.seed(STARTER_TOML);
+    const lb = await b.load();
+    expect(lb.parsed.ok && lb.parsed.config.collab.domainsByAdmin).toBeFalsy();
+  });
 });

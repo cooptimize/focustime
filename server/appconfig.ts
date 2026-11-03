@@ -17,6 +17,8 @@ export type AppSettings = {
   demo: boolean;
   /** A3: where the plan store is. Never per person. */
   database: DatabaseSettings;
+  /** A5: the only domains help invites may go to, for everyone (empty: each person's own setting or work email). */
+  inviteDomains: string[];
 };
 
 /**
@@ -49,7 +51,10 @@ export const APP_ENV = {
   dbAuth: "FOCUSTIME_DB_AUTH",
   dbUser: "FOCUSTIME_DB_USER",
   dbIdentity: "FOCUSTIME_DB_MANAGED_IDENTITY_CLIENT_ID",
+  inviteDomains: "FOCUSTIME_INVITE_DOMAINS",
 } as const;
+
+const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 
 type Table = Record<string, unknown>;
 const isTable = (v: unknown): v is Table => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -98,6 +103,11 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
 
   const database = readDatabase(sec("database"), val, errors);
 
+  const c = sec("collab");
+  const domainText = val(APP_ENV.inviteDomains, Array.isArray(c.invite_domains) ? c.invite_domains.join(",") : c.invite_domains);
+  const inviteDomains = domainText ? domainText.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean) : [];
+  if (inviteDomains.length > 5 || inviteDomains.some((x) => !DOMAIN.test(x))) errors.push('invite domains must be up to 5 domains, like "cooptimize.example", separated by commas');
+
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
@@ -108,6 +118,7 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
       google: googleClient ? { clientId: googleClient } : null,
       demo,
       database,
+      inviteDomains,
     },
   };
 }
