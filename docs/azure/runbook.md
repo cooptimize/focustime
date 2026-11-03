@@ -43,7 +43,10 @@ FT_IMAGE_TAG=<sha> az deployment group create  -g FocusTime-dev -n ft-dev --para
 A brand new environment: `infra/scripts/bootstrap.sh --env dev --member <upn> ...`, then a first deploy with
 `FT_APP_READY=false` (a placeholder image, so the app's identity exists and gets its roles), then
 `infra/scripts/app-registration.sh --dev-url https://<fqdn> --vault <vault>` and
-`infra/scripts/copy-secrets.sh --vault <vault>`, then the workflow.
+`infra/scripts/copy-secrets.sh --vault <vault>`, then the repository variable for the app's identity
+(`gh variable set AZURE_DEV_APP_IDENTITY_CLIENT_ID --body $(az ad sp show --id $(az containerapp show -g FocusTime-dev -n ft-dev-app --query identity.principalId -o tsv) --query appId -o tsv)`;
+`scripts/db-user.ts` makes the database user from it), then the workflow. If the app is ever deleted and recreated, its
+identity changes: set the variable again.
 
 ## Roll back a revision
 

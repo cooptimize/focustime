@@ -63,7 +63,7 @@ jobs:
           FOCUSTIME_DB_AUTH: entra
         run: node scripts/focustime.ts migrate
       - name: The app's database user
-        run: node scripts/db-user.ts --server "$SQL_FQDN" --database focustime --principal ft-dev-app
+        run: node scripts/db-user.ts --server "$SQL_FQDN" --database focustime --principal ft-dev-app --client-id "${{ vars.AZURE_DEV_APP_IDENTITY_CLIENT_ID }}"
       - name: Deploy the Bicep (what-if, then create)
         env:
           FT_IMAGE_TAG: ${{ github.sha }}
