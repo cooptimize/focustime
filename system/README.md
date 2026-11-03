@@ -27,7 +27,7 @@ FOCUSTIME_FOCUS=<program that focuses a matching window or runs a command: <prog
 
 On Omarchy (Hyprland) these are `omarchy-launch-webapp` and `omarchy-launch-or-focus`, and a key binding in
 `~/.config/hypr/bindings.lua` can run `focustime-open`. Where `hyprctl` is available, a window left from an earlier
-server run is closed first so a fresh one opens with the current launch token.
+server run is closed first so a fresh one opens on the current server.
 
 None of this is needed for the hosted app, and no product code depends on it: the import-boundary test
 (`host/boundary.test.ts`) keeps the core modules away from the machine.

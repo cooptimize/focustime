@@ -6,9 +6,9 @@
 #   focustime-open --capture same, then the window opens Quick capture (step 9)
 #   focustime-open --window  (used by the step above) launch the app window
 #
-# The launch link holds the per-launch token. It is read from the server's private file
-# ($XDG_RUNTIME_DIR/focustime/launch.json, mode 0600) and handed straight to the browser.
-# It is never printed, logged or passed through eval.
+# The launch link is the server's public URL (A2: http://localhost:<port>/; sign-in is a session, not a token in the
+# link). It is read from the server's private file ($XDG_RUNTIME_DIR/focustime/launch.json, mode 0600) and handed
+# straight to the browser. It is never passed through eval.
 #
 # Developer loop only (see system/README.md). The window is launched and focused through two optional helpers named
 # in ${XDG_CONFIG_HOME:-~/.config}/focustime/launcher.env, one KEY=program line each (read as data, never sourced):
@@ -23,8 +23,9 @@ set -euo pipefail
 LAUNCH_FILE="${XDG_RUNTIME_DIR:-/tmp}/focustime/launch.json"
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/focustime/browser"
 # Chromium names an --app window after its host and profile, and ignores --class for it. The
-# dedicated data directory always uses profile "Default", so the class is stable: chrome-127.0.0.1__-Default.
-WINDOW_PATTERN='^(focustime|chrome-127\.0\.0\.1__-default)$'
+# dedicated data directory always uses profile "Default", so the class is stable: chrome-localhost__-Default
+# (A2: the public URL is on localhost), or chrome-127.0.0.1__-Default for a window from before A2.
+WINDOW_PATTERN='^(focustime|chrome-localhost__-default|chrome-127\.0\.0\.1__-default)$'
 WAIT_SECONDS=60
 # Which server the open window was launched for. After a service restart the window's token is stale,
 # so that window is replaced instead of focused.
@@ -50,16 +51,16 @@ fail() {
   exit 1
 }
 
-# Prints the launch link only into a variable of the caller. Succeeds when the server named in
-# the launch file is alive and answers on 127.0.0.1.
+# Prints the launch link only into a variable of the caller. Succeeds when the server named in the launch file is
+# alive and answers on its loopback port. A2: the link is on localhost (127.0.0.1 page loads redirect there).
 read_link() {
   local url pid port code
   [[ -r $LAUNCH_FILE ]] || return 1
   url=$(jq -r '.url // empty' "$LAUNCH_FILE" 2>/dev/null) || return 1
   pid=$(jq -r '.pid // empty' "$LAUNCH_FILE" 2>/dev/null) || return 1
   [[ $pid =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null || return 1
-  [[ $url =~ ^http://127\.0\.0\.1:([0-9]+)/ ]] || return 1
-  port=${BASH_REMATCH[1]}
+  [[ $url =~ ^http://(localhost|127\.0\.0\.1):([0-9]+)/$ ]] || return 1
+  port=${BASH_REMATCH[2]}
   code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:$port/" 2>/dev/null) || return 1
   ((code > 0 && code < 500)) || return 1
   LINK=$url
