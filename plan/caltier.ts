@@ -12,6 +12,8 @@ export type EditFacts = {
   allDay: boolean;
   /** FocusTime's marker value, when the event carries one. */
   marker: string | null;
+  /** D468: marked, but this person's store has no record of it (an earlier FocusTime made it): an ordinary event. */
+  earlier?: boolean;
   webLink: string | null;
   /** Step 16 (D283): my response (Graph's value), the organizer's name for a meeting I'm invited to, and whether new times may be proposed. */
   response?: string | null;
@@ -19,7 +21,7 @@ export type EditFacts = {
   proposals?: boolean;
 };
 
-export type Tier = "focustime" | "invite" | "mine" | "meeting" | "readonly" | "unknown";
+export type Tier = "focustime" | "invite" | "earlier" | "mine" | "meeting" | "readonly" | "unknown";
 export type EditAction = "move" | "resize" | "retitle" | "show_as" | "delete" | "cancel" | "open" | "rsvp";
 export type ActionState = { id: EditAction; allowed: boolean; reason?: string };
 export type EventEdit = { tier: Tier; actions: ActionState[]; webLink: string | null; why: string };
@@ -43,12 +45,14 @@ const REASON = {
   focustimeOnly: "Only events FocusTime created",
   rsvpOnly: "Only meetings someone else invited you to can be answered",
   rsvpOrganizer: "You organize this meeting, so there is nothing to answer",
+  earlier: "Made by an earlier FocusTime: it leaves this event alone, so change it in Outlook",
 };
 
 /** The tier of an Outlook event from its scan facts (null: not scanned, or no write access). */
 export function tierOf(e: Pick<CalEvent, "source">, f: EditFacts | null): Tier {
   if (e.source !== "outlook") return "readonly";
   if (!f) return "unknown";
+  if (f.marker && f.earlier && (TIMEBOX_MARKER.test(f.marker) || INVITE_MARKER.test(f.marker))) return "earlier";
   if (f.marker && TIMEBOX_MARKER.test(f.marker)) return "focustime";
   if (f.marker && INVITE_MARKER.test(f.marker)) return "invite";
   if (f.isOrganizer && f.others === 0) return "mine";
@@ -72,6 +76,8 @@ export function eventEdit(e: Pick<CalEvent, "source" | "allDay">, f: EditFacts |
   switch (tier) {
     case "focustime":
       return { tier, why: "Created by FocusTime: edit it here, the event and its timebox are one thing", webLink, actions: ALL.map((a) => (a === "cancel" ? st(a, false, REASON.cancelOnly) : a === "rsvp" ? st(a, false, REASON.rsvpOnly) : a === "open" ? open : st(a, true))) };
+    case "earlier":
+      return { tier, why: REASON.earlier, webLink, actions: ALL.map((a) => (a === "open" ? open : st(a, false, REASON.earlier))) };
     case "invite":
       return { tier, why: REASON.invite, webLink, actions: ALL.map((a) => (a === "cancel" || a === "open" ? st(a, true) : st(a, false, REASON.invite))) };
     case "mine": {

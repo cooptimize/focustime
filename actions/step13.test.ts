@@ -11,6 +11,7 @@ import { createPlanStore } from "../store/plan-store.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 import { clearPreviews } from "./timebox-actions.ts";
 import { clearSyncMemo, syncWeek } from "./outlook-sync.ts";
+import { eventEdit } from "../plan/caltier.ts";
 import type { CandidatesData, SuggestData, WriteLogView, WritePreview, WriteResult } from "./types.ts";
 
 const NOW = "2026-11-06T15:00:00Z"; // Fri Nov 6, 9:00 Chicago
@@ -237,18 +238,34 @@ describe("two-way sync for FocusTime events", () => {
   });
 });
 
-describe("Q69: a FocusTime-marked event without a local record", () => {
-  it("is rebuilt from its marker (record and timebox), hidden as a meeting, and logged from Outlook", async () => {
+describe("D468: a FocusTime-marked event this person has no record of (made by an earlier FocusTime)", () => {
+  it("is an ordinary event: nothing recorded or rebuilt, Open in Outlook only, and sync never changes or deletes it", async () => {
     const t = setup();
     const uid = "tb-0b6c1d2e-3f40-4152-8a6b-7c8d9e0f1a2b";
     const id = t.g.seed({ subject: "T&W: #4512 Import mapping", start: "2026-11-10T15:00:00Z", end: "2026-11-10T16:00:00Z", marker: uid, isReminderOn: false });
+    const writes = () => t.g.calls.filter((c) => c.method !== "GET").length;
+    const before = writes();
     const r = await t.sync();
-    expect(r.rebuilt).toBe(1);
-    expect((await t.plan.ownEvent(uid))).toMatchObject({ eventId: id, deletedAt: null });
-    expect((await t.plan.timeboxByUid(uid))).toMatchObject({ clientKey: "T&W", title: "#4512 Import mapping", date: D, start: `${D}T09:00:00-06:00`, outlook: true, outlookNote: "Rebuilt from Outlook" });
-    expect(r.facts[`outlook:${id}`]).toMatchObject({ marker: uid });
-    // A second scan finds it in step.
-    expect((await t.sync()).rebuilt).toBe(0);
+    expect(r.earlier).toBe(1);
+    expect(await t.plan.ownEvent(uid)).toBeNull();
+    expect(await t.plan.timeboxByUid(uid)).toBeNull();
+    const facts = r.facts[`outlook:${id}`]!;
+    expect(facts).toMatchObject({ marker: uid, earlier: true });
+    const edit = eventEdit({ source: "outlook", allDay: false }, facts, true);
+    expect(edit.tier).toBe("earlier");
+    expect(edit.actions.filter((a) => a.allowed).map((a) => a.id)).toEqual(["open"]);
+    // Twice more, as a refresh would: still nothing written to Outlook, nothing recorded, the event as it was.
+    await t.sync();
+    expect(writes()).toBe(before);
+    expect(t.g.events.get(id)).toMatchObject({ subject: "T&W: #4512 Import mapping", start: "2026-11-10T15:00:00Z", end: "2026-11-10T16:00:00Z" });
+    expect(await t.plan.ownEvents()).toEqual([]);
+  });
+  it("an earlier help invite can't be cancelled from here", async () => {
+    const t = setup();
+    const uid = "inv-0b6c1d2e-3f40-4152-8a6b-7c8d9e0f1a2c";
+    const id = t.g.seed({ subject: "T&W: help on #4512", start: "2026-11-10T15:00:00Z", end: "2026-11-10T16:00:00Z", marker: uid, isReminderOn: false });
+    const facts = (await t.sync()).facts[`outlook:${id}`]!;
+    expect(eventEdit({ source: "outlook", allDay: false }, facts, true).tier).toBe("earlier");
   });
 });
 

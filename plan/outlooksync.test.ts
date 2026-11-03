@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rebuildFrom, syncDecision, timeboxFrom, type SeenEvent } from "./outlooksync.ts";
+import { syncDecision, timeboxFrom, type SeenEvent } from "./outlooksync.ts";
 import { outlookFields, type Fields } from "./timebox.ts";
 
 const TZ = "America/Chicago";
@@ -41,14 +41,3 @@ describe("two-way sync for FocusTime events", () => {
   });
 });
 
-describe("Q69: rebuild a FocusTime event's record from its marker", () => {
-  const clients = [{ key: "T&W", name: "Tailspin & Wingtip" }, { key: "Adatum", name: "Adatum" }];
-  it("finds the client from the subject and keeps the marker as the uid", () => {
-    expect(rebuildFrom(seen({ subject: "Tailspin & Wingtip: #4512 Import mapping" }), clients, TZ, "Cooptimize")).toMatchObject({ uid: UID, clientKey: "T&W", title: "#4512 Import mapping", date: "2026-11-03", start: "2026-11-03T09:00:00-06:00", outlook: true, showAs: "busy" });
-    expect(rebuildFrom(seen({ subject: "T&W: #4512 Import mapping" }), clients, TZ, "Cooptimize")).toMatchObject({ clientKey: "T&W", title: "#4512 Import mapping" });
-  });
-  it("falls back to the subject's prefix, else Internal", () => {
-    expect(rebuildFrom(seen({ subject: "Acme: kickoff" }), clients, TZ, "Cooptimize")).toMatchObject({ clientKey: "Acme", title: "kickoff" });
-    expect(rebuildFrom(seen({ subject: "Deep work" }), clients, TZ, "Cooptimize")).toMatchObject({ clientKey: "Cooptimize", title: "Deep work" });
-  });
-});

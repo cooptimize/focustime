@@ -1,7 +1,7 @@
-// Two-way sync for FocusTime's own Outlook events (step 13, Q70) and rebuilding a lost record from the marker (Q69).
+// Two-way sync for FocusTime's own Outlook events (step 13, Q70). A marked event with no record is left alone (D468, replacing Q69).
 // Pure: what FocusTime last wrote, what Outlook shows now, and what the timebox wants now, in; one decision out.
 // "Since the last sync" means against `last`: the fields last confirmed on Outlook or last taken from it.
-import type { Fields, OutlookShowAs, Timebox } from "./timebox.ts";
+import type { Fields, OutlookShowAs } from "./timebox.ts";
 import { timeboxProblem } from "./timebox.ts";
 
 /** A marked event as Outlook shows it now (UTC instants). */
@@ -68,18 +68,3 @@ export function timeboxFrom(fields: Fields, clientName: string, tz: string): { d
   return { date, start, end, title: titleFromSubject(fields.subject, clientName).slice(0, 200), showAs: showAsOf(fields.showAs) };
 }
 
-/**
- * Q69: a FocusTime-marked event with no local record. The client is the subject's "<client>: " prefix when it names a
- * known client; else the prefix itself; else Internal. Null when its times can't be a timebox (it then stays hidden
- * as FocusTime's and is listed for removal).
- */
-export function rebuildFrom(seen: SeenEvent, clients: readonly { key: string; name: string }[], tz: string, internal: string): Omit<Timebox, "id" | "createdAt" | "updatedAt" | "removedAt" | "pickId" | "itemId" | "url" | "outlookNote" | "conflict"> | null {
-  const known = clients.find((c) => seen.subject.startsWith(`${c.name}: `)) ?? clients.find((c) => seen.subject.startsWith(`${c.key}: `));
-  const prefix = /^([^:]{1,40}): ./.exec(seen.subject)?.[1];
-  const clientKey = known?.key ?? prefix ?? internal;
-  const name = known ? (seen.subject.startsWith(`${known.name}: `) ? known.name : known.key) : prefix ?? "";
-  const f: Fields = { subject: seen.subject, body: "", start: Temporal.Instant.from(seen.start).toString(), end: Temporal.Instant.from(seen.end).toString(), showAs: showAsOf(seen.showAs), reminder: false };
-  const t = timeboxFrom(f, name, tz);
-  if (!t) return null;
-  return { uid: seen.marker, date: t.date, clientKey, title: name ? t.title : seen.subject.slice(0, 200), start: t.start, end: t.end, outlook: true, showAs: t.showAs };
-}
