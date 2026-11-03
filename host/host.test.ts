@@ -1,6 +1,7 @@
 // A1: the Host contract, run over the fake host, the hosted (azure) host with fake parts, and the local host's parts
 // that don't need the desktop (its secrets are covered by keyring.test.ts with a fake secret-tool).
 import { mkdtempSync, statSync, existsSync } from "node:fs";
+import { perPerson } from "./per-person.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -21,7 +22,7 @@ function inbox(): NoticeInbox & { items: Map<string, Notice> } {
 }
 const azure = () => {
   const box = inbox();
-  return { host: createAzureHost({ secrets: memorySecrets(), config: memoryConfig(), snapshots: memorySnapshots(), photos: memoryPhotos(), inbox: box }), box };
+  return { host: createAzureHost({ secrets: memorySecrets(), config: memoryConfig(), snapshotsFor: perPerson(() => memorySnapshots()), photos: memoryPhotos(), inbox: box }), box };
 };
 
 function snapshotContract(name: string, make: () => SnapshotStore) {
@@ -61,7 +62,15 @@ function hostContract(name: string, make: () => Host) {
       await h.secrets.writePat.clear("adatum-1");
       await expect(h.secrets.writePat.get("adatum-1")).rejects.toBeInstanceOf(SecretError);
     });
-    snapshotContract(name, () => make().snapshots);
+    snapshotContract(name, () => make().snapshotsFor("ana"));
+    it("keeps each person's snapshots apart (A2)", async () => {
+      const h = make();
+      await h.snapshotsFor("ana").write("outlook", "2026-11-02", { fetchedAt: "2026-11-02T14:00:00Z", items: [1] });
+      expect(await h.snapshotsFor("ben").read("outlook", "2026-11-02")).toBeNull();
+      expect(h.snapshotsFor("ana")).toBe(h.snapshotsFor("ana"));
+      await h.snapshotsFor("ben").clear("outlook");
+      expect((await h.snapshotsFor("ana").read("outlook", "2026-11-02"))?.items).toEqual([1]);
+    });
     it("caches photos and clears them", async () => {
       const h = make();
       await h.photos.write("oid-1", { fetchedAt: "2026-11-02T14:00:00Z", photo: null });

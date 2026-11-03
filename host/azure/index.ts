@@ -1,7 +1,7 @@
 // The hosted app's host (A1 stub). Desktop-only operations throw HostUnavailable with a plain message; the rest is
 // handed in (secrets, snapshots, photos, the in-app notice inbox), so A2 can back them with Key Vault and the database
 // and A6 with in-app notifications without changing core modules. Links open in the page that asked ("client").
-import { HostUnavailable, type Host, type HostConfig, type HostPaths, type HostSecrets, type Notice, type PhotoCache, type SnapshotStore } from "../types.ts";
+import { HostUnavailable, type Host, type KeyProvider, type HostConfig, type HostPaths, type HostSecrets, type Notice, type PhotoCache, type SnapshotStore } from "../types.ts";
 
 /** Where in-app notices go until the page takes them (A6). */
 export type NoticeInbox = { add(n: Notice): string; remove(handle: string): void };
@@ -9,9 +9,10 @@ export type NoticeInbox = { add(n: Notice): string; remove(handle: string): void
 export type AzureHostParts = {
   secrets: HostSecrets;
   config: HostConfig;
-  snapshots: SnapshotStore;
+  snapshotsFor: (userId: string) => SnapshotStore;
   photos: PhotoCache;
   inbox: NoticeInbox;
+  keys?: KeyProvider;
   now?: () => Temporal.Instant;
 };
 
@@ -27,9 +28,11 @@ export function createAzureHost(p: AzureHostParts): Host {
   return {
     kind: "azure",
     secrets: p.secrets,
+    // A4: the data key wrapped by a Key Vault key, unwrapped by the app's managed identity.
+    keys: p.keys ?? { dataKey: async () => desktopOnly("The data key (Key Vault, step A4)")() },
     config: p.config,
     paths: noPaths,
-    snapshots: p.snapshots,
+    snapshotsFor: p.snapshotsFor,
     photos: p.photos,
     files: {
       exportPlan: async () => desktopOnly("Saving an export to a folder")(),

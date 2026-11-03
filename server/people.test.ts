@@ -61,7 +61,8 @@ const theme = async (s: ReturnType<ReturnType<typeof setup>["settingsFor"]>) => 
 describe("first sign-in (A2)", () => {
   it("claims the store's rows for its owner and seeds their settings from the config file, once", async () => {
     const t = setup({ unowned: true });
-    expect(await t.people.signedIn(OWNER, TOKENS)).toEqual({ userId: OWNER.oid });
+    expect(await t.people.signedIn(OWNER, TOKENS)).toEqual({ userId: OWNER.oid, owner: true });
+    expect(await t.people.signedIn(OWNER, TOKENS)).toEqual({ userId: OWNER.oid, owner: false });
     expect(unownedRows(t.db)).toBe(0);
     expect(planStoreOn(t.db, { userId: OWNER.oid, now: () => now().toZonedDateTimeISO("UTC") }).inbox().map((c) => c.text)).toEqual(["From before"]);
     const s = t.settingsFor(OWNER.oid);
@@ -84,7 +85,7 @@ describe("first sign-in (A2)", () => {
   it("someone new gets the starter in their Outlook time zone; nothing of the owner's", async () => {
     const t = setup({ unowned: true, mailbox: "America/New_York" });
     await t.people.signedIn(OWNER, TOKENS);
-    await t.people.signedIn(NEW, TOKENS);
+    expect(await t.people.signedIn(NEW, TOKENS)).toEqual({ userId: NEW.oid, owner: false });
     expect(t.mailboxAsked).toEqual(["fake-access"]);
     expect(t.accounts.users.get(NEW.oid)!.timeZone).toBe("America/New_York");
     const p = (await t.settingsFor(NEW.oid).load()).parsed;

@@ -309,3 +309,62 @@ describe("one Microsoft sign-in (step 15.4)", () => {
     expect(workEmail({ oid: "o", tid: "t", name: "n", username: "pat", email: null })).toBeNull();
   });
 });
+
+describe("web sign-in (A2: the server's own routes, no loopback)", () => {
+  const REDIRECT = "http://localhost:5317/auth/google/callback";
+  function web(opts: { exchange?: TokenBehavior } = {}) {
+    const tok = fakeTokenEndpoint(G_TOKEN, opts);
+    const keyring = memoryKeyring({ "google-client-secret": FAKE_CLIENT_SECRET });
+    const logs: LogRecord[] = [];
+    const client = createOAuthClient(googleProvider({ clientId: G_CLIENT, calendars: ["primary"] }), {
+      fetch: tok.fetch, keyring, openBrowser: async () => { throw new Error("no browser on the server"); }, log: (r) => logs.push(r),
+      web: { login: () => "/auth/google/login", redirectUri: REDIRECT },
+    });
+    return { client, tok, keyring, logs };
+  }
+
+  it("connect sends this tab to the server's login route", async () => {
+    expect(await web().client.connect()).toEqual({ status: "redirect", url: "/auth/google/login" });
+  });
+
+  it("start then finish: PKCE S256 to the web redirect, the code redeemed with the client secret, the refresh token kept", async () => {
+    const { client, tok, keyring, logs } = web();
+    const { url, pending } = await client.webStart();
+    const auth = new URL(url);
+    expect(auth.searchParams.get("redirect_uri")).toBe(REDIRECT);
+    expect(auth.searchParams.get("state")).toBe(pending.state);
+    expect(auth.searchParams.get("code_challenge")).toBe(createHash("sha256").update(pending.verifier).digest("base64url"));
+    expect(auth.searchParams.get("scope")).toBe("https://www.googleapis.com/auth/calendar.events.readonly");
+    expect(url).not.toContain(pending.verifier);
+    const r = await client.webFinish(new URL(`${REDIRECT}?code=${FAKE_AUTH_CODE}&state=${pending.state}`), pending);
+    expect(r).toEqual({ status: "connected" });
+    const body = tok.calls[0]!.body;
+    expect(body.get("redirect_uri")).toBe(REDIRECT);
+    expect(body.get("code_verifier")).toBe(pending.verifier);
+    expect(body.get("client_secret")).toBe(FAKE_CLIENT_SECRET);
+    expect(keyring.store.get("google-refresh-token")).toBe(FAKE_REFRESH);
+    expect(JSON.stringify(logs)).not.toContain(FAKE_REFRESH);
+    expect(JSON.stringify(logs)).not.toContain(FAKE_AUTH_CODE);
+  });
+
+  it("a refusal or a failed exchange keeps nothing", async () => {
+    const a = web();
+    const { pending } = await a.client.webStart();
+    expect(await a.client.webFinish(new URL(`${REDIRECT}?error=access_denied&state=${pending.state}`), pending)).toMatchObject({ status: "cancelled" });
+    const b = web({ exchange: "invalid_grant" });
+    const p2 = (await b.client.webStart()).pending;
+    expect(await b.client.webFinish(new URL(`${REDIRECT}?code=x&state=${p2.state}`), p2)).toMatchObject({ status: "failed" });
+    expect(a.keyring.store.has("google-refresh-token") || b.keyring.store.has("google-refresh-token")).toBe(false);
+  });
+
+  it("a confidential Microsoft client sends its secret from the named account", async () => {
+    const tok = fakeTokenEndpoint(MS_TOKEN, {});
+    const keyring = memoryKeyring({ "entra-client-secret": "FAKE-ENTRA-SECRET", "outlook-refresh-token": FAKE_REFRESH });
+    const client = createOAuthClient(microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }), {
+      fetch: tok.fetch, keyring, openBrowser: async () => {}, log: () => {}, clientSecretAccount: "entra-client-secret",
+      web: { login: () => "/auth/microsoft/login", redirectUri: "http://localhost:5317/auth/microsoft/callback" },
+    });
+    await client.accessToken();
+    expect(tok.calls[0]!.body.get("client_secret")).toBe("FAKE-ENTRA-SECRET");
+  });
+});

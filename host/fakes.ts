@@ -1,5 +1,6 @@
 // An in-memory Host for tests (A1): every part works without the machine, and records what it was asked to do.
 import { Pat } from "../sources/devops/pat.ts";
+import { perPerson } from "./per-person.ts";
 import { parseConfig, setSystemUserIdInText } from "../config/schema.ts";
 import { starterToml } from "../config/starter.ts";
 import { NEUTRAL_ZONE } from "../week/zone.ts";
@@ -56,6 +57,9 @@ export function memorySecrets(initial: Record<string, string> = {}, opts: { lock
 }
 
 /** Settings kept as config text in memory: validated like the file, with no backups. */
+/** A fixed data key for the fake host (tests only). */
+export const FAKE_DATA_KEY = new Uint8Array(32).fill(7);
+
 export function memoryConfig(initial = STARTER_TOML, app: string | null = null): HostConfig & { text: () => string } {
   let text = initial;
   return {
@@ -102,9 +106,10 @@ export function createFakeHost(o: { now?: () => Temporal.Instant; zone?: string;
     kind: "local",
     record,
     secrets: memorySecrets(o.secrets),
+    keys: { dataKey: async () => FAKE_DATA_KEY },
     config: memoryConfig(),
     paths: { config: "/fake/config.toml", data: "/fake/data", cache: "/fake/cache", runtime: "/fake/run", planDb: ":memory:" },
-    snapshots: memorySnapshots(),
+    snapshotsFor: perPerson(() => memorySnapshots()),
     photos: memoryPhotos(),
     files: {
       exportPlan: async (json) => (record.exports.push(json), "/fake/data/exports/plan.json"),

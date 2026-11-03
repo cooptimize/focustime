@@ -44,7 +44,8 @@ export function createPeople(d: PeopleDeps) {
   }
 
   /** A validated Microsoft sign-in: the user id to start a session for, or why not. */
-  async function signedIn(u: SignedIn, tokens: SignInTokens): Promise<{ userId: string } | { refused: SignInRefusal }> {
+  /** `owner`: this sign-in made them the store's owner (claimed its rows, or seeded from the config file), once. */
+  async function signedIn(u: SignedIn, tokens: SignInTokens): Promise<{ userId: string; owner: boolean } | { refused: SignInRefusal }> {
     if (d.accounts.users.get(u.oid)?.deletedAt) {
       d.log({ source: "auth", op: "sign_in", kind: "deleted" });
       return { refused: "deleted" };
@@ -64,7 +65,7 @@ export function createPeople(d: PeopleDeps) {
     } else owner = fresh && d.accounts.users.count() === 1 && isOwner(d.db, who, myEmail);
     const zone = fresh && !owner ? await d.mailboxZone(tokens.accessToken) : null;
     if (fresh) await seed(u, { owner, zone });
-    return { userId: u.oid };
+    return { userId: u.oid, owner };
   }
 
   return { signedIn };

@@ -4,14 +4,19 @@
 // FOCUSTIME_HOST=local|azure (A1) picks the host: local (the default) is the developer loop on this machine; azure is
 // the hosted app's host, a stub until A2 (its secrets, snapshots and plan store are in memory).
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
-import type { Host } from "../host/types.ts";
+import type { Host, SnapshotStore } from "../host/types.ts";
+import { perPerson } from "../host/per-person.ts";
+import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
+import { Pat } from "../sources/devops/pat.ts";
+import { cacheKey } from "../sources/devops/source.ts";
+import type { WritePats } from "../actions/devops-write-actions.ts";
 import { createLocalHost } from "../host/local/index.ts";
 import { createAzureHost } from "../host/azure/index.ts";
 import { memoryConfig, memoryPhotos, memorySecrets, memorySnapshots } from "../host/fakes.ts";
 import { hoursOn } from "../week/hours.ts";
 import { randomBytes } from "node:crypto";
 import { readAppSettings, redirectUris } from "./appconfig.ts";
-import { createEntraSignIn } from "./auth/entra.ts";
+import { createEntraSignIn, type SignedIn } from "./auth/entra.ts";
 import { createAccountStore } from "../store/accounts.ts";
 import { createUserSettings, type AppKeys, type UserSettings } from "../store/user-settings.ts";
 import { exportUser, hardDeleteDue, HARD_DELETE_AFTER_DAYS, recordSoftDelete } from "../store/user-data.ts";
@@ -20,7 +25,7 @@ import { mailboxZone } from "./auth/mailbox.ts";
 import { createPeople } from "./people.ts";
 import { join, resolve } from "node:path";
 import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
-import type { MicrosoftAccount } from "../actions/account.ts";
+import { rememberIdentity, type MicrosoftAccount } from "../actions/account.ts";
 import { presenceContext, vmContext } from "../actions/dispatch.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
 import type { TeamsStatusState } from "../plan/presence.ts";
@@ -77,7 +82,7 @@ const hostKind = process.env.FOCUSTIME_HOST ?? "local";
 if (hostKind !== "local" && hostKind !== "azure") throw new Error("FOCUSTIME_HOST must be local or azure");
 const host: Host =
   hostKind === "azure"
-    ? createAzureHost({ secrets: memorySecrets(), config: memoryConfig(), snapshots: memorySnapshots(), photos: memoryPhotos(), inbox: { add: () => "0", remove: () => {} }, now: instantNow })
+    ? createAzureHost({ secrets: memorySecrets(), config: memoryConfig(), snapshotsFor: perPerson(() => memorySnapshots()), photos: memoryPhotos(), inbox: { add: () => "0", remove: () => {} }, now: instantNow })
     : createLocalHost({ port, headless, open, noReopen: args.includes("--no-reopen"), now: instantNow });
 
 // A2: app-level settings (public URL, the Entra and Google registrations, Dataverse, the demo): env over the host's app
@@ -94,40 +99,73 @@ const renamed = host.kind === "local" ? await moveFromOldName({ today: Temporal.
 /** Where settings live, for the start line: the config file (local), or in memory (the hosted stub, until A2). */
 const cfgPath = host.facts().configPath ?? "in memory";
 
-// One Dataverse source per distinct config, so the in-memory token and results survive between requests.
+/**
+ * A2: what the server keeps in memory for a signed-in person: their settings and what it uses from them (zone, DevOps
+ * choices), their encrypted secrets and their own snapshot cache.
+ */
+type Person = { userId: string; zone: string; pickableTypes: string[]; openStates: Record<string, string[]>; settings: UserSettings; secrets: UserSecrets; snapshots: SnapshotStore };
+
+// One Dataverse source per person and config, so the in-memory token and results survive between requests.
 const sources = new Map<string, DataverseSource>();
-const makeDataverse = (cfg: DataverseConfig, timeZone: string) => {
-  const key = JSON.stringify([cfg, timeZone]);
+const dataverseFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
+  const key = JSON.stringify([who.userId, cfg, timeZone]);
   let s = sources.get(key);
   if (!s) {
-    s = createDataverseSource({ config: cfg, timeZone, getSecret: () => host.secrets.get("dataverse-client-secret"), fetch, snapshots: host.snapshots, log });
+    s = createDataverseSource({ config: cfg, timeZone, getSecret: () => host.secrets.get("dataverse-client-secret"), fetch, snapshots: who.snapshots, log });
     sources.set(key, s);
   }
   return s;
 };
 
-// Calendar sources: one instance per config so access tokens and results stay in memory.
-const keyring: Keyring = { get: (a) => host.secrets.get(a), set: (a, v) => host.secrets.set(a, v), delete: (a) => host.secrets.delete(a) };
-/** Opens the sign-in page in the default browser. The URL holds no secret (client ID, PKCE challenge, state). */
+/**
+ * A2: a person's keyring for the calendar sign-ins: their refresh tokens from their own encrypted secrets, the app's
+ * client secrets (Entra, Google) from the host's secret store. Nothing is written to the host's store from here.
+ */
+const keyringOf = (who: Person): Keyring => ({
+  get: (a) => (a === "outlook-refresh-token" || a === "google-refresh-token" ? who.secrets.get(a) : host.secrets.get(a)),
+  set: (a, v) => who.secrets.set(a, v),
+  delete: (a) => who.secrets.delete(a),
+});
+/** Opens a page in the default browser (the old loopback sign-in only; the web sign-in happens in the tab). */
 const openBrowser = async (url: string) => void (await host.links.open(url).catch(() => null));
+// Calendar sources: one per person and config, so access tokens and results stay in memory, each person's apart.
 const calendars = new Map<string, CalendarSource>();
-function memo<T extends CalendarSource>(kind: "outlook" | "google", cfg: OutlookConfig | GoogleConfig, timeZone: string, make: () => T): T {
-  const key = JSON.stringify([kind, cfg, timeZone]);
+function memo<T extends CalendarSource>(who: Person, kind: "outlook" | "google", cfg: OutlookConfig | GoogleConfig, timeZone: string, make: () => T): T {
+  const key = JSON.stringify([who.userId, kind, cfg, timeZone]);
   let s = calendars.get(key) as T | undefined;
   if (!s) calendars.set(key, (s = make()));
   return s;
 }
-const calendarDeps = (timeZone: string) => ({ fetch, keyring, openBrowser, loopback: host.loopback, snapshots: host.snapshots, log, timeZone });
-const makeOutlook = (cfg: OutlookConfig, timeZone: string) => memo("outlook", cfg, timeZone, () => createOutlookSource({ ...calendarDeps(timeZone), config: cfg }));
+/** A2: forget a person's calendar sources (a new sign-in, a delete): the next use starts from their stored tokens. */
+const forgetCalendars = (userId: string) => {
+  for (const k of [...calendars.keys()]) if (k.startsWith(`[${JSON.stringify(userId)},`)) calendars.delete(k);
+};
+const urls = redirectUris(app);
+const calendarDeps = (who: Person, timeZone: string) => ({ fetch, keyring: keyringOf(who), openBrowser, loopback: host.loopback, snapshots: who.snapshots, log, timeZone });
+/** The Outlook config is the web registration's (the settings put its ids in): sign-in through the server's routes. */
+const isWebApp = (cfg: OutlookConfig) => !!app.entra && cfg.clientId === app.entra.clientId;
+const outlookFor = (who: Person) => (cfg: OutlookConfig, timeZone: string) =>
+  memo(who, "outlook", cfg, timeZone, () =>
+    createOutlookSource({
+      ...calendarDeps(who, timeZone),
+      config: cfg,
+      ...(isWebApp(cfg)
+        ? {
+            web: { login: () => { const u = accounts.users.get(who.userId); return `/auth/microsoft/login${u ? `?hint=${encodeURIComponent(u.upn)}` : ""}`; }, redirectUri: urls.microsoft },
+            clientSecretAccount: "entra-client-secret" as const,
+          }
+        : {}),
+    }),
+  );
 /**
- * Step 15.4: the Microsoft sign-in is the Outlook source's auth client (one refresh token, one keyring entry); the
- * app's user, the calendar and the Azure token all come from it.
+ * Step 15.4: the Microsoft sign-in is the Outlook source's auth client; the calendar, Teams, photos and the Azure token
+ * all come from it. A2: the refresh token is the one the web sign-in returned, kept in the person's secrets.
  */
 const presenceClients = new WeakMap<object, PresenceClient>();
 const photoClients = new WeakMap<object, PhotoClient>();
-const accountFor = (cfg: AppConfig): MicrosoftAccount | null => {
+const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null => {
   if (!cfg.outlook) return null;
-  const src = makeOutlook(cfg.outlook, userZone(cfg));
+  const src = outlookFor(who)(cfg.outlook, userZone(cfg));
   // Step 16.3: Teams presence on its own token from the same sign-in (one client per sign-in).
   let presence = presenceClients.get(src);
   if (!presence) presenceClients.set(src, (presence = createPresenceClient({ fetch, token: () => src.auth.accessToken("presence"), invalidate: () => src.auth.invalidate(), log })));
@@ -145,24 +183,36 @@ const accountFor = (cfg: AppConfig): MicrosoftAccount | null => {
   };
 };
 const azureFor = (token: () => Promise<string>) => createAzureClient({ fetch, token, log });
-const makeGoogle = (cfg: GoogleConfig, timeZone: string) => memo("google", cfg, timeZone, () => createGoogleSource({ ...calendarDeps(timeZone), config: cfg }));
+const googleFor = (who: Person) => (cfg: GoogleConfig, timeZone: string) =>
+  memo(who, "google", cfg, timeZone, () => createGoogleSource({ ...calendarDeps(who, timeZone), config: cfg, web: { login: () => "/auth/google/login", redirectUri: urls.google } }));
 
-// DevOps: one source per Dataverse config. PATs come from Dataverse per fetch (devopsTargets) and are not kept.
-// One per person and Dataverse config (each person's portfolio types and open states are theirs).
+/**
+ * A2: a person's DevOps write PATs, one per client, in their encrypted secrets (account devops-write-pat:<cache key>).
+ * Read back only wrapped in Pat. Never logged, cached, exported or returned to the UI.
+ */
+const writePatsOf = (who: Person): WritePats => ({
+  get: async (clientKey) => new Pat(await who.secrets.get(writePatAccount(clientKey))),
+  set: async (clientKey, value) => {
+    if (!value || value.length > 1024 || /[\r\n\s]/.test(value)) throw new Error("A PAT is one line of 1 to 1024 characters with no spaces");
+    await who.secrets.set(writePatAccount(clientKey), value);
+  },
+  clear: (clientKey) => who.secrets.delete(writePatAccount(clientKey)),
+});
+const writePatAccount = (clientKey: string) => `devops-write-pat:${cacheKey(clientKey)}` as const;
+
+// DevOps: one source per person and Dataverse config. PATs come from Dataverse per fetch (devopsTargets), not kept.
 const devopsSources = new Map<string, DevOpsSource>();
 const devopsFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
   const key = JSON.stringify([who.userId, cfg, timeZone]);
   let s = devopsSources.get(key);
   if (!s) {
-    const dv = makeDataverse(cfg, timeZone);
-    s = createDevOpsSource({ fetch, log, snapshots: host.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), pickableTypes: () => who.pickableTypes, openStates: (k) => who.openStates[k] ?? [] });
+    const dv = dataverseFor(who)(cfg, timeZone);
+    s = createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), pickableTypes: () => who.pickableTypes, openStates: (k) => who.openStates[k] ?? [] });
     devopsSources.set(key, s);
   }
   return s;
 };
 
-/** A2: what the server keeps in memory for a signed-in person, from their settings (their zone, DevOps choices). */
-type Person = { userId: string; zone: string; pickableTypes: string[]; openStates: Record<string, string[]>; settings: UserSettings };
 let planDb: DatabaseSync | undefined;
 const planPath = host.kind === "local" ? host.paths.planDb : ":memory:";
 try {
@@ -198,6 +248,9 @@ const settingsFor = (userId: string): UserSettings =>
     defaultZone: host.clock.zone(),
     now: instantNow,
   });
+
+/** A2: a person's encrypted secrets (refresh tokens, write PATs), sealed with the app's data key. */
+const secretsFor = (userId: string): UserSecrets => createUserSecrets({ db, userId, keys: host.keys, now: instantNow });
 
 const people = createPeople({
   db,
@@ -250,9 +303,25 @@ const server = createApp({
     microsoft: entra,
     signedIn: async (u, tokens) => {
       const r = await people.signedIn(u, tokens);
-      if ("userId" in r) runtimeFor(r.userId);
+      if ("refused" in r) return r;
+      await keepSignIn(r.userId, u, tokens.refreshToken, r.owner);
       return r;
     },
+    google: app.google
+      ? {
+          start: async (userId) => {
+            const src = await googleOf(userId);
+            if (!src) throw new Error("Google isn't set up");
+            return src.auth.webStart();
+          },
+          finish: async (userId, callback, pending) => {
+            const src = await googleOf(userId);
+            const r = src ? await src.auth.webFinish(callback, pending) : null;
+            if (r?.status === "connected") forgetCalendars(userId);
+            return r?.status === "connected" ? "connected" : "failed";
+          },
+        }
+      : null,
     demo: app.demo ? async () => {
       const id = `demo-${randomBytes(12).toString("base64url")}`;
       await demoFor(id);
@@ -278,13 +347,13 @@ setInterval(() => void accounts.sessions.sweep(), 15 * 60_000).unref();
  * started once per process for each person who signs in, and at start for everyone with a store (so a running timer
  * ends on time after a restart without anyone signing in).
  */
-const runtimes = new Map<string, { ctx: ActionContext; stop: () => void }>();
+const runtimes = new Map<string, { ctx: ActionContext; who: Person; stop: () => void }>();
 function runtimeFor(userId: string): ActionContext {
   const known = runtimes.get(userId);
   if (known) return known.ctx;
   const settings = settingsFor(userId);
   if (!settings.has()) settings.seed(starterToml(accounts.users.get(userId)?.timeZone ?? host.clock.zone()));
-  const who: Person = { userId, zone: accounts.users.get(userId)?.timeZone ?? host.clock.zone(), pickableTypes: [], openStates: {}, settings };
+  const who: Person = { userId, zone: accounts.users.get(userId)?.timeZone ?? host.clock.zone(), pickableTypes: [], openStates: {}, settings, secrets: secretsFor(userId), snapshots: host.snapshotsFor(userId) };
   /** Their settings, with what the server keeps from them refreshed. */
   const loadConfig = async () => {
     const r = await settings.load();
@@ -301,11 +370,15 @@ function runtimeFor(userId: string): ActionContext {
     renameNote: renamed.note,
     demo: demoControl(false),
     loadConfig,
-    makeDataverse,
-    makeOutlook,
-    makeGoogle,
+    makeDataverse: dataverseFor(who),
+    makeOutlook: outlookFor(who),
+    makeGoogle: googleFor(who),
     makeDevOps: devopsFor(who),
     saveSystemUserId: (id) => settings.saveSystemUserId(id),
+    get signedInAs() {
+      const u = accounts.users.get(userId);
+      return u ? { email: u.email, upn: u.upn } : undefined;
+    },
     writeConfig: (edit) => settings.write(edit),
     now: () => instantNow().toString(),
     plan,
@@ -313,9 +386,9 @@ function runtimeFor(userId: string): ActionContext {
     media,
     secrets: { state: (a) => host.secrets.state(a), set: (a, v) => host.secrets.setApp(a, v) },
     // Step 14: personal DevOps write PATs (the host's secret store) and the writer (dev.azure.com of one client per call).
-    writePats: host.secrets.writePat,
+    writePats: writePatsOf(who),
     devopsWriter: createDevOpsWriter({ fetch, log }),
-    account: accountFor,
+    account: accountFor(who),
     photoCache: host.photos,
     azure: azureFor,
     exportPlan: (json) => host.files.exportPlan(json),
@@ -329,9 +402,43 @@ function runtimeFor(userId: string): ActionContext {
       remove: async () => deleteData(userId),
     },
   };
-  runtimes.set(userId, { ctx: liveCtx, stop: startTicks(plan, liveCtx, who) });
+  runtimes.set(userId, { ctx: liveCtx, who, stop: startTicks(plan, liveCtx, who) });
   return liveCtx;
 }
+
+/**
+ * A2: after a Microsoft sign-in, the person's refresh token goes into their encrypted secrets (the Outlook source and
+ * everything on that sign-in use it), who they are is remembered in their store (as the Outlook sign-in did), and
+ * their calendar sources start fresh. The store's owner, the first time: the DevOps write PATs this machine's keyring
+ * holds for their clients are copied into their secrets (the keyring entries stay).
+ */
+async function keepSignIn(userId: string, u: SignedIn, refreshToken: string, owner: boolean): Promise<void> {
+  const ctx = runtimeFor(userId);
+  const mine = secretsFor(userId);
+  await mine.set("outlook-refresh-token", refreshToken).catch(() => log({ source: "auth", op: "refresh_token", kind: "not_kept" }));
+  forgetCalendars(userId);
+  rememberIdentity(ctx.plan, { oid: u.oid, tid: u.tid, name: u.name, username: u.upn, email: u.email }, instantNow().toString());
+  if (!owner || !ctx.plan || !ctx.writePats) return;
+  let copied = 0;
+  for (const { clientKey } of ctx.plan.devopsIdentities()) {
+    const pat = await host.secrets.writePat.get(clientKey).catch(() => null);
+    if (!pat || mine.has(writePatAccount(clientKey))) continue;
+    await mine.set(writePatAccount(clientKey), patValue(pat)).then(() => copied++, () => null);
+  }
+  log({ source: "plan", op: "write_pats_moved", count: copied });
+}
+
+/** A person's Google source for the web sign-in, from their settings (null without [google]). */
+async function googleOf(userId: string) {
+  runtimeFor(userId);
+  const rt = runtimes.get(userId)!;
+  const r = await rt.ctx.loadConfig();
+  if (!r.parsed.ok || !r.parsed.config.google) return null;
+  return googleFor(rt.who)(r.parsed.config.google, userZone(r.parsed.config));
+}
+
+/** The value inside a Pat, for the one copy from the keyring into the person's secrets (Pat has no getter on purpose). */
+const patValue = (p: Pat) => Buffer.from(p.basicAuth().slice("Basic ".length), "base64").toString("utf8").slice(1);
 
 /**
  * Settings > Data > Delete my data (A2): soft now (sign-in refused, sessions ended, background work stopped; the rows
@@ -342,6 +449,9 @@ async function deleteData(userId: string): Promise<{ hardDeleteOn: string }> {
   accounts.users.setDeleted(userId, at.toString());
   recordSoftDelete(db, userId, at);
   accounts.sessions.endAllFor(userId);
+  // Their refresh tokens and write PATs go now (the rows of their data wait for the hard delete).
+  secretsFor(userId).clear();
+  forgetCalendars(userId);
   runtimes.get(userId)?.stop();
   runtimes.delete(userId);
   plans.delete(userId);
@@ -397,7 +507,7 @@ function startTicks(store: PlanStore, liveCtx: ActionContext, who: Person): () =
     if (hit && Date.now() - hit.at < 30 * 60_000) return hit.off;
     const c = await configOrNull();
     if (!c?.dataverse.mySystemUserId) return false;
-    const off = (await makeDataverse(c.dataverse, userZone(c)).pto(d, d)).items.some((e) => e.date === d);
+    const off = (await liveCtx.makeDataverse(c.dataverse, userZone(c)).pto(d, d)).items.some((e) => e.date === d);
     ptoMemo.set(d, { at: Date.now(), off });
     return off;
   };
@@ -667,7 +777,7 @@ function startTicks(store: PlanStore, liveCtx: ActionContext, who: Person): () =
     if (!s?.runningSince) return void (lastCalendar = null);
     if (!calendarRefreshDue(s, lastCalendar, t)) return;
     lastCalendar = t;
-    void refreshTodayWarnings({ loadConfig, makeOutlook, makeGoogle, plan: store, now: () => instantNow().toString() })
+    void refreshTodayWarnings({ loadConfig, makeOutlook: liveCtx.makeOutlook, makeGoogle: liveCtx.makeGoogle, plan: store, now: () => instantNow().toString() })
       .then((n) => n !== null && log({ source: "plan", op: "warnings", kind: "refreshed", count: n }))
       .catch(() => log({ source: "plan", op: "warnings", kind: "failed" }));
   };

@@ -73,6 +73,8 @@ export type ActionContext = {
   makeGoogle: (cfg: GoogleConfig, timeZone: string) => CalendarSource;
   makeDevOps: (cfg: DataverseConfig, timeZone: string) => DevOpsSource;
   saveSystemUserId: (id: string) => Promise<void>;
+  /** A2: the signed-in person's names (their sign-in email and UPN), to find them in Dataverse. */
+  signedInAs?: { email: string | null; upn: string } | undefined;
   now: () => string;
   /** Waits before a second read-back after a network error (D255); tests pass an instant one. */
   sleep?: (ms: number) => Promise<void>;
@@ -320,7 +322,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     let dv = cfg.dataverse;
     let resolveError: string | null = null;
     if (!dv.mySystemUserId) {
-      const r = await ctx.makeDataverse(dv, tz).resolveUserId(dv.myEmail);
+      const r = await matchMe(ctx, dv, tz);
       if (r.ok) {
         await ctx.saveSystemUserId(r.id);
         dv = { ...dv, mySystemUserId: r.id };
@@ -962,4 +964,24 @@ async function openLink(links: HostLinks, url: string): Promise<ActionResponse> 
   } catch {
     return { ok: false, status: 500, error: "Could not start the browser" };
   }
+}
+
+/** A2: the words when nobody in Dataverse has the signed-in person's email or sign-in name. */
+export const NO_DATAVERSE_MATCH = "We couldn't match you in Dataverse yet. Your work email and sign-in name aren't on a Dataverse user. Ask an admin to add you, or set your Dataverse user in Settings > You";
+
+/**
+ * A2: who the signed-in person is in Dataverse (Account Worker, Focus Time and Time Off are read for them): the
+ * first Dataverse user that has their email, else their UPN. A stored my_systemuserid (from an earlier match, or set
+ * by hand in Settings) is used as is and skips this.
+ */
+export async function matchMe(ctx: Pick<ActionContext, "makeDataverse" | "signedInAs">, dv: DataverseConfig, tz: string): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+  const names = [...new Set([dv.myEmail, ctx.signedInAs?.email ?? "", ctx.signedInAs?.upn ?? ""].map((x) => x.trim().toLowerCase()).filter((x) => x.includes("@")))];
+  const src = ctx.makeDataverse(dv, tz);
+  for (const name of names) {
+    const r = await src.resolveUserId(name);
+    if (r.ok) return r;
+    // Not found under this name: try the next. Anything else (more than one, Dataverse down) is the answer.
+    if (r.reason !== "none") return r;
+  }
+  return { ok: false, message: NO_DATAVERSE_MATCH };
 }

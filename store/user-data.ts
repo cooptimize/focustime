@@ -7,6 +7,9 @@ import type { DatabaseSync } from "node:sqlite";
 import type { UserRow } from "./accounts.ts";
 import { scopedDb, USER_TABLES } from "./scope.ts";
 
+/** User tables left out of the export: sealed secrets. */
+export const NOT_EXPORTED: readonly string[] = ["user_secrets"];
+
 /** How long a soft delete waits before everything is removed. */
 export const HARD_DELETE_AFTER_DAYS = 30;
 
@@ -17,6 +20,8 @@ export function exportUser(db: DatabaseSync, user: UserRow, now: Temporal.Instan
   const s = scopedDb(db, user.id);
   const tables: Record<string, unknown[]> = {};
   for (const t of USER_TABLES) {
+    // Secrets (sealed or not) never leave the server.
+    if (NOT_EXPORTED.includes(t)) continue;
     const rows = s.prepare(`SELECT * FROM ${t}`).all() as Record<string, unknown>[];
     tables[t] = rows.map(({ user_id: _u, ...rest }) => rest);
   }

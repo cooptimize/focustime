@@ -1147,6 +1147,14 @@ export const MIGRATIONS: readonly string[] = [
      user_hash TEXT NOT NULL,
      requested_at TEXT NOT NULL,
      hard_deleted_at TEXT
+   );`,  // 26: A2, each person's secrets (refresh tokens, DevOps write PATs), sealed with the app's data key
+  // (store/user-secrets.ts). Never exported; removed at Delete my data.
+  `CREATE TABLE user_secrets (
+     user_id TEXT NOT NULL,
+     account TEXT NOT NULL,
+     sealed TEXT NOT NULL,
+     updated_at TEXT NOT NULL,
+     PRIMARY KEY (user_id, account)
    );`,
 ];
 

@@ -3,7 +3,7 @@ import { STARTER_TOML } from "../fixtures/starter.ts";
 import { createAccountStore } from "./accounts.ts";
 import { openPlanDb, planStoreOn } from "./plan-store.ts";
 import { USER_TABLES } from "./scope.ts";
-import { exportUser, hardDeleteDue, recordSoftDelete } from "./user-data.ts";
+import { exportUser, hardDeleteDue, NOT_EXPORTED, recordSoftDelete } from "./user-data.ts";
 import { createUserSettings } from "./user-settings.ts";
 
 const NY = "America/New_York";
@@ -33,7 +33,7 @@ describe("export my data (A2)", () => {
     t.person("ben");
     const out = exportUser(t.db, t.accounts.users.get("ana")!, now());
     const text = JSON.stringify(out);
-    expect(Object.keys(out.tables as object).sort()).toEqual([...USER_TABLES].sort());
+    expect(Object.keys(out.tables as object).sort()).toEqual(USER_TABLES.filter((x) => !NOT_EXPORTED.includes(x)).sort());
     expect(text).toContain("ana's capture");
     expect(text).toContain("ana's follow-up");
     expect(text).not.toContain("ben");

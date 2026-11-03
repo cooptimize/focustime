@@ -124,9 +124,17 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       const me = storedIdentity(ctx.plan);
       if (!me) return refuse("Sign in with Microsoft first", 401);
       const tag = i.tag?.trim() || cfg?.azure.ownerTag || "Owner";
-      const value = i.value?.trim() || cfg?.azure.ownerValue || me.name;
+      // A2: by default the Owner tag holds the person's UPN; tags from before (their display name) still match.
+      const given = i.value?.trim() || cfg?.azure.ownerValue || "";
+      const tries = given ? [given] : [...new Set([me.username, me.name].filter((x) => !!x))];
       try {
-        const vms = await client(ctx).findVms(tag, value);
+        let value = tries[0] ?? "";
+        let vms = await client(ctx).findVms(tag, value);
+        for (const next of tries.slice(1)) {
+          if (vms.length) break;
+          value = next;
+          vms = await client(ctx).findVms(tag, value);
+        }
         return { ok: true, data: { tag, value, vms, chosen: chosen(ctx)?.id ?? null } };
       } catch (e) {
         return errResponse(e);

@@ -1,6 +1,8 @@
 // The local host (A1): the developer loop on one Linux machine. Secret Service through secret-tool, XDG folders,
 // notify-send, playerctl, PipeWire, xdg-open and Chromium. Only server/ imports this; core modules see the Host type.
+import { join } from "node:path";
 import type { Host } from "../types.ts";
+import { perPerson } from "../per-person.ts";
 import { clearWritePat, deleteSecret, getSecret, getWritePat, secretState, setAppSecret, setSecret, setWritePat } from "./keyring.ts";
 import { localPaths } from "./paths.ts";
 import { createSnapshotStore } from "./snapshots.ts";
@@ -18,6 +20,8 @@ export type LocalHostOptions = Omit<LaunchOptions, "runtimeDir" | "service"> & {
   env?: NodeJS.ProcessEnv;
 };
 
+import { localDataKey } from "./datakey.ts";
+
 export function createLocalHost(o: LocalHostOptions): Host {
   const env = o.env ?? process.env;
   const paths = localPaths(env);
@@ -33,9 +37,11 @@ export function createLocalHost(o: LocalHostOptions): Host {
       setApp: (a, v) => setAppSecret(a, v),
       writePat: { get: (k) => getWritePat(k), set: (k, v) => setWritePat(k, v), clear: (k) => clearWritePat(k) },
     },
+    keys: { dataKey: () => localDataKey() },
     config: fileConfig(paths.config, () => Temporal.Now.timeZoneId()),
     paths,
-    snapshots: createSnapshotStore(paths.cache),
+    // A2: ~/.cache/focustime/people/<hash of the person>/<source>/<key>.json
+    snapshotsFor: perPerson((h) => createSnapshotStore(join(paths.cache, "people", h))),
     photos: createPhotoCache(paths.cache),
     files: localFiles(paths),
     loopback: createLoopback(),

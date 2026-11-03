@@ -98,6 +98,13 @@ export type Keyring = {
 
 export type OAuthDeps = {
   fetch: typeof fetch;
+  /**
+   * A2: the web sign-in. connect() sends the browser to `login` (the server's own route) instead of a loopback
+   * listener, and webStart/webFinish run the code flow against `redirectUri` (the server's callback).
+   */
+  web?: { login: (opts: ConnectOptions) => string; redirectUri: string };
+  /** A2: a confidential client (the FocusTime web registration): its secret from the host's store. */
+  clientSecretAccount?: AppSecretAccount;
   keyring: Keyring;
   openBrowser: (url: string) => Promise<void>;
   /** The host's sign-in redirect listener. Absent: signing in isn't available here. */
@@ -108,7 +115,7 @@ export type OAuthDeps = {
   signInTimeoutMs?: number;
 };
 
-export type ConnectResult = { status: "connected"; identity?: IdClaims } | { status: "cancelled" | "failed"; message: string; /** Microsoft couldn't be reached (step 15.5, Q88: offline use). */ offline?: boolean };
+export type ConnectResult = { status: "connected"; identity?: IdClaims } | { status: "redirect"; url: string } | { status: "cancelled" | "failed"; message: string; /** Microsoft couldn't be reached (step 15.5, Q88: offline use). */ offline?: boolean };
 export type ConnectOptions = {
   /** Calendar changes (step 12). */
   write?: boolean;
@@ -140,13 +147,14 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
   const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : (k === "id" || k === "arm" || k === "presence" || k === "photo") && p.kinds?.[k] ? p.kinds[k]! : p.scope);
   const log = (op: string, extra: { status?: number; kind?: string; durationMs?: number } = {}) => deps.log({ source: p.source, op, ...extra });
 
+  const secretAccount = deps.clientSecretAccount ?? p.clientSecretAccount;
   async function clientSecret(): Promise<string | undefined> {
-    if (!p.clientSecretAccount) return undefined;
+    if (!secretAccount) return undefined;
     try {
-      return await deps.keyring.get(p.clientSecretAccount);
+      return await deps.keyring.get(secretAccount);
     } catch (e) {
       if (e instanceof SecretError && e.kind === "not_found")
-        throw new AuthFailure("misconfigured", `No ${p.label} client secret in the keyring (service focustime, account ${p.clientSecretAccount})`);
+        throw new AuthFailure("misconfigured", `No ${p.label} client secret in the keyring (service focustime, account ${secretAccount})`);
       throw new AuthFailure("keyring", "Secret storage unavailable (Secret Service). Unlock the keyring and retry");
     }
   }
@@ -239,6 +247,8 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
     const join = (...sets: (string | undefined | false)[]) => [...new Set(sets.filter((x): x is string => !!x).flatMap((x) => x.split(" ")))].join(" ");
     const graph = join(p.kinds?.id, p.scope, opts.write && p.writeScope, opts.teams && p.kinds?.presence, opts.photos && p.kinds?.photo);
     const scope = join(graph, opts.azure && p.kinds?.arm);
+    // A2: the web sign-in happens in this browser tab, through the server's routes.
+    if (deps.web) return { status: "redirect", url: deps.web.login(opts) };
     const verifier = randomBytes(48).toString("base64url");
     const challenge = createHash("sha256").update(verifier).digest("base64url");
     const state = randomBytes(24).toString("base64url");
@@ -297,6 +307,51 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
     }
   }
 
+  /** A2, web sign-in: where to send the browser (PKCE and state; the caller keeps `pending` server side). */
+  async function webStart(): Promise<{ url: string; pending: { state: string; nonce: string; verifier: string } }> {
+    if (!deps.web) throw new AuthFailure("misconfigured", `${p.label} sign-in isn't available here`);
+    await clientSecret();
+    const verifier = randomBytes(48).toString("base64url");
+    const state = randomBytes(24).toString("base64url");
+    const auth = new URL(p.authorizeUrl);
+    const params: Record<string, string> = {
+      client_id: p.clientId,
+      response_type: "code",
+      redirect_uri: deps.web.redirectUri,
+      scope: p.scope,
+      state,
+      code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+      code_challenge_method: "S256",
+      ...p.extraAuthParams,
+    };
+    for (const [k, v] of Object.entries(params)) auth.searchParams.set(k, v);
+    log("sign_in_started");
+    return { url: auth.toString(), pending: { state, nonce: "", verifier } };
+  }
+
+  /** A2, web sign-in: the callback (its state already matched by the caller) redeemed, the refresh token stored. */
+  async function webFinish(callback: URL, pending: { verifier: string }): Promise<ConnectResult> {
+    if (!deps.web) return { status: "failed", message: `${p.label} sign-in isn't available here` };
+    const code = callback.searchParams.get("code");
+    if (callback.searchParams.get("error") || !code) {
+      const denied = callback.searchParams.get("error") === "access_denied";
+      log("sign_in", { kind: denied ? "denied" : "provider_error" });
+      return denied ? { status: "cancelled", message: "Sign-in was cancelled" } : { status: "failed", message: `${p.label} sign-in failed` };
+    }
+    try {
+      access.clear();
+      const r = await tokenRequest("token_exchange", { grant_type: "authorization_code", code, redirect_uri: deps.web.redirectUri, code_verifier: pending.verifier });
+      access.clear();
+      if (!r.refreshToken) return { status: "failed", message: "Sign-in did not return a refresh token" };
+      await storeRefresh(r.refreshToken);
+      log("sign_in", { kind: "connected" });
+      return { status: "connected" };
+    } catch (e) {
+      access.clear();
+      return { status: "failed", message: e instanceof AuthFailure ? e.message : `${p.label} sign-in failed` };
+    }
+  }
+
   async function disconnect(): Promise<void> {
     access.clear();
     lastIdentity = null;
@@ -317,7 +372,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
     return lastIdentity;
   }
 
-  return { provider: p, connect, accessToken, writeAccess, identity, disconnect, invalidate: () => access.clear() };
+  return { provider: p, connect, webStart, webFinish, accessToken, writeAccess, identity, disconnect, invalidate: () => access.clear() };
 }
 
 export type OAuthClient = ReturnType<typeof createOAuthClient>;

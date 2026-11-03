@@ -6,6 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { openPlanDb, planStoreOn, type PlanStore } from "./plan-store.ts";
 import { scopeSql, ScopeError, USER_TABLES } from "./scope.ts";
 import { createUserSettings } from "./user-settings.ts";
+import { createUserSecrets, fakeKeyProvider } from "./user-secrets.ts";
 import { starterToml } from "../config/starter.ts";
 import { createDemoContext, seedDemo } from "../server/demo.ts";
 import { DEMO_TZ } from "../sources/demo/data.ts";
@@ -21,6 +22,8 @@ const tablesOf = (db: DatabaseSync) =>
   (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
 
 /** Everything a person can have: the demo's week, plus a row in each table the demo leaves empty. */
+const KEYS = fakeKeyProvider();
+
 async function fill(db: DatabaseSync, userId: string): Promise<PlanStore> {
   const plan = planStoreOn(db, { userId, now: zoned });
   const ctx = createDemoContext({ now: () => NOW, demo: { on: true, set: async () => {} }, plan });
@@ -47,6 +50,7 @@ async function fill(db: DatabaseSync, userId: string): Promise<PlanStore> {
   plan.setRoadmapDates("cooptimize", 7001, { start: "2026-11-02", end: "2026-11-20" });
   plan.logTeamsStatus({ op: "set", status: "Busy", minutes: 25, result: "done", message: null });
   createUserSettings({ db, userId, app: { dataverse: null, entra: null, google: null }, person: () => ({ email: `${tag}@example.com`, upn: `${tag}@example.com`, timeZone: null }), setZone: () => {}, defaultZone: DEMO_TZ, now: () => Temporal.Instant.from(NOW) }).seed(starterToml(DEMO_TZ));
+  await createUserSecrets({ db, userId, keys: KEYS, now: () => Temporal.Instant.from(NOW) }).set("devops-write-pat:cooptimize", `pat-${tag}`);
   // Only migration 21 writes the dedupe log; a row as it would have left one.
   db.prepare("INSERT INTO dedupe_log (user_id, at, table_name, removed_id, kept_id) VALUES (?, ?, 'week_features', 1, 2)").run(userId, NOW);
   return plan;
@@ -136,6 +140,9 @@ describe("per-user scoping (A2)", () => {
     }
     expect(tried).toBeGreaterThan(1000);
     b.reset();
+    const bSecrets = createUserSecrets({ db, userId: "user-b", keys: KEYS, now: () => Temporal.Instant.from(NOW) });
+    await bSecrets.delete("devops-write-pat:cooptimize");
+    bSecrets.clear();
     expect(rowsOf(db, "user-a")).toEqual(before);
     expect(view(a)).toEqual(aView);
     // And A's reset leaves B's rows alone.

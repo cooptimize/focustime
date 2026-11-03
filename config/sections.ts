@@ -18,7 +18,7 @@ export type SettingsRow = { section: string; position: number; body: string };
 
 const HEADER = /^\s*\[\[?\s*([^\]]+?)\s*\]\]?\s*(#.*)?$/;
 
-/** The top-level name of a table header's key ("hours" for [[hours.override]], "W&C" for ["W&C".x]). */
+/** The top-level name of a table header's key ("hours" for [[hours.override]], "T&W" for ["T&W".x]). */
 function rootOf(key: string): string {
   const k = key.trim();
   if (k.startsWith('"')) {

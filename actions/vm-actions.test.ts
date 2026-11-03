@@ -177,13 +177,22 @@ describe("me from the signed-in account", () => {
 });
 
 describe("my VM: find and confirm", () => {
-  it("finds VMs tagged Owner = my display name, across what I can see", async () => {
+  it("finds VMs tagged Owner = my display name when none has my UPN, across what I can see", async () => {
     const s = setup();
     await s.run("auth.status");
     const r = await s.run<{ tag: string; value: string; vms: { id: string; power: string }[] }>("vm.find", {});
     expect(r).toMatchObject({ tag: "Owner", value: "Pat Example" });
     expect(r.vms).toEqual([expect.objectContaining({ id: VM, name: "vm-pat-01", power: "deallocated" })]);
     expect((await s.run<{ vms: unknown[] }>("vm.find", { value: "Dana Example" })).vms).toHaveLength(1);
+  });
+
+  it("finds VMs tagged Owner = my UPN first (A2)", async () => {
+    const s = setup();
+    s.arm.addVm({ id: `${VM}-upn`, name: "vm-pat-02", resourceGroup: "rg-dev", subscriptionId: SUB, location: "eastus", tags: { Owner: "pat@example.com" }, power: "running" }, { time: "1900" });
+    await s.run("auth.status");
+    const r = await s.run<{ value: string; vms: { name: string }[] }>("vm.find", {});
+    expect(r.value).toBe("pat@example.com");
+    expect(r.vms.map((v) => v.name)).toEqual(["vm-pat-02"]);
   });
 
   it("tag name and value come from config when set", async () => {

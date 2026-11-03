@@ -4,8 +4,8 @@ import type { OutlookConfig } from "../../config/schema.ts";
 import type { Logger } from "../../log/logger.ts";
 import { ForeignLinkError, getJson, PartialError } from "../calendar/http.ts";
 import { createCalendarSource } from "../calendar/source.ts";
-import type { Loopback, SnapshotStore } from "../../host/types.ts";
-import { createOAuthClient, microsoftProvider, type Keyring } from "../oauth/oauth.ts";
+import type { AppSecretAccount, Loopback, SnapshotStore } from "../../host/types.ts";
+import { createOAuthClient, microsoftProvider, type ConnectOptions, type Keyring } from "../oauth/oauth.ts";
 import { weekRange } from "../when.ts";
 import { normalizeGraphEvents, type GraphEvent } from "./normalize.ts";
 import { createGraphWriter, type GraphWriter } from "./write.ts";
@@ -22,6 +22,9 @@ export type CalendarDeps<C> = {
   keyring: Keyring;
   openBrowser: (url: string) => Promise<void>;
   loopback?: Loopback;
+  /** A2: the web sign-in (the server's routes) in place of the loopback. */
+  web?: { login: (opts: ConnectOptions) => string; redirectUri: string };
+  clientSecretAccount?: AppSecretAccount;
   snapshots: SnapshotStore;
   log: Logger;
   timeZone: string;
@@ -35,6 +38,8 @@ export function createOutlookSource(deps: CalendarDeps<OutlookConfig>) {
   const auth = createOAuthClient(microsoftProvider(deps.config), {
     fetch: deps.fetch, keyring: deps.keyring, openBrowser: deps.openBrowser, log: deps.log, timeoutMs,
     ...(deps.loopback ? { loopback: deps.loopback } : {}),
+    ...(deps.web ? { web: deps.web } : {}),
+    ...(deps.clientSecretAccount ? { clientSecretAccount: deps.clientSecretAccount } : {}),
     ...(deps.signInTimeoutMs ? { signInTimeoutMs: deps.signInTimeoutMs } : {}),
     ...(deps.now ? { now: () => deps.now!().epochMilliseconds } : {}),
   });

@@ -15,6 +15,8 @@ export function createGoogleSource(deps: CalendarDeps<GoogleConfig>) {
   const auth = createOAuthClient(googleProvider(deps.config), {
     fetch: deps.fetch, keyring: deps.keyring, openBrowser: deps.openBrowser, log: deps.log, timeoutMs,
     ...(deps.loopback ? { loopback: deps.loopback } : {}),
+    ...(deps.web ? { web: deps.web } : {}),
+    ...(deps.clientSecretAccount ? { clientSecretAccount: deps.clientSecretAccount } : {}),
     ...(deps.signInTimeoutMs ? { signInTimeoutMs: deps.signInTimeoutMs } : {}),
     ...(deps.now ? { now: () => deps.now!().epochMilliseconds } : {}),
   });
@@ -55,8 +57,10 @@ export function createGoogleSource(deps: CalendarDeps<GoogleConfig>) {
     return events;
   }
 
-  return createCalendarSource({
+  const base = createCalendarSource({
     id: "google", label: "Google", connectAction: "connect_google", auth, fetchWeek,
     snapshots: deps.snapshots, log: deps.log, timeZone: deps.timeZone, ...(deps.now ? { now: deps.now } : {}),
   });
+  // A2: the web sign-in's start and finish (Settings > Connections > Connect Google).
+  return { ...base, auth };
 }

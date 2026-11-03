@@ -49,7 +49,7 @@ export type AppConfig = {
   /** Step 17: Settings > Roadmap thresholds (whole numbers). */
   roadmap: RoadmapThresholds;
 };
-/** `ownerValue` empty means the signed-in person's display name. `startWithoutAsking` (step 15.5, Q87): the morning box's Start runs at once. */
+/** `ownerValue` empty means the signed-in person's UPN (A2), then their display name. `startWithoutAsking` (step 15.5, Q87): the morning box's Start runs at once. */
 export type AzureSettings = { ownerTag: string; ownerValue: string; startWithoutAsking: boolean };
 export const DEFAULT_AZURE: AzureSettings = { ownerTag: "Owner", ownerValue: "", startWithoutAsking: true };
 /** `domains` empty means my work email's domain. */

@@ -194,12 +194,21 @@ export type HostFacts = {
   configPath: string | null;
 };
 
+/**
+ * A2: the app's data key (32 bytes), which seals each person's secrets in the store (store/user-secrets.ts). Local:
+ * kept in the host's secret store (account data-key, made on first use). Hosted (A4): wrapped by a Key Vault key.
+ */
+export type KeyProvider = { dataKey: () => Promise<Uint8Array> };
+
+
 export interface Host {
   readonly kind: HostKind;
   secrets: HostSecrets;
+  keys: KeyProvider;
   config: HostConfig;
   paths: HostPaths;
-  snapshots: SnapshotStore;
+  /** A2: each person's own snapshot cache (one person's last good week never shows for another). */
+  snapshotsFor(userId: string): SnapshotStore;
   photos: PhotoCache;
   files: HostFiles;
   loopback: Loopback;

@@ -525,14 +525,15 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
   }
 
   /** Find my systemuserid from my work email. Exactly one match or a plain error. */
-  async function resolveUserId(email: string): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+  /** `none`: no Dataverse user has it (another name may still match, A2); `many` and `failed` are answers. */
+  async function resolveUserId(email: string): Promise<{ ok: true; id: string } | { ok: false; message: string; reason?: "none" | "many" | "failed" }> {
     try {
       const q = `internalemailaddress eq '${email.replace(/'/g, "''")}'`;
       const users = await getAll<{ systemuserid: string }>("systemusers", `systemusers?$select=systemuserid&$filter=${encodeURIComponent(q)}`);
       if (users.length === 1 && users[0]?.systemuserid) return { ok: true, id: users[0].systemuserid };
-      return { ok: false, message: users.length === 0 ? "No Dataverse user has that work email: check my_email in config" : "More than one Dataverse user has that work email" };
+      return users.length === 0 ? { ok: false, message: "No Dataverse user has that work email: check my_email in config", reason: "none" } : { ok: false, message: "More than one Dataverse user has that work email", reason: "many" };
     } catch (e) {
-      return { ok: false, message: e instanceof SourceFailure ? e.message : "Could not look up your Dataverse user" };
+      return { ok: false, message: e instanceof SourceFailure ? e.message : "Could not look up your Dataverse user", reason: "failed" };
     }
   }
 

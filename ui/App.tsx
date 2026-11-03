@@ -187,6 +187,15 @@ export function App() {
   }, []);
   const [busy, setBusy] = useState<"outlook" | "google" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // A2: back from Google's sign-in (Settings > Connections > Connect): say how it went, then drop it from the address.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const g = q.get("google");
+    if (!g) return;
+    setNotice(g === "connected" ? "Google Calendar connected" : g === "expired" ? "That Google sign-in took too long. Try Connect again" : "Google Calendar didn't connect. Try again");
+    q.delete("google");
+    history.replaceState(null, "", `${location.pathname}${q.size ? `?${q}` : ""}${location.hash}`);
+  }, []);
   // Step 17: after Done in Plan the week, offer Look ahead 4 weeks when it is due (every other Thursday).
   const [offerAhead, setOfferAhead] = useState(false);
   // Notices from work item links (e.g. "Could not start the browser"), shown for a few seconds.
@@ -404,9 +413,11 @@ export function App() {
   const openSettingsRef = useRef<((section?: string) => void) | null>(null);
   const devopsWrites = useDevOpsWriteFlow({ allowed: data?.devopsWrite ?? [], onDone: reloadQuiet, openSettings: () => openSettingsRef.current?.("clients") });
   const connectWrite = useCallback(async () => {
-    setNotice("Finish signing in to Microsoft in your browser, and allow calendar changes");
+    setNotice("Signing in to Microsoft to allow calendar changes");
     try {
-      const r = await call<{ status: string; message?: string }>("auth.connect_outlook_write", {});
+      const r = await call<{ status: string; message?: string; url?: string }>("auth.connect_outlook_write", {});
+      // A2: the sign-in happens in this tab, through the server's own route.
+      if (r.status === "redirect" && r.url?.startsWith("/auth/")) return location.assign(r.url);
       setNotice(r.status === "connected" ? "Outlook reconnected" : (r.message ?? "Sign-in did not finish"));
     } catch {
       setNotice("Sign-in did not finish");
