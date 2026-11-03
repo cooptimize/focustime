@@ -16,6 +16,7 @@ jobs:
       FOCUSTIME_TEST_SQL: required
       FOCUSTIME_TEST_SQL_SERVER: localhost
       FOCUSTIME_TEST_SQL_PORT: "14330"
+      FOCUSTIME_TEST_WEBKIT: required
       TZ: America/Chicago
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +34,8 @@ jobs:
           MSSQL_SA_PASSWORD="$pw" docker run -d --name sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD -e MSSQL_PID=Developer \
             -p 127.0.0.1:14330:1433 mcr.microsoft.com/mssql/server:2025-latest
       - run: npm ci --no-audit --no-fund
+      # Playwright's WebKit (Safari's engine) and its system libraries, for e2e/safari.test.ts.
+      - run: npx playwright-core install --with-deps webkit
       - run: npm run typecheck
       - name: Wait for SQL Server
         run: |

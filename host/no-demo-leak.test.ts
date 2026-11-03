@@ -1,14 +1,14 @@
 // no-demo-leak: one source of truth per session. A real session gets its clients from Dataverse and its items from
 // DevOps; a demo session gets only demo data. The demo is wired in one place: server/main.ts builds a demo session's
 // context from server/demo.ts, which alone reads sources/demo/. Nothing else that runs (the server from
-// server/main.ts, the page from ui/main.tsx) may import the demo, the fixtures, or a test fake.
+// server/main.ts, the page from ui/boot.ts) may import the demo, the fixtures, or a test fake.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { importsOf } from "./imports.ts";
 
 const ROOT = resolve(import.meta.dirname, "..");
-const ENTRIES = ["server/main.ts", "ui/main.tsx"];
+const ENTRIES = ["server/main.ts", "ui/boot.ts"];
 /** Demo data, fixtures and fakes: never in a real session. */
 const FORBIDDEN = /^(fixtures\/|sources\/demo\/|server\/demo\.ts$|host\/fakes\.ts$|test\/|e2e\/)|(^|\/)[a-z-]*fakes?\.ts$|\/fixtures\/|\.test\.tsx?$/;
 /** The demo wiring: the only edges allowed into it. */
@@ -55,7 +55,7 @@ describe("no demo data, fixtures or fakes outside the demo wiring (no-demo-leak)
   it("the walk reaches the whole app (both entries, the actions, the sources)", () => {
     const seen: string[] = [];
     leaks(ENTRIES, (f) => (seen.push(relative(ROOT, f)), readFileSync(f, "utf8")));
-    expect(seen).toEqual(expect.arrayContaining(["server/main.ts", "ui/main.tsx", "ui/App.tsx", "actions/dispatch.ts", "server/demo.ts", "ui/Settings.tsx"]));
+    expect(seen).toEqual(expect.arrayContaining(["server/main.ts", "ui/boot.ts", "ui/main.tsx", "ui/App.tsx", "actions/dispatch.ts", "server/demo.ts", "ui/Settings.tsx"]));
     expect(seen.length).toBeGreaterThan(200);
   });
   it("catches a leak: any other file importing a fixture, the demo data or a fake", () => {
