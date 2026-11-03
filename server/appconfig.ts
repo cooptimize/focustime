@@ -17,6 +17,8 @@ export type AppSettings = {
   demo: boolean;
   /** A3: where the plan store is. Never per person. */
   database: DatabaseSettings;
+  /** The email domains invites may go to (lowercase). Empty: each person's own work email domain. */
+  inviteDomains: string[];
 };
 
 /**
@@ -42,6 +44,7 @@ export const APP_ENV = {
   dataverseClientId: "FOCUSTIME_DATAVERSE_CLIENT_ID",
   googleClientId: "FOCUSTIME_GOOGLE_CLIENT_ID",
   demo: "FOCUSTIME_DEMO",
+  inviteDomains: "FOCUSTIME_INVITE_DOMAINS",
   dbDriver: "FOCUSTIME_DB_DRIVER",
   dbServer: "FOCUSTIME_DB_SERVER",
   dbPort: "FOCUSTIME_DB_PORT",
@@ -98,6 +101,11 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
 
   const database = readDatabase(sec("database"), val, errors);
 
+  // invite_domains (or FOCUSTIME_INVITE_DOMAINS, comma separated): who invites may go to, the same for everyone.
+  const domainsRaw = env[APP_ENV.inviteDomains] ?? (Array.isArray(raw.invite_domains) ? raw.invite_domains.join(",") : typeof raw.invite_domains === "string" ? raw.invite_domains : "");
+  const inviteDomains = [...new Set(String(domainsRaw).split(",").map((d) => d.trim().toLowerCase()).filter(Boolean))];
+  if (inviteDomains.some((d) => !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(d))) errors.push("invite_domains must be domain names like example.com");
+
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
@@ -108,6 +116,7 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
       google: googleClient ? { clientId: googleClient } : null,
       demo,
       database,
+      inviteDomains,
     },
   };
 }

@@ -1,4 +1,5 @@
-// Settings (step 6b): every setting FocusTime owns, read from and written to the same validated config file. Values
+// Settings (step 6b): every setting FocusTime owns, read from and written to the same validated settings (a person's
+// account, or the config file in the developer loop); each field saves itself (ui/settings/autosave.tsx). Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
 import { AzureWriteLog, TeamsAccessLine, TeamsStatusLog, YouAccount } from "./Account.tsx";
@@ -86,6 +87,9 @@ type Props = {
   onSetup?: (step: SetupStep) => void;
 };
 
+/** Where an app-level value is changed when there is no config file here (hosted, signed in, the demo). */
+const ADMIN = "Set by your FocusTime admin";
+
 const DEVOPS_STATE: Record<ClientWork["status"], string> = { ok: "Live", identity_missing: "No identity", not_set_up: "Not set up", auth_failed: "PAT problem", no_access: "No access", unreachable: "Unreachable", error: "Error" };
 
 const DAY_NAMES = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" } as const;
@@ -165,11 +169,11 @@ export function Settings(props: Props) {
         <h2 ref={headRef} tabIndex={-1}>
           {title}
         </h2>
-        {data && props.section !== "about" && props.section !== "setup" && <p className="muted set-path">Saved to {data.configPath}</p>}
+        {data && props.section !== "about" && props.section !== "setup" && <p className="muted set-path">Changes save as you make them, to {data.configPath}</p>}
         {error && <p className="field-problem">{error}</p>}
         {data && data.problems.length > 0 && props.section !== "connections" && props.section !== "data" && (
           <div className="config-banner" role="alert">
-            <strong>The config file has problems, so only Connections and Data work here until it is fixed by hand.</strong>
+            <strong>{data.fromFile ? "The config file has problems, so only Connections and Data work here until it is fixed by hand." : "Your saved settings have problems, so only Connections and Data work here. Ask your FocusTime admin."}</strong>
             <ul>
               {data.problems.map((p) => (
                 <li key={p.field}>
@@ -199,9 +203,9 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
         <VmStartForm {...p} />
         {d.you && (
         <div className="set-grid">
-          <ReadOnly label="Email when signed out" value={d.you.email} where="Used only when signed out ([dataverse] my_email in config.toml)" />
+          <ReadOnly label={d.fromFile ? "Email when signed out" : "Email"} value={d.you.email} where={d.fromFile ? "Used only when signed out ([dataverse] my_email in config.toml)" : "From your Microsoft sign-in"} />
           <ReadOnly label="Dataverse user" value={d.you.systemUserId ? "Found" : "Not found yet"} where="Change this in Dataverse" />
-          <ReadOnly label="Environment" value={d.you.environmentUrl} where="Set in config.toml ([dataverse] environment_url)" />
+          <ReadOnly label="Environment" value={d.you.environmentUrl} where={d.fromFile ? "Set in config.toml ([dataverse] environment_url)" : ADMIN} />
           <ReadOnly label="Time zone" value={userZone(d.you)} where="Change it under Working hours" />
         </div>
         )}
@@ -634,7 +638,7 @@ function CollabForm(p: FormProps) {
             <button type="button" className="mini" disabled={!adding.trim()} onClick={add}>Add</button>
           </span>
         </AutoField>
-        <ReadOnly label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where="Set in config.toml ([collab] domains)" />
+        <ReadOnly label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where={p.data.fromFile ? "Set in config.toml ([collab] domains)" : ADMIN} />
       </div>
     </div>
   );

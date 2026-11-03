@@ -112,6 +112,9 @@ export type SettingsClient = {
 
 export type SettingsData = {
   configPath: string;
+  /** True when the settings are a config file on this machine (the developer loop); false for an account's settings
+   * (signed in, hosted) or the demo: then app-level values are "Set by your FocusTime admin", never a file path. */
+  fromFile: boolean;
   /** Per-field problems when the file doesn't validate (Settings shows them and saves nothing else). */
   problems: FieldProblem[];
   you: { email: string; systemUserId: string | null; environmentUrl: string; timeZone: string } | null;

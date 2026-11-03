@@ -37,6 +37,9 @@ const SECRET_LABELS: Record<AppSecret, string> = { "dataverse-client-secret": "D
 
 const bad = (error: string, status = 400, fields?: FieldProblem[]): ActionResponse => ({ ok: false, status, error, ...(fields ? { fields } : {}) });
 
+/** A config file on disk (an absolute path), as against "your FocusTime account" or the demo's words. */
+export const isFilePath = (p: string) => p.startsWith("/") || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("~/");
+
 async function load(ctx: SettingsContext): Promise<SettingsData> {
   const loaded = await ctx.loadConfig();
   // A2: app secrets are the app's, never a person's: only a context that may change them (not a signed-in person's)
@@ -49,7 +52,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
       expires: loaded.parsed.ok ? (loaded.parsed.config.secretExpiry[account] ?? null) : null,
     })),
   );
-  const base = { configPath: loaded.path, palette: CLIENT_SLOTS, secrets, data: { planStore: !!ctx.plan } };
+  const base = { configPath: loaded.path, fromFile: isFilePath(loaded.path), palette: CLIENT_SLOTS, secrets, data: { planStore: !!ctx.plan } };
   if (!loaded.parsed.ok)
     return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX }, collab: { ...DEFAULT_COLLAB, domains: [] }, notify: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, vm: { startWithoutAsking: DEFAULT_AZURE.startWithoutAsking }, roadmap: { ...DEFAULT_THRESHOLDS } };
   const cfg = loaded.parsed.config;

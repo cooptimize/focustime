@@ -15,6 +15,8 @@ export type AppKeys = {
   dataverse: { environmentUrl: string; tenantId: string; clientId: string } | null;
   entra: { tenantId: string; clientId: string } | null;
   google: { clientId: string } | null;
+  /** Who invites may go to, set by the app (fix/settings-autosave); absent or empty: the person's own email domain. */
+  inviteDomains?: readonly string[];
 };
 
 /** Who the settings are for, as the users table has them. */
@@ -67,6 +69,8 @@ export function createUserSettings(o: {
     if (o.app.google) t = setValue(t, "google", "client_id", o.app.google.clientId);
     else if (/^\[google\]/m.test(t)) t = setValue(t, "google", "client_id", "");
     if (p.timeZone) t = setValue(t, "hours", "time_zone", p.timeZone);
+    // Invite domains are the app's: set by the admin, never from a person's own rows.
+    if (o.app.inviteDomains?.length) t = setValue(t, "collab", "domains", [...o.app.inviteDomains]);
     return t;
   }
 

@@ -172,3 +172,11 @@ describe("Settings > Clients follow state (step 6d)", () => {
     expect(by(cs, "HM Electronics")).toEqual({ active: true, why: "kept" });
   });
 });
+
+describe("where settings live (fix/settings-autosave)", () => {
+  it("only a path on disk is a config file; an account's settings and the demo are not", async () => {
+    const { isFilePath } = await import("./settings-actions.ts");
+    expect(["/home/me/.config/focustime/config.toml", "C:\\Users\\me\\config.toml", "~/.config/focustime/config.toml"].every(isFilePath)).toBe(true);
+    expect(["your FocusTime account", "Demo data (in memory, not your config file)"].some(isFilePath)).toBe(false);
+  });
+});
