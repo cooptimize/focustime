@@ -55,6 +55,8 @@ import { vmAction, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
+import { feedbackAction, type FeedbackContext, type FeedbackService } from "./feedback-actions.ts";
+import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
 
 /** The plan store marker for the first launch (step 17.5). */
@@ -108,6 +110,8 @@ export type ActionContext = {
    */
   account?: (cfg: AppConfig) => MicrosoftAccount | null;
   azure?: (token: () => Promise<string>) => AzureClient;
+  /** F1: Send feedback (the app's feedback service and who is sending). Absent: feedback isn't available here. */
+  feedback?: { service: FeedbackService; sender: () => Promise<Sender | null> };
 };
 
 /** Actions that reach outside FocusTime or change secrets: refused while demo mode is on (D272). */
@@ -645,6 +649,13 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "vm.log":
     case "vm.start_now":
       return vmAction(await vmContext(ctx), action, req.input);
+    case "feedback.status":
+    case "feedback.preview":
+    case "feedback.send": {
+      if (!ctx.feedback) return { ok: false, status: 503, error: "Feedback isn't available here" };
+      const f: FeedbackContext = { ...ctx.feedback, plan: ctx.plan, today: async () => localToday(ctx.now(), userZone(await configured(ctx))) };
+      return feedbackAction(f, action, req.input, () => Date.parse(ctx.now()));
+    }
     case "notify.test": {
       if (!noInput(req.input)) return bad("notify.test takes no input");
       if (!ctx.notifications) return { ok: false, status: 503, error: "Notifications aren't available here" };

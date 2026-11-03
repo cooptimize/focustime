@@ -64,14 +64,14 @@ export type Harness = { url: string; browser: Browser; stop: () => Promise<void>
  * takes it before the server listens (the server then exits with "already running on port"), it starts again on a new
  * one (test/ports.ts). WebKit's TLS front gets its port the same way; the server's public URL names that front.
  */
-export async function startDemo(engine: "chromium" | "webkit" = "chromium"): Promise<Harness> {
+export async function startDemo(engine: "chromium" | "webkit" = "chromium", extraEnv: Record<string, string> = {}): Promise<Harness> {
   const dir = await mkdtemp(join(tmpdir(), "focustime-e2e-"));
   // A2: no sign-in is set up here; the sign-in page offers "Try the demo", which every test uses.
   await mkdir(join(dir, "data", "focustime"), { recursive: true });
   const root = resolve(import.meta.dirname, "..");
   const launch = join(dir, "run", "focustime", "launch.json");
   const startServer = async (port: number, front: number | null) => {
-    const env = { ...process.env, ...(front ? { FOCUSTIME_PUBLIC_URL: `https://localhost:${front}` } : {}), FOCUSTIME_DEMO: "1", XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"), XDG_CACHE_HOME: join(dir, "cache"), XDG_RUNTIME_DIR: join(dir, "run") };
+    const env = { ...process.env, ...(front ? { FOCUSTIME_PUBLIC_URL: `https://localhost:${front}` } : {}), FOCUSTIME_DEMO: "1", XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"), XDG_CACHE_HOME: join(dir, "cache"), XDG_RUNTIME_DIR: join(dir, "run"), ...extraEnv };
     const child: ChildProcess = spawn(process.execPath, ["server/main.ts", "--dev", "--no-open", "--no-reopen", "--headless", "--port", String(port), "--clock", NOW], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     child.stdout?.on("data", (b) => (out += b));
