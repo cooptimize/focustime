@@ -39,6 +39,11 @@ import { MenuCtx, MenuRow, useMenu } from "./Menus.tsx";
 import { TimeboxDetails, useTimeboxes } from "./Timeboxes.tsx";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { PickRow, PICK_DRAG } from "./PickRow.tsx";
+import { PlanFrame } from "./plan/PlanFrame.tsx";
+import { PlanHeader } from "./plan/PlanHeader.tsx";
+import { UnitCard, PlanLabel } from "./plan/UnitCard.tsx";
+import { AddPane, AddSection, BoxHint } from "./plan/AddPane.tsx";
+import { FoldLine } from "./plan/FoldLine.tsx";
 
 import type { FollowUpView } from "../actions/types.ts";
 
@@ -112,6 +117,8 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   useEffect(() => onSelectBlock?.(sel), [sel]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onSelectBlock?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [myDay, setMyDay] = useState(false);
+  /** U6: bumped by /, so the right pane opens its list and focuses the search. */
+  const [slash, setSlash] = useState(0);
   /** Step 15.1 (D274): what didn't fit after Timebox my day ran, until it's acted on or closed. */
   const [didntFit, setDidntFit] = useState<{ text: string; picks: DidntFit[] } | null>(null);
   const settle = (pickId: number) => setDidntFit((d) => {
@@ -144,6 +151,15 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
     } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
       e.preventDefault();
       onStep(e.key === "ArrowLeft" ? -1 : 1);
+    } else if ((e.key === "j" || e.key === "k") && !past) {
+      // U6: J and K move between blocks, as they move between clients in Plan the week.
+      const i = blocks.findIndex((b) => b.half === sel);
+      const to = blocks[Math.max(0, Math.min(blocks.length - 1, i + (e.key === "j" ? 1 : -1)))];
+      if (to) (e.preventDefault(), setSel(to.half));
+    } else if (e.key === "/" && !past) {
+      // U6: / goes to the right pane's search.
+      e.preventDefault();
+      setSlash((n) => n + 1);
     }
   };
   // Step 15.2: when focus falls to the page (a "+" became a check, a dialog closed), ← → C Esc still reach this view.
@@ -152,7 +168,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   useEffect(() => {
     const lost = (e: globalThis.KeyboardEvent) => {
       if (e.defaultPrevented || (document.activeElement && document.activeElement !== document.body) || topOverlay(document) !== "none") return;
-      if (!["ArrowLeft", "ArrowRight", "Escape", "c", "C"].includes(e.key)) return;
+      if (!["ArrowLeft", "ArrowRight", "Escape", "c", "C", "j", "k", "/"].includes(e.key)) return;
       ref.current?.focus({ preventScroll: true });
       keyRef.current(e as unknown as KeyboardEvent);
     };
@@ -169,30 +185,27 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   const split = splitByBlocks(cal.timed, blocks.filter((b) => !b.slot.off).map((b) => ({ key: b.half, start: b.slot.start, end: b.slot.end })));
   const whens = new Map(cal.timed.map((e) => [e.event.id, e.when]));
 
-  return (
-    <PlanCtx.Provider value={inner}>
-      <section ref={ref} className="planday pd2" tabIndex={-1} aria-label={`Plan ${longDate(day.date)}`} onKeyDown={onKey}>
-        <header className="pd2-head">
-          <div className="pd2-title">
-            <h2>
-              <span className="pd-step" role="group" aria-label="Day">
-                <button type="button" onClick={() => onStep(-1)} aria-label="Previous day (←)" title="Previous day (←)">‹</button>
-                <button type="button" onClick={() => onStep(1)} aria-label="Next day (→)" title="Next day (→)">›</button>
-              </span>
-              {planDayTitle(day.date, today)}
-              {badge && <span className={`pd-which ${badge === "Past" ? "past" : "next"}`}>{badge}</span>}
-            </h2>
-            <p className="pd2-status">{off ? "Day off" : past ? "Tick what got done, or drop the rest" : <Headline h={dayHeadline(blocks.filter((b) => !b.slot.off))} />}</p>
-          </div>
-          <div className="pd2-actions">
-            {!past && !off && committed && timing && unboxed > 0 && (
-              <button type="button" className="pd2-secondary" onClick={() => setMyDay(true)} title="Give every planned pick a time in its block's free time">
-                Timebox my day
-              </button>
-            )}
-            <ModeArea done={{ onClick: done, title: past ? "Back to Now (Esc)" : committed ? "Back to Now (C)" : "Save this plan for the day (C)" }}>{switcher}</ModeArea>
-          </div>
-        </header>
+  const header = (
+    <PlanHeader
+      className="pd2-head"
+      titleClass="pd2-title"
+      summaryClass="pd2-status"
+      step={{ prev: () => onStep(-1), next: () => onStep(1), prevLabel: "Previous day (←)", nextLabel: "Next day (→)", label: "Day", className: "pd-step" }}
+      title={planDayTitle(day.date, today)}
+      badge={badge && <span className={`pd-which ${badge === "Past" ? "past" : "next"}`}>{badge}</span>}
+      summary={off ? "Day off" : past ? "Tick what got done, or drop the rest" : <Headline h={dayHeadline(blocks.filter((b) => !b.slot.off))} />}
+      secondary={
+        !past && !off && committed && timing && unboxed > 0 ? (
+          <button type="button" className="pd2-secondary" onClick={() => setMyDay(true)} title="Give every planned pick a time in its block's free time">
+            Timebox my day
+          </button>
+        ) : null
+      }
+      mode={<ModeArea done={{ onClick: done, title: past ? "Back to Now (Esc)" : committed ? "Back to Now (C)" : "Save this plan for the day (C)" }}>{switcher}</ModeArea>}
+    />
+  );
+  const notices = (
+    <>
         {didntFit && !past && (
           <div className="pd-didnt-fit" role="status" aria-label="Picks that didn't fit">
             <p>
@@ -240,34 +253,49 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
           </div>
         )}
         {error && <p className="pd-error" role="alert">{error}</p>}
-        {off ? (
-          <p className="pd-pto full" role="note">
-            <strong>Day off</strong> · {off.titles.join(", ")}. Nothing to plan.
-          </p>
-        ) : past ? (
-          <div className="pd2-panes single">
-            <PastDay halves={[...new Set<Half>(["AM", "PM", ...dayPicks.filter((p) => p.half === "EVE").map((p) => p.half)])]} picks={dayPicks.filter((p) => p.status !== "moved")} act={act} />
-          </div>
-        ) : (
-          <AddDragCtx.Provider value={setDragging}>
-          <div className="pd2-panes">
-            <div className="pd2-left" aria-label={`Your ${weekdayOf(day.date)}`}>
-              <AllDayRow events={cal.allDay} />
-              <OutsideLine label="Before your blocks" events={split.before} tz={tz} />
-              {state.carryOver.length > 0 && selBlock && <CarryOver picks={state.carryOver} date={day.date} to={selBlock.half} act={act} />}
-              {state.carryTarget && state.carryTarget < day.date && <p className="muted pd-note">Unfinished work from earlier days shows on {dayLabel(state.carryTarget)}.</p>}
-              {blocks.map((b) => (
-                <DayBlock key={b.half} b={b} selected={b.half === sel} onSelect={() => setSel(b.half)} overflow={day.kind !== "work" && b.half !== "EVE"} tz={tz} now={now} colors={colors} name={name} act={act} hintPick={hintPick} weekFeatures={state.weekFeatures} whens={whens} />
-              ))}
-              <OutsideLine label="After your blocks" events={split.after} tz={tz} />
-            </div>
-            {selBlock && (
-              <AddPane key={`${day.date}${selBlock.half}`} slot={selBlock.slot} picks={selBlock.picks} overflow={day.kind !== "work" && selBlock.half !== "EVE"} state={state} picked={picked} here={new Set(selBlock.picks.map(pickedKey))} clients={clients} colors={colors} act={act} focus={focusItem} clearFocus={() => setFocusItem(null)} />
-            )}
-          </div>
-          {dragging && <WeekDropStrip drag={dragging} planDate={day.date} colors={colors} name={name} act={act} onDone={() => setDragging(null)} />}
-          </AddDragCtx.Provider>
-        )}
+    </>
+  );
+  const plannable = !off && !past;
+  const left = off ? (
+    <p className="pd-pto full" role="note">
+      <strong>Day off</strong> · {off.titles.join(", ")}. Nothing to plan.
+    </p>
+  ) : past ? (
+    <PastDay halves={[...new Set<Half>(["AM", "PM", ...dayPicks.filter((p) => p.half === "EVE").map((p) => p.half)])]} picks={dayPicks.filter((p) => p.status !== "moved")} act={act} />
+  ) : (
+    <>
+      <AllDayRow events={cal.allDay} />
+      <OutsideLine label="Before your blocks" events={split.before} tz={tz} />
+      {state.carryOver.length > 0 && selBlock && <CarryOver picks={state.carryOver} date={day.date} to={selBlock.half} act={act} />}
+      {state.carryTarget && state.carryTarget < day.date && <p className="muted pd-note">Unfinished work from earlier days shows on {dayLabel(state.carryTarget)}.</p>}
+      {blocks.map((b) => (
+        <DayBlock key={b.half} b={b} selected={b.half === sel} onSelect={() => setSel(b.half)} overflow={day.kind !== "work" && b.half !== "EVE"} tz={tz} now={now} colors={colors} name={name} act={act} hintPick={hintPick} weekFeatures={state.weekFeatures} whens={whens} />
+      ))}
+      <OutsideLine label="After your blocks" events={split.after} tz={tz} />
+    </>
+  );
+  const right =
+    plannable && selBlock ? (
+      <AddPaneDay key={`${day.date}${selBlock.half}`} slot={selBlock.slot} picks={selBlock.picks} overflow={day.kind !== "work" && selBlock.half !== "EVE"} state={state} picked={picked} here={new Set(selBlock.picks.map(pickedKey))} clients={clients} colors={colors} act={act} focus={focusItem} clearFocus={() => setFocusItem(null)} slash={slash} />
+    ) : undefined;
+
+  return (
+    <PlanCtx.Provider value={inner}>
+      <AddDragCtx.Provider value={setDragging}>
+        <PlanFrame
+          frameRef={ref}
+          className="planday pd2"
+          label={`Plan ${longDate(day.date)}`}
+          onKeyDown={onKey}
+          header={header}
+          notices={notices}
+          leftClass={`pd2-left${past ? " past" : ""}`}
+          leftLabel={plannable ? `Your ${weekdayOf(day.date)}` : undefined}
+          left={left}
+          right={right}
+          after={
+            <>
+              {dragging && plannable && <WeekDropStrip drag={dragging} planDate={day.date} colors={colors} name={name} act={act} onDone={() => setDragging(null)} />}
         {myDay && (
           <TimeboxMyDay
             day={day}
@@ -285,7 +313,10 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
             }}
           />
         )}
-      </section>
+            </>
+          }
+        />
+      </AddDragCtx.Provider>
     </PlanCtx.Provider>
   );
 }
@@ -346,23 +377,27 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
     void act("pick.move", { id, date: slot.date, half: slot.half });
   };
   return (
-    <section
+    <UnitCard
       className={`pd2-block${selected ? " selected" : ""}${b.ended ? " ended" : ""}${over ? " drop" : ""}`}
-      style={{ "--c": clientColor(bc.clientKey ?? undefined, colors) } as CSSProperties}
-      aria-label={`${halfName(slot.half)}: ${title}`}
+      color={clientColor(bc.clientKey ?? undefined, colors)}
+      label={`${halfName(slot.half)}: ${title}`}
       onClick={onSelect}
       onDragOver={(e) => (e.dataTransfer.types.includes(PICK_DRAG) || e.dataTransfer.types.includes(ADD_DRAG)) && (e.preventDefault(), setOver(true))}
       onDragLeave={() => setOver(false)}
       onDrop={onDrop}
-    >
-      <header className="pd2-block-head">
+      headClass="pd2-block-head"
+      name={
         <button type="button" className="pd2-block-name" aria-pressed={selected} onClick={onSelect} title={`${halfName(slot.half)}: add work to this block on the right`}>
           <span className="swatch" />
           <span className="pd2-client">{title}</span>
-          <span className="pd2-when">{shortRange(slot, tz)}</span>
         </button>
-        {fw.text && (
-          <span className={`pd2-fit ${fw.kind}`}>
+      }
+      detail={<span className="pd2-when">{shortRange(slot, tz)}</span>}
+      tone={fw.kind === "over" ? "over" : "fits"}
+      fitClass={`pd2-fit ${fw.kind}`}
+      fit={
+        fw.text && (
+          <>
             {fw.text}
             {fw.kind === "over" && (
               <>
@@ -372,9 +407,10 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
                 </button>
               </>
             )}
-          </span>
-        )}
-      </header>
+          </>
+        )
+      }
+    >
       {note && <p className="pd2-note">Left off: {note.note}</p>}
       {ordered.length > 0 ? (
         <ul className="pd2-picks">
@@ -388,13 +424,11 @@ function DayBlock({ b, selected, onSelect, overflow, tz, now, colors, name, act,
       {trim && marked.size > 0 && <p className="pd2-trim-hint">Highlighted: make one smaller (click its size) or move it with ⋯.</p>}
       {(meetings > 0 || personal > 0 || slot.freeGaps.length > 0) && !slot.off && (
         <div className="pd2-cal">
-          <button type="button" className="pd2-fold" aria-expanded={cal} onClick={(e) => (e.stopPropagation(), setCalToggle(!cal))}>
-            <span aria-hidden="true">{cal ? "▾" : "▸"}</span> Agenda{cal ? "" : ` · ${[meetings ? `${meetings} meeting${meetings === 1 ? "" : "s"}` : "", personal ? `${personal} personal` : "", `${formatDuration(freeMinutes(slot))} free`].filter(Boolean).join(" · ")}`}
-          </button>
+          <FoldLine className="pd2-fold" open={cal} onToggle={() => setCalToggle(!cal)} label="Agenda" count={cal ? undefined : [meetings ? `${meetings} meeting${meetings === 1 ? "" : "s"}` : "", personal ? `${personal} personal` : "", `${formatDuration(freeMinutes(slot))} free`].filter(Boolean).join(" · ")} />
           {cal && <Agenda slot={slot} now={now} tz={tz} clientName={name} pickRow={() => null} whens={whens} />}
         </div>
       )}
-    </section>
+    </UnitCard>
   );
 }
 
@@ -431,7 +465,7 @@ function RowNote({ p, bc, name }: { p: Pick; bc: string | null; name: (k: string
  * The right pane: "Add to <Client> <morning>". This week's musts (each feature with its stories, or Needs stories),
  * the client's follow-ups when there are any, everything else folded, and the type box at the bottom (U4).
  */
-function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, act, focus, clearFocus }: { slot: Slot; picks: Pick[]; overflow: boolean; state: PlanDayState; picked: Set<string>; here: Set<string>; clients: { clientKey: string; clientName: string }[]; colors: Record<string, string>; act: PlanDayAct; focus: number | null; clearFocus: () => void }) {
+function AddPaneDay({ slot, picks, overflow, state, picked, here, clients, colors, act, focus, clearFocus, slash }: { slot: Slot; picks: Pick[]; overflow: boolean; state: PlanDayState; picked: Set<string>; here: Set<string>; clients: { clientKey: string; clientName: string }[]; colors: Record<string, string>; act: PlanDayAct; focus: number | null; clearFocus: () => void; slash: number }) {
   const block = overflow ? null : (slot.focus[0] ?? null);
   const bc = blockClient(block?.clientKey ?? null, picks);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -441,6 +475,14 @@ function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, 
   const work = clientKey ? allWork.get(clientKey) : undefined;
   const [query, setQuery] = useState("");
   const [restOpen, setRestOpen] = useState(false);
+  const search = useRef<HTMLInputElement>(null);
+  const slashSeen = useRef(slash);
+  useEffect(() => {
+    if (slash === slashSeen.current) return;
+    slashSeen.current = slash;
+    setRestOpen(true);
+    setTimeout(() => search.current?.focus(), 0);
+  }, [slash]);
   // U4: the feature a typed story goes under (Enter in the type box); none means the client, no parent yet.
   const [feature, setFeature] = useState<number | null>(focus);
   const name = (k: string | null) => clients.find((c) => c.clientKey === k)?.clientName ?? k ?? "";
@@ -454,28 +496,33 @@ function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, 
   const label = musts.length === (s?.priorities.length ?? 0) ? "This week's musts" : "This week";
   return (
     <HereCtx.Provider value={here}>
-    <div className="pd2-right" style={{ "--c": clientColor(clientKey ?? undefined, colors) } as CSSProperties} aria-label="Add work">
-      <h3 className="pd2-pane-title">
-        Add to {clientKey ? <span className="pd2-pane-client">{name(clientKey)}</span> : "this block"} {halfName(slot.half).toLowerCase()}
-      </h3>
-      {!block && clients.length > 0 && (
-        <div className="client-chooser" role="group" aria-label="Which client">
-          {clients.map((c) => (
-            <button key={c.clientKey} type="button" className="chip-btn" aria-pressed={clientKey === c.clientKey} style={{ "--c": clientColor(c.clientKey, colors) } as CSSProperties} onClick={() => setChosen(c.clientKey)}>
-              <span className="swatch" />
-              {c.clientName}
-            </button>
-          ))}
-        </div>
-      )}
-      {!clientKey ? (
-        <p className="muted pd-note">Choose a client for this block first.</p>
-      ) : (
-        <>
-          <div className="pd2-scroll">
+      <AddPane
+        className="pd2-right"
+        color={clientColor(clientKey ?? undefined, colors)}
+        titleClass="pd2-pane-title"
+        client={clientKey ? <span className="pd2-pane-client">{name(clientKey)}</span> : "this block"}
+        suffix={halfName(slot.half).toLowerCase()}
+        scrollClass="pd2-scroll"
+        top={
+          !block && clients.length > 0 ? (
+            <div className="client-chooser" role="group" aria-label="Which client">
+              {clients.map((c) => (
+                <button key={c.clientKey} type="button" className="chip-btn" aria-pressed={clientKey === c.clientKey} style={{ "--c": clientColor(c.clientKey, colors) } as CSSProperties} onClick={() => setChosen(c.clientKey)}>
+                  <span className="swatch" />
+                  {c.clientName}
+                </button>
+              ))}
+            </div>
+          ) : undefined
+        }
+        box={clientKey ? <StoryBox clientKey={clientKey} clientName={name(clientKey)} half={slot.half} date={slot.date} parent={feature} parentTitle={chosenTitle} act={act} /> : undefined}
+      >
+        {!clientKey ? (
+          <p className="muted pd-note">Choose a client for this block first.</p>
+        ) : (
+          <>
             {s!.priorities.length > 0 ? (
-              <section className="pd2-sec" aria-label={label}>
-                <h4>{label}</h4>
+              <AddSection className="pd2-sec" label={label}>
                 {focus !== null && (
                   <p className="pd2-explain">
                     One feature. <button type="button" className="link-btn" onClick={clearFocus}>Show all</button>
@@ -486,13 +533,12 @@ function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, 
                     <Priority key={p.ref.itemId} p={p} clientKey={clientKey} date={slot.date} add={add} chosen={feature === p.ref.itemId} onChoose={() => setFeature((f) => (f === p.ref.itemId ? null : p.ref.itemId))} />
                   ))}
                 </ul>
-              </section>
+              </AddSection>
             ) : (
               !work && <p className="muted pd-note">DevOps isn't loaded for this client right now.</p>
             )}
             {s!.followUps.length > 0 && (
-              <section className="pd2-sec" aria-label="Follow-ups">
-                <h4>Follow-ups</h4>
+              <AddSection className="pd2-sec" label="Follow-ups">
                 <ul className="pd2-list">
                   {s!.followUps.map((f) => (
                     <AddRow key={f.id} k={`f${f.id}`} drag={{ clientKey, title: f.what, input: { followUpId: f.id } }} onAdd={() => add({ followUpId: f.id })} label={`Add follow-up: ${f.what}`}>
@@ -501,15 +547,13 @@ function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, 
                     </AddRow>
                   ))}
                 </ul>
-              </section>
+              </AddSection>
             )}
-            <section className="pd2-sec" aria-label="Everything else">
-              <button type="button" className="pd2-fold" aria-expanded={restOpen || !!query} onClick={() => setRestOpen((o) => !o)}>
-                <span aria-hidden="true">{restOpen || query ? "▾" : "▸"}</span> Everything else{work ? ` · ${s!.rest.length + loose.length} in DevOps order` : ""}
-              </button>
+            <AddSection className="pd2-sec" label="Everything else" title={null}>
+              <FoldLine className="pd2-fold" open={restOpen || !!query} onToggle={() => setRestOpen((o) => !o)} label="Everything else" count={work ? `${s!.rest.length + loose.length} in DevOps order` : undefined} />
               {(restOpen || query) && (
                 <>
-                  <input className="pd2-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by title or #id" aria-label={`Search ${name(clientKey)}'s work`} />
+                  <input ref={search} className="pd2-search pl-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Escape" && query && (e.stopPropagation(), setQuery(""))} placeholder="Search by title or #id" aria-label={`Search ${name(clientKey)}'s work`} />
                   <ul className="pd2-list">
                     {loose.map((d) => (
                       <AddRow key={`d${d.id}`} k={`d${d.id}`} drag={{ clientKey, title: d.title, input: { draftId: d.id, size: d.size } }} onAdd={() => add({ draftId: d.id, size: d.size })} label={`Add draft: ${d.title}`}>
@@ -533,12 +577,10 @@ function AddPane({ slot, picks, overflow, state, picked, here, clients, colors, 
                   {query && !s!.rest.length && <p className="muted pd-note">Nothing matches "{query}".</p>}
                 </>
               )}
-            </section>
-          </div>
-          <StoryBox clientKey={clientKey} clientName={name(clientKey)} half={slot.half} date={slot.date} parent={feature} parentTitle={chosenTitle} act={act} />
-        </>
-      )}
-    </div>
+            </AddSection>
+          </>
+        )}
+      </AddPane>
     </HereCtx.Provider>
   );
 }
@@ -755,7 +797,7 @@ function StoryBox({ clientKey, clientName, half, date, parent, parentTitle, act 
           if (ok) setValue(NO_ITEM);
         }}
       />
-      <p className="pd2-type-hint">Enter adds a draft story{parentTitle ? ` under ${parentTitle}` : ""}. Shift+Enter adds a plain note.</p>
+      <BoxHint className="pd2-type-hint">Enter adds a draft story{parentTitle ? ` under ${parentTitle}` : ""}. Shift+Enter adds a plain note.</BoxHint>
     </div>
   );
 }
@@ -764,7 +806,7 @@ function StoryBox({ clientKey, clientName, half, date, parent, parentTitle, act 
 function CarryOver({ picks, date, to, act }: { picks: Pick[]; date: string; to: Half; act: PlanDayAct }) {
   return (
     <section className="pd2-carry" aria-label="Unfinished from earlier">
-      <h4>Unfinished from earlier</h4>
+      <PlanLabel>Unfinished from earlier</PlanLabel>
       <ul className="pd2-list">
         {picks.map((p) => (
           <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`More for ${p.title}`} item={{ clientKey: p.clientKey, url: p.itemUrl }} className="pd2-add">
@@ -781,7 +823,7 @@ function CarryOver({ picks, date, to, act }: { picks: Pick[]; date: string; to: 
 /** A past day: its picks per block, tick done or drop. No sizes, moves, candidates or commit (server enforces it too). */
 function PastDay({ halves, picks, act }: { halves: Half[]; picks: Pick[]; act: PlanDayAct }) {
   return (
-    <div className="pd2-left past">
+    <>
       {halves.map((half) => {
         const mine = picks.filter((p) => p.half === half);
         return (
@@ -801,7 +843,7 @@ function PastDay({ halves, picks, act }: { halves: Half[]; picks: Pick[]; act: P
           </section>
         );
       })}
-    </div>
+    </>
   );
 }
 

@@ -15,6 +15,7 @@ import { pickTime } from "../plan/picktime.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 import { useFocused } from "./planview.ts";
 import { WorkLink } from "./WorkLink.tsx";
+import { PlanRow } from "./plan/PlanRow.tsx";
 
 /** The next size when the chip is clicked: S, M, L, then S again. */
 export const nextSize = (s: Size): Size => SIZES[(SIZES.indexOf(s) + 1) % SIZES.length]!;
@@ -71,13 +72,19 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
         {pick.size}
       </button>
     );
+  if (planD)
+    // U6: Plan the day's row is the shared planning row (ui/plan/PlanRow.tsx).
+    return (
+      <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
+        handle={pick.status === "done" ? "✓" : "⋮⋮"} titleText={pick.title}
+        title={link && pick.itemUrl ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl}>{pick.title}</WorkLink> : pick.title}
+        badges={<>{extra}{badge}</>}
+        right={<>{timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{sizeChip}</>}
+        hover={<>{!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{menu.button(`More for ${pick.title}`)}</>} />
+    );
   return (
-    <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${planD ? " dens-plan" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
-      {planD ? (
-        <span className="pr-handle" aria-hidden="true">{pick.status === "done" ? "✓" : "⋮⋮"}</span>
-      ) : (
+    <li data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""}${today ? " dens-today" : ""}${week ? " dens-week" : ""}${next ? " next" : ""} ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}>
       <input type="checkbox" tabIndex={tabIndex} checked={pick.status === "done"} disabled={!canTick || pick.status === "dropped"} onChange={(e) => toggle(pick.id, e.target.checked)} onClick={stop} onDoubleClick={stop} aria-label={`Done: ${pick.title}`} />
-      )}
       <span className="pr-title" title={pick.title}>
         {link && pick.itemUrl ? (
           <WorkLink clientKey={pick.clientKey} url={pick.itemUrl} className={today ? "pr-link pr-cue" : undefined} title={today ? `${pick.title}\nOpen #${pick.itemId ?? ""} in DevOps` : undefined}>
@@ -95,16 +102,6 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
           {actions}
           <span className="pr-hover">
             <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />
-            {menu.button(`More for ${pick.title}`)}
-          </span>
-        </>
-      ) : planD ? (
-        <>
-          {badge}
-          {timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}
-          {sizeChip}
-          <span className="pr-hover">
-            {!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}
             {menu.button(`More for ${pick.title}`)}
           </span>
         </>

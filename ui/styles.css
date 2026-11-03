@@ -1969,44 +1969,14 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .dw-parent select { max-width: min(360px, 70vw); }
 
 /* ---------- Step 15: Plan the day in two panes, one pick row, the context line, calm fit (D263 to D269) ---------- */
-.planday.pd2 {
-  flex: 1; min-height: 0; margin: 0 24px 12px; padding: 0; gap: 0; overflow: hidden;
-  border: 1px solid var(--border); box-shadow: var(--shadow-panel); border-radius: 12px;
-}
-.pd2-head {
-  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 16px;
-  padding: 12px 20px; border-bottom: 1px solid var(--border);
-}
-.pd2-title h2 { margin: 0; font-size: var(--fs-4); font-weight: 600; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
-.pd2-status { margin: 2px 0 0; color: var(--text-muted); font-size: var(--fs-3); }
 .pd-planned { font-size: var(--fs-2); font-weight: 600; color: var(--ok); border: 1px solid color-mix(in oklab, var(--ok) 45%, var(--border)); border-radius: 99px; padding: 1px 8px; }
-.pd2-actions { display: flex; align-items: center; gap: 8px; }
-.pd2-actions button { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); cursor: pointer; }
-.pd2-actions .quiet { border-color: transparent; color: var(--text-muted); }
-.pd2 .pd-committed, .pd2 .pd-error, .pd2 .pd-pto { margin: 10px 20px 0; }
-.pd2-panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(340px, 5fr) minmax(360px, 6fr); }
-.pd2-panes.single { grid-template-columns: 1fr; }
-.pd2-left, .pd2-right { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 20px 20px; display: flex; flex-direction: column; gap: 12px; }
-.pd2-left { border-right: 1px solid var(--border); background: var(--bg); }
-.pd2-right { background: var(--surface); }
-.pd2-pane-title { margin: 0; font-size: var(--fs-4); font-weight: 600; color: var(--text); }
-.pd2-pane-title .muted { font-weight: 400; }
 
-.pd2-block {
-  border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 10px; background: var(--surface);
-  padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; cursor: pointer;
-}
-.pd2-block.selected { border-color: var(--accent); border-left-color: var(--c); box-shadow: 0 0 0 1px var(--accent); }
 .pd2-block.ended { opacity: 0.7; }
 .pd2-block.drop { box-shadow: 0 0 0 2px var(--focus); }
 .pd2-block.past { cursor: default; }
-.pd2-block-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .pd2-block-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
 .pd2-block-name .swatch { align-self: center; }
-.pd2-client { font-size: var(--fs-4); font-weight: 600; }
 .pd2-block-name .muted { font-size: var(--fs-3); }
-.pd2-fit { margin-left: auto; display: inline-flex; gap: 8px; align-items: baseline; font-size: var(--fs-3); color: var(--text-muted); }
-.pd2-fit.over { color: var(--watch); font-weight: 600; }
 .pd2-note { margin: 0; font-size: var(--fs-3); color: var(--text-muted); }
 .pd2-empty { margin: 0; font-size: var(--fs-3); color: var(--text-faint); }
 .pd2-trim-hint { margin: 0; font-size: var(--fs-2); color: var(--watch); }
@@ -2036,8 +2006,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* The right pane */
 .pd2-right .client-chooser { display: flex; flex-wrap: wrap; gap: 6px; }
-.pd2-sec { display: flex; flex-direction: column; gap: 4px; }
-.pd2-sec h4 { margin: 6px 0 0; font-size: var(--fs-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
 .pd2-explain { margin: 0 0 2px; font-size: var(--fs-3); color: var(--text-muted); }
 .pd2-add { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 4px; border-radius: 6px; font-size: var(--fs-3); }
 .pd2-add:hover { background: var(--raised); }
@@ -2054,22 +2022,16 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pd2-plus.done:hover { background: transparent; border-color: transparent; color: var(--ok); }
 .pd2-toggle { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 4px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; font-size: var(--fs-3); text-align: left; cursor: pointer; }
 .pd2-toggle:hover { background: var(--raised); }
-.pd2-sec h4 .pd2-toggle { font-size: var(--fs-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 0; }
 .pd2-feature > .pd2-toggle .pr-title { font-weight: 600; }
 .pd2-tier { flex: none; font-size: var(--fs-1); font-weight: 600; padding: 0 7px; line-height: calc(17px * var(--text-scale)); border-radius: 99px; border: 1px solid var(--border-strong); color: var(--text-muted); }
 .pd2-tier.must { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 45%, var(--border)); }
 .pd2-group-title { display: block; padding: 4px; font-size: var(--fs-3); color: var(--text-muted); }
-.pd2-search { width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-3); }
 .pd2-draft-link { align-self: flex-start; font-size: var(--fs-3); margin: 2px 0 0 4px; }
 .pd2-draft { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .pd2-draft input { flex: 1 1 220px; }
 .pd2-breakdown { flex-wrap: wrap; }
 .pd2-breakdown textarea { flex-basis: 100%; }
-.pd2-carry h4 { margin: 0 0 4px; font-size: var(--fs-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
 .pd2-right .intention input { width: 100%; }
-.app.narrow .pd2-panes { grid-template-columns: 1fr; overflow-y: auto; }
-.app.narrow .pd2-left { border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; }
-.app.narrow .pd2-right { overflow: visible; }
 
 /* The musts summary (step 11), in the Week header since step 16.2 */
 .cl-musts { position: relative; flex: none; }
@@ -2359,7 +2321,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .top-more { font-size: var(--fs-4); line-height: 1; padding: 2px 10px; }
 .follow-ups-head:has(.mode-area) .top-btn { margin-left: 0; }
 .plan-ahead-soon { margin: 32px 0; padding: 32px; border: 1px dashed var(--border-strong); border-radius: 12px; color: var(--text-muted); font-size: var(--fs-4); text-align: center; max-width: 900px; }
-.pd2-title h2 { display: flex; align-items: center; gap: 10px; }
 .page-head .ph-title { flex: 1 1 0; }
 .app.narrow .today-head { flex-wrap: wrap; }
 
@@ -3068,48 +3029,18 @@ button.att-chip { cursor: pointer; }
    Header: ‹ ›, "Plan today", the day's free time and (amber) how far over; Timebox my day (secondary), Done, mode
    switch. Blocks: swatch, client, a muted range, the fit once on the right; rows with a handle and the size chip; the
    agenda open on the selected block only. Right pane: musts with stories, follow-ups, everything else, the type box. */
-.pd2 { font-size: var(--fs-3); }
-.pd2-title h2 { font-size: var(--fs-4); font-weight: 600; letter-spacing: 0; }
 .pd2 .pd-which { font-size: var(--fs-2); font-weight: 500; }
-.pd2-head { align-items: center; }
-.pd2-title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.pd2-status { margin: 0; font-size: var(--fs-3); color: var(--text-muted); }
 .pd2-over { color: var(--watch); }
-.pd2-actions button.pd2-secondary { font-size: var(--fs-3); font-weight: 500; padding: 5px 12px; }
 .pd2-block-name { align-items: baseline; }
-.pd2-client { font-size: var(--fs-4); font-weight: 600; }
-.pd2-when { font-size: var(--fs-3); color: var(--text-muted); }
-.pd2-fit { font-size: var(--fs-3); font-weight: 400; }
-.pd2-fit.over { font-weight: 500; }
 .pd2-fit .link-btn { font-size: var(--fs-3); font-weight: 500; color: inherit; }
 .pd2-note, .pd2-empty { font-size: var(--fs-2); }
 .pd2-trim-hint { font-size: var(--fs-2); }
-.pd2-fold { font: inherit; font-size: var(--fs-2); color: var(--text-muted); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
-.pd2-fold:hover { color: var(--text); }
-.pd2-sec .pd2-fold { font-size: var(--fs-3); padding: 4px 0; }
 .pd2 .pd-agenda ol { font-size: var(--fs-2); }
 .pd2 .ag-free .ag-title, .detail-panel .ag-free .ag-title { font-weight: 500; }
 .pd2 .ag-timebox .ag-title, .pd2 .pd-agenda li.when-now .ag-title, .pd2 .pd-agenda li.when-next .ag-title { font-weight: 500; }
 /* Plan the day's rows: handle, title, badge, size chip, + time and ⋯ on hover. */
-.pick-row.dens-plan { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; font-size: var(--fs-3); }
-.pick-row.dens-plan:hover { background: var(--raised); }
-.pick-row.dens-plan .pr-handle { flex: none; width: 14px; text-align: center; color: var(--text-faint); font-size: var(--fs-2); letter-spacing: -2px; cursor: grab; }
-.pick-row.dens-plan.done .pr-handle { color: var(--ok); letter-spacing: 0; }
-.pick-row.dens-plan.done .pr-title { color: var(--text-muted); text-decoration: line-through; }
-.pick-row.dens-plan .pr-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pick-row.dens-plan .pr-title a { color: inherit; text-decoration: none; }
-.pick-row.dens-plan .pr-title a:hover { text-decoration: underline; }
-.pick-row.dens-plan .pr-note { font-size: var(--fs-2); color: var(--text-muted); flex: none; }
-.pick-row.dens-plan .pr-hover { display: inline-flex; align-items: center; gap: 6px; opacity: 0; transition: opacity 0.1s; }
-.pick-row.dens-plan:hover .pr-hover, .pick-row.dens-plan:focus-within .pr-hover { opacity: 1; }
-.pick-row.dens-plan .more-btn, .pick-row.dens-plan .pr-hover button:last-child { font-size: var(--fs-4); font-weight: 600; }
-.pick-row.dens-plan.trim { background: color-mix(in oklab, var(--watch) 14%, transparent); }
 /* Right pane. */
-.pd2-right { display: flex; flex-direction: column; }
-.pd2-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
-.pd2-pane-title { font-size: var(--fs-4); font-weight: 600; }
 .pd2-pane-client { color: var(--c, var(--accent)); }
-.pd2-sec h4 { font-size: var(--fs-1); font-weight: 600; margin: 4px 0 2px; }
 .pd2-explain { font-size: var(--fs-2); }
 .pd2-add { font-size: var(--fs-3); }
 .pd2-feature { display: flex; flex-direction: column; gap: 2px; }
@@ -3126,14 +3057,10 @@ button.att-chip { cursor: pointer; }
 .pd2-needs .link-btn { font-size: var(--fs-2); font-weight: 400; }
 .pd2-feature > ul { margin: 2px 0 4px 14px; }
 .pd2-group-title { font-size: var(--fs-2); }
-.pd2-search { font-size: var(--fs-3); }
-.pd2-type { margin-top: auto; padding-top: 10px; }
 .pd2-type input { width: 100%; font-size: var(--fs-3); }
-.pd2-type-hint { margin: 4px 0 0; font-size: var(--fs-2); color: var(--text-muted); }
 .pd2 .pd-committed, .pd2 .pd-didnt-fit { font-size: var(--fs-3); }
 .pd2 .pd-committed button, .pd2 .pd-didnt-fit .mini { font-size: var(--fs-3); font-weight: 500; }
 .pd2-weekstrip { font-size: var(--fs-2); }
-.pd2-carry h4 { font-size: var(--fs-1); }
 .intention.pd2-type { display: block; }
 .pd2-type .item-lookup { display: block; width: 100%; }
 .pd2-plus { font-size: var(--fs-4); font-weight: 600; }
@@ -3176,3 +3103,105 @@ button.att-chip { cursor: pointer; }
 /* U5.1 (D406): all-day chips, one per day covered, the same on every day; two or more stack; the title truncates. */
 section.day > .day-allday { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
 section.day > .day-allday .chip { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* U6 (D409): the planning layout (ui/plan/), one for Plan the day and Plan the week. Header, two panes (the work
+   scrolls on the left; "Add to <client>" pinned on the right with its own scroll and the type box at its foot), unit
+   cards with a 4 px client edge, collapsed lines on one column grid, one row, one fold control. */
+.pl-frame {
+  --pl-right: 420px;
+  flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0; overflow: hidden; outline: none;
+  padding: 0; border: 0; border-radius: 0; background: var(--bg); box-shadow: none; font-size: var(--fs-3);
+}
+.pl-head { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 12px 24px 10px; }
+.pl-titlewrap { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; min-width: 0; }
+.pl-step { display: inline-flex; gap: 2px; }
+.pl-step button { min-width: 28px; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-4); font-weight: 600; line-height: 1.2; cursor: pointer; }
+.pl-step button:hover { border-color: var(--text-muted); }
+.pl-heading { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-4); font-weight: 600; letter-spacing: 0; outline: none; }
+.pl-heading .pd-which { margin-left: 0; font-size: var(--fs-2); font-weight: 500; }
+.pl-summary { margin: 0; font-size: var(--fs-3); color: var(--text-muted); }
+.pl-summary .pd2-over, .pl-summary .over { color: var(--watch); }
+.pl-spacer { flex: 1; }
+.pl-secondary { display: inline-flex; align-items: center; gap: 8px; }
+.pl-secondary > button:not(.link-btn) { padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); font-weight: 500; cursor: pointer; }
+.pl-secondary > .link-btn { font-size: var(--fs-3); font-weight: 500; }
+.pl-more { font-size: var(--fs-4); font-weight: 600; }
+.pl-frame > .pd-didnt-fit, .pl-frame > .pd-committed, .pl-frame > .pd-error, .pl-frame > .set-problem, .pl-frame > .co-notice, .pl-frame > .pw-brief { margin: 0 24px 10px; }
+.pl-panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) var(--pl-right); gap: 20px; padding: 0 24px; }
+.pl-panes.single { grid-template-columns: minmax(0, 1fr); }
+.pl-left { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 12px; padding: 2px 2px 24px; }
+.pl-add {
+  position: sticky; top: 0; align-self: stretch; min-width: 0; min-height: 0; margin-bottom: 16px; overflow: hidden;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+}
+.pl-add-title { margin: 0; flex: none; font-size: var(--fs-4); font-weight: 600; color: var(--text); }
+.pl-add-client { color: var(--c, var(--accent)); }
+.pl-add-count { font-size: var(--fs-3); font-weight: 400; color: var(--text-muted); }
+.pl-add .client-chooser { display: flex; flex-wrap: wrap; gap: 6px; }
+.pl-add-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 12px; }
+.pl-add-box { flex: none; padding-top: 10px; border-top: 1px solid var(--border); }
+.pl-add-box input { width: 100%; font-size: var(--fs-3); }
+.pl-add-box .intention { display: block; }
+.pl-add-box .item-lookup { display: block; width: 100%; }
+.pl-hint { margin: 4px 0 0; font-size: var(--fs-2); color: var(--text-muted); }
+.pl-search { width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-3); }
+.pl-sec { display: flex; flex-direction: column; gap: 4px; }
+.pl-label { margin: 4px 0 2px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.pl-fold { align-self: flex-start; padding: 4px 0; border: 0; background: none; color: var(--text-muted); font: inherit; font-size: var(--fs-3); text-align: left; cursor: pointer; }
+.pl-fold:hover { color: var(--text); }
+@media (min-width: 2400px) { .pl-frame { --pl-right: 520px; } }
+@media (max-width: 1199px) {
+  .pl-frame { overflow-y: auto; }
+  .pl-panes { flex: none; grid-template-columns: minmax(0, 1fr); }
+  .pl-left { overflow: visible; padding-bottom: 8px; }
+  .pl-add { position: static; overflow: visible; }
+  .pl-add-scroll { overflow: visible; }
+}
+
+/* A unit: a block (Plan the day) or a client (Plan the week). */
+.pl-unit {
+  min-width: 0; overflow: hidden; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px;
+  border: 1px solid var(--border); border-left: 4px solid var(--c, var(--border-strong)); border-radius: 12px; background: var(--surface);
+}
+.pl-unit.selected { border-color: var(--accent); border-left-color: var(--c, var(--accent)); box-shadow: 0 0 0 1px var(--accent); }
+.pl-unit-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.pl-unit-name { min-width: 0; font-size: var(--fs-4); font-weight: 600; }
+.pl-unit-name > button { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pl-unit-name .swatch { align-self: center; }
+.pl-unit-detail { font-size: var(--fs-3); color: var(--text-muted); }
+.pl-fit { display: inline-flex; align-items: baseline; gap: 8px; font-size: var(--fs-3); font-weight: 400; color: var(--text-muted); }
+.pl-fit.over { color: var(--watch); font-weight: 500; }
+.pl-fit.all { color: var(--ok); font-weight: 500; }
+.pl-fit .link-btn { font-size: var(--fs-3); font-weight: 500; color: inherit; }
+.pl-unit-sub { margin: 0; font-size: var(--fs-2); color: var(--text-muted); }
+
+/* A collapsed unit: one line on the same column grid everywhere. */
+.pl-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pl-line {
+  display: grid; grid-template-columns: minmax(120px, 220px) minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: calc(40px * var(--text-scale));
+  padding: 6px 14px; border: 1px solid var(--border); border-left: 4px solid var(--c, var(--border-strong)); border-radius: 12px; background: var(--surface); font-size: var(--fs-3);
+}
+.pl-line:hover { background: var(--raised); }
+.pl-line.open { border-color: var(--accent); border-left-color: var(--c, var(--accent)); }
+.pl-line-name { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.pl-line-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-line-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+.pl-line-open { font-size: var(--fs-3); font-weight: 500; }
+.pl-line-open.on { color: var(--accent); }
+
+/* The one planning row. */
+.pl-row { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; min-width: 0; min-height: calc(28px * var(--text-scale)); padding: 2px 6px; border-radius: 6px; font-size: var(--fs-3); }
+.pl-row:hover { background: var(--raised); }
+.pl-row[draggable="true"] { cursor: grab; }
+.pl-row.trim { background: color-mix(in oklab, var(--watch) 14%, transparent); box-shadow: inset 2px 0 0 var(--watch); }
+.pl-handle { flex: none; width: 14px; text-align: center; color: var(--text-faint); font-size: var(--fs-2); letter-spacing: -2px; cursor: grab; }
+.pl-row.done .pl-handle { color: var(--ok); letter-spacing: 0; }
+.pl-title { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-title a, .pl-title > button { color: inherit; text-decoration: none; }
+.pl-title a:hover, .pl-title > button:hover { text-decoration: underline; }
+.pl-row.done .pl-title { color: var(--text-muted); text-decoration: line-through; }
+.pl-row .pr-note { flex: none; font-size: var(--fs-2); color: var(--text-muted); }
+.pl-hover { flex: none; display: inline-flex; align-items: center; gap: 6px; opacity: 0; transition: opacity 0.1s; }
+.pl-row:hover > .pl-hover, .pl-row:focus-within > .pl-hover, .pl-hover:has(.pt-hint), .pl-hover:has([aria-expanded="true"]) { opacity: 1; }
+.pl-hover .more-btn, .pl-hover > button.more { font-size: var(--fs-4); font-weight: 600; }
