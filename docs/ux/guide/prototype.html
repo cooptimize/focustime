@@ -1,0 +1,452 @@
+<title>FocusTime Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one calm column of chapters; a sticky chapter rail; the rhythm as a stepper you click through; one small sandbox for sizing. Dark-first, FocusTime brand tokens. */
+:root{
+  --surface:#0E1620; --raised:#162130; --sunk:#0B121A; --border:#2B3A4D; --text:#E6ECF2; --muted:#9AAABB; --faint:#6F8094;
+  --primary:#4FA3DD; --am:#2F5F8C; --pm:#4FA3DD; --accent:#9CC24F; --lime:#B2D235;
+  --amber:#E6B85C; --amber-bg:#2A2414; --amber-bd:#5A4A1A; --risk:#F3A6A6; --risk-bg:#3A1D1D; --on-accent:#0E1620;
+  --c1:#4F8CFF; --c2:#22B3A1; --c3:#8B7CF6; --c4:#F0A03C;
+  --sans:"IBM Plex Sans", system-ui, sans-serif; --mono:"IBM Plex Mono", ui-monospace, monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){
+  --surface:#F5F7FA; --raised:#FFFFFF; --sunk:#EBEFF4; --border:#D3DBE4; --text:#14212E; --muted:#56687A; --faint:#7A8A9B;
+  --primary:#00416B; --am:#7FA6C9; --pm:#00416B; --accent:#42783C; --lime:#7E9A1F;
+  --amber:#8A5A00; --amber-bg:#FBF0D4; --amber-bd:#E8D29A; --risk:#9E2A2A; --risk-bg:#FBE3E3; --on-accent:#FFFFFF;
+  color-scheme:light; } }
+:root[data-theme="light"]{
+  --surface:#F5F7FA; --raised:#FFFFFF; --sunk:#EBEFF4; --border:#D3DBE4; --text:#14212E; --muted:#56687A; --faint:#7A8A9B;
+  --primary:#00416B; --am:#7FA6C9; --pm:#00416B; --accent:#42783C; --lime:#7E9A1F;
+  --amber:#8A5A00; --amber-bg:#FBF0D4; --amber-bd:#E8D29A; --risk:#9E2A2A; --risk-bg:#FBE3E3; --on-accent:#FFFFFF;
+  color-scheme:light; }
+:root[data-theme="dark"]{ color-scheme:dark; }
+
+*{box-sizing:border-box}
+body{background:var(--surface);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.55}
+a{color:var(--primary)}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:2px solid #F2C94C;outline-offset:2px;border-radius:6px}
+.wrap{max-width:1080px;margin:0 auto;padding-block:0 72px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* top */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.top .wrap{display:flex;align-items:center;gap:18px;padding-block:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;letter-spacing:-.02em;font-size:16px}
+.chapters{display:flex;gap:2px;flex-wrap:wrap;margin-left:auto}
+.chapters a{text-decoration:none;color:var(--muted);font-size:13px;padding:6px 10px;border-radius:7px}
+.chapters a:hover{color:var(--text);background:var(--raised)}
+.chapters a.on{color:var(--text);background:var(--raised);box-shadow:inset 0 0 0 1px var(--border)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:40px;align-items:center;padding-block:56px 32px}
+.eyebrow{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+h1{font-size:clamp(30px,4.2vw,44px);line-height:1.08;letter-spacing:-.025em;font-weight:600;margin:10px 0 14px;text-wrap:balance}
+h1 em{font-style:normal;color:var(--primary)}
+.lede{font-size:17px;color:var(--muted);max-width:52ch;margin:0}
+.weekbox{background:var(--raised);border:1px solid var(--border);border-radius:16px;padding:22px 22px 18px}
+.week{display:grid;grid-template-columns:28px repeat(5,minmax(0,1fr));gap:6px 6px;align-items:center;font-size:12px}
+.week .d{color:var(--muted);text-align:center}
+.week .r{color:var(--faint);font-size:11px}
+.cell{height:40px;border-radius:7px;border:1px solid var(--border);background:var(--sunk);position:relative;transition:transform .25s,box-shadow .25s}
+.cell.f{border-left-width:4px}
+.cell.open{border-style:dashed;background:transparent}
+.cell.off{background:repeating-linear-gradient(45deg,var(--sunk),var(--sunk) 5px,var(--raised) 5px,var(--raised) 10px)}
+.cell span{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;right:6px}
+.weekcap{display:flex;justify-content:space-between;gap:10px;margin-top:12px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.lit{box-shadow:0 0 0 2px var(--primary);transform:translateY(-2px)}
+
+/* sections */
+section.ch{padding-block:44px 8px;border-top:1px solid var(--border)}
+section.ch:first-of-type{border-top:0}
+h2{font-size:24px;letter-spacing:-.015em;font-weight:600;margin:6px 0 8px;text-wrap:balance}
+.sub{color:var(--muted);max-width:62ch;margin:0 0 24px}
+
+/* concept cards */
+.concepts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.concept{text-align:left;background:var(--raised);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:6px;min-width:0;transition:border-color .2s}
+.concept:hover{border-color:var(--primary)}
+.concept[aria-expanded="true"]{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 7%,var(--raised))}
+.concept .k{display:flex;align-items:center;gap:8px;font-weight:600}
+.concept .k i{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none}
+.concept .s{color:var(--muted);font-size:14px}
+.concept .more{font-size:14px;margin-top:4px;color:var(--text)}
+.concept .more[hidden]{display:none}
+.tag{font-family:var(--mono);font-size:11px;padding:1px 6px;border-radius:5px;background:var(--sunk);border:1px solid var(--border);color:var(--muted)}
+
+/* rhythm stepper */
+.rhythm{display:grid;grid-template-columns:260px minmax(0,1fr);gap:20px;align-items:start}
+.steps{display:flex;flex-direction:column;gap:6px;position:relative}
+.step{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;text-align:left;background:transparent;border:1px solid transparent;border-radius:10px;padding:10px 12px;align-items:center}
+.step:hover{background:var(--raised)}
+.step[aria-selected="true"]{background:var(--raised);border-color:var(--border)}
+.step .dot{width:26px;height:26px;border-radius:50%;border:1px solid var(--border);display:grid;place-items:center;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.step[aria-selected="true"] .dot{background:var(--primary);border-color:var(--primary);color:var(--on-accent)}
+.step b{display:block;font-weight:600;font-size:14px}
+.step small{color:var(--muted);font-size:12px}
+.panel{background:var(--raised);border:1px solid var(--border);border-radius:14px;padding:20px 22px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;min-height:340px}
+.panel h3{margin:0 0 4px;font-size:20px;font-weight:600;letter-spacing:-.01em}
+.panel .when{font-size:13px;color:var(--muted);margin-bottom:12px}
+.panel ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.panel .keys{margin-top:14px;font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+kbd{font-family:var(--mono);font-size:12px;padding:2px 7px;border-radius:5px;border:1px solid var(--border);border-bottom-width:2px;background:var(--sunk);color:var(--text)}
+.nav{display:flex;gap:8px;margin-top:16px}
+.btn{border:1px solid var(--border);background:var(--sunk);border-radius:8px;padding:7px 14px;font-size:13px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn:disabled{opacity:.4;cursor:default}
+
+/* mini screens */
+.mini{background:var(--sunk);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;display:flex;flex-direction:column;gap:6px;min-width:0;align-self:start}
+.mini .hd{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:12px}
+.mini .card{background:var(--raised);border:1px solid var(--border);border-left:3px solid var(--c1);border-radius:7px;padding:8px 9px;display:flex;flex-direction:column;gap:4px}
+.mini .row{display:flex;gap:7px;align-items:center;min-width:0}
+.mini .row span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .meet{color:var(--muted);border-left:2px solid var(--border);padding-left:6px}
+.mini .chk{width:11px;height:11px;border:1px solid var(--muted);border-radius:3px;flex:none}
+.mini .chk.on{background:var(--accent);border-color:var(--accent)}
+.mini .go{margin-left:auto;background:var(--accent);color:var(--on-accent);border-radius:5px;padding:1px 7px;font-weight:600;font-size:11px;flex:none}
+.mini .warn{color:var(--amber);font-size:11px}
+.mini .pill{font-size:10px;padding:1px 6px;border-radius:8px;flex:none}
+.pill.r{background:var(--risk-bg);color:var(--risk)}
+.pill.a{background:var(--amber-bg);color:var(--amber)}
+.mini .muted{color:var(--muted)}
+.mini .chips{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
+.mini .chips i{height:12px;border-radius:3px;background:var(--border)}
+
+/* sizing sandbox */
+.sandbox{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+.blockviz{background:var(--raised);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+.bar{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;height:46px;margin:12px 0 10px;position:relative}
+.bar .q{border-radius:6px;background:var(--sunk);border:1px dashed var(--border);transition:background .2s}
+.bar .q.fill{border-style:solid;border-color:transparent}
+.over{display:flex;gap:4px;min-height:14px}
+.over i{height:10px;border-radius:3px;background:var(--amber);opacity:.75;width:calc(25% - 3px)}
+.fitword{font-size:18px;font-weight:600}
+.fitword.ok{color:var(--accent)} .fitword.warn{color:var(--amber)}
+.adds{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.adds .btn b{font-family:var(--mono)}
+.stack{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;min-height:28px}
+.stack button{border:1px solid var(--border);background:var(--sunk);border-radius:6px;padding:2px 8px;font-family:var(--mono);font-size:12px}
+.legend{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:8px}
+.legend b{color:var(--text);font-weight:600}
+
+/* principle */
+.principle{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:24px;align-items:center}
+.quote{font-size:clamp(22px,3vw,30px);font-weight:600;letter-spacing:-.02em;line-height:1.2;text-wrap:balance}
+.quote span{color:var(--accent)}
+.ladder{display:flex;flex-direction:column;gap:8px}
+.rung{display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;align-items:center;background:var(--raised);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px}
+.rung .lvl{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.rung.flag{background:var(--amber-bg);border-color:var(--amber-bd)}
+.rung.flag .lvl{color:var(--amber)}
+
+/* keys */
+.keygrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.key{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--raised);border:1px solid var(--border);border-radius:9px;padding:9px 12px;font-size:14px;min-width:0}
+
+/* faq */
+details{background:var(--raised);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px}
+summary{cursor:pointer;font-weight:500;list-style:none;display:flex;justify-content:space-between;gap:12px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--muted);font-family:var(--mono)}
+details[open] summary::after{content:"–"}
+details p{margin:10px 0 2px;color:var(--muted);max-width:68ch}
+
+footer{margin-top:48px;color:var(--faint);font-size:13px;display:flex;gap:10px;align-items:center}
+
+@media (max-width:860px){
+  .hero,.rhythm,.panel,.sandbox,.principle{grid-template-columns:minmax(0,1fr)}
+  .concepts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .keygrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .steps{flex-direction:row;overflow-x:auto;padding-bottom:4px}
+  .step{min-width:170px}
+  .chapters{display:none}
+}
+@media (max-width:520px){
+  .concepts,.keygrid{grid-template-columns:minmax(0,1fr)}
+  .rung{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important;animation:none!important} }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 200 90" width="36" height="16" aria-hidden="true"><rect x="9.5" y="9.5" width="37" height="23" rx="5" fill="none" stroke="var(--accent)" stroke-width="3"/><rect x="8" y="50" width="40" height="32" rx="6" fill="var(--pm)"/><rect x="56" y="8" width="40" height="26" rx="6" fill="var(--am)"/><rect x="56" y="50" width="40" height="32" rx="6" fill="var(--pm)"/><rect x="104" y="8" width="40" height="26" rx="6" fill="var(--am)"/><rect x="104" y="50" width="40" height="32" rx="6" fill="var(--pm)"/><rect x="152" y="8" width="40" height="26" rx="6" fill="var(--am)"/><rect x="152" y="50" width="40" height="32" rx="6" fill="var(--pm)"/></svg>
+      FocusTime <span style="color:var(--muted);font-weight:400">Guide</span>
+    </div>
+    <nav class="chapters" aria-label="Chapters">
+      <a href="#basics">The basics</a>
+      <a href="#rhythm">Your rhythm</a>
+      <a href="#sizing">Sizing work</a>
+      <a href="#devops">DevOps first</a>
+      <a href="#keys">Shortcuts</a>
+      <a href="#questions">Questions</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero" aria-labelledby="h-hero">
+    <div>
+      <div class="eyebrow">Start here</div>
+      <h1 id="h-hero">Your week is <em>half-days</em>. Plan them, work them, close them.</h1>
+      <p class="lede">FocusTime takes the focus blocks you already have, lays your DevOps work into them, and keeps the day honest when meetings move. Five minutes here and you'll know the whole loop.</p>
+    </div>
+    <div class="weekbox" aria-label="An example week">
+      <div class="week" id="week">
+        <span></span><span class="d">Mon</span><span class="d">Tue</span><span class="d">Wed</span><span class="d">Thu</span><span class="d">Fri</span>
+        <span class="r">AM</span>
+        <div class="cell f" style="border-left-color:var(--c1)"><span>Cooptimize</span></div>
+        <div class="cell f" style="border-left-color:var(--c3)"><span>Harbor</span></div>
+        <div class="cell f" style="border-left-color:var(--c2)"><span>Northwind</span></div>
+        <div class="cell off"><span style="color:var(--muted)">PTO</span></div>
+        <div class="cell open"><span style="color:var(--muted)">Catch-up</span></div>
+        <span class="r">PM</span>
+        <div class="cell f" style="border-left-color:var(--c2)"><span>Northwind</span></div>
+        <div class="cell f" style="border-left-color:var(--c4)"><span>Atlas</span></div>
+        <div class="cell f" style="border-left-color:var(--c2)"><span>Northwind</span></div>
+        <div class="cell off"><span style="color:var(--muted)">PTO</span></div>
+        <div class="cell open"><span style="color:var(--muted)">Catch-up</span></div>
+      </div>
+      <div class="weekcap"><span>Each cell is a <b style="color:var(--text)">focus block</b>: half a day for one client.</span><span>Example data</span></div>
+    </div>
+  </section>
+
+  <section class="ch" id="basics" aria-labelledby="h-basics">
+    <div class="eyebrow">Chapter 1</div>
+    <h2 id="h-basics">Seven words you'll see everywhere</h2>
+    <p class="sub">Tap a card for the one-line detail. That's genuinely all the vocabulary FocusTime needs.</p>
+    <div class="concepts" id="concepts">
+      <button class="concept" aria-expanded="false">
+        <span class="k"><i style="background:var(--c1)"></i>Focus block</span>
+        <span class="s">Half a day set aside for one client.</span>
+        <span class="more" hidden>They come from Focus Time in Dataverse, the same schedule Cooptimize already keeps. FocusTime reads it; you change it where you always have.</span>
+      </button>
+      <button class="concept" aria-expanded="false">
+        <span class="k"><i style="background:var(--c2)"></i>Client</span>
+        <span class="s">Who the block is for, with its own color.</span>
+        <span class="more" hidden>Cooptimize counts as a client too. Each client's work, notes and follow-ups stay with that client and never mix.</span>
+      </button>
+      <button class="concept" aria-expanded="false">
+        <span class="k"><i style="background:var(--primary)"></i>Feature &amp; story</span>
+        <span class="s">The week commits features. The day commits stories.</span>
+        <span class="more" hidden>A feature is the outcome a client cares about this week. Stories are the pieces you actually sit down and do. Both live in DevOps.</span>
+      </button>
+      <button class="concept" aria-expanded="false">
+        <span class="k"><i style="background:var(--accent)"></i>Must &amp; nice to have</span>
+        <span class="s">What you'll definitely touch this week, and what fits if there's room.</span>
+        <span class="more" hidden>A must is a target, not a contract. Moving one is one click and nobody gets scolded. Dropping a promised one offers to draft a heads-up.</span>
+      </button>
+      <button class="concept" aria-expanded="false">
+        <span class="k"><i style="background:var(--amber)"></i>Size</span>
+        <span class="s"><span class="tag">S</span> <span class="tag">M</span> <span class="tag">L</span> for stories, blocks for features.</span>
+        <span class="more" hidden>S is about an hour, M a couple of hours, L most of a block. Once a feature's stories are sized, they decide how big the feature is. Try it in Chapter 3.</span>
+      </button>
+      <button class="concept" aria-expanded="false">
+        <span class="k"><i style="background:var(--risk)"></i>Follow-up</span>
+        <span class="s">Something you owe someone, until you close the loop.</span>
+        <span class="more" hidden>An update, an answer, a DevOps change. Some open on their own (a slipped must, a done story still Active in DevOps). Close the loop when it's done.</span>
+      </button>
+      <button class="concept" aria-expanded="false">
+        <span class="k"><i style="background:var(--lime)"></i>Capture</span>
+        <span class="s">Get a thought out of your head in one line.</span>
+        <span class="more" hidden>Press <kbd>N</kbd> anywhere. Save it as is, or as a follow-up, a draft story or a draft feature. Sort the rest later in Inbox.</span>
+      </button>
+      <button class="concept" aria-expanded="false">
+        <span class="k"><i style="background:var(--risk)"></i>At risk</span>
+        <span class="s">A block that meetings or life are eating into.</span>
+        <span class="more" hidden>The reason is always written on the card: "At risk · Dentist 12:00". It's a heads-up, not a failure.</span>
+      </button>
+      <button class="concept" aria-expanded="false">
+        <span class="k"><i style="background:var(--faint)"></i>Close out</span>
+        <span class="s">Leave each client ready to pick up again.</span>
+        <span class="more" hidden>One line per client on where you left off. Next time that client's block comes around, the note is waiting at the top.</span>
+      </button>
+    </div>
+  </section>
+
+  <section class="ch" id="rhythm" aria-labelledby="h-rhythm">
+    <div class="eyebrow">Chapter 2</div>
+    <h2 id="h-rhythm">The rhythm, from Thursday to Thursday</h2>
+    <p class="sub">Five moments, each a few minutes. Click through them, or use the arrow keys once one is selected.</p>
+    <div class="rhythm">
+      <div class="steps" role="tablist" aria-label="Rhythm steps" id="steps"></div>
+      <div class="panel" role="tabpanel" id="panel" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="ch" id="sizing" aria-labelledby="h-sizing">
+    <div class="eyebrow">Chapter 3</div>
+    <h2 id="h-sizing">How much fits in a block?</h2>
+    <p class="sub">A block is half a day. Add stories and watch the fit. This is the same math FocusTime uses on every card.</p>
+    <div class="sandbox">
+      <div class="blockviz">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+          <b>One focus block</b><span style="color:var(--muted);font-size:13px">Northwind · Mon PM</span>
+        </div>
+        <div class="bar" id="bar"><div class="q"></div><div class="q"></div><div class="q"></div><div class="q"></div></div>
+        <div class="over" id="over" aria-hidden="true"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+          <span class="fitword ok" id="fit">Empty block</span>
+          <span id="load" style="color:var(--muted);font-size:13px;font-family:var(--mono)">0 of 1 block</span>
+        </div>
+        <div class="adds">
+          <button class="btn" data-add="1">+ <b>S</b> story</button>
+          <button class="btn" data-add="2">+ <b>M</b> story</button>
+          <button class="btn" data-add="4">+ <b>L</b> story</button>
+          <button class="btn" id="clear">Clear</button>
+        </div>
+        <div class="stack" id="stack" aria-label="Stories in this block"></div>
+      </div>
+      <div class="legend">
+        <div><b>S</b> about an hour. <b>M</b> a couple of hours. <b>L</b> most of a block.</div>
+        <div>Four S, two M or one L fill a block. Anything past that spills over, shown in amber, never red: it's a nudge to move one, not a mistake.</div>
+        <div>For the week, features are counted in <b>half blocks</b>: "½ block", "1½ blocks". Once a feature's stories are sized, they decide its size automatically. No decimals, ever.</div>
+        <div style="color:var(--faint)">Tap a story chip to remove it.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ch" id="devops" aria-labelledby="h-devops">
+    <div class="eyebrow">Chapter 4</div>
+    <h2 id="h-devops">DevOps first</h2>
+    <div class="principle">
+      <div>
+        <div class="quote">If it isn't in DevOps, <span>it isn't planned yet.</span></div>
+        <p class="sub" style="margin-top:14px">FocusTime makes the healthy path the easy one. It reads your work from DevOps, nudges big things into smaller pieces, and offers to update DevOps when you finish. It never changes anything without showing you first.</p>
+      </div>
+      <div class="ladder">
+        <div class="rung"><span class="lvl">Epic</span><span>Lives on the Roadmap. Needs features before it reaches a week.</span></div>
+        <div class="rung"><span class="lvl">Feature</span><span>Goes on a week as a must or nice to have.</span></div>
+        <div class="rung flag"><span class="lvl">Needs stories</span><span>A feature with no stories can't go on a day yet. <b>Draft stories</b> or send a <b>Coop brief</b>.</span></div>
+        <div class="rung"><span class="lvl">Story</span><span>Goes on a day, gets a size, gets done.</span></div>
+        <div class="rung"><span class="lvl">Done</span><span>Tick it, then <b>Mark done in DevOps</b> from Close out.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ch" id="keys" aria-labelledby="h-keys">
+    <div class="eyebrow">Chapter 5</div>
+    <h2 id="h-keys">The shortcuts worth learning</h2>
+    <p class="sub">Everything works with the mouse. These save you a few clicks a day. <kbd>Ctrl</kbd> <kbd>K</kbd> lists every action with its key.</p>
+    <div class="keygrid">
+      <div class="key"><span>Today, Week, Roadmap, Inbox</span><span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></span></div>
+      <div class="key"><span>Plan this view</span><kbd>P</kbd></div>
+      <div class="key"><span>Capture a thought</span><kbd>N</kbd></div>
+      <div class="key"><span>Check-in</span><kbd>M</kbd></div>
+      <div class="key"><span>Close out</span><kbd>E</kbd></div>
+      <div class="key"><span>Plan the week</span><kbd>W</kbd></div>
+      <div class="key"><span>Every action</span><span><kbd>Ctrl</kbd> <kbd>K</kbd></span></div>
+      <div class="key"><span>Next or previous client</span><span><kbd>J</kbd> <kbd>K</kbd></span></div>
+      <div class="key"><span>Text size</span><span><kbd>Ctrl</kbd> <kbd>+</kbd> <kbd>−</kbd></span></div>
+    </div>
+  </section>
+
+  <section class="ch" id="questions" aria-labelledby="h-q">
+    <div class="eyebrow">Chapter 6</div>
+    <h2 id="h-q">Questions people ask first</h2>
+    <details><summary>Where do my clients and blocks come from?</summary><p>From Focus Time in Dataverse, the schedule Cooptimize already keeps. If a block is wrong, change it there and FocusTime picks it up on the next refresh.</p></details>
+    <details><summary>What does FocusTime change in DevOps or Outlook?</summary><p>Only what you confirm. Every change shows a preview first, is checked afterwards, and can be undone from Settings &gt; Data. In Outlook it only edits events it created, or your own events with no one else on them. It never deletes anything in DevOps.</p></details>
+    <details><summary>Why is "over" amber and not red?</summary><p>Because plans change and that's normal. Red is only for real trouble, like a block at risk or a follow-up that's overdue.</p></details>
+    <details><summary>Do I need to connect my personal calendar?</summary><p>No. Google Calendar is optional. If you connect it, personal events count against your free time so the plan stays realistic, and you can hide them with <kbd>G</kbd>.</p></details>
+    <details><summary>Can anyone else see my plan?</summary><p>No. Your plan, notes, follow-ups and settings are yours. Teammates only ever see your free and busy times and your Teams presence, the same as in Outlook and Teams today.</p></details>
+    <details><summary>Where do I add my DevOps write access?</summary><p>Settings &gt; Clients, on each client: enter a personal access token with work item read and write. FocusTime checks it against your DevOps identity, stores it encrypted, and never shows it again.</p></details>
+  </section>
+
+  <footer>
+    <svg viewBox="0 0 60 60" width="22" height="22" aria-hidden="true"><path d="M20 21 L-6 13 L-6 47 L20 39 Z" fill="var(--lime)" opacity=".25"/><rect x="20" y="15" width="30" height="30" rx="6" fill="var(--accent)"/><rect x="20" y="23" width="4.5" height="14" rx="1.5" fill="var(--lime)"/></svg>
+    FocusTime by Cooptimize. Questions or ideas? Capture them with <kbd>N</kbd> and tag them @focustime.
+  </footer>
+</main>
+
+<script>
+(function(){
+  // concept cards
+  document.querySelectorAll('.concept').forEach(function(c){
+    c.addEventListener('click',function(){
+      var open=c.getAttribute('aria-expanded')==='true';
+      c.setAttribute('aria-expanded',String(!open));
+      c.querySelector('.more').hidden=open;
+    });
+  });
+
+  // rhythm
+  var steps=[
+    {n:'Plan the week',when:'Thursday or Friday · about 15 minutes',key:['W'],
+     what:['Open one client at a time: their blocks next week are already laid out.','Pick the features you\'ll definitely touch (musts) and the ones that fit if there\'s room.','Anything without stories gets a nudge: draft them now or send a Coop brief.','Click Next client until all are planned, then Done.'],
+     lit:[0,1,2,5,6,7],mini:'week'},
+    {n:'Plan the day',when:'Each morning · about 5 minutes',key:['P'],
+     what:['Each of today\'s blocks shows its meetings and free gaps.','This week\'s musts for that client come first; add their stories.','Size each story S, M or L and watch the fit.','Done. Optionally, Timebox my day places stories into the gaps.'],
+     lit:[0,5],mini:'plan'},
+    {n:'Now',when:'All day',key:['1','F'],
+     what:['Today shows each block\'s meetings and stories in time order.','The next story has the one Start focus button.','Focus sets Teams to Busy and counts the time.','Tick stories off as you finish them.'],
+     lit:[0],mini:'now'},
+    {n:'Check-in',when:'After lunch · 2 minutes',key:['M'],
+     what:['The same cards, re-fit to the time that\'s actually left.','Anything that no longer fits gets one suggested move.','Walk-on work? Add it once at the bottom.','Done, and back to Now.'],
+     lit:[5],mini:'check'},
+    {n:'Close out',when:'End of day · 3 minutes',key:['E'],
+     what:['Write one line per client on where you left off.','Mark finished stories done in DevOps.','Close the loop on follow-ups that are due.','Done. The week folds back up until tomorrow.'],
+     lit:[0,5],mini:'close'}
+  ];
+  var cells=Array.prototype.slice.call(document.querySelectorAll('#week .cell'));
+  var stepsEl=document.getElementById('steps'), panel=document.getElementById('panel');
+  var cur=0;
+  function mini(kind){
+    if(kind==='week') return '<div class="mini"><div class="hd"><span>Plan the week</span><span class="muted">2 of 4 planned</span></div><div class="chips"><i style="background:var(--c1)"></i><i style="background:var(--c3)"></i><i style="background:var(--c2)"></i><i></i><i></i><i style="background:var(--c2)"></i><i style="background:var(--c4)"></i><i style="background:var(--c2)"></i><i></i><i></i></div><div class="card" style="border-left-color:var(--c2)"><div class="row"><b>Northwind</b><span class="muted" style="margin-left:auto">1½ of 2 blocks</span></div><div class="row"><span>Order history export</span><span class="muted" style="margin-left:auto">1 block</span></div><div class="row"><span>Supplier onboarding</span><span class="pill a" style="margin-left:auto">Needs stories</span></div></div><div class="row muted"><span>Next client: Harbor ›</span></div></div>';
+    if(kind==='plan') return '<div class="mini"><div class="hd"><span>Plan today</span><span class="muted">about 5h free</span></div><div class="card"><div class="row"><b>Cooptimize</b><span class="muted" style="margin-left:auto">Fits</span></div><div class="row"><span>Utilization chart</span><span class="tag" style="margin-left:auto">S</span></div><div class="row"><span>Onboarding guide</span><span class="tag" style="margin-left:auto">M</span></div><div class="row meet"><span>11:00 Proposal review</span></div><div class="row" style="color:var(--accent)"><span>Free · 1h 45m</span></div></div></div>';
+    if(kind==='now') return '<div class="mini"><div class="hd"><span>Today</span><span class="pill r">At risk · Dentist 12:00</span></div><div class="card"><div class="row meet"><span>9:00 Team standup</span></div><div class="row"><i class="chk on"></i><span style="text-decoration:line-through;color:var(--muted)">Timesheet summary</span></div><div class="row"><i class="chk"></i><b>Utilization chart</b><span class="go">Start focus</span></div><div class="row"><i class="chk"></i><span>Onboarding guide</span></div><div class="row meet"><span>11:00 Proposal review · Next</span></div></div></div>';
+    if(kind==='check') return '<div class="mini"><div class="hd"><span>Check-in</span><span class="muted">4h left today</span></div><div class="card" style="border-left-color:var(--c2)"><div class="row"><b>Northwind</b><span class="muted" style="margin-left:auto">2 done</span></div><div class="row"><span>Invoice totals</span><span class="tag" style="margin-left:auto">S</span><span class="pill a">Move to Wed</span></div><div class="warn">About 1h over. Move one?</div></div></div>';
+    return '<div class="mini"><div class="hd"><span>Close out</span><span class="muted">4 done · 3h 10m focused</span></div><div class="card"><div class="row muted"><span>Where you left off</span></div><div class="row"><span>Chart renders; next, the client filter.</span></div></div><div class="card" style="border-left-color:var(--amber)"><div class="row"><span>#4411 still Active in DevOps</span><span class="go">Mark done</span></div></div><div class="card" style="border-left-color:var(--risk)"><div class="row"><span class="pill r">Overdue</span><span>Reply to Jordan</span></div></div></div>';
+  }
+  function render(i,focus){
+    cur=i;
+    Array.prototype.forEach.call(stepsEl.children,function(b,j){b.setAttribute('aria-selected',String(j===i));b.tabIndex=j===i?0:-1;});
+    var s=steps[i];
+    panel.innerHTML='<div><h3>'+s.n+'</h3><div class="when">'+s.when+'</div><ul>'+s.what.map(function(w){return '<li>'+w+'</li>';}).join('')+'</ul><div class="keys">Shortcut '+s.key.map(function(k){return '<kbd>'+k+'</kbd>';}).join(' ')+'</div><div class="nav"><button class="btn" id="prev"'+(i===0?' disabled':'')+'>Back</button><button class="btn primary" id="next">'+(i===steps.length-1?'Start over':'Next: '+steps[i+1].n)+'</button></div></div>'+mini(s.mini);
+    cells.forEach(function(c,j){c.classList.toggle('lit',s.lit.indexOf(j)>-1);});
+    document.getElementById('prev').onclick=function(){render(Math.max(0,cur-1),true);};
+    document.getElementById('next').onclick=function(){render(cur===steps.length-1?0:cur+1,true);};
+    if(focus) stepsEl.children[i].focus({preventScroll:true});
+  }
+  steps.forEach(function(s,i){
+    var b=document.createElement('button'); b.className='step'; b.setAttribute('role','tab');
+    b.innerHTML='<span class="dot">'+(i+1)+'</span><span><b>'+s.n+'</b><small>'+s.when.split(' · ')[0]+'</small></span>';
+    b.onclick=function(){render(i);};
+    b.onkeydown=function(e){ if(e.key==='ArrowDown'||e.key==='ArrowRight'){e.preventDefault();render((i+1)%steps.length,true);} if(e.key==='ArrowUp'||e.key==='ArrowLeft'){e.preventDefault();render((i-1+steps.length)%steps.length,true);} };
+    stepsEl.appendChild(b);
+  });
+  render(0);
+
+  // sizing sandbox: quarters
+  var items=[], bar=document.getElementById('bar'), over=document.getElementById('over'), fit=document.getElementById('fit'), load=document.getElementById('load'), stack=document.getElementById('stack');
+  var names={1:'S',2:'M',4:'L'};
+  function words(q){ var half=Math.ceil(q/2); var whole=Math.floor(half/2), h=half%2; if(half===0) return '0'; return (whole?whole:'')+(h?'½':''); }
+  function draw(){
+    var total=items.reduce(function(a,b){return a+b;},0);
+    var qs=bar.querySelectorAll('.q'); var colors=['var(--c2)','color-mix(in srgb,var(--c2) 75%,var(--raised))'];
+    qs.forEach(function(q,j){ var f=j<total; q.classList.toggle('fill',f); q.style.background=f?colors[j%2]:''; });
+    over.innerHTML=''; for(var k=4;k<total;k++){ over.appendChild(document.createElement('i')); }
+    var free=4-total;
+    if(total===0){fit.textContent='Empty block';fit.className='fitword ok';}
+    else if(total<=4){fit.textContent=free===0?'Fits, full':'Fits · '+(free===1?'about 1h':free===2?'about 2h':'about 3h')+' spare';fit.className='fitword ok';}
+    else {var o=total-4; fit.textContent='About '+(o===1?'1h':o===2?'2h':o===3?'3h':Math.round(o/4*3.5)+'h')+' over · move one?';fit.className='fitword warn';}
+    var w=words(total); load.textContent=(w==='0'?'0':w)+' of 1 block';
+    stack.innerHTML=''; items.forEach(function(v,i){ var b=document.createElement('button'); b.textContent=names[v]+' ✕'; b.setAttribute('aria-label','Remove '+names[v]+' story'); b.onclick=function(){items.splice(i,1);draw();}; stack.appendChild(b); });
+  }
+  document.querySelectorAll('[data-add]').forEach(function(b){ b.onclick=function(){ if(items.reduce(function(a,c){return a+c;},0)<12){items.push(+b.dataset.add);draw();} }; });
+  document.getElementById('clear').onclick=function(){items=[];draw();};
+  items=[2,1]; draw();
+
+  // chapter highlight
+  var links=Array.prototype.slice.call(document.querySelectorAll('.chapters a'));
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting){ links.forEach(function(l){l.classList.toggle('on',l.getAttribute('href')==='#'+e.target.id);}); } }); },{rootMargin:'-40% 0px -55% 0px'});
+    document.querySelectorAll('section.ch').forEach(function(s){io.observe(s);});
+  }
+})();
+</script>

@@ -1,5 +1,5 @@
 // Step 17.5: the app open (loader, unroll, "Back into Mon AM", into the top bar), the Close out reverse, and the
-// fun moments. Lumen appears only here, on sign-in and connect screens, in About and in three empty states;
+// fun moments. Lumen appears only here, on sign-in and connect screens, in About, in the Guide's footer and in three empty states;
 // never in Week, Plan the week, Today, Plan the day, Check-in, Roadmap or on a card. Lumen never carries information.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Lumen, LumenLoading, Unroll } from "./Brand.tsx";

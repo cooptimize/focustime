@@ -113,6 +113,8 @@ export type MenuEnv = {
   /** The work item that had focus when the menu opened (O opens it), if any. */
   focusedItem: { clientKey: string; url: string } | null;
   showKeys: () => void;
+  /** G1: the in-app Guide (#/guide). */
+  showGuide: () => void;
   /** The active theme and how to change it (saved in config, applied live). */
   theme: Theme;
   /** Settings > Planning (step 6c): size minutes and focus timer defaults. */
@@ -962,6 +964,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.set_text_size": return { next: () => ({ title: "Text size", items: TEXT_SIZES.map((s) => ({ id: s, label: TEXT_SIZE_NAMES[s], checked: env.textSize === s, action: "ui.set_text_size", run: () => env.saveTextSize(s) })) }) };
     case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
     case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
+    case "ui.tour_offer": return { run: () => env.showGuide() };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };
@@ -1148,7 +1151,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
       hint: "O",
       ...(env.focusedItem ? { run: () => env.openLink(env.focusedItem!.clientKey, env.focusedItem!.url) } : { disabled: "Focus a work item first (Tab to it)" }),
     },
-    { id: "ui.keys", action: "ui.keys", group: "Keyboard", label: "Keyboard shortcuts", hint: "?", run: env.showKeys },
+    { id: "ui.guide", action: "ui.guide", group: "Help", label: "Guide: the basics, the rhythm, sizing and shortcuts", hint: "?", run: () => env.showGuide() },
+    { id: "ui.keys", action: "ui.keys", group: "Keyboard", label: "Keyboard shortcuts (every key in one list)", run: env.showKeys },
   ];
 }
 

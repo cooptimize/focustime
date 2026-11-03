@@ -11,6 +11,9 @@ import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
 import { BentMark } from "./brand/Brand.tsx";
+import { Guide, TourLink } from "./guide/Guide.tsx";
+import { TOUR } from "./guide/content.ts";
+import { parseHash } from "./nav.ts";
 
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
@@ -76,13 +79,35 @@ export function AuthGate({ children }: { children: ReactNode }) {
   return <AuthCtx.Provider value={api}>{children}</AuthCtx.Provider>;
 }
 
+/** G1: the Guide's address (#/guide, #/guide/keys) while signed out, kept in step with the location. */
+function useGuideHash(): [string | null | undefined, (open: boolean) => void] {
+  const read = () => {
+    const o = parseHash(location.hash)?.overlay;
+    return o?.kind === "guide" ? o.chapter : undefined;
+  };
+  const [at, setAt] = useState<string | null | undefined>(read);
+  useEffect(() => {
+    const on = () => setAt(read());
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
+  const set = useCallback((open: boolean) => {
+    if (open) location.hash = "#/guide";
+    else history.replaceState(null, "", `${location.pathname}${location.search}`);
+    setAt(open ? null : undefined);
+  }, []);
+  return [at, set];
+}
+
 export function SignInScreen({ message: first }: { message: string | null }) {
   const [busy, setBusy] = useState<"microsoft" | "demo" | null>(null);
   const [message, setMessage] = useState<string | null>(first);
+  const [guide, setGuide] = useGuideHash();
   useEffect(() => {
     setSignInShowing(true);
     return () => setSignInShowing(false);
   }, []);
+  if (guide !== undefined) return <Guide standalone chapter={guide} closeLabel={TOUR.signIn} onClose={() => setGuide(false)} />;
   return (
     <main className="signin-page">
       <div className="signin-card">
@@ -103,6 +128,7 @@ export function SignInScreen({ message: first }: { message: string | null }) {
         </button>
         {message && <p className="set-problem" role="alert">{message}</p>}
         <p className="set-hint">Your sign-in stays on the FocusTime server; FocusTime never sees your password.</p>
+        <TourLink onOpen={() => setGuide(true)} />
         <div className="signin-alt">
           <button
             type="button"

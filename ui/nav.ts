@@ -29,7 +29,8 @@ export type Nav =
   | { tab: "roadmap"; mode: RoadmapMode }
   | { tab: "inbox"; followUp: number | null };
 
-export type Overlay = { kind: "focus" } | { kind: "settings"; section: string } | null;
+/** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
+export type Overlay = { kind: "focus" } | { kind: "settings"; section: string } | { kind: "guide"; chapter: string | null } | null;
 export type Loc = { nav: Nav; overlay: Overlay };
 
 export const navOf = {
@@ -87,10 +88,11 @@ const validDate = (s: string) => {
   }
 };
 
-/** "#/today/plan/2026-11-03/PM", "#/week/plan/2026-11-09", "#/roadmap/ahead", "#/inbox", "#/settings/you". */
+/** "#/today/plan/2026-11-03/PM", "#/week/plan/2026-11-09", "#/roadmap/ahead", "#/inbox", "#/settings/you", "#/guide/keys". */
 export function hashOf(l: Loc): string {
   if (l.overlay?.kind === "focus") return "#/focus";
   if (l.overlay?.kind === "settings") return `#/settings/${l.overlay.section}`;
+  if (l.overlay?.kind === "guide") return l.overlay.chapter ? `#/guide/${l.overlay.chapter}` : "#/guide";
   const n = l.nav;
   if (n.tab === "today") return ["#/today", n.mode === "now" ? null : n.mode, n.mode === "plan" || n.mode === "closeout" ? n.date : null, n.mode === "plan" && n.date ? n.half : null].filter(Boolean).join("/");
   if (n.tab === "week") return ["#/week", n.mode === "planweek" ? "plan" : null, n.week].filter(Boolean).join("/");
@@ -112,6 +114,8 @@ export function parseHash(hash: string): Loc | null {
       return a === undefined ? { nav: navOf.today(), overlay: { kind: "focus" } } : null;
     case "settings":
       return a !== undefined && SECTION.test(a) && b === undefined ? { nav: navOf.today(), overlay: { kind: "settings", section: a } } : a === undefined ? { nav: navOf.today(), overlay: { kind: "settings", section: "you" } } : null;
+    case "guide":
+      return b !== undefined ? null : a === undefined ? { nav: navOf.today(), overlay: { kind: "guide", chapter: null } } : SECTION.test(a) ? { nav: navOf.today(), overlay: { kind: "guide", chapter: a } } : null;
     case "today": {
       if (a === undefined) return plain(navOf.today());
       if (a === "checkin") return b === undefined ? plain(navOf.today("checkin")) : null;

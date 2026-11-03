@@ -100,6 +100,7 @@ export const ACTIONS = [
   { name: "ui.set_theme", title: "Change theme", group: "Display", target: "theme", summary: "Cooptimize Dark, Cooptimize Light or Neutral; saved in config" },
   { name: "demo.set", title: "Demo mode", group: "Display", target: "none", summary: "Swap every source for fictional sample data to demo safely; nothing leaves FocusTime and your plan isn't touched" },
   { name: "ui.first_launch", title: "First launch", group: "Display", target: "none", summary: "True only the first time FocusTime opens on this computer (for the welcome moment); kept in the plan store" },
+  { name: "ui.tour_offer", title: "Tour link", group: "Display", target: "none", summary: "Whether a person's first Today offers the 2-minute tour; { done: true } once they open it or say Not now; kept per person in the plan store" },
   { name: "ui.set_reduce_motion", title: "Reduce motion", group: "Display", target: "none", summary: "No opening and closing animation and no moving Lumen; the still pose shows" },
   { name: "ui.set_text_size", title: "Text size", group: "Display", target: "none", shortcut: "Ctrl +", summary: "Default, Large or Larger for all text; saved in config" },
   { name: "ui.set_view_range", title: "Timelines", group: "Display", target: "range", shortcut: "V", summary: "The hours Week's rails and timelines show: business hours, 12 hours or 24 hours, for now; Settings > Display sets the default" },
