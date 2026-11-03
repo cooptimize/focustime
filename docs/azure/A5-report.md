@@ -107,6 +107,43 @@ Welcome message for the two pilot users (sent by Tanner; their names stay out of
 After each signs in, the report back is only: matched in Dataverse yes or no, the number of followed clients, sources
 live, setup steps done or skipped. Never plan content.
 
+## After the pilot started: Settings › Clients empty on prod (D472, D473)
+
+**Symptom.** On prod, Settings › Clients said "Your Dataverse user isn't found yet. Sign in with your work account, or
+check your email under You", and everything Settings shows from Dataverse was empty (clients, their DevOps identities,
+Followed). Dev and the local app were fine.
+
+**Diagnosis (read only).**
+1. Not a connection failure, and not a match failure. Prod's App Insights (the closed field set: source, op, status)
+   showed the Dataverse token, one `systemusers` lookup, then `focustimes`, `accounts`, `my_accounts`,
+   `accountworkers`, `devops_accounts` and the DevOps reads, all 200: Dataverse answered and found the person, and the
+   week loaded their clients.
+2. No config gap. Every app setting name dev has, prod has (the values that differ are the environment's own: the public
+   URL, the SQL server, the vault, App Insights, `FOCUSTIME_ENV`, `FOCUSTIME_INVITE_DOMAINS`); the same three app secret
+   references; the same three Key Vault secret names (`ft-entra-client-secret`, `ft-google-client-secret`,
+   `ft-dataverse-client-secret`), all enabled. The Dataverse URL, tenant and client id are the same in both.
+3. Matching is by email, then UPN, against the Dataverse user's `internalemailaddress` (the Entra oid isn't used). The
+   week's match finds the user and keeps their id with the sign-in (`ms_identity` in account state), not in
+   `user_settings`.
+
+**Cause.** `actions/dispatch.ts` gave every action the settings with "me" from the sign-in except `settings.load` and
+`settings.save`, which read `user_settings` as written. On prod's clean database (D465) `my_systemuserid` was never in
+`user_settings`, so Settings saw no Dataverse user and never queried. Dev and the local store had `my_systemuserid` in
+their settings from before the sign-in kept it, which hid the gap.
+
+**Fix.** Settings reads through the same signed-in context and, when no Dataverse user is known yet, runs the same
+match (and keeps it); saves still edit the settings as written. The message tells the two cases apart: "Couldn't reach
+Dataverse. Try again, or tell the FocusTime team." and "No Cooptimize staff record matches <email>. Ask the FocusTime
+team."; the week shows the first as unreachable rather than misconfigured. Code only: nothing in Azure was wrong, so
+the Bicep is unchanged. Tests: `actions/settings-actions.test.ts` (kept with the sign-in, matched now, no match,
+unreachable, never "sign in"; they fail on the old code), `actions/match-me.test.ts`.
+
+**So it can't recur: the parity check.** deploy-prod.yml now runs `infra/scripts/parity.sh` before the migration or any
+change, a dry run included: it fails if dev has an app setting, app secret reference or Key Vault secret name that prod
+lacks, now or after this deploy (the what-if), unless `infra/parity-allow.txt` allows it with a reason. Names only.
+ft-prod-deploy got read-only rights for it (Reader on ft-dev-app, Key Vault Reader on both vaults) from
+`bootstrap.sh --env prod`, a narrow exception to D471. `scripts/parity.test.ts` checks it against a fake `az`.
+
 ## Limitations
 
 - Max 1 replica until the scheduler has a lease (D467).

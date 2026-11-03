@@ -14,6 +14,8 @@
 #   6. Prod only (A5, D471): prod runs dev's tested image, so it pulls from dev's registry. The pull identity
 #      ft-prod-pull (in FocusTime) and the deploy identity ft-prod-deploy get AcrPull on that one registry, nothing
 #      else in FocusTime-dev. PROD_DEPLOYERS (--deployer, GitHub logins) is who may run deploy-prod.yml (D466).
+#   7. Prod only (D472): the parity check's reads for ft-prod-deploy: Reader on ft-dev-app, Key Vault Reader on both
+#      vaults (names, never values).
 #
 # Prints names and ids, never a secret (there are none here).
 #
@@ -130,6 +132,24 @@ if [[ $ENV == prod ]]; then
       done
     fi
   done
+  # 7. Prod: what deploy-prod.yml's parity check (infra/scripts/parity.sh) reads, read only: Reader on dev's container app
+  #    (setting names; never its secret values, which need listSecrets) and Key Vault Reader on both vaults (secret
+  #    names and metadata; never values).
+  if [[ -n $PRINCIPAL_ID ]]; then
+    PARITY_SCOPES=("Reader=$(az containerapp show -g "$DEV_RG" -n ft-dev-app --query id -o tsv 2>/dev/null || true)")
+    for vrg in "$DEV_RG" "$RG"; do PARITY_SCOPES+=("Key Vault Reader=$(az keyvault list -g "$vrg" --query '[0].id' -o tsv 2>/dev/null || true)"); done
+    for pair in "${PARITY_SCOPES[@]}"; do
+      role=${pair%%=*} scope=${pair#*=}
+      [[ -n $scope ]] || { echo "Skipping $role for the parity check: its resource doesn't exist yet (run again after the first deploy)"; continue; }
+      if [[ -z $(az role assignment list --assignee "$PRINCIPAL_ID" --scope "$scope" --role "$role" --query "[].id" -o tsv) ]]; then
+        echo "Assigning $role on ${scope##*/} to $UAMI (parity check)"
+        for i in 1 2 3 4 5 6; do
+          run role assignment create --assignee-object-id "$PRINCIPAL_ID" --assignee-principal-type ServicePrincipal --role "$role" --scope "$scope" -o none && break
+          ((i < 6)) || exit 1; sleep 15
+        done
+      fi
+    done
+  fi
   VARS+=("AZURE_PROD_REGISTRY=$ACR_NAME")
   if ((${#DEPLOYERS[@]})); then VARS+=("PROD_DEPLOYERS=$(IFS=,; echo "${DEPLOYERS[*]}")"); fi
 fi

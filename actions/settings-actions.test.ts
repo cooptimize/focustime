@@ -9,6 +9,8 @@ import { STARTER_TOML } from "../fixtures/starter.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { startTestApp } from "../server/test-app.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
+import { createPlanStore } from "../store/plan-store.ts";
+import { IDENTITY_KEY, type StoredIdentity } from "./account.ts";
 import type { SettingsData } from "./types.ts";
 
 const SECRET = "FAKE-SETTINGS-SECRET-5d1e";
@@ -41,7 +43,8 @@ describe("Settings (step 6b)", () => {
     // no-demo-leak: without Dataverse, only the internal client (always followed); a color in settings makes no client.
     expect(d.clients.map((c) => c.key)).toEqual(["Cooptimize"]);
     expect(d.dataverseReached).toBe(false);
-    expect(d.dataverseProblem).toMatch(/Dataverse user isn't found yet/);
+    // makeDataverse fails here: Dataverse can't be reached.
+    expect(d.dataverseProblem).toBe("Couldn't reach Dataverse. Try again, or tell the FocusTime team.");
     expect(d.secrets.map((s) => [s.account, s.state])).toEqual([["dataverse-client-secret", "missing"], ["google-client-secret", "missing"]]);
   });
 
@@ -178,5 +181,70 @@ describe("where settings live (fix/settings-autosave)", () => {
     const { isFilePath } = await import("./settings-actions.ts");
     expect(["/home/me/.config/focustime/config.toml", "C:\\Users\\me\\config.toml", "~/.config/focustime/config.toml"].every(isFilePath)).toBe(true);
     expect(["your FocusTime account", "Demo data (in memory, not your config file)"].some(isFilePath)).toBe(false);
+  });
+});
+
+// A5 fix: in the hosted app the Dataverse user found for a person is kept with their sign-in (ms_identity), not in
+// their settings. Settings once read only the settings, so on prod (a clean database) Clients said "isn't found yet"
+// while Week, which reads the sign-in, had the clients.
+describe("Settings › Clients finds me like the week does (A5 fix)", () => {
+  const ID = "dddddddd-0000-4000-8000-0000000000c1";
+  const ME = { oid: "00000000-0000-4000-8000-0000000000e1", tid: "00000000-0000-4000-8000-0000000000e2", name: "Pat Example", username: "pat@example.com", email: "pat@example.com" };
+  type Lookup = { ok: true; id: string } | { ok: false; message: string; reason: "none" | "many" | "failed" };
+  async function signedIn(o: { kept?: string | null; lookup?: (email: string) => Lookup; clients?: boolean } = {}) {
+    const dir = mkdtempSync(join(tmpdir(), "c-settings-me-"));
+    const path = join(dir, "config.toml");
+    writeFileSync(path, STARTER_TOML.replace('my_email = ""', 'my_email = "pat@example.com"')); // no my_systemuserid, like a new prod user
+    const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Now.zonedDateTimeISO("UTC") });
+    await plan.setAccountState(IDENTITY_KEY, { ...ME, signedInAt: "2026-11-03T12:00:00Z", systemUserId: o.kept ?? null, systemUserEmail: o.kept ? "pat@example.com" : null } satisfies StoredIdentity);
+    const asked: string[] = [];
+    const no = () => { throw new Error("n/a"); };
+    const c: ActionContext = {
+      plan,
+      loadConfig: async () => ({ path, parsed: parseConfig(readFileSync(path, "utf8")) }),
+      makeDataverse: ((dv: { mySystemUserId: string | null }) => ({
+        resolveUserId: async (email: string) => (asked.push(email), o.lookup?.(email) ?? { ok: false, message: "none", reason: "none" }),
+        myClients: async () => (o.clients === false || dv.mySystemUserId !== ID ? null : [{ clientKey: "Fabrikam", clientName: "Fabrikam", devops: true, devopsEmail: "pat@fabrikam.example" }]),
+      })) as never,
+      makeOutlook: no, makeGoogle: no, makeDevOps: no,
+      saveSystemUserId: async () => { throw new Error("a signed-in match is kept with the sign-in, not in the file"); },
+      signedInAs: async () => ({ email: ME.email, upn: ME.username }),
+      now: () => "2026-11-03T14:00:00Z",
+    };
+    const r = await dispatch(c, { action: "settings.load", input: {} });
+    expect(r.ok).toBe(true);
+    return { d: (r as { data: SettingsData }).data, asked, plan };
+  }
+
+  it("uses the Dataverse user kept with the sign-in", async () => {
+    const { d, asked } = await signedIn({ kept: ID });
+    expect(d.dataverseProblem).toBeNull();
+    expect(d.clients.map((c) => [c.key, c.devopsEmail])).toContainEqual(["Fabrikam", "pat@fabrikam.example"]);
+    expect(d.you).toMatchObject({ email: "pat@example.com", systemUserId: ID });
+    expect(asked).toEqual([]);
+  });
+
+  it("finds and keeps it when none is known yet", async () => {
+    const { d, plan } = await signedIn({ lookup: (e) => (e === "pat@example.com" ? { ok: true, id: ID } : { ok: false, message: "none", reason: "none" }) });
+    expect(d.dataverseProblem).toBeNull();
+    expect(d.clients.map((c) => c.key)).toContain("Fabrikam");
+    expect(await plan.accountState<StoredIdentity>(IDENTITY_KEY)).toMatchObject({ systemUserId: ID, systemUserEmail: "pat@example.com" });
+  });
+
+  it("says no staff record matches, by email, when Dataverse answered", async () => {
+    const { d } = await signedIn();
+    expect(d.dataverseProblem).toBe("No Cooptimize staff record matches pat@example.com. Ask the FocusTime team.");
+  });
+
+  it("says it couldn't reach Dataverse when the lookup or the clients read fails", async () => {
+    const down = await signedIn({ lookup: () => ({ ok: false, message: "401", reason: "failed" }) });
+    expect(down.d.dataverseProblem).toBe("Couldn't reach Dataverse. Try again, or tell the FocusTime team.");
+    const clients = await signedIn({ kept: ID, clients: false });
+    expect(clients.d.dataverseProblem).toBe("Couldn't reach Dataverse. Try again, or tell the FocusTime team.");
+  });
+
+  it("never asks a signed-in person to sign in", async () => {
+    for (const o of [{}, { lookup: () => ({ ok: false, message: "x", reason: "failed" }) as Lookup }, { kept: ID, clients: false }])
+      expect((await signedIn(o)).d.dataverseProblem).not.toMatch(/sign in/i);
   });
 });
