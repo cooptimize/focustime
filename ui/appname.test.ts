@@ -50,7 +50,9 @@ describe("the app's name in user-visible text (R1)", () => {
   });
 
   it('"Focus Time" with a space only ever names the Dataverse table', () => {
-    const bad = all.flatMap((f) => f.strings.filter((s) => /Focus Time/.test(s) && !f.file.startsWith("sources/dataverse/") && !/Dataverse/.test(s)).map((s) => `${f.file}: ${s}`));
+    // E2: the Guide's "What's a block, then?" names the table without the word Dataverse (its other answers say it).
+    const table = /half-day set aside for a client in Focus Time\./;
+    const bad = all.flatMap((f) => f.strings.filter((s) => /Focus Time/.test(s) && !f.file.startsWith("sources/dataverse/") && !/Dataverse/.test(s) && !(f.file === "ui/guide/content.ts" && table.test(s))).map((s) => `${f.file}: ${s}`));
     expect(bad).toEqual([]);
   });
 
