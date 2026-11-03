@@ -7,10 +7,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { request } from "node:http";
 import { createServer as createHttps } from "node:https";
-import { connect, createServer } from "node:net";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Browser, type Page } from "playwright-core";
+import { onFreePort } from "../test/ports.ts";
 
 export const CHROMIUM = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].find((p) => existsSync(p)) ?? null;
 /**
@@ -20,15 +21,6 @@ export const CHROMIUM = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr
 export const WEBKIT = existsSync(webkit.executablePath()) ? webkit.executablePath() : null;
 export const NOW = "2026-11-02T09:30:00-05:00";
 
-const freePort = () =>
-  new Promise<number>((ok, fail) => {
-    const s = createServer();
-    s.listen(0, "127.0.0.1", () => {
-      const a = s.address();
-      s.close(() => (a && typeof a === "object" ? ok(a.port) : fail(new Error("no port"))));
-    });
-  });
-
 /**
  * An https://localhost front for the server, for WebKit: it keeps no Secure cookie over http (Chromium does on
  * localhost), and the session cookies are __Host- (Secure). A self-signed certificate made for this run in the test's
@@ -37,7 +29,7 @@ const freePort = () =>
 async function tlsFront(dir: string, port: number, target: number): Promise<() => void> {
   const key = join(dir, "tls.key");
   const cert = join(dir, "tls.crt");
-  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", cert, "-days", "1", "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost"], { stdio: "ignore" });
+  if (!existsSync(cert)) execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", cert, "-days", "1", "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost"], { stdio: "ignore" });
   const server = createHttps({ key: readFileSync(key), cert: readFileSync(cert) }, (req, res) => {
     const up = request({ host: "127.0.0.1", port: target, method: req.method, path: req.url, headers: req.headers }, (r) => {
       res.writeHead(r.statusCode ?? 502, r.headers);
@@ -58,39 +50,65 @@ async function tlsFront(dir: string, port: number, target: number): Promise<() =
     up.on("error", () => socket.destroy());
     socket.on("error", () => up.destroy());
   });
-  await new Promise<void>((ok) => server.listen(port, "127.0.0.1", ok));
+  await new Promise<void>((ok, fail) => {
+    server.once("error", fail);
+    server.listen(port, "127.0.0.1", ok);
+  });
   return () => server.close();
 }
 
 export type Harness = { url: string; browser: Browser; stop: () => Promise<void> };
 
+/**
+ * Starts a demo server in its own temp folder (XDG dirs) on a free port. The port is picked by the OS; if another test
+ * takes it before the server listens (the server then exits with "already running on port"), it starts again on a new
+ * one (test/ports.ts). WebKit's TLS front gets its port the same way; the server's public URL names that front.
+ */
 export async function startDemo(engine: "chromium" | "webkit" = "chromium"): Promise<Harness> {
   const dir = await mkdtemp(join(tmpdir(), "focustime-e2e-"));
   // A2: no sign-in is set up here; the sign-in page offers "Try the demo", which every test uses.
-  const front = engine === "webkit" ? await freePort() : null;
-  const env = { ...process.env, ...(front ? { FOCUSTIME_PUBLIC_URL: `https://localhost:${front}` } : {}), FOCUSTIME_DEMO: "1", XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"), XDG_CACHE_HOME: join(dir, "cache"), XDG_RUNTIME_DIR: join(dir, "run") };
   await mkdir(join(dir, "data", "focustime"), { recursive: true });
-  const port = await freePort();
   const root = resolve(import.meta.dirname, "..");
-  const child: ChildProcess = spawn(process.execPath, ["server/main.ts", "--dev", "--no-open", "--no-reopen", "--headless", "--port", String(port), "--clock", NOW], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
-  let out = "";
-  child.stdout?.on("data", (b) => (out += b));
-  child.stderr?.on("data", (b) => (out += b));
   const launch = join(dir, "run", "focustime", "launch.json");
-  for (let i = 0; i < 300 && !existsSync(launch); i++) {
-    if (child.exitCode !== null) throw new Error(`server exited: ${out.slice(-500)}`);
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  const url = (JSON.parse(await readFile(launch, "utf8")) as { url: string }).url;
-  const closeFront = front ? await tlsFront(dir, front, port) : () => {};
+  const startServer = async (port: number, front: number | null) => {
+    const env = { ...process.env, ...(front ? { FOCUSTIME_PUBLIC_URL: `https://localhost:${front}` } : {}), FOCUSTIME_DEMO: "1", XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"), XDG_CACHE_HOME: join(dir, "cache"), XDG_RUNTIME_DIR: join(dir, "run") };
+    const child: ChildProcess = spawn(process.execPath, ["server/main.ts", "--dev", "--no-open", "--no-reopen", "--headless", "--port", String(port), "--clock", NOW], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    child.stdout?.on("data", (b) => (out += b));
+    child.stderr?.on("data", (b) => (out += b));
+    for (let i = 0; i < 300 && !existsSync(launch); i++) {
+      if (child.exitCode !== null) throw new Error(`server exited: ${out.slice(-500)}`);
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    if (!existsSync(launch)) {
+      child.kill("SIGTERM");
+      throw new Error(`server did not start in 30 s: ${out.slice(-500)}`);
+    }
+    return { child, port, url: (JSON.parse(await readFile(launch, "utf8")) as { url: string }).url };
+  };
+  let closeFront = () => {};
+  let server: Awaited<ReturnType<typeof startServer>>;
+  if (engine === "webkit") {
+    // The front's port first (the server's public URL names it), then the server, then the front on that port.
+    ({ server, closeFront } = await onFreePort(async (front) => {
+      const s = await onFreePort((port) => startServer(port, front));
+      try {
+        return { server: s, closeFront: await tlsFront(dir, front, s.port) };
+      } catch (e) {
+        s.child.kill("SIGTERM");
+        await rm(launch, { force: true });
+        throw e;
+      }
+    }));
+  } else server = await onFreePort((port) => startServer(port, null));
   const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu"] });
   return {
-    url: `${url}?now=${encodeURIComponent(NOW)}`,
+    url: `${server.url}?now=${encodeURIComponent(NOW)}`,
     browser,
     stop: async () => {
       await browser.close().catch(() => {});
       closeFront();
-      child.kill("SIGTERM");
+      server.child.kill("SIGTERM");
       await new Promise((r) => setTimeout(r, 200));
       await rm(dir, { recursive: true, force: true });
     },
