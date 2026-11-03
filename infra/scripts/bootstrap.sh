@@ -75,12 +75,20 @@ if ((DRY)) && ! az identity show -g "$RG" -n "$UAMI" -o none 2>/dev/null; then C
   CLIENT_ID=$(az identity show -g "$RG" -n "$UAMI" --query clientId -o tsv)
   PRINCIPAL_ID=$(az identity show -g "$RG" -n "$UAMI" --query principalId -o tsv)
 fi
+# GitHub's token subject: the name form, and the immutable-id form this organization's tokens use
+# (repo:<owner>@<owner id>/<repo>@<repo id>:...). Both are added, so either format signs in.
 SUBJECT="repo:$REPO:ref:refs/heads/main"
-if [[ -z $(az identity federated-credential list -g "$RG" --identity-name "$UAMI" --query "[?subject=='$SUBJECT'].name" -o tsv 2>/dev/null) ]]; then
-  echo "Adding the federated credential github-main ($SUBJECT)"
-  run identity federated-credential create -g "$RG" --identity-name "$UAMI" -n github-main \
-    --issuer https://token.actions.githubusercontent.com --subject "$SUBJECT" --audiences api://AzureADTokenExchange -o none
-fi
+IDS=$(gh api "repos/$REPO" --jq '"\(.owner.id) \(.id)"' 2>/dev/null || true)
+SUBJECTS=("github-main=$SUBJECT")
+if [[ -n $IDS ]]; then SUBJECTS+=("github-main-ids=repo:${REPO%%/*}@${IDS%% *}/${REPO#*/}@${IDS#* }:ref:refs/heads/main"); fi
+for pair in "${SUBJECTS[@]}"; do
+  name=${pair%%=*} sub=${pair#*=}
+  if [[ -z $(az identity federated-credential list -g "$RG" --identity-name "$UAMI" --query "[?subject=='$sub'].name" -o tsv 2>/dev/null) ]]; then
+    echo "Adding the federated credential $name ($sub)"
+    run identity federated-credential create -g "$RG" --identity-name "$UAMI" -n "$name" \
+      --issuer https://token.actions.githubusercontent.com --subject "$sub" --audiences api://AzureADTokenExchange -o none
+  fi
+done
 if [[ -n $PRINCIPAL_ID ]]; then
   RG_ID=$(az group show -n "$RG" --query id -o tsv)
   for role in Contributor "User Access Administrator"; do
@@ -109,4 +117,4 @@ echo "== $ENV"
 echo "resource group:   $RG ($LOCATION)"
 echo "db admins group:  $GROUP ($GROUP_ID)"
 echo "deploy identity:  $UAMI (client id $CLIENT_ID)"
-echo "federated:        $SUBJECT"
+printf "federated:        %s\n" "${SUBJECTS[@]#*=}"
