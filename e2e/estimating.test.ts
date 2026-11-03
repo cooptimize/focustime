@@ -1,12 +1,13 @@
-// Step 16.4: simple estimating (whole blocks and S/M/L) and profile photos, in demo mode (fictional data, generated
-// avatars, no Graph calls). The scan reads every view's text for fractional amounts: none may show anywhere.
+// Step 16.4 and E1: estimating in half blocks (a feature's load from its sized stories, else its estimate; stories S, M
+// or L) and profile photos, in demo mode (fictional data, generated avatars, no Graph calls). The scan reads every
+// view's text for decimals and quarters: none may show anywhere (half blocks are the unit).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, startDemo, weekClient, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
-/** Decimals and fractions: "0.8 blocks", "1.5 h", "half a block", "½". Times (9:30) and dates are fine. */
-const FRACTION = /(?<![\d:])\d+[.,]\d+(?![\d:])|half a block|½|¼|¾/i;
+/** Decimals and quarters: "0.8 blocks", "1.5 h", "¼", "¾". Half blocks ("½ block", "1½ blocks", "half a block") are the unit (E1). Times (9:30) and dates are fine. */
+const FRACTION = /(?<![\d:])\d+[.,]\d+(?![\d:])|¼|¾/i;
 
 describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", () => {
   beforeAll(async () => {
@@ -23,10 +24,10 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
     return { page, errors };
   };
 
-  it("each client: its whole blocks, a plain status, and why a half-day doesn't count", async () => {
+  it("each client: its blocks, a plain status in half blocks, and why a half-day doesn't count", async () => {
     const { page, errors } = await planWeek();
     const northwind = (await weekClient(page, "Northwind")).locator(".pw-card-head");
-    await expect.poll(() => northwind.locator(".pw-fit2").textContent()).toBe("3 planned, 2 available");
+    await expect.poll(() => northwind.locator(".pw-fit2").textContent()).toBe("2½ planned, 2 available");
     // U4: why a half-day doesn't count is on hover over the fit words (and in the client's panel).
     await expect(northwind.locator(".pw-budget").getAttribute("title")).resolves.toMatch(/^2 blocks this week\. Not counted: Wed AM: mostly meetings/);
     await expect((await weekClient(page, "Cooptimize")).locator(".pw-card-head .pw-fit2").textContent()).resolves.toBe("All 1 planned");
@@ -34,32 +35,55 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
     await page.close();
   }, T);
 
-  it("stories nest in their feature and fill it; over asks once to raise, one click", async () => {
+  it("stories nest in their feature and its load comes from their sizes, rounded up to a half block; no stepper", async () => {
     const { page } = await planWeek();
     const harbor = await weekClient(page, "Harbor");
     const feature = harbor.locator(".pw-row").first();
     await expect.poll(() => feature.locator(".pw-nested > li").count()).toBe(2);
-    await expect(feature.locator(".pw-raise").textContent()).resolves.toContain("Stories need more than 1 block. Raise to 2?");
-    await feature.getByRole("button", { name: "Raise to 2" }).click();
-    await expect.poll(() => feature.locator(".pw-stepper .pw-chip-btn").textContent()).toBe("2 blocks");
-    await expect.poll(() => feature.locator(".pw-raise").count()).toBe(0);
-    // Northwind's export: an L and an M in 2 blocks needs more stories (no numbers).
-    const exp = (await weekClient(page, "Northwind")).locator(".pw-row").first();
-    await expect(exp.locator(".pw-fill").textContent()).resolves.toBe("needs more stories");
+    // An L and an S: 1¼, shown as 1½. Its estimate (1 block) is ignored.
+    await expect(feature.locator(".pw-stepper .pw-load").first().textContent()).resolves.toBe("1½ blocks");
+    await expect(feature.locator(".pw-stepper .pw-load").first().getAttribute("title")).resolves.toMatch(/^From its stories/);
+    await expect(feature.locator(":scope > .pw-stepper button.pw-step:not(.pw-step-ph)").count()).resolves.toBe(0);
+    // Sizing a story changes the load: the S becomes an L, 2 blocks.
+    await feature.locator(".pw-nested > li").nth(1).locator(".pw-size").click();
+    await page.getByRole("menuitem", { name: /^L · about a whole block/ }).click();
+    await expect.poll(() => feature.locator(".pw-stepper .pw-load").first().textContent()).toBe("2 blocks");
     await page.close();
   }, T);
 
-  it("whole-block steppers; a story has S, M or L, never blocks", async () => {
+  it("a feature with no stories on the list: its estimate, ±½ on hover; a story has S, M or L, never blocks", async () => {
     const { page } = await planWeek();
-    const feature = (await weekClient(page, "Northwind")).locator(".pw-row").first();
-    await feature.getByRole("button", { name: "One block more" }).click();
-    await expect.poll(() => feature.locator(".pw-stepper .pw-chip-btn").first().textContent()).toBe("3 blocks");
-    await feature.getByRole("button", { name: "One block less" }).first().click();
-    await expect.poll(() => feature.locator(".pw-stepper .pw-chip-btn").first().textContent()).toBe("2 blocks");
+    const northwind = await weekClient(page, "Northwind");
+    const est = northwind.locator(".pw-row", { has: page.locator(":scope > .pw-stepper:not(.pw-derived)") }).first();
+    await expect(est.locator(".pw-stepper .pw-load").first().textContent()).resolves.toBe("1 block");
+    await est.hover();
+    await est.getByRole("button", { name: "Half a block more" }).click();
+    await expect.poll(() => est.locator(".pw-stepper .pw-load").first().textContent()).toBe("1½ blocks");
+    await expect.poll(() => northwind.locator(".pw-card-head .pw-fit2").textContent()).toBe("3 planned, 2 available");
+    await est.getByRole("button", { name: "Half a block less" }).first().click();
+    await est.getByRole("button", { name: "Half a block less" }).first().click();
+    await expect.poll(() => est.locator(".pw-stepper .pw-load").first().textContent()).toBe("½ block");
+    await expect(est.getByRole("button", { name: "Half a block less" }).first().isDisabled()).resolves.toBe(true);
+    const feature = northwind.locator(".pw-row").first();
     const story = feature.locator(".pw-nested > li").first();
     await story.locator(".pw-size").click();
     await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual(expect.arrayContaining([expect.stringContaining("S · about an hour"), expect.stringContaining("M · a couple of hours"), expect.stringContaining("L · about a whole block")]));
     await page.keyboard.press("Escape");
+    await page.close();
+  }, T);
+
+  it("a feature's other stories are one muted count line, not their titles; it opens the feature's panel with owner and state", async () => {
+    const { page, errors } = await planWeek();
+    const line = page.locator(".pw-client .pw-row > .pw-kids").first();
+    await line.waitFor({ timeout: 10_000 });
+    const text = (await line.textContent()) ?? "";
+    expect(text).toMatch(/^\d+ more stor(y|ies)( · \d+ assigned to others)?$/);
+    expect(text).not.toMatch(/ · 0 assigned/);
+    await line.click();
+    const panel = page.locator(".dp-section[aria-label='Stories'] .pw-pstories li");
+    await expect.poll(() => panel.count()).toBeGreaterThanOrEqual(Number(text.split(" ")[0]));
+    await expect(panel.first().locator(".muted").textContent()).resolves.toMatch(/ · /);
+    expect(errors).toEqual([]);
     await page.close();
   }, T);
 
@@ -87,10 +111,10 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
     await page.close();
   }, T);
 
-  it("no fractional amounts anywhere: Plan the week, Week, Today, Plan the day, Check-in, Close out, Roadmap", async () => {
-    // The scan catches what step 16.4 removed, and leaves times and dates alone.
-    for (const bad of ["Room for about 1.5 blocks more", "0.8 blocks", "About half a block over", "1.5 h"]) expect(bad).toMatch(FRACTION);
-    for (const ok of ["9:30 AM", "Nov 2, 2026", "3 planned, 2 available", "1:30 PM to 5:00 PM"]) expect(ok).not.toMatch(FRACTION);
+  it("no decimals or quarters anywhere: Plan the week, Week, Today, Plan the day, Check-in, Close out, Roadmap", async () => {
+    // The scan catches decimals and quarters (step 16.4, E1), and leaves half blocks, times and dates alone.
+    for (const bad of ["Room for about 1.5 blocks more", "0.8 blocks", "¼ block", "¾ blocks", "1.5 h"]) expect(bad).toMatch(FRACTION);
+    for (const ok of ["9:30 AM", "Nov 2, 2026", "2½ planned, 2 available", "half a block free", "½ block", "1:30 PM to 5:00 PM"]) expect(ok).not.toMatch(FRACTION);
     const { page } = await freshPage(h);
     const views: [string, string][] = [
       ["#/week/plan/2026-11-02", ".pw-client"],

@@ -1,12 +1,13 @@
 // Roadmap › Plan ahead (step 17, slice 2): one timeline, weekly columns for weeks 1 to 4 and a column per month for
 // weeks 5 to 12, with a today line. Rows by client; epics as parent bars with their features nested (collapsible).
 // Bars from DevOps Start Date and Target Date where the process has them (solid), otherwise estimated (hatched, "est.");
-// the target as a diamond, a ghost past it when the pace forecast overshoots. Weeks 1 to 4: whole blocks per feature per
+// the target as a diamond, a ghost past it when the pace forecast overshoots. Weeks 1 to 4: half blocks per feature per
 // week, the same rows Plan the week edits. Dragging a bar keeps its dates locally; "Save dates to DevOps" writes them
 // through the DevOps write flow (preview, rev test, read back, undo). Whole numbers only.
 import type React from "react";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { AheadState, RoadmapClient, RoadmapRow, RoadmapState, WeekLoadData } from "../actions/types.ts";
+import { blocksNumber, blocksOf, blocksWord, Q } from "../plan/estimate.ts";
 import { barDates, cellChoices, dragBar, monthLoad, NEXT_WORDS, pastWords, readiness, stepCell, timelineScale, type AheadColumn, type BarDates, type DragMode, type MonthLoad, type NextStep, type ReadinessFlag, type Scale } from "../plan/ahead.ts";
 import type { DraftStory } from "../plan/types.ts";
 import { DraftEditorCtx } from "./DraftEditor.tsx";
@@ -32,7 +33,7 @@ type Line = { kind: "row"; bar: Bar; depth: number; children: number; open: bool
 /** Bars for every row of a client: features first (from their own dates and planned weeks), then epics (their own dates, else their features' span). */
 function barsFor(c: RoadmapClient, ahead: AheadState): Map<number, Bar> {
   const out = new Map<number, Bar>();
-  const weeksOf = (id: number) => ahead.cells.filter((x) => x.clientKey === c.clientKey && x.itemId === id && x.blocks > 0).map((x) => x.weekStart);
+  const weeksOf = (id: number) => ahead.cells.filter((x) => x.clientKey === c.clientKey && x.itemId === id && x.quarters > 0).map((x) => x.weekStart);
   for (const r of c.rows.filter((x) => x.tier === "feature"))
     out.set(r.id, { ...barDates({ hasStartField: r.hasStartField, startDate: r.startDate, targetDate: r.targetDate, local: ahead.dates[key(c.clientKey, r.id)] ?? null, plannedWeeks: weeksOf(r.id), firstActivity: r.firstActivity, forecastEnd: r.status.forecastEnd, today: ahead.today }), row: r, clientKey: c.clientKey });
   for (const e of c.rows.filter((x) => x.tier === "epic")) {
@@ -100,10 +101,11 @@ export function PlanAhead({ data, switcher, onDone, onChanged }: { data: WeekLoa
   const weekW = Math.max(90, Math.floor((width - labelW - 24) / (4 + 1.6 * months + 0.8 * pastN)));
   const scale = useMemo(() => (cols.length ? timelineScale(cols, { week: weekW, month: Math.floor(weekW * 1.6), past: Math.floor(weekW * 0.8) }) : null), [cols, weekW]);
 
+  /** In quarters (a half-block amount); 0 takes the feature off that week. */
   const setBlocks = useCallback(
-    async (clientKey: string, itemId: number, weekStart: string, blocks: number) => {
+    async (clientKey: string, itemId: number, weekStart: string, quarters: number) => {
       try {
-        await call("weekplan.set_feature", { weekStart, clientKey, itemId, blocks });
+        await call("weekplan.set_feature", { weekStart, clientKey, itemId, blocks: blocksOf(quarters) });
         onChanged();
         const a = await call<AheadState>("roadmap.ahead", {});
         setAhead(a);
@@ -192,6 +194,7 @@ type GroupProps = {
   color: string;
   closed: Set<string>;
   toggle: (id: string) => void;
+  /** n in quarters. */
   setBlocks: (k: string, id: number, w: string, n: number) => Promise<void>;
   setDates: (k: string, id: number, d: { start: string; end: string } | null) => Promise<void>;
   save: (b: Bar) => void;
@@ -242,8 +245,8 @@ function ClientGroup(p: GroupProps) {
       void (async () => {
         for (let w = a; w <= b; w++) {
           const ws = ahead.weeks[w]!;
-          const cur = ahead.cells.find((x) => x.clientKey === c.clientKey && x.itemId === d.id && x.weekStart === ws)?.blocks ?? 0;
-          if (cur === 0) await p.setBlocks(c.clientKey, d.id, ws, 1);
+          const cur = ahead.cells.find((x) => x.clientKey === c.clientKey && x.itemId === d.id && x.weekStart === ws)?.quarters ?? 0;
+          if (cur === 0) await p.setBlocks(c.clientKey, d.id, ws, Q);
         }
       })();
     };
@@ -283,13 +286,13 @@ function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, d
   const isFeature = r.tier === "feature";
   const kids = c.rows.filter((x) => x.parentId === r.id).map((x) => x.id);
   const cellOf = (w: string) => (isFeature ? ahead.cells.find((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.weekStart === w) : null);
-  const epicBlocks = (w: string) => ahead.cells.filter((x) => x.clientKey === c.clientKey && kids.includes(x.itemId) && x.weekStart === w).reduce((n, x) => n + x.blocks, 0);
+  const epicBlocks = (w: string) => ahead.cells.filter((x) => x.clientKey === c.clientKey && kids.includes(x.itemId) && x.weekStart === w).reduce((n, x) => n + x.quarters, 0);
   const owned = r.relation === "owned";
   const openDraft = useContext(DraftEditorCtx);
   const flags = readiness({
     tier: r.tier, state: r.status.state, owned, stories: r.done + r.open, start: b.start, target: r.targetDate, today: ahead.today, weeks: ahead.weeks,
-    plannedWeeks: isFeature ? ahead.cells.filter((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.blocks > 0).map((x) => x.weekStart) : [],
-    crowdedMonths: crowded, cols: g.cols, needsStories: isFeature && ahead.cells.some((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.blocks > 0 && x.fill === "needs_stories"),
+    plannedWeeks: isFeature ? ahead.cells.filter((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.quarters > 0).map((x) => x.weekStart) : [],
+    crowdedMonths: crowded, cols: g.cols, needsStories: isFeature && ahead.cells.some((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.quarters > 0 && !x.derived),
   });
   const runNext = async (f: ReadinessFlag, n: NextStep) => {
     try {
@@ -318,7 +321,7 @@ function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, d
       } else if (n === "help") {
         env?.openHelp({ clientKey: c.clientKey, title: `#${r.id} ${r.title}`, url: r.url, itemId: r.id, pinned: null });
       } else if (n === "plan_weeks") {
-        const i = ahead.weeks.slice(0, 4).findIndex((w) => !(ahead.cells.find((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.weekStart === w)?.blocks));
+        const i = ahead.weeks.slice(0, 4).findIndex((w) => !(ahead.cells.find((x) => x.clientKey === c.clientKey && x.itemId === r.id && x.weekStart === w)?.quarters));
         cellRefs.get(`${r.id}:${Math.max(0, i)}`)?.focus();
       }
     } catch (e) {
@@ -359,10 +362,10 @@ function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, d
   };
 
   const choose = (w: string, i: number, cur: number, at: { x: number; y: number }) => {
-    const budget = cap?.weeks[i]?.budget ?? 0;
+    const budget = cap?.weeks[i]?.budgetQ ?? 0;
     openMenu(at, {
       title: `${r.title}: week of ${monthDay(w)}`,
-      items: cellChoices(budget, cur).map((n) => ({ id: String(n), label: n === 0 ? "None" : plural(n, "block", "blocks"), checked: n === cur, action: "weekplan.set_feature", run: () => void g.setBlocks(c.clientKey, r.id, w, n) })),
+      items: cellChoices(budget, cur).map((n) => ({ id: String(n), label: n === 0 ? "None" : blocksWord(n), checked: n === cur, action: "weekplan.set_feature", run: () => void g.setBlocks(c.clientKey, r.id, w, n) })),
     });
   };
   const span = dragSpan?.id === r.id ? [Math.min(dragSpan.from, dragSpan.to), Math.max(dragSpan.from, dragSpan.to)] : null;
@@ -429,7 +432,7 @@ function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, d
         {endsLate && <span className="pa-beyond" title={`Ends ${monthDay(b.end)}, after these 12 weeks`}>→ {monthDay(b.end)}</span>}
         {ahead.past.map((p, j) => {
           const ids = new Set([r.id, ...r.stories.map((x) => x.id), ...(isFeature ? [] : c.rows.filter((x) => x.parentId === r.id).flatMap((x) => [x.id, ...x.stories.map((y) => y.id)]))]);
-          const planned = p.planned.filter((x) => x.clientKey === c.clientKey && (x.itemId === r.id || (!isFeature && kids.includes(x.itemId)))).reduce((n, x) => n + x.blocks, 0);
+          const planned = p.planned.filter((x) => x.clientKey === c.clientKey && (x.itemId === r.id || (!isFeature && kids.includes(x.itemId)))).reduce((n, x) => n + x.quarters, 0);
           const minutes = p.worked.filter((x) => x.clientKey === c.clientKey && x.itemId !== null && ids.has(x.itemId)).reduce((n, x) => n + x.minutes, 0);
           const words = pastWords(planned, minutes, ahead.blockMinutes);
           if (!words) return null;
@@ -441,8 +444,9 @@ function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, d
         })}
         {ahead.weeks.slice(0, 4).map((w, i) => {
           const cell = cellOf(w);
-          const n = isFeature ? (cell?.blocks ?? 0) : epicBlocks(w);
-          const budget = cap?.weeks[i]?.budget ?? 0;
+          const n = isFeature ? (cell?.quarters ?? 0) : epicBlocks(w);
+          const budget = cap?.weeks[i]?.budgetQ ?? 0;
+          const derived = !!cell?.derived;
           const style = { left: scale.colX(i + g.pastN) + 2, width: scale.colW(i + g.pastN) - 4 };
           const focused = focus?.id === r.id && focus.week === i;
           if (!isFeature)
@@ -454,8 +458,8 @@ function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, d
                 tabIndex={focused || (!focus && first && i === 0) ? 0 : -1}
                 className="pa-cell epic"
                 style={style}
-                aria-label={`${r.title}, week of ${monthDay(w)}: its features have ${n ? plural(n, "block", "blocks") : "no blocks"}.${l.children ? ` Enter to ${l.open ? "hide" : "show"} its features.` : ""}`}
-                title={`Its features: ${n ? plural(n, "block", "blocks") : "no blocks"} in the week of ${monthDay(w)}`}
+                aria-label={`${r.title}, week of ${monthDay(w)}: its features have ${n ? blocksWord(n) : "no blocks"}.${l.children ? ` Enter to ${l.open ? "hide" : "show"} its features.` : ""}`}
+                title={`Its features: ${n ? blocksWord(n) : "no blocks"} in the week of ${monthDay(w)}`}
                 onFocus={() => setFocus({ id: r.id, week: i })}
                 onKeyDown={(e) => {
                   if (e.key === "ArrowRight") move(r.id, i, 0, 1);
@@ -481,11 +485,12 @@ function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, d
               tabIndex={focused || (!focus && first && i === 0) ? 0 : -1}
               className={`pa-cell${n ? " set" : ""}${cell?.tier === "nice" ? " nice" : ""}${inSpan ? " span" : ""}`}
               style={style}
-              aria-label={`${r.title}, week of ${monthDay(w)}: ${n ? plural(n, "block", "blocks") : "no blocks"}${cell?.tier === "nice" ? " (nice to have)" : ""}. Budget ${plural(budget, "block", "blocks")}.`}
-              title={`${n ? plural(n, "block", "blocks") : "No blocks"} in the week of ${monthDay(w)}${cell?.tier === "nice" ? " (nice to have)" : ""}`}
+              aria-label={`${r.title}, week of ${monthDay(w)}: ${n ? blocksWord(n) : "no blocks"}${derived ? " from its stories" : ""}${cell?.tier === "nice" ? " (nice to have)" : ""}. Budget ${blocksWord(budget)}.`}
+              title={`${n ? blocksWord(n) : "No blocks"} in the week of ${monthDay(w)}${derived ? ", from its stories (size them in Plan the week)" : ""}${cell?.tier === "nice" ? " (nice to have)" : ""}`}
+              aria-disabled={derived || undefined}
               onFocus={() => setFocus({ id: r.id, week: i })}
               onPointerDown={(e) => {
-                if (e.button !== 0) return;
+                if (e.button !== 0 || derived) return;
                 drag.current = { id: r.id, from: i, to: i };
               }}
               onPointerEnter={() => {
@@ -495,6 +500,7 @@ function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, d
                 }
               }}
               onClick={(e) => {
+                if (derived) return;
                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                 choose(w, i, n, { x: rect.left, y: rect.bottom + 4 });
               }}
@@ -503,7 +509,7 @@ function BarRow({ l, g, crowded, first, focus, setFocus, move, cellRefs, drag, d
                 else if (e.key === "ArrowLeft") move(r.id, i, 0, -1);
                 else if (e.key === "ArrowDown") move(r.id, i, 1, 0);
                 else if (e.key === "ArrowUp") move(r.id, i, -1, 0);
-                else if (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "−") {
+                else if (!derived && (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "−")) {
                   const next = stepCell(n, e.key === "-" || e.key === "−" ? -1 : 1, budget);
                   if (next !== n) void g.setBlocks(c.clientKey, r.id, w, next);
                 } else return;
@@ -531,12 +537,16 @@ function PastWords({ words }: { words: string }) {
   );
 }
 
-/** Whole blocks as filled segments (a number beside them past four). */
+/** Quarters as filled block segments, a half block as a half segment (a number beside them past four blocks). */
 function Segments({ n }: { n: number }) {
+  const halves = Math.ceil(n / 2);
+  const whole = Math.floor(halves / 2);
+  const half = halves % 2 === 1;
   return (
     <span className="pa-segs" aria-hidden="true">
-      {Array.from({ length: Math.min(n, 4) }, (_, i) => <span key={i} className="pa-seg" />)}
-      <span className="pa-seg-n">{n}</span>
+      {Array.from({ length: Math.min(whole, 4) }, (_, i) => <span key={i} className="pa-seg" />)}
+      {half && whole < 4 && <span className="pa-seg half" />}
+      <span className="pa-seg-n">{blocksNumber(n)}</span>
     </span>
   );
 }
@@ -564,7 +574,7 @@ function CapacityRow({ c, cap, cols, scale, loads, ahead }: { c: RoadmapClient; 
           const style = { left: scale.colX(i) + 2, width: scale.colW(i) - 4 };
           if (col.kind === "past") {
             const p = ahead.past.find((x) => x.weekStart === col.weekStart);
-            const planned = p?.planned.filter((x) => x.clientKey === c.clientKey).reduce((n, x) => n + x.blocks, 0) ?? 0;
+            const planned = p?.planned.filter((x) => x.clientKey === c.clientKey).reduce((n, x) => n + x.quarters, 0) ?? 0;
             const minutes = p?.worked.filter((x) => x.clientKey === c.clientKey).reduce((n, x) => n + x.minutes, 0) ?? 0;
             const words = pastWords(planned, minutes, ahead.blockMinutes) ?? "nothing planned";
             return (
@@ -577,8 +587,8 @@ function CapacityRow({ c, cap, cols, scale, loads, ahead }: { c: RoadmapClient; 
             const w = cap?.weeks.find((x) => x.weekStart === col.weekStart);
             const why = w?.notCounted.length ? `Not counted: ${w.notCounted.join(" · ")}` : "";
             return (
-              <span key={col.from} className={`pa-capcell ${w?.status ?? "none"}`} style={style} title={`${w?.budget ?? 0} available, ${w?.planned ?? 0} planned (musts)${why ? `. ${why}` : ""}`}>
-                {w ? (w.budget || w.planned ? w.text : "No blocks") : "No blocks"}
+              <span key={col.from} className={`pa-capcell ${w?.status ?? "none"}`} style={style} title={`${blocksNumber(w?.budgetQ ?? 0)} available, ${blocksNumber(w?.plannedQ ?? 0)} planned (musts)${why ? `. ${why}` : ""}`}>
+                {w ? (w.budgetQ || w.plannedQ ? w.text : "No blocks") : "No blocks"}
               </span>
             );
           }

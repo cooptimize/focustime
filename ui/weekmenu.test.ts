@@ -43,14 +43,20 @@ describe("weekItemMenu (Plan the week row ⋯, D267)", () => {
     pins[1]!.run!();
     expect(o.pin.mock.calls).toEqual([["2026-11-02", "PM", true], ["2026-11-04", "AM", false]]);
   });
-  it("sets whole blocks only (step 16.4)", () => {
+  it("sets half blocks, ½ to 10 (E1; was whole blocks in step 16.4)", () => {
     const o = ops();
     const step = blocksStep(facts(), o);
     const list = "items" in step ? step.items : [];
     expect(list.find((i) => i.checked)?.label).toBe("2 blocks");
-    expect(list.every((i) => /^\d+ blocks?$/.test(i.label))).toBe(true);
-    list.find((i) => i.label === "3 blocks")!.run!();
-    expect(o.blocks).toHaveBeenCalledWith(3);
+    expect(list.slice(0, 4).map((i) => i.label)).toEqual(["½ block", "1 block", "1½ blocks", "2 blocks"]);
+    expect(list.every((i) => /^\d*½? blocks?$/.test(i.label))).toBe(true);
+    list.find((i) => i.label === "1½ blocks")!.run!();
+    expect(o.blocks).toHaveBeenCalledWith(1.5);
+  });
+  it("a feature whose load comes from its stories has no estimate to set", () => {
+    const m = weekItemMenu({ ...facts(), derived: true }, ops());
+    const blocks = ("items" in m ? m.items : []).find((i) => i.id === "blocks");
+    expect(blocks?.disabled).toMatch(/From its stories/);
   });
   it("a story has a size, not blocks; nested under its feature it takes the feature's tier", () => {
     const o = { ...ops(), size: vi.fn() };

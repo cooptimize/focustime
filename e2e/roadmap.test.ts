@@ -4,8 +4,8 @@ import { CHROMIUM, freshPage, startDemo, weekRow, type Harness } from "./harness
 
 let h: Harness;
 const T = 90_000;
-/** Decimals and fractions (as in e2e/estimating.test.ts): none may show. Times (9:30) and dates are fine. */
-const FRACTION = /(?<![\d:])\d+[.,]\d+(?![\d:])|half a block|½|¼|¾/i;
+/** Decimals and quarters: "0.8 blocks", "1.5 h", "¼", "¾". Half blocks ("½ block", "1½ blocks", "half a block") are the unit (E1). Times (9:30) and dates are fine. */
+const FRACTION = /(?<![\d:])\d+[.,]\d+(?![\d:])|¼|¾/i;
 
 describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => {
   beforeAll(async () => {
@@ -35,9 +35,9 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     await expect(rowOf(page, "Order history export").locator(".rm-reason").textContent()).resolves.toBe("3 stories open, about 1 closes every 3 weeks, 11 days left, needs about 9 weeks");
     await page.locator(".rm-sum.rm-over").waitFor();
     const sums = await page.locator(".rm-sum").allTextContents();
-    // Eight states, then Over-booked weeks (Northwind's and Atlas's week 1).
+    // Eight states, then Over-booked weeks (Northwind's, Atlas's and, since E1, Harbor's week 1: its L and S need 1½ blocks).
     expect(sums.length).toBe(9);
-    expect(sums[8]).toMatch(/^2\s*Over-booked weeks$/);
+    expect(sums[8]).toMatch(/^3\s*Over-booked weeks$/);
     expect(sums.every((t) => /^\d+/.test(t))).toBe(true);
     expect(errors).toEqual([]);
     await page.close();
@@ -63,7 +63,7 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     await page.getByRole("button", { name: "Clear filters" }).click();
     // Over-booked weeks: only the features with blocks in a week that has more musts than blocks.
     await page.locator(".rm-sum.rm-over").click();
-    await expect.poll(async () => (await page.locator(".rm-row .dl-title a").allTextContents()).sort()).toEqual(["Customer portal redesign", "Order history export", "Supplier onboarding"]);
+    await expect.poll(async () => (await page.locator(".rm-row .dl-title a").allTextContents()).sort()).toEqual(["Customer portal redesign", "Order history export", "Patient intake form", "Supplier onboarding"]);
     await page.locator(".rm-sum.rm-over").click();
     await expect.poll(() => page.locator(".rm-row").count()).toBeGreaterThan(10);
     // Contributing: only the parents of my stories.
@@ -117,14 +117,15 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     // Atlas: two features due in December with few blocks.
     const atlasCap = page.locator('.pa-cap[aria-label="Atlas Freight: blocks per week and month"]');
     await expect(atlasCap.locator(".pa-capcell.crowded").textContent()).resolves.toMatch(/^Crowded month\s*\d+ blocks, 2 features due$/);
-    await expect(page.locator('.pa-cap[aria-label="Northwind Foods: blocks per week and month"] .pa-capcell:not(.past)').first().textContent()).resolves.toBe("3 planned, 2 available");
+    await expect(page.locator('.pa-cap[aria-label="Northwind Foods: blocks per week and month"] .pa-capcell:not(.past)').first().textContent()).resolves.toBe("2½ planned, 2 available");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
 
-  it("a week cell sets whole blocks, the same blocks Plan the week shows; a change there shows here", async () => {
+  it("a week cell sets half blocks, the same blocks Plan the week shows; a change there shows here", async () => {
     const { page, errors } = await ahead();
     await cell(page, "Store locator", "Nov 9").click();
+    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual(expect.arrayContaining([expect.stringContaining("½ block"), expect.stringContaining("1½ blocks")]));
     await page.getByRole("menuitem", { name: "2 blocks" }).click();
     await expect.poll(() => cell(page, "Store locator", "Nov 9").getAttribute("aria-label")).toContain(": 2 blocks.");
     // Plan the week (next week, Nov 9): the feature is there as a must with 2 blocks.
@@ -132,11 +133,11 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     const row = await weekRow(page, "Store locator");
     await expect.poll(() => row.locator(".pw-stepper .pw-chip-btn").first().textContent()).toBe("2 blocks");
     await row.hover();
-    await row.getByRole("button", { name: "One block less" }).first().click();
-    await expect.poll(() => row.locator(".pw-stepper .pw-chip-btn").first().textContent()).toBe("1 block");
+    await row.getByRole("button", { name: "Half a block less" }).first().click();
+    await expect.poll(() => row.locator(".pw-stepper .pw-chip-btn").first().textContent()).toBe("1½ blocks");
     await page.evaluate(() => (location.hash = "#/roadmap/ahead"));
     await page.locator(".pa-item").first().waitFor();
-    await expect.poll(() => cell(page, "Store locator", "Nov 9").getAttribute("aria-label")).toContain(": 1 block.");
+    await expect.poll(() => cell(page, "Store locator", "Nov 9").getAttribute("aria-label")).toContain(": 1½ blocks.");
     // None removes it from the week again.
     await cell(page, "Store locator", "Nov 9").click();
     await page.getByRole("menuitem", { name: "None" }).click();
@@ -151,7 +152,7 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     await page.keyboard.press("ArrowRight");
     await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? "")).toMatch(/^Loyalty points, week of Nov 16:/);
     await page.keyboard.press("+");
-    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label")).toContain(": 1 block.");
+    await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label")).toContain(": ½ block.");
     await page.keyboard.press("-");
     await expect.poll(() => cell(page, "Loyalty points", "Nov 16").getAttribute("aria-label")).toContain(": no blocks.");
     await page.keyboard.press("ArrowDown");
