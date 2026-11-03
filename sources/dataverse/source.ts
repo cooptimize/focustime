@@ -1,9 +1,8 @@
 // Read-only Dataverse source: Focus Time patterns for me, for one week.
 // Token in memory only. Never throws to callers: every failure becomes a SourceResult with a plain message.
-import { readSnapshot, writeSnapshot } from "../../cache/snapshots.ts";
 import type { DataverseConfig } from "../../config/schema.ts";
 import type { Logger } from "../../log/logger.ts";
-import { SecretError } from "../../secrets/keyring.ts";
+import { SecretError, type SnapshotStore } from "../../host/types.ts";
 import { formatTime } from "../../week/format.ts";
 import { PTO_DETAIL_COLUMNS, PTO_DETAIL_FILTER_COLUMNS, PTO_TRACKER_COLUMNS, PTO_TRACKER_FILTER_COLUMNS, ptoEntries, type PtoDetailRow, type PtoEntry, type PtoTrackerRow } from "../../week/pto.ts";
 import type { FailureCause, FocusPattern, SourceResult } from "../../week/types.ts";
@@ -16,7 +15,7 @@ export type DataverseSourceDeps = {
   timeZone: string;
   getSecret: () => Promise<string>;
   fetch: typeof fetch;
-  cacheDir: string;
+  snapshots: SnapshotStore;
   log: Logger;
   now?: () => Temporal.Instant;
   memoryTtlMs?: number;
@@ -299,7 +298,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     if (skipped.length) log({ source: "dataverse", op: "normalize", kind: "skipped", count: skipped.length });
 
     const fetchedAt = now().toZonedDateTimeISO(deps.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
-    await writeSnapshot(deps.cacheDir, "dataverse", snapshotKey, { fetchedAt, items: patterns }).catch(() =>
+    await deps.snapshots.write("dataverse", snapshotKey, { fetchedAt, items: patterns }).catch(() =>
       log({ source: "dataverse", op: "cache_write", kind: "failed" }),
     );
     const result: SourceResult<FocusPattern> = { source: "dataverse", status: "ok", fetchedAt, fromCache: false, items: patterns };
@@ -325,7 +324,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     } catch (e) {
       const f = e instanceof SourceFailure ? e : new SourceFailure("error", "Dataverse load failed");
       if (!(e instanceof SourceFailure)) log({ source: "dataverse", op: "load", kind: "unexpected" });
-      const snap = await readSnapshot<FocusPattern>(deps.cacheDir, "dataverse", snapshotKey);
+      const snap = await deps.snapshots.read<FocusPattern>("dataverse", snapshotKey);
       const message = snap
         ? f.status === "unreachable"
           ? `Offline, showing data from ${fmtAt(snap.fetchedAt)}`
@@ -509,14 +508,14 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
       const items = entries.filter((e) => e.date >= from && e.date <= to);
       if (skipped) log({ source: "dataverse", op: "pto_normalize", kind: "skipped", count: skipped });
       const fetchedAt = now().toZonedDateTimeISO(deps.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
-      await writeSnapshot(deps.cacheDir, "pto", key, { fetchedAt, items }).catch(() => log({ source: "dataverse", op: "cache_write", kind: "failed" }));
+      await deps.snapshots.write("pto", key, { fetchedAt, items }).catch(() => log({ source: "dataverse", op: "cache_write", kind: "failed" }));
       result = { source: "pto", status: "ok", fetchedAt, fromCache: false, items };
       if (skipped) result.message = `${skipped} PTO ${skipped === 1 ? "row" : "rows"} skipped (unreadable dates)`;
     } catch (e) {
       const f = e instanceof SourceFailure ? e : new SourceFailure("error", "PTO load failed");
       if (!(e instanceof SourceFailure)) log({ source: "dataverse", op: "pto", kind: "unexpected" });
       const plain = f.status === "auth_required" ? "PTO not readable: check the FocusTime role in Dataverse" : f.message;
-      const snap = await readSnapshot<PtoEntry>(deps.cacheDir, "pto", key);
+      const snap = await deps.snapshots.read<PtoEntry>("pto", key);
       const message = snap ? `${plain}. Showing PTO from ${fmtAt(snap.fetchedAt)}` : `${plain}. No cached PTO yet`;
       result = { source: "pto", status: f.status, fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [], message };
       if (f.rootCause) result.cause = f.rootCause;

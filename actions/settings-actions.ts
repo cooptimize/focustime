@@ -2,7 +2,6 @@
 // export the plan store. Secrets are never returned: only whether they are set and an expiry date I entered.
 import { DEFAULT_THRESHOLDS } from "../plan/roadmap.ts";
 import { DEFAULT_FOCUS } from "../plan/focussound.ts";
-import { join } from "node:path";
 import { DEFAULT_TIMEBOX, CLIENT_SLOTS, colorCss, DEFAULT_PLAN, inviteDomains, DEFAULT_COLLAB, type AppConfig, type ParseResult } from "../config/schema.ts";
 import { DEFAULT_NOTIFY } from "../plan/notify.ts";
 import { DEFAULT_AZURE } from "../config/schema.ts";
@@ -163,4 +162,3 @@ export async function settingsAction(ctx: SettingsContext, action: SettingsActio
 }
 
 /** Default export location: ~/.local/share/focustime/exports/plan-<stamp>.json. */
-export const exportPath = (dataDir: string, stamp: string) => join(dataDir, "exports", `plan-${stamp.replace(/[^0-9TZ]/g, "")}.json`);

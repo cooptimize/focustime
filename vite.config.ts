@@ -9,6 +9,6 @@ export default defineConfig({
   preview: { host: "127.0.0.1", port: 5318, strictPort: true },
   test: {
     environment: "node",
-    include: ["week/**/*.test.ts", "plan/**/*.test.ts", "store/**/*.test.ts", "ui/**/*.test.ts", "sources/**/*.test.ts", "fixtures/**/*.test.ts", "config/**/*.test.ts", "secrets/**/*.test.ts", "server/**/*.test.ts", "actions/**/*.test.ts", "links/**/*.test.ts", "e2e/**/*.test.ts"],
+    include: ["week/**/*.test.ts", "plan/**/*.test.ts", "store/**/*.test.ts", "ui/**/*.test.ts", "sources/**/*.test.ts", "fixtures/**/*.test.ts", "config/**/*.test.ts", "host/**/*.test.ts", "server/**/*.test.ts", "actions/**/*.test.ts", "links/**/*.test.ts", "e2e/**/*.test.ts"],
   },
 });

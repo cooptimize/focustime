@@ -1,3 +1,4 @@
+import { createSnapshotStore } from "../host/local/snapshots.ts";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { request } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -46,7 +47,7 @@ beforeAll(async () => {
     },
     ctx: {
       loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(text) }),
-      makeDataverse: (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: f.fetch, cacheDir: mkdtempSync(join(tmpdir(), "c-")), log: (r) => logs.push(r) }),
+      makeDataverse: (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: f.fetch, snapshots: createSnapshotStore(mkdtempSync(join(tmpdir(), "c-"))), log: (r) => logs.push(r) }),
       makeOutlook: () => { throw new Error("not configured"); },
       makeGoogle: () => { throw new Error("not configured"); },
       makeDevOps: () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined }),

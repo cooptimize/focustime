@@ -1,13 +1,11 @@
-// Delegated sign-in for Outlook and Google: authorization code + PKCE (S256) over a one-shot
-// loopback listener on 127.0.0.1. Refresh tokens live only in the keyring; access tokens only in memory.
+// Delegated sign-in for Outlook and Google: authorization code + PKCE (S256) over the host's one-shot
+// redirect listener (host/local: a loopback on 127.0.0.1). Refresh tokens live only in the keyring; access tokens only in memory.
 // Nothing here logs or returns tokens, codes, secrets or provider error descriptions.
 import { createHash, randomBytes } from "node:crypto";
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import type { GoogleConfig, OutlookConfig } from "../../config/schema.ts";
 import type { Logger } from "../../log/logger.ts";
 import { parseIdToken, type IdClaims } from "./idtoken.ts";
-import { SecretError, type AppSecretAccount, type RefreshTokenAccount, type SecretAccount } from "../../secrets/keyring.ts";
+import { SecretError, type AppSecretAccount, type Loopback, type LoopbackListener, type RefreshTokenAccount, type SecretAccount } from "../../host/types.ts";
 
 export type OAuthProvider = {
   source: "outlook" | "google";
@@ -102,6 +100,8 @@ export type OAuthDeps = {
   fetch: typeof fetch;
   keyring: Keyring;
   openBrowser: (url: string) => Promise<void>;
+  /** The host's sign-in redirect listener. Absent: signing in isn't available here. */
+  loopback?: Loopback;
   log: Logger;
   now?: () => number;
   timeoutMs?: number;
@@ -233,32 +233,6 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
     return { status: "write" };
   }
 
-  /** Wait for the browser to come back to the loopback listener with our state. */
-  function waitForCode(server: Server, port: number, state: string): Promise<{ code: string } | { error: "denied" | "timeout" | "failed" }> {
-    return new Promise((resolve) => {
-      const timer = setTimeout(() => resolve({ error: "timeout" }), deps.signInTimeoutMs ?? 5 * 60_000);
-      const allowedHosts = [`${p.redirectHost}:${port}`, `127.0.0.1:${port}`];
-      server.on("request", (req, res) => {
-        const url = new URL(req.url ?? "/", "http://placeholder");
-        if (!allowedHosts.includes(String(req.headers.host ?? "").toLowerCase())) {
-          res.writeHead(403).end();
-          return;
-        }
-        if (req.method !== "GET" || url.pathname !== "/" || url.searchParams.get("state") !== state) {
-          res.writeHead(400, { "content-type": "text/plain" }).end("Unexpected request");
-          return;
-        }
-        const code = url.searchParams.get("code");
-        const error = url.searchParams.get("error");
-        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer" });
-        res.end(DONE_PAGE(!!code));
-        clearTimeout(timer);
-        if (code) resolve({ code });
-        else resolve({ error: error === "access_denied" ? "denied" : "failed" });
-      });
-    });
-  }
-
   async function connect(opts: ConnectOptions = {}): Promise<ConnectResult> {
     // The browser visit asks for every scope set at once (it may span resources), so later refreshes for any of them
     // are a subset of what was consented. The code exchange redeems one resource: Graph, with OpenID for who it is.
@@ -268,16 +242,13 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
     const verifier = randomBytes(48).toString("base64url");
     const challenge = createHash("sha256").update(verifier).digest("base64url");
     const state = randomBytes(24).toString("base64url");
-    const server = createServer();
+    if (!deps.loopback) return { status: "failed", message: `${p.label} sign-in isn't available here` };
+    let listener: LoopbackListener | null = null;
     try {
       // Fail early if the client secret (Google) is missing, before opening the browser.
       await clientSecret();
-      await new Promise<void>((resolve, reject) => {
-        server.once("error", reject);
-        server.listen(0, "127.0.0.1", () => resolve());
-      });
-      const port = (server.address() as AddressInfo).port;
-      const redirectUri = `http://${p.redirectHost}:${port}/`;
+      listener = await deps.loopback.listen(p.redirectHost);
+      const redirectUri = listener.redirectUri;
       const auth = new URL(p.authorizeUrl);
       const params: Record<string, string> = {
         client_id: p.clientId,
@@ -296,7 +267,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
       }
       for (const [k, v] of Object.entries(params)) auth.searchParams.set(k, v);
 
-      const waiting = waitForCode(server, port, state);
+      const waiting = listener.wait(state, deps.signInTimeoutMs ?? 5 * 60_000, DONE_PAGE);
       log("sign_in_started");
       await deps.openBrowser(auth.toString());
       const result = await waiting;
@@ -322,8 +293,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
       access.clear();
       return e instanceof AuthFailure && e.kind === "network" ? { status: "failed", message: "Microsoft can't be reached. Check your connection", offline: true } : { status: "failed", message: e instanceof AuthFailure ? e.message : `${p.label} sign-in failed` };
     } finally {
-      server.closeAllConnections();
-      server.close();
+      listener?.close();
     }
   }
 

@@ -13,13 +13,8 @@ import type { ActionResponse, TimerView } from "./types.ts";
 export type TimerAction = "timer.start" | "timer.pause" | "timer.resume" | "timer.stop" | "timer.extend" | "timer.done" | "timer.next" | "timer.deep" | "playlist.open" | "plan.reset";
 
 /** Media control (step 10): playerctl and playlist links; the server's implementation is server/media.ts. */
-export type MediaControl = {
-  status: () => Promise<{ playerctl: boolean; spotify: boolean }>;
-  /** Pause or resume players on a timer change (only when enabled and playerctl is there). Never throws. */
-  transition: (prev: TimerLike, next: TimerLike, enabled: boolean) => Promise<"pause" | "play" | null>;
-  /** Opens one validated playlist target (https:// or spotify:) with xdg-open. */
-  open: (target: string) => Promise<void>;
-};
+import type { MediaControl } from "../host/types.ts";
+export type { MediaControl };
 
 export type TimerContext = {
   plan?: PlanStore | undefined;

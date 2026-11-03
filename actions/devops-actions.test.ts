@@ -1,3 +1,4 @@
+import { createSnapshotStore } from "../host/local/snapshots.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,7 +21,7 @@ function ctx(orgs: Record<string, OrgScenario> = { contoso: "agile" }, opts: { d
   const dv = fakeFetch("ok");
   const dvFetch = dv.fetch;
   const ado = fakeDevOps(orgs);
-  const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dvFetch, cacheDir, log: () => {} });
+  const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dvFetch, snapshots: createSnapshotStore(cacheDir), log: () => {} });
   const c: ActionContext = {
     loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(opts.text ?? text) }),
     makeDataverse,
@@ -29,7 +30,7 @@ function ctx(orgs: Record<string, OrgScenario> = { contoso: "agile" }, opts: { d
     makeDevOps: (cfg, tz) => {
       if (opts.devopsThrows) return { load: async () => { throw new Error("boom"); }, lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined };
       const dv = makeDataverse(cfg, tz);
-      return createDevOpsSource({ fetch: ado.fetch, log: () => {}, cacheDir, timeZone: tz, targets: (k) => dv.devopsTargets(k) });
+      return createDevOpsSource({ fetch: ado.fetch, log: () => {}, snapshots: createSnapshotStore(cacheDir), timeZone: tz, targets: (k) => dv.devopsTargets(k) });
     },
     saveSystemUserId: async () => {},
     now: () => "2026-11-03T15:00:00Z",

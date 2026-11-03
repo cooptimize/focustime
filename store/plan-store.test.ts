@@ -1,3 +1,4 @@
+import { localStoreFiles } from "../host/local/files.ts";
 import { mkdirSync, mkdtempSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +11,7 @@ let clock = Temporal.ZonedDateTime.from("2026-11-02T08:01:00-05:00[America/New_Y
 const now = () => clock;
 const fresh = () => {
   const path = join(mkdtempSync(join(tmpdir(), "focustime-plan-")), "data", "plan.db");
-  return { path, store: createPlanStore({ path, now }) };
+  return { path, store: createPlanStore({ path, now, files: localStoreFiles }) };
 };
 const item = { half: "AM" as const, clientKey: "Adatum", kind: "item" as const, itemId: 101, title: "Story", itemType: "User Story", itemUrl: "https://dev.azure.com/x/y/_workitems/edit/101", size: "M" as const };
 
@@ -22,7 +23,7 @@ describe("plan store", () => {
     expect(statSync(join(path, "..")).mode & 0o777).toBe(0o700);
     store.close();
     // Re-opening runs nothing again.
-    const again = createPlanStore({ path, now });
+    const again = createPlanStore({ path, now, files: localStoreFiles });
     expect(again.schemaVersion()).toBe(MIGRATIONS.length);
     again.close();
   });
@@ -43,7 +44,7 @@ describe("plan store", () => {
     old.exec("UPDATE picks SET carried_from = 1 WHERE id = 2");
     old.close();
 
-    const store = createPlanStore({ path, now });
+    const store = createPlanStore({ path, now, files: localStoreFiles });
     expect(store.schemaVersion()).toBe(MIGRATIONS.length);
     expect(store.picksFor("2026-10-29").map((p) => [p.id, p.half, p.status, p.carriedFrom])).toEqual([
       [1, "AM", "done", null],
@@ -59,7 +60,7 @@ describe("plan store", () => {
     bak.close();
     store.close();
     // Opening again makes no second backup.
-    createPlanStore({ path, now }).close();
+    createPlanStore({ path, now, files: localStoreFiles }).close();
     expect(readdirSync(dir).filter((f) => f.startsWith("plan.db.bak-"))).toHaveLength(1);
   });
 
@@ -87,7 +88,7 @@ describe("plan store", () => {
     const db = new DatabaseSync(path);
     db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(MIGRATIONS.length + 5, "x");
     db.close();
-    expect(() => createPlanStore({ path, now })).toThrow(/newer FocusTime/);
+    expect(() => createPlanStore({ path, now, files: localStoreFiles })).toThrow(/newer FocusTime/);
   });
 
   it("timestamps carry offset and time zone", () => {
@@ -107,7 +108,7 @@ describe("plan store", () => {
     store.setDone(a.id, true);
     store.close();
 
-    const reopened = createPlanStore({ path, now });
+    const reopened = createPlanStore({ path, now, files: localStoreFiles });
     expect(reopened.day("2026-11-02")?.committedAt).not.toBeNull();
     const picks = reopened.picksFor("2026-11-02");
     expect(picks.map((p) => [p.half, p.title, p.size, p.status])).toEqual([
@@ -168,7 +169,7 @@ describe("plan store", () => {
     expect(store.markOnce("notify", "2026-11-02")).toBe(true);
     expect(store.markOnce("notify", "2026-11-02")).toBe(false);
     store.close();
-    const again = createPlanStore({ path, now });
+    const again = createPlanStore({ path, now, files: localStoreFiles });
     expect(again.markOnce("notify", "2026-11-02")).toBe(false);
     expect(again.markOnce("notify", "2026-11-03")).toBe(true);
   });
@@ -215,7 +216,7 @@ describe("step 6c: follow-ups, timer state, focused time and reset", () => {
     store.addFocus({ pickId: p.id, label: "Story", startedAt: "2026-11-02T14:00:00Z", endedAt: "2026-11-02T14:25:00Z", seconds: 1500 });
     store.addFocus({ pickId: p.id, label: "Story", startedAt: "2026-11-02T15:00:00Z", endedAt: "2026-11-02T15:10:00Z", seconds: 600 });
     store.close();
-    const again = createPlanStore({ path, now });
+    const again = createPlanStore({ path, now, files: localStoreFiles });
     expect(again.getState("timer")).toEqual({ kind: "focus", pickId: p.id });
     expect(again.focusedSeconds([p.id, 999])).toEqual({ [p.id]: 2100 });
     again.setState("timer", null);
@@ -316,7 +317,7 @@ describe("week plan by client (step 11)", () => {
               (9, '2026-11-09', 'T&S', 300, 'Paging', 'Feature', NULL, 1, 2, '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]')`);
     old.exec("INSERT INTO week_feature_slots VALUES (7, '2026-11-10', 'PM'), (7, '2026-11-11', 'AM')");
     old.close();
-    const store = createPlanStore({ path, now });
+    const store = createPlanStore({ path, now, files: localStoreFiles });
     expect(store.schemaVersion()).toBe(MIGRATIONS.length);
     expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v7-"))).toHaveLength(1);
     const p = store.weekPlan(W);
@@ -346,7 +347,7 @@ describe("week plan by client (step 11)", () => {
               (8, '2026-11-09', 'Adatum', 502, 'story', 'nice', 'Big story', 'User Story', NULL, 1.5, NULL, NULL, ${at}, ${at})`);
     old.exec("INSERT INTO week_feature_slots VALUES (3, '2026-11-10', 'PM')");
     old.close();
-    const store = createPlanStore({ path, now });
+    const store = createPlanStore({ path, now, files: localStoreFiles });
     expect(store.schemaVersion()).toBe(MIGRATIONS.length);
     expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v18-"))).toHaveLength(1);
     const f = store.weekPlan(W).features;
@@ -418,7 +419,7 @@ describe("quick capture (step 9)", () => {
     old.exec(`INSERT INTO picks (id, date, half, client_key, kind, draft_id, title, size, status, position, created_at, updated_at)
               VALUES (1, '2026-10-29', 'AM', 'Adatum', 'draft', 5, 'Draft under 210', 'M', 'planned', 0, 'x', 'x')`);
     old.close();
-    const store = createPlanStore({ path, now });
+    const store = createPlanStore({ path, now, files: localStoreFiles });
     expect(store.schemaVersion()).toBe(MIGRATIONS.length);
     expect(store.drafts()).toEqual([expect.objectContaining({ id: 5, parentItemId: 210, title: "Draft under 210" })]);
     expect(store.picksFor("2026-10-29")[0]).toMatchObject({ kind: "draft", draftId: 5 });
@@ -473,7 +474,7 @@ describe("quick capture (step 9)", () => {
     old.exec(`INSERT INTO notes (id, client_key, text, capture_id, created_at, updated_at) VALUES
               (1, 'Adatum', 'Adatum wants Git', 1, '${at}', '${at}'), (2, NULL, 'caching idea', 2, '${at}', '${at}'), (3, 'T&S', 'Mark approves timesheets', NULL, '${at}', '${at}'), (4, NULL, 'Read the docs', NULL, '${at}', '${at}')`);
     old.close();
-    const store = createPlanStore({ path, now });
+    const store = createPlanStore({ path, now, files: localStoreFiles });
     expect(store.schemaVersion()).toBe(MIGRATIONS.length);
     expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v10-"))).toHaveLength(1);
     // Loops are follow-ups now, ids kept; a closed one counts as done.
@@ -509,7 +510,7 @@ describe("timeboxes, own Outlook events and the write log (step 12)", () => {
     expect(t.uid).toMatch(/^tb-[0-9a-f-]{36}$/);
     store.updateTimebox(t.id, { start: "2026-11-03T09:30:00-05:00", end: "2026-11-03T11:00:00-05:00", outlook: true });
     store.close();
-    const again = createPlanStore({ path, now });
+    const again = createPlanStore({ path, now, files: localStoreFiles });
     expect(again.timeboxesBetween("2026-11-02", "2026-11-06")).toMatchObject([{ uid: t.uid, start: "2026-11-03T09:30:00-05:00", outlook: true, removedAt: null }]);
   });
 
@@ -541,7 +542,7 @@ describe("timeboxes, own Outlook events and the write log (step 12)", () => {
     const u = store.logWrite({ op: "update", uid: "tb-1", eventId: "E1", account: null, calendar: null, before: null, after: F, localBefore: null, localAfter: null, auto: false, undoOf: w.id });
     store.markUndone(w.id, u.id);
     store.close();
-    const again = createPlanStore({ path, now });
+    const again = createPlanStore({ path, now, files: localStoreFiles });
     expect(again.writeLog().map((x) => [x.id, x.status, x.attempts, x.undoneBy, x.undoOf])).toEqual([[u.id, "pending", 1, null, w.id], [w.id, "confirmed", 2, u.id, null]]);
     expect(again.writeEntry(w.id)!.before).toEqual(F);
   });
@@ -559,7 +560,7 @@ describe("timeboxes, own Outlook events and the write log (step 12)", () => {
               VALUES (1, 'x', 'outlook', 'create', 'timebox', 'tb-1', 'E1', NULL, '{}', 'confirmed', 0, NULL, 2, 1, 'x'),
                      (2, 'x', 'outlook', 'delete', 'timebox', 'tb-1', 'E1', '{}', NULL, 'confirmed', 0, 1, NULL, 1, 'x')`);
     old.close();
-    const store = createPlanStore({ path, now });
+    const store = createPlanStore({ path, now, files: localStoreFiles });
     expect(store.schemaVersion()).toBe(MIGRATIONS.length);
     expect(store.writeLog().map((x) => [x.id, x.kind, x.undoOf, x.undoneBy])).toEqual([[2, "timebox", 1, null], [1, "timebox", null, 2]]);
     const r = store.logWrite({ op: "update", kind: "rsvp", uid: "rsvp:M1", eventId: "M1", account: null, calendar: null, before: { ...F, response: "notResponded" }, after: { ...F, response: "accepted", comment: "See you there" }, localBefore: null, localAfter: null, auto: false });
@@ -636,7 +637,7 @@ describe("week plan duplicates (U3, D388)", () => {
     old.exec("INSERT INTO week_feature_slots VALUES (5, '2026-11-10', 'PM')");
     old.close();
     const logged: { op: string; count?: number }[] = [];
-    const store = createPlanStore({ path, now, log: (r) => logged.push(r) });
+    const store = createPlanStore({ path, now, files: localStoreFiles, log: (r) => logged.push(r) });
     expect(store.schemaVersion()).toBe(MIGRATIONS.length);
     const p = store.weekPlan(W);
     expect(p.features.map((f) => [f.id, f.itemId, f.slots.length]).sort()).toEqual([

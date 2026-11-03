@@ -1,3 +1,4 @@
+import { createSnapshotStore } from "../../host/local/snapshots.ts";
 import { mkdtempSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,7 +25,7 @@ function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | Targ
     fetch: api.fetch,
     retryDelayMs: 0,
     log: (r) => logs.push(r),
-    cacheDir,
+    snapshots: createSnapshotStore(cacheDir),
     timeZone: NY,
     now: () => clock,
     ...(opts.pickableTypes ? { pickableTypes: () => opts.pickableTypes! } : {}),

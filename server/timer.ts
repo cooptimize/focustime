@@ -1,7 +1,5 @@
 // The focus timer's server side (step 6c): checked every few seconds, so a session ends on time and warns ahead
 // whether or not the window is open. The state is in the plan store, so a restart picks it up where it was.
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import { logSegment, TIMER_KEY } from "../actions/timer-actions.ts";
 import { dueWarnings, tickTimer, type TimerState, type WarnPoint } from "../plan/timer.ts";
 import type { PlanStore } from "../store/plan-store.ts";
@@ -63,13 +61,4 @@ export const CALENDAR_REFRESH_MS = 5 * 60_000;
 /** Whether to reload today's calendars now: a running timer, and none done in the last 5 minutes. */
 export function calendarRefreshDue(s: TimerState | null, lastMs: number | null, nowMs: number): boolean {
   return !!s?.runningSince && !s.ended && (lastMs === null || nowMs - lastMs >= CALENDAR_REFRESH_MS);
-}
-
-const SOUND = "/usr/share/sounds/freedesktop/stereo/complete.oga";
-/** A short end sound through PipeWire, when the sound file is there. Fire and forget. */
-export function playEndSound(): void {
-  if (!existsSync(SOUND)) return;
-  const p = spawn("pw-play", [SOUND], { stdio: "ignore" });
-  p.on("error", () => {});
-  p.unref();
 }

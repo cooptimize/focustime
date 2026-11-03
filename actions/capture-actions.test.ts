@@ -1,3 +1,4 @@
+import { createSnapshotStore } from "../host/local/snapshots.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -23,7 +24,7 @@ function setup(o: { offline?: boolean } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "c-cap-"));
   const dv = fakeFetch(o.offline ? "token_network_down" : "ok");
   const ado = fakeDevOps({ contoso: o.offline ? "offline" : "planweek", cooptimize: o.offline ? "offline" : "agile" });
-  const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, cacheDir: dir, log: () => {} });
+  const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, snapshots: createSnapshotStore(dir), log: () => {} });
   let devops: ReturnType<typeof createDevOpsSource> | null = null;
   const plan = createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
   const c: ActionContext = {
@@ -31,7 +32,7 @@ function setup(o: { offline?: boolean } = {}) {
     makeDataverse,
     makeOutlook: () => { throw new Error("n/a"); },
     makeGoogle: () => { throw new Error("n/a"); },
-    makeDevOps: (cfg, tz) => (devops ??= createDevOpsSource({ fetch: ado.fetch, log: () => {}, cacheDir: dir, timeZone: tz, targets: (k) => makeDataverse(cfg, tz).devopsTargets(k) })),
+    makeDevOps: (cfg, tz) => (devops ??= createDevOpsSource({ fetch: ado.fetch, log: () => {}, snapshots: createSnapshotStore(dir), timeZone: tz, targets: (k) => makeDataverse(cfg, tz).devopsTargets(k) })),
     saveSystemUserId: async () => {},
     now: () => NOW,
     plan,

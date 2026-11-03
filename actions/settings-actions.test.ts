@@ -1,3 +1,4 @@
+import { createSnapshotStore } from "../host/local/snapshots.ts";
 import { createHostBrowsers } from "../server/host.ts";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
@@ -170,7 +171,7 @@ describe("Settings > Clients follow state (step 6d)", () => {
     const t = setup(text);
     const dv = fakeFetch("ok").fetch;
     const cacheDir = mkdtempSync(join(tmpdir(), "c-follow-"));
-    t.c.makeDataverse = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv, cacheDir, log: () => {} });
+    t.c.makeDataverse = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv, snapshots: createSnapshotStore(cacheDir), log: () => {} });
     const load = async () => ((await t.run("settings.load", {})) as { data: SettingsData }).data.clients;
     const by = (cs: SettingsData["clients"], k: string) => cs.find((c) => c.key === k)?.follow;
     let cs = await load();

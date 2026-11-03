@@ -1,7 +1,7 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import { clearPhotos, photoAction } from "./photo-actions.ts";
-import type { PhotoCache } from "../cache/photos.ts";
+import type { PhotoCache } from "../host/types.ts";
 import { expiringSoon } from "../plan/expiry.ts";
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import { DEFAULT_PLAN, DEFAULT_TIMEBOX, DEFAULT_UI, TEXT_SIZES, THEMES, type AppConfig, type DataverseConfig, type GoogleConfig, type OutlookConfig, type ParseResult } from "../config/schema.ts";

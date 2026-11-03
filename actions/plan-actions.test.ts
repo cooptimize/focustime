@@ -1,3 +1,4 @@
+import { createSnapshotStore } from "../host/local/snapshots.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,7 +25,7 @@ function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string
   const dir = mkdtempSync(join(tmpdir(), "c-plan-"));
   const dv = fakeFetch("ok", { pto: opts.pto ?? "ok" });
   const ado = fakeDevOps({ contoso: "portfolio", cooptimize: "agile" });
-  const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, cacheDir: dir, log: () => {} });
+  const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, snapshots: createSnapshotStore(dir), log: () => {} });
   const devopsByKey = new Map<string, ReturnType<typeof createDevOpsSource>>();
   const plan = createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
   const c: ActionContext = {
@@ -35,7 +36,7 @@ function setup(opts: { noPlan?: boolean; pto?: "ok" | "forbidden"; text?: string
     makeDevOps: (cfg, tz) => {
       const key = JSON.stringify([cfg, tz]);
       let s = devopsByKey.get(key);
-      if (!s) devopsByKey.set(key, (s = createDevOpsSource({ fetch: ado.fetch, log: () => {}, cacheDir: dir, timeZone: tz, targets: (k) => makeDataverse(cfg, tz).devopsTargets(k) })));
+      if (!s) devopsByKey.set(key, (s = createDevOpsSource({ fetch: ado.fetch, log: () => {}, snapshots: createSnapshotStore(dir), timeZone: tz, targets: (k) => makeDataverse(cfg, tz).devopsTargets(k) })));
       return s;
     },
     saveSystemUserId: async () => {},

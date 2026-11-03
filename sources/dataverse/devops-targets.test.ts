@@ -1,3 +1,4 @@
+import { createSnapshotStore } from "../../host/local/snapshots.ts";
 import { mkdtempSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,7 +15,7 @@ function setup(scenario: Scenario = "ok", extra: Parameters<typeof fakeFetch>[1]
   const cacheDir = mkdtempSync(join(tmpdir(), "focustime-dvt-"));
   const logs: LogRecord[] = [];
   const f = fakeFetch(scenario, extra);
-  const source = createDataverseSource({ config: dvConfig, timeZone: "America/New_York", getSecret: async () => FAKE_SECRET, fetch: f.fetch, cacheDir, log: (r) => logs.push(r), now: () => NOW });
+  const source = createDataverseSource({ config: dvConfig, timeZone: "America/New_York", getSecret: async () => FAKE_SECRET, fetch: f.fetch, snapshots: createSnapshotStore(cacheDir), log: (r) => logs.push(r), now: () => NOW });
   return { source, calls: f.calls, logs, cacheDir };
 }
 
@@ -87,7 +88,7 @@ describe("Dataverse → DevOps settings", () => {
 describe("my clients for Open half-days (Q21)", () => {
   it("lists every account I'm an Account Worker on, with whether DevOps is set up, and never selects the PAT", async () => {
     const { fetch, calls } = fakeFetch("ok");
-    const src = createDataverseSource({ config: dvConfig, timeZone: "America/New_York", getSecret: async () => FAKE_SECRET, fetch, cacheDir: mkdtempSync(join(tmpdir(), "c-")), log: () => {} });
+    const src = createDataverseSource({ config: dvConfig, timeZone: "America/New_York", getSecret: async () => FAKE_SECRET, fetch, snapshots: createSnapshotStore(mkdtempSync(join(tmpdir(), "c-"))), log: () => {} });
     const mine = await src.myClients();
     expect(mine).toEqual([
       { clientKey: "Adatum", clientName: "Adatum", devops: true, devopsEmail: "me@contoso.example" },
@@ -102,7 +103,7 @@ describe("my clients for Open half-days (Q21)", () => {
 
   it("returns null (not a guess) when Dataverse fails", async () => {
     const { fetch } = fakeFetch("dv_503");
-    const src = createDataverseSource({ config: dvConfig, timeZone: "America/New_York", getSecret: async () => FAKE_SECRET, fetch, cacheDir: mkdtempSync(join(tmpdir(), "c-")), log: () => {} });
+    const src = createDataverseSource({ config: dvConfig, timeZone: "America/New_York", getSecret: async () => FAKE_SECRET, fetch, snapshots: createSnapshotStore(mkdtempSync(join(tmpdir(), "c-"))), log: () => {} });
     expect(await src.myClients()).toBeNull();
   });
 });

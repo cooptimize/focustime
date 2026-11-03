@@ -4,6 +4,7 @@ import type { OutlookConfig } from "../../config/schema.ts";
 import type { Logger } from "../../log/logger.ts";
 import { ForeignLinkError, getJson, PartialError } from "../calendar/http.ts";
 import { createCalendarSource } from "../calendar/source.ts";
+import type { Loopback, SnapshotStore } from "../../host/types.ts";
 import { createOAuthClient, microsoftProvider, type Keyring } from "../oauth/oauth.ts";
 import { weekRange } from "../when.ts";
 import { normalizeGraphEvents, type GraphEvent } from "./normalize.ts";
@@ -20,7 +21,8 @@ export type CalendarDeps<C> = {
   fetch: typeof fetch;
   keyring: Keyring;
   openBrowser: (url: string) => Promise<void>;
-  cacheDir: string;
+  loopback?: Loopback;
+  snapshots: SnapshotStore;
   log: Logger;
   timeZone: string;
   now?: () => Temporal.Instant;
@@ -32,6 +34,7 @@ export function createOutlookSource(deps: CalendarDeps<OutlookConfig>) {
   const timeoutMs = deps.timeoutMs ?? 20_000;
   const auth = createOAuthClient(microsoftProvider(deps.config), {
     fetch: deps.fetch, keyring: deps.keyring, openBrowser: deps.openBrowser, log: deps.log, timeoutMs,
+    ...(deps.loopback ? { loopback: deps.loopback } : {}),
     ...(deps.signInTimeoutMs ? { signInTimeoutMs: deps.signInTimeoutMs } : {}),
     ...(deps.now ? { now: () => deps.now!().epochMilliseconds } : {}),
   });
@@ -76,7 +79,7 @@ export function createOutlookSource(deps: CalendarDeps<OutlookConfig>) {
 
   const base = createCalendarSource({
     id: "outlook", label: "Outlook", connectAction: "connect_microsoft", auth, fetchWeek,
-    cacheDir: deps.cacheDir, log: deps.log, timeZone: deps.timeZone, ...(deps.now ? { now: deps.now } : {}),
+    snapshots: deps.snapshots, log: deps.log, timeZone: deps.timeZone, ...(deps.now ? { now: deps.now } : {}),
   });
   const writer = createGraphWriter({ fetch: deps.fetch, token: () => auth.accessToken("write"), invalidate: () => auth.invalidate(), log: deps.log, timeoutMs });
   const write: OutlookWrite = { access: () => auth.writeAccess(), writer };

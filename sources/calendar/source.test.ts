@@ -1,3 +1,5 @@
+import { createSnapshotStore } from "../../host/local/snapshots.ts";
+import { createLoopback } from "../../host/local/loopback.ts";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,7 +24,7 @@ function setup(kind: Kind, scenario: ApiScenario, opts: { connected?: boolean; c
     "google-client-secret": FAKE_CLIENT_SECRET,
     ...(opts.connected === false ? {} : { "outlook-refresh-token": FAKE_REFRESH, "google-refresh-token": FAKE_REFRESH }),
   }, { locked: !!opts.locked });
-  const common = { fetch: api.fetch, keyring, openBrowser: async () => {}, cacheDir, log: (r: LogRecord) => logs.push(r), timeZone: NY, now: () => NOW };
+  const common = { fetch: api.fetch, keyring, loopback: createLoopback(), openBrowser: async () => {}, snapshots: createSnapshotStore(cacheDir), log: (r: LogRecord) => logs.push(r), timeZone: NY, now: () => NOW };
   const source =
     kind === "outlook"
       ? createOutlookSource({ ...common, config: { tenantId: TENANT, clientId: "44444444-4444-4444-8444-444444444444" } })

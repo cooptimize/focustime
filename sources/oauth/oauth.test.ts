@@ -1,3 +1,4 @@
+import { createLoopback } from "../../host/local/loopback.ts";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { LogRecord } from "../../log/logger.ts";
@@ -20,7 +21,7 @@ function ms(opts: { exchange?: TokenBehavior; refresh?: TokenBehavior; consented
   const browser = opts.browser ?? fakeBrowser({ kind: "approve" }, tok.authorize);
   const logs: LogRecord[] = [];
   const client = createOAuthClient(microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }), {
-    fetch: tok.fetch, keyring, openBrowser: browser.open, log: (r) => logs.push(r), signInTimeoutMs: opts.signInTimeoutMs ?? 2000,
+    fetch: tok.fetch, keyring, loopback: createLoopback(), openBrowser: browser.open, log: (r) => logs.push(r), signInTimeoutMs: opts.signInTimeoutMs ?? 2000,
   });
   return { client, tok, keyring, browser, logs };
 }
@@ -30,7 +31,7 @@ function google(opts: { exchange?: TokenBehavior; refresh?: TokenBehavior; keyri
   const keyring = opts.keyring ?? memoryKeyring({ "google-client-secret": FAKE_CLIENT_SECRET });
   const browser = fakeBrowser({ kind: "approve" });
   const client = createOAuthClient(googleProvider({ clientId: G_CLIENT, calendars: ["primary"] }), {
-    fetch: tok.fetch, keyring, openBrowser: browser.open, log: () => {}, signInTimeoutMs: 2000,
+    fetch: tok.fetch, keyring, loopback: createLoopback(), openBrowser: browser.open, log: () => {}, signInTimeoutMs: 2000,
   });
   return { client, tok, keyring, browser };
 }

@@ -1,3 +1,4 @@
+import { createSnapshotStore } from "../host/local/snapshots.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,7 +20,7 @@ function ctx(scenario: Scenario, text = configText): ActionContext {
   return {
     loadConfig: async () => ({ path: "/home/me/.config/focustime/config.toml", parsed }),
     makeDataverse: (cfg, tz) =>
-      createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: f.fetch, cacheDir: mkdtempSync(join(tmpdir(), "c-")), log: () => {} }),
+      createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: f.fetch, snapshots: createSnapshotStore(mkdtempSync(join(tmpdir(), "c-"))), log: () => {} }),
     makeOutlook: () => { throw new Error("Outlook is not configured in these tests"); },
     makeGoogle: () => { throw new Error("Google is not configured in these tests"); },
     makeDevOps: () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined }),

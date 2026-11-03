@@ -1,7 +1,7 @@
 // Fake OAuth provider and fake browser for tests. Error bodies echo secrets on purpose.
 import { request } from "node:http";
-import type { SecretAccount } from "../../secrets/keyring.ts";
-import { SecretError } from "../../secrets/keyring.ts";
+import type { SecretAccount } from "../../host/types.ts";
+import { SecretError } from "../../host/types.ts";
 
 export const FAKE_AUTH_CODE = "FAKE-AUTHCODE-c0de11";
 export const FAKE_REFRESH = "FAKE-REFRESH-5e5e77";

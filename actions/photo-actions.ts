@@ -3,7 +3,7 @@
 // shows initials. Never logged: not the person, the address or the image.
 import type { AppConfig } from "../config/schema.ts";
 import { dataUrl, MAX_PHOTO_PEOPLE, photoAge } from "../plan/photos.ts";
-import type { PhotoCache } from "../cache/photos.ts";
+import type { PhotoCache } from "../host/types.ts";
 import { HttpError, NetworkError } from "../sources/calendar/http.ts";
 import type { Photo } from "../sources/graph/photos.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";

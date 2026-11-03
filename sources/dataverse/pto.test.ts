@@ -1,3 +1,4 @@
+import { createSnapshotStore } from "../../host/local/snapshots.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +12,7 @@ const FRI = "2026-11-06";
 function setup(pto: "ok" | "none" | "forbidden", cacheDir = mkdtempSync(join(tmpdir(), "c-pto-")), missing?: string) {
   const logs: LogRecord[] = [];
   const f = fakeFetch("ok", missing ? { pto, missing } : { pto });
-  const source = createDataverseSource({ config: dvConfig, timeZone: "America/New_York", getSecret: async () => FAKE_SECRET, fetch: f.fetch, cacheDir, log: (r) => logs.push(r), now: () => Temporal.Instant.from("2026-11-02T13:00:00Z") });
+  const source = createDataverseSource({ config: dvConfig, timeZone: "America/New_York", getSecret: async () => FAKE_SECRET, fetch: f.fetch, snapshots: createSnapshotStore(cacheDir), log: (r) => logs.push(r), now: () => Temporal.Instant.from("2026-11-02T13:00:00Z") });
   return { source, calls: f.calls, logs, cacheDir };
 }
 

@@ -1,8 +1,7 @@
 // Local plan store (D23): SQLite through Node's built-in node:sqlite, under ~/.local/share/focustime/.
 // Holds only FocusTime's own plan (day plans, picks, draft stories) and a few one-time markers.
 // Nothing here is ever written to DevOps, Outlook, Google or Dataverse.
-import { chmodSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import type { StoreFiles } from "../host/types.ts";
 import { DatabaseSync } from "node:sqlite";
 import { carryOver } from "../plan/rules.ts";
 import { type ItemLevel, type Tier } from "../plan/weeklist.ts";
@@ -823,14 +822,18 @@ const PICK_SELECT = `SELECT p.*, o.date AS carried_from_date FROM picks p LEFT J
 
 export class PlanError extends Error {}
 
-export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedDateTime; log?: Logger }) {
-  if (opts.path !== ":memory:") mkdirSync(dirname(opts.path), { recursive: true, mode: 0o700 });
+/**
+ * `files` (the host's, A1): makes the store's folder and keeps the file and its backups private. Absent: the path is
+ * used as given (in-memory stores and tests).
+ */
+export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedDateTime; log?: Logger; files?: StoreFiles }) {
+  if (opts.path !== ":memory:") opts.files?.prepare(opts.path);
   const db = new DatabaseSync(opts.path);
-  if (opts.path !== ":memory:") chmodSync(opts.path, 0o600);
+  if (opts.path !== ":memory:") opts.files?.secure(opts.path);
   db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
   db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
   const before = schemaVersion(db);
-  migrate(db, opts.now, opts.path);
+  migrate(db, opts.now, opts.path, opts.files);
   // U3 (D388): say how many duplicate week items migration 21 removed (counts only; the rows are in dedupe_log).
   if (before < 21 && opts.log) {
     const n = (db.prepare("SELECT COUNT(*) AS n FROM dedupe_log WHERE table_name = 'week_features'").get() as { n: number }).n;
@@ -1428,7 +1431,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       if (opts.path !== ":memory:") {
         bak = `${opts.path}.bak-reset-${opts.now().toInstant().toString().replace(/[^0-9TZ]/g, "")}`;
         db.prepare("VACUUM INTO ?").run(bak);
-        chmodSync(bak, 0o600);
+        opts.files?.secure(bak);
       }
       tx(() => {
         // FocusTime's Outlook events and the audit log stay: they are what lets it find, undo and remove its own events.
@@ -1848,7 +1851,7 @@ function schemaVersion(db: DatabaseSync): number {
 /** Where the copy taken before a migration goes: plan.db.bak-v<from>-<stamp>, next to the store, 0600. */
 export const backupPath = (path: string, from: number, stamp: string) => `${path}.bak-v${from}-${stamp.replace(/[^0-9TZ]/g, "")}`;
 
-function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":memory:") {
+function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":memory:", files?: StoreFiles) {
   db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
   const current = schemaVersion(db);
   if (current > MIGRATIONS.length) throw new Error(`Plan store is from a newer FocusTime (schema ${current}); not opening it`);
@@ -1856,7 +1859,7 @@ function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":m
   if (current > 0 && current < MIGRATIONS.length && path !== ":memory:") {
     const bak = backupPath(path, current, now().toInstant().toString());
     db.prepare("VACUUM INTO ?").run(bak);
-    chmodSync(bak, 0o600);
+    files?.secure(bak);
   }
   for (let v = current + 1; v <= MIGRATIONS.length; v++) {
     // A table rebuild (SQLite's documented procedure): foreign keys off around it, then checked before commit.

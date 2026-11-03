@@ -1,29 +1,14 @@
-// Keyring access through Secret Service, via the system `secret-tool`.
+// The local host's secret store (A1): Secret Service, via the system `secret-tool`.
 // The only module that touches secrets. The secret arrives on stdout and is never put in argv,
 // logged, cached or included in an error.
 import { execFile } from "node:child_process";
-import { Pat } from "../sources/devops/pat.ts";
-import { cacheKey } from "../sources/devops/source.ts";
+import { Pat } from "../../sources/devops/pat.ts";
+import { cacheKey } from "../../sources/devops/source.ts";
+import { SECRET_ACCOUNTS as ACCOUNTS, SecretError, WRITABLE_ACCOUNTS as WRITABLE, type AppSecretAccount, type RefreshTokenAccount, type SecretAccount, type SecretState } from "../types.ts";
+
+export { SecretError, type AppSecretAccount, type RefreshTokenAccount, type SecretAccount };
 
 export const KEYRING_SERVICE = "focustime";
-/** App secrets set up by me outside FocusTime: read-only here. */
-export type AppSecretAccount = "dataverse-client-secret" | "google-client-secret";
-/** Refresh tokens FocusTime writes after sign-in and clears on disconnect. */
-export type RefreshTokenAccount = "outlook-refresh-token" | "google-refresh-token";
-export type SecretAccount = AppSecretAccount | RefreshTokenAccount;
-const ACCOUNTS: readonly SecretAccount[] = ["dataverse-client-secret", "google-client-secret", "outlook-refresh-token", "google-refresh-token"];
-const WRITABLE: readonly RefreshTokenAccount[] = ["outlook-refresh-token", "google-refresh-token"];
-
-export type SecretErrorKind = "not_found" | "unavailable" | "locked";
-
-export class SecretError extends Error {
-  readonly kind: SecretErrorKind;
-  constructor(kind: SecretErrorKind) {
-    super(`Secret storage: ${kind}`);
-    this.name = "SecretError";
-    this.kind = kind;
-  }
-}
 
 export type RunResult = { code: number; stdout: string; stderr: string };
 export type Runner = (args: string[], stdin?: string) => Promise<RunResult>;
@@ -74,7 +59,7 @@ export async function setAppSecret(account: AppSecretAccount, value: string, run
 }
 
 /** Whether an account has an entry, without keeping its value: "set", "missing", or why the keyring can't say. */
-export async function secretState(account: SecretAccount, run: Runner = runSecretTool): Promise<"set" | "missing" | "locked" | "unavailable"> {
+export async function secretState(account: SecretAccount, run: Runner = runSecretTool): Promise<SecretState> {
   try {
     await getSecret(account, run);
     return "set";

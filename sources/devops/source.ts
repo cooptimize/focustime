@@ -3,7 +3,7 @@
 // wrapped in Pat, and are used only to build the Authorization header right at the request. They are
 // never logged, cached, returned or put in a message. Only the normalized items are cached.
 import { createHash } from "node:crypto";
-import { readSnapshot, writeSnapshot } from "../../cache/snapshots.ts";
+import type { SnapshotStore } from "../../host/types.ts";
 import type { Logger } from "../../log/logger.ts";
 import type { ClientPortfolio, ClientWork, ClientWorkStatus, FailureCause, PortfolioItem, WorkItem } from "../../week/types.ts";
 import { formatFetchedAt } from "../when.ts";
@@ -21,7 +21,7 @@ const MAX_ANCESTOR_DEPTH = 4; // feature → epic → any custom levels above, Q
 export type DevOpsDeps = {
   fetch: typeof fetch;
   log: Logger;
-  cacheDir: string;
+  snapshots: SnapshotStore;
   timeZone: string;
   /** Dataverse → DevOps: settings and PATs for these clients, read live. */
   targets: (clientKeys: string[]) => Promise<TargetsResult>;
@@ -346,7 +346,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
           const w = works[i]!;
           const key = `portfolio-${cacheKey(ref.clientKey)}`;
           const fallback = async (status: ClientWorkStatus, message: string, cause?: FailureCause): Promise<ClientPortfolio> => {
-            const snap = (await readSnapshot<PortfolioItem>(d.cacheDir, "devops", key)) as PortfolioSnapshot | null;
+            const snap = (await d.snapshots.read<PortfolioItem>("devops", key)) as PortfolioSnapshot | null;
             const msg = snap ? `${message}. Showing features from ${formatFetchedAt(snap.fetchedAt, d.timeZone, now())}` : message;
             return { clientKey: ref.clientKey, clientName: ref.clientName, status, message: msg, ...(cause ? { cause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [], targetFields: snap?.targetFields ?? {}, startFields: snap?.startFields ?? {}, sizeField: snap?.sizeField ?? null, acceptanceField: snap?.acceptanceField ?? false };
           };
@@ -357,7 +357,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
             if (pre) throw pre;
             const { items, targetFields, startFields, sizeField, acceptanceField } = await fetchPortfolio(ref, target!, w.items);
             const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
-            await writeSnapshot(d.cacheDir, "devops", key, { fetchedAt, items, targetFields, startFields, sizeField, acceptanceField } as unknown as WorkSnapshot).catch(() => log("cache_write", { kind: "failed" }));
+            await d.snapshots.write("devops", key, { fetchedAt, items, targetFields, startFields, sizeField, acceptanceField } as unknown as WorkSnapshot).catch(() => log("cache_write", { kind: "failed" }));
             return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, targetFields, startFields, sizeField, acceptanceField };
           } catch (e) {
             if (!(e instanceof DevOpsFailure)) log("portfolio", { kind: "unexpected" });
@@ -398,7 +398,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
   async function fromCache(ref: ClientRef, f: DevOpsFailure): Promise<ClientWork> {
     // Identity missing or not set up: nothing to fall back to that would be right to show.
     const useCache = f.status !== "identity_missing" && f.status !== "not_set_up";
-    const snap = useCache ? ((await readSnapshot<WorkItem>(d.cacheDir, "devops", cacheKey(ref.clientKey))) as WorkSnapshot | null) : null;
+    const snap = useCache ? ((await d.snapshots.read<WorkItem>("devops", cacheKey(ref.clientKey))) as WorkSnapshot | null) : null;
     const message = snap ? `${f.message}. Showing items from ${formatFetchedAt(snap.fetchedAt, d.timeZone, now())}` : useCache ? `${f.message}. No cached items yet` : f.message;
     return { clientKey: ref.clientKey, clientName: ref.clientName, status: f.status, message, ...(f.rootCause ? { cause: f.rootCause } : {}), fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: (snap?.items ?? []).map(withLevel), children: Array.isArray(snap?.children) ? snap.children.map(withLevel) : [] };
   }
@@ -415,7 +415,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
       const { items, children, watched, committed } = await fetchClient(ref, target!, watch, features);
       const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
       const snap: WorkSnapshot = { fetchedAt, items, children };
-      await writeSnapshot(d.cacheDir, "devops", cacheKey(ref.clientKey), snap).catch(() => log("cache_write", { kind: "failed" }));
+      await d.snapshots.write("devops", cacheKey(ref.clientKey), snap).catch(() => log("cache_write", { kind: "failed" }));
       return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, children, watched, committed };
     } catch (e) {
       if (!(e instanceof DevOpsFailure)) log("load", { kind: "unexpected" });

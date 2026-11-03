@@ -1,15 +1,17 @@
 // Start FocusTime: local server on 127.0.0.1, per-launch token, opens a Chromium app window.
 // Usage: node server/main.ts [--dev] [--no-open] [--no-reopen] [--port 5317] [--clock <ISO instant>]
+// FOCUSTIME_HOST=local|azure (A1) picks the host: local (the default) is the developer loop on this machine; azure is
+// the hosted app's host, a stub until A2 (its secrets, snapshots and plan store are in memory).
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
 import { createHostBrowsers } from "./host.ts";
+import type { Host } from "../host/types.ts";
+import { createLocalHost } from "../host/local/index.ts";
+import { createAzureHost } from "../host/azure/index.ts";
+import { memoryPhotos, memorySecrets, memorySnapshots } from "../host/fakes.ts";
 import { hoursOn } from "../week/hours.ts";
-import { takeOpenRequest } from "./open-request.ts";
-import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { cacheRoot, configPath, loadConfigFile, planDbPath, saveSystemUserId } from "../config/load.ts";
+import { loadConfigFile, saveSystemUserId } from "../config/load.ts";
 import { writeConfig } from "../config/edit.ts";
 import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
 import type { MicrosoftAccount } from "../actions/account.ts";
@@ -18,20 +20,15 @@ import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.t
 import type { TeamsStatusState } from "../plan/presence.ts";
 import { createPresenceClient, type PresenceClient } from "../sources/graph/presence.ts";
 import { createPhotoClient, type PhotoClient } from "../sources/graph/photos.ts";
-import { createPhotoCache } from "../cache/photos.ts";
 import { restoreTick, vmAction, type VmStatus } from "../actions/vm-actions.ts";
 import { CHECKIN_DONE_MARK } from "../actions/closeout-actions.ts";
 import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
 import { createAzureClient } from "../sources/azure/client.ts";
 import { localToday } from "../week/dates.ts";
 import { stderrLogger } from "../log/logger.ts";
-import { clearWritePat, deleteSecret, getSecret, getWritePat, secretState, setAppSecret, setSecret, setWritePat } from "../secrets/keyring.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { readFileSync } from "node:fs";
-import { chmod } from "node:fs/promises";
-import { dirname } from "node:path";
-import { homedir } from "node:os";
-import { exportPath } from "../actions/settings-actions.ts";
+import { homedir, tmpdir } from "node:os";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import { createDataverseSource, type DataverseSource } from "../sources/dataverse/source.ts";
 import { createGoogleSource } from "../sources/google/source.ts";
@@ -40,17 +37,15 @@ import { createDevOpsSource, type DevOpsSource } from "../sources/devops/source.
 import type { Keyring } from "../sources/oauth/oauth.ts";
 import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
 import { createApp } from "./app.ts";
-import { moveFromOldName } from "./rename.ts";
+import { moveFromOldName } from "../host/local/rename.ts";
 import { createDemoContext, seedDemo, type DemoControl } from "./demo.ts";
 import type { ActionContext } from "../actions/dispatch.ts";
-import { existsSync } from "node:fs";
-import { calendarRefreshDue, checkTimer, playEndSound, TIMER_BUTTONS } from "./timer.ts";
+import { calendarRefreshDue, checkTimer, TIMER_BUTTONS } from "./timer.ts";
 import { refreshTodayWarnings } from "../actions/warnings.ts";
 import { TIMER_KEY, timerAction, timerLike } from "../actions/timer-actions.ts";
 import { DEFAULT_FOCUS } from "../plan/focussound.ts";
-import { mediaControl } from "./media.ts";
 import type { TimerState } from "../plan/timer.ts";
-import { checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeDesktopNotification, closeoutReminderDue, desktopNotify, notifySend } from "./notify.ts";
+import { checkDayReminder, checkinReminderDue, checkReminder, checkWeekNudges, closeoutReminderDue } from "./notify.ts";
 import { DEFAULT_NOTIFY, dueFollowUps, inWorkingHours, noticeDone, notices, parseRoute, type Notice } from "../plan/notify.ts";
 import { createNotifier } from "../actions/notifier.ts";
 import { expiringFor } from "../actions/dispatch.ts";
@@ -69,13 +64,21 @@ const clockOffsetMs = clockArg >= 0 ? Temporal.Instant.from(args[clockArg + 1] ?
 /** The server's clock: real time, or a pinned start running forward (--clock). */
 const instantNow = () => (clockOffsetMs ? Temporal.Instant.fromEpochMilliseconds(Date.now() + clockOffsetMs) : Temporal.Now.instant());
 const zonedNow = (tz: string) => instantNow().toZonedDateTimeISO(tz);
-
-// R1: the one-time move from Coopilot's folders and keyring entries, before anything reads config, the store or a secret.
-const renamed = await moveFromOldName({ today: Temporal.Now.plainDateISO().toString(), log: stderrLogger });
 const root = resolve(import.meta.dirname, "..");
 const token = randomBytes(32).toString("base64url");
-const cfgPath = configPath();
 const log = stderrLogger;
+
+const hostKind = process.env.FOCUSTIME_HOST ?? "local";
+if (hostKind !== "local" && hostKind !== "azure") throw new Error("FOCUSTIME_HOST must be local or azure");
+const host: Host =
+  hostKind === "azure"
+    ? createAzureHost({ secrets: memorySecrets(), snapshots: memorySnapshots(), photos: memoryPhotos(), inbox: { add: () => "0", remove: () => {} }, now: instantNow })
+    : createLocalHost({ port, token, headless, open, noReopen: args.includes("--no-reopen"), now: instantNow });
+
+// R1: the one-time move from Coopilot's folders and keyring entries, before anything reads config, the store or a secret.
+const renamed = host.kind === "local" ? await moveFromOldName({ today: Temporal.Now.plainDateISO().toString(), log: stderrLogger }) : { note: null };
+/** The config file. The hosted app has none until A2 moves settings to the database: a scratch one meanwhile. */
+const cfgPath = host.kind === "local" ? host.paths.config : join(tmpdir(), "focustime-hosted", "config.toml");
 
 // One Dataverse source per distinct config, so the in-memory token and results survive between requests.
 const sources = new Map<string, DataverseSource>();
@@ -83,18 +86,16 @@ const makeDataverse = (cfg: DataverseConfig, timeZone: string) => {
   const key = JSON.stringify([cfg, timeZone]);
   let s = sources.get(key);
   if (!s) {
-    s = createDataverseSource({ config: cfg, timeZone, getSecret: () => getSecret("dataverse-client-secret"), fetch, cacheDir: cacheRoot(), log });
+    s = createDataverseSource({ config: cfg, timeZone, getSecret: () => host.secrets.get("dataverse-client-secret"), fetch, snapshots: host.snapshots, log });
     sources.set(key, s);
   }
   return s;
 };
 
 // Calendar sources: one instance per config so access tokens and results stay in memory.
-const keyring: Keyring = { get: (a) => getSecret(a), set: (a, v) => setSecret(a, v), delete: (a) => deleteSecret(a) };
+const keyring: Keyring = { get: (a) => host.secrets.get(a), set: (a, v) => host.secrets.set(a, v), delete: (a) => host.secrets.delete(a) };
 /** Opens the sign-in page in the default browser. The URL holds no secret (client ID, PKCE challenge, state). */
-const openBrowser = async (url: string) => {
-  spawn("xdg-open", [url], { detached: true, stdio: "ignore" }).unref();
-};
+const openBrowser = async (url: string) => void (await host.links.open(url).catch(() => null));
 const calendars = new Map<string, CalendarSource>();
 function memo<T extends CalendarSource>(kind: "outlook" | "google", cfg: OutlookConfig | GoogleConfig, timeZone: string, make: () => T): T {
   const key = JSON.stringify([kind, cfg, timeZone]);
@@ -102,7 +103,7 @@ function memo<T extends CalendarSource>(kind: "outlook" | "google", cfg: Outlook
   if (!s) calendars.set(key, (s = make()));
   return s;
 }
-const calendarDeps = (timeZone: string) => ({ fetch, keyring, openBrowser, cacheDir: cacheRoot(), log, timeZone });
+const calendarDeps = (timeZone: string) => ({ fetch, keyring, openBrowser, loopback: host.loopback, snapshots: host.snapshots, log, timeZone });
 const makeOutlook = (cfg: OutlookConfig, timeZone: string) => memo("outlook", cfg, timeZone, () => createOutlookSource({ ...calendarDeps(timeZone), config: cfg }));
 /**
  * Step 15.4: the Microsoft sign-in is the Outlook source's auth client (one refresh token, one keyring entry); the
@@ -139,7 +140,7 @@ const makeDevOps = (cfg: DataverseConfig, timeZone: string) => {
   let s = devopsSources.get(key);
   if (!s) {
     const dv = makeDataverse(cfg, timeZone);
-    s = createDevOpsSource({ fetch, log, cacheDir: cacheRoot(), timeZone, targets: (keys) => dv.devopsTargets(keys), pickableTypes: () => pickableTypes, openStates: (k) => openStates[k] ?? [] });
+    s = createDevOpsSource({ fetch, log, snapshots: host.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), pickableTypes: () => pickableTypes, openStates: (k) => openStates[k] ?? [] });
     devopsSources.set(key, s);
   }
   return s;
@@ -162,7 +163,7 @@ const loadConfig = async () => {
 await loadConfig().catch(() => null);
 let plan: PlanStore | undefined;
 try {
-  plan = createPlanStore({ path: planDbPath(), now: () => zonedNow(timeZone), log });
+  plan = createPlanStore({ path: host.kind === "local" ? host.paths.planDb : ":memory:", now: () => zonedNow(timeZone), log, files: host.files.store });
 } catch {
   log({ source: "plan", op: "open", kind: "failed" });
 }
@@ -174,11 +175,11 @@ if (dev) {
   devMiddleware = vite.middlewares;
 }
 
-/** Media control for focus (step 10): playerctl when installed, playlist links through xdg-open. */
-const media = mediaControl();
+/** Media control for focus (step 10): the host's (local: playerctl when installed, playlist links through xdg-open). */
+const media = host.media;
 
-// Demo mode (step 15, D272): a flag file next to the plan store; the demo context is built (and seeded) on demand.
-const demoFlag = join(dirname(planDbPath()), "demo-mode");
+// Demo mode (step 15, D272): the host keeps a flag (local: a file next to the plan store); the demo context is built
+// (and seeded) on demand.
 let demoCtx: ActionContext | null = null;
 const demoControl = (on: boolean): DemoControl => ({ on, set: async (v) => setDemo(v) });
 async function setDemo(on: boolean): Promise<void> {
@@ -188,17 +189,16 @@ async function setDemo(on: boolean): Promise<void> {
       await seedDemo(ctx);
       demoCtx = ctx;
     }
-    await mkdir(dirname(demoFlag), { recursive: true, mode: 0o700 });
-    await writeFile(demoFlag, "on\n", { mode: 0o600 });
+    await host.files.demoFlag.set(true);
     log({ source: "plan", op: "demo", kind: "on" });
   } else {
-    await rm(demoFlag, { force: true });
+    await host.files.demoFlag.set(false);
     demoCtx?.plan?.close();
     demoCtx = null;
     log({ source: "plan", op: "demo", kind: "off" });
   }
 }
-if (existsSync(demoFlag)) await setDemo(true).catch(() => log({ source: "plan", op: "demo", kind: "failed" }));
+if (host.files.demoFlag.get()) await setDemo(true).catch(() => log({ source: "plan", op: "demo", kind: "failed" }));
 /** The plan store the timer ticks on: the demo one while demo mode is on. */
 const activePlan = () => demoCtx?.plan ?? plan;
 
@@ -209,7 +209,7 @@ const server = createApp({
   // FOCUSTIME_DIST: a verification build elsewhere, so checking work never swaps the UI the service serves.
   ...(devMiddleware ? { devMiddleware } : { distDir: process.env.FOCUSTIME_DIST ?? join(root, "dist") }),
   // The launcher's request (capture), else the view a clicked notification asked for (step 15.5), taken once.
-  takeOpenRequest: async () => (await takeOpenRequest(runtimeDir)) ?? takeRoute(),
+  takeOpenRequest: async () => (await host.launch.takeOpenRequest()) ?? takeRoute(),
   reopen: reopenWindow,
   ctx: () => demoCtx ?? liveCtx,
 });
@@ -225,14 +225,14 @@ const liveCtx: ActionContext = {
     writeConfig: (edit) => writeConfig(cfgPath, edit),
     now: () => instantNow().toString(),
     ...(plan ? { plan } : {}),
-    launch: launchDetached,
+    launch: (argv) => host.launch.detached(argv),
     media,
-    secrets: { state: (a) => secretState(a), set: (a, v) => setAppSecret(a, v) },
-    // Step 14: personal DevOps write PATs (keyring, stdin only) and the writer (dev.azure.com of one client per call).
-    writePats: { get: (k) => getWritePat(k), set: (k, v) => setWritePat(k, v), clear: (k) => clearWritePat(k) },
+    secrets: { state: (a) => host.secrets.state(a), set: (a, v) => host.secrets.setApp(a, v) },
+    // Step 14: personal DevOps write PATs (the host's secret store) and the writer (dev.azure.com of one client per call).
+    writePats: host.secrets.writePat,
     devopsWriter: createDevOpsWriter({ fetch, log }),
     account: accountFor,
-    photoCache: createPhotoCache(cacheRoot()),
+    photoCache: host.photos,
     azure: azureFor,
     // Browser .desktop entries and Local State only; profile names are all that is kept.
     host: createHostBrowsers({
@@ -245,13 +245,7 @@ const liveCtx: ActionContext = {
       },
       home: homedir(),
     }),
-    exportPlan: async (json) => {
-      const out = exportPath(dirname(planDbPath()), new Date().toISOString());
-      await mkdir(dirname(out), { recursive: true, mode: 0o700 });
-      await writeFile(out, json, { mode: 0o600 });
-      await chmod(out, 0o600);
-      return out;
-    },
+    exportPlan: (json) => host.files.exportPlan(json),
 };
 
 /**
@@ -273,31 +267,9 @@ function takeRoute(): string | null {
   return r;
 }
 
-/**
- * Step 15.4 fix (host adapter): "Reopen FocusTime" from a window whose launch token is old. Under the service,
- * focustime-open replaces a window opened for an earlier server run; with npm start, a new app window opens with the
- * launch link. --no-reopen (the browser tests) turns it off.
- */
-async function reopenWindow(): Promise<boolean> {
-  const script = join(homedir(), ".local", "bin", "focustime-open");
-  if (headless || args.includes("--no-reopen")) return false;
-  const argv = process.env.INVOCATION_ID && existsSync(script) ? [script] : open ? ["chromium", `--app=http://127.0.0.1:${port}/?token=${token}`] : null;
-  if (!argv) return false;
-  return launchDetached(argv).then(() => true, () => false);
-}
-
-/** link.open: start a browser from an argument array (no shell), detached, with no output kept. */
-function launchDetached(argv: string[]): Promise<void> {
-  return new Promise((ok, fail) => {
-    const [cmd, ...args] = argv;
-    if (!cmd) return fail(new Error("empty command"));
-    const child = spawn(cmd, args, { detached: true, stdio: "ignore", shell: false });
-    child.once("error", () => fail(new Error("could not start")));
-    child.once("spawn", () => {
-      child.unref();
-      ok();
-    });
-  });
+/** "Reopen FocusTime" from a window whose launch token is old (the host's; --no-reopen turns it off). */
+function reopenWindow(): Promise<boolean> {
+  return host.launch.reopen();
 }
 
 // Notifications (step 15.5): every reminder, the timer, my VM, follow-ups due and expiring secrets go through one
@@ -339,7 +311,7 @@ if (plan) {
       // Start asks first (Settings > You), or it couldn't: open the VM menu, where the preview and the reason show.
       if (!r.ok) {
         openRoute("vm");
-        if (r.code !== "ask_first") notifySend("FocusTime", `Couldn't ${key === "start" ? "start your VM" : "restore auto-shutdown"}: ${r.error}.`);
+        if (r.code !== "ask_first") host.notifications.line("FocusTime", `Couldn't ${key === "start" ? "start your VM" : "restore auto-shutdown"}: ${r.error}.`);
       }
     }
   };
@@ -390,7 +362,7 @@ if (plan) {
   };
   const notifier = createNotifier({
     plan: store,
-    host: { show: (n, shown) => (headless ? Promise.resolve(null) : desktopNotify(n, shown)), close: closeDesktopNotification },
+    host: { show: (n, shown) => host.notifications.show(n, shown), close: (h) => host.notifications.close(h) },
     done,
     facts: async () => {
       const c = await configOrNull();
@@ -568,7 +540,7 @@ if (plan) {
           : new Promise((resolve) => {
               void notifier.offer(n, (key) => resolve(key || null)).then((g) => g !== "send" && resolve(null), () => resolve(null));
             }),
-      sound: playEndSound,
+      sound: () => host.media.endSound(),
       act: (action) => timerAction(timerCtx(), action, {}),
       // Step 10: a session that ends on its own pauses media too (when Settings > Focus asks for it).
       ended: async (before, after) => void (await media.transition(timerLike(before), timerLike(after), ((await configOrNull())?.focus ?? DEFAULT_FOCUS).pauseMedia)),
@@ -612,8 +584,6 @@ if (plan) {
   void timerTick();
 }
 
-const runtimeDir = join(process.env.XDG_RUNTIME_DIR || tmpdir(), "focustime");
-const launchFile = join(runtimeDir, "launch.json");
 
 server.on("error", (e: NodeJS.ErrnoException) => {
   if (e.code === "EADDRINUSE") {
@@ -624,15 +594,14 @@ server.on("error", (e: NodeJS.ErrnoException) => {
 });
 server.listen(port, "127.0.0.1", async () => {
   const url = `http://127.0.0.1:${port}/?token=${token}`;
-  await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
-  await writeFile(launchFile, JSON.stringify({ url, pid: process.pid }), { mode: 0o600 });
   // The launch URL holds the per-launch token, so it goes to a private file, not the terminal.
-  process.stdout.write(`FocusTime running on http://127.0.0.1:${port} (${dev ? "dev" : "built"} UI)\nConfig: ${cfgPath}\nLaunch link: ${launchFile}\n`);
-  if (open) spawn("chromium", [`--app=${url}`], { detached: true, stdio: "ignore" }).unref();
+  const launchFile = await host.launch.publish(url);
+  process.stdout.write(`FocusTime running on http://127.0.0.1:${port} (${dev ? "dev" : "built"} UI, ${host.kind} host)\nConfig: ${cfgPath}\n${launchFile ? `Launch link: ${launchFile}\n` : ""}`);
+  host.launch.openWindow(url);
 });
 
 const stop = async () => {
-  await rm(launchFile, { force: true });
+  await host.launch.unpublish();
   plan?.close();
   process.exit(0);
 };

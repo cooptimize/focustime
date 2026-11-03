@@ -14,6 +14,7 @@ export function createGoogleSource(deps: CalendarDeps<GoogleConfig>) {
   const timeoutMs = deps.timeoutMs ?? 20_000;
   const auth = createOAuthClient(googleProvider(deps.config), {
     fetch: deps.fetch, keyring: deps.keyring, openBrowser: deps.openBrowser, log: deps.log, timeoutMs,
+    ...(deps.loopback ? { loopback: deps.loopback } : {}),
     ...(deps.signInTimeoutMs ? { signInTimeoutMs: deps.signInTimeoutMs } : {}),
     ...(deps.now ? { now: () => deps.now!().epochMilliseconds } : {}),
   });
@@ -56,6 +57,6 @@ export function createGoogleSource(deps: CalendarDeps<GoogleConfig>) {
 
   return createCalendarSource({
     id: "google", label: "Google", connectAction: "connect_google", auth, fetchWeek,
-    cacheDir: deps.cacheDir, log: deps.log, timeZone: deps.timeZone, ...(deps.now ? { now: deps.now } : {}),
+    snapshots: deps.snapshots, log: deps.log, timeZone: deps.timeZone, ...(deps.now ? { now: deps.now } : {}),
   });
 }

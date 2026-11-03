@@ -1,8 +1,6 @@
 // Shared shell for the Outlook and Google calendar sources: token, one 401 retry, snapshot cache,
 // memory TTL and plain failure states. Never throws to callers.
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
-import { readSnapshot, writeSnapshot } from "../../cache/snapshots.ts";
+import type { SnapshotStore } from "../../host/types.ts";
 import type { Logger } from "../../log/logger.ts";
 import type { CalEvent, FailureCause, SourceResult } from "../../week/types.ts";
 import { AuthFailure, type ConnectOptions, type ConnectResult, type OAuthClient } from "../oauth/oauth.ts";
@@ -29,7 +27,7 @@ export type CalendarSourceDeps = {
   connectAction: "connect_microsoft" | "connect_google";
   auth: OAuthClient;
   fetchWeek: (weekStart: string, token: string) => Promise<CalEvent[]>;
-  cacheDir: string;
+  snapshots: SnapshotStore;
   log: Logger;
   timeZone: string;
   now?: () => Temporal.Instant;
@@ -81,7 +79,7 @@ export function createCalendarSource(d: CalendarSourceDeps) {
       events = await d.fetchWeek(weekStart, token);
     }
     const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
-    await writeSnapshot(d.cacheDir, d.id, weekStart, { fetchedAt, items: events }).catch(() => d.log({ source: d.id, op: "cache_write", kind: "failed" }));
+    await d.snapshots.write(d.id, weekStart, { fetchedAt, items: events }).catch(() => d.log({ source: d.id, op: "cache_write", kind: "failed" }));
     return { source: d.id, status: "ok", fetchedAt, fromCache: false, items: events };
   }
 
@@ -94,7 +92,7 @@ export function createCalendarSource(d: CalendarSourceDeps) {
       result = await fetchLive(weekStart);
     } catch (e) {
       const m = map(e);
-      const snap = m.useCache ? await readSnapshot<CalEvent>(d.cacheDir, d.id, weekStart) : null;
+      const snap = m.useCache ? await d.snapshots.read<CalEvent>(d.id, weekStart) : null;
       const at = snap ? formatFetchedAt(snap.fetchedAt, d.timeZone, now()) : null;
       const message = !m.useCache
         ? m.message
@@ -119,7 +117,7 @@ export function createCalendarSource(d: CalendarSourceDeps) {
   async function disconnect(): Promise<void> {
     memory.clear();
     await d.auth.disconnect();
-    await rm(join(d.cacheDir, d.id), { recursive: true, force: true });
+    await d.snapshots.clear(d.id);
     d.log({ source: d.id, op: "disconnect" });
   }
 

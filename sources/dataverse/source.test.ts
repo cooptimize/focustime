@@ -1,8 +1,9 @@
+import { createSnapshotStore } from "../../host/local/snapshots.ts";
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { SecretError } from "../../secrets/keyring.ts";
+import { SecretError } from "../../host/types.ts";
 import type { LogRecord } from "../../log/logger.ts";
 import { createDataverseSource, type DataverseSourceDeps } from "./source.ts";
 import { dvConfig, ENV, FAKE_SECRET, FAKE_TOKEN, fakeFetch, ME, type Scenario } from "./test-fakes.ts";
@@ -19,7 +20,7 @@ function setup(scenario: Scenario, over: Partial<DataverseSourceDeps> = {}) {
     timeZone: "America/New_York",
     getSecret: async () => FAKE_SECRET,
     fetch: f.fetch,
-    cacheDir,
+    snapshots: createSnapshotStore(cacheDir),
     log: (r) => logs.push(r),
     now: () => NOW,
     ...over,
@@ -195,7 +196,7 @@ describe("resolveUserId", () => {
       timeZone: "America/New_York",
       getSecret: async () => FAKE_SECRET,
       fetch: f.fetch,
-      cacheDir: mkdtempSync(join(tmpdir(), "focustime-cache-")),
+      snapshots: createSnapshotStore(mkdtempSync(join(tmpdir(), "focustime-cache-"))),
       log: () => {},
     });
     return { src, calls: f.calls };

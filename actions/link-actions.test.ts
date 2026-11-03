@@ -1,3 +1,4 @@
+import { createSnapshotStore } from "../host/local/snapshots.ts";
 import { createHostBrowsers } from "../server/host.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -26,7 +27,7 @@ function setup(opts: { launchFails?: boolean; noLaunch?: boolean } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "c-link-"));
   const dv = fakeFetch("ok");
   const ado = fakeDevOps({ contoso: "portfolio", cooptimize: "agile" });
-  const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, cacheDir: dir, log: () => {} });
+  const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, snapshots: createSnapshotStore(dir), log: () => {} });
   let devops: ReturnType<typeof createDevOpsSource> | undefined;
   const launched: string[][] = [];
   const c: ActionContext = {
@@ -34,7 +35,7 @@ function setup(opts: { launchFails?: boolean; noLaunch?: boolean } = {}) {
     makeDataverse,
     makeOutlook: () => { throw new Error("n/a"); },
     makeGoogle: () => { throw new Error("n/a"); },
-    makeDevOps: (cfg, tz) => (devops ??= createDevOpsSource({ fetch: ado.fetch, log: () => {}, cacheDir: dir, timeZone: tz, targets: (k) => makeDataverse(cfg, tz).devopsTargets(k) })),
+    makeDevOps: (cfg, tz) => (devops ??= createDevOpsSource({ fetch: ado.fetch, log: () => {}, snapshots: createSnapshotStore(dir), timeZone: tz, targets: (k) => makeDataverse(cfg, tz).devopsTargets(k) })),
     saveSystemUserId: async () => {},
     now: () => "2026-11-03T14:00:00Z",
     ...(opts.noLaunch ? {} : { launch: async (argv: string[]) => { if (opts.launchFails) throw new Error("ENOENT"); launched.push(argv); } }),

@@ -4,7 +4,7 @@ import { mkdtempSync, readdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createPhotoCache } from "../cache/photos.ts";
+import { createPhotoCache } from "../host/local/photos.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../config/starter.ts";
 import { demoAvatar, photoAge } from "../plan/photos.ts";

@@ -4,13 +4,9 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { CachedPhoto, PhotoCache } from "../types.ts";
 
-export type CachedPhoto = { fetchedAt: string; photo: { type: string; bytes: Uint8Array } | null };
-export type PhotoCache = {
-  read(id: string): Promise<CachedPhoto | null>;
-  write(id: string, entry: CachedPhoto): Promise<void>;
-  clear(): Promise<void>;
-};
+export type { CachedPhoto, PhotoCache };
 
 const TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 

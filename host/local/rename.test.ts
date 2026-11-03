@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { moveFromOldName, RENAME_NOTE } from "./rename.ts";
-import type { Runner } from "../secrets/keyring.ts";
-import { writePatAccount } from "../secrets/keyring.ts";
-import type { LogRecord } from "../log/logger.ts";
+import type { Runner } from "./keyring.ts";
+import { writePatAccount } from "./keyring.ts";
+import type { LogRecord } from "../../log/logger.ts";
 
 /** A fake Secret Service: entries by service and account, every call recorded. */
 function fakeKeyring(entries: Record<string, string>, opts: { failStoreFor?: string; corruptReadBack?: string } = {}) {

@@ -1,8 +1,10 @@
-// Last good snapshot per source per week. Normalized fields only; no secrets, tokens or raw bodies.
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+// The local host's snapshot cache (~/.cache/focustime/<source>/<week>.json): last good snapshot per source per week.
+// Normalized fields only; no secrets, tokens or raw bodies.
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { Snapshot, SnapshotStore } from "../types.ts";
 
-export type Snapshot<T> = { fetchedAt: string; items: T[]; children?: T[] };
+export type { Snapshot };
 
 // A week (calendars, Dataverse) or a short slug (DevOps, one file per client).
 const KEY = /^(\d{4}-\d{2}-\d{2}|[a-z0-9][a-z0-9-]{0,79})$/;
@@ -28,4 +30,16 @@ export async function writeSnapshot<T>(root: string, source: string, weekStart: 
   const tmp = `${path}.tmp`;
   await writeFile(tmp, JSON.stringify(snap, null, 1), { mode: 0o600 });
   await rename(tmp, path);
+}
+
+/** The SnapshotStore for one cache folder. */
+export function createSnapshotStore(root: string): SnapshotStore {
+  return {
+    read: (source, key) => readSnapshot(root, source, key),
+    write: (source, key, snap) => writeSnapshot(root, source, key, snap),
+    clear: async (source) => {
+      if (!/^[a-z]+$/.test(source)) throw new Error("Bad snapshot source");
+      await rm(join(root, source), { recursive: true, force: true });
+    },
+  };
 }

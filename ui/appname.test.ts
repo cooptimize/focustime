@@ -6,7 +6,7 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = join(import.meta.dirname, "..");
-const DIRS = ["ui", "server", "actions", "plan", "week", "sources", "config", "links", "store", "secrets", "cache", "log"];
+const DIRS = ["ui", "server", "actions", "plan", "week", "sources", "config", "links", "store", "host", "log"];
 
 /** Kept on purpose, by file: the Outlook marker and text already on Outlook events and DevOps items. */
 const KEEP: Record<string, RegExp> = {
@@ -17,7 +17,7 @@ const KEEP: Record<string, RegExp> = {
   "config/starter.ts": /^# .*"Coopilot (Dataverse Reader|Desktop)"/,
 };
 /** The rename itself: it has to name the old folders and keyring service. */
-const RENAME_MODULES = ["server/rename.ts", "secrets/keyring-rename.ts"];
+const RENAME_MODULES = ["host/local/rename.ts", "host/local/keyring-rename.ts"];
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {

@@ -2,14 +2,14 @@
 // renamed build before anything else. Folders: when the focustime folder doesn't exist and the coopilot one does,
 // copy it (never move, never overwrite) and leave a MIGRATED.txt note in the old folder. The data folder's browser
 // profile (the app window's own Chromium data) is not copied; the window starts a fresh one. Keyring: see
-// secrets/keyring-rename.ts. Idempotent: a second run finds the new folders and no old keyring entries.
+// host/local/keyring-rename.ts. Idempotent: a second run finds the new folders and no old keyring entries.
 import { cp, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { renameAccounts, renameKeyring, type KeyringRename } from "../secrets/keyring-rename.ts";
-import type { Runner } from "../secrets/keyring.ts";
-import type { Logger } from "../log/logger.ts";
+import { renameAccounts, renameKeyring, type KeyringRename } from "./keyring-rename.ts";
+import type { Runner } from "./keyring.ts";
+import type { Logger } from "../../log/logger.ts";
 
 /** The app's name before Nov 2: only for finding the old folders. */
 const OLD = "coopilot";

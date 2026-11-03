@@ -2,10 +2,10 @@
 // for the programs on PATH (nothing is run to detect, nothing is installed). Commands are argument arrays started
 // without a shell. Only the players FocusTime paused are resumed.
 import { execFile, spawn } from "node:child_process";
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
-import type { MediaControl } from "../actions/timer-actions.ts";
-import { mediaStep, type TimerLike } from "../plan/focussound.ts";
+import type { MediaControl } from "../types.ts";
+import { mediaStep, type TimerLike } from "../../plan/focussound.ts";
 
 /** Whether a program is on PATH and executable. */
 export function onPath(name: string, path = process.env.PATH ?? ""): boolean {
@@ -94,4 +94,13 @@ export function mediaControl(deps: { has?: (name: string) => boolean; exec?: Run
     },
     open: (target: string) => open(openArgs(target)),
   };
+}
+
+const SOUND = "/usr/share/sounds/freedesktop/stereo/complete.oga";
+/** A short end sound through PipeWire, when the sound file is there. Fire and forget. */
+export function playEndSound(): void {
+  if (!existsSync(SOUND)) return;
+  const p = spawn("pw-play", [SOUND], { stdio: "ignore" });
+  p.on("error", () => {});
+  p.unref();
 }

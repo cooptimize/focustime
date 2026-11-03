@@ -1,3 +1,4 @@
+import { createSnapshotStore } from "../host/local/snapshots.ts";
 import { withTitles } from "./weekplan-actions.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,7 +28,7 @@ function setup() {
   const dv = fakeFetch("ok");
   // Adatum's DevOps org gets the Plan the week scenario: features of mine, parents of my stories, an epic.
   const ado = fakeDevOps({ contoso: "planweek", cooptimize: "agile" });
-  const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, cacheDir: dir, log: () => {} });
+  const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, snapshots: createSnapshotStore(dir), log: () => {} });
   const devops = new Map<string, ReturnType<typeof createDevOpsSource>>();
   const plan = createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(clock).toZonedDateTimeISO("America/New_York") });
   const c: ActionContext = {
@@ -38,7 +39,7 @@ function setup() {
     makeDevOps: (cfg, tz) => {
       const key = JSON.stringify([cfg, tz]);
       let s = devops.get(key);
-      if (!s) devops.set(key, (s = createDevOpsSource({ fetch: ado.fetch, log: () => {}, cacheDir: dir, timeZone: tz, targets: (k) => makeDataverse(cfg, tz).devopsTargets(k) })));
+      if (!s) devops.set(key, (s = createDevOpsSource({ fetch: ado.fetch, log: () => {}, snapshots: createSnapshotStore(dir), timeZone: tz, targets: (k) => makeDataverse(cfg, tz).devopsTargets(k) })));
       return s;
     },
     saveSystemUserId: async () => {},

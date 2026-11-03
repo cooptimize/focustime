@@ -1,3 +1,5 @@
+import { createSnapshotStore } from "../host/local/snapshots.ts";
+import { createLoopback } from "../host/local/loopback.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -32,9 +34,9 @@ function ctx(opts: { dv?: Scenario; outlook?: ApiScenario; google?: ApiScenario;
   const opened: string[] = [];
   const c: ActionContext = {
     loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(opts.text ?? base) }),
-    makeDataverse: (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dvFetch, cacheDir, log: () => {} }),
-    makeOutlook: (cfg, tz) => createOutlookSource({ config: cfg, timeZone: tz, fetch: oFetch, keyring, openBrowser: async (u) => { opened.push(u); }, cacheDir, log: () => {}, signInTimeoutMs: 150 }),
-    makeGoogle: (cfg, tz) => createGoogleSource({ config: cfg, timeZone: tz, fetch: gFetch, keyring, openBrowser: async (u) => { opened.push(u); }, cacheDir, log: () => {} }),
+    makeDataverse: (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dvFetch, snapshots: createSnapshotStore(cacheDir), log: () => {} }),
+    makeOutlook: (cfg, tz) => createOutlookSource({ config: cfg, timeZone: tz, fetch: oFetch, keyring, loopback: createLoopback(), openBrowser: async (u) => { opened.push(u); }, snapshots: createSnapshotStore(cacheDir), log: () => {}, signInTimeoutMs: 150 }),
+    makeGoogle: (cfg, tz) => createGoogleSource({ config: cfg, timeZone: tz, fetch: gFetch, keyring, loopback: createLoopback(), openBrowser: async (u) => { opened.push(u); }, snapshots: createSnapshotStore(cacheDir), log: () => {} }),
     makeDevOps: () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined }),
     saveSystemUserId: async () => {},
     now: () => "2026-11-03T15:00:00Z",

@@ -1,23 +1,9 @@
 // Config file I/O. Creates a commented starter file when missing.
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { parseConfig, setSystemUserIdInText, type ParseResult } from "./schema.ts";
 import { migrateDayShapeText, writeConfig } from "./edit.ts";
 import { STARTER_TOML } from "./starter.ts";
-
-export function configPath(env = process.env): string {
-  return join(env.XDG_CONFIG_HOME || join(homedir(), ".config"), "focustime", "config.toml");
-}
-
-export function cacheRoot(env = process.env): string {
-  return join(env.XDG_CACHE_HOME || join(homedir(), ".cache"), "focustime");
-}
-
-/** The local plan store lives here (XDG data, not cache: it is my own data). */
-export function planDbPath(env = process.env): string {
-  return join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "focustime", "plan.db");
-}
 
 export type LoadedConfig = { path: string; parsed: ParseResult; created?: boolean };
 
