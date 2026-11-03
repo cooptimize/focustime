@@ -148,6 +148,14 @@ describe("access tokens from the stored refresh token", () => {
     expect((err as AuthFailure).kind).toBe(kind);
   });
 
+  it("a refresh token from another client (Google's unauthorized_client) needs reconnecting, not a config fix", async () => {
+    const { client } = google({ refresh: "unauthorized_client", keyring: memoryKeyring({ "google-client-secret": FAKE_CLIENT_SECRET, "google-refresh-token": FAKE_REFRESH }) });
+    const err = await client.accessToken().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AuthFailure);
+    expect((err as AuthFailure).kind).toBe("expired");
+    expect((err as AuthFailure).message).toMatch(/needs reconnecting/);
+  });
+
   it("disconnect clears only this source's refresh token and the in-memory token", async () => {
     const keyring = memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH, "google-refresh-token": "other", "dataverse-client-secret": "dv" });
     const { client, tok } = ms({ keyring });

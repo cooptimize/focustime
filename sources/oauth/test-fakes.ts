@@ -34,7 +34,7 @@ export function memoryKeyring(initial: Partial<Record<SecretAccount, string>> = 
   };
 }
 
-export type TokenBehavior = "ok" | "ok_rotate" | "invalid_grant" | "invalid_client" | "network" | "no_refresh_token";
+export type TokenBehavior = "ok" | "ok_rotate" | "invalid_grant" | "invalid_client" | "unauthorized_client" | "network" | "no_refresh_token";
 
 /**
  * `consented`: scopes the user has agreed to (bare names, e.g. Calendars.ReadBasic). A refresh asking for anything
@@ -59,6 +59,7 @@ export function fakeTokenEndpoint(tokenUrl: string, behavior: { exchange?: Token
     if (b === "network") throw new TypeError("fetch failed");
     if (b === "invalid_grant") return json(400, { error: "invalid_grant", error_description: `Token has been expired or revoked: ${FAKE_REFRESH} ${FAKE_CLIENT_SECRET}` });
     if (b === "invalid_client") return json(401, { error: "invalid_client", error_description: `bad secret ${FAKE_CLIENT_SECRET}` });
+    if (b === "unauthorized_client") return json(401, { error: "unauthorized_client", error_description: "Unauthorized" });
     const asked = (body.get("scope") ?? "").split(" ").filter((x) => x && x !== "offline_access");
     if (asked.some((a) => a.startsWith("https://") && !a.startsWith(new URL(asked.find((x) => x.startsWith("https://"))!).origin)))
       return json(400, { error: "invalid_request", error_description: `AADSTS28000: more than one resource ${FAKE_REFRESH}` });

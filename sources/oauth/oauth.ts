@@ -191,6 +191,10 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
       // Only the error code, sub-error and numeric codes are read; the description can echo request values.
       if (needsInteraction(json)) throw new AuthFailure("consent", `${p.label} needs you to sign in again to allow this`);
       if (json.error === "invalid_grant") throw new AuthFailure("expired", `${p.label} needs reconnecting`);
+      // A refresh token from another client (the app moved to a new client id): the client itself was accepted, so
+      // the fix is to connect again, not the config. Google answers unauthorized_client; Microsoft invalid_grant.
+      if (params.grant_type === "refresh_token" && json.error === "unauthorized_client")
+        throw new AuthFailure("expired", `${p.label} needs reconnecting: the saved sign-in was made for a different app client`);
       if (json.error === "invalid_client" || json.error === "unauthorized_client" || json.error === "invalid_request")
         throw new AuthFailure("misconfigured", `${p.label} sign-in was rejected: check ${p.source}.client_id in config`);
       throw new AuthFailure("error", `${p.label} sign-in failed (HTTP ${res.status})`);
