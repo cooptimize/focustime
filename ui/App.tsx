@@ -61,7 +61,6 @@ import { nowStrip } from "../plan/now.ts";
 import { cardHalves, slotOf, validHalf } from "./halves.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
-import { SAMPLE_WEEK } from "../fixtures/sample-week.ts";
 import { useLayout } from "./viewport.ts";
 import { commandList, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
@@ -1598,8 +1597,6 @@ export function App() {
       <StatusBar
         sources={data.sources}
         devops={data.devops}
-        sampleWeek={SAMPLE_WEEK}
-        isSampleWeek={data.weekStart === SAMPLE_WEEK}
         hours={data.hours}
         loading={loading}
         busy={busy}

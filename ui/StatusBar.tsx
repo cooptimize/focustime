@@ -11,8 +11,6 @@ import { userZone } from "../week/zone.ts";
 type Props = {
   sources: SourceSummary[];
   devops: ClientWork[] | null;
-  sampleWeek: string;
-  isSampleWeek: boolean;
   hours: TimeModel;
   loading: boolean;
   busy: Calendar | null;
@@ -33,13 +31,12 @@ function when(iso: string, tz: string): string {
   return z.toPlainDate().equals(today) ? t : `${shortDate(z.toPlainDate().toString())} ${t}`;
 }
 
-export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, loading, busy, notice, extra, clock, onRefresh, onConnect, onDisconnect }: Props) {
-  const samples = sources.filter((s) => s.sample);
+export function StatusBar({ sources, devops, hours, loading, busy, notice, extra, clock, onRefresh, onConnect, onDisconnect }: Props) {
   const shape = { timeZone: userZone({ hours }) };
   const lines = causeLines(sources, devops);
   // Step 10: one quiet line when everything is live; it opens on a click and on its own when something needs attention.
   const [open, setOpen] = useState(false);
-  const fine = !lines.length && !samples.length && sources.every((s) => stateOf(s).cls === "live") && (devops ?? []).every((c) => c.status === "ok");
+  const fine = !lines.length && sources.every((s) => stateOf(s).cls === "live") && (devops ?? []).every((c) => c.status === "ok");
   const oldest = sources.map((s) => s.fetchedAt).filter((x): x is string => !!x).sort()[0] ?? null;
   // U5.1: notices are chips inside the bar's one row, never lines under it.
   const chips = (
@@ -122,14 +119,6 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, lo
           );
         })}
         <DevOpsEntry devops={devops} clock={clock} timeZone={shape.timeZone} />
-        {samples.length > 0 && (
-          <span className="sample-note">
-            <span className="sample-pill">Sample meetings</span>
-            <span className="muted">
-              {samples.map((s) => SOURCE_NAMES[s.source]).join(" and ")} not set up yet{isSampleWeek ? "" : `; sample meetings exist only for the week of ${shortDate(sampleWeek)}`}
-            </span>
-          </span>
-        )}
         {chips}
         <span className="muted shape" title={`Working hours. Change them in Settings or a day's menu. Times in ${userZone({ hours })}`}>
           {hoursSummary(hours)}

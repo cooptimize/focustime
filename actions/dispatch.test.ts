@@ -37,7 +37,7 @@ describe("action dispatcher", () => {
     expect(await dispatch(ctx("ok"), { action: "week.load", input: { extra: 1 } })).toMatchObject({ ok: false, status: 400 });
   });
 
-  it("week.load shows real focus blocks and labels the sample meetings as sample", async () => {
+  it("week.load shows real focus blocks; calendars that aren't set up say so, with no sample meetings (no-demo-leak)", async () => {
     const r = await dispatch(ctx("ok"), { action: "week.load", input: { weekStart: "2026-11-02" } });
     if (!r.ok) throw new Error(r.error);
     const data = r.data as { week: { days: { am: { focus: { clientName: string }[] } }[] }; sources: { source: string; status: string; sample?: boolean; itemCount: number }[] };
@@ -45,9 +45,10 @@ describe("action dispatcher", () => {
     expect(data.sources.map((s) => [s.source, s.status, Boolean(s.sample)])).toEqual([
       ["dataverse", "ok", false],
       ["pto", "ok", false],
-      ["outlook", "ok", true],
-      ["google", "ok", true],
+      ["outlook", "misconfigured", false],
+      ["google", "misconfigured", false],
     ]);
+    expect(data.sources.filter((s) => s.source === "outlook" || s.source === "google").map((s) => s.itemCount)).toEqual([0, 0]);
     expect(JSON.stringify(data.sources)).not.toContain('"items"');
   });
 

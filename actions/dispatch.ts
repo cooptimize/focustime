@@ -9,7 +9,7 @@ import { setValue, type WriteResult } from "../config/edit.ts";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
-import { loadSampleSources } from "../sources/sample.ts";
+import { calendarNotSetUp } from "../sources/not-set-up.ts";
 import { buildWeek } from "../week/build.ts";
 import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
@@ -253,8 +253,8 @@ async function patternWeek(ctx: ActionContext, cfg: AppConfig, weekStart: string
 
 /**
  * Step 17: Plan ahead's week models. One focus-pattern read (everything running from week 1 on) and one PTO read for
- * the 12 weeks; meetings and personal events only for the first `withCalendars` weeks (as week.load reads them, sample
- * meetings only for a calendar that isn't configured at all), so "mostly meetings" counts as in Plan the week.
+ * the 12 weeks; meetings and personal events only for the first `withCalendars` weeks (as week.load reads them; none
+ * for a calendar that isn't set up), so "mostly meetings" counts as in Plan the week.
  */
 async function aheadWeekModels(ctx: ActionContext, cfg: AppConfig, weekStarts: string[], withCalendars: number, refresh: boolean): Promise<Week[]> {
   const tz = userZone(cfg);
@@ -263,15 +263,14 @@ async function aheadWeekModels(ctx: ActionContext, cfg: AppConfig, weekStarts: s
   const last = Temporal.PlainDate.from(weekStarts[weekStarts.length - 1]!).add({ days: 6 }).toString();
   const dv = cfg.dataverse.mySystemUserId ? ctx.makeDataverse(cfg.dataverse, tz) : null;
   const [patterns, ptoR] = await Promise.all([dv ? dv.following(first, opts).catch(() => null) : null, dv ? dv.pto(first, last, opts).catch(() => null) : null]);
-  const sample = loadSampleSources();
   const own = ctx.plan ? ownEventIds((await ctx.plan.ownEvents())) : new Set<string>();
   return Promise.all(
     weekStarts.map(async (w, i) => {
       let events: CalEvent[] = [];
       if (i < withCalendars) {
         const [o, g] = await Promise.all([
-          cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(w, opts).catch(() => null) : sample.outlook,
-          cfg.google ? ctx.makeGoogle(cfg.google, tz).load(w, opts).catch(() => null) : sample.google,
+          cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(w, opts).catch(() => null) : null,
+          cfg.google ? ctx.makeGoogle(cfg.google, tz).load(w, opts).catch(() => null) : null,
         ]);
         events = withoutOwn([...(o?.items ?? []), ...(g?.items ?? [])], own);
       }
@@ -297,11 +296,10 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const todayPlans = (await hasPlansOn(ctx, model, todayDate));
   const weekStart = input.weekStart ?? defaultWeekStart(todayDate, todayPlans);
 
-  const sample = loadSampleSources();
   const refresh = input.refresh ? { refresh: true } : {};
-  // Sample meetings stay only for a calendar source that is not configured at all.
-  const outlookP: Promise<SourceResult<CalEvent>> = cfg?.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(weekStart, refresh) : Promise.resolve(sample.outlook);
-  const googleP: Promise<SourceResult<CalEvent>> = cfg?.google ? ctx.makeGoogle(cfg.google, tz).load(weekStart, refresh) : Promise.resolve(sample.google);
+  // A calendar that isn't set up says so (no-demo-leak): no stand-in meetings, ever.
+  const outlookP: Promise<SourceResult<CalEvent>> = cfg?.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(weekStart, refresh) : Promise.resolve(calendarNotSetUp("outlook"));
+  const googleP: Promise<SourceResult<CalEvent>> = cfg?.google ? ctx.makeGoogle(cfg.google, tz).load(weekStart, refresh) : Promise.resolve(calendarNotSetUp("google"));
 
   let dataverse: SourceResult<FocusPattern>;
   let ptoP: Promise<SourceResult<PtoEntry> | null> = Promise.resolve(null);

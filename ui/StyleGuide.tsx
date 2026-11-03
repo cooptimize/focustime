@@ -344,7 +344,7 @@ export function StyleGuide() {
       <section className="sg-section">
         <h2>Status bar</h2>
         <div className="sg-status">
-          <StatusBar sources={sources} devops={null} sampleWeek={SAMPLE_WEEK} isSampleWeek hours={model} loading={false} busy={null} notice={null} clock={Date.parse(NOW)} onRefresh={noop} onConnect={noop} onDisconnect={noop} />
+          <StatusBar sources={sources} devops={null} hours={model} loading={false} busy={null} notice={null} clock={Date.parse(NOW)} onRefresh={noop} onConnect={noop} onDisconnect={noop} />
         </div>
       </section>
     </div>
