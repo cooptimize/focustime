@@ -1,7 +1,7 @@
 // The command menu (Ctrl+K) and the "⋯" / right-click popup menus (step 6). Both render menu steps from
 // ui/menu.ts: arrow keys move, Enter chooses, Backspace on an empty search or Left goes back, Esc closes.
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { filterCommands, type FormField, type MenuEnv, type MenuItem, type MenuStep } from "./menu.ts";
+import { filterCommands, type FormField, type MenuEnv, type MenuHead, type MenuItem, type MenuStep } from "./menu.ts";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
 import { ITEM_ATTRS } from "./keys.ts";
 import { useScopedTab } from "./scope.ts";
@@ -218,9 +218,20 @@ function useSteps(first: MenuStep) {
   return { step: stack[stack.length - 1]!, push: (s: MenuStep) => setStack((st) => [...st, s]), back: () => setStack((st) => (st.length > 1 ? st.slice(0, -1) : st)), canBack: stack.length > 1 };
 }
 
+/** D459: a row menu's header is a label, not an action: one muted line, the full title on hover, outside the list (arrow keys never land on it). */
+export function MenuHeader({ head }: { head: MenuHead }) {
+  return (
+    <div className="menu-head" title={head.full} aria-hidden="true">
+      {head.text}
+    </div>
+  );
+}
+
 /** A popup menu at a point (the "⋯" button or a right-click). */
 export function PopupMenu({ at, step: first, onClose }: { at: { x: number; y: number }; step: MenuStep; onClose: () => void }) {
   const { step, push, back, canBack } = useSteps(first);
+  // The header always comes from the step this menu was opened with (the row), never from a step before it.
+  const head = "items" in first ? first.head : undefined;
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(at);
   useLayoutEffect(() => {
@@ -244,6 +255,7 @@ export function PopupMenu({ at, step: first, onClose }: { at: { x: number; y: nu
     <div
       ref={ref}
       className="popup-menu"
+      aria-label={head?.full ?? step.title}
       data-overlay="modal"
       popover="manual"
       style={{ left: pos.x, top: pos.y }}
@@ -255,14 +267,18 @@ export function PopupMenu({ at, step: first, onClose }: { at: { x: number; y: nu
         }
       }}
     >
-      <div className="menu-title">
-        {canBack && (
-          <button type="button" className="menu-back" onClick={back} aria-label="Back">
-            ‹
-          </button>
-        )}
-        <span>{step.title}</span>
-      </div>
+      {head && !canBack ? (
+        <MenuHeader head={head} />
+      ) : (
+        <div className="menu-title">
+          {canBack && (
+            <button type="button" className="menu-back" onClick={back} aria-label="Back">
+              ‹
+            </button>
+          )}
+          <span>{step.title}</span>
+        </div>
+      )}
       <StepView step={step} query="" onDone={onClose} push={push} back={back} canBack={canBack} autoFocusList popup />
     </div>
   );
@@ -333,12 +349,14 @@ export function CommandMenu({ commands, onClose }: { commands: MenuItem[]; onClo
 }
 
 export function MenuHost({ env, children }: { env: MenuEnv | null; children: ReactNode }) {
-  const [popup, setPopup] = useState<{ at: { x: number; y: number }; step: MenuStep } | null>(null);
-  const api = useMemo<MenuApi>(() => ({ env, open: (at, step) => setPopup({ at, step }) }), [env]);
+  // Each open is a new menu (its own key): nothing from the last row's menu carries over to the next one.
+  const [popup, setPopup] = useState<{ at: { x: number; y: number }; step: MenuStep; n: number } | null>(null);
+  const count = useRef(0);
+  const api = useMemo<MenuApi>(() => ({ env, open: (at, step) => setPopup({ at, step, n: ++count.current }) }), [env]);
   return (
     <MenuCtx.Provider value={api}>
       {children}
-      {popup && <PopupMenu at={popup.at} step={popup.step} onClose={() => setPopup(null)} />}
+      {popup && <PopupMenu key={popup.n} at={popup.at} step={popup.step} onClose={() => setPopup(null)} />}
     </MenuCtx.Provider>
   );
 }

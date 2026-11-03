@@ -222,7 +222,7 @@ function ClientSection({ c, rows, colors, ops }: { c: RoadmapClient; rows: Roadm
       {rows.length > 0 && (
         <ul className="dl-list">
           {rows.map((r) => (
-            <Row key={r.id} k={c.clientKey} r={r} ops={ops} />
+            <Row key={r.id} k={c.clientKey} name={c.clientName} r={r} ops={ops} />
           ))}
         </ul>
       )}
@@ -230,7 +230,7 @@ function ClientSection({ c, rows, colors, ops }: { c: RoadmapClient; rows: Roadm
   );
 }
 
-function Row({ k, r, ops }: { k: string; r: RoadmapRow; ops: Ops }) {
+function Row({ k, name, r, ops }: { k: string; name: string; r: RoadmapRow; ops: Ops }) {
   const wordOf = useContext(PresenceCtx);
   const { env, open: openMenu } = useContext(MenuCtx);
   const dw = useDevOpsWrite();
@@ -241,7 +241,7 @@ function Row({ k, r, ops }: { k: string; r: RoadmapRow; ops: Ops }) {
   const target = () => dw?.targetDate({ clientKey: k, itemId: r.id, title: r.title, current: r.targetDate });
   const menu = (): MenuStep =>
     roadmapRowMenu(
-      { title: r.title, tier: r.tier, targetDate: r.targetDate, open: r.open, onWeek: r.onWeek, canWrite: !!dw?.can(k), hasLink: !!r.url, owned },
+      { id: r.id, clientName: name, title: r.title, tier: r.tier, targetDate: r.targetDate, open: r.open, onWeek: r.onWeek, canWrite: !!dw?.can(k), hasLink: !!r.url, owned },
       {
         open: () => void openWorkItem(k, r.url),
         brief: () => void ops.brief(k, r.id),

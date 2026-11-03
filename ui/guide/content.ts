@@ -101,7 +101,7 @@ export const RHYTHM = {
       name: "Plan the week",
       when: "Thursday or Friday · about 15 minutes",
       keys: [{ command: "view.planweek" }],
-      what: ["Open one client at a time: their blocks next week are already laid out.", "Pick the features you'll definitely touch (musts) and the ones that fit if there's room.", "Anything without stories gets a nudge: draft them now or send a Coop brief.", "Click Next client until all are planned, then Done."],
+      what: ["Open one client at a time: their blocks next week are already laid out.", "Pick the features you'll definitely touch (musts) and the ones that fit if there's room.", "Anything without stories gets a nudge: draft them now or send a Coop brief.", "A target date shows on a row only when it falls this week or has passed. Amber means it may land too late.", "Click Next client until all are planned, then Done."],
       lit: [{ half: "AM", day: 0 }, { half: "AM", day: 1 }, { half: "AM", day: 2 }, { half: "PM", day: 0 }, { half: "PM", day: 1 }, { half: "PM", day: 2 }],
       mini: {
         kind: "week",

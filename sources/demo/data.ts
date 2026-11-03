@@ -154,8 +154,8 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
   Northwind: [
     [1100, "Epic", "Active", null, "Customer portal redesign", "Jordan Lee"],
     [1110, "Feature", "Active", 1100, "Order history export", ME, "2026-11-13"],
-    [1111, "User Story", "Active", 1110, "Export orders to CSV", ME],
-    [1112, "User Story", "New", 1110, "Filter orders by date range", ME],
+    [1111, "User Story", "Active", 1110, "Export orders to CSV", ME, "2026-10-30"],
+    [1112, "User Story", "New", 1110, "Filter orders by date range", ME, "2026-11-05"],
     [1113, "User Story", "New", 1110, "Export button on the order page", "Priya Shah"],
     [1114, "User Story", "Closed", 1110, "Order export API endpoint", ME],
     [1120, "Feature", "New", 1100, "Supplier onboarding", ME, null],
@@ -170,9 +170,13 @@ const ITEMS: Record<DemoClientKey, Raw[]> = {
   ],
   Harbor: [
     [2210, "Feature", "Active", null, "Patient intake form", ME, "2026-11-27"],
-    [2211, "User Story", "Active", 2210, "Insurance card upload", ME],
+    [2211, "User Story", "Active", 2210, "Insurance card upload", ME, "2026-11-05"],
     [2212, "User Story", "New", 2210, "Validate date of birth", ME],
-    [2213, "User Story", "New", 2210, "Intake form accessibility review", "Sam Ortiz"],
+    [2213, "User Story", "New", 2210, "Intake form accessibility review", "Sam Ortiz", "2026-11-04"],
+    // D460: more people on the intake form (Cooptimizers with photos, and someone outside the team: initials).
+    [2217, "User Story", "New", 2210, "Intake form translations", "Jordan Lee"],
+    [2218, "User Story", "New", 2210, "Intake data export", "Priya Shah", "2026-11-12"],
+    [2219, "User Story", "New", 2210, "Front desk review of the intake form", "Morgan Reyes"],
     [2214, "User Story", "Closed", 2210, "Intake form layout", ME],
     [2215, "User Story", "Closed", 2210, "Save a draft intake", "Sam Ortiz"],
     [2216, "User Story", "Closed", 2210, "Intake confirmation email", ME],
@@ -234,7 +238,7 @@ export function demoPortfolio(k: DemoClientKey, fetchedAt: string): ClientPortfo
   const all = ITEMS[k].map((r, n) => item(k, r, n + 1));
   const child = (c: WorkItem): PortfolioChild => ({
     id: c.id, title: c.title, type: c.type, state: c.state, stateCategory: c.stateCategory, open: c.stateCategory !== "Completed", level: c.level, order: c.order, url: c.url, assignedTo: c.assignedTo ?? null, assignedToEmail: c.assignedToEmail ?? null, mine: !!c.assignedToMe,
-    changedAt: QUIET.has(c.id) ? "2026-10-09T15:00:00Z" : c.changedAt, size: UNSIZED.has(c.id) ? null : 3, blocked: BLOCKED.has(c.id),
+    changedAt: QUIET.has(c.id) ? "2026-10-09T15:00:00Z" : c.changedAt, size: UNSIZED.has(c.id) ? null : 3, blocked: BLOCKED.has(c.id), targetDate: c.targetDate ?? null,
   });
   const items: PortfolioItem[] = all
     .filter((i) => i.level === "portfolio")
@@ -245,7 +249,7 @@ export function demoPortfolio(k: DemoClientKey, fetchedAt: string): ClientPortfo
       children: all.filter((c) => c.parentId === i.id).map(child),
       areaPath: client(k).project, iterationPath: `${client(k).project}\\Sprint 23`,
     }));
-  return { clientKey: k, clientName: client(k).name, status: "ok", fetchedAt, fromCache: false, items, targetFields: { Feature: "Microsoft.VSTS.Scheduling.TargetDate", Epic: "Microsoft.VSTS.Scheduling.TargetDate" }, startFields: { Feature: "Microsoft.VSTS.Scheduling.StartDate", Epic: "Microsoft.VSTS.Scheduling.StartDate" }, sizeField: "Microsoft.VSTS.Scheduling.StoryPoints", acceptanceField: true };
+  return { clientKey: k, clientName: client(k).name, status: "ok", fetchedAt, fromCache: false, items, targetFields: { Feature: "Microsoft.VSTS.Scheduling.TargetDate", Epic: "Microsoft.VSTS.Scheduling.TargetDate", "User Story": "Microsoft.VSTS.Scheduling.TargetDate" }, startFields: { Feature: "Microsoft.VSTS.Scheduling.StartDate", Epic: "Microsoft.VSTS.Scheduling.StartDate" }, sizeField: "Microsoft.VSTS.Scheduling.StoryPoints", acceptanceField: true };
 }
 
 export const isDemoClient = (k: string): k is DemoClientKey => DEMO_CLIENTS.some((c) => c.key === k);

@@ -396,7 +396,8 @@ describe("Plan the week: features and epics (step 8)", () => {
     expect(adatum!.items.find((i) => i.id === 240)!.children).toEqual([]);
     // The epic's only feature is closed.
     expect(adatum!.items.find((i) => i.id === 250)!.children.map((c) => [c.id, c.open, c.level])).toEqual([[251, false, "portfolio"]]);
-    expect(adatum!.targetFields).toEqual({ Feature: "Microsoft.VSTS.Scheduling.TargetDate" });
+    // D461: story-level types too, so a story's target date can show in Plan the week (this fake gives every type the field).
+    expect(adatum!.targetFields).toEqual({ Feature: "Microsoft.VSTS.Scheduling.TargetDate", "User Story": "Microsoft.VSTS.Scheduling.TargetDate", Bug: "Microsoft.VSTS.Scheduling.TargetDate", Task: "Microsoft.VSTS.Scheduling.TargetDate" });
     // Step 16.4: an assignee's email only in assignedToEmail (for matching to Cooptimizers), nowhere else.
     const strip = (v: unknown): unknown => JSON.parse(JSON.stringify(v, (k, x) => (k === "assignedToEmail" ? undefined : x)));
     expect(JSON.stringify(strip(adatum))).not.toMatch(/@/);

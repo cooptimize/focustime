@@ -1076,7 +1076,10 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .menu-item.danger:not([aria-disabled="true"]) { color: var(--risk); }
 .menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-why { font-size: var(--fs-2); }
-.menu-hint { flex: none; font-size: var(--fs-2); color: var(--text-faint); }
+/* D459: a row menu's header is a label: one muted line, a hairline under it, never hovered or chosen. */
+.menu-head { margin: 0 0 4px; padding: 6px 10px 6px; border-bottom: 1px solid var(--border); font-size: var(--fs-2); font-weight: 500; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; user-select: none; }
+/* Hints on the right stay short: they give way to the label and truncate like it. */
+.menu-hint { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2); color: var(--text-faint); }
 .menu-hint kbd { margin: 0; font-size: var(--fs-1); padding: 1px 5px; }
 .menu-arrow { color: var(--text-faint); }
 .menu-empty { padding: 10px; color: var(--text-faint); font-size: var(--fs-3); }
@@ -3136,7 +3139,8 @@ section.day > .day-allday .chip { display: block; min-width: 0; overflow: hidden
 
 /* The one planning row. */
 .pl-row { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; min-width: 0; min-height: calc(28px * var(--text-scale)); padding: 2px 6px; border-radius: 6px; font-size: var(--fs-3); }
-.pl-row:hover { background: var(--raised); }
+/* A nested row's hover belongs to it alone: its parent row doesn't light up or show its own ⋯ (D459). */
+.pl-row:hover:not(:has(.pl-row:hover)) { background: var(--raised); }
 .pl-row[draggable="true"] { cursor: grab; }
 .pl-row.trim { background: color-mix(in oklab, var(--watch) 14%, transparent); box-shadow: inset 2px 0 0 var(--watch); }
 .pl-handle { flex: none; width: 14px; text-align: center; color: var(--text-faint); font-size: var(--fs-2); letter-spacing: -2px; cursor: grab; }
@@ -3147,7 +3151,7 @@ section.day > .day-allday .chip { display: block; min-width: 0; overflow: hidden
 .pl-row.done .pl-title { color: var(--text-muted); text-decoration: line-through; }
 .pl-row .pr-note { flex: none; font-size: var(--fs-2); color: var(--text-muted); }
 .pl-hover { flex: none; display: inline-flex; align-items: center; gap: 6px; opacity: 0; transition: opacity 0.1s; }
-.pl-row:hover > .pl-hover, .pl-row:focus-within > .pl-hover, .pl-hover:has(.pt-hint), .pl-hover:has([aria-expanded="true"]) { opacity: 1; }
+.pl-row:hover:not(:has(.pl-row:hover)) > .pl-hover, .pl-row:focus-within:not(:has(.pl-row:focus-within)) > .pl-hover, .pl-hover:has(.pt-hint), .pl-hover:has([aria-expanded="true"]) { opacity: 1; }
 .pl-hover .more-btn, .pl-hover > button.more { font-size: var(--fs-4); font-weight: 600; }
 
 /* U6: Plan the week on the planning layout. The week grid at the top (the client filter), client lines, the open
@@ -3205,7 +3209,7 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .planweek .pw-row .pw-open { font: inherit; font-weight: 400; color: var(--text); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .planweek .pw-row.done .pw-open, .planweek .pw-row.done .pl-title a { color: var(--text-muted); }
 .planweek .pw-row > .pw-stepper .pw-step { opacity: 0; transition: opacity 0.1s; }
-.planweek .pw-row:hover > .pw-stepper .pw-step, .planweek .pw-row:focus-within > .pw-stepper .pw-step { opacity: 1; }
+.planweek .pw-row:hover:not(:has(.pl-row:hover)) > .pw-stepper .pw-step, .planweek .pw-row:focus-within > .pw-stepper .pw-step { opacity: 1; }
 .planweek .pw-row > .pw-parent, .planweek .pw-row > .pw-fill, .planweek .pw-row > .pw-kids, .planweek .pw-row > .pw-nested { flex-basis: 100%; }
 .planweek .pw-nested { list-style: none; margin: 2px 0 0 22px; padding: 0 0 0 10px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 1px; }
 .pw-chip-static { flex: none; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); font-size: var(--fs-2); font-weight: 500; color: var(--text-muted); line-height: calc(20px * var(--text-scale)); }
@@ -3391,7 +3395,7 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 @media (max-width: 520px) {
   .guide-concepts, .guide-keygrid { grid-template-columns: minmax(0, 1fr); }
   .guide-ladder .rung { grid-template-columns: minmax(0, 1fr); gap: 2px; }
-  .guide-every .key-list { grid-template-columns: minmax(0, 1fr); }
+  .guide-every .key-list { grid-template-columns: minmax(0, 1fr); }a
   .guide-every .key-list dt { justify-content: flex-start; }
   .guide-week { grid-template-columns: 22px repeat(5, minmax(0, 1fr)); gap: 4px; }
   .guide-weekbox { padding: 14px; }
@@ -3411,7 +3415,7 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .hours-stepper .hs-value:disabled { cursor: default; opacity: 0.8; }
 .hours-stepper .hs-input { width: 5.5ch; padding: 0 6px; font: inherit; font-size: var(--fs-2); line-height: calc(20px * var(--text-scale)); text-align: center; color: var(--text); background: var(--surface); border: 1px solid var(--accent, var(--text-muted)); border-radius: 6px; }
 .planweek .pw-row > .hours-stepper .hs-step { opacity: 0; transition: opacity 0.1s; }
-.planweek .pw-row:hover > .hours-stepper .hs-step, .planweek .pw-row:focus-within > .hours-stepper .hs-step { opacity: 1; }
+.planweek .pw-row:hover:not(:has(.pl-row:hover)) > .hours-stepper .hs-step, .planweek .pw-row:focus-within > .hours-stepper .hs-step { opacity: 1; }
 .size-chip { white-space: nowrap; }
 .size-chip.unsized { color: var(--text-muted); border-style: dashed; font-weight: 400; }
 .over-word { color: var(--watch); font-weight: 500; }
@@ -3455,3 +3459,24 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .about-dialog { width: min(560px, calc(100vw - 32px)); }
 .about-line { margin: 4px 14px 0; font-size: var(--fs-3); overflow-wrap: anywhere; }
 .about-actions { display: flex; align-items: center; gap: 12px; padding: 10px 14px 12px; font-size: var(--fs-3); }
+/* D460: owners. A 16 px photo or initials in the same circle (no shift when a photo arrives); others' avatars overlap. */
+.owner { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+.owner .avatar { margin-right: 0; }
+.owner-stack { display: inline-flex; align-items: center; margin-left: 6px; vertical-align: middle; }
+.owner-stack .avatar { margin-right: 0; box-shadow: 0 0 0 1.5px var(--surface); }
+.owner-stack .avatar + .avatar { margin-left: -5px; }
+.owner-more { margin-left: 4px; font-size: var(--fs-1); color: var(--text-muted); }
+/* D461: a row's target date, only when it matters this week; amber when it may land too late, never red. */
+.pw-due { flex: none; font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; }
+.pw-due.late { color: var(--watch); }
+.pw-dates .link-btn { font-size: inherit; }
+
+/* D462: in Plan the week and Plan the day the detail panel takes the right pane's place while open: same column,
+   same sticky card, its own scroll. The header and the whole week grid stay in view; nothing is covered. */
+.pl-panes.with-panel { grid-template-columns: minmax(0, 1fr) var(--pl-right); }
+.pl-panel { position: sticky; top: 0; align-self: stretch; min-width: 0; min-height: 0; margin-bottom: 16px; display: flex; }
+.pl-panel > .detail-panel { position: static; inset: auto; z-index: auto; flex: 1; width: auto; min-height: 0; border: 1px solid var(--border); border-radius: 12px; box-shadow: none; overflow: hidden; }
+@media (max-width: 1199px) {
+  .pl-panes.with-panel { grid-template-columns: minmax(0, 1fr); }
+  .pl-panel { position: static; }
+}

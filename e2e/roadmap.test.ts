@@ -87,7 +87,7 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     const { page } = await roadmap();
     const row = rowOf(page, "Patient intake form");
     await row.getByRole("button", { name: /Show stories of Patient intake form/ }).click();
-    await expect.poll(() => row.locator(".rm-group h4").allTextContents()).toEqual(["Blocked 1", "In progress 1", "Not started 1", "Done 3"]);
+    await expect.poll(() => row.locator(".rm-group h4").allTextContents()).toEqual(["Blocked 1", "In progress 1", "Not started 4", "Done 3"]);
     await expect(row.locator(".rm-group.g-blocked li").textContent()).resolves.toContain("Validate date of birth");
     await expect(row.locator(".rm-badge").getAttribute("title")).resolves.toMatch(/\w+ \w+/);
     await expect(page.locator(".rm-sum").first().getAttribute("title")).resolves.toMatch(/\w+ \w+/);
