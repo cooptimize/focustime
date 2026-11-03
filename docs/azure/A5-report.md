@@ -2,7 +2,7 @@
 
 Prod is FocusTime's daily app: the resource group **FocusTime** (subscription "Production Services and Apps", Central
 US), the same Bicep as dev with `infra/prod.bicepparam`, an empty database, its own vault and data key, deployed by hand
-by SHA with the exact image dev tested. Branch `feat/prod`; decisions D463 to D470.
+by SHA with the exact image dev tested. Branch `feat/prod`; decisions D465 to D471.
 
 URL: `https://ft-prod-app.grayforest-92f64bef.centralus.azurecontainerapps.io` (the built-in Container Apps hostname).
 
@@ -17,9 +17,9 @@ URL: `https://ft-prod-app.grayforest-92f64bef.centralus.azurecontainerapps.io` (
   Administrator on FocusTime, nothing else but AcrPull on dev's registry; in FocusTime DB Admins), ft-prod-pull (AcrPull
   on dev's registry only), and the GitHub variables `AZURE_PROD_CLIENT_ID`, `AZURE_PROD_RESOURCE_GROUP`,
   `AZURE_PROD_REGISTRY`, `AZURE_PROD_APP_IDENTITY_CLIENT_ID`, `PROD_DEPLOYERS`.
-- **One registry** (D470): prod pulls dev's `ftdevacr5bthbn` with ft-prod-pull, so it runs the bytes dev tested. The
+- **One registry** (D471): prod pulls dev's `ftdevacr5bthbn` with ft-prod-pull, so it runs the bytes dev tested. The
   app's system identity keeps Key Vault and SQL.
-- **deploy-prod.yml** (D464): manual, from main, by SHA; refuses anyone not in PROD_DEPLOYERS and any commit not on main;
+- **deploy-prod.yml** (D466): manual, from main, by SHA; refuses anyone not in PROD_DEPLOYERS and any commit not on main;
   builds nothing, reads the digest of dev's image for that commit (`scripts/image-digest.ts`, pull rights only) and
   fails plainly if there is none; migrate, database user, Bicep what-if and deploy, smoke test that `/version` says
   `prod <sha>`. `dry_run` stops after the checks. Rollback and roll forward: the same with another SHA, printed in each
@@ -27,15 +27,15 @@ URL: `https://ft-prod-app.grayforest-92f64bef.centralus.azurecontainerapps.io` (
 - **Sign-in and secrets**: `app-registration.sh` added the prod callback to the "FocusTime" registration (dev, prod and
   local now) and put a prod-only Entra client secret into the prod vault; `copy-secrets.sh` copied the Google and
   Dataverse secrets from the keyring by pipe. Tanner added the prod Google redirect URI to "FocusTime Web".
-- **App-level settings** (runbook table): env label `prod`, invite domains `cooptimize.org` (D469: an app setting,
-  `FOCUSTIME_INVITE_DOMAINS`, that replaces a person's own; Settings says "Set by your FocusTime admin"), and the ids
+- **App-level settings** (runbook table): env label `prod`, invite domains `cooptimize.org` (`FOCUSTIME_INVITE_DOMAINS`, the app setting from fix/settings-autosave, D464;
+  Settings says "Set by your FocusTime admin"), and the ids
   dev already had.
-- **Clean start** (D463): nothing copied from the local app or dev, either way. `scripts/env-separation.test.ts` fails if
+- **Clean start** (D465): nothing copied from the local app or dev, either way. `scripts/env-separation.test.ts` fails if
   dev's parameters or workflow name a prod resource, or the reverse (the shared registry line excepted).
-- **Migrations only add** (D466): the rule in CLAUDE.md; `store/migrations/additive.test.ts` flags a DROP or RENAME
+- **Migrations only add** (D468): the rule in CLAUDE.md; `store/migrations/additive.test.ts` flags a DROP or RENAME
   without a `safe-drop: <reason>` comment and keeps the numbered lists frozen; the named runner now runs on a newer
   database (logs `newer_schema`) instead of refusing, so a rollback always starts.
-- **Old timeboxes** (D468): an event with FocusTime's marker and no record in this person's store is an ordinary event
+- **Old timeboxes** (D470): an event with FocusTime's marker and no record in this person's store is an ordinary event
   (tier "earlier", Open in Outlook only), never moved, cancelled or deleted, and not imported (replaces Q69). One Guide
   question.
 - **The capture address**: `#/capture` opens Quick capture over the last place, for the hosted app's Super+Alt+N.
@@ -44,8 +44,7 @@ URL: `https://ft-prod-app.grayforest-92f64bef.centralus.azurecontainerapps.io` (
 
 `store/migrations/named.ts`, `named.test.ts`, `additive.test.ts` (new), `store/sql/migrate.ts`; `actions/outlook-sync.ts`,
 `actions/step13.test.ts`, `plan/caltier.ts`, `plan/outlooksync.ts`, `plan/outlooksync.test.ts`, `ui/guide/content.ts`;
-`server/appconfig.ts`, `server/appconfig.test.ts` (new), `store/user-settings.ts`, `store/user-settings.test.ts`,
-`config/schema.ts`, `server/main.ts`, `ui/Settings.tsx`; `ui/App.tsx`, `e2e/capture-address.test.ts` (new);
+`ui/App.tsx`, `e2e/capture-address.test.ts` (new);
 `infra/main.bicep`, `infra/modules/app.bicep`, `infra/modules/sql.bicep`, `infra/prod.bicepparam`,
 `infra/scripts/bootstrap.sh`; `.github/workflows/deploy-prod.yml`; `scripts/image-digest.ts` (new),
 `scripts/env-separation.test.ts` (new); `docs/azure/runbook.md`, `docs/azure/A5-report.md` (new), `docs/decisions.md`,
@@ -110,11 +109,11 @@ live, setup steps done or skipped. Never plan content.
 
 ## Limitations
 
-- Max 1 replica until the scheduler has a lease (D465).
-- Prod depends on dev's registry (D470): deleting dev needs a prod registry first (runbook).
+- Max 1 replica until the scheduler has a lease (D467).
+- Prod depends on dev's registry (D471): deleting dev needs a prod registry first (runbook).
 - The FocusTime resource group's own location is East US (it existed before A5); its resources are in Central US.
 - CLAUDE.md's cloud rule still says prod deploys go through "its environment approval"; with the free plan that is the
-  PROD_DEPLOYERS check (D464). The rule's wording was left for Tanner (this step changes CLAUDE.md only for the
+  PROD_DEPLOYERS check (D466). The rule's wording was left for Tanner (this step changes CLAUDE.md only for the
   migrations rule and the milestone).
 - Cost is an estimate from list prices (runbook); the real figure goes in after the first week.
 

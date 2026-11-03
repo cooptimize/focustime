@@ -1,4 +1,4 @@
-// D466: migrations only add (tables, columns, indexes). A rename or a drop ships in a later release than the code that
+// D468: migrations only add (tables, columns, indexes). A rename or a drop ships in a later release than the code that
 // stops using it, and its file says why with a "safe-drop: <reason>" comment, so rolling back to the previous revision
 // is always safe against the current database. The numbered lists are frozen: every new change is a timestamped file.
 import { readdirSync, readFileSync } from "node:fs";
@@ -20,7 +20,7 @@ export function notAdditive(source: string, sql: readonly string[]): string[] {
   return sql.flatMap((s) => s.split(";").map((x) => x.trim()).filter((x) => TAKES_AWAY.test(x)).map((x) => x.replace(/\s+/g, " ").slice(0, 80)));
 }
 
-describe("migrations only add (D466)", () => {
+describe("migrations only add (D468)", () => {
   it("flags a drop or a rename, and lets one through only with a safe-drop reason", () => {
     expect(notAdditive("", ["CREATE TABLE a (x int)", "CREATE INDEX a_x ON a (x)", "ALTER TABLE a ADD y int"])).toEqual([]);
     expect(notAdditive("", ["ALTER TABLE a DROP COLUMN y"])).toHaveLength(1);

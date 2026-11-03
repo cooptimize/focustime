@@ -238,7 +238,7 @@ describe("two-way sync for FocusTime events", () => {
   });
 });
 
-describe("D468: a FocusTime-marked event this person has no record of (made by an earlier FocusTime)", () => {
+describe("D470: a FocusTime-marked event this person has no record of (made by an earlier FocusTime)", () => {
   it("is an ordinary event: nothing recorded or rebuilt, Open in Outlook only, and sync never changes or deletes it", async () => {
     const t = setup();
     const uid = "tb-0b6c1d2e-3f40-4152-8a6b-7c8d9e0f1a2b";

@@ -34,7 +34,7 @@ describe("the list", () => {
     expect(pending([later, earlier], new Set()).map((m) => m.name)).toEqual([earlier.name, later.name]);
     expect(pending([later, earlier], new Set([earlier.name])).map((m) => m.name)).toEqual([later.name]);
   });
-  it("runs on a database with a newer migration this build doesn't know (D466: migrations only add, so a rollback is safe)", () => {
+  it("runs on a database with a newer migration this build doesn't know (D468: migrations only add, so a rollback is safe)", () => {
     expect(pending([earlier], new Set(["20271231T2359_future"]))).toEqual([earlier]);
     expect(newerThanBuild([earlier], new Set([earlier.name, "20271231T2359_future"]))).toEqual(["20271231T2359_future"]);
     // An unknown one older than this build's newest isn't "newer": another branch's, not ours to judge.

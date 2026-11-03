@@ -1,4 +1,4 @@
-// A5 (D464): the digest of the image deploy-dev built and tested for one commit, read from dev's registry with only
+// A5 (D466): the digest of the image deploy-dev built and tested for one commit, read from dev's registry with only
 // pull rights (AcrPull: the registry's own token exchange, no management read). Prints `sha256:...`; fails plainly
 // when there is no image for that commit. Tokens stay in this process: never printed, never an argument.
 //

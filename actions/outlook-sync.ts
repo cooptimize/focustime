@@ -1,7 +1,7 @@
 // Two-way sync for FocusTime's own Outlook events and edit facts for the tiers (step 13), on each Outlook refresh with
 // write access. One calendarView scan of the week on the write token: marked events are compared with what FocusTime
 // last wrote (plan/outlooksync.ts); a change made only in Outlook moves the timebox ("Changed in Outlook"), a change
-// on both sides becomes a conflict to choose, and a marked event with no record of this person's is left alone as an ordinary event (D468). Nothing is written
+// on both sides becomes a conflict to choose, and a marked event with no record of this person's is left alone as an ordinary event (D470). Nothing is written
 // to Outlook here; sync changes are logged as "from Outlook". Failures only mean no sync and no edit facts this time.
 import type { AppConfig } from "../config/schema.ts";
 import type { EditFacts } from "../plan/caltier.ts";
@@ -13,7 +13,7 @@ import type { PlanStore } from "../store/plan-store.ts";
 import { clientName, localOf, wantFields } from "./timebox-actions.ts";
 import { userZone } from "../week/zone.ts";
 
-/** `earlier`: FocusTime-marked events this person's store has no record of (D468): left alone, shown as ordinary events. */
+/** `earlier`: FocusTime-marked events this person's store has no record of (D470): left alone, shown as ordinary events. */
 export type SyncResult = { facts: Record<string, EditFacts>; changed: number; conflicts: number; earlier: number };
 
 const memo = new Map<string, { at: number; result: SyncResult }>();
@@ -39,7 +39,7 @@ export async function syncWeek(o: { plan: PlanStore; ow: OutlookWrite; cfg: AppC
   const events = await ow.writer.scan(startIso, endIso);
   const result: SyncResult = { facts: {}, changed: 0, conflicts: 0, earlier: 0 };
   for (const e of events) result.facts[`outlook:${e.id}`] = e.facts;
-  // D468: a help invite this person's store doesn't know was sent by an earlier FocusTime: not cancellable from here.
+  // D470: a help invite this person's store doesn't know was sent by an earlier FocusTime: not cancellable from here.
   for (const e of events) if (e.facts.marker && INVITE_MARKER.test(e.facts.marker) && !(await plan.invite(e.facts.marker))) result.facts[`outlook:${e.id}`] = { ...e.facts, earlier: true };
 
   const seen = new Map<string, SeenEvent>();
@@ -53,7 +53,7 @@ export async function syncWeek(o: { plan: PlanStore; ow: OutlookWrite; cfg: AppC
     const own = (await plan.ownEvent(uid));
     let tb = (await plan.timeboxByUid(uid));
     if (!own || own.deletedAt) {
-      // D468 (replaces Q69's rebuild): a marked event this person has no timebox for was made by an earlier FocusTime
+      // D470 (replaces Q69's rebuild): a marked event this person has no timebox for was made by an earlier FocusTime
       // (the local app, another store). It is theirs, not ours: an ordinary event, never changed or deleted, nothing
       // recorded. Only a timebox of their own whose event record went missing is linked again.
       if (!tb) {

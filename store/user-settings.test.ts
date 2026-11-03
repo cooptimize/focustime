@@ -87,6 +87,19 @@ await forEachDriver("a person's settings in the store (A2)", ({ open }) => {
     expect((await ana.load()).parsed.ok && ((await ana.load()).parsed as { config: { ui: { theme: string } } }).config.ui.theme).toBe("neutral");
   });
 
+  it("invite domains are the app's: set by the admin, never kept in a person's rows (fix/settings-autosave)", async () => {
+    const t = await setup(open, { ...APP, inviteDomains: ["contoso.example", "fabrikam.example"] });
+    const ana = t.make("ana");
+    // Even a person's own [collab] domains (an old import) give way to the app's.
+    await ana.seed(STARTER_TOML.replace(/\[collab\][^[]*/, "") + '\n[collab]\ndomains = ["mine.example"]\n');
+    const loaded = await ana.load();
+    expect(loaded.parsed.ok && loaded.parsed.config.collab.domains).toEqual(["contoso.example", "fabrikam.example"]);
+    expect((await ana.write(settingsEdit("collab", { meetingMinutes: 45, teams: true, daysAhead: 3, exclude: [] }))).ok).toBe(true);
+    const rows = (await t.db.all("SELECT body FROM user_settings WHERE user_id = ?", ["ana"])) as { body: string }[];
+    expect(rows.map((r) => r.body).join("\n")).not.toMatch(/^\s*domains\s*=/m);
+    expect(personalRows('[collab]\nteams = true\ndomains = ["x.example"]\n').map((r) => r.body).join("")).not.toContain("domains");
+  });
+
   it("keeps the time zone on the person: a Settings change is mirrored, and their zone wins on load", async () => {
     const t = await setup(open);
     const s = t.make("ana");
@@ -115,18 +128,5 @@ await forEachDriver("a person's settings in the store (A2)", ({ open }) => {
     expect(l.parsed.ok).toBe(true);
     expect(l.parsed.ok && l.parsed.config.outlook).toBeNull();
     expect(l.parsed.ok && l.parsed.config.google).toBeNull();
-  });
-
-  it("A5: invite domains set by the admin replace a person's own, and say so", async () => {
-    const t = await setup(open, { ...APP, inviteDomains: ["Cooptimize.example"] });
-    const s = t.make("ana");
-    await s.seed(setValue(STARTER_TOML, "collab", "domains", ["fabrikam.example"]));
-    const l = await s.load();
-    expect(l.parsed.ok && l.parsed.config.collab).toMatchObject({ domains: ["cooptimize.example"], domainsByAdmin: true });
-    const plain = await setup(open);
-    const b = plain.make("ben");
-    await b.seed(STARTER_TOML);
-    const lb = await b.load();
-    expect(lb.parsed.ok && lb.parsed.config.collab.domainsByAdmin).toBeFalsy();
   });
 });

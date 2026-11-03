@@ -1,4 +1,4 @@
-// Two-way sync for FocusTime's own Outlook events (step 13, Q70). A marked event with no record is left alone (D468, replacing Q69).
+// Two-way sync for FocusTime's own Outlook events (step 13, Q70). A marked event with no record is left alone (D470, replacing Q69).
 // Pure: what FocusTime last wrote, what Outlook shows now, and what the timebox wants now, in; one decision out.
 // "Since the last sync" means against `last`: the fields last confirmed on Outlook or last taken from it.
 import type { Fields, OutlookShowAs } from "./timebox.ts";

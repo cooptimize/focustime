@@ -544,7 +544,7 @@ export function YouAccount() {
             <input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="/subscriptions/…/resourceGroups/…/providers/Microsoft.Compute/virtualMachines/…" aria-label="VM resource ID" spellCheck={false} />
             <button type="submit" className="mini" disabled={busy || !manual.trim()}>Use this VM</button>
           </form>
-          <span className="set-hint">By the Owner tag ([azure] owner_tag in config.toml).</span>
+          <span className="set-hint">Found by the VM's Owner tag.</span>
         </div>
       )}
       {message && <p className="set-problem" role="alert">{message}</p>}

@@ -112,7 +112,7 @@ export async function migrateSqlServer(conn: SqlServerConn, o: { log?: Logger; m
   if (!o.migrations || newest === SQLSERVER_VERSION) {
     const recorded = await appliedNames(conn);
     const newer = newerThanBuild(o.named ?? NAMED_MIGRATIONS, recorded);
-    // D466: a newer database is fine (migrations only add): an older revision after a rollback runs on it.
+    // D468: a newer database is fine (migrations only add): an older revision after a rollback runs on it.
     if (newer.length) o.log?.({ source: "database", op: "newer_schema", count: newer.length });
     for (const m of pending(o.named ?? NAMED_MIGRATIONS, recorded)) {
       await conn.tx(async () => {

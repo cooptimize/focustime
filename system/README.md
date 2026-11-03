@@ -15,7 +15,7 @@ default when the server starts here), so a change can be tried end to end before
 
 After a server change: `npm run build`, then `systemctl --user restart focustime`, then `focustime-open`.
 
-## Retired for daily use (A5, D467)
+## Retired for daily use (A5, D469)
 
 Since A5 the daily app is prod (`https://ft-prod-app.grayforest-92f64bef.centralus.azurecontainerapps.io`), and the
 service here is off: `systemctl --user disable --now focustime` (the service and its login autostart through

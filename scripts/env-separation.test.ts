@@ -1,5 +1,5 @@
-// A5 (D463): dev and prod share nothing but the image registry. Dev's files never name prod's resources, identities,
-// vault or database, and prod's never name dev's, except the one shared registry (AcrPull only, D470).
+// A5 (D465): dev and prod share nothing but the image registry. Dev's files never name prod's resources, identities,
+// vault or database, and prod's never name dev's, except the one shared registry (AcrPull only, D471).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -23,7 +23,7 @@ function crossings(files: string[], other: "dev" | "prod"): string[] {
   );
 }
 
-describe("dev and prod stay apart (D463)", () => {
+describe("dev and prod stay apart (D465)", () => {
   it("dev's config never names a prod resource", () => {
     expect(crossings(DEV, "prod")).toEqual([]);
   });

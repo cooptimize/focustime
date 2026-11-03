@@ -8,8 +8,8 @@ the globally unique ones carry a suffix from the resource group id:
 | What | Dev | Prod |
 |---|---|---|
 | URL | `https://ft-dev-app.ashysand-30e17134.centralus.azurecontainerapps.io` | `https://ft-prod-app.grayforest-92f64bef.centralus.azurecontainerapps.io` |
-| Container App / environment | `ft-dev-app` / `ft-dev-cae` (0 to 1 replica) | `ft-prod-app` / `ft-prod-cae` (1 replica, D465) |
-| Container registry | `ftdevacr5bthbn` | the same one (D470): pulled by `ft-prod-pull`, AcrPull only |
+| Container App / environment | `ft-dev-app` / `ft-dev-cae` (0 to 1 replica) | `ft-prod-app` / `ft-prod-cae` (1 replica, D467) |
+| Container registry | `ftdevacr5bthbn` | the same one (D471): pulled by `ft-prod-pull`, AcrPull only |
 | Key Vault | `ft-dev-kv-5bthbn` | `ft-prod-kv-kkzllj` (its own `ft-data-key`, never dev's) |
 | Secrets in the vault | `ft-entra-client-secret`, `ft-google-client-secret`, `ft-dataverse-client-secret` | the same names, prod's own copies |
 | SQL server / database | `ft-dev-sql-5bthbn` / `focustime` (serverless 0.5 to 1 vCore, 7 days PITR) | `ft-prod-sql-kkzllj` / `focustime` (serverless 0.5 to 2 vCores, auto-pause 60 min, 14 days PITR) |
@@ -99,7 +99,7 @@ az containerapp update -g FocusTime-dev -n ft-dev-app --image ftdevacr5bthbn.azu
 ```
 
 Or re-run the deploy workflow for the earlier commit (Actions, the run, "Re-run all jobs"). A rollback across a
-schema change is safe: migrations only add (D466), and an older build runs on a newer database (it logs
+schema change is safe: migrations only add (D468), and an older build runs on a newer database (it logs
 `newer_schema`). Restore the database only when the data itself went wrong.
 
 Restore the database (7 days of point-in-time restore) to a new database, then swap names:
@@ -147,7 +147,7 @@ ContainerAppConsoleLogs_CL | where TimeGenerated > ago(1h) | project TimeGenerat
 
 ## Delete dev
 
-Prod pulls its image from dev's registry (D470). Before deleting dev, give prod a registry of its own (drop
+Prod pulls its image from dev's registry (D471). Before deleting dev, give prod a registry of its own (drop
 `sharedRegistry` and `pullIdentityName` from `prod.bicepparam` and build in deploy-prod), or prod can no longer start a
 new revision.
 
@@ -165,7 +165,7 @@ gone for good.
 
 ### Deploy by SHA
 
-Prod runs only a commit dev already built, tested and deployed: the same image, by digest (D464).
+Prod runs only a commit dev already built, tested and deployed: the same image, by digest (D466).
 
 1. Find the commit: dev's ⋯ › About ("FocusTime · dev · #12 · 3f96061"), or `curl -s <dev url>/version`.
 2. Run the workflow from main: Actions › deploy-prod › Run workflow, `ref` = that SHA, or
@@ -188,7 +188,7 @@ gh workflow run deploy-prod.yml --repo cooptimize/focustime -f ref=<previous sha
 ```
 
 Roll forward: the same with the newer SHA. Single revision mode: each deploy makes a new revision and the old ones stay
-listed, inactive (`az containerapp revision list -g FocusTime -n ft-prod-app -o table`). Migrations only add (D466), so
+listed, inactive (`az containerapp revision list -g FocusTime -n ft-prod-app -o table`). Migrations only add (D468), so
 the older build runs on the database as it is; no restore is needed for a rollback.
 
 ### Prod's app-level settings
@@ -201,7 +201,7 @@ per person. Settings shows the ones a person sees as "Set by your FocusTime admi
 | `FOCUSTIME_ENV` | `prod` (About, `/version`; Setup's Start over is refused) | `param env` |
 | `FOCUSTIME_HOST` | `azure` | app.bicep |
 | `FOCUSTIME_PUBLIC_URL` | the Container App's own hostname | app.bicep |
-| `FOCUSTIME_INVITE_DOMAINS` | `cooptimize.org` (D469; dev: empty, each person's work email) | `param inviteDomains` |
+| `FOCUSTIME_INVITE_DOMAINS` | `cooptimize.org` (D464; dev: empty, each person's work email) | `param inviteDomains` |
 | `FOCUSTIME_ENTRA_TENANT_ID` / `_CLIENT_ID` | the tenant / `0040169f-a4c9-46d9-bd81-83c31d0d6ff0` | `param entraClientId` |
 | `FOCUSTIME_GOOGLE_CLIENT_ID` | the "FocusTime Web" client | `param googleClientId` |
 | `FOCUSTIME_DATAVERSE_URL` / `_TENANT_ID` / `_CLIENT_ID` | `https://cooptimize.crm.dynamics.com` and its ids | `param dataverse*` |
@@ -238,7 +238,7 @@ Nothing to set up for them in Azure: anyone in the Cooptimize tenant can sign in
    followed clients, which sources are live, which setup steps were done or skipped. Settings › Data and the
    attention line show the same to them.
 
-### Retire the local daily app (D467)
+### Retire the local daily app (D469)
 
 Prod replaces the local service for daily use. Kept installed for a few weeks:
 

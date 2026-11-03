@@ -45,7 +45,7 @@ export function inOrder<T extends Pick<NamedMigration, "name">>(list: readonly T
 
 /**
  * The named migrations to apply, given those already recorded. A recorded name this build doesn't know is fine, even
- * one newer than its newest: migrations only add (D466), so an older build runs safely on a newer database, and
+ * one newer than its newest: migrations only add (D468), so an older build runs safely on a newer database, and
  * rolling back to the previous revision never needs the database rolled back too. `newerThanBuild` names them.
  */
 export function pending<T extends Pick<NamedMigration, "name">>(list: readonly T[], applied: ReadonlySet<string>): T[] {

@@ -1458,6 +1458,7 @@ export function App() {
           onSection={setSettingsAt}
           onClose={() => setSettingsAt(null)}
           onSaved={reloadQuiet}
+          onNotice={setNotice}
           sources={data.sources}
           devops={data.devops}
           busy={busy}

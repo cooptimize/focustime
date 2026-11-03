@@ -1,5 +1,5 @@
-# Prod deploy (A5, D464): manual only. Promotes the exact image deploy-dev built and tested for one commit on main, by
-# its digest in dev's registry; it builds nothing. Then the database migration (migrations only add, D466), the app's
+# Prod deploy (A5, D466): manual only. Promotes the exact image deploy-dev built and tested for one commit on main, by
+# its digest in dev's registry; it builds nothing. Then the database migration (migrations only add, D468), the app's
 # database user, the Bicep, and a smoke test that the served commit is the one asked for.
 #
 # Run it: Actions › deploy-prod › Run workflow, ref = the commit (usually the SHA in dev's ⋯ › About), or

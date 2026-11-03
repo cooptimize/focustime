@@ -15,8 +15,8 @@ export type AppKeys = {
   dataverse: { environmentUrl: string; tenantId: string; clientId: string } | null;
   entra: { tenantId: string; clientId: string } | null;
   google: { clientId: string } | null;
-  /** A5: invite domains set by the FocusTime admin for everyone; they replace a person's own. Absent or empty: theirs. */
-  inviteDomains?: string[];
+  /** Who invites may go to, set by the app (fix/settings-autosave); absent or empty: the person's own email domain. */
+  inviteDomains?: readonly string[];
 };
 
 /** Who the settings are for, as the users table has them. */
@@ -69,15 +69,12 @@ export function createUserSettings(o: {
     if (o.app.google) t = setValue(t, "google", "client_id", o.app.google.clientId);
     else if (/^\[google\]/m.test(t)) t = setValue(t, "google", "client_id", "");
     if (p.timeZone) t = setValue(t, "hours", "time_zone", p.timeZone);
+    // Invite domains are the app's: set by the admin, never from a person's own rows.
+    if (o.app.inviteDomains?.length) t = setValue(t, "collab", "domains", [...o.app.inviteDomains]);
     return t;
   }
 
-  const admin = (o.app.inviteDomains ?? []).map((d) => d.toLowerCase());
-  const parse = (t: string): ParseResult => {
-    const r = parseConfig(t, { defaultZone: o.defaultZone });
-    if (!r.ok || !admin.length) return r;
-    return { ...r, config: { ...r.config, collab: { ...r.config.collab, domains: [...admin], domainsByAdmin: true } } };
-  };
+  const parse = (t: string): ParseResult => parseConfig(t, { defaultZone: o.defaultZone });
 
   return {
     /** Whether the person has settings yet (a first sign-in has none until seeded). */

@@ -12,7 +12,7 @@ export type EditFacts = {
   allDay: boolean;
   /** FocusTime's marker value, when the event carries one. */
   marker: string | null;
-  /** D468: marked, but this person's store has no record of it (an earlier FocusTime made it): an ordinary event. */
+  /** D470: marked, but this person's store has no record of it (an earlier FocusTime made it): an ordinary event. */
   earlier?: boolean;
   webLink: string | null;
   /** Step 16 (D283): my response (Graph's value), the organizer's name for a meeting I'm invited to, and whether new times may be proposed. */

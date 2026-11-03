@@ -1,19 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { readAppSettings } from "./appconfig.ts";
 
-const URL = "http://localhost:4400";
+const URL = "http://localhost:5317";
 
-describe("app settings: invite domains (A5)", () => {
-  it("reads FOCUSTIME_INVITE_DOMAINS as a lowercase list, none by default", () => {
+describe("app-level invite domains (fix/settings-autosave)", () => {
+  it("come from FOCUSTIME_INVITE_DOMAINS, else invite_domains in the app config, lowercased and deduplicated", () => {
+    const env = readAppSettings({ FOCUSTIME_INVITE_DOMAINS: "Contoso.example, fabrikam.example,contoso.example" }, null, URL);
+    expect(env.ok && env.settings.inviteDomains).toEqual(["contoso.example", "fabrikam.example"]);
+    const file = readAppSettings({}, 'invite_domains = ["contoso.example"]\n', URL);
+    expect(file.ok && file.settings.inviteDomains).toEqual(["contoso.example"]);
     const none = readAppSettings({}, null, URL);
     expect(none.ok && none.settings.inviteDomains).toEqual([]);
-    const set = readAppSettings({ FOCUSTIME_INVITE_DOMAINS: "Cooptimize.example, fabrikam.example" }, null, URL);
-    expect(set.ok && set.settings.inviteDomains).toEqual(["cooptimize.example", "fabrikam.example"]);
-    const toml = readAppSettings({}, '[collab]\ninvite_domains = ["contoso.example"]\n', URL);
-    expect(toml.ok && toml.settings.inviteDomains).toEqual(["contoso.example"]);
   });
-
-  it("refuses something that isn't a domain", () => {
-    expect(readAppSettings({ FOCUSTIME_INVITE_DOMAINS: "not a domain" }, null, URL).ok).toBe(false);
+  it("refuse something that isn't a domain name", () => {
+    expect(readAppSettings({ FOCUSTIME_INVITE_DOMAINS: "not a domain" }, null, URL)).toMatchObject({ ok: false });
   });
 });

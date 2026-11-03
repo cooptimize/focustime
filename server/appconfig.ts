@@ -17,7 +17,7 @@ export type AppSettings = {
   demo: boolean;
   /** A3: where the plan store is. Never per person. */
   database: DatabaseSettings;
-  /** A5: the only domains help invites may go to, for everyone (empty: each person's own setting or work email). */
+  /** The email domains invites may go to (lowercase). Empty: each person's own work email domain. */
   inviteDomains: string[];
 };
 
@@ -44,6 +44,7 @@ export const APP_ENV = {
   dataverseClientId: "FOCUSTIME_DATAVERSE_CLIENT_ID",
   googleClientId: "FOCUSTIME_GOOGLE_CLIENT_ID",
   demo: "FOCUSTIME_DEMO",
+  inviteDomains: "FOCUSTIME_INVITE_DOMAINS",
   dbDriver: "FOCUSTIME_DB_DRIVER",
   dbServer: "FOCUSTIME_DB_SERVER",
   dbPort: "FOCUSTIME_DB_PORT",
@@ -51,10 +52,7 @@ export const APP_ENV = {
   dbAuth: "FOCUSTIME_DB_AUTH",
   dbUser: "FOCUSTIME_DB_USER",
   dbIdentity: "FOCUSTIME_DB_MANAGED_IDENTITY_CLIENT_ID",
-  inviteDomains: "FOCUSTIME_INVITE_DOMAINS",
 } as const;
-
-const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 
 type Table = Record<string, unknown>;
 const isTable = (v: unknown): v is Table => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -103,10 +101,10 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
 
   const database = readDatabase(sec("database"), val, errors);
 
-  const c = sec("collab");
-  const domainText = val(APP_ENV.inviteDomains, Array.isArray(c.invite_domains) ? c.invite_domains.join(",") : c.invite_domains);
-  const inviteDomains = domainText ? domainText.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean) : [];
-  if (inviteDomains.length > 5 || inviteDomains.some((x) => !DOMAIN.test(x))) errors.push('invite domains must be up to 5 domains, like "cooptimize.example", separated by commas');
+  // invite_domains (or FOCUSTIME_INVITE_DOMAINS, comma separated): who invites may go to, the same for everyone.
+  const domainsRaw = env[APP_ENV.inviteDomains] ?? (Array.isArray(raw.invite_domains) ? raw.invite_domains.join(",") : typeof raw.invite_domains === "string" ? raw.invite_domains : "");
+  const inviteDomains = [...new Set(String(domainsRaw).split(",").map((d) => d.trim().toLowerCase()).filter(Boolean))];
+  if (inviteDomains.some((d) => !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(d))) errors.push("invite_domains must be domain names like example.com");
 
   if (errors.length) return { ok: false, errors };
   return {

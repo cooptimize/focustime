@@ -11,9 +11,9 @@
 #      that resource group only, and membership of the DB admins group (the post-deploy database script runs with its
 #      token, never by hand).
 #   5. The GitHub repository variables the workflows read (ids only, never a secret).
-#   6. Prod only (A5, D470): prod runs dev's tested image, so it pulls from dev's registry. The pull identity
+#   6. Prod only (A5, D471): prod runs dev's tested image, so it pulls from dev's registry. The pull identity
 #      ft-prod-pull (in FocusTime) and the deploy identity ft-prod-deploy get AcrPull on that one registry, nothing
-#      else in FocusTime-dev. PROD_DEPLOYERS (--deployer, GitHub logins) is who may run deploy-prod.yml (D464).
+#      else in FocusTime-dev. PROD_DEPLOYERS (--deployer, GitHub logins) is who may run deploy-prod.yml (D466).
 #
 # Prints names and ids, never a secret (there are none here).
 #

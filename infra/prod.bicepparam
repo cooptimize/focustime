@@ -7,7 +7,7 @@ param location = 'centralus'
 param adminGroupObjectId = 'b6320a08-7f2f-4902-b2b5-7a99e11c29fc' // FocusTime DB Admins
 param appReady = bool(readEnvironmentVariable('FT_APP_READY', 'true'))
 param imageTag = readEnvironmentVariable('FT_IMAGE_TAG', 'latest')
-// deploy-prod.yml: the digest of the image dev built and tested for the chosen commit (D464). Never built for prod.
+// deploy-prod.yml: the digest of the image dev built and tested for the chosen commit (D466). Never built for prod.
 param imageDigest = readEnvironmentVariable('FT_IMAGE_DIGEST', '')
 param sharedRegistry = { name: 'ftdevacr5bthbn', resourceGroup: 'FocusTime-dev' } // dev's registry, AcrPull only
 param pullIdentityName = 'ft-prod-pull' // bootstrap.sh --env prod
