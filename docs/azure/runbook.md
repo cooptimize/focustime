@@ -82,6 +82,32 @@ commit, the PR number from the merge message, and the build time in UTC. The env
 Settings > Setup > Start over clears your own setup state, so the four screens show again on the next load. It is
 refused on prod (403) and hidden there.
 
+## Check a VM's auto-shutdown is on (D465)
+
+FocusTime only reads a VM's auto-shutdown; it never changes it. To check one (yours, or one someone asks about):
+
+- Portal: the VM > Operations > Auto-shutdown. "Enabled" should be On, with the time and time zone the owner wants.
+  Notification before auto-shutdown can stay as it is.
+- Shell (read only):
+
+```sh
+az rest --method get --url "https://management.azure.com/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.DevTestLab/schedules/shutdown-computevm-<vm>?api-version=2018-09-15" \
+  --query "{status:properties.status,time:properties.dailyRecurrence.time,tz:properties.timeZoneId,notify:properties.notificationSettings.status}"
+```
+
+  `status` should be `Enabled`. A 404 means the VM has no auto-shutdown at all.
+- Who changed it, and with which app (90 days):
+
+```sh
+az monitor activity-log list --subscription <sub> --offset 90d --namespace Microsoft.DevTestLab \
+  --query "[?operationName.value=='Microsoft.DevTestLab/schedules/write' && status.value=='Succeeded'].{at:eventTimestamp,who:caller,app:claims.appid,schedule:resourceId}" -o table
+```
+
+  The app id says where a change came from: `c44b4083-3bb0-49c1-b47d-974e53cbdf3c` is the Azure portal, and
+  `15021957-09f5-41de-b9b2-ab28f42d6d0c` (Coopilot Desktop) is the local FocusTime before D465. The hosted FocusTime
+  (`0040169f-a4c9-46d9-bd81-83c31d0d6ff0`) never wrote a schedule.
+- To turn it back on, use the portal page above. Don't use FocusTime; it can't write a schedule.
+
 ## Roll back a revision
 
 Single revision mode: the previous image is redeployed, not reactivated.
