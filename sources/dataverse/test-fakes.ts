@@ -1,5 +1,5 @@
 // Fake Entra token endpoint and Dataverse Web API for tests. Error bodies deliberately echo the
-// secret and token so tests prove Coopilot never forwards raw bodies.
+// secret and token so tests prove FocusTime never forwards raw bodies.
 import accounts from "./fixtures/accounts.json" with { type: "json" };
 import focustimes from "./fixtures/focustimes.json" with { type: "json" };
 import type { DataverseConfig } from "../../config/schema.ts";

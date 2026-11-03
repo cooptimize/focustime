@@ -1,4 +1,4 @@
-// A pick's time on its own row (step 14.5, D259): "+ time" when untimed, "9:00–11:00" when timed in Coopilot,
+// A pick's time on its own row (step 14.5, D259): "+ time" when untimed, "9:00–11:00" when timed in FocusTime,
 // "9:00–11:00 · Outlook" with a calendar icon when it is on Outlook. Clicking opens the same small editor everywhere
 // (week cards, Today, Plan the day): the block's free gaps, start and length, Put on Outlook, Remove time. Hidden when
 // "Use timeboxing" is off (D261).
@@ -9,7 +9,7 @@ import { MenuCtx, useMenu } from "./Menus.tsx";
 import { spanText, timeStep } from "./menu.ts";
 import { useTimeboxes } from "./Timeboxes.tsx";
 
-const HINT_KEY = "coopilot.hint.picktime";
+const HINT_KEY = "focustime.hint.picktime";
 function hintSeen(): boolean {
   try {
     return localStorage.getItem(HINT_KEY) === "1";
@@ -74,7 +74,7 @@ export function PickTime({ pick, editable = true, hint = false }: { pick: Pick; 
   }
   const when = spanText(t.start, t.end, env.tz);
   const pending = state === "outlook" && !t.onOutlook;
-  const note = t.conflict ? "Changed in Coopilot and in Outlook: choose a version" : t.outlookNote ?? (pending ? "Not on Outlook yet: confirm the preview" : null);
+  const note = t.conflict ? "Changed in FocusTime and in Outlook: choose a version" : t.outlookNote ?? (pending ? "Not on Outlook yet: confirm the preview" : null);
   const label = `${when}${state === "outlook" ? " on Outlook" : ""}${note ? `. ${note}` : ""}${canEdit ? ". Change the time" : ""}`;
   return (
     <button type="button" className={`pt-time ${state}${t.conflict ? " conflict" : ""}${pending ? " pending" : ""}`} aria-haspopup={canEdit ? "menu" : undefined} aria-label={label} title={label} onClick={open} disabled={!canEdit} {...stop}>

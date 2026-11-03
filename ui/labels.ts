@@ -69,7 +69,7 @@ import { createContext } from "react";
 export const SampleSources = createContext<ReadonlySet<string>>(new Set());
 
 export function sourceName(e: CalEvent, samples: ReadonlySet<string>): string {
-  if (e.source === "coopilot") return "Coopilot (unavailable)";
+  if (e.source === "focustime") return "FocusTime (unavailable)";
   const name = e.source === "outlook" ? "Outlook" : "Google";
   return samples.has(e.source) ? `${name} sample` : name;
 }

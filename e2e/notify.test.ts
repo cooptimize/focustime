@@ -53,7 +53,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
 
   it("clicking a notification opens its view: each route", async () => {
     const { page, errors } = await freshPage(h);
-    const go = (route: string) => page.evaluate((r) => window.dispatchEvent(new CustomEvent("coopilot:open-route", { detail: r })), route);
+    const go = (route: string) => page.evaluate((r) => window.dispatchEvent(new CustomEvent("focustime:open-route", { detail: r })), route);
     const expectView = async (route: string, selector: string) => {
       await page.keyboard.press("Escape");
       await go(route);

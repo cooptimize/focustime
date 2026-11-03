@@ -1,6 +1,6 @@
 // Media control for focus (step 10 slice 5). Read-only detection of playerctl (MPRIS) and the Spotify app by looking
 // for the programs on PATH (nothing is run to detect, nothing is installed). Commands are argument arrays started
-// without a shell. Only the players Coopilot paused are resumed.
+// without a shell. Only the players FocusTime paused are resumed.
 import { execFile, spawn } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { delimiter, join } from "node:path";

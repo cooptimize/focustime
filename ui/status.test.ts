@@ -27,10 +27,10 @@ describe("status lines, one per root cause", () => {
   });
 
   it("a failure of its own keeps its own line, after the shared cause; identical messages show once", () => {
-    const own = src("google", { status: "misconfigured", fromCache: true, message: "Google refused access: check the calendar permission for Coopilot. Showing data from 3:49 PM" });
+    const own = src("google", { status: "misconfigured", fromCache: true, message: "Google refused access: check the calendar permission for FocusTime. Showing data from 3:49 PM" });
     const lines = causeLines([locked("dataverse"), locked("pto"), own], null);
     expect(lines.map((l) => l.key)).toEqual(["keyring", expect.stringMatching(/^msg:/)]);
-    expect(lines[1]).toMatchObject({ cause: null, affected: ["Google"], text: "Google refused access: check the calendar permission for Coopilot", since: AT });
+    expect(lines[1]).toMatchObject({ cause: null, affected: ["Google"], text: "Google refused access: check the calendar permission for FocusTime", since: AT });
   });
 
   it("live, sample and never-connected sources are not failures; DevOps failures of its own stay in its popover", () => {

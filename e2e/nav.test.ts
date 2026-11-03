@@ -9,7 +9,7 @@ const T = 90_000;
 const hash = (page: Page) => page.evaluate(() => location.hash);
 const tab = (page: Page) => page.locator(".views .view-tab[aria-current=page]").textContent();
 const mode = (page: Page) => page.locator(".mode-switch .ms-btn[aria-current=page]").first().textContent();
-const route = (page: Page, r: string) => page.evaluate((r) => window.dispatchEvent(new CustomEvent("coopilot:open-route", { detail: r })), r);
+const route = (page: Page, r: string) => page.evaluate((r) => window.dispatchEvent(new CustomEvent("focustime:open-route", { detail: r })), r);
 
 describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo mode)", () => {
   beforeAll(async () => {

@@ -1,5 +1,5 @@
 // "Needs help from…" (step 13): pick a length and a range, see Cooptimizers ranked by tier (on this client that day,
-// on this client, anyone else; PTO only as "away"), choose people or let Coopilot choose the top tier, get up to five
+// on this client, anyone else; PTO only as "away"), choose people or let FocusTime choose the top tier, get up to five
 // times when everyone is free inside their own working hours, then preview the invite. Nothing is sent here: the
 // preview (every attendee named, "they will receive an invite") goes to the write flow, which sends on confirm.
 import { useEffect, useRef, useState } from "react";
@@ -151,7 +151,7 @@ export function HelpFinder({ target, clientName, settings, tz, onPreview, onClos
 
         <fieldset className="help-people">
           <legend>
-            Who <span className="muted">{chosen.length ? `${chosen.length} chosen; all of them must be free` : "none chosen: Coopilot picks the best-placed person free at each time"}</span>
+            Who <span className="muted">{chosen.length ? `${chosen.length} chosen; all of them must be free` : "none chosen: FocusTime picks the best-placed person free at each time"}</span>
           </legend>
           {byTier.map(({ t, list }) => (
             <div key={t} className="help-tier">

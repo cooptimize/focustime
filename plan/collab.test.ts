@@ -43,7 +43,7 @@ describe("candidate tiers (Cooptimize staff only)", () => {
   });
 });
 
-/** getSchedule as Graph returns it, with details Coopilot must never keep. */
+/** getSchedule as Graph returns it, with details FocusTime must never keep. */
 function scheduleBody(view: Record<string, string>, wh: Record<string, { tz: unknown; start?: string; end?: string }>) {
   return {
     value: Object.entries(view).map(([id, v]) => ({
@@ -164,7 +164,7 @@ describe("the invite and its range", () => {
   it("names the client and item, carries the DevOps link and note, lowercases attendee emails", () => {
     const f = inviteFields({ clientName: "T&S", itemTitle: "#4512 Import mapping", url: "https://dev.azure.com/wc/p/_workitems/edit/4512", note: "  stuck on the lookup  ", start: "2026-11-10T09:00:00-06:00", end: "2026-11-10T09:30:00-06:00", people: [{ name: "Ana", email: "Ana@cooptimize.org" }], teams: true });
     expect(f).toMatchObject({ subject: "T&S: help on #4512 Import mapping", start: "2026-11-10T15:00:00Z", attendees: [{ name: "Ana", email: "ana@cooptimize.org" }], teams: true, showAs: "busy" });
-    expect(f.body).toBe("https://dev.azure.com/wc/p/_workitems/edit/4512\n\nstuck on the lookup\n\nHelp session planned in Coopilot.");
+    expect(f.body).toBe("https://dev.azure.com/wc/p/_workitems/edit/4512\n\nstuck on the lookup\n\nHelp session planned in FocusTime.");
     expect(helpFollowUpText(["Ana", "Ben", "Cy"], "#4512 Import mapping")).toBe("Help session with Ana, Ben and Cy on #4512 Import mapping");
   });
   it("defaults to the pinned day, else the next 3 workdays", () => {

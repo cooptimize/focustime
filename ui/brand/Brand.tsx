@@ -46,7 +46,7 @@ export function BentMark({ width = 120 }: { width?: number }) {
 /** The lockup: bent mark, wordmark and "by Cooptimize" (outlined). About in Settings. */
 export function Lockup({ width = 260 }: { width?: number }) {
   const uid = useId().replace(/:/g, "");
-  return <span className="brand-svg lockup" style={{ width }} role="img" aria-label="Coopilot by Cooptimize" dangerouslySetInnerHTML={{ __html: inline(lockupRaw, uid) }} />;
+  return <span className="brand-svg lockup" style={{ width }} role="img" aria-label="FocusTime by Cooptimize" dangerouslySetInnerHTML={{ __html: inline(lockupRaw, uid) }} />;
 }
 
 /** Lumen's parts, drawn at the origin (30 x 30): beam to the left of the light bar, body, bar. */

@@ -101,7 +101,7 @@ describe("demo mode (D272)", () => {
     const before = JSON.stringify(real.picksBetween("2026-10-01", "2026-12-31"));
     real.close();
     const bytes = readFileSync(realPath);
-    const cfgPath = join(dirs.config, "coopilot", "config.toml");
+    const cfgPath = join(dirs.config, "focustime", "config.toml");
     writeFileSync(join(dirs.config, "marker"), "x");
 
     const ctx = await demo();

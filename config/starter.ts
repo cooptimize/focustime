@@ -1,9 +1,9 @@
-// Commented starter config, written to ~/.config/coopilot/config.toml when it is missing.
+// Commented starter config, written to ~/.config/focustime/config.toml when it is missing.
 // Not secret, but keep it out of public repos.
-export const STARTER_TOML = `# Coopilot configuration.
+export const STARTER_TOML = `# FocusTime configuration.
 # Not secret, but don't commit it publicly. Secrets never go in this file:
 # the Dataverse client secret lives in the OS keyring
-# (service "coopilot", account "dataverse-client-secret").
+# (service "focustime", account "dataverse-client-secret").
 
 [dataverse]
 # Environment root URL, Web API v9.2 is used under it.
@@ -23,7 +23,7 @@ tenant_id = "abf29d42-2ea9-422b-b0af-ed7cb5595b7e"
 client_id = ""
 
 # Google Calendar, read-only, signed in as you. Client ID of the Desktop OAuth client.
-# Its client secret goes in the keyring (service "coopilot", account "google-client-secret").
+# Its client secret goes in the keyring (service "focustime", account "google-client-secret").
 # calendars: "primary" is your main calendar; add other calendar IDs
 # (Google Calendar > Settings > the calendar > Integrate calendar > Calendar ID).
 [google]
@@ -50,7 +50,7 @@ meeting_watch_minutes = 90
 meeting_at_risk_minutes = 150
 min_focus_window_minutes = 90
 
-# Standing blocks from Coopilot config. A Dataverse block for a different client
+# Standing blocks from FocusTime config. A Dataverse block for a different client
 # in the same half-day wins and the half-day is flagged double-booked.
 # client is the account's reporting nickname (Cooptimize is the internal account).
 [[standing_blocks]]

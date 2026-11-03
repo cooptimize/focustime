@@ -156,7 +156,7 @@ export function SortCapture({ capture, clients, today, onDone, onCancel }: { cap
   );
 }
 
-const TIP_KEY = "coopilot.hint.capturetag";
+const TIP_KEY = "focustime.hint.capturetag";
 const tipSeen = () => {
   try {
     return localStorage.getItem(TIP_KEY) === "1";
@@ -453,7 +453,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   );
 }
 
-/** The capture box over any view (N, the top-bar button, the command menu, or the global key via coopilot-open). */
+/** The capture box over any view (N, the top-bar button, the command menu, or the global key via focustime-open). */
 export function CaptureDialog({ data, onClose, onChanged, onOpenView, defaultClient = null, initialKind = null }: { data: WeekLoadData; onClose: () => void; onChanged: () => void; onOpenView: () => void; defaultClient?: string | null; initialKind?: BoxKind | null }) {
   const back = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null);
   useEffect(() => () => back.current?.focus?.(), []);

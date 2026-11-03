@@ -23,7 +23,7 @@ describe("power state", () => {
     expect(CHIP_LABEL[chipOf("unknown", null)]).toBe("Unknown");
   });
 
-  it("a start Coopilot asked for shows Starting… until Azure says running", () => {
+  it("a start FocusTime asked for shows Starting… until Azure says running", () => {
     const t = { op: "start" as const, since: "2026-11-02T14:00:00Z" };
     expect(chipOf("deallocated", t)).toBe("starting");
     expect(chipOf("running", t)).toBe("running");
@@ -88,7 +88,7 @@ describe("auto-shutdown", () => {
     expect(chipText("unknown", s, z, "2026-11-02")).toBe("Unknown");
   });
 
-  it("puts back only what Coopilot changed", () => {
+  it("puts back only what FocusTime changed", () => {
     const now = (time: string, status: "Enabled" | "Disabled" = "Enabled") => ({ time, status, timeZoneId: "UTC" });
     expect(restorePlan(change, now("2100"))).toBe("restore");
     expect(restorePlan(change, now("1900"))).toBe("already");

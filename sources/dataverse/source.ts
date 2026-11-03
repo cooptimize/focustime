@@ -64,7 +64,7 @@ const FOCUS_COLUMNS = [
   "coop_startdate", "coop_enddate", "coop_mondaydaypart", "coop_tuesdaydaypart",
   "coop_wednesdaydaypart", "coop_thursdaydaypart", "statecode",
 ] as const;
-const KEYRING_HINT = "keyring entry coopilot / dataverse-client-secret";
+const KEYRING_HINT = "keyring entry focustime / dataverse-client-secret";
 
 export function createDataverseSource(deps: DataverseSourceDeps) {
   const { config, log } = deps;
@@ -91,7 +91,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
       const kind = e instanceof SecretError ? e.kind : "unavailable";
       log({ source: "dataverse", op: "keyring", kind });
       if (kind === "not_found")
-        throw new SourceFailure("misconfigured", "No Dataverse client secret in the keyring (service coopilot, account dataverse-client-secret)", "open_settings");
+        throw new SourceFailure("misconfigured", "No Dataverse client secret in the keyring (service focustime, account dataverse-client-secret)", "open_settings");
       throw new SourceFailure("error", "Secret storage unavailable (Secret Service). Unlock the keyring and retry", undefined, undefined, "keyring");
     }
 
@@ -515,7 +515,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
     } catch (e) {
       const f = e instanceof SourceFailure ? e : new SourceFailure("error", "PTO load failed");
       if (!(e instanceof SourceFailure)) log({ source: "dataverse", op: "pto", kind: "unexpected" });
-      const plain = f.status === "auth_required" ? "PTO not readable: check the Coopilot role in Dataverse" : f.message;
+      const plain = f.status === "auth_required" ? "PTO not readable: check the FocusTime role in Dataverse" : f.message;
       const snap = await readSnapshot<PtoEntry>(deps.cacheDir, "pto", key);
       const message = snap ? `${plain}. Showing PTO from ${fmtAt(snap.fetchedAt)}` : `${plain}. No cached PTO yet`;
       result = { source: "pto", status: f.status, fetchedAt: snap?.fetchedAt ?? null, fromCache: !!snap, items: snap?.items ?? [], message };
@@ -553,7 +553,7 @@ export function createDataverseSource(deps: DataverseSourceDeps) {
   const fail = (e: unknown, op: string): TeamFailure => {
     if (!(e instanceof SourceFailure)) log({ source: "dataverse", op, kind: "unexpected" });
     const f = e instanceof SourceFailure ? e : null;
-    return { ok: false, message: f?.rootCause === "keyring" ? "Keyring locked" : f?.status === "unreachable" ? "Dataverse unreachable" : f?.status === "auth_required" ? "Dataverse access denied: check the Coopilot role (users, Focus Time, Account Workers, PTO)" : f?.message ?? "Dataverse read failed" };
+    return { ok: false, message: f?.rootCause === "keyring" ? "Keyring locked" : f?.status === "unreachable" ? "Dataverse unreachable" : f?.status === "auth_required" ? "Dataverse access denied: check the Dataverse reader role (users, Focus Time, Account Workers, PTO)" : f?.message ?? "Dataverse read failed" };
   };
 
   /**

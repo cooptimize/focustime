@@ -23,7 +23,7 @@ describe("playerctl commands", () => {
   });
   it("finds programs on PATH without running them", () => {
     expect(onPath("sh", "/usr/bin:/bin")).toBe(true);
-    expect(onPath("no-such-program-coopilot", "/usr/bin:/bin")).toBe(false);
+    expect(onPath("no-such-program-focustime", "/usr/bin:/bin")).toBe(false);
   });
 });
 
@@ -39,7 +39,7 @@ describe("media control follows focus", () => {
     expect(ran).toEqual([playerctl.list(), ["playerctl", "--player", "spotify", "pause"]]);
     expect(await m.transition(brk, { ...focus, startedAt: "c" }, true)).toBe("play");
     expect(ran.at(-1)).toEqual(["playerctl", "--player", "spotify", "play"]);
-    expect(await m.transition(null, focus, true)).toBeNull(); // nothing paused by Coopilot now
+    expect(await m.transition(null, focus, true)).toBeNull(); // nothing paused by FocusTime now
   });
   it("never resumes when nothing was playing", async () => {
     const { m, ran } = setup(true, "mpv\tPaused\n");

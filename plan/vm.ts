@@ -20,7 +20,7 @@ export function powerFrom(statuses: unknown): PowerState {
   return "unknown";
 }
 
-/** A start or stop Coopilot asked for and is still waiting on. */
+/** A start or stop FocusTime asked for and is still waiting on. */
 export type VmOp = "start" | "deallocate";
 export type VmTransition = { op: VmOp; since: string };
 
@@ -34,7 +34,7 @@ export const CHIP_LABEL: Record<VmChip, string> = {
   unknown: "Unknown",
 };
 
-/** What the chip shows: Azure's state, or the transition Coopilot started while Azure still shows the old state. */
+/** What the chip shows: Azure's state, or the transition FocusTime started while Azure still shows the old state. */
 export function chipOf(power: PowerState, transition: VmTransition | null): VmChip {
   if (transition?.op === "start" && power !== "running") return "starting";
   if (transition?.op === "deallocate" && power !== "deallocated") return "stopping";
@@ -61,7 +61,7 @@ export const canStop = (c: VmChip) => c === "running" || c === "billing";
 // ---- Auto-shutdown (Microsoft.DevTestLab/schedules, shutdown-computevm-<vm>) ----
 
 export type ShutdownStatus = "Enabled" | "Disabled";
-/** The parts of a schedule Coopilot reads and changes: daily time "HHMM" in the schedule's own zone, and status. */
+/** The parts of a schedule FocusTime reads and changes: daily time "HHMM" in the schedule's own zone, and status. */
 export type Shutdown = { time: string; status: ShutdownStatus; timeZoneId: string };
 
 export function minutesOf(hhmm: string): number | null {
@@ -70,7 +70,7 @@ export function minutesOf(hhmm: string): number | null {
 }
 export const hhmmOf = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}${String(min % 60).padStart(2, "0")}`;
 
-/** The schedule from a GET body, or null when it isn't a daily shutdown schedule Coopilot understands. */
+/** The schedule from a GET body, or null when it isn't a daily shutdown schedule FocusTime understands. */
 export function shutdownFrom(body: unknown): Shutdown | null {
   const p = typeof body === "object" && body !== null ? (body as { properties?: unknown }).properties : null;
   if (typeof p !== "object" || p === null) return null;
@@ -129,7 +129,7 @@ export function applyChoice(s: Shutdown, choice: ShutdownChoice): { time: string
 }
 
 /**
- * A schedule Coopilot changed and will put back: the original (first one, kept across further delays), what it was
+ * A schedule FocusTime changed and will put back: the original (first one, kept across further delays), what it was
  * changed to, the local day of the change, and the last failed restore, if any.
  */
 export type ShutdownChange = {

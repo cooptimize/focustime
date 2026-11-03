@@ -59,7 +59,9 @@ const FIRST_LAUNCH_MARK = "first_launch";
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
 export type ActionContext = {
-  /** Step 16.4: the profile photo cache (~/.cache/coopilot/photos). Absent: photos aren't cached (demo mode, tests). */
+  /** R1: what to do when the one-time move from Coopilot's keyring entries failed; shown on the sign-in screen. */
+  renameNote?: string | null;
+  /** Step 16.4: the profile photo cache (~/.cache/focustime/photos). Absent: photos aren't cached (demo mode, tests). */
   photoCache?: PhotoCache;
   /** Step 15.5: the notifier (test and sample notifications). Absent: notifications aren't available here. */
   notifications?: { test: () => Promise<void>; sample: (kind: string, live: boolean, gated: boolean) => Promise<boolean> };
@@ -98,14 +100,14 @@ export type ActionContext = {
   azure?: (token: () => Promise<string>) => AzureClient;
 };
 
-/** Actions that reach outside Coopilot or change secrets: refused while demo mode is on (D272). */
+/** Actions that reach outside FocusTime or change secrets: refused while demo mode is on (D272). */
 export const DEMO_REFUSED: readonly ActionName[] = [
   "link.open", "outlook.open", "playlist.open", "data.export", "secret.set",
   "auth.connect_microsoft", "auth.connect_google", "auth.connect_outlook_write", "auth.disconnect",
   "write.confirm", "write.retry", "devops.confirm", "devops.retry", "devops.set_write_pat", "devops.clear_write_pat",
   "auth.sign_in", "auth.sign_out",
 ];
-export const DEMO_REFUSAL = "Demo data: nothing leaves Coopilot in demo mode";
+export const DEMO_REFUSAL = "Demo data: nothing leaves FocusTime in demo mode";
 
 export type ActionRequest = { action: unknown; input: unknown };
 
@@ -354,7 +356,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     }
   }
 
-  // Step 13: with write access, scan the week for edit facts and sync Coopilot's own events (Outlook changes come
+  // Step 13: with write access, scan the week for edit facts and sync FocusTime's own events (Outlook changes come
   // back to the timeboxes; Q69 rebuilds lost records). Its failure only means no sync and no edit facts this time.
   const ow = cfg?.outlook ? ctx.makeOutlook(cfg.outlook, tz).write ?? null : null;
   const syncP = (async () => {
@@ -373,7 +375,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const unavailable = ctx.plan?.unavailableBetween(weekStart, sunday) ?? [];
   const flex = ctx.plan?.flexBetween(weekStart, sunday) ?? [];
   const weekendPlanned = new Set(weekDates7(weekStart).slice(5).filter((d) => (ctx.plan?.picksFor(d) ?? []).some((p) => p.status === "planned" || p.status === "done")));
-  // Coopilot's own Outlook events show once, as timeboxes, and never count as meetings in risk rules (step 12).
+  // FocusTime's own Outlook events show once, as timeboxes, and never count as meetings in risk rules (step 12).
   const own = ctx.plan ? ownEventIds(ctx.plan.ownEvents()) : new Set<string>();
   const week = buildWeek({ weekStart, patterns: dataverse.items, events: withoutOwn([...outlook.items, ...google.items], own), config: weekConfig, pto, unavailable, flex, viewRange: input.viewRange ?? cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
   const todayDay = week.days.find((d) => d.date === todayDate);
@@ -534,7 +536,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       return { ok: true, data: await ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).connect({ write: true }) };
     }
     case "outlook.open": {
-      // Step 13: Outlook on the web, for meetings Coopilot won't change. Only Outlook links, in Cooptimize's profile.
+      // Step 13: Outlook on the web, for meetings FocusTime won't change. Only Outlook links, in Cooptimize's profile.
       const i = req.input as Record<string, unknown> | null;
       if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "url")) return bad("outlook.open takes { url }");
       const url = outlookLink(i.url);
@@ -612,7 +614,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "auth.status":
     case "auth.sign_in":
     case "auth.sign_out":
-      return accountAction({ ...(ctx.plan ? { plan: ctx.plan } : {}), account: await accountOf(ctx), now: ctx.now, clearPhotos: () => clearPhotos(ctx.photoCache ?? null) }, action, req.input);
+      return accountAction({ ...(ctx.plan ? { plan: ctx.plan } : {}), account: await accountOf(ctx), now: ctx.now, clearPhotos: () => clearPhotos(ctx.photoCache ?? null), renameNote: ctx.renameNote ?? null }, action, req.input);
     case "vm.find":
     case "vm.choose":
     case "vm.status":
@@ -649,7 +651,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "auth.disconnect": {
       const input = req.input as { source?: unknown } | undefined;
       if (typeof input !== "object" || input === null || Object.keys(input).length !== 1) return bad("auth.disconnect takes { source }");
-      if (input.source === "dataverse") return bad("Dataverse uses an app secret set up outside Coopilot; remove it with secret-tool if needed");
+      if (input.source === "dataverse") return bad("Dataverse uses an app secret set up outside FocusTime; remove it with secret-tool if needed");
       if (input.source !== "outlook" && input.source !== "google") return bad("source must be outlook or google");
       const cfg = await configured(ctx);
       const tz = cfg?.week.hours.timeZone ?? "UTC";

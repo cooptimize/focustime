@@ -1,5 +1,5 @@
-// Outlook writes (step 12) through Microsoft Graph, delegated Calendars.ReadWrite, for Coopilot's own events only.
-// Every event Coopilot creates carries a marker: a single-value extended property with a stable id. Update and delete
+// Outlook writes (step 12) through Microsoft Graph, delegated Calendars.ReadWrite, for FocusTime's own events only.
+// Every event FocusTime creates carries a marker: a single-value extended property with a stable id. Update and delete
 // read the event first and refuse unless the marker is there and matches. Errors carry a kind and an HTTP status only,
 // never bodies; the token is used only for the Authorization header to graph.microsoft.com.
 import type { Logger } from "../../log/logger.ts";
@@ -10,7 +10,11 @@ import { RSVP_ENDPOINT, rsvpBody, rsvpProblem, type MeetingFacts, type RsvpRespo
 import { HttpError, NetworkError } from "../calendar/http.ts";
 
 const API = "https://graph.microsoft.com/v1.0/";
-/** Coopilot's marker property: a fixed namespace GUID, named CoopilotId. Its value is the timebox's stable id. */
+/**
+ * FocusTime's marker property: a fixed namespace GUID, named CoopilotId. Its value is the timebox's stable id.
+ * CoopilotId is the historical marker name (the app was Coopilot until Nov 2): never rename it, or every event
+ * created before would lose its marker and become uneditable.
+ */
 export const MARKER_PROP = "String {5b0f3c1e-8a2d-4e7f-9c41-6d2a8e0b7f13} Name CoopilotId";
 /** All writer calls: times in UTC and immutable event ids (so ids survive moves between folders). */
 export const WRITE_PREFER = 'outlook.timezone="UTC", IdType="ImmutableId"';
@@ -21,23 +25,23 @@ const MEETING_SELECT = "subject,start,end,showAs,isCancelled,isOrganizer,attende
 const OWN_SELECT = "subject,start,end,showAs,isAllDay,isCancelled,isOrganizer,attendees,type";
 const expandMarker = `singleValueExtendedProperties($filter=id eq '${MARKER_PROP}')`;
 
-/** The fields Coopilot writes. Start and end are UTC instants ("2026-11-03T14:00:00Z"). */
+/** The fields FocusTime writes. Start and end are UTC instants ("2026-11-03T14:00:00Z"). */
 export type OutlookFields = Fields;
 /** What a read back shows (no body is read). Null when the event does not exist. */
 export type OutlookEvent = { id: string; subject: string; start: string; end: string; showAs: string; isReminderOn: boolean; marker: string | null };
 export type CalendarInfo = { name: string; owner: string };
 
-/** The event isn't Coopilot's (no marker, or another timebox's). Nothing was changed. */
+/** The event isn't FocusTime's (no marker, or another timebox's). Nothing was changed. */
 export class OwnershipError extends Error {
   constructor() {
-    super("This Outlook event wasn't created by Coopilot, so Coopilot won't change it");
+    super("This Outlook event wasn't created by FocusTime, so FocusTime won't change it");
   }
 }
 /** The event is gone (deleted in Outlook). */
 export class GoneError extends Error {}
-/** One of my own events that Coopilot may not change (others on it, repeating, all-day, or marked). Nothing changed. */
+/** One of my own events that FocusTime may not change (others on it, repeating, all-day, or marked). Nothing changed. */
 export class NotMineError extends Error {}
-/** A meeting Coopilot won't answer (I organize it, it's Coopilot's, nobody else, cancelled). Nothing was sent. */
+/** A meeting FocusTime won't answer (I organize it, it's FocusTime's, nobody else, cancelled). Nothing was sent. */
 export class RsvpRefused extends Error {}
 /** An attendee outside the allowed domains. Nothing was sent. */
 export class DomainError extends Error {
@@ -81,7 +85,7 @@ export function createBody(f: OutlookFields, marker: string, transactionId: stri
     singleValueExtendedProperties: [{ id: MARKER_PROP, value: marker }],
   };
 }
-/** A PATCH body: only what changed among the fields Coopilot owns. */
+/** A PATCH body: only what changed among the fields FocusTime owns. */
 export function patchBody(before: OutlookFields, after: OutlookFields) {
   const out: Record<string, unknown> = {};
   if (before.subject !== after.subject) out.subject = after.subject;
@@ -112,7 +116,7 @@ export function inviteBody(f: OutlookFields, marker: string, transactionId: stri
 }
 export const sameInstant = (a: string, b: string) => !!a && !!b && Temporal.Instant.compare(Temporal.Instant.from(a), Temporal.Instant.from(b)) === 0;
 
-/** Does the event read back as written? The fields Coopilot sets, compared one by one (the body is not read). */
+/** Does the event read back as written? The fields FocusTime sets, compared one by one (the body is not read). */
 export function matches(e: OutlookEvent | null, f: OutlookFields, marker: string): { ok: boolean; differs: string[] } {
   if (!e) return { ok: false, differs: ["event not found"] };
   const differs: string[] = [];
@@ -142,11 +146,11 @@ export function inviteMatches(e: InviteBack | null, f: OutlookFields, marker: st
 
 /** One of my own events, read for the tier check: no attendee addresses kept, only how many others there are. */
 export type OwnEditable = { id: string; subject: string; start: string; end: string; showAs: string; isOrganizer: boolean; others: number; type: string; isAllDay: boolean; marker: string | null };
-/** Coopilot may change it: I organize it, nobody else is on it, a single timed event, and not Coopilot's own. */
+/** FocusTime may change it: I organize it, nobody else is on it, a single timed event, and not FocusTime's own. */
 export const editableMine = (e: OwnEditable) => e.isOrganizer && e.others === 0 && e.type === "singleInstance" && !e.isAllDay && !e.marker;
-/** The part of my own event Coopilot changes: time and show as. Title and body are never sent. */
+/** The part of my own event FocusTime changes: time and show as. Title and body are never sent. */
 export type OwnChange = { start: string; end: string; showAs: OutlookShowAs };
-/** One event from the week scan: edit facts for the tier, and the subject only for Coopilot-marked events (sync). */
+/** One event from the week scan: edit facts for the tier, and the subject only for FocusTime-marked events (sync). */
 export type ScanEvent = { id: string; start: string; end: string; showAs: string; facts: EditFacts; subject: string | null };
 
 export type GraphWriterDeps = { fetch: typeof fetch; token: () => Promise<string>; invalidate: () => void; log: Logger; timeoutMs?: number };
@@ -221,7 +225,7 @@ export function createGraphWriter(d: GraphWriterDeps) {
     const e = await get(id);
     if (!e) throw new GoneError("gone");
     if (e.marker !== marker) {
-      d.log({ source: "outlook", op: "write_refused", kind: "not_coopilot" });
+      d.log({ source: "outlook", op: "write_refused", kind: "not_focustime" });
       throw new OwnershipError();
     }
     return e;
@@ -283,7 +287,7 @@ export function createGraphWriter(d: GraphWriterDeps) {
   /**
    * The week's events with what the tier rule needs (step 13), by the write token: organizer or not, how many others,
    * series or single, all-day, the marker. Attendee addresses are counted and dropped; subjects are kept only for
-   * Coopilot-marked events (two-way sync). Every page must come back, or none is used.
+   * FocusTime-marked events (two-way sync). Every page must come back, or none is used.
    */
   async function scan(startIso: string, endIso: string): Promise<ScanEvent[]> {
     const u = new URL(`${API}me/calendarView`);
@@ -337,7 +341,7 @@ export function createGraphWriter(d: GraphWriterDeps) {
 
   /**
    * Move, resize or change the show as of one of my own events (step 13). Read first; refused (NotMineError, nothing
-   * sent) unless I organize it, nobody else is on it, it is single and timed, and it isn't Coopilot's. Only start,
+   * sent) unless I organize it, nobody else is on it, it is single and timed, and it isn't FocusTime's. Only start,
    * end and show as are sent; never the title or body, never a marker. Returns the event as it was.
    */
   async function updateOwn(id: string, after: OwnChange): Promise<OwnEditable> {
@@ -345,7 +349,7 @@ export function createGraphWriter(d: GraphWriterDeps) {
     if (!was) throw new GoneError("gone");
     if (!editableMine(was)) {
       d.log({ source: "outlook", op: "write_refused", kind: "not_mine" });
-      throw new NotMineError("Only your own events with nobody else on them can be changed from Coopilot");
+      throw new NotMineError("Only your own events with nobody else on them can be changed from FocusTime");
     }
     const patch: Record<string, unknown> = {};
     if (!sameInstant(was.start, after.start)) patch.start = toGraphTime(after.start);
@@ -431,7 +435,7 @@ export function createGraphWriter(d: GraphWriterDeps) {
   }
 
   /**
-   * Answer a meeting (step 16): read first and refuse (RsvpRefused, nothing sent) one I organize, a Coopilot event, one
+   * Answer a meeting (step 16): read first and refuse (RsvpRefused, nothing sent) one I organize, a FocusTime event, one
    * with nobody else, a cancelled one. Then one POST to accept, tentativelyAccept or decline; the organizer is always
    * told. Never a PATCH, DELETE or cancel: the meeting itself is not edited. Returns the meeting as it was.
    */

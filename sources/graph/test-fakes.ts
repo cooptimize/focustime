@@ -42,7 +42,7 @@ export function fakeGraph(opts: { owner?: string } = {}) {
     ...(withMarker ? { singleValueExtendedProperties: e.marker ? [{ id: MARKER_PROP, value: e.marker }] : [] } : {}),
   });
   const utc = (t: { dateTime: string }) => Temporal.Instant.from(`${t.dateTime}Z`).toString();
-  /** Add an event Coopilot did not create (no marker), or one with someone else's marker. */
+  /** Add an event FocusTime did not create (no marker), or one with someone else's marker. */
   function seed(e: Partial<Ev> & { start: string; end: string }) {
     const id = e.id ?? `EV${++n}`;
     events.set(id, { id, subject: "Someone's meeting", body: "", showAs: "busy", isReminderOn: true, marker: null, transactionId: null, ...e });

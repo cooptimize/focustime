@@ -93,7 +93,7 @@ export function createAzureClient(d: AzureDeps) {
   const timeoutMs = d.timeoutMs ?? 20_000;
 
   async function send(call: AzureCall, method: "GET" | "POST" | "PUT", url: string, body?: unknown): Promise<Response> {
-    if (!url.startsWith(`${ARM}/`)) throw new AzureError("refused", 0, "Coopilot only calls Azure Resource Manager");
+    if (!url.startsWith(`${ARM}/`)) throw new AzureError("refused", 0, "FocusTime only calls Azure Resource Manager");
     const token = await d.token();
     const started = performance.now();
     let res: Response;

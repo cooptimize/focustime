@@ -253,7 +253,7 @@ describe("follow-ups (step 7, step 13.5)", () => {
     expect((await t.run<{ followUps: unknown[] }>("followups.list", {})).followUps).toHaveLength(1);
   });
 
-  it("Delete is only for ones I added; Coopilot's own say to use Not needed", async () => {
+  it("Delete is only for ones I added; FocusTime's own say to use Not needed", async () => {
     const t = setup();
     const a = (await t.run<{ followUp: { id: number } }>("followup.add", { what: "Mine" })).followUp;
     const rule = t.plan.openRuleFollowUp({ kind: "slip", ruleKey: "slip:x", clientKey: "Adatum", who: "Adatum", what: "Heads-up to Adatum" })!;

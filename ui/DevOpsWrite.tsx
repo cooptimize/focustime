@@ -450,7 +450,7 @@ export function DevOpsWriteLog(): ReactNode {
   return (
     <section className="write-log dw-log" aria-label="DevOps write log">
       <h3>DevOps write log</h3>
-      <p className="muted">Every change Coopilot made in DevOps, with your write PAT. Nothing is ever deleted: undoing a new item sets it to Removed.</p>
+      <p className="muted">Every change FocusTime made in DevOps, with your write PAT. Nothing is ever deleted: undoing a new item sets it to Removed.</p>
       {error && <p className="set-problem">{error}</p>}
       {log && !log.entries.length && <p className="muted">Nothing written to DevOps yet.</p>}
       {log && log.entries.length > 0 && (

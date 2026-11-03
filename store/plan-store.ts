@@ -1,5 +1,5 @@
-// Local plan store (D23): SQLite through Node's built-in node:sqlite, under ~/.local/share/coopilot/.
-// Holds only Coopilot's own plan (day plans, picks, draft stories) and a few one-time markers.
+// Local plan store (D23): SQLite through Node's built-in node:sqlite, under ~/.local/share/focustime/.
+// Holds only FocusTime's own plan (day plans, picks, draft stories) and a few one-time markers.
 // Nothing here is ever written to DevOps, Outlook, Google or Dataverse.
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -17,6 +17,7 @@ export type { WriteEntry, WriteStatus } from "../plan/timebox.ts";
 const FK_OFF = "-- foreign keys off for a table rebuild";
 
 /** Ordered schema changes. Never edit a shipped one; add a new entry. */
+// Migration numbers, table names and the write logs' kind names are unchanged by the rename (R1): existing stores depend on them.
 export const MIGRATIONS: readonly string[] = [
   `CREATE TABLE day_plans (
      date TEXT PRIMARY KEY CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
@@ -269,7 +270,7 @@ export const MIGRATIONS: readonly string[] = [
      SELECT id, week_start, client_key, item_id, 'feature', 'must', title, item_type, url, blocks, NULL, NULL, created_at, updated_at FROM week_features ORDER BY id;
    DROP TABLE week_features;
    ALTER TABLE week_features_v8 RENAME TO week_features;`,
-  // 9 (step 12): timeboxes (local, optionally on Outlook), the Outlook events Coopilot created (by marker uid, with the
+  // 9 (step 12): timeboxes (local, optionally on Outlook), the Outlook events FocusTime created (by marker uid, with the
   // event id and the fields last confirmed), and the audit log of every external write with its prior values.
   `CREATE TABLE timeboxes (
      id INTEGER PRIMARY KEY,
@@ -694,7 +695,7 @@ const toTimebox = (r: Row): Timebox => ({
   showAs: ((r.show_as as string | null) ?? "busy") as Timebox["showAs"], outlookNote: (r.outlook_note as string | null) ?? null, conflict: json<Timebox["conflict"]>(r.conflict),
   removedAt: (r.removed_at as string | null) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
 });
-/** A help invite Coopilot sent (step 13). Attendees are Cooptimize staff (name and work email). */
+/** A help invite FocusTime sent (step 13). Attendees are Cooptimize staff (name and work email). */
 export type Invite = { id: number; uid: string; clientKey: string; itemId: number | null; pickId: number | null; timeboxId: number | null; title: string; url: string | null; start: string; end: string; attendees: Attendee[]; teams: boolean; note: string | null; eventId: string | null; status: "pending" | "sent" | "cancelled"; followUpId: number | null; createdAt: string; updatedAt: string };
 const toInvite = (r: Row): Invite => ({
   id: r.id as number, uid: r.uid as string, clientKey: r.client_key as string, itemId: (r.item_id as number | null) ?? null, pickId: (r.pick_id as number | null) ?? null, timeboxId: (r.timebox_id as number | null) ?? null,
@@ -1185,7 +1186,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       tx(() => {
         const r = db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row | undefined;
         if (!r) throw new PlanError(`No follow-up ${id}`);
-        if (!toFollowUp(r).byHand) throw new PlanError("Coopilot opened this one; use Not needed instead");
+        if (!toFollowUp(r).byHand) throw new PlanError("FocusTime opened this one; use Not needed instead");
         db.prepare("UPDATE picks SET follow_up_id = NULL WHERE follow_up_id = ?").run(id);
         db.prepare("UPDATE captures SET routed_id = NULL WHERE routed_as = 'follow_up' AND routed_id = ?").run(id);
         db.prepare("DELETE FROM follow_ups WHERE id = ?").run(id);
@@ -1430,7 +1431,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         chmodSync(bak, 0o600);
       }
       tx(() => {
-        // Coopilot's Outlook events and the audit log stay: they are what lets it find, undo and remove its own events.
+        // FocusTime's Outlook events and the audit log stay: they are what lets it find, undo and remove its own events.
         db.exec("UPDATE outlook_events SET timebox_id = NULL");
         for (const t of RESET_TABLES) db.exec(`DELETE FROM ${t}`);
       });
@@ -1691,7 +1692,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
       const r = db.prepare("SELECT * FROM outlook_events WHERE uid = ?").get(uid) as Row | undefined;
       return r ? toOwn(r) : null;
     },
-    /** Every Outlook event Coopilot created and hasn't deleted. */
+    /** Every Outlook event FocusTime created and hasn't deleted. */
     ownEvents(): OwnEvent[] {
       return (db.prepare("SELECT * FROM outlook_events WHERE deleted_at IS NULL ORDER BY created_at, uid").all() as Row[]).map(toOwn);
     },
@@ -1850,7 +1851,7 @@ export const backupPath = (path: string, from: number, stamp: string) => `${path
 function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":memory:") {
   db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
   const current = schemaVersion(db);
-  if (current > MIGRATIONS.length) throw new Error(`Plan store is from a newer Coopilot (schema ${current}); not opening it`);
+  if (current > MIGRATIONS.length) throw new Error(`Plan store is from a newer FocusTime (schema ${current}); not opening it`);
   // A store with data gets a full copy before any schema change (D125).
   if (current > 0 && current < MIGRATIONS.length && path !== ":memory:") {
     const bak = backupPath(path, current, now().toInstant().toString());

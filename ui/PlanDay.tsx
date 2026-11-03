@@ -4,7 +4,7 @@
 // menu. U4 (D396 to D399): the U3 type scale; rows without a checkbox (ticking is Today's), the size chip always; the
 // agenda open only on the selected block; Enter in the type box makes a draft story under the chosen feature and plans
 // it, Shift+Enter a plain intention ("not in DevOps"); features aren't picks, so they offer Draft stories instead.
-// Everything here is local: the actions only write Coopilot's plan store.
+// Everything here is local: the actions only write FocusTime's plan store.
 import { ModeArea } from "./ModeSwitch.tsx";
 import { planDayTitle } from "./nav.ts";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
@@ -654,7 +654,7 @@ function WeekDropStrip({ drag, planDate, colors, name, act, onDone }: { drag: Ad
   );
 }
 /** A right-pane row dragged onto a block on the left (step 15.2). */
-export const ADD_DRAG = "application/x-coopilot-add";
+export const ADD_DRAG = "application/x-focustime-add";
 type AddDrag = { clientKey: string; title: string; input: Record<string, unknown> };
 
 /** A row with one "+" that adds it to the selected block; drag it onto any block instead. Once added: a check. */
@@ -1007,7 +1007,7 @@ function TimeboxMyDay({ day, picks, weekFeatures, now, tz, onClose, onRan }: { d
         )}
         {anyOutlook && env.access && !canWrite && (
           <p className="tb-explain" role="note">
-            {env.access.access === "not_set_up" ? "Outlook isn't set up, so these stay in Coopilot." : env.access.message}{" "}
+            {env.access.access === "not_set_up" ? "Outlook isn't set up, so these stay in FocusTime." : env.access.message}{" "}
             {(env.access.access === "read_only" || env.access.access === "not_connected") && (
               <button type="button" className="mini" onClick={env.connectWrite}>
                 Reconnect Outlook

@@ -2,7 +2,7 @@ Paste everything below the line into Claude Code, started in this folder.
 
 ---
 
-You're building Coopilot with me, step 1 of Milestones 1–2. Read CLAUDE.md, docs/spec.md, docs/decisions.md and docs/open-questions.md first. Don't restart discovery; the design is settled in those files.
+You're building FocusTime with me, step 1 of Milestones 1–2. Read CLAUDE.md, docs/spec.md, docs/decisions.md and docs/open-questions.md first. Don't restart discovery; the design is settled in those files.
 
 Step 1 scope (authorized): the week model and the visual week grid, using sample data only. No real accounts, no network calls, no keyring use yet.
 

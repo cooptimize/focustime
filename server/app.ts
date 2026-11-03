@@ -16,9 +16,9 @@ export type AppOptions = {
   distDir?: string;
   /** Or hand UI requests to Vite (development). */
   devMiddleware?: (req: IncomingMessage, res: ServerResponse, next: () => void) => void;
-  /** Step 9: the view coopilot-open asked for (e.g. "capture"), taken once; null when none. */
+  /** Step 9: the view focustime-open asked for (e.g. "capture"), taken once; null when none. */
   takeOpenRequest?: () => Promise<string | null>;
-  /** Step 15.4 fix: open a fresh window with the current launch link (the host's coopilot-open); false when it can't. */
+  /** Step 15.4 fix: open a fresh window with the current launch link (the host's focustime-open); false when it can't. */
   reopen?: () => Promise<boolean>;
 };
 
@@ -35,10 +35,10 @@ const TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
-const SESSION_PAGE = `<!doctype html><meta charset="utf-8"><title>Coopilot</title>
+const SESSION_PAGE = `<!doctype html><meta charset="utf-8"><title>FocusTime</title>
 <body style="font:16px system-ui;padding:40px;max-width:640px">
-<h1 style="font-size:20px">Coopilot needs a fresh launch link</h1>
-<p>This page is protected by a token that changes every time Coopilot starts. Open Coopilot again from the launcher, with Super + Alt + C, or with <code>coopilot-open</code>. It replaces this window.</p>`;
+<h1 style="font-size:20px">FocusTime needs a fresh launch link</h1>
+<p>This page is protected by a token that changes every time FocusTime starts. Open FocusTime again from the launcher, with Super + Alt + C, or with <code>focustime-open</code>. It replaces this window.</p>`;
 
 function baseHeaders(res: ServerResponse, csp: boolean) {
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -82,10 +82,10 @@ export function createApp(opts: AppOptions) {
       }
       if (url.pathname.startsWith("/api/")) {
         res.writeHead(g.status, { "content-type": "application/json", "cache-control": "no-store" });
-        return res.end(JSON.stringify(g.status === 401 ? { ok: false, status: 401, code: LAUNCH_TOKEN_CODE, error: "Coopilot was restarted, so this window is out of date" } : { ok: false, status: 403, code: "forbidden", error: "Forbidden" }));
+        return res.end(JSON.stringify(g.status === 401 ? { ok: false, status: 401, code: LAUNCH_TOKEN_CODE, error: "FocusTime was restarted, so this window is out of date" } : { ok: false, status: 403, code: "forbidden", error: "Forbidden" }));
       }
       res.writeHead(g.status, { "content-type": "text/plain; charset=utf-8" });
-      return res.end(g.status === 401 ? "Coopilot was restarted: open it again" : "Forbidden");
+      return res.end(g.status === 401 ? "FocusTime was restarted: open it again" : "Forbidden");
     }
     if (g.action === "redirect") {
       res.writeHead(302, { location: g.location, "set-cookie": g.setCookie, "cache-control": "no-store" });
@@ -122,7 +122,7 @@ export function createApp(opts: AppOptions) {
       res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
       return res.end(JSON.stringify(out));
     }
-    // The launcher's one-shot request (coopilot-open --capture). Guarded like actions; POST so a link can't take it.
+    // The launcher's one-shot request (focustime-open --capture). Guarded like actions; POST so a link can't take it.
     if (url.pathname === "/api/open-request") {
       if (req.method !== "POST") {
         res.writeHead(405, { allow: "POST" });

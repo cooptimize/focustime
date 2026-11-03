@@ -1,6 +1,6 @@
 // Focus sounds (step 10 slice 5). Pure rules shared by the UI, the config and the server:
 // - which generated sound should play for a timer state, and when a soft chime marks a break;
-// - when media players are paused or resumed (only what Coopilot paused is resumed);
+// - when media players are paused or resumed (only what FocusTime paused is resumed);
 // - which playlist links are allowed (Spotify and YouTube only) and how each one opens.
 // No audio, no processes, no network here.
 
@@ -47,7 +47,7 @@ export function soundStep(prev: TimerLike, next: TimerLike, choice: SoundKind, o
 
 /**
  * Media control on a timer change. Pause when focus ends, stops or turns into a break; resume when a focus session
- * starts again, but only if Coopilot did the pausing (`pausedByUs`), so it never starts music nobody was playing.
+ * starts again, but only if FocusTime did the pausing (`pausedByUs`), so it never starts music nobody was playing.
  */
 export function mediaStep(prev: TimerLike, next: TimerLike, pausedByUs: boolean, enabled: boolean): { command: "pause" | "play" | null; pausedByUs: boolean } {
   if (!enabled) return { command: null, pausedByUs: false };

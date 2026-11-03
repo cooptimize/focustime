@@ -1,7 +1,7 @@
 // Notifications (step 15.5): the one path every notification takes. Each checker (reminders, the timer, my VM,
 // follow-ups, expiring secrets) asks `allows(kind)` before it marks its occasion, then `offer`s the notification; the
 // notifier applies Settings > Notifications (switch, quiet hours, holding during focus), keeps held ones in the plan
-// store until the session ends, collapses them into one, and routes a click: the notification itself opens Coopilot
+// store until the session ends, collapses them into one, and routes a click: the notification itself opens FocusTime
 // on the right view, a button runs its action. Showing it is the host's job (notify-send today, browser
 // notifications in a hosted version), so nothing here is machine-specific.
 import { collapse, gate, OPEN_KEY, type AnyKind, type Gate, type GateFacts, type Notice } from "../plan/notify.ts";
@@ -31,7 +31,7 @@ export type NotifierDeps = {
   /** Settings > Notifications and the facts the gate needs now. */
   facts: () => Promise<GateFacts>;
   now: () => string;
-  /** Opens (or focuses) Coopilot on a route. */
+  /** Opens (or focuses) FocusTime on a route. */
   open: (route: string) => Promise<void> | void;
   /** Runs a notification's button (e.g. timer Done, VM Start). */
   act: (n: Notice, key: string) => Promise<void>;
@@ -138,7 +138,7 @@ export function createNotifier(d: NotifierDeps): Notifier {
       return keep.length;
     },
     test: async () => {
-      deliver({ kind: "test", key: `test:${d.now()}`, title: "Coopilot", body: "Test notification. Click it to open Settings > Notifications.", buttons: [], route: "settings:notifications", at: d.now() });
+      deliver({ kind: "test", key: `test:${d.now()}`, title: "FocusTime", body: "Test notification. Click it to open Settings > Notifications.", buttons: [], route: "settings:notifications", at: d.now() });
     },
     show: (n, onClick) => deliver(n, [], onClick),
     sweep: async () => {

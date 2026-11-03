@@ -1,6 +1,6 @@
 // Timeboxes (step 12): a stretch of a day's timeline given to a client and (usually) a pick or week list item. Stored
-// locally; optionally put on Outlook as a Busy event Coopilot owns. Pure: validation, the event's fields, planned time
-// with timeboxes, whether Outlook needs a change, which Outlook events are Coopilot's own, and how a write is undone.
+// locally; optionally put on Outlook as a Busy event FocusTime owns. Pure: validation, the event's fields, planned time
+// with timeboxes, whether Outlook needs a change, which Outlook events are FocusTime's own, and how a write is undone.
 import type { CalEvent, IsoDate } from "../week/types.ts";
 
 /** The three answers to a meeting (step 16), as Graph's responseStatus names them. */
@@ -33,7 +33,7 @@ export type Timebox = {
   updatedAt: string;
 };
 
-/** Outlook's show as values Coopilot can set. */
+/** Outlook's show as values FocusTime can set. */
 export type OutlookShowAs = "free" | "tentative" | "busy" | "oof" | "workingElsewhere";
 export const SHOW_AS_VALUES: readonly OutlookShowAs[] = ["busy", "tentative", "free", "oof", "workingElsewhere"];
 export const SHOW_AS_LABEL: Record<OutlookShowAs, string> = { busy: "Busy", tentative: "Tentative", free: "Free", oof: "Away", workingElsewhere: "Working elsewhere" };
@@ -74,7 +74,7 @@ export const snap = (minutes: number, step = TIMEBOX_SNAP) => Math.round(minutes
 /** One attendee of a help invite (step 13): Cooptimize staff only. */
 export type Attendee = { name: string; email: string };
 /**
- * The fields Coopilot writes. Timeboxes: subject, body, start, end, show as, no reminder. Invites (step 13) add the
+ * The fields FocusTime writes. Timeboxes: subject, body, start, end, show as, no reminder. Invites (step 13) add the
  * attendees and whether it is a Teams meeting.
  */
 export type Fields = {
@@ -82,11 +82,19 @@ export type Fields = {
   /** Step 16 (D284), RSVP only: my response, the note sent with it, a proposed new time, and the organizer's name. */
   response?: string; comment?: string; proposed?: { start: string; end: string }; organizer?: string;
 };
-/** The fields Coopilot writes to Outlook: "<client>: <title>", its show as (Busy by default), no reminder, the DevOps link in the body. */
+/** The last line of a timebox event's body. */
+export const BODY_TAG = "Timebox planned in FocusTime.";
+/**
+ * The same line as written before the rename (R1). Kept on purpose: events created before Nov 2 carry it, and a body
+ * that only differs by this line counts as the same, so the rename never rewrites existing Outlook events.
+ */
+const LEGACY_BODY_TAG = "Timebox planned in Coopilot.";
+const sameBody = (a: string, b: string) => a.replace(LEGACY_BODY_TAG, BODY_TAG) === b.replace(LEGACY_BODY_TAG, BODY_TAG);
+/** The fields FocusTime writes to Outlook: "<client>: <title>", its show as (Busy by default), no reminder, the DevOps link in the body. */
 export function outlookFields(tb: Pick<Timebox, "title" | "url" | "start" | "end"> & { showAs?: OutlookShowAs }, clientName: string): Fields {
   return {
     subject: `${clientName}: ${tb.title}`.slice(0, 255),
-    body: [tb.url ?? "", "Timebox planned in Coopilot."].filter(Boolean).join("\n\n"),
+    body: [tb.url ?? "", BODY_TAG].filter(Boolean).join("\n\n"),
     start: Temporal.Instant.from(tb.start).toString(),
     end: Temporal.Instant.from(tb.end).toString(),
     showAs: tb.showAs ?? "busy",
@@ -94,11 +102,11 @@ export function outlookFields(tb: Pick<Timebox, "title" | "url" | "start" | "end
   };
 }
 
-/** What Coopilot last wrote and confirmed for a timebox's event. */
+/** What FocusTime last wrote and confirmed for a timebox's event. */
 export type OwnEvent = { uid: string; timeboxId: number | null; eventId: string; fields: Fields; deletedAt: string | null };
 
 export type SyncOp = "create" | "update" | "delete";
-const same = (a: Fields, b: Fields) => a.subject === b.subject && a.body === b.body && ms(a.start) === ms(b.start) && ms(a.end) === ms(b.end) && a.showAs === b.showAs;
+const same = (a: Fields, b: Fields) => a.subject === b.subject && sameBody(a.body, b.body) && ms(a.start) === ms(b.start) && ms(a.end) === ms(b.end) && a.showAs === b.showAs;
 /**
  * Does Outlook need a change to match the timebox? Create when it should be on Outlook and isn't; update when what
  * was written differs; delete when the timebox is removed or "Put on Outlook" is off. Null when in step.
@@ -112,11 +120,11 @@ export function syncNeed(tb: Pick<Timebox, "outlook" | "removedAt"> | null, own:
   return null;
 }
 
-/** Coopilot's own Outlook events, by the ids it recorded when it wrote them (reads can't see the marker). */
+/** FocusTime's own Outlook events, by the ids it recorded when it wrote them (reads can't see the marker). */
 export function ownEventIds(own: readonly OwnEvent[]): Set<string> {
   return new Set(own.filter((o) => !o.deletedAt).map((o) => `outlook:${o.eventId}`));
 }
-/** Calendar events without Coopilot's own: they show once, as timeboxes, and never count as meetings. */
+/** Calendar events without FocusTime's own: they show once, as timeboxes, and never count as meetings. */
 export function withoutOwn<E extends Pick<CalEvent, "id">>(events: readonly E[], own: ReadonlySet<string>): E[] {
   return own.size ? events.filter((e) => !own.has(e.id)) : [...events];
 }

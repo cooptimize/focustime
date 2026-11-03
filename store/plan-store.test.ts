@@ -9,7 +9,7 @@ const NY = "America/New_York";
 let clock = Temporal.ZonedDateTime.from("2026-11-02T08:01:00-05:00[America/New_York]");
 const now = () => clock;
 const fresh = () => {
-  const path = join(mkdtempSync(join(tmpdir(), "coopilot-plan-")), "data", "plan.db");
+  const path = join(mkdtempSync(join(tmpdir(), "focustime-plan-")), "data", "plan.db");
   return { path, store: createPlanStore({ path, now }) };
 };
 const item = { half: "AM" as const, clientKey: "Adatum", kind: "item" as const, itemId: 101, title: "Story", itemType: "User Story", itemUrl: "https://dev.azure.com/x/y/_workitems/edit/101", size: "M" as const };
@@ -28,7 +28,7 @@ describe("plan store", () => {
   });
 
   it("migrates a step 6 store to the time model with a private backup first, keeping every pick (D125)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     mkdirSync(dir, { recursive: true });
     const old = new DatabaseSync(path);
@@ -81,13 +81,13 @@ describe("plan store", () => {
     expect(store.removeUnavailable(u.id)).toBe(true);
   });
 
-  it("refuses a store from a newer Coopilot instead of guessing", () => {
+  it("refuses a store from a newer FocusTime instead of guessing", () => {
     const { path, store } = fresh();
     store.close();
     const db = new DatabaseSync(path);
     db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(MIGRATIONS.length + 5, "x");
     db.close();
-    expect(() => createPlanStore({ path, now })).toThrow(/newer Coopilot/);
+    expect(() => createPlanStore({ path, now })).toThrow(/newer FocusTime/);
   });
 
   it("timestamps carry offset and time zone", () => {
@@ -302,7 +302,7 @@ describe("week plan by client (step 11)", () => {
   const W = "2026-11-09";
   const base = { weekStart: W, clientKey: "Adatum", title: "T", itemType: "Feature", url: null };
   it("migration 8 turns committed features into musts and placements into pins, ids kept, with a backup first", () => {
-    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path);
     old.exec("PRAGMA foreign_keys = ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
@@ -329,7 +329,7 @@ describe("week plan by client (step 11)", () => {
   });
 
   it("migration 19 rounds half-block features up to whole blocks and gives stories a size, ids and pins kept, with a backup", () => {
-    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path);
     old.exec("PRAGMA foreign_keys = ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
@@ -405,7 +405,7 @@ describe("week plan by client (step 11)", () => {
 
 describe("quick capture (step 9)", () => {
   it("migration 7 keeps draft stories and the picks that point at them, and lets a draft have no feature", () => {
-    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path);
     old.exec("PRAGMA foreign_keys = ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
@@ -455,7 +455,7 @@ describe("quick capture (step 9)", () => {
   });
 
   it("migration 11 renames loops to follow-ups and moves notes into where I left off, with a backup first", () => {
-    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path);
     old.exec("PRAGMA foreign_keys = ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
@@ -547,7 +547,7 @@ describe("timeboxes, own Outlook events and the write log (step 12)", () => {
   });
 
   it("migration 15 rebuilds the write log keeping every row and undo link, and then takes RSVP writes (D284)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path, { enableForeignKeyConstraints: false });
     old.exec("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
@@ -567,7 +567,7 @@ describe("timeboxes, own Outlook events and the write log (step 12)", () => {
     store.close();
   });
 
-  it("reset empties timeboxes but keeps Coopilot's Outlook events and the audit log", () => {
+  it("reset empties timeboxes but keeps FocusTime's Outlook events and the audit log", () => {
     const { store } = fresh();
     const t = store.addTimebox({ ...box, outlook: true });
     store.recordOwnEvent(t.uid, t.id, "E1", F);
@@ -616,7 +616,7 @@ describe("Roadmap snapshots (step 16, D280)", () => {
 describe("week plan duplicates (U3, D388)", () => {
   const W = "2026-11-09";
   it("migration 21 keeps the oldest row for an item under a client key in another letter case, moves its pins, and logs the removal", () => {
-    const dir = mkdtempSync(join(tmpdir(), "coopilot-plan-"));
+    const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path);
     old.exec("PRAGMA foreign_keys = ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");

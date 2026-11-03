@@ -113,5 +113,5 @@ export type WeekPlanRecord = { weekStart: IsoDate; committedAt: ZonedStamp | nul
 /** How a follow-up was closed (step 13.5), optional. */
 export const CLOSE_HOW = ["teams", "email", "devops", "call"] as const;
 export type CloseHow = (typeof CLOSE_HOW)[number];
-/** Why Coopilot opened a heads-up: the trigger, the items, when (step 13.5). */
+/** Why FocusTime opened a heads-up: the trigger, the items, when (step 13.5). */
 export type FollowUpOrigin = { trigger: string; items: { itemId: number | null; title: string }[]; at: string };

@@ -9,6 +9,8 @@ export type AuthStatus = {
   state: "signed_in" | "signed_out" | "unavailable";
   person: Person | null;
   message: string | null;
+  /** R1: the one-time keyring move from Coopilot failed; what to do (no secret, no value). */
+  renameNote?: string | null;
 };
 
 /** My VM, kept per signed-in person (their object id), in account state. */
@@ -41,7 +43,7 @@ export type VmStatus = {
   canStart: boolean;
   canStop: boolean;
   schedule: { label: string; time: string; status: Shutdown["status"]; timeZoneId: string } | null;
-  /** A schedule change Coopilot will put back, with plain words for it. */
+  /** A schedule change FocusTime will put back, with plain words for it. */
   change: (ShutdownChange & { text: string }) | null;
   /** Today's warning: the change is still in place after its day. */
   stillChanged: boolean;

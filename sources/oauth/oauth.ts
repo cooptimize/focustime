@@ -125,10 +125,10 @@ export type ConnectOptions = {
 export type WriteAccess = { status: "write" } | { status: "read_only" | "not_connected" | "unavailable"; message: string };
 type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo";
 
-const DONE_PAGE = (ok: boolean) => `<!doctype html><meta charset="utf-8"><title>Coopilot</title>
+const DONE_PAGE = (ok: boolean) => `<!doctype html><meta charset="utf-8"><title>FocusTime</title>
 <body style="font:16px system-ui;padding:40px;max-width:560px">
 <h1 style="font-size:20px">${ok ? "Signed in" : "Sign-in not completed"}</h1>
-<p>${ok ? "You can close this tab and go back to Coopilot." : "You can close this tab. Coopilot will show what happened."}</p>`;
+<p>${ok ? "You can close this tab and go back to FocusTime." : "You can close this tab. FocusTime will show what happened."}</p>`;
 
 export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
   const now = deps.now ?? (() => Date.now());
@@ -146,7 +146,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
       return await deps.keyring.get(p.clientSecretAccount);
     } catch (e) {
       if (e instanceof SecretError && e.kind === "not_found")
-        throw new AuthFailure("misconfigured", `No ${p.label} client secret in the keyring (service coopilot, account ${p.clientSecretAccount})`);
+        throw new AuthFailure("misconfigured", `No ${p.label} client secret in the keyring (service focustime, account ${p.clientSecretAccount})`);
       throw new AuthFailure("keyring", "Secret storage unavailable (Secret Service). Unlock the keyring and retry");
     }
   }
@@ -214,21 +214,21 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
    * read-only, and reading is untouched (its token and the stored refresh token stay as they are).
    */
   async function writeAccess(): Promise<WriteAccess> {
-    if (!p.writeScope) return { status: "read_only", message: `${p.label} is read-only in Coopilot` };
+    if (!p.writeScope) return { status: "read_only", message: `${p.label} is read-only in FocusTime` };
     try {
       await accessToken("write");
     } catch (e) {
       access.delete("write");
       if (e instanceof AuthFailure && e.kind === "not_connected") return { status: "not_connected", message: e.message };
       if (e instanceof AuthFailure && (e.kind === "network" || e.kind === "keyring")) return { status: "unavailable", message: e.message };
-      return { status: "read_only", message: `Coopilot can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings > Connections and allow calendar changes` };
+      return { status: "read_only", message: `FocusTime can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings > Connections and allow calendar changes` };
     }
     // Granted scopes come back as full URIs or bare names; compare the bare names.
     const bare = (x: string) => x.split("/").pop()!.toLowerCase();
     const granted = new Set((access.get("write")?.scope ?? "").split(" ").map(bare));
     if (!p.writeScope.split(" ").filter((x) => x !== "offline_access").every((w) => granted.has(bare(w)))) {
       access.delete("write");
-      return { status: "read_only", message: `Coopilot can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings > Connections and allow calendar changes` };
+      return { status: "read_only", message: `FocusTime can't change your ${p.label} calendar yet. Reconnect ${p.label} in Settings > Connections and allow calendar changes` };
     }
     return { status: "write" };
   }

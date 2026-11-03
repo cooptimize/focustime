@@ -190,7 +190,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
   /** Q47: without a story level the backlog levels can't tell stories from features, so the client fails instead of guessing. */
   function needStoryLevel(meta: Metadata, ctx: Ctx, project: string) {
     if (meta.levels.story.size === 0)
-      throw new DevOpsFailure("error", `The process for ${ctx.projectName || project} (${ctx.client}) has no story level in its backlog levels, so Coopilot can't tell stories from features there. Nothing is guessed; check the project's backlog configuration`);
+      throw new DevOpsFailure("error", `The process for ${ctx.projectName || project} (${ctx.client}) has no story level in its backlog levels, so FocusTime can't tell stories from features there. Nothing is guessed; check the project's backlog configuration`);
   }
 
   async function fetchClient(ref: ClientRef, target: DevOpsTarget, watch: readonly number[] = [], features: readonly number[] = []): Promise<{ items: WorkItem[]; children: WorkItem[]; watched: WorkItem[]; committed: WorkItem[] }> {

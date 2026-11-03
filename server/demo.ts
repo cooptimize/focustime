@@ -1,6 +1,6 @@
 // Demo mode (step 15, D272): a whole action context built from fictional data, with its own plan store in memory and
 // its config held in memory. It is given no fetch, keyring, writer, link launcher or export, and dispatch refuses
-// every outward action while it is on, so nothing leaves Coopilot and nothing real is read or written.
+// every outward action while it is on, so nothing leaves FocusTime and nothing real is read or written.
 import { parseConfig } from "../config/schema.ts";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { dispatch } from "../actions/dispatch.ts";

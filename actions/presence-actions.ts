@@ -38,7 +38,7 @@ const bad = (error: string, status = 400): ActionResponse => ({ ok: false, statu
 
 function accessOf(e: unknown): { access: TeamsAccess; message: string } {
   if (e instanceof AuthFailure) {
-    if (e.kind === "consent") return { access: "consent", message: "Coopilot needs your OK to use Teams status. Choose Allow Teams status" };
+    if (e.kind === "consent") return { access: "consent", message: "FocusTime needs your OK to use Teams status. Choose Allow Teams status" };
     if (e.kind === "not_connected" || e.kind === "expired") return { access: "signed_out", message: "Sign in with Microsoft to set your Teams status" };
     return { access: "unavailable", message: e.message };
   }
@@ -121,7 +121,7 @@ async function syncOnce(ctx: PresenceContext, plan: PlanStore): Promise<TeamsSta
     try {
       const mine = await client.mine();
       if (manualChange(state, mine.availability, nowIso)) {
-        plan.logTeamsStatus({ op: "left", status: state.set, minutes: null, result: "done", message: "Changed in Teams: Coopilot leaves it until the next session" });
+        plan.logTeamsStatus({ op: "left", status: state.set, minutes: null, result: "done", message: "Changed in Teams: FocusTime leaves it until the next session" });
         return save({ ...state, manual: true, checkedAt: nowIso });
       }
       return save({ ...state, checkedAt: nowIso });

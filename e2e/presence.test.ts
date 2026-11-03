@@ -70,7 +70,7 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
   it("the VM notifications open the header chip's menu", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("2");
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent("coopilot:open-route", { detail: "vm" })));
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("focustime:open-route", { detail: "vm" })));
     await expect.poll(() => page.getByRole("menuitem", { name: /Delay shutdown 1h/ }).count(), { timeout: 10_000 }).toBe(1);
     await page.close();
   }, T);

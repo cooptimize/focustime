@@ -83,8 +83,8 @@ function nowOverride(): string | undefined {
   }
 }
 
-/** Step 16.2: the last place, so reopening (a new window from coopilot-open) lands where the last one was. */
-const LOC_KEY = "coopilot.loc";
+/** Step 16.2: the last place, so reopening (a new window from focustime-open) lands where the last one was. */
+const LOC_KEY = "focustime.loc";
 function storedLoc(): Loc | null {
   try {
     const h = localStorage.getItem(LOC_KEY);
@@ -657,7 +657,7 @@ export function App() {
       await call("demo.set", { on });
       setPd(null);
       pdTried.current = null;
-      setNotice(on ? "Demo data on: fictional clients and work. Nothing leaves Coopilot" : "Demo data off: your own data again");
+      setNotice(on ? "Demo data on: fictional clients and work. Nothing leaves FocusTime" : "Demo data off: your own data again");
       reloadRef.current();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Couldn't switch demo mode");
@@ -698,7 +698,7 @@ export function App() {
   const disconnect = useCallback(
     async (src: "outlook" | "google") => {
       const name = src === "outlook" ? "Outlook" : "Google";
-      if (!window.confirm(`Disconnect ${name}? Coopilot forgets its sign-in and cached ${name} events. Nothing changes in ${name}.`)) return;
+      if (!window.confirm(`Disconnect ${name}? FocusTime forgets its sign-in and cached ${name} events. Nothing changes in ${name}.`)) return;
       await disconnectSource(src).catch(() => setNotice(`Could not disconnect ${name}`));
       void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true });
     },
@@ -795,8 +795,8 @@ export function App() {
     return () => window.removeEventListener(ROUTE_EVENT, on);
   }, []);
 
-  // Step 9: coopilot-open --capture leaves a request; take it on load, when the window gains focus, and every few
-  // seconds while it has focus (the global key may be pressed while Coopilot is already in front).
+  // Step 9: focustime-open --capture leaves a request; take it on load, when the window gains focus, and every few
+  // seconds while it has focus (the global key may be pressed while FocusTime is already in front).
   const hasData = !!data;
   useEffect(() => {
     if (!hasData) return;
@@ -1168,8 +1168,8 @@ export function App() {
     return (
       <div className="center-note">
         {opening}
-        <h1>Reopen Coopilot</h1>
-        <p>Coopilot was restarted, so this window is out of date. Reopen it to continue; the new window replaces this one.</p>
+        <h1>Reopen FocusTime</h1>
+        <p>FocusTime was restarted, so this window is out of date. Reopen it to continue; the new window replaces this one.</p>
         <ReopenButton />
       </div>
     );
@@ -1265,7 +1265,7 @@ export function App() {
   return (
     <>
     {opening}
-    {welcome && <MomentOverlay line="Welcome to Coopilot. Here's your week." onDone={() => setWelcome(false)} />}
+    {welcome && <MomentOverlay line="Welcome to FocusTime. Here's your week." onDone={() => setWelcome(false)} />}
     {closing && <CloseReverse musts={closing.musts} onDone={() => setClosing(null)} />}
     <SampleSources.Provider value={samples}>
     <DevOpsWork.Provider value={work}>
@@ -1281,10 +1281,10 @@ export function App() {
         <div className="brand">
           <button type="button" className="brand-home" onClick={() => setView("today")} title="Today">
             <WeekMark height={18} />
-            <span className="name">Coopilot</span>
+            <span className="name">FocusTime</span>
           </button>
           {data.demo && (
-            <button type="button" className="demo-tag" onClick={() => setSettingsAt("display")} title="Demo mode: fictional data, nothing leaves Coopilot. Turn it off in Settings > Display">
+            <button type="button" className="demo-tag" onClick={() => setSettingsAt("display")} title="Demo mode: fictional data, nothing leaves FocusTime. Turn it off in Settings > Display">
               Demo data
             </button>
           )}
@@ -1347,7 +1347,7 @@ export function App() {
 
       {!data.config.ok && (
         <div className="config-banner" role="alert">
-          <strong>{data.config.created ? "Coopilot created a starter config. Fill it in to show your focus blocks." : "Config needs attention. Focus blocks are hidden until it is fixed."}</strong>
+          <strong>{data.config.created ? "FocusTime created a starter config. Fill it in to show your week." : "Config needs attention. Focus blocks are hidden until it is fixed."}</strong>
           <span className="muted"> {data.config.path}</span>
           <ul>
             {data.config.errors.map((e) => (

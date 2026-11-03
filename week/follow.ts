@@ -1,4 +1,4 @@
-// Which clients Coopilot follows (step 6d): DevOps is fetched, and Open half-days offer work, only for these.
+// Which clients FocusTime follows (step 6d): DevOps is fetched, and Open half-days offer work, only for these.
 // Pure: Focus Time patterns (mine), today and the settings in, a state with its reason out.
 import type { FocusPattern, IsoDate } from "./types.ts";
 

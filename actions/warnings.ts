@@ -25,7 +25,7 @@ export async function refreshTodayWarnings(ctx: WarningsContext): Promise<number
     cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(weekStart).catch(() => null) : null,
     cfg.google ? ctx.makeGoogle(cfg.google, tz).load(weekStart).catch(() => null) : null,
   ]);
-  // Coopilot's own timebox events are not meetings (step 12).
+  // FocusTime's own timebox events are not meetings (step 12).
   const events: CalEvent[] = withoutOwn([...(outlook?.items ?? []), ...(google?.items ?? [])], ownEventIds(plan.ownEvents()));
   const sunday = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
   const week = buildWeek({ weekStart, patterns: [], events, config: cfg.week, unavailable: plan.unavailableBetween(weekStart, sunday), flex: plan.flexBetween(weekStart, sunday) });

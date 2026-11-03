@@ -1,4 +1,4 @@
-// One row per pick (step 14.5, D259): a pick is untimed, timed in Coopilot, or timed and on Outlook. "+ time" and the
+// One row per pick (step 14.5, D259): a pick is untimed, timed in FocusTime, or timed and on Outlook. "+ time" and the
 // time editor offer the block's free gaps; an already-timed pick's own timebox counts as free, so the list never says
 // "no free time" because of it, and "Keep current" comes first. Drag math for the card timelines. Pure.
 import type { Slot } from "../week/types.ts";

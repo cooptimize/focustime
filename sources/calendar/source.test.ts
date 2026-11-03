@@ -15,7 +15,7 @@ const NOW = Temporal.Instant.from("2026-11-02T13:02:00Z"); // 8:02 AM New York
 type Kind = "outlook" | "google";
 
 function setup(kind: Kind, scenario: ApiScenario, opts: { connected?: boolean; calendars?: string[]; cacheDir?: string; locked?: boolean } = {}) {
-  const cacheDir = opts.cacheDir ?? mkdtempSync(join(tmpdir(), "coopilot-cal-"));
+  const cacheDir = opts.cacheDir ?? mkdtempSync(join(tmpdir(), "focustime-cal-"));
   const logs: LogRecord[] = [];
   const api = fakeApis(scenario);
   const keyring = memoryKeyring({

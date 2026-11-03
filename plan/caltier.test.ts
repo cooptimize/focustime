@@ -6,20 +6,20 @@ const facts = (over: Partial<EditFacts> = {}): EditFacts => ({ isOrganizer: true
 const TB = "tb-0b6c1d2e-3f40-4152-8a6b-7c8d9e0f1a2b";
 const INV = "inv-0b6c1d2e-3f40-4152-8a6b-7c8d9e0f1a2b";
 
-describe("calendar editing tiers (Coopilot only edits what it created or what only I can see)", () => {
+describe("calendar editing tiers (FocusTime only edits what it created or what only I can see)", () => {
   it("puts each event in one tier", () => {
-    expect(tierOf(ol, facts({ marker: TB }))).toBe("coopilot");
+    expect(tierOf(ol, facts({ marker: TB }))).toBe("focustime");
     expect(tierOf(ol, facts({ marker: INV, others: 2 }))).toBe("invite");
     expect(tierOf(ol, facts())).toBe("mine");
     expect(tierOf(ol, facts({ others: 1 }))).toBe("meeting");
     expect(tierOf(ol, facts({ isOrganizer: false }))).toBe("meeting");
     expect(tierOf(ol, null)).toBe("unknown");
     expect(tierOf({ source: "google" }, facts())).toBe("readonly");
-    // A marker that isn't Coopilot's shape gives no rights.
+    // A marker that isn't FocusTime's shape gives no rights.
     expect(tierOf(ol, facts({ marker: "evil", others: 3 }))).toBe("meeting");
   });
 
-  it("Coopilot events: move, resize, retitle, show as and delete", () => {
+  it("FocusTime events: move, resize, retitle, show as and delete", () => {
     const x = eventEdit(ol, facts({ marker: TB }), true);
     for (const a of ["move", "resize", "retitle", "show_as", "delete", "open"] as const) expect(allows(x, a)).toBe(true);
     expect(allows(x, "cancel")).toBe(false);

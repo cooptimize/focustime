@@ -3,7 +3,7 @@
 // no detail rows covers every weekday from its start to its end date (D109).
 import type { IsoDate } from "./types.ts";
 
-/** A Time Off Tracker row as read (only the fields Coopilot selects). */
+/** A Time Off Tracker row as read (only the fields FocusTime selects). */
 export type PtoTrackerRow = {
   coop_timeofftrackerid: string;
   coop_timeoffstartdate: string | null;
@@ -17,7 +17,7 @@ export type PtoDetailRow = {
   coop_date: string | null;
 };
 
-/** The columns Coopilot reads, per table (selected or filtered on). A missing one is reported by name (D108). */
+/** The columns FocusTime reads, per table (selected or filtered on). A missing one is reported by name (D108). */
 export const PTO_TRACKER_COLUMNS = ["coop_timeofftrackerid", "coop_timeoffstartdate", "coop_enddate", "coop_title"] as const;
 export const PTO_TRACKER_FILTER_COLUMNS = ["_coop_employee_value", "statecode"] as const;
 export const PTO_DETAIL_COLUMNS = ["_coop_timeofftracker_value", "coop_date"] as const;

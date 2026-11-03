@@ -202,9 +202,9 @@ describe("each write", () => {
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 500, date: "2026-11-20" } })).toMatchObject({ status: 409 });
   });
   it("create a story from a draft: type from the requirement backlog, parent link, me, area and iteration from the parent", async () => {
-    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "[Coopilot test] safe to remove", size: "S" });
+    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "[FocusTime test] safe to remove", size: "S" });
     const p = await s.preview({ kind: "create", draftId: d.id, description: "Desc", acceptance: "AC" });
-    expect(p.item).toBe("New User Story: [Coopilot test] safe to remove");
+    expect(p.item).toBe("New User Story: [FocusTime test] safe to remove");
     expect(p.links[0]).toContain("#437");
     const r = await s.confirm(p);
     expect(r.confirmed).toBe(true);
@@ -341,14 +341,14 @@ describe("undo of each kind", () => {
   });
   const undo = async (id: number) => s.write({ kind: "undo", writeId: id });
   it("the live sequence: create, comment, state, then undo state, comment and create (Removed, draft and picks back)", async () => {
-    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "[Coopilot test] safe to remove", size: "S" });
+    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "[FocusTime test] safe to remove", size: "S" });
     const pick = s.plan.addPick({ date: "2026-11-03", half: "AM", clientKey: COOP, kind: "draft", draftId: d.id, title: d.title, size: "S" } as never);
     const created = await s.write({ kind: "create", draftId: d.id });
     const id = created.entry.itemId!;
     // Draft replaced everywhere it was referenced: its pick is now the item, and the draft left the lists.
     expect(s.plan.getPick(pick.id)).toMatchObject({ kind: "item", itemId: id, draftId: null, itemUrl: `https://dev.azure.com/cooptimize/Cooptimize%20Project/_workitems/edit/${id}` });
     expect(s.plan.drafts().some((x) => x.id === d.id)).toBe(false);
-    const comment = await s.write({ kind: "comment", itemId: id, text: "Coopilot write check" });
+    const comment = await s.write({ kind: "comment", itemId: id, text: "FocusTime write check" });
     const state = await s.write({ kind: "state", itemId: id, state: "Active" });
     // Only the newest change can be undone first.
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "undo", writeId: created.entry.id } })).toMatchObject({ status: 409 });

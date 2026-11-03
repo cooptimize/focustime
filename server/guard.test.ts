@@ -3,7 +3,7 @@ import { checkRequest, type RequestFacts } from "./guard.ts";
 
 const TOKEN = "launch-token-abc123";
 const opts = { port: 5317, token: TOKEN };
-const base: RequestFacts = { method: "GET", path: "/", search: "", host: "127.0.0.1:5317", cookie: `coopilot_5317=${TOKEN}` };
+const base: RequestFacts = { method: "GET", path: "/", search: "", host: "127.0.0.1:5317", cookie: `focustime_5317=${TOKEN}` };
 const check = (over: Partial<RequestFacts>) => checkRequest({ ...base, ...over }, opts);
 
 describe("request guard", () => {
@@ -31,7 +31,7 @@ describe("request guard", () => {
 
   it("requires the token on every request", () => {
     expect(check({ cookie: undefined })).toMatchObject({ action: "deny", status: 401 });
-    expect(check({ cookie: "coopilot_5317=wrong" })).toMatchObject({ action: "deny", status: 401 });
+    expect(check({ cookie: "focustime_5317=wrong" })).toMatchObject({ action: "deny", status: 401 });
     expect(check({ path: "/assets/app.js", cookie: undefined })).toMatchObject({ action: "deny", status: 401 });
   });
 
@@ -40,7 +40,7 @@ describe("request guard", () => {
     expect(r).toEqual({
       action: "redirect",
       location: "/?now=x",
-      setCookie: `coopilot_5317=${TOKEN}; HttpOnly; SameSite=Strict; Path=/`,
+      setCookie: `focustime_5317=${TOKEN}; HttpOnly; SameSite=Strict; Path=/`,
     });
     expect(check({ cookie: undefined, search: "?token=wrong" })).toMatchObject({ action: "deny", status: 401 });
   });
@@ -51,11 +51,11 @@ describe("request guard", () => {
   });
 
   it("lets a window with an old token ask to reopen, and nothing else (step 15.4 fix)", () => {
-    const old = { cookie: "coopilot_5317=old", origin: "http://127.0.0.1:5317" };
+    const old = { cookie: "focustime_5317=old", origin: "http://127.0.0.1:5317" };
     expect(check({ ...old, method: "POST", path: "/api/reopen" })).toEqual({ action: "allow" });
     expect(check({ ...old, method: "GET", path: "/api/reopen" })).toMatchObject({ action: "deny", status: 401 });
     expect(check({ ...old, method: "POST", path: "/api/action" })).toMatchObject({ action: "deny", status: 401 });
     expect(check({ ...old, method: "POST", path: "/api/reopen", origin: "http://evil.example" })).toMatchObject({ action: "deny", status: 403 });
-    expect(check({ cookie: "coopilot_5317=old", method: "POST", path: "/api/reopen" })).toMatchObject({ action: "deny", status: 403 });
+    expect(check({ cookie: "focustime_5317=old", method: "POST", path: "/api/reopen" })).toMatchObject({ action: "deny", status: 403 });
   });
 });

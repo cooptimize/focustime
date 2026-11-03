@@ -638,7 +638,7 @@ function RulerEvent({ e, tz, style }: { e: CalEvent; tz: string; style: CSSPrope
 /** Step 13: any calendar event opens its menu (click, right-click, Enter): only what its tier allows is enabled. */
 export function useEventMenu(e: CalEvent) {
   const menu = useMenu((env) => eventMenu(env, e));
-  const live = !e.unavailable && e.source !== "coopilot";
+  const live = !e.unavailable && e.source !== "focustime";
   const open = (ev: ReactMouseEvent | KeyboardEvent) => {
     ev.stopPropagation();
     const el = ev.currentTarget as HTMLElement;
@@ -660,7 +660,7 @@ function EventCard({ placed, tz, style, label = true }: { placed: PlacedEvent; t
     <div
       className={`event ${e.unavailable ? "unavailable" : kind} show-${show} ${placed.continuesBefore ? "cont-before" : ""} ${placed.continuesAfter ? "cont-after" : ""}`}
       style={style}
-      title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}${e.unavailable ? "" : "\nClick for what Coopilot can do with it"}`}
+      title={`${e.title}\n${eventRange(e, tz)} · ${sourceName(e, samples)} · ${showAsLabel(e)}${e.unavailable ? "" : "\nClick for what FocusTime can do with it"}`}
       {...menu}
     >
       {label && <><span className="ev-line">

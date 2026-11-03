@@ -144,7 +144,7 @@ describe("secrets from Settings never come back", () => {
     await new Promise<void>((ok) => app.listen(port, "127.0.0.1", ok));
     const body = JSON.stringify({ action: "secret.set", input: { account: "google-client-secret", value: SECRET } });
     const res = await new Promise<string>((ok, fail) => {
-      const req = request({ host: "127.0.0.1", port, path: "/api/action", method: "POST", headers: { host: `127.0.0.1:${port}`, origin: `http://127.0.0.1:${port}`, cookie: `coopilot_${port}=${TOKEN}`, "content-type": "application/json", "content-length": Buffer.byteLength(body) } }, (r) => {
+      const req = request({ host: "127.0.0.1", port, path: "/api/action", method: "POST", headers: { host: `127.0.0.1:${port}`, origin: `http://127.0.0.1:${port}`, cookie: `focustime_${port}=${TOKEN}`, "content-type": "application/json", "content-length": Buffer.byteLength(body) } }, (r) => {
         let s = "";
         r.on("data", (c) => (s += c));
         r.on("end", () => ok(`${r.statusCode} ${s}`));

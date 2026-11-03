@@ -30,7 +30,7 @@ describe("media pause and resume (playerctl)", () => {
     expect(mediaStep(focus(), brk, false, true)).toEqual({ command: "pause", pausedByUs: true });
     expect(mediaStep(focus(), focus({ running: false, ended: true }), false, true).command).toBe("pause");
     expect(mediaStep(brk, focus({ startedAt: "c" }), true, true)).toEqual({ command: "play", pausedByUs: false });
-    expect(mediaStep(null, focus(), false, true)).toEqual({ command: null, pausedByUs: false }); // nothing was paused by Coopilot
+    expect(mediaStep(null, focus(), false, true)).toEqual({ command: null, pausedByUs: false }); // nothing was paused by FocusTime
     expect(mediaStep(focus({ running: false, ended: true }), focus({ startedAt: "a" }), true, true).command).toBe("play"); // +15 after time's up
   });
   it("leaves media alone on a timer pause or resume, and does nothing when turned off", () => {

@@ -162,5 +162,5 @@ export async function settingsAction(ctx: SettingsContext, action: SettingsActio
   }
 }
 
-/** Default export location: ~/.local/share/coopilot/exports/plan-<stamp>.json. */
+/** Default export location: ~/.local/share/focustime/exports/plan-<stamp>.json. */
 export const exportPath = (dataDir: string, stamp: string) => join(dataDir, "exports", `plan-${stamp.replace(/[^0-9TZ]/g, "")}.json`);

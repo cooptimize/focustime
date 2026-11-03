@@ -175,7 +175,7 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
       const ol = cfg.outlook ? ctx.outlook(cfg) : null;
       if (!ol?.schedule) return bad("Outlook isn't set up, so free/busy can't be checked", 409);
       const dates = datesOf(r.from, r.to);
-      // My PTO days are out; my calendar from the usual reads (Coopilot's own timebox events are soft, not busy).
+      // My PTO days are out; my calendar from the usual reads (FocusTime's own timebox events are soft, not busy).
       const myPto = new Set((await ctx.dataverse(cfg).pto(r.from, r.to).catch(() => null))?.items.map((e) => e.date) ?? []);
       const windows = myWindows(cfg, dates, myPto);
       if (!windows.length) return { ok: true, data: { slots: [], checked: 0, problems: [...c.problems, "No working hours of yours in that range"] } satisfies SuggestData };
@@ -247,7 +247,7 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
       const ol = cfg.outlook ? ctx.outlook(cfg) : null;
       if (!ol?.write) return bad("Outlook isn't set up", 409);
       const access = await ol.write.access();
-      if (access.status !== "write") return bad(access.status === "unavailable" ? access.message : "Coopilot can't send invites yet. Reconnect Outlook in Settings > Connections and allow calendar changes.", 409);
+      if (access.status !== "write") return bad(access.status === "unavailable" ? access.message : "FocusTime can't send invites yet. Reconnect Outlook in Settings > Connections and allow calendar changes.", 409);
       const clientName = cfg.clientSettings[clientKey]?.name ?? clientKey;
       const url = devopsUrl(o.url);
       const f = inviteFields({ clientName, itemTitle: title, url, note, start, end, people: named, teams });

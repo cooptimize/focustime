@@ -1,5 +1,5 @@
 // Default, non-secret settings. Later these are loaded and validated from
-// ~/.config/coopilot/config.toml; for step 1 they are compiled in.
+// ~/.config/focustime/config.toml; for step 1 they are compiled in.
 import type { WeekConfig } from "../week/types.ts";
 import { legacyHours } from "./schema.ts";
 

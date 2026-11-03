@@ -9,6 +9,11 @@ export const COMMENTS_API = "7.1-preview.4";
 export const BATCH_LIMIT = 10;
 export const PARENT_REL = "System.LinkTypes.Hierarchy-Reverse";
 export const AC_FIELD = "Microsoft.VSTS.Common.AcceptanceCriteria";
+/**
+ * The comment an undo of Create in DevOps adds. Kept word for word from before the rename (R1): it is already posted
+ * on DevOps items, and one template keeps them consistent.
+ */
+export const REMOVED_COMMENT = "Removed by Coopilot: undo of an item created from Coopilot.";
 
 const ORG = /^[A-Za-z0-9][A-Za-z0-9-]{0,49}$/;
 export const validOrg = (org: string | null | undefined): org is string => typeof org === "string" && ORG.test(org);
@@ -110,7 +115,7 @@ export function createOps(s: CreateSpec): PatchOp[] {
 }
 /** Undo of a create: the type's Removed state with a comment, never a delete. */
 export function removeOps(rev: number, removedState: string): PatchOp[] {
-  return [test(rev), { op: "replace", path: "/fields/System.State", value: removedState }, { op: "add", path: "/fields/System.History", value: textToHtml("Removed by Coopilot: undo of an item created from Coopilot.") }];
+  return [test(rev), { op: "replace", path: "/fields/System.State", value: removedState }, { op: "add", path: "/fields/System.History", value: textToHtml(REMOVED_COMMENT) }];
 }
 
 /** The completed state to preselect: the first state in the Completed category. */

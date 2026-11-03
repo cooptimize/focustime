@@ -17,7 +17,7 @@ const ref = (k: string): ClientRef => ({ clientKey: k, clientName: k });
 function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | TargetsResult, opts: { ids?: number; cacheDir?: string; pickableTypes?: string[] } = {}) {
   const api = fakeDevOps(orgs, opts);
   const logs: LogRecord[] = [];
-  const cacheDir = opts.cacheDir ?? mkdtempSync(join(tmpdir(), "coopilot-devops-"));
+  const cacheDir = opts.cacheDir ?? mkdtempSync(join(tmpdir(), "focustime-devops-"));
   let clock = T0;
   const targetCalls: string[][] = [];
   const src = createDevOpsSource({
@@ -172,7 +172,7 @@ describe("setup problems are stated, never guessed", () => {
   });
 
   it("Dataverse unavailable: every client falls back to its own cache", async () => {
-    const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-devops-"));
+    const cacheDir = mkdtempSync(join(tmpdir(), "focustime-devops-"));
     await setup({ a: "agile" }, [target("A", "a")], { cacheDir }).src.load([ref("A")]);
     const s = setup({ a: "agile" }, { ok: false, message: "Dataverse unreachable" }, { cacheDir });
     const r = await s.src.load([ref("A"), ref("B")]);
@@ -204,7 +204,7 @@ describe("failure states, each with a plain message and the client's own cache",
   ];
 
   it.each(cases)("%s → %s, falls back to the last good items", async (scenario, status, message) => {
-    const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-devops-"));
+    const cacheDir = mkdtempSync(join(tmpdir(), "focustime-devops-"));
     const good = await setup({ a: "agile" }, [target("A", "a")], { cacheDir }).src.load([ref("A")]);
     const r = await setup({ a: scenario }, [target("A", "a")], { cacheDir }).src.load([ref("A")]);
     expect(byKey(r, "A")).toMatchObject({ status, fromCache: true, message: `${message}. Showing items from 8:02 AM` });
@@ -217,7 +217,7 @@ describe("failure states, each with a plain message and the client's own cache",
   });
 
   it("a failed batch never overwrites the snapshot with partial results", async () => {
-    const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-devops-"));
+    const cacheDir = mkdtempSync(join(tmpdir(), "focustime-devops-"));
     await setup({ a: "agile" }, [target("A", "a")], { cacheDir }).src.load([ref("A")]);
     const before = readFileSync(join(cacheDir, "devops", `${cacheKey("A")}.json`), "utf8");
     await setup({ a: "batch_fails" }, [target("A", "a")], { cacheDir }).src.load([ref("A")]);
@@ -356,7 +356,7 @@ describe("story level: children of epics and features (step 5)", () => {
   });
 
   it("children are cached with the items and come back on failure", async () => {
-    const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-devops-"));
+    const cacheDir = mkdtempSync(join(tmpdir(), "focustime-devops-"));
     await setup({ contoso: "portfolio" }, [target("Adatum", "contoso")], { cacheDir }).src.load([ref("Adatum")]);
     const [adatum] = await setup({ contoso: "offline" }, [target("Adatum", "contoso")], { cacheDir }).src.load([ref("Adatum")]);
     expect(adatum!.fromCache).toBe(true);
@@ -426,7 +426,7 @@ describe("Plan the week: features and epics (step 8)", () => {
     expect(s.calls.some((c) => c.url.includes("/_apis/wit/fields?"))).toBe(true);
   });
   it("caches for five minutes, and falls back to the last snapshot when DevOps fails", async () => {
-    const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-devops-"));
+    const cacheDir = mkdtempSync(join(tmpdir(), "focustime-devops-"));
     const s = setup({ planweek: "planweek" }, [target("Adatum", "planweek")], { cacheDir });
     await s.src.portfolio([ref("Adatum")]);
     const n = s.calls.length;

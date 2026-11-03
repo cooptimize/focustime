@@ -20,7 +20,7 @@ import { PlanRow } from "./plan/PlanRow.tsx";
 /** The next size when the chip is clicked: S, M, L, then S again. */
 export const nextSize = (s: Size): Size => SIZES[(SIZES.indexOf(s) + 1) % SIZES.length]!;
 
-export const PICK_DRAG = "application/x-coopilot-pick";
+export const PICK_DRAG = "application/x-focustime-pick";
 
 type Props = {
   pick: Pick;

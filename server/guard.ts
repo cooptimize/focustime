@@ -18,7 +18,7 @@ export type GuardResult =
   | { action: "redirect"; location: string; setCookie: string };
 
 export const REOPEN_PATH = "/api/reopen";
-export const cookieName = (port: number) => `coopilot_${port}`;
+export const cookieName = (port: number) => `focustime_${port}`;
 
 function same(a: string, b: string): boolean {
   const x = Buffer.from(a);
@@ -36,7 +36,7 @@ export function checkRequest(req: RequestFacts, opts: { port: number; token: str
     return { action: "deny", status: 403, reason: "Cross-site request" };
   if (req.path.startsWith("/api/") && req.origin === undefined) return { action: "deny", status: 403, reason: "API calls need a same-origin Origin" };
 
-  // Step 15.4 fix: a window with an old launch token may ask the host to open a fresh window (Reopen Coopilot). It
+  // Step 15.4 fix: a window with an old launch token may ask the host to open a fresh window (Reopen FocusTime). It
   // passes every check above (loopback Host, same-origin Origin), takes no input and returns nothing.
   if (req.path === REOPEN_PATH && req.method === "POST") return { action: "allow" };
 

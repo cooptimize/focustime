@@ -239,7 +239,7 @@ const longDate = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-U
 
 /**
  * The Coop brief: copyable markdown for one feature, for Coop on the client VM to propose user stories. Only DevOps
- * fields (and the client's name): nothing from Coopilot's plan, notes or follow-ups, and no assignees.
+ * fields (and the client's name): nothing from FocusTime's plan, notes or follow-ups, and no assignees.
  */
 export function briefMarkdown(o: { clientName: string; item: PortfolioItem; description: string | null }): string {
   const { item } = o;
@@ -316,4 +316,4 @@ export function weekNudges(
 }
 
 export const WEEK_NUDGE_MESSAGE = (weekStart: IsoDate, thisWeek: boolean) =>
-  `${thisWeek ? "This week" : `Next week (${Temporal.PlainDate.from(weekStart).toLocaleString("en-US", { month: "short", day: "numeric" })})`} isn't planned yet: choose each client's features. Open Coopilot and press W.`;
+  `${thisWeek ? "This week" : `Next week (${Temporal.PlainDate.from(weekStart).toLocaleString("en-US", { month: "short", day: "numeric" })})`} isn't planned yet: choose each client's features. Open FocusTime and press W.`;

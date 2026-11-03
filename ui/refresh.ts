@@ -72,8 +72,8 @@ export type LoadOutcome = { kind: "ok"; data: WeekLoadData } | { kind: "session"
 export function afterLoad(prev: LoadState, outcome: LoadOutcome): LoadState {
   if (outcome.kind === "ok") return { kind: "ready", data: outcome.data };
   if (outcome.kind === "session") return { kind: "session" };
-  if (prev.kind === "ready") return { kind: "ready", data: prev.data, refreshError: "Could not reach the Coopilot server. Showing what was loaded earlier" };
-  return { kind: "failed", message: "Could not reach the Coopilot server" };
+  if (prev.kind === "ready") return { kind: "ready", data: prev.data, refreshError: "Could not reach the FocusTime server. Showing what was loaded earlier" };
+  return { kind: "failed", message: "Could not reach the FocusTime server" };
 }
 
 /** "updated just now", "updated 4 min ago", "updated 3 h ago", or the date for older data. */

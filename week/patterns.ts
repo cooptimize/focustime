@@ -37,7 +37,7 @@ export function expandPatterns(patterns: readonly FocusPattern[], weekStart: Iso
   return out.sort(bySlot);
 }
 
-/** Standing blocks from Coopilot config, placed on this week's dates. */
+/** Standing blocks from FocusTime config, placed on this week's dates. */
 export function standingBlocksFor(standing: readonly StandingBlock[], weekStart: IsoDate): FocusBlock[] {
   const dates = weekDates(weekStart);
   return standing.map((s) => {

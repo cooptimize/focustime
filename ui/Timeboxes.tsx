@@ -120,7 +120,7 @@ export function useWriteFlow(onDone: () => void) {
         if (r.previews.every((p) => p.auto)) return void (await confirmBatch(rows));
         setBatch({ rows, busy: false, error: null });
       } catch (e) {
-        notify(`Saved in Coopilot. ${errText(e)}`);
+        notify(`Saved in FocusTime. ${errText(e)}`);
       }
     },
     [confirmBatch, onDone],
@@ -153,7 +153,7 @@ export function useWriteFlow(onDone: () => void) {
         if (r.preview.auto) return void (await confirm(r.preview));
         setFlow({ preview: r.preview, result: null, busy: false, error: null });
       } catch (e) {
-        notify(`Saved in Coopilot. ${errText(e)}`);
+        notify(`Saved in FocusTime. ${errText(e)}`);
       }
     },
     [confirm],
@@ -462,7 +462,7 @@ export function TimeboxDialog({ target, defaultMinutes, title, env, onClose }: {
   );
 }
 
-/** "Put on Outlook": a switch that explains itself when Coopilot can't write yet. */
+/** "Put on Outlook": a switch that explains itself when FocusTime can't write yet. */
 function OutlookToggle({ on, onChange, env, canWrite }: { on: boolean; onChange: (v: boolean) => void; env: TimeboxEnv; canWrite: boolean }) {
   const a = env.access;
   return (
@@ -472,7 +472,7 @@ function OutlookToggle({ on, onChange, env, canWrite }: { on: boolean; onChange:
       </label>
       {on && a && !canWrite && (
         <p className="tb-explain" role="note">
-          {a.access === "not_set_up" ? "Outlook isn't set up, so this timebox stays in Coopilot." : `${a.message}`}{" "}
+          {a.access === "not_set_up" ? "Outlook isn't set up, so this timebox stays in FocusTime." : `${a.message}`}{" "}
           {(a.access === "read_only" || a.access === "not_connected") && (
             <button type="button" className="mini" onClick={env.connectWrite}>
               Reconnect Outlook
@@ -542,7 +542,7 @@ export function TimeboxDetails({ tb, env, clientName, today, onRemoved }: { tb: 
       {tb.conflict && <ConflictChoice tb={tb} env={env} clientName={clientName} />}
       {tb.sync && env.access && !canWrite && (
         <span className="tb-explain">
-          {env.access.access === "not_set_up" ? "Outlook isn't set up; kept in Coopilot." : "Saved in Coopilot. To put it on Outlook, reconnect Outlook and allow calendar changes."}{" "}
+          {env.access.access === "not_set_up" ? "Outlook isn't set up; kept in FocusTime." : "Saved in FocusTime. To put it on Outlook, reconnect Outlook and allow calendar changes."}{" "}
           {(env.access.access === "read_only" || env.access.access === "not_connected") && (
             <button type="button" className="mini" onClick={env.connectWrite}>
               Reconnect Outlook
@@ -571,7 +571,7 @@ function RemovedChoice({ tb, env, onRemoved }: { tb: TimeboxView; env: TimeboxEn
       if (keep === "remove") onRemoved();
       await call("timebox.resolve", { id: tb.id, keep });
       env.changed();
-      notify(keep === "local" ? "Kept in Coopilot only" : "Timebox removed");
+      notify(keep === "local" ? "Kept in FocusTime only" : "Timebox removed");
     } catch (e) {
       notify(errText(e));
     }
@@ -591,31 +591,31 @@ function RemovedChoice({ tb, env, onRemoved }: { tb: TimeboxView; env: TimeboxEn
 export function ConflictChoice({ tb, env, clientName }: { tb: TimeboxView; env: TimeboxEnv; clientName: string }) {
   const c = tb.conflict!;
   const theirs = c.outlook;
-  const choose = async (keep: "coopilot" | "outlook") => {
+  const choose = async (keep: "focustime" | "outlook") => {
     try {
       const r = await call<{ timebox: TimeboxView | null; uid?: string; sync: string | null }>("timebox.resolve", { id: tb.id, keep });
       env.changed();
       if (r.sync) await env.sync(tb.uid);
-      else notify(keep === "outlook" ? "Took Outlook's version" : "Kept Coopilot's version");
+      else notify(keep === "outlook" ? "Took Outlook's version" : "Kept FocusTime's version");
     } catch (e) {
       notify(errText(e));
     }
   };
   return (
-    <div className="tb-conflict" role="group" aria-label="Changed in Coopilot and in Outlook">
+    <div className="tb-conflict" role="group" aria-label="Changed in FocusTime and in Outlook">
       <p>
         <strong>Changed in both places</strong> <span className="muted">({c.changed.join(", ")}). Nothing was overwritten.</span>
       </p>
       <dl>
-        <dt>Coopilot</dt>
+        <dt>FocusTime</dt>
         <dd>
           {clientName}: {tb.title} · {range(tb, env.tz)} · {SHOW_AS_LABEL[tb.showAs]}
         </dd>
         <dt>Outlook</dt>
         <dd>{theirs ? `${theirs.subject} · ${range(theirs, env.tz)} · ${SHOW_AS_LABEL[theirs.showAs as OutlookShowAs] ?? theirs.showAs}` : "Deleted in Outlook"}</dd>
       </dl>
-      <button type="button" className="mini" onClick={() => void choose("coopilot")}>
-        Keep Coopilot's
+      <button type="button" className="mini" onClick={() => void choose("focustime")}>
+        Keep FocusTime's
       </button>
       <button type="button" className="mini" onClick={() => void choose("outlook")}>
         {theirs ? "Use Outlook's" : "Remove the timebox too"}
@@ -644,7 +644,7 @@ export function InviteChips({ match }: { match: (i: InviteView) => boolean }): R
 // ---------- the week cards ----------
 
 /**
- * Timeboxes inside a card's timeline, in client color (Coopilot's own Outlook events show only here, once). Step 13:
+ * Timeboxes inside a card's timeline, in client color (FocusTime's own Outlook events show only here, once). Step 13:
  * drag to move, the bottom edge to resize (15 minute steps); right-click or Enter for its menu (by tier).
  */
 /** Timed picks and timeboxes as bands; `bounds` is what the strip covers (the view range, or the block's working hours on the compact ruler, D276). */

@@ -1,4 +1,4 @@
-// Demo data (step 15, D272): a realistic, fictional week for showing Coopilot without real client data. Every date is
+// Demo data (step 15, D272): a realistic, fictional week for showing FocusTime without real client data. Every date is
 // generated from the week asked for, so the demo always looks current. No real people, clients, meetings or items.
 import type { PtoEntry } from "../../week/pto.ts";
 import type { CalEvent, ClientPortfolio, ClientWork, FocusPattern, IsoDate, PortfolioChild, PortfolioItem, WorkItem } from "../../week/types.ts";
@@ -31,7 +31,7 @@ export const DEMO_PRESENCE: Record<string, { availability: string; activity: str
 };
 
 /** The config the demo runs with (held in memory; never the real file). */
-export const DEMO_CONFIG = `# Coopilot demo configuration (in memory only)
+export const DEMO_CONFIG = `# FocusTime demo configuration (in memory only)
 [dataverse]
 environment_url = "https://demo.crm.dynamics.com"
 tenant_id = "00000000-0000-4000-8000-0000000000d1"

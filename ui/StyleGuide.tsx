@@ -159,7 +159,7 @@ export function StyleGuide() {
   const [layers, setLayers] = useState<ReturnType<typeof readTokens>>([]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    document.title = "Coopilot style guide";
+    document.title = "FocusTime style guide";
     // After the attribute lands, read the tokens the theme now resolves to.
     const id = requestAnimationFrame(() => setLayers(readTokens()));
     return () => cancelAnimationFrame(id);
@@ -173,7 +173,7 @@ export function StyleGuide() {
       <header className="sg-head">
         <div className="brand">
           <WeekMark height={18} />
-          <span className="name">Coopilot style guide</span>
+          <span className="name">FocusTime style guide</span>
         </div>
         <div className="sg-themes" role="radiogroup" aria-label="Theme preview">
           {THEMES.map((t) => (
@@ -191,7 +191,7 @@ export function StyleGuide() {
         <div className="sg-brand">
           <figure><WeekMark height={36} /><figcaption>WeekMark: top bar, icon</figcaption></figure>
           <figure><BentMark width={120} /><figcaption>BentMark: sign-in</figcaption></figure>
-          <figure><Lockup width={240} /><figcaption>Lockup: About</figcaption></figure>
+          <figure><Lockup width={280} /><figcaption>Lockup: About</figcaption></figure>
           <figure><Lumen pose="still" size={40} /><figcaption>Lumen still</figcaption></figure>
           <figure><Lumen pose="idle" size={40} /><figcaption>Lumen idle</figcaption></figure>
           <figure><Lumen pose="bob" size={40} /><figcaption>Lumen bob</figcaption></figure>

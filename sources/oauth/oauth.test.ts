@@ -108,7 +108,7 @@ describe("sign-in (auth code + PKCE over loopback)", () => {
     const { client } = google({ keyring: memoryKeyring() });
     expect(await client.connect()).toEqual({
       status: "failed",
-      message: "No Google client secret in the keyring (service coopilot, account google-client-secret)",
+      message: "No Google client secret in the keyring (service focustime, account google-client-secret)",
     });
   });
 });
@@ -209,7 +209,7 @@ describe("write access (step 12, optional)", () => {
     expect((await ms({ refresh: "network", keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) }).client.writeAccess()).status).toBe("unavailable");
   });
 
-  it("Google has no write scope in Coopilot", async () => {
+  it("Google has no write scope in FocusTime", async () => {
     const { client } = google({ keyring: memoryKeyring({ "google-client-secret": FAKE_CLIENT_SECRET, "google-refresh-token": FAKE_REFRESH }) });
     expect((await client.writeAccess()).status).toBe("read_only");
   });

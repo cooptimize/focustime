@@ -18,7 +18,7 @@ let close: () => void;
 
 beforeAll(async () => {
   const dist = mkdtempSync(join(tmpdir(), "dist-"));
-  writeFileSync(join(dist, "index.html"), "<!doctype html><title>Coopilot</title>");
+  writeFileSync(join(dist, "index.html"), "<!doctype html><title>FocusTime</title>");
   mkdirSync(join(dist, "assets"));
   writeFileSync(join(dist, "assets", "app.js"), "console.log(1)");
   const text = STARTER_TOML.replace("https://cooptimize.crm.dynamics.com", ENV)
@@ -74,7 +74,7 @@ function send(path: string, headers: Record<string, string> = {}, method = "GET"
     req.end();
   });
 }
-const cookie = () => `coopilot_${port}=${TOKEN}`;
+const cookie = () => `focustime_${port}=${TOKEN}`;
 const api = (input: unknown, headers: Record<string, string> = {}) =>
   send("/api/action", { cookie: cookie(), origin: `http://127.0.0.1:${port}`, "content-type": "application/json", ...headers }, "POST", JSON.stringify({ action: "week.load", input }));
 
@@ -130,7 +130,7 @@ describe("local server", () => {
   });
 
   it("says an old launch token apart from an action's refusal, as JSON with code launch_token (step 15.4 fix)", async () => {
-    const r = await api({}, { cookie: `coopilot_${port}=an-old-token` });
+    const r = await api({}, { cookie: `focustime_${port}=an-old-token` });
     expect(r.status).toBe(401);
     expect(JSON.parse(r.body)).toMatchObject({ ok: false, code: "launch_token" });
     expect(r.body).not.toContain("Session expired");
@@ -138,7 +138,7 @@ describe("local server", () => {
 
   it("opens a fresh window for a window with an old token: same origin only, POST only, once per 5 seconds", async () => {
     const reopen = (headers: Record<string, string> = {}, method = "POST") =>
-      send("/api/reopen", { cookie: `coopilot_${port}=an-old-token`, origin: `http://127.0.0.1:${port}`, "content-type": "application/json", ...headers }, method, method === "POST" ? "{}" : undefined);
+      send("/api/reopen", { cookie: `focustime_${port}=an-old-token`, origin: `http://127.0.0.1:${port}`, "content-type": "application/json", ...headers }, method, method === "POST" ? "{}" : undefined);
     expect((await reopen({ origin: "http://evil.example" })).status).toBe(403);
     expect((await reopen({ host: "evil.example" })).status).toBe(403);
     expect((await send("/api/reopen", { "content-type": "application/json" }, "POST", "{}")).status).toBe(403);

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { OPEN_REQUEST_FILE, takeOpenRequest } from "./open-request.ts";
 
-const dir = () => mkdtempSync(join(tmpdir(), "coopilot-run-"));
+const dir = () => mkdtempSync(join(tmpdir(), "focustime-run-"));
 const put = (d: string, body: string, mode = 0o600) => {
   writeFileSync(join(d, OPEN_REQUEST_FILE), body, { mode });
   chmodSync(join(d, OPEN_REQUEST_FILE), mode);

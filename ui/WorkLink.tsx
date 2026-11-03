@@ -1,12 +1,12 @@
 // Every work item link goes through link.open, so it opens in that client's Edge profile (step 5.5).
-// The href stays for hover and copy; a click never navigates the Coopilot window itself.
+// The href stays for hover and copy; a click never navigates the FocusTime window itself.
 import type { MouseEvent, ReactNode } from "react";
 import { call } from "./api.ts";
 import { isDevOpsUrl } from "./work.ts";
 import { ITEM_ATTRS } from "./keys.ts";
 import { useScopedTab } from "./scope.ts";
 
-export const NOTICE_EVENT = "coopilot:notice";
+export const NOTICE_EVENT = "focustime:notice";
 const notify = (message: string) => window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: message }));
 
 export async function openWorkItem(clientKey: string, url: string): Promise<void> {

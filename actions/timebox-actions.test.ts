@@ -95,7 +95,7 @@ describe("write framework: preview", () => {
       ["Show as", "Busy"],
       ["Reminder", "None"],
       ["Attendees", "None"],
-      ["Body", "https://dev.azure.com/adatum/p/_workitems/edit/4512\n\nTimebox planned in Coopilot."],
+      ["Body", "https://dev.azure.com/adatum/p/_workitems/edit/4512\n\nTimebox planned in FocusTime."],
     ]);
     expect(preview!.visibility).toMatch(/nobody is invited/);
     expect(t.g.events.size).toBe(0);
@@ -171,18 +171,18 @@ describe("write framework: write, read back, log", () => {
     expect(t.g.calls.filter((c) => c.method === "POST")).toHaveLength(1);
   });
 
-  it("refuses to touch an event without the Coopilot marker", async () => {
+  it("refuses to touch an event without the FocusTime marker", async () => {
     const t = setup();
     const { timebox } = await t.box();
     await t.put(timebox.uid);
-    // Someone swaps the recorded event for one Coopilot didn't create (or the record is wrong).
+    // Someone swaps the recorded event for one FocusTime didn't create (or the record is wrong).
     const foreign = t.g.seed({ start: "2026-11-03T14:00:00Z", end: "2026-11-03T15:00:00Z" });
     const own = t.plan.ownEvent(timebox.uid)!;
     t.plan.recordOwnEvent(timebox.uid, timebox.id, foreign, own.fields);
     const before = structuredClone(t.g.events.get(foreign));
     await t.run("timebox.set_outlook", { id: timebox.id, on: false });
     const r = await t.fail("write.preview", { uid: timebox.uid });
-    expect(r.error).toMatch(/wasn't created by Coopilot/);
+    expect(r.error).toMatch(/wasn't created by FocusTime/);
     expect(t.g.events.get(foreign)).toEqual(before);
     expect(t.g.calls.some((c) => (c.method === "PATCH" || c.method === "DELETE") && c.path.includes(foreign))).toBe(false);
   });
@@ -210,10 +210,10 @@ describe("write framework: undo", () => {
   });
   const latest = async () => (await t.run<WriteLogView>("write.log", {})).entries[0]! as WriteEntry & { undoable: boolean };
 
-  it("undo of a create deletes the event Coopilot created and turns Put on Outlook off", async () => {
+  it("undo of a create deletes the event FocusTime created and turns Put on Outlook off", async () => {
     const e = await latest();
     const { preview } = await t.preview({ undo: e.id });
-    expect(preview).toMatchObject({ op: "delete", undo: true, summary: "Undo: delete an Outlook event Coopilot created" });
+    expect(preview).toMatchObject({ op: "delete", undo: true, summary: "Undo: delete an Outlook event FocusTime created" });
     expect((await t.confirm(preview!)).confirmed).toBe(true);
     expect(t.g.events.size).toBe(0);
     expect(t.plan.timebox(id)).toMatchObject({ outlook: false, removedAt: null });
@@ -276,7 +276,7 @@ describe("don't ask again for my own timeboxes (confirm_own = false)", () => {
   });
 });
 
-describe("reset leaves Coopilot's events findable", () => {
+describe("reset leaves FocusTime's events findable", () => {
   it("an event whose timebox is gone is listed for removal and can be removed", async () => {
     const t = setup();
     const { timebox } = await t.box();
@@ -292,7 +292,7 @@ describe("reset leaves Coopilot's events findable", () => {
 });
 
 describe("de-duplication in the week view", () => {
-  it("week.load drops Coopilot's own Outlook events (by recorded id) and returns the timebox instead", async () => {
+  it("week.load drops FocusTime's own Outlook events (by recorded id) and returns the timebox instead", async () => {
     const t = setup();
     const { timebox } = await t.box();
     await t.put(timebox.uid);

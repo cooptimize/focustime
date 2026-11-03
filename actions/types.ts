@@ -71,7 +71,7 @@ export type WeekLoadData = {
   timeboxSettings: { outlookDefault: boolean; confirmOwn: boolean; enabled: boolean };
   /** Step 13: edit facts per Outlook event id ("outlook:<id>") from the write-token scan (no attendee addresses). */
   eventEdit: Record<string, import("../plan/caltier.ts").EditFacts>;
-  /** Whether Coopilot may write to Outlook (the tiers only matter with it). */
+  /** Whether FocusTime may write to Outlook (the tiers only matter with it). */
   canWrite: boolean;
   /** Help invites on and around the week. */
   invites: InviteView[];
@@ -106,7 +106,7 @@ export type SettingsClient = {
   profile: string | null;
   /** The color as CSS (hex or palette token). */
   css: string | null;
-  /** Whether Coopilot follows it (DevOps, Open half-days) and why (step 6d); null when it couldn't be worked out. */
+  /** Whether FocusTime follows it (DevOps, Open half-days) and why (step 6d); null when it couldn't be worked out. */
   follow: FollowState | null;
   /** Step 14: the checked DevOps write PAT's owner (never the PAT), or null: this client stays read-only. */
   write: { name: string; email: string; org: string; validatedAt: string; expires: string | null } | null;

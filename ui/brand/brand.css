@@ -17,7 +17,7 @@ span.brand-svg > svg { display: block; width: 100%; height: auto; }
    by the page's CSP (style-src 'self'), so their beams are matched by their gradient fill here. */
 .lumen-beam, .brand-svg path[fill^="url(#beam"] { mix-blend-mode: var(--brand-beam-blend); }
 
-/* Top bar: the mark and the live "Coopilot" text, one button home to Today. */
+/* Top bar: the mark and the live "FocusTime" text, one button home to Today. */
 .brand-home {
   display: inline-flex; align-items: center; gap: 9px;
   border: 0; background: none; padding: 2px 4px; margin: -2px -4px; border-radius: 6px;

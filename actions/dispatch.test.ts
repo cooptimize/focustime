@@ -17,7 +17,7 @@ function ctx(scenario: Scenario, text = configText): ActionContext {
   const parsed = parseConfig(text.replace("https://cooptimize.crm.dynamics.com", dvConfig.environmentUrl));
   const f = fakeFetch(scenario);
   return {
-    loadConfig: async () => ({ path: "/home/me/.config/coopilot/config.toml", parsed }),
+    loadConfig: async () => ({ path: "/home/me/.config/focustime/config.toml", parsed }),
     makeDataverse: (cfg, tz) =>
       createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: f.fetch, cacheDir: mkdtempSync(join(tmpdir(), "c-")), log: () => {} }),
     makeOutlook: () => { throw new Error("Outlook is not configured in these tests"); },

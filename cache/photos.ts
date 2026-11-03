@@ -1,4 +1,4 @@
-// Profile photo cache (step 16.4): ~/.cache/coopilot/photos, one small image per person plus when it was read (or
+// Profile photo cache (step 16.4): ~/.cache/focustime/photos, one small image per person plus when it was read (or
 // that there is none), kept 7 days and refreshed in the background. File names are a hash of the Entra object ID, so
 // the folder names no one. Never in the plan store; cleared on sign-out. Nothing here logs.
 import { createHash } from "node:crypto";
@@ -16,7 +16,7 @@ const TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 
 export function createPhotoCache(root: string): PhotoCache {
   const dir = join(root, "photos");
-  const key = (id: string) => createHash("sha256").update(`coopilot-photo:${id.toLowerCase()}`).digest("hex").slice(0, 40);
+  const key = (id: string) => createHash("sha256").update(`focustime-photo:${id.toLowerCase()}`).digest("hex").slice(0, 40);
   const put = async (path: string, data: string | Uint8Array) => {
     const tmp = `${path}.tmp`;
     await writeFile(tmp, data, { mode: 0o600 });

@@ -30,7 +30,7 @@ describe("ui.set_theme (step 6b)", () => {
     expect(r).toEqual({ ok: true, data: { ui: { theme: "cooptimize-light", viewRange: "business", showTimelines: true, reduceMotion: false, textSize: "default", showPersonal: true } } });
     const text = readFileSync(t.path, "utf8");
     expect(text).toContain('[ui]\ntheme = "cooptimize-light"');
-    expect(text).toContain("# Coopilot configuration.");
+    expect(text).toContain("# FocusTime configuration.");
   });
   it("refuses unknown themes and extra fields", async () => {
     const t = setup();

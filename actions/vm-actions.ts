@@ -2,7 +2,7 @@
 // delay or skip tonight's shutdown and put the schedule back the next morning. Every change goes through the write
 // framework: preview, confirm, read back (the real power state, or the schedule read again), audit log. No undo for
 // power actions (the opposite action is offered instead); a schedule change is undone by its restore.
-// Coopilot only reads status, starts, deallocates and updates the auto-shutdown schedule, and only for the VM the
+// FocusTime only reads status, starts, deallocates and updates the auto-shutdown schedule, and only for the VM the
 // signed-in person confirmed: every call takes that VM from the store, never from the request.
 import { randomUUID } from "node:crypto";
 import type { AppConfig } from "../config/schema.ts";
@@ -40,7 +40,7 @@ export type VmContext = {
 export const vmKey = (oid: string) => `vm:${oid}`;
 export const shutdownKey = (vmId: string) => `vm_shutdown:${vmId.toLowerCase()}`;
 export const PROMPT_MARKER = "vm_prompt";
-/** How long a start or stop may take before Coopilot says it timed out. */
+/** How long a start or stop may take before FocusTime says it timed out. */
 export const POWER_TIMEOUT_MS = 15 * 60_000;
 const PREVIEW_MS = 5 * 60_000;
 
@@ -48,7 +48,7 @@ type Held = { id: string; expiresAt: number; op: VmPreviewOp; vmId: string; befo
 
 export type { ChosenVm, VmError, VmPreview, VmPreviewOp, VmStatus };
 
-// In memory: previews (5 minutes), transitions Coopilot is following, and a short status memo so the top bar and
+// In memory: previews (5 minutes), transitions FocusTime is following, and a short status memo so the top bar and
 // Today don't both call Azure. A restart loses transitions; the log's pending rows are settled from the power state.
 const previews = new Map<string, Held>();
 const transitions = new Map<string, VmTransition & { entryId: number }>();
@@ -68,7 +68,7 @@ const onlyKeys = (v: unknown, keys: string[]) => v === undefined || v === null |
 function errOf(e: unknown): VmError {
   if (e instanceof AzureError) return { kind: e.kind, message: e.message, permission: e.permission };
   if (e instanceof AuthFailure) {
-    if (e.kind === "consent") return { kind: "consent", message: "Coopilot needs your OK to use Azure. Choose Allow Azure access and sign in", permission: null };
+    if (e.kind === "consent") return { kind: "consent", message: "FocusTime needs your OK to use Azure. Choose Allow Azure access and sign in", permission: null };
     if (e.kind === "not_connected" || e.kind === "expired") return { kind: "not_signed_in", message: "Sign in with Microsoft first", permission: null };
     return { kind: e.kind, message: e.message, permission: null };
   }
@@ -96,7 +96,7 @@ const nowMs = (ctx: VmContext) => Temporal.Instant.from(ctx.now()).epochMillisec
 /** Refuses a VM ID that isn't the confirmed one (a stale window, or anything else). */
 function guard(vm: ChosenVm | null, asked: unknown): ActionResponse | null {
   if (!vm) return refuse("Choose your VM first (Settings > You)");
-  if (asked !== undefined && (typeof asked !== "string" || !sameVm(asked, vm.id))) return refuse("Coopilot only acts on the VM you confirmed as yours", 403);
+  if (asked !== undefined && (typeof asked !== "string" || !sameVm(asked, vm.id))) return refuse("FocusTime only acts on the VM you confirmed as yours", 403);
   return null;
 }
 
@@ -177,7 +177,7 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       return held.op === "start" || held.op === "deallocate" ? power(ctx, vm!, held.op) : held.op === "restore" ? restore(ctx, vm!, today, false) : change(ctx, vm!, held.op, today);
     }
     case "vm.restore": {
-      // Today's one-click Restore: putting back what Coopilot changed (the change's preview said it would).
+      // Today's one-click Restore: putting back what FocusTime changed (the change's preview said it would).
       if (!onlyKeys(input, ["vmId"])) return bad("vm.restore takes { vmId? }");
       const vm = chosen(ctx);
       const g = guard(vm, isObj(input) ? input.vmId : undefined);
@@ -264,7 +264,7 @@ function settleOrphans(ctx: VmContext, vm: ChosenVm, p: PowerState, t: number) {
   for (const e of ctx.plan?.azureWriteLog(20) ?? []) {
     if (e.status !== "pending" || (e.op !== "start" && e.op !== "deallocate") || !sameVm(e.vmId, vm.id)) continue;
     if (reached(e.op, p)) ctx.plan!.settleAzureWrite(e.id, { status: "confirmed", message: `Read back: ${CHIP_LABEL[chipOf(p, null)]}`, after: { power: p } });
-    else if (t - Date.parse(e.at) > POWER_TIMEOUT_MS) ctx.plan!.settleAzureWrite(e.id, { status: "timed_out", message: "Coopilot stopped following this before Azure finished" });
+    else if (t - Date.parse(e.at) > POWER_TIMEOUT_MS) ctx.plan!.settleAzureWrite(e.id, { status: "timed_out", message: "FocusTime stopped following this before Azure finished" });
   }
 }
 
@@ -286,7 +286,7 @@ async function preview(ctx: VmContext, vm: ChosenVm, op: VmPreviewOp, tz: string
       const focus = op === "deallocate" && ctx.focusRunning();
       return hold(
         op === "start"
-          ? { title: "Start your VM", lines: [{ label: "State", before: CHIP_LABEL[chip], after: "Running" }], notes: ["Compute billing starts while it runs.", "Coopilot follows it until Azure shows it running."], warning: null, confirmLabel: "Start" }
+          ? { title: "Start your VM", lines: [{ label: "State", before: CHIP_LABEL[chip], after: "Running" }], notes: ["Compute billing starts while it runs.", "FocusTime follows it until Azure shows it running."], warning: null, confirmLabel: "Start" }
           : {
               title: "Stop your VM", lines: [{ label: "State", before: CHIP_LABEL[chip], after: "Stopped (deallocated)" }],
               notes: ["Stop deallocates it: Windows shuts down, compute billing stops, disks are kept.", "Save your work in the VM first. Unsaved work there is lost."],
@@ -300,8 +300,8 @@ async function preview(ctx: VmContext, vm: ChosenVm, op: VmPreviewOp, tz: string
     const rec = ctx.plan?.accountState<ShutdownChange>(shutdownKey(vm.id)) ?? null;
     const fmt = (x: { time: string; status: string }) => (x.status === "Disabled" ? "Off tonight" : shutdownTime({ time: x.time, timeZoneId: s.timeZoneId }, tz, today));
     if (op === "restore") {
-      if (!rec) return refuse("Auto-shutdown isn't changed by Coopilot; nothing to restore");
-      return hold({ title: "Restore auto-shutdown", lines: [{ label: "Auto-shutdown", before: fmt(s), after: fmt(rec.original) }], notes: ["Puts back the schedule as it was before Coopilot changed it."], warning: null, confirmLabel: "Restore" }, s, rec.original);
+      if (!rec) return refuse("Auto-shutdown isn't changed by FocusTime; nothing to restore");
+      return hold({ title: "Restore auto-shutdown", lines: [{ label: "Auto-shutdown", before: fmt(s), after: fmt(rec.original) }], notes: ["Puts back the schedule as it was before FocusTime changed it."], warning: null, confirmLabel: "Restore" }, s, rec.original);
     }
     const next = applyChoice(s, op);
     if ("error" in next) return refuse(next.error);
@@ -310,7 +310,7 @@ async function preview(ctx: VmContext, vm: ChosenVm, op: VmPreviewOp, tz: string
       {
         title: op === "skip" ? "Skip tonight's auto-shutdown" : `Delay auto-shutdown ${op === "delay60" ? "1 hour" : "2 hours"}`,
         lines: [{ label: "Auto-shutdown", before: fmt(s), after: fmt(next) }],
-        notes: [`Coopilot puts it back to ${fmt(original)} tomorrow morning and checks it.`, "Only this VM's auto-shutdown schedule changes."],
+        notes: [`FocusTime puts it back to ${fmt(original)} tomorrow morning and checks it.`, "Only this VM's auto-shutdown schedule changes."],
         warning: null, confirmLabel: op === "skip" ? "Skip tonight" : "Delay",
       },
       s, next,
@@ -436,13 +436,13 @@ async function change(ctx: VmContext, vm: ChosenVm, choice: ShutdownChoice, toda
   memo.delete(vm.id.toLowerCase());
   const back = await readBack(c, vm, ctx);
   const ok = back !== "unreadable" && back !== null && back.time === next.time && back.status === next.status;
-  const settledEntry = plan.settleAzureWrite(entry.id, ok ? { status: "confirmed", message: "Read back: matches" } : { status: "failed", message: back === "unreadable" ? "Written, but Coopilot couldn't read it back. It will still be put back tomorrow" : "Azure shows something else than what was asked. It will still be put back tomorrow" });
+  const settledEntry = plan.settleAzureWrite(entry.id, ok ? { status: "confirmed", message: "Read back: matches" } : { status: "failed", message: back === "unreadable" ? "Written, but FocusTime couldn't read it back. It will still be put back tomorrow" : "Azure shows something else than what was asked. It will still be put back tomorrow" });
   return { ok: true, data: { entry: settledEntry, change: record } };
 }
 
 /**
- * Puts back what Coopilot changed. Auto (the next-morning run) or by hand (Restore). Only when the schedule still shows
- * Coopilot's change; changed elsewhere since, it is left as it is (and said so). A failure keeps the record and the
+ * Puts back what FocusTime changed. Auto (the next-morning run) or by hand (Restore). Only when the schedule still shows
+ * FocusTime's change; changed elsewhere since, it is left as it is (and said so). A failure keeps the record and the
  * Today warning; the first failure is logged, later automatic retries only update the record.
  */
 export async function restore(ctx: VmContext, vm: ChosenVm, _today: IsoDate, auto: boolean): Promise<ActionResponse> {
@@ -450,7 +450,7 @@ export async function restore(ctx: VmContext, vm: ChosenVm, _today: IsoDate, aut
   if (!plan) return refuse("The local plan store isn't available", 503);
   const key = shutdownKey(vm.id);
   const rec = plan.accountState<ShutdownChange>(key);
-  if (!rec) return refuse("Auto-shutdown isn't changed by Coopilot; nothing to restore");
+  if (!rec) return refuse("Auto-shutdown isn't changed by FocusTime; nothing to restore");
   const fail = (e: unknown): ActionResponse => {
     const x = errOf(e);
     if (!rec.failedAt || !auto) {
@@ -479,7 +479,7 @@ export async function restore(ctx: VmContext, vm: ChosenVm, _today: IsoDate, aut
   };
   if (what === "already") return done("confirmed", "Already back as it was; nothing to change");
   if (what === "gone") return done("refused", "The auto-shutdown schedule no longer exists; nothing to put back");
-  if (what === "changed_elsewhere") return done("refused", "Changed outside Coopilot since; left as it is");
+  if (what === "changed_elsewhere") return done("refused", "Changed outside FocusTime since; left as it is");
   try {
     await c.putSchedule(refOf(vm), scheduleBody(raw!, rec.original));
   } catch (e) {
@@ -487,7 +487,7 @@ export async function restore(ctx: VmContext, vm: ChosenVm, _today: IsoDate, aut
   }
   const back = await readBack(c, vm, ctx);
   if (back !== "unreadable" && back !== null && back.time === rec.original.time && back.status === rec.original.status) return done("confirmed", "Restored. Read back: matches");
-  return fail(new AzureError("failed", 0, back === "unreadable" ? "Restored, but Coopilot couldn't read it back to check" : "Azure doesn't show the restored schedule yet"));
+  return fail(new AzureError("failed", 0, back === "unreadable" ? "Restored, but FocusTime couldn't read it back to check" : "Azure doesn't show the restored schedule yet"));
 }
 
 /** The next-morning restore (server tick): first run after midnight, retried every 10 minutes, and at work start. */

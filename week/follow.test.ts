@@ -6,7 +6,7 @@ const TODAY = "2026-11-02";
 const p = (clientKey: string, startDate: string, endDate: string | null, active = true): FocusPattern => ({ id: `${clientKey}-${startDate}`, clientKey, clientName: clientKey, startDate, endDate, active, days: { Mon: "AM" } });
 const opts = { today: TODAY, graceDays: 14, always: [] as string[], kept: [] as string[] };
 
-describe("which clients Coopilot follows (step 6d)", () => {
+describe("which clients FocusTime follows (step 6d)", () => {
   it("an ongoing pattern, even one starting later, makes a client active", () => {
     expect(followState("Adatum", [p("Adatum", "2026-01-05", null)], opts)).toMatchObject({ active: true, why: "ongoing" });
     expect(followState("Adatum", [p("Adatum", "2026-12-01", null)], opts)).toMatchObject({ active: true, why: "ongoing" });

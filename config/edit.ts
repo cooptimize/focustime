@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { spanText, WEEKDAY_KEYS, type DayOverride, type TimeModel } from "../week/hours.ts";
 import { parseConfig, type ParseResult } from "./schema.ts";
 
-/** A TOML value written by Coopilot: strings are quoted and escaped, lists and inline tables nest. */
+/** A TOML value written by FocusTime: strings are quoted and escaped, lists and inline tables nest. */
 export type TomlValue = string | number | boolean | TomlValue[] | { [k: string]: TomlValue };
 
 const BARE_KEY = /^[A-Za-z0-9_-]+$/;

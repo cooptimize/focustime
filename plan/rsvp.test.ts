@@ -9,9 +9,9 @@ describe("which meetings can be answered (D284)", () => {
   it("answers a meeting someone else organizes with others on it", () => {
     expect(rsvpProblem(meeting())).toBeNull();
   });
-  it("refuses one I organize, a Coopilot event, one with nobody else, and a cancelled one", () => {
+  it("refuses one I organize, a FocusTime event, one with nobody else, and a cancelled one", () => {
     expect(rsvpProblem(meeting({ isOrganizer: true }))).toMatch(/You organize/);
-    expect(rsvpProblem(meeting({ marker: "tb-1" }))).toMatch(/Coopilot's/);
+    expect(rsvpProblem(meeting({ marker: "tb-1" }))).toMatch(/FocusTime's/);
     expect(rsvpProblem(meeting({ others: 0 }))).toMatch(/Nobody else/);
     expect(rsvpProblem(meeting({ isCancelled: true }))).toMatch(/cancelled/);
   });

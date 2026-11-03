@@ -25,9 +25,9 @@ export const RSVP_VERB: Record<RsvpResponse, string> = { accepted: "Accept", ten
 /** What the read for an RSVP knows about a meeting. No attendee addresses: only how many others. */
 export type MeetingFacts = { isOrganizer: boolean; others: number; isCancelled: boolean; marker: string | null; response: string | null; organizer: string | null; allowNewTimeProposals: boolean };
 
-/** Why Coopilot won't answer this meeting, or null when it can. */
+/** Why FocusTime won't answer this meeting, or null when it can. */
 export function rsvpProblem(m: MeetingFacts): string | null {
-  if (m.marker) return "This event is Coopilot's: there is nothing to answer";
+  if (m.marker) return "This event is FocusTime's: there is nothing to answer";
   if (m.isOrganizer) return "You organize this meeting, so there is nothing to answer";
   if (m.isCancelled) return "This meeting was cancelled";
   if (m.others === 0) return "Nobody else is on this event, so there is nothing to answer";

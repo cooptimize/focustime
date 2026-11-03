@@ -1,5 +1,5 @@
 // Outlook via Microsoft Graph calendarView, delegated Calendars.ReadBasic, read-only. Step 12: an optional write side
-// (Calendars.ReadWrite, its own token) for Coopilot's own timebox events only, through the write framework.
+// (Calendars.ReadWrite, its own token) for FocusTime's own timebox events only, through the write framework.
 import type { OutlookConfig } from "../../config/schema.ts";
 import type { Logger } from "../../log/logger.ts";
 import { ForeignLinkError, getJson, PartialError } from "../calendar/http.ts";
@@ -43,7 +43,7 @@ export function createOutlookSource(deps: CalendarDeps<OutlookConfig>) {
     first.searchParams.set("endDateTime", range.end);
     first.searchParams.set("$select", GRAPH_SELECT);
     first.searchParams.set("$top", "100");
-    // Immutable ids (step 12): the same id the writer gets back, so Coopilot's own events are recognized.
+    // Immutable ids (step 12): the same id the writer gets back, so FocusTime's own events are recognized.
     const headers = { prefer: `outlook.timezone="${deps.timeZone}", IdType="ImmutableId"` };
     const items: GraphEvent[] = [];
     let url: string | null = first.toString();

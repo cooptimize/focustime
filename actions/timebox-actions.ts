@@ -1,7 +1,7 @@
-// Timeboxes and the write framework (step 12). A timebox is local first; "Put on Outlook" makes Coopilot own one Busy
+// Timeboxes and the write framework (step 12). A timebox is local first; "Put on Outlook" makes FocusTime own one Busy
 // event for it. Every external write goes through here: a named change with narrow inputs, a preview (target system,
 // account, calendar, exact fields, who can see it) held on the server for five minutes, a confirm that writes, reads
-// back and only then reports success, an audit log entry with the prior values, and undo. Coopilot only changes events
+// back and only then reports success, an audit log entry with the prior values, and undo. FocusTime only changes events
 // that carry its marker. Nothing writes on a single click: the UI previews, the person confirms (or, for changes to
 // their own timebox events with confirm_own off, the confirm follows the preview, still logged and undoable).
 import { readBack, type Sleep } from "./readback.ts";
@@ -104,7 +104,7 @@ function when(f: Fields, tz: string) {
 }
 const showLabel = (v: string) => SHOW_AS_LABEL[v as OutlookShowAs] ?? v;
 const people = (f: Fields) => (f.attendees ?? []).map((a) => `${a.name} <${a.email}>`).join(", ");
-/** The preview's field list: every field Coopilot writes, before and after (an update marks what changes). */
+/** The preview's field list: every field FocusTime writes, before and after (an update marks what changes). */
 export function previewFields(op: SyncOp, before: Fields | null, after: Fields | null, tz: string, kind: WriteKind = "timebox"): PreviewField[] {
   const row = (label: string, b: string | null, a: string | null): PreviewField => ({ label, before: b, after: a, changed: op === "update" ? b !== a : true });
   const pick = <K extends keyof Fields>(f: Fields | null, k: K) => (f ? (f[k] as string) : null);
@@ -146,7 +146,7 @@ export function previewFields(op: SyncOp, before: Fields | null, after: Fields |
   ];
 }
 export const VISIBILITY = "Only on your calendar. No attendees, so nobody is invited or notified. People who can see your calendar see this time as it is shown (Busy unless you change it); whether they also see the title depends on your Outlook sharing settings.";
-export const VISIBILITY_EVENT = "Your own event with nobody else on it, so nobody is notified. Coopilot changes only its time and show as: the title and body stay as they are, and it isn't marked as Coopilot's.";
+export const VISIBILITY_EVENT = "Your own event with nobody else on it, so nobody is notified. FocusTime changes only its time and show as: the title and body stay as they are, and it isn't marked as FocusTime's.";
 const others = (f: Fields | null) => (f?.attendees ?? []).filter((a) => a.name !== "You").map((a) => a.name);
 /** Who hears about an invite: every teammate by name; a test invite to myself says so instead of "You will each". */
 function inviteVisibility(op: SyncOp, f: Fields | null): string {
@@ -163,11 +163,11 @@ const visibility = (kind: WriteKind, op: SyncOp, f: Fields | null) =>
   kind === "event" ? VISIBILITY_EVENT
   : kind === "invite" ? inviteVisibility(op, f)
   : VISIBILITY;
-const SUMMARY: Record<SyncOp, string> = { create: "Create an Outlook event", update: "Change an Outlook event Coopilot created", delete: "Delete an Outlook event Coopilot created" };
+const SUMMARY: Record<SyncOp, string> = { create: "Create an Outlook event", update: "Change an Outlook event FocusTime created", delete: "Delete an Outlook event FocusTime created" };
 const RSVP_SUMMARY: Record<RsvpResponse, string> = { accepted: "Accept the meeting", tentativelyAccepted: "Answer Tentative to the meeting", declined: "Decline the meeting" };
 const summaryOf = (kind: WriteKind, op: SyncOp) => (kind === "event" ? "Change your own Outlook event" : kind === "invite" ? (op === "delete" ? "Cancel the help invite" : "Send a help invite") : SUMMARY[op]);
 
-const NO_WRITE = "Coopilot can't change your Outlook calendar yet. Reconnect Outlook in Settings > Connections and allow calendar changes. Your timeboxes still work locally.";
+const NO_WRITE = "FocusTime can't change your Outlook calendar yet. Reconnect Outlook in Settings > Connections and allow calendar changes. Your timeboxes still work locally.";
 
 export async function timeboxAction(ctx: TimeboxContext, action: TimeboxAction, input: unknown): Promise<ActionResponse> {
   try {
@@ -195,7 +195,7 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
     const tb = plan.timeboxByUid(uid);
     const own = plan.ownEvent(uid);
     if (!tb && !own) throw new PlanError("No such timebox");
-    if (tb?.conflict) return { bad: bad("This timebox changed in Coopilot and in Outlook: choose which version to keep first", 409) };
+    if (tb?.conflict) return { bad: bad("This timebox changed in FocusTime and in Outlook: choose which version to keep first", 409) };
     const w = want(cfg, tb);
     let op = syncNeed(tb, own, w);
     let current: OutlookEvent | null = null;
@@ -229,7 +229,7 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
     // Still the same change? A timebox moved again after the preview needs a new one.
     if (held.undoOf === null && held.kind === "timebox") {
       const tb = plan.timeboxByUid(held.uid);
-      if (tb?.conflict) return bad("This timebox changed in Coopilot and in Outlook: choose which version to keep first", 409);
+      if (tb?.conflict) return bad("This timebox changed in FocusTime and in Outlook: choose which version to keep first", 409);
       const w = want(cfg, tb);
       const now = syncNeed(tb, plan.ownEvent(held.uid), w);
       if (now !== held.op || JSON.stringify(w) !== JSON.stringify(held.after)) return bad("The timebox changed since the preview. Review the change again", 409);
@@ -310,10 +310,10 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
       return out(plan.updateTimebox(tb.id, { start, end, title, showAs, outlookNote: null }));
     }
     case "timebox.resolve": {
-      // Step 13: both sides changed since the last sync. Keep Coopilot's (then the usual preview puts it on Outlook)
+      // Step 13: both sides changed since the last sync. Keep FocusTime's (then the usual preview puts it on Outlook)
       // or use Outlook's (the timebox follows it, nothing is written).
       const o = fields(input, ["id", "keep"]);
-      if (o.keep !== "coopilot" && o.keep !== "outlook" && o.keep !== "local" && o.keep !== "remove") throw new Invalid("keep must be coopilot, outlook, local or remove");
+      if (o.keep !== "focustime" && o.keep !== "outlook" && o.keep !== "local" && o.keep !== "remove") throw new Invalid("keep must be focustime, outlook, local or remove");
       if (o.keep === "local" || o.keep === "remove") {
         // Step 13.5: its event was deleted in Outlook. Keep it here only, or remove it; nothing is written either way.
         const gone = plan.timebox(posId(o.id, "id"));
@@ -327,7 +327,7 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
       const own = plan.ownEvent(tb.uid);
       const theirs = tb.conflict.outlook;
       const localBefore = localOf(tb);
-      if (o.keep === "coopilot") {
+      if (o.keep === "focustime") {
         // Outlook's version becomes "what is there", so the timebox shows as out of step until it is written.
         if (own && theirs) plan.recordOwnEvent(tb.uid, tb.id, own.eventId, theirs);
         else if (own) plan.markOwnDeleted(tb.uid);
@@ -339,7 +339,7 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
         return { ok: true, data: { timebox: null, uid: tb.uid, sync: null } };
       }
       const t = timeboxFrom(theirs, clientName(cfg, tb.clientKey), tz);
-      if (!t) throw new PlanError("Outlook's version can't be a timebox (it is longer than 8 hours or crosses midnight). Keep Coopilot's, or change it in Outlook");
+      if (!t) throw new PlanError("Outlook's version can't be a timebox (it is longer than 8 hours or crosses midnight). Keep FocusTime's, or change it in Outlook");
       const next = plan.updateTimebox(tb.id, { ...t, pickId: t.date === tb.date ? tb.pickId : null, conflict: null, outlookNote: `Changed in Outlook: ${tb.conflict.changed.join(", ")}` });
       if (own) plan.recordOwnEvent(tb.uid, tb.id, own.eventId, want(cfg, next) ?? theirs);
       plan.logWrite({ op: "update", kind: "sync", status: "confirmed", message: "From Outlook: Outlook's version kept (chosen)", uid: tb.uid, eventId: own?.eventId ?? null, account: null, calendar: null, before: own?.fields ?? null, after: theirs, localBefore, localAfter: localOf(next), auto: false });
@@ -368,7 +368,7 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
       const entries = plan.writeLog(100);
       const top = undoTops(plan.writeLog(1000));
       const undoable = (e: WriteEntry) => top.get(e.uid) === e.id && !!undoOf(e);
-      // Coopilot events on Outlook whose timebox is gone (after Reset local plan): offered for removal.
+      // FocusTime events on Outlook whose timebox is gone (after Reset local plan): offered for removal.
       const orphans = plan.ownEvents().filter((x) => { const t = plan.timeboxByUid(x.uid); return !t || t.removedAt || !t.outlook; }).map((x) => ({ uid: x.uid, title: x.fields.subject, when: when(x.fields, tz) }));
       return { ok: true, data: { entries: entries.map((e) => ({ ...e, undoable: undoable(e), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending", whenText: e.after ? when(e.after, tz) : e.before ? when(e.before, tz) : null })), orphans } };
     }
@@ -428,11 +428,11 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
         const eventId = text(e.id, "event id", 400);
         const now = await ow.writer.ownEditable(eventId).catch((x: unknown) => { throw x instanceof NetworkError ? new PlanError("Outlook unreachable") : x; });
         if (!now) throw new PlanError("That event is gone from Outlook");
-        if (!editableMine(now)) return bad(now.marker ? "That event is Coopilot's: change its timebox instead" : now.others > 0 || !now.isOrganizer ? "Others are on this meeting, so Coopilot won't change it: open it in Outlook" : now.isAllDay ? "An all-day event: change it in Outlook" : "A repeating event: change it in Outlook", 409);
+        if (!editableMine(now)) return bad(now.marker ? "That event is FocusTime's: change its timebox instead" : now.others > 0 || !now.isOrganizer ? "Others are on this meeting, so FocusTime won't change it: open it in Outlook" : now.isAllDay ? "An all-day event: change it in Outlook" : "A repeating event: change it in Outlook", 409);
         const start = e.start === undefined ? now.start : Temporal.Instant.from(localTime(e.start, "start", tz)).toString();
         const end = e.end === undefined ? now.end : Temporal.Instant.from(localTime(e.end, "end", tz)).toString();
         if (Temporal.Instant.compare(Temporal.Instant.from(end), Temporal.Instant.from(start)) <= 0) throw new Invalid("An event ends after it starts");
-        if (Temporal.Instant.from(start).until(Temporal.Instant.from(end)).total("hours") > 24) throw new Invalid("Coopilot changes events of up to 24 hours");
+        if (Temporal.Instant.from(start).until(Temporal.Instant.from(end)).total("hours") > 24) throw new Invalid("FocusTime changes events of up to 24 hours");
         if (e.showAs !== undefined && !isShowAs(e.showAs)) throw new Invalid("showAs must be busy, tentative, free, oof or workingElsewhere");
         const showNow = (isShowAs(now.showAs) ? now.showAs : (["busy", "tentative", "free", "oof", "workingElsewhere"] as const).find((v) => v.toLowerCase() === now.showAs.toLowerCase()) ?? "busy") as OutlookShowAs;
         const before: Fields = { subject: now.subject, body: "", start: Temporal.Instant.from(now.start).toString(), end: Temporal.Instant.from(now.end).toString(), showAs: showNow, reminder: false };
@@ -515,7 +515,7 @@ async function writeState(ctx: TimeboxContext, cfg: AppConfig): Promise<WriteSta
   const ow = ctx.outlook(cfg);
   if (!ow) return { access: "not_set_up", message: "Outlook isn't set up", ...settings };
   const a = await ow.access();
-  return { access: a.status, message: a.status === "write" ? "Coopilot can create and change its own Outlook events" : a.status === "read_only" ? NO_WRITE : a.message, ...settings };
+  return { access: a.status, message: a.status === "write" ? "FocusTime can create and change its own Outlook events" : a.status === "read_only" ? NO_WRITE : a.message, ...settings };
 }
 
 /**
@@ -588,7 +588,7 @@ type Settle = (status: WriteEntry["status"], message: string, more?: { eventId?:
 function failed(e: unknown, settle: Settle): WriteResult {
   if (e instanceof OwnershipError || e instanceof NotMineError || e instanceof DomainError || e instanceof RsvpRefused) return settle("refused", e.message);
   if (e instanceof GoneError) return settle("refused", "That event is gone from Outlook, so there is nothing to change");
-  if (e instanceof NetworkError) return settle("unconfirmed", "Outlook didn't answer, so Coopilot can't tell whether the change landed. Retry checks first and won't make a duplicate");
+  if (e instanceof NetworkError) return settle("unconfirmed", "Outlook didn't answer, so FocusTime can't tell whether the change landed. Retry checks first and won't make a duplicate");
   if (e instanceof HttpError && e.status === 403) return settle("failed", NO_WRITE);
   if (e instanceof HttpError) return settle("failed", `Outlook refused the change (HTTP ${e.status}). Retry when it's back`);
   return settle("failed", "The change didn't go through. Retry");
@@ -631,7 +631,7 @@ async function attemptRsvp(plan: PlanStore, ow: OutlookWrite, entry: WriteEntry,
   // The prior response is what was really there just before this one.
   if (entry.attempts === 1 && entry.undoOf === null && entry.before) plan.settleWrite(entry.id, { status: "pending", before: { ...entry.before, response: was.response ?? "none" } });
   const back = await again(env, () => ow.writer.meeting(id));
-  if (!back) return response === "declined" ? done(true) : settle("unconfirmed", "Outlook doesn't show the meeting anymore, so Coopilot can't confirm your response. Retry checks first");
+  if (!back) return response === "declined" ? done(true) : settle("unconfirmed", "Outlook doesn't show the meeting anymore, so FocusTime can't confirm your response. Retry checks first");
   if (back.response !== response) return settle("unconfirmed", "Outlook didn't show your response yet. Retry checks first and won't send it twice");
   return done(false);
 }
@@ -658,7 +658,7 @@ async function attemptInvite(plan: PlanStore, ow: OutlookWrite, entry: WriteEntr
   }
   // Undo: cancel.
   const before = entry.before ?? null;
-  await ow.writer.cancel(entry.eventId!, entry.uid, "Cancelled from Coopilot.");
+  await ow.writer.cancel(entry.eventId!, entry.uid, "Cancelled from FocusTime.");
   const back = await again(env, () => ow.writer.get(entry.eventId!));
   const still = back && before ? (await ow.writer.scan(before.start, before.end)).some((e) => e.id === entry.eventId) : !!back;
   if (still) return settle("unconfirmed", "Outlook still shows the meeting. Retry to cancel it again");

@@ -168,7 +168,7 @@ export type MenuEnv = {
   /** Timeboxes (step 12): the Timebox… dialog for a pick or a work item, and Reconnect Outlook with calendar changes. */
   openTimebox: (t: TimeboxTarget) => void;
   connectWrite: () => void;
-  /** Step 13: edit facts per Outlook event and whether Coopilot may write; my own event's preview; Outlook on the web. */
+  /** Step 13: edit facts per Outlook event and whether FocusTime may write; my own event's preview; Outlook on the web. */
   eventEdit: Record<string, EditFacts>;
   canWrite: boolean;
   editEvent: (input: { id: string; start?: string; end?: string; showAs?: OutlookShowAs }) => void;
@@ -488,7 +488,7 @@ const outlookDay = (date: IsoDate) => {
 
 /**
  * The menu of any calendar event: every action, those its tier doesn't allow disabled with a one-line reason
- * ("Coopilot only edits what it created or what only I can see"). My own events: move, change end and show as,
+ * ("FocusTime only edits what it created or what only I can see"). My own events: move, change end and show as,
  * each previewed. Meetings with others: Open in Outlook only.
  */
 export function eventMenu(env: MenuEnv, e: CalEvent): MenuStep {
@@ -524,22 +524,22 @@ export function eventMenu(env: MenuEnv, e: CalEvent): MenuStep {
       case "open":
         return { ...base, run: () => env.openOutlook(x.webLink ?? outlookDay(date)) };
       default:
-        // Coopilot's own events show as timeboxes, where these live.
+        // FocusTime's own events show as timeboxes, where these live.
         return { ...base, disabled: "Edit it as a timebox (its band in the block)" };
     }
   }
 }
 
-/** The menu of a timebox (a Coopilot event: the event and its timebox are one thing). */
+/** The menu of a timebox (a FocusTime event: the event and its timebox are one thing). */
 export function timeboxMenu(env: MenuEnv, t: TimeboxView): MenuStep {
   const tz = env.tz;
   const dur = Temporal.Instant.from(t.start).until(Temporal.Instant.from(t.end)).total("minutes");
   const ev = Object.entries(env.eventEdit).find(([, f]) => f.marker === t.uid);
-  const blocked = t.conflict ? "Changed in Coopilot and in Outlook: choose a version first" : undefined;
+  const blocked = t.conflict ? "Changed in FocusTime and in Outlook: choose a version first" : undefined;
   const change = (input: Record<string, unknown>) => env.timeboxChange("timebox.update", { id: t.id, ...input });
   const conflict: MenuItem[] = t.conflict
     ? [
-        { id: "keep", label: "Keep Coopilot's version", hint: t.conflict.changed.join(", "), action: "timebox.resolve", run: () => env.timeboxChange("timebox.resolve", { id: t.id, keep: "coopilot" }) },
+        { id: "keep", label: "Keep FocusTime's version", hint: t.conflict.changed.join(", "), action: "timebox.resolve", run: () => env.timeboxChange("timebox.resolve", { id: t.id, keep: "focustime" }) },
         { id: "theirs", label: t.conflict.outlook ? "Use Outlook's version" : "Remove (deleted in Outlook)", action: "timebox.resolve", run: () => env.timeboxChange("timebox.resolve", { id: t.id, keep: "outlook" }) },
       ]
     : [];
@@ -630,11 +630,11 @@ export function timeStep(env: MenuEnv, p: Pick): MenuStep {
     };
   }
   const len = minutesOfBox(t);
-  const blocked = t.conflict ? "Changed in Coopilot and in Outlook: choose a version first" : undefined;
+  const blocked = t.conflict ? "Changed in FocusTime and in Outlook: choose a version first" : undefined;
   const change = (input: Record<string, unknown>) => env.timeboxChange("timebox.update", { id: t.id, ...input });
   const conflict: MenuItem[] = t.conflict
     ? [
-        { id: "keepmine", label: "Keep Coopilot's version", hint: t.conflict.changed.join(", "), action: "timebox.resolve", run: () => env.timeboxChange("timebox.resolve", { id: t.id, keep: "coopilot" }) },
+        { id: "keepmine", label: "Keep FocusTime's version", hint: t.conflict.changed.join(", "), action: "timebox.resolve", run: () => env.timeboxChange("timebox.resolve", { id: t.id, keep: "focustime" }) },
         { id: "theirs", label: t.conflict.outlook ? "Use Outlook's version" : "Remove (deleted in Outlook)", action: "timebox.resolve", run: () => env.timeboxChange("timebox.resolve", { id: t.id, keep: "outlook" }) },
       ]
     : [];
@@ -959,7 +959,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
     case "ui.set_text_size": return { next: () => ({ title: "Text size", items: TEXT_SIZES.map((s) => ({ id: s, label: TEXT_SIZE_NAMES[s], checked: env.textSize === s, action: "ui.set_text_size", run: () => env.saveTextSize(s) })) }) };
     case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
-    case "ui.first_launch": return { disabled: "Runs on its own the first time Coopilot opens" };
+    case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };

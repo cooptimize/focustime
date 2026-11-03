@@ -135,7 +135,7 @@ describe("focus sets my Teams status", () => {
     });
   }
 
-  it("a restart still clears it: what Coopilot set is kept in account state", async () => {
+  it("a restart still clears it: what FocusTime set is kept in account state", async () => {
     const s = setup();
     await s.run("timer.start", { minutes: 50 });
     await s.sync();

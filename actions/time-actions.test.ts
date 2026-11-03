@@ -34,7 +34,7 @@ describe("time model actions (step 6b)", () => {
     expect(r.ok).toBe(true);
     const text = readFileSync(t.path, "utf8");
     expect(text).toContain('[[hours.override]]\ndate = "2026-11-05"\nsegments = ["09:00-16:00", "20:00-22:00"]\nlunch = ""');
-    expect(text).toContain("# Coopilot configuration.");
+    expect(text).toContain("# FocusTime configuration.");
     await t.run("hours.set_day", { date: "2026-11-06", segments: ["09:00-12:00"] });
     await t.run("hours.set_day", { date: "2026-11-05", segments: ["10:00-15:00"] });
     const after = parseConfig(readFileSync(t.path, "utf8"));

@@ -1,4 +1,4 @@
-// Settings (step 6b): every setting Coopilot owns, read from and written to the same validated config file. Values
+// Settings (step 6b): every setting FocusTime owns, read from and written to the same validated config file. Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
 import { AzureWriteLog, TeamsAccessLine, TeamsStatusLog, YouAccount } from "./Account.tsx";
@@ -280,7 +280,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
                 <input type="radio" name="range" checked={p.viewRange === r} onChange={() => p.setViewRange(r)} /> {VIEW_RANGE_NAMES[r]}
               </label>
             ))}
-            <span className="set-hint">The default. V on Week changes it until you close Coopilot.</span>
+            <span className="set-hint">The default. V on Week changes it until you close FocusTime.</span>
           </fieldset>
           <fieldset className="set-choice">
             <legend>Personal events</legend>
@@ -318,9 +318,9 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
       // Step 17.5: the lockup, the version and the credit line.
       return (
         <div className="brand-about">
-          <Lockup width={280} />
+          <Lockup width={320} />
           <p>Version {APP_VERSION}</p>
-          <p className="set-hint">Coopilot is made by Cooptimize, for planning a week of client focus blocks.</p>
+          <p className="set-hint">FocusTime is made by Cooptimize, for planning a week of client work.</p>
         </div>
       );
   }
@@ -738,7 +738,7 @@ function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
               ? "Checking for playerctl…"
               : media.playerctl
                 ? "Pauses what is playing when focus ends or a break starts, and resumes it when the next focus starts. Uses playerctl (MPRIS)."
-                : "playerctl isn't installed, so Coopilot can't pause or resume music players. Install the playerctl package to use this; nothing is installed for you."
+                : "playerctl isn't installed, so FocusTime can't pause or resume music players. Install the playerctl package to use this; nothing is installed for you."
           }
         >
           <label className="set-check">
@@ -850,7 +850,7 @@ function NotifyForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
         void save("notify", { kinds, quiet, quietPto });
       }}
     >
-      <p className="muted">Each is sent once; a click opens Coopilot there.</p>
+      <p className="muted">Each is sent once; a click opens FocusTime there.</p>
       <div className="set-notify">
         {group("Ritual reminders", RITUAL_KINDS)}
         {group("While you focus", ["timer", "meeting"])}
@@ -1199,7 +1199,7 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
       <input ref={ref} type="password" autoComplete="new-password" spellCheck={false} placeholder={w ? "New PAT to replace it" : "Paste your PAT"} aria-label={`DevOps write PAT for ${c.setting.name ?? c.key} (masked)`} />
       <label className="set-inline">
         <span className="muted">Expires (optional)</span>
-        <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} title="DevOps doesn't tell Coopilot the expiry; copy it from the PAT page" />
+        <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} title="DevOps doesn't tell FocusTime the expiry; copy it from the PAT page" />
       </label>
       <button type="submit" className="mini primary" disabled={busy}>
         {busy ? "Checking…" : "Save"}
@@ -1304,7 +1304,7 @@ function DataSection(p: Props & { data: SettingsData }) {
   );
 }
 
-/** Settings > Connections (step 12): whether Coopilot may change its own Outlook events, and how to allow it. */
+/** Settings > Connections (step 12): whether FocusTime may change its own Outlook events, and how to allow it. */
 function OutlookWriteRow() {
   const env = useTimeboxes();
   useEffect(() => env?.loadAccess(), []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1314,7 +1314,7 @@ function OutlookWriteRow() {
     <div className="set-write">
       <h3>Outlook calendar changes</h3>
       <p>
-        {!a ? "Checking…" : a.access === "write" ? "Allowed: Coopilot can create, change and remove the Outlook events it created (timeboxes), each after a preview. It can't change any other event." : a.message}
+        {!a ? "Checking…" : a.access === "write" ? "Allowed: FocusTime can create, change and remove the Outlook events it created (timeboxes), each after a preview. It can't change any other event." : a.message}
       </p>
       {a && a.access !== "write" && a.access !== "not_set_up" && (
         <button type="button" className="mini primary" onClick={env.connectWrite}>
@@ -1329,7 +1329,7 @@ function OutlookWriteRow() {
 const OPS: Record<WriteEntry["op"], string> = { create: "Created", update: "Changed", delete: "Removed" };
 const KINDS: Record<WriteEntry["kind"], string | null> = { timebox: null, event: "Your event", invite: "Help invite", sync: "From Outlook", rsvp: "Response" };
 const STATUS: Record<WriteEntry["status"], string> = { pending: "Not finished", confirmed: "Confirmed", unconfirmed: "Not confirmed", failed: "Failed", refused: "Refused" };
-/** Settings > Data (step 12): every external write, newest first, with Undo and Retry; and Coopilot events left on Outlook. */
+/** Settings > Data (step 12): every external write, newest first, with Undo and Retry; and FocusTime events left on Outlook. */
 function WriteLog() {
   const env = useTimeboxes();
   const [log, setLog] = useState<WriteLogView | null>(null);
@@ -1342,11 +1342,11 @@ function WriteLog() {
   return (
     <section className="write-log" aria-label="Write log">
       <h3>Write log</h3>
-      <p className="muted">Every change Coopilot made outside this computer.</p>
+      <p className="muted">Every change FocusTime made outside this computer.</p>
       {error && <p className="set-problem">{error}</p>}
       {log && log.orphans.length > 0 && (
         <div className="wl-orphans">
-          <h4>Coopilot events with no timebox</h4>
+          <h4>FocusTime events with no timebox</h4>
           <ul>
             {log.orphans.map((o) => (
               <li key={o.uid}>

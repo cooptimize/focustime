@@ -36,7 +36,7 @@ describe("timebox capacity math", () => {
 const fields = outlookFields({ title: "#4512 Import mapping", url: "https://dev.azure.com/adatum/p/_workitems/edit/4512", start: "2026-11-03T09:00:00-06:00", end: "2026-11-03T10:30:00-06:00" }, "Adatum");
 describe("Outlook fields", () => {
   it("Busy, no reminder, '<client>: <title>', the DevOps link in the body, UTC times", () => {
-    expect(fields).toEqual({ subject: "Adatum: #4512 Import mapping", body: "https://dev.azure.com/adatum/p/_workitems/edit/4512\n\nTimebox planned in Coopilot.", start: "2026-11-03T15:00:00Z", end: "2026-11-03T16:30:00Z", showAs: "busy", reminder: false });
+    expect(fields).toEqual({ subject: "Adatum: #4512 Import mapping", body: "https://dev.azure.com/adatum/p/_workitems/edit/4512\n\nTimebox planned in FocusTime.", start: "2026-11-03T15:00:00Z", end: "2026-11-03T16:30:00Z", showAs: "busy", reminder: false });
   });
 });
 
@@ -51,11 +51,13 @@ describe("sync need", () => {
     ["timebox gone entirely", [null, own, null], "delete"],
     ["off, never written", [{ outlook: false, removedAt: null }, null, fields], null],
     ["on, event deleted earlier", [{ outlook: true, removedAt: null }, { ...own, deletedAt: "x" }, fields], "create"],
+    // R1: an event written before the rename carries the old body line; that alone never rewrites it.
+    ["on, written before the rename", [{ outlook: true, removedAt: null }, { ...own, fields: { ...fields, body: fields.body.replace("FocusTime.", "Coopilot.") } }, fields], null],
   ])("%s → %s", (_l, args, want) => expect(syncNeed(...args)).toBe(want));
 });
 
-describe("de-duplication of Coopilot events in the week view", () => {
-  it("drops Coopilot's own events by recorded id and keeps everything else", () => {
+describe("de-duplication of FocusTime events in the week view", () => {
+  it("drops FocusTime's own events by recorded id and keeps everything else", () => {
     const ids = ownEventIds([{ uid: "u", timeboxId: 1, eventId: "E1", fields, deletedAt: null }, { uid: "v", timeboxId: 2, eventId: "E2", fields, deletedAt: "x" }]);
     const events = [{ id: "outlook:E1" }, { id: "outlook:E2" }, { id: "outlook:E3" }, { id: "google:E1" }];
     expect(withoutOwn(events, ids).map((e) => e.id)).toEqual(["outlook:E2", "outlook:E3", "google:E1"]);

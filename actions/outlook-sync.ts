@@ -1,5 +1,5 @@
-// Two-way sync for Coopilot's own Outlook events and edit facts for the tiers (step 13), on each Outlook refresh with
-// write access. One calendarView scan of the week on the write token: marked events are compared with what Coopilot
+// Two-way sync for FocusTime's own Outlook events and edit facts for the tiers (step 13), on each Outlook refresh with
+// write access. One calendarView scan of the week on the write token: marked events are compared with what FocusTime
 // last wrote (plan/outlooksync.ts); a change made only in Outlook moves the timebox ("Changed in Outlook"), a change
 // on both sides becomes a conflict to choose, and a marked event with no record is rebuilt (Q69). Nothing is written
 // to Outlook here; sync changes are logged as "from Outlook". Failures only mean no sync and no edit facts this time.
@@ -56,8 +56,8 @@ export async function syncWeek(o: { plan: PlanStore; ow: OutlookWrite; cfg: AppC
         if (!r) continue;
         tb = plan.addTimebox({ uid, date: r.date, clientKey: r.clientKey, title: r.title, start: r.start, end: r.end, outlook: true, showAs: r.showAs });
         tb = plan.updateTimebox(tb.id, { outlookNote: "Rebuilt from Outlook" });
-        log(tb, "create", "From Outlook: rebuilt from its Coopilot marker", null, tb, ev.id, null, wantFields(cfg, tb));
-      } else log(tb, "update", "From Outlook: record rebuilt from its Coopilot marker", tb, tb, ev.id, null, null);
+        log(tb, "create", "From Outlook: rebuilt from its FocusTime marker", null, tb, ev.id, null, wantFields(cfg, tb));
+      } else log(tb, "update", "From Outlook: record rebuilt from its FocusTime marker", tb, tb, ev.id, null, null);
       const fields = wantFields(cfg, tb) ?? outlookFields({ ...tb }, clientName(cfg, tb.clientKey));
       plan.recordOwnEvent(uid, tb.id, ev.id, { ...fields, subject: ev.subject, start: instant(ev.start).toString(), end: instant(ev.end).toString(), showAs: (tb.showAs) });
       result.rebuilt++;
@@ -67,7 +67,7 @@ export async function syncWeek(o: { plan: PlanStore; ow: OutlookWrite; cfg: AppC
     result.changed += apply(o, tb, own.fields, ev, log, result);
   }
 
-  // Coopilot's events on this week that the scan didn't show: deleted in Outlook, or moved out of the week.
+  // FocusTime's events on this week that the scan didn't show: deleted in Outlook, or moved out of the week.
   const weekEnd = Temporal.PlainDate.from(o.weekStart).add({ days: 6 }).toString();
   for (const own of plan.ownEvents()) {
     if (seen.has(own.uid)) continue;
@@ -117,7 +117,7 @@ function apply(o: { plan: PlanStore; cfg: AppConfig; now: () => string }, tb: Ti
   const changed = d.kind === "conflict" ? d.changed : d.kind === "adopt" ? [...d.changed, "too long for a timebox"] : [];
   if (JSON.stringify(tb.conflict?.outlook ?? null) === JSON.stringify(outlook) && tb.conflict) return 0;
   plan.updateTimebox(tb.id, { conflict: { outlook, changed, at: o.now() } });
-  log(tb, "update", `Changed in Coopilot and in Outlook (${changed.join(", ")}): waiting for your choice`, tb, tb, own.eventId, last, outlook);
+  log(tb, "update", `Changed in FocusTime and in Outlook (${changed.join(", ")}): waiting for your choice`, tb, tb, own.eventId, last, outlook);
   result.conflicts++;
   return 0;
 }

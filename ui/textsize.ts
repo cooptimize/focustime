@@ -27,7 +27,7 @@ export function textSizeKey(e: KeyIn): "up" | "down" | "reset" | null {
   return null;
 }
 
-const KEY = "coopilot.textSize";
+const KEY = "focustime.textSize";
 const isSize = (v: unknown): v is TextSize => typeof v === "string" && (TEXT_SIZES as readonly string[]).includes(v);
 
 /** The size the last session saw, for the first paint before the config arrives. */
@@ -40,7 +40,7 @@ export function storedTextSize(): TextSize {
   }
 }
 
-const EVENT = "coopilot:text-size";
+const EVENT = "focustime:text-size";
 const current = (): TextSize => {
   const v = typeof document === "undefined" ? null : document.documentElement.getAttribute("data-text-size");
   return isSize(v) ? v : "default";

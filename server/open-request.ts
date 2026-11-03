@@ -1,4 +1,4 @@
-// Step 9: coopilot-open --capture leaves a one-shot request next to the launch file; the window takes it on load or
+// Step 9: focustime-open --capture leaves a one-shot request next to the launch file; the window takes it on load or
 // focus and opens that view. The file holds only a view name: never a token or anything else.
 import { lstat, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";

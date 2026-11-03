@@ -72,7 +72,7 @@ describe("capacity from the time model", () => {
     expect(capacityMinutes(mon.am, START)).toBe(120); // 9–12 minus a 1h meeting
     expect(capacityMinutes(mon.pm, START)).toBe(4 * 60 - 90); // 13–17 minus 1.5h unavailable
     expect(mon.pm.busyMeetingMinutes).toBe(0); // unavailable time is not a meeting
-    expect(mon.pm.events.map((e) => e.event.source)).toEqual(["coopilot"]);
+    expect(mon.pm.events.map((e) => e.event.source)).toEqual(["focustime"]);
   });
 
   it("gives a split day an evening slot that holds its own capacity", () => {

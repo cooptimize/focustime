@@ -62,10 +62,10 @@ describe("meeting RSVP: preview (D284)", () => {
     expect(f["Proposed time"]!.after).toMatch(/^Wed, Nov 4, 3:00 PM to 4:00 PM$/);
     expect(t.g.calls.filter((x) => x.method !== "GET")).toEqual([]);
   });
-  it("refuses a meeting I organize, a Coopilot event, one with nobody else, and a proposed time the meeting doesn't allow", async () => {
+  it("refuses a meeting I organize, a FocusTime event, one with nobody else, and a proposed time the meeting doesn't allow", async () => {
     const t = setup();
     expect((await t.fail("write.preview", { rsvp: { id: t.meeting({ isOrganizer: true }), response: "accepted" } })).error).toMatch(/You organize/);
-    expect((await t.fail("write.preview", { rsvp: { id: t.meeting({ marker: "tb-11111111-1111-4111-8111-111111111111" }), response: "accepted" } })).error).toMatch(/Coopilot's/);
+    expect((await t.fail("write.preview", { rsvp: { id: t.meeting({ marker: "tb-11111111-1111-4111-8111-111111111111" }), response: "accepted" } })).error).toMatch(/FocusTime's/);
     expect((await t.fail("write.preview", { rsvp: { id: t.meeting({ attendees: [] }), response: "accepted" } })).error).toMatch(/Nobody else/);
     expect((await t.fail("write.preview", { rsvp: { id: t.meeting({ allowNewTimeProposals: false }), response: "tentativelyAccepted", proposedStart: "2026-11-04T15:00:00-05:00", proposedEnd: "2026-11-04T16:00:00-05:00" } })).error).toMatch(/doesn't allow/);
     expect((await t.fail("write.preview", { rsvp: { id: t.meeting(), response: "maybe" } })).status).toBe(400);

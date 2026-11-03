@@ -69,8 +69,8 @@ export type ShowAs = "free" | "tentative" | "busy" | "oof" | "workingElsewhere" 
 
 export type CalEvent = {
   id: string;
-  /** "coopilot": unavailable time blocked in Coopilot (step 6b), busy like a meeting but not a meeting. */
-  source: "outlook" | "google" | "coopilot";
+  /** "focustime": unavailable time blocked in FocusTime (step 6b), busy like a meeting but not a meeting. */
+  source: "outlook" | "google" | "focustime";
   title: string;
   /** Timed: ISO date-time with offset. All-day: ISO date. */
   start: string;
@@ -80,11 +80,11 @@ export type CalEvent = {
   showAs?: ShowAs;
   isPersonal: boolean;
   responseStatus?: "none" | "organizer" | "accepted" | "tentative" | "declined" | "notResponded";
-  /** Set on unavailable time (source "coopilot"): its plan store id and note. */
+  /** Set on unavailable time (source "focustime"): its plan store id and note. */
   unavailable?: { id: number; note: string | null };
 };
 
-/** Time blocked in Coopilot for things on no calendar (step 6b). Counts against capacity like a meeting. */
+/** Time blocked in FocusTime for things on no calendar (step 6b). Counts against capacity like a meeting. */
 export type Unavailable = { id: number; title: string; start: IsoDateTime; end: IsoDateTime; note: string | null };
 
 /** Planned work outside working hours (step 6b): local only, never written to a calendar. */

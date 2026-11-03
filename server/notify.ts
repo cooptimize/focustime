@@ -45,16 +45,16 @@ export async function checkReminder(d: ReminderDeps): Promise<boolean> {
   if (!reminderDue(now, model, d.committed(date), offset)) return false;
   if (d.off && (await d.off(date).catch(() => false))) return false;
   if (!d.once(date)) return false;
-  d.send("Coopilot", "Today isn't planned yet. Open Coopilot and press P to plan the day.");
+  d.send("FocusTime", "Today isn't planned yet. Open FocusTime and press P to plan the day.");
   return true;
 }
 
 /** The icon name every notification carries (step 17.5): the hicolor icons installed by system/install-icons.sh. */
-export const NOTIFY_ICON = "coopilot";
+export const NOTIFY_ICON = "focustime";
 
 /** notify-send with a fixed argument list (no shell). Fire and forget: for a line that needs no buttons or click. */
 export function notifySend(title: string, body: string) {
-  const p = spawn("notify-send", ["--app-name=Coopilot", "--urgency=normal", `--icon=${NOTIFY_ICON}`, title, body], { stdio: "ignore" });
+  const p = spawn("notify-send", ["--app-name=FocusTime", "--urgency=normal", `--icon=${NOTIFY_ICON}`, title, body], { stdio: "ignore" });
   p.on("error", () => {});
   p.unref();
 }
@@ -69,7 +69,7 @@ export function notifySend(title: string, body: string) {
 export function desktopNotify(n: Notice, shown?: (handle: string) => void): Promise<string | null> {
   return new Promise((resolve) => {
     // --print-id (Q91): the first line is the notification's id, so it can be closed when its occasion is handled.
-    const args = ["--app-name=Coopilot", "--urgency=normal", "--print-id", `--icon=${NOTIFY_ICON}`, `--action=${OPEN_KEY}=Open`, ...n.buttons.map((b) => `--action=${b.key}=${b.label}`), n.title, n.body];
+    const args = ["--app-name=FocusTime", "--urgency=normal", "--print-id", `--icon=${NOTIFY_ICON}`, `--action=${OPEN_KEY}=Open`, ...n.buttons.map((b) => `--action=${b.key}=${b.label}`), n.title, n.body];
     const p = spawn("notify-send", args, { stdio: ["ignore", "pipe", "ignore"] });
     let out = "";
     let told = false;
@@ -91,7 +91,7 @@ export function desktopNotify(n: Notice, shown?: (handle: string) => void): Prom
 }
 
 /**
- * Q91: withdraws a notification Coopilot showed (freedesktop CloseNotification, fixed arguments, no shell). A
+ * Q91: withdraws a notification FocusTime showed (freedesktop CloseNotification, fixed arguments, no shell). A
  * service that ignores it leaves the notification; clicking it then opens a view that shows the thing is done.
  */
 export function closeDesktopNotification(handle: string) {
@@ -143,8 +143,8 @@ export async function checkDayReminder(d: DayReminderDeps): Promise<boolean> {
   return true;
 }
 
-export const CLOSEOUT_MESSAGE = "Time to close out the day: picks, resume notes and follow-ups. Open Coopilot and press E.";
-export const CHECKIN_MESSAGE = "Midday check-in: what still fits this afternoon. Open Coopilot and press M.";
+export const CLOSEOUT_MESSAGE = "Time to close out the day: picks, resume notes and follow-ups. Open FocusTime and press E.";
+export const CHECKIN_MESSAGE = "Midday check-in: what still fits this afternoon. Open FocusTime and press M.";
 
 /**
  * Plan the week nudges (step 8): Thursday and Friday for next week, Monday for this week, each from its time (Settings

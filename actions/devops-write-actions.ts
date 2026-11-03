@@ -4,10 +4,10 @@
 // /rev, reads back and only then reports success, an audit log with prior values, Retry that checks before writing
 // again, and Undo. Writes use the client's personal write PAT from the keyring, checked against my DevOps identity
 // for that client, and go only to that client's org. The company read PAT from Dataverse is never read here: targets
-// come from devopsTargets(keys, { withPat: false }). Nothing is ever deleted except a comment Coopilot added (undo).
+// come from devopsTargets(keys, { withPat: false }). Nothing is ever deleted except a comment FocusTime added (undo).
 import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { AC_FIELD, BATCH_LIMIT, START_FIELD, completedState, createOps, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
+import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, completedState, createOps, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
 import { dateOnly, detectTargetField, htmlToText, identityEmail, portfolioTiers, workItemUrl } from "../sources/devops/normalize.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
@@ -76,7 +76,7 @@ const isoDate = (v: unknown, name: string): string => {
 const NO_PAT = (client: string) => `DevOps writes aren't enabled for ${client}. Enter your own DevOps PAT in Settings > Clients > DevOps write access`;
 const SUMMARY: Record<WriteOp, string> = {
   state: "Change the state of a DevOps item", comment: "Add a comment to a DevOps item", create: "Create a DevOps item", target_date: "Set a target date in DevOps",
-  undo_state: "Undo: put the state back", undo_comment: "Undo: delete the comment Coopilot added", undo_create: "Undo: set the created item to Removed", undo_target_date: "Undo: put the target date back",
+  undo_state: "Undo: put the state back", undo_comment: "Undo: delete the comment FocusTime added", undo_create: "Undo: set the created item to Removed", undo_target_date: "Undo: put the target date back",
 };
 
 export async function devopsWriteAction(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -260,7 +260,7 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
   const fieldsRows = labels.map((l) => row(l, h.op === "create" ? null : h.before[l] ?? null, h.after[l] ?? null));
   const links = h.op === "create" && h.parentId ? [`Adds a parent link to #${h.parentId}, which shows the new item as its child`] : h.op === "undo_create" ? ["The parent link stays; the item shows as Removed under it"] : [];
   const notes: string[] = [];
-  if (h.op === "undo_create" && h.draftId) notes.push("The draft comes back in Coopilot, with its picks.");
+  if (h.op === "undo_create" && h.draftId) notes.push("The draft comes back in FocusTime, with its picks.");
   if (h.op === "undo_state" && h.commentId) notes.push("The comment added with that change is deleted too.");
   if (h.followUpId) notes.push("Closes the follow-up once DevOps shows the change.");
   if (h.rev !== null) notes.push(`Written only if the item is still at revision ${h.rev}; if anyone changed it since, nothing is written.`);
@@ -297,7 +297,7 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
     }
     case "target_date": {
       const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
-      if (identityEmail(item.fields["System.AssignedTo"]) !== env.me.email.toLowerCase()) throw new Refused(`#${item.id} isn't assigned to you, so Coopilot won't set its target date`, 409);
+      if (identityEmail(item.fields["System.AssignedTo"]) !== env.me.email.toLowerCase()) throw new Refused(`#${item.id} isn't assigned to you, so FocusTime won't set its target date`, 409);
       const tiers = portfolioTiers(await writer.processConfig(org, pat, project));
       if (!tiers.feature.has(item.type) && !tiers.epic.has(item.type)) throw new Refused(`#${item.id} is a ${item.type}: target dates are set on features and epics`, 409);
       const typeHas = await writer.typeFields(org, pat, project, item.type);
@@ -334,7 +334,7 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
       if (!wantParent.has(parent.type)) throw new Refused(`#${parent.id} is a ${parent.type}: a ${draft.level === "feature" ? "feature goes under an epic" : "story goes under a feature"}`, 409);
       const parentStates = await writer.states(org, pat, project, parent.type);
       const pcat = parentStates.find((s) => s.name === parent.state)?.category ?? "InProgress";
-      if (!isOpenCategory(pcat)) throw new Refused(`#${parent.id} is ${parent.state}; Coopilot adds items only under open parents`, 409);
+      if (!isOpenCategory(pcat)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
       const typeHas = await writer.typeFields(org, pat, project, type);
       const acField = draft.level === "story" && typeHas.has(AC_FIELD);
       // Step 15.3: the draft editor's values; an explicit input (older callers) still wins.
@@ -371,7 +371,7 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
       const item = await writer.item(org, pat, project, entry.itemId);
       const u = { ...base(env), ...none, itemId: item.id, title: item.title, undoOf: entry.id, type: item.type, parentId: entry.parentId };
       if (entry.op === "state") {
-        if (item.state !== entry.after.State) throw new Refused(`DevOps shows #${item.id} as ${item.state} now, changed after Coopilot's change. Undo would overwrite that; change it in DevOps`, 409, "changed");
+        if (item.state !== entry.after.State) throw new Refused(`DevOps shows #${item.id} as ${item.state} now, changed after FocusTime's change. Undo would overwrite that; change it in DevOps`, 409, "changed");
         return { ...u, op: "undo_state", ops: stateOps(item.rev, entry.before.State!), rev: item.rev, before: { State: item.state }, after: { State: entry.before.State ?? null }, commentId: entry.commentId };
       }
       if (entry.op === "target_date") {
@@ -380,7 +380,7 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
         const cur = dateOnly(item.fields[field], tz);
         if (cur !== entry.after["Target date"]) throw new Refused(`DevOps shows another target date on #${item.id} now (${cur ?? "none"}). Undo would overwrite it`, 409, "changed");
         const prior = entry.before["Target date"] ?? null;
-        // Step 17: a dates write puts Start Date back too, if it is still what Coopilot set.
+        // Step 17: a dates write puts Start Date back too, if it is still what FocusTime set.
         if ("Start date" in entry.after) {
           const curStart = dateOnly(item.fields[START_FIELD], tz);
           if (curStart !== entry.after["Start date"]) throw new Refused(`DevOps shows another start date on #${item.id} now (${curStart ?? "none"}). Undo would overwrite it`, 409, "changed");
@@ -399,9 +399,9 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
       // A create: never deleted, set to its type's Removed state with a comment.
       const states = await writer.states(org, pat, project, item.type);
       const removed = removedState(states);
-      if (!removed) throw new Refused(`${item.type} has no Removed state in this process. Coopilot never deletes items: close or remove #${item.id} in DevOps`, 409);
+      if (!removed) throw new Refused(`${item.type} has no Removed state in this process. FocusTime never deletes items: close or remove #${item.id} in DevOps`, 409);
       if (item.state === removed) return `#${item.id} is already ${removed}`;
-      return { ...u, op: "undo_create", ops: removeOps(item.rev, removed), rev: item.rev, before: { State: item.state, Comment: null }, after: { State: removed, Comment: "Removed by Coopilot: undo of an item created from Coopilot." }, draftId: entry.draftId, pickIds: entry.pickIds };
+      return { ...u, op: "undo_create", ops: removeOps(item.rev, removed), rev: item.rev, before: { State: item.state, Comment: null }, after: { State: removed, Comment: REMOVED_COMMENT }, draftId: entry.draftId, pickIds: entry.pickIds };
     }
     default:
       throw new Invalid("kind must be state, comment, create, target_date or undo");
@@ -472,7 +472,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
         const since = Temporal.Instant.from(entry.at).toZonedDateTimeISO("UTC").toPlainDate().subtract({ days: 1 }).toString();
         const q = `SELECT [System.Id] FROM WorkItems WHERE [System.Parent] = ${entry.parentId} AND [System.Title] = '${entry.title.replace(/'/g, "''")}' AND [System.CreatedBy] = @Me AND [System.CreatedDate] >= '${since}'`;
         const found = await writer.wiql(org, pat, project, q);
-        if (found.length > 1) return settle("refused", `DevOps already has ${found.length} items with this title under #${entry.parentId}. Check DevOps; Coopilot won't make another`);
+        if (found.length > 1) return settle("refused", `DevOps already has ${found.length} items with this title under #${entry.parentId}. Check DevOps; FocusTime won't make another`);
         id = found[0] ?? null;
       }
       if (id === null) {
@@ -527,7 +527,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     return settle("confirmed", msg, { revAfter: back.rev, ...(wrote.commentId !== null ? { commentId: wrote.commentId } : {}) });
   } catch (e) {
     if (e instanceof WriteFailure) {
-      if (e.kind === "network") return settle("unconfirmed", "DevOps didn't answer, so Coopilot can't tell whether the change landed. Retry checks first and won't write twice");
+      if (e.kind === "network") return settle("unconfirmed", "DevOps didn't answer, so FocusTime can't tell whether the change landed. Retry checks first and won't write twice");
       if (e.kind === "auth" || e.kind === "forbidden") return settle("failed", e.message);
       if (e.kind === "not_found") return settle("refused", e.message);
       return settle("failed", e.message);

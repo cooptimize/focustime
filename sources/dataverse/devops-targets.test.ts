@@ -11,7 +11,7 @@ import { ACCT, devopsAccounts, dvConfig, FAKE_PAT_Adatum, FAKE_PAT_WC, FAKE_SECR
 const NOW = Temporal.Instant.from("2026-11-02T13:02:00Z");
 
 function setup(scenario: Scenario = "ok", extra: Parameters<typeof fakeFetch>[1] = {}) {
-  const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-dvt-"));
+  const cacheDir = mkdtempSync(join(tmpdir(), "focustime-dvt-"));
   const logs: LogRecord[] = [];
   const f = fakeFetch(scenario, extra);
   const source = createDataverseSource({ config: dvConfig, timeZone: "America/New_York", getSecret: async () => FAKE_SECRET, fetch: f.fetch, cacheDir, log: (r) => logs.push(r), now: () => NOW });

@@ -1,4 +1,4 @@
-// Parse and validate ~/.config/coopilot/config.toml. Pure: text in, config or per-field errors out.
+// Parse and validate ~/.config/focustime/config.toml. Pure: text in, config or per-field errors out.
 import { parse, TomlError } from "smol-toml";
 import { PROFILE_DIR } from "../links/edge.ts";
 import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
@@ -204,6 +204,7 @@ export function parseConfig(text: string): ParseResult {
     return v;
   };
 
+  // Section and key names are unchanged by the rename (R1), so existing config files keep working.
   for (const k of Object.keys(raw)) {
     if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap"].includes(k)) err(k, "Unknown section");
   }

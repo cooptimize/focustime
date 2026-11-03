@@ -58,7 +58,7 @@ export function createCalendarSource(d: CalendarSourceDeps) {
     if (e instanceof FetchFailure) return { status: e.status, message: e.message, ...(e.fixAction ? { fixAction: e.fixAction } : {}), useCache: true };
     if (e instanceof HttpError) {
       if (e.status === 401) return { status: "auth_required", message: `${L} needs reconnecting`, fixAction: d.connectAction, useCache: true };
-      if (e.status === 403) return { status: "misconfigured", message: `${L} refused access: check the calendar permission for Coopilot`, fixAction: "open_settings", useCache: true };
+      if (e.status === 403) return { status: "misconfigured", message: `${L} refused access: check the calendar permission for FocusTime`, fixAction: "open_settings", useCache: true };
       return { status: "error", message: `${L} error (HTTP ${e.status})`, useCache: true };
     }
     if (e instanceof NetworkError) return { status: "unreachable", message: `${L} unreachable`, useCache: true, cause: "network" };

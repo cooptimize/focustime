@@ -50,7 +50,7 @@ function gaps(busy: Interval[], start: number, end: number): Interval[] {
 }
 
 function sourceLabel(b: FocusBlock): string {
-  return b.source === "dataverse" ? "Dataverse" : "standing block, Coopilot config";
+  return b.source === "dataverse" ? "Dataverse" : "standing block, FocusTime config";
 }
 
 /**

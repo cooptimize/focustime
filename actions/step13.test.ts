@@ -100,7 +100,7 @@ describe("editing tier: my own events with nobody else on them", () => {
     expect(t.g.events.get(id)).toMatchObject({ start: "2026-11-10T20:00:00Z", showAs: "busy", marker: null });
   });
 
-  it("refuses meetings with others, events organized by someone else, repeating and all-day ones, and Coopilot's own (nothing sent)", async () => {
+  it("refuses meetings with others, events organized by someone else, repeating and all-day ones, and FocusTime's own (nothing sent)", async () => {
     const t = setup();
     const meeting = t.g.seed({ start: "2026-11-10T20:00:00Z", end: "2026-11-10T21:00:00Z", attendees: [{ address: "ana@cooptimize.org", name: "Ana" }] });
     const theirs = t.g.seed({ start: "2026-11-10T20:00:00Z", end: "2026-11-10T21:00:00Z", isOrganizer: false });
@@ -112,12 +112,12 @@ describe("editing tier: my own events with nobody else on them", () => {
     }
     const tb = await t.box();
     const mine = t.plan.ownEvent(tb.uid)!.eventId;
-    expect((await t.fail("write.preview", { event: { id: mine, start: `${D}T15:30:00-06:00`, end: `${D}T16:30:00-06:00` } })).error).toMatch(/Coopilot's: change its timebox/);
+    expect((await t.fail("write.preview", { event: { id: mine, start: `${D}T15:30:00-06:00`, end: `${D}T16:30:00-06:00` } })).error).toMatch(/FocusTime's: change its timebox/);
     expect(t.g.calls.filter((c) => c.method === "PATCH")).toEqual([]);
   });
 });
 
-describe("editing tier: Coopilot events (the event and its timebox are one thing)", () => {
+describe("editing tier: FocusTime events (the event and its timebox are one thing)", () => {
   it("retitles and changes show as through the timebox; the preview shows both", async () => {
     const t = setup();
     const tb = await t.box();
@@ -132,7 +132,7 @@ describe("editing tier: Coopilot events (the event and its timebox are one thing
   });
 });
 
-describe("two-way sync for Coopilot events", () => {
+describe("two-way sync for FocusTime events", () => {
   it("follows a move made in Outlook, notes it, and logs it as from Outlook (not undoable from the log)", async () => {
     const t = setup();
     const tb = await t.box();
@@ -197,7 +197,7 @@ describe("two-way sync for Coopilot events", () => {
     expect(t.g.events.size).toBe(0);
   });
 
-  it("both changed: keeps both, writes nothing, blocks the push until I choose; Use Outlook's or Keep Coopilot's", async () => {
+  it("both changed: keeps both, writes nothing, blocks the push until I choose; Use Outlook's or Keep FocusTime's", async () => {
     const t = setup();
     const tb = await t.box();
     const id = t.plan.ownEvent(tb.uid)!.eventId;
@@ -216,8 +216,8 @@ describe("two-way sync for Coopilot events", () => {
     await t.sync();
     expect((await t.run<WriteLogView>("write.log", {})).entries.length).toBe(before);
 
-    // Keep Coopilot's: the push is offered (preview shows Outlook's title as "Now").
-    const k = await t.run<{ sync: string; timebox: { conflict: unknown } }>("timebox.resolve", { id: tb.id, keep: "coopilot" });
+    // Keep FocusTime's: the push is offered (preview shows Outlook's title as "Now").
+    const k = await t.run<{ sync: string; timebox: { conflict: unknown } }>("timebox.resolve", { id: tb.id, keep: "focustime" });
     expect(k).toMatchObject({ sync: "update", timebox: { conflict: null } });
     const p = (await t.run<{ preview: WritePreview }>("write.preview", { uid: tb.uid })).preview;
     expect(p.fields.find((f) => f.label === "Title")).toMatchObject({ before: "T&S: renamed in Outlook", after: "T&S: #4512 Import mapping" });
@@ -237,7 +237,7 @@ describe("two-way sync for Coopilot events", () => {
   });
 });
 
-describe("Q69: a Coopilot-marked event without a local record", () => {
+describe("Q69: a FocusTime-marked event without a local record", () => {
   it("is rebuilt from its marker (record and timebox), hidden as a meeting, and logged from Outlook", async () => {
     const t = setup();
     const uid = "tb-0b6c1d2e-3f40-4152-8a6b-7c8d9e0f1a2b";

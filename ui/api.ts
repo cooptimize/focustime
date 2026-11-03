@@ -3,14 +3,14 @@ import type { ActionResponse, FieldProblem, WeekLoadData } from "../actions/type
 import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
 
 /**
- * The window's launch token is old (Coopilot was restarted): only the server's guard says this, with code
+ * The window's launch token is old (FocusTime was restarted): only the server's guard says this, with code
  * "launch_token". An action's own refusal is never one, whatever its status (step 15.4 fix: missing Azure consent
  * is a 401 refusal with code "consent").
  */
 export class SessionError extends Error {}
-export const STALE_MESSAGE = "Coopilot was restarted, so this window is out of date. Reopen Coopilot to continue";
+export const STALE_MESSAGE = "FocusTime was restarted, so this window is out of date. Reopen FocusTime to continue";
 
-/** Who shows "Reopen Coopilot" when a call finds the window out of date (set by the root). */
+/** Who shows "Reopen FocusTime" when a call finds the window out of date (set by the root). */
 let onStale: (() => void) | null = null;
 export const setStaleListener = (f: typeof onStale) => void (onStale = f);
 
@@ -26,14 +26,14 @@ export async function readResponse<T>(res: Response): Promise<T> {
     if (body.ok) return body.data;
     if (body.code !== "launch_token") throw new ActionRefusal(body.error, body.status, body.fields ?? [], body.code);
   } else if (res.status !== 401) {
-    throw new ActionRefusal(res.status === 403 ? "Coopilot refused that request" : `Coopilot answered ${res.status}`, res.status);
+    throw new ActionRefusal(res.status === 403 ? "FocusTime refused that request" : `FocusTime answered ${res.status}`, res.status);
   }
   onStale?.();
   throw new SessionError(STALE_MESSAGE);
 }
 
-/** Asks the host to open a fresh window (coopilot-open replaces this one). False when it can't. */
-export async function reopenCoopilot(): Promise<boolean> {
+/** Asks the host to open a fresh window (focustime-open replaces this one). False when it can't. */
+export async function reopenFocusTime(): Promise<boolean> {
   try {
     const r = await fetch("/api/reopen", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: "{}" });
     return r.status === 202;
@@ -98,7 +98,7 @@ export const planAction = (action: string, input: unknown) => call<PlanResult & 
 /** Saves the theme in config (step 6b). */
 export const setThemeAction = (theme: string) => call<{ ui: { theme: string } }>("ui.set_theme", { theme });
 
-/** Step 9: the view coopilot-open asked for ("capture"), taken once; null when none or on any failure. */
+/** Step 9: the view focustime-open asked for ("capture"), taken once; null when none or on any failure. */
 export async function takeOpenRequest(): Promise<string | null> {
   try {
     const r = await fetch("/api/open-request", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });

@@ -44,7 +44,7 @@ type Item = Listed<WeekFeature>;
 type HeadsUp = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; trigger?: "dropped" | "demoted" };
 type Drag = { clientKey: string; itemId: number; tier: Tier };
 
-const DRAG_TYPE = "application/x-coopilot-feature";
+const DRAG_TYPE = "application/x-focustime-feature";
 const HALF_WORD: Record<Half, string> = { AM: "morning", PM: "afternoon" };
 const plainDate = (d: IsoDate) => Temporal.PlainDate.from(d);
 const dateShort = (d: IsoDate) => plainDate(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });

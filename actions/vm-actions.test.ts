@@ -258,7 +258,7 @@ describe("my VM: status, start and stop through the write framework", () => {
 
   it("refuses any VM other than the confirmed one", async () => {
     const s = await signedInWithVm();
-    expect(await s.fail("vm.preview", { op: "start", vmId: OTHER })).toMatchObject({ status: 403, error: "Coopilot only acts on the VM you confirmed as yours" });
+    expect(await s.fail("vm.preview", { op: "start", vmId: OTHER })).toMatchObject({ status: 403, error: "FocusTime only acts on the VM you confirmed as yours" });
     expect(await s.fail("vm.restore", { vmId: OTHER })).toMatchObject({ status: 403 });
     // A preview held for the VM I had, after choosing another: refused at confirm.
     const p = await s.run<VmPreview>("vm.preview", { op: "start" });
@@ -376,7 +376,7 @@ describe("auto-shutdown: delay, skip, and the next-morning restore", () => {
     s.clock.advance(16 * 3600_000);
     await restoreTick(s.vmCtx(), { atWorkStart: true });
     expect(s.arm.schedule(VM)).toEqual({ time: "1730", status: "Enabled" });
-    expect(s.plan.azureWriteLog()[0]).toMatchObject({ op: "shutdown_restore", status: "refused", message: "Changed outside Coopilot since; left as it is" });
+    expect(s.plan.azureWriteLog()[0]).toMatchObject({ op: "shutdown_restore", status: "refused", message: "Changed outside FocusTime since; left as it is" });
     expect(s.plan.accountState(shutdownKey(VM))).toBeNull();
   });
 

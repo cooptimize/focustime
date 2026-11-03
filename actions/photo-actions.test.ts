@@ -45,7 +45,7 @@ function setup(o: { signedIn?: boolean; noClient?: boolean; fail?: unknown; cach
     },
   };
   const account: MicrosoftAccount = { signIn: async () => ({ status: "connected" }), identity: async () => ME, armToken: async () => "x", writeAccess: async () => ({ status: "read_only", message: "x" }), signOut: async () => {}, ...(o.noClient ? {} : { photos }) };
-  const dir = mkdtempSync(join(tmpdir(), "coopilot-photos-"));
+  const dir = mkdtempSync(join(tmpdir(), "focustime-photos-"));
   const cache = createPhotoCache(dir);
   const c: ActionContext = {
     loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(TOML) }),

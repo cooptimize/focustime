@@ -47,10 +47,10 @@ describe("PTO from Dataverse (step 6)", () => {
     const r = await bad.source.pto(WEEK, FRI);
     expect(r).toMatchObject({ source: "pto", status: "auth_required", fromCache: true });
     expect(r.items).toHaveLength(1);
-    expect(r.message).toMatch(/^PTO not readable: check the Coopilot role in Dataverse\. Showing PTO from /);
+    expect(r.message).toMatch(/^PTO not readable: check the FocusTime role in Dataverse\. Showing PTO from /);
     expect(JSON.stringify([r, bad.logs])).not.toContain(FAKE_TOKEN);
     const none = setup("forbidden");
-    expect(await none.source.pto(WEEK, FRI)).toMatchObject({ items: [], fromCache: false, message: "PTO not readable: check the Coopilot role in Dataverse. No cached PTO yet" });
+    expect(await none.source.pto(WEEK, FRI)).toMatchObject({ items: [], fromCache: false, message: "PTO not readable: check the FocusTime role in Dataverse. No cached PTO yet" });
   });
 
   it("a range covers trackers with no detail rows on every weekday (D109)", async () => {

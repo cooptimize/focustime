@@ -7,7 +7,7 @@ const UID = "tb-0b6c1d2e-3f40-4152-8a6b-7c8d9e0f1a2b";
 const last: Fields = outlookFields({ title: "#4512 Import mapping", url: "https://dev.azure.com/wc/p/_workitems/edit/4512", start: "2026-11-03T09:00:00-06:00", end: "2026-11-03T10:30:00-06:00" }, "T&S");
 const seen = (over: Partial<SeenEvent> = {}): SeenEvent => ({ id: "EV1", subject: last.subject, start: last.start, end: last.end, showAs: "busy", marker: UID, ...over });
 
-describe("two-way sync for Coopilot events", () => {
+describe("two-way sync for FocusTime events", () => {
   it("does nothing when neither side changed (the body isn't compared)", () => {
     expect(syncDecision(last, seen(), { ...last, body: "different" })).toEqual({ kind: "none" });
   });
@@ -20,9 +20,9 @@ describe("two-way sync for Coopilot events", () => {
     expect(timeboxFrom(d.fields, "T&S", TZ)).toEqual({ date: "2026-11-03", start: "2026-11-03T10:00:00-06:00", end: "2026-11-03T11:00:00-06:00", title: "Import mapping v2", showAs: "tentative" });
   });
 
-  it("deleted in Outlook: the timebox is kept and asks (step 13.5), whether or not Coopilot changed it", () => {
+  it("deleted in Outlook: the timebox is kept and asks (step 13.5), whether or not FocusTime changed it", () => {
     expect(syncDecision(last, null, last)).toEqual({ kind: "removed_in_outlook" });
-    // Deleted in Outlook and removed in Coopilot too: nothing left to do.
+    // Deleted in Outlook and removed in FocusTime too: nothing left to do.
     expect(syncDecision(last, null, null)).toEqual({ kind: "none" });
   });
 
@@ -30,9 +30,9 @@ describe("two-way sync for Coopilot events", () => {
     const mine = { ...last, start: "2026-11-03T15:30:00Z", end: "2026-11-03T17:00:00Z" };
     const d = syncDecision(last, seen({ subject: "T&S: renamed in Outlook" }), mine);
     expect(d).toMatchObject({ kind: "conflict", changed: ["title"], outlook: { subject: "T&S: renamed in Outlook" } });
-    // Moved in Coopilot, deleted in Outlook: kept and asks too, never a re-create.
+    // Moved in FocusTime, deleted in Outlook: kept and asks too, never a re-create.
     expect(syncDecision(last, null, mine)).toEqual({ kind: "removed_in_outlook" });
-    // Removed in Coopilot, changed in Outlook.
+    // Removed in FocusTime, changed in Outlook.
     expect(syncDecision(last, seen({ showAs: "free" }), null)).toMatchObject({ kind: "conflict" });
   });
 
@@ -41,7 +41,7 @@ describe("two-way sync for Coopilot events", () => {
   });
 });
 
-describe("Q69: rebuild a Coopilot event's record from its marker", () => {
+describe("Q69: rebuild a FocusTime event's record from its marker", () => {
   const clients = [{ key: "T&S", name: "Tailspin & Sons" }, { key: "Adatum", name: "Adatum" }];
   it("finds the client from the subject and keeps the marker as the uid", () => {
     expect(rebuildFrom(seen({ subject: "Tailspin & Sons: #4512 Import mapping" }), clients, TZ, "Cooptimize")).toMatchObject({ uid: UID, clientKey: "T&S", title: "#4512 Import mapping", date: "2026-11-03", start: "2026-11-03T09:00:00-06:00", outlook: true, showAs: "busy" });

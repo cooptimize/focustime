@@ -1,4 +1,4 @@
-// Who signed in (step 15.4): the claims Coopilot keeps from an ID token. The token comes straight from the token
+// Who signed in (step 15.4): the claims FocusTime keeps from an ID token. The token comes straight from the token
 // endpoint over TLS to a public client, so it is read, not validated (Microsoft: public apps don't benefit from
 // validating it); it is used to show who is signed in and to find "me" in Dataverse, never to authorize anything.
 export type IdClaims = {
@@ -15,7 +15,7 @@ export type IdClaims = {
 
 const text = (v: unknown, max = 256) => (typeof v === "string" && v.length > 0 && v.length <= max && !/[\u0000-\u001f]/.test(v) ? v : null);
 
-/** The claims Coopilot keeps, or null for anything that isn't a well-formed ID token with an oid and a username. */
+/** The claims FocusTime keeps, or null for anything that isn't a well-formed ID token with an oid and a username. */
 export function parseIdToken(jwt: string): IdClaims | null {
   const parts = jwt.split(".");
   if (parts.length !== 3 || !parts[1]) return null;

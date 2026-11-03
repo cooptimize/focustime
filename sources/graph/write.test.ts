@@ -36,7 +36,7 @@ describe("Graph writer", () => {
     expect(g.calls.filter((c) => c.method === "POST")).toHaveLength(1);
   });
 
-  it("refuses to update or delete an event without the Coopilot marker, and changes nothing", async () => {
+  it("refuses to update or delete an event without the FocusTime marker, and changes nothing", async () => {
     const { g, w } = setup();
     const id = g.seed({ start: F.start, end: F.end });
     const before = structuredClone(g.events.get(id));
@@ -101,7 +101,7 @@ describe("Graph writer", () => {
     expect(text).not.toContain("dev.azure.com");
   });
 
-  it("the create body carries exactly the fields Coopilot owns", () => {
+  it("the create body carries exactly the fields FocusTime owns", () => {
     expect(Object.keys(createBody(F, "m", "t")).sort()).toEqual(["attendees", "body", "end", "isReminderOn", "showAs", "singleValueExtendedProperties", "start", "subject", "transactionId"]);
   });
 });

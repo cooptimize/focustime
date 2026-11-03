@@ -24,7 +24,7 @@ export type BuildWeekInput = {
 
 /** Unavailable time as a busy calendar item, so every rule treats it like a meeting's time (not as a meeting). */
 export function unavailableEvent(u: Unavailable): CalEvent {
-  return { id: `unavailable-${u.id}`, source: "coopilot", title: u.title, start: u.start, end: u.end, allDay: false, showAs: "busy", isPersonal: false, unavailable: { id: u.id, note: u.note } };
+  return { id: `unavailable-${u.id}`, source: "focustime", title: u.title, start: u.start, end: u.end, allDay: false, showAs: "busy", isPersonal: false, unavailable: { id: u.id, note: u.note } };
 }
 
 /** The local span of an instant range on a date, clipped to that day; null when it doesn't touch the day. */

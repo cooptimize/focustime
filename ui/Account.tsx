@@ -1,4 +1,4 @@
-// Step 15.4: who Coopilot works for (one Microsoft sign-in) and my Azure VM. The sign-in screen on first open and after
+// Step 15.4: who FocusTime works for (one Microsoft sign-in) and my Azure VM. The sign-in screen on first open and after
 // sign-out, the person in the top bar, the VM chip (top bar and Today) with Start, Stop and the auto-shutdown choices,
 // their preview, Today's morning prompt and "still changed" warning, Settings > You (sign out, find and confirm my VM)
 // and the Azure write log in Settings > Data.
@@ -62,8 +62,8 @@ function SignInScreen({ status, signIn, offline, onSkip }: { status: AuthStatus;
     <main className="signin">
       <div className="signin-card">
         <BentMark width={120} />
-        <h1>Coopilot</h1>
-        <p>Sign in with your Microsoft work account. Coopilot uses it for your calendar and your Azure VM, and to find you in Dataverse.</p>
+        <h1>FocusTime</h1>
+        <p>Sign in with your Microsoft work account. FocusTime uses it for your calendar and your Azure VM, and to find you in Dataverse.</p>
         <button
           type="button"
           className="top-btn primary signin-btn"
@@ -84,12 +84,13 @@ function SignInScreen({ status, signIn, offline, onSkip }: { status: AuthStatus;
         </button>
         {busy && <p className="muted">Your browser opened Microsoft's sign-in page. Come back here when it says you can close the tab.</p>}
         {message && <p className="set-problem" role="alert">{message}</p>}
-        <p className="set-hint">The first time, Microsoft asks you to allow calendar and Azure access for Coopilot Desktop. Tokens stay in your keyring on this computer.</p>
+        {status.renameNote && <p className="set-problem" role="alert">{status.renameNote}</p>}
+        <p className="set-hint">The first time, Microsoft asks you to allow calendar and Azure access for this app. Tokens stay in your keyring on this computer.</p>
         <div className="signin-alt">
           <button type="button" className="link-btn muted" onClick={() => void call("demo.set", { on: true }).then(() => location.reload(), (e: unknown) => setMessage(errText(e)))}>Try the demo (fictional data)</button>
           {offline && <button type="button" className="link-btn muted signin-skip" onClick={onSkip}>Continue offline</button>}
         </div>
-        {offline && <p className="set-hint">Offline: Coopilot shows your local plan and what it saved from the last sign-in. Sign in when you're back online.</p>}
+        {offline && <p className="set-hint">Offline: FocusTime shows your local plan and what it saved from the last sign-in. Sign in when you're back online.</p>}
       </div>
     </main>
   );
@@ -133,7 +134,7 @@ export function PersonChip({ onOpen, onSettings }: { onOpen: (at: { x: number; y
 type VmApi = { status: VmStatus | null; refresh: (fresh?: boolean) => Promise<void>; act: (op: VmPreviewOp, anchor?: { x: number; y: number }) => void; openMenu: (at: { x: number; y: number }) => void };
 export const VmCtx = createContext<VmApi>({ status: null, refresh: async () => {}, act: () => {}, openMenu: () => {} });
 
-export const VM_MENU_EVENT = "coopilot:vm-menu";
+export const VM_MENU_EVENT = "focustime:vm-menu";
 const TONE: Record<string, string> = { running: "ok", deallocated: "off", billing: "warn", starting: "busy", stopping: "busy", unknown: "off" };
 
 /** Holds my VM's status for the window: refreshed every 60 s while visible, every 10 s while it starts or stops. */
@@ -217,8 +218,8 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
 }
 
 const DONE: Record<VmPreviewOp, string> = {
-  start: "Starting your VM. Coopilot follows it until it's running",
-  deallocate: "Stopping your VM. Coopilot follows it until it's deallocated",
+  start: "Starting your VM. FocusTime follows it until it's running",
+  deallocate: "Stopping your VM. FocusTime follows it until it's deallocated",
   delay60: "Auto-shutdown delayed 1 hour. It goes back tomorrow morning",
   delay120: "Auto-shutdown delayed 2 hours. It goes back tomorrow morning",
   skip: "Auto-shutdown skipped tonight. It goes back tomorrow morning",
@@ -271,7 +272,7 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
           </button>
           <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>Cancel</button>
         </div>
-        <p className="set-hint">Logged in Settings &gt; Data. {p.op === "start" || p.op === "deallocate" ? "No undo: use the opposite action instead." : "Coopilot puts the schedule back itself."}</p>
+        <p className="set-hint">Logged in Settings &gt; Data. {p.op === "start" || p.op === "deallocate" ? "No undo: use the opposite action instead." : "FocusTime puts the schedule back itself."}</p>
       </div>
     </div>
   );
@@ -286,7 +287,7 @@ export function VmChip() {
   if (!status?.vm) return null;
   const chip = status.chip ?? "unknown";
   const text = status.text ?? status.label ?? "Unknown";
-  const extra = [status.change?.text, status.needsConsent ? "Coopilot needs your OK to use Azure: open this menu and choose Allow Azure access" : status.error?.message].filter(Boolean).join(". ");
+  const extra = [status.change?.text, status.needsConsent ? "FocusTime needs your OK to use Azure: open this menu and choose Allow Azure access" : status.error?.message].filter(Boolean).join(". ");
   return (
     <button
       type="button"
@@ -322,7 +323,7 @@ export function VmToday() {
   return (
     <>
       {status.stillChanged && status.change && (
-        <span className="att-chip vm warn" role="alert" title={`${status.change.text}.${status.change.message ? ` Coopilot couldn't put it back: ${status.change.message}.` : ""}`}>
+        <span className="att-chip vm warn" role="alert" title={`${status.change.text}.${status.change.message ? ` FocusTime couldn't put it back: ${status.change.message}.` : ""}`}>
           <span className="att-tag">Auto-shutdown is still changed</span>
           <span>{status.change.text}</span>
           <button
@@ -409,9 +410,9 @@ export function YouAccount() {
     setFound(null);
     setManual("");
     await vm.refresh(true);
-    notify(vmId ? "This VM is yours in Coopilot" : "VM choice cleared");
+    notify(vmId ? "This VM is yours in FocusTime" : "VM choice cleared");
   });
-  if (!status?.configured) return <p className="muted">Microsoft sign-in needs the Coopilot Desktop app registration: set [outlook] client_id in config.</p>;
+  if (!status?.configured) return <p className="muted">Microsoft sign-in needs an app registration: set [outlook] client_id in config.</p>;
   const p = status.person;
   const signedIn = status.state !== "signed_out";
   return (
@@ -441,7 +442,7 @@ export function YouAccount() {
           <span className="set-value">
             {vm.status?.vm ? <>{vm.status.vm.name} <span className="muted">{vm.status.vm.resourceGroup} · {vm.status.vm.location}</span></> : <span className="muted">None chosen yet</span>}
           </span>
-          <span className="set-hint">Coopilot changes only this VM: start, stop and auto-shutdown.</span>
+          <span className="set-hint">FocusTime changes only this VM: start, stop and auto-shutdown.</span>
           <span className="set-actions">
             <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setFound(await call<Found>("vm.find", {})))}>Find my VM</button>
             {vm.status?.vm && <button type="button" className="mini quiet" disabled={busy} onClick={() => void choose(null)}>Forget</button>}
@@ -570,7 +571,7 @@ export function TeamsStatusLog({ tz }: { tz: string }) {
   );
 }
 
-/** Settings > Focus: whether Coopilot can set my Teams status, and Allow Teams status when it needs consent. */
+/** Settings > Focus: whether FocusTime can set my Teams status, and Allow Teams status when it needs consent. */
 /**
  * Settings > You (step 16.4): whether profile photos show. ProfilePhoto.Read.All needs an admin's consent in Entra;
  * until then (or with no photo) everyone shows as initials.
@@ -614,7 +615,7 @@ export function TeamsAccessLine() {
   if (!v) return <span className="set-hint">Checking Teams…</span>;
   const words: Record<string, string> = {
     ok: "Teams is connected: focus can set your status, and teammates' presence shows next to their names.",
-    consent: "Coopilot needs your OK to use Teams status and presence. One more sign-in; no admin approval is needed.",
+    consent: "FocusTime needs your OK to use Teams status and presence. One more sign-in; no admin approval is needed.",
     signed_out: "Sign in with Microsoft (Settings > You) to use Teams status.",
     unavailable: "Teams can't be reached right now.",
     off: "",

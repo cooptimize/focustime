@@ -24,7 +24,7 @@ const FLAG: Record<RoadmapRow["flags"][number], string> = { needs_breakdown: "",
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const monthDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
 const GROUP_WORDS: Record<RoadmapStory["group"], string> = { blocked: "Blocked", active: "In progress", new: "Not started", done: "Done" };
-const FILTER_KEY = "coopilot.roadmap.filter";
+const FILTER_KEY = "focustime.roadmap.filter";
 
 /** Step 17: the filters persist for the session (per window), never beyond it. */
 function loadFilter(): RoadmapFilter {

@@ -2,7 +2,7 @@
 // [ui] theme is the truth; a copy in localStorage only avoids a flash of the default theme while loading.
 import { DEFAULT_UI, THEMES, type Theme } from "../config/schema.ts";
 
-const KEY = "coopilot.theme";
+const KEY = "focustime.theme";
 export const isTheme = (v: unknown): v is Theme => typeof v === "string" && (THEMES as readonly string[]).includes(v);
 
 export function applyTheme(t: Theme): void {

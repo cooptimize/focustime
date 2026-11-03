@@ -1,5 +1,5 @@
-// The app's user (step 15.4): one Microsoft sign-in (the Coopilot Desktop app registration, delegated, PKCE over
-// loopback) is who Coopilot works for. Its refresh token stays in the keyring (account outlook-refresh-token, kept
+// The app's user (step 15.4): one Microsoft sign-in (the "Coopilot Desktop" app registration in Entra, its display name kept in R1, delegated, PKCE over
+// loopback) is who FocusTime works for. Its refresh token stays in the keyring (account outlook-refresh-token, kept
 // from step 3 so an existing Outlook connection carries over); who signed in (name, username, ids) and the Dataverse
 // user found for them are kept in the plan store's account state. "Me" comes from the sign-in; config's my_email and
 // my_systemuserid stay as the fallback while signed out. The launch token and Host/Origin checks still apply.
@@ -64,9 +64,14 @@ export function rememberIdentity(plan: PlanStore | undefined, c: IdClaims, at: s
 }
 export const storedIdentity = (plan: PlanStore | undefined) => plan?.accountState<StoredIdentity>(IDENTITY_KEY) ?? null;
 
-export type AccountContext = { plan?: PlanStore; account: MicrosoftAccount | null; now: () => string; /** Step 16.4: cleared on sign-out. */ clearPhotos?: () => Promise<void> };
+export type AccountContext = { plan?: PlanStore; account: MicrosoftAccount | null; now: () => string; /** Step 16.4: cleared on sign-out. */ clearPhotos?: () => Promise<void>; /** R1: the keyring move failed. */ renameNote?: string | null };
 
 export async function authStatus(ctx: AccountContext): Promise<AuthStatus> {
+  const s = await statusOf(ctx);
+  return ctx.renameNote ? { ...s, renameNote: ctx.renameNote } : s;
+}
+
+async function statusOf(ctx: AccountContext): Promise<Omit<AuthStatus, "renameNote">> {
   if (!ctx.account) return { configured: false, state: "signed_out", person: null, message: null };
   const stored = storedIdentity(ctx.plan);
   try {
@@ -100,7 +105,7 @@ export async function accountAction(ctx: AccountContext, action: "auth.status" |
       // Step 16.4: Allow photos adds ProfilePhoto.Read.All (asked for only then; it needs an admin's consent in Entra).
       const photos = (input as { photos?: unknown } | null)?.photos;
       if (photos !== undefined && typeof photos !== "boolean") return { ok: false, status: 400, error: "photos must be true or false" };
-      if (!ctx.account) return { ok: true, data: { status: "failed", message: "Add outlook.client_id (the Coopilot Desktop app registration) to config first" } };
+      if (!ctx.account) return { ok: true, data: { status: "failed", message: "Add outlook.client_id (the app registration) to config first" } };
       const stored = storedIdentity(ctx.plan);
       // Keep calendar changes if this sign-in already had them; prefill the account for an incremental consent.
       const write = (await ctx.account.writeAccess().catch(() => null))?.status === "write";

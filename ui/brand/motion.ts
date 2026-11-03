@@ -3,8 +3,8 @@
 // With either on: no sweep, unroll, hop or bob; the still pose shows; open and close cut straight to the result.
 import { useEffect, useState } from "react";
 
-const KEY = "coopilot.reduceMotion";
-const EVENT = "coopilot:reduce-motion";
+const KEY = "focustime.reduceMotion";
+const EVENT = "focustime:reduce-motion";
 const QUERY = "(prefers-reduced-motion: reduce)";
 
 function stored(): boolean {

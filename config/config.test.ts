@@ -307,7 +307,7 @@ describe("loading a config with the old day shape", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const { loadConfigFile } = await import("./load.ts");
-    const dir = await mkdtemp(join(tmpdir(), "coopilot-cfg-"));
+    const dir = await mkdtemp(join(tmpdir(), "focustime-cfg-"));
     const path = join(dir, "config.toml");
     await writeFile(path, valid, { mode: 0o600 });
     const r = await loadConfigFile(path);

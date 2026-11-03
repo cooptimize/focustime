@@ -1075,7 +1075,7 @@ function DayTimeline({ day, blocks, data, picks, now, nowMs, events, onNotice }:
   );
 }
 
-const HINT_KEY = "coopilot.hint.flow";
+const HINT_KEY = "focustime.hint.flow";
 /** A first-run hint (step 10), dismissed for good in this browser profile. Storage can fail; the hint then just shows. */
 export function FlowHint() {
   const [hidden, setHidden] = useState(() => {
@@ -1095,7 +1095,7 @@ export function FlowHint() {
     setHidden(true);
   };
   return (
-    <aside className="flow-hint" aria-label="How Coopilot fits together">
+    <aside className="flow-hint" aria-label="How FocusTime fits together">
       <p>
         <strong>Week</strong> is each client's musts and nice to haves, from DevOps. <strong>Day</strong> is for stories: what you pick for each block. <strong>Focus</strong> is one story at a time.
       </p>

@@ -179,7 +179,7 @@ export function lastActivity(item: PortfolioItem): string | null {
   return best;
 }
 
-/** The earliest change among an item's children: the closest Coopilot gets to "first story activity" (Plan ahead). */
+/** The earliest change among an item's children: the closest FocusTime gets to "first story activity" (Plan ahead). */
 export function firstActivity(item: PortfolioItem): string | null {
   let best: string | null = null;
   for (const c of item.children) {

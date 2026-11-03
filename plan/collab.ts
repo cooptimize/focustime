@@ -188,7 +188,7 @@ export type SuggestInput = {
   focus?: readonly [number, number][];
   candidates: readonly Candidate[];
   availability: readonly Availability[];
-  /** Chosen people (emails), or null for "let Coopilot choose the top tier". */
+  /** Chosen people (emails), or null for "let FocusTime choose the top tier". */
   chosen: readonly string[] | null;
   now: number;
   tz: string;
@@ -257,7 +257,7 @@ export function suggestSlots(o: SuggestInput): Slot[] {
 export function inviteFields(o: { clientName: string; itemTitle: string; url: string | null; note: string | null; start: string; end: string; people: readonly Attendee[]; teams: boolean }): Fields {
   return {
     subject: `${o.clientName}: help on ${o.itemTitle}`.slice(0, 255),
-    body: [o.url ?? "", o.note?.trim() ?? "", "Help session planned in Coopilot."].filter(Boolean).join("\n\n"),
+    body: [o.url ?? "", o.note?.trim() ?? "", "Help session planned in FocusTime."].filter(Boolean).join("\n\n"),
     start: Temporal.Instant.from(o.start).toString(),
     end: Temporal.Instant.from(o.end).toString(),
     showAs: "busy",

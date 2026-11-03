@@ -1,7 +1,7 @@
 // Teams presence (step 16.3). Pure rules for two things:
 // 1. Focus sets my Teams status: Busy (or Do not disturb for deep focus) while a focus session runs, always with an
 //    expiration (the time left plus 5 minutes), cleared when the session stops, ends, pauses or is abandoned. A
-//    status I set by hand in Teams during a session wins: Coopilot leaves it alone until the next session.
+//    status I set by hand in Teams during a session wins: FocusTime leaves it alone until the next session.
 // 2. Teammates' presence as one plain word. Only availability and activity are read; status messages, out of
 //    office notes and work location are never kept. Nothing here is stored or logged.
 
@@ -68,7 +68,7 @@ export const PRESENCE_REFRESH_MS = 2 * 60_000;
 
 // ---- my status during focus ----
 
-/** What Coopilot sets: Busy, or Do not disturb for deep focus. Graph wants the same value as availability and activity. */
+/** What FocusTime sets: Busy, or Do not disturb for deep focus. Graph wants the same value as availability and activity. */
 export type FocusStatus = "Busy" | "DoNotDisturb";
 export type TeamsStatusSettings = { teamsStatus: boolean; plainFocus: "busy" | "none" };
 export const DEFAULT_TEAMS_STATUS: TeamsStatusSettings = { teamsStatus: true, plainFocus: "busy" };
@@ -105,7 +105,7 @@ export function focusGoal(s: FocusSession, settings: TeamsStatusSettings): Focus
 }
 
 /**
- * What Coopilot last did to my status, kept in the plan store (kv "teams_status") so a restart can still clear it.
+ * What FocusTime last did to my status, kept in the plan store (kv "teams_status") so a restart can still clear it.
  * `key` says what the last set was for (session, length, status), so an extend or a switch to deep focus sets again.
  */
 export type TeamsStatusState = {
@@ -155,20 +155,20 @@ export function afterStep(state: TeamsStatusState, step: TeamsStep, s: FocusSess
   return state;
 }
 
-/** Availability values that count as what Coopilot set (Teams may show a meeting or a presentation under Busy or DND). */
+/** Availability values that count as what FocusTime set (Teams may show a meeting or a presentation under Busy or DND). */
 const SAME: Record<FocusStatus, ReadonlySet<string>> = {
   Busy: new Set(["Busy", "BusyIdle", "InAMeeting", "InACall"]),
   DoNotDisturb: new Set(["DoNotDisturb", "Presenting", "Focusing"]),
 };
 
-/** Whether to read my presence now (a status is set by Coopilot, not taken over, and not read for a minute). */
+/** Whether to read my presence now (a status is set by FocusTime, not taken over, and not read for a minute). */
 export function checkDue(state: TeamsStatusState, now: string): boolean {
   if (!state.set || state.manual) return false;
   return !state.checkedAt || ms(now) - ms(state.checkedAt) >= CHECK_MS;
 }
 
 /**
- * Did I change my status in Teams? Read at least a minute after Coopilot set it: an availability other than the one
+ * Did I change my status in Teams? Read at least a minute after FocusTime set it: an availability other than the one
  * set (or its meeting forms). Offline or unknown says nothing (no Teams client signed in, not a choice).
  */
 export function manualChange(state: TeamsStatusState, availability: unknown, now: string): boolean {

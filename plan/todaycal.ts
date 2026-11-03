@@ -1,7 +1,7 @@
 // Step 17.6: the day's calendar for Today and Plan the day. Every timed event once, in time order, with its full
 // times inside the day (the week build clips an event into each card it overlaps; here the pieces are joined),
-// all-day events apart, and which one is under way and which is next. Pure. Declined meetings and Coopilot's own
-// timebox events never reach here: the week build drops declined ones and week.load drops Coopilot's own events.
+// all-day events apart, and which one is under way and which is next. Pure. Declined meetings and FocusTime's own
+// timebox events never reach here: the week build drops declined ones and week.load drops FocusTime's own events.
 import type { CalEvent, Day, PlacedEvent } from "../week/types.ts";
 
 export type DayEventKind = "meeting" | "personal" | "unavailable";

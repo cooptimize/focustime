@@ -1,9 +1,9 @@
 // Notifications (step 15.5): which kinds there are, whether one goes out now, is held for later or not sent, how held
-// ones collapse into one, and where clicking one opens Coopilot. Pure: no I/O, no host. The host only shows a
+// ones collapse into one, and where clicking one opens FocusTime. Pure: no I/O, no host. The host only shows a
 // notification and says which button was clicked (desktop today, browser notifications in a hosted version).
 import { hoursOn, type TimeModel } from "../week/hours.ts";
 
-/** Every kind of notification Coopilot sends. Each has its own switch in Settings > Notifications, except the test. */
+/** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
 export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export type AnyKind = NotifyKind | "test" | "held";
@@ -47,7 +47,7 @@ export const DEFAULT_NOTIFY: NotifySettings = {
   quietPto: true,
 };
 
-/** Where clicking a notification opens Coopilot. */
+/** Where clicking a notification opens FocusTime. */
 export type Route =
   | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" }
   | { view: "planweek"; weekStart: string }
@@ -161,12 +161,12 @@ export function collapse(held: readonly Notice[], at: string): Notice | null {
 export const handledKeys = (n: Notice, held: readonly Notice[] = []): string[] => (n.kind === "held" ? held.map((h) => h.key) : [n.key]);
 
 /** The page event that opens a route in the window (a hosted version's browser notifications would use it too). */
-export const ROUTE_EVENT = "coopilot:open-route";
+export const ROUTE_EVENT = "focustime:open-route";
 
 /** "Open" is the click on the notification itself (the freedesktop "default" action). */
 export const OPEN_KEY = "default";
 
-// ---- The notifications themselves: text, buttons and where a click opens Coopilot. ----
+// ---- The notifications themselves: text, buttons and where a click opens FocusTime. ----
 
 const open = (label: string): NotifyButton => ({ key: "open", label });
 const shortDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { month: "short", day: "numeric" });
@@ -201,7 +201,7 @@ export const notices = {
   }),
   meeting: (labels: string[], keys: string[], at: string): Notice => ({ kind: "meeting", key: `meeting:${keys.join("|")}`.slice(0, 300), title: "In 5 minutes", body: labels.join("\n"), buttons: [], route: "focus", at }),
   vmOff: (date: string, vmName: string, at: string): Notice => ({ kind: "vm", key: `vm_off:${date}`, title: "Your VM is off", body: `${vmName} is stopped.\nClick to start it.`, buttons: [{ key: "start", label: "Start" }], route: "vm", at, ref: date }),
-  vmChanged: (date: string, text: string, at: string): Notice => ({ kind: "vm", key: `vm_changed:${date}`, title: "Auto-shutdown is still changed", body: `${text}. Coopilot couldn't put it back.\nClick to restore it.`, buttons: [{ key: "restore", label: "Restore" }], route: "vm", at, ref: date }),
+  vmChanged: (date: string, text: string, at: string): Notice => ({ kind: "vm", key: `vm_changed:${date}`, title: "Auto-shutdown is still changed", body: `${text}. FocusTime couldn't put it back.\nClick to restore it.`, buttons: [{ key: "restore", label: "Restore" }], route: "vm", at, ref: date }),
   followUps: (date: string, due: { id: number; what: string; overdue: boolean }[], at: string): Notice | null => {
     if (!due.length) return null;
     const over = due.filter((f) => f.overdue).length;

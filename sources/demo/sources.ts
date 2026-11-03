@@ -7,7 +7,7 @@ import type { CalEvent, ClientWork, SourceId, SourceResult } from "../../week/ty
 import type { GraphWriter } from "../graph/write.ts";
 import { DEMO_CLIENTS, DEMO_ME, DEMO_PEOPLE, demoGoogle, demoOrganizer, demoOutlook, demoPatterns, demoPortfolio, demoPto, demoWork, isDemoClient } from "./data.ts";
 
-const NO = "Demo data: nothing leaves Coopilot";
+const NO = "Demo data: nothing leaves FocusTime";
 
 export function createDemoSources(now: () => string) {
   const ok = <T>(source: SourceId, items: T[]): SourceResult<T> => ({ source, status: "ok", fetchedAt: now(), fromCache: false, items });
@@ -76,7 +76,7 @@ export function createDemoSources(now: () => string) {
     orgOf: (clientKey) => DEMO_CLIENTS.find((c) => c.key === clientKey)?.org ?? null,
     last: (clientKey) => last.get(clientKey) ?? null,
     portfolio: async (clients) => clients.filter((c) => isDemoClient(c.clientKey)).map((c) => demoPortfolio(c.clientKey as never, now())),
-    description: async () => "A fictional work item for the Coopilot demo.",
+    description: async () => "A fictional work item for the FocusTime demo.",
     forget: (clientKey) => void last.delete(clientKey),
   };
   return { dataverse, outlook, google, devops };

@@ -11,7 +11,7 @@ const WEEK = "2026-11-02";
 const NOW = Temporal.Instant.from("2026-11-02T13:02:00Z"); // 08:02 New York
 
 function setup(scenario: Scenario, over: Partial<DataverseSourceDeps> = {}) {
-  const cacheDir = mkdtempSync(join(tmpdir(), "coopilot-cache-"));
+  const cacheDir = mkdtempSync(join(tmpdir(), "focustime-cache-"));
   const logs: LogRecord[] = [];
   const f = fakeFetch(scenario);
   const source = createDataverseSource({
@@ -113,7 +113,7 @@ describe("Dataverse source: failure states (spec section 9)", () => {
     ["dv_403", "auth_required", "Dataverse access denied: check app user role", "open_settings"],
     ["table_missing", "misconfigured", "Focus block table coop_focustimes not found in Dataverse (renamed or removed?): check config", "open_settings"],
     ["column_missing", "misconfigured", "Focus block column coop_mondaydaypart not found in coop_focustimes (renamed or removed?): check config", "open_settings"],
-    ["token_invalid_client", "auth_required", "Dataverse sign-in failed: the client secret was rejected. Update keyring entry coopilot / dataverse-client-secret", "open_settings"],
+    ["token_invalid_client", "auth_required", "Dataverse sign-in failed: the client secret was rejected. Update keyring entry focustime / dataverse-client-secret", "open_settings"],
     ["token_bad_tenant", "misconfigured", "Dataverse sign-in failed: check tenant_id and client_id in config", "open_settings"],
     ["token_bad_scope", "misconfigured", "Dataverse sign-in failed: check environment_url in config", "open_settings"],
     ["env_not_found", "misconfigured", "Dataverse environment not found: check environment_url in config", "open_settings"],
@@ -166,7 +166,7 @@ describe("Dataverse source: failure states (spec section 9)", () => {
     const { source } = setup("ok", { getSecret: async () => { throw new SecretError("not_found"); } });
     const r = await source.load(WEEK);
     expect(r.status).toBe("misconfigured");
-    expect(r.message).toBe("No Dataverse client secret in the keyring (service coopilot, account dataverse-client-secret). No cached data yet");
+    expect(r.message).toBe("No Dataverse client secret in the keyring (service focustime, account dataverse-client-secret). No cached data yet");
   });
 
   it.each(["unavailable", "locked"] as const)("reports a %s keyring as secret storage unavailable", async (kind) => {
@@ -195,7 +195,7 @@ describe("resolveUserId", () => {
       timeZone: "America/New_York",
       getSecret: async () => FAKE_SECRET,
       fetch: f.fetch,
-      cacheDir: mkdtempSync(join(tmpdir(), "coopilot-cache-")),
+      cacheDir: mkdtempSync(join(tmpdir(), "focustime-cache-")),
       log: () => {},
     });
     return { src, calls: f.calls };
