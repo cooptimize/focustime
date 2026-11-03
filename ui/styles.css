@@ -1239,6 +1239,13 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .set-field input[aria-invalid="true"], .set-playlists input[aria-invalid="true"] { border-color: var(--risk); }
 .field-problem { color: var(--risk); font-size: var(--fs-2); font-weight: 600; }
 .set-save { display: flex; gap: 12px; align-items: center; }
+/* Settings saves itself: a small mark by the field, an error under it, one Undo toast. */
+.set-mark { font-size: var(--fs-2); min-height: 0; }
+.set-mark:empty { display: none; }
+.set-saved { color: var(--ok); font-weight: 500; }
+.set-retry { color: var(--watch); }
+.set-undo { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 40; pointer-events: none; }
+.set-undo-box { pointer-events: auto; display: inline-flex; gap: 12px; align-items: center; padding: 8px 14px; border-radius: 10px; font-size: var(--fs-3); background: var(--raised); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); }
 .set-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .set-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .set-list li { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
