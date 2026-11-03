@@ -16,7 +16,9 @@
 #
 # Usage:
 #   infra/scripts/app-registration.sh --dev-url https://<dev app>.centralus.azurecontainerapps.io \
-#     --prod-url https://<prod app>.centralus.azurecontainerapps.io --vault <key vault name> [--rotate-secret] [--dry-run]
+#     [--prod-url https://<prod app>.centralus.azurecontainerapps.io] --vault <key vault name> [--rotate-secret] [--dry-run]
+#
+# The redirect list is replaced with exactly the URLs given (plus local), so A5 passes --dev-url and --prod-url both.
 #   infra/scripts/app-registration.sh --local [--port 5317] [--rotate-secret] [--dry-run]
 #
 # --local (A2, before any vault exists): the developer loop only. The redirect URI is http://localhost:<port> alone,
@@ -25,7 +27,9 @@
 set -euo pipefail
 
 NAME="FocusTime"
-SECRET_NAME="entra-client-secret"
+# Key Vault secret name (A4); the local host's secret store keeps its own name, entra-client-secret.
+SECRET_NAME="ft-entra-client-secret"
+LOCAL_SECRET_NAME="entra-client-secret"
 SECRET_YEARS=1
 LOCAL_URL="http://localhost:5317"
 CALLBACK="/auth/microsoft/callback"
@@ -55,15 +59,15 @@ if ((LOCAL)); then
   command -v secret-tool >/dev/null || { echo "secret-tool not found (the local host's secret store)" >&2; exit 1; }
   LOCAL_URL="http://localhost:$PORT"
 else
-  [[ -n $DEV_URL && -n $PROD_URL && -n $VAULT ]] || { echo "usage: $0 --dev-url URL --prod-url URL --vault NAME [--rotate-secret] [--dry-run], or $0 --local [--port N]" >&2; exit 2; }
-  for u in "$DEV_URL" "$PROD_URL"; do [[ $u =~ ^https://[a-z0-9.-]+$ ]] || { echo "not an https origin: $u" >&2; exit 2; }; done
+  [[ -n $DEV_URL && -n $VAULT ]] || { echo "usage: $0 --dev-url URL [--prod-url URL] --vault NAME [--rotate-secret] [--dry-run], or $0 --local [--port N]" >&2; exit 2; }
+  for u in "$DEV_URL" ${PROD_URL:+"$PROD_URL"}; do [[ $u =~ ^https://[a-z0-9.-]+$ ]] || { echo "not an https origin: $u" >&2; exit 2; }; done
 fi
 
 command -v az >/dev/null || { echo "Azure CLI not found" >&2; exit 1; }
 az account show -o none 2>/dev/null || { echo "Run az login first" >&2; exit 1; }
 run() { if ((DRY)); then echo "dry-run: az $*"; else az "$@"; fi; }
 
-if ((LOCAL)); then REDIRECTS=("$LOCAL_URL$CALLBACK"); else REDIRECTS=("$DEV_URL$CALLBACK" "$PROD_URL$CALLBACK" "$LOCAL_URL$CALLBACK"); fi
+if ((LOCAL)); then REDIRECTS=("$LOCAL_URL$CALLBACK"); else REDIRECTS=("$DEV_URL$CALLBACK" ${PROD_URL:+"$PROD_URL$CALLBACK"} "$LOCAL_URL$CALLBACK"); fi
 
 # 1. The registration, found by display name (exactly one, or none).
 ids=$(az ad app list --display-name "$NAME" --query "[?displayName=='$NAME'].appId" -o tsv)
@@ -120,13 +124,13 @@ grant "$ARM_API" "${ARM_SCOPES[@]}"
 # old one by hand (az ad app credential delete) once the app has restarted on the new one.
 if ((LOCAL)); then
   # Whether the store has one already, without printing it (lookup's output goes nowhere).
-  if secret-tool lookup service focustime account "$SECRET_NAME" >/dev/null 2>&1 && ((ROTATE == 0)); then
-    echo "The local secret store already has $SECRET_NAME; pass --rotate-secret for a new one"
-  elif ((DRY)); then echo "dry-run: new client secret into the local secret store (focustime/$SECRET_NAME)"; else
+  if secret-tool lookup service focustime account "$LOCAL_SECRET_NAME" >/dev/null 2>&1 && ((ROTATE == 0)); then
+    echo "The local secret store already has $LOCAL_SECRET_NAME; pass --rotate-secret for a new one"
+  elif ((DRY)); then echo "dry-run: new client secret into the local secret store (focustime/$LOCAL_SECRET_NAME)"; else
     az ad app credential reset --id "$APP_ID" --display-name "focustime-local-$(date +%Y%m%d)" --years "$SECRET_YEARS" --append --query password -o tsv \
       | tr -d '\n' \
-      | secret-tool store --label "FocusTime: $SECRET_NAME" service focustime account "$SECRET_NAME"
-    echo "Client secret written to the local secret store as focustime/$SECRET_NAME"
+      | secret-tool store --label "FocusTime: $LOCAL_SECRET_NAME" service focustime account "$LOCAL_SECRET_NAME"
+    echo "Client secret written to the local secret store as focustime/$LOCAL_SECRET_NAME"
   fi
 else
 existing=$(az keyvault secret list --vault-name "$VAULT" --query "[?name=='$SECRET_NAME'].name | [0]" -o tsv 2>/dev/null || true)
