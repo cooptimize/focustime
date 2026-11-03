@@ -11,7 +11,7 @@ import type { WriteResult } from "../config/edit.ts";
 import type { DataverseSource } from "../sources/dataverse/source.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { localToday } from "../week/dates.ts";
-import { followState } from "../week/follow.ts";
+import { followState, INTERNAL_CLIENT } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import type { ActionResponse, AppSecret, FieldProblem, SecretPresence, SettingsClient, SettingsData } from "./types.ts";
 import { userZone } from "../week/zone.ts";
@@ -63,7 +63,13 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
       : Promise.resolve(null),
   ]);
   const mine = fetched ?? [];
-  const keys = [...new Set([...mine.map((c) => c.clientKey), ...Object.keys(cfg.clientSettings), ...cfg.week.standingBlocks.map((b) => b.clientKey)])].sort((a, b) => a.localeCompare(b));
+  // no-demo-leak: without Dataverse's answer the list says why and where to fix it; nothing stands in for it.
+  const dataverseProblem = fetched !== null ? null : dv ? "Couldn't read your clients from Dataverse. Check Connections, then Refresh" : "Your Dataverse user isn't found yet. Sign in with your work account, or check your email under You";
+  // no-demo-leak: the clients are the internal one, Dataverse's (mine), and standing-block and Keep following clients
+  // (my own choices).
+  // A color or name in settings alone never makes a client: that is how fixture names once showed up here.
+  const kept = Object.entries(cfg.clientSettings).filter(([, v]) => v.follow).map(([k]) => k);
+  const keys = [...new Set([INTERNAL_CLIENT, ...mine.map((c) => c.clientKey), ...kept, ...cfg.week.standingBlocks.map((b) => b.clientKey)])].sort((a, b) => a.localeCompare(b));
   const clients = await mapSeq(keys, async (key): Promise<SettingsClient> => {
     const m = mine.find((c) => c.clientKey === key);
     const setting = cfg.clientSettings[key] ?? { color: null, name: null, openStates: [], follow: false };
@@ -79,6 +85,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
     ...base,
     problems: [],
     dataverseReached: fetched !== null,
+    dataverseProblem,
     you: { email: cfg.dataverse.myEmail, systemUserId: cfg.dataverse.mySystemUserId, environmentUrl: cfg.dataverse.environmentUrl, timeZone: tz },
     hours: cfg.week.hours,
     standingBlocks: cfg.week.standingBlocks,

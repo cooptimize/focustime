@@ -250,13 +250,24 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
     case "clients":
       return (
         <div className="set-clients">
-          {d.clients.length === 0 && <p className="muted">No clients yet: they come from Dataverse and config.</p>}
-          {d.clients.map((c) => (
-            <div key={c.key} className="set-client-wrap" style={{ "--c": c.setting.color ? (c.setting.color.startsWith("#") ? c.setting.color : `var(--client-${c.setting.color})`) : "var(--client-none)" } as CSSProperties}>
-              <ClientForm client={c} data={d} onSavedData={p.onSavedData} />
-              {c.devops && <WriteAccess client={c} onDone={p.reload} />}
-            </div>
+          {d.dataverseProblem && (
+            <p className="set-problem" role="status">
+              {d.dataverseProblem}{" "}
+              <button type="button" className="link-btn" onClick={() => void p.reload()}>Refresh</button>
+            </p>
+          )}
+          {d.clients.length === 0 && !d.dataverseProblem && <p className="muted">No clients yet. Your followed clients come from Dataverse (your Account Worker records and focus time).</p>}
+          {followedFirst(d.clients).followed.map((c) => (
+            <ClientCard key={c.key} c={c} d={d} p={p} />
           ))}
+          {followedFirst(d.clients).other.length > 0 && (
+            <details className="set-client-more">
+              <summary>Not followed · {followedFirst(d.clients).other.length}</summary>
+              {followedFirst(d.clients).other.map((c) => (
+                <ClientCard key={c.key} c={c} d={d} p={p} />
+              ))}
+            </details>
+          )}
         </div>
       );
     case "connections":
@@ -948,6 +959,19 @@ export function followText(f: FollowState | null, grace: number): string {
     case "ended": return `Not followed: focus time ended ${fullDate(f.date)}. No DevOps items or Open half-day choices.`;
     case "none": return "Not followed: no focus time. No DevOps items or Open half-day choices.";
   }
+}
+
+/** Followed clients (or follow unknown) first; Dataverse clients FocusTime doesn't follow fold away. */
+const followedFirst = (cs: readonly SettingsClient[]) => ({ followed: cs.filter((c) => c.follow?.active !== false), other: cs.filter((c) => c.follow?.active === false) });
+
+/** One client: its settings, its DevOps identity (Dataverse's) and, when it has DevOps, my write access. */
+function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSavedData: (d: SettingsData) => void; reload: () => Promise<void> } }) {
+  return (
+    <div className="set-client-wrap" style={{ "--c": c.setting.color ? (c.setting.color.startsWith("#") ? c.setting.color : `var(--client-${c.setting.color})`) : "var(--client-none)" } as CSSProperties}>
+      <ClientForm client={c} data={d} onSavedData={p.onSavedData} />
+      {c.devops ? <WriteAccess client={c} onDone={p.reload} /> : d.dataverseReached && <p className="muted set-client-note">No DevOps set up for {c.setting.name ?? c.dataverseName ?? c.key} in Dataverse, so there is nothing to write to. Change it in Dataverse.</p>}
+    </div>
+  );
 }
 
 function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; data: SettingsData; onSavedData: (d: SettingsData) => void }) {

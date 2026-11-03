@@ -61,11 +61,13 @@ describe("week.load with real calendar sources", () => {
     expect(titles(d)).not.toContain("Cooptimize weekly standup"); // sample fixture
   });
 
-  it("keeps sample meetings only for a source that is not configured at all", async () => {
+  it("a source that isn't set up says so with where to set it up, and nothing in its place (no-demo-leak: never sample meetings)", async () => {
     const d = await load(ctx({ text: base.replace('client_id = "123-abc.apps.googleusercontent.com"', 'client_id = ""') }).c);
-    expect(status(d)).toEqual({ dataverse: "ok", pto: "ok", outlook: "ok", google: "ok:sample" });
-    expect(titles(d)).toContain("WC weekly status");
-    expect(titles(d)).toContain("School pickup"); // sample Google
+    expect(status(d)).toEqual({ dataverse: "ok", pto: "ok", outlook: "ok", google: "misconfigured" });
+    expect(d.sources.find((s) => s.source === "google")).toMatchObject({ fixAction: "open_settings", itemCount: 0, message: "Google Calendar isn't set up yet. Set it up in Settings > Connections" });
+    expect(titles(d)).toContain("WC weekly status"); // Outlook's own
+    expect(titles(d)).not.toContain("School pickup"); // the old sample Google
+    expect(titles(d)).not.toContain("Preschool drop-off");
   });
 
   it("isolates failures: each source reports its own state and the others still show", async () => {

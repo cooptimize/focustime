@@ -3,4 +3,12 @@
 import { starterToml } from "../config/starter.ts";
 
 export const FIXTURE_ZONE = "America/New_York";
-export const STARTER_TOML = starterToml(FIXTURE_ZONE);
+/** The fictional clients' colors the fixtures were written with (the product's starter has none: no-demo-leak). */
+export const FIXTURE_CLIENT_COLORS = `
+[clients]
+"T&W" = "#1f9e8f"
+Proseware = "#7b68ee"
+Adatum = "#d2892a"
+Cooptimize = "#4a7fd4"
+`;
+export const STARTER_TOML = `${starterToml(FIXTURE_ZONE)}${FIXTURE_CLIENT_COLORS}`;

@@ -3215,3 +3215,5 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .pw-addpane .pw-must { white-space: nowrap; }
 .pw-addpane .pw-epics li { padding: 2px 6px; }
 .pw-type-input { width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-3); }
+.set-client-note { margin: 4px 0 12px; font-size: var(--fs-2); }
+.set-client-more > summary { cursor: pointer; color: var(--text-muted); margin: 8px 0; }
