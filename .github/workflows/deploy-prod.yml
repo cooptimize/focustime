@@ -5,6 +5,8 @@
 # Run it: Actions › deploy-prod › Run workflow, ref = the commit (usually the SHA in dev's ⋯ › About), or
 #   gh workflow run deploy-prod.yml -f ref=<sha>
 # Roll back: the same with the previous SHA (each run's summary names it); roll forward: the same with the newer one.
+# The image is the chosen commit's; the scripts, migrations and Bicep are always main's, so a rollback changes only the
+# app (D472). Nothing older than prod's first commit (a347188) can be deployed.
 # dry_run: only the actor check and the image lookup; nothing changes.
 #
 # Who may run it: the GitHub logins in the repository variable PROD_DEPLOYERS (comma separated); anyone else is refused
@@ -62,9 +64,14 @@ jobs:
           [[ $REF =~ ^[A-Za-z0-9._/-]{1,100}$ ]] || { echo "::error::ref must be a commit SHA or a branch name"; exit 1; }
           sha=$(git rev-parse --verify --quiet "origin/$REF^{commit}" || git rev-parse --verify --quiet "$REF^{commit}") || { echo "::error::No commit $REF"; exit 1; }
           git merge-base --is-ancestor "$sha" origin/main || { echo "::error::${sha:0:7} is not on main: prod runs only what main (and dev) ran"; exit 1; }
+          # The first commit prod ran (A5). An older image can't run here: it refuses a newer database and predates
+          # prod's settings. Rollbacks go back as far as this, no further.
+          git merge-base --is-ancestor a347188333b0f4789947f6a3f66675bdae341b3d "$sha" || { echo "::error::${sha:0:7} is older than prod's first commit (a347188); it can't run on prod's database"; exit 1; }
           echo "SHA=$sha" >> "$GITHUB_ENV"
           echo "SHORT=${sha:0:7}" >> "$GITHUB_ENV"
-          git checkout -q "$sha"
+          # Only the image comes from that commit. The scripts, the migrations and the Bicep stay main's (this run's
+          # checkout): migrations only add (D468), so main's are already applied or safe, and a rollback never
+          # undoes infrastructure.
       - uses: actions/setup-node@v4
         with:
           node-version: 26
