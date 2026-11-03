@@ -133,7 +133,7 @@ describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)"
       const d = s.ok ? (s.data as { clients: { key: string }[]; dataverseProblem: string | null }) : null;
       // Only the internal client (always followed); nothing guessed for the rest.
       expect(d?.clients.map((c) => c.key)).toEqual(["Cooptimize"]);
-      expect(d?.dataverseProblem).toMatch(/Couldn't read your clients from Dataverse.*Check Connections, then Refresh/);
+      expect(d?.dataverseProblem).toBe("Couldn't reach Dataverse. Try again, or tell the FocusTime team.");
     } finally {
       await app.close();
     }

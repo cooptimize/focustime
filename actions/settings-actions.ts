@@ -15,13 +15,19 @@ import { followState, INTERNAL_CLIENT } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import type { ActionResponse, AppSecret, FieldProblem, SecretPresence, SettingsClient, SettingsData } from "./types.ts";
 import { userZone } from "../week/zone.ts";
+import { DATAVERSE_UNREACHABLE, noDataverseMatch, type MatchResult } from "./dataverse-words.ts";
 
 export type SettingsAction = "settings.load" | "settings.save" | "secret.set" | "data.export";
 
 export const APP_SECRETS: readonly AppSecret[] = ["dataverse-client-secret", "google-client-secret"];
 
 export type SettingsContext = {
+  /** The config as written (what a save edits). */
   loadConfig: () => Promise<{ path: string; parsed: ParseResult }>;
+  /** The config as the signed-in person sees it ("me" from the sign-in, the Dataverse user kept with it). Absent: loadConfig. */
+  viewConfig?: () => Promise<{ path: string; parsed: ParseResult }>;
+  /** Finds and keeps my Dataverse user when none is known yet (dispatch's matchMe). Absent: nothing to try. */
+  findMe?: (dv: AppConfig["dataverse"], timeZone: string) => Promise<MatchResult>;
   writeConfig?: (edit: (text: string) => string) => Promise<WriteResult>;
   makeDataverse: (cfg: AppConfig["dataverse"], timeZone: string) => Pick<DataverseSource, "myClients"> & Partial<Pick<DataverseSource, "following">>;
   /** The server clock (ISO instant), for which clients are followed today. */
@@ -41,7 +47,7 @@ const bad = (error: string, status = 400, fields?: FieldProblem[]): ActionRespon
 export const isFilePath = (p: string) => p.startsWith("/") || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("~/");
 
 async function load(ctx: SettingsContext): Promise<SettingsData> {
-  const loaded = await ctx.loadConfig();
+  const loaded = await (ctx.viewConfig ?? ctx.loadConfig)();
   // A2: app secrets are the app's, never a person's: only a context that may change them (not a signed-in person's)
   // lists them.
   const secrets = await Promise.all(
@@ -55,8 +61,16 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
   const base = { configPath: loaded.path, fromFile: isFilePath(loaded.path), palette: CLIENT_SLOTS, secrets, data: { planStore: !!ctx.plan } };
   if (!loaded.parsed.ok)
     return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX }, collab: { ...DEFAULT_COLLAB, domains: [] }, notify: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, vm: { startWithoutAsking: DEFAULT_AZURE.startWithoutAsking }, roadmap: { ...DEFAULT_THRESHOLDS } };
-  const cfg = loaded.parsed.config;
-  const tz = userZone(cfg);
+  const tz = userZone(loaded.parsed.config);
+  // Who I am in Dataverse: the kept user, else a match now (the same as the week's), else why not.
+  let matchProblem: string | null = null;
+  let me = loaded.parsed.config.dataverse;
+  if (!me.mySystemUserId && ctx.findMe) {
+    const r = await ctx.findMe(me, tz).catch((): MatchResult => ({ ok: false, reason: "failed", message: DATAVERSE_UNREACHABLE }));
+    if (r.ok) me = { ...me, mySystemUserId: r.id };
+    else matchProblem = r.message;
+  }
+  const cfg: AppConfig = { ...loaded.parsed.config, dataverse: me };
   const dv = cfg.dataverse.mySystemUserId ? ctx.makeDataverse(cfg.dataverse, tz) : null;
   const [fetched, follow] = await Promise.all([
     dv ? dv.myClients().catch(() => null) : Promise.resolve(null),
@@ -67,7 +81,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
   ]);
   const mine = fetched ?? [];
   // no-demo-leak: without Dataverse's answer the list says why and where to fix it; nothing stands in for it.
-  const dataverseProblem = fetched !== null ? null : dv ? "Couldn't read your clients from Dataverse. Check Connections, then Refresh" : "Your Dataverse user isn't found yet. Sign in with your work account, or check your email under You";
+  const dataverseProblem = fetched !== null ? null : dv ? DATAVERSE_UNREACHABLE : (matchProblem ?? noDataverseMatch(cfg.dataverse.myEmail));
   // no-demo-leak: the clients are the internal one, Dataverse's (mine), and standing-block and Keep following clients
   // (my own choices).
   // A color or name in settings alone never makes a client: that is how fixture names once showed up here.
