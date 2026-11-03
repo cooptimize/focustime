@@ -5,6 +5,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { importsOf } from "./imports.ts";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const CORE = ["week", "plan", "actions", "sources", "store"];
@@ -18,9 +19,6 @@ const PROGRAMS = /["'`](secret-tool|notify-send|gdbus|playerctl|pw-play|xdg-open
 const isSource = (n: string) => /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) && !/(^|-)fakes?\.ts$|test-helpers\.ts$/.test(n);
 const walk = (d: string): string[] => readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : isSource(n) ? [join(d, n)] : []));
 
-export function importsOf(text: string): string[] {
-  return [...text.matchAll(/^\s*(?:import|export)\s[^;]*?\sfrom\s+["']([^"']+)["']|^\s*import\s+["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)|\brequire\(\s*["']([^"']+)["']\s*\)/gm)].map((m) => (m[1] ?? m[2] ?? m[3] ?? m[4])!);
-}
 
 /** Every boundary break reachable from the core modules, as "importer -> what". */
 export function violations(files: string[], read = (f: string) => readFileSync(f, "utf8"), exists: (f: string) => boolean = existsSync): string[] {

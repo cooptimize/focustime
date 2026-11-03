@@ -16,7 +16,7 @@ import { envSecrets } from "../host/azure/secrets.ts";
 import { appKeyStore } from "../store/app-keys.ts";
 import { appInsights } from "../log/appinsights.ts";
 import { DefaultAzureCredential } from "@azure/identity";
-import { memoryConfig, memoryPhotos, memorySnapshots } from "../host/fakes.ts";
+import { noSettingsFile, photoCache, snapshotCache } from "../host/azure/memory.ts";
 import { randomBytes } from "node:crypto";
 import { readAppSettings, redirectUris } from "./appconfig.ts";
 import { createEntraSignIn, type SignedIn } from "./auth/entra.ts";
@@ -85,9 +85,9 @@ const host: Host =
         // store is open (it keeps the wrapped key).
         secrets: envSecrets(),
         keys: { dataKey: () => (dataKeys ? dataKeys.dataKey() : Promise.reject(new Error("The data key isn't available (no Key Vault set up for this app)"))) },
-        config: memoryConfig(),
-        snapshotsFor: perPerson(() => memorySnapshots()),
-        photos: memoryPhotos(),
+        config: noSettingsFile(),
+        snapshotsFor: perPerson(() => snapshotCache()),
+        photos: photoCache(),
         inbox: { add: () => "0", remove: () => {} },
         now: instantNow,
       })
