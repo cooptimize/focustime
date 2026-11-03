@@ -1,16 +1,23 @@
 // Browser tests (step 15.2): a throwaway FocusTime server in demo mode (fictional data, in-memory store, nothing
 // fetched), its own XDG dirs and port, the clock pinned to Monday Nov 2, 2026 9:30 AM, the UI through Vite in the
-// server (no build). Chromium from the system (playwright-core, already a dev dependency). Never touches the real
-// config, plan store, cache or the running service.
-import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+// server (no build). Chromium from the system (playwright-core, already a dev dependency), or Playwright's WebKit
+// behind a local TLS proxy. Never touches the real config, plan store, cache or the running service.
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
-import { createServer } from "node:net";
+import { request } from "node:http";
+import { createServer as createHttps } from "node:https";
+import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium, type Browser, type Page } from "playwright-core";
+import { chromium, webkit, type Browser, type Page } from "playwright-core";
 
 export const CHROMIUM = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].find((p) => existsSync(p)) ?? null;
+/**
+ * Playwright's WebKit (Safari's engine), for the Safari checks: installed with `npx playwright-core install --with-deps
+ * webkit` (CI does). Its build needs Ubuntu's libraries; FOCUSTIME_TEST_WEBKIT=required makes a missing one a failure.
+ */
+export const WEBKIT = existsSync(webkit.executablePath()) ? webkit.executablePath() : null;
 export const NOW = "2026-11-02T09:30:00-05:00";
 
 const freePort = () =>
@@ -22,12 +29,46 @@ const freePort = () =>
     });
   });
 
+/**
+ * An https://localhost front for the server, for WebKit: it keeps no Secure cookie over http (Chromium does on
+ * localhost), and the session cookies are __Host- (Secure). A self-signed certificate made for this run in the test's
+ * temp dir (pages open with ignoreHTTPSErrors); requests and websocket upgrades pass through unchanged.
+ */
+async function tlsFront(dir: string, port: number, target: number): Promise<() => void> {
+  const key = join(dir, "tls.key");
+  const cert = join(dir, "tls.crt");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", cert, "-days", "1", "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost"], { stdio: "ignore" });
+  const server = createHttps({ key: readFileSync(key), cert: readFileSync(cert) }, (req, res) => {
+    const up = request({ host: "127.0.0.1", port: target, method: req.method, path: req.url, headers: req.headers }, (r) => {
+      res.writeHead(r.statusCode ?? 502, r.headers);
+      r.pipe(res);
+    });
+    up.on("error", () => res.destroy());
+    req.pipe(up);
+  });
+  server.on("upgrade", (req, socket, head) => {
+    const up = connect(target, "127.0.0.1", () => {
+      const lines = [];
+      for (let i = 0; i < req.rawHeaders.length; i += 2) lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
+      up.write(`${req.method} ${req.url} HTTP/1.1\r\n${lines.join("\r\n")}\r\n\r\n`);
+      up.write(head);
+      up.pipe(socket).on("error", () => up.destroy());
+      socket.pipe(up);
+    });
+    up.on("error", () => socket.destroy());
+    socket.on("error", () => up.destroy());
+  });
+  await new Promise<void>((ok) => server.listen(port, "127.0.0.1", ok));
+  return () => server.close();
+}
+
 export type Harness = { url: string; browser: Browser; stop: () => Promise<void> };
 
-export async function startDemo(): Promise<Harness> {
+export async function startDemo(engine: "chromium" | "webkit" = "chromium"): Promise<Harness> {
   const dir = await mkdtemp(join(tmpdir(), "focustime-e2e-"));
   // A2: no sign-in is set up here; the sign-in page offers "Try the demo", which every test uses.
-  const env = { ...process.env, FOCUSTIME_DEMO: "1", XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"), XDG_CACHE_HOME: join(dir, "cache"), XDG_RUNTIME_DIR: join(dir, "run") };
+  const front = engine === "webkit" ? await freePort() : null;
+  const env = { ...process.env, ...(front ? { FOCUSTIME_PUBLIC_URL: `https://localhost:${front}` } : {}), FOCUSTIME_DEMO: "1", XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"), XDG_CACHE_HOME: join(dir, "cache"), XDG_RUNTIME_DIR: join(dir, "run") };
   await mkdir(join(dir, "data", "focustime"), { recursive: true });
   const port = await freePort();
   const root = resolve(import.meta.dirname, "..");
@@ -41,12 +82,14 @@ export async function startDemo(): Promise<Harness> {
     await new Promise((r) => setTimeout(r, 100));
   }
   const url = (JSON.parse(await readFile(launch, "utf8")) as { url: string }).url;
-  const browser = await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu"] });
+  const closeFront = front ? await tlsFront(dir, front, port) : () => {};
+  const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu"] });
   return {
     url: `${url}?now=${encodeURIComponent(NOW)}`,
     browser,
     stop: async () => {
       await browser.close().catch(() => {});
+      closeFront();
       child.kill("SIGTERM");
       await new Promise((r) => setTimeout(r, 200));
       await rm(dir, { recursive: true, force: true });

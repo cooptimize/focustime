@@ -30,7 +30,8 @@
     "openid-client": "6.8.9",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "smol-toml": "1.9.1"
+    "smol-toml": "1.9.1",
+    "temporal-polyfill": "1.0.6"
   },
   "devDependencies": {
     "@types/node": "26.6.6",
