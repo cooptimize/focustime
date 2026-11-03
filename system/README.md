@@ -32,7 +32,7 @@ mv ~/.config/autostart/focustime.desktop.retired ~/.config/autostart/focustime.d
 focustime-open
 ```
 
-and put the two bindings back to `/home/tanner/.local/bin/focustime-open` and `... --capture`. The SQL Server container
+and put the two bindings back to `~/.local/bin/focustime-open` and `... --capture`. The SQL Server container
 (`npm run db:up`) and the developer loop (`npm run dev`) don't need the service and keep working either way.
 
 ## The database (A3)
