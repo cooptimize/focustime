@@ -56,8 +56,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     await expect(field.locator(".set-mark").getAttribute("aria-live")).resolves.toBe("polite");
     expect(sent.n).toBe(1);
     expect((await load(page)).planning.focusMinutes).toBe(before + 5);
-    await field.scrollIntoViewIfNeeded();
-    await shotBoth(page, "settings-planning-saved");
+    await shotBoth(page, "settings-planning-saved", field);
 
     // Undo: the old value back on the server and in the field.
     await page.locator(".set-undo").getByRole("button", { name: "Undo" }).click();
@@ -84,7 +83,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     await expect(input.inputValue()).resolves.toBe("5");
     await expect(input.getAttribute("aria-invalid")).resolves.toBe("true");
     expect((await load(page)).risk.meetingAtRiskMinutes).toBe(before);
-    await shotBoth(page, "settings-risk-error");
+    await shotBoth(page, "settings-risk-error", atRisk);
 
     // Leaving with that field still wrong doesn't drop it silently: Settings stays and the field is focused.
     await page.locator(".set-nav").getByRole("button", { name: "Planning" }).click();
@@ -119,6 +118,25 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     await page.close();
   }, T);
 
+  it("the page scrolls as one; the section list stays in view and marks the section shown", async () => {
+    const { page } = await freshPage(h);
+    await openSettings(page);
+    await page.locator(".set-nav").getByRole("button", { name: "Planning" }).click();
+    await page.locator(".set-field", { hasText: "Focus length" }).waitFor();
+    const layout = await page.evaluate(() => {
+      const body = document.querySelector<HTMLElement>(".set-body")!;
+      const page = document.querySelector<HTMLElement>(".settings")!;
+      page.scrollTo({ top: page.scrollHeight });
+      const nav = document.querySelector<HTMLElement>(".set-nav")!.getBoundingClientRect();
+      return { inner: getComputedStyle(body).overflowY, innerScrolls: body.scrollHeight > body.clientHeight + 1, scrolled: page.scrollTop > 0, navTop: nav.top, width: body.getBoundingClientRect().width };
+    });
+    expect(layout).toMatchObject({ inner: "visible", innerScrolls: false, scrolled: true });
+    expect(layout.navTop).toBeGreaterThanOrEqual(0);
+    expect(layout.width).toBeLessThanOrEqual(1100);
+    await expect(page.locator('.set-tab[aria-current="page"]').textContent()).resolves.toBe("Planning");
+    await page.close();
+  }, T);
+
   it("a DevOps write PAT keeps its one explicit button, Check and save", async () => {
     const { page } = await freshPage(h);
     await openSettings(page);
@@ -127,8 +145,7 @@ describe.skipIf(!CHROMIUM)("Settings saves itself", () => {
     await pat.waitFor({ timeout: 20_000 });
     await expect(pat.getByRole("button", { name: "Check and save" }).count()).resolves.toBe(1);
     await expect(page.locator(".set-body").getByRole("button", { name: /^Save$/ }).count()).resolves.toBe(0);
-    await pat.scrollIntoViewIfNeeded();
-    await shotBoth(page, "settings-clients-pat");
+    await shotBoth(page, "settings-clients-pat", pat);
     await page.close();
   }, T);
 });

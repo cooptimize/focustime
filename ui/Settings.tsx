@@ -133,7 +133,11 @@ export function Settings(props: Props) {
   useEffect(() => {
     void reload();
   }, [reload]);
-  useEffect(() => headRef.current?.focus(), [props.section]);
+  useEffect(() => {
+    // One scroll for the whole page: a new section starts at its top.
+    headRef.current?.closest(".settings")?.scrollTo({ top: 0 });
+    headRef.current?.focus({ preventScroll: true });
+  }, [props.section]);
   const saved = useCallback(
     (d: SettingsData) => {
       setData(d);
