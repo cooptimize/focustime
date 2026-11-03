@@ -1,0 +1,87 @@
+# Dev deploy on every push to main: the CI checks, then the image to ACR, the database migration, the app's database
+# user, the Bicep, and a smoke test. Signs in to Azure with OIDC as the federated identity ft-dev-deploy (no client
+# secret anywhere); its rights are Contributor and User Access Administrator on FocusTime-dev only, and membership of
+# "FocusTime DB Admins" for the database steps. See docs/azure/runbook.md.
+name: deploy-dev
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RG: ${{ vars.AZURE_DEV_RESOURCE_GROUP }}
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_DEV_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Find the resources
+        run: |
+          az bicep install
+          echo "ACR=$(az acr list -g "$RG" --query '[0].name' -o tsv)" >> "$GITHUB_ENV"
+          echo "SQL_SERVER=$(az sql server list -g "$RG" --query '[0].name' -o tsv)" >> "$GITHUB_ENV"
+          echo "SQL_FQDN=$(az sql server list -g "$RG" --query '[0].fullyQualifiedDomainName' -o tsv)" >> "$GITHUB_ENV"
+      - name: Build and push the image
+        run: |
+          az acr login -n "$ACR"
+          docker build -t "$ACR.azurecr.io/focustime:$TAG" .
+          docker push "$ACR.azurecr.io/focustime:$TAG"
+      # The runner reaches the database through a firewall rule for its own address, added here and removed at the end
+      # of the job whatever happens; the server otherwise allows Azure services only.
+      - name: Open the database to this runner
+        run: |
+          ip=$(curl -fsS https://api.ipify.org)
+          az sql server firewall-rule create -g "$RG" -s "$SQL_SERVER" -n "gh-run-${{ github.run_id }}" --start-ip-address "$ip" --end-ip-address "$ip" -o none
+      - name: Migrate the database
+        env:
+          FOCUSTIME_DB_DRIVER: sqlserver
+          FOCUSTIME_DB_SERVER: ${{ env.SQL_FQDN }}
+          FOCUSTIME_DB_PORT: "1433"
+          FOCUSTIME_DB_NAME: focustime
+          FOCUSTIME_DB_AUTH: entra
+        run: node scripts/focustime.ts migrate
+      - name: The app's database user
+        run: node scripts/db-user.ts --server "$SQL_FQDN" --database focustime --principal ft-dev-app
+      - name: Deploy the Bicep (what-if, then create)
+        env:
+          FT_IMAGE_TAG: ${{ github.sha }}
+          FT_APP_READY: "true"
+        run: |
+          az deployment group what-if -g "$RG" -n ft-dev --parameters infra/dev.bicepparam --exclude-change-types NoChange Ignore
+          az deployment group create -g "$RG" -n ft-dev --parameters infra/dev.bicepparam --query properties.outputs.publicUrl.value -o tsv > url.txt
+          echo "APP_URL=$(cat url.txt)" >> "$GITHUB_ENV"
+      - name: Smoke test
+        run: |
+          # The app may be scaled to zero and the database paused: allow a few minutes for both to wake.
+          for i in $(seq 1 40); do curl -fsS "$APP_URL/healthz" && break; sleep 10; done
+          curl -fsS "$APP_URL/healthz"
+          curl -fsS "$APP_URL/" | grep -q "<title>FocusTime</title>"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/auth/microsoft/login")
+          loc=$(curl -s -o /dev/null -w '%{redirect_url}' "$APP_URL/auth/microsoft/login")
+          [[ $code == 302 && $loc == https://login.microsoftonline.com/* ]] || { echo "sign-in: $code ${loc%%\?*}"; exit 1; }
+          curl -sI "$APP_URL/" | grep -iE '^(strict-transport-security|content-security-policy|x-frame-options|x-content-type-options):'
+      - name: Close the database to this runner
+        if: always() && env.SQL_SERVER != ''
+        run: az sql server firewall-rule delete -g "$RG" -s "$SQL_SERVER" -n "gh-run-${{ github.run_id }}" -o none || true

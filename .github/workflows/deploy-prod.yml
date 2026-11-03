@@ -1,0 +1,13 @@
+# Prod deploy: manual, behind the "production" environment's required reviewers. A stub until A5, which builds it the
+# way deploy-dev.yml works (its own federated identity on the FocusTime resource group, min replicas 1).
+name: deploy-prod
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: echo "Prod deploys are built in A5." && exit 1

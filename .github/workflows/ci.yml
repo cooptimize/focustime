@@ -1,0 +1,71 @@
+# Typecheck, unit tests, the store tests on SQL Server, browser tests, the Bicep build and the image build.
+# Runs on pull requests and on pushes to branches other than main; on main, deploy-dev.yml calls it before deploying.
+name: ci
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FOCUSTIME_TEST_SQL: required
+      FOCUSTIME_TEST_SQL_SERVER: localhost
+      FOCUSTIME_TEST_SQL_PORT: "14330"
+      TZ: America/Chicago
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      # The SQL Server container for the store tests: a throwaway sa password made for this run (masked), not a stored
+      # secret; the container lives only as long as the job.
+      - name: Start SQL Server
+        run: |
+          pw="Ft-$(openssl rand -hex 16)-A1"
+          echo "::add-mask::$pw"
+          echo "FOCUSTIME_TEST_SQL_PASSWORD=$pw" >> "$GITHUB_ENV"
+          MSSQL_SA_PASSWORD="$pw" docker run -d --name sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD -e MSSQL_PID=Developer \
+            -p 127.0.0.1:14330:1433 mcr.microsoft.com/mssql/server:2025-latest
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - name: Wait for SQL Server
+        run: |
+          for i in $(seq 1 60); do
+            docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$FOCUSTIME_TEST_SQL_PASSWORD" -Q "SELECT 1" -b >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          docker logs sql | tail -20; exit 1
+      - name: Unit, store (SQLite and SQL Server) and browser tests
+        run: npx vitest run --reporter=dot
+      - name: Build the UI
+        run: npx vite build
+  infra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bicep build
+        run: |
+          az bicep install
+          az bicep build --file infra/main.bicep --stdout > /dev/null
+          az bicep build-params --file infra/dev.bicepparam --stdout > /dev/null
+          az bicep build-params --file infra/prod.bicepparam --stdout > /dev/null
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image and smoke test it
+        run: |
+          docker build -t focustime:ci .
+          docker run -d --name app -p 127.0.0.1:8080:8080 -e FOCUSTIME_PUBLIC_URL=http://localhost:8080 -e FOCUSTIME_DEMO=1 \
+            -e FOCUSTIME_DB_DRIVER=sqlite focustime:ci
+          for i in $(seq 1 30); do curl -fsS http://localhost:8080/healthz && break; sleep 1; done
+          curl -fsS http://localhost:8080/healthz
+          docker logs app | tail -20
