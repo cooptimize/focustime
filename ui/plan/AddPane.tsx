@@ -1,5 +1,5 @@
 // U6: the right pane on both planning screens: "Add to <client>" in its color with a muted count, an optional search,
-// the sections (THIS WEEK'S MUSTS or FROM DEVOPS first, then "▸ Everything else · N in DevOps order"), and the type
+// the sections (THIS WEEK'S MUSTS or FROM DEVOPS first, then "▸ More from <client>'s DevOps · N" in DevOps order, open on its own when nothing is above it), and the type
 // box pinned at the bottom with its one-line hint.
 import type { CSSProperties, ReactNode } from "react";
 

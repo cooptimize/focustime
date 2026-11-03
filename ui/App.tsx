@@ -718,6 +718,9 @@ export function App() {
 
   /** Week › Plan the week for a week (its Monday); the week loads too, since fit and readiness use it. */
   const openPlanWeek = useCallback((w: IsoDate) => goNav(navOf.week("planweek", w)), [goNav]);
+  /** fix/planday-pane: the client Plan the week opens on (Plan the day's "plan the week"), until it has. */
+  const [planWeekClient, setPlanWeekClient] = useState<string | null>(null);
+  const clearPlanWeekClient = useCallback(() => setPlanWeekClient(null), []);
 
   /** A view by name (the command menu, older entry points): its tab and mode, or an overlay. */
   const setView = useCallback(
@@ -1451,7 +1454,7 @@ export function App() {
           }
         />
       ) : planWeekAt !== null ? (
-        <PlanWeek switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
+        <PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
       ) : followUpsOpen ? (
         <Inbox data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
       ) : roadmapOpen ? (
@@ -1489,6 +1492,11 @@ export function App() {
                       onStep={(dir) => void stepPlanDay(dir)}
                       start={pdStart}
                       onSelectBlock={setPdHalf}
+                      onPlanWeek={(clientKey) => {
+                        // The week this day is in (the line says "this week").
+                        setPlanWeekClient(clientKey);
+                        openPlanWeek(week.days[0]!.date);
+                      }}
                     />
           );
           })()

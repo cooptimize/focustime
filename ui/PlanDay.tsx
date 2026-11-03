@@ -43,6 +43,7 @@ import { PlanFrame } from "./plan/PlanFrame.tsx";
 import { PlanHeader } from "./plan/PlanHeader.tsx";
 import { UnitCard, PlanLabel } from "./plan/UnitCard.tsx";
 import { AddPane, AddSection, BoxHint } from "./plan/AddPane.tsx";
+import { moreLabel, moreOpenByDefault, NOTHING_PLANNED, rememberFold, sessionFold } from "./plan/more.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
 
 import type { FollowUpView } from "../actions/types.ts";
@@ -80,13 +81,15 @@ type Props = {
   today: string;
   /** Step 15.2: the selected block, so ⋯ menus add to it (null when the view closes). */
   onSelectBlock?: (half: Half | null) => void;
+  /** fix/planday-pane: "plan the week" in the right pane's nothing-planned line: Plan the week on that client. */
+  onPlanWeek?: (clientKey: string) => void;
 };
 
 const inPlay = (p: Pick) => p.status === "planned" || p.status === "done";
 const pickedKey = (p: Pick) => (p.itemId !== null ? `i${p.clientKey}:${p.itemId}` : p.draftId !== null ? `d${p.draftId}` : p.followUpId !== null ? `f${p.followUpId}` : `t${p.clientKey}:${p.title}`);
 const weekdayOf = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long" });
 
-export function PlanDay({ day, state, which, now, tz, colors, clients, error, act, onCommit, onClose, onStep, nextDay = null, start, justCommitted = false, onCommitSeen, switcher, today, onSelectBlock }: Props) {
+export function PlanDay({ day, state, which, now, tz, colors, clients, error, act, onCommit, onClose, onStep, nextDay = null, start, justCommitted = false, onCommitSeen, switcher, today, onSelectBlock, onPlanWeek }: Props) {
   const past = state.access === "past";
   const off = day.pto;
   const ref = useRef<HTMLElement>(null);
@@ -276,7 +279,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   );
   const right =
     plannable && selBlock ? (
-      <AddPaneDay key={`${day.date}${selBlock.half}`} slot={selBlock.slot} picks={selBlock.picks} overflow={day.kind !== "work" && selBlock.half !== "EVE"} state={state} picked={picked} here={new Set(selBlock.picks.map(pickedKey))} clients={clients} colors={colors} act={act} focus={focusItem} clearFocus={() => setFocusItem(null)} slash={slash} />
+      <AddPaneDay key={`${day.date}${selBlock.half}`} slot={selBlock.slot} picks={selBlock.picks} overflow={day.kind !== "work" && selBlock.half !== "EVE"} state={state} picked={picked} here={new Set(selBlock.picks.map(pickedKey))} clients={clients} colors={colors} act={act} focus={focusItem} clearFocus={() => setFocusItem(null)} slash={slash} onPlanWeek={onPlanWeek} />
     ) : undefined;
 
   return (
@@ -465,7 +468,7 @@ function RowNote({ p, bc, name }: { p: Pick; bc: string | null; name: (k: string
  * The right pane: "Add to <Client> <morning>". This week's musts (each feature with its stories, or Needs stories),
  * the client's follow-ups when there are any, everything else folded, and the type box at the bottom (U4).
  */
-function AddPaneDay({ slot, picks, overflow, state, picked, here, clients, colors, act, focus, clearFocus, slash }: { slot: Slot; picks: Pick[]; overflow: boolean; state: PlanDayState; picked: Set<string>; here: Set<string>; clients: { clientKey: string; clientName: string }[]; colors: Record<string, string>; act: PlanDayAct; focus: number | null; clearFocus: () => void; slash: number }) {
+function AddPaneDay({ slot, picks, overflow, state, picked, here, clients, colors, act, focus, clearFocus, slash, onPlanWeek }: { slot: Slot; picks: Pick[]; overflow: boolean; state: PlanDayState; picked: Set<string>; here: Set<string>; clients: { clientKey: string; clientName: string }[]; colors: Record<string, string>; act: PlanDayAct; focus: number | null; clearFocus: () => void; slash: number; onPlanWeek?: ((clientKey: string) => void) | undefined }) {
   const block = overflow ? null : (slot.focus[0] ?? null);
   const bc = blockClient(block?.clientKey ?? null, picks);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -473,14 +476,18 @@ function AddPaneDay({ slot, picks, overflow, state, picked, here, clients, color
   const allWork = useContext(DevOpsWork);
   const pv = useContext(PlanCtx);
   const work = clientKey ? allWork.get(clientKey) : undefined;
+  const clientKeyRef = useRef(clientKey);
+  clientKeyRef.current = clientKey;
   const [query, setQuery] = useState("");
-  const [restOpen, setRestOpen] = useState(false);
+  // fix/planday-pane: "More from <client>'s DevOps" opens on its own when nothing is above it (no musts, no
+  // follow-ups); a fold or unfold by hand is kept per client for the session.
+  const [restFold, setRestFold] = useState<Record<string, boolean>>({});
   const search = useRef<HTMLInputElement>(null);
   const slashSeen = useRef(slash);
   useEffect(() => {
     if (slash === slashSeen.current) return;
     slashSeen.current = slash;
-    setRestOpen(true);
+    if (clientKeyRef.current) setRestFold((f) => ({ ...f, [clientKeyRef.current!]: true }));
     setTimeout(() => search.current?.focus(), 0);
   }, [slash]);
   // U4: the feature a typed story goes under (Enter in the type box); none means the client, no parent yet.
@@ -493,6 +500,12 @@ function AddPaneDay({ slot, picks, overflow, state, picked, here, clients, color
   const loose = clientKey ? state.drafts.filter((d) => d.clientKey === clientKey && d.parentItemId === null && d.level === "story" && d.devopsId == null && !picked.has(`d${d.id}`)) : [];
   const chosenTitle = s?.priorities.find((p) => p.level === "feature" && p.ref.itemId === feature)?.ref.title ?? null;
   const musts = s?.priorities.filter((p) => p.tier === "must") ?? [];
+  const restOpen = clientKey ? (restFold[clientKey] ?? sessionFold(clientKey) ?? moreOpenByDefault(musts.length, s?.followUps.length ?? 0)) : false;
+  const setRestOpen = (open: boolean) => {
+    if (!clientKey) return;
+    setRestFold((f) => ({ ...f, [clientKey]: open }));
+    rememberFold(clientKey, open);
+  };
   const label = musts.length === (s?.priorities.length ?? 0) ? "This week's musts" : "This week";
   return (
     <HereCtx.Provider value={here}>
@@ -549,10 +562,23 @@ function AddPaneDay({ slot, picks, overflow, state, picked, here, clients, color
                 </ul>
               </AddSection>
             )}
-            <AddSection className="pd2-sec" label="Everything else" title={null}>
-              <FoldLine className="pd2-fold" open={restOpen || !!query} onToggle={() => setRestOpen((o) => !o)} label="Everything else" count={work ? `${s!.rest.length + loose.length} in DevOps order` : undefined} />
+            <AddSection className="pd2-sec" label={moreLabel(name(clientKey))} title={null}>
+              <FoldLine className="pd2-fold pd2-more" open={restOpen || !!query} onToggle={() => setRestOpen(!restOpen)} label={moreLabel(name(clientKey))} count={work ? s!.rest.length + loose.length : undefined} title="In DevOps order" />
               {(restOpen || query) && (
                 <>
+                  {s!.priorities.length === 0 && (
+                    <p className="muted pd-note pd2-none">
+                      {NOTHING_PLANNED[0](name(clientKey))}
+                      {onPlanWeek ? (
+                        <button type="button" className="link-btn" onClick={() => onPlanWeek(clientKey)}>
+                          {NOTHING_PLANNED[1]}
+                        </button>
+                      ) : (
+                        NOTHING_PLANNED[1]
+                      )}
+                      {NOTHING_PLANNED[2]}
+                    </p>
+                  )}
                   <input ref={search} className="pd2-search pl-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Escape" && query && (e.stopPropagation(), setQuery(""))} placeholder="Search by title or #id" aria-label={`Search ${name(clientKey)}'s work`} />
                   <ul className="pd2-list">
                     {loose.map((d) => (

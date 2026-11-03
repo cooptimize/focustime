@@ -2,7 +2,7 @@
 // "9:00–11:00 · Outlook" with a calendar icon when it is on Outlook. Clicking opens the same small editor everywhere
 // (week cards, Today, Plan the day): the block's free gaps, start and length, Put on Outlook, Remove time. Hidden when
 // "Use timeboxing" is off (D261).
-import { useContext, useState, type ReactNode } from "react";
+import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { pickTime } from "../plan/picktime.ts";
 import type { Pick } from "../plan/types.ts";
 import { MenuCtx, useMenu } from "./Menus.tsx";
@@ -45,31 +45,12 @@ export function PickTime({ pick, editable = true, hint = false }: { pick: Pick; 
   if (state === "untimed" || !t) {
     if (!canEdit) return null;
     return (
-      <>
+      <span className="pt-anchor">
         <button type="button" className="pt-add" aria-haspopup="menu" onClick={open} title="Give it a time in this block's free time" {...stop}>
           + time
         </button>
-        {hint && !seen && (
-          <span className="pt-hint" role="note">
-            Give it a time, optionally put it on Outlook.{" "}
-            <button
-              type="button"
-              className="link-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSeen(true);
-                try {
-                  localStorage.setItem(HINT_KEY, "1");
-                } catch {
-                  // Storage can fail; the hint just shows again next time.
-                }
-              }}
-            >
-              Got it
-            </button>
-          </span>
-        )}
-      </>
+        {hint && !seen && <TimeHint onDone={() => setSeen(true)} />}
+      </span>
     );
   }
   const when = spanText(t.start, t.end, env.tz);
@@ -87,5 +68,55 @@ export function PickTime({ pick, editable = true, hint = false }: { pick: Pick; 
         </span>
       )}
     </button>
+  );
+}
+
+/** Where the hint must stay: the card its row is in (a Plan the day block, a Today block, a week card or a panel). */
+export const HINT_CARD = ".pd2-block, .today-block, .half.card, .detail-panel, .pl-card, .checklist";
+
+/**
+ * fix/planday-pane: the one-time hint as a small popover under "+ time" (it used to sit in the row and overflow it).
+ * Anchored to the button's right edge; shifted right if it would leave the card on the left, and shown above the
+ * button when there's no room below it inside the card.
+ */
+function TimeHint({ onDone }: { onDone: () => void }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const card = el?.closest(HINT_CARD) as HTMLElement | null;
+    if (!el || !card) return;
+    const fit = () => {
+      el.classList.remove("up");
+      el.style.setProperty("--pt-shift", "0px");
+      const c = card.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      const shift = Math.max(0, c.left + 6 - r.left);
+      el.style.setProperty("--pt-shift", `${Math.round(shift)}px`);
+      if (r.bottom > c.bottom - 4 && r.top - c.top > r.height + 30) el.classList.add("up");
+    };
+    fit();
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fit);
+    ro?.observe(card);
+    return () => ro?.disconnect();
+  }, []);
+  return (
+    <span ref={ref} className="pt-hint" role="note">
+      Give it a time, optionally put it on Outlook.{" "}
+      <button
+        type="button"
+        className="link-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDone();
+          try {
+            localStorage.setItem(HINT_KEY, "1");
+          } catch {
+            // Storage can fail; the hint just shows again next time.
+          }
+        }}
+      >
+        Got it
+      </button>
+    </span>
   );
 }
