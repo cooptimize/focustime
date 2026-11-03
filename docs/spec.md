@@ -755,3 +755,15 @@ The identity from `assets/brand/` in the app, with no layout or domain token cha
 - **UI (`ui/DayCalendar.tsx`, D368):** meetings inside each block on Today, all-day row and before/after lines; Plan the day's agendas open by default with Now and Next.
 - **Launcher check:** `system/FocusTime.desktop` passes `desktop-file-validate`, and the desktop's launcher lists it. No repo change.
 - **Contract change:** none (no new action, source or store change). `AgendaItem` gains an optional `showAs`.
+
+## 47. E1: estimating in half blocks, derived from sized stories (authorized Nov 3)
+
+Revises step 16.4's estimating (section 43) and D334, D339. Decisions D438 to D441.
+
+- Units: quarters of a block inside (`plan/estimate.ts`), integers only: S = 1, M = 2, L = 4, a block = 4. Shown as half blocks: "½ block", "1 block", "1½ blocks", "2 blocks", "half a block free", "2½ planned, 2 available". No decimals, no quarters.
+- A feature's load this week: with sized stories under it on the list, their sum rounded up to a half block ("From its stories", no stepper); otherwise its estimate, ½ to 20 in half-block steps (±½ on hover, default 1 block). Unsized stories under it: "size its stories to plan from them". A story added to the week starts not sized.
+- Loose stories (no feature on the list): each its own size rounded up to a half block, unsized as M.
+- Budget: counted half-days × 4, less borrowed time in half blocks. The over line, the client line's fit words, the client panel and Plan ahead (cells, capacity row, past weeks) use the same quarters and words. Plan ahead's cells step half a block; a derived cell can't be set.
+- The feature's other open DevOps stories are one muted line, "5 more stories · 2 assigned to others"; it opens the feature panel (each story with state and owner).
+- Storage: `week_features.blocks` takes halves (SQLite migration 27 rebuilds the table, SQL Server migration 29 makes it decimal(3,1)); whole blocks stay valid, nothing converted. Export schema 27; 26 still reads.
+- Plan the day unchanged.
