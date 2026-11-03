@@ -42,11 +42,10 @@ describe("capacity", () => {
 });
 
 describe("size fit", () => {
-  it("S, M and L are about 1 h, 2 h and a whole block; only planned picks use capacity", () => {
-    expect(plannedMinutes([pick({ size: "S" }), pick({ size: "M" }), pick({ size: "L" })])).toBe(60 + 120 + 210);
+  it("S, M and L are 1h, 2h and 4h, unsized counts as 2h (E2); only planned picks use capacity", () => {
+    expect(plannedMinutes([pick({ size: "S" }), pick({ size: "M" }), pick({ size: "L" })])).toBe(60 + 120 + 240);
+    expect(plannedMinutes([pick({ size: null }), pick({ size: "S" })])).toBe(120 + 60);
     expect(plannedMinutes([pick({ status: "done" }), pick({ status: "moved" }), pick({ status: "dropped" })])).toBe(0);
-    // Sizes from Settings > Planning (step 6c).
-    expect(plannedMinutes([pick({ size: "S" }), pick({ size: "L" })], { S: 45, M: 90, L: 180 })).toBe(225);
   });
   it("fits with room to spare, tight under 30 minutes of slack, over by the excess", () => {
     expect(fitOf(0, 120)).toEqual({ kind: "empty" });
@@ -55,8 +54,8 @@ describe("size fit", () => {
     expect(fitOf(210, 210)).toEqual({ kind: "tight", spare: 0 });
     expect(fitOf(240, 195)).toEqual({ kind: "over", by: 45 });
   });
-  it("an L fills a clear 3.5 h block exactly", () => {
-    expect(fitOf(plannedMinutes([pick({ size: "L" })]), 210).kind).toBe("tight");
+  it("an L fills a clear 4h block exactly", () => {
+    expect(fitOf(plannedMinutes([pick({ size: "L" })]), 240).kind).toBe("tight");
   });
 });
 

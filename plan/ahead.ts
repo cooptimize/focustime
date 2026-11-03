@@ -1,13 +1,13 @@
 // Plan ahead (step 17, slice 2): one timeline with weekly columns for weeks 1 to 4 and monthly columns (compressed) for
-// weeks 5 to 12; bar dates from DevOps or estimated; half blocks per week in weeks 1 to 4; crowded months after that.
-// Pure: no I/O. Whole numbers only in anything shown.
+// weeks 5 to 12; bar dates from DevOps or estimated; hours per week in weeks 1 to 4 (E2); crowded months after that.
+// Pure: no I/O. Whole hours only in anything shown.
 import type { IsoDate } from "../week/types.ts";
-import { blocksNumber } from "./estimate.ts";
+import { hoursText, isOver } from "./estimate.ts";
 
 export const AHEAD_WEEKS = 12;
 export const PLAN_WEEKS = 4;
-/** A month after week 4 is crowded when its features due get fewer than this many blocks each (D351). */
-export const CROWDED_BLOCKS_PER_FEATURE = 3;
+/** A month after week 4 is crowded when its features due get less free time than this each (D351; E2: 3 blocks of 4h). */
+export const CROWDED_MINUTES_PER_FEATURE = 12 * 60;
 /** Without a target date, a planned week or a pace, an estimated bar runs this many days. */
 export const DEFAULT_SPAN_DAYS = 14;
 
@@ -95,7 +95,7 @@ export type BarInput = {
   targetDate: IsoDate | null;
   /** Dates I dragged (kept locally until saved). */
   local: { start: IsoDate; end: IsoDate } | null;
-  /** Weeks (Mondays) in weeks 1 to 4 with blocks for it. */
+  /** Weeks (Mondays) in weeks 1 to 4 with time planned for it. */
   plannedWeeks: readonly IsoDate[];
   /** The earliest change seen among its stories (ISO instant or date). */
   firstActivity: string | null;
@@ -136,23 +136,12 @@ export function dragBar(b: { start: IsoDate; end: IsoDate }, mode: DragMode, day
   return { start: b.start, end: maxDate(plus(b.end, n), b.start) };
 }
 
-/** Week cells take half blocks (2 quarters each) from 0 to the client's budget that week (at least what is set already). In quarters. */
-export function cellChoices(budgetQ: number, currentQ: number): number[] {
-  const top = Math.max(budgetQ, currentQ);
-  return Array.from({ length: Math.floor(top / 2) + 1 }, (_, i) => i * 2);
-}
-/** + and − on a focused week cell: half a block, kept within 0 and the client's budget. In quarters. */
-export function stepCell(currentQ: number, delta: 1 | -1, budgetQ: number): number {
-  return Math.max(0, Math.min(Math.max(budgetQ, currentQ), currentQ + delta * 2));
-}
-
 export type MonthLoad = { month: string; label: string; available: number; due: number; crowded: boolean; text: string };
-/** "Dec: 8 blocks, 3 features due" and Crowded month when each feature due gets fewer than 3 blocks (D351). */
-export function monthLoad(col: { month: string; label: string }, available: number, due: number): MonthLoad {
-  const crowded = due > 0 && available < due * CROWDED_BLOCKS_PER_FEATURE;
-  const blocks = `${available} ${available === 1 ? "block" : "blocks"}`;
+/** "about 32h, 3 features due" and Crowded month when each feature due gets less than 12h (D351, E2). Minutes in. */
+export function monthLoad(col: { month: string; label: string }, availableMinutes: number, due: number): MonthLoad {
+  const crowded = due > 0 && availableMinutes < due * CROWDED_MINUTES_PER_FEATURE;
   const features = due ? `, ${due} ${due === 1 ? "feature" : "features"} due` : "";
-  return { month: col.month, label: col.label, available, due, crowded, text: `${blocks}${features}` };
+  return { month: col.month, label: col.label, available: availableMinutes, due, crowded, text: `${availableMinutes ? `about ${hoursText(availableMinutes)} free` : "No focus time"}${features}` };
 }
 
 /** Which month column a date falls in (null: weeks 1 to 4, or outside the 12 weeks). */
@@ -162,15 +151,15 @@ export function monthOf(cols: readonly AheadColumn[], d: IsoDate): string | null
 }
 
 /**
- * Over-booked weeks (the Roadmap summary's filter): weeks 1 to 4 where a client's musts take more blocks than its
- * budget, and the features with blocks in one of them ("<client>:<id>"). In quarters.
+ * Over-booked weeks (the Roadmap summary's filter): weeks 1 to 4 where a client's musts need more than its free time,
+ * and the features with time in one of them ("<client>:<id>"). In minutes.
  */
 export function overbooked(
-  clients: readonly { clientKey: string; weeks: readonly { weekStart: IsoDate; plannedQ: number; budgetQ: number }[] }[],
-  cells: readonly { clientKey: string; itemId: number; weekStart: IsoDate; quarters: number }[],
+  clients: readonly { clientKey: string; weeks: readonly { weekStart: IsoDate; plannedMinutes: number; freeMinutes: number }[] }[],
+  cells: readonly { clientKey: string; itemId: number; weekStart: IsoDate; minutes: number }[],
 ): { weeks: number; items: Set<string> } {
-  const over = new Set(clients.flatMap((c) => c.weeks.filter((w) => w.plannedQ > w.budgetQ).map((w) => `${c.clientKey}|${w.weekStart}`)));
-  const items = new Set(cells.filter((x) => x.quarters > 0 && over.has(`${x.clientKey}|${x.weekStart}`)).map((x) => `${x.clientKey}:${x.itemId}`));
+  const over = new Set(clients.flatMap((c) => c.weeks.filter((w) => isOver(w.plannedMinutes, w.freeMinutes)).map((w) => `${c.clientKey}|${w.weekStart}`)));
+  const items = new Set(cells.filter((x) => x.minutes > 0 && over.has(`${x.clientKey}|${x.weekStart}`)).map((x) => `${x.clientKey}:${x.itemId}`));
   return { weeks: over.size, items };
 }
 
@@ -178,15 +167,11 @@ export function overbooked(
 export const PAST_WEEKS = 2;
 export const pastWeeks = (thisMonday: IsoDate): IsoDate[] => Array.from({ length: PAST_WEEKS }, (_, i) => plus(thisMonday, -7 * (PAST_WEEKS - i)));
 
-/** Focused minutes in quarters, to the nearest half block (a block is about one L). */
-export const workedQuarters = (minutes: number, blockMinutes: number): number => Math.round((minutes * 2) / Math.max(1, blockMinutes)) * 2;
-
-/** "planned 1½, worked about 1"; "planned 2, no focus time"; "not planned, worked about ½"; null when neither. In quarters. */
-export function pastWords(plannedQ: number, minutes: number, blockMinutes: number): string | null {
-  const w = workedQuarters(minutes, blockMinutes);
-  const worked = minutes <= 0 ? "no focus time" : w === 0 ? "worked under half a block" : `worked about ${blocksNumber(w)}`;
-  if (plannedQ > 0) return `planned ${blocksNumber(plannedQ)}, ${worked}`;
-  return minutes > 0 ? `not planned, ${worked}` : null;
+/** "planned 6h, worked about 4h"; "planned 6h, no focus time"; "not planned, worked about 2h"; null when neither. Minutes in. */
+export function pastWords(plannedMinutes: number, workedMinutes: number): string | null {
+  const worked = workedMinutes <= 0 ? "no focus time" : workedMinutes < 30 ? "worked under 1h" : `worked about ${hoursText(workedMinutes)}`;
+  if (plannedMinutes > 0) return `planned ${hoursText(plannedMinutes)}, ${worked}`;
+  return workedMinutes > 0 ? `not planned, ${worked}` : null;
 }
 
 export type NextStep = "breakdown" | "brief" | "draft_feature" | "set_target" | "ask_owner" | "help" | "plan_weeks";
@@ -205,11 +190,11 @@ export type ReadinessInput = {
   today: IsoDate;
   /** The 12 Mondays (week 1 is this week). */
   weeks: readonly IsoDate[];
-  /** Weeks 1 to 4 with blocks for it. */
+  /** Weeks 1 to 4 with time planned for it. */
   plannedWeeks: readonly IsoDate[];
   crowdedMonths: ReadonlySet<string>;
   cols: readonly AheadColumn[];
-  /** A week's blocks not filled by its listed stories (step 16.4 "needs more stories"). */
+  /** A week's estimate not covered by its listed stories (step 16.4 "needs more stories"). */
   needsStories: boolean;
 };
 

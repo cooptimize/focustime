@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ClientWork, WorkItem } from "../week/types.ts";
-import { blocksLeft, devopsStateFrom, headsUpKey, pickDoneFrom, weekHeadsUpDraft, weekList, itemDone, moveWithin, offersHeadsUp, onTrack, otherStoriesLine, orderList, progress, progressLabel, stackRank, validBlocks, type ListItem } from "./weeklist.ts";
+import { freeLeft, devopsStateFrom, headsUpKey, pickDoneFrom, weekHeadsUpDraft, weekList, itemDone, moveWithin, offersHeadsUp, onTrack, otherStoriesLine, orderList, progress, progressLabel, stackRank, validHours, type ListItem } from "./weeklist.ts";
 
-const item = (o: Partial<ListItem> & { itemId: number }): ListItem => ({ clientKey: "Adatum", level: "feature", tier: "must", blocks: 1, position: null, doneAt: null, slots: [], createdAt: "2026-11-05T10:00:00-05:00[America/New_York]", ...o });
+const item = (o: Partial<ListItem> & { itemId: number }): ListItem => ({ clientKey: "Adatum", level: "feature", tier: "must", estimate: 240, position: null, doneAt: null, slots: [], createdAt: "2026-11-05T10:00:00-05:00[America/New_York]", ...o });
 const wi = (id: number, stateCategory = "InProgress"): WorkItem => ({ id, title: `#${id}`, type: "User Story", state: "x", stateCategory, level: "story", order: id, parentId: null, changedAt: "2026-11-01T00:00:00Z", url: "" });
 const work = (o: Partial<ClientWork> = {}): ClientWork => ({ clientKey: "Adatum", clientName: "Adatum", status: "ok", fetchedAt: "x", fromCache: false, items: [], children: [], ...o });
 
@@ -27,9 +27,9 @@ describe("tiers and order", () => {
     expect([40, 41, 7, 5, 9].map((id) => r("Adatum", id))).toEqual([0, 1, 1_000_000, 1_000_001, 1_000_002]);
     expect(r("Adatum", 1)).toBeNull();
   });
-  it("an estimate is ½ to 20 in half-block steps (E1; whole blocks from step 16.4 stay valid)", () => {
-    expect([0.5, 1, 2.5, 20].every(validBlocks)).toBe(true);
-    expect([0, 0.25, 1.75, 21, Number.NaN, "1"].some(validBlocks)).toBe(false);
+  it("an estimate is whole hours, 1 to 80 (E2)", () => {
+    expect([1, 6, 80].every(validHours)).toBe(true);
+    expect([0, 0.5, 1.5, 81, Number.NaN, "1"].some(validHours)).toBe(false);
   });
 });
 
@@ -48,12 +48,12 @@ describe("done and progress against the current plan", () => {
     expect(itemDone(item({ itemId: 5, level: "feature" }), devops, () => true)).toBeNull(); // a feature isn't done by one pick
     expect(itemDone(item({ itemId: 1 }), devops, noPick)).toBeNull();
   });
-  it("counts musts done of musts on the list now, and the blocks the open ones need", () => {
-    const list = [item({ itemId: 1, doneAt: "x" }), item({ itemId: 2, blocks: 2 }), item({ itemId: 3, blocks: 0.5 }), item({ itemId: 4, tier: "nice" }), item({ itemId: 5, clientKey: "T&W" })];
+  it("counts musts done of musts on the list now, and the minutes the open ones need", () => {
+    const list = [item({ itemId: 1, doneAt: "x" }), item({ itemId: 2, estimate: 480 }), item({ itemId: 3, estimate: 120 }), item({ itemId: 4, tier: "nice" }), item({ itemId: 5, clientKey: "T&W" })];
     const p = progress(list, (i) => !!i.doneAt);
     expect(p).toEqual([
-      { clientKey: "Adatum", musts: 3, done: 1, left: 2, leftQuarters: 10, nice: 1 },
-      { clientKey: "T&W", musts: 1, done: 0, left: 1, leftQuarters: 4, nice: 0 },
+      { clientKey: "Adatum", musts: 3, done: 1, left: 2, leftMinutes: 600, nice: 1 },
+      { clientKey: "T&W", musts: 1, done: 0, left: 1, leftMinutes: 240, nice: 0 },
     ]);
     expect(progressLabel(p[0]!)).toBe("1 of 3 musts done");
     // A must swapped out no longer counts: progress follows the current plan.
@@ -63,21 +63,19 @@ describe("done and progress against the current plan", () => {
 
 describe("the midweek question", () => {
   const blk = (date: string, half: "AM" | "PM", free = 210) => ({ start: `${date}T${half === "AM" ? "09:00" : "12:30"}:00-05:00`, end: `${date}T${half === "AM" ? "12:30" : "17:00"}:00-05:00`, freeMinutes: free, totalMinutes: half === "AM" ? 210 : 270, pto: false });
-  it("counts whole blocks still ahead: not days off, not mostly meetings, the one under way while half is left", () => {
+  it("counts the free time still ahead: no days off, what is free after meetings, the share of the one under way", () => {
     const blocks = [blk("2026-11-09", "AM"), blk("2026-11-10", "PM", 270), blk("2026-11-11", "AM", 105), { ...blk("2026-11-12", "AM"), pto: true }];
-    expect(blocksLeft(blocks, "2026-11-08T12:00:00Z")).toBe(2);
-    expect(blocksLeft(blocks, "2026-11-09T15:45:00Z")).toBe(2); // Mon 10:45, half the morning still left
-    expect(blocksLeft(blocks, "2026-11-09T16:30:00Z")).toBe(1); // Mon 11:30, under half left
-    expect(blocksLeft(blocks, "2026-11-12T12:00:00Z")).toBe(0);
+    expect(freeLeft(blocks, "2026-11-08T12:00:00Z")).toBe(210 + 270 + 105);
+    expect(freeLeft(blocks, "2026-11-09T15:45:00Z")).toBe(105 + 270 + 105); // Mon 10:45, half the morning left
+    expect(freeLeft(blocks, "2026-11-12T12:00:00Z")).toBe(0);
   });
-  it("asks, never alarms, in whole blocks", () => {
-    expect(onTrack({ musts: 4, left: 3, leftQuarters: 12 }, 2)).toEqual({ kind: "at_risk", text: "3 musts left, 2 blocks left. Still realistic?" });
-    expect(onTrack({ musts: 4, left: 1, leftQuarters: 4 }, 1)).toEqual({ kind: "on_track", text: "1 must left, 1 block left. Looks doable." });
-    expect(onTrack({ musts: 2, left: 2, leftQuarters: 4 }, 0)).toEqual({ kind: "at_risk", text: "2 musts left, no blocks left. Still realistic?" });
-    expect(onTrack({ musts: 2, left: 0, leftQuarters: 0 }, 1).kind).toBe("done");
-    expect(onTrack({ musts: 0, left: 0, leftQuarters: 0 }, 3).kind).toBe("none");
-    // E1: half a block over is still over.
-    expect(onTrack({ musts: 2, left: 2, leftQuarters: 6 }, 1).kind).toBe("at_risk");
+  it("asks, never alarms, in hours", () => {
+    expect(onTrack({ musts: 4, left: 3, leftMinutes: 720 }, 420)).toEqual({ kind: "at_risk", text: "3 musts left, about 7h free left. Still realistic?" });
+    expect(onTrack({ musts: 4, left: 1, leftMinutes: 240 }, 240)).toEqual({ kind: "on_track", text: "1 must left, about 4h free left. Looks doable." });
+    expect(onTrack({ musts: 2, left: 2, leftMinutes: 240 }, 0)).toEqual({ kind: "at_risk", text: "2 musts left, no free time left. Still realistic?" });
+    expect(onTrack({ musts: 2, left: 0, leftMinutes: 0 }, 60).kind).toBe("done");
+    expect(onTrack({ musts: 0, left: 0, leftMinutes: 0 }, 180).kind).toBe("none");
+    expect(onTrack({ musts: 2, left: 2, leftMinutes: 300 }, 240).kind).toBe("at_risk");
   });
 });
 
@@ -106,14 +104,14 @@ describe("weekList (every view's order, done and progress)", () => {
     const days = { "2026-11-10": { picks: [{ clientKey: "Adatum", itemId: 5, status: "done" }] } };
     const r = weekList(f, work, [], pickDoneFrom(days));
     expect(r.items.map((i) => [i.itemId, i.done])).toEqual([[1, null], [2, "devops"], [4, "local"], [5, "pick"], [3, null]]);
-    expect(r.progress).toEqual([{ clientKey: "Adatum", musts: 4, done: 3, left: 1, leftQuarters: 2, nice: 1 }]);
+    expect(r.progress).toEqual([{ clientKey: "Adatum", musts: 4, done: 3, left: 1, leftMinutes: 120, nice: 1 }]);
   });
 });
 
 describe("progress with features as envelopes (step 16.4)", () => {
-  it("a story under a listed feature is part of it: not its own must, its done size counts toward the feature (E1: its load comes from it)", () => {
-    const list = [item({ itemId: 1, blocks: 2 }), item({ itemId: 2, level: "story", blocks: null, size: "L", parentId: 1, doneAt: "x" }), item({ itemId: 3, level: "story", blocks: null, size: "M", parentId: null })];
-    expect(progress(list, (i) => !!i.doneAt)).toEqual([{ clientKey: "Adatum", musts: 2, done: 0, left: 2, leftQuarters: 2, nice: 0 }]);
+  it("a story under a listed feature is part of it: not its own must, its done size counts toward the feature (its load comes from it)", () => {
+    const list = [item({ itemId: 1, estimate: 480 }), item({ itemId: 2, level: "story", estimate: null, size: "L", parentId: 1, doneAt: "x" }), item({ itemId: 3, level: "story", estimate: null, size: "M", parentId: null })];
+    expect(progress(list, (i) => !!i.doneAt)).toEqual([{ clientKey: "Adatum", musts: 2, done: 0, left: 2, leftMinutes: 120, nice: 0 }]);
   });
 });
 

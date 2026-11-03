@@ -22,5 +22,5 @@ export function dayFocus(picks: readonly Pick[], focused: Readonly<Record<number
 export function dayFocus(picks: readonly Pick[], focused: Readonly<Record<number, number>> | ((id: number) => number), sizes: Readonly<Record<Size, number>>) {
   const of = typeof focused === "function" ? focused : (id: number) => focused[id] ?? 0;
   const seconds = picks.reduce((n, p) => n + of(p.id), 0);
-  return { focusedMinutes: Math.floor(seconds / 60), plannedMinutes: picks.filter((p) => p.status !== "dropped").reduce((n, p) => n + sizes[p.size], 0) };
+  return { focusedMinutes: Math.floor(seconds / 60), plannedMinutes: picks.filter((p) => p.status !== "dropped").reduce((n, p) => n + sizes[p.size ?? "M"], 0) };
 }

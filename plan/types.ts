@@ -1,8 +1,9 @@
 // Plan layer types (step 5, Plan the day). Pure data shared by the store, actions and UI.
 import type { Half, IsoDate } from "../week/types.ts";
 import type { DayAccess } from "./days.ts";
+import { STORY_MINUTES, UNSIZED_MINUTES, type StorySize } from "./estimate.ts";
 
-export type Size = "S" | "M" | "L";
+export type Size = StorySize;
 export type PickStatus = "planned" | "done" | "moved" | "dropped";
 /** What a pick points at: a DevOps item, a local draft story, or a typed intention. */
 export type PickKind = "item" | "draft" | "intention";
@@ -26,7 +27,8 @@ export type Pick = {
   title: string;
   itemType: string | null;
   itemUrl: string | null;
-  size: Size;
+  /** E2: S, M or L, or null when not sized yet (counts as 2h everywhere, never blocks anything). */
+  size: Size | null;
   status: PickStatus;
   /** The pick this one was carried or moved from. */
   carriedFrom: number | null;
@@ -66,15 +68,17 @@ export type PlanDayState = {
   /** The latest resume note per client on or before this date (step 7). */
   resumeNotes: Record<string, { clientKey: string; date: IsoDate; note: string }>;
   /** Features committed to this date's week (step 8): their stories are offered first in their client's blocks. */
-  weekFeatures: { clientKey: string; itemId: number; title: string; url: string | null; slots: WeekFeature["slots"]; level: WeekFeature["level"]; tier: WeekFeature["tier"]; blocks: number | null; size?: WeekFeature["size"]; parentId?: number | null; position: number | null; doneAt: ZonedStamp | null }[];
+  weekFeatures: { clientKey: string; itemId: number; title: string; url: string | null; slots: WeekFeature["slots"]; level: WeekFeature["level"]; tier: WeekFeature["tier"]; estimate: number | null; size?: WeekFeature["size"]; parentId?: number | null; position: number | null; doneAt: ZonedStamp | null }[];
 };
 
 /** Committed plans for the days of a week, for the checklist on the week view. */
 /** Step 16.2: closedOutAt too, for the ✓ on Today's Close out mode on any day of the week. */
 export type PlanWeek = Record<IsoDate, { committedAt: ZonedStamp | null; closedOutAt?: ZonedStamp | null; picks: Pick[] }>;
 
-/** S up to about 1 h, M about 2 h, L a whole block (about 3 to 4 h). Nothing above L: split it first. */
-export const SIZE_MINUTES: Record<Size, number> = { S: 60, M: 120, L: 210 };
+/** E2: S 1h, M 2h, L 4h, fixed for everyone (plan/estimate.ts). Nothing above L: split it first. */
+export const SIZE_MINUTES: Readonly<Record<Size, number>> = STORY_MINUTES;
+/** A pick's minutes by its size: 2h when unsized (Timebox my day, fit and budgets alike). */
+export const sizeMinutes = (size: Size | null | undefined, sizes: Readonly<Record<Size, number>> = SIZE_MINUTES) => (size ? sizes[size] : UNSIZED_MINUTES);
 export const SIZES: readonly Size[] = ["S", "M", "L"];
 export const DEFAULT_SIZE: Size = "M";
 
@@ -90,8 +94,8 @@ export type WeekFeature = {
   /** Step 11: a feature or a story on the client's week list, a must or a nice to have. */
   level: "feature" | "story";
   tier: "must" | "nice";
-  /** E1: a feature's estimate in half blocks, or null for 1 block (its sized stories on the list win); null for a story. */
-  blocks: number | null;
+  /** E2: a feature's estimate in minutes (whole hours), or null for 4h (its stories on the list win once one is sized); null for a story. */
+  estimate: number | null;
   /** Step 16.4: a story's size (S, M or L); null for a feature. */
   size: "S" | "M" | "L" | null;
   /** Step 16.4: a story's parent feature in DevOps, when known (nests it under that feature on the list). */

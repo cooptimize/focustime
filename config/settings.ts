@@ -87,16 +87,11 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       return (text) => setValue(setValue(setValue(text, "risk", "meeting_watch_minutes", watch), "risk", "meeting_at_risk_minutes", atRisk), "risk", "min_focus_window_minutes", window);
     }
     case "planning": {
-      const keys = ["pickablePortfolioTypes", "sizes", "minSizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
+      const keys = ["pickablePortfolioTypes", "minSizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
       only(v, keys, "plan");
       const types = strList(v.pickablePortfolioTypes ?? [], "plan.pickable_portfolio_types").filter(Boolean);
-      // Each value is written as given; parseConfig checks ranges and order per field (plan.size_m etc.).
+      // Each value is written as given; parseConfig checks ranges per field (plan.min_m etc.). Sizes are fixed (E2).
       const values: [string, TomlValue][] = [["pickable_portfolio_types", types]];
-      if (v.sizes !== undefined) {
-        const sz = obj(v.sizes, "plan.sizes");
-        only(sz, ["S", "M", "L"], "plan.sizes");
-        for (const k of ["S", "M", "L"] as const) if (sz[k] !== undefined) values.push([`size_${k.toLowerCase()}`, int(sz[k], `plan.size_${k.toLowerCase()}`)]);
-      }
       if (v.minSizes !== undefined) {
         const mz = obj(v.minSizes, "plan.min_sizes");
         only(mz, ["S", "M", "L"], "plan.min_sizes");

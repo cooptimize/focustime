@@ -1,60 +1,71 @@
-// Estimating in half blocks (E1, D438; was step 16.4, D334). A block is one half-day of client focus time. All
-// arithmetic is in quarters of a block, integers only: S = 1, M = 2, L = 4, a block = 4. What is shown is always a
-// half-block amount ("½ block", "1½ blocks"), never a quarter and never a decimal.
+// Estimating in hours (E2, D446; was half blocks, E1). A block is only the calendar unit: the half-day where the work
+// happens. How much work is always time, kept in minutes and shown as whole hours ("about 6h"), never a fraction, a
+// decimal or a block. S, M and L are shortcuts: 1h, 2h and 4h. Sizing is optional: an unsized story counts as M (2h) in
+// every fit and budget, marked as an assumption, never an error.
 //
 // A feature's load this week:
-// - derived: when stories under it are on the week list and at least one is sized, the sum of the sized ones, rounded
-//   up to the next half block. Its typed estimate is ignored (and its stepper hidden).
-// - estimate: otherwise, the person's estimate in half-block steps (½ to 20), 1 block when none was set.
-// A story on the list without its feature counts its own size, rounded up to a half block (an unsized one counts as M).
-// Nested stories never add to the client's total. Pure: no I/O.
+// - from its stories: when stories under it are on the week list and at least one is sized, the sum of all of them
+//   (unsized ones as 2h). Its typed estimate is ignored then (and its stepper hidden: "from its stories").
+// - its estimate: otherwise, the person's estimate in whole hours (1 to 80), 4h when none was set.
+// A story on the list without its feature counts its own size (unsized as 2h). Nested stories never add to the client's
+// total beyond their feature's load. Pure: no I/O.
 
 export type StorySize = "S" | "M" | "L";
 export const STORY_SIZES: readonly StorySize[] = ["S", "M", "L"];
-/** S about an hour, M a couple of hours, L about a whole block: quarters of a block. */
-export const STORY_QUARTERS: Record<StorySize, number> = { S: 1, M: 2, L: 4 };
-/** Quarters in a block. */
-export const Q = 4;
-export const MAX_BLOCKS = 20;
-/** A feature with no estimate and no sized stories: 1 block. */
-export const DEFAULT_FEATURE_QUARTERS = Q;
-/** An unsized story counts as this when it stands alone on the list. */
-export const DEFAULT_STORY_SIZE: StorySize = "M";
+/** The one table of sizes: S 1h, M 2h, L 4h, in minutes. */
+export const STORY_MINUTES: Readonly<Record<StorySize, number>> = { S: 60, M: 120, L: 240 };
+/** An unsized story counts as M until it is sized. */
+export const UNSIZED_MINUTES = STORY_MINUTES.M;
+/** A feature with no estimate and no sized stories: 4h. */
+export const DEFAULT_FEATURE_MINUTES = 240;
+/** A feature estimate in whole hours: 1 to 80. */
+export const MIN_ESTIMATE_HOURS = 1;
+export const MAX_ESTIMATE_HOURS = 80;
 
-/** A feature estimate in blocks: ½ to 20 in half-block steps (whole blocks from before E1 are valid as they are). */
-export const validHalfBlocks = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && Number.isInteger(n * 2) && n >= 0.5 && n <= MAX_BLOCKS;
 export const validStorySize = (s: unknown): s is StorySize => s === "S" || s === "M" || s === "L";
+/** Whole hours, 1 to 80. */
+export const validEstimateHours = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= MIN_ESTIMATE_HOURS && n <= MAX_ESTIMATE_HOURS;
+/** A stored estimate: whole hours in minutes, 60 to 4800. */
+export const validEstimateMinutes = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n % 60 === 0 && validEstimateHours(n / 60);
 
-/** Blocks (a half-block amount) to quarters, and back. */
-export const quartersOf = (blocks: number) => Math.round(blocks * Q);
-export const blocksOf = (quarters: number) => quarters / Q;
-/** Up to the next half block (2 quarters). */
-export const upToHalf = (q: number) => Math.ceil(q / 2) * 2;
-const downToHalf = (q: number) => Math.floor(q / 2) * 2;
+/** A story's minutes: its size, or 2h when unsized. */
+export const storyMinutes = (size: StorySize | null | undefined): number => (size && validStorySize(size) ? STORY_MINUTES[size] : UNSIZED_MINUTES);
 
-/** A half-block amount as a number word: "½", "1", "1½", "12". Quarters round up to a half: never shown. */
-export function blocksNumber(q: number): string {
-  const halves = Math.ceil(Math.max(0, q) / 2);
-  const whole = Math.floor(halves / 2);
-  const half = halves % 2 === 1;
-  if (!whole) return half ? "½" : "0";
-  return `${whole}${half ? "½" : ""}`;
+/** Whole hours: "6h". More than nothing but under half an hour reads "under 1h"; nothing is "0h". */
+export function hoursText(minutes: number): string {
+  const m = Math.max(0, minutes);
+  if (m > 0 && m < 30) return "under 1h";
+  return `${Math.round(m / 60)}h`;
 }
-/** "½ block", "1 block", "1½ blocks", "2 blocks". */
-export const blocksWord = (q: number) => `${blocksNumber(q)} block${upToHalf(q) === Q || upToHalf(q) === 2 ? "" : "s"}`;
-/** What is free: "half a block", else blocksWord. */
-const freeWord = (q: number) => (upToHalf(q) === 2 ? "half a block" : blocksWord(q));
+/** An estimate: "about 6h". */
+export const aboutText = (minutes: number) => `about ${hoursText(minutes)}`;
+/** A size chip: "M · 2h", or "Size? · 2h" for an unsized story. */
+export const sizeChipText = (size: StorySize | null | undefined) => `${size && validStorySize(size) ? size : "Size?"} · ${hoursText(storyMinutes(size))}`;
 
-/** Loose stories' quarters for the budget: each its own size rounded up to a half block. */
-export const looseQuarters = (sizes: readonly (StorySize | null | undefined)[]) => sizes.reduce((n, s) => n + upToHalf(STORY_QUARTERS[s ?? DEFAULT_STORY_SIZE]), 0);
+/**
+ * The shared stepper (Plan the week, Plan ahead, the detail panel): 1h steps up to 8h, 2h above, within 1 and 80.
+ * A typed value off the 2h grid above 8h steps to the next even hour.
+ */
+export function stepHours(hours: number, delta: 1 | -1): number {
+  const h = Math.round(hours);
+  const next = delta > 0 ? (h < 8 ? h + 1 : h % 2 ? h + 1 : h + 2) : h <= 8 ? h - 1 : h % 2 ? h - 1 : h - 2;
+  return Math.max(MIN_ESTIMATE_HOURS, Math.min(MAX_ESTIMATE_HOURS, next));
+}
+/** A typed stepper value: whole hours 1 to 80 ("6" or "6h"), else null (the box keeps the old value). */
+export function parseHours(text: string): number | null {
+  const t = text.trim().replace(/h$/i, "").trim();
+  if (!/^\d+$/.test(t)) return null;
+  const n = Number(t);
+  return validEstimateHours(n) ? n : null;
+}
 
 export type EstItem = {
   clientKey: string;
   itemId: number;
   level: "feature" | "story";
   tier: "must" | "nice";
-  /** Features: the person's estimate in blocks (half-block steps), or null for the default (1 block). Stories: ignored. */
-  blocks: number | null;
+  /** Features: the person's estimate in minutes (whole hours), or null for the default (4h). Stories: ignored. */
+  estimate: number | null;
   /** Stories: S, M or L, or null when not sized yet. Features: ignored. */
   size?: StorySize | null;
   /** A story's parent feature in DevOps, when known. */
@@ -66,20 +77,20 @@ export type Envelope<T> = {
   feature: T;
   /** The stories on the list under it (they take its tier). */
   stories: T[];
-  /** Its load this week in quarters (always a half-block amount). */
-  quarters: number;
-  /** True when the load comes from its sized stories (the estimate is ignored and its stepper hidden). */
+  /** Its load this week in minutes. */
+  minutes: number;
+  /** True when the load comes from its stories (at least one sized): the estimate is ignored and its stepper hidden. */
   derived: boolean;
-  /** Stories under it on the list but none sized: the estimate applies, and the row says so. */
+  /** Most of its stories on the list aren't sized: the row says "estimate · stories not sized", not "from stories". */
   unsized: boolean;
-  /** Quarters done: all when the feature is done, else its done stories' share, down to a half block. */
-  doneQuarters: number;
+  /** Minutes done: all when the feature is done, else its done stories' share. */
+  doneMinutes: number;
 };
 export type Estimate<T> = { envelopes: Envelope<T>[]; loose: T[] };
 
 /**
  * Features as envelopes: each listed story whose parent feature is on the same client's list nests under it; the rest
- * stay loose (their own rows). A feature's load is derived from its sized stories, or its estimate.
+ * stay loose (their own rows). A feature's load comes from its stories when one is sized, else its estimate.
  */
 export function estimate<T extends EstItem>(items: readonly T[]): Estimate<T> {
   const features = items.filter((i) => i.level === "feature");
@@ -93,17 +104,18 @@ export function estimate<T extends EstItem>(items: readonly T[]): Estimate<T> {
   }
   const envelopes = features.map((f) => {
     const stories = byFeature.get(key(f.clientKey, f.itemId))!;
-    const sized = stories.filter((s) => validStorySize(s.size));
-    const derived = sized.length > 0;
-    const quarters = derived ? upToHalf(sized.reduce((n, s) => n + STORY_QUARTERS[s.size!], 0)) : f.blocks != null && validHalfBlocks(f.blocks) ? quartersOf(f.blocks) : DEFAULT_FEATURE_QUARTERS;
-    const doneQuarters = f.done
-      ? quarters
+    const sized = stories.filter((s) => validStorySize(s.size)).length;
+    const derived = sized > 0;
+    const minutes = derived ? stories.reduce((n, s) => n + storyMinutes(s.size), 0) : f.estimate != null && validEstimateMinutes(f.estimate) ? f.estimate : DEFAULT_FEATURE_MINUTES;
+    const doneStories = stories.filter((s) => !!s.done);
+    const doneMinutes = f.done
+      ? minutes
       : derived
-        ? Math.min(quarters, downToHalf(sized.filter((s) => !!s.done).reduce((n, s) => n + STORY_QUARTERS[s.size!], 0)))
+        ? Math.min(minutes, doneStories.reduce((n, s) => n + storyMinutes(s.size), 0))
         : stories.length
-          ? downToHalf(Math.floor((quarters * stories.filter((s) => !!s.done).length) / stories.length))
+          ? Math.round((minutes * doneStories.length) / stories.length)
           : 0;
-    return { feature: f, stories, quarters, derived, unsized: !derived && stories.length > 0, doneQuarters };
+    return { feature: f, stories, minutes, derived, unsized: stories.length > 0 && stories.length - sized > stories.length / 2, doneMinutes };
   });
   return { envelopes, loose };
 }
@@ -114,40 +126,60 @@ export function tierOf<T extends EstItem>(e: Estimate<T>, item: T): "must" | "ni
   return item.tier;
 }
 
-/** Quarters planned per client and tier: each feature's load, plus loose stories each rounded up to a half block. */
-export function plannedQuarters<T extends EstItem>(e: Estimate<T>, clientKey: string, tier: "must" | "nice"): number {
-  const features = e.envelopes.filter((x) => x.feature.clientKey === clientKey && x.feature.tier === tier).reduce((n, x) => n + x.quarters, 0);
-  return features + looseQuarters(e.loose.filter((s) => s.clientKey === clientKey && s.tier === tier).map((s) => s.size));
+/** Minutes planned per client and tier: each feature's load, plus loose stories by size (unsized as 2h). */
+export function plannedMinutesOf<T extends EstItem>(e: Estimate<T>, clientKey: string, tier: "must" | "nice"): number {
+  const features = e.envelopes.filter((x) => x.feature.clientKey === clientKey && x.feature.tier === tier).reduce((n, x) => n + x.minutes, 0);
+  return features + e.loose.filter((s) => s.clientKey === clientKey && s.tier === tier).reduce((n, s) => n + storyMinutes(s.size), 0);
 }
 
-/** "½ of 1½ blocks done". */
-export const progressWords = (env: Pick<Envelope<unknown>, "quarters" | "doneQuarters">) => `${blocksNumber(env.doneQuarters)} of ${blocksWord(env.quarters)} done`;
-
-/** The row's plain status: stories on the list that aren't sized yet (so its estimate applies). Nothing otherwise. */
-export function fillWords(env: Pick<Envelope<unknown>, "unsized">): string | null {
-  return env.unsized ? "size its stories to plan from them" : null;
+/** A feature's load in words: "6h" when every story under it is sized, else "about 6h". */
+export function loadText(env: Pick<Envelope<Pick<EstItem, "size">>, "minutes" | "derived" | "stories">): string {
+  const exact = env.derived && env.stories.every((s) => validStorySize(s.size));
+  return exact ? hoursText(env.minutes) : aboutText(env.minutes);
 }
 
-/** The client's plain status against its budget, in quarters: "All 3 planned", "half a block free", "2½ planned, 2 available". */
-export function budgetWords(budgetQ: number, plannedQ: number): { kind: "none" | "all" | "free" | "over"; text: string } {
-  if (plannedQ > budgetQ) return { kind: "over", text: `${blocksNumber(plannedQ)} planned, ${blocksNumber(budgetQ)} available` };
-  if (!budgetQ) return { kind: "none", text: "No blocks this week" };
-  if (plannedQ === budgetQ) return { kind: "all", text: `All ${blocksNumber(budgetQ)} planned` };
-  return { kind: plannedQ ? "free" : "none", text: `${freeWord(budgetQ - plannedQ)} free` };
+/** Where the load comes from, under the row: "from stories", "estimate · stories not sized", or nothing (no stories). */
+export function sourceWords(env: Pick<Envelope<unknown>, "derived" | "unsized">): string | null {
+  if (env.unsized) return "estimate · stories not sized";
+  return env.derived ? "from stories" : null;
 }
 
-/** Old half-block counts (before step 16.4): features round up to whole blocks; a story becomes M (half) or L. */
-export function migrateBlocks(level: "feature" | "story", blocks: number): { blocks: number; size: StorySize | null } {
-  if (level === "story") return { blocks: Math.max(1, Math.ceil(blocks)), size: blocks <= 0.5 ? "M" : "L" };
-  return { blocks: Math.min(MAX_BLOCKS, Math.max(1, Math.ceil(blocks))), size: null };
+/** "2h of about 6h done". */
+export const progressWords = (env: Pick<Envelope<Pick<EstItem, "size">>, "minutes" | "doneMinutes" | "derived" | "stories">) => `${hoursText(env.doneMinutes)} of ${loadText(env)} done`;
+
+/** Over by this much or less still fits (sizes are estimates): the same grace as a block's fit (plan/fit.ts). */
+export const OVER_GRACE_MINUTES = 10;
+/** Planned past free time by more than the grace. */
+export const isOver = (plannedMinutes: number, freeMinutes: number) => plannedMinutes - freeMinutes > OVER_GRACE_MINUTES;
+/** "about 2h over", or "a little over" under 45 minutes. */
+export const overText = (by: number) => (by < 45 ? "a little over" : `about ${hoursText(by)} over`);
+
+/**
+ * A client's week in words (Plan the week's line and header, Plan ahead): "7h free" and "9h planned", with the amber
+ * "about 2h over" when its musts need more than its free time. Never red.
+ */
+export function budgetWords(freeMin: number, plannedMin: number): { kind: "none" | "all" | "free" | "over"; free: string; planned: string | null; over: string | null; text: string } {
+  const free = freeMin > 0 ? `${hoursText(freeMin)} free` : "No focus time this week";
+  const planned = plannedMin > 0 ? `${hoursText(plannedMin)} planned` : null;
+  const text = [free, planned].filter(Boolean).join(" · ");
+  if (isOver(plannedMin, freeMin)) return { kind: "over", free, planned, over: overText(plannedMin - freeMin), text };
+  if (!plannedMin) return { kind: "none", free, planned, over: null, text };
+  return { kind: freeMin - plannedMin < 30 ? "all" : "free", free, planned, over: null, text };
 }
 
 /**
- * U4: the one amber line under a client's musts when they need more than it has, in quarters: "2½ blocks of musts,
- * 2 blocks free. Move one to nice to have, or borrow Friday." Friday is offered only when the week has a catch-up day.
+ * The one amber line under a client's musts when they need more than its free time: "About 2h more than Northwind's
+ * free time this week. Make one a nice to have, or borrow Friday." Friday only when the week has a catch-up day.
  */
-export function overLine(budgetQ: number, plannedQ: number, friday: boolean): string | null {
-  if (plannedQ <= budgetQ) return null;
-  const free = budgetQ ? `${freeWord(budgetQ)} free` : "no blocks free";
-  return `${blocksWord(plannedQ)} of musts, ${free}. Move one to nice to have${friday ? ", or borrow Friday" : ""}.`;
+export function overLine(clientName: string, freeMin: number, plannedMin: number, friday: boolean): string | null {
+  if (!isOver(plannedMin, freeMin)) return null;
+  const by = plannedMin - freeMin;
+  const amount = by < 45 ? "A little more" : `About ${hoursText(by)} more`;
+  return `${amount} than ${clientName}'s free time this week. Make one a nice to have${friday ? ", or borrow Friday" : ""}.`;
+}
+
+/** 1 block = 4h: what E1 (half blocks) and step 16.4 (whole blocks) stored, as minutes to the nearest hour (1h to 80h). */
+export function blocksToMinutes(blocks: number): number {
+  const hours = Math.round(blocks * 4);
+  return Math.max(MIN_ESTIMATE_HOURS, Math.min(MAX_ESTIMATE_HOURS, hours)) * 60;
 }

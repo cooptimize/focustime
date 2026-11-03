@@ -97,7 +97,7 @@ export const colorCss = (c: string) => ((CLIENT_SLOTS as readonly string[]).incl
 export type PlanConfig = {
   /** Portfolio-level work item types that can still be picked (Q20), matched without regard to case. */
   pickablePortfolioTypes: string[];
-  /** Minutes per pick size (step 6c, Q36). */
+  /** Minutes per pick size: fixed since E2 (S 1h, M 2h, L 4h, D446); old size_s/m/l values are read and ignored. */
   sizes: { S: number; M: number; L: number };
   /** Shortest useful time per size (step 15.1, D273): Timebox my day never places or trims a pick below it. */
   minSizes: { S: number; M: number; L: number };
@@ -122,7 +122,7 @@ export type PlanConfig = {
   weekNudgeMon: string;
 };
 
-export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes"> = { sizes: { S: 60, M: 120, L: 210 }, minSizes: { S: 30, M: 60, L: 90 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0, weekNudgeThu: "14:00", weekNudgeFri: "09:00", weekNudgeMon: "08:30" };
+export const DEFAULT_PLAN: Omit<PlanConfig, "pickablePortfolioTypes"> = { sizes: { S: 60, M: 120, L: 240 }, minSizes: { S: 30, M: 60, L: 90 }, carryDays: 7, reminderOffsetMinutes: 0, focusMinutes: 50, breakMinutes: 10, endSound: false, followGraceDays: 14, closeoutReminderMinutes: 15, checkinReminderMinutes: 0, weekNudgeThu: "14:00", weekNudgeFri: "09:00", weekNudgeMon: "08:30" };
 const PLAN_KEYS = ["pickable_portfolio_types", "size_s", "size_m", "size_l", "min_s", "min_m", "min_l", "carry_days", "reminder_offset_minutes", "focus_minutes", "break_minutes", "end_sound", "follow_grace_days", "closeout_reminder_minutes", "checkin_reminder_minutes", "week_nudge_thu", "week_nudge_fri", "week_nudge_mon"];
 
 export type FieldError = { field: string; message: string };
@@ -340,12 +340,8 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       }
       return v;
     };
-    const sS = minutes("size_s", 5, 480), sM = minutes("size_m", 5, 480), sL = minutes("size_l", 5, 480);
-    if (sS !== undefined) planOpts.sizes.S = sS;
-    if (sM !== undefined) planOpts.sizes.M = sM;
-    if (sL !== undefined) planOpts.sizes.L = sL;
-    if (planOpts.sizes.M <= planOpts.sizes.S) err("plan.size_m", "Must be more than S");
-    if (planOpts.sizes.L <= planOpts.sizes.M) err("plan.size_l", "Must be more than M");
+    // E2 (D446): S, M and L are fixed shortcuts for 1h, 2h and 4h. Sizes a person set before stay in their settings
+    // text, unread: never an error, never used.
     for (const z of ["S", "M", "L"] as const) {
       const key = `min_${z.toLowerCase()}`;
       const v = minutes(key, 15, 480);

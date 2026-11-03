@@ -55,8 +55,8 @@ describe("Now strip", () => {
     const picks = [pick("AM", "Done one", { status: "done" }), pick("AM", "Big one", { size: "L" }), pick("AM", "Another", { size: "M" }), pick("PM", "Later"), pick("PM", "Dropped", { status: "dropped" })];
     const s = nowStrip(input("2026-11-02T10:40", { picks, committed: true }));
     expect(s.picks).toEqual({ done: 1, total: 4 });
-    // Free from 10:40 to 12:00 is 80 min; 210 + 120 planned.
-    expect(s.overBy).toBe(250);
+    // Free from 10:40 to 12:00 is 80 min; 240 + 120 planned (E2: L is 4h).
+    expect(s.overBy).toBe(280);
     expect(s.nextPick).toBe("Big one");
     // With the morning's picks done, the next pick comes from later in the day.
     const later = nowStrip(input("2026-11-02T11:00", { picks: picks.map((p) => (p.half === "AM" ? { ...p, status: "done" as const } : p)), committed: true }));

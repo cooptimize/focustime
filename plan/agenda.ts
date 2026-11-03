@@ -87,7 +87,7 @@ export function placeInGap(gap: FreeGap, want: number, min = TIMEBOX_MIN): Place
 }
 
 export type DayPlacement = Placement & { pickId: number; half: Half; title: string; clientKey: string };
-export type Unplaced = { pickId: number; half: Half; title: string; size: Size; reason: string };
+export type Unplaced = { pickId: number; half: Half; title: string; size: Size | null; reason: string };
 
 /** The shortest useful time per size (D273): Timebox my day never places a pick in less. */
 export const DEFAULT_MIN_SIZES: Readonly<Record<Size, number>> = { S: 30, M: 60, L: 90 };
@@ -105,15 +105,16 @@ export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, S
   const boxed = new Set(timeboxes.filter((t) => !t.removedAt && t.pickId !== null).map((t) => t.pickId));
   const todo = picks
     .filter((p) => p.status === "planned" && !boxed.has(p.id) && blocks[p.half])
-    .sort((a, b) => Number(musts.has(b.id)) - Number(musts.has(a.id)) || SIZE_RANK[a.size] - SIZE_RANK[b.size] || a.position - b.position || a.id - b.id);
+    .sort((a, b) => Number(musts.has(b.id)) - Number(musts.has(a.id)) || SIZE_RANK[a.size ?? "M"] - SIZE_RANK[b.size ?? "M"] || a.position - b.position || a.id - b.id);
   const gaps = new Map<Half, FreeGap[]>();
   for (const [h, s] of Object.entries(blocks) as [Half, Slot][]) gaps.set(h, openGaps(s, timeboxes, now));
   const placed: DayPlacement[] = [];
   const unplaced: Unplaced[] = [];
   for (const p of todo) {
     const list = gaps.get(p.half)!;
-    const want = sizes[p.size];
-    const min = Math.min(minSizes[p.size], want);
+    // E2: an unsized pick takes 2h, like M (never left out for having no size).
+    const want = sizes[p.size ?? "M"];
+    const min = Math.min(minSizes[p.size ?? "M"], want);
     let i = list.findIndex((g) => placeInGap(g, want, min)?.trimmed === false);
     if (i < 0) i = list.reduce((best, g, k) => (placeInGap(g, want, min) && (best < 0 || g.minutes > list[best]!.minutes) ? k : best), -1);
     const at = i >= 0 ? placeInGap(list[i]!, want, min) : null;

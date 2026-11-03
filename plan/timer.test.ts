@@ -60,6 +60,8 @@ describe("focus timer state", () => {
     expect(suggestMinutes("S", sizes)).toBe(60);
     expect(suggestMinutes("L", sizes)).toBe(210);
     expect(suggestMinutes("S", { S: 47, M: 90, L: 180 })).toBe(45);
+    // E2: an unsized pick starts focus like an M, never refused.
+    expect(suggestMinutes(null, { S: 60, M: 120, L: 240 })).toBe(120);
   });
 });
 
