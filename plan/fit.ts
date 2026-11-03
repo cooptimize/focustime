@@ -104,11 +104,12 @@ export function blockFitWords(f: Fit | null): FitWords {
 }
 
 /**
- * Plan the day's header line (U4): "about 5 hours free" and, only when some block is over, "about 2 hours over"
- * (the amber part): the sum of each block's overage, so it agrees with the block fit words.
+ * Plan the day's header line (U4, E2: whole hours as everywhere else): "about 5h free" and, only when some block is
+ * over, "about 2h over" (the amber part): the sum of each block's overage, so it agrees with the block fit words.
  */
 export function dayHeadline(blocks: readonly { planned: number; free: number }[]): { free: string; over: string | null } {
   const free = blocks.reduce((s, b) => s + b.free, 0);
   const over = blocks.reduce((s, b) => s + (b.planned - b.free > OVER_GRACE ? b.planned - b.free : 0), 0);
-  return { free: `${aboutHours(free)} free`, over: over > 0 ? `${aboutHours(over)} over` : null };
+  const h = (m: number) => (m < 30 ? "under 1h" : `about ${Math.round(m / 60)}h`);
+  return { free: free > 0 ? `${h(free)} free` : "no free time", over: over > 0 ? (over < 45 ? "a little over" : `${h(over)} over`) : null };
 }
