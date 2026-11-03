@@ -908,7 +908,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "weekplan.commit":
     case "weekplan.add":
     case "weekplan.set_tier":
-    case "weekplan.set_blocks":
+    case "weekplan.set_estimate":
     case "weekplan.set_size":
     case "weekplan.reorder":
     case "weekplan.remove":

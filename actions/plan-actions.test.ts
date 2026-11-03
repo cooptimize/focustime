@@ -69,7 +69,7 @@ describe("Plan the day actions", () => {
     const start = await t.run<PlanDayState>("planday.start", { date: D });
     expect(start.plan.committedAt).toBeNull();
     const a = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 101 });
-    expect(a.pick).toMatchObject({ kind: "item", title: "Story assigned to me", size: "M", status: "planned" });
+    expect(a.pick).toMatchObject({ kind: "item", title: "Story assigned to me", size: null, status: "planned" });
     const child = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", itemId: 122, size: "S" });
     expect(child.pick.title).toBe("Story two levels down");
     await t.run("pick.add", { date: D, half: "PM", clientKey: "Cooptimize", intention: "  Review the  planning copy " });
@@ -83,7 +83,7 @@ describe("Plan the day actions", () => {
     expect(after.planDay.committed).toBe(true);
     expect(after.plan![D]!.picks.map((p) => [p.half, p.title, p.size, p.status])).toEqual([
       ["AM", "Story assigned to me", "L", "done"],
-      ["PM", "Review the planning copy", "M", "planned"],
+      ["PM", "Review the planning copy", null, "planned"],
       ["PM", "Story two levels down", "S", "planned"],
     ]);
   });

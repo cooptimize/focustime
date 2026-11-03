@@ -177,7 +177,7 @@ export async function closeoutAction(ctx: CloseoutContext, action: CloseoutActio
         const pto = await ptoSet(ctx, cfg, slot.date);
         if (pto.has(slot.date)) return bad(`${dayLabel(slot.date)} is a PTO day. Choose another day`, 422);
         const sizes = cfg?.plan.sizes ?? { S: 60, M: 120, L: 210 };
-        let minutes = borrowMinutes(sizes[p.size], (await plan.focusedSeconds([pid]))[pid] ?? 0);
+        let minutes = borrowMinutes(sizes[p.size ?? "M"], (await plan.focusedSeconds([pid]))[pid] ?? 0);
         if (o.minutes !== undefined) {
           if (typeof o.minutes !== "number" || !Number.isInteger(o.minutes) || o.minutes < 5 || o.minutes > 480) throw new Invalid("minutes must be a whole number from 5 to 480");
           minutes = o.minutes;

@@ -61,18 +61,19 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   await run("vm.choose", { vmId: DEMO_VM_ID });
   await run("week.load", { weekStart });
   await run("weekplan.load", { weekStart });
-  // E1: a feature's load comes from its sized stories on the list (Harbor's L and S: 1½ blocks), else its estimate
-  // (Northwind 1120: 1 block, none set); stories sized S, M or L.
-  const list: [string, number, "must" | "nice", { blocks?: number; size?: "S" | "M" | "L" }][] = [
-    ["Cooptimize", 4410, "must", { blocks: 1 }],
+  // E2: a feature's load comes from its stories on the list once one is sized (Harbor's L and S: 5h; Northwind 1110's
+  // L and an unsized one: 4h + 2h), else its estimate in hours (Northwind 1120: 4h, none set); stories S, M, L or not
+  // sized yet.
+  const list: [string, number, "must" | "nice", { hours?: number; size?: "S" | "M" | "L" }][] = [
+    ["Cooptimize", 4410, "must", { hours: 4 }],
     ["Cooptimize", 4411, "must", { size: "M" }],
     ["Cooptimize", 4412, "must", { size: "M" }],
-    ["Northwind", 1110, "must", { blocks: 2 }],
+    ["Northwind", 1110, "must", { hours: 8 }],
     ["Northwind", 1111, "must", { size: "L" }],
-    ["Northwind", 1112, "must", { size: "M" }],
+    ["Northwind", 1112, "must", {}],
     ["Northwind", 1120, "must", {}],
     ["Northwind", 1130, "nice", { size: "M" }],
-    ["Harbor", 2210, "must", { blocks: 1 }],
+    ["Harbor", 2210, "must", { hours: 4 }],
     ["Harbor", 2211, "must", { size: "L" }],
     ["Harbor", 2212, "must", { size: "S" }],
     ["Atlas", 3311, "must", { size: "L" }],
@@ -108,7 +109,7 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
     ];
     for (const [n, features, picks] of past) {
       const ws = Temporal.PlainDate.from(weekStart).add({ days: n }).toString();
-      for (const [clientKey, itemId, title, blocks] of features) (await plan.addWeekItem({ weekStart: ws, clientKey, itemId, title, itemType: "Feature", url: null, level: "feature", tier: "must", blocks }));
+      for (const [clientKey, itemId, title, blocks] of features) (await plan.addWeekItem({ weekStart: ws, clientKey, itemId, title, itemType: "Feature", url: null, level: "feature", tier: "must", estimate: blocks * 240 }));
       (await plan.commitWeek(ws));
       for (const [clientKey, itemId, title, dayN, minutes] of picks) {
         const date = Temporal.PlainDate.from(ws).add({ days: dayN }).toString();

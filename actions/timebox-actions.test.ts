@@ -474,3 +474,18 @@ describe("drag on the card timeline (step 14.5, D259)", () => {
     expect(Date.parse([...t.g.events.values()][0]!.start)).toBe(Date.parse(`${D}T08:30:00-05:00`));
   });
 });
+
+describe("an unsized story never blocks anything (E2)", () => {
+  it("Start focus (2h suggested), Timebox my day and Done all work on a story with no size", async () => {
+    const t = setup();
+    const p = await t.plan.addPick({ date: D, half: "AM", clientKey: "Adatum", kind: "item", itemId: 4600, title: "Unsized story", itemType: "User Story", itemUrl: null, size: null });
+    expect(p.size).toBeNull();
+    const started = await t.run<{ timer: { pickId: number | null; plannedMinutes: number } }>("timer.start", { pickId: p.id });
+    expect(started.timer).toMatchObject({ pickId: p.id, plannedMinutes: 120 });
+    await t.run("timer.stop", {});
+    const boxed = await t.run<{ timeboxes: { pickId: number }[] }>("timebox.add_many", { date: D, items: [{ pickId: p.id, start: `${D}T09:00:00-05:00`, end: `${D}T11:00:00-05:00` }] });
+    expect(boxed.timeboxes.map((x) => x.pickId)).toEqual([p.id]);
+    await t.run("pick.mark_done", { id: p.id, done: true });
+    expect((await t.plan.getPick(p.id))!.status).toBe("done");
+  });
+});

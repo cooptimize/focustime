@@ -400,25 +400,23 @@ export type AheadState = {
   clients: {
     clientKey: string;
     clientName: string;
-    /** Weeks 1 to 4: the budget against the musts planned, in quarters of a block, as Plan the week counts them (E1). */
-    weeks: { weekStart: string; budgetQ: number; plannedQ: number; nicePlannedQ: number; status: "none" | "all" | "free" | "over"; text: string; notCounted: string[] }[];
-    /** Weeks 5 to 12: blocks available per month column (patterns and PTO). */
+    /** Weeks 1 to 4: free time against the musts planned, in minutes, as Plan the week counts them (E2). */
+    weeks: { weekStart: string; freeMinutes: number; plannedMinutes: number; nicePlannedMinutes: number; borrowedMinutes: number; status: "none" | "all" | "free" | "over"; text: string; over: string | null }[];
+    /** Weeks 5 to 12: free minutes per month column (patterns and PTO). */
     months: { month: string; available: number }[];
   }[];
   /**
-   * Each feature's load per week in weeks 1 to 4, in quarters (a half-block amount), from the week plans (what Plan the
-   * week shows). derived: from its sized stories on that week's list, so the cell can't be set by hand.
+   * Each feature's load per week in weeks 1 to 4, in minutes, from the week plans (what Plan the week shows). derived:
+   * from its stories on that week's list (one sized), so the cell can't be set by hand; unsized: most aren't sized.
    */
-  cells: { clientKey: string; itemId: number; weekStart: string; quarters: number; derived: boolean; tier: "must" | "nice"; weekItemId: number; stories: number }[];
+  cells: { clientKey: string; itemId: number; weekStart: string; minutes: number; derived: boolean; unsized: boolean; tier: "must" | "nice"; weekItemId: number; stories: number }[];
   /** Dates dragged on the timeline, not saved to DevOps yet, per "<client>:<id>". */
   dates: Record<string, { start: string; end: string }>;
   /**
-   * Slice 3: the 2 weeks before week 1. Musts' quarters from that week's plan (committed or not) and focused minutes per
-   * pick item (a story maps to its feature in the UI); whole minutes, shown only as half blocks in words.
+   * Slice 3: the 2 weeks before week 1. Musts' minutes from that week's plan (committed or not) and focused minutes per
+   * pick item (a story maps to its feature in the UI); shown as whole hours in words.
    */
-  past: { weekStart: string; committed: boolean; planned: { clientKey: string; itemId: number; quarters: number }[]; worked: { clientKey: string; itemId: number | null; minutes: number }[] }[];
-  /** A block in minutes (size L, Settings > Planning), to turn focused time into half blocks. */
-  blockMinutes: number;
+  past: { weekStart: string; committed: boolean; planned: { clientKey: string; itemId: number; minutes: number }[]; worked: { clientKey: string; itemId: number | null; minutes: number }[] }[];
 };
 
 // ---- Step 16.3: Teams presence ----
