@@ -2,8 +2,8 @@
 // opens on its own, and a fold or unfold by hand remembered per client for the session (sessionStorage, so a reload
 // keeps it and a new window starts fresh). Pure apart from that storage.
 
-/** "Proseware's", "Atlas'": the client's name as a possessive. */
-export const possessive = (name: string) => (/s$/i.test(name) ? `${name}'` : `${name}'s`);
+/** "Proseware's", "Atlas's": the client's name as a possessive (always 's, so an initialism ending in S reads right). */
+export const possessive = (name: string) => `${name}'s`;
 
 /** The section's label; FoldLine adds " · N". */
 export const moreLabel = (clientName: string) => `More from ${possessive(clientName)} DevOps`;

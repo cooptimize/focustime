@@ -5,8 +5,10 @@ import { moreLabel, moreOpenByDefault, NOTHING_PLANNED, possessive, rememberFold
 describe("More from <client>'s DevOps", () => {
   it("names the client", () => {
     expect(moreLabel("Proseware")).toBe("More from Proseware's DevOps");
-    expect(moreLabel("W&C")).toBe("More from W&C's DevOps");
-    expect(possessive("Atlas")).toBe("Atlas'");
+    expect(moreLabel("Adatum")).toBe("More from Adatum's DevOps");
+    // Always 's, so initialisms ending in S read right too.
+    expect(possessive("Atlas")).toBe("Atlas's");
+    expect(possessive("ABS")).toBe("ABS's");
   });
   it("opens on its own only with no musts and no follow-ups above it", () => {
     expect(moreOpenByDefault(0, 0)).toBe(true);
