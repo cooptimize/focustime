@@ -456,7 +456,7 @@ export function YouAccount() {
             <button type="button" className="mini primary" disabled={busy} onClick={() => void run(async () => setMessage(await signIn(true)))}>Sign in with Microsoft</button>
           )}
         </span>
-        {signedIn && <span className="set-hint">Your local plan stays.</span>}
+        {signedIn && <span className="set-hint">Your plan stays in your FocusTime account.</span>}
       </div>
       {signedIn && (
         <div className="set-field">
@@ -470,7 +470,7 @@ export function YouAccount() {
           <span className="set-value">
             {vm.status?.vm ? <>{vm.status.vm.name} <span className="muted">{vm.status.vm.resourceGroup} · {vm.status.vm.location}</span></> : <span className="muted">None chosen yet</span>}
           </span>
-          <span className="set-hint">FocusTime only starts this VM. It never stops it or changes its auto-shutdown.</span>
+          <span className="set-hint">FocusTime only reads this VM's status and starts it. It never changes its auto-shutdown.</span>
           <span className="set-actions">
             <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setFound(await call<Found>("vm.find", {})))}>Find my VM</button>
             {vm.status?.vm && <button type="button" className="mini quiet" disabled={busy} onClick={() => void choose(null)}>Forget</button>}
@@ -613,7 +613,7 @@ export function PhotosAccessLine() {
   useEffect(check, [check]);
   if (!v) return <span className="set-hint">Checking photos…</span>;
   const text = v.available
-    ? v.me ? "Photos show for you and Cooptimizers. Cached for 7 days on this computer, cleared when you sign out." : "Photos are allowed. You have no photo in Microsoft, so your initials show."
+    ? v.me ? "Photos show for you and Cooptimizers. Cached for 7 days on this device, cleared when you sign out." : "Photos are allowed. You have no photo in Microsoft, so your initials show."
     : v.reason === "consent" ? "Photos need your OK, and an admin's approval in Entra (Profile photos, read). Until then, initials show." : v.reason === "signed_out" ? "Sign in to show photos." : "Photos can't be read right now; initials show.";
   return (
     <span className="set-photos-access">
