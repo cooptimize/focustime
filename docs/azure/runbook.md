@@ -1,18 +1,25 @@
 # FocusTime on Azure: runbook
 
-Dev lives in the resource group **FocusTime-dev** (subscription "Production Services and Apps",
-`65be698f-0695-48f4-b322-1aa1c387d5e2`, Central US). Prod (A5) will be **FocusTime**. Names are `ft-<env>-<resource>`;
+Two environments in the subscription "Production Services and Apps" (`65be698f-0695-48f4-b322-1aa1c387d5e2`), both in
+Central US: dev in the resource group **FocusTime-dev**, prod (A5) in **FocusTime** (the group itself was made earlier
+in East US and is empty but for FocusTime; every resource in it is in Central US). Names are `ft-<env>-<resource>`;
 the globally unique ones carry a suffix from the resource group id:
 
-| What | Dev name |
-|---|---|
-| Container App / environment | `ft-dev-app` / `ft-dev-cae` |
-| Container registry | `ftdevacr5bthbn` |
-| Key Vault | `ft-dev-kv-5bthbn` (key `ft-data-key`; secrets `ft-entra-client-secret`, `ft-google-client-secret`, `ft-dataverse-client-secret`) |
-| SQL server / database | `ft-dev-sql-5bthbn` / `focustime` |
-| Log Analytics / App Insights | `ft-dev-log` / `ft-dev-appi` |
-| Deploy identity | `ft-dev-deploy` (federated: `repo:cooptimize/focustime:ref:refs/heads/main`) |
-| SQL admin group | "FocusTime DB Admins" |
+| What | Dev | Prod |
+|---|---|---|
+| URL | `https://ft-dev-app.ashysand-30e17134.centralus.azurecontainerapps.io` | `https://ft-prod-app.grayforest-92f64bef.centralus.azurecontainerapps.io` |
+| Container App / environment | `ft-dev-app` / `ft-dev-cae` (0 to 1 replica) | `ft-prod-app` / `ft-prod-cae` (1 replica, D465) |
+| Container registry | `ftdevacr5bthbn` | the same one (D470): pulled by `ft-prod-pull`, AcrPull only |
+| Key Vault | `ft-dev-kv-5bthbn` | `ft-prod-kv-kkzllj` (its own `ft-data-key`, never dev's) |
+| Secrets in the vault | `ft-entra-client-secret`, `ft-google-client-secret`, `ft-dataverse-client-secret` | the same names, prod's own copies |
+| SQL server / database | `ft-dev-sql-5bthbn` / `focustime` (serverless 0.5 to 1 vCore, 7 days PITR) | `ft-prod-sql-kkzllj` / `focustime` (serverless 0.5 to 2 vCores, auto-pause 60 min, 14 days PITR) |
+| Log Analytics / App Insights | `ft-dev-log` / `ft-dev-appi` | `ft-prod-log` / `ft-prod-appi` |
+| Deploy identity | `ft-dev-deploy` | `ft-prod-deploy` (also AcrPull on dev's registry, to read digests) |
+| How it deploys | every merge to main (`deploy-dev.yml`) | by hand, by SHA (`deploy-prod.yml`, PROD_DEPLOYERS) |
+| SQL admin group | "FocusTime DB Admins" | the same |
+
+Both use the "FocusTime" Entra registration (`0040169f-a4c9-46d9-bd81-83c31d0d6ff0`, each environment with its own
+client secret) and the "FocusTime Web" Google client (both redirect URIs on it).
 
 Rules: every cloud change goes through the Bicep (`infra/`) and the deploy workflow, or one of the scripts in
 `infra/scripts/`. Nobody runs SQL against the hosted database by hand except to read; nobody prints a secret.
@@ -92,8 +99,8 @@ az containerapp update -g FocusTime-dev -n ft-dev-app --image ftdevacr5bthbn.azu
 ```
 
 Or re-run the deploy workflow for the earlier commit (Actions, the run, "Re-run all jobs"). A rollback across a
-schema change: the older build refuses a newer database ("newer than this build"); restore the database to a point
-before the migration instead (below), then roll back the image.
+schema change is safe: migrations only add (D466), and an older build runs on a newer database (it logs
+`newer_schema`). Restore the database only when the data itself went wrong.
 
 Restore the database (7 days of point-in-time restore) to a new database, then swap names:
 
@@ -140,6 +147,10 @@ ContainerAppConsoleLogs_CL | where TimeGenerated > ago(1h) | project TimeGenerat
 
 ## Delete dev
 
+Prod pulls its image from dev's registry (D470). Before deleting dev, give prod a registry of its own (drop
+`sharedRegistry` and `pullIdentityName` from `prod.bicepparam` and build in deploy-prod), or prod can no longer start a
+new revision.
+
 ```sh
 az group delete -n FocusTime-dev            # everything in it, including the deploy identity
 az keyvault purge -n ft-dev-kv-5bthbn        # fails while purge protection holds it (90 days); the name is then reserved
@@ -149,3 +160,116 @@ Then remove the federated deploy identity's leftovers: none outside the group (i
 The "FocusTime" app registration and the "FocusTime DB Admins" group stay (prod uses both); remove the dev redirect URI
 by running `app-registration.sh` with only the URLs still in use. Delete the GitHub variables `AZURE_DEV_*` if dev is
 gone for good.
+
+## Prod (A5)
+
+### Deploy by SHA
+
+Prod runs only a commit dev already built, tested and deployed: the same image, by digest (D464).
+
+1. Find the commit: dev's ⋯ › About ("FocusTime · dev · #12 · 3f96061"), or `curl -s <dev url>/version`.
+2. Run the workflow from main: Actions › deploy-prod › Run workflow, `ref` = that SHA, or
+   `gh workflow run deploy-prod.yml --repo cooptimize/focustime -f ref=<sha>`, then `gh run watch`.
+3. It refuses anyone not in the repository variable PROD_DEPLOYERS (comma separated GitHub logins), a commit not on
+   main, or a commit dev has no image for. Then it migrates, makes the app's database user, prints the Bicep what-if,
+   deploys, and checks that `/version` says `prod <sha>`. The run's summary names the image and what ran before.
+4. Check: `curl -s https://ft-prod-app.grayforest-92f64bef.centralus.azurecontainerapps.io/version`, or ⋯ › About in prod.
+
+A dry run (`-f dry_run=true`) checks only who is running it and that the image exists; nothing changes. Add or remove a
+deployer: `gh variable set PROD_DEPLOYERS --repo cooptimize/focustime --body "login1,login2"` (or `bootstrap.sh --env
+prod --deployer <login> ...`, which sets the whole list).
+
+### Roll back and roll forward
+
+Roll back: run deploy-prod with the previous SHA. The last run's summary prints it as a ready command:
+
+```sh
+gh workflow run deploy-prod.yml --repo cooptimize/focustime -f ref=<previous sha>
+```
+
+Roll forward: the same with the newer SHA. Single revision mode: each deploy makes a new revision and the old ones stay
+listed, inactive (`az containerapp revision list -g FocusTime -n ft-prod-app -o table`). Migrations only add (D466), so
+the older build runs on the database as it is; no restore is needed for a rollback.
+
+### Prod's app-level settings
+
+Set by `infra/prod.bicepparam` and `infra/modules/app.bicep` (env vars on the Container App), never by hand and never
+per person. Settings shows the ones a person sees as "Set by your FocusTime admin".
+
+| Setting | Prod value | Where |
+|---|---|---|
+| `FOCUSTIME_ENV` | `prod` (About, `/version`; Setup's Start over is refused) | `param env` |
+| `FOCUSTIME_HOST` | `azure` | app.bicep |
+| `FOCUSTIME_PUBLIC_URL` | the Container App's own hostname | app.bicep |
+| `FOCUSTIME_INVITE_DOMAINS` | `cooptimize.org` (D469; dev: empty, each person's work email) | `param inviteDomains` |
+| `FOCUSTIME_ENTRA_TENANT_ID` / `_CLIENT_ID` | the tenant / `0040169f-a4c9-46d9-bd81-83c31d0d6ff0` | `param entraClientId` |
+| `FOCUSTIME_GOOGLE_CLIENT_ID` | the "FocusTime Web" client | `param googleClientId` |
+| `FOCUSTIME_DATAVERSE_URL` / `_TENANT_ID` / `_CLIENT_ID` | `https://cooptimize.crm.dynamics.com` and its ids | `param dataverse*` |
+| `FOCUSTIME_DB_*` | `sqlserver`, `ft-prod-sql-kkzllj.database.windows.net`, `focustime`, auth `entra` | app.bicep |
+| `FOCUSTIME_KEYVAULT_URL` / `FOCUSTIME_DATA_KEY_NAME` | `ft-prod-kv-kkzllj` / `ft-data-key` | app.bicep |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | `ft-prod-appi`'s | app.bicep |
+| Secrets (Key Vault references) | `FOCUSTIME_SECRET_ENTRA_CLIENT`, `_GOOGLE_CLIENT`, `_DATAVERSE_CLIENT` | app.bicep |
+
+### The first deploy of prod (done in A5, for the record)
+
+1. `infra/scripts/bootstrap.sh --env prod --member <upn> --deployer <github login>`: ft-prod-deploy, ft-prod-pull,
+   AcrPull on dev's registry for both, the GitHub variables `AZURE_PROD_CLIENT_ID`, `AZURE_PROD_RESOURCE_GROUP`,
+   `AZURE_PROD_REGISTRY`, `PROD_DEPLOYERS`.
+2. `FT_APP_READY=false az deployment group what-if`, then `create`, `-g FocusTime -n ft-prod --parameters
+   infra/prod.bicepparam`: everything with a placeholder image, so the app's identity exists and gets its vault roles.
+3. `gh variable set AZURE_PROD_APP_IDENTITY_CLIENT_ID --body $(az ad sp show --id $(az containerapp show -g FocusTime -n ft-prod-app --query identity.principalId -o tsv) --query appId -o tsv)`.
+4. `infra/scripts/app-registration.sh --dev-url <dev url> --prod-url <prod url> --vault ft-prod-kv-kkzllj` (both
+   redirect URIs, prod's own Entra secret) and `infra/scripts/copy-secrets.sh --vault ft-prod-kv-kkzllj`.
+5. The prod Google redirect URI `<prod url>/auth/google/callback` on the "FocusTime Web" client (by hand in the Google
+   console: there is no API for it).
+6. deploy-prod with the SHA to promote.
+
+### First run for a new person
+
+Nothing to set up for them in Azure: anyone in the Cooptimize tenant can sign in.
+
+1. Send them the prod URL. They sign in with their Cooptimize account (one consent for Outlook, Teams presence and
+   Azure).
+2. Setup (S1) opens: Your day, Your clients, Standing blocks, Calendars; about two minutes. Each client's DevOps writes
+   need a personal PAT (Work Items, read and write) from `https://dev.azure.com/<org>/_usersSettings/tokens`, entered
+   in Setup or later in Settings; without one the client stays read-only.
+3. They should open ⋯ › Guide first.
+4. What to check (and all an admin reports back, never plan content): matched in Dataverse yes or no, the number of
+   followed clients, which sources are live, which setup steps were done or skipped. Settings › Data and the
+   attention line show the same to them.
+
+### Retire the local daily app (D467)
+
+Prod replaces the local service for daily use. Kept installed for a few weeks:
+
+```sh
+systemctl --user disable --now focustime     # the service and its autostart; files and data stay
+```
+
+The launcher, Super+Alt+C and Super+Alt+N open prod in an app-style browser window instead (`~/.config/hypr/`). The
+SQL Server container and the developer loop stay. Turning it back on: `system/README.md`.
+
+### Delete the old "Coopilot Desktop" registration
+
+Kept as a fallback until **2026-11-10**, then deleted (nothing in FocusTime uses it after A5; the local app is retired):
+
+```sh
+az ad app list --display-name "Coopilot Desktop" --query "[].{name:displayName,appId:appId}" -o table
+az ad app delete --id <that appId>
+```
+
+### Cost (estimate, list prices for Central US on 2026-11-03)
+
+| | Prod per month | Dev per month |
+|---|---|---|
+| SQL compute (serverless, $0.626 per vCore hour; awake about 300 h for working hours and the scheduler's wakes, mostly at the 0.5 vCore floor) | $95 to $140 | $15 to $30 (fewer hours) |
+| SQL storage (32 GB max, $0.138 per GB) and backups (within the free allowance) | $4.50 | $4.50 |
+| Container App (0.5 vCPU, 1 GiB; prod always on, mostly idle at $0.000003 per vCPU and GiB second; the free grant is shared) | $15 to $20 | $0 to $3 |
+| Container registry (Basic, shared) | | $5 |
+| Log Analytics and App Insights (first 5 GB a month free) | $0 to $3 | $0 to $2 |
+| Key Vault | under $1 | under $1 |
+| **Total** | **about $115 to $165** | **about $25 to $45** |
+
+SQL compute is most of it; what keeps it down is the idle rule (D431) letting the database pause outside people's
+working hours. The actual cost after the first week goes here (Cost Management, resource group FocusTime, or
+`az consumption usage list --start-date <d> --end-date <d>`): _not measured yet_.

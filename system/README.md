@@ -15,6 +15,26 @@ default when the server starts here), so a change can be tried end to end before
 
 After a server change: `npm run build`, then `systemctl --user restart focustime`, then `focustime-open`.
 
+## Retired for daily use (A5, D467)
+
+Since A5 the daily app is prod (`https://ft-prod-app.grayforest-92f64bef.centralus.azurecontainerapps.io`), and the
+service here is off: `systemctl --user disable --now focustime` (the service and its login autostart through
+`focustime-open`; the autostart entry in `~/.config/autostart/` is moved aside to `focustime.desktop.retired`). Nothing
+was deleted: the repo, `~/.config/focustime/`, the keyring entries, `~/.local/share/focustime/` and the `focustime`
+database in the container are as they were. Super+Alt+C and Super+Alt+N in `~/.config/hypr/bindings.lua` open prod
+(and prod's `#/capture`) in an app window instead.
+
+Turn it back on:
+
+```sh
+systemctl --user enable --now focustime
+mv ~/.config/autostart/focustime.desktop.retired ~/.config/autostart/focustime.desktop
+focustime-open
+```
+
+and put the two bindings back to `/home/tanner/.local/bin/focustime-open` and `... --capture`. The SQL Server container
+(`npm run db:up`) and the developer loop (`npm run dev`) don't need the service and keep working either way.
+
 ## The database (A3)
 
 The plan store is SQL Server: Azure SQL in the hosted app, the local container here. Needs `podman` and
