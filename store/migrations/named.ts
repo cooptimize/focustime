@@ -44,16 +44,20 @@ export function inOrder<T extends Pick<NamedMigration, "name">>(list: readonly T
 }
 
 /**
- * The named migrations to apply, given those already recorded. A recorded name this build doesn't know that sorts after
- * its newest one means the database is from a newer build: refused, as the numbered runners refuse a newer version.
+ * The named migrations to apply, given those already recorded. A recorded name this build doesn't know is fine, even
+ * one newer than its newest: migrations only add (D466), so an older build runs safely on a newer database, and
+ * rolling back to the previous revision never needs the database rolled back too. `newerThanBuild` names them.
  */
 export function pending<T extends Pick<NamedMigration, "name">>(list: readonly T[], applied: ReadonlySet<string>): T[] {
+  return inOrder(list).filter((m) => !applied.has(m.name));
+}
+
+/** Recorded migrations newer than this build's newest (a rollback, or a newer revision migrated first). */
+export function newerThanBuild(list: readonly Pick<NamedMigration, "name">[], applied: ReadonlySet<string>): string[] {
   const ordered = inOrder(list);
   const newest = ordered[ordered.length - 1]?.name ?? "";
   const known = new Set(ordered.map((m) => m.name));
-  const newer = [...applied].filter((n) => !known.has(n) && n > newest).sort();
-  if (newer.length) throw new Error(`The database has migration ${newer[newer.length - 1]}, newer than this build`);
-  return ordered.filter((m) => !applied.has(m.name));
+  return [...applied].filter((n) => !known.has(n) && n > newest).sort();
 }
 
 export const NAMES_TABLE = "schema_migration_names";
