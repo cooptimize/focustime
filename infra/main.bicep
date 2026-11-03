@@ -23,6 +23,12 @@ param sqlMaxVCores int = 1
 param sqlRetentionDays int = 7
 @description('A5: the only domains help invites may go to, for everyone (comma list); empty: each person\'s work email.')
 param inviteDomains string = ''
+@description('F1: Send feedback creates stories in this DevOps organization and project, under this feature.')
+param feedbackOrg string = 'cooptimize'
+param feedbackProject string = 'Cooptimize Internal'
+param feedbackParentId string = '496'
+@description('F1: true sends feedback (prod); false shows the preview only (dev, unless switched on for a test).')
+param feedbackLive bool = false
 @description('dev 0 (scale to zero); prod 1 so the scheduler keeps running.')
 param minReplicas int
 param entraClientId string
@@ -93,6 +99,10 @@ module app 'modules/app.bicep' = {
     imageTag: imageTag
     imageDigest: imageDigest
     inviteDomains: inviteDomains
+    feedbackOrg: feedbackOrg
+    feedbackProject: feedbackProject
+    feedbackParentId: feedbackParentId
+    feedbackLive: feedbackLive
     minReplicas: minReplicas
     tenantId: tenantId
     entraClientId: entraClientId

@@ -31,6 +31,10 @@ param appReady bool
 param imageTag string
 param imageDigest string = ''
 param inviteDomains string = ''
+param feedbackOrg string = ''
+param feedbackProject string = ''
+param feedbackParentId string = ''
+param feedbackLive bool = false
 param minReplicas int
 param tenantId string
 param entraClientId string
@@ -94,6 +98,11 @@ var settings = [
   { name: 'FOCUSTIME_DATA_KEY_NAME', value: 'ft-data-key' }
   { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: insights.properties.ConnectionString }
   { name: 'FOCUSTIME_INVITE_DOMAINS', value: inviteDomains }
+  // F1: Send feedback (docs/azure/runbook.md, "Send feedback").
+  { name: 'FOCUSTIME_FEEDBACK_ORG', value: feedbackOrg }
+  { name: 'FOCUSTIME_FEEDBACK_PROJECT', value: feedbackProject }
+  { name: 'FOCUSTIME_FEEDBACK_PARENT_ID', value: feedbackParentId }
+  { name: 'FOCUSTIME_FEEDBACK_LIVE', value: feedbackLive ? 'true' : 'false' }
 ]
 var image = empty(imageDigest) ? '${registryLoginServer}/focustime:${imageTag}' : '${registryLoginServer}/focustime@${imageDigest}'
 

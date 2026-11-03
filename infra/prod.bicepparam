@@ -20,3 +20,4 @@ param googleClientId = '1059654433254-tdph7ca8a4psvt1sve51mhp6sr5j1re3.apps.goog
 param dataverseUrl = 'https://cooptimize.crm.dynamics.com'
 param dataverseTenantId = 'abf29d42-2ea9-422b-b0af-ed7cb5595b7e'
 param dataverseClientId = 'bf36f621-3e9f-43f9-ab47-89fb89fe7f4a'
+param feedbackLive = true // F1: Send feedback creates stories under Feature #496 (org, project and feature: main.bicep's defaults)
