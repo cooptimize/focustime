@@ -1,13 +1,154 @@
-# Prod deploy: manual, behind the "production" environment's required reviewers. A stub until A5, which builds it the
-# way deploy-dev.yml works (its own federated identity on the FocusTime resource group, min replicas 1).
+# Prod deploy (A5, D464): manual only. Promotes the exact image deploy-dev built and tested for one commit on main, by
+# its digest in dev's registry; it builds nothing. Then the database migration (migrations only add, D466), the app's
+# database user, the Bicep, and a smoke test that the served commit is the one asked for.
+#
+# Run it: Actions › deploy-prod › Run workflow, ref = the commit (usually the SHA in dev's ⋯ › About), or
+#   gh workflow run deploy-prod.yml -f ref=<sha>
+# Roll back: the same with the previous SHA (each run's summary names it); roll forward: the same with the newer one.
+# dry_run: only the actor check and the image lookup; nothing changes.
+#
+# Who may run it: the GitHub logins in the repository variable PROD_DEPLOYERS (comma separated); anyone else is refused
+# (the free plan has no environment approvals for a private repository). Signs in to Azure with OIDC as ft-prod-deploy:
+# Contributor and User Access Administrator on FocusTime only, AcrPull on dev's registry, and membership of
+# "FocusTime DB Admins" for the database steps. See docs/azure/runbook.md.
 name: deploy-prod
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit on main to deploy (a SHA from dev's About, or main)"
+        required: true
+        default: main
+      dry_run:
+        description: "Only check who is running it and that the image exists"
+        type: boolean
+        default: false
 permissions:
   contents: read
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RG: ${{ vars.AZURE_PROD_RESOURCE_GROUP }}
+      ACR: ${{ vars.AZURE_PROD_REGISTRY }}
     steps:
-      - run: echo "Prod deploys are built in A5." && exit 1
+      - name: Who may deploy to prod
+        env:
+          ACTOR: ${{ github.actor }}
+          DEPLOYERS: ${{ vars.PROD_DEPLOYERS }}
+        run: |
+          if [[ -z $DEPLOYERS || ",${DEPLOYERS// /}," != *",$ACTOR,"* ]]; then
+            echo "::error::$ACTOR may not deploy to prod. Prod deployers are the GitHub logins in the repository variable PROD_DEPLOYERS."
+            exit 1
+          fi
+          echo "$ACTOR may deploy to prod"
+      - name: Run from main only
+        if: github.ref != 'refs/heads/main'
+        run: echo "::error::Run deploy-prod from main (the workflow file on another branch isn't the reviewed one)" && exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The commit
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          [[ $REF =~ ^[A-Za-z0-9._/-]{1,100}$ ]] || { echo "::error::ref must be a commit SHA or a branch name"; exit 1; }
+          sha=$(git rev-parse --verify --quiet "origin/$REF^{commit}" || git rev-parse --verify --quiet "$REF^{commit}") || { echo "::error::No commit $REF"; exit 1; }
+          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::${sha:0:7} is not on main: prod runs only what main (and dev) ran"; exit 1; }
+          echo "SHA=$sha" >> "$GITHUB_ENV"
+          echo "SHORT=${sha:0:7}" >> "$GITHUB_ENV"
+          git checkout -q "$sha"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_PROD_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: The image dev tested
+        run: |
+          digest=$(node scripts/image-digest.ts "$ACR" "$SHA")
+          echo "DIGEST=$digest" >> "$GITHUB_ENV"
+          echo "Deploying $SHORT: $ACR.azurecr.io/focustime@$digest"
+      - name: What runs in prod now
+        run: |
+          fqdn=$(az containerapp show -g "$RG" -n ft-prod-app --query properties.configuration.ingress.fqdn -o tsv 2>/dev/null || true)
+          prev=""
+          if [[ -n $fqdn ]]; then
+            prev=$(curl -fsS "https://$fqdn/version" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).sha)}catch{}})' || true)
+          fi
+          prevFull=""
+          if [[ $prev =~ ^[0-9a-f]{7,40}$ ]]; then prevFull=$(git rev-parse --verify --quiet "$prev^{commit}" || true); fi
+          {
+            echo "### deploy-prod ${SHORT}"
+            echo "- image: \`focustime@${DIGEST}\`"
+            echo "- before: ${prevFull:-nothing yet}"
+            if [[ -n $prevFull ]]; then echo "- roll back: \`gh workflow run deploy-prod.yml -f ref=${prevFull}\`"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "SQL_SERVER=$(az sql server list -g "$RG" --query '[0].name' -o tsv)" >> "$GITHUB_ENV"
+          echo "SQL_FQDN=$(az sql server list -g "$RG" --query '[0].fullyQualifiedDomainName' -o tsv)" >> "$GITHUB_ENV"
+      - name: Dry run ends here
+        if: inputs.dry_run
+        run: |
+          echo "Dry run: $GITHUB_ACTOR may deploy, and the image for $SHORT exists. Nothing changed."
+      # The runner reaches the database through a firewall rule for its own address, added here and removed at the end
+      # of the job whatever happens; the server otherwise allows Azure services only.
+      - name: Open the database to this runner
+        if: ${{ !inputs.dry_run }}
+        run: |
+          ip=$(curl -fsS https://api.ipify.org)
+          az sql server firewall-rule create -g "$RG" -s "$SQL_SERVER" -n "gh-run-${{ github.run_id }}" --start-ip-address "$ip" --end-ip-address "$ip" -o none
+      - name: Migrate the database
+        if: ${{ !inputs.dry_run }}
+        env:
+          FOCUSTIME_DB_DRIVER: sqlserver
+          FOCUSTIME_DB_SERVER: ${{ env.SQL_FQDN }}
+          FOCUSTIME_DB_PORT: "1433"
+          FOCUSTIME_DB_NAME: focustime
+          FOCUSTIME_DB_AUTH: entra
+        run: node scripts/focustime.ts migrate
+      - name: The app's database user
+        if: ${{ !inputs.dry_run }}
+        run: node scripts/db-user.ts --server "$SQL_FQDN" --database focustime --principal ft-prod-app --client-id "${{ vars.AZURE_PROD_APP_IDENTITY_CLIENT_ID }}"
+      - name: Deploy the Bicep (what-if, then create)
+        if: ${{ !inputs.dry_run }}
+        env:
+          FT_IMAGE_TAG: ${{ env.SHA }}
+          FT_IMAGE_DIGEST: ${{ env.DIGEST }}
+          FT_APP_READY: "true"
+        run: |
+          az bicep install
+          az deployment group what-if -g "$RG" -n ft-prod --parameters infra/prod.bicepparam --exclude-change-types NoChange Ignore
+          az deployment group create -g "$RG" -n ft-prod --parameters infra/prod.bicepparam --query properties.outputs.publicUrl.value -o tsv > url.txt
+          echo "APP_URL=$(cat url.txt)" >> "$GITHUB_ENV"
+      - name: Smoke test
+        if: ${{ !inputs.dry_run }}
+        run: |
+          for i in $(seq 1 40); do curl -fsS "$APP_URL/healthz" && break; sleep 10; done
+          curl -fsS "$APP_URL/healthz"
+          for i in $(seq 1 30); do
+            served=$(curl -fsS "$APP_URL/version" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const v=JSON.parse(s);console.log(`${v.env} ${v.sha}`)})')
+            [[ $served == "prod ${SHORT}" ]] && break
+            sleep 10
+          done
+          echo "served: $served, deployed: prod ${SHORT}"
+          [[ $served == "prod ${SHORT}" ]]
+          curl -fsS "$APP_URL/" | grep -q "<title>FocusTime</title>"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/auth/microsoft/login")
+          loc=$(curl -s -o /dev/null -w '%{redirect_url}' "$APP_URL/auth/microsoft/login")
+          [[ $code == 302 && $loc == https://login.microsoftonline.com/* ]] || { echo "sign-in: $code ${loc%%\?*}"; exit 1; }
+          curl -sI "$APP_URL/" | grep -iE '^(strict-transport-security|content-security-policy|x-frame-options|x-content-type-options):'
+          echo "- served: prod ${SHORT} at $APP_URL" >> "$GITHUB_STEP_SUMMARY"
+      - name: Close the database to this runner
+        if: always() && env.SQL_SERVER != '' && !inputs.dry_run
+        run: az sql server firewall-rule delete -g "$RG" -s "$SQL_SERVER" -n "gh-run-${{ github.run_id }}" -o none || true

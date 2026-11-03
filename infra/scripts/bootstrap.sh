@@ -11,21 +11,26 @@
 #      that resource group only, and membership of the DB admins group (the post-deploy database script runs with its
 #      token, never by hand).
 #   5. The GitHub repository variables the workflows read (ids only, never a secret).
+#   6. Prod only (A5, D470): prod runs dev's tested image, so it pulls from dev's registry. The pull identity
+#      ft-prod-pull (in FocusTime) and the deploy identity ft-prod-deploy get AcrPull on that one registry, nothing
+#      else in FocusTime-dev. PROD_DEPLOYERS (--deployer, GitHub logins) is who may run deploy-prod.yml (D464).
 #
 # Prints names and ids, never a secret (there are none here).
 #
-# Usage: infra/scripts/bootstrap.sh --env dev --member <upn> [--member <upn> ...] [--dry-run]
+# Usage: infra/scripts/bootstrap.sh --env dev|prod --member <upn> [--member <upn> ...] [--deployer <github login> ...] [--dry-run]
 set -euo pipefail
 
 SUBSCRIPTION="65be698f-0695-48f4-b322-1aa1c387d5e2"
 LOCATION="centralus"
 REPO="cooptimize/focustime"
 GROUP="FocusTime DB Admins"
-ENV="" DRY=0 MEMBERS=()
+ENV="" DRY=0 MEMBERS=() DEPLOYERS=()
+DEV_RG="FocusTime-dev" PULL="ft-prod-pull"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --env) ENV=$2; shift 2 ;;
     --member) MEMBERS+=("$2"); shift 2 ;;
+    --deployer) DEPLOYERS+=("$2"); shift 2 ;;
     --dry-run) DRY=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -104,10 +109,35 @@ if [[ -n $PRINCIPAL_ID ]]; then
   add_member "$PRINCIPAL_ID" "$UAMI"
 fi
 
+# 6. Prod: AcrPull on dev's registry for the pull identity and the deploy identity (it reads the image's digest).
+VARS=()
+if [[ $ENV == prod ]]; then
+  if ! az identity show -g "$RG" -n "$PULL" -o none 2>/dev/null; then
+    echo "Creating identity $PULL"; run identity create -g "$RG" -n "$PULL" -l "$LOCATION" --tags app=focustime env=prod -o none
+  fi
+  ACR_NAME=$(az acr list -g "$DEV_RG" --query '[0].name' -o tsv)
+  [[ -n $ACR_NAME ]] || { echo "No registry in $DEV_RG: deploy dev first" >&2; exit 1; }
+  ACR_ID=$(az acr show -n "$ACR_NAME" --query id -o tsv)
+  PULL_PRINCIPAL=$(az identity show -g "$RG" -n "$PULL" --query principalId -o tsv 2>/dev/null || true)
+  for pair in "$PULL=$PULL_PRINCIPAL" "$UAMI=$PRINCIPAL_ID"; do
+    who=${pair%%=*} pid=${pair#*=}
+    [[ -n $pid ]] || continue
+    if [[ -z $(az role assignment list --assignee "$pid" --scope "$ACR_ID" --role AcrPull --query "[].id" -o tsv) ]]; then
+      echo "Assigning AcrPull on $ACR_NAME to $who"
+      for i in 1 2 3 4 5 6; do
+        run role assignment create --assignee-object-id "$pid" --assignee-principal-type ServicePrincipal --role AcrPull --scope "$ACR_ID" -o none && break
+        ((i < 6)) || exit 1; sleep 15
+      done
+    fi
+  done
+  VARS+=("AZURE_PROD_REGISTRY=$ACR_NAME")
+  if ((${#DEPLOYERS[@]})); then VARS+=("PROD_DEPLOYERS=$(IFS=,; echo "${DEPLOYERS[*]}")"); fi
+fi
+
 # 5. GitHub repository variables (ids, not secrets).
 if command -v gh >/dev/null; then
   E=${ENV^^}
-  for kv in "AZURE_TENANT_ID=$TENANT" "AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION" "AZURE_${E}_CLIENT_ID=$CLIENT_ID" "AZURE_${E}_RESOURCE_GROUP=$RG" "AZURE_DB_ADMIN_GROUP_ID=$GROUP_ID"; do
+  for kv in "AZURE_TENANT_ID=$TENANT" "AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION" "AZURE_${E}_CLIENT_ID=$CLIENT_ID" "AZURE_${E}_RESOURCE_GROUP=$RG" "AZURE_DB_ADMIN_GROUP_ID=$GROUP_ID" "${VARS[@]}"; do
     if ((DRY)); then echo "dry-run: gh variable set ${kv%%=*}"; else gh variable set "${kv%%=*}" --repo "$REPO" --body "${kv#*=}"; fi
   done
 else echo "gh not found: set the repository variables by hand (docs/azure/runbook.md)"; fi
@@ -118,3 +148,7 @@ echo "resource group:   $RG ($LOCATION)"
 echo "db admins group:  $GROUP ($GROUP_ID)"
 echo "deploy identity:  $UAMI (client id $CLIENT_ID)"
 printf "federated:        %s\n" "${SUBJECTS[@]#*=}"
+if [[ $ENV == prod ]]; then
+  echo "pull identity:    $PULL (AcrPull on ${ACR_NAME:-?})"
+  echo "prod deployers:   ${DEPLOYERS[*]:-(unchanged)}"
+fi
