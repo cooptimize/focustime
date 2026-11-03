@@ -393,18 +393,21 @@ describe("week plan by client (step 11)", () => {
     await store.close();
   });
 
-  it("adds features (whole blocks or none) and stories (S, M, L) as musts or nice to haves, sets tier and a done mark", async () => {
+  it("adds features (half blocks or none) and stories (S, M, L, or not sized yet: E1) as musts or nice to haves, sets tier and a done mark", async () => {
     const { store } = await fresh();
     const a = (await store.addWeekItem({ ...base, itemId: 210, level: "feature" }));
     expect(a).toMatchObject({ level: "feature", tier: "must", blocks: null, size: null, position: null, doneAt: null });
     const b = (await store.addWeekItem({ ...base, itemId: 501, itemType: "User Story", level: "story", tier: "nice", parentId: 210 }));
-    expect(b).toMatchObject({ level: "story", tier: "nice", blocks: null, size: "M", parentId: 210 });
+    expect(b).toMatchObject({ level: "story", tier: "nice", blocks: null, size: null, parentId: 210 });
     // Adding again updates it in place.
     expect((await store.addWeekItem({ ...base, itemId: 210, title: "Renamed", level: "feature", tier: "nice", blocks: 3 }))).toMatchObject({ id: a.id, title: "Renamed", tier: "nice", blocks: 3 });
     expect((await store.setWeekItemTier(a.id, "must")).tier).toBe("must");
     expect((await store.setWeekItemBlocks(a.id, 2)).blocks).toBe(2);
-    await expect(store.setWeekItemBlocks(a.id, 1.5)).rejects.toThrow(/whole number/);
-    await expect(store.setWeekItemBlocks(a.id, 21)).rejects.toThrow(/whole number/);
+    expect((await store.setWeekItemBlocks(a.id, 1.5)).blocks).toBe(1.5);
+    expect((await store.setWeekItemBlocks(a.id, 0.5)).blocks).toBe(0.5);
+    await expect(store.setWeekItemBlocks(a.id, 1.25)).rejects.toThrow(/half-block steps/);
+    await expect(store.setWeekItemBlocks(a.id, 0)).rejects.toThrow(/half-block steps/);
+    await expect(store.setWeekItemBlocks(a.id, 21)).rejects.toThrow(/half-block steps/);
     await expect(store.setWeekItemBlocks(b.id, 1)).rejects.toThrow(/size/);
     expect((await store.setWeekItemSize(b.id, "L")).size).toBe("L");
     await expect(store.setWeekItemSize(a.id, "S")).rejects.toThrow(/blocks, not a size/);

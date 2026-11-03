@@ -16,7 +16,7 @@ import { aheadColumns, aheadWeeks, pastWeeks, PLAN_WEEKS } from "../plan/ahead.t
 import { DEFAULT_PLAN } from "../config/schema.ts";
 import { AHEAD_SEEN_MARK, directionOccasion, lookAheadOccasion } from "../plan/rituals.ts";
 import { borrowedForWeek, weekBudget } from "../plan/weekplan.ts";
-import { estimate } from "../plan/estimate.ts";
+import { blocksOf, blocksWord, estimate } from "../plan/estimate.ts";
 import type { AheadState } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -178,12 +178,12 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     const w = weekStarts[i]!;
     const items = (await plan.weekPlan(w)).features;
     for (const b of weekBudget(week, items, { borrowedMinutes: borrowedForWeek(borrowed, w) })) {
-      const reasons = [...b.blocks.filter((x) => !x.counts).map((x) => x.reason!).filter(Boolean), ...(b.borrowedBlocks ? [`${b.borrowedBlocks} ${b.borrowedBlocks === 1 ? "block" : "blocks"} of borrowed time to make up`] : [])];
-      capOf(b.clientKey, b.clientName).weeks.push({ weekStart: w, budget: b.budget, planned: b.planned, nicePlanned: b.nicePlanned, status: b.status, text: b.text, notCounted: reasons });
+      const reasons = [...b.blocks.filter((x) => !x.counts).map((x) => x.reason!).filter(Boolean), ...(b.borrowedQ ? [`${blocksWord(b.borrowedQ)} of borrowed time to make up`] : [])];
+      capOf(b.clientKey, b.clientName).weeks.push({ weekStart: w, budgetQ: b.budgetQ, plannedQ: b.plannedQ, nicePlannedQ: b.nicePlannedQ, status: b.status, text: b.text, notCounted: reasons });
     }
-    // Each feature's whole blocks that week: as set, or (no count) what its stories add up to.
+    // Each feature's load that week: from its sized stories on that week's list, else its estimate (E1).
     const est = estimate(items.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })));
-    for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, blocks: env.blocks, auto: env.auto, tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length, fill: env.fill });
+    for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, quarters: env.quarters, derived: env.derived, tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length });
   }
   // Weeks 5 to 12: blocks available per month column (patterns and PTO; meetings aren't known that far ahead).
   for (const col of columns) {
@@ -194,7 +194,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
       if (!week) continue;
       for (const b of weekBudget(week, [], { borrowedMinutes: {} })) {
         const x = per.get(b.clientKey) ?? { name: b.clientName, n: 0 };
-        x.n += b.budget;
+        x.n += blocksOf(b.budgetQ);
         per.set(b.clientKey, x);
       }
     }
@@ -203,7 +203,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
   // A client with blocks only after week 4 still gets its four weeks (none available).
   for (const c of caps.values())
     for (const w of weekStarts.slice(0, PLAN_WEEKS))
-      if (!c.weeks.some((x) => x.weekStart === w)) c.weeks.push({ weekStart: w, budget: 0, planned: 0, nicePlanned: 0, status: "none", text: "No blocks this week", notCounted: [] });
+      if (!c.weeks.some((x) => x.weekStart === w)) c.weeks.push({ weekStart: w, budgetQ: 0, plannedQ: 0, nicePlannedQ: 0, status: "none", text: "No blocks this week", notCounted: [] });
   for (const c of caps.values()) c.weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const dates = Object.fromEntries((await plan.roadmapDates()));
   // The last 2 weeks: each feature's blocks on that week's plan against the focused time on its picks (slice 3).
@@ -222,7 +222,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     return {
       weekStart: w,
       committed: !!wp.committedAt,
-      planned: est.envelopes.filter((e) => e.feature.tier === "must").map((e) => ({ clientKey: e.feature.clientKey, itemId: e.feature.itemId, blocks: e.blocks })),
+      planned: est.envelopes.filter((e) => e.feature.tier === "must").map((e) => ({ clientKey: e.feature.clientKey, itemId: e.feature.itemId, quarters: e.quarters })),
       worked: [...worked].map(([k, minutes]) => {
         const [clientKey, id] = k.split("|");
         return { clientKey: clientKey!, itemId: id ? Number(id) : null, minutes };

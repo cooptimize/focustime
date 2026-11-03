@@ -61,7 +61,8 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   await run("vm.choose", { vmId: DEMO_VM_ID });
   await run("week.load", { weekStart });
   await run("weekplan.load", { weekStart });
-  // Step 16.4: features in whole blocks, stories sized S, M or L; stories under a listed feature fill it.
+  // E1: a feature's load comes from its sized stories on the list (Harbor's L and S: 1½ blocks), else its estimate
+  // (Northwind 1120: 1 block, none set); stories sized S, M or L.
   const list: [string, number, "must" | "nice", { blocks?: number; size?: "S" | "M" | "L" }][] = [
     ["Cooptimize", 4410, "must", { blocks: 1 }],
     ["Cooptimize", 4411, "must", { size: "M" }],

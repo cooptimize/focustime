@@ -1,7 +1,8 @@
 // Plan ahead (step 17, slice 2): one timeline with weekly columns for weeks 1 to 4 and monthly columns (compressed) for
-// weeks 5 to 12; bar dates from DevOps or estimated; whole blocks per week in weeks 1 to 4; crowded months after that.
+// weeks 5 to 12; bar dates from DevOps or estimated; half blocks per week in weeks 1 to 4; crowded months after that.
 // Pure: no I/O. Whole numbers only in anything shown.
 import type { IsoDate } from "../week/types.ts";
+import { blocksNumber } from "./estimate.ts";
 
 export const AHEAD_WEEKS = 12;
 export const PLAN_WEEKS = 4;
@@ -135,14 +136,14 @@ export function dragBar(b: { start: IsoDate; end: IsoDate }, mode: DragMode, day
   return { start: b.start, end: maxDate(plus(b.end, n), b.start) };
 }
 
-/** Week cells take whole blocks from 0 to the client's budget that week (at least what is set already). */
-export function cellChoices(budget: number, current: number): number[] {
-  const top = Math.max(budget, current);
-  return Array.from({ length: top + 1 }, (_, i) => i);
+/** Week cells take half blocks (2 quarters each) from 0 to the client's budget that week (at least what is set already). In quarters. */
+export function cellChoices(budgetQ: number, currentQ: number): number[] {
+  const top = Math.max(budgetQ, currentQ);
+  return Array.from({ length: Math.floor(top / 2) + 1 }, (_, i) => i * 2);
 }
-/** + and − on a focused week cell, kept within 0 and the client's budget. */
-export function stepCell(current: number, delta: 1 | -1, budget: number): number {
-  return Math.max(0, Math.min(Math.max(budget, current), current + delta));
+/** + and − on a focused week cell: half a block, kept within 0 and the client's budget. In quarters. */
+export function stepCell(currentQ: number, delta: 1 | -1, budgetQ: number): number {
+  return Math.max(0, Math.min(Math.max(budgetQ, currentQ), currentQ + delta * 2));
 }
 
 export type MonthLoad = { month: string; label: string; available: number; due: number; crowded: boolean; text: string };
@@ -162,14 +163,14 @@ export function monthOf(cols: readonly AheadColumn[], d: IsoDate): string | null
 
 /**
  * Over-booked weeks (the Roadmap summary's filter): weeks 1 to 4 where a client's musts take more blocks than its
- * budget, and the features with blocks in one of them ("<client>:<id>").
+ * budget, and the features with blocks in one of them ("<client>:<id>"). In quarters.
  */
 export function overbooked(
-  clients: readonly { clientKey: string; weeks: readonly { weekStart: IsoDate; planned: number; budget: number }[] }[],
-  cells: readonly { clientKey: string; itemId: number; weekStart: IsoDate; blocks: number }[],
+  clients: readonly { clientKey: string; weeks: readonly { weekStart: IsoDate; plannedQ: number; budgetQ: number }[] }[],
+  cells: readonly { clientKey: string; itemId: number; weekStart: IsoDate; quarters: number }[],
 ): { weeks: number; items: Set<string> } {
-  const over = new Set(clients.flatMap((c) => c.weeks.filter((w) => w.planned > w.budget).map((w) => `${c.clientKey}|${w.weekStart}`)));
-  const items = new Set(cells.filter((x) => x.blocks > 0 && over.has(`${x.clientKey}|${x.weekStart}`)).map((x) => `${x.clientKey}:${x.itemId}`));
+  const over = new Set(clients.flatMap((c) => c.weeks.filter((w) => w.plannedQ > w.budgetQ).map((w) => `${c.clientKey}|${w.weekStart}`)));
+  const items = new Set(cells.filter((x) => x.quarters > 0 && over.has(`${x.clientKey}|${x.weekStart}`)).map((x) => `${x.clientKey}:${x.itemId}`));
   return { weeks: over.size, items };
 }
 
@@ -177,14 +178,14 @@ export function overbooked(
 export const PAST_WEEKS = 2;
 export const pastWeeks = (thisMonday: IsoDate): IsoDate[] => Array.from({ length: PAST_WEEKS }, (_, i) => plus(thisMonday, -7 * (PAST_WEEKS - i)));
 
-/** Focused minutes as whole blocks (a block is about one L), rounded. */
-export const workedBlocks = (minutes: number, blockMinutes: number): number => Math.round(minutes / Math.max(1, blockMinutes));
+/** Focused minutes in quarters, to the nearest half block (a block is about one L). */
+export const workedQuarters = (minutes: number, blockMinutes: number): number => Math.round((minutes * 2) / Math.max(1, blockMinutes)) * 2;
 
-/** "planned 2, worked about 1"; "planned 2, no focus time"; "not planned, worked about 1"; null when neither. */
-export function pastWords(planned: number, minutes: number, blockMinutes: number): string | null {
-  const w = workedBlocks(minutes, blockMinutes);
-  const worked = minutes <= 0 ? "no focus time" : w === 0 ? "worked under a block" : `worked about ${w}`;
-  if (planned > 0) return `planned ${planned}, ${worked}`;
+/** "planned 1½, worked about 1"; "planned 2, no focus time"; "not planned, worked about ½"; null when neither. In quarters. */
+export function pastWords(plannedQ: number, minutes: number, blockMinutes: number): string | null {
+  const w = workedQuarters(minutes, blockMinutes);
+  const worked = minutes <= 0 ? "no focus time" : w === 0 ? "worked under half a block" : `worked about ${blocksNumber(w)}`;
+  if (plannedQ > 0) return `planned ${blocksNumber(plannedQ)}, ${worked}`;
   return minutes > 0 ? `not planned, ${worked}` : null;
 }
 

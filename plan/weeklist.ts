@@ -3,7 +3,7 @@
 // or half-day are optional. Pure: ordering, done (DevOps state, a local mark, a done pick), progress per client, the
 // midweek on-track question and when a dropped must offers a heads-up. No I/O.
 import type { ClientWork, IsoDate } from "../week/types.ts";
-import { blocksFor, blocksWord, estimate, validWholeBlocks, type StorySize } from "./estimate.ts";
+import { blocksWord, estimate, looseQuarters, Q, validHalfBlocks, type StorySize } from "./estimate.ts";
 
 export type Tier = "must" | "nice";
 export type ItemLevel = "feature" | "story";
@@ -16,7 +16,7 @@ export type ListItem = {
   itemId: number;
   level: ItemLevel;
   tier: Tier;
-  /** Step 16.4: a feature's whole blocks (null: what its stories add up to); null for a story. */
+  /** E1: a feature's estimate in half blocks (null: 1 block), used when no sized story of it is on the list; null for a story. */
   blocks: number | null;
   /** Step 16.4: a story's size and parent feature. */
   size?: StorySize | null;
@@ -29,7 +29,7 @@ export type ListItem = {
 };
 
 /** A valid block count: a whole number from 1 to 20 (step 16.4). */
-export const validBlocks = validWholeBlocks;
+export const validBlocks = validHalfBlocks;
 
 /**
  * List order: musts before nice-to-haves; within a client's tier, items placed by hand (position set) in that order,
@@ -104,15 +104,15 @@ export function itemDone(i: Pick<ListItem, "clientKey" | "itemId" | "level" | "d
   return null;
 }
 
-export type Progress = { clientKey: string; musts: number; done: number; left: number; leftBlocks: number; nice: number };
+export type Progress = { clientKey: string; musts: number; done: number; left: number; /** Quarters of a block the open musts still need (E1). */ leftQuarters: number; nice: number };
 /**
  * Per client, against the current plan: musts done of musts now on the list (features and loose stories; a story
- * under a listed feature is part of it and takes its tier), and the whole blocks the open ones still need.
+ * under a listed feature is part of it and takes its tier), and the quarters of a block the open ones still need.
  */
 export function progress<T extends Pick<ListItem, "clientKey" | "itemId" | "tier" | "blocks" | "level" | "size" | "parentId">>(items: readonly T[], done: (i: T) => boolean): Progress[] {
   const est = estimate(items.map((i) => ({ ...i, src: i, done: done(i) })));
   const out = new Map<string, Progress>();
-  const at = (k: string) => out.get(k) ?? out.set(k, { clientKey: k, musts: 0, done: 0, left: 0, leftBlocks: 0, nice: 0 }).get(k)!;
+  const at = (k: string) => out.get(k) ?? out.set(k, { clientKey: k, musts: 0, done: 0, left: 0, leftQuarters: 0, nice: 0 }).get(k)!;
   for (const i of items) at(i.clientKey);
   for (const e of est.envelopes) {
     const p = at(e.feature.clientKey);
@@ -122,7 +122,7 @@ export function progress<T extends Pick<ListItem, "clientKey" | "itemId" | "tier
       if (e.feature.done) p.done++;
       else {
         p.left++;
-        p.leftBlocks += e.blocks - e.doneBlocks;
+        p.leftQuarters += e.quarters - e.doneQuarters;
       }
     }
   }
@@ -139,7 +139,7 @@ export function progress<T extends Pick<ListItem, "clientKey" | "itemId" | "tier
       }
     }
   }
-  for (const [k, sizes] of looseOpen) at(k).leftBlocks += blocksFor(sizes);
+  for (const [k, sizes] of looseOpen) at(k).leftQuarters += looseQuarters(sizes);
   return [...out.values()];
 }
 
@@ -164,15 +164,15 @@ export function blocksLeft(blocks: readonly CapacityBlock[], now: string): numbe
 
 export type TrackKind = "none" | "done" | "on_track" | "at_risk";
 /**
- * The midweek question per client: the whole blocks its open musts need against the whole blocks still ahead this
+ * The midweek question per client: the quarters its open musts need against the whole blocks still ahead this
  * week. Worded as a question, never an alarm: "3 musts left, 2 blocks left. Still realistic?"
  */
-export function onTrack(p: Pick<Progress, "musts" | "left" | "leftBlocks">, remainingBlocks: number): { kind: TrackKind; text: string } {
+export function onTrack(p: Pick<Progress, "musts" | "left" | "leftQuarters">, remainingBlocks: number): { kind: TrackKind; text: string } {
   if (!p.musts) return { kind: "none", text: "No musts this week" };
   if (!p.left) return { kind: "done", text: "All musts done" };
   const r = Math.max(0, Math.floor(remainingBlocks));
-  const left = `${p.left} must${p.left === 1 ? "" : "s"} left, ${r ? blocksWord(r) : "no blocks"} left.`;
-  return p.leftBlocks > r ? { kind: "at_risk", text: `${left} Still realistic?` } : { kind: "on_track", text: `${left} Looks doable.` };
+  const left = `${p.left} must${p.left === 1 ? "" : "s"} left, ${r ? blocksWord(r * Q) : "no blocks"} left.`;
+  return p.leftQuarters > r * Q ? { kind: "at_risk", text: `${left} Still realistic?` } : { kind: "on_track", text: `${left} Looks doable.` };
 }
 
 /**
@@ -216,4 +216,15 @@ export function weekList<F extends ListLike>(
   const devops = devopsStateFrom(work);
   const items = orderList(features, stackRank(work, portfolios)).map((f) => ({ ...f, done: itemDone(f, devops, pickDone) }));
   return { items, progress: progress(items, (i) => !!i.done) };
+}
+
+/**
+ * E1: a feature's other open stories in DevOps (not on the week list) as one muted line instead of their titles:
+ * "5 more stories · 2 assigned to others" (the second part only when some are). Null when there are none.
+ */
+export function otherStoriesLine(children: readonly { level: string; open: boolean; id: number; mine: boolean; assignedTo: string | null }[], listed: ReadonlySet<number>): string | null {
+  const rest = children.filter((c) => c.level === "story" && c.open && !listed.has(c.id));
+  if (!rest.length) return null;
+  const others = rest.filter((c) => !c.mine && c.assignedTo != null).length;
+  return `${rest.length} more ${rest.length === 1 ? "story" : "stories"}${others ? ` · ${others} assigned to others` : ""}`;
 }

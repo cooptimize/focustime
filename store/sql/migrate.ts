@@ -24,6 +24,15 @@ export const SQLSERVER_MIGRATIONS: readonly SqlServerMigration[] = [
     name: "app_keys",
     sql: "CREATE TABLE app_keys (name nvarchar(64) NOT NULL PRIMARY KEY, value nvarchar(max) NOT NULL, created_at datetime2(7) NOT NULL);",
   },
+  // E1 (D438): a feature's estimate in half blocks, 0.5 to 20 (whole blocks stay valid; nothing to convert). The user
+  // tables' version 27, as SQLite's migration 27.
+  {
+    version: 29,
+    name: "week_features.blocks in half blocks",
+    sql: `ALTER TABLE week_features DROP CONSTRAINT week_features_blocks;
+ALTER TABLE week_features ALTER COLUMN blocks decimal(3,1) NULL;
+ALTER TABLE week_features ADD CONSTRAINT week_features_blocks CHECK (blocks IS NULL OR (blocks BETWEEN 0.5 AND 20 AND blocks * 2 = FLOOR(blocks * 2) AND level = 'feature'));`,
+  },
 ];
 
 export const SQLSERVER_VERSION = SQLSERVER_MIGRATIONS[SQLSERVER_MIGRATIONS.length - 1]!.version;

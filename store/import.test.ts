@@ -10,6 +10,7 @@ import { MIGRATIONS } from "./plan-store.ts";
 import { USER_TABLES } from "./scope.ts";
 import type { Conn } from "./sql/conn.ts";
 import { BASELINE_VERSION } from "./sql/baseline.ts";
+import { SQLSERVER_MIGRATIONS } from "./sql/migrate.ts";
 import { exportUser, NOT_EXPORTED, PARENTS_FIRST, USER_SCHEMA_VERSION } from "./user-data.ts";
 
 const now = () => Temporal.Instant.from(FILL_NOW);
@@ -35,9 +36,10 @@ const tablesOf = async (conn: Conn, id: string) => {
   return Object.fromEntries(Object.entries(t).map(([k, rows]) => [k, rows.map(instants).sort()]));
 };
 
-it("the export's schema version is SQLite's newest and SQL Server's baseline", () => {
+it("the export's schema version is SQLite's newest; SQL Server's user tables match it at migration 29 (D438)", () => {
   expect(USER_SCHEMA_VERSION).toBe(MIGRATIONS.length);
-  expect(USER_SCHEMA_VERSION).toBe(BASELINE_VERSION);
+  expect(BASELINE_VERSION).toBe(26);
+  expect(SQLSERVER_MIGRATIONS.find((m) => m.version === 29)?.name).toMatch(/week_features/);
 });
 
 it("PARENTS_FIRST lists every exported user table once, after every table it references", async () => {
