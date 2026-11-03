@@ -3197,6 +3197,12 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .pw-addpane .pw-features, .pw-addpane .pw-epics { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .pw-addpane .pw-addrow { display: flex; align-items: center; gap: 8px; min-height: calc(28px * var(--text-scale)); padding: 2px 6px; border-radius: 6px; }
 .pw-addpane .pw-addrow:hover { background: var(--raised); }
+.pw-addpane .pw-addrow { flex-wrap: wrap; }
+.pw-addpane .pw-add-kids { flex-basis: 100%; list-style: none; margin: 0 0 2px 18px; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.pw-addpane .pw-add-kid { font-size: var(--fs-2); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-addpane .pw-add-kid a { color: var(--text-muted); text-decoration: none; }
+.pw-addpane .pw-add-kid a:hover { text-decoration: underline; }
+.pw-epic-line { margin: 0 0 8px; font-size: var(--fs-3); }
 .pw-addpane .pw-addrow .pw-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-3); }
 .pw-addpane .pw-addrow .pw-title a { color: var(--text); text-decoration: none; }
 .pw-addpane .pw-addrow .pw-title a:hover { text-decoration: underline; }

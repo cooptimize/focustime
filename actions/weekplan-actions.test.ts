@@ -316,6 +316,8 @@ describe("Plan the week one client at a time (U6)", () => {
     s = await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT });
     expect(s.weekDrafts).toEqual([{ draftId: a.draft.id, tier: "nice" }]);
     expect((await t.fail("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: " ", tier: "must" })).status).toBe(400);
+    // D437: the type box always saves a draft feature; a level can't be asked for (never a story).
+    expect((await t.fail("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "A story?", tier: "must", level: "story" })).status).toBe(400);
     expect((await t.fail("weekplan.add_draft", { weekStart: "2026-10-26", clientKey: "Adatum", title: "Late", tier: "must" })).status).toBe(409);
   });
 
