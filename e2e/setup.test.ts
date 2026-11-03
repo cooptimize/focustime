@@ -8,9 +8,9 @@ import { Pat } from "../sources/devops/pat.ts";
 import { WriteFailure } from "../sources/devops/write.ts";
 import { CHROMIUM } from "./harness.ts";
 import { liveBrowser, liveContext, T, type LiveBrowser } from "./live.ts";
+import { shotBoth } from "./shots.ts";
 
 const GOOD = "good-write-pat-0000";
-const SHOTS = process.env.FOCUSTIME_SHOTS ?? null;
 
 describe.skipIf(!CHROMIUM)("first-run setup", () => {
   let lb: LiveBrowser;
@@ -39,7 +39,7 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
     const app = await lb.start(ctx);
     try {
       const page = await app.page();
-      const shot = async (name: string) => SHOTS && (await page.screenshot({ path: `${SHOTS}/${name}.png` }));
+      const shot = (name: string) => shotBoth(page, name);
       await page.goto(app.url);
 
       // 1. Your day: focus on the first field; Enter continues.
