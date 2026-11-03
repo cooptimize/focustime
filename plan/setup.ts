@@ -24,22 +24,22 @@ export const remainingSteps = (s: SetupState): SetupStep[] => SETUP_STEPS.filter
 export const firstRemaining = (s: SetupState): SetupStep => remainingSteps(s)[0] ?? SETUP_STEPS[0];
 
 /**
- * Who sees the flow on opening the app: a real (not demo) person with no setup record at all and no settings of their
- * own yet. Anyone with settings from before S1 counts as set up (they never see it). Once any step has a record the
- * flow doesn't open by itself again; the Today line takes over.
+ * Whether the flow opens by itself, and where: a real (not demo) person who hasn't closed it and still has a step with
+ * no record. That's a new person (no rows: people with settings before S1 were recorded done by the migration), or
+ * one who signed out halfway (it resumes at the first step without a record). Null: it doesn't open by itself.
  */
-export function showsFlow(o: { demo: boolean; state: SetupState; hasOwnSettings: boolean }): boolean {
-  if (o.demo || o.hasOwnSettings) return false;
-  return Object.keys(o.state).length === 0;
+export function autoOpen(o: { demo: boolean; state: SetupState }): SetupStep | null {
+  if (o.demo) return null;
+  if (Object.values(o.state).includes("dismissed")) return null;
+  return SETUP_STEPS.find((k) => !o.state[k]) ?? null;
 }
 
 /**
- * The quiet line on Today: "2 setup steps left", or null. Never in demo mode, never for someone set up before S1
- * (settings and no record), never once all four are done.
+ * The quiet line on Today: "2 setup steps left", opening the flow at the first step not done; or null. Never in demo
+ * mode, never while the flow would open by itself, never once all four are done.
  */
-export function todayLine(o: { demo: boolean; state: SetupState; hasOwnSettings: boolean }): { text: string; step: SetupStep } | null {
-  if (o.demo) return null;
-  if (o.hasOwnSettings && Object.keys(o.state).length === 0) return null;
+export function todayLine(o: { demo: boolean; state: SetupState }): { text: string; step: SetupStep } | null {
+  if (o.demo || autoOpen(o)) return null;
   const left = remainingSteps(o.state);
   if (!left.length) return null;
   return { text: `${left.length} setup ${left.length === 1 ? "step" : "steps"} left`, step: left[0]! };
@@ -58,3 +58,27 @@ export function dismissFrom(s: SetupState, at: SetupStep): SetupState {
   for (const k of SETUP_STEPS.slice(SETUP_STEPS.indexOf(at))) if (!s[k]) out[k] = "dismissed";
   return out;
 }
+
+/** One client on the clients screen: from Dataverse, with its DevOps organization and whose write PAT it has (never the PAT). */
+export type SetupClient = { key: string; name: string; org: string | null; write: { name: string; email: string } | null };
+
+export type SetupView = {
+  demo: boolean;
+  state: SetupState;
+  /** Where the flow opens by itself, or null. */
+  open: SetupStep | null;
+  /** The first step not done (the Today line and Settings > Setup open here). */
+  next: SetupStep;
+  /** Today's quiet line ("2 setup steps left"), or null. */
+  line: { text: string; step: SetupStep } | null;
+};
+
+export type SetupPrefill = {
+  /** "outlook": your Outlook working hours; "settings": what's saved now (Outlook couldn't say). */
+  from: "outlook" | "settings";
+  timeZone: string;
+  /** Per weekday (mon to sun): spans like "09:00-17:00"; empty is a day off. */
+  weekdays: Record<string, string[]>;
+  lunch: string;
+  note: string | null;
+};

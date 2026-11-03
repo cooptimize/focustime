@@ -3406,3 +3406,36 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .size-chip.unsized { color: var(--text-muted); border-style: dashed; font-weight: 400; }
 .over-word { color: var(--watch); font-weight: 500; }
 .dp-estimate { display: flex; align-items: center; gap: 10px; }
+
+/* S1 (D451): first-run setup. The capture dialog's frame; a step list on top, one screen at a time. */
+.setup-backdrop { padding-top: 8vh; }
+.setup-dialog { width: min(760px, 100%); max-height: 84vh; gap: 14px; padding: 18px 22px; }
+.setup-head { display: flex; align-items: center; gap: 12px; }
+.setup-steps { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; list-style: none; flex: 1 1 auto; min-width: 0; font-size: var(--fs-2); color: var(--text-faint); counter-reset: setup; }
+.setup-steps li { counter-increment: setup; white-space: nowrap; }
+.setup-steps li::before { content: counter(setup) ". "; }
+.setup-steps li.past { color: var(--text-muted); }
+.setup-steps li.now { color: var(--text); font-weight: 600; }
+.setup-screen { display: grid; gap: 12px; }
+.setup-screen h2 { margin: 0; font-size: var(--fs-4); }
+.setup-intro { margin: 0; color: var(--text-muted); font-size: var(--fs-3); }
+.setup-note { margin: 0; font-size: var(--fs-3); }
+.setup-fields { display: grid; gap: 12px; }
+.setup-row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
+.setup-row .set-field { flex: 1 1 140px; }
+.setup-row input[type="password"] { flex: 1 1 260px; min-width: 0; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; }
+.setup-days { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; border: 0; }
+.setup-days legend { margin-bottom: 4px; padding: 0; }
+.setup-day { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-3); }
+.setup-clients { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.setup-client { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.setup-client-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.setup-client-head strong { flex: 1 1 auto; min-width: 0; font-size: var(--fs-3); }
+.setup-choice { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.setup-pat { display: grid; gap: 8px; font-size: var(--fs-3); }
+.setup-pat ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.setup-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 4px; }
+.setup-actions .mini:first-child { margin-right: auto; }
+.setup-line { margin: 4px 0 0; font-size: var(--fs-2); color: var(--text-muted); }
+.setup-line .link-btn { color: var(--text-muted); }
+@media (max-width: 600px) { .setup-dialog { padding: 14px 16px; } .setup-steps li:not(.now) { display: none; } }

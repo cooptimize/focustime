@@ -970,6 +970,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
     case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
     case "ui.tour_offer": return { run: () => env.showGuide() };
+    case "setup.load":
+    case "setup.prefill":
+    case "setup.mark":
+    case "setup.reset": return { run: () => env.openSettings("setup") };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };

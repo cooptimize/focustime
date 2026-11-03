@@ -66,6 +66,16 @@ describe("SQLite", () => {
     expect(readdirSync(dir).filter((f) => f.startsWith("plan.db.bak-"))).toHaveLength(1);
   });
 
+  it("setup_state: everyone who already has settings counts as set up (each step done); nobody else gets a row", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "focustime-named-")), "plan.db");
+    const before = openPlanDb({ path, now, named: [] });
+    before.prepare("INSERT INTO user_settings (user_id, section, position, body, updated_at) VALUES ('old', 'hours', 1, 'x', 'x'), ('old', 'ui', 2, 'x', 'x')").run();
+    before.close();
+    const db = openPlanDb({ path, now });
+    expect(db.prepare("SELECT user_id, step, status FROM setup_state ORDER BY step").all().map((r) => `${r.user_id} ${r.step} ${r.status}`)).toEqual(["old blocks done", "old calendars done", "old clients done", "old day done"]);
+    db.close();
+  });
+
   it("a failing named migration leaves nothing half done", () => {
     const dir = mkdtempSync(join(tmpdir(), "focustime-named-"));
     const path = join(dir, "plan.db");
@@ -93,12 +103,15 @@ await onSqlServer("SQL Server timestamped migrations (S1)", () => {
     }
   });
 
-  it("a database already at the newest numbered migration gets only the named ones", async () => {
+  it("a database already at the newest numbered migration gets only the named ones; people with settings count as set up", async () => {
     const db = await emptySqlServer();
     try {
       await migrateSqlServer(db.conn, { named: [] });
+      const at = "2026-11-02T14:00:00Z";
+      await db.conn.run("INSERT INTO users (id, tenant_id, upn, display_name, email, time_zone, created_at, last_sign_in_at) VALUES ('old', 't', 'o@example.com', 'O', NULL, NULL, ?, ?)", [at, at]);
+      await db.conn.run("INSERT INTO user_settings (user_id, section, position, body, updated_at) VALUES ('old', 'hours', 1, 'x', ?)", [at]);
       expect(await migrateSqlServer(db.conn)).toEqual(NAMED_MIGRATIONS.map((m) => m.name).sort());
-      expect(await db.conn.get("SELECT OBJECT_ID(N'setup_state') AS id")).not.toEqual({ id: null });
+      expect((await db.conn.all("SELECT step FROM setup_state WHERE user_id = 'old' AND status = 'done' ORDER BY step")).map((r) => r.step)).toEqual(["blocks", "calendars", "clients", "day"]);
     } finally {
       await db.drop();
     }

@@ -1,33 +1,16 @@
 // no-demo-leak: a real (not demo) session, signed in as a fake person with fake live sources (Dataverse and DevOps
 // answering from test fakes, no calendars set up). Every screen and picker is read for the demo's names and the old
 // sample meetings: none may show. Then each source fails in turn: the screen says so with its fix, never stand-in data.
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { chromium, type Browser, type Page } from "playwright-core";
-import { createServer, type ViteDevServer } from "vite";
+import type { Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { dispatch, type ActionContext } from "../actions/dispatch.ts";
-import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../fixtures/starter.ts";
-import { CSRF_COOKIE, SESSION_COOKIE } from "../server/auth/cookies.ts";
-import { startTestApp } from "../server/test-app.ts";
-import { createDataverseSource } from "../sources/dataverse/source.ts";
-import { dvConfig, FAKE_SECRET, fakeFetch, type Scenario } from "../sources/dataverse/test-fakes.ts";
+import { dispatch } from "../actions/dispatch.ts";
 import { DEMO_CLIENTS, DEMO_PEOPLE } from "../sources/demo/data.ts";
-import { createDevOpsSource } from "../sources/devops/source.ts";
-import { fakeDevOps } from "../sources/devops/test-fakes.ts";
-import { createSnapshotStore } from "../host/local/snapshots.ts";
-import { createPlanStore } from "../store/plan-store.ts";
 import { CHROMIUM } from "./harness.ts";
+import { liveBrowser, liveContext as live, T, type LiveBrowser, type LiveOptions } from "./live.ts";
 
-const T = 120_000;
-const NOW = "2026-11-02T09:30:00-05:00";
-const ROOT = resolve(import.meta.dirname, "..");
-const ME = "e2e00000-0000-4000-8000-0000000000aa";
-const text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"')
-  .replace('my_systemuserid = ""', `my_systemuserid = "${dvConfig.mySystemUserId}"`)
-  .replace("https://cooptimize.crm.dynamics.com", dvConfig.environmentUrl);
+const liveContext = (o?: LiveOptions) => live(o);
+let lb: LiveBrowser;
+const start = async (ctx: Promise<Awaited<ReturnType<typeof live>>>) => lb.start(await ctx);
 
 /** What only the demo (or the old sample week) has: its clients, its people, the sample meetings. */
 const DEMO_WORDS = [
@@ -39,53 +22,6 @@ const DEMO_WORDS = [
   "Sample meetings",
   "Demo data",
 ];
-
-/** A live-style context: the real dispatch over sources that read from the fakes. */
-function liveContext(o: { dataverse?: Scenario; devopsDown?: boolean } = {}): ActionContext {
-  const dir = mkdtempSync(join(tmpdir(), "ft-real-"));
-  const dv = fakeFetch(o.dataverse ?? "ok");
-  const ado = fakeDevOps({ contoso: o.devopsDown ? "offline" : "planweek", cooptimize: o.devopsDown ? "offline" : "agile" });
-  const makeDataverse: ActionContext["makeDataverse"] = (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: dv.fetch, snapshots: createSnapshotStore(join(dir, "dv")), log: () => {} });
-  let devops: ReturnType<typeof createDevOpsSource> | null = null;
-  return {
-    loadConfig: async () => ({ path: "/e2e/config.toml", parsed: parseConfig(text) }),
-    makeDataverse,
-    makeOutlook: () => {
-      throw new Error("Outlook isn't set up here");
-    },
-    makeGoogle: () => {
-      throw new Error("Google isn't set up here");
-    },
-    makeDevOps: (cfg, tz) => (devops ??= createDevOpsSource({ fetch: ado.fetch, log: () => {}, snapshots: createSnapshotStore(join(dir, "ado")), timeZone: tz, targets: (k) => makeDataverse(cfg, tz).devopsTargets(k) })),
-    saveSystemUserId: async () => {},
-    now: () => NOW,
-    plan: createPlanStore({ path: join(dir, "plan.db"), now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") }),
-  };
-}
-
-type Running = { url: string; close: () => Promise<void>; page: () => Promise<Page> };
-let browser: Browser;
-let vite: ViteDevServer;
-
-async function start(ctx: ActionContext): Promise<Running> {
-  const app = await startTestApp({ ctx, now: () => Temporal.Instant.from(NOW), extra: { devMiddleware: vite.middlewares } });
-  const b = app.browser();
-  const s = await b.signIn(ME);
-  return {
-    url: `${app.publicUrl}/?now=${encodeURIComponent(NOW)}`,
-    close: app.close,
-    page: async () => {
-      const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
-      await context.addCookies([
-        { name: SESSION_COOKIE, value: s.cookie, url: app.publicUrl.replace("http:", "https:"), secure: true, httpOnly: true, sameSite: "Lax" },
-        { name: CSRF_COOKIE, value: s.csrf, url: app.publicUrl.replace("http:", "https:"), secure: true, sameSite: "Strict" },
-      ]);
-      const page = await context.newPage();
-      await page.addInitScript(() => localStorage.setItem("focustime.hint.flow", "dismissed"));
-      return page;
-    },
-  };
-}
 
 /** Every demo word on the page (its text and its titles), with a little context. */
 async function demoWordsOn(page: Page): Promise<string[]> {
@@ -112,16 +48,14 @@ const SCREENS: [string, string, string][] = [
 
 describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)", () => {
   beforeAll(async () => {
-    vite = await createServer({ root: ROOT, configFile: join(ROOT, "vite.config.ts"), server: { middlewareMode: true, hmr: false }, appType: "spa", logLevel: "silent" });
-    browser = await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu"] });
+    lb = await liveBrowser();
   }, T);
   afterAll(async () => {
-    await browser?.close();
-    await vite?.close();
+    await lb?.close();
   });
 
   it("the fake live sources answer as a real person's (the check below has something to look at)", async () => {
-    const ctx = liveContext();
+    const ctx = await liveContext();
     const r = await dispatch(ctx, { action: "settings.load", input: {} });
     expect(r.ok).toBe(true);
     const keys = (r.ok ? (r.data as { clients: { key: string }[] }).clients : []).map((c) => c.key);
@@ -172,7 +106,7 @@ describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)"
   }, T);
 
   it("calendars that aren't set up say so with where to set them up; no stand-in meetings", async () => {
-    const r = await dispatch(liveContext(), { action: "week.load", input: { weekStart: "2026-11-02" } });
+    const r = await dispatch(await liveContext(), { action: "week.load", input: { weekStart: "2026-11-02" } });
     expect(r.ok).toBe(true);
     const sources = r.ok ? (r.data as { sources: { source: string; status: string; message?: string; fixAction?: string; itemCount: number; sample?: boolean }[] }).sources : [];
     for (const s of sources.filter((x) => x.source === "outlook" || x.source === "google")) {
@@ -195,7 +129,7 @@ describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)"
       expect(body).toMatch(/Retry|Refresh|Settings|reach/i);
       expect(await demoWordsOn(page)).toEqual([]);
       // Settings > Clients explains instead of listing guesses.
-      const s = await dispatch(liveContext({ dataverse: "network_down" }), { action: "settings.load", input: {} });
+      const s = await dispatch(await liveContext({ dataverse: "network_down" }), { action: "settings.load", input: {} });
       const d = s.ok ? (s.data as { clients: { key: string }[]; dataverseProblem: string | null }) : null;
       // Only the internal client (always followed); nothing guessed for the rest.
       expect(d?.clients.map((c) => c.key)).toEqual(["Cooptimize"]);
