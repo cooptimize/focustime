@@ -7,7 +7,7 @@
 // outside them.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, weekClient, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, weekClient, weekClientNames, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -112,7 +112,13 @@ describe.skipIf(!CHROMIUM)("Plan the week one client at a time (U6)", () => {
     await go(page, `#/week/plan/${NEXT}`);
     await weekClient(page, "Cooptimize");
     expect(await summary(page)).toBe("next week · 0 of 4 clients planned");
-    expect(await offered(page)).toEqual(expect.arrayContaining([4410, 4411, 4412, 4420]));
+    // D437: the feature and the orphan story are rows; the feature's stories nest under it, never rows of their own.
+    expect(await offered(page)).toEqual(expect.arrayContaining([4410, 4420]));
+    expect(await offered(page)).not.toContain(4411);
+    expect(await page.locator('.pw-addpane .pw-addrow[data-item="4410"] .pw-add-kid').allTextContents()).toEqual([
+      expect.stringMatching(/#4411 Timesheet summary query\s+Story$/),
+      expect.stringMatching(/#4412 Utilization chart\s+Story$/),
+    ]);
     await page.getByRole("button", { name: "Add #4410 as a must" }).click();
     const row = page.locator(".pw-client .pw-row", { hasText: "Internal reporting refresh" });
     await row.waitFor();
@@ -170,6 +176,50 @@ describe.skipIf(!CHROMIUM)("Plan the week one client at a time (U6)", () => {
     await must.locator(".draft-title").click();
     await page.locator(".draft-editor").waitFor();
     await page.keyboard.press("Escape");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("each row says its type (Feature with its target date, Story), never User Story; no epics; an epic with no features is a line on the card that opens the draft editor", async () => {
+    const { page, errors } = await freshPage(h);
+    await reset(page);
+    await go(page, `#/week/plan/${NEXT}`);
+    const names = await weekClientNames(page);
+    let rows = 0;
+    for (const name of names) {
+      await weekClient(page, name);
+      await expect.poll(() => paneName(page)).toBe(name);
+      const words = await page.locator(".pw-addpane .pw-addrow > .pw-title .pw-type-word").allTextContents();
+      expect(words.length, name).toBe(await page.locator(".pw-addpane .pw-addrow").count());
+      // A story-tier item that is not the process's story type (a Bug) keeps its own word; "User Story" is always "Story".
+      for (const w of words) expect(["Feature", "Story", "Bug"], name).toContain(w);
+      rows += words.length;
+      const pane = await page.locator(".pw-addpane").innerText();
+      expect(pane, name).not.toContain("User Story");
+      expect(pane, name).not.toMatch(/\bEpics?\b/);
+    }
+    expect(rows).toBeGreaterThan(0);
+    // A feature with a target date says it after its type word.
+    await weekClient(page, "Cooptimize");
+    await expect(page.locator('.pw-addpane .pw-addrow[data-item="4410"] > .pw-title').innerText()).resolves.toMatch(/Internal reporting refresh\s+Feature · target Nov 20/);
+    // The type box saves a draft feature, never a story.
+    await expect(page.locator(".pw-addpane .pw-type").innerText()).resolves.toContain("Enter saves a draft feature as a must");
+    // Atlas's epic with no features: once, at the top of its card; Draft feature opens the draft editor under it.
+    expect(names).toContain("Atlas");
+    {
+      await weekClient(page, "Atlas");
+      const line = page.locator(".pw-client .pw-epic-line");
+      await expect(line.count()).resolves.toBe(1);
+      await expect(line.innerText()).resolves.toMatch(/^Epic needs features\s+#3320 Carrier integrations · Draft feature$/);
+      await line.getByRole("button", { name: "Draft feature" }).click();
+      const ed = page.locator(".draft-editor");
+      await ed.waitFor();
+      const drafts = (await call(page, "weekplan.load", { weekStart: NEXT })).data.drafts as { level: string; parentItemId: number | null; id: number }[];
+      const made = drafts.find((d) => d.parentItemId === 3320);
+      expect(made?.level).toBe("feature");
+      await page.keyboard.press("Escape");
+      if (made) await call(page, "draft.remove", { id: made.id });
+    }
     expect(errors).toEqual([]);
     await page.close();
   }, T);

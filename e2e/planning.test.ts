@@ -91,10 +91,8 @@ describe.skipIf(!CHROMIUM)("Plan the week and Plan the day (U4)", () => {
       // Said once: in the card's header, and not again in the card or in the week grid (U1 had it twice).
       expect(((await card.innerText()).split(fit).length - 1), fit).toBe(1);
       await expect(page.locator(".pw-grid").innerText()).resolves.not.toContain(fit);
-      // The right pane follows the open client and never offers what is on its list (Everything else opened too).
+      // The right pane follows the open client and never offers what is on its list.
       await expect(page.locator(".pw-addpane .pl-add-client").textContent()).resolves.toBe(name);
-      const rest = page.locator(".pw-addpane .pw-rest .pl-fold");
-      if ((await rest.count()) && (await rest.getAttribute("aria-expanded")) === "false") await rest.click();
       const listed = (await card.locator(".pw-row .pl-title").allTextContents()).map((t) => t.replace("✓", "").trim());
       const offered = (await page.locator(".pw-addpane .pw-addrow .pw-title a").allTextContents()).map((t) => t.replace(/^#\d+\s+/, "").trim());
       for (const t of offered) expect(listed).not.toContain(t);

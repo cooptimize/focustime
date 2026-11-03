@@ -12,12 +12,13 @@ import { ModeArea } from "./ModeSwitch.tsx";
 import { planWeekParts } from "./nav.ts";
 import { mondayOf } from "../week/dates.ts";
 import type React from "react";
-import { DraftTitle } from "./DraftEditor.tsx";
+import { DraftEditorCtx, DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps, DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { blocksStep, blocksText, storySizeStep, weekItemMenu, type MenuStep, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react";
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import type { DraftStory, WeekFeature } from "../plan/types.ts";
+import { addPaneRows, type AddRowInfo } from "../plan/weekadd.ts";
 import { borrowedForWeek, readiness, weekBudget, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
 import { estimate, fillWords, overLine, progressWords, type Envelope } from "../plan/estimate.ts";
 import { moveWithin, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
@@ -106,6 +107,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const search = useRef<HTMLInputElement>(null);
   const briefArea = useRef<HTMLTextAreaElement>(null);
   const { open: openMenu } = useContext(MenuCtx);
+  const openDraft = useContext(DraftEditorCtx);
   const tz = userZone(data);
   const weekReady = data.weekStart === weekStart;
 
@@ -222,6 +224,11 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const pin = (k: string, itemId: number, date: IsoDate, half: Half, on: boolean) => void act("weekplan.place", { weekStart, clientKey: k, itemId, date, half, on });
   const dropped = (r: { headsUp: HeadsUp | null } | null) => setOffer(r?.headsUp ?? null);
   const ops: Ops = {
+    // D437: an epic with no features: a local draft feature under it, opened in the draft editor to name and fill in.
+    draftFeature: (k, epicId) =>
+      void act<{ draft: DraftStory }>("draft.add_feature", { clientKey: k, parentItemId: epicId, title: "New feature" }).then((r) => {
+        if (r?.draft) openDraft?.(r.draft);
+      }),
     add: (k, itemId, tier) => void act("weekplan.add", { weekStart, clientKey: k, itemId, tier }, `#${itemId} added as ${tier === "must" ? "a must" : "a nice to have"}`),
     tier: (i, tier) => void act<{ headsUp: HeadsUp | null }>("weekplan.set_tier", { id: i.id, tier }, `#${i.itemId} is now ${tier === "must" ? "a must" : "a nice to have"}`).then(dropped),
     remove: (i) => void act<{ headsUp: HeadsUp | null }>("weekplan.remove", { id: i.id }, `Took #${i.itemId} off the week`).then(dropped),
@@ -356,7 +363,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
           l.clientKey === openK ? (
             <li key={l.clientKey} className="pw-open-card">
               <ClientCard k={l.clientKey} line={l} st={st} past={past} items={items} fit={fits.find((f) => f.clientKey === l.clientKey)} days={days} info={info} nameOf={nameOf} colors={data.clients} friday={friday}
-                folds={folds} toggleFold={toggleFold} ops={ops} weekDrafts={weekDrafts.filter((w) => w.draft.clientKey === l.clientKey)}
+                folds={folds} toggleFold={toggleFold} ops={ops} weekDrafts={weekDrafts.filter((w) => w.draft.clientKey === l.clientKey)} epics={flags.filter((f) => f.kind === "needs_features" && f.clientKey === l.clientKey && f.itemId !== null)}
                 prevName={n > 0 ? nameOf(keys[n - 1]!) : null} nextName={n < keys.length - 1 ? nameOf(keys[n + 1]!) : null} onPrev={() => go(-1)} onNext={() => go(1)} onFinish={() => void finish()} />
             </li>
           ) : (
@@ -695,7 +702,9 @@ type Ops = {
   client: (k: string) => void;
   /** U6: a draft feature on the list: must, nice or off. */
   draftTier: (d: DraftStory, tier: Tier | "off") => void;
-  /** U6: the type box: a draft feature as a must (Enter) or a nice to have (Shift+Enter). */
+  /** D437: "Epic needs features · Draft feature" on the card: a draft feature under the epic, in the draft editor. */
+  draftFeature: (k: string, epicId: number) => void;
+  /** U6: the type box: a draft feature as a must (Enter) or a nice to have (Shift+Enter). Never a story. */
   typed: (k: string, title: string, tier: Tier) => Promise<boolean>;
   /** U6: Nothing this week for a client. */
   quiet: (k: string, on: boolean) => void;
@@ -717,6 +726,8 @@ type CardProps = {
   toggleFold: (key: string) => void;
   ops: Ops;
   weekDrafts: { draft: DraftStory; tier: Tier }[];
+  /** D437: its epics with no features (readiness), each one line at the top of the card. */
+  epics: ReadinessFlag[];
   prevName: string | null;
   nextName: string | null;
   onPrev: () => void;
@@ -769,6 +780,19 @@ function ClientCard(p: CardProps) {
       tone={fit ? TONE[fit.status] : "fits"}
       sub={port && (port.status !== "ok" || port.fromCache) ? `DevOps: ${port.status !== "ok" ? (port.message ?? port.status) : "from cache"}` : undefined}
     >
+      {p.epics.map((f) => (
+        <p key={f.itemId} className="pw-epic-line">
+          <span className="pw-kind">Epic needs features</span> <WorkLink clientKey={k} url={f.url}>#{f.itemId} {f.title}</WorkLink>
+          {!p.past && (
+            <>
+              {" · "}
+              <button type="button" className="link-btn pw-draft-feature-btn" onClick={() => p.ops.draftFeature(k, f.itemId!)} title={`A draft feature under #${f.itemId}, in the draft editor`}>
+                Draft feature
+              </button>
+            </>
+          )}
+        </p>
+      ))}
       <div className="pw-tier">
         {!empty && <PlanLabel>Must</PlanLabel>}
         {empty ? (
@@ -858,39 +882,27 @@ type AddProps = {
 };
 
 /**
- * U6: "Add to <client>", following the open client. FROM DEVOPS: its features and my stories not on a list (never a
- * story under a listed feature), each with + Must and Nice; Everything else folded (other open stories under its
- * features, its epics); Search over both (Enter adds the first match as a must, Esc clears); the type box at the foot.
+ * U6: "Add to <client>", following the open client. FROM DEVOPS (plan/weekadd.ts, D437): its features not on the list,
+ * each with its open stories nested under it, and stories with no parent feature; each with + Must and Nice and its
+ * type word. Never an epic (an epic with no features is a line on the card) and never a story on its own when it has
+ * a feature. Search (Enter adds the first match as a must, Esc clears); the type box at the foot.
  */
-function AddWeek({ k, st, items, work, nameOf, colors, ops, query, setQuery, search, folds, toggleFold }: AddProps) {
+function AddWeek({ k, st, items, work, nameOf, colors, ops, query, setQuery, search }: AddProps) {
   const q = query.trim().toLowerCase();
   const match = (i: { id: number; title: string }) => !q || i.title.toLowerCase().includes(q) || String(i.id).includes(q.replace(/^#/, ""));
   const port = st.portfolios.find((x) => x.clientKey === k);
   const w = work?.find((x) => x.clientKey === k);
   const listed = new Set(items.filter((i) => i.clientKey === k).map((i) => i.itemId));
-  // A story whose feature is on the list belongs to that feature's row, not to Add (U4).
-  const underListed = (parentId: number | null | undefined) => parentId != null && listed.has(parentId);
-  const features = (port?.items ?? []).filter((i) => i.tier === "feature" && !listed.has(i.id));
-  const stories = (w?.items ?? []).filter((i) => i.level === "story" && !listed.has(i.id) && !underListed(i.parentId));
-  const flat = [
-    ...features.map((f) => ({ id: f.id, title: f.title, url: f.url, what: `${f.type.toLowerCase()}${f.targetDate ? ` · target ${dateShortIso(f.targetDate)}` : ""}`, flag: f.children.some((c) => c.level === "story") ? null : "no stories" })),
-    ...stories.map((s) => ({ id: s.id, title: s.title, url: s.url, what: s.type === "User Story" ? "story" : s.type.toLowerCase(), flag: null })),
-  ];
-  // Q64: open stories under its features (any assignee) not offered above, grouped by feature; then its epics.
-  const offered = new Set(flat.map((x) => x.id));
-  const under = features.map((f) => ({ f, kids: f.children.filter((c) => c.level === "story" && c.open && !listed.has(c.id) && !offered.has(c.id) && match(c)) })).filter((g) => g.kids.length);
-  const epics = (port?.items ?? []).filter((i) => i.tier === "epic" && match(i));
-  const shown = flat.filter(match);
-  const restCount = features.reduce((n, f) => n + f.children.filter((c) => c.level === "story" && c.open && !listed.has(c.id) && !offered.has(c.id)).length, 0) + (port?.items ?? []).filter((i) => i.tier === "epic").length;
-  const restOpen = folds.has(`rest:${k}`) || !!q;
-  const firstMatch = shown[0]?.id ?? under[0]?.kids[0]?.id ?? null;
+  const rows = addPaneRows({ portfolio: port?.items ?? [], work: w?.items ?? [], listed });
+  const shown = rows.filter((r) => match(r) || r.nested.some(match));
+  const firstMatch = shown[0]?.id ?? null;
   const name = nameOf(k);
   return (
     <AddPane
       className="pw-addpane"
       color={clientColor(k, colors)}
       client={name}
-      count={`${flat.length} of yours not on the list`}
+      count={`${rows.length} of yours not on the list`}
       top={
         <input ref={search} type="search" className="pw-search pl-search" value={query} placeholder="Search" aria-label={`Search ${name}'s DevOps by title or number`}
           onChange={(e) => setQuery(e.target.value)}
@@ -914,41 +926,9 @@ function AddWeek({ k, st, items, work, nameOf, colors, ops, query, setQuery, sea
           <p className="pw-empty-line">{q ? "Nothing matches." : listed.size ? "Everything of yours is on the list." : `Nothing in DevOps is assigned to you for ${name}.`}</p>
         )}
         <ul className="pw-features">
-          {shown.map((f) => <AddRow key={f.id} k={k} id={f.id} title={f.title} url={f.url} what={f.what} flag={f.flag} ops={ops} />)}
+          {shown.map((r) => <AddRow key={r.id} k={k} row={r} ops={ops} />)}
         </ul>
       </AddSection>
-      {restCount + under.length > 0 && (
-        <AddSection className="pw-rest" label="Everything else" title={null}>
-          <FoldLine className="pw-fold" open={restOpen} onToggle={() => toggleFold(`rest:${k}`)} label="Everything else" count={`${restCount} in DevOps order`} />
-          {restOpen && (
-            <>
-              {under.map((g) => (
-                <div key={g.f.id} className="pw-under">
-                  <PlanLabel>Under {g.f.title}</PlanLabel>
-                  <ul className="pw-features">
-                    {g.kids.map((c) => <AddRow key={c.id} k={k} id={c.id} title={c.title} url={c.url} what={`story · ${c.mine ? "you" : c.assignedTo ?? "unassigned"}`} flag={null} ops={ops} />)}
-                  </ul>
-                </div>
-              ))}
-              {epics.length > 0 && (
-                <div className="pw-under">
-                  <PlanLabel>Epics</PlanLabel>
-                  <ul className="pw-epics">
-                    {epics.map((e) => {
-                      const openKids = e.children.filter((c) => c.open).length;
-                      return (
-                        <li key={e.id}>
-                          <WorkLink clientKey={k} url={e.url}>#{e.id} {e.title}</WorkLink> <span className="muted">{openKids} open of {e.children.length} feature{e.children.length === 1 ? "" : "s"}{e.targetDate ? ` · target ${dateShortIso(e.targetDate)}` : ""}</span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-            </>
-          )}
-        </AddSection>
-      )}
     </AddPane>
   );
 }
@@ -976,22 +956,33 @@ function TypeBox({ k, name, ops }: { k: string; name: string; ops: Ops }) {
             if (ok) setText("");
           });
         }} />
-      <BoxHint>Enter: a must. Shift+Enter: nice to have.</BoxHint>
+      <BoxHint>Enter saves a draft feature as a must. Shift+Enter: nice to have.</BoxHint>
     </div>
   );
 }
 
-function AddRow({ k, id, title, url, what, flag, ops }: { k: string; id: number; title: string; url: string; what: string; flag: string | null; ops: Ops }) {
+function AddRow({ k, row, ops }: { k: string; row: AddRowInfo; ops: Ops }) {
+  const { id, title, url } = row;
   return (
     <li className="pw-addrow" data-item={id}>
       <span className="pw-title" title={`#${id} ${title}`}>
-        <WorkLink clientKey={k} url={url}>#{id} {title}</WorkLink> <span className="pw-meta">{what}</span>
-        {flag && <span className="pw-flagword"> · {flag}</span>}
+        <WorkLink clientKey={k} url={url}>#{id} {title}</WorkLink> <span className="pw-meta pw-type-word">{row.typeWord}</span>
+        {row.targetDate && <span className="pw-meta"> · target {dateShortIso(row.targetDate)}</span>}
+        {row.flag && <span className="pw-flagword"> · {row.flag}</span>}
       </span>
       <span className="pw-acts">
         <button type="button" className="mini pw-must" onClick={() => ops.add(k, id, "must")} aria-label={`Add #${id} as a must`}>+ Must</button>
         <button type="button" className="mini quiet pw-nice-btn" onClick={() => ops.add(k, id, "nice")} aria-label={`Add #${id} as a nice to have`}>Nice</button>
       </span>
+      {row.nested.length > 0 && (
+        <ul className="pw-add-kids" aria-label={`Stories under #${id}`}>
+          {row.nested.map((c) => (
+            <li key={c.id} className="pw-add-kid">
+              <WorkLink clientKey={k} url={c.url}>#{c.id} {c.title}</WorkLink> <span className="pw-meta pw-type-word">{c.typeWord}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
   );
 }
