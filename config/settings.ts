@@ -166,7 +166,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
     }
     case "notify": {
       // Step 15.5: Settings > Notifications. Written as given; parseConfig checks each value.
-      only(v, ["kinds", "quiet", "quietPto"], "notify");
+      only(v, ["kinds", "quiet", "quietPto", "pushDetails"], "notify");
       const values: [string, TomlValue][] = [];
       if (v.kinds !== undefined) {
         const k = obj(v.kinds, "notify");
@@ -181,6 +181,10 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       if (v.quietPto !== undefined) {
         if (typeof v.quietPto !== "boolean") throw new SettingsInputError("notify.quiet_pto", "Must be true or false");
         values.push(["quiet_pto", v.quietPto]);
+      }
+      if (v.pushDetails !== undefined) {
+        if (typeof v.pushDetails !== "boolean") throw new SettingsInputError("notify.push_details", "Must be true or false");
+        values.push(["push_details", v.pushDetails]);
       }
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "notify", k, val, i === 0 ? "Notifications (step 15.5): a switch per kind and quiet hours. During focus, all but the timer and meeting warnings wait until it ends." : undefined), text);
     }

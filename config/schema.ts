@@ -561,6 +561,9 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
         } else if (k === "quiet_pto") {
           if (typeof t.quiet_pto !== "boolean") err("notify.quiet_pto", "Must be true or false");
           else notify.quietPto = t.quiet_pto;
+        } else if (k === "push_details") {
+          if (typeof t.push_details !== "boolean") err("notify.push_details", "Must be true or false");
+          else notify.pushDetails = t.push_details;
         } else err(`notify.${k}`, "Unknown field");
       }
     }

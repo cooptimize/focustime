@@ -28,6 +28,8 @@ import { InlineMoment } from "./brand/Opening.tsx";
 import { Lockup } from "./brand/Brand.tsx";
 import { usePhone } from "./viewport.ts";
 import { PhoneReadOnly } from "./Phone.tsx";
+import { deviceId, disablePush, enablePush, pushSupport, type PushStatus } from "./pwa.ts";
+import { NOTICES_CHANGED } from "./Notices.tsx";
 import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 
@@ -825,10 +827,10 @@ function NotifyForm(p: FormProps) {
   const n = p.data.notify;
   const a = useAutoSave({
     section: "notify",
-    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto },
+    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : "Quiet on PTO days"),
+    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : "Quiet on PTO days"),
   });
   const [test, setTest] = useState<string | null>(null);
   const group = (title: string, list: readonly NotifyKind[]) => (
@@ -874,13 +876,104 @@ function NotifyForm(p: FormProps) {
           className="mini"
           onClick={() => {
             setTest("Sending…");
-            void call("notify.test", {}).then(() => setTest("Sent. Click it to come back here."), (e: unknown) => setTest(e instanceof Error ? e.message : "Couldn't send it"));
+            void call("notify.test", {}).then(
+              () => (setTest("Sent. Click it to come back here."), window.dispatchEvent(new Event(NOTICES_CHANGED))),
+              (e: unknown) => setTest(e instanceof Error ? e.message : "Couldn't send it"),
+            );
           }}
         >
           Send a test notification
         </button>
         {test && <span className="set-hint" role="status">{test}</span>}
       </div>
+      <h3>On your devices</h3>
+      <PushDevices />
+      <AutoField a={a} k="pushDetails" label="Show details in notifications" hint="Off: a push says only what kind of thing it is (Follow-ups due). On: client names and work item titles too, on the lock screen.">
+        <label className="set-check">
+          <input type="checkbox" checked={a.v.pushDetails} onChange={(e) => a.change("pushDetails", e.target.checked)} /> Show details
+        </label>
+      </AutoField>
+    </div>
+  );
+}
+
+/**
+ * P1: push, per device. "Notify this device" asks the browser's permission only when tapped; the list shows every
+ * device with push on, with Remove. In-app notifications (⋯ › Notifications) work without any of this.
+ */
+function PushDevices() {
+  const [st, setSt] = useState<PushStatus | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => void call<PushStatus>("push.status", {}).then(setSt, () => setSt({ available: false, reason: "Push status isn't available right now.", publicKey: null, devices: [] })), []);
+  if (!st) return <p className="muted">Checking…</p>;
+  const me = deviceId();
+  const here = st.devices.some((d) => d.deviceId === me);
+  const support = pushSupport();
+  const run = async (f: () => Promise<void>) => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await f();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "That didn't work");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const when = (iso: string) => new Date(iso.replace(/\[.*\]$/, "")).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return (
+    <div className="set-push">
+      {!st.available ? (
+        <p className="muted">{st.reason}</p>
+      ) : support === "ios-install" ? (
+        <p className="muted">On iPhone, add FocusTime to your home screen first (⋯ › Install app), then open it from there to turn this on.</p>
+      ) : support === "unsupported" ? (
+        <p className="muted">This browser can't get push notifications. In-app notifications still work.</p>
+      ) : (
+        <div className="set-actions-row">
+          {here ? (
+            <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setSt((await disablePush()) ?? st))}>
+              Turn off for this device
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="mini primary"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const r = await enablePush(st.publicKey!);
+                  if (r.ok) (setSt(r.status), setMsg("This device gets notifications now. Send a test above to check."));
+                  else setMsg(r.reason);
+                })
+              }
+            >
+              Notify this device
+            </button>
+          )}
+        </div>
+      )}
+      {msg && <p className="set-hint" role="status">{msg}</p>}
+      {st.devices.length > 0 && (
+        <ul className="push-devices">
+          {st.devices.map((d) => (
+            <li key={d.deviceId}>
+              <span className="pd-name">
+                {d.label}
+                {d.deviceId === me ? " (this device)" : ""}
+              </span>
+              <span className="set-hint">
+                Added {when(d.createdAt)}
+                {d.failedAt ? " · last one didn't arrive" : d.sentAt ? ` · last ${when(d.sentAt)}` : ""}
+              </span>
+              <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setSt(d.deviceId === me ? ((await disablePush()) ?? st) : await call<PushStatus>("push.remove", { deviceId: d.deviceId })))}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -41,11 +41,13 @@ export const KIND_HINT: Record<NotifyKind, string> = {
 export const RITUAL_KINDS: readonly NotifyKind[] = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction"];
 
 export type QuietMode = "outside_hours" | "off";
-export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean };
+/** pushDetails (P1): push messages say what the notice says (client names, work item titles); off by default. */
+export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean };
 export const DEFAULT_NOTIFY: NotifySettings = {
   kinds: Object.fromEntries(NOTIFY_KINDS.map((k) => [k, true])) as Record<NotifyKind, boolean>,
   quiet: "outside_hours",
   quietPto: true,
+  pushDetails: false,
 };
 
 /** Where clicking a notification opens FocusTime. */
