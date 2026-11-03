@@ -67,6 +67,7 @@ import { CommandMenu, MenuHost } from "./Menus.tsx";
 import { WeekItems } from "./ItemLookup.tsx";
 import { NoHoursPrompt } from "./NoHoursPrompt.tsx";
 import { KeyLegend } from "./KeyLegend.tsx";
+import { Guide, TourLink } from "./guide/Guide.tsx";
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -115,7 +116,11 @@ export function App() {
   const [reconnected, setReconnected] = useState<"outlook" | "google" | null>(null);
   const afterOpening = useCallback(() => {
     call<{ first: boolean }>("ui.first_launch", {}).then((r) => r.first && setWelcome(true), () => {});
+    // G1: a person's first Today offers the tour once (per person, in the plan store).
+    call<{ show: boolean }>("ui.tour_offer", {}).then((r) => setTourOffer(r.show), () => {});
   }, []);
+  const [tourOffer, setTourOffer] = useState(false);
+  const endTourOffer = useCallback(() => setTourOffer(false), []);
   const [detailsOpen, setDetailsOpen] = useState(false);
   /** U3: where the detail panel opened (the features list, a follow-up or a pick), or the block itself. */
   const [panelFocus, setPanelFocus] = useState<PanelFocus | null>(null);
@@ -148,12 +153,24 @@ export function App() {
   const nav = loc.nav;
   const settingsAt: SettingsSectionId | null = loc.overlay?.kind === "settings" ? (SETTINGS_SECTIONS.some(([id]) => id === (loc.overlay as { section: string }).section) ? (loc.overlay.section as SettingsSectionId) : "you") : null;
   const focusOpen = loc.overlay?.kind === "focus";
+  /** G1: the Guide (#/guide), over the current place like Settings. */
+  const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
   const base: "today" | "week" = nav.tab === "week" ? "week" : "today";
   const followUpsOpen = nav.tab === "inbox";
   const roadmapOpen = nav.tab === "roadmap";
   const checkInOpen = nav.tab === "today" && nav.mode === "checkin";
   /** Settings (step 6b) at a section, or closed (back to the place under it). */
   const setSettingsAt = useCallback((section: SettingsSectionId | null) => go((l) => ({ nav: l.nav, overlay: section ? { kind: "settings", section } : null })), [go]);
+  // G1: the tour link shows on the first Today (Now) a person sees, once: it is recorded as shown when it first
+  // appears, and stays for this visit until they open the Guide from it or say Not now.
+  const showTour = tourOffer && !loc.overlay && loc.nav.tab === "today" && loc.nav.mode === "now";
+  const tourMarked = useRef(false);
+  useEffect(() => {
+    if (!showTour || tourMarked.current) return;
+    tourMarked.current = true;
+    void call("ui.tour_offer", { done: true }).catch(() => {});
+  }, [showTour]);
+  const openGuide = useCallback((chapter: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "guide", chapter } })), [go]);
   const setFocusOpen = useCallback((on: boolean) => go((l) => ({ nav: on ? l.nav : l.nav, overlay: on ? { kind: "focus" } : null })), [go]);
   /** Bumped when something outside Plan the week (the command menu) changes its plan, so it reloads. */
   const [planWeekVersion, setPlanWeekVersion] = useState(0);
@@ -874,9 +891,11 @@ export function App() {
       if (!globalKeyAllowed(e, t, topOverlay(document))) return;
       const typing = isTypingTarget(t);
       if (e.key === "?" && !typing) {
+        // G1: ? opens the Guide (and closes it again); the one-list legend stays in the command menu and ⋯.
         e.preventDefault();
         setDetailsOpen(false);
-        setKeysOpen((o) => !o);
+        setKeysOpen(false);
+        go((l) => (l.overlay?.kind === "guide" ? { nav: l.nav, overlay: null } : { nav: l.nav, overlay: { kind: "guide", chapter: null } }));
         return;
       }
       if (keysOpen) return;
@@ -892,7 +911,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [cmdOpen, keysOpen, data, moveRegion]);
+  }, [cmdOpen, keysOpen, data, moveRegion, go]);
 
   // Ctrl+K (or Cmd+K) opens the command menu from anywhere, even while Plan the day or details are open.
   useEffect(() => {
@@ -967,7 +986,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (base !== "week" || focusOpen || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (base !== "week" || focusOpen || guideAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       const days = data.week.days;
@@ -1017,7 +1036,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, base, captureOpen, layout]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, guideAt, base, captureOpen, layout]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
   const weekItems = useMemo(() => (data?.weekFeatures ?? []).filter((f) => f.weekStart === data?.weekStart).map((f) => ({ clientKey: f.clientKey, itemId: f.itemId })), [data?.weekFeatures, data?.weekStart]);
@@ -1072,6 +1091,7 @@ export function App() {
       moveRegion: (dir) => setTimeout(() => moveRegion(dir), 0),
       focusedItem: focusedItem.current,
       showKeys: () => setKeysOpen(true),
+      showGuide: () => openGuide(),
       theme,
       setTheme: (t) => void setTheme(t),
       viewRange: data.week.range.mode,
@@ -1169,7 +1189,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, goNav]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, openGuide, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, goNav]); // eslint-disable-line react-hooks/exhaustive-deps
   openSettingsRef.current = env?.openSettings ?? null;
 
   // Step 17.5: the opening (loader, unroll, into the top bar's mark), then the welcome moment on the first launch ever.
@@ -1340,8 +1360,8 @@ export function App() {
             type="button"
             className="top-btn top-more"
             aria-haspopup="menu"
-            aria-label="More: commands and keyboard shortcuts"
-            title="Commands (Ctrl K) and keyboard shortcuts (?)"
+            aria-label="More: the Guide, commands and keyboard shortcuts"
+            title="Guide (?), commands (Ctrl K) and keyboard shortcuts"
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
               setMoreAt({ x: r.right, y: r.bottom + 4 });
@@ -1382,6 +1402,11 @@ export function App() {
         </div>
       )}
 
+      {showTour && (
+        <div className="today-tour">
+          <TourLink onOpen={() => (endTourOffer(), openGuide())} onDismiss={endTourOffer} />
+        </div>
+      )}
       {settingsAt !== null ? (
         <Settings
           section={settingsAt}
@@ -1418,6 +1443,8 @@ export function App() {
           setDemo={(on) => void switchDemo(on)}
           runTime={runTime}
         />
+      ) : guideAt ? (
+        <Guide chapter={guideAt.chapter} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
       ) : focusOpen ? (
         <FocusScreen
           t={data.timer}
@@ -1630,7 +1657,8 @@ export function App() {
             title: "More",
             items: [
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
-              { id: "keys", label: "Keyboard shortcuts", hint: "?", run: () => setKeysOpen(true) },
+              { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
+              { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
             ],
           }}
           onClose={() => setMoreAt(null)}
