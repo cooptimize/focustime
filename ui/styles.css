@@ -2206,7 +2206,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .signin-card { max-width: 440px; width: 100%; display: grid; gap: 14px; justify-items: start; padding: 32px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-panel); }
 .signin-card h1 { margin: 0; font-size: var(--fs-4); }
 .signin-card p { margin: 0; line-height: 1.5; }
-.signin-btn { font-size: var(--fs-4); padding: 10px 18px; background: var(--action); color: var(--on-action); border-color: var(--action); }
+.signin-card .signin-btn { font-size: var(--fs-4); padding: 10px 18px; background: var(--action); color: var(--on-action); border-color: var(--action); }
 .signin-btn:disabled { opacity: 0.75; }
 .signin-skip { font-size: var(--fs-3); padding: 0; }
 .person-chip { width: 30px; height: 30px; flex: none; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--raised); color: var(--text); font: inherit; font-size: var(--fs-2); font-weight: 600; letter-spacing: 0.02em; display: inline-grid; place-items: center; cursor: pointer; }

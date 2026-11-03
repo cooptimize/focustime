@@ -38,8 +38,10 @@ const bad = (error: string, status = 400, fields?: FieldProblem[]): ActionRespon
 
 async function load(ctx: SettingsContext): Promise<SettingsData> {
   const loaded = await ctx.loadConfig();
+  // A2: app secrets are the app's, never a person's: only a context that may change them (not a signed-in person's)
+  // lists them.
   const secrets = await Promise.all(
-    APP_SECRETS.map(async (account) => ({
+    (ctx.secrets ? APP_SECRETS : []).map(async (account) => ({
       account,
       label: SECRET_LABELS[account],
       state: ctx.secrets ? await ctx.secrets.state(account).catch((): SecretPresence => "unavailable") : ("unavailable" as const),

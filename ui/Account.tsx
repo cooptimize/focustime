@@ -6,7 +6,7 @@ import { Avatar, forgetPhotos, usePhotos, usePresence } from "./Presence.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AuthStatus, AzureWriteEntry, Person, TeamsStatusEntry, VmPreview, VmPreviewOp, VmStatus } from "../actions/account-types.ts";
 import type { PhotosData, TeamsStatusView } from "../actions/types.ts";
-import { ActionRefusal, call, endSession, SessionError, signInWithMicrosoft, startDemo } from "./api.ts";
+import { ActionRefusal, call, endSession, SessionError, setSignInShowing, signInWithMicrosoft, startDemo } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
@@ -79,6 +79,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
 export function SignInScreen({ message: first }: { message: string | null }) {
   const [busy, setBusy] = useState<"microsoft" | "demo" | null>(null);
   const [message, setMessage] = useState<string | null>(first);
+  useEffect(() => {
+    setSignInShowing(true);
+    return () => setSignInShowing(false);
+  }, []);
   return (
     <main className="signin">
       <div className="signin-card">

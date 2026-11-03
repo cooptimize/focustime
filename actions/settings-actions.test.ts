@@ -111,6 +111,16 @@ describe("secrets from Settings never come back", () => {
     expect((load as { data: SettingsData }).data.secrets[0]).toEqual({ account: "dataverse-client-secret", label: "Dataverse client secret", state: "set", expires: "2027-03-01" });
   });
 
+  it("a signed-in person's context can't list or set the app's client secrets (A2)", async () => {
+    const t = setup();
+    delete (t.c as { secrets?: unknown }).secrets;
+    const load = await t.run("settings.load", {});
+    expect((load as { data: SettingsData }).data.secrets).toEqual([]);
+    const r = await t.run("secret.set", { account: "dataverse-client-secret", value: SECRET });
+    expect(r).toMatchObject({ ok: false, status: 503 });
+    expect(t.stored).toEqual([]);
+  });
+
   it("refuses refresh-token accounts, multi-line values and unknown fields without echoing the value", async () => {
     const t = setup();
     for (const input of [{ account: "outlook-refresh-token", value: SECRET }, { account: "google-client-secret", value: `${SECRET}\nmore` }, { account: "google-client-secret", value: SECRET, extra: 1 }]) {

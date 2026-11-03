@@ -14,6 +14,14 @@ export const STALE_MESSAGE = "You're signed out. Sign in to continue";
 /** Who shows the sign-in screen when a call finds the session ended (set by the root). */
 let onStale: (() => void) | null = null;
 export const setStaleListener = (f: typeof onStale) => void (onStale = f);
+/** While the sign-in screen shows, an ended session is what the page already says: no banner over it. */
+let signInShowing = false;
+let onSignInShown: (() => void) | null = null;
+export const setSignInShownListener = (f: typeof onSignInShown) => void (onSignInShown = f);
+export const setSignInShowing = (v: boolean) => {
+  signInShowing = v;
+  if (v) onSignInShown?.();
+};
 
 /** The session's CSRF token (a readable cookie the server set with the session). */
 export function csrfToken(): string {
@@ -40,7 +48,7 @@ export async function readResponse<T>(res: Response): Promise<T> {
   } else if (res.status !== 401) {
     throw new ActionRefusal(res.status === 403 ? "FocusTime refused that request" : `FocusTime answered ${res.status}`, res.status);
   }
-  onStale?.();
+  if (!signInShowing) onStale?.();
   throw new SessionError(STALE_MESSAGE);
 }
 

@@ -8,7 +8,6 @@ import type { Host, SnapshotStore } from "../host/types.ts";
 import { perPerson } from "../host/per-person.ts";
 import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
 import { Pat } from "../sources/devops/pat.ts";
-import { cacheKey } from "../sources/devops/source.ts";
 import type { WritePats } from "../actions/devops-write-actions.ts";
 import { createLocalHost } from "../host/local/index.ts";
 import { createAzureHost } from "../host/azure/index.ts";
@@ -22,6 +21,7 @@ import { exportUser, hardDeleteDue, HARD_DELETE_AFTER_DAYS, recordSoftDelete } f
 import { starterToml } from "../config/starter.ts";
 import { mailboxZone } from "./auth/mailbox.ts";
 import { createPeople } from "./people.ts";
+import { copyOwnerSecrets, writePatAccount } from "./owner-secrets.ts";
 import { personTicks, type PersonTicks } from "./ticks.ts";
 import { createScheduler } from "./scheduler.ts";
 import { keepRoute, takeRoute } from "./open-route.ts";
@@ -183,7 +183,6 @@ const writePatsOf = (who: Person): WritePats => ({
   },
   clear: (clientKey) => who.secrets.delete(writePatAccount(clientKey)),
 });
-const writePatAccount = (clientKey: string) => `devops-write-pat:${cacheKey(clientKey)}` as const;
 
 // DevOps: one source per person and Dataverse config. PATs come from Dataverse per fetch (devopsTargets), not kept.
 const devopsSources = new Map<string, DevOpsSource>();
@@ -369,7 +368,8 @@ function runtimeFor(userId: string): ActionContext {
     plan,
     links: host.links,
     media,
-    secrets: { state: (a) => host.secrets.state(a), set: (a, v) => host.secrets.setApp(a, v) },
+    // A2: no `secrets`: the app's client secrets (Dataverse, Google, Entra) are set up outside FocusTime
+    // (infra/scripts, the host's secret store or Key Vault), never from a person's Settings.
     // Step 14: personal DevOps write PATs (the host's secret store) and the writer (dev.azure.com of one client per call).
     writePats: writePatsOf(who),
     devopsWriter: createDevOpsWriter({ fetch, log }),
@@ -395,8 +395,8 @@ function runtimeFor(userId: string): ActionContext {
 /**
  * A2: after a Microsoft sign-in, the person's refresh token goes into their encrypted secrets (the Outlook source and
  * everything on that sign-in use it), who they are is remembered in their store (as the Outlook sign-in did), and
- * their calendar sources start fresh. The store's owner, the first time: the DevOps write PATs this machine's keyring
- * holds for their clients are copied into their secrets (the keyring entries stay).
+ * their calendar sources start fresh. The store's owner, the first time: the DevOps write PATs and the Google refresh
+ * token this machine's keyring holds are copied into their secrets (server/owner-secrets.ts; the keyring entries stay).
  */
 async function keepSignIn(userId: string, u: SignedIn, refreshToken: string, owner: boolean): Promise<void> {
   const ctx = runtimeFor(userId);
@@ -404,14 +404,13 @@ async function keepSignIn(userId: string, u: SignedIn, refreshToken: string, own
   await mine.set("outlook-refresh-token", refreshToken).catch(() => log({ source: "auth", op: "refresh_token", kind: "not_kept" }));
   forgetCalendars(userId);
   rememberIdentity(ctx.plan, { oid: u.oid, tid: u.tid, name: u.name, username: u.upn, email: u.email }, instantNow().toString());
-  if (!owner || !ctx.plan || !ctx.writePats) return;
-  let copied = 0;
-  for (const { clientKey } of ctx.plan.devopsIdentities()) {
-    const pat = await host.secrets.writePat.get(clientKey).catch(() => null);
-    if (!pat || mine.has(writePatAccount(clientKey))) continue;
-    await mine.set(writePatAccount(clientKey), patValue(pat)).then(() => copied++, () => null);
-  }
-  log({ source: "plan", op: "write_pats_moved", count: copied });
+  if (!owner || !ctx.plan) return;
+  const r = await copyOwnerSecrets({
+    clientKeys: ctx.plan.devopsIdentities().map((i) => i.clientKey),
+    mine,
+    keyring: { writePat: (k) => host.secrets.writePat.get(k), googleRefreshToken: () => host.secrets.get("google-refresh-token") },
+  });
+  log({ source: "plan", op: "owner_secrets_copied", kind: r.google ? "with_google" : "without_google", count: r.pats });
 }
 
 /** A person's Google source for the web sign-in, from their settings (null without [google]). */
@@ -422,9 +421,6 @@ async function googleOf(userId: string) {
   if (!r.parsed.ok || !r.parsed.config.google) return null;
   return googleFor(rt.who)(r.parsed.config.google, userZone(r.parsed.config));
 }
-
-/** The value inside a Pat, for the one copy from the keyring into the person's secrets (Pat has no getter on purpose). */
-const patValue = (p: Pat) => Buffer.from(p.basicAuth().slice("Basic ".length), "base64").toString("utf8").slice(1);
 
 /**
  * Settings > Data > Delete my data (A2): soft now (sign-in refused, sessions ended, background work stopped; the rows

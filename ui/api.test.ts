@@ -43,3 +43,21 @@ describe("readResponse", () => {
     expect(await readResponse(json(200, { ok: true, data: { a: 1 } }))).toEqual({ a: 1 });
   });
 });
+
+describe("the signed-out banner and the sign-in screen (A2)", () => {
+  it("doesn't flag an ended session while the sign-in screen shows, and hides a flag already raised", async () => {
+    const { setSignInShowing, setSignInShownListener } = await import("./api.ts");
+    const stale = vi.fn();
+    const hide = vi.fn();
+    setStaleListener(stale);
+    setSignInShownListener(hide);
+    setSignInShowing(true);
+    expect(hide).toHaveBeenCalledTimes(1);
+    await expect(readResponse(new Response(JSON.stringify({ ok: false, status: 401, error: "x", code: "signed_out" }), { status: 401 }))).rejects.toBeInstanceOf(SessionError);
+    expect(stale).not.toHaveBeenCalled();
+    setSignInShowing(false);
+    await expect(readResponse(new Response(JSON.stringify({ ok: false, status: 401, error: "x", code: "signed_out" }), { status: 401 }))).rejects.toBeInstanceOf(SessionError);
+    expect(stale).toHaveBeenCalledTimes(1);
+    setSignInShownListener(null);
+  });
+});

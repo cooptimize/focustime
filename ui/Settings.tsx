@@ -1067,8 +1067,8 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
           </ul>
         </>
       )}
-      <h3>Client secrets</h3>
-      <p className="muted">Saved to the keyring; never shown again.</p>
+      {p.data.secrets.length > 0 && <h3>Client secrets</h3>}
+      {p.data.secrets.length > 0 && <p className="muted">Saved to the keyring; never shown again.</p>}
       {p.data.secrets.map((s) => (
         <SecretForm key={s.account} secret={s} onDone={p.reload} />
       ))}
