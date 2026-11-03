@@ -187,3 +187,27 @@ describe("the database's state for a waiting page (A3)", () => {
     }
   });
 });
+
+describe("the platform's probes (A4)", () => {
+  it("answer from any Host, with no session and no database call; requests reach telemetry by route name only", async () => {
+    const seen: { route: string; status: number }[] = [];
+    let calls = 0;
+    const t = await startTestApp({ ctx: () => (calls++, {} as ActionContext), extra: { onRequest: (r) => seen.push({ route: r.route, status: r.status }) } });
+    try {
+      const b = t.browser();
+      for (const p of ["/healthz", "/readyz"]) {
+        const r = await b.send(p, { host: "10.0.0.7:8080" });
+        expect(r.status).toBe(200);
+        expect(JSON.parse(r.body)).toEqual({ status: "ok" });
+      }
+      expect((await b.send("/healthz", {}, "POST", "{}")).status).toBe(405);
+      await b.send("/auth/microsoft/callback?code=secret-code&state=s");
+      await new Promise((r) => setTimeout(r, 20));
+      expect(calls).toBe(0);
+      expect(seen.map((x) => x.route)).toContain("/auth/microsoft/callback");
+      expect(JSON.stringify(seen)).not.toContain("secret-code");
+    } finally {
+      await t.close();
+    }
+  });
+});

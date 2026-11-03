@@ -18,6 +18,12 @@ export const SQLSERVER_MIGRATIONS: readonly SqlServerMigration[] = [
     name: "scheduler_state",
     sql: "CREATE TABLE scheduler_state (id int NOT NULL PRIMARY KEY CHECK (id = 1), next_due datetime2(7) NOT NULL, updated_at datetime2(7) NOT NULL);",
   },
+  // A4: the hosted app's data key, wrapped by the Key Vault key ft-data-key (host/azure/datakey.ts). An app table.
+  {
+    version: 28,
+    name: "app_keys",
+    sql: "CREATE TABLE app_keys (name nvarchar(64) NOT NULL PRIMARY KEY, value nvarchar(max) NOT NULL, created_at datetime2(7) NOT NULL);",
+  },
 ];
 
 export const SQLSERVER_VERSION = SQLSERVER_MIGRATIONS[SQLSERVER_MIGRATIONS.length - 1]!.version;

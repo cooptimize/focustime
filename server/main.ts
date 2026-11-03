@@ -4,14 +4,19 @@
 // FOCUSTIME_HOST=local|azure (A1) picks the host: local (the default) is the developer loop on this machine; azure is
 // the hosted app's host, a stub until A2 (its secrets, snapshots and plan store are in memory).
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
-import type { Host, SnapshotStore } from "../host/types.ts";
+import type { Host, KeyProvider, SnapshotStore } from "../host/types.ts";
 import { perPerson } from "../host/per-person.ts";
 import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { WritePats } from "../actions/devops-write-actions.ts";
 import { createLocalHost } from "../host/local/index.ts";
 import { createAzureHost } from "../host/azure/index.ts";
-import { memoryConfig, memoryPhotos, memorySecrets, memorySnapshots } from "../host/fakes.ts";
+import { keyVaultDataKey } from "../host/azure/datakey.ts";
+import { envSecrets } from "../host/azure/secrets.ts";
+import { appKeyStore } from "../store/app-keys.ts";
+import { appInsights } from "../log/appinsights.ts";
+import { DefaultAzureCredential } from "@azure/identity";
+import { memoryConfig, memoryPhotos, memorySnapshots } from "../host/fakes.ts";
 import { randomBytes } from "node:crypto";
 import { readAppSettings, redirectUris } from "./appconfig.ts";
 import { createEntraSignIn, type SignedIn } from "./auth/entra.ts";
@@ -55,7 +60,8 @@ const open = !args.includes("--no-open");
 /** --headless (the browser tests): no desktop notifications and no windows opened by the server. */
 const headless = args.includes("--headless");
 const portArg = args.indexOf("--port");
-const port = portArg >= 0 ? Number(args[portArg + 1]) : 5317;
+// A4: the hosted app listens on PORT (the container's, 8080) on every interface; the developer loop on 127.0.0.1:5317.
+const port = portArg >= 0 ? Number(args[portArg + 1]) : process.env.FOCUSTIME_HOST === "azure" ? Number(process.env.PORT ?? 8080) : 5317;
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("--port must be 1024-65535");
 const clockArg = args.indexOf("--clock");
 const clockOffsetMs = clockArg >= 0 ? Temporal.Instant.from(args[clockArg + 1] ?? "").epochMilliseconds - Date.now() : 0;
@@ -63,13 +69,28 @@ const clockOffsetMs = clockArg >= 0 ? Temporal.Instant.from(args[clockArg + 1] ?
 const instantNow = () => (clockOffsetMs ? Temporal.Instant.fromEpochMilliseconds(Date.now() + clockOffsetMs) : Temporal.Now.instant());
 const zonedNow = (tz: string) => instantNow().toZonedDateTimeISO(tz);
 const root = resolve(import.meta.dirname, "..");
-const log = stderrLogger;
+/** A4: the hosted app's telemetry (Application Insights, from its connection string), on top of stderr. */
+const telemetry =
+  process.env.FOCUSTIME_HOST === "azure" && process.env.APPLICATIONINSIGHTS_CONNECTION_STRING ? appInsights({ connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING, next: stderrLogger }) : null;
+const log = telemetry?.log ?? stderrLogger;
 
 const hostKind = process.env.FOCUSTIME_HOST ?? "local";
+/** A4 (hosted): the data key, wrapped by Key Vault (set once the store is open). */
+let dataKeys: KeyProvider | null = null;
 if (hostKind !== "local" && hostKind !== "azure") throw new Error("FOCUSTIME_HOST must be local or azure");
 const host: Host =
   hostKind === "azure"
-    ? createAzureHost({ secrets: memorySecrets(), config: memoryConfig(), snapshotsFor: perPerson(() => memorySnapshots()), photos: memoryPhotos(), inbox: { add: () => "0", remove: () => {} }, now: instantNow })
+    ? createAzureHost({
+        // A4: app secrets from Key Vault references (the environment, read once); the data key from Key Vault once the
+        // store is open (it keeps the wrapped key).
+        secrets: envSecrets(),
+        keys: { dataKey: () => (dataKeys ? dataKeys.dataKey() : Promise.reject(new Error("The data key isn't available (no Key Vault set up for this app)"))) },
+        config: memoryConfig(),
+        snapshotsFor: perPerson(() => memorySnapshots()),
+        photos: memoryPhotos(),
+        inbox: { add: () => "0", remove: () => {} },
+        now: instantNow,
+      })
     : createLocalHost({ port, headless, open, noReopen: args.includes("--no-reopen"), now: instantNow });
 
 // A2: app-level settings (public URL, the Entra and Google registrations, Dataverse, the demo): env over the host's app
@@ -215,6 +236,15 @@ if (!opened) {
   process.exit(1);
 }
 const db: Conn = opened.conn;
+if (host.kind === "azure" && process.env.FOCUSTIME_KEYVAULT_URL) {
+  const credential = new DefaultAzureCredential(process.env.AZURE_CLIENT_ID ? { managedIdentityClientId: process.env.AZURE_CLIENT_ID } : {});
+  dataKeys = keyVaultDataKey({
+    vaultUrl: process.env.FOCUSTIME_KEYVAULT_URL,
+    keyName: process.env.FOCUSTIME_DATA_KEY_NAME ?? "ft-data-key",
+    token: async () => (await credential.getToken("https://vault.azure.net/.default")).token,
+    store: async () => appKeyStore(db, "data-key", instantNow),
+  });
+}
 /** A3: when a signed-in person last used FocusTime (in memory; the idle rule's "someone is active"). */
 let lastUse = 0;
 const ACTIVE_MS = 15 * 60_000;
@@ -332,6 +362,7 @@ const server = createApp({
   takeOpenRequest: async (s) => (s.demo ? null : ((await host.launch.takeOpenRequest()) ?? (await takeRouteFor(s.userId)))),
   reopen: reopenWindow,
   dbStatus: () => opened.status?.() ?? "ok",
+  ...(telemetry ? { onRequest: telemetry.request } : {}),
   ctx: (s) => {
     if (s.demo) return demoFor(s.userId);
     lastUse = Date.now();
@@ -527,7 +558,7 @@ server.on("error", (e: NodeJS.ErrnoException) => {
   }
   throw e;
 });
-server.listen(port, "127.0.0.1", async () => {
+server.listen(port, host.kind === "azure" ? "0.0.0.0" : "127.0.0.1", async () => {
   // A2: the launch link is the public URL; signing in is what lets a window in, not the link.
   const url = `${app.publicUrl}/`;
   const launchFile = await host.launch.publish(url);
@@ -537,6 +568,7 @@ server.listen(port, "127.0.0.1", async () => {
 
 const stop = async () => {
   stopScheduler();
+  await telemetry?.flush();
   await host.launch.unpublish();
   await opened.close().catch(() => undefined);
   process.exit(0);

@@ -1,5 +1,5 @@
 // A3: loads one person's export (Settings > Data > Export my data, or focustime export-local) into a store, for one
-// user id: Tanner's move from the local SQLite store to SQL Server (A5), and anyone moving between environments.
+// user id: the developer's move from the local SQLite store to SQL Server (A5), and anyone moving between environments.
 //
 // - Idempotent on ids: a row whose key is already there for this person is left as it is; running it twice adds
 //   nothing the second time. A row whose id belongs to someone else is refused (ids are kept as they were, so two

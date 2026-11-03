@@ -90,7 +90,7 @@ const INSTANT_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   user_secrets: ["updated_at"],
 };
 /** App tables (no person, no zone): every datetime2 is an instant. */
-const APP_TABLES = new Set(["users", "sessions", "auth_requests", "deletions", "schema_version", "scheduler_state"]);
+const APP_TABLES = new Set(["users", "sessions", "auth_requests", "deletions", "schema_version", "scheduler_state", "app_keys"]);
 
 const STAMP = /^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d+)?)?(Z|[+-]\d\d:\d\d)(\[[^\]]+\])?$/;
 

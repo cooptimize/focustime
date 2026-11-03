@@ -54,7 +54,25 @@ export type AppOptions = {
    * never from the database, so a page whose call is waiting can ask; it says nothing about anyone.
    */
   dbStatus?: () => "ok" | "waking" | "unavailable";
+  /** A4: every finished request, as a fixed route name, status and duration (App Insights in the hosted app). */
+  onRequest?: (r: RequestRecord) => void;
 };
+
+/** A4: liveness and readiness for the platform's probes (no session, no database call). */
+export const HEALTH_PATH = "/healthz";
+export const READY_PATH = "/readyz";
+
+/** A finished request, for telemetry: never a path with ids, a query, a header or a body. */
+export type RequestRecord = { method: string; route: string; status: number; durationMs: number };
+
+/** A request's route as a fixed name (telemetry never sees the path itself). */
+export function routeClass(path: string): string {
+  if (path === "/api/action") return "/api/action";
+  if (path.startsWith("/api/")) return path.replace(/[^a-z/-]/gi, "").slice(0, 40);
+  if (path.startsWith("/auth/")) return path.split("/").slice(0, 4).join("/").replace(/[^a-z/-]/gi, "");
+  if (path.startsWith("/assets/")) return "/assets";
+  return "/ (page)";
+}
 
 /** A3: the database's state, without a session (the session lookup itself waits while the database wakes). */
 export const DB_STATUS_PATH = "/api/db-status";
@@ -129,6 +147,20 @@ export function createApp(opts: AppOptions) {
       return Array.isArray(v) ? v[0] : v;
     };
     baseHeaders(res, !!opts.distDir, https);
+
+    // A4: the platform's probes (liveness and readiness). Before the Host check: a probe calls the replica's own
+    // address. Never a database call, so probes don't keep a serverless database awake.
+    if (url.pathname === HEALTH_PATH || url.pathname === READY_PATH) {
+      if (method !== "GET" && method !== "HEAD") {
+        res.writeHead(405, { allow: "GET, HEAD" });
+        return res.end();
+      }
+      return json(res, 200, { status: "ok" });
+    }
+    if (opts.onRequest) {
+      const started = performance.now();
+      res.on("finish", () => opts.onRequest!({ method, route: routeClass(url.pathname), status: res.statusCode, durationMs: performance.now() - started }));
+    }
 
     const g = checkRequest({ method, path: url.pathname, search: url.search, host: header("host"), origin: header("origin"), secFetchSite: header("sec-fetch-site"), secFetchMode: header("sec-fetch-mode") }, { publicUrl: opts.publicUrl });
     if (g.action === "deny") {
