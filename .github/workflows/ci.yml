@@ -1,13 +1,20 @@
 # Typecheck, unit tests, the store tests on SQL Server, browser tests, the Bicep build and the image build.
-# Runs on pull requests and on pushes to branches other than main; on main, deploy-dev.yml calls it before deploying.
+# Runs on pull requests and on pushes to main only (S1, D455): a branch push with an open PR used to run it twice.
+# A newer push to the same ref cancels the run in progress. deploy-dev.yml calls it only when the merged tree was not
+# already tested by the PR's run (D456): the test job saves the tree it tested as the artifact "tested-tree".
 name: ci
 on:
   pull_request:
   push:
-    branches-ignore: [main]
+    branches: [main]
   workflow_call:
 permissions:
   contents: read
+concurrency:
+  # Per ref: a PR's runs share refs/pull/N/merge. Called from deploy-dev, github.workflow is "deploy-dev", so that run
+  # never shares a group with ci's own run on main.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -48,6 +55,15 @@ jobs:
         run: npx vitest run --reporter=dot
       - name: Build the UI
         run: npx vite build
+      # The tree this run tested (for a PR, GitHub's merge of it into main). deploy-dev compares it with the merged
+      # commit's tree to skip running all of this again (docs/azure/runbook.md, "How deploy-dev reuses the PR's CI").
+      - name: Record the tested tree
+        run: git rev-parse 'HEAD^{tree}' > tested-tree.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tested-tree
+          path: tested-tree.txt
+          retention-days: 30
   infra:
     runs-on: ubuntu-latest
     timeout-minutes: 10

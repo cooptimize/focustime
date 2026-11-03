@@ -13,10 +13,47 @@ concurrency:
   group: deploy-dev
   cancel-in-progress: false
 jobs:
+  # D456: when the merged commit came from a PR whose ci run passed on exactly the same tree, that run already tested
+  # this code: skip the full suite and run only the typecheck (and the smoke test after the deploy). Otherwise (a push
+  # that wasn't a PR, main moved since the PR's last run, no artifact) run all of ci.yml first, as before.
+  reuse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      tested: ${{ steps.check.outputs.tested }}
+      pr: ${{ steps.check.outputs.pr }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Did the PR's ci test this tree?
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci-tree-match.sh "${{ github.repository }}" "${{ github.sha }}"
   ci:
+    needs: reuse
+    if: needs.reuse.outputs.tested != 'true'
     uses: ./.github/workflows/ci.yml
+  typecheck:
+    needs: reuse
+    if: needs.reuse.outputs.tested == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
   deploy:
-    needs: ci
+    needs: [reuse, ci, typecheck]
+    # One of ci or typecheck ran and passed; the other was skipped.
+    if: ${{ !cancelled() && !failure() && (needs.ci.result == 'success' || needs.typecheck.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
