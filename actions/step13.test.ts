@@ -111,7 +111,7 @@ describe("editing tier: my own events with nobody else on them", () => {
       expect([r.status, r.error]).toEqual([409, expect.stringMatching(why)]);
     }
     const tb = await t.box();
-    const mine = t.plan.ownEvent(tb.uid)!.eventId;
+    const mine = (await t.plan.ownEvent(tb.uid))!.eventId;
     expect((await t.fail("write.preview", { event: { id: mine, start: `${D}T15:30:00-06:00`, end: `${D}T16:30:00-06:00` } })).error).toMatch(/FocusTime's: change its timebox/);
     expect(t.g.calls.filter((c) => c.method === "PATCH")).toEqual([]);
   });
@@ -127,7 +127,7 @@ describe("editing tier: FocusTime events (the event and its timebox are one thin
     expect(p.fields.find((f) => f.label === "Title")).toMatchObject({ before: "T&W: #4512 Import mapping", after: "T&W: Import mapping, part 2", changed: true });
     expect(p.fields.find((f) => f.label === "Show as")).toMatchObject({ before: "Busy", after: "Tentative", changed: true });
     expect((await t.confirm(p)).confirmed).toBe(true);
-    expect(t.g.events.get(t.plan.ownEvent(tb.uid)!.eventId)).toMatchObject({ subject: "T&W: Import mapping, part 2", showAs: "tentative" });
+    expect(t.g.events.get((await t.plan.ownEvent(tb.uid))!.eventId)).toMatchObject({ subject: "T&W: Import mapping, part 2", showAs: "tentative" });
     expect((await t.fail("timebox.update", { id: tb.id, showAs: "invisible" })).error).toMatch(/showAs/);
   });
 });
@@ -136,13 +136,13 @@ describe("two-way sync for FocusTime events", () => {
   it("follows a move made in Outlook, notes it, and logs it as from Outlook (not undoable from the log)", async () => {
     const t = setup();
     const tb = await t.box();
-    const ev = t.g.events.get(t.plan.ownEvent(tb.uid)!.eventId)!;
+    const ev = t.g.events.get((await t.plan.ownEvent(tb.uid))!.eventId)!;
     ev.start = "2026-11-10T19:00:00Z"; // 1:00 PM Chicago
     ev.end = "2026-11-10T20:00:00Z";
     ev.subject = "T&W: Import mapping (moved)";
     const r = await t.sync();
     expect(r.changed).toBe(1);
-    const now = t.plan.timebox(tb.id)!;
+    const now = (await t.plan.timebox(tb.id))!;
     expect(now).toMatchObject({ start: `${D}T13:00:00-06:00`, end: `${D}T14:00:00-06:00`, title: "Import mapping (moved)", outlookNote: "Changed in Outlook: time, title", conflict: null });
     // In step: no write is needed, nothing was written.
     expect((await t.run<{ nothing?: true }>("write.preview", { uid: tb.uid })).nothing).toBe(true);
@@ -154,22 +154,22 @@ describe("two-way sync for FocusTime events", () => {
   it("deleted in Outlook: keeps the timebox, turns Put on Outlook off, never re-creates it; Keep or Remove (step 13.5)", async () => {
     const t = setup();
     const tb = await t.box();
-    t.g.events.delete(t.plan.ownEvent(tb.uid)!.eventId);
+    t.g.events.delete((await t.plan.ownEvent(tb.uid))!.eventId);
     const writes = t.g.calls.filter((c) => c.method !== "GET").length;
     await t.sync();
-    expect(t.plan.timebox(tb.id)).toMatchObject({ removedAt: null, outlook: false, outlookNote: "Removed in Outlook", conflict: null });
-    expect(t.plan.ownEvent(tb.uid)!.deletedAt).not.toBeNull();
+    expect((await t.plan.timebox(tb.id))).toMatchObject({ removedAt: null, outlook: false, outlookNote: "Removed in Outlook", conflict: null });
+    expect((await t.plan.ownEvent(tb.uid))!.deletedAt).not.toBeNull();
     await t.sync();
     expect(t.g.calls.filter((c) => c.method !== "GET").length).toBe(writes);
     // Keep: the note goes, the timebox stays local.
     await t.run("timebox.resolve", { id: tb.id, keep: "local" });
-    expect(t.plan.timebox(tb.id)).toMatchObject({ removedAt: null, outlook: false, outlookNote: null });
+    expect((await t.plan.timebox(tb.id))).toMatchObject({ removedAt: null, outlook: false, outlookNote: null });
     // Remove (on another one): the timebox goes, nothing is written.
     const tb2 = await t.box("13:00", "14:00");
-    t.g.events.delete(t.plan.ownEvent(tb2.uid)!.eventId);
+    t.g.events.delete((await t.plan.ownEvent(tb2.uid))!.eventId);
     await t.sync();
     await t.run("timebox.resolve", { id: tb2.id, keep: "remove" });
-    expect(t.plan.timebox(tb2.id)!.removedAt).not.toBeNull();
+    expect((await t.plan.timebox(tb2.id))!.removedAt).not.toBeNull();
     expect((await t.fail("timebox.resolve", { id: tb.id, keep: "local" })).status).toBe(409);
   });
 
@@ -177,22 +177,22 @@ describe("two-way sync for FocusTime events", () => {
     const t = setup();
     // Gone before the preview: a remove has nothing to do.
     const a = await t.box();
-    t.g.events.delete(t.plan.ownEvent(a.uid)!.eventId);
+    t.g.events.delete((await t.plan.ownEvent(a.uid))!.eventId);
     await t.run("timebox.remove", { id: a.id });
     expect(await t.run("write.preview", { uid: a.uid })).toEqual({ nothing: true, alreadyGone: true });
     // Gone before the preview of a change: kept here with Put on Outlook off, never re-created.
     const b = await t.box("11:00", "12:00");
-    t.g.events.delete(t.plan.ownEvent(b.uid)!.eventId);
+    t.g.events.delete((await t.plan.ownEvent(b.uid))!.eventId);
     await t.run("timebox.update", { id: b.id, start: `${D}T11:30:00-06:00`, end: `${D}T12:30:00-06:00` });
     expect(await t.run("write.preview", { uid: b.uid })).toEqual({ nothing: true, alreadyGone: true });
-    expect(t.plan.timebox(b.id)).toMatchObject({ outlook: false, outlookNote: "Removed in Outlook", removedAt: null });
+    expect((await t.plan.timebox(b.id))).toMatchObject({ outlook: false, outlookNote: "Removed in Outlook", removedAt: null });
     // Gone between preview and confirm (a 404): confirmed as already gone.
     const c = await t.box("13:00", "14:00");
     await t.run("timebox.remove", { id: c.id });
     const p = (await t.run<{ preview: WritePreview }>("write.preview", { uid: c.uid })).preview;
-    t.g.events.delete(t.plan.ownEvent(c.uid)!.eventId);
+    t.g.events.delete((await t.plan.ownEvent(c.uid))!.eventId);
     expect(await t.confirm(p)).toMatchObject({ confirmed: true, message: "Already gone from Outlook; nothing to remove" });
-    const log = t.plan.writeLog(20).map((e) => e.message);
+    const log = (await t.plan.writeLog(20)).map((e) => e.message);
     expect(log.filter((m) => m?.startsWith("Already gone from Outlook"))).toHaveLength(3);
     expect(t.g.events.size).toBe(0);
   });
@@ -200,14 +200,14 @@ describe("two-way sync for FocusTime events", () => {
   it("both changed: keeps both, writes nothing, blocks the push until I choose; Use Outlook's or Keep FocusTime's", async () => {
     const t = setup();
     const tb = await t.box();
-    const id = t.plan.ownEvent(tb.uid)!.eventId;
+    const id = (await t.plan.ownEvent(tb.uid))!.eventId;
     await t.run("timebox.update", { id: tb.id, start: `${D}T10:00:00-06:00`, end: `${D}T11:00:00-06:00` });
     t.g.events.get(id)!.subject = "T&W: renamed in Outlook";
     const writes = t.g.calls.filter((c) => c.method !== "GET").length;
     const r = await t.sync();
     expect(r.conflicts).toBe(1);
     expect(t.g.calls.filter((c) => c.method !== "GET").length).toBe(writes);
-    const c = t.plan.timebox(tb.id)!;
+    const c = (await t.plan.timebox(tb.id))!;
     expect(c).toMatchObject({ start: `${D}T10:00:00-06:00`, conflict: { changed: ["title"], outlook: { subject: "T&W: renamed in Outlook" } } });
     expect(t.g.events.get(id)!.subject).toBe("T&W: renamed in Outlook");
     expect((await t.fail("write.preview", { uid: tb.uid })).error).toMatch(/choose which version/);
@@ -226,7 +226,7 @@ describe("two-way sync for FocusTime events", () => {
   it("Use Outlook's: the timebox takes Outlook's version, nothing is written", async () => {
     const t = setup();
     const tb = await t.box();
-    const id = t.plan.ownEvent(tb.uid)!.eventId;
+    const id = (await t.plan.ownEvent(tb.uid))!.eventId;
     await t.run("timebox.update", { id: tb.id, start: `${D}T10:00:00-06:00`, end: `${D}T11:00:00-06:00` });
     Object.assign(t.g.events.get(id)!, { start: "2026-11-10T21:00:00Z", end: "2026-11-10T22:00:00Z" });
     await t.sync();
@@ -244,8 +244,8 @@ describe("Q69: a FocusTime-marked event without a local record", () => {
     const id = t.g.seed({ subject: "T&W: #4512 Import mapping", start: "2026-11-10T15:00:00Z", end: "2026-11-10T16:00:00Z", marker: uid, isReminderOn: false });
     const r = await t.sync();
     expect(r.rebuilt).toBe(1);
-    expect(t.plan.ownEvent(uid)).toMatchObject({ eventId: id, deletedAt: null });
-    expect(t.plan.timeboxByUid(uid)).toMatchObject({ clientKey: "T&W", title: "#4512 Import mapping", date: D, start: `${D}T09:00:00-06:00`, outlook: true, outlookNote: "Rebuilt from Outlook" });
+    expect((await t.plan.ownEvent(uid))).toMatchObject({ eventId: id, deletedAt: null });
+    expect((await t.plan.timeboxByUid(uid))).toMatchObject({ clientKey: "T&W", title: "#4512 Import mapping", date: D, start: `${D}T09:00:00-06:00`, outlook: true, outlookNote: "Rebuilt from Outlook" });
     expect(r.facts[`outlook:${id}`]).toMatchObject({ marker: uid });
     // A second scan finds it in step.
     expect((await t.sync()).rebuilt).toBe(0);
@@ -279,7 +279,7 @@ describe("the collaboration finder", () => {
     expect(sched.auth).toBe("Bearer FAKE-READ-TOKEN");
     expect(JSON.stringify(s)).not.toMatch(/SECRET/);
     expect(JSON.stringify(t.logs)).not.toMatch(/SECRET|FAKE-READ-TOKEN|FAKE-WRITE/);
-    expect(JSON.stringify(t.plan.exportJson())).not.toMatch(/SECRET/);
+    expect(JSON.stringify((await t.plan.exportJson()))).not.toMatch(/SECRET/);
     expect((await t.fail("collab.suggest", { clientKey: "T&W", minutes: 30, people: ["pat@client.example"] })).status).toBe(422);
   });
 
@@ -298,13 +298,13 @@ describe("the collaboration finder", () => {
     expect(done).toMatchObject({ confirmed: true, message: "Invite sent to Ana, Ben", entry: { kind: "invite" } });
     const post = t.g.calls.find((c) => c.method === "POST" && c.path === "/v1.0/me/events")!.body as Record<string, unknown>;
     expect(post).toMatchObject({ isOnlineMeeting: true, onlineMeetingProvider: "teamsForBusiness", attendees: [{ emailAddress: { address: "ana@cooptimize.example", name: "Ana" }, type: "required" }, { emailAddress: { address: "ben@cooptimize.example" } }] });
-    const inv = t.plan.invitesFrom("2026-11-01")[0]!;
+    const inv = (await t.plan.invitesFrom("2026-11-01"))[0]!;
     expect(inv).toMatchObject({ status: "sent", itemId: 4512, clientKey: "T&W", eventId: done.entry.eventId });
-    const followUp = t.plan.getFollowUp(inv.followUpId!)!;
+    const followUp = (await t.plan.getFollowUp(inv.followUpId!))!;
     expect(followUp).toMatchObject({ kind: "help", what: "Help session with Ana and Ben on #4512 Import mapping", closedAt: null });
     // The follow-up closes once the meeting is over.
-    expect(t.plan.closeHelpFollowUps(Temporal.Instant.from("2026-11-10T19:29:00Z"))).toBe(0);
-    expect(t.plan.closeHelpFollowUps(Temporal.Instant.from("2026-11-10T19:31:00Z"))).toBe(1);
+    expect((await t.plan.closeHelpFollowUps(Temporal.Instant.from("2026-11-10T19:29:00Z")))).toBe(0);
+    expect((await t.plan.closeHelpFollowUps(Temporal.Instant.from("2026-11-10T19:31:00Z")))).toBe(1);
   });
 
   it("limits attendee domains at preview and in the writer", async () => {
@@ -331,9 +331,9 @@ describe("the collaboration finder", () => {
     expect(c).toMatchObject({ confirmed: true, message: expect.stringMatching(/cancelled/) });
     expect(t.g.calls.some((x) => x.method === "POST" && x.path.endsWith("/cancel"))).toBe(true);
     expect(t.g.calls.some((x) => x.method === "DELETE")).toBe(false);
-    const inv = t.plan.invitesFrom("2026-11-01")[0]!;
+    const inv = (await t.plan.invitesFrom("2026-11-01"))[0]!;
     expect(inv.status).toBe("cancelled");
-    expect(t.plan.getFollowUp(inv.followUpId!)!.closedAt).not.toBeNull();
+    expect((await t.plan.getFollowUp(inv.followUpId!))!.closedAt).not.toBeNull();
     // A cancelled invite isn't sent again by another undo.
     expect((await t.run<WriteLogView>("write.log", {})).entries.every((e) => !e.undoable)).toBe(true);
   });

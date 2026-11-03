@@ -98,9 +98,9 @@ describe("demo mode (D272)", () => {
   it("writes nothing to disk: config, data and cache folders stay empty, and the real store is untouched", async () => {
     const realPath = join(dirs.data, "real", "plan.db");
     const real = createPlanStore({ path: realPath, now: () => Temporal.Now.zonedDateTimeISO("America/New_York"), files: localStoreFiles });
-    real.addPick({ date: "2026-11-02", half: "AM", clientKey: "Adatum", kind: "intention", title: "Real work", size: "M" } as never);
-    const before = JSON.stringify(real.picksBetween("2026-10-01", "2026-12-31"));
-    real.close();
+    await real.addPick({ date: "2026-11-02", half: "AM", clientKey: "Adatum", kind: "intention", title: "Real work", size: "M" } as never);
+    const before = JSON.stringify(await real.picksBetween("2026-10-01", "2026-12-31"));
+    await real.close();
     const bytes = readFileSync(realPath);
     const cfgPath = join(dirs.config, "focustime", "config.toml");
     writeFileSync(join(dirs.config, "marker"), "x");
@@ -118,8 +118,8 @@ describe("demo mode (D272)", () => {
     expect(() => readFileSync(cfgPath)).toThrow();
     expect(readFileSync(realPath).equals(bytes)).toBe(true);
     const again = createPlanStore({ path: realPath, now: () => Temporal.Now.zonedDateTimeISO("America/New_York") });
-    expect(JSON.stringify(again.picksBetween("2026-10-01", "2026-12-31"))).toBe(before);
-    again.close();
+    expect(JSON.stringify((await again.picksBetween("2026-10-01", "2026-12-31")))).toBe(before);
+    await again.close();
   });
 
   it("demo.set calls the server's switch; it is refused where there is none", async () => {
@@ -137,10 +137,10 @@ describe("Done and commit (D265)", () => {
     const ctx = await demo();
     await ok(ctx, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", itemId: 4411 });
     const c = await ok<{ plan: { committedAt: string } }>(ctx, "planday.commit", { date: "2026-11-02" });
-    const first = c.plan?.committedAt ?? ctx.plan!.day("2026-11-02")!.committedAt;
+    const first = c.plan?.committedAt ?? (await ctx.plan!.day("2026-11-02"))!.committedAt;
     expect(first).toBeTruthy();
     const added = await ok<{ pick: { id: number } }>(ctx, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", itemId: 4412 });
-    expect(ctx.plan!.day("2026-11-02")!.committedAt).toBe(first);
+    expect((await ctx.plan!.day("2026-11-02"))!.committedAt).toBe(first);
     // After the commit a removed pick is kept as dropped (the committed-day rule), with no second commit.
     const removed = await ok<{ result: string }>(ctx, "pick.remove", { id: added.pick.id });
     expect(removed.result).toBe("dropped");

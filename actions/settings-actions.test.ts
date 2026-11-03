@@ -136,7 +136,7 @@ describe("secrets from Settings never come back", () => {
     const logs: LogRecord[] = [];
     const app = await startTestApp({ ctx: t.c, log: (r) => logs.push(r) });
     const b = app.browser();
-    b.signIn("user-a");
+    await b.signIn("user-a");
     const r = await b.action("secret.set", { account: "google-client-secret", value: SECRET });
     const res = `${r.status} ${r.body}`;
     await app.close();

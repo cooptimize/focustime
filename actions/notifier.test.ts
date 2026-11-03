@@ -60,13 +60,13 @@ describe("notifier", () => {
     expect(await t.n.offer(notices.checkin("2026-11-02", AT))).toBe("hold");
     expect(await t.n.offer(notices.timerEnd(false, "Write", "s1", AT))).toBe("send");
     expect(t.shown.map((x) => x.kind)).toEqual(["timer"]);
-    expect(t.plan.getState<Notice[]>(HELD_KEY)).toHaveLength(1);
+    expect((await t.plan.getState<Notice[]>(HELD_KEY))).toHaveLength(1);
     expect(await t.n.flush()).toBe(0); // still focusing
     t.f.focusRunning = false;
     await t.n.refresh();
     expect(await t.n.flush()).toBe(1);
     expect(t.shown.at(-1)).toMatchObject({ kind: "checkin", title: "Check-in" });
-    expect(t.n.held()).toEqual([]);
+    expect(await t.n.held()).toEqual([]);
     expect(await t.n.offer(notices.checkin("2026-11-02", AT))).toBe("repeat");
   });
 
@@ -93,7 +93,7 @@ describe("notifier", () => {
     await t.n.offer(fu);
     await flush();
     expect(t.opened).toEqual(["followup:9"]);
-    expect(t.n.handled(fu.key)).toBe(true);
+    expect(await t.n.handled(fu.key)).toBe(true);
     expect(t.acted).toEqual([]);
     t.answer("open"); // the notification's own "Plan the day" button
     await t.n.offer(notices.planDay("2026-11-02", AT));
@@ -142,7 +142,7 @@ describe("notifier", () => {
     await t.n.flush();
     await flush();
     expect(t.opened).toEqual(["today"]);
-    expect(t.n.handled(a.key) && t.n.handled(b.key)).toBe(true);
+    expect((await t.n.handled(a.key)) && (await t.n.handled(b.key))).toBe(true);
   });
 
   it("the test notification goes out whatever the settings", async () => {
@@ -196,7 +196,7 @@ describe("closing notifications that no longer apply (step 16.2, Q91)", () => {
     planned = true;
     expect(await t.n.sweep()).toBe(1);
     expect(t.closed).toEqual(["100"]);
-    expect(t.n.handled("plan_day:2026-11-02")).toBe(true);
+    expect(await t.n.handled("plan_day:2026-11-02")).toBe(true);
     await flush();
     expect(t.n.onScreen()).toEqual([]);
     expect(await t.n.sweep()).toBe(0);
@@ -218,7 +218,7 @@ describe("closing notifications that no longer apply (step 16.2, Q91)", () => {
     const done = new Set<string>();
     const t = closable((x) => done.has(x.key));
     await t.n.refresh();
-    t.plan.setState(HELD_KEY, [notices.planDay("2026-11-02", AT), notices.checkin("2026-11-02", AT)]);
+    (await t.plan.setState(HELD_KEY, [notices.planDay("2026-11-02", AT), notices.checkin("2026-11-02", AT)]));
     expect(await t.n.flush()).toBe(2);
     await flush();
     done.add("plan_day:2026-11-02");

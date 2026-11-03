@@ -36,13 +36,13 @@ function setup() {
   };
 }
 const flush = () => new Promise((r) => setTimeout(r, 0));
-const pickAt = (plan: ReturnType<typeof createPlanStore>, title: string, size: "S" | "M" | "L" = "S") => plan.addPick({ date: "2026-11-02", half: "AM", clientKey: "Adatum", kind: "intention", title, size });
+const pickAt = async (plan: ReturnType<typeof createPlanStore>, title: string, size: "S" | "M" | "L" = "S") => (await plan.addPick({ date: "2026-11-02", half: "AM", clientKey: "Adatum", kind: "intention", title, size }));
 
 describe("focus timer on the server (step 6c)", () => {
   it("keeps its state across a restart of the store", async () => {
     const t = setup();
     await t.run("timer.start", { minutes: 25 });
-    const raw = t.plan.getState<TimerState>(TIMER_KEY);
+    const raw = (await t.plan.getState<TimerState>(TIMER_KEY));
     expect(raw).toMatchObject({ kind: "focus", plannedMinutes: 25, runningSince: T("09:00").toString() });
     t.at("09:10");
     const r = await t.run("timer.pause");
@@ -51,8 +51,8 @@ describe("focus timer on the server (step 6c)", () => {
 
   it("ends on time with a notification offering Done, +15 min and Next pick, and records focused time on the pick", async () => {
     const t = setup();
-    const a = pickAt(t.plan, "Write the summary");
-    const b = pickAt(t.plan, "Review the PR");
+    const a = (await pickAt(t.plan, "Write the summary"));
+    const b = (await pickAt(t.plan, "Review the PR"));
     await t.run("timer.start", { pickId: a.id, minutes: 25 });
     t.at("09:24");
     expect(await checkTimer(t.deps)).toBeNull();
@@ -62,16 +62,16 @@ describe("focus timer on the server (step 6c)", () => {
     await flush();
     expect(t.sent[0]).toMatchObject({ title: "Focus session done", body: "Write the summary\nClick for Done, +15 min or Next pick.", actions: [{ key: "done" }, { key: "extend" }, { key: "next" }] });
     expect(t.acted).toEqual(["timer.next"]);
-    expect(t.plan.focusedSeconds([a.id])).toEqual({ [a.id]: 1500 });
+    expect((await t.plan.focusedSeconds([a.id]))).toEqual({ [a.id]: 1500 });
     // Next pick: the next planned pick, suggested from its size (S = 60 min).
-    expect(t.plan.getState<TimerState>(TIMER_KEY)).toMatchObject({ pickId: b.id, plannedMinutes: 60, ended: false });
+    expect((await t.plan.getState<TimerState>(TIMER_KEY))).toMatchObject({ pickId: b.id, plannedMinutes: 60, ended: false });
     // Ending sends one notification only.
     expect(await checkTimer(t.deps)).toBeNull();
   });
 
   it("Done ticks the pick done; +15 runs again from now; the end sound only when turned on", async () => {
     const t = setup();
-    const a = pickAt(t.plan, "Write the summary");
+    const a = (await pickAt(t.plan, "Write the summary"));
     await t.run("timer.start", { pickId: a.id, minutes: 5 });
     t.at("09:05");
     t.answer("extend");
@@ -79,14 +79,14 @@ describe("focus timer on the server (step 6c)", () => {
     await checkTimer(t.deps);
     await flush();
     expect(t.sounds()).toBe(1);
-    expect(t.plan.getState<TimerState>(TIMER_KEY)).toMatchObject({ plannedMinutes: 20, ended: false, runningSince: T("09:05").toString() });
+    expect((await t.plan.getState<TimerState>(TIMER_KEY))).toMatchObject({ plannedMinutes: 20, ended: false, runningSince: T("09:05").toString() });
     t.at("09:20");
     t.answer("done");
     await checkTimer(t.deps);
     await flush();
-    expect(t.plan.getState(TIMER_KEY)).toBeNull();
-    expect(t.plan.getPick(a.id)?.status).toBe("done");
-    expect(t.plan.focusedSeconds([a.id])).toEqual({ [a.id]: 20 * 60 });
+    expect((await t.plan.getState(TIMER_KEY))).toBeNull();
+    expect((await t.plan.getPick(a.id))?.status).toBe("done");
+    expect((await t.plan.focusedSeconds([a.id]))).toEqual({ [a.id]: 20 * 60 });
   });
 
   it("a choice made in the window first wins; a late notification answer does nothing", async () => {
@@ -100,13 +100,13 @@ describe("focus timer on the server (step 6c)", () => {
     release("extend");
     await flush();
     expect(t.acted).toEqual([]);
-    expect(t.plan.getState(TIMER_KEY)).toBeNull();
+    expect((await t.plan.getState(TIMER_KEY))).toBeNull();
   });
 
   it("warns 5 minutes before a meeting or the end of the block, once, even mid-session; not while paused", async () => {
     const t = setup();
-    t.plan.setState("warn_points", { date: "2026-11-02", points: [{ key: "event:outlook:1", at: T("10:00").toString(), label: "Standup at 10:00 AM" }, { key: "end:AM", at: T("12:30").toString(), label: "The morning ends at 12:30 PM" }] });
-    t.plan.setState(TIMER_KEY, startTimer(T("09:30"), { kind: "focus", pickId: null, label: "Focus", minutes: 120 }));
+    (await t.plan.setState("warn_points", { date: "2026-11-02", points: [{ key: "event:outlook:1", at: T("10:00").toString(), label: "Standup at 10:00 AM" }, { key: "end:AM", at: T("12:30").toString(), label: "The morning ends at 12:30 PM" }] }));
+    (await t.plan.setState(TIMER_KEY, startTimer(T("09:30"), { kind: "focus", pickId: null, label: "Focus", minutes: 120 })));
     t.at("09:54");
     expect(await checkTimer(t.deps)).toBeNull();
     t.at("09:56");
@@ -124,18 +124,18 @@ describe("focus timer on the server (step 6c)", () => {
     expect(await t.run("timer.start", { minutes: 0 })).toMatchObject({ ok: false, status: 400 });
     expect(await t.run("timer.start", { kind: "nap" })).toMatchObject({ ok: false, status: 400 });
     expect(await t.run("timer.pause")).toMatchObject({ ok: false, status: 409 });
-    const a = pickAt(t.plan, "x");
-    t.plan.setDone(a.id, true);
+    const a = (await pickAt(t.plan, "x"));
+    (await t.plan.setDone(a.id, true));
     expect(await t.run("timer.start", { pickId: a.id })).toMatchObject({ ok: false, status: 409 });
     expect(await t.run("plan.reset", { confirm: "yes" })).toMatchObject({ ok: false, status: 422 });
   });
 
   it("reset needs the typed confirmation and clears follow-ups too", async () => {
     const t = setup();
-    t.plan.addFollowUp({ who: "Dana", what: "Send it", due: null, clientKey: null, channel: null });
+    (await t.plan.addFollowUp({ who: "Dana", what: "Send it", due: null, clientKey: null, channel: null }));
     expect(await t.run("plan.reset", { confirm: "yes" })).toMatchObject({ ok: false, status: 422 });
     expect(await t.run("plan.reset", { confirm: "reset" })).toMatchObject({ ok: true });
-    expect(t.plan.allFollowUps()).toEqual([]);
+    expect((await t.plan.allFollowUps())).toEqual([]);
   });
 });
 
@@ -151,7 +151,7 @@ describe("focused time on a pick across sessions and restarts (step 6d)", () => 
     const runOn = (plan: ReturnType<typeof open>, a: Parameters<typeof timerAction>[1], input?: unknown) => timerAction({ plan, config: async () => cfg, now: () => clock.toString() }, a, input);
 
     let plan = open();
-    const a = pickAt(plan, "Write the summary", "M");
+    const a = (await pickAt(plan, "Write the summary", "M"));
     await runOn(plan, "timer.start", { pickId: a.id, minutes: 30 });
     clock = T("09:10");
     await runOn(plan, "timer.pause"); // 10 min
@@ -161,7 +161,7 @@ describe("focused time on a pick across sessions and restarts (step 6d)", () => 
     await runOn(plan, "timer.resume");
     clock = T("09:45");
     await runOn(plan, "timer.stop"); // +5 min
-    expect(plan.focusedSeconds([a.id])).toEqual({ [a.id]: 15 * 60 });
+    expect((await plan.focusedSeconds([a.id]))).toEqual({ [a.id]: 15 * 60 });
 
     // A second session that ends while nobody looks: only its 20 minutes count.
     await runOn(plan, "timer.start", { pickId: a.id, minutes: 20 });
@@ -170,7 +170,7 @@ describe("focused time on a pick across sessions and restarts (step 6d)", () => 
     clock = T("11:00");
     const deps = { plan, now: () => clock, endSound: async () => false, notify: async () => null, sound: () => {}, act: async () => undefined };
     expect(await checkTimer(deps)).toBe("ended");
-    expect(plan.focusedSeconds([a.id])).toEqual({ [a.id]: 35 * 60 });
+    expect((await plan.focusedSeconds([a.id]))).toEqual({ [a.id]: 35 * 60 });
     // A plain timer and a break never add to a pick.
     await runOn(plan, "timer.start", { minutes: 10 });
     clock = T("11:10");
@@ -178,7 +178,7 @@ describe("focused time on a pick across sessions and restarts (step 6d)", () => 
     await runOn(plan, "timer.start", { kind: "break", minutes: 5 });
     clock = T("11:15");
     await runOn(plan, "timer.stop");
-    expect(plan.focusedSeconds([a.id])).toEqual({ [a.id]: 35 * 60 });
+    expect((await plan.focusedSeconds([a.id]))).toEqual({ [a.id]: 35 * 60 });
   });
 });
 
@@ -202,18 +202,18 @@ describe("fresher warnings while a timer runs (step 6d, Q40)", () => {
       now: () => clock.toString(),
     };
     await t.run("timer.start", { minutes: 90 });
-    const s = () => t.plan.getState<TimerState>(TIMER_KEY);
-    expect(calendarRefreshDue(s(), null, clock.epochMilliseconds)).toBe(true);
+    const s = async () => (await t.plan.getState<TimerState>(TIMER_KEY));
+    expect(calendarRefreshDue((await s()), null, clock.epochMilliseconds)).toBe(true);
     await refreshTodayWarnings(ctx);
     const last = clock.epochMilliseconds;
 
     // Someone books 10:00 at 9:40. Before the next refresh nothing knows about it.
     outlook.push({ title: "Quick sync", start: "2026-11-02T10:00:00-05:00", end: "2026-11-02T10:15:00-05:00" });
     clock = T("09:34");
-    expect(calendarRefreshDue(s(), last, clock.epochMilliseconds)).toBe(false);
+    expect(calendarRefreshDue((await s()), last, clock.epochMilliseconds)).toBe(false);
     t.at("09:56");
     clock = T("09:56");
-    expect(calendarRefreshDue(s(), last, clock.epochMilliseconds)).toBe(true);
+    expect(calendarRefreshDue((await s()), last, clock.epochMilliseconds)).toBe(true);
     expect(await checkTimer(t.deps)).toBeNull(); // the old points don't have it
     await refreshTodayWarnings(ctx);
     expect(await checkTimer(t.deps)).toBe("warned");
@@ -222,6 +222,6 @@ describe("fresher warnings while a timer runs (step 6d, Q40)", () => {
     expect(loads.every((o) => !o.refresh)).toBe(true);
     // Paused or ended: no refreshes.
     await t.run("timer.pause");
-    expect(calendarRefreshDue(s(), null, clock.epochMilliseconds)).toBe(false);
+    expect(calendarRefreshDue((await s()), null, clock.epochMilliseconds)).toBe(false);
   });
 });

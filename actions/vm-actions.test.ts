@@ -77,7 +77,7 @@ function setup(opts: AccountOpts & { start?: string; forbid?: string[]; failOps?
   };
   const vmCtx = () => ({
     plan, config: async () => (parseConfig(TOML) as { ok: true; config: never }).config, account, azure: c.azure!, now: clock.now, sleep: c.sleep!,
-    focusRunning: () => false, workday: async () => true,
+    focusRunning: async () => false, workday: async () => true,
   });
   return { c, run, fail, plan, arm, clock, state, signIns, offline, account, vmCtx, signedOut: () => signedOut };
 }
@@ -101,7 +101,7 @@ describe("sign-in: the app's user (step 15.4)", () => {
     expect(await s.run("auth.status")).toEqual({ configured: true, state: "signed_out", person: null, message: null });
     expect(await s.run("auth.sign_in", {})).toEqual({ status: "connected", person: { name: "Pat Example", username: "pat@example.com", initials: "PE" } });
     expect(s.signIns).toEqual([{ azure: true }]);
-    expect(s.plan.accountState<StoredIdentity>(IDENTITY_KEY)).toMatchObject({ oid: PAT.oid, username: "pat@example.com", systemUserId: null });
+    expect((await s.plan.accountState<StoredIdentity>(IDENTITY_KEY))).toMatchObject({ oid: PAT.oid, username: "pat@example.com", systemUserId: null });
     expect(await s.run("auth.status")).toMatchObject({ state: "signed_in", person: { initials: "PE" } });
   });
 
@@ -123,18 +123,18 @@ describe("sign-in: the app's user (step 15.4)", () => {
     const s = setup();
     await s.run("auth.status");
     const off = setup({ identityFails: "network" });
-    off.plan.setAccountState(IDENTITY_KEY, s.plan.accountState(IDENTITY_KEY));
+    (await off.plan.setAccountState(IDENTITY_KEY, (await s.plan.accountState(IDENTITY_KEY))));
     expect(await off.run("auth.status")).toMatchObject({ state: "unavailable", person: { name: "Pat Example" } });
   });
 
   it("sign out clears the token and who I am, keeps the local plan and my VM choice", async () => {
     const s = await signedInWithVm();
-    s.plan.setState("x", 1);
+    (await s.plan.setState("x", 1));
     expect(await s.run("auth.sign_out")).toEqual({ status: "signed_out" });
     expect(s.signedOut()).toBe(1);
-    expect(s.plan.accountState(IDENTITY_KEY)).toBeNull();
-    expect(s.plan.getState("x")).toBe(1);
-    expect(s.plan.accountState(vmKey(PAT.oid))).toMatchObject({ id: VM });
+    expect((await s.plan.accountState(IDENTITY_KEY))).toBeNull();
+    expect((await s.plan.getState("x"))).toBe(1);
+    expect((await s.plan.accountState(vmKey(PAT.oid)))).toMatchObject({ id: VM });
     expect(await s.run("auth.status")).toMatchObject({ state: "signed_out" });
   });
 
@@ -172,7 +172,7 @@ describe("me from the signed-in account", () => {
     s.c.makeDevOps = () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined }) as never;
     await s.run("week.load", { weekStart: "2026-11-02" });
     expect(saved).toEqual([]);
-    expect(s.plan.accountState<StoredIdentity>(IDENTITY_KEY)).toMatchObject({ systemUserId: "dddddddd-0000-4000-8000-0000000000f1", systemUserEmail: "pat@example.com" });
+    expect((await s.plan.accountState<StoredIdentity>(IDENTITY_KEY))).toMatchObject({ systemUserId: "dddddddd-0000-4000-8000-0000000000f1", systemUserEmail: "pat@example.com" });
   });
 });
 
@@ -206,11 +206,11 @@ describe("my VM: find and confirm", () => {
     const s = setup();
     await s.run("auth.status");
     expect(await s.run("vm.choose", { vmId: VM })).toMatchObject({ vm: { id: VM, name: "vm-pat-01", resourceGroup: "rg-dev", location: "eastus" } });
-    expect(s.plan.accountState(vmKey(PAT.oid))).toMatchObject({ id: VM });
+    expect((await s.plan.accountState(vmKey(PAT.oid)))).toMatchObject({ id: VM });
     expect(await s.fail("vm.choose", { vmId: "vm-pat-01" })).toMatchObject({ status: 400 });
     expect(await s.fail("vm.choose", { vmId: VM.replace("vm-pat-01", "vm-nope") })).toMatchObject({ status: 404, error: expect.stringMatching(/VM not found/) });
     await s.run("vm.choose", { vmId: null });
-    expect(s.plan.accountState(vmKey(PAT.oid))).toBeNull();
+    expect((await s.plan.accountState(vmKey(PAT.oid)))).toBeNull();
   });
 
   it("signed out: nothing to find", async () => {
@@ -244,7 +244,7 @@ describe("my VM: status, start and stop through the write framework", () => {
     expect(await s.run<VmStatus>("vm.status")).toMatchObject({ chip: "starting", label: "Starting…", refreshMs: 10_000 });
     expect(s.arm.calls.filter((x) => x.method === "POST" && x.path.endsWith("/start"))).toHaveLength(1);
     await settled();
-    const log = s.plan.azureWriteLog();
+    const log = (await s.plan.azureWriteLog());
     expect(log[0]).toMatchObject({ op: "start", vmId: VM, status: "confirmed", message: "Read back: Running", before: { power: "deallocated" }, after: { power: "running" } });
     // It polled the operation, not just the state.
     expect(s.arm.calls.some((x) => x.path.includes("/operations/"))).toBe(true);
@@ -254,14 +254,14 @@ describe("my VM: status, start and stop through the write framework", () => {
   it("stop = deallocate, warns when focus is running, no undo (Start is offered instead)", async () => {
     const s = await signedInWithVm();
     s.arm.setPower(VM, "running");
-    s.plan.setState(TIMER_KEY, { runningSince: s.clock.now() });
+    (await s.plan.setState(TIMER_KEY, { runningSince: s.clock.now() }));
     const p = await s.run<VmPreview>("vm.preview", { op: "deallocate" });
     expect(p).toMatchObject({ title: "Stop your VM", confirmLabel: "Stop", warning: expect.stringMatching(/focus session is running/) });
     expect(p.lines[0]).toEqual({ label: "State", before: "Running", after: "Stopped (deallocated)" });
     await s.run("vm.confirm", { previewId: p.previewId });
     expect(s.arm.calls.find((x) => x.method === "POST")!.path).toMatch(/\/deallocate$/);
     await settled();
-    expect(s.plan.azureWriteLog()[0]).toMatchObject({ op: "deallocate", status: "confirmed" });
+    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "deallocate", status: "confirmed" });
     expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ chip: "deallocated", canStart: true });
   });
 
@@ -286,14 +286,14 @@ describe("my VM: status, start and stop through the write framework", () => {
     const s = await signedInWithVm({ forbid: ["start"] });
     const p = await s.run<VmPreview>("vm.preview", { op: "start" });
     expect(await s.fail("vm.confirm", { previewId: p.previewId })).toMatchObject({ status: 403, error: "Azure says you don't have permission: Microsoft.Compute/virtualMachines/start/action", code: "forbidden" });
-    expect(s.plan.azureWriteLog()[0]).toMatchObject({ op: "start", status: "refused" });
+    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "start", status: "refused" });
   });
 
   it("an operation that fails, and one that never finishes, are logged as such", async () => {
     const s = await signedInWithVm({ failOps: ["start"] });
     await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "start" })).previewId });
     await settled();
-    expect(s.plan.azureWriteLog()[0]).toMatchObject({ status: "failed", message: "Azure says the start failed" });
+    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ status: "failed", message: "Azure says the start failed" });
 
     const t = await signedInWithVm();
     t.arm.vms.get(VM.toLowerCase())!.tags.stuck = "1";
@@ -301,7 +301,7 @@ describe("my VM: status, start and stop through the write framework", () => {
     // Azure never shows it running: offline after the start was accepted.
     t.offline.on = true;
     await settled();
-    expect(t.plan.azureWriteLog()[0]).toMatchObject({ status: "timed_out", message: expect.stringMatching(/within 15 minutes/) });
+    expect((await t.plan.azureWriteLog())[0]).toMatchObject({ status: "timed_out", message: expect.stringMatching(/within 15 minutes/) });
   });
 
   it("previews expire after 5 minutes", async () => {
@@ -323,8 +323,8 @@ describe("auto-shutdown: delay, skip, and the next-morning restore", () => {
     expect(put.path).toBe(`/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.DevTestLab/schedules/shutdown-computevm-vm-pat-01`);
     expect(put.body).toMatchObject({ location: "eastus", properties: { taskType: "ComputeVmShutdownTask", dailyRecurrence: { time: "2000" }, status: "Enabled", targetResourceId: VM } });
     expect((put.body as { properties: Record<string, unknown> }).properties.provisioningState).toBeUndefined();
-    expect(s.plan.azureWriteLog()[0]).toMatchObject({ op: "shutdown_change", status: "confirmed", before: { time: "1900", status: "Enabled" }, after: { time: "2000", status: "Enabled" } });
-    expect(s.plan.accountState(shutdownKey(VM))).toMatchObject({ date: "2026-11-02", original: { time: "1900", status: "Enabled" }, changed: { time: "2000" } });
+    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "shutdown_change", status: "confirmed", before: { time: "1900", status: "Enabled" }, after: { time: "2000", status: "Enabled" } });
+    expect((await s.plan.accountState(shutdownKey(VM)))).toMatchObject({ date: "2026-11-02", original: { time: "1900", status: "Enabled" }, changed: { time: "2000" } });
     expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ schedule: { label: "Auto-shutdown 8:00 PM" }, change: { text: "Auto-shutdown set to 8:00 PM; normally 7:00 PM" }, stillChanged: false });
   });
 
@@ -333,7 +333,7 @@ describe("auto-shutdown: delay, skip, and the next-morning restore", () => {
     await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "delay60" })).previewId });
     await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "delay120" })).previewId });
     expect(s.arm.schedule(VM)).toEqual({ time: "2200", status: "Enabled" });
-    expect(s.plan.accountState(shutdownKey(VM))).toMatchObject({ original: { time: "1900" }, changed: { time: "2200" } });
+    expect((await s.plan.accountState(shutdownKey(VM)))).toMatchObject({ original: { time: "1900" }, changed: { time: "2200" } });
     const t = await signedInWithVm();
     const p = await t.run<VmPreview>("vm.preview", { op: "skip" });
     expect(p.lines[0]).toMatchObject({ before: "7:00 PM", after: "Off tonight" });
@@ -345,19 +345,19 @@ describe("auto-shutdown: delay, skip, and the next-morning restore", () => {
   it("a read-back that doesn't match is logged as failed, and still restored tomorrow", async () => {
     const s = await signedInWithVm({ ignorePut: true });
     await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "delay60" })).previewId });
-    expect(s.plan.azureWriteLog()[0]).toMatchObject({ status: "failed", message: expect.stringMatching(/still be put back/) });
-    expect(s.plan.accountState(shutdownKey(VM))).not.toBeNull();
+    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ status: "failed", message: expect.stringMatching(/still be put back/) });
+    expect((await s.plan.accountState(shutdownKey(VM)))).not.toBeNull();
   });
 
   it("restores the next morning (first run after midnight), with read-back", async () => {
     const s = await signedInWithVm();
     await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "delay120" })).previewId });
-    expect(await restoreTick(s.vmCtx(), { atWorkStart: false })).toBeNull();
+    expect(await restoreTick((await s.vmCtx()), { atWorkStart: false })).toBeNull();
     s.clock.advance(15 * 3600_000 + 60_000); // 00:01 on Tuesday in New York
-    expect(await restoreTick(s.vmCtx(), { atWorkStart: false })).toBe("restored");
+    expect(await restoreTick((await s.vmCtx()), { atWorkStart: false })).toBe("restored");
     expect(s.arm.schedule(VM)).toEqual({ time: "1900", status: "Enabled" });
-    expect(s.plan.accountState(shutdownKey(VM))).toBeNull();
-    expect(s.plan.azureWriteLog()[0]).toMatchObject({ op: "shutdown_restore", status: "confirmed", auto: true, message: "Restored. Read back: matches" });
+    expect((await s.plan.accountState(shutdownKey(VM)))).toBeNull();
+    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "shutdown_restore", status: "confirmed", auto: true, message: "Restored. Read back: matches" });
   });
 
   it("can't restore (offline): a Today warning with one-click Restore; retries, then restores", async () => {
@@ -365,9 +365,9 @@ describe("auto-shutdown: delay, skip, and the next-morning restore", () => {
     await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "skip" })).previewId });
     s.clock.advance(16 * 3600_000);
     s.offline.on = true;
-    expect(await restoreTick(s.vmCtx(), { atWorkStart: false })).toBe("failed");
-    expect(await restoreTick(s.vmCtx(), { atWorkStart: false })).toBeNull(); // waits 10 minutes
-    expect(s.plan.azureWriteLog().filter((e) => e.op === "shutdown_restore")).toHaveLength(1);
+    expect(await restoreTick((await s.vmCtx()), { atWorkStart: false })).toBe("failed");
+    expect(await restoreTick((await s.vmCtx()), { atWorkStart: false })).toBeNull(); // waits 10 minutes
+    expect((await s.plan.azureWriteLog()).filter((e) => e.op === "shutdown_restore")).toHaveLength(1);
     s.offline.on = false;
     clearVmState();
     const st = await s.run<VmStatus>("vm.status");
@@ -383,10 +383,10 @@ describe("auto-shutdown: delay, skip, and the next-morning restore", () => {
     const sched = s.arm.schedules.get(VM.toLowerCase())!;
     (sched.properties as { dailyRecurrence: { time: string } }).dailyRecurrence.time = "1730";
     s.clock.advance(16 * 3600_000);
-    await restoreTick(s.vmCtx(), { atWorkStart: true });
+    await restoreTick((await s.vmCtx()), { atWorkStart: true });
     expect(s.arm.schedule(VM)).toEqual({ time: "1730", status: "Enabled" });
-    expect(s.plan.azureWriteLog()[0]).toMatchObject({ op: "shutdown_restore", status: "refused", message: "Changed outside FocusTime since; left as it is" });
-    expect(s.plan.accountState(shutdownKey(VM))).toBeNull();
+    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "shutdown_restore", status: "refused", message: "Changed outside FocusTime since; left as it is" });
+    expect((await s.plan.accountState(shutdownKey(VM)))).toBeNull();
   });
 
   it("refuses a delay past midnight and a VM without a schedule", async () => {
@@ -401,7 +401,7 @@ describe("auto-shutdown: delay, skip, and the next-morning restore", () => {
     const s = await signedInWithVm({ forbid: ["scheduleWrite"] });
     const p = await s.run<VmPreview>("vm.preview", { op: "delay60" });
     expect(await s.fail("vm.confirm", { previewId: p.previewId })).toMatchObject({ status: 403, error: expect.stringMatching(/Microsoft.DevTestLab\/schedules\/write/) });
-    expect(s.plan.accountState(shutdownKey(VM))).toBeNull();
+    expect((await s.plan.accountState(shutdownKey(VM)))).toBeNull();
   });
 });
 
@@ -440,7 +440,7 @@ describe("one-click Start from the morning box (step 15.5, Q87)", () => {
     expect(r).toMatchObject({ entry: { status: "pending" }, transition: { op: "start" } });
     expect(s.arm.calls.filter((x) => x.method === "POST" && x.path.endsWith("/start"))).toHaveLength(1);
     await settled();
-    expect(s.plan.azureWriteLog()[0]).toMatchObject({ op: "start", vmId: VM, status: "confirmed", message: "Read back: Running" });
+    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "start", vmId: VM, status: "confirmed", message: "Read back: Running" });
   });
 
   it("asks first when Settings > You turns it off; stop still needs its preview", async () => {
@@ -448,7 +448,7 @@ describe("one-click Start from the morning box (step 15.5, Q87)", () => {
     const r = await s.fail("vm.start_now", {});
     expect(r).toMatchObject({ status: 409, code: "ask_first" });
     expect(s.arm.calls.some((x) => x.method === "POST")).toBe(false);
-    expect(s.plan.azureWriteLog()).toHaveLength(0);
+    expect((await s.plan.azureWriteLog())).toHaveLength(0);
   });
 
   it("refuses another VM, and a VM that is already running", async () => {

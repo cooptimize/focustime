@@ -80,31 +80,31 @@ describe("server", () => {
 
   it("refuses a state change without the session's CSRF token", async () => {
     const b = app.browser();
-    b.signIn("user-a");
+    await b.signIn("user-a");
     expect((await b.action("week.load", { weekStart: "2026-11-02" }, { "x-csrf": "" })).status).toBe(403);
     expect((await b.action("week.load", { weekStart: "2026-11-02" }, { "x-csrf": "wrong" })).status).toBe(403);
     const other = app.browser();
-    other.signIn("user-a");
+    await other.signIn("user-a");
     // Another session's token doesn't do.
     expect((await b.action("week.load", { weekStart: "2026-11-02" }, { "x-csrf": other.jar.get(CSRF_COOKIE)! })).status).toBe(403);
   });
 
   it("refuses a foreign Host even with a session (DNS rebinding)", async () => {
     const b = app.browser();
-    b.signIn("user-a");
+    await b.signIn("user-a");
     expect((await b.send("/", { host: "evil.example" })).status).toBe(403);
   });
 
   it("refuses API calls from another origin or without an Origin", async () => {
     const b = app.browser();
-    b.signIn("user-a");
+    await b.signIn("user-a");
     expect((await b.action("week.load", {}, { origin: `http://localhost:${app.port + 1}` })).status).toBe(403);
     expect((await b.send("/api/action", { "content-type": "application/json" }, "POST", "{}")).status).toBe(403);
   });
 
   it("serves week.load with real focus blocks, and nothing secret goes over the wire or into logs", async () => {
     const b = app.browser();
-    const s = b.signIn("user-a");
+    const s = (await b.signIn("user-a"));
     const r = await b.action("week.load", { weekStart: "2026-11-02" });
     expect(r.status).toBe(200);
     const data = JSON.parse(r.body).data;
@@ -117,7 +117,7 @@ describe("server", () => {
 
   it("ends a session after the idle timeout, and the next call is signed out", async () => {
     const b = app.browser();
-    b.signIn("user-a");
+    await b.signIn("user-a");
     expect((await b.action("week.load", { weekStart: "2026-11-02" })).status).toBe(200);
     now = now.add({ milliseconds: SESSION_IDLE_MS + 1000 });
     const r = await b.action("week.load", { weekStart: "2026-11-02" });
@@ -128,7 +128,7 @@ describe("server", () => {
 
   it("hands the launcher's open request to the window once, guarded like actions and POST only (step 9)", async () => {
     const b = app.browser();
-    b.signIn("user-a");
+    await b.signIn("user-a");
     expect((await app.browser().post("/api/open-request", {})).status).toBe(401);
     expect((await b.post("/api/open-request", {}, { origin: "http://evil.example" })).status).toBe(403);
     expect((await b.send("/api/open-request", { origin: app.publicUrl })).status).toBe(405);
@@ -138,20 +138,20 @@ describe("server", () => {
 
   it("rejects unknown actions", async () => {
     const b = app.browser();
-    b.signIn("user-a");
+    await b.signIn("user-a");
     expect((await b.action("dataverse.write", {})).status).toBe(400);
   });
 
   it("signs out: the session ends at the server and its cookies are cleared", async () => {
     const b = app.browser();
-    b.signIn("user-a");
+    await b.signIn("user-a");
     const before = b.jar.get(SESSION_COOKIE)!;
     expect((await b.post("/auth/logout", {}, { "x-csrf": "wrong" })).status).toBe(403);
-    expect(app.accounts.sessions.resolve(before)).not.toBeNull();
+    expect((await app.accounts.sessions.resolve(before))).not.toBeNull();
     const r = await b.post("/auth/logout", {});
     expect(r.status).toBe(200);
     expect(b.jar.has(SESSION_COOKIE)).toBe(false);
-    expect(app.accounts.sessions.resolve(before)).toBeNull();
+    expect((await app.accounts.sessions.resolve(before))).toBeNull();
   });
 
   it("brings the window up for the developer loop: same origin only, POST only, once per 5 seconds; no session needed", async () => {
@@ -166,5 +166,24 @@ describe("server", () => {
     expect(reopened).toBe(1);
     expect((await b.post("/api/reopen", {})).status).toBe(503);
     expect(reopened).toBe(1);
+  });
+});
+
+describe("the database's state for a waiting page (A3)", () => {
+  it("answers from memory, with no session, same origin only, and says only ok, waking or unavailable", async () => {
+    let state: "ok" | "waking" | "unavailable" = "waking";
+    const t = await startTestApp({ ctx: {} as ActionContext, extra: { dbStatus: () => state } });
+    try {
+      const b = t.browser();
+      const r = await b.post("/api/db-status", {});
+      expect(r.status).toBe(200);
+      expect(JSON.parse(r.body)).toEqual({ status: "waking" });
+      state = "ok";
+      expect(JSON.parse((await b.post("/api/db-status", {})).body)).toEqual({ status: "ok" });
+      expect((await b.send("/api/db-status")).status).toBe(403);
+      expect((await b.post("/api/db-status", {}, { origin: "http://evil.example" })).status).toBe(403);
+    } finally {
+      await t.close();
+    }
   });
 });

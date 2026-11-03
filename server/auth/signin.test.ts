@@ -88,7 +88,7 @@ describe("Microsoft sign-in", () => {
     expect(set).toMatch(new RegExp(`${SESSION_COOKIE}=[^;]+; Path=/; Secure; HttpOnly; SameSite=Lax`));
     expect(set).toMatch(new RegExp(`${CSRF_COOKIE}=[^;]+; Path=/; Secure; SameSite=Strict`));
     expect(t.signedIn).toEqual([{ oid: FAKE_OID, tid: FAKE_TENANT, upn: "ana@cooptimize.example", name: "Ana Example", email: "ana@cooptimize.example" }]);
-    const s = t.app.accounts.sessions.resolve(b.jar.get(SESSION_COOKIE));
+    const s = (await t.app.accounts.sessions.resolve(b.jar.get(SESSION_COOKIE)));
     expect(s).toMatchObject({ userId: FAKE_OID, demo: false });
     // The code was redeemed with the verifier and the client secret.
     const req = t.idp.seen.tokenRequests[0]!;
@@ -168,10 +168,10 @@ describe("Microsoft sign-in", () => {
   it("starts a fresh session id at sign-in, never the one the browser brought", async () => {
     const t = await setup();
     const b = t.app.browser();
-    const planted = b.signIn("someone-else");
+    const planted = (await b.signIn("someone-else"));
     await t.signIn(b);
     expect(b.jar.get(SESSION_COOKIE)).not.toBe(planted.cookie);
-    expect(t.app.accounts.sessions.resolve(planted.cookie)).toBeNull();
+    expect((await t.app.accounts.sessions.resolve(planted.cookie))).toBeNull();
   });
 });
 
@@ -184,11 +184,11 @@ describe("demo sessions", () => {
     expect(r.status).toBe(200);
     const d2 = t.app.browser();
     await d2.post("/auth/demo", {});
-    const s1 = t.app.accounts.sessions.resolve(d1.jar.get(SESSION_COOKIE))!;
-    const s2 = t.app.accounts.sessions.resolve(d2.jar.get(SESSION_COOKIE))!;
+    const s1 = (await t.app.accounts.sessions.resolve(d1.jar.get(SESSION_COOKIE)))!;
+    const s2 = (await t.app.accounts.sessions.resolve(d2.jar.get(SESSION_COOKIE)))!;
     expect(s1).toMatchObject({ demo: true, userId: "demo-1" });
     expect(s2).toMatchObject({ demo: true, userId: "demo-2" });
-    expect(t.app.accounts.sessions.resolve(real.jar.get(SESSION_COOKIE))).toMatchObject({ demo: false, userId: FAKE_OID });
+    expect((await t.app.accounts.sessions.resolve(real.jar.get(SESSION_COOKIE)))).toMatchObject({ demo: false, userId: FAKE_OID });
     // The demo cookie lasts hours, not days.
     expect(String(r.headers["set-cookie"])).toMatch(/Max-Age=7200/);
   });

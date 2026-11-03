@@ -37,10 +37,10 @@ describe("scopeSql (A2)", () => {
     );
   });
 
-  it("leaves app tables and transaction control alone", () => {
+  it("leaves app tables alone, and refuses transaction control (A3: transactions belong to the connection)", () => {
     expect(scoped("SELECT * FROM sessions WHERE id = ?")).toBe("SELECT * FROM sessions WHERE id = ?");
-    expect(scoped("BEGIN IMMEDIATE")).toBe("BEGIN IMMEDIATE");
     expect(scoped("SELECT 1")).toBe("SELECT 1");
+    expect(() => scopeSql("BEGIN IMMEDIATE")).toThrow(ScopeError);
   });
 
   it("refuses what it can't scope instead of running it unscoped", () => {

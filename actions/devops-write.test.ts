@@ -123,7 +123,7 @@ describe("write identity", () => {
     expect(r).toMatchObject({ status: 422, code: "identity_mismatch" });
     if (!r.ok) expect(r.error).toContain("Dana Ruiz");
     expect(s.keyring.size).toBe(0);
-    expect(s.plan.devopsIdentity(COOP)).toBeNull();
+    expect((await s.plan.devopsIdentity(COOP))).toBeNull();
   });
   it("refuses a PAT DevOps doesn't accept, and one when my DevOps identity is missing", async () => {
     expect(await s.fail("devops.set_write_pat", { clientKey: COOP, pat: "nope" })).toMatchObject({ status: 422 });
@@ -155,7 +155,7 @@ describe("write identity", () => {
     await s.enable();
     await s.run("devops.clear_write_pat", { clientKey: COOP });
     expect(s.keyring.size).toBe(0);
-    expect(s.plan.devopsIdentity(COOP)).toBeNull();
+    expect((await s.plan.devopsIdentity(COOP))).toBeNull();
   });
 });
 
@@ -202,7 +202,7 @@ describe("each write", () => {
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "target_date", itemId: 500, date: "2026-11-20" } })).toMatchObject({ status: 409 });
   });
   it("create a story from a draft: type from the requirement backlog, parent link, me, area and iteration from the parent", async () => {
-    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "[FocusTime test] safe to remove", size: "S" });
+    const d = (await s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "[FocusTime test] safe to remove", size: "S" }));
     const p = await s.preview({ kind: "create", draftId: d.id, description: "Desc", acceptance: "AC" });
     expect(p.item).toBe("New User Story: [FocusTime test] safe to remove");
     expect(p.links[0]).toContain("#437");
@@ -219,16 +219,16 @@ describe("each write", () => {
     expect(s.forgotten).toContain(COOP);
   });
   it("create a feature from a draft feature: under an epic only", async () => {
-    const ok = s.plan.addDraft({ clientKey: COOP, parentItemId: 600, title: "New feature", size: "M", level: "feature" });
+    const ok = (await s.plan.addDraft({ clientKey: COOP, parentItemId: 600, title: "New feature", size: "M", level: "feature" }));
     expect((await s.write({ kind: "create", draftId: ok.id })).confirmed).toBe(true);
-    const wrong = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "Feature under a feature", size: "M", level: "feature" });
+    const wrong = (await s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "Feature under a feature", size: "M", level: "feature" }));
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "create", draftId: wrong.id } })).toMatchObject({ status: 409 });
-    const orphan = s.plan.addDraft({ clientKey: COOP, parentItemId: null, title: "No parent", size: "M" });
+    const orphan = (await s.plan.addDraft({ clientKey: COOP, parentItemId: null, title: "No parent", size: "M" }));
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "create", draftId: orphan.id } })).toMatchObject({ status: 409 });
   });
   it("step 15.3: a story uses the draft editor's description and acceptance criteria; the preview shows every field", async () => {
-    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "Old title", size: "S" });
-    s.plan.updateDraft(d.id, { title: "Edited title", description: "Line one\nLine two", acceptance: "Given a file, it imports" });
+    const d = (await s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "Old title", size: "S" }));
+    (await s.plan.updateDraft(d.id, { title: "Edited title", description: "Line one\nLine two", acceptance: "Given a file, it imports" }));
     const p = await s.preview({ kind: "create", draftId: d.id });
     expect(p.item).toBe("New User Story: Edited title");
     const rows = Object.fromEntries(p.fields.map((r) => [r.label, r.after]));
@@ -241,8 +241,8 @@ describe("each write", () => {
     expect(ops.find((o) => o.path === "/fields/Microsoft.VSTS.Common.AcceptanceCriteria")!.value).toContain("Given a file, it imports");
   });
   it("step 15.3: a feature sends its start and target dates (midnight in my zone) and the preview shows them", async () => {
-    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 600, title: "Dated feature", size: "M", level: "feature" });
-    s.plan.updateDraft(d.id, { startDate: "2026-11-09", targetDate: "2026-11-27" });
+    const d = (await s.plan.addDraft({ clientKey: COOP, parentItemId: 600, title: "Dated feature", size: "M", level: "feature" }));
+    (await s.plan.updateDraft(d.id, { startDate: "2026-11-09", targetDate: "2026-11-27" }));
     const p = await s.preview({ kind: "create", draftId: d.id });
     const rows = Object.fromEntries(p.fields.map((r) => [r.label, r.after]));
     expect(rows).toMatchObject({ Type: "Feature", "Start date": "2026-11-09", "Target date": "2026-11-27" });
@@ -254,15 +254,15 @@ describe("each write", () => {
   it("step 15.3: a start date the type has no field for is refused, not dropped", async () => {
     const t = setup({ startDate: false });
     await t.enable();
-    const d = t.plan.addDraft({ clientKey: COOP, parentItemId: 600, title: "F", size: "M", level: "feature" });
-    t.plan.updateDraft(d.id, { startDate: "2026-11-09" });
+    const d = (await t.plan.addDraft({ clientKey: COOP, parentItemId: 600, title: "F", size: "M", level: "feature" }));
+    (await t.plan.updateDraft(d.id, { startDate: "2026-11-09" }));
     expect(await t.fail("devops.preview", { clientKey: COOP, change: { kind: "create", draftId: d.id } })).toMatchObject({ status: 409 });
     expect(t.dv.writes()).toEqual([]);
   });
   it("no acceptance criteria field: none is sent", async () => {
     const t = setup({ acceptance: false });
     await t.enable();
-    const d = t.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "S", size: "S" });
+    const d = (await t.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "S", size: "S" }));
     await t.write({ kind: "create", draftId: d.id, acceptance: "AC" });
     expect((t.dv.writes().find((w) => w.method === "POST")!.body as { path: string }[]).some((o) => o.path.includes("Acceptance"))).toBe(false);
   });
@@ -295,7 +295,7 @@ describe("guardrails", () => {
     expect(patches(s).length).toBe(n);
   });
   it("a lost create answer: Retry finds the item under the parent and doesn't create a second", async () => {
-    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "Once only", size: "S" });
+    const d = (await s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "Once only", size: "S" }));
     s.dv.fail("POST", /\$User%20Story$/, "lost");
     const r = await s.write({ kind: "create", draftId: d.id });
     expect(r.confirmed).toBe(false);
@@ -341,13 +341,13 @@ describe("undo of each kind", () => {
   });
   const undo = async (id: number) => s.write({ kind: "undo", writeId: id });
   it("the live sequence: create, comment, state, then undo state, comment and create (Removed, draft and picks back)", async () => {
-    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "[FocusTime test] safe to remove", size: "S" });
-    const pick = s.plan.addPick({ date: "2026-11-03", half: "AM", clientKey: COOP, kind: "draft", draftId: d.id, title: d.title, size: "S" } as never);
+    const d = (await s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "[FocusTime test] safe to remove", size: "S" }));
+    const pick = (await s.plan.addPick({ date: "2026-11-03", half: "AM", clientKey: COOP, kind: "draft", draftId: d.id, title: d.title, size: "S" } as never));
     const created = await s.write({ kind: "create", draftId: d.id });
     const id = created.entry.itemId!;
     // Draft replaced everywhere it was referenced: its pick is now the item, and the draft left the lists.
-    expect(s.plan.getPick(pick.id)).toMatchObject({ kind: "item", itemId: id, draftId: null, itemUrl: `https://dev.azure.com/cooptimize/Cooptimize%20Project/_workitems/edit/${id}` });
-    expect(s.plan.drafts().some((x) => x.id === d.id)).toBe(false);
+    expect((await s.plan.getPick(pick.id))).toMatchObject({ kind: "item", itemId: id, draftId: null, itemUrl: `https://dev.azure.com/cooptimize/Cooptimize%20Project/_workitems/edit/${id}` });
+    expect((await s.plan.drafts()).some((x) => x.id === d.id)).toBe(false);
     const comment = await s.write({ kind: "comment", itemId: id, text: "FocusTime write check" });
     const state = await s.write({ kind: "state", itemId: id, state: "Active" });
     // Only the newest change can be undone first.
@@ -360,8 +360,8 @@ describe("undo of each kind", () => {
     expect(removed.confirmed).toBe(true);
     expect(s.dv.items.get(id)!.fields["System.State"]).toBe("Removed");
     expect(s.dv.items.has(id)).toBe(true); // never deleted
-    expect(s.plan.getPick(pick.id)).toMatchObject({ kind: "draft", draftId: d.id, itemId: null });
-    expect(s.plan.drafts().some((x) => x.id === d.id)).toBe(true);
+    expect((await s.plan.getPick(pick.id))).toMatchObject({ kind: "draft", draftId: d.id, itemId: null });
+    expect((await s.plan.drafts()).some((x) => x.id === d.id)).toBe(true);
     // #437 only gained the child link.
     expect(s.dv.writes().filter((w) => w.url.includes("/workitems/437"))).toHaveLength(0);
   });
@@ -409,10 +409,10 @@ describe("undo of each kind", () => {
     expect(await s.fail("devops.preview", { clientKey: COOP, change: { kind: "undo", writeId: r.entry.id } })).toMatchObject({ status: 409, code: "changed" });
   });
   it("Mark done in DevOps closes the follow-up after read back", async () => {
-    const f = s.plan.openRuleFollowUp({ kind: "devops_update", ruleKey: "x:500", clientKey: COOP, who: COOP, what: "Update DevOps #500", itemId: 500 } as never)!;
+    const f = (await s.plan.openRuleFollowUp({ kind: "devops_update", ruleKey: "x:500", clientKey: COOP, who: COOP, what: "Update DevOps #500", itemId: 500 } as never))!;
     const r = await s.write({ kind: "state", itemId: 500, state: "Closed", followUpId: f.id });
     expect(r.confirmed).toBe(true);
-    expect(s.plan.getFollowUp(f.id)).toMatchObject({ outcome: "done", closeHow: "devops" });
+    expect((await s.plan.getFollowUp(f.id))).toMatchObject({ outcome: "done", closeHow: "devops" });
   });
 });
 
@@ -443,7 +443,7 @@ describe("read-back resilience (step 14.5, D255)", () => {
   it("a create's read-back is retried the same way", async () => {
     const s = setup();
     await s.enable();
-    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "Retry me", size: "S" });
+    const d = (await s.plan.addDraft({ clientKey: COOP, parentItemId: 437, title: "Retry me", size: "S" }));
     const p = await s.preview({ kind: "create", draftId: d.id });
     s.dv.fail("GET", /workitems\/\d+$/i, "network");
     const r = await s.confirm(p);
@@ -463,7 +463,7 @@ describe("parent first (step 14.5, D257)", () => {
   it("the server never creates a draft without a parent", async () => {
     const s = setup();
     await s.enable();
-    const d = s.plan.addDraft({ clientKey: COOP, parentItemId: null, title: "No parent", size: "S" });
+    const d = (await s.plan.addDraft({ clientKey: COOP, parentItemId: null, title: "No parent", size: "S" }));
     const r = await s.fail("devops.preview", { clientKey: COOP, change: { kind: "create", draftId: d.id } });
     expect(r.status).toBeGreaterThanOrEqual(400);
     expect(s.dv.writes()).toHaveLength(0);

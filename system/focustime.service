@@ -10,6 +10,8 @@ Type=simple
 WorkingDirectory=@REPO@
 # Build the UI so the service always serves the current code, then run the server without opening a window.
 ExecStartPre=@NODE@ node_modules/vite/bin/vite.js build --logLevel warn
+# A3: start the local SQL Server container when the app config uses it (nothing otherwise).
+ExecStartPre=@NODE@ scripts/db.ts start-if-configured
 ExecStart=@NODE@ server/main.ts --no-open
 Restart=on-failure
 RestartSec=5

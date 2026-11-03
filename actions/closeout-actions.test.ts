@@ -61,49 +61,49 @@ function setup(start = "2026-11-02T15:00:00Z") {
     if (r.ok) throw new Error("expected failure");
     return r;
   };
-  const add = (p: Partial<NewPick> = {}) => plan.addPick({ date: MON, half: "PM", clientKey: "Adatum", kind: "intention", title: "Review the mapping", size: "M", ...p });
+  const add = async (p: Partial<NewPick> = {}) => (await plan.addPick({ date: MON, half: "PM", clientKey: "Adatum", kind: "intention", title: "Review the mapping", size: "M", ...p }));
   return { run, fail, plan, add, watches, setDevOps: (w: ClientWork[]) => void (next = w), at: (t: string) => void (clock = t) };
 }
 
 describe("follow-ups through week.load (step 7)", () => {
   it("a done pick whose item is still open opens 'Update DevOps'; a later fetch of the item by id closes it", async () => {
     const t = setup();
-    const p = t.add({ kind: "item", itemId: 101, title: "Export report" });
-    t.plan.commit(MON);
-    t.plan.setDone(p.id, true);
+    const p = (await t.add({ kind: "item", itemId: 101, title: "Export report" }));
+    (await t.plan.commit(MON));
+    (await t.plan.setDone(p.id, true));
     t.setDevOps([adatum([item()])]);
     await t.run("week.load", { weekStart: MON });
-    expect(t.plan.openFollowUps().map((l) => [l.kind, l.who, l.what, l.itemId])).toEqual([["devops_update", "Adatum", "Update DevOps #101: Export report", 101]]);
+    expect((await t.plan.openFollowUps()).map((l) => [l.kind, l.who, l.what, l.itemId])).toEqual([["devops_update", "Adatum", "Update DevOps #101: Export report", 101]]);
     expect((await t.run<WeekLoadData>("week.load", { weekStart: MON })).openFollowUps).toBe(1);
     // The next load asks DevOps for #101 by id; it is now Closed.
     t.at("2026-11-02T23:00:00Z");
     t.setDevOps([adatum([], [item({ state: "Closed", stateCategory: "Completed", changedAt: "2026-11-02T22:30:00Z" })])]);
     await t.run("week.load", { weekStart: MON });
     expect(t.watches.at(-1)).toEqual({ Adatum: [101] });
-    expect(t.plan.openFollowUps()).toEqual([]);
-    expect(t.plan.allFollowUps()[0]).toMatchObject({ closedBy: "signal", closeNote: "DevOps #101 is Closed" });
+    expect((await t.plan.openFollowUps())).toEqual([]);
+    expect((await t.plan.allFollowUps())[0]).toMatchObject({ closedBy: "signal", closeNote: "DevOps #101 is Closed" });
   });
 
   it("a blocked item assigned to me opens 'Nudge on blocker'; unblocked, it closes", async () => {
     const t = setup();
     t.setDevOps([adatum([item({ id: 202, title: "Waiting on API keys", tags: ["Blocked"], blocked: true })])]);
     await t.run("week.load", { weekStart: MON });
-    expect(t.plan.openFollowUps().map((l) => l.what)).toEqual(["Nudge on blocker for #202: Waiting on API keys"]);
+    expect((await t.plan.openFollowUps()).map((l) => l.what)).toEqual(["Nudge on blocker for #202: Waiting on API keys"]);
     t.setDevOps([adatum([item({ id: 202, title: "Waiting on API keys" })])]);
     await t.run("week.load", { weekStart: MON });
-    expect(t.plan.openFollowUps()).toEqual([]);
+    expect((await t.plan.openFollowUps())).toEqual([]);
   });
 });
 
 describe("Close out (step 7)", () => {
   it("carries over to the next plannable day, moves to a chosen slot, and the slip opens a heads-up follow-up with a draft", async () => {
     const t = setup("2026-11-02T22:15:00Z"); // Mon 5:15 PM
-    const a = t.add({ kind: "item", itemId: 101, title: "Export report" });
-    const b = t.add({ title: "Review the mapping", size: "S" });
-    const done = t.add({ title: "Standup notes", size: "S" });
-    t.plan.commit(MON);
-    t.plan.setDone(done.id, true);
-    t.plan.addFocus({ pickId: a.id, label: "Export report", startedAt: "x", endedAt: "y", seconds: 45 * 60 });
+    const a = (await t.add({ kind: "item", itemId: 101, title: "Export report" }));
+    const b = (await t.add({ title: "Review the mapping", size: "S" }));
+    const done = (await t.add({ title: "Standup notes", size: "S" }));
+    (await t.plan.commit(MON));
+    (await t.plan.setDone(done.id, true));
+    (await t.plan.addFocus({ pickId: a.id, label: "Export report", startedAt: "x", endedAt: "y", seconds: 45 * 60 }));
     let st = await t.run<CloseOutState>("closeout.load", { date: MON });
     expect(st).toMatchObject({ date: MON, today: MON, access: "today", carryTo: "2026-11-03", closedOutAt: null });
     expect(st.focused[a.id]).toBe(2700);
@@ -119,7 +119,7 @@ describe("Close out (step 7)", () => {
     expect(slip.draft).toContain("- Review the mapping: moving to Wed, Nov 4 (morning)");
     // Mark as told closes it by hand.
     await t.run("followup.close", { id: slip.id, note: "Posted in Teams" });
-    expect(t.plan.allFollowUps().find((l) => l.id === slip.id)).toMatchObject({ closedBy: "me", closeNote: "Posted in Teams" });
+    expect((await t.plan.allFollowUps()).find((l) => l.id === slip.id)).toMatchObject({ closedBy: "me", closeNote: "Posted in Teams" });
 
     st = await t.run<CloseOutState>("closeout.commit", { date: MON });
     expect(st.closedOutAt).toMatch(/^2026-11-02T17:15/);
@@ -139,9 +139,9 @@ describe("Close out (step 7)", () => {
 describe("borrowed time (step 7)", () => {
   it("'make it up tonight' moves the pick to the evening, records what's owed and offers a flex session; a done payback pick pays it", async () => {
     const t = setup("2026-11-02T22:15:00Z");
-    const p = t.add({ title: "Export report", size: "M" });
-    t.plan.commit(MON);
-    t.plan.addFocus({ pickId: p.id, label: "x", startedAt: "x", endedAt: "y", seconds: 45 * 60 });
+    const p = (await t.add({ title: "Export report", size: "M" }));
+    (await t.plan.commit(MON));
+    (await t.plan.addFocus({ pickId: p.id, label: "x", startedAt: "x", endedAt: "y", seconds: 45 * 60 }));
     const r = await t.run<{ pick: { id: number; date: string; half: string }; borrowed: { minutes: number; payback: string; paidAt: string | null }; flexOffer: unknown }>("pick.make_up", { id: p.id, when: "tonight" });
     expect(r.pick).toMatchObject({ id: p.id, date: MON, half: "EVE" });
     expect(r.borrowed).toMatchObject({ minutes: 75, payback: "tonight", paidAt: null });
@@ -149,7 +149,7 @@ describe("borrowed time (step 7)", () => {
     let w = await t.run<WeekLoadData>("week.load", { weekStart: MON });
     expect(w.borrowed.map((b) => [b.title, b.minutes, b.paidAt])).toEqual([["Export report", 75, null]]);
     // Tonight is the same day: no heads-up is owed.
-    expect(t.plan.openFollowUps().filter((l) => l.kind === "slip")).toEqual([]);
+    expect((await t.plan.openFollowUps()).filter((l) => l.kind === "slip")).toEqual([]);
     await t.run("pick.mark_done", { id: p.id, done: true });
     w = await t.run<WeekLoadData>("week.load", { weekStart: MON });
     expect(w.borrowed[0]).toMatchObject({ paidBy: "picks" });
@@ -158,9 +158,9 @@ describe("borrowed time (step 7)", () => {
 
   it("Friday or another day moves it there (the slip owes a heads-up); paying by hand works; refusals are plain", async () => {
     const t = setup("2026-11-02T22:15:00Z");
-    const p = t.add({ title: "Export report", size: "S" });
-    const q = t.add({ title: "Load test", size: "S" });
-    t.plan.commit(MON);
+    const p = (await t.add({ title: "Export report", size: "S" }));
+    const q = (await t.add({ title: "Load test", size: "S" }));
+    (await t.plan.commit(MON));
     const r = await t.run<{ pick: { id: number; date: string; half: string }; borrowed: { id: number; minutes: number }; flexOffer: unknown }>("pick.make_up", { id: p.id, when: "friday" });
     expect(r.pick).toMatchObject({ date: "2026-11-06", half: "AM" });
     expect(r.borrowed.minutes).toBe(60);
@@ -170,7 +170,7 @@ describe("borrowed time (step 7)", () => {
     await t.run("borrow.pay", { id: r.borrowed.id });
     const w = await t.run<WeekLoadData>("week.load", { weekStart: MON });
     expect(w.borrowed.map((b) => [b.title, b.paidBy])).toEqual([["Export report", "me"], ["Load test", null]]);
-    expect(t.plan.openFollowUps().map((l) => l.kind)).toContain("slip");
+    expect((await t.plan.openFollowUps()).map((l) => l.kind)).toContain("slip");
     expect((await t.fail("pick.make_up", { id: p.id, when: "tonight" })).status).toBe(409);
     expect((await t.fail("pick.make_up", { id: 999, when: "tonight" })).status).toBe(404);
     expect((await t.fail("pick.make_up", { id: q.id, when: "someday" })).status).toBe(400);
@@ -189,12 +189,12 @@ describe("resume notes (step 7)", () => {
     expect(pd.resumeNotes.Adatum).toEqual({ clientKey: "Adatum", date: MON, note: "Mapping half done, next: lookups" });
     const w = await t.run<WeekLoadData>("week.load", { weekStart: MON });
     expect(w.resumeNotes.Adatum?.note).toBe("Mapping half done, next: lookups");
-    expect(t.plan.noteHistory("Adatum").map((n) => n.date)).toEqual([MON, "2026-10-29"]);
+    expect((await t.plan.noteHistory("Adatum")).map((n) => n.date)).toEqual([MON, "2026-10-29"]);
     // Planning an earlier day shows the note that was latest then.
-    expect(t.plan.latestNotes("2026-10-30").Adatum?.note).toBe("Started the export");
+    expect((await t.plan.latestNotes("2026-10-30")).Adatum?.note).toBe("Started the export");
     // An empty note removes that day's; the earlier one is latest again.
     await t.run("note.set", { clientKey: "Adatum", date: MON, note: "" });
-    expect(t.plan.latestNotes().Adatum?.note).toBe("Started the export");
+    expect((await t.plan.latestNotes()).Adatum?.note).toBe("Started the export");
     expect((await t.fail("note.set", { clientKey: "Adatum", date: "2026-11-09", note: "x" })).status).toBe(422);
     expect((await t.fail("note.set", { clientKey: "Adatum", date: MON, note: "x".repeat(201) })).status).toBe(400);
   });
@@ -257,7 +257,7 @@ describe("follow-ups (step 7, step 13.5)", () => {
   it("Delete is only for ones I added; FocusTime's own say to use Not needed", async () => {
     const t = setup();
     const a = (await t.run<{ followUp: { id: number } }>("followup.add", { what: "Mine" })).followUp;
-    const rule = t.plan.openRuleFollowUp({ kind: "slip", ruleKey: "slip:x", clientKey: "Adatum", who: "Adatum", what: "Heads-up to Adatum" })!;
+    const rule = (await t.plan.openRuleFollowUp({ kind: "slip", ruleKey: "slip:x", clientKey: "Adatum", who: "Adatum", what: "Heads-up to Adatum" }))!;
     await t.run("followup.delete", { id: a.id });
     const r = await t.fail("followup.delete", { id: rule.id });
     expect(r.status).toBe(409);

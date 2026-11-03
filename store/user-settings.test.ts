@@ -5,7 +5,8 @@ import { parseConfig } from "../config/schema.ts";
 import { settingsEdit } from "../config/settings.ts";
 import { starterToml } from "../config/starter.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
-import { openPlanDb } from "./plan-store.ts";
+import { addUsers, forEachDriver } from "../test/db.ts";
+import type { Conn } from "./sql/conn.ts";
 import { createUserSettings, SETTINGS_PLACE, type AppKeys } from "./user-settings.ts";
 
 const NY = "America/New_York";
@@ -16,8 +17,9 @@ const APP: AppKeys = {
   google: { clientId: "123-abc.apps.googleusercontent.com" },
 };
 
-function setup(app: AppKeys = APP) {
-  const db = openPlanDb({ path: ":memory:", now: () => now().toZonedDateTimeISO(NY) });
+async function setup(open: () => Promise<{ conn: Conn }>, app: AppKeys = APP) {
+  const db = (await open()).conn;
+  await addUsers(db, "ana", "ben");
   const people = new Map<string, { email: string | null; upn: string; timeZone: string | null }>();
   const make = (userId: string) => {
     people.set(userId, { email: `${userId}@cooptimize.example`, upn: `${userId}@cooptimize.example`, timeZone: null });
@@ -46,13 +48,13 @@ describe("settings sections (A2)", () => {
   });
 });
 
-describe("a person's settings in the store (A2)", () => {
+await forEachDriver("a person's settings in the store (A2)", ({ open }) => {
   it("is seeded once and completed with the app's keys and the person's sign-in", async () => {
-    const t = setup();
+    const t = await setup(open);
     const s = t.make("ana");
-    expect(s.has()).toBe(false);
-    s.seed(STARTER_TOML);
-    expect(s.has()).toBe(true);
+    expect((await s.has())).toBe(false);
+    await s.seed(STARTER_TOML);
+    expect((await s.has())).toBe(true);
     const loaded = await s.load();
     expect(loaded.path).toBe(SETTINGS_PLACE);
     expect(loaded.parsed.ok).toBe(true);
@@ -62,18 +64,18 @@ describe("a person's settings in the store (A2)", () => {
     expect(c.outlook).toEqual({ tenantId: APP.entra!.tenantId, clientId: APP.entra!.clientId });
     expect(c.google?.clientId).toBe(APP.google!.clientId);
     // Nothing app-level was stored.
-    const stored = (t.db.prepare("SELECT body FROM user_settings").all() as { body: string }[]).map((r) => r.body).join("\n");
+    const stored = (await t.db.all("SELECT body FROM user_settings")).map((r) => r.body as string).join("\n");
     expect(stored).not.toContain(APP.dataverse!.environmentUrl);
     expect(stored).not.toContain(APP.entra!.clientId);
     expect(stored).not.toContain(APP.google!.clientId);
   });
 
   it("saves a Settings edit as rows, refuses an invalid one, and keeps people apart", async () => {
-    const t = setup();
+    const t = await setup(open);
     const ana = t.make("ana");
     const ben = t.make("ben");
-    ana.seed(STARTER_TOML);
-    ben.seed(STARTER_TOML);
+    await ana.seed(STARTER_TOML);
+    await ben.seed(STARTER_TOML);
     const r = await ana.write(settingsEdit("display", { theme: "neutral", viewRange: "business", showTimelines: false }));
     expect(r.ok).toBe(true);
     const a = await ana.load();
@@ -86,9 +88,9 @@ describe("a person's settings in the store (A2)", () => {
   });
 
   it("keeps the time zone on the person: a Settings change is mirrored, and their zone wins on load", async () => {
-    const t = setup();
+    const t = await setup(open);
     const s = t.make("ana");
-    s.seed(starterToml(NY));
+    await s.seed(starterToml(NY));
     await s.write((x) => setValue(x, "hours", "time_zone", "America/Denver"));
     expect(t.people.get("ana")!.timeZone).toBe("America/Denver");
     t.people.get("ana")!.timeZone = "America/Los_Angeles";
@@ -97,18 +99,18 @@ describe("a person's settings in the store (A2)", () => {
   });
 
   it("saves the Dataverse user found for the person in their own settings", async () => {
-    const t = setup();
+    const t = await setup(open);
     const s = t.make("ana");
-    s.seed(STARTER_TOML);
+    await s.seed(STARTER_TOML);
     await s.saveSystemUserId("44444444-4444-4444-8444-444444444444");
     const l = await s.load();
     expect(l.parsed.ok && l.parsed.config.dataverse.mySystemUserId).toBe("44444444-4444-4444-8444-444444444444");
   });
 
   it("without app keys, uses the starter's Dataverse environment and offers no Microsoft or Google sign-in", async () => {
-    const t = setup({ dataverse: null, entra: null, google: null });
+    const t = await setup(open, { dataverse: null, entra: null, google: null });
     const s = t.make("ana");
-    s.seed(STARTER_TOML);
+    await s.seed(STARTER_TOML);
     const l = await s.load();
     expect(l.parsed.ok).toBe(true);
     expect(l.parsed.ok && l.parsed.config.outlook).toBeNull();

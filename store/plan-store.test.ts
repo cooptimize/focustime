@@ -3,40 +3,62 @@ import { mkdirSync, mkdtempSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { giveUnowned } from "./claim.ts";
-import { MIGRATIONS, openPlanDb, planStoreOn, SOLO_USER, type PlanDbOptions } from "./plan-store.ts";
+import { MIGRATIONS, openPlanDb, planStoreOn, SOLO_USER, sqliteBackup, type PlanDbOptions, type PlanStore } from "./plan-store.ts";
+import { sqliteConn } from "./sql/sqlite.ts";
+import { addUsers, forEachDriver, type TestDb } from "../test/db.ts";
 
-/** A2: opens (and migrates) a store; rows from before migration 24 go to the test's one person, as at a first sign-in. */
-function createPlanStore(o: PlanDbOptions) {
-  const db = openPlanDb(o);
-  giveUnowned(db, SOLO_USER);
-  return planStoreOn(db, { ...o, userId: SOLO_USER });
-}
+/** SQL Server's stand-in for a store's file: "reopen" is a new store on the same test database. */
+const ON_SQLSERVER = "sqlserver:";
 
 const NY = "America/New_York";
 let clock = Temporal.ZonedDateTime.from("2026-11-02T08:01:00-05:00[America/New_York]");
 const now = () => clock;
-const fresh = () => {
-  const path = join(mkdtempSync(join(tmpdir(), "focustime-plan-")), "data", "plan.db");
-  return { path, store: createPlanStore({ path, now, files: localStoreFiles }) };
-};
 const item = { half: "AM" as const, clientKey: "Adatum", kind: "item" as const, itemId: 101, title: "Story", itemType: "User Story", itemUrl: "https://dev.azure.com/x/y/_workitems/edit/101", size: "M" as const };
 
+const START = clock;
+beforeEach(() => void (clock = START));
+
+await forEachDriver("plan store", (d) => {
+let current: TestDb | null = null;
+/** On SQL Server, closing a store must not close the test database it shares. */
+const onSqlServer = (db: TestDb, o: { now: () => Temporal.ZonedDateTime }): PlanStore => ({ ...planStoreOn(db.conn, { now: o.now, userId: SOLO_USER }), close: async () => {} });
+/** A2: opens (and migrates) a store; rows from before migration 24 go to the test's one person, as at a first sign-in. */
+async function createPlanStore(o: PlanDbOptions): Promise<PlanStore> {
+  if (d.driver === "sqlserver" && o.path === ON_SQLSERVER) return onSqlServer(current!, o);
+  if (d.driver === "sqlserver" && o.path === ":memory:") {
+    current = await d.open();
+    await addUsers(current.conn, SOLO_USER);
+    return onSqlServer(current, o);
+  }
+  const raw = openPlanDb(o);
+  const conn = sqliteConn(raw);
+  await giveUnowned(conn, SOLO_USER);
+  return planStoreOn(conn, { ...o, userId: SOLO_USER, backup: sqliteBackup(raw, o.files) });
+}
+const fresh = async () => {
+  if (d.driver === "sqlserver") return { path: ON_SQLSERVER, store: await await createPlanStore({ path: ":memory:", now }) };
+  const path = join(mkdtempSync(join(tmpdir(), "focustime-plan-")), "data", "plan.db");
+  return { path, store: await await createPlanStore({ path, now, files: localStoreFiles }) };
+};
+/** Tests of SQLite itself: its file, its backups and its 26 migrations (SQL Server starts at the baseline). */
+const itSqlite = d.driver === "sqlite" ? it : it.skip;
+
 describe("plan store", () => {
-  it("migrates from empty, creates a private file, and records the schema version", () => {
-    const { path, store } = fresh();
-    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
+  itSqlite("migrates from empty, creates a private file, and records the schema version", async () => {
+    const { path, store } = await fresh();
+    expect((await store.schemaVersion())).toBe(MIGRATIONS.length);
     expect(statSync(path).mode & 0o777).toBe(0o600);
     expect(statSync(join(path, "..")).mode & 0o777).toBe(0o700);
-    store.close();
+    await store.close();
     // Re-opening runs nothing again.
-    const again = createPlanStore({ path, now, files: localStoreFiles });
-    expect(again.schemaVersion()).toBe(MIGRATIONS.length);
-    again.close();
+    const again = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await again.schemaVersion())).toBe(MIGRATIONS.length);
+    await again.close();
   });
 
-  it("migrates a step 6 store to the time model with a private backup first, keeping every pick (D125)", () => {
+  itSqlite("migrates a step 6 store to the time model with a private backup first, keeping every pick (D125)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     mkdirSync(dir, { recursive: true });
@@ -52,195 +74,195 @@ describe("plan store", () => {
     old.exec("UPDATE picks SET carried_from = 1 WHERE id = 2");
     old.close();
 
-    const store = createPlanStore({ path, now, files: localStoreFiles });
-    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
-    expect(store.picksFor("2026-10-29").map((p) => [p.id, p.half, p.status, p.carriedFrom])).toEqual([
+    const store = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await store.schemaVersion())).toBe(MIGRATIONS.length);
+    expect((await store.picksFor("2026-10-29")).map((p) => [p.id, p.half, p.status, p.carriedFrom])).toEqual([
       [1, "AM", "done", null],
       [2, "PM", "planned", 1],
     ]);
-    store.start("2026-11-02");
-    expect(store.addPick({ ...item, date: "2026-11-02", half: "EVE" }).half).toBe("EVE");
+    (await store.start("2026-11-02"));
+    expect((await store.addPick({ ...item, date: "2026-11-02", half: "EVE" })).half).toBe("EVE");
     const backups = readdirSync(dir).filter((f) => f.startsWith("plan.db.bak-v2-"));
     expect(backups).toHaveLength(1);
     expect(statSync(join(dir, backups[0]!)).mode & 0o777).toBe(0o600);
     const bak = new DatabaseSync(join(dir, backups[0]!), { readOnly: true });
     expect((bak.prepare("SELECT COUNT(*) AS n FROM picks").get() as { n: number }).n).toBe(2);
     bak.close();
-    store.close();
+    await store.close();
     // Opening again makes no second backup.
-    createPlanStore({ path, now, files: localStoreFiles }).close();
+    await (await createPlanStore({ path, now, files: localStoreFiles })).close();
     expect(readdirSync(dir).filter((f) => f.startsWith("plan.db.bak-"))).toHaveLength(1);
   });
 
-  it("stores unavailable time and flex sessions; a flex session opens its update follow-up once it has ended", () => {
-    const { store } = fresh();
-    const u = store.addUnavailable({ date: "2026-11-03", title: "Dentist", start: "2026-11-03T19:00:00Z", end: "2026-11-03T20:00:00Z" });
-    expect(store.unavailableBetween("2026-11-02", "2026-11-08").map((x) => x.id)).toEqual([u.id]);
-    const f = store.addFlex({ date: "2026-11-07", clientKey: "Adatum", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z", itemId: 101 });
-    expect(store.flexBetween("2026-11-07", "2026-11-07").map((x) => x.itemId)).toEqual([101]);
-    store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T16:00:00Z"));
-    expect(store.openFollowUps()).toEqual([]);
-    store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T17:00:00Z"));
-    store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T18:00:00Z"));
-    const followUps = store.openFollowUps();
+  it("stores unavailable time and flex sessions; a flex session opens its update follow-up once it has ended", async () => {
+    const { store } = await fresh();
+    const u = (await store.addUnavailable({ date: "2026-11-03", title: "Dentist", start: "2026-11-03T19:00:00Z", end: "2026-11-03T20:00:00Z" }));
+    expect((await store.unavailableBetween("2026-11-02", "2026-11-08")).map((x) => x.id)).toEqual([u.id]);
+    const f = (await store.addFlex({ date: "2026-11-07", clientKey: "Adatum", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z", itemId: 101 }));
+    expect((await store.flexBetween("2026-11-07", "2026-11-07")).map((x) => x.itemId)).toEqual([101]);
+    (await store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T16:00:00Z")));
+    expect((await store.openFollowUps())).toEqual([]);
+    (await store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T17:00:00Z")));
+    (await store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T18:00:00Z")));
+    const followUps = (await store.openFollowUps());
     expect(followUps).toHaveLength(1);
     expect(followUps[0]).toMatchObject({ clientKey: "Adatum", sourceKind: "flex", sourceId: f.id });
     expect(followUps[0]!.what).toMatch(/update to Adatum/);
-    expect(() => store.removeFlex(f.id)).toThrow();
-    expect(store.removeUnavailable(u.id)).toBe(true);
+    await expect(store.removeFlex(f.id)).rejects.toThrow();
+    expect((await store.removeUnavailable(u.id))).toBe(true);
   });
 
-  it("refuses a store from a newer FocusTime instead of guessing", () => {
-    const { path, store } = fresh();
-    store.close();
+  itSqlite("refuses a store from a newer FocusTime instead of guessing", async () => {
+    const { path, store } = await fresh();
+    await store.close();
     const db = new DatabaseSync(path);
     db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(MIGRATIONS.length + 5, "x");
     db.close();
-    expect(() => createPlanStore({ path, now, files: localStoreFiles })).toThrow(/newer FocusTime/);
+    await expect(createPlanStore({ path, now, files: localStoreFiles })).rejects.toThrow(/newer FocusTime/);
   });
 
-  it("timestamps carry offset and time zone", () => {
-    const { store } = fresh();
-    const plan = store.start("2026-11-02");
+  it("timestamps carry offset and time zone", async () => {
+    const { store } = await fresh();
+    const plan = (await store.start("2026-11-02"));
     expect(plan.createdAt).toBe("2026-11-02T08:01:00-05:00[America/New_York]");
-    expect(store.commit("2026-11-02").committedAt).toMatch(/-05:00\[America\/New_York\]$/);
+    expect((await store.commit("2026-11-02")).committedAt).toMatch(/-05:00\[America\/New_York\]$/);
   });
 
-  it("commit and picks persist across a restart", () => {
-    const { path, store } = fresh();
-    store.start("2026-11-02");
-    const a = store.addPick({ date: "2026-11-02", ...item });
-    store.addPick({ date: "2026-11-02", half: "PM", clientKey: "Cooptimize", kind: "intention", title: "Write the planning doc", size: "S" });
-    store.setSize(a.id, "L");
-    store.commit("2026-11-02");
-    store.setDone(a.id, true);
-    store.close();
+  it("commit and picks persist across a restart", async () => {
+    const { path, store } = await fresh();
+    (await store.start("2026-11-02"));
+    const a = (await store.addPick({ date: "2026-11-02", ...item }));
+    (await store.addPick({ date: "2026-11-02", half: "PM", clientKey: "Cooptimize", kind: "intention", title: "Write the planning doc", size: "S" }));
+    (await store.setSize(a.id, "L"));
+    (await store.commit("2026-11-02"));
+    (await store.setDone(a.id, true));
+    await store.close();
 
-    const reopened = createPlanStore({ path, now, files: localStoreFiles });
-    expect(reopened.day("2026-11-02")?.committedAt).not.toBeNull();
-    const picks = reopened.picksFor("2026-11-02");
+    const reopened = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await reopened.day("2026-11-02"))?.committedAt).not.toBeNull();
+    const picks = (await reopened.picksFor("2026-11-02"));
     expect(picks.map((p) => [p.half, p.title, p.size, p.status])).toEqual([
       ["AM", "Story", "L", "done"],
       ["PM", "Write the planning doc", "S", "planned"],
     ]);
-    reopened.close();
+    await reopened.close();
   });
 
-  it("enforces the shape of a pick in the schema too", () => {
-    const { store } = fresh();
-    expect(() => store.addPick({ date: "2026-11-02", ...item, size: "XL" as never })).toThrow();
-    expect(() => store.addPick({ date: "2026-11-02", half: "AM", clientKey: "Adatum", kind: "item", title: "no id", size: "M" })).toThrow();
+  it("enforces the shape of a pick in the schema too", async () => {
+    const { store } = await fresh();
+    await expect(store.addPick({ date: "2026-11-02", ...item, size: "XL" as never })).rejects.toThrow();
+    await expect(store.addPick({ date: "2026-11-02", half: "AM", clientKey: "Adatum", kind: "item", title: "no id", size: "M" })).rejects.toThrow();
   });
 
-  it("moving to another day carries the pick and settles the original; same day just changes block", () => {
-    const { store } = fresh();
-    const a = store.addPick({ date: "2026-11-02", ...item });
-    const inPlace = store.move(a.id, "2026-11-02", "PM");
+  it("moving to another day carries the pick and settles the original; same day just changes block", async () => {
+    const { store } = await fresh();
+    const a = (await store.addPick({ date: "2026-11-02", ...item }));
+    const inPlace = (await store.move(a.id, "2026-11-02", "PM"));
     expect([inPlace.id, inPlace.half]).toEqual([a.id, "PM"]);
-    const fri = store.move(a.id, "2026-11-06", "AM");
+    const fri = (await store.move(a.id, "2026-11-06", "AM"));
     expect(fri).toMatchObject({ date: "2026-11-06", half: "AM", status: "planned", carriedFrom: a.id, carriedFromDate: "2026-11-02", itemId: 101 });
-    expect(store.getPick(a.id)!.status).toBe("moved");
+    expect((await store.getPick(a.id))!.status).toBe("moved");
   });
 
-  it("carry-over: yesterday's unfinished picks, carried once", () => {
-    const { store } = fresh();
-    const done = store.addPick({ date: "2026-10-29", ...item, title: "done" });
-    const open = store.addPick({ date: "2026-10-29", ...item, title: "unfinished" });
-    store.commit("2026-10-29");
-    store.setDone(done.id, true);
-    expect(store.carryOverFor("2026-11-02").map((p) => p.title)).toEqual(["unfinished"]);
-    store.move(open.id, "2026-11-02", "AM");
-    expect(store.carryOverFor("2026-11-02")).toEqual([]);
-    expect(store.picksFor("2026-11-02")[0]).toMatchObject({ title: "unfinished", carriedFromDate: "2026-10-29" });
+  it("carry-over: yesterday's unfinished picks, carried once", async () => {
+    const { store } = await fresh();
+    const done = (await store.addPick({ date: "2026-10-29", ...item, title: "done" }));
+    const open = (await store.addPick({ date: "2026-10-29", ...item, title: "unfinished" }));
+    (await store.commit("2026-10-29"));
+    (await store.setDone(done.id, true));
+    expect((await store.carryOverFor("2026-11-02")).map((p) => p.title)).toEqual(["unfinished"]);
+    (await store.move(open.id, "2026-11-02", "AM"));
+    expect((await store.carryOverFor("2026-11-02"))).toEqual([]);
+    expect((await store.picksFor("2026-11-02"))[0]).toMatchObject({ title: "unfinished", carriedFromDate: "2026-10-29" });
   });
 
-  it("remove: deleted before commit, kept as dropped after; a carried pick dropped again goes back to its day", () => {
-    const { store } = fresh();
-    const a = store.addPick({ date: "2026-11-02", ...item });
-    expect(store.removePick(a.id).result).toBe("deleted");
-    expect(store.getPick(a.id)).toBeNull();
+  it("remove: deleted before commit, kept as dropped after; a carried pick dropped again goes back to its day", async () => {
+    const { store } = await fresh();
+    const a = (await store.addPick({ date: "2026-11-02", ...item }));
+    expect((await store.removePick(a.id)).result).toBe("deleted");
+    expect((await store.getPick(a.id))).toBeNull();
 
-    const old = store.addPick({ date: "2026-10-29", ...item });
-    store.commit("2026-10-29");
-    const carried = store.move(old.id, "2026-11-02", "AM");
-    expect(store.removePick(carried.id).result).toBe("deleted");
-    expect(store.getPick(old.id)!.status).toBe("planned");
-    expect(store.carryOverFor("2026-11-02")).toHaveLength(1);
+    const old = (await store.addPick({ date: "2026-10-29", ...item }));
+    (await store.commit("2026-10-29"));
+    const carried = (await store.move(old.id, "2026-11-02", "AM"));
+    expect((await store.removePick(carried.id)).result).toBe("deleted");
+    expect((await store.getPick(old.id))!.status).toBe("planned");
+    expect((await store.carryOverFor("2026-11-02"))).toHaveLength(1);
 
-    const b = store.addPick({ date: "2026-11-02", ...item });
-    store.commit("2026-11-02");
-    expect(store.removePick(b.id)).toMatchObject({ result: "dropped", pick: { status: "dropped" } });
+    const b = (await store.addPick({ date: "2026-11-02", ...item }));
+    (await store.commit("2026-11-02"));
+    expect((await store.removePick(b.id))).toMatchObject({ result: "dropped", pick: { status: "dropped" } });
   });
 
-  it("markOnce is true only the first time, across restarts", () => {
-    const { path, store } = fresh();
-    expect(store.markOnce("notify", "2026-11-02")).toBe(true);
-    expect(store.markOnce("notify", "2026-11-02")).toBe(false);
-    store.close();
-    const again = createPlanStore({ path, now, files: localStoreFiles });
-    expect(again.markOnce("notify", "2026-11-02")).toBe(false);
-    expect(again.markOnce("notify", "2026-11-03")).toBe(true);
+  it("markOnce is true only the first time, across restarts", async () => {
+    const { path, store } = await fresh();
+    expect((await store.markOnce("notify", "2026-11-02"))).toBe(true);
+    expect((await store.markOnce("notify", "2026-11-02"))).toBe(false);
+    await store.close();
+    const again = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await again.markOnce("notify", "2026-11-02"))).toBe(false);
+    expect((await again.markOnce("notify", "2026-11-03"))).toBe(true);
   });
 
-  it("exports everything to JSON", () => {
-    const { store } = fresh();
-    store.addPick({ date: "2026-11-02", ...item });
-    store.addDraft({ clientKey: "Adatum", parentItemId: 130, title: "Split the feature", size: "S" });
-    store.commit("2026-11-02");
-    const out = JSON.parse(JSON.stringify(store.exportJson()));
+  it("exports everything to JSON", async () => {
+    const { store } = await fresh();
+    (await store.addPick({ date: "2026-11-02", ...item }));
+    (await store.addDraft({ clientKey: "Adatum", parentItemId: 130, title: "Split the feature", size: "S" }));
+    (await store.commit("2026-11-02"));
+    const out = JSON.parse(JSON.stringify((await store.exportJson())));
     expect(out.schemaVersion).toBe(MIGRATIONS.length);
     expect(out.dayPlans).toHaveLength(1);
     expect(out.picks[0]).toMatchObject({ itemId: 101, size: "M", status: "planned" });
     expect(out.draftStories[0]).toMatchObject({ parentItemId: 130, title: "Split the feature" });
   });
 
-  it("works for any zone the clock is in", () => {
+  it("works for any zone the clock is in", async () => {
     clock = Temporal.ZonedDateTime.from("2026-11-02T08:01:00+01:00[Europe/Paris]");
-    const { store } = fresh();
-    expect(store.start("2026-11-02").createdAt).toContain("[Europe/Paris]");
+    const { store } = await fresh();
+    expect((await store.start("2026-11-02")).createdAt).toContain("[Europe/Paris]");
     clock = Temporal.ZonedDateTime.from(`2026-11-02T08:01:00-05:00[${NY}]`);
   });
 });
 
 describe("step 6c: follow-ups, timer state, focused time and reset", () => {
-  it("closes a follow-up by hand with a note, once", () => {
-    const { store } = fresh();
-    const f = store.addFlex({ date: "2026-11-07", clientKey: "Adatum", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z" });
-    const [followUp] = store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T18:00:00Z"));
+  it("closes a follow-up by hand with a note, once", async () => {
+    const { store } = await fresh();
+    const f = (await store.addFlex({ date: "2026-11-07", clientKey: "Adatum", start: "2026-11-07T15:00:00Z", end: "2026-11-07T17:00:00Z" }));
+    const [followUp] = (await store.openFlexFollowUps(Temporal.Instant.from("2026-11-07T18:00:00Z")));
     expect(followUp?.sourceId).toBe(f.id);
-    const closed = store.closeFollowUp(followUp!.id, "Posted in Teams");
+    const closed = (await store.closeFollowUp(followUp!.id, "Posted in Teams"));
     expect(closed).toMatchObject({ closeNote: "Posted in Teams" });
     expect(closed.closedAt).not.toBeNull();
-    expect(store.openFollowUps()).toEqual([]);
-    expect(store.allFollowUps()).toHaveLength(1);
-    expect(() => store.closeFollowUp(followUp!.id, null)).toThrow(/already closed/);
-    expect(() => store.closeFollowUp(999, null)).toThrow(/No follow-up/);
+    expect((await store.openFollowUps())).toEqual([]);
+    expect((await store.allFollowUps())).toHaveLength(1);
+    await expect(store.closeFollowUp(followUp!.id, null)).rejects.toThrow(/already closed/);
+    await expect(store.closeFollowUp(999, null)).rejects.toThrow(/No follow-up/);
   });
 
-  it("keeps small state and focused time across a reopen", () => {
-    const { path, store } = fresh();
-    const p = store.addPick({ date: "2026-11-02", ...item });
-    store.setState("timer", { kind: "focus", pickId: p.id });
-    store.addFocus({ pickId: p.id, label: "Story", startedAt: "2026-11-02T14:00:00Z", endedAt: "2026-11-02T14:25:00Z", seconds: 1500 });
-    store.addFocus({ pickId: p.id, label: "Story", startedAt: "2026-11-02T15:00:00Z", endedAt: "2026-11-02T15:10:00Z", seconds: 600 });
-    store.close();
-    const again = createPlanStore({ path, now, files: localStoreFiles });
-    expect(again.getState("timer")).toEqual({ kind: "focus", pickId: p.id });
-    expect(again.focusedSeconds([p.id, 999])).toEqual({ [p.id]: 2100 });
-    again.setState("timer", null);
-    expect(again.getState("timer")).toBeNull();
-    again.close();
+  it("keeps small state and focused time across a reopen", async () => {
+    const { path, store } = await fresh();
+    const p = (await store.addPick({ date: "2026-11-02", ...item }));
+    (await store.setState("timer", { kind: "focus", pickId: p.id }));
+    (await store.addFocus({ pickId: p.id, label: "Story", startedAt: "2026-11-02T14:00:00Z", endedAt: "2026-11-02T14:25:00Z", seconds: 1500 }));
+    (await store.addFocus({ pickId: p.id, label: "Story", startedAt: "2026-11-02T15:00:00Z", endedAt: "2026-11-02T15:10:00Z", seconds: 600 }));
+    await store.close();
+    const again = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await again.getState("timer"))).toEqual({ kind: "focus", pickId: p.id });
+    expect((await again.focusedSeconds([p.id, 999]))).toEqual({ [p.id]: 2100 });
+    (await again.setState("timer", null));
+    expect((await again.getState("timer"))).toBeNull();
+    await again.close();
   });
 
-  it("reset empties every plan table after a private full backup, and keeps the once-a-day markers (Q37)", () => {
-    const { path, store } = fresh();
-    store.addPick({ date: "2026-11-02", ...item });
-    store.markOnce("reminder", "2026-11-02");
-    const bak = store.reset();
+  itSqlite("reset empties every plan table after a private full backup, and keeps the once-a-day markers (Q37)", async () => {
+    const { path, store } = await fresh();
+    (await store.addPick({ date: "2026-11-02", ...item }));
+    (await store.markOnce("reminder", "2026-11-02"));
+    const bak = (await store.reset());
     expect(bak).toMatch(/plan\.db\.bak-reset-\d+T\d+Z$/);
     expect(statSync(bak!).mode & 0o777).toBe(0o600);
-    expect(store.picksFor("2026-11-02")).toEqual([]);
-    expect(store.markOnce("reminder", "2026-11-02")).toBe(false);
+    expect((await store.picksFor("2026-11-02"))).toEqual([]);
+    expect((await store.markOnce("reminder", "2026-11-02"))).toBe(false);
     // The backup still has the pick.
     const copy = new DatabaseSync(bak!);
     expect((copy.prepare("SELECT COUNT(*) AS n FROM picks").get() as { n: number }).n).toBe(1);
@@ -252,65 +274,65 @@ describe("step 6c: follow-ups, timer state, focused time and reset", () => {
 describe("week plan (step 8)", () => {
   const W = "2026-11-09";
   const f = { weekStart: W, clientKey: "Adatum", itemId: 210, title: "Dana's feature", itemType: "Feature", url: "https://dev.azure.com/x/y/_workitems/edit/210" };
-  it("commits features to a week by a number of blocks; 0 blocks takes it off", () => {
-    const { store } = fresh();
-    expect(store.weekPlan(W)).toEqual({ weekStart: W, committedAt: null, updatedAt: null, features: [] });
-    const a = store.setWeekFeature({ ...f, blocks: 2 });
+  it("commits features to a week by a number of blocks; 0 blocks takes it off", async () => {
+    const { store } = await fresh();
+    expect((await store.weekPlan(W))).toEqual({ weekStart: W, committedAt: null, updatedAt: null, features: [] });
+    const a = (await store.setWeekFeature({ ...f, blocks: 2 }));
     expect(a).toMatchObject({ clientKey: "Adatum", itemId: 210, blocks: 2, slots: [] });
-    store.setWeekFeature({ ...f, blocks: 3 });
-    store.setWeekFeature({ ...f, itemId: 240, title: "Mine", blocks: 1 });
-    expect(store.weekPlan(W).features.map((x) => [x.itemId, x.blocks])).toEqual([[210, 3], [240, 1]]);
-    store.setWeekFeature({ ...f, itemId: 240, title: "Mine", blocks: 0 });
-    expect(store.weekPlan(W).features.map((x) => x.itemId)).toEqual([210]);
-    expect(() => store.setWeekFeature({ ...f, blocks: 99 })).toThrow(/blocks/);
+    (await store.setWeekFeature({ ...f, blocks: 3 }));
+    (await store.setWeekFeature({ ...f, itemId: 240, title: "Mine", blocks: 1 }));
+    expect((await store.weekPlan(W)).features.map((x) => [x.itemId, x.blocks])).toEqual([[210, 3], [240, 1]]);
+    (await store.setWeekFeature({ ...f, itemId: 240, title: "Mine", blocks: 0 }));
+    expect((await store.weekPlan(W)).features.map((x) => x.itemId)).toEqual([210]);
+    await expect(store.setWeekFeature({ ...f, blocks: 99 })).rejects.toThrow(/blocks/);
   });
-  it("pins a feature to specific blocks without changing its blocks (step 11)", () => {
-    const { store } = fresh();
-    const a = store.setWeekFeature({ ...f, blocks: 1 })!;
-    store.placeFeature(a.id, "2026-11-10", "PM", true);
-    store.placeFeature(a.id, "2026-11-09", "AM", true);
-    expect(store.weekPlan(W).features[0]).toMatchObject({ blocks: 1, slots: [{ date: "2026-11-09", half: "AM" }, { date: "2026-11-10", half: "PM" }] });
-    store.placeFeature(a.id, "2026-11-09", "AM", true); // again: no change
-    store.placeFeature(a.id, "2026-11-09", "AM", false);
-    expect(store.weekPlan(W).features[0]).toMatchObject({ blocks: 1, slots: [{ date: "2026-11-10", half: "PM" }] });
-    expect(() => store.placeFeature(a.id, "2026-11-17", "AM", true)).toThrow(/week/);
-    expect(() => store.placeFeature(999, "2026-11-09", "AM", true)).toThrow();
+  it("pins a feature to specific blocks without changing its blocks (step 11)", async () => {
+    const { store } = await fresh();
+    const a = (await store.setWeekFeature({ ...f, blocks: 1 }))!;
+    (await store.placeFeature(a.id, "2026-11-10", "PM", true));
+    (await store.placeFeature(a.id, "2026-11-09", "AM", true));
+    expect((await store.weekPlan(W)).features[0]).toMatchObject({ blocks: 1, slots: [{ date: "2026-11-09", half: "AM" }, { date: "2026-11-10", half: "PM" }] });
+    (await store.placeFeature(a.id, "2026-11-09", "AM", true)); // again: no change
+    (await store.placeFeature(a.id, "2026-11-09", "AM", false));
+    expect((await store.weekPlan(W)).features[0]).toMatchObject({ blocks: 1, slots: [{ date: "2026-11-10", half: "PM" }] });
+    await expect(store.placeFeature(a.id, "2026-11-17", "AM", true)).rejects.toThrow(/week/);
+    await expect(store.placeFeature(999, "2026-11-09", "AM", true)).rejects.toThrow();
   });
-  it("commits the week, stays editable, and knows when it changed since the commit", () => {
-    const { store } = fresh();
-    store.setWeekFeature({ ...f, blocks: 2 });
-    const c = store.commitWeek(W);
+  it("commits the week, stays editable, and knows when it changed since the commit", async () => {
+    const { store } = await fresh();
+    (await store.setWeekFeature({ ...f, blocks: 2 }));
+    const c = (await store.commitWeek(W));
     expect(c.committedAt).toBe(clock.toString({ smallestUnit: "second" }));
     clock = clock.add({ minutes: 5 });
-    store.setWeekFeature({ ...f, blocks: 3 });
-    const p = store.weekPlan(W);
+    (await store.setWeekFeature({ ...f, blocks: 3 }));
+    const p = (await store.weekPlan(W));
     expect(p.updatedAt! > p.committedAt!).toBe(true);
     clock = clock.add({ minutes: 5 });
-    expect(store.commitWeek(W).committedAt! >= p.updatedAt!).toBe(true);
+    expect((await store.commitWeek(W)).committedAt! >= p.updatedAt!).toBe(true);
   });
-  it("marks a feature as being broken down (local only), and the reset and export cover the week plan", () => {
-    const { store } = fresh();
-    store.markBreakdown("Adatum", 240, true);
-    expect(store.breakdownMarks()).toEqual([{ clientKey: "Adatum", itemId: 240, markedAt: clock.toString({ smallestUnit: "second" }) }]);
-    store.markBreakdown("Adatum", 240, false);
-    expect(store.breakdownMarks()).toEqual([]);
-    store.setWeekFeature({ ...f, blocks: 2 });
-    store.commitWeek(W);
-    store.markBreakdown("Adatum", 240, true);
-    const e = store.exportJson();
+  it("marks a feature as being broken down (local only), and the reset and export cover the week plan", async () => {
+    const { store } = await fresh();
+    (await store.markBreakdown("Adatum", 240, true));
+    expect((await store.breakdownMarks())).toEqual([{ clientKey: "Adatum", itemId: 240, markedAt: clock.toString({ smallestUnit: "second" }) }]);
+    (await store.markBreakdown("Adatum", 240, false));
+    expect((await store.breakdownMarks())).toEqual([]);
+    (await store.setWeekFeature({ ...f, blocks: 2 }));
+    (await store.commitWeek(W));
+    (await store.markBreakdown("Adatum", 240, true));
+    const e = (await store.exportJson());
     expect(e.weekPlans).toHaveLength(1);
     expect(e.weekFeatures).toHaveLength(1);
     expect(e.breakdownMarks).toHaveLength(1);
-    store.reset();
-    expect(store.weekPlan(W).features).toEqual([]);
-    expect(store.breakdownMarks()).toEqual([]);
+    (await store.reset());
+    expect((await store.weekPlan(W)).features).toEqual([]);
+    expect((await store.breakdownMarks())).toEqual([]);
   });
 });
 
 describe("week plan by client (step 11)", () => {
   const W = "2026-11-09";
   const base = { weekStart: W, clientKey: "Adatum", title: "T", itemType: "Feature", url: null };
-  it("migration 8 turns committed features into musts and placements into pins, ids kept, with a backup first", () => {
+  itSqlite("migration 8 turns committed features into musts and placements into pins, ids kept, with a backup first", async () => {
     const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path);
@@ -325,19 +347,19 @@ describe("week plan by client (step 11)", () => {
               (9, '2026-11-09', 'T&W', 300, 'Paging', 'Feature', NULL, 1, 2, '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]')`);
     old.exec("INSERT INTO week_feature_slots VALUES (7, '2026-11-10', 'PM'), (7, '2026-11-11', 'AM')");
     old.close();
-    const store = createPlanStore({ path, now, files: localStoreFiles });
-    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
+    const store = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await store.schemaVersion())).toBe(MIGRATIONS.length);
     expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v7-"))).toHaveLength(1);
-    const p = store.weekPlan(W);
+    const p = (await store.weekPlan(W));
     expect(p.committedAt).toBe("2026-11-06T16:00:00-05:00[America/New_York]");
     expect(p.features.map((x) => [x.id, x.itemId, x.level, x.tier, x.blocks, x.position, x.doneAt, x.slots.length])).toEqual([
       [7, 210, "feature", "must", 3, null, null, 2],
       [9, 300, "feature", "must", 1, null, null, 0],
     ]);
-    store.close();
+    await store.close();
   });
 
-  it("migration 19 rounds half-block features up to whole blocks and gives stories a size, ids and pins kept, with a backup", () => {
+  itSqlite("migration 19 rounds half-block features up to whole blocks and gives stories a size, ids and pins kept, with a backup", async () => {
     const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path);
@@ -355,10 +377,10 @@ describe("week plan by client (step 11)", () => {
               (8, '2026-11-09', 'Adatum', 502, 'story', 'nice', 'Big story', 'User Story', NULL, 1.5, NULL, NULL, ${at}, ${at})`);
     old.exec("INSERT INTO week_feature_slots VALUES (3, '2026-11-10', 'PM')");
     old.close();
-    const store = createPlanStore({ path, now, files: localStoreFiles });
-    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
+    const store = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await store.schemaVersion())).toBe(MIGRATIONS.length);
     expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v18-"))).toHaveLength(1);
-    const f = store.weekPlan(W).features;
+    const f = (await store.weekPlan(W)).features;
     expect(f.map((x) => [x.id, x.level, x.tier, x.blocks, x.size, x.parentId, x.position, !!x.doneAt, x.slots.length])).toEqual([
       [3, "feature", "must", 2, null, null, null, false, 1],
       [4, "feature", "nice", 1, null, null, 2, false, 0],
@@ -368,52 +390,53 @@ describe("week plan by client (step 11)", () => {
     ]);
     // No fraction survives anywhere in the week plan.
     expect(f.every((x) => x.blocks === null || Number.isInteger(x.blocks))).toBe(true);
-    store.close();
+    await store.close();
   });
 
-  it("adds features (whole blocks or none) and stories (S, M, L) as musts or nice to haves, sets tier and a done mark", () => {
-    const { store } = fresh();
-    const a = store.addWeekItem({ ...base, itemId: 210, level: "feature" });
+  it("adds features (whole blocks or none) and stories (S, M, L) as musts or nice to haves, sets tier and a done mark", async () => {
+    const { store } = await fresh();
+    const a = (await store.addWeekItem({ ...base, itemId: 210, level: "feature" }));
     expect(a).toMatchObject({ level: "feature", tier: "must", blocks: null, size: null, position: null, doneAt: null });
-    const b = store.addWeekItem({ ...base, itemId: 501, itemType: "User Story", level: "story", tier: "nice", parentId: 210 });
+    const b = (await store.addWeekItem({ ...base, itemId: 501, itemType: "User Story", level: "story", tier: "nice", parentId: 210 }));
     expect(b).toMatchObject({ level: "story", tier: "nice", blocks: null, size: "M", parentId: 210 });
     // Adding again updates it in place.
-    expect(store.addWeekItem({ ...base, itemId: 210, title: "Renamed", level: "feature", tier: "nice", blocks: 3 })).toMatchObject({ id: a.id, title: "Renamed", tier: "nice", blocks: 3 });
-    expect(store.setWeekItemTier(a.id, "must").tier).toBe("must");
-    expect(store.setWeekItemBlocks(a.id, 2).blocks).toBe(2);
-    expect(() => store.setWeekItemBlocks(a.id, 1.5)).toThrow(/whole number/);
-    expect(() => store.setWeekItemBlocks(a.id, 21)).toThrow(/whole number/);
-    expect(() => store.setWeekItemBlocks(b.id, 1)).toThrow(/size/);
-    expect(store.setWeekItemSize(b.id, "L").size).toBe("L");
-    expect(() => store.setWeekItemSize(a.id, "S")).toThrow(/blocks, not a size/);
-    store.setWeekItemParents(W, [{ clientKey: base.clientKey, itemId: 501, parentId: 220 }]);
-    expect(store.weekItem(b.id)?.parentId).toBe(220);
-    expect(store.markWeekItemDone(b.id, true).doneAt).toBe(clock.toString({ smallestUnit: "second" }));
-    expect(store.markWeekItemDone(b.id, false).doneAt).toBeNull();
-    store.removeWeekItem(b.id);
-    expect(store.weekPlan(W).features.map((x) => x.itemId)).toEqual([210]);
-    expect(() => store.removeWeekItem(b.id)).toThrow(/No such/);
-    expect(store.weekItem(a.id)?.itemId).toBe(210);
+    expect((await store.addWeekItem({ ...base, itemId: 210, title: "Renamed", level: "feature", tier: "nice", blocks: 3 }))).toMatchObject({ id: a.id, title: "Renamed", tier: "nice", blocks: 3 });
+    expect((await store.setWeekItemTier(a.id, "must")).tier).toBe("must");
+    expect((await store.setWeekItemBlocks(a.id, 2)).blocks).toBe(2);
+    await expect(store.setWeekItemBlocks(a.id, 1.5)).rejects.toThrow(/whole number/);
+    await expect(store.setWeekItemBlocks(a.id, 21)).rejects.toThrow(/whole number/);
+    await expect(store.setWeekItemBlocks(b.id, 1)).rejects.toThrow(/size/);
+    expect((await store.setWeekItemSize(b.id, "L")).size).toBe("L");
+    await expect(store.setWeekItemSize(a.id, "S")).rejects.toThrow(/blocks, not a size/);
+    (await store.setWeekItemParents(W, [{ clientKey: base.clientKey, itemId: 501, parentId: 220 }]));
+    expect((await store.weekItem(b.id))?.parentId).toBe(220);
+    expect((await store.markWeekItemDone(b.id, true)).doneAt).toBe(clock.toString({ smallestUnit: "second" }));
+    expect((await store.markWeekItemDone(b.id, false)).doneAt).toBeNull();
+    (await store.removeWeekItem(b.id));
+    expect((await store.weekPlan(W)).features.map((x) => x.itemId)).toEqual([210]);
+    await expect(store.removeWeekItem(b.id)).rejects.toThrow(/No such/);
+    expect((await store.weekItem(a.id))?.itemId).toBe(210);
   });
 
-  it("keeps a local order per client and tier, resets to DevOps order, and a tier change drops the position", () => {
-    const { store } = fresh();
-    const ids = [210, 220, 230].map((itemId) => store.addWeekItem({ ...base, itemId, level: "feature" }).id);
-    store.addWeekItem({ ...base, clientKey: "T&W", itemId: 300, level: "feature" });
-    store.reorderWeekItems(W, "Adatum", "must", [{ itemId: 230, position: 1 }, { itemId: 210, position: 2 }]);
-    const pos = () => Object.fromEntries(store.weekPlan(W).features.map((x) => [x.itemId, x.position]));
-    expect(pos()).toEqual({ 210: 2, 220: null, 230: 1, 300: null });
-    expect(() => store.reorderWeekItems(W, "Adatum", "nice", [{ itemId: 230, position: 1 }])).toThrow(/nice to have/);
-    expect(() => store.reorderWeekItems(W, "T&W", "must", [{ itemId: 210, position: 1 }])).toThrow();
-    store.setWeekItemTier(ids[2]!, "nice");
-    expect(pos()[230]).toBeNull();
-    store.reorderWeekItems(W, "Adatum", "must", null);
-    expect(pos()).toEqual({ 210: null, 220: null, 230: null, 300: null });
+  it("keeps a local order per client and tier, resets to DevOps order, and a tier change drops the position", async () => {
+    const { store } = await fresh();
+    const ids: number[] = [];
+    for (const itemId of [210, 220, 230]) ids.push((await store.addWeekItem({ ...base, itemId, level: "feature" })).id);
+    (await store.addWeekItem({ ...base, clientKey: "T&W", itemId: 300, level: "feature" }));
+    (await store.reorderWeekItems(W, "Adatum", "must", [{ itemId: 230, position: 1 }, { itemId: 210, position: 2 }]));
+    const pos = async () => Object.fromEntries((await store.weekPlan(W)).features.map((x) => [x.itemId, x.position]));
+    expect((await pos())).toEqual({ 210: 2, 220: null, 230: 1, 300: null });
+    await expect(store.reorderWeekItems(W, "Adatum", "nice", [{ itemId: 230, position: 1 }])).rejects.toThrow(/nice to have/);
+    await expect(store.reorderWeekItems(W, "T&W", "must", [{ itemId: 210, position: 1 }])).rejects.toThrow();
+    (await store.setWeekItemTier(ids[2]!, "nice"));
+    expect((await pos())[230]).toBeNull();
+    (await store.reorderWeekItems(W, "Adatum", "must", null));
+    expect((await pos())).toEqual({ 210: null, 220: null, 230: null, 300: null });
   });
 });
 
 describe("quick capture (step 9)", () => {
-  it("migration 7 keeps draft stories and the picks that point at them, and lets a draft have no feature", () => {
+  itSqlite("migration 7 keeps draft stories and the picks that point at them, and lets a draft have no feature", async () => {
     const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path);
@@ -427,43 +450,43 @@ describe("quick capture (step 9)", () => {
     old.exec(`INSERT INTO picks (id, date, half, client_key, kind, draft_id, title, size, status, position, created_at, updated_at)
               VALUES (1, '2026-10-29', 'AM', 'Adatum', 'draft', 5, 'Draft under 210', 'M', 'planned', 0, 'x', 'x')`);
     old.close();
-    const store = createPlanStore({ path, now, files: localStoreFiles });
-    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
-    expect(store.drafts()).toEqual([expect.objectContaining({ id: 5, parentItemId: 210, title: "Draft under 210" })]);
-    expect(store.picksFor("2026-10-29")[0]).toMatchObject({ kind: "draft", draftId: 5 });
-    expect(store.addDraft({ clientKey: "Adatum", parentItemId: null, title: "No feature yet", size: "S" }).parentItemId).toBeNull();
+    const store = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await store.schemaVersion())).toBe(MIGRATIONS.length);
+    expect((await store.drafts())).toEqual([expect.objectContaining({ id: 5, parentItemId: 210, title: "Draft under 210" })]);
+    expect((await store.picksFor("2026-10-29"))[0]).toMatchObject({ kind: "draft", draftId: 5 });
+    expect((await store.addDraft({ clientKey: "Adatum", parentItemId: null, title: "No feature yet", size: "S" })).parentItemId).toBeNull();
     expect(readdirSync(dir).filter((f) => f.startsWith("plan.db.bak-v6-"))).toHaveLength(1);
-    store.close();
+    await store.close();
   });
 
-  it("saves captures to the inbox and routes each once to a follow-up, a draft story, a note, or dismisses it", () => {
-    const { store } = fresh();
-    const a = store.addCapture({ text: "  Told Dana I'd send the export by Thursday  ", clientKey: "Adatum" });
+  it("saves captures to the inbox and routes each once to a follow-up, a draft story, a note, or dismisses it", async () => {
+    const { store } = await fresh();
+    const a = (await store.addCapture({ text: "  Told Dana I'd send the export by Thursday  ", clientKey: "Adatum" }));
     expect(a).toMatchObject({ text: "Told Dana I'd send the export by Thursday", clientKey: "Adatum", routedAt: null });
-    const b = store.addCapture({ text: "need to add paging", clientKey: "T&W" });
-    const c = store.addCapture({ text: "their CFO prefers email", clientKey: null });
-    const d = store.addCapture({ text: "never mind", clientKey: null });
-    expect(() => store.addCapture({ text: "   ", clientKey: null })).toThrow(/Type something/);
-    expect(store.inbox().map((x) => x.id)).toEqual([d.id, c.id, b.id, a.id]);
-    expect(store.inboxCount()).toBe(4);
+    const b = (await store.addCapture({ text: "need to add paging", clientKey: "T&W" }));
+    const c = (await store.addCapture({ text: "their CFO prefers email", clientKey: null }));
+    const d = (await store.addCapture({ text: "never mind", clientKey: null }));
+    await expect(store.addCapture({ text: "   ", clientKey: null })).rejects.toThrow(/Type something/);
+    expect((await store.inbox()).map((x) => x.id)).toEqual([d.id, c.id, b.id, a.id]);
+    expect((await store.inboxCount())).toBe(4);
 
-    const la = store.routeCapture(a.id, { as: "follow_up", clientKey: "Adatum", who: "Dana", what: "Send the export", due: "2026-11-05" });
+    const la = (await store.routeCapture(a.id, { as: "follow_up", clientKey: "Adatum", who: "Dana", what: "Send the export", due: "2026-11-05" }));
     expect(la).toMatchObject({ routedAs: "follow_up" });
-    expect(store.openFollowUps().find((l) => l.id === la.routedId)).toMatchObject({ kind: "capture", who: "Dana", what: "Send the export", due: "2026-11-05", clientKey: "Adatum" });
-    const db = store.routeCapture(b.id, { as: "draft", clientKey: "T&W", parentItemId: null, title: "Add paging", size: "M" });
-    expect(store.getDraft(db.routedId!)).toMatchObject({ clientKey: "T&W", parentItemId: null, title: "Add paging", size: "M" });
-    const nc = store.routeCapture(c.id, { as: "draft", clientKey: "Proseware", parentItemId: null, title: "Their CFO prefers email", size: "S" });
-    expect(store.getDraft(nc.routedId!)).toMatchObject({ level: "story", clientKey: "Proseware" });
-    store.routeCapture(d.id, { as: "dismissed" });
-    expect(store.inboxCount()).toBe(0);
-    expect(() => store.routeCapture(a.id, { as: "dismissed" })).toThrow(/already sorted/);
+    expect((await store.openFollowUps()).find((l) => l.id === la.routedId)).toMatchObject({ kind: "capture", who: "Dana", what: "Send the export", due: "2026-11-05", clientKey: "Adatum" });
+    const db = (await store.routeCapture(b.id, { as: "draft", clientKey: "T&W", parentItemId: null, title: "Add paging", size: "M" }));
+    expect((await store.getDraft(db.routedId!))).toMatchObject({ clientKey: "T&W", parentItemId: null, title: "Add paging", size: "M" });
+    const nc = (await store.routeCapture(c.id, { as: "draft", clientKey: "Proseware", parentItemId: null, title: "Their CFO prefers email", size: "S" }));
+    expect((await store.getDraft(nc.routedId!))).toMatchObject({ level: "story", clientKey: "Proseware" });
+    (await store.routeCapture(d.id, { as: "dismissed" }));
+    expect((await store.inboxCount())).toBe(0);
+    await expect(store.routeCapture(a.id, { as: "dismissed" })).rejects.toThrow(/already sorted/);
     // A failed route leaves the capture in the inbox.
-    const e = store.addCapture({ text: "x", clientKey: null });
-    expect(() => store.routeCapture(e.id, { as: "follow_up", clientKey: null, who: "", what: " ", due: null })).toThrow();
-    expect(store.inbox().map((x) => x.id)).toEqual([e.id]);
+    const e = (await store.addCapture({ text: "x", clientKey: null }));
+    await expect(store.routeCapture(e.id, { as: "follow_up", clientKey: null, who: "", what: " ", due: null })).rejects.toThrow();
+    expect((await store.inbox()).map((x) => x.id)).toEqual([e.id]);
   });
 
-  it("migration 11 renames loops to follow-ups and moves notes into where I left off, with a backup first", () => {
+  itSqlite("migration 11 renames loops to follow-ups and moves notes into where I left off, with a backup first", async () => {
     const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path);
@@ -482,29 +505,29 @@ describe("quick capture (step 9)", () => {
     old.exec(`INSERT INTO notes (id, client_key, text, capture_id, created_at, updated_at) VALUES
               (1, 'Adatum', 'Adatum wants Git', 1, '${at}', '${at}'), (2, NULL, 'caching idea', 2, '${at}', '${at}'), (3, 'T&W', 'Mark approves timesheets', NULL, '${at}', '${at}'), (4, NULL, 'Read the docs', NULL, '${at}', '${at}')`);
     old.close();
-    const store = createPlanStore({ path, now, files: localStoreFiles });
-    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
+    const store = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await store.schemaVersion())).toBe(MIGRATIONS.length);
     expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v10-"))).toHaveLength(1);
     // Loops are follow-ups now, ids kept; a closed one counts as done.
-    expect(store.allFollowUps().map((f) => [f.id, f.kind, f.outcome, f.byHand]).sort()).toEqual([[1, "slip", "done", false], [2, "manual", null, true]]);
+    expect((await store.allFollowUps()).map((f) => [f.id, f.kind, f.outcome, f.byHand]).sort()).toEqual([[1, "slip", "done", false], [2, "manual", null, true]]);
     // Notes with a client join that client's left-off line on their day; appended to one already there.
-    expect(store.latestNotes("2026-10-31").Adatum?.note).toBe("Left off at mapping · Adatum wants Git");
-    expect(store.latestNotes("2026-10-31")["T&W"]?.note).toBe("Mark approves timesheets");
+    expect((await store.latestNotes("2026-10-31")).Adatum?.note).toBe("Left off at mapping · Adatum wants Git");
+    expect((await store.latestNotes("2026-10-31"))["T&W"]?.note).toBe("Mark approves timesheets");
     // Notes with no client go back to the inbox: their own capture un-sorted, or a new capture.
-    expect(store.inbox().map((c) => c.text).sort()).toEqual(["Read the docs", "caching idea", "to sort"]);
-    const ex = store.exportJson() as Record<string, unknown>;
+    expect((await store.inbox()).map((c) => c.text).sort()).toEqual(["Read the docs", "caching idea", "to sort"]);
+    const ex = (await store.exportJson()) as Record<string, unknown>;
     expect(ex.notes).toBeUndefined();
     expect((ex.captures as { id: number; routedAs: string | null }[]).find((c) => c.id === 1)?.routedAs).toBe("left_off");
     expect((ex.captures as { id: number; routedAs: string | null }[]).find((c) => c.id === 3)?.routedAs).toBe("follow_up");
-    store.close();
+    await store.close();
   });
 
-  it("routes a capture to a draft feature, optionally under an epic", () => {
-    const { store } = fresh();
-    const c = store.addCapture({ text: "feature: onboarding", clientKey: "Adatum" });
-    const r = store.routeCapture(c.id, { as: "draft_feature", clientKey: "Adatum", parentItemId: 900, title: "Onboarding" });
+  it("routes a capture to a draft feature, optionally under an epic", async () => {
+    const { store } = await fresh();
+    const c = (await store.addCapture({ text: "feature: onboarding", clientKey: "Adatum" }));
+    const r = (await store.routeCapture(c.id, { as: "draft_feature", clientKey: "Adatum", parentItemId: 900, title: "Onboarding" }));
     expect(r.routedAs).toBe("draft_feature");
-    expect(store.getDraft(r.routedId!)).toMatchObject({ level: "feature", parentItemId: 900, title: "Onboarding", size: "M" });
+    expect((await store.getDraft(r.routedId!))).toMatchObject({ level: "feature", parentItemId: 900, title: "Onboarding", size: "M" });
   });
 });
 
@@ -512,50 +535,50 @@ describe("timeboxes, own Outlook events and the write log (step 12)", () => {
   const F = { subject: "Adatum: Story", body: "x", start: "2026-11-03T14:00:00Z", end: "2026-11-03T15:00:00Z", showAs: "busy" as const, reminder: false as const };
   const box = { date: "2026-11-03", clientKey: "Adatum", title: "Story", start: "2026-11-03T09:00:00-05:00", end: "2026-11-03T10:00:00-05:00", outlook: false };
 
-  it("keeps timeboxes across reopen, with a stable uid", () => {
-    const { path, store } = fresh();
-    const t = store.addTimebox(box);
+  it("keeps timeboxes across reopen, with a stable uid", async () => {
+    const { path, store } = await fresh();
+    const t = (await store.addTimebox(box));
     expect(t.uid).toMatch(/^tb-[0-9a-f-]{36}$/);
-    store.updateTimebox(t.id, { start: "2026-11-03T09:30:00-05:00", end: "2026-11-03T11:00:00-05:00", outlook: true });
-    store.close();
-    const again = createPlanStore({ path, now, files: localStoreFiles });
-    expect(again.timeboxesBetween("2026-11-02", "2026-11-06")).toMatchObject([{ uid: t.uid, start: "2026-11-03T09:30:00-05:00", outlook: true, removedAt: null }]);
+    (await store.updateTimebox(t.id, { start: "2026-11-03T09:30:00-05:00", end: "2026-11-03T11:00:00-05:00", outlook: true }));
+    await store.close();
+    const again = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await again.timeboxesBetween("2026-11-02", "2026-11-06"))).toMatchObject([{ uid: t.uid, start: "2026-11-03T09:30:00-05:00", outlook: true, removedAt: null }]);
   });
 
-  it("a removed timebox with a live Outlook event is kept (as removed), so its event can be taken off and undone", () => {
-    const { store } = fresh();
-    const t = store.addTimebox({ ...box, outlook: true });
-    store.recordOwnEvent(t.uid, t.id, "E1", F);
-    expect(store.removeTimebox(t.id)).toEqual({ kept: true });
-    expect(store.timebox(t.id)!.removedAt).not.toBeNull();
-    store.markOwnDeleted(t.uid);
-    expect(store.timebox(t.id)!.removedAt).not.toBeNull();
-    expect(store.ownEvents()).toEqual([]);
-    expect(store.ownEvent(t.uid)!.deletedAt).not.toBeNull();
+  it("a removed timebox with a live Outlook event is kept (as removed), so its event can be taken off and undone", async () => {
+    const { store } = await fresh();
+    const t = (await store.addTimebox({ ...box, outlook: true }));
+    (await store.recordOwnEvent(t.uid, t.id, "E1", F));
+    expect((await store.removeTimebox(t.id))).toEqual({ kept: true });
+    expect((await store.timebox(t.id))!.removedAt).not.toBeNull();
+    (await store.markOwnDeleted(t.uid));
+    expect((await store.timebox(t.id))!.removedAt).not.toBeNull();
+    expect((await store.ownEvents())).toEqual([]);
+    expect((await store.ownEvent(t.uid))!.deletedAt).not.toBeNull();
   });
 
-  it("a timebox never on Outlook is simply deleted", () => {
-    const { store } = fresh();
-    const t = store.addTimebox(box);
-    expect(store.removeTimebox(t.id)).toEqual({ kept: false });
+  it("a timebox never on Outlook is simply deleted", async () => {
+    const { store } = await fresh();
+    const t = (await store.addTimebox(box));
+    expect((await store.removeTimebox(t.id))).toEqual({ kept: false });
   });
 
-  it("logs a write with its prior values, settles it, and marks it undone", () => {
-    const { path, store } = fresh();
+  it("logs a write with its prior values, settles it, and marks it undone", async () => {
+    const { path, store } = await fresh();
     const local = { start: box.start, end: box.end, outlook: false, removedAt: null };
-    const w = store.logWrite({ op: "update", uid: "tb-1", eventId: "E1", account: "me@x", calendar: "Calendar", before: F, after: { ...F, start: "2026-11-03T14:30:00Z" }, localBefore: local, localAfter: local, auto: false });
+    const w = (await store.logWrite({ op: "update", uid: "tb-1", eventId: "E1", account: "me@x", calendar: "Calendar", before: F, after: { ...F, start: "2026-11-03T14:30:00Z" }, localBefore: local, localAfter: local, auto: false }));
     expect(w.status).toBe("pending");
-    store.settleWrite(w.id, { status: "unconfirmed", message: "Couldn't confirm" });
-    store.settleWrite(w.id, { status: "confirmed", retry: true });
-    const u = store.logWrite({ op: "update", uid: "tb-1", eventId: "E1", account: null, calendar: null, before: null, after: F, localBefore: null, localAfter: null, auto: false, undoOf: w.id });
-    store.markUndone(w.id, u.id);
-    store.close();
-    const again = createPlanStore({ path, now, files: localStoreFiles });
-    expect(again.writeLog().map((x) => [x.id, x.status, x.attempts, x.undoneBy, x.undoOf])).toEqual([[u.id, "pending", 1, null, w.id], [w.id, "confirmed", 2, u.id, null]]);
-    expect(again.writeEntry(w.id)!.before).toEqual(F);
+    (await store.settleWrite(w.id, { status: "unconfirmed", message: "Couldn't confirm" }));
+    (await store.settleWrite(w.id, { status: "confirmed", retry: true }));
+    const u = (await store.logWrite({ op: "update", uid: "tb-1", eventId: "E1", account: null, calendar: null, before: null, after: F, localBefore: null, localAfter: null, auto: false, undoOf: w.id }));
+    (await store.markUndone(w.id, u.id));
+    await store.close();
+    const again = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await again.writeLog()).map((x) => [x.id, x.status, x.attempts, x.undoneBy, x.undoOf])).toEqual([[u.id, "pending", 1, null, w.id], [w.id, "confirmed", 2, u.id, null]]);
+    expect((await again.writeEntry(w.id))!.before).toEqual(F);
   });
 
-  it("migration 15 rebuilds the write log keeping every row and undo link, and then takes RSVP writes (D284)", () => {
+  itSqlite("migration 15 rebuilds the write log keeping every row and undo link, and then takes RSVP writes (D284)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path, { enableForeignKeyConstraints: false });
@@ -568,63 +591,63 @@ describe("timeboxes, own Outlook events and the write log (step 12)", () => {
               VALUES (1, 'x', 'outlook', 'create', 'timebox', 'tb-1', 'E1', NULL, '{}', 'confirmed', 0, NULL, 2, 1, 'x'),
                      (2, 'x', 'outlook', 'delete', 'timebox', 'tb-1', 'E1', '{}', NULL, 'confirmed', 0, 1, NULL, 1, 'x')`);
     old.close();
-    const store = createPlanStore({ path, now, files: localStoreFiles });
-    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
-    expect(store.writeLog().map((x) => [x.id, x.kind, x.undoOf, x.undoneBy])).toEqual([[2, "timebox", 1, null], [1, "timebox", null, 2]]);
-    const r = store.logWrite({ op: "update", kind: "rsvp", uid: "rsvp:M1", eventId: "M1", account: null, calendar: null, before: { ...F, response: "notResponded" }, after: { ...F, response: "accepted", comment: "See you there" }, localBefore: null, localAfter: null, auto: false });
-    expect(store.writeEntry(r.id)).toMatchObject({ kind: "rsvp", after: { response: "accepted", comment: "See you there" } });
-    store.close();
+    const store = await createPlanStore({ path, now, files: localStoreFiles });
+    expect((await store.schemaVersion())).toBe(MIGRATIONS.length);
+    expect((await store.writeLog()).map((x) => [x.id, x.kind, x.undoOf, x.undoneBy])).toEqual([[2, "timebox", 1, null], [1, "timebox", null, 2]]);
+    const r = (await store.logWrite({ op: "update", kind: "rsvp", uid: "rsvp:M1", eventId: "M1", account: null, calendar: null, before: { ...F, response: "notResponded" }, after: { ...F, response: "accepted", comment: "See you there" }, localBefore: null, localAfter: null, auto: false }));
+    expect((await store.writeEntry(r.id))).toMatchObject({ kind: "rsvp", after: { response: "accepted", comment: "See you there" } });
+    await store.close();
   });
 
-  it("reset empties timeboxes but keeps FocusTime's Outlook events and the audit log", () => {
-    const { store } = fresh();
-    const t = store.addTimebox({ ...box, outlook: true });
-    store.recordOwnEvent(t.uid, t.id, "E1", F);
-    store.logWrite({ op: "create", uid: t.uid, eventId: "E1", account: null, calendar: null, before: null, after: F, localBefore: null, localAfter: null, auto: false });
-    store.reset();
-    expect(store.timeboxesBetween("2026-11-01", "2026-11-30")).toEqual([]);
-    expect(store.ownEvents()).toMatchObject([{ uid: t.uid, timeboxId: null, eventId: "E1" }]);
-    expect(store.writeLog()).toHaveLength(1);
+  it("reset empties timeboxes but keeps FocusTime's Outlook events and the audit log", async () => {
+    const { store } = await fresh();
+    const t = (await store.addTimebox({ ...box, outlook: true }));
+    (await store.recordOwnEvent(t.uid, t.id, "E1", F));
+    (await store.logWrite({ op: "create", uid: t.uid, eventId: "E1", account: null, calendar: null, before: null, after: F, localBefore: null, localAfter: null, auto: false }));
+    (await store.reset());
+    expect((await store.timeboxesBetween("2026-11-01", "2026-11-30"))).toEqual([]);
+    expect((await store.ownEvents())).toMatchObject([{ uid: t.uid, timeboxId: null, eventId: "E1" }]);
+    expect((await store.writeLog())).toHaveLength(1);
   });
 
-  it("export includes timeboxes, own events and the write log", () => {
-    const { store } = fresh();
-    store.addTimebox(box);
-    const e = store.exportJson();
+  it("export includes timeboxes, own events and the write log", async () => {
+    const { store } = await fresh();
+    (await store.addTimebox(box));
+    const e = (await store.exportJson());
     expect([e.timeboxes.length, e.outlookEvents.length, e.writeLog.length]).toEqual([1, 0, 0]);
   });
 });
 
 describe("Roadmap snapshots (step 16, D280)", () => {
-  it("keeps one row per item per day, the latest of the day, and drops rows older than 120 days", () => {
-    const s = createPlanStore({ path: ":memory:", now: () => Temporal.ZonedDateTime.from("2026-11-02T09:00:00-06:00[America/Chicago]") });
-    s.recordSnapshots("2026-06-01", [{ clientKey: "Fabrikam", itemId: 10, done: 0, open: 9 }]);
-    s.recordSnapshots("2026-10-26", [{ clientKey: "Fabrikam", itemId: 10, done: 2, open: 7 }, { clientKey: "Contoso", itemId: 10, done: 1, open: 1 }]);
-    s.recordSnapshots("2026-11-02", [{ clientKey: "Fabrikam", itemId: 10, done: 3, open: 6 }]);
-    s.recordSnapshots("2026-11-02", [{ clientKey: "Fabrikam", itemId: 10, done: 4, open: 5 }]);
-    const all = s.snapshotsFrom("2026-01-01");
+  it("keeps one row per item per day, the latest of the day, and drops rows older than 120 days", async () => {
+    const s = await createPlanStore({ path: ":memory:", now: () => Temporal.ZonedDateTime.from("2026-11-02T09:00:00-06:00[America/Chicago]") });
+    await s.recordSnapshots("2026-06-01", [{ clientKey: "Fabrikam", itemId: 10, done: 0, open: 9 }]);
+    await s.recordSnapshots("2026-10-26", [{ clientKey: "Fabrikam", itemId: 10, done: 2, open: 7 }, { clientKey: "Contoso", itemId: 10, done: 1, open: 1 }]);
+    await s.recordSnapshots("2026-11-02", [{ clientKey: "Fabrikam", itemId: 10, done: 3, open: 6 }]);
+    await s.recordSnapshots("2026-11-02", [{ clientKey: "Fabrikam", itemId: 10, done: 4, open: 5 }]);
+    const all = (await s.snapshotsFrom("2026-01-01"));
     expect(all.get("Fabrikam:10")).toEqual([{ date: "2026-10-26", done: 2, open: 7 }, { date: "2026-11-02", done: 4, open: 5 }]);
     expect(all.get("Contoso:10")).toEqual([{ date: "2026-10-26", done: 1, open: 1 }]);
-    expect(s.snapshotsFrom("2026-11-01").get("Fabrikam:10")).toHaveLength(1);
+    expect((await s.snapshotsFrom("2026-11-01")).get("Fabrikam:10")).toHaveLength(1);
   });
 
-  it("step 17 (migration 20): dates dragged on Plan ahead are kept per item, replaced, cleared and exported", () => {
-    const s = createPlanStore({ path: ":memory:", now });
-    expect(s.roadmapDates().size).toBe(0);
-    s.setRoadmapDates("Fabrikam", 10, { start: "2026-11-09", end: "2026-12-04" });
-    s.setRoadmapDates("Fabrikam", 10, { start: "2026-11-16", end: "2026-12-11" });
-    s.setRoadmapDates("Contoso", 10, { start: "2026-11-02", end: "2026-11-02" });
-    expect(Object.fromEntries(s.roadmapDates())).toEqual({ "Fabrikam:10": { start: "2026-11-16", end: "2026-12-11" }, "Contoso:10": { start: "2026-11-02", end: "2026-11-02" } });
-    expect(() => s.setRoadmapDates("Fabrikam", 11, { start: "2026-11-10", end: "2026-11-09" })).toThrow(/before the start/);
-    expect(s.exportJson().roadmapDates).toContainEqual({ item: "Fabrikam:10", start: "2026-11-16", end: "2026-12-11" });
-    s.setRoadmapDates("Fabrikam", 10, null);
-    expect([...s.roadmapDates().keys()]).toEqual(["Contoso:10"]);
+  it("step 17 (migration 20): dates dragged on Plan ahead are kept per item, replaced, cleared and exported", async () => {
+    const s = await createPlanStore({ path: ":memory:", now });
+    expect((await s.roadmapDates()).size).toBe(0);
+    await s.setRoadmapDates("Fabrikam", 10, { start: "2026-11-09", end: "2026-12-04" });
+    await s.setRoadmapDates("Fabrikam", 10, { start: "2026-11-16", end: "2026-12-11" });
+    await s.setRoadmapDates("Contoso", 10, { start: "2026-11-02", end: "2026-11-02" });
+    expect(Object.fromEntries((await s.roadmapDates()))).toEqual({ "Fabrikam:10": { start: "2026-11-16", end: "2026-12-11" }, "Contoso:10": { start: "2026-11-02", end: "2026-11-02" } });
+    await expect(s.setRoadmapDates("Fabrikam", 11, { start: "2026-11-10", end: "2026-11-09" })).rejects.toThrow(/before the start/);
+    expect((await s.exportJson()).roadmapDates).toContainEqual({ item: "Fabrikam:10", start: "2026-11-16", end: "2026-12-11" });
+    await s.setRoadmapDates("Fabrikam", 10, null);
+    expect([...(await s.roadmapDates()).keys()]).toEqual(["Contoso:10"]);
   });
 });
 
 describe("week plan duplicates (U3, D388)", () => {
   const W = "2026-11-09";
-  it("migration 21 keeps the oldest row for an item under a client key in another letter case, moves its pins, and logs the removal", () => {
+  itSqlite("migration 21 keeps the oldest row for an item under a client key in another letter case, moves its pins, and logs the removal", async () => {
     const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
     const path = join(dir, "plan.db");
     const old = new DatabaseSync(path);
@@ -645,9 +668,9 @@ describe("week plan duplicates (U3, D388)", () => {
     old.exec("INSERT INTO week_feature_slots VALUES (5, '2026-11-10', 'PM')");
     old.close();
     const logged: { op: string; count?: number }[] = [];
-    const store = createPlanStore({ path, now, files: localStoreFiles, log: (r) => logged.push(r) });
-    expect(store.schemaVersion()).toBe(MIGRATIONS.length);
-    const p = store.weekPlan(W);
+    const store = await createPlanStore({ path, now, files: localStoreFiles, log: (r) => logged.push(r) });
+    expect((await store.schemaVersion())).toBe(MIGRATIONS.length);
+    const p = (await store.weekPlan(W));
     expect(p.features.map((f) => [f.id, f.itemId, f.slots.length]).sort()).toEqual([
       [3, 210, 1],
       [6, 211, 0],
@@ -658,14 +681,15 @@ describe("week plan duplicates (U3, D388)", () => {
     db.close();
   });
 
-  it("adding an item already on the week (any letter case of the client key) updates that row instead of adding a second", () => {
-    const store = createPlanStore({ path: ":memory:", now });
-    const a = store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 210, title: "Export", itemType: "Feature", url: null, level: "feature" });
-    const b = store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 210, title: "Export v2", itemType: "Feature", url: null, level: "feature" });
-    const c = store.addWeekItem({ weekStart: W, clientKey: "adatum", itemId: 210, title: "Export v3", itemType: "Feature", url: null, level: "feature" });
+  it("adding an item already on the week (any letter case of the client key) updates that row instead of adding a second", async () => {
+    const store = await createPlanStore({ path: ":memory:", now });
+    const a = (await store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 210, title: "Export", itemType: "Feature", url: null, level: "feature" }));
+    const b = (await store.addWeekItem({ weekStart: W, clientKey: "Adatum", itemId: 210, title: "Export v2", itemType: "Feature", url: null, level: "feature" }));
+    const c = (await store.addWeekItem({ weekStart: W, clientKey: "adatum", itemId: 210, title: "Export v3", itemType: "Feature", url: null, level: "feature" }));
     expect(b.id).toBe(a.id);
     expect(c.id).toBe(a.id);
-    expect(store.weekPlan(W).features).toHaveLength(1);
-    expect(store.weekPlan(W).features[0]!.title).toBe("Export v3");
+    expect((await store.weekPlan(W)).features).toHaveLength(1);
+    expect((await store.weekPlan(W)).features[0]!.title).toBe("Export v3");
   });
+});
 });

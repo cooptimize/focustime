@@ -10,7 +10,7 @@ function ctx(users: Record<string, string>, opts: { failing?: boolean } = {}) {
   return {
     asked,
     c: {
-      signedInAs: { email: "ana@cooptimize.example", upn: "ana.s@cooptimize.example" },
+      signedInAs: async () => ({ email: "ana@cooptimize.example", upn: "ana.s@cooptimize.example" }),
       makeDataverse: () =>
         ({
           resolveUserId: async (e: string) => {

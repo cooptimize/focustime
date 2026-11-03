@@ -60,7 +60,7 @@ describe("quick capture actions (step 9)", () => {
     expect(s.today).toBe("2026-11-05");
     // Routing to a follow-up needs nothing outside the store either.
     await t.run("capture.route", { id: r.capture.id, as: "follow_up", clientKey: "Adatum", who: "Dana", what: "Send the export", due: "2026-11-05" });
-    expect(t.plan.openFollowUps()).toEqual([expect.objectContaining({ kind: "capture", who: "Dana", due: "2026-11-05" })]);
+    expect((await t.plan.openFollowUps())).toEqual([expect.objectContaining({ kind: "capture", who: "Dana", due: "2026-11-05" })]);
     // Nothing was sent anywhere: no DevOps call, and no Dataverse call for capture.add or capture.load.
     expect(t.ado.calls).toEqual([]);
   });
@@ -84,10 +84,10 @@ describe("quick capture actions (step 9)", () => {
     const a = await t.run<{ capture: { id: number } }>("capture.add", { text: "need to export as CSV", clientKey: "Adatum" });
     expect((await t.fail("capture.route", { id: a.capture.id, as: "draft", clientKey: "Adatum", title: "Export as CSV", parentItemId: 250 })).status).toBe(422); // an epic
     const r = await t.run<{ capture: { routedId: number } }>("capture.route", { id: a.capture.id, as: "draft", clientKey: "Adatum", title: "Export as CSV", size: "S", parentItemId: 240 });
-    expect(t.plan.getDraft(r.capture.routedId)).toMatchObject({ clientKey: "Adatum", parentItemId: 240, title: "Export as CSV", size: "S" });
+    expect((await t.plan.getDraft(r.capture.routedId))).toMatchObject({ clientKey: "Adatum", parentItemId: 240, title: "Export as CSV", size: "S" });
     const b = await t.run<{ capture: { id: number } }>("capture.add", { text: "todo retry failed syncs", clientKey: "Adatum" });
     const n = await t.run<{ capture: { routedId: number } }>("capture.route", { id: b.capture.id, as: "draft", clientKey: "Adatum", title: "Retry failed syncs" });
-    expect(t.plan.getDraft(n.capture.routedId)).toMatchObject({ parentItemId: null, size: "M" });
+    expect((await t.plan.getDraft(n.capture.routedId))).toMatchObject({ parentItemId: null, size: "M" });
   });
 
   it("with DevOps down, a draft can't be put under a feature but saves without one", async () => {
@@ -106,7 +106,7 @@ describe("quick capture actions (step 9)", () => {
     expect((await t.fail("capture.route", { id: a.capture.id, as: "draft_feature", clientKey: "Adatum", title: "Onboarding", parentItemId: 240 })).status).toBe(422); // a feature, not an epic
     expect((await t.fail("capture.route", { id: a.capture.id, as: "note", clientKey: "Adatum", text: "x" })).status).toBe(400);
     const r = await t.run<{ capture: { routedId: number } }>("capture.route", { id: a.capture.id, as: "draft_feature", clientKey: "Adatum", title: "Onboarding", parentItemId: 250 });
-    expect(t.plan.getDraft(r.capture.routedId)).toMatchObject({ level: "feature", parentItemId: 250, title: "Onboarding" });
+    expect((await t.plan.getDraft(r.capture.routedId))).toMatchObject({ level: "feature", parentItemId: 250, title: "Onboarding" });
     // Plan the week's "Draft a feature" under an epic, the same check.
     const d = await t.run<{ draft: { level: string; parentItemId: number | null } }>("draft.add_feature", { clientKey: "Adatum", parentItemId: 250, title: "Self-service export" });
     expect(d.draft).toMatchObject({ level: "feature", parentItemId: 250 });
@@ -119,11 +119,11 @@ describe("quick capture actions (step 9)", () => {
     const a = await t.run<{ capture: { id: number } }>("capture.add", { text: "send Dana the mapping", clientKey: "Adatum" });
     expect((await t.fail("capture.route", { id: a.capture.id, as: "follow_up", what: "Send the mapping", itemId: 240 })).status).toBe(400); // a linked item needs a client
     await t.run("capture.route", { id: a.capture.id, as: "follow_up", clientKey: "Adatum", who: "Dana", what: "Send the mapping", channel: "teams", itemId: 240 });
-    expect(t.plan.openFollowUps()).toEqual([expect.objectContaining({ kind: "capture", who: "Dana", channel: "teams", itemId: 240 })]);
+    expect((await t.plan.openFollowUps())).toEqual([expect.objectContaining({ kind: "capture", who: "Dana", channel: "teams", itemId: 240 })]);
     const b = await t.run<{ capture: { id: number } }>("capture.add", { text: "feature: bulk import", clientKey: "Adatum" });
     expect((await t.fail("capture.route", { id: b.capture.id, as: "draft_feature", clientKey: "Adatum", title: "Bulk import", targetDate: "Friday" })).status).toBe(400);
     const r = await t.run<{ capture: { routedId: number } }>("capture.route", { id: b.capture.id, as: "draft_feature", clientKey: "Adatum", title: "Bulk import", parentItemId: 250, targetDate: "2026-11-27" });
-    expect(t.plan.getDraft(r.capture.routedId)).toMatchObject({ level: "feature", parentItemId: 250, targetDate: "2026-11-27" });
+    expect((await t.plan.getDraft(r.capture.routedId))).toMatchObject({ level: "feature", parentItemId: 250, targetDate: "2026-11-27" });
     const c = await t.run<{ capture: { id: number } }>("capture.add", { text: "story: retry", clientKey: "Adatum" });
     expect((await t.fail("capture.route", { id: c.capture.id, as: "draft", clientKey: "Adatum", title: "Retry", targetDate: "2026-11-27" })).status).toBe(400); // dates are for features
     const f = await t.run<CaptureFeatures>("capture.features", { clientKey: "Adatum" });

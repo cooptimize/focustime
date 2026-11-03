@@ -20,11 +20,11 @@ const TEAM = [
   { id: "d3", name: "Sam Ortiz", email: "sam.ortiz@example.com", aadId: null },
 ];
 
-function setup(o: { toml?: string; signedIn?: boolean; fail?: unknown } = {}) {
+async function setup(o: { toml?: string; signedIn?: boolean; fail?: unknown } = {}) {
   let t = Date.parse("2026-11-02T15:00:00Z");
   const clock = { now: () => new Date(t).toISOString(), advance: (min: number) => void (t += min * 60_000) };
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(clock.now()).toZonedDateTimeISO("America/New_York") });
-  if (o.signedIn !== false) plan.setAccountState(IDENTITY_KEY, { ...ME, signedInAt: clock.now(), systemUserId: null, systemUserEmail: null });
+  if (o.signedIn !== false) (await plan.setAccountState(IDENTITY_KEY, { ...ME, signedInAt: clock.now(), systemUserId: null, systemUserEmail: null }));
   const calls: { op: string; oid?: string; status?: string; minutes?: number; ids?: string[] }[] = [];
   const g = { mine: "Busy" as string | null, fail: o.fail as unknown };
   const presence: PresenceClient = {
@@ -74,11 +74,11 @@ function setup(o: { toml?: string; signedIn?: boolean; fail?: unknown } = {}) {
 
 describe("focus sets my Teams status", () => {
   it("start sets Busy on my own user for the time left plus 5 minutes; logged", async () => {
-    const s = setup();
+    const s = (await setup());
     await s.run("timer.start", { minutes: 50 });
     await s.sync();
     expect(s.writes()).toEqual([{ op: "set", oid: ME.oid, status: "Busy", minutes: 55 }]);
-    expect(s.plan.teamsStatusLog()).toMatchObject([{ op: "set", status: "Busy", minutes: 55, result: "done" }]);
+    expect((await s.plan.teamsStatusLog())).toMatchObject([{ op: "set", status: "Busy", minutes: 55, result: "done" }]);
     const v = await s.run<TeamsStatusView>("presence.status");
     expect(v).toMatchObject({ enabled: true, set: "Busy", until: "2026-11-02T15:55:00Z", manual: false });
     // Nothing more while nothing changes.
@@ -88,7 +88,7 @@ describe("focus sets my Teams status", () => {
   });
 
   it("deep focus sets Do not disturb; switching during a session sets it again", async () => {
-    const s = setup();
+    const s = (await setup());
     await s.run("timer.start", { minutes: 30, deep: true });
     await s.sync();
     expect(s.writes().at(-1)).toMatchObject({ status: "DoNotDisturb", minutes: 35 });
@@ -99,7 +99,7 @@ describe("focus sets my Teams status", () => {
   });
 
   it("+15 refreshes the expiration", async () => {
-    const s = setup();
+    const s = (await setup());
     await s.run("timer.start", { minutes: 50 });
     await s.sync();
     s.clock.advance(40);
@@ -109,26 +109,26 @@ describe("focus sets my Teams status", () => {
   });
 
   for (const [how, end] of [
-    ["Stop", async (s: ReturnType<typeof setup>) => void (await s.run("timer.stop"))],
-    ["Done", async (s: ReturnType<typeof setup>) => void (await s.run("timer.done"))],
-    ["Pause", async (s: ReturnType<typeof setup>) => void (await s.run("timer.pause"))],
-    ["a break instead", async (s: ReturnType<typeof setup>) => void (await s.run("timer.start", { kind: "break" }))],
-    ["the session ending on time", async (s: ReturnType<typeof setup>) => s.clock.advance(60)],
-    ["abandoned (the timer gone, e.g. Reset local plan)", async (s: ReturnType<typeof setup>) => s.plan.setState("timer", null)],
+    ["Stop", async (s: Awaited<ReturnType<typeof setup>>) => void (await s.run("timer.stop"))],
+    ["Done", async (s: Awaited<ReturnType<typeof setup>>) => void (await s.run("timer.done"))],
+    ["Pause", async (s: Awaited<ReturnType<typeof setup>>) => void (await s.run("timer.pause"))],
+    ["a break instead", async (s: Awaited<ReturnType<typeof setup>>) => void (await s.run("timer.start", { kind: "break" }))],
+    ["the session ending on time", async (s: Awaited<ReturnType<typeof setup>>) => s.clock.advance(60)],
+    ["abandoned (the timer gone, e.g. Reset local plan)", async (s: Awaited<ReturnType<typeof setup>>) => (await s.plan.setState("timer", null))],
   ] as const) {
     it(`${how} clears it (back to automatic)`, async () => {
-      const s = setup();
+      const s = (await setup());
       await s.run("timer.start", { minutes: 50 });
       await s.sync();
       await end(s);
       if (how === "the session ending on time") {
         // The server's timer tick ends it; here the stored state says ended.
-        const st = s.plan.getState<{ runningSince: string | null; ended: boolean; elapsedMs: number; plannedMinutes: number }>("timer")!;
-        s.plan.setState("timer", { ...st, runningSince: null, ended: true, elapsedMs: st.plannedMinutes * 60_000 });
+        const st = (await s.plan.getState<{ runningSince: string | null; ended: boolean; elapsedMs: number; plannedMinutes: number }>("timer"))!;
+        (await s.plan.setState("timer", { ...st, runningSince: null, ended: true, elapsedMs: st.plannedMinutes * 60_000 }));
       }
       await s.sync();
       expect(s.writes().at(-1)).toEqual({ op: "clear", oid: ME.oid });
-      expect(s.plan.teamsStatusLog()[0]).toMatchObject({ op: "clear", result: "done" });
+      expect((await s.plan.teamsStatusLog())[0]).toMatchObject({ op: "clear", result: "done" });
       // Once.
       await s.sync();
       expect(s.writes().filter((w) => w.op === "clear")).toHaveLength(1);
@@ -136,23 +136,23 @@ describe("focus sets my Teams status", () => {
   }
 
   it("a restart still clears it: what FocusTime set is kept in account state", async () => {
-    const s = setup();
+    const s = (await setup());
     await s.run("timer.start", { minutes: 50 });
     await s.sync();
-    expect(s.plan.accountState<{ set: string }>(TEAMS_STATUS_KEY)?.set).toBe("Busy");
+    expect((await s.plan.accountState<{ set: string }>(TEAMS_STATUS_KEY))?.set).toBe("Busy");
     await s.run("timer.stop");
     await s.sync();
-    expect(s.plan.accountState<{ set: string | null }>(TEAMS_STATUS_KEY)?.set).toBeNull();
+    expect((await s.plan.accountState<{ set: string | null }>(TEAMS_STATUS_KEY))?.set).toBeNull();
   });
 
   it("a status I set by hand in Teams is not overridden, not even on +15, and is left at the end", async () => {
-    const s = setup();
+    const s = (await setup());
     await s.run("timer.start", { minutes: 50 });
     await s.sync();
     s.clock.advance(2);
     s.g.mine = "Available";
     await s.sync();
-    expect(s.plan.teamsStatusLog()[0]).toMatchObject({ op: "left" });
+    expect((await s.plan.teamsStatusLog())[0]).toMatchObject({ op: "left" });
     await s.run("timer.extend");
     await s.sync();
     await s.run("timer.stop");
@@ -165,12 +165,12 @@ describe("focus sets my Teams status", () => {
   });
 
   it("Settings > Focus: off sets nothing; plain focus can leave status alone (deep still sets Do not disturb)", async () => {
-    const off = setup({ toml: `${TOML}\n[focus]\nteams_status = false\n` });
+    const off = (await setup({ toml: `${TOML}\n[focus]\nteams_status = false\n` }));
     await off.run("timer.start", { minutes: 50, deep: true });
     await off.sync();
     expect(off.writes()).toEqual([]);
     expect(await off.run<TeamsStatusView>("presence.status")).toMatchObject({ enabled: false });
-    const none = setup({ toml: `${TOML}\n[focus]\nplain_focus_status = "none"\n` });
+    const none = (await setup({ toml: `${TOML}\n[focus]\nplain_focus_status = "none"\n` }));
     await none.run("timer.start", { minutes: 50 });
     await none.sync();
     expect(none.writes()).toEqual([]);
@@ -180,19 +180,19 @@ describe("focus sets my Teams status", () => {
   });
 
   it("no consent: nothing set, one failed log entry (not one a minute), and Settings can say Allow Teams status", async () => {
-    const s = setup({ fail: new AuthFailure("consent", "x") });
+    const s = (await setup({ fail: new AuthFailure("consent", "x") }));
     await s.run("timer.start", { minutes: 50 });
     await s.sync();
     s.clock.advance(1);
     await s.sync();
     s.clock.advance(1);
     await s.sync();
-    expect(s.plan.teamsStatusLog()).toMatchObject([{ op: "set", result: "failed", message: expect.stringContaining("Allow Teams status") }]);
+    expect((await s.plan.teamsStatusLog())).toMatchObject([{ op: "set", result: "failed", message: expect.stringContaining("Allow Teams status") }]);
     expect(await s.run<TeamsStatusView>("presence.status", { check: true })).toMatchObject({ access: "consent", set: null });
   });
 
   it("signed out: nothing is attempted", async () => {
-    const s = setup({ signedIn: false });
+    const s = (await setup({ signedIn: false }));
     await s.run("timer.start", { minutes: 50 });
     await s.sync();
     expect(s.calls).toEqual([]);
@@ -202,31 +202,31 @@ describe("focus sets my Teams status", () => {
 
 describe("teammates' presence", () => {
   it("one batched read for the people on screen (emails and exact names), words only", async () => {
-    const s = setup();
+    const s = (await setup());
     const r = await s.run<PresencePeopleData>("presence.people", { emails: ["Jordan.Lee@example.com", "sam.ortiz@example.com", "client@contoso.example"], names: ["Priya Shah", "Nobody"] });
     expect(s.calls).toEqual([{ op: "people", ids: [aad(1), aad(2)] }]);
     expect(r).toEqual({ available: true, reason: null, people: [{ email: "jordan.lee@example.com", name: "Jordan Lee", word: "Available" }, { email: "priya.shah@example.com", name: "Priya Shah", word: "In a meeting" }] });
   });
 
   it("is never kept: nothing about teammates in the plan store, the export or the Teams status log", async () => {
-    const s = setup();
+    const s = (await setup());
     await s.run("presence.people", { emails: ["jordan.lee@example.com", "priya.shah@example.com"] });
-    const all = JSON.stringify(s.plan.exportJson());
+    const all = JSON.stringify((await s.plan.exportJson()));
     for (const x of [aad(1), aad(2), "Available", "InAMeeting", "In a meeting", "jordan"]) expect(all).not.toContain(x);
   });
 
   it("can't be read (no consent, error, signed out): shows nothing rather than a guess", async () => {
     for (const fail of [new AuthFailure("consent", "x"), new HttpError(403), new HttpError(500)]) {
-      const s = setup({ fail });
+      const s = (await setup({ fail }));
       expect(await s.run<PresencePeopleData>("presence.people", { emails: ["jordan.lee@example.com"] })).toMatchObject({ available: false, people: [] });
     }
-    const out = setup({ signedIn: false });
+    const out = (await setup({ signedIn: false }));
     expect(await out.run<PresencePeopleData>("presence.people", { emails: ["jordan.lee@example.com"] })).toEqual({ available: false, reason: "signed_out", people: [] });
     expect(out.calls).toEqual([]);
   });
 
   it("refuses odd input and more than 100 people", async () => {
-    const s = setup();
+    const s = (await setup());
     for (const bad of [{ emails: "x" }, { emails: [1] }, { other: [] }, { emails: Array.from({ length: 101 }, (_, i) => `p${i}@example.com`) }]) {
       const r = await dispatch(s.c, { action: "presence.people", input: bad });
       expect(r.ok, JSON.stringify(bad).slice(0, 40)).toBe(false);

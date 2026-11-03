@@ -1,7 +1,7 @@
 // Step 15.4 fix, A2: an action's refusal (even a 401 or 403) is never shown as signed out; only the server's
 // signed_out answer (no live session) asks the person to sign in again.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ActionRefusal, readResponse, SessionError, setStaleListener, STALE_MESSAGE } from "./api.ts";
+import { ActionRefusal, call, readResponse, SessionError, setDbStateListener, setStaleListener, STALE_MESSAGE, type DbState } from "./api.ts";
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -59,5 +59,50 @@ describe("the signed-out banner and the sign-in screen (A2)", () => {
     await expect(readResponse(new Response(JSON.stringify({ ok: false, status: 401, error: "x", code: "signed_out" }), { status: 401 }))).rejects.toBeInstanceOf(SessionError);
     expect(stale).toHaveBeenCalledTimes(1);
     setSignInShownListener(null);
+  });
+});
+
+describe("a call that waits on a waking database (A3)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    setDbStateListener(null);
+  });
+
+  it("asks the server's state after 1.5 seconds, says waking, and goes back to ok when the call answers", async () => {
+    vi.useFakeTimers();
+    let answer!: (r: Response) => void;
+    const asked: string[] = [];
+    vi.stubGlobal("fetch", (url: string) => {
+      asked.push(url);
+      if (url === "/api/db-status") return Promise.resolve(json(200, { status: "waking" }));
+      return new Promise<Response>((r) => (answer = r));
+    });
+    const seen: DbState[] = [];
+    setDbStateListener((s) => seen.push(s));
+    const p = call<string>("week.load", {});
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(asked).toEqual(["/api/action"]);
+    await vi.advanceTimersByTimeAsync(2600);
+    expect(asked.filter((u) => u === "/api/db-status").length).toBe(3);
+    expect(seen.at(-1)).toBe("waking");
+    answer(json(200, { ok: true, data: "fine" }));
+    await expect(p).resolves.toBe("fine");
+    expect(seen.at(-1)).toBe("ok");
+    const n = asked.length;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(asked.length).toBe(n);
+  });
+
+  it("a quick call never asks", async () => {
+    vi.useFakeTimers();
+    const asked: string[] = [];
+    vi.stubGlobal("fetch", (url: string) => {
+      asked.push(url);
+      return Promise.resolve(json(200, { ok: true, data: 1 }));
+    });
+    await expect(call<number>("week.load", {})).resolves.toBe(1);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(asked).toEqual(["/api/action"]);
   });
 });

@@ -9,6 +9,7 @@ import { localStoreFiles } from "../host/local/files.ts";
 import { claimUnowned, isOwner, unownedRows } from "./claim.ts";
 import { MIGRATIONS, openPlanDb, planStoreOn } from "./plan-store.ts";
 import { USER_TABLES } from "./scope.ts";
+import { sqliteConn } from "./sql/sqlite.ts";
 
 const now = () => Temporal.ZonedDateTime.from("2026-11-02T09:30:00-05:00[America/New_York]");
 const OID = "0b7c6f1e-0000-4000-8000-00000000a11c";
@@ -44,54 +45,58 @@ function v23Store(identity: boolean) {
 const countsOf = (db: DatabaseSync, where: string) => Object.fromEntries(USER_TABLES.map((t) => [t, (db.prepare(`SELECT count(*) AS n FROM ${t} WHERE ${where}`).get() as { n: number }).n]));
 
 describe("migration 24 and the first sign-in (A2)", () => {
-  it("keeps every row as no one's, after a private backup", () => {
+  it("keeps every row as no one's, after a private backup", async () => {
     const s = v23Store(true);
-    const db = openPlanDb({ path: s.path, now, files: localStoreFiles });
-    expect(countsOf(db, "user_id = ''")).toEqual(s.counts);
+    const raw = openPlanDb({ path: s.path, now, files: localStoreFiles });
+    expect(countsOf(raw, "user_id = ''")).toEqual(s.counts);
     expect(readdirSync(s.dir).some((f) => f.startsWith("plan.db.bak-v23-"))).toBe(true);
-    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-    db.close();
+    expect(raw.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    raw.close();
   });
 
-  it("gives every row to the signed-in owner (the recorded Microsoft account) and leaves nothing unowned", () => {
+  it("gives every row to the signed-in owner (the recorded Microsoft account) and leaves nothing unowned", async () => {
     const s = v23Store(true);
-    const db = openPlanDb({ path: s.path, now });
-    const r = claimUnowned(db, ME, "");
+    const raw = openPlanDb({ path: s.path, now });
+    const db = sqliteConn(raw);
+    const r = (await claimUnowned(db, ME, ""));
     expect(r).toMatchObject({ claimed: true });
-    expect(unownedRows(db)).toBe(0);
-    expect(countsOf(db, `user_id = '${OID}'`)).toEqual(s.counts);
-    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect((await unownedRows(db))).toBe(0);
+    expect(countsOf(raw, `user_id = '${OID}'`)).toEqual(s.counts);
+    expect(raw.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     // The owner's store shows them.
     const plan = planStoreOn(db, { userId: OID, now });
-    expect(plan.picksFor("2026-11-02").map((p) => p.title)).toEqual(["Pick 0", "Pick 1", "Pick 2"]);
-    expect(plan.inbox().length).toBe(1);
+    expect((await plan.picksFor("2026-11-02")).map((p) => p.title)).toEqual(["Pick 0", "Pick 1", "Pick 2"]);
+    expect((await plan.inbox()).length).toBe(1);
     // Nothing is left to claim the next time.
-    expect(claimUnowned(db, ME, "")).toMatchObject({ claimed: false, reason: "nothing" });
+    expect((await claimUnowned(db, ME, ""))).toMatchObject({ claimed: false, reason: "nothing" });
   });
 
-  it("claims nothing for another person, even one with the config file's email", () => {
+  it("claims nothing for another person, even one with the config file's email", async () => {
     const s = v23Store(true);
-    const db = openPlanDb({ path: s.path, now });
+    const raw = openPlanDb({ path: s.path, now });
+    const db = sqliteConn(raw);
     const other = { ...ME, oid: "11111111-0000-4000-8000-000000000000" };
-    expect(claimUnowned(db, other, ME.email)).toMatchObject({ claimed: false, reason: "not_owner" });
-    expect(claimUnowned(db, { ...ME, tid: "22222222-0000-4000-8000-000000000000" }, "")).toMatchObject({ claimed: false, reason: "not_owner" });
-    expect(countsOf(db, "user_id = ''")).toEqual(s.counts);
+    expect((await claimUnowned(db, other, ME.email))).toMatchObject({ claimed: false, reason: "not_owner" });
+    expect((await claimUnowned(db, { ...ME, tid: "22222222-0000-4000-8000-000000000000" }, ""))).toMatchObject({ claimed: false, reason: "not_owner" });
+    expect(countsOf(raw, "user_id = ''")).toEqual(s.counts);
   });
 
-  it("without a recorded account, the config file's work email names the owner", () => {
+  it("without a recorded account, the config file's work email names the owner", async () => {
     const s = v23Store(false);
-    const db = openPlanDb({ path: s.path, now });
-    expect(isOwner(db, ME, "")).toBe(false);
-    expect(isOwner(db, ME, "someone@cooptimize.example")).toBe(false);
-    expect(claimUnowned(db, ME, "Ana@Cooptimize.example")).toMatchObject({ claimed: true });
-    expect(unownedRows(db)).toBe(0);
+    const raw = openPlanDb({ path: s.path, now });
+    const db = sqliteConn(raw);
+    expect((await isOwner(db, ME, ""))).toBe(false);
+    expect((await isOwner(db, ME, "someone@cooptimize.example"))).toBe(false);
+    expect((await claimUnowned(db, ME, "Ana@Cooptimize.example"))).toMatchObject({ claimed: true });
+    expect((await unownedRows(db))).toBe(0);
   });
 
-  it("never merges into a person who already has rows of their own", () => {
+  it("never merges into a person who already has rows of their own", async () => {
     const s = v23Store(true);
-    const db = openPlanDb({ path: s.path, now });
-    planStoreOn(db, { userId: OID, now }).addCapture({ text: "Mine already", clientKey: null });
-    expect(claimUnowned(db, ME, "")).toMatchObject({ claimed: false, reason: "has_rows" });
-    expect(countsOf(db, "user_id = ''")).toEqual(s.counts);
+    const raw = openPlanDb({ path: s.path, now });
+    const db = sqliteConn(raw);
+    await planStoreOn(db, { userId: OID, now }).addCapture({ text: "Mine already", clientKey: null });
+    expect((await claimUnowned(db, ME, ""))).toMatchObject({ claimed: false, reason: "has_rows" });
+    expect(countsOf(raw, "user_id = ''")).toEqual(s.counts);
   });
 });

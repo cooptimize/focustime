@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs the developer loop for this user (system/README.md): the systemd user service (this repo and the node on
-# PATH filled in), the focustime-open launcher in ~/.local/bin, the launcher entry, the login autostart entry and the
+# PATH filled in), the focustime-open launcher and the focustime command (A3: import, export-local) in ~/.local/bin, the launcher entry, the login autostart entry and the
 # icons. Run it again after moving the repo folder. With --remove-coopilot it also removes what the app installed under
 # its old name (the coopilot service, launcher, entries and icons). Nothing outside those is touched.
 # Usage: system/install.sh [--remove-coopilot]
@@ -18,6 +18,7 @@ fill() { sed -e "s|@REPO@|$repo|g" -e "s|@NODE@|$node|g" -e "s|@BIN@|$bin|g" "$1
 mkdir -p "$units" "$apps" "$autostart" "$bin"
 fill "$repo/system/focustime.service" > "$units/focustime.service"
 ln -sfn "$repo/system/focustime-open" "$bin/focustime-open"
+ln -sfn "$repo/scripts/focustime.ts" "$bin/focustime"
 fill "$repo/system/FocusTime.desktop" > "$apps/FocusTime.desktop"
 fill "$repo/system/focustime-autostart.desktop" > "$autostart/focustime.desktop"
 chmod 644 "$apps/FocusTime.desktop" "$autostart/focustime.desktop"

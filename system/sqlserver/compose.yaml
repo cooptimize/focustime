@@ -1,0 +1,26 @@
+# A3: the local SQL Server for development and tests (the hosted app uses Azure SQL; same schema, same migrations).
+# Started by `npm run db:up` (scripts/db.ts), which passes the sa password from the keyring entry sql-password in the
+# environment; it is never written here or on a command line. Listens on 127.0.0.1:14330 only.
+#
+#   npm run db:up       start it (first time: makes the password, the volume and the databases)
+#   npm run db:migrate  bring a database to this build's schema (default focustime_dev; --database focustime)
+#   npm run db:reset    empty focustime_dev (never the service's focustime database)
+#   npm run db:down     stop it (the data stays in the volume)
+name: focustime
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    container_name: focustime-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?run npm run db:up, which reads it from the keyring}
+    ports:
+      - "127.0.0.1:14330:1433"
+    volumes:
+      - focustime-sqlserver:/var/opt/mssql
+    restart: unless-stopped
+    # SQL Server checkpoints on shutdown; 10 s (the default) can cut it off.
+    stop_grace_period: 30s
+volumes:
+  focustime-sqlserver:

@@ -58,10 +58,10 @@ describe("roadmap.load", () => {
   });
   it("takes one snapshot per item per day from a live read, and builds the trend and rate from them", async () => {
     const { ctx, plan } = setup();
-    plan.recordSnapshots("2026-10-19", [{ clientKey: "Fabrikam", itemId: 10, done: 0, open: 5 }]);
+    (await plan.recordSnapshots("2026-10-19", [{ clientKey: "Fabrikam", itemId: 10, done: 0, open: 5 }]));
     await load(ctx);
     await load(ctx);
-    const snaps = plan.snapshotsFrom("2026-10-01").get("Fabrikam:10");
+    const snaps = (await plan.snapshotsFrom("2026-10-01")).get("Fabrikam:10");
     expect(snaps).toEqual([{ date: "2026-10-19", done: 0, open: 5 }, { date: "2026-11-02", done: 1, open: 2 }]);
     const row = (await load(ctx)).clients[0]!.rows[0]!;
     expect(row.trend).toEqual(snaps);
@@ -87,7 +87,7 @@ describe("roadmap.load", () => {
   it("takes no snapshot from a cached read, and passes refresh through", async () => {
     const { ctx, plan, reads } = setup(undefined, true);
     await load(ctx, { refresh: true });
-    expect(plan.snapshotsFrom("2026-01-01").size).toBe(0);
+    expect((await plan.snapshotsFrom("2026-01-01")).size).toBe(0);
     expect(reads).toEqual([{ clients: ["Fabrikam", "Contoso"], refresh: true }]);
   });
   it("refuses unknown input", async () => {
@@ -111,8 +111,8 @@ describe("roadmap.ahead and roadmap.set_dates (step 17, slice 2)", () => {
   };
   it("12 weeks from this week; budgets for weeks 1 to 4 and feature blocks from the week plans; months after", async () => {
     const { ctx, plan, asked } = withWeeks();
-    plan.addWeekItem({ weekStart: "2026-11-09", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 3 });
-    plan.addWeekItem({ weekStart: "2026-11-16", clientKey: "Fabrikam", itemId: 11, title: "Feature 11", itemType: "Feature", url: null, level: "feature", tier: "nice", blocks: 1 });
+    (await plan.addWeekItem({ weekStart: "2026-11-09", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 3 }));
+    (await plan.addWeekItem({ weekStart: "2026-11-16", clientKey: "Fabrikam", itemId: 11, title: "Feature 11", itemType: "Feature", url: null, level: "feature", tier: "nice", blocks: 1 }));
     const d = await ahead(ctx, { refresh: true });
     expect(asked).toEqual([{ n: 12, withCalendars: 4, refresh: true }]);
     expect(d.today).toBe("2026-11-02");
@@ -133,12 +133,12 @@ describe("roadmap.ahead and roadmap.set_dates (step 17, slice 2)", () => {
   });
   it("slice 3: the last 2 weeks, musts planned and focused minutes per pick item; fill on each cell", async () => {
     const { ctx, plan } = withWeeks();
-    plan.addWeekItem({ weekStart: "2026-10-26", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 2 });
-    plan.addWeekItem({ weekStart: "2026-10-26", clientKey: "Fabrikam", itemId: 11, title: "Feature 11", itemType: "Feature", url: null, level: "feature", tier: "nice", blocks: 1 });
-    plan.commitWeek("2026-10-26");
-    const pick = plan.addPick({ date: "2026-10-27", half: "AM", clientKey: "Fabrikam", kind: "item", itemId: 2, title: "Story 2", size: "L" });
-    plan.addFocus({ pickId: pick.id, label: "Story 2", startedAt: "2026-10-27T09:00:00-05:00[America/Chicago]", endedAt: "2026-10-27T12:20:00-05:00[America/Chicago]", seconds: 200 * 60 });
-    plan.addWeekItem({ weekStart: "2026-11-02", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 1 });
+    (await plan.addWeekItem({ weekStart: "2026-10-26", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 2 }));
+    (await plan.addWeekItem({ weekStart: "2026-10-26", clientKey: "Fabrikam", itemId: 11, title: "Feature 11", itemType: "Feature", url: null, level: "feature", tier: "nice", blocks: 1 }));
+    (await plan.commitWeek("2026-10-26"));
+    const pick = (await plan.addPick({ date: "2026-10-27", half: "AM", clientKey: "Fabrikam", kind: "item", itemId: 2, title: "Story 2", size: "L" }));
+    (await plan.addFocus({ pickId: pick.id, label: "Story 2", startedAt: "2026-10-27T09:00:00-05:00[America/Chicago]", endedAt: "2026-10-27T12:20:00-05:00[America/Chicago]", seconds: 200 * 60 }));
+    (await plan.addWeekItem({ weekStart: "2026-11-02", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 1 }));
     const d = await ahead(ctx);
     expect(d.columns.slice(0, 2).map((c) => [c.kind, c.label])).toEqual([["past", "Oct 19"], ["past", "Oct 26"]]);
     expect(d.past).toEqual([
@@ -153,14 +153,14 @@ describe("roadmap.ahead and roadmap.set_dates (step 17, slice 2)", () => {
     // Nov 5: a look-ahead Thursday and November's first Thursday.
     ctx.now = () => "2026-11-05T15:00:00Z";
     await ahead(ctx);
-    expect(plan.marked("ahead_seen", "direction:2026-11")).toBe(false);
+    expect((await plan.marked("ahead_seen", "direction:2026-11"))).toBe(false);
     await ahead(ctx, { seen: true });
-    expect(plan.marked("ahead_seen", "direction:2026-11")).toBe(true);
+    expect((await plan.marked("ahead_seen", "direction:2026-11"))).toBe(true);
     // Next week isn't planned yet: the look ahead stays to offer after Done in Plan the week.
-    expect(plan.marked("ahead_seen", "plan_ahead:2026-11-05")).toBe(false);
-    plan.commitWeek("2026-11-09");
+    expect((await plan.marked("ahead_seen", "plan_ahead:2026-11-05"))).toBe(false);
+    (await plan.commitWeek("2026-11-09"));
     await ahead(ctx, { seen: true });
-    expect(plan.marked("ahead_seen", "plan_ahead:2026-11-05")).toBe(true);
+    expect((await plan.marked("ahead_seen", "plan_ahead:2026-11-05"))).toBe(true);
     expect(await roadmapAction(ctx, "roadmap.ahead", { seen: "yes" })).toMatchObject({ ok: false, status: 400 });
   });
   it("keeps dragged dates locally, clears them, and refuses bad input", async () => {

@@ -25,11 +25,11 @@ const TEAM = [
 ];
 const JPEG: Photo = { type: "image/jpeg", bytes: new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]) };
 
-function setup(o: { signedIn?: boolean; noClient?: boolean; fail?: unknown; cache?: boolean } = {}) {
+async function setup(o: { signedIn?: boolean; noClient?: boolean; fail?: unknown; cache?: boolean } = {}) {
   let t = Date.parse("2026-11-02T15:00:00Z");
   const clock = { now: () => new Date(t).toISOString(), advanceDays: (d: number) => void (t += d * 86_400_000) };
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(clock.now()).toZonedDateTimeISO("America/New_York") });
-  if (o.signedIn !== false) plan.setAccountState(IDENTITY_KEY, { ...ME, signedInAt: clock.now(), systemUserId: null, systemUserEmail: null });
+  if (o.signedIn !== false) (await plan.setAccountState(IDENTITY_KEY, { ...ME, signedInAt: clock.now(), systemUserId: null, systemUserEmail: null }));
   const reads: string[] = [];
   const g = { fail: o.fail as unknown, photo: JPEG as Photo | null };
   const photos: PhotoClient = {
@@ -70,7 +70,7 @@ const settle = () => new Promise((r) => setTimeout(r, 20));
 
 describe("photos for the people on screen", () => {
   it("my photo and teammates' by email; no photo or no Entra ID reads as initials (null)", async () => {
-    const s = setup();
+    const s = (await setup());
     const r = await s.run({ me: true, emails: ["Jordan.Lee@example.com", "priya.shah@example.com", "sam.ortiz@example.com", "nobody@example.com"] });
     expect(r.available).toBe(true);
     expect(r.me).toMatch(/^data:image\/jpeg;base64,/);
@@ -82,7 +82,7 @@ describe("photos for the people on screen", () => {
     expect(s.reads.sort()).toEqual([aad(1), aad(2), "me"].sort());
   });
   it("serves from the cache for 7 days; then shows the old one and reads again in the background", async () => {
-    const s = setup();
+    const s = (await setup());
     await s.run({ emails: ["jordan.lee@example.com"] });
     expect(s.reads).toEqual([aad(1)]);
     s.clock.advanceDays(6);
@@ -98,27 +98,27 @@ describe("photos for the people on screen", () => {
     expect(after.people[0]!.photo).toBeNull();
   });
   it("a missing photo is remembered too (no read every time)", async () => {
-    const s = setup();
+    const s = (await setup());
     await s.run({ emails: ["priya.shah@example.com"] });
     await s.run({ emails: ["priya.shah@example.com"] });
     expect(s.reads).toEqual([aad(2)]);
   });
   it("no permission (403 or consent): initials, and says so", async () => {
-    const s = setup({ fail: new HttpError(403) });
+    const s = (await setup({ fail: new HttpError(403) }));
     expect(await s.run({ me: true, emails: ["jordan.lee@example.com"] })).toEqual({ available: false, reason: "consent", me: null, people: [] });
   });
   it("signed out, or no photo access on this account: initials, no reads", async () => {
-    expect(await setup({ signedIn: false }).run({ me: true })).toMatchObject({ available: false, reason: "signed_out" });
-    expect(await setup({ noClient: true }).run({ me: true })).toMatchObject({ available: false, reason: "signed_out" });
+    expect(await (await setup({ signedIn: false })).run({ me: true })).toMatchObject({ available: false, reason: "signed_out" });
+    expect(await (await setup({ noClient: true })).run({ me: true })).toMatchObject({ available: false, reason: "signed_out" });
   });
   it("refuses bad input and too many people", async () => {
-    const s = setup();
+    const s = (await setup());
     await expect(s.run({ emails: "x" })).rejects.toThrow(/400/);
     await expect(s.run({ who: [] })).rejects.toThrow(/400/);
     await expect(s.run({ emails: Array.from({ length: 61 }, (_, i) => `p${i}@example.com`) })).rejects.toThrow(/At most 60/);
   });
   it("sign-out clears the photo cache", async () => {
-    const s = setup();
+    const s = (await setup());
     await s.run({ me: true, emails: ["jordan.lee@example.com"] });
     expect(readdirSync(join(s.dir, "photos")).length).toBeGreaterThan(0);
     const r = await dispatch(s.c, { action: "auth.sign_out", input: {} });
@@ -126,7 +126,7 @@ describe("photos for the people on screen", () => {
     expect(existsSync(join(s.dir, "photos"))).toBe(false);
   });
   it("the cache names no one: file names are hashes, not IDs or addresses", async () => {
-    const s = setup();
+    const s = (await setup());
     await s.run({ me: true, emails: ["jordan.lee@example.com"] });
     for (const f of readdirSync(join(s.dir, "photos"))) expect(f).toMatch(/^[0-9a-f]{40}\.(json|img)$/);
   });
