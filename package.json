@@ -15,11 +15,18 @@
     "test:watch": "vitest",
     "screenshot": "node scripts/screenshot.mjs",
     "start": "vite build && node server/main.ts",
-    "serve": "node server/main.ts"
+    "serve": "node server/main.ts",
+    "db:up": "node scripts/db.ts up",
+    "db:migrate": "node scripts/db.ts migrate",
+    "db:reset": "node scripts/db.ts reset",
+    "db:down": "node scripts/db.ts down",
+    "focustime": "node scripts/focustime.ts"
   },
   "dependencies": {
+    "@azure/identity": "4.14.1",
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@fontsource/ibm-plex-sans": "5.3.0",
+    "mssql": "12.7.13",
     "openid-client": "6.8.9",
     "react": "19.3.1",
     "react-dom": "19.3.1",
@@ -35,5 +42,8 @@
     "typescript": "7.0.2",
     "vite": "8.3.5",
     "vitest": "5.0.5"
+  },
+  "bin": {
+    "focustime": "scripts/focustime.ts"
   }
 }

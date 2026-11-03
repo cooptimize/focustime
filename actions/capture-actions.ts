@@ -107,13 +107,13 @@ export async function captureAction(ctx: CaptureContext, action: CaptureAction, 
         const o = fields(input, ["text"], ["clientKey"]);
         const t = text(o.text, "text", MAX_CAPTURE);
         if (!t) throw new Invalid("Type something to capture");
-        const capture = plan.addCapture({ text: t, clientKey: optClient(o.clientKey) });
-        return { ok: true, data: { capture, inboxCount: plan.inboxCount() } };
+        const capture = (await plan.addCapture({ text: t, clientKey: optClient(o.clientKey) }));
+        return { ok: true, data: { capture, inboxCount: (await plan.inboxCount()) } };
       }
       case "capture.load": {
         fields(input ?? {}, []);
         const cfg = await ctx.config().catch(() => null);
-        const state: CaptureState = { today: await todayOf(ctx, cfg), inbox: plan.inbox(), inboxCount: plan.inboxCount(), drafts: plan.drafts() };
+        const state: CaptureState = { today: await todayOf(ctx, cfg), inbox: (await plan.inbox()), inboxCount: (await plan.inboxCount()), drafts: (await plan.drafts()) };
         return { ok: true, data: state };
       }
       case "capture.features": {
@@ -164,8 +164,8 @@ export async function captureAction(ctx: CaptureContext, action: CaptureAction, 
           default:
             throw new Invalid("as must be follow_up, draft, draft_feature or dismissed");
         }
-        const capture = plan.routeCapture(capId, route);
-        return { ok: true, data: { capture, inboxCount: plan.inboxCount() } };
+        const capture = (await plan.routeCapture(capId, route));
+        return { ok: true, data: { capture, inboxCount: (await plan.inboxCount()) } };
       }
       case "draft.add_feature": {
         // Plan the week's "Epic with no features: Draft a feature". Local only, until it is added in DevOps.
@@ -176,7 +176,7 @@ export async function captureAction(ctx: CaptureContext, action: CaptureAction, 
         if (typeof parentItemId === "object" && parentItemId !== null) return parentItemId;
         const title = text(o.title, "title", 200);
         if (!title) throw new Invalid("A draft feature needs a title");
-        return { ok: true, data: { draft: plan.addDraft({ clientKey: key, parentItemId, title, size: "M", level: "feature" }) } };
+        return { ok: true, data: { draft: (await plan.addDraft({ clientKey: key, parentItemId, title, size: "M", level: "feature" })) } };
       }
     }
   } catch (e) {

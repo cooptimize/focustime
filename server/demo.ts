@@ -107,16 +107,16 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
     ];
     for (const [n, features, picks] of past) {
       const ws = Temporal.PlainDate.from(weekStart).add({ days: n }).toString();
-      for (const [clientKey, itemId, title, blocks] of features) plan.addWeekItem({ weekStart: ws, clientKey, itemId, title, itemType: "Feature", url: null, level: "feature", tier: "must", blocks });
-      plan.commitWeek(ws);
+      for (const [clientKey, itemId, title, blocks] of features) (await plan.addWeekItem({ weekStart: ws, clientKey, itemId, title, itemType: "Feature", url: null, level: "feature", tier: "must", blocks }));
+      (await plan.commitWeek(ws));
       for (const [clientKey, itemId, title, dayN, minutes] of picks) {
         const date = Temporal.PlainDate.from(ws).add({ days: dayN }).toString();
-        const pick = plan.addPick({ date, half: "AM", clientKey, kind: "item", itemId, title, itemType: "User Story", size: "L" });
+        const pick = (await plan.addPick({ date, half: "AM", clientKey, kind: "item", itemId, title, itemType: "User Story", size: "L" }));
         const start = Temporal.ZonedDateTime.from({ timeZone: tz, year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)), day: Number(date.slice(8, 10)), hour: 9 });
-        plan.addFocus({ pickId: pick.id, label: title, startedAt: start.toString(), endedAt: start.add({ minutes }).toString(), seconds: minutes * 60 });
-        plan.drop(pick.id);
+        (await plan.addFocus({ pickId: pick.id, label: title, startedAt: start.toString(), endedAt: start.add({ minutes }).toString(), seconds: minutes * 60 }));
+        (await plan.drop(pick.id));
       }
     }
   }
-  [-21, -14, -7].forEach((n, i) => ctx.plan?.recordSnapshots(day(n), history.map(([clientKey, itemId, c]) => ({ clientKey, itemId, done: c[i]![0], open: c[i]![1] }))));
+  for (const [i, n] of [-21, -14, -7].entries()) await ctx.plan?.recordSnapshots(day(n), history.map(([clientKey, itemId, c]) => ({ clientKey, itemId, done: c[i]![0], open: c[i]![1] })));
 }

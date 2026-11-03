@@ -1,6 +1,7 @@
 // The Roadmap view (step 16, D278 to D282): features and epics I own across followed clients, read-only. Built from
 // the step 8 portfolio read; the only thing it writes is a local daily snapshot of done and open counts per item, from
 // a live read. Nothing external is written here: the row actions use the existing named actions.
+import { mapSeq } from "./seq.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { matchCooptimizer, type Teammate } from "../plan/people.ts";
 import { blockedCount, contributingItems, firstActivity, lastActivity, ownedItems, rowState, storyCounts, trendRate, TREND_DAYS } from "../plan/roadmap.ts";
@@ -59,14 +60,14 @@ export async function roadmapAction(ctx: RoadmapContext, action: RoadmapAction, 
   // One snapshot per owned item per day, only from a live read (a cached one would repeat old counts).
   for (const p of portfolios) {
     if (p.status !== "ok" || p.fromCache) continue;
-    plan.recordSnapshots(today, rowItems(p).map((i) => ({ clientKey: p.clientKey, itemId: i.id, ...pick(storyCounts(i, now, false)) })));
+    (await plan.recordSnapshots(today, rowItems(p).map((i) => ({ clientKey: p.clientKey, itemId: i.id, ...pick(storyCounts(i, now, false)) }))));
   }
-  const snaps = plan.snapshotsFrom(Temporal.PlainDate.from(today).subtract({ days: TREND_DAYS }).toString());
+  const snaps = (await plan.snapshotsFrom(Temporal.PlainDate.from(today).subtract({ days: TREND_DAYS }).toString()));
   // Step 16.4: people match Cooptimizers by email (name only without one); only a Cooptimizer's email goes to the view.
   const team = ctx.team ? await ctx.team(cfg).catch(() => null) : null;
   const people = (list: { name: string; count: number; email: string | null }[]) =>
     list.map((x) => ({ name: x.name, count: x.count, email: x.name === "You" ? null : (team ? (matchCooptimizer(team, x)?.email.toLowerCase() ?? null) : null) }));
-  const onWeek = new Set(plan.weekPlan(mondayOf(today)).features.map((f) => `${f.clientKey}:${f.itemId}`));
+  const onWeek = new Set((await plan.weekPlan(mondayOf(today))).features.map((f) => `${f.clientKey}:${f.itemId}`));
   const th = cfg.roadmap;
   const match = (name: string | null, email: string | null | undefined) => (name && team ? (matchCooptimizer(team, { name, email: email ?? null })?.email.toLowerCase() ?? null) : null);
   const out: RoadmapClient[] = portfolios.map((p) => {
@@ -157,14 +158,14 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
   // planned, and this month's direction review. Their dot goes and their notification closes.
   if (o.seen === true) {
     const la = lookAheadOccasion(today);
-    if (la && plan.weekPlan(Temporal.PlainDate.from(la).add({ days: 4 }).toString()).committedAt) plan.markOnce(AHEAD_SEEN_MARK, `plan_ahead:${la}`);
+    if (la && (await plan.weekPlan(Temporal.PlainDate.from(la).add({ days: 4 }).toString())).committedAt) (await plan.markOnce(AHEAD_SEEN_MARK, `plan_ahead:${la}`));
     const dr = directionOccasion(today);
-    if (dr) plan.markOnce(AHEAD_SEEN_MARK, `direction:${dr.slice(0, 7)}`);
+    if (dr) (await plan.markOnce(AHEAD_SEEN_MARK, `direction:${dr.slice(0, 7)}`));
   }
   const past = pastWeeks(weekStarts[0]!);
   const columns = aheadColumns(weekStarts, past);
   const weeks = await ctx.weeks(cfg, weekStarts, PLAN_WEEKS, o.refresh === true);
-  const borrowed = plan.borrowedFor(weekStarts[0]!, Temporal.PlainDate.from(weekStarts[PLAN_WEEKS - 1]!).add({ days: 6 }).toString());
+  const borrowed = (await plan.borrowedFor(weekStarts[0]!, Temporal.PlainDate.from(weekStarts[PLAN_WEEKS - 1]!).add({ days: 6 }).toString()));
   type Cap = AheadState["clients"][number];
   const caps = new Map<string, Cap>();
   const capOf = (k: string, name: string): Cap => {
@@ -173,9 +174,9 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     return c;
   };
   const cells: AheadState["cells"] = [];
-  weeks.slice(0, PLAN_WEEKS).forEach((week, i) => {
+  for (const [i, week] of weeks.slice(0, PLAN_WEEKS).entries()) {
     const w = weekStarts[i]!;
-    const items = plan.weekPlan(w).features;
+    const items = (await plan.weekPlan(w)).features;
     for (const b of weekBudget(week, items, { borrowedMinutes: borrowedForWeek(borrowed, w) })) {
       const reasons = [...b.blocks.filter((x) => !x.counts).map((x) => x.reason!).filter(Boolean), ...(b.borrowedBlocks ? [`${b.borrowedBlocks} ${b.borrowedBlocks === 1 ? "block" : "blocks"} of borrowed time to make up`] : [])];
       capOf(b.clientKey, b.clientName).weeks.push({ weekStart: w, budget: b.budget, planned: b.planned, nicePlanned: b.nicePlanned, status: b.status, text: b.text, notCounted: reasons });
@@ -183,7 +184,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     // Each feature's whole blocks that week: as set, or (no count) what its stories add up to.
     const est = estimate(items.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })));
     for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, blocks: env.blocks, auto: env.auto, tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length, fill: env.fill });
-  });
+  }
   // Weeks 5 to 12: blocks available per month column (patterns and PTO; meetings aren't known that far ahead).
   for (const col of columns) {
     if (col.kind !== "month") continue;
@@ -204,13 +205,13 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     for (const w of weekStarts.slice(0, PLAN_WEEKS))
       if (!c.weeks.some((x) => x.weekStart === w)) c.weeks.push({ weekStart: w, budget: 0, planned: 0, nicePlanned: 0, status: "none", text: "No blocks this week", notCounted: [] });
   for (const c of caps.values()) c.weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
-  const dates = Object.fromEntries(plan.roadmapDates());
+  const dates = Object.fromEntries((await plan.roadmapDates()));
   // The last 2 weeks: each feature's blocks on that week's plan against the focused time on its picks (slice 3).
-  const pastOut: AheadState["past"] = past.map((w) => {
-    const wp = plan.weekPlan(w);
+  const pastOut: AheadState["past"] = await mapSeq(past, async (w) => {
+    const wp = (await plan.weekPlan(w));
     const est = estimate(wp.features.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })));
-    const picks = plan.picksBetween(w, Temporal.PlainDate.from(w).add({ days: 6 }).toString());
-    const secs = plan.focusedSeconds(picks.map((p) => p.id));
+    const picks = (await plan.picksBetween(w, Temporal.PlainDate.from(w).add({ days: 6 }).toString()));
+    const secs = (await plan.focusedSeconds(picks.map((p) => p.id)));
     const worked = new Map<string, number>();
     for (const p of picks) {
       const m = Math.round((secs[p.id] ?? 0) / 60);
@@ -242,12 +243,12 @@ async function setDatesAction(ctx: RoadmapContext, input: unknown): Promise<Acti
   const plan = ctx.plan;
   if (!plan) return bad("The local plan store isn't available", 503);
   if (o.start === null && o.end === null) {
-    plan.setRoadmapDates(o.clientKey, o.itemId, null);
+    (await plan.setRoadmapDates(o.clientKey, o.itemId, null));
     return { ok: true, data: { dates: null } };
   }
   const start = isoDate(o.start), end = isoDate(o.end);
   if (!start || !end) return bad("start and end must be dates (YYYY-MM-DD)");
   if (end < start) return bad("The end date is before the start date", 422);
-  plan.setRoadmapDates(o.clientKey, o.itemId, { start, end });
+  (await plan.setRoadmapDates(o.clientKey, o.itemId, { start, end }));
   return { ok: true, data: { dates: { start, end } } };
 }

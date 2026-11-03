@@ -30,6 +30,7 @@ import { DEFAULT_COLLAB } from "../config/schema.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import { checkDevOpsUrl } from "../links/devops-url.ts";
 import { hasHoursOn, planAction } from "./plan-actions.ts";
+import { mapSeq } from "./seq.ts";
 import { timeAction } from "./time-actions.ts";
 import { TIMER_KEY, timerAction, timerView, type MediaControl } from "./timer-actions.ts";
 import { DEFAULT_FOCUS } from "../plan/focussound.ts";
@@ -51,7 +52,7 @@ import type { HostLinks } from "../host/types.ts";
 import type { ActionResponse, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
 import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
 import { vmAction, type VmContext } from "./vm-actions.ts";
-import { presenceAction, syncTeamsStatus, type PresenceContext } from "./presence-actions.ts";
+import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -74,7 +75,7 @@ export type ActionContext = {
   makeDevOps: (cfg: DataverseConfig, timeZone: string) => DevOpsSource;
   saveSystemUserId: (id: string) => Promise<void>;
   /** A2: the signed-in person's names (their sign-in email and UPN), to find them in Dataverse. */
-  signedInAs?: { email: string | null; upn: string } | undefined;
+  signedInAs?: (() => Promise<{ email: string | null; upn: string } | undefined>) | undefined;
   now: () => string;
   /** Waits before a second read-back after a network error (D255); tests pass an instant one. */
   sleep?: (ms: number) => Promise<void>;
@@ -198,10 +199,10 @@ export function planningOf(cfg: AppConfig | null): PlanningSettings {
 const hasHoursFor = (ctx: Pick<ActionContext, "plan">, model: TimeModel, date: string) => hasHoursOn(ctx.plan, model, date);
 
 /** Anything planned on a date: working hours, a flex session, unavailable time or picks. */
-function hasPlansOn(ctx: Pick<ActionContext, "plan">, model: TimeModel, date: string): boolean {
-  if (hasHoursFor(ctx, model, date)) return true;
+async function hasPlansOn(ctx: Pick<ActionContext, "plan">, model: TimeModel, date: string): Promise<boolean> {
+  if ((await hasHoursFor(ctx, model, date))) return true;
   if (!ctx.plan) return false;
-  return ctx.plan.unavailableBetween(date, date).length > 0 || ctx.plan.picksFor(date).some((p) => p.status === "planned" || p.status === "done");
+  return (await ctx.plan.unavailableBetween(date, date)).length > 0 || (await ctx.plan.picksFor(date)).some((p) => p.status === "planned" || p.status === "done");
 }
 
 const summarize = (s: SourceResult<unknown>): SourceSummary => {
@@ -263,7 +264,7 @@ async function aheadWeekModels(ctx: ActionContext, cfg: AppConfig, weekStarts: s
   const dv = cfg.dataverse.mySystemUserId ? ctx.makeDataverse(cfg.dataverse, tz) : null;
   const [patterns, ptoR] = await Promise.all([dv ? dv.following(first, opts).catch(() => null) : null, dv ? dv.pto(first, last, opts).catch(() => null) : null]);
   const sample = loadSampleSources();
-  const own = ctx.plan ? ownEventIds(ctx.plan.ownEvents()) : new Set<string>();
+  const own = ctx.plan ? ownEventIds((await ctx.plan.ownEvents())) : new Set<string>();
   return Promise.all(
     weekStarts.map(async (w, i) => {
       let events: CalEvent[] = [];
@@ -275,7 +276,7 @@ async function aheadWeekModels(ctx: ActionContext, cfg: AppConfig, weekStarts: s
         events = withoutOwn([...(o?.items ?? []), ...(g?.items ?? [])], own);
       }
       const sunday = Temporal.PlainDate.from(w).add({ days: 6 }).toString();
-      return buildWeek({ weekStart: w, patterns: patterns?.items ?? [], events, config: cfg.week, pto: ptoByDate(ptoR?.items ?? [], weekDates7(w)), unavailable: ctx.plan?.unavailableBetween(w, sunday) ?? [] });
+      return buildWeek({ weekStart: w, patterns: patterns?.items ?? [], events, config: cfg.week, pto: ptoByDate(ptoR?.items ?? [], weekDates7(w)), unavailable: (await ctx.plan?.unavailableBetween(w, sunday)) ?? [] });
     }),
   );
 }
@@ -292,8 +293,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const todayDate = localToday(now, tz);
   // A flex session that has ended opens its update follow-up (D126), on any read. By the server's clock, never the UI's
   // ?now (a check could otherwise open follow-ups for sessions still ahead; step 6c, like D118).
-  ctx.plan?.openFlexFollowUps(Temporal.Instant.from(ctx.now()));
-  const todayPlans = hasPlansOn(ctx, model, todayDate);
+  (await ctx.plan?.openFlexFollowUps(Temporal.Instant.from(ctx.now())));
+  const todayPlans = (await hasPlansOn(ctx, model, todayDate));
   const weekStart = input.weekStart ?? defaultWeekStart(todayDate, todayPlans);
 
   const sample = loadSampleSources();
@@ -346,13 +347,13 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       const picked = await devopsClients(ctx, { ...cfg, dataverse: dv }, weekStart, todayDate, refresh, dataverse.items);
       planClients = picked.planClients;
       // Items an open follow-up is about are read by id too, so a completed one can close its follow-up (step 7).
-      const watch = ctx.plan ? watchedIds(ctx.plan.openFollowUps()) : {};
+      const watch = ctx.plan ? watchedIds((await ctx.plan.openFollowUps())) : {};
       // Features on the week lists of this week, today's week and next (step 8), so Plan the day can offer their
       // stories. Every list item (features and stories) is also read by id, done ones included, so progress can count
       // what DevOps shows as Completed (step 11).
       const features: Record<string, number[]> = {};
       if (ctx.plan)
-        for (const f of ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate))) {
+        for (const f of (await ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate)))) {
           if (f.level === "feature") (features[f.clientKey] ??= []).includes(f.itemId) || features[f.clientKey]!.push(f.itemId);
           (watch[f.clientKey] ??= []).includes(f.itemId) || watch[f.clientKey]!.push(f.itemId);
         }
@@ -372,15 +373,16 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     return { canWrite: true, facts: r?.facts ?? {} };
   })();
   const [outlook, google, devops, ptoResult, ahead, synced] = await Promise.all([outlookP, googleP, devopsP, ptoP, aheadP, syncP]);
-  ctx.plan?.closeHelpFollowUps(Temporal.Instant.from(ctx.now()));
+  (await ctx.plan?.closeHelpFollowUps(Temporal.Instant.from(ctx.now())));
   const pto = ptoByDate(ptoResult?.items ?? [], weekDates7(weekStart));
   const ptoAhead = [...new Set((ahead?.items ?? []).map((e) => e.date))].sort();
   const sunday = Temporal.PlainDate.from(weekStart).add({ days: 6 }).toString();
-  const unavailable = ctx.plan?.unavailableBetween(weekStart, sunday) ?? [];
-  const flex = ctx.plan?.flexBetween(weekStart, sunday) ?? [];
-  const weekendPlanned = new Set(weekDates7(weekStart).slice(5).filter((d) => (ctx.plan?.picksFor(d) ?? []).some((p) => p.status === "planned" || p.status === "done")));
+  const unavailable = (await ctx.plan?.unavailableBetween(weekStart, sunday)) ?? [];
+  const flex = (await ctx.plan?.flexBetween(weekStart, sunday)) ?? [];
+  const weekendPicks = (await ctx.plan?.picksBetween(weekDates7(weekStart)[5]!, sunday)) ?? [];
+  const weekendPlanned = new Set(weekDates7(weekStart).slice(5).filter((d) => weekendPicks.some((p) => p.date === d && (p.status === "planned" || p.status === "done"))));
   // FocusTime's own Outlook events show once, as timeboxes, and never count as meetings in risk rules (step 12).
-  const own = ctx.plan ? ownEventIds(ctx.plan.ownEvents()) : new Set<string>();
+  const own = ctx.plan ? ownEventIds((await ctx.plan.ownEvents())) : new Set<string>();
   const week = buildWeek({ weekStart, patterns: dataverse.items, events: withoutOwn([...outlook.items, ...google.items], own), config: weekConfig, pto, unavailable, flex, viewRange: input.viewRange ?? cfg?.ui.viewRange ?? DEFAULT_UI.viewRange, weekendPlanned });
   const todayDay = week.days.find((d) => d.date === todayDate);
   const clientColors = cfg ? cfg.clients : Object.fromEntries(Object.values(defaultClients).map((c) => [c.shortName, c.color]));
@@ -390,22 +392,30 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   const serverToday = localToday(ctx.now(), tz);
   const names = new Map([...planClients.map((c) => [c.clientKey, c.clientName] as const), ...(devops ?? []).map((w) => [w.clientKey, w.clientName] as const)]);
   if (ctx.plan) {
-    applyFollowUpRules(ctx.plan, { today: serverToday, work: devops, internal: internalClients(cfg), clientName: nameOf(cfg, (k) => names.get(k)), isWorkday: workdayOf(cfg) });
-    ctx.plan.settleBorrowed();
+    await applyFollowUpRules(ctx.plan, { today: serverToday, work: devops, internal: internalClients(cfg), clientName: nameOf(cfg, (k) => names.get(k)), isWorkday: workdayOf(cfg) });
+    (await ctx.plan.settleBorrowed());
   }
-  const todayPlan = ctx.plan?.day(todayDate) ?? null;
+  const todayPlan = (await ctx.plan?.day(todayDate)) ?? null;
   // The focus timer warns 5 minutes before meetings and block ends (server/timer.ts); keep today's points fresh.
-  if (ctx.plan && todayDay) ctx.plan.setState("warn_points", { date: todayDate, points: warnPoints(todayDay, tz) });
+  if (ctx.plan && todayDay) (await ctx.plan.setState("warn_points", { date: todayDate, points: warnPoints(todayDay, tz) }));
   const todayOff = ptoAhead.includes(todayDate) || !!pto[todayDate];
   // Q51: committed features show their current DevOps title (fresh results only); the stored one is the fallback.
   const currentTitle = titleFrom(devops);
+  // A3: what the view reads from the store, read before it is put together (the store is async).
+  const plan = ctx.plan;
+  const open = plan ? await plan.openFollowUps() : [];
+  const weekPlans = plan ? await plan.week(week.days.map((d) => d.date)) : null;
+  const committedWeeks = plan ? await plan.committedWeeks() : new Set<IsoDate>();
+  const aheadSeen = plan ? await plan.markedDates(AHEAD_SEEN_MARK) : new Set<IsoDate>();
+  const clientName = nameOf(cfg, (k) => names.get(k));
+  const writeLog = plan ? await plan.writeLog(1000) : [];
   return {
     weekStart,
     week,
     today: columnOf(todayTarget(now, model, { todayHasPlans: todayPlans, hasEve: !!todayDay?.eve }), week),
-    plan: ctx.plan ? ctx.plan.week(week.days.map((d) => d.date)) : null,
+    plan: weekPlans,
     planClients,
-    planDay: { date: todayDate, workday: hasHoursFor(ctx, model, todayDate) && !todayOff, committed: !!todayPlan?.committedAt, available: !!ctx.plan },
+    planDay: { date: todayDate, workday: (await hasHoursFor(ctx, model, todayDate)) && !todayOff, committed: !!todayPlan?.committedAt, available: !!ctx.plan },
     ptoAhead,
     sources: [dataverse, ...(ptoResult ? [ptoResult] : []), outlook, google].map(summarize),
     devops,
@@ -415,33 +425,33 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     planning: planningOf(cfg),
     focus: cfg?.focus ?? DEFAULT_FOCUS,
     media: ctx.media ? await ctx.media.status() : { players: false, spotify: false },
-    timer: timerView(ctx.plan?.getState<TimerState>(TIMER_KEY) ?? null, Temporal.Instant.from(ctx.now())),
-    openFollowUps: ctx.plan?.openFollowUps().length ?? 0,
-    captures: ctx.plan?.inboxCount() ?? 0,
-    followUps: ctx.plan ? ctx.plan.openFollowUps().filter((f) => !f.snoozedUntil || f.snoozedUntil <= serverToday).map((f) => followUpView(ctx.plan!, f, serverToday, nameOf(cfg, (k) => names.get(k)))) : [],
-    focused: ctx.plan ? ctx.plan.focusedSeconds(Object.values(ctx.plan.week(week.days.map((d) => d.date))).flatMap((d) => d.picks.map((p) => p.id))) : {},
-    resumeNotes: ctx.plan ? Object.fromEntries(Object.entries(ctx.plan.latestNotes()).map(([k, n]) => [k, noteView(n)])) : {},
-    borrowed: ctx.plan ? ctx.plan.borrowedFor(weekStart, sunday).map(borrowedView) : [],
+    timer: timerView((await ctx.plan?.getState<TimerState>(TIMER_KEY)) ?? null, Temporal.Instant.from(ctx.now())),
+    openFollowUps: open.length,
+    captures: (await ctx.plan?.inboxCount()) ?? 0,
+    followUps: plan ? await mapSeq(open.filter((f) => !f.snoozedUntil || f.snoozedUntil <= serverToday), (f) => followUpView(plan, f, serverToday, clientName)) : [],
+    focused: plan && weekPlans ? await plan.focusedSeconds(Object.values(weekPlans).flatMap((d) => d.picks.map((p) => p.id))) : {},
+    resumeNotes: ctx.plan ? Object.fromEntries(Object.entries((await ctx.plan.latestNotes())).map(([k, n]) => [k, noteView(n)])) : {},
+    borrowed: ctx.plan ? (await ctx.plan.borrowedFor(weekStart, sunday)).map(borrowedView) : [],
     closeOut: { date: todayDate, done: !!todayPlan?.closedOutAt },
-    checkIn: { date: todayDate, done: !!ctx.plan?.marked(CHECKIN_DONE_MARK, todayDate) },
-    weekPlan: ctx.plan ? withTitles(weekPlanView(ctx.plan.weekPlan(weekStart)), currentTitle) : null,
-    weekFeatures: ctx.plan ? withCurrentTitles(ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate)), currentTitle) : [],
+    checkIn: { date: todayDate, done: !!(await ctx.plan?.marked(CHECKIN_DONE_MARK, todayDate)) },
+    weekPlan: ctx.plan ? withTitles(weekPlanView((await ctx.plan.weekPlan(weekStart))), currentTitle) : null,
+    weekFeatures: ctx.plan ? withCurrentTitles((await ctx.plan.weekFeaturesFor(featureWeeks(weekStart, todayDate))), currentTitle) : [],
     // Step 17: the Plan ahead rituals due now (a dot on Roadmap's Plan ahead).
     aheadDue: ctx.plan
-      ? aheadRitualsDue({ today: todayDate, time: Temporal.Instant.from(now).toZonedDateTimeISO(tz).toPlainTime().toString().slice(0, 5), workStart: hoursOn(model, todayDate).segments[0]?.start ?? null, pto: todayOff, weekCommitted: (w) => !!ctx.plan!.weekPlan(w).committedAt, seen: (k) => ctx.plan!.marked(AHEAD_SEEN_MARK, k) }).map((r) => r.kind)
+      ? aheadRitualsDue({ today: todayDate, time: Temporal.Instant.from(now).toZonedDateTimeISO(tz).toPlainTime().toString().slice(0, 5), workStart: hoursOn(model, todayDate).segments[0]?.start ?? null, pto: todayOff, weekCommitted: (w) => committedWeeks.has(w), seen: (k) => aheadSeen.has(k) }).map((r) => r.kind)
       : [],
-    weekNudge: { badge: ctx.plan && cfg ? weekNudges(Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz), nudgeTimes(cfg), (w) => !!ctx.plan!.weekPlan(w).committedAt).badge : null },
+    weekNudge: { badge: ctx.plan && cfg ? weekNudges(Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz), nudgeTimes(cfg), (w) => committedWeeks.has(w)).badge : null },
     // Step 16.2: Planned ✓ on the Week tab's mode switch, for this week, next week and the week shown.
-    weekCommitted: Object.fromEntries([...new Set([mondayOf(todayDate), Temporal.PlainDate.from(mondayOf(todayDate)).add({ days: 7 }).toString(), week.days[0]!.date])].map((w) => [w, !!ctx.plan?.weekPlan(w).committedAt])),
-    timeboxes: ctx.plan ? timeboxesFor(ctx.plan, weekStart, sunday).map((t) => timeboxView(t, ctx.plan!, cfg)) : [],
+    weekCommitted: Object.fromEntries([...new Set([mondayOf(todayDate), Temporal.PlainDate.from(mondayOf(todayDate)).add({ days: 7 }).toString(), week.days[0]!.date])].map((w) => [w, committedWeeks.has(w)])),
+    timeboxes: plan ? await mapSeq(await timeboxesFor(plan, weekStart, sunday), (t) => timeboxView(t, plan, cfg)) : [],
     timeboxSettings: cfg?.timebox ?? DEFAULT_TIMEBOX,
     eventEdit: synced.facts,
     canWrite: synced.canWrite,
-    invites: ctx.plan ? ctx.plan.invitesFrom(Temporal.PlainDate.from(weekStart).subtract({ days: 7 }).toString()).map((i, _n, _a, log = ctx.plan!.writeLog(1000)) => ({ writeId: log.find((e) => e.uid === i.uid && e.op === "create" && e.status === "confirmed" && !e.undoneBy)?.id ?? null, uid: i.uid, clientKey: i.clientKey, itemId: i.itemId, pickId: i.pickId, timeboxId: i.timeboxId, title: i.title, start: i.start, end: i.end, names: i.attendees.map((a) => a.name), teams: i.teams, status: i.status })) : [],
+    invites: plan ? (await plan.invitesFrom(Temporal.PlainDate.from(weekStart).subtract({ days: 7 }).toString())).map((i) => ({ writeId: writeLog.find((e) => e.uid === i.uid && e.op === "create" && e.status === "confirmed" && !e.undoneBy)?.id ?? null, uid: i.uid, clientKey: i.clientKey, itemId: i.itemId, pickId: i.pickId, timeboxId: i.timeboxId, title: i.title, start: i.start, end: i.end, names: i.attendees.map((a) => a.name), teams: i.teams, status: i.status })) : [],
     collab: cfg?.collab ?? DEFAULT_COLLAB,
-    devopsWrite: ctx.plan && ctx.devopsWriter && ctx.writePats ? ctx.plan.devopsIdentities().map((i) => i.clientKey) : [],
+    devopsWrite: ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : [],
     // Step 14.5 (D256): write PATs and app secrets that expire within 14 days, for Today.
-    expiring: expiringFor(ctx.plan, cfg, serverToday, (k) => names.get(k)),
+    expiring: (await expiringFor(ctx.plan, cfg, serverToday, (k) => names.get(k))),
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
     demo: !!ctx.demo?.on,
@@ -471,13 +481,13 @@ function withSignedIn(ctx: ActionContext): ActionContext {
     ...ctx,
     loadConfig: async () => {
       const r = await ctx.loadConfig();
-      return { ...r, parsed: withMe(r.parsed, storedIdentity(ctx.plan)) };
+      return { ...r, parsed: withMe(r.parsed, (await storedIdentity(ctx.plan))) };
     },
     saveSystemUserId: async (id) => {
-      const cur = storedIdentity(ctx.plan);
+      const cur = (await storedIdentity(ctx.plan));
       const r = await ctx.loadConfig();
       const email = r.parsed.ok ? withMe(r.parsed, cur) : null;
-      if (cur && email?.ok) ctx.plan!.setAccountState(IDENTITY_KEY, { ...cur, systemUserId: id, systemUserEmail: email.config.dataverse.myEmail } satisfies StoredIdentity);
+      if (cur && email?.ok) (await ctx.plan!.setAccountState(IDENTITY_KEY, { ...cur, systemUserId: id, systemUserEmail: email.config.dataverse.myEmail } satisfies StoredIdentity));
       else await ctx.saveSystemUserId(id);
     },
   };
@@ -511,8 +521,8 @@ export async function vmContext(ctx: ActionContext): Promise<VmContext> {
     azure: ctx.azure ?? null,
     now: ctx.now,
     ...(ctx.sleep ? { sleep: ctx.sleep } : {}),
-    focusRunning: () => !!ctx.plan?.getState<TimerState>(TIMER_KEY)?.runningSince,
-    workday: async (cfg, date) => hasHoursOn(ctx.plan, cfg.week.hours, date) && !(await ptoOn(ctx, cfg, date)),
+    focusRunning: async () => !!(await ctx.plan?.getState<TimerState>(TIMER_KEY))?.runningSince,
+    workday: async (cfg, date) => (await hasHoursOn(ctx.plan, cfg.week.hours, date)) && !(await ptoOn(ctx, cfg, date)),
   };
 }
 
@@ -656,7 +666,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       const src = input.source === "outlook" ? ctx.makeOutlook(section as OutlookConfig, tz) : ctx.makeGoogle(section as GoogleConfig, tz);
       await src.disconnect();
       // Outlook's token is the Microsoft sign-in (step 15.4): disconnecting it signs out.
-      if (input.source === "outlook") ctx.plan?.setAccountState(IDENTITY_KEY, null);
+      if (input.source === "outlook") (await ctx.plan?.setAccountState(IDENTITY_KEY, null));
       return { ok: true, data: { status: "disconnected" } };
     }
     case "week.load": {
@@ -698,7 +708,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       // (its store is in memory, so it would show on every start) and not without a plan store.
       if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("ui.first_launch takes no input");
       if (ctx.demo?.on || !ctx.plan) return { ok: true, data: { first: false } };
-      return { ok: true, data: { first: ctx.plan.markOnce(FIRST_LAUNCH_MARK, "once") } };
+      return { ok: true, data: { first: (await ctx.plan.markOnce(FIRST_LAUNCH_MARK, "once")) } };
     }
     case "ui.set_reduce_motion": {
       // Step 17.5: Settings > Display "Reduce motion", besides the system's reduced motion setting.
@@ -780,7 +790,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "plan.reset": {
       const r = await timerAction({ plan: ctx.plan, config: () => configured(ctx), now: ctx.now, media: ctx.media }, action, req.input);
       // Step 16.3: my Teams status follows the session (not waited for; the server's tick also runs it).
-      if (r.ok && action.startsWith("timer.")) void presenceContext(ctx).then(syncTeamsStatus).catch(() => {});
+      if (r.ok && action.startsWith("timer.")) void syncTeamsStatusWith(ctx.plan, () => presenceContext(ctx)).catch(() => {});
       return r;
     }
     case "presence.status":
@@ -944,10 +954,10 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
 }
 
 /** Step 14.5 (D256): write PATs and app secrets that expire within 14 days (Today, and step 15.5's notification). */
-export function expiringFor(plan: PlanStore | undefined, cfg: AppConfig | null, today: IsoDate, known: (key: string) => string | undefined = () => undefined) {
+export async function expiringFor(plan: PlanStore | undefined, cfg: AppConfig | null, today: IsoDate, known: (key: string) => string | undefined = () => undefined) {
   return expiringSoon(
     [
-      ...(plan ? plan.devopsIdentities() : []).filter((i) => i.expires).map((i) => ({ key: `pat:${i.clientKey}`, label: `${nameOf(cfg, known)(i.clientKey)} DevOps write access`, expires: i.expires!, section: "clients" })),
+      ...(plan ? (await plan.devopsIdentities()) : []).filter((i) => i.expires).map((i) => ({ key: `pat:${i.clientKey}`, label: `${nameOf(cfg, known)(i.clientKey)} DevOps write access`, expires: i.expires!, section: "clients" })),
       ...Object.entries(cfg?.secretExpiry ?? {}).map(([k, v]) => ({ key: `secret:${k}`, label: k === "dataverse-client-secret" ? "The Dataverse app secret" : "The Google app secret", expires: v!, section: "connections" })),
     ],
     today,
@@ -975,7 +985,8 @@ export const NO_DATAVERSE_MATCH = "We couldn't match you in Dataverse yet. Your 
  * by hand in Settings) is used as is and skips this.
  */
 export async function matchMe(ctx: Pick<ActionContext, "makeDataverse" | "signedInAs">, dv: DataverseConfig, tz: string): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
-  const names = [...new Set([dv.myEmail, ctx.signedInAs?.email ?? "", ctx.signedInAs?.upn ?? ""].map((x) => x.trim().toLowerCase()).filter((x) => x.includes("@")))];
+  const me = await ctx.signedInAs?.();
+  const names = [...new Set([dv.myEmail, me?.email ?? "", me?.upn ?? ""].map((x) => x.trim().toLowerCase()).filter((x) => x.includes("@")))];
   const src = ctx.makeDataverse(dv, tz);
   for (const name of names) {
     const r = await src.resolveUserId(name);

@@ -25,13 +25,14 @@ export class HostUnavailable extends Error {
 
 /**
  * App secrets set up outside FocusTime: read-only, except Settings may replace the first two. A2: the "FocusTime" Entra
- * registration's client secret (written by infra/scripts/app-registration.sh, never by FocusTime).
+ * registration's client secret (written by infra/scripts/app-registration.sh, never by FocusTime). A3: the SQL login's
+ * password for a local SQL Server container (npm run db:up writes it; the hosted app signs in with its identity).
  */
-export type AppSecretAccount = "dataverse-client-secret" | "google-client-secret" | "entra-client-secret";
+export type AppSecretAccount = "dataverse-client-secret" | "google-client-secret" | "entra-client-secret" | "sql-password";
 /** Refresh tokens FocusTime writes after sign-in and clears on disconnect. */
 export type RefreshTokenAccount = "outlook-refresh-token" | "google-refresh-token";
 export type SecretAccount = AppSecretAccount | RefreshTokenAccount;
-export const SECRET_ACCOUNTS: readonly SecretAccount[] = ["dataverse-client-secret", "google-client-secret", "entra-client-secret", "outlook-refresh-token", "google-refresh-token"];
+export const SECRET_ACCOUNTS: readonly SecretAccount[] = ["dataverse-client-secret", "google-client-secret", "entra-client-secret", "sql-password", "outlook-refresh-token", "google-refresh-token"];
 export const WRITABLE_ACCOUNTS: readonly RefreshTokenAccount[] = ["outlook-refresh-token", "google-refresh-token"];
 
 export type SecretErrorKind = "not_found" | "unavailable" | "locked";

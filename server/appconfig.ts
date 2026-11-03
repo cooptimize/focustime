@@ -3,6 +3,7 @@
 // rows in the plan store (store/settings.ts). Nothing here is secret: the client secrets live in the host's secret store.
 import { parse } from "smol-toml";
 
+import type { DatabaseSettings } from "../store/sql/sqlserver.ts";
 export type AppSettings = {
   /** Where people reach FocusTime (scheme, host and port, no path): the cookies, Host and Origin checks, redirect URIs. */
   publicUrl: string;
@@ -14,7 +15,16 @@ export type AppSettings = {
   google: { clientId: string } | null;
   /** "Try the demo" on the sign-in page. */
   demo: boolean;
+  /** A3: where the plan store is. Never per person. */
+  database: DatabaseSettings;
 };
+
+/**
+ * A3: the plan store's database. SQL Server (Azure SQL in the hosted app, a local container for development) signs in
+ * with the app's managed identity (auth "entra", DefaultAzureCredential) or a SQL login (auth "sql", the container;
+ * its password is the host secret sql-password, never in this config). SQLite is the local file (the fallback).
+ */
+export type { DatabaseSettings };
 
 export type AppSettingsResult = { ok: true; settings: AppSettings } | { ok: false; errors: string[] };
 
@@ -32,6 +42,13 @@ export const APP_ENV = {
   dataverseClientId: "FOCUSTIME_DATAVERSE_CLIENT_ID",
   googleClientId: "FOCUSTIME_GOOGLE_CLIENT_ID",
   demo: "FOCUSTIME_DEMO",
+  dbDriver: "FOCUSTIME_DB_DRIVER",
+  dbServer: "FOCUSTIME_DB_SERVER",
+  dbPort: "FOCUSTIME_DB_PORT",
+  dbName: "FOCUSTIME_DB_NAME",
+  dbAuth: "FOCUSTIME_DB_AUTH",
+  dbUser: "FOCUSTIME_DB_USER",
+  dbIdentity: "FOCUSTIME_DB_MANAGED_IDENTITY_CLIENT_ID",
 } as const;
 
 type Table = Record<string, unknown>;
@@ -79,6 +96,8 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
   const demoRaw = env[APP_ENV.demo] ?? (typeof raw.demo === "boolean" ? String(raw.demo) : "true");
   const demo = !["0", "false", "off", "no"].includes(demoRaw.trim().toLowerCase());
 
+  const database = readDatabase(sec("database"), val, errors);
+
   if (errors.length) return { ok: false, errors };
   return {
     ok: true,
@@ -88,7 +107,47 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
       dataverse: dvUrl ? { environmentUrl: dvUrl, tenantId: dvTenant, clientId: dvClient } : null,
       google: googleClient ? { clientId: googleClient } : null,
       demo,
+      database,
     },
+  };
+}
+
+const HOST = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i;
+
+/** [database] (and FOCUSTIME_DB_*): no [database] means the SQLite file. */
+function readDatabase(d: Table, val: (envName: string, from: unknown) => string, errors: string[]): DatabaseSettings {
+  const driver = val(APP_ENV.dbDriver, d.driver) || "sqlite";
+  if (driver === "sqlite") return { driver: "sqlite" };
+  if (driver !== "sqlserver") {
+    errors.push('[database] driver must be "sqlserver" or "sqlite"');
+    return { driver: "sqlite" };
+  }
+  const server = val(APP_ENV.dbServer, d.server);
+  const portText = val(APP_ENV.dbPort, typeof d.port === "number" ? String(d.port) : d.port) || "1433";
+  const port = Number(portText);
+  const database = val(APP_ENV.dbName, d.database);
+  const auth = val(APP_ENV.dbAuth, d.auth) || "entra";
+  const user = val(APP_ENV.dbUser, d.user) || null;
+  const identity = val(APP_ENV.dbIdentity, d.managed_identity_client_id) || null;
+  if (!HOST.test(server)) errors.push("[database] server must be a host name");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) errors.push("[database] port must be a port number");
+  if (!/^[\w-]{1,128}$/.test(database)) errors.push("[database] database must be a database name");
+  if (auth !== "entra" && auth !== "sql") errors.push('[database] auth must be "entra" (the app\'s identity) or "sql" (a SQL login, local only)');
+  if (auth === "sql" && !user) errors.push("[database] a SQL login needs user");
+  if (identity && !GUID.test(identity)) errors.push("[database] managed_identity_client_id must be a GUID");
+  const local = server === "localhost" || server === "127.0.0.1";
+  if (auth === "sql" && !local) errors.push("[database] a SQL login is for the local container only; Azure SQL uses the app's identity");
+  return {
+    driver: "sqlserver",
+    server,
+    port,
+    database,
+    auth: auth === "sql" ? "sql" : "entra",
+    user,
+    managedIdentityClientId: identity,
+    encrypt: d.encrypt === false ? false : true,
+    // The local container's certificate is its own (self-signed); Azure SQL's is checked.
+    trustServerCertificate: local && d.trust_server_certificate !== false,
   };
 }
 

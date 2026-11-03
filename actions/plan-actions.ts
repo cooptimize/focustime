@@ -2,7 +2,7 @@
 // and write only to the local plan store. Nothing here calls DevOps, Outlook, Google or Dataverse.
 import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
-import { carryTarget, dayLabel, dayRule, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
+import { carryTarget, dayLabel, dayRule, SCAN_DAYS, upcomingStart, type DayRule, type HasHours } from "../plan/days.ts";
 import { alreadyPlanned } from "../plan/dup.ts";
 import { sessionEnd, unpickableReason } from "../plan/rules.ts";
 import { DEFAULT_SIZE, SIZES, type Pick as PlanPick, type PlanDayState, type Size } from "../plan/types.ts";
@@ -31,17 +31,34 @@ export type PlanContext = {
 };
 
 /** Whether a date has working hours or a flex session (D127): the one plannability rule, from the time model. */
-export function hasHoursOn(plan: PlanStore | undefined, model: TimeModel, date: IsoDate): boolean {
-  return hoursOn(model, date).segments.length > 0 || (plan?.flexBetween(date, date).length ?? 0) > 0;
+export async function hasHoursOn(plan: PlanStore | undefined, model: TimeModel, date: IsoDate): Promise<boolean> {
+  return hoursOn(model, date).segments.length > 0 || ((await plan?.flexBetween(date, date))?.length ?? 0) > 0;
+}
+
+/**
+ * The same rule for every date within SCAN_DAYS of `from` (the day stepper and the carry-over target look that far),
+ * with the flex sessions read once (A3: the rule is a plain function, and the store is async).
+ */
+export async function hasHoursNear(plan: PlanStore | undefined, model: TimeModel, from: IsoDate): Promise<HasHours> {
+  const d = Temporal.PlainDate.from(from);
+  const flex = new Set(plan ? (await plan.flexDays(d.subtract({ days: SCAN_DAYS + 1 }).toString(), d.add({ days: SCAN_DAYS + 1 }).toString())).map((f) => f.date) : []);
+  return (x) => hoursOn(model, x).segments.length > 0 || flex.has(x);
+}
+
+/** Which days from `from` (SCAN_DAYS on) are committed, read once. */
+export async function committedNear(plan: PlanStore, from: IsoDate): Promise<(d: IsoDate) => boolean> {
+  const to = Temporal.PlainDate.from(from).add({ days: SCAN_DAYS + 1 }).toString();
+  const days = new Set((await plan.dayPlansBetween(from, to)).filter((p) => p.committedAt).map((p) => p.date));
+  return (d) => days.has(d);
 }
 
 /** Today, the first upcoming day and the plannability rule, in the configured zone. */
-async function clock(ctx: PlanContext): Promise<{ cfg: AppConfig | null; today: IsoDate; upcoming: IsoDate; model: TimeModel; hasHours: HasHours }> {
+async function clock(ctx: PlanContext): Promise<{ cfg: AppConfig | null; today: IsoDate; upcoming: IsoDate; model: TimeModel; hasHours: (d: IsoDate) => Promise<boolean> }> {
   const cfg = await ctx.config();
   const model = cfg?.week.hours ?? defaultWeekConfig.hours;
   const now = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(userZone(model));
   const today = now.toPlainDate().toString();
-  const hasHours: HasHours = (d) => hasHoursOn(ctx.plan, model, d);
+  const hasHours = (d: IsoDate) => hasHoursOn(ctx.plan, model, d);
   return { cfg, today, upcoming: upcomingStart(now, dayEndOf(model, today) ?? "24:00"), model, hasHours };
 }
 
@@ -52,13 +69,13 @@ async function ptoOf(ctx: PlanContext, cfg: AppConfig | null, d: IsoDate): Promi
 /** The day rule for a date: PTO and days without working hours are refused; earlier days are past. */
 async function ruleFor(ctx: PlanContext, d: IsoDate): Promise<DayRule> {
   const { cfg, today, hasHours } = await clock(ctx);
-  return dayRule(d, today, await ptoOf(ctx, cfg, d), hasHours(d));
+  return dayRule(d, today, await ptoOf(ctx, cfg, d), await hasHours(d));
 }
 
 /** Refuses a full PTO day with a plain reason; null when the day can take picks. */
 async function ptoRefusal(ctx: PlanContext, d: IsoDate): Promise<string | null> {
   const { cfg, today, hasHours } = await clock(ctx);
-  const r = dayRule(d, today, await ptoOf(ctx, cfg, d), hasHours(d));
+  const r = dayRule(d, today, await ptoOf(ctx, cfg, d), await hasHours(d));
   return !r.ok && r.kind === "pto" ? r.reason : null;
 }
 
@@ -121,19 +138,22 @@ const bool = (v: unknown, name: string) => {
 
 /** The carry-over day: the earliest upcoming, plannable, uncommitted day (plan/days.ts). */
 async function carryDay(ctx: PlanContext, plan: PlanStore): Promise<{ target: IsoDate | null; upcoming: IsoDate }> {
-  const { cfg, upcoming, hasHours } = await clock(ctx);
+  const { cfg, upcoming, model } = await clock(ctx);
   const monday = Temporal.PlainDate.from(upcoming).subtract({ days: Temporal.PlainDate.from(upcoming).dayOfWeek - 1 }).toString();
   const pto = ctx.ptoAhead && cfg ? await ctx.ptoAhead(cfg, monday).catch(() => new Set<IsoDate>()) : new Set<IsoDate>();
-  return { target: carryTarget(upcoming, (d) => !!plan.day(d)?.committedAt, pto, hasHours), upcoming };
+  return { target: carryTarget(upcoming, await committedNear(plan, upcoming), pto, await hasHoursNear(plan, model, upcoming)), upcoming };
 }
 
 /** A pick whose evening or weekend session hasn't ended yet by the server's clock (Q45): not carry-over yet. */
-function pendingSession(ctx: PlanContext, plan: PlanStore, cfg: AppConfig | null): (p: PlanPick) => boolean {
+async function pendingSession(ctx: PlanContext, plan: PlanStore, cfg: AppConfig | null, upcoming: IsoDate): Promise<(p: PlanPick) => boolean> {
   const model = cfg?.week.hours ?? defaultWeekConfig.hours;
   const now = Temporal.Instant.from(ctx.now());
+  // The flex sessions of the days carry-over looks back over (the store's carryOverFor reads the same span).
+  const from = Temporal.PlainDate.from(upcoming).subtract({ days: Math.max(14, cfg?.plan.carryDays ?? 0) }).toString();
+  const flex = await plan.flexDays(from, upcoming);
   return (p) => {
     // Flex ends are date-times; as local times on the pick's date (a session past midnight counts as midnight).
-    const flexEnds = plan.flexBetween(p.date, p.date).map((f) => {
+    const flexEnds = flex.filter((f) => f.date === p.date).map(({ flex: f }) => {
       const z = Temporal.Instant.from(f.end).toZonedDateTimeISO(userZone(model));
       return z.toPlainDate().toString() > p.date ? "24:00" : z.toPlainTime().toString({ smallestUnit: "minute" });
     });
@@ -147,19 +167,19 @@ function pendingSession(ctx: PlanContext, plan: PlanStore, cfg: AppConfig | null
 
 async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = true): Promise<PlanDayState> {
   const { today, cfg } = await clock(ctx);
-  const day = plan.start(d);
+  const day = (await plan.start(d));
   const carry = await carryDay(ctx, plan);
   // Unfinished picks from before the first upcoming day, offered only on the carry-over day.
-  const carryOver = carry.target === d ? plan.carryOverFor(carry.upcoming, cfg?.plan.carryDays, pendingSession(ctx, plan, cfg)) : [];
-  const picks = plan.picksFor(d);
+  const carryOver = carry.target === d ? (await plan.carryOverFor(carry.upcoming, cfg?.plan.carryDays, await pendingSession(ctx, plan, cfg, carry.upcoming))) : [];
+  const picks = (await plan.picksFor(d));
   // Focused seconds per pick (step 6d): the day's picks and the carry-over offered.
-  const focused = plan.focusedSeconds([...picks, ...carryOver].map((p) => p.id));
+  const focused = (await plan.focusedSeconds([...picks, ...carryOver].map((p) => p.id)));
   // Where I left off per client (step 7): the latest resume note on or before this day.
-  const resumeNotes = Object.fromEntries(Object.entries(plan.latestNotes(d)).map(([k, n]) => [k, { clientKey: n.clientKey, date: n.date, note: n.note }]));
+  const resumeNotes = Object.fromEntries(Object.entries((await plan.latestNotes(d))).map(([k, n]) => [k, { clientKey: n.clientKey, date: n.date, note: n.note }]));
   // Committed features of this date's week (step 8).
   const monday = Temporal.PlainDate.from(d).subtract({ days: Temporal.PlainDate.from(d).dayOfWeek - 1 }).toString();
-  const weekFeatures = plan.weekPlan(monday).features.map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, url: f.url, slots: f.slots, level: f.level, tier: f.tier, blocks: f.blocks, size: f.size, parentId: f.parentId, position: f.position, doneAt: f.doneAt }));
-  return { date: d, plan: day, picks, carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: plan.drafts(), opened, focused, resumeNotes, weekFeatures };
+  const weekFeatures = (await plan.weekPlan(monday)).features.map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, url: f.url, slots: f.slots, level: f.level, tier: f.tier, blocks: f.blocks, size: f.size, parentId: f.parentId, position: f.position, doneAt: f.doneAt }));
+  return { date: d, plan: day, picks, carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: (await plan.drafts()), opened, focused, resumeNotes, weekFeatures };
 }
 
 export async function planAction(ctx: PlanContext, action: PlanAction, input: unknown): Promise<ActionResponse> {
@@ -174,7 +194,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const rule = await ruleFor(ctx, d);
         if (!rule.ok) return bad(rule.reason, 422);
         // An automatic open happens once per day, and never for a day already committed.
-        const opened = !auto || (!plan.day(d)?.committedAt && plan.markOnce("plan_day_auto", d));
+        const opened = !auto || (!(await plan.day(d))?.committedAt && (await plan.markOnce("plan_day_auto", d)));
         return { ok: true, data: await state(ctx, plan, d, opened) };
       }
       case "planday.commit": {
@@ -182,7 +202,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const rule = await ruleFor(ctx, d);
         if (!rule.ok) return bad(rule.reason, 422);
         if (rule.access === "past") return bad(pastReason(d), 409);
-        plan.commit(d);
+        (await plan.commit(d));
         return { ok: true, data: await state(ctx, plan, d) };
       }
       case "pick.add": {
@@ -204,51 +224,51 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           if (!item) return bad(`Item ${itemId} is not among the loaded DevOps items for ${base.clientKey}. Refresh and try again`, 409);
           const why = unpickableReason(item);
           if (why) return bad(why, 422);
-          const dup = plan.picksFor(base.date).find((x) => x.itemId === itemId && x.clientKey === base.clientKey && (x.status === "planned" || x.status === "done"));
+          const dup = (await plan.picksFor(base.date)).find((x) => x.itemId === itemId && x.clientKey === base.clientKey && (x.status === "planned" || x.status === "done"));
           if (dup) return dupRefusal(dup.half, base.half);
           p = { ...base, kind: "item", itemId, title: item.title, itemType: item.type, itemUrl: item.url.startsWith("https://dev.azure.com/") ? item.url : null };
         } else if (o.draftId !== undefined) {
-          const draft = plan.getDraft(id(o.draftId, "draftId"));
+          const draft = (await plan.getDraft(id(o.draftId, "draftId")));
           if (!draft || draft.clientKey !== base.clientKey) return bad("No such draft story for this client", 404);
-          const dup = alreadyPlanned(plan.picksFor(base.date), { clientKey: base.clientKey, draftId: draft.id }, base.date, base.half);
+          const dup = alreadyPlanned((await plan.picksFor(base.date)), { clientKey: base.clientKey, draftId: draft.id }, base.date, base.half);
           if (dup) return dupRefusal(dup.half, base.half);
           p = { ...base, kind: "draft", draftId: draft.id, title: draft.title, itemType: draft.level === "feature" ? "Draft feature" : "Draft story" };
         } else if (o.followUpId !== undefined) {
-          const f = plan.getFollowUp(id(o.followUpId, "followUpId"));
+          const f = (await plan.getFollowUp(id(o.followUpId, "followUpId")));
           if (!f) return bad("No such follow-up", 404);
           if (f.closedAt) return bad("That follow-up is already closed", 409);
-          const dup = plan.picksFor(base.date).find((x) => x.followUpId === f.id && (x.status === "planned" || x.status === "done"));
+          const dup = (await plan.picksFor(base.date)).find((x) => x.followUpId === f.id && (x.status === "planned" || x.status === "done"));
           if (dup) return dupRefusal(dup.half, base.half);
           p = { ...base, kind: "intention", title: f.what.slice(0, 200), itemType: "Follow-up", followUpId: f.id };
         } else {
           p = { ...base, kind: "intention", title: text(o.intention, "intention") };
         }
-        const pick = plan.addPick(p);
+        const pick = (await plan.addPick(p));
         return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
       }
       case "pick.remove": {
         const pid = id(fields(input, ["id"]).id);
-        const before = plan.getPick(pid);
+        const before = (await plan.getPick(pid));
         if (!before) return bad(`No pick ${pid}`, 404);
         // On a past day nothing is deleted: the pick is kept as dropped, so the record of the day stays.
-        const r = (await pastRefusal(ctx, before.date)) ? { result: "dropped" as const, pick: plan.drop(pid) } : plan.removePick(pid);
+        const r = (await pastRefusal(ctx, before.date)) ? { result: "dropped" as const, pick: (await plan.drop(pid)) } : (await plan.removePick(pid));
         return { ok: true, data: { result: r.result, state: await state(ctx, plan, before.date) } };
       }
       case "pick.set_size": {
         const o = fields(input, ["id", "size"]);
         const pid = id(o.id);
         const sz = size(o.size);
-        const before = plan.getPick(pid);
+        const before = (await plan.getPick(pid));
         if (!before) return bad(`No pick ${pid}`, 404);
         const past = await pastRefusal(ctx, before.date);
         if (past) return bad(past, 409);
-        const pick = plan.setSize(pid, sz);
+        const pick = (await plan.setSize(pid, sz));
         return { ok: true, data: { pick, state: await state(ctx, plan, pick.date) } };
       }
       case "pick.move": {
         const o = fields(input, ["id", "date", "half"], ["anyway"]);
         const pid = id(o.id);
-        const before = plan.getPick(pid);
+        const before = (await plan.getPick(pid));
         if (!before) return bad(`No pick ${pid}`, 404);
         const to = date(o.date);
         if (o.anyway !== undefined && typeof o.anyway !== "boolean") throw new Invalid("anyway must be true or false");
@@ -263,13 +283,13 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const ask = o.anyway === true || !cfgNow ? null : noHoursPrompt(cfgNow.week.hours, to, Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(userZone(cfgNow)).toPlainDate().toString());
         if (ask) return { ok: false, status: 409, error: ask, code: "no_hours" };
         // Step 15.1 (D277): never two copies of one item in a block.
-        if (alreadyPlanned(plan.picksFor(to), before, to, h, pid)) return { ok: false, status: 409, error: "Already planned here", code: "duplicate" };
-        const pick = plan.move(pid, to, h);
+        if (alreadyPlanned((await plan.picksFor(to)), before, to, h, pid)) return { ok: false, status: 409, error: "Already planned here", code: "duplicate" };
+        const pick = (await plan.move(pid, to, h));
         return { ok: true, data: { pick, state: await state(ctx, plan, before.date) } };
       }
       case "pick.mark_done": {
         const o = fields(input, ["id", "done"]);
-        const pick = plan.setDone(id(o.id), bool(o.done, "done"));
+        const pick = (await plan.setDone(id(o.id), bool(o.done, "done")));
         return { ok: true, data: { pick } };
       }
       case "draft.add_story": {
@@ -281,17 +301,17 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const sz = size(o.size);
         const cfg = await ctx.config();
         if (!cfg) return bad("Fix the config first", 409);
-        if (parentItemId === null) return { ok: true, data: { draft: plan.addDraft({ clientKey: key, parentItemId: null, title, size: sz }) } };
+        if (parentItemId === null) return { ok: true, data: { draft: (await plan.addDraft({ clientKey: key, parentItemId: null, title, size: sz })) } };
         const parent = ctx.devops(cfg).lookup(key, parentItemId);
         if (!parent) return bad(`Item ${parentItemId} is not among the loaded DevOps items for ${key}. Refresh and try again`, 409);
         if (parent.level !== "portfolio") return bad("Draft stories go under an epic or feature; this item can be picked directly", 422);
-        return { ok: true, data: { draft: plan.addDraft({ clientKey: key, parentItemId, title, size: sz }) } };
+        return { ok: true, data: { draft: (await plan.addDraft({ clientKey: key, parentItemId, title, size: sz })) } };
       }
       case "draft.set_parent": {
         // Step 14.5 (D257): a draft needs a parent before it can be created in DevOps. A story goes under an open
         // feature, a draft feature under an open epic, of the draft's own client, from the loaded DevOps items.
         const o = fields(input, ["id", "parentItemId"]);
-        const draft = plan.getDraft(id(o.id));
+        const draft = (await plan.getDraft(id(o.id)));
         if (!draft || draft.devopsId) return bad("No such draft, or it is already in DevOps", 404);
         const parentItemId = id(o.parentItemId, "parentItemId");
         const cfg = await ctx.config();
@@ -301,12 +321,12 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const want = draft.level === "feature" ? "epic" : "feature";
         if (parent.level !== "portfolio" || (parent.tier ?? "feature") !== want) return bad(draft.level === "feature" ? "A draft feature goes under an epic" : "A draft story goes under a feature", 422);
         if (parent.stateCategory === "Completed" || parent.stateCategory === "Removed") return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
-        return { ok: true, data: { draft: plan.setDraftParent(draft.id, parentItemId) } };
+        return { ok: true, data: { draft: (await plan.setDraftParent(draft.id, parentItemId)) } };
       }
       case "draft.update": {
         // Step 15.3: the draft editor. Local only; Create in DevOps writes these values later.
         const o = fields(input, ["id"], ["title", "description", "acceptance", "clientKey", "parentItemId", "size", "startDate", "targetDate"]);
-        const draft = plan.getDraft(id(o.id));
+        const draft = (await plan.getDraft(id(o.id)));
         if (!draft || draft.devopsId) return bad("No such draft, or it is already in DevOps", 404);
         const patch: DraftPatch = {};
         if (o.title !== undefined) patch.title = text(o.title, "title");
@@ -342,11 +362,11 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           if (parent.stateCategory === "Completed" || parent.stateCategory === "Removed") return bad(`#${parentItemId} is ${parent.state}; choose an open one`, 422);
           patch.parentItemId = parentItemId;
         } else if (o.parentItemId === null) patch.parentItemId = null;
-        return { ok: true, data: { draft: plan.updateDraft(draft.id, patch) } };
+        return { ok: true, data: { draft: (await plan.updateDraft(draft.id, patch)) } };
       }
       case "draft.remove": {
         const o = fields(input, ["id"]);
-        plan.removeDraft(id(o.id));
+        (await plan.removeDraft(id(o.id)));
         return { ok: true, data: { removed: true } };
       }
     }

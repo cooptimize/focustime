@@ -2,7 +2,7 @@
 // puts the text together from their rows and the app's keys (the Dataverse, Microsoft and Google registrations from
 // the app config, their sign-in email, their time zone); saving runs the same edit as before on that text, validates
 // it, and stores the person's part back as rows. Every statement is scoped to the person (store/scope.ts).
-import type { DatabaseSync } from "node:sqlite";
+import type { Conn } from "./sql/conn.ts";
 import { joinSettings, personalRows, type SettingsRow } from "../config/sections.ts";
 import { setValue, type WriteResult } from "../config/edit.ts";
 import { parseConfig, setSystemUserIdInText, type ParseResult } from "../config/schema.ts";
@@ -27,36 +27,31 @@ export const SETTINGS_PLACE = "your FocusTime account";
 const starterKey = (key: string) => new RegExp(`^${key} = "([^"]*)"`, "m").exec(starterToml("UTC"))?.[1] ?? "";
 
 export function createUserSettings(o: {
-  db: DatabaseSync;
+  db: Conn;
   userId: string;
   app: AppKeys;
-  person: () => SettingsPerson;
+  person: () => SettingsPerson | Promise<SettingsPerson>;
   /** The person's time zone changed in Settings (kept on their users row too). */
-  setZone: (zone: string) => void;
+  setZone: (zone: string) => void | Promise<void>;
   /** The zone for someone whose settings name none (the host clock's). */
   defaultZone: string;
   now: () => Temporal.Instant;
 }) {
   const db = scopedDb(o.db, o.userId);
-  const rows = (): SettingsRow[] => (db.prepare("SELECT section, position, body FROM user_settings ORDER BY position").all() as SettingsRow[]).map((r) => ({ section: r.section, position: r.position, body: r.body }));
+  const rows = async (): Promise<SettingsRow[]> => ((await db.all("SELECT section, position, body FROM user_settings ORDER BY position")) as SettingsRow[]).map((r) => ({ section: r.section, position: r.position, body: r.body }));
 
-  function store(next: SettingsRow[]): void {
+  async function store(next: SettingsRow[]): Promise<void> {
     const at = o.now().toString();
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      db.prepare("DELETE FROM user_settings").run();
-      for (const r of next) db.prepare("INSERT INTO user_settings (section, position, body, updated_at) VALUES (?, ?, ?, ?)").run(r.section, r.position, r.body, at);
-      db.exec("COMMIT");
-    } catch (e) {
-      db.exec("ROLLBACK");
-      throw e;
-    }
+    await db.tx(async () => {
+      await db.run("DELETE FROM user_settings");
+      for (const r of next) await db.run("INSERT INTO user_settings (section, position, body, updated_at) VALUES (?, ?, ?, ?)", r.section, r.position, r.body, at);
+    });
   }
 
   /** The whole settings text: the person's rows, completed with the app's keys and who they are. */
-  function text(): string {
-    let t = joinSettings(rows());
-    const p = o.person();
+  async function text(): Promise<string> {
+    let t = joinSettings(await rows());
+    const p = await o.person();
     const dv = o.app.dataverse ?? { environmentUrl: starterKey("environment_url"), tenantId: starterKey("tenant_id"), clientId: starterKey("client_id") };
     t = setValue(t, "dataverse", "environment_url", dv.environmentUrl);
     t = setValue(t, "dataverse", "tenant_id", dv.tenantId);
@@ -79,22 +74,22 @@ export function createUserSettings(o: {
 
   return {
     /** Whether the person has settings yet (a first sign-in has none until seeded). */
-    has: (): boolean => !!db.prepare("SELECT 1 FROM user_settings LIMIT 1").get(),
+    has: async (): Promise<boolean> => !!(await db.get("SELECT 1 FROM user_settings LIMIT 1")),
     /** Stores settings text as the person's rows (their config file once, or the starter for someone new). */
-    seed(textToSeed: string): void {
-      store(personalRows(textToSeed));
+    async seed(textToSeed: string): Promise<void> {
+      await store(personalRows(textToSeed));
     },
     text,
-    load: async () => ({ path: SETTINGS_PLACE, parsed: parse(text()) }),
+    load: async () => ({ path: SETTINGS_PLACE, parsed: parse(await text()) }),
     /** Runs a Settings edit on the text; stored only when the result is valid. */
     async write(edit: (text: string) => string): Promise<WriteResult> {
-      const next = edit(text());
+      const next = edit(await text());
       const parsed = parse(next);
       if (!parsed.ok) return { ok: false, parsed };
-      store(personalRows(next));
+      await store(personalRows(next));
       const zone = userZone(parsed.config);
-      if (zone !== o.person().timeZone) o.setZone(zone);
-      const again = parse(text());
+      if (zone !== (await o.person()).timeZone) await o.setZone(zone);
+      const again = parse(await text());
       return again.ok ? { ok: true, parsed: again, backup: "" } : { ok: false, parsed: again };
     },
     async saveSystemUserId(id: string): Promise<void> {

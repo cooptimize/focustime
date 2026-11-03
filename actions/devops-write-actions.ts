@@ -114,7 +114,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
   /** The client's org and project (never its company PAT) and my write PAT, checked to belong together. */
   const envOf = async (clientKey: string): Promise<Env> => {
     if (!ctx.writer || !ctx.pats) throw new Refused("DevOps writes aren't available here", 503);
-    const me = plan.devopsIdentity(clientKey);
+    const me = (await plan.devopsIdentity(clientKey));
     if (!me) throw new Refused(NO_PAT(clientName(clientKey)), 409, "no_write_pat");
     const t = await ctx.targets(cfg, [clientKey]).catch(() => null);
     if (!t?.ok) throw new Refused(`DevOps settings for ${clientName(clientKey)} can't be read from Dataverse now. Try again`, 503);
@@ -139,9 +139,9 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const expires = o.expires === undefined || o.expires === null || o.expires === "" ? null : isoDate(o.expires, "expires");
       if (o.pat === undefined) {
         // Only the expiry changes.
-        const cur = plan.devopsIdentity(clientKey);
+        const cur = (await plan.devopsIdentity(clientKey));
         if (!cur) throw new Refused("Enter the PAT first", 409);
-        return { ok: true, data: { write: writeView(plan.setDevopsIdentity({ ...cur, expires })) } };
+        return { ok: true, data: { write: writeView((await plan.setDevopsIdentity({ ...cur, expires }))) } };
       }
       if (typeof o.pat !== "string" || !o.pat || o.pat.length > 1024 || /\s/.test(o.pat)) throw new Invalid("The PAT must be one line of 1 to 1024 characters with no spaces");
       if (!ctx.writer || !ctx.pats) return bad("DevOps writes aren't available here", 503);
@@ -164,18 +164,18 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       } catch {
         return bad("The keyring refused the PAT (locked or unavailable). Unlock it and try again", 503);
       }
-      return { ok: true, data: { write: writeView(plan.setDevopsIdentity({ clientKey, org: target.org, id: who.id, name: who.name, email: who.email, expires })) } };
+      return { ok: true, data: { write: writeView((await plan.setDevopsIdentity({ clientKey, org: target.org, id: who.id, name: who.name, email: who.email, expires }))) } };
     }
     case "devops.clear_write_pat": {
       const o = fields(input, ["clientKey"]);
       const clientKey = str(o.clientKey, "clientKey", 100)!;
       if (ctx.pats) await ctx.pats.clear(clientKey).catch(() => undefined);
-      plan.clearDevopsIdentity(clientKey);
+      (await plan.clearDevopsIdentity(clientKey));
       return { ok: true, data: { write: null } };
     }
     case "devops.write_status": {
       fields(input ?? {}, []);
-      return { ok: true, data: { clients: plan.devopsIdentities().map(writeView) } };
+      return { ok: true, data: { clients: (await plan.devopsIdentities()).map(writeView) } };
     }
     case "devops.states": {
       // The states of an item's type with their categories, for the state picker (completed one first offered).
@@ -187,7 +187,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
     }
     case "devops.log": {
       fields(input ?? {}, [], ["limit"]);
-      const log = plan.devopsWriteLog(200);
+      const log = (await plan.devopsWriteLog(200));
       const tops = undoTops(log);
       return { ok: true, data: { entries: log.map((e) => ({ ...e, undoable: !!e.itemId && tops.get(`${e.org.toLowerCase()}#${e.itemId}`) === e.id && !e.op.startsWith("undo_"), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending" })) } };
     }
@@ -224,7 +224,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
         }
         try {
           const env = await envOf(h.clientKey);
-          const entry = plan.logDevopsWrite({ clientKey: h.clientKey, org: h.org, project: h.project, op: h.op, itemId: h.itemId, parentId: h.parentId, title: h.title, identity: env.me.email, before: h.before, after: h.after, ops: h.ops, revBefore: h.rev, revAfter: null, commentId: h.commentId, draftId: h.draftId, pickIds: h.pickIds, followUpId: h.followUpId, undoOf: h.undoOf });
+          const entry = (await plan.logDevopsWrite({ clientKey: h.clientKey, org: h.org, project: h.project, op: h.op, itemId: h.itemId, parentId: h.parentId, title: h.title, identity: env.me.email, before: h.before, after: h.after, ops: h.ops, revBefore: h.rev, revAfter: null, commentId: h.commentId, draftId: h.draftId, pickIds: h.pickIds, followUpId: h.followUpId, undoOf: h.undoOf }));
           results.push(await attempt(ctx, env, entry, false, tz));
         } catch (e) {
           if (e instanceof Refused) results.push({ error: e.message, status: e.status });
@@ -237,7 +237,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
     }
     case "devops.retry": {
       const o = fields(input, ["id"]);
-      const entry = plan.devopsWrite(posId(o.id, "id"));
+      const entry = (await plan.devopsWrite(posId(o.id, "id")));
       if (!entry) throw new PlanError("No such write");
       if (entry.status === "confirmed" || entry.status === "refused") return { ok: true, data: { entry, confirmed: entry.status === "confirmed", message: entry.status === "confirmed" ? "Already confirmed" : entry.message ?? "Refused" } satisfies DevOpsResult };
       const env = await envOf(entry.clientKey);
@@ -287,7 +287,7 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
       if (!states.some((s) => s.name === state)) throw new Invalid(`${state} isn't a state of ${item.type}`);
       const comment = str(o.comment, "comment", 4000, true);
       const followUpId = o.followUpId === undefined || o.followUpId === null ? null : posId(o.followUpId, "followUpId");
-      if (followUpId !== null && !plan.getFollowUp(followUpId)) throw new PlanError("No such follow-up");
+      if (followUpId !== null && !(await plan.getFollowUp(followUpId))) throw new PlanError("No such follow-up");
       if (state === item.state && !comment) return `#${item.id} is already ${state}`;
       return { ...base(env), ...none, op: "state", itemId: item.id, title: item.title, ops: stateOps(item.rev, state, comment), rev: item.rev, before: { State: item.state, ...(comment ? { Comment: null } : {}) }, after: { State: state, ...(comment ? { Comment: comment } : {}) }, followUpId, type: item.type };
     }
@@ -321,7 +321,7 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
       return { ...base(env), ...none, op: "target_date", itemId: item.id, title: item.title, ops: targetDateOps(item.rev, field, date, tz, had(field)), rev: item.rev, before: { "Target date": cur }, after: { "Target date": date }, type: item.type, field };
     }
     case "create": {
-      const draft = plan.getDraft(posId(o.draftId, "draftId"));
+      const draft = (await plan.getDraft(posId(o.draftId, "draftId")));
       if (!draft) throw new PlanError("No such draft");
       if (draft.devopsId) return `"${draft.title}" is already in DevOps as #${draft.devopsId}`;
       if (draft.clientKey !== env.clientKey) throw new Refused("That draft belongs to another client", 409);
@@ -362,13 +362,13 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
       return { ...base(env), ...none, op: "create", itemId: null, parentId: parent.id, title: draft.title, ops, rev: null, before: {}, after, draftId: draft.id, type };
     }
     case "undo": {
-      const entry = plan.devopsWrite(posId(o.writeId, "writeId"));
+      const entry = (await plan.devopsWrite(posId(o.writeId, "writeId")));
       if (!entry) throw new PlanError("No such write");
       if (entry.clientKey !== env.clientKey || entry.org.toLowerCase() !== org.toLowerCase()) throw new Refused("That write belongs to another client", 409);
       if (entry.status !== "confirmed" || entry.itemId === null) throw new Refused("Only a confirmed change can be undone", 409);
       if (entry.op.startsWith("undo_")) throw new Refused("An undo isn't undone again: make the change again instead", 409);
       if (entry.undoneBy !== null) throw new Refused("Already undone", 409);
-      if (undoTops(plan.devopsWriteLog(1000)).get(`${entry.org.toLowerCase()}#${entry.itemId}`) !== entry.id) throw new Refused("Undo the newer change to this item first", 409);
+      if (undoTops((await plan.devopsWriteLog(1000))).get(`${entry.org.toLowerCase()}#${entry.itemId}`) !== entry.id) throw new Refused("Undo the newer change to this item first", 409);
       const item = await writer.item(org, pat, project, entry.itemId);
       const u = { ...base(env), ...none, itemId: item.id, title: item.title, undoOf: entry.id, type: item.type, parentId: entry.parentId };
       if (entry.op === "state") {
@@ -437,8 +437,8 @@ const applied = (e: DevOpsWriteEntry, now: Record<string, string | null>) => Obj
  */
 async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntry, retry: boolean, tz: string): Promise<DevOpsResult> {
   const { writer, org, pat, project, plan } = env;
-  const settle = (status: DevOpsWriteEntry["status"], message: string, more: { itemId?: number | null; revAfter?: number | null; commentId?: number | null; pickIds?: number[] } = {}, extra: Partial<DevOpsResult> = {}): DevOpsResult => {
-    const e = plan.settleDevopsWrite(entry.id, { status, message, retry, ...more });
+  const settle = async (status: DevOpsWriteEntry["status"], message: string, more: { itemId?: number | null; revAfter?: number | null; commentId?: number | null; pickIds?: number[] } = {}, extra: Partial<DevOpsResult> = {}): Promise<DevOpsResult> => {
+    const e = (await plan.settleDevopsWrite(entry.id, { status, message, retry, ...more }));
     return { entry: e, confirmed: status === "confirmed", message, ...extra };
   };
   const forget = () => ctx.devops?.(env.cfg).forget(env.clientKey);
@@ -451,7 +451,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       // A comment by me with the same text since the attempt (an hour of clock skew allowed) is the one that landed.
       if (retry) posted = (await writer.comments(org, pat, project, entry.itemId!)).find((c) => !c.isDeleted && c.createdBy?.toLowerCase() === env.me.email.toLowerCase() && sameText(c.text, text) && (!c.createdDate || Temporal.Instant.compare(Temporal.Instant.from(c.createdDate), Temporal.Instant.from(entry.at).subtract({ hours: 1 })) >= 0)) ?? null;
       const made = posted ?? (await writer.addComment(org, pat, project, entry.itemId!, text));
-      plan.settleDevopsWrite(entry.id, { status: "pending", commentId: made.id });
+      (await plan.settleDevopsWrite(entry.id, { status: "pending", commentId: made.id }));
       const back = await again(() => writer.getComment(org, pat, project, entry.itemId!, made.id));
       if (back.isDeleted || !sameText(back.text, text)) return settle("unconfirmed", "DevOps didn't show the comment yet. Retry checks first and won't post it twice", { commentId: made.id });
       forget();
@@ -462,7 +462,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       if (!before.isDeleted) await writer.deleteComment(org, pat, project, entry.itemId!, entry.commentId!);
       const back = await again(() => writer.getComment(org, pat, project, entry.itemId!, entry.commentId!));
       if (!back.isDeleted) return settle("unconfirmed", "DevOps still shows the comment. Retry to delete it again");
-      plan.markDevopsUndone(entry.undoOf!, entry.id);
+      (await plan.markDevopsUndone(entry.undoOf!, entry.id));
       forget();
       return settle("confirmed", "Comment deleted in DevOps");
     }
@@ -479,13 +479,13 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       if (id === null) {
         const made = await writer.create(org, pat, project, entry.after.Type!, entry.ops as PatchOp[]);
         id = made.id;
-        plan.settleDevopsWrite(entry.id, { status: "pending", itemId: id });
+        (await plan.settleDevopsWrite(entry.id, { status: "pending", itemId: id }));
       }
       const back = await again(() => writer.item(org, pat, project, id!));
       const ok = back.title === entry.title && back.parentId === entry.parentId && identityEmail(back.fields["System.AssignedTo"]) === env.me.email.toLowerCase();
       if (!ok) return settle("unconfirmed", `DevOps didn't show #${id} as asked yet (title, parent or assignee). Retry checks first and won't create another`, { itemId: id });
       const url = workItemUrl(org, env.projectName, id);
-      const pickIds = entry.draftId !== null && plan.getDraft(entry.draftId) && !plan.getDraft(entry.draftId)!.devopsId ? plan.markDraftCreated(entry.draftId, { itemId: id, url, title: back.title, type: back.type }) : entry.pickIds;
+      const pickIds = entry.draftId !== null && (await plan.getDraft(entry.draftId)) && !(await plan.getDraft(entry.draftId))!.devopsId ? (await plan.markDraftCreated(entry.draftId, { itemId: id, url, title: back.title, type: back.type })) : entry.pickIds;
       forget();
       return settle("confirmed", `Created #${id} in DevOps`, { itemId: id, revAfter: back.rev, pickIds }, { itemId: id, url });
     }
@@ -508,7 +508,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
         }
         throw e;
       }
-      if (entry.op === "state") plan.settleDevopsWrite(entry.id, { status: "pending", commentId: wrote.commentId });
+      if (entry.op === "state") (await plan.settleDevopsWrite(entry.id, { status: "pending", commentId: wrote.commentId }));
     }
     const back = await again(() => writer.item(org, pat, project, itemId));
     if (!applied(entry, current(entry, back, tz))) return settle("unconfirmed", "DevOps didn't show the change yet. Retry checks first and won't write twice", { revAfter: back.rev });
@@ -517,11 +517,11 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       const cm = await writer.getComment(org, pat, project, itemId, entry.commentId).catch(() => null);
       if (cm && !cm.isDeleted) await writer.deleteComment(org, pat, project, itemId, entry.commentId);
     }
-    if (entry.undoOf !== null) plan.markDevopsUndone(entry.undoOf, entry.id);
-    if (entry.op === "undo_create" && entry.draftId !== null) plan.restoreDraft(entry.draftId, entry.pickIds);
+    if (entry.undoOf !== null) (await plan.markDevopsUndone(entry.undoOf, entry.id));
+    if (entry.op === "undo_create" && entry.draftId !== null) (await plan.restoreDraft(entry.draftId, entry.pickIds));
     if (entry.op === "state" && entry.followUpId !== null) {
-      const f = plan.getFollowUp(entry.followUpId);
-      if (f && !f.closedAt) plan.closeFollowUp(entry.followUpId, `Marked ${entry.after.State} in DevOps`, "me", { how: "devops", outcome: "done" });
+      const f = (await plan.getFollowUp(entry.followUpId));
+      if (f && !f.closedAt) (await plan.closeFollowUp(entry.followUpId, `Marked ${entry.after.State} in DevOps`, "me", { how: "devops", outcome: "done" }));
     }
     forget();
     const msg = entry.op.startsWith("undo_") ? "Undone in DevOps" : entry.op === "state" ? `#${itemId} is ${entry.after.State} in DevOps` : "Target date set in DevOps";
@@ -537,7 +537,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     return settle("failed", "The change didn't go through. Retry");
   }
 
-  function conflict(e: DevOpsWriteEntry, now: ItemSnapshot): DevOpsResult {
+  function conflict(e: DevOpsWriteEntry, now: ItemSnapshot): Promise<DevOpsResult> {
     const changed = Object.entries(current(e, now, tz)).filter(([k, v]) => (e.before[k] ?? null) !== v).map(([k, v]) => ({ field: k, was: e.before[k] ?? null, now: v }));
     const what = changed.length ? changed.map((c) => `${c.field} is ${c.now ?? "empty"} (was ${c.was ?? "empty"})`).join("; ") : `it is at revision ${now.rev} now (was ${e.revBefore})`;
     return settle("refused", `Changed in DevOps since you loaded it: ${what}. Nothing was written. Reload to review it again`, {}, { changed });

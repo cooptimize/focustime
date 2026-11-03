@@ -49,7 +49,15 @@ export type AppOptions = {
   takeOpenRequest?: (s: Session) => Promise<string | null>;
   /** The developer loop: bring the app window up (the host's launcher); false when it can't. Not authentication. */
   reopen?: () => Promise<boolean>;
+  /**
+   * A3: the database's state for the page ("waking" while a paused Azure SQL database resumes). Read from memory,
+   * never from the database, so a page whose call is waiting can ask; it says nothing about anyone.
+   */
+  dbStatus?: () => "ok" | "waking" | "unavailable";
 };
+
+/** A3: the database's state, without a session (the session lookup itself waits while the database wakes). */
+export const DB_STATUS_PATH = "/api/db-status";
 
 /** An API call without a live session: the page shows the sign-in screen. */
 export const SIGNED_OUT_CODE = "signed_out";
@@ -108,8 +116,8 @@ export function createApp(opts: AppOptions) {
   };
   /** Back to the app, with why a sign-in didn't complete (the sign-in screen words it). */
   const signInFailed = (res: ServerResponse, reason: string) => redirect(res, `/?signin=${encodeURIComponent(reason)}`, [clearAuthCookie()]);
-  const startSession = (userId: string, demo: boolean) => {
-    const s = opts.accounts.sessions.create(userId, { demo });
+  const startSession = async (userId: string, demo: boolean) => {
+    const s = (await opts.accounts.sessions.create(userId, { demo }));
     return sessionCookies(s.cookie, s.csrf, Math.floor((demo ? DEMO_SESSION_MS : SESSION_MAX_MS) / 1000));
   };
 
@@ -142,7 +150,7 @@ export function createApp(opts: AppOptions) {
       try {
         const hint = url.searchParams.get("hint");
         const { url: to, pending } = await opts.auth.microsoft.start(hint && hint.length < 256 ? { loginHint: hint } : {});
-        opts.accounts.authRequests.put("microsoft", pending);
+        await opts.accounts.authRequests.put("microsoft", pending);
         return redirect(res, to, [authCookie(pending.state)]);
       } catch (e) {
         return signInFailed(res, e instanceof SignInError ? e.reason : "unavailable");
@@ -153,34 +161,34 @@ export function createApp(opts: AppOptions) {
       // The state must be the one this browser started (its auth cookie) and one the server is waiting for.
       const state = url.searchParams.get("state");
       if (!state || !same(readCookie(cookieHeader, AUTH_COOKIE), state)) return signInFailed(res, "expired");
-      const pending = opts.accounts.authRequests.take("microsoft", state);
+      const pending = (await opts.accounts.authRequests.take("microsoft", state));
       if (!pending) return signInFailed(res, "expired");
       try {
         const done = await opts.auth.microsoft.finish(url, pending);
         const r = await opts.auth.signedIn(done.user, done.tokens);
         if ("refused" in r) return signInFailed(res, r.refused);
         // A fresh session id at sign-in (never one the browser brought).
-        opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
-        return redirect(res, "/", [...startSession(r.userId, false), clearAuthCookie()]);
+        await opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
+        return redirect(res, "/", [...(await startSession(r.userId, false)), clearAuthCookie()]);
       } catch (e) {
         return signInFailed(res, e instanceof SignInError ? e.reason : "invalid");
       }
     }
     if (url.pathname === "/auth/google/login" && method === "GET") {
-      const s = session();
+      const s = (await session());
       if (!s || s.demo || !opts.auth.google) return redirect(res, "/#/settings/connections");
       try {
         const { url: to, pending } = await opts.auth.google.start(s.userId);
-        opts.accounts.authRequests.put("google", pending, s.userId);
+        await opts.accounts.authRequests.put("google", pending, s.userId);
         return redirect(res, to, [authCookie(pending.state)]);
       } catch {
         return redirect(res, "/?google=failed#/settings/connections", [clearAuthCookie()]);
       }
     }
     if (url.pathname === "/auth/google/callback" && method === "GET") {
-      const s = session();
+      const s = (await session());
       const state = url.searchParams.get("state");
-      const pending = state && same(readCookie(cookieHeader, AUTH_COOKIE), state) ? opts.accounts.authRequests.take("google", state) : null;
+      const pending = state && same(readCookie(cookieHeader, AUTH_COOKIE), state) ? await opts.accounts.authRequests.take("google", state) : null;
       // The person who started it must be the one it comes back to.
       if (!s || !opts.auth.google || !pending || pending.userId !== s.userId) return redirect(res, "/?google=expired#/settings/connections", [clearAuthCookie()]);
       const r = await opts.auth.google.finish(s.userId, url, pending).catch(() => "failed" as const);
@@ -190,17 +198,17 @@ export function createApp(opts: AppOptions) {
       if (!opts.auth.demo) return json(res, 404, { ok: false, status: 404, error: "The demo isn't available here" });
       const userId = await opts.auth.demo();
       // The demo replaces whatever session this browser had (sign in again for your own data).
-      const before = session();
-      opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
+      const before = (await session());
+      await opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
       if (before) opts.auth.ended?.(before);
       opts.log({ source: "auth", op: "demo", kind: "started" });
-      return json(res, 200, { ok: true, data: { status: "demo" } }, startSession(userId, true));
+      return json(res, 200, { ok: true, data: { status: "demo" } }, (await startSession(userId, true)));
     }
     if (url.pathname === "/auth/logout" && method === "POST") {
-      const s = session();
+      const s = (await session());
       // Without a live session there is nothing to end; the cookies are cleared either way.
       if (s && !changeAllowed(s)) return json(res, 403, { ok: false, status: 403, code: "csrf", error: "Forbidden" });
-      opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
+      await opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
       if (s) {
         opts.auth.ended?.(s);
         opts.log({ source: "auth", op: "sign_out", kind: s.demo ? "demo" : "signed_out" });
@@ -213,6 +221,14 @@ export function createApp(opts: AppOptions) {
     }
 
     // ---- API ----
+    if (url.pathname === DB_STATUS_PATH) {
+      // POST, as every /api call (the guard wants a same-origin Origin, which a browser sends on a POST).
+      if (method !== "POST") {
+        res.writeHead(405, { allow: "POST" });
+        return res.end();
+      }
+      return json(res, 200, { status: opts.dbStatus?.() ?? "ok" });
+    }
     if (url.pathname === REOPEN_PATH) {
       // The developer loop's "bring the window up": opens nothing but FocusTime's own window, at most every 5 seconds.
       if (method !== "POST") {
@@ -229,7 +245,7 @@ export function createApp(opts: AppOptions) {
         res.writeHead(405, { allow: "POST" });
         return res.end();
       }
-      const s = session();
+      const s = (await session());
       if (!s) return json(res, 401, { ok: false, status: 401, code: SIGNED_OUT_CODE, error: "Sign in to continue" }, clearSessionCookies());
       if (!changeAllowed(s)) {
         opts.log({ source: "server", op: "denied", status: 403, kind: "csrf" });

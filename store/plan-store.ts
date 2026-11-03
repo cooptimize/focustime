@@ -1,8 +1,11 @@
 // Local plan store (D23): SQLite through Node's built-in node:sqlite, under ~/.local/share/focustime/.
 // Holds only FocusTime's own plan (day plans, picks, draft stories) and a few one-time markers.
 // Nothing here is ever written to DevOps, Outlook, Google or Dataverse.
+import { USER_SCHEMA_VERSION } from "./user-data.ts";
 import type { StoreFiles } from "../host/types.ts";
 import { DatabaseSync } from "node:sqlite";
+import type { Conn } from "./sql/conn.ts";
+import { sqliteConn } from "./sql/sqlite.ts";
 import { carryOver } from "../plan/rules.ts";
 import { type ItemLevel, type Tier } from "../plan/weeklist.ts";
 import { DEFAULT_STORY_SIZE, validStorySize, validWholeBlocks, type StorySize } from "../plan/estimate.ts";
@@ -1414,7 +1417,7 @@ export function openPlanDb(opts: PlanDbOptions): DatabaseSync {
   if (opts.path !== ":memory:") opts.files?.secure(opts.path);
   db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
   db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
-  const before = schemaVersion(db);
+  const before = sqliteVersion(db);
   migrate(db, opts.now, opts.path, opts.files);
   // U3 (D388): say how many duplicate week items migration 21 removed (counts only; the rows are in dedupe_log).
   if (before < 21 && opts.log) {
@@ -1424,378 +1427,382 @@ export function openPlanDb(opts: PlanDbOptions): DatabaseSync {
   return db;
 }
 
-/** A plan store on its own database (tests, demo sessions and scripts): opened, migrated, closed with the store. */
+/** A plan store on its own SQLite database (tests, demo sessions and scripts): opened, migrated, closed with the store. */
 export function createPlanStore(opts: PlanDbOptions & { userId?: string }) {
-  return planStoreOn(openPlanDb(opts), { ...opts, userId: opts.userId ?? SOLO_USER });
+  const raw = openPlanDb(opts);
+  return planStoreOn(sqliteConn(raw), { ...opts, userId: opts.userId ?? SOLO_USER, backup: sqliteBackup(raw, opts.files) });
 }
+
+/** A copy of a SQLite store (Reset local plan's backup), 0600. */
+export const sqliteBackup = (raw: DatabaseSync, files?: StoreFiles) => async (to: string) => {
+  raw.prepare("VACUUM INTO ?").run(to);
+  files?.secure(to);
+};
 
 /** The person a store opened on its own belongs to when none is named (tests, scripts, the demo's own database). */
 export const SOLO_USER = "solo";
 
-/** The plan store on an open database. `close` closes the database (so only the database's one owner calls it). */
-export function planStoreOn(raw: DatabaseSync, opts: { now: () => Temporal.ZonedDateTime; userId: string; path?: string; files?: StoreFiles }) {
+/**
+ * The plan store on an open connection (A3: SQL Server, or SQLite for the demo). `close` closes the connection (so
+ * only its one owner calls it). `backup` (SQLite only) copies the store before Reset local plan; `path` names the copy.
+ */
+export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTime; userId: string; path?: string; backup?: (to: string) => Promise<void> }) {
   // A2: every statement below is this person's only (store/scope.ts); nothing here names user_id itself.
-  const db = scopedDb(raw, opts.userId);
+  const db = scopedDb(conn, opts.userId, () => opts.now().timeZoneId);
 
   const stamp = (): ZonedStamp => opts.now().toString({ smallestUnit: "second" });
-  const tx = <T>(fn: () => T): T => {
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      const out = fn();
-      db.exec("COMMIT");
-      return out;
-    } catch (e) {
-      db.exec("ROLLBACK");
-      throw e;
-    }
-  };
+  /** Every write runs in a transaction (joined when the caller has one open). */
+  const tx = <T>(fn: () => Promise<T>): Promise<T> => db.tx(fn);
 
   /** The week's plan row, created if missing, with its updated time moved on. */
-  const touchWeek = (weekStart: IsoDate, at: ZonedStamp) =>
-    db.prepare("INSERT INTO week_plans (week_start, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(week_start) DO UPDATE SET updated_at = excluded.updated_at").run(weekStart, at, at);
+  const touchWeek = async (weekStart: IsoDate, at: ZonedStamp) =>
+    (await db.run("INSERT INTO week_plans (week_start, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(week_start) DO UPDATE SET updated_at = excluded.updated_at", weekStart, at, at));
   /** One change to a week item: runs `change`, touches its week; returns the week it is on. */
-  const weekItemChange = (id: number, change: (at: ZonedStamp) => unknown): IsoDate =>
-    tx(() => {
-      const r = db.prepare("SELECT week_start FROM week_features WHERE id = ?").get(id) as Row | undefined;
+  const weekItemChange = (id: number, change: (at: ZonedStamp) => Promise<unknown>): Promise<IsoDate> =>
+    tx(async () => {
+      const r = (await db.get("SELECT week_start FROM week_features WHERE id = ?", id)) as Row | undefined;
       if (!r) throw new PlanError("No such item on the week plan");
       const at = stamp();
-      change(at);
-      touchWeek(r.week_start as string, at);
+      await change(at);
+      (await touchWeek(r.week_start as string, at));
       return r.week_start as string;
     });
 
-  const getPlan = (date: IsoDate) => {
-    const r = db.prepare("SELECT * FROM day_plans WHERE date = ?").get(date) as Row | undefined;
+  const getPlan = async (date: IsoDate): Promise<DayPlan | null> => {
+    const r = (await db.get("SELECT * FROM day_plans WHERE date = ?", date)) as Row | undefined;
     return r ? toPlan(r) : null;
   };
-  const ensurePlan = (date: IsoDate): DayPlan => {
+  const ensurePlan = async (date: IsoDate): Promise<DayPlan> => {
     const at = stamp();
-    db.prepare("INSERT INTO day_plans (date, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(date) DO NOTHING").run(date, at, at);
-    return getPlan(date)!;
+    (await db.run("INSERT INTO day_plans (date, committed_at, created_at, updated_at) VALUES (?, NULL, ?, ?) ON CONFLICT(date) DO NOTHING", date, at, at));
+    return (await getPlan(date))!;
   };
-  const getPick = (id: number): Pick | null => {
-    const r = db.prepare(`${PICK_SELECT} WHERE p.id = ?`).get(id) as Row | undefined;
+  const getPick = async (id: number): Promise<Pick | null> => {
+    const r = (await db.get(`${PICK_SELECT} WHERE p.id = ?`, id)) as Row | undefined;
     return r ? toPick(r) : null;
   };
-  const mustPick = (id: number): Pick => {
-    const p = getPick(id);
+  const mustPick = async (id: number): Promise<Pick> => {
+    const p = (await getPick(id));
     if (!p) throw new PlanError(`No pick ${id}`);
     return p;
   };
-  const nextPosition = (date: IsoDate, half: Half) =>
-    ((db.prepare("SELECT COALESCE(MAX(position), 0) AS m FROM picks WHERE date = ? AND half = ?").get(date, half) as Row).m as number) + 1;
+  const nextPosition = async (date: IsoDate, half: Half): Promise<number> =>
+    (((await db.get("SELECT COALESCE(MAX(position), 0) AS m FROM picks WHERE date = ? AND half = ?", date, half)) as Row).m as number) + 1;
 
-  function insertPick(p: NewPick, carriedFrom: number | null = null): Pick {
-    ensurePlan(p.date);
+  async function insertPick(p: NewPick, carriedFrom: number | null = null): Promise<Pick> {
+    (await ensurePlan(p.date));
     const at = stamp();
-    const r = db
-      .prepare(
-        `INSERT INTO picks (date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, NULL, ?, ?, ?, ?)`,
-      )
-      .run(p.date, p.half, p.clientKey, p.kind, p.itemId ?? null, p.draftId ?? null, p.title, p.itemType ?? null, p.itemUrl ?? null, p.size, carriedFrom, nextPosition(p.date, p.half), at, at, p.followUpId ?? null);
-    return getPick(Number(r.lastInsertRowid))!;
+    const r = (await db.run(`INSERT INTO picks (date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, NULL, ?, ?, ?, ?)`, p.date, p.half, p.clientKey, p.kind, p.itemId ?? null, p.draftId ?? null, p.title, p.itemType ?? null, p.itemUrl ?? null, p.size, carriedFrom, (await nextPosition(p.date, p.half)), at, at, p.followUpId ?? null));
+    return (await getPick(r.lastId!))!;
   }
 
-  const picksBetween = (from: IsoDate, to: IsoDate): Pick[] =>
-    (db.prepare(`${PICK_SELECT} WHERE p.date >= ? AND p.date <= ? ORDER BY p.date, p.half, p.position`).all(from, to) as Row[]).map(toPick);
+  const picksBetween = async (from: IsoDate, to: IsoDate): Promise<Pick[]> =>
+    ((await db.all(`${PICK_SELECT} WHERE p.date >= ? AND p.date <= ? ORDER BY p.date, p.half, p.position`, from, to)) as Row[]).map(toPick);
 
   return {
     /** Creates the day plan if missing. */
-    start: (date: IsoDate): DayPlan => ensurePlan(date),
+    start: async (date: IsoDate): Promise<DayPlan> => (await ensurePlan(date)),
     day: getPlan,
+    /** The day plans from one date to another (A3: read once for the carry-over target). */
+    dayPlansBetween: async (from: IsoDate, to: IsoDate): Promise<DayPlan[]> => ((await db.all("SELECT * FROM day_plans WHERE date >= ? AND date <= ? ORDER BY date", from, to)) as Row[]).map(toPlan),
     getPick,
     picksFor: (date: IsoDate) => picksBetween(date, date),
     picksBetween,
-    carryOverFor(today: IsoDate, days?: number, pending?: (p: Pick) => boolean): Pick[] {
+    async carryOverFor(today: IsoDate, days?: number, pending?: (p: Pick) => boolean): Promise<Pick[]> {
       const from = Temporal.PlainDate.from(today).subtract({ days: Math.max(14, days ?? 0) }).toString();
-      return carryOver(picksBetween(from, today), today, days, pending);
+      return carryOver((await picksBetween(from, today)), today, days, pending);
     },
-    addPick: (p: NewPick): Pick => tx(() => insertPick(p)),
+    addPick: async (p: NewPick): Promise<Pick> => tx(async () => (await insertPick(p))),
     /** Before the day is committed a pick is simply removed; after, it is kept as dropped. */
-    removePick(id: number): { result: "deleted" | "dropped"; pick: Pick } {
-      return tx(() => {
-        const p = mustPick(id);
-        const committed = !!getPlan(p.date)?.committedAt;
-        const referenced = db.prepare("SELECT 1 FROM picks WHERE carried_from = ?").get(id);
+    async removePick(id: number): Promise<{ result: "deleted" | "dropped"; pick: Pick }> {
+      return tx(async () => {
+        const p = (await mustPick(id));
+        const committed = !!(await getPlan(p.date))?.committedAt;
+        const referenced = (await db.get("SELECT 1 FROM picks WHERE carried_from = ?", id));
         if (!committed && !referenced && p.carriedFrom === null) {
-          db.prepare("DELETE FROM picks WHERE id = ?").run(id);
+          (await db.run("DELETE FROM picks WHERE id = ?", id));
           return { result: "deleted", pick: p };
         }
         if (p.carriedFrom !== null && !committed) {
           // Carried in this morning and dropped again: hand it back to the day it came from.
-          db.prepare("DELETE FROM picks WHERE id = ?").run(id);
-          db.prepare("UPDATE picks SET status = 'planned', updated_at = ? WHERE id = ? AND status = 'moved'").run(stamp(), p.carriedFrom);
+          (await db.run("DELETE FROM picks WHERE id = ?", id));
+          (await db.run("UPDATE picks SET status = 'planned', updated_at = ? WHERE id = ? AND status = 'moved'", stamp(), p.carriedFrom));
           return { result: "deleted", pick: p };
         }
-        db.prepare("UPDATE picks SET status = 'dropped', updated_at = ? WHERE id = ?").run(stamp(), id);
-        return { result: "dropped", pick: mustPick(id) };
+        (await db.run("UPDATE picks SET status = 'dropped', updated_at = ? WHERE id = ?", stamp(), id));
+        return { result: "dropped", pick: (await mustPick(id)) };
       });
     },
     /** Settles a planned pick as dropped and keeps it, whatever the day's commit state (past days). */
-    drop(id: number): Pick {
-      return tx(() => {
-        const p = mustPick(id);
+    async drop(id: number): Promise<Pick> {
+      return tx(async () => {
+        const p = (await mustPick(id));
         if (p.status !== "planned") throw new PlanError("Only a planned pick can be dropped");
-        db.prepare("UPDATE picks SET status = 'dropped', updated_at = ? WHERE id = ?").run(stamp(), id);
-        return mustPick(id);
+        (await db.run("UPDATE picks SET status = 'dropped', updated_at = ? WHERE id = ?", stamp(), id));
+        return (await mustPick(id));
       });
     },
-    setSize(id: number, size: Size): Pick {
-      return tx(() => {
-        mustPick(id);
-        db.prepare("UPDATE picks SET size = ?, updated_at = ? WHERE id = ?").run(size, stamp(), id);
-        return mustPick(id);
+    async setSize(id: number, size: Size): Promise<Pick> {
+      return tx(async () => {
+        (await mustPick(id));
+        (await db.run("UPDATE picks SET size = ?, updated_at = ? WHERE id = ?", size, stamp(), id));
+        return (await mustPick(id));
       });
     },
     /** Same day: change block in place. Another day: the original becomes "moved" and a new pick is carried there. */
-    move(id: number, date: IsoDate, half: Half): Pick {
-      return tx(() => {
-        const p = mustPick(id);
+    async move(id: number, date: IsoDate, half: Half): Promise<Pick> {
+      return tx(async () => {
+        const p = (await mustPick(id));
         if (p.status !== "planned") throw new PlanError("Only a planned pick can be moved");
         if (p.date === date) {
           if (p.half === half) return p;
-          db.prepare("UPDATE picks SET half = ?, position = ?, updated_at = ? WHERE id = ?").run(half, nextPosition(date, half), stamp(), id);
-          return mustPick(id);
+          (await db.run("UPDATE picks SET half = ?, position = ?, updated_at = ? WHERE id = ?", half, (await nextPosition(date, half)), stamp(), id));
+          return (await mustPick(id));
         }
-        db.prepare("UPDATE picks SET status = 'moved', updated_at = ? WHERE id = ?").run(stamp(), id);
+        (await db.run("UPDATE picks SET status = 'moved', updated_at = ? WHERE id = ?", stamp(), id));
         const base: NewPick = { date, half, clientKey: p.clientKey, kind: p.kind, title: p.title, itemType: p.itemType, itemUrl: p.itemUrl, size: p.size };
         if (p.itemId !== null) base.itemId = p.itemId;
         if (p.draftId !== null) base.draftId = p.draftId;
         if (p.followUpId !== null) base.followUpId = p.followUpId;
-        return insertPick(base, p.id);
+        return (await insertPick(base, p.id));
       });
     },
-    commit(date: IsoDate): DayPlan {
-      return tx(() => {
-        ensurePlan(date);
+    async commit(date: IsoDate): Promise<DayPlan> {
+      return tx(async () => {
+        (await ensurePlan(date));
         const at = stamp();
-        db.prepare("UPDATE day_plans SET committed_at = ?, updated_at = ? WHERE date = ?").run(at, at, date);
-        return getPlan(date)!;
+        (await db.run("UPDATE day_plans SET committed_at = ?, updated_at = ? WHERE date = ?", at, at, date));
+        return (await getPlan(date))!;
       });
     },
-    setDone(id: number, done: boolean): Pick {
-      return tx(() => {
-        const p = mustPick(id);
+    async setDone(id: number, done: boolean): Promise<Pick> {
+      return tx(async () => {
+        const p = (await mustPick(id));
         if (p.status !== "planned" && p.status !== "done") throw new PlanError("Only a planned or done pick can be ticked");
-        db.prepare("UPDATE picks SET status = ?, updated_at = ? WHERE id = ?").run(done ? "done" : "planned", stamp(), id);
+        (await db.run("UPDATE picks SET status = ?, updated_at = ? WHERE id = ?", done ? "done" : "planned", stamp(), id));
         // Step 13.5: ticking a follow-up pick done closes the loop.
-        const fu = (db.prepare("SELECT follow_up_id FROM picks WHERE id = ?").get(id) as Row).follow_up_id as number | null;
-        if (done && fu !== null) db.prepare("UPDATE follow_ups SET closed_at = ?, closed_by = 'me', outcome = 'done', close_note = COALESCE(close_note, 'Done as a pick'), snoozed_until = NULL WHERE id = ? AND closed_at IS NULL").run(stamp(), fu);
-        return mustPick(id);
+        const fu = ((await db.get("SELECT follow_up_id FROM picks WHERE id = ?", id)) as Row).follow_up_id as number | null;
+        if (done && fu !== null) (await db.run("UPDATE follow_ups SET closed_at = ?, closed_by = 'me', outcome = 'done', close_note = COALESCE(close_note, 'Done as a pick'), snoozed_until = NULL WHERE id = ? AND closed_at IS NULL", stamp(), fu));
+        return (await mustPick(id));
       });
     },
-    addDraft(d: { clientKey: string; parentItemId: number | null; title: string; size: Size; level?: "story" | "feature" }): DraftStory {
-      return tx(() => {
+    async addDraft(d: { clientKey: string; parentItemId: number | null; title: string; size: Size; level?: "story" | "feature" }): Promise<DraftStory> {
+      return tx(async () => {
         const at = stamp();
-        const r = db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, level, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(d.clientKey, d.parentItemId, d.title, d.size, d.level ?? "story", at, at);
-        return toDraft(db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
+        const r = (await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, level, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", d.clientKey, d.parentItemId, d.title, d.size, d.level ?? "story", at, at));
+        return toDraft((await db.get("SELECT * FROM draft_stories WHERE id = ?", r.lastId!)) as Row);
       });
     },
-    getDraft(id: number): DraftStory | null {
-      const r = db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row | undefined;
+    async getDraft(id: number): Promise<DraftStory | null> {
+      const r = (await db.get("SELECT * FROM draft_stories WHERE id = ?", id)) as Row | undefined;
       return r ? toDraft(r) : null;
     },
     /** Step 14.5 (D257): a parent for a draft before it is created in DevOps. Checked by the caller. */
-    setDraftParent(id: number, parentItemId: number): DraftStory {
-      return tx(() => {
-        const r = db.prepare("UPDATE draft_stories SET parent_item_id = ?, updated_at = ? WHERE id = ? AND devops_id IS NULL").run(parentItemId, stamp(), id);
+    async setDraftParent(id: number, parentItemId: number): Promise<DraftStory> {
+      return tx(async () => {
+        const r = (await db.run("UPDATE draft_stories SET parent_item_id = ?, updated_at = ? WHERE id = ? AND devops_id IS NULL", parentItemId, stamp(), id));
         if (!r.changes) throw new PlanError("No such draft, or it is already in DevOps");
-        return toDraft(db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row);
+        return toDraft((await db.get("SELECT * FROM draft_stories WHERE id = ?", id)) as Row);
       });
     },
     /** Step 15.3: the draft editor's edits (checked by the caller). A new client clears the parent; refused while a pick uses it. */
-    updateDraft(id: number, patch: DraftPatch): DraftStory {
-      return tx(() => {
-        const r = db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row | undefined;
+    async updateDraft(id: number, patch: DraftPatch): Promise<DraftStory> {
+      return tx(async () => {
+        const r = (await db.get("SELECT * FROM draft_stories WHERE id = ?", id)) as Row | undefined;
         if (!r || r.devops_id != null) throw new PlanError("No such draft, or it is already in DevOps");
         const d = toDraft(r);
         const moved = patch.clientKey !== undefined && patch.clientKey !== d.clientKey;
-        if (moved && (db.prepare("SELECT COUNT(*) AS n FROM picks WHERE draft_id = ? AND status IN ('planned','done')").get(id) as { n: number }).n > 0)
+        if (moved && ((await db.get("SELECT COUNT(*) AS n FROM picks WHERE draft_id = ? AND status IN ('planned','done')", id)) as { n: number }).n > 0)
           throw new PlanError("A pick uses this draft. Drop the pick first, then change the client");
         const n = { ...d, parentItemId: moved && patch.parentItemId === undefined ? null : d.parentItemId, ...patch };
-        db.prepare("UPDATE draft_stories SET client_key = ?, parent_item_id = ?, title = ?, size = ?, description = ?, acceptance = ?, start_date = ?, target_date = ?, updated_at = ? WHERE id = ?").run(n.clientKey, n.parentItemId, n.title, n.size, n.description ?? null, n.acceptance ?? null, n.startDate ?? null, n.targetDate ?? null, stamp(), id);
-        if (moved) db.prepare("UPDATE picks SET client_key = ? WHERE draft_id = ?").run(n.clientKey, id);
+        (await db.run("UPDATE draft_stories SET client_key = ?, parent_item_id = ?, title = ?, size = ?, description = ?, acceptance = ?, start_date = ?, target_date = ?, updated_at = ? WHERE id = ?", n.clientKey, n.parentItemId, n.title, n.size, n.description ?? null, n.acceptance ?? null, n.startDate ?? null, n.targetDate ?? null, stamp(), id));
+        if (moved) (await db.run("UPDATE picks SET client_key = ? WHERE draft_id = ?", n.clientKey, id));
         // A planned pick of the draft shows its new title.
-        if (n.title !== d.title) db.prepare("UPDATE picks SET title = ?, updated_at = ? WHERE draft_id = ? AND status = 'planned'").run(n.title, stamp(), id);
-        return toDraft(db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row);
+        if (n.title !== d.title) (await db.run("UPDATE picks SET title = ?, updated_at = ? WHERE draft_id = ? AND status = 'planned'", n.title, stamp(), id));
+        return toDraft((await db.get("SELECT * FROM draft_stories WHERE id = ?", id)) as Row);
       });
     },
     /** Step 14.5: delete a local draft no pick uses (local only; DevOps is never touched). */
-    removeDraft(id: number): void {
-      tx(() => {
-        const d = db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row | undefined;
+    async removeDraft(id: number): Promise<void> {
+      await tx(async () => {
+        const d = (await db.get("SELECT * FROM draft_stories WHERE id = ?", id)) as Row | undefined;
         if (!d) throw new PlanError("No such draft");
         if (d.devops_id != null) throw new PlanError("That draft is already in DevOps");
-        const used = db.prepare("SELECT COUNT(*) AS n FROM picks WHERE draft_id = ?").get(id) as { n: number };
+        const used = (await db.get("SELECT COUNT(*) AS n FROM picks WHERE draft_id = ?", id)) as { n: number };
         if (used.n > 0) throw new PlanError("A pick uses this draft. Drop the pick first, then delete the draft");
-        db.prepare("DELETE FROM draft_stories WHERE id = ?").run(id);
+        (await db.run("DELETE FROM draft_stories WHERE id = ?", id));
       });
     },
     /** Drafts not yet created in DevOps (step 14: a created one leaves every draft list). */
-    drafts: (): DraftStory[] => (db.prepare("SELECT * FROM draft_stories WHERE devops_id IS NULL ORDER BY id").all() as Row[]).map(toDraft),
+    drafts: async (): Promise<DraftStory[]> => ((await db.all("SELECT * FROM draft_stories WHERE devops_id IS NULL ORDER BY id")) as Row[]).map(toDraft),
     /** U6: every draft, created in DevOps or not (a week-list draft feature turns into its week item once created). */
-    allDrafts: (): DraftStory[] => (db.prepare("SELECT * FROM draft_stories ORDER BY id").all() as Row[]).map(toDraft),
+    allDrafts: async (): Promise<DraftStory[]> => ((await db.all("SELECT * FROM draft_stories ORDER BY id")) as Row[]).map(toDraft),
     /**
      * Step 14: a draft now exists in DevOps. The draft keeps its row with the new item, and its picks become item picks
      * for the new id (title, type, link), so the plan keeps them. Returns those pick ids, for undo.
      */
-    markDraftCreated(id: number, item: { itemId: number; url: string; title: string; type: string }): number[] {
-      return tx(() => {
-        const d = db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row | undefined;
+    async markDraftCreated(id: number, item: { itemId: number; url: string; title: string; type: string }): Promise<number[]> {
+      return tx(async () => {
+        const d = (await db.get("SELECT * FROM draft_stories WHERE id = ?", id)) as Row | undefined;
         if (!d) throw new PlanError("No such draft");
         if (d.devops_id != null) throw new PlanError("That draft is already in DevOps");
         const at = stamp();
-        db.prepare("UPDATE draft_stories SET devops_id = ?, devops_url = ?, updated_at = ? WHERE id = ?").run(item.itemId, item.url, at, id);
-        const picks = (db.prepare("SELECT id FROM picks WHERE draft_id = ?").all(id) as Row[]).map((r) => r.id as number);
-        db.prepare("UPDATE picks SET kind = 'item', item_id = ?, draft_id = NULL, title = ?, item_type = ?, item_url = ?, updated_at = ? WHERE draft_id = ?").run(item.itemId, item.title, item.type, item.url, at, id);
+        (await db.run("UPDATE draft_stories SET devops_id = ?, devops_url = ?, updated_at = ? WHERE id = ?", item.itemId, item.url, at, id));
+        const picks = ((await db.all("SELECT id FROM picks WHERE draft_id = ?", id)) as Row[]).map((r) => r.id as number);
+        (await db.run("UPDATE picks SET kind = 'item', item_id = ?, draft_id = NULL, title = ?, item_type = ?, item_url = ?, updated_at = ? WHERE draft_id = ?", item.itemId, item.title, item.type, item.url, at, id));
         return picks;
       });
     },
     /** Undo of a create (step 14): the draft is back, and the picks that were moved to the item point at it again. */
-    restoreDraft(id: number, pickIds: readonly number[]): void {
-      tx(() => {
-        const d = db.prepare("SELECT * FROM draft_stories WHERE id = ?").get(id) as Row | undefined;
+    async restoreDraft(id: number, pickIds: readonly number[]): Promise<void> {
+      await tx(async () => {
+        const d = (await db.get("SELECT * FROM draft_stories WHERE id = ?", id)) as Row | undefined;
         if (!d || d.devops_id == null) return;
         const at = stamp();
-        for (const p of pickIds) db.prepare("UPDATE picks SET kind = 'draft', draft_id = ?, item_id = NULL, title = ?, item_type = NULL, item_url = NULL, updated_at = ? WHERE id = ? AND item_id = ?").run(id, d.title as string, at, p, d.devops_id as number);
-        db.prepare("UPDATE draft_stories SET devops_id = NULL, devops_url = NULL, updated_at = ? WHERE id = ?").run(at, id);
+        for (const p of pickIds) (await db.run("UPDATE picks SET kind = 'draft', draft_id = ?, item_id = NULL, title = ?, item_type = NULL, item_url = NULL, updated_at = ? WHERE id = ? AND item_id = ?", id, d.title as string, at, p, d.devops_id as number));
+        (await db.run("UPDATE draft_stories SET devops_id = NULL, devops_url = NULL, updated_at = ? WHERE id = ?", at, id));
       });
     },
     // ---- DevOps write identities and the DevOps audit log (step 14) ----
-    devopsIdentity(clientKey: string): DevOpsIdentityRow | null {
-      const r = db.prepare("SELECT * FROM devops_identities WHERE client_key = ?").get(clientKey) as Row | undefined;
+    async devopsIdentity(clientKey: string): Promise<DevOpsIdentityRow | null> {
+      const r = (await db.get("SELECT * FROM devops_identities WHERE client_key = ?", clientKey)) as Row | undefined;
       return r ? toIdentity(r) : null;
     },
-    devopsIdentities: (): DevOpsIdentityRow[] => (db.prepare("SELECT * FROM devops_identities ORDER BY client_key").all() as Row[]).map(toIdentity),
-    setDevopsIdentity(i: Omit<DevOpsIdentityRow, "validatedAt">): DevOpsIdentityRow {
-      db.prepare(
-        `INSERT INTO devops_identities (client_key, org, identity_id, name, email, validated_at, expires) VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(client_key) DO UPDATE SET org = excluded.org, identity_id = excluded.identity_id, name = excluded.name, email = excluded.email, validated_at = excluded.validated_at, expires = excluded.expires`,
-      ).run(i.clientKey, i.org, i.id, i.name, i.email, stamp(), i.expires);
-      return this.devopsIdentity(i.clientKey)!;
+    devopsIdentities: async (): Promise<DevOpsIdentityRow[]> => ((await db.all("SELECT * FROM devops_identities ORDER BY client_key")) as Row[]).map(toIdentity),
+    async setDevopsIdentity(i: Omit<DevOpsIdentityRow, "validatedAt">): Promise<DevOpsIdentityRow> {
+      return tx(async () => {
+        (await db.run(`INSERT INTO devops_identities (client_key, org, identity_id, name, email, validated_at, expires) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(client_key) DO UPDATE SET org = excluded.org, identity_id = excluded.identity_id, name = excluded.name, email = excluded.email, validated_at = excluded.validated_at, expires = excluded.expires`, i.clientKey, i.org, i.id, i.name, i.email, stamp(), i.expires));
+        return (await this.devopsIdentity(i.clientKey))!;
+      });
     },
-    clearDevopsIdentity(clientKey: string): void {
-      db.prepare("DELETE FROM devops_identities WHERE client_key = ?").run(clientKey);
+    async clearDevopsIdentity(clientKey: string): Promise<void> {
+      (await db.run("DELETE FROM devops_identities WHERE client_key = ?", clientKey));
     },
-    logDevopsWrite(w: NewDevOpsWrite): DevOpsWriteEntry {
-      const at = stamp();
-      const r = db
-        .prepare(
-          `INSERT INTO devops_write_log (at, client_key, org, project, op, item_id, parent_id, title, identity, before, after, ops, rev_before, rev_after, comment_id, draft_id, pick_ids, follow_up_id, status, message, undo_of, undone_by, attempts, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, NULL, 1, ?)`,
-        )
-        .run(at, w.clientKey, w.org, w.project, w.op, w.itemId, w.parentId, w.title, w.identity, JSON.stringify(w.before), JSON.stringify(w.after), w.ops ? JSON.stringify(w.ops) : null, w.revBefore, w.revAfter, w.commentId, w.draftId, JSON.stringify(w.pickIds ?? []), w.followUpId, w.undoOf, at);
-      return this.devopsWrite(Number(r.lastInsertRowid))!;
+    async logDevopsWrite(w: NewDevOpsWrite): Promise<DevOpsWriteEntry> {
+      return tx(async () => {
+        const at = stamp();
+        const r = (await db.run(`INSERT INTO devops_write_log (at, client_key, org, project, op, item_id, parent_id, title, identity, before, after, ops, rev_before, rev_after, comment_id, draft_id, pick_ids, follow_up_id, status, message, undo_of, undone_by, attempts, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, NULL, 1, ?)`, at, w.clientKey, w.org, w.project, w.op, w.itemId, w.parentId, w.title, w.identity, JSON.stringify(w.before), JSON.stringify(w.after), w.ops ? JSON.stringify(w.ops) : null, w.revBefore, w.revAfter, w.commentId, w.draftId, JSON.stringify(w.pickIds ?? []), w.followUpId, w.undoOf, at));
+        return (await this.devopsWrite(r.lastId!))!;
+      });
     },
-    devopsWrite(id: number): DevOpsWriteEntry | null {
-      const r = db.prepare("SELECT * FROM devops_write_log WHERE id = ?").get(id) as Row | undefined;
+    async devopsWrite(id: number): Promise<DevOpsWriteEntry | null> {
+      const r = (await db.get("SELECT * FROM devops_write_log WHERE id = ?", id)) as Row | undefined;
       return r ? toDevopsWrite(r) : null;
     },
-    settleDevopsWrite(id: number, s: { status: DevOpsWriteEntry["status"]; message?: string | null; itemId?: number | null; revBefore?: number | null; revAfter?: number | null; commentId?: number | null; before?: Record<string, string | null>; pickIds?: number[]; retry?: boolean }): DevOpsWriteEntry {
-      const w = this.devopsWrite(id);
-      if (!w) throw new PlanError("No such write");
-      db.prepare("UPDATE devops_write_log SET status = ?, message = ?, item_id = ?, rev_before = ?, rev_after = ?, comment_id = ?, before = ?, pick_ids = ?, attempts = attempts + ?, updated_at = ? WHERE id = ?").run(
-        s.status, s.message ?? null, s.itemId === undefined ? w.itemId : s.itemId, s.revBefore === undefined ? w.revBefore : s.revBefore, s.revAfter === undefined ? w.revAfter : s.revAfter,
-        s.commentId === undefined ? w.commentId : s.commentId, JSON.stringify(s.before ?? w.before), JSON.stringify(s.pickIds ?? w.pickIds), s.retry ? 1 : 0, stamp(), id,
-      );
-      return this.devopsWrite(id)!;
+    async settleDevopsWrite(id: number, s: { status: DevOpsWriteEntry["status"]; message?: string | null; itemId?: number | null; revBefore?: number | null; revAfter?: number | null; commentId?: number | null; before?: Record<string, string | null>; pickIds?: number[]; retry?: boolean }): Promise<DevOpsWriteEntry> {
+      return tx(async () => {
+        const w = (await this.devopsWrite(id));
+        if (!w) throw new PlanError("No such write");
+        (await db.run("UPDATE devops_write_log SET status = ?, message = ?, item_id = ?, rev_before = ?, rev_after = ?, comment_id = ?, before = ?, pick_ids = ?, attempts = attempts + ?, updated_at = ? WHERE id = ?", s.status, s.message ?? null, s.itemId === undefined ? w.itemId : s.itemId, s.revBefore === undefined ? w.revBefore : s.revBefore, s.revAfter === undefined ? w.revAfter : s.revAfter,
+          s.commentId === undefined ? w.commentId : s.commentId, JSON.stringify(s.before ?? w.before), JSON.stringify(s.pickIds ?? w.pickIds), s.retry ? 1 : 0, stamp(), id,));
+        return (await this.devopsWrite(id))!;
+      });
     },
-    markDevopsUndone(id: number, by: number): void {
-      db.prepare("UPDATE devops_write_log SET undone_by = ?, updated_at = ? WHERE id = ?").run(by, stamp(), id);
+    async markDevopsUndone(id: number, by: number): Promise<void> {
+      (await db.run("UPDATE devops_write_log SET undone_by = ?, updated_at = ? WHERE id = ?", by, stamp(), id));
     },
-    devopsWriteLog(limit = 100): DevOpsWriteEntry[] {
-      return (db.prepare("SELECT * FROM devops_write_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toDevopsWrite);
+    async devopsWriteLog(limit = 100): Promise<DevOpsWriteEntry[]> {
+      return ((await db.all("SELECT * FROM devops_write_log ORDER BY id DESC LIMIT ?", limit)) as Row[]).map(toDevopsWrite);
     },
     // ---- unavailable time and flex sessions (step 6b) ----
-    unavailableBetween: (from: IsoDate, to: IsoDate): Unavailable[] =>
-      (db.prepare("SELECT * FROM unavailable WHERE date >= ? AND date <= ? ORDER BY date, start_at, id").all(from, to) as Row[]).map(toUnavailable),
-    addUnavailable(u: NewUnavailable): Unavailable {
-      const at = stamp();
-      const r = db.prepare("INSERT INTO unavailable (date, title, start_at, end_at, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(u.date, u.title, u.start, u.end, u.note ?? null, at, at);
-      return toUnavailable(db.prepare("SELECT * FROM unavailable WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
+    unavailableBetween: async (from: IsoDate, to: IsoDate): Promise<Unavailable[]> =>
+      ((await db.all("SELECT * FROM unavailable WHERE date >= ? AND date <= ? ORDER BY date, start_at, id", from, to)) as Row[]).map(toUnavailable),
+    async addUnavailable(u: NewUnavailable): Promise<Unavailable> {
+      return tx(async () => {
+        const at = stamp();
+        const r = (await db.run("INSERT INTO unavailable (date, title, start_at, end_at, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", u.date, u.title, u.start, u.end, u.note ?? null, at, at));
+        return toUnavailable((await db.get("SELECT * FROM unavailable WHERE id = ?", r.lastId!)) as Row);
+      });
     },
-    getUnavailable(id: number): Unavailable | null {
-      const r = db.prepare("SELECT * FROM unavailable WHERE id = ?").get(id) as Row | undefined;
+    async getUnavailable(id: number): Promise<Unavailable | null> {
+      const r = (await db.get("SELECT * FROM unavailable WHERE id = ?", id)) as Row | undefined;
       return r ? toUnavailable(r) : null;
     },
-    removeUnavailable(id: number): boolean {
-      return Number(db.prepare("DELETE FROM unavailable WHERE id = ?").run(id).changes) === 1;
+    async removeUnavailable(id: number): Promise<boolean> {
+      return Number((await db.run("DELETE FROM unavailable WHERE id = ?", id)).changes) === 1;
     },
-    flexBetween: (from: IsoDate, to: IsoDate): FlexSession[] =>
-      (db.prepare("SELECT * FROM flex_sessions WHERE date >= ? AND date <= ? ORDER BY date, start_at, id").all(from, to) as Row[]).map(toFlex),
-    addFlex(f: NewFlex): FlexSession {
-      const at = stamp();
-      const r = db
-        .prepare("INSERT INTO flex_sessions (date, client_key, start_at, end_at, item_id, item_title, item_url, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(f.date, f.clientKey, f.start, f.end, f.itemId ?? null, f.itemTitle ?? null, f.itemUrl ?? null, f.note ?? null, at, at);
-      return toFlex(db.prepare("SELECT * FROM flex_sessions WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
+    flexBetween: async (from: IsoDate, to: IsoDate): Promise<FlexSession[]> =>
+      ((await db.all("SELECT * FROM flex_sessions WHERE date >= ? AND date <= ? ORDER BY date, start_at, id", from, to)) as Row[]).map(toFlex),
+    /** Flex sessions in a range with the date each is on (A3: read once where a plain rule asks about several days). */
+    flexDays: async (from: IsoDate, to: IsoDate): Promise<{ date: IsoDate; flex: FlexSession }[]> =>
+      ((await db.all("SELECT * FROM flex_sessions WHERE date >= ? AND date <= ? ORDER BY date, start_at, id", from, to)) as Row[]).map((r) => ({ date: r.date as string, flex: toFlex(r) })),
+    async addFlex(f: NewFlex): Promise<FlexSession> {
+      return tx(async () => {
+        const at = stamp();
+        const r = (await db.run("INSERT INTO flex_sessions (date, client_key, start_at, end_at, item_id, item_title, item_url, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", f.date, f.clientKey, f.start, f.end, f.itemId ?? null, f.itemTitle ?? null, f.itemUrl ?? null, f.note ?? null, at, at));
+        return toFlex((await db.get("SELECT * FROM flex_sessions WHERE id = ?", r.lastId!)) as Row);
+      });
     },
-    getFlex(id: number): FlexSession | null {
-      const r = db.prepare("SELECT * FROM flex_sessions WHERE id = ?").get(id) as Row | undefined;
+    async getFlex(id: number): Promise<FlexSession | null> {
+      const r = (await db.get("SELECT * FROM flex_sessions WHERE id = ?", id)) as Row | undefined;
       return r ? toFlex(r) : null;
     },
     /** Removes a flex session that hasn't ended; an ended one has opened its follow-up and stays. */
-    removeFlex(id: number): boolean {
-      return tx(() => {
-        if (db.prepare("SELECT 1 FROM follow_ups WHERE source_kind = 'flex' AND source_id = ?").get(id)) throw new PlanError("This flex session has ended and opened its update follow-up; it stays");
-        return Number(db.prepare("DELETE FROM flex_sessions WHERE id = ?").run(id).changes) === 1;
+    async removeFlex(id: number): Promise<boolean> {
+      return tx(async () => {
+        if ((await db.get("SELECT 1 FROM follow_ups WHERE source_kind = 'flex' AND source_id = ?", id))) throw new PlanError("This flex session has ended and opened its update follow-up; it stays");
+        return Number((await db.run("DELETE FROM flex_sessions WHERE id = ?", id)).changes) === 1;
       });
     },
     /**
      * After a flex session ends, a "post the update to <client>" follow-up opens once (D126). Called on reads; returns
      * the follow-ups it opened. The follow-ups UI comes later; the rows are kept until then.
      */
-    openFlexFollowUps(now: Temporal.Instant): FollowUp[] {
-      return tx(() => {
-        const rows = db.prepare("SELECT f.* FROM flex_sessions f LEFT JOIN follow_ups l ON l.source_kind = 'flex' AND l.source_id = f.id WHERE l.id IS NULL").all() as Row[];
+    async openFlexFollowUps(now: Temporal.Instant): Promise<FollowUp[]> {
+      return tx(async () => {
+        const rows = (await db.all("SELECT f.* FROM flex_sessions f LEFT JOIN follow_ups l ON l.source_kind = 'flex' AND l.source_id = f.id WHERE l.id IS NULL")) as Row[];
         const opened: FollowUp[] = [];
         for (const f of rows.map(toFlex)) {
           if (Temporal.Instant.compare(Temporal.Instant.from(f.end), now) > 0) continue;
           const what = `Post the update to ${f.clientKey}${f.itemTitle ? ` on ${f.itemTitle}` : ""} after the flex session`;
-          const r = db.prepare("INSERT INTO follow_ups (kind, client_key, what, source_kind, source_id, opened_at) VALUES ('flex_update', ?, ?, 'flex', ?, ?)").run(f.clientKey, what, f.id, stamp());
-          opened.push(toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(Number(r.lastInsertRowid)) as Row));
+          const r = (await db.run("INSERT INTO follow_ups (kind, client_key, what, source_kind, source_id, opened_at) VALUES ('flex_update', ?, ?, 'flex', ?, ?)", f.clientKey, what, f.id, stamp()));
+          opened.push(toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", r.lastId!)) as Row));
         }
         return opened;
       });
     },
-    openFollowUps: (): FollowUp[] => (db.prepare("SELECT * FROM follow_ups WHERE closed_at IS NULL ORDER BY opened_at, id").all() as Row[]).map(toFollowUp),
+    openFollowUps: async (): Promise<FollowUp[]> => ((await db.all("SELECT * FROM follow_ups WHERE closed_at IS NULL ORDER BY opened_at, id")) as Row[]).map(toFollowUp),
     /** Every follow-up, open first (step 6c follow-ups list). */
-    allFollowUps: (): FollowUp[] => (db.prepare("SELECT * FROM follow_ups ORDER BY closed_at IS NOT NULL, opened_at, id").all() as Row[]).map(toFollowUp),
+    allFollowUps: async (): Promise<FollowUp[]> => ((await db.all("SELECT * FROM follow_ups ORDER BY CASE WHEN closed_at IS NULL THEN 0 ELSE 1 END, opened_at, id")) as Row[]).map(toFollowUp),
     /**
      * Closes an open follow-up: "Close the loop" by hand (optional how and note), by a signal with its reason, or
      * "Not needed" (closed quietly, not counted as done).
      */
-    closeFollowUp(id: number, note: string | null, by: "me" | "signal" = "me", o: { how?: CloseHow | null; outcome?: "done" | "not_needed" } = {}): FollowUp {
-      return tx(() => {
-        const r = db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row | undefined;
+    async closeFollowUp(id: number, note: string | null, by: "me" | "signal" = "me", o: { how?: CloseHow | null; outcome?: "done" | "not_needed" } = {}): Promise<FollowUp> {
+      return tx(async () => {
+        const r = (await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row | undefined;
         if (!r) throw new PlanError(`No follow-up ${id}`);
         if (r.closed_at) throw new PlanError("That follow-up is already closed");
-        db.prepare("UPDATE follow_ups SET closed_at = ?, close_note = ?, closed_by = ?, outcome = ?, close_how = ?, snoozed_until = NULL WHERE id = ?").run(stamp(), note, by, o.outcome ?? "done", o.how ?? null, id);
-        return toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row);
+        (await db.run("UPDATE follow_ups SET closed_at = ?, close_note = ?, closed_by = ?, outcome = ?, close_how = ?, snoozed_until = NULL WHERE id = ?", stamp(), note, by, o.outcome ?? "done", o.how ?? null, id));
+        return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row);
       });
     },
     /** Hidden from lists until that day (null wakes it now). */
-    snoozeFollowUp(id: number, until: IsoDate | null): FollowUp {
-      const r = db.prepare("UPDATE follow_ups SET snoozed_until = ? WHERE id = ? AND closed_at IS NULL").run(until, id);
-      if (!Number(r.changes)) throw new PlanError(db.prepare("SELECT 1 FROM follow_ups WHERE id = ?").get(id) ? "That follow-up is already closed" : `No follow-up ${id}`);
-      return toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row);
+    async snoozeFollowUp(id: number, until: IsoDate | null): Promise<FollowUp> {
+      return tx(async () => {
+        const r = (await db.run("UPDATE follow_ups SET snoozed_until = ? WHERE id = ? AND closed_at IS NULL", until, id));
+        if (!Number(r.changes)) throw new PlanError((await db.get("SELECT 1 FROM follow_ups WHERE id = ?", id)) ? "That follow-up is already closed" : `No follow-up ${id}`);
+        return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row);
+      });
     },
     /** Only follow-ups I added (by hand or from a capture); a rule's follow-up is closed as Not needed instead. */
-    deleteFollowUp(id: number): void {
-      tx(() => {
-        const r = db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row | undefined;
+    async deleteFollowUp(id: number): Promise<void> {
+      await tx(async () => {
+        const r = (await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row | undefined;
         if (!r) throw new PlanError(`No follow-up ${id}`);
         if (!toFollowUp(r).byHand) throw new PlanError("FocusTime opened this one; use Not needed instead");
-        db.prepare("UPDATE picks SET follow_up_id = NULL WHERE follow_up_id = ?").run(id);
-        db.prepare("UPDATE captures SET routed_id = NULL WHERE routed_as = 'follow_up' AND routed_id = ?").run(id);
-        db.prepare("DELETE FROM follow_ups WHERE id = ?").run(id);
+        (await db.run("UPDATE picks SET follow_up_id = NULL WHERE follow_up_id = ?", id));
+        (await db.run("UPDATE captures SET routed_id = NULL WHERE routed_as = 'follow_up' AND routed_id = ?", id));
+        (await db.run("DELETE FROM follow_ups WHERE id = ?", id));
       });
     },
     /** Edits client, who, what, channel and due of an open follow-up. */
-    editFollowUp(id: number, patch: Partial<FollowUpFields>): FollowUp {
-      return tx(() => {
-        const r = db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row | undefined;
+    async editFollowUp(id: number, patch: Partial<FollowUpFields>): Promise<FollowUp> {
+      return tx(async () => {
+        const r = (await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row | undefined;
         if (!r) throw new PlanError(`No follow-up ${id}`);
         const f = toFollowUp(r);
         if (f.closedAt) throw new PlanError("That follow-up is already closed");
@@ -1804,244 +1811,272 @@ export function planStoreOn(raw: DatabaseSync, opts: { now: () => Temporal.Zoned
         const n = { clientKey: f.clientKey, who: f.who, what: f.what, channel: f.channel, due: f.due, itemId: moved ? null : f.itemId, ...patch };
         if (!n.what.trim()) throw new PlanError("Say what you owe");
         if (n.itemId && !n.clientKey) throw new PlanError("A work item needs the client it belongs to");
-        db.prepare("UPDATE follow_ups SET client_key = ?, who = ?, what = ?, channel = ?, due = ?, item_id = ? WHERE id = ?").run(n.clientKey, n.who, n.what, n.channel, n.due, n.itemId, id);
-        return toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row);
+        (await db.run("UPDATE follow_ups SET client_key = ?, who = ?, what = ?, channel = ?, due = ?, item_id = ? WHERE id = ?", n.clientKey, n.who, n.what, n.channel, n.due, n.itemId, id));
+        return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row);
       });
     },
-    getFollowUp(id: number): FollowUp | null {
-      const r = db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(id) as Row | undefined;
+    async getFollowUp(id: number): Promise<FollowUp | null> {
+      const r = (await db.get("SELECT * FROM follow_ups WHERE id = ?", id)) as Row | undefined;
       return r ? toFollowUp(r) : null;
     },
     /** Opens a rule's follow-up once per rule key (step 7). Null when that key already has a follow-up, open or closed. */
-    openRuleFollowUp(l: NewRuleFollowUp): FollowUp | null {
-      const r = db
-        .prepare("INSERT INTO follow_ups (kind, client_key, who, what, item_id, rule_key, ref_at, draft, detail, origin, opened_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(rule_key) DO NOTHING")
-        .run(l.kind, l.clientKey, l.who, l.what, l.itemId ?? null, l.ruleKey, l.refAt ?? null, l.draft ?? null, l.detail ? JSON.stringify(l.detail) : null, l.origin ? JSON.stringify(l.origin) : null, stamp());
-      return Number(r.changes) === 1 ? toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(Number(r.lastInsertRowid)) as Row) : null;
+    async openRuleFollowUp(l: NewRuleFollowUp): Promise<FollowUp | null> {
+      return tx(async () => {
+        const r = (await db.run("INSERT INTO follow_ups (kind, client_key, who, what, item_id, rule_key, ref_at, draft, detail, origin, opened_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(rule_key) DO NOTHING", l.kind, l.clientKey, l.who, l.what, l.itemId ?? null, l.ruleKey, l.refAt ?? null, l.draft ?? null, l.detail ? JSON.stringify(l.detail) : null, l.origin ? JSON.stringify(l.origin) : null, stamp()));
+        return Number(r.changes) === 1 ? toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", r.lastId!)) as Row) : null;
+      });
     },
     /** A slip follow-up that is still open takes more slipped picks: its draft and the picks it covers. */
-    updateFollowUpDraft(id: number, what: string, draft: string, detail: { picks: number[] }, origin?: FollowUpOrigin | null): void {
-      db.prepare("UPDATE follow_ups SET what = ?, draft = ?, detail = ?, origin = COALESCE(?, origin) WHERE id = ? AND closed_at IS NULL").run(what, draft, JSON.stringify(detail), origin ? JSON.stringify(origin) : null, id);
+    async updateFollowUpDraft(id: number, what: string, draft: string, detail: { picks: number[] }, origin?: FollowUpOrigin | null): Promise<void> {
+      (await db.run("UPDATE follow_ups SET what = ?, draft = ?, detail = ?, origin = COALESCE(?, origin) WHERE id = ? AND closed_at IS NULL", what, draft, JSON.stringify(detail), origin ? JSON.stringify(origin) : null, id));
     },
     /** A follow-up added by hand: who, what, optional due date. */
     // ---- quick capture (step 9) ----
     /** Saves a capture to the inbox: the plan store only, so it works with every source offline. */
-    addCapture(c: { text: string; clientKey: string | null }): Capture {
-      const text = c.text.trim();
-      if (!text) throw new PlanError("Type something to capture");
-      if (text.length > MAX_CAPTURE) throw new PlanError(`A capture is at most ${MAX_CAPTURE} characters`);
-      const r = db.prepare("INSERT INTO captures (text, client_key, created_at) VALUES (?, ?, ?)").run(text, c.clientKey, stamp());
-      return toCapture(db.prepare("SELECT * FROM captures WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
+    async addCapture(c: { text: string; clientKey: string | null }): Promise<Capture> {
+      return tx(async () => {
+        const text = c.text.trim();
+        if (!text) throw new PlanError("Type something to capture");
+        if (text.length > MAX_CAPTURE) throw new PlanError(`A capture is at most ${MAX_CAPTURE} characters`);
+        const r = (await db.run("INSERT INTO captures (text, client_key, created_at) VALUES (?, ?, ?)", text, c.clientKey, stamp()));
+        return toCapture((await db.get("SELECT * FROM captures WHERE id = ?", r.lastId!)) as Row);
+      });
     },
-    getCapture(id: number): Capture | null {
-      const r = db.prepare("SELECT * FROM captures WHERE id = ?").get(id) as Row | undefined;
+    async getCapture(id: number): Promise<Capture | null> {
+      const r = (await db.get("SELECT * FROM captures WHERE id = ?", id)) as Row | undefined;
       return r ? toCapture(r) : null;
     },
     /** Captures not routed yet, newest first. */
-    inbox: (): Capture[] => (db.prepare("SELECT * FROM captures WHERE routed_at IS NULL ORDER BY id DESC").all() as Row[]).map(toCapture),
-    inboxCount: (): number => (db.prepare("SELECT COUNT(*) AS n FROM captures WHERE routed_at IS NULL").get() as Row).n as number,
+    inbox: async (): Promise<Capture[]> => ((await db.all("SELECT * FROM captures WHERE routed_at IS NULL ORDER BY id DESC")) as Row[]).map(toCapture),
+    inboxCount: async (): Promise<number> => ((await db.get("SELECT COUNT(*) AS n FROM captures WHERE routed_at IS NULL")) as Row).n as number,
     /** Routes a capture once: makes the follow-up, draft story or note and marks the capture, in one transaction. */
-    routeCapture(id: number, r: CaptureRoute): Capture {
-      return tx(() => {
-        const c = db.prepare("SELECT * FROM captures WHERE id = ?").get(id) as Row | undefined;
+    async routeCapture(id: number, r: CaptureRoute): Promise<Capture> {
+      return tx(async () => {
+        const c = (await db.get("SELECT * FROM captures WHERE id = ?", id)) as Row | undefined;
         if (!c) throw new PlanError("No such capture");
         if (c.routed_at) throw new PlanError("That capture is already sorted");
         const at = stamp();
         let routedId: number | null = null;
         if (r.as === "follow_up") {
           if (!r.what.trim()) throw new PlanError("A follow-up needs what you owe");
-          routedId = Number(db.prepare("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, item_id, opened_at) VALUES ('capture', ?, ?, ?, ?, ?, ?, ?)").run(r.clientKey, r.who.trim() || null, r.what.trim(), r.due, r.channel ?? null, r.clientKey ? (r.itemId ?? null) : null, at).lastInsertRowid);
+          routedId = Number((await db.run("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, item_id, opened_at) VALUES ('capture', ?, ?, ?, ?, ?, ?, ?)", r.clientKey, r.who.trim() || null, r.what.trim(), r.due, r.channel ?? null, r.clientKey ? (r.itemId ?? null) : null, at)).lastId);
         } else if (r.as === "draft") {
           if (!r.title.trim()) throw new PlanError("A draft story needs a title");
-          routedId = Number(db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(r.clientKey, r.parentItemId, r.title.trim(), r.size, at, at).lastInsertRowid);
+          routedId = Number((await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", r.clientKey, r.parentItemId, r.title.trim(), r.size, at, at)).lastId);
         } else if (r.as === "draft_feature") {
           if (!r.title.trim()) throw new PlanError("A draft feature needs a title");
-          routedId = Number(db.prepare("INSERT INTO draft_stories (client_key, parent_item_id, title, size, level, target_date, created_at, updated_at) VALUES (?, ?, ?, 'M', 'feature', ?, ?, ?)").run(r.clientKey, r.parentItemId, r.title.trim(), r.targetDate ?? null, at, at).lastInsertRowid);
+          routedId = Number((await db.run("INSERT INTO draft_stories (client_key, parent_item_id, title, size, level, target_date, created_at, updated_at) VALUES (?, ?, ?, 'M', 'feature', ?, ?, ?)", r.clientKey, r.parentItemId, r.title.trim(), r.targetDate ?? null, at, at)).lastId);
         }
-        db.prepare("UPDATE captures SET routed_at = ?, routed_as = ?, routed_id = ? WHERE id = ?").run(at, r.as, routedId, id);
-        return toCapture(db.prepare("SELECT * FROM captures WHERE id = ?").get(id) as Row);
+        (await db.run("UPDATE captures SET routed_at = ?, routed_as = ?, routed_id = ? WHERE id = ?", at, r.as, routedId, id));
+        return toCapture((await db.get("SELECT * FROM captures WHERE id = ?", id)) as Row);
       });
     },
-    addFollowUp(l: { who: string | null; what: string; due: IsoDate | null; clientKey?: string | null; channel?: string | null; itemId?: number | null }): FollowUp {
-      const r = db.prepare("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, item_id, opened_at) VALUES ('manual', ?, ?, ?, ?, ?, ?, ?)").run(l.clientKey ?? null, l.who || null, l.what, l.due, l.channel ?? null, l.itemId ?? null, stamp());
-      return toFollowUp(db.prepare("SELECT * FROM follow_ups WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
+    async addFollowUp(l: { who: string | null; what: string; due: IsoDate | null; clientKey?: string | null; channel?: string | null; itemId?: number | null }): Promise<FollowUp> {
+      return tx(async () => {
+        const r = (await db.run("INSERT INTO follow_ups (kind, client_key, who, what, due, channel, item_id, opened_at) VALUES ('manual', ?, ?, ?, ?, ?, ?, ?)", l.clientKey ?? null, l.who || null, l.what, l.due, l.channel ?? null, l.itemId ?? null, stamp()));
+        return toFollowUp((await db.get("SELECT * FROM follow_ups WHERE id = ?", r.lastId!)) as Row);
+      });
     },
     // ---- Close out, resume notes and borrowed time (step 7) ----
     /** Marks Close out done for a day (creating the day plan if there is none). */
-    closeOut(date: IsoDate): DayPlan {
-      return tx(() => {
-        ensurePlan(date);
+    async closeOut(date: IsoDate): Promise<DayPlan> {
+      return tx(async () => {
+        (await ensurePlan(date));
         const at = stamp();
-        db.prepare("UPDATE day_plans SET closed_out_at = ?, updated_at = ? WHERE date = ?").run(at, at, date);
-        return getPlan(date)!;
+        (await db.run("UPDATE day_plans SET closed_out_at = ?, updated_at = ? WHERE date = ?", at, at, date));
+        return (await getPlan(date))!;
       });
     },
     /** One note per client and day: writing again the same day replaces it; an empty note removes that day's. */
-    setResumeNote(clientKey: string, date: IsoDate, note: string): ResumeNote | null {
-      if (!note) {
-        db.prepare("DELETE FROM resume_notes WHERE client_key = ? AND date = ?").run(clientKey, date);
-        return null;
-      }
-      const at = stamp();
-      db.prepare("INSERT INTO resume_notes (client_key, date, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(client_key, date) DO UPDATE SET note = excluded.note, updated_at = excluded.updated_at").run(clientKey, date, note, at, at);
-      return toNote(db.prepare("SELECT * FROM resume_notes WHERE client_key = ? AND date = ?").get(clientKey, date) as Row);
+    async setResumeNote(clientKey: string, date: IsoDate, note: string): Promise<ResumeNote | null> {
+      return tx(async () => {
+        if (!note) {
+          (await db.run("DELETE FROM resume_notes WHERE client_key = ? AND date = ?", clientKey, date));
+          return null;
+        }
+        const at = stamp();
+        (await db.run("INSERT INTO resume_notes (client_key, date, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(client_key, date) DO UPDATE SET note = excluded.note, updated_at = excluded.updated_at", clientKey, date, note, at, at));
+        return toNote((await db.get("SELECT * FROM resume_notes WHERE client_key = ? AND date = ?", clientKey, date)) as Row);
+      });
     },
     /** The latest note per client (on or before `upTo` when given): the one that wins. */
-    latestNotes(upTo?: IsoDate): Record<string, ResumeNote> {
-      const rows = (db.prepare("SELECT * FROM resume_notes WHERE date <= ? ORDER BY date, updated_at, id").all(upTo ?? "9999-12-31") as Row[]).map(toNote);
+    async latestNotes(upTo?: IsoDate): Promise<Record<string, ResumeNote>> {
+      const rows = ((await db.all("SELECT * FROM resume_notes WHERE date <= ? ORDER BY date, updated_at, id", upTo ?? "9999-12-31")) as Row[]).map(toNote);
       return Object.fromEntries(rows.map((n) => [n.clientKey, n]));
     },
-    notesOn: (date: IsoDate): ResumeNote[] => (db.prepare("SELECT * FROM resume_notes WHERE date = ? ORDER BY client_key").all(date) as Row[]).map(toNote),
-    noteHistory: (clientKey: string): ResumeNote[] => (db.prepare("SELECT * FROM resume_notes WHERE client_key = ? ORDER BY date DESC").all(clientKey) as Row[]).map(toNote),
+    notesOn: async (date: IsoDate): Promise<ResumeNote[]> => ((await db.all("SELECT * FROM resume_notes WHERE date = ? ORDER BY client_key", date)) as Row[]).map(toNote),
+    noteHistory: async (clientKey: string): Promise<ResumeNote[]> => ((await db.all("SELECT * FROM resume_notes WHERE client_key = ? ORDER BY date DESC", clientKey)) as Row[]).map(toNote),
     /**
      * "I'll make it up": the pick moves to the payback day and slot, and borrowed time is recorded against the
      * moved pick, in one transaction.
      */
-    makeUp(id: number, to: { date: IsoDate; half: Half }, b: { minutes: number; payback: Borrowed["payback"] }): { pick: Pick; borrowed: Borrowed } {
-      return tx(() => {
-        const p = mustPick(id);
+    async makeUp(id: number, to: { date: IsoDate; half: Half }, b: { minutes: number; payback: Borrowed["payback"] }): Promise<{ pick: Pick; borrowed: Borrowed }> {
+      return tx(async () => {
+        const p = (await mustPick(id));
         if (p.status !== "planned") throw new PlanError("Only a planned pick can be made up");
         if (p.date === to.date && p.half === to.half) throw new PlanError("That is where the pick already is");
         let moved: Pick;
         if (p.date === to.date) {
-          db.prepare("UPDATE picks SET half = ?, position = ?, updated_at = ? WHERE id = ?").run(to.half, nextPosition(to.date, to.half), stamp(), id);
-          moved = mustPick(id);
+          (await db.run("UPDATE picks SET half = ?, position = ?, updated_at = ? WHERE id = ?", to.half, (await nextPosition(to.date, to.half)), stamp(), id));
+          moved = (await mustPick(id));
         } else {
-          db.prepare("UPDATE picks SET status = 'moved', updated_at = ? WHERE id = ?").run(stamp(), id);
+          (await db.run("UPDATE picks SET status = 'moved', updated_at = ? WHERE id = ?", stamp(), id));
           const base: NewPick = { date: to.date, half: to.half, clientKey: p.clientKey, kind: p.kind, title: p.title, itemType: p.itemType, itemUrl: p.itemUrl, size: p.size };
           if (p.itemId !== null) base.itemId = p.itemId;
           if (p.draftId !== null) base.draftId = p.draftId;
           if (p.followUpId !== null) base.followUpId = p.followUpId;
-          moved = insertPick(base, p.id);
+          moved = (await insertPick(base, p.id));
         }
-        const r = db
-          .prepare("INSERT INTO borrowed (pick_id, from_pick_id, client_key, title, date, minutes, payback, payback_date, payback_half, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .run(moved.id, p.id, p.clientKey, p.title, p.date, b.minutes, b.payback, to.date, to.half, stamp());
-        return { pick: moved, borrowed: toBorrowed(db.prepare("SELECT * FROM borrowed WHERE id = ?").get(Number(r.lastInsertRowid)) as Row) };
+        const r = (await db.run("INSERT INTO borrowed (pick_id, from_pick_id, client_key, title, date, minutes, payback, payback_date, payback_half, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", moved.id, p.id, p.clientKey, p.title, p.date, b.minutes, b.payback, to.date, to.half, stamp()));
+        return { pick: moved, borrowed: toBorrowed((await db.get("SELECT * FROM borrowed WHERE id = ?", r.lastId!)) as Row) };
       });
     },
     /**
      * Borrowed time is paid once its payback pick is done, following the pick if it was moved on again. Called on
      * reads; returns the records it marked paid.
      */
-    settleBorrowed(): Borrowed[] {
-      return tx(() => {
+    async settleBorrowed(): Promise<Borrowed[]> {
+      return tx(async () => {
         const paid: Borrowed[] = [];
-        for (const b of (db.prepare("SELECT * FROM borrowed WHERE paid_at IS NULL").all() as Row[]).map(toBorrowed)) {
+        for (const b of ((await db.all("SELECT * FROM borrowed WHERE paid_at IS NULL")) as Row[]).map(toBorrowed)) {
           let id: number | null = b.pickId;
           for (let hops = 0; id !== null && hops < 50; hops++) {
-            const p = getPick(id);
+            const p = (await getPick(id));
             if (p?.status === "done") {
-              db.prepare("UPDATE borrowed SET paid_at = ?, paid_by = 'picks' WHERE id = ?").run(stamp(), b.id);
+              (await db.run("UPDATE borrowed SET paid_at = ?, paid_by = 'picks' WHERE id = ?", stamp(), b.id));
               paid.push({ ...b, paidAt: stamp(), paidBy: "picks" });
               break;
             }
-            id = p?.status === "moved" ? ((db.prepare("SELECT id FROM picks WHERE carried_from = ? ORDER BY id DESC").get(id) as Row | undefined)?.id as number | undefined) ?? null : null;
+            id = p?.status === "moved" ? (((await db.get("SELECT id FROM picks WHERE carried_from = ? ORDER BY id DESC", id)) as Row | undefined)?.id as number | undefined) ?? null : null;
           }
         }
         return paid;
       });
     },
-    payBorrowed(id: number): Borrowed {
-      return tx(() => {
-        const r = db.prepare("SELECT * FROM borrowed WHERE id = ?").get(id) as Row | undefined;
+    async payBorrowed(id: number): Promise<Borrowed> {
+      return tx(async () => {
+        const r = (await db.get("SELECT * FROM borrowed WHERE id = ?", id)) as Row | undefined;
         if (!r) throw new PlanError(`No borrowed time ${id}`);
         if (r.paid_at) throw new PlanError("That is already paid");
-        db.prepare("UPDATE borrowed SET paid_at = ?, paid_by = 'me' WHERE id = ?").run(stamp(), id);
-        return toBorrowed(db.prepare("SELECT * FROM borrowed WHERE id = ?").get(id) as Row);
+        (await db.run("UPDATE borrowed SET paid_at = ?, paid_by = 'me' WHERE id = ?", stamp(), id));
+        return toBorrowed((await db.get("SELECT * FROM borrowed WHERE id = ?", id)) as Row);
       });
     },
     /** Borrowed records from days in a range, plus every unpaid one. */
-    borrowedFor: (from: IsoDate, to: IsoDate): Borrowed[] =>
-      (db.prepare("SELECT * FROM borrowed WHERE (date >= ? AND date <= ?) OR paid_at IS NULL ORDER BY date, id").all(from, to) as Row[]).map(toBorrowed),
+    borrowedFor: async (from: IsoDate, to: IsoDate): Promise<Borrowed[]> =>
+      ((await db.all("SELECT * FROM borrowed WHERE (date >= ? AND date <= ?) OR paid_at IS NULL ORDER BY date, id", from, to)) as Row[]).map(toBorrowed),
+    /** Picks by id (A3: the follow-up rules read the ones they need once). */
+    async picksByIds(ids: readonly number[]): Promise<Pick[]> {
+      const out: Pick[] = [];
+      for (let i = 0; i < ids.length; i += 500) {
+        const part = ids.slice(i, i + 500);
+        out.push(...((await db.all(`${PICK_SELECT} WHERE p.id IN (${part.map(() => "?").join(", ")})`, ...part)) as Row[]).map(toPick));
+      }
+      return out;
+    },
+    /** The picks carried from these picks (where moved ones went), oldest first. */
+    async picksCarriedFrom(ids: readonly number[]): Promise<Pick[]> {
+      const out: Pick[] = [];
+      for (let i = 0; i < ids.length; i += 500) {
+        const part = ids.slice(i, i + 500);
+        out.push(...((await db.all(`${PICK_SELECT} WHERE p.carried_from IN (${part.map(() => "?").join(", ")}) ORDER BY p.id`, ...part)) as Row[]).map(toPick));
+      }
+      return out;
+    },
     /** The pick a moved pick went to (the latest one carried from it), for "moved to Wed PM". */
-    movedTo(id: number): Pick | null {
-      const r = db.prepare(`${PICK_SELECT} WHERE p.carried_from = ? ORDER BY p.id DESC`).get(id) as Row | undefined;
+    async movedTo(id: number): Promise<Pick | null> {
+      const r = (await db.get(`${PICK_SELECT} WHERE p.carried_from = ? ORDER BY p.id DESC`, id)) as Row | undefined;
       return r ? toPick(r) : null;
     },
     // ---- my VM and who signed in (step 15.4) ----
-    logAzureWrite(w: NewAzureWrite): AzureWriteEntry {
-      const at = stamp();
-      const r = db
-        .prepare("INSERT INTO azure_write_log (at, op, vm_id, vm_name, before, after, status, message, auto, attempts, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?, 1, ?)")
-        .run(at, w.op, w.vmId, w.vmName, w.before === null ? null : JSON.stringify(w.before), w.after === null ? null : JSON.stringify(w.after), w.auto ? 1 : 0, at);
-      return this.azureWrite(Number(r.lastInsertRowid))!;
+    async logAzureWrite(w: NewAzureWrite): Promise<AzureWriteEntry> {
+      return tx(async () => {
+        const at = stamp();
+        const r = (await db.run("INSERT INTO azure_write_log (at, op, vm_id, vm_name, before, after, status, message, auto, attempts, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?, 1, ?)", at, w.op, w.vmId, w.vmName, w.before === null ? null : JSON.stringify(w.before), w.after === null ? null : JSON.stringify(w.after), w.auto ? 1 : 0, at));
+        return (await this.azureWrite(r.lastId!))!;
+      });
     },
-    azureWrite(id: number): AzureWriteEntry | null {
-      const r = db.prepare("SELECT * FROM azure_write_log WHERE id = ?").get(id) as Row | undefined;
+    async azureWrite(id: number): Promise<AzureWriteEntry | null> {
+      const r = (await db.get("SELECT * FROM azure_write_log WHERE id = ?", id)) as Row | undefined;
       return r ? toAzureWrite(r) : null;
     },
-    settleAzureWrite(id: number, s: { status: AzureWriteEntry["status"]; message?: string | null; after?: unknown; retry?: boolean }): AzureWriteEntry {
-      const w = this.azureWrite(id);
-      if (!w) throw new PlanError("No such write");
-      db.prepare("UPDATE azure_write_log SET status = ?, message = ?, after = ?, attempts = attempts + ?, updated_at = ? WHERE id = ?").run(
-        s.status, s.message ?? null, s.after === undefined ? (w.after === null ? null : JSON.stringify(w.after)) : JSON.stringify(s.after), s.retry ? 1 : 0, stamp(), id,
-      );
-      return this.azureWrite(id)!;
+    async settleAzureWrite(id: number, s: { status: AzureWriteEntry["status"]; message?: string | null; after?: unknown; retry?: boolean }): Promise<AzureWriteEntry> {
+      return tx(async () => {
+        const w = (await this.azureWrite(id));
+        if (!w) throw new PlanError("No such write");
+        (await db.run("UPDATE azure_write_log SET status = ?, message = ?, after = ?, attempts = attempts + ?, updated_at = ? WHERE id = ?", s.status, s.message ?? null, s.after === undefined ? (w.after === null ? null : JSON.stringify(w.after)) : JSON.stringify(s.after), s.retry ? 1 : 0, stamp(), id,));
+        return (await this.azureWrite(id))!;
+      });
     },
-    azureWriteLog(limit = 100): AzureWriteEntry[] {
-      return (db.prepare("SELECT * FROM azure_write_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toAzureWrite);
+    async azureWriteLog(limit = 100): Promise<AzureWriteEntry[]> {
+      return ((await db.all("SELECT * FROM azure_write_log ORDER BY id DESC LIMIT ?", limit)) as Row[]).map(toAzureWrite);
     },
     // ---- my Teams status during focus (step 16.3) ----
-    logTeamsStatus(e: Omit<TeamsStatusEntry, "id" | "at">): TeamsStatusEntry {
-      const r = db.prepare("INSERT INTO teams_status_log (at, op, status, minutes, result, message) VALUES (?, ?, ?, ?, ?, ?)").run(stamp(), e.op, e.status, e.minutes, e.result, e.message);
-      return toTeamsStatus(db.prepare("SELECT * FROM teams_status_log WHERE id = ?").get(Number(r.lastInsertRowid)) as Row);
+    async logTeamsStatus(e: Omit<TeamsStatusEntry, "id" | "at">): Promise<TeamsStatusEntry> {
+      return tx(async () => {
+        const r = (await db.run("INSERT INTO teams_status_log (at, op, status, minutes, result, message) VALUES (?, ?, ?, ?, ?, ?)", stamp(), e.op, e.status, e.minutes, e.result, e.message));
+        return toTeamsStatus((await db.get("SELECT * FROM teams_status_log WHERE id = ?", r.lastId!)) as Row);
+      });
     },
-    teamsStatusLog(limit = 100): TeamsStatusEntry[] {
-      return (db.prepare("SELECT * FROM teams_status_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toTeamsStatus);
+    async teamsStatusLog(limit = 100): Promise<TeamsStatusEntry[]> {
+      return ((await db.all("SELECT * FROM teams_status_log ORDER BY id DESC LIMIT ?", limit)) as Row[]).map(toTeamsStatus);
     },
     /** Account state (step 15.4): who signed in, my VM, a changed schedule. Not emptied by Reset local plan. null removes. */
-    accountState<T>(key: string): T | null {
-      const r = db.prepare("SELECT value FROM account_state WHERE key = ?").get(key) as Row | undefined;
+    async accountState<T>(key: string): Promise<T | null> {
+      const r = (await db.get("SELECT value FROM account_state WHERE key = ?", key)) as Row | undefined;
       return r ? (JSON.parse(r.value as string) as T) : null;
     },
-    setAccountState(key: string, value: unknown): void {
-      if (value === null) db.prepare("DELETE FROM account_state WHERE key = ?").run(key);
-      else db.prepare("INSERT INTO account_state (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").run(key, JSON.stringify(value), stamp());
+    async setAccountState(key: string, value: unknown): Promise<void> {
+      return tx(async () => {
+        if (value === null) (await db.run("DELETE FROM account_state WHERE key = ?", key));
+        else (await db.run("INSERT INTO account_state (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at", key, JSON.stringify(value), stamp()));
+      });
     },
     /** Small JSON state that survives restarts (the focus timer). null removes it. */
-    getState<T>(key: string): T | null {
-      const r = db.prepare("SELECT value FROM kv WHERE key = ?").get(key) as Row | undefined;
+    async getState<T>(key: string): Promise<T | null> {
+      const r = (await db.get("SELECT value FROM kv WHERE key = ?", key)) as Row | undefined;
       return r ? (JSON.parse(r.value as string) as T) : null;
     },
-    setState(key: string, value: unknown): void {
-      if (value === null) db.prepare("DELETE FROM kv WHERE key = ?").run(key);
-      else db.prepare("INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").run(key, JSON.stringify(value), stamp());
+    async setState(key: string, value: unknown): Promise<void> {
+      return tx(async () => {
+        if (value === null) (await db.run("DELETE FROM kv WHERE key = ?", key));
+        else (await db.run("INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at", key, JSON.stringify(value), stamp()));
+      });
     },
     /** Records focused time (step 6c); pickId null for a plain timer. */
-    addFocus(s: FocusSegment): void {
+    async addFocus(s: FocusSegment): Promise<void> {
       if (s.seconds <= 0) return;
-      db.prepare("INSERT INTO focus_log (pick_id, label, started_at, ended_at, seconds) VALUES (?, ?, ?, ?, ?)").run(s.pickId, s.label, s.startedAt, s.endedAt, Math.round(s.seconds));
+      (await db.run("INSERT INTO focus_log (pick_id, label, started_at, ended_at, seconds) VALUES (?, ?, ?, ?, ?)", s.pickId, s.label, s.startedAt, s.endedAt, Math.round(s.seconds)));
     },
     /** Focused seconds per pick for these picks. */
-    focusedSeconds(pickIds: readonly number[]): Record<number, number> {
+    async focusedSeconds(pickIds: readonly number[]): Promise<Record<number, number>> {
       if (!pickIds.length) return {};
-      const rows = db.prepare(`SELECT pick_id, SUM(seconds) AS s FROM focus_log WHERE pick_id IN (${pickIds.map(() => "?").join(",")}) GROUP BY pick_id`).all(...pickIds) as Row[];
+      const rows = (await db.all(`SELECT pick_id, SUM(seconds) AS s FROM focus_log WHERE pick_id IN (${pickIds.map(() => "?").join(",")}) GROUP BY pick_id`, ...pickIds)) as Row[];
       return Object.fromEntries(rows.map((r) => [r.pick_id as number, r.s as number]));
     },
     /**
      * Reset local plan (Q37): a full copy first (plan.db.bak-reset-<stamp>, 0600), then every plan table emptied in one
      * transaction. Returns the backup path. Not available for an in-memory store's backup (tests get null).
      */
-    reset(): string | null {
+    async reset(): Promise<string | null> {
       let bak: string | null = null;
       if (opts.path && opts.path !== ":memory:") {
         bak = `${opts.path}.bak-reset-${opts.now().toInstant().toString().replace(/[^0-9TZ]/g, "")}`;
-        raw.prepare("VACUUM INTO ?").run(bak);
-        opts.files?.secure(bak);
+        if (!opts.backup) throw new PlanError("This store can't be copied before a reset");
+        await opts.backup(bak);
       }
-      tx(() => {
+      await tx(async () => {
         // FocusTime's Outlook events and the audit log stay: they are what lets it find, undo and remove its own events.
-        db.prepare("UPDATE outlook_events SET timebox_id = NULL").run();
-        for (const t of RESET_TABLES) db.prepare(`DELETE FROM ${t}`).run();
+        (await db.run("UPDATE outlook_events SET timebox_id = NULL"));
+        for (const t of RESET_TABLES) (await db.run(`DELETE FROM ${t}`));
       });
       return bak;
     },
     // ---- Plan the week (step 8) ----
-    weekPlan(weekStart: IsoDate): WeekPlanRecord {
-      const plan = db.prepare("SELECT * FROM week_plans WHERE week_start = ?").get(weekStart) as Row | undefined;
-      const rows = db.prepare("SELECT * FROM week_features WHERE week_start = ? ORDER BY id").all(weekStart) as Row[];
-      const slots = db.prepare("SELECT s.* FROM week_feature_slots s JOIN week_features f ON f.id = s.feature_id WHERE f.week_start = ? ORDER BY s.date, s.half").all(weekStart) as Row[];
+    async weekPlan(weekStart: IsoDate): Promise<WeekPlanRecord> {
+      const plan = (await db.get("SELECT * FROM week_plans WHERE week_start = ?", weekStart)) as Row | undefined;
+      const rows = (await db.all("SELECT * FROM week_features WHERE week_start = ? ORDER BY id", weekStart)) as Row[];
+      const slots = (await db.all("SELECT s.* FROM week_feature_slots s JOIN week_features f ON f.id = s.feature_id WHERE f.week_start = ? ORDER BY s.date, s.half", weekStart)) as Row[];
       const features = rows.map((r): WeekFeature => ({
         id: r.id as number,
         weekStart: r.week_start as string,
@@ -2065,322 +2100,346 @@ export function planStoreOn(raw: DatabaseSync, opts: { now: () => Temporal.Zoned
       return { weekStart, committedAt: (plan?.committed_at as string | null) ?? null, updatedAt: latest ?? null, features };
     },
     /** Step 8's call: a feature on a week with a number of blocks (a must when new); 0 blocks takes it off. */
-    setWeekFeature(f: NewWeekFeature): WeekFeature | null {
-      if (f.blocks === 0) {
-        const row = db.prepare("SELECT id FROM week_features WHERE week_start = ? AND client_key = ? AND item_id = ?").get(f.weekStart, f.clientKey, f.itemId) as Row | undefined;
-        if (row) this.removeWeekItem(row.id as number);
-        return null;
-      }
-      return this.addWeekItem({ ...f, level: "feature" });
+    async setWeekFeature(f: NewWeekFeature): Promise<WeekFeature | null> {
+      return tx(async () => {
+        if (f.blocks === 0) {
+          const row = (await db.get("SELECT id FROM week_features WHERE week_start = ? AND client_key = ? AND item_id = ?", f.weekStart, f.clientKey, f.itemId)) as Row | undefined;
+          if (row) (await this.removeWeekItem(row.id as number));
+          return null;
+        }
+        return (await this.addWeekItem({ ...f, level: "feature" }));
+      });
     },
     /**
      * Put a feature or story on a client's week list (step 11), or update it if there: title, type and link always;
      * tier and blocks when given. New items are musts with the level's default blocks unless told otherwise.
      */
-    addWeekItem(f: NewWeekItem): WeekFeature {
+    async addWeekItem(f: NewWeekItem): Promise<WeekFeature> {
       if (f.level === "feature" && f.blocks != null && !validWholeBlocks(f.blocks)) throw new PlanError(`blocks must be a whole number from 1 to ${MAX_FEATURE_BLOCKS}`);
       if (f.level === "story" && f.size !== undefined && !validStorySize(f.size)) throw new PlanError("size must be S, M or L");
-      return tx(() => {
+      return tx(async () => {
         const at = stamp();
         // U3 (D388): never a second row for the same item, even under a client key in another letter case.
-        const row = db.prepare("SELECT id, tier, level FROM week_features WHERE week_start = ? AND lower(client_key) = lower(?) AND item_id = ? ORDER BY id LIMIT 1").get(f.weekStart, f.clientKey, f.itemId) as Row | undefined;
-        touchWeek(f.weekStart, at);
+        const row = (await db.get("SELECT id, tier, level FROM week_features WHERE week_start = ? AND lower(client_key) = lower(?) AND item_id = ? ORDER BY id LIMIT 1", f.weekStart, f.clientKey, f.itemId)) as Row | undefined;
+        (await touchWeek(f.weekStart, at));
         let id: number;
         const blocks = f.level === "feature" ? (f.blocks ?? null) : null;
         const size = f.level === "story" ? (f.size ?? DEFAULT_STORY_SIZE) : null;
         if (row) {
           id = row.id as number;
-          db.prepare("UPDATE week_features SET title = ?, item_type = ?, url = ?, level = ?, updated_at = ? WHERE id = ?").run(f.title, f.itemType, f.url, f.level, at, id);
-          if (row.level !== f.level) db.prepare("UPDATE week_features SET blocks = ?, size = ? WHERE id = ?").run(blocks, size, id);
-          else if (f.level === "feature" && f.blocks !== undefined) db.prepare("UPDATE week_features SET blocks = ? WHERE id = ?").run(blocks, id);
-          else if (f.level === "story" && f.size !== undefined) db.prepare("UPDATE week_features SET size = ? WHERE id = ?").run(size, id);
-          if (f.parentId !== undefined) db.prepare("UPDATE week_features SET parent_id = ? WHERE id = ?").run(f.parentId, id);
-          if (f.tier && f.tier !== row.tier) db.prepare("UPDATE week_features SET tier = ?, position = NULL WHERE id = ?").run(f.tier, id);
+          (await db.run("UPDATE week_features SET title = ?, item_type = ?, url = ?, level = ?, updated_at = ? WHERE id = ?", f.title, f.itemType, f.url, f.level, at, id));
+          if (row.level !== f.level) (await db.run("UPDATE week_features SET blocks = ?, size = ? WHERE id = ?", blocks, size, id));
+          else if (f.level === "feature" && f.blocks !== undefined) (await db.run("UPDATE week_features SET blocks = ? WHERE id = ?", blocks, id));
+          else if (f.level === "story" && f.size !== undefined) (await db.run("UPDATE week_features SET size = ? WHERE id = ?", size, id));
+          if (f.parentId !== undefined) (await db.run("UPDATE week_features SET parent_id = ? WHERE id = ?", f.parentId, id));
+          if (f.tier && f.tier !== row.tier) (await db.run("UPDATE week_features SET tier = ?, position = NULL WHERE id = ?", f.tier, id));
         } else {
           id = Number(
-            db
-              .prepare("INSERT INTO week_features (week_start, client_key, item_id, level, tier, title, item_type, url, blocks, size, parent_id, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)")
-              .run(f.weekStart, f.clientKey, f.itemId, f.level, f.tier ?? "must", f.title, f.itemType, f.url, blocks, size, f.parentId ?? null, at, at).lastInsertRowid,
+            (await db.run("INSERT INTO week_features (week_start, client_key, item_id, level, tier, title, item_type, url, blocks, size, parent_id, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)", f.weekStart, f.clientKey, f.itemId, f.level, f.tier ?? "must", f.title, f.itemType, f.url, blocks, size, f.parentId ?? null, at, at)).lastId,
           );
         }
-        return this.weekPlan(f.weekStart).features.find((x) => x.id === id)!;
+        return (await this.weekPlan(f.weekStart)).features.find((x) => x.id === id)!;
       });
     },
     /** Must or nice to have; changing tier puts it back in DevOps order within the new tier. */
-    setWeekItemTier(id: number, tier: "must" | "nice"): WeekFeature {
-      const w = weekItemChange(id, (at) => db.prepare("UPDATE week_features SET tier = ?, position = CASE WHEN tier = ? THEN position ELSE NULL END, updated_at = ? WHERE id = ?").run(tier, tier, at, id));
-      return this.weekPlan(w).features.find((x) => x.id === id)!;
+    async setWeekItemTier(id: number, tier: "must" | "nice"): Promise<WeekFeature> {
+      return tx(async () => {
+        const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET tier = ?, position = CASE WHEN tier = ? THEN position ELSE NULL END, updated_at = ? WHERE id = ?", tier, tier, at, id))));
+        return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
+      });
     },
     /** A feature's whole blocks, or null to take what its stories add up to (step 16.4). Stories have a size. */
-    setWeekItemBlocks(id: number, blocks: number | null): WeekFeature {
-      if (blocks !== null && !validWholeBlocks(blocks)) throw new PlanError(`blocks must be a whole number from 1 to ${MAX_FEATURE_BLOCKS}`);
-      const row = db.prepare("SELECT level FROM week_features WHERE id = ?").get(id) as Row | undefined;
-      if (row && row.level !== "feature") throw new PlanError("A story has a size (S, M or L), not blocks");
-      const w = weekItemChange(id, (at) => db.prepare("UPDATE week_features SET blocks = ?, updated_at = ? WHERE id = ?").run(blocks, at, id));
-      return this.weekPlan(w).features.find((x) => x.id === id)!;
+    async setWeekItemBlocks(id: number, blocks: number | null): Promise<WeekFeature> {
+      return tx(async () => {
+        if (blocks !== null && !validWholeBlocks(blocks)) throw new PlanError(`blocks must be a whole number from 1 to ${MAX_FEATURE_BLOCKS}`);
+        const row = (await db.get("SELECT level FROM week_features WHERE id = ?", id)) as Row | undefined;
+        if (row && row.level !== "feature") throw new PlanError("A story has a size (S, M or L), not blocks");
+        const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET blocks = ?, updated_at = ? WHERE id = ?", blocks, at, id))));
+        return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
+      });
     },
     /** A story's size on the week list (step 16.4). */
-    setWeekItemSize(id: number, size: StorySize): WeekFeature {
-      if (!validStorySize(size)) throw new PlanError("size must be S, M or L");
-      const row = db.prepare("SELECT level FROM week_features WHERE id = ?").get(id) as Row | undefined;
-      if (row && row.level !== "story") throw new PlanError("A feature has blocks, not a size");
-      const w = weekItemChange(id, (at) => db.prepare("UPDATE week_features SET size = ?, updated_at = ? WHERE id = ?").run(size, at, id));
-      return this.weekPlan(w).features.find((x) => x.id === id)!;
+    async setWeekItemSize(id: number, size: StorySize): Promise<WeekFeature> {
+      return tx(async () => {
+        if (!validStorySize(size)) throw new PlanError("size must be S, M or L");
+        const row = (await db.get("SELECT level FROM week_features WHERE id = ?", id)) as Row | undefined;
+        if (row && row.level !== "story") throw new PlanError("A feature has blocks, not a size");
+        const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET size = ?, updated_at = ? WHERE id = ?", size, at, id))));
+        return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
+      });
     },
     /** Parent features as DevOps says now, for stories on a week's lists (no change to updated_at: not a plan edit). */
-    setWeekItemParents(weekStart: IsoDate, parents: readonly { clientKey: string; itemId: number; parentId: number | null }[]): void {
-      const up = db.prepare("UPDATE week_features SET parent_id = ? WHERE week_start = ? AND client_key = ? AND item_id = ? AND level = 'story' AND parent_id IS NOT ?");
-      tx(() => {
-        for (const p of parents) up.run(p.parentId, weekStart, p.clientKey, p.itemId, p.parentId);
+    async setWeekItemParents(weekStart: IsoDate, parents: readonly { clientKey: string; itemId: number; parentId: number | null }[]): Promise<void> {
+      await tx(async () => {
+        for (const p of parents) await db.run("UPDATE week_features SET parent_id = ? WHERE week_start = ? AND client_key = ? AND item_id = ? AND level = 'story' AND parent_id IS DISTINCT FROM ?", p.parentId, weekStart, p.clientKey, p.itemId, p.parentId);
       });
     },
     /** A local done mark (on) or taking it back (off). */
-    markWeekItemDone(id: number, on: boolean): WeekFeature {
-      const w = weekItemChange(id, (at) => db.prepare("UPDATE week_features SET done_at = ?, updated_at = ? WHERE id = ?").run(on ? at : null, at, id));
-      return this.weekPlan(w).features.find((x) => x.id === id)!;
+    async markWeekItemDone(id: number, on: boolean): Promise<WeekFeature> {
+      return tx(async () => {
+        const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET done_at = ?, updated_at = ? WHERE id = ?", on ? at : null, at, id))));
+        return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
+      });
     },
     /**
      * A local order for one client's tier: positions 1..n for the items given (the rest of the tier follows in DevOps
      * order). `null` resets the client's whole list (both tiers) to DevOps order. Never written back to DevOps.
      */
-    reorderWeekItems(weekStart: IsoDate, clientKey: string, tier: "must" | "nice", order: readonly { itemId: number; position: number }[] | null): WeekPlanRecord {
-      tx(() => {
+    async reorderWeekItems(weekStart: IsoDate, clientKey: string, tier: "must" | "nice", order: readonly { itemId: number; position: number }[] | null): Promise<WeekPlanRecord> {
+      await tx(async () => {
         const at = stamp();
-        if (order === null) db.prepare("UPDATE week_features SET position = NULL, updated_at = ? WHERE week_start = ? AND client_key = ? AND position IS NOT NULL").run(at, weekStart, clientKey);
+        if (order === null) (await db.run("UPDATE week_features SET position = NULL, updated_at = ? WHERE week_start = ? AND client_key = ? AND position IS NOT NULL", at, weekStart, clientKey));
         else
           for (const o of order) {
             if (!Number.isInteger(o.position) || o.position < 1) throw new PlanError("position must be a whole number from 1");
-            const r = db.prepare("UPDATE week_features SET position = ?, updated_at = ? WHERE week_start = ? AND client_key = ? AND tier = ? AND item_id = ?").run(o.position, at, weekStart, clientKey, tier, o.itemId);
+            const r = (await db.run("UPDATE week_features SET position = ?, updated_at = ? WHERE week_start = ? AND client_key = ? AND tier = ? AND item_id = ?", o.position, at, weekStart, clientKey, tier, o.itemId));
             if (Number(r.changes) !== 1) throw new PlanError(`#${o.itemId} isn't a ${tier === "must" ? "must" : "nice to have"} on this client's week`);
           }
-        touchWeek(weekStart, at);
+        (await touchWeek(weekStart, at));
       });
-      return this.weekPlan(weekStart);
+      return (await this.weekPlan(weekStart));
     },
     /** Take an item off the week list (its pins go with it). */
-    removeWeekItem(id: number): void {
-      tx(() => {
-        const r = db.prepare("SELECT week_start FROM week_features WHERE id = ?").get(id) as Row | undefined;
+    async removeWeekItem(id: number): Promise<void> {
+      await tx(async () => {
+        const r = (await db.get("SELECT week_start FROM week_features WHERE id = ?", id)) as Row | undefined;
         if (!r) throw new PlanError("No such item on the week plan");
-        db.prepare("DELETE FROM week_features WHERE id = ?").run(id);
-        touchWeek(r.week_start as string, stamp());
+        (await db.run("DELETE FROM week_features WHERE id = ?", id));
+        (await touchWeek(r.week_start as string, stamp()));
       });
     },
-    weekItem(id: number): WeekFeature | null {
-      const r = db.prepare("SELECT week_start FROM week_features WHERE id = ?").get(id) as Row | undefined;
-      return r ? (this.weekPlan(r.week_start as string).features.find((x) => x.id === id) ?? null) : null;
+    async weekItem(id: number): Promise<WeekFeature | null> {
+      const r = (await db.get("SELECT week_start FROM week_features WHERE id = ?", id)) as Row | undefined;
+      return r ? ((await this.weekPlan(r.week_start as string)).features.find((x) => x.id === id) ?? null) : null;
     },
     /** Pin a week item to a block of its week (on) or unpin it (off). Pins don't change its blocks (step 11). */
-    placeFeature(featureId: number, date: IsoDate, half: "AM" | "PM", on: boolean): WeekFeature {
-      return tx(() => {
-        const r = db.prepare("SELECT * FROM week_features WHERE id = ?").get(featureId) as Row | undefined;
+    async placeFeature(featureId: number, date: IsoDate, half: "AM" | "PM", on: boolean): Promise<WeekFeature> {
+      return tx(async () => {
+        const r = (await db.get("SELECT * FROM week_features WHERE id = ?", featureId)) as Row | undefined;
         if (!r) throw new PlanError("No such feature on the week plan");
         const week = r.week_start as string;
         const offset = Temporal.PlainDate.from(week).until(Temporal.PlainDate.from(date)).days;
         if (offset < 0 || offset > 6) throw new PlanError("That block isn't in the feature's week");
         const at = stamp();
-        if (on) db.prepare("INSERT INTO week_feature_slots (feature_id, date, half) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").run(featureId, date, half);
-        else db.prepare("DELETE FROM week_feature_slots WHERE feature_id = ? AND date = ? AND half = ?").run(featureId, date, half);
-        db.prepare("UPDATE week_features SET updated_at = ? WHERE id = ?").run(at, featureId);
-        touchWeek(week, at);
-        return this.weekPlan(week).features.find((x) => x.id === featureId)!;
+        if (on) (await db.run("INSERT INTO week_feature_slots (feature_id, date, half) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", featureId, date, half));
+        else (await db.run("DELETE FROM week_feature_slots WHERE feature_id = ? AND date = ? AND half = ?", featureId, date, half));
+        (await db.run("UPDATE week_features SET updated_at = ? WHERE id = ?", at, featureId));
+        (await touchWeek(week, at));
+        return (await this.weekPlan(week)).features.find((x) => x.id === featureId)!;
       });
     },
-    commitWeek(weekStart: IsoDate): WeekPlanRecord {
-      tx(() => {
+    async commitWeek(weekStart: IsoDate): Promise<WeekPlanRecord> {
+      await tx(async () => {
         const at = stamp();
-        touchWeek(weekStart, at);
-        db.prepare("UPDATE week_plans SET committed_at = ?, updated_at = ? WHERE week_start = ?").run(at, at, weekStart);
+        (await touchWeek(weekStart, at));
+        (await db.run("UPDATE week_plans SET committed_at = ?, updated_at = ? WHERE week_start = ?", at, at, weekStart));
       });
-      return this.weekPlan(weekStart);
+      return (await this.weekPlan(weekStart));
     },
     /** Committed features per week for these weeks (the week view and Plan the day). */
-    weekFeaturesFor(weekStarts: readonly IsoDate[]): WeekFeature[] {
-      return [...new Set(weekStarts)].flatMap((w) => this.weekPlan(w).features);
+    async weekFeaturesFor(weekStarts: readonly IsoDate[]): Promise<WeekFeature[]> {
+      const out: WeekFeature[] = [];
+      for (const w of new Set(weekStarts)) out.push(...(await this.weekPlan(w)).features);
+      return out;
     },
     /** U6: draft features on a week's list, with their tier, in the order they were added. */
-    weekDrafts: (weekStart: IsoDate): { draftId: number; tier: "must" | "nice" }[] =>
-      (db.prepare("SELECT draft_id, tier FROM week_drafts WHERE week_start = ? ORDER BY created_at, draft_id").all(weekStart) as Row[]).map((r) => ({ draftId: r.draft_id as number, tier: r.tier as "must" | "nice" })),
+    weekDrafts: async (weekStart: IsoDate): Promise<{ draftId: number; tier: "must" | "nice" }[]> =>
+      ((await db.all("SELECT draft_id, tier FROM week_drafts WHERE week_start = ? ORDER BY created_at, draft_id", weekStart)) as Row[]).map((r) => ({ draftId: r.draft_id as number, tier: r.tier as "must" | "nice" })),
     /** U6: put a draft feature on a week's list as a must or a nice to have, or take it off (null). */
-    setWeekDraft(weekStart: IsoDate, draftId: number, tier: "must" | "nice" | null): void {
-      if (tier === null) {
-        db.prepare("DELETE FROM week_drafts WHERE week_start = ? AND draft_id = ?").run(weekStart, draftId);
-        return;
-      }
-      const d = db.prepare("SELECT level FROM draft_stories WHERE id = ?").get(draftId) as Row | undefined;
-      if (!d) throw new PlanError("No such draft");
-      if (d.level !== "feature") throw new PlanError("Only a draft feature goes on the week list");
-      db.prepare("INSERT INTO week_drafts (week_start, draft_id, tier, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(week_start, draft_id) DO UPDATE SET tier = excluded.tier").run(weekStart, draftId, tier, stamp());
+    async setWeekDraft(weekStart: IsoDate, draftId: number, tier: "must" | "nice" | null): Promise<void> {
+      return tx(async () => {
+        if (tier === null) {
+          (await db.run("DELETE FROM week_drafts WHERE week_start = ? AND draft_id = ?", weekStart, draftId));
+          return;
+        }
+        const d = (await db.get("SELECT level FROM draft_stories WHERE id = ?", draftId)) as Row | undefined;
+        if (!d) throw new PlanError("No such draft");
+        if (d.level !== "feature") throw new PlanError("Only a draft feature goes on the week list");
+        (await db.run("INSERT INTO week_drafts (week_start, draft_id, tier, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(week_start, draft_id) DO UPDATE SET tier = excluded.tier", weekStart, draftId, tier, stamp()));
+      });
     },
     /** U6: clients marked "Nothing this week" for a week. */
-    weekQuiet: (weekStart: IsoDate): string[] => (db.prepare("SELECT client_key FROM week_quiet WHERE week_start = ? ORDER BY client_key").all(weekStart) as Row[]).map((r) => r.client_key as string),
-    setWeekQuiet(weekStart: IsoDate, clientKey: string, on: boolean): void {
-      if (on) db.prepare("INSERT INTO week_quiet (week_start, client_key, marked_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").run(weekStart, clientKey, stamp());
-      else db.prepare("DELETE FROM week_quiet WHERE week_start = ? AND client_key = ?").run(weekStart, clientKey);
+    weekQuiet: async (weekStart: IsoDate): Promise<string[]> => ((await db.all("SELECT client_key FROM week_quiet WHERE week_start = ? ORDER BY client_key", weekStart)) as Row[]).map((r) => r.client_key as string),
+    async setWeekQuiet(weekStart: IsoDate, clientKey: string, on: boolean): Promise<void> {
+      return tx(async () => {
+        if (on) (await db.run("INSERT INTO week_quiet (week_start, client_key, marked_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", weekStart, clientKey, stamp()));
+        else (await db.run("DELETE FROM week_quiet WHERE week_start = ? AND client_key = ?", weekStart, clientKey));
+      });
     },
-    markBreakdown(clientKey: string, itemId: number, on: boolean): void {
-      if (on) db.prepare("INSERT INTO breakdown_marks (client_key, item_id, marked_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").run(clientKey, itemId, stamp());
-      else db.prepare("DELETE FROM breakdown_marks WHERE client_key = ? AND item_id = ?").run(clientKey, itemId);
+    async markBreakdown(clientKey: string, itemId: number, on: boolean): Promise<void> {
+      return tx(async () => {
+        if (on) (await db.run("INSERT INTO breakdown_marks (client_key, item_id, marked_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", clientKey, itemId, stamp()));
+        else (await db.run("DELETE FROM breakdown_marks WHERE client_key = ? AND item_id = ?", clientKey, itemId));
+      });
     },
-    breakdownMarks: (): { clientKey: string; itemId: number; markedAt: ZonedStamp }[] =>
-      (db.prepare("SELECT * FROM breakdown_marks ORDER BY marked_at, client_key, item_id").all() as Row[]).map((r) => ({ clientKey: r.client_key as string, itemId: r.item_id as number, markedAt: r.marked_at as string })),
+    breakdownMarks: async (): Promise<{ clientKey: string; itemId: number; markedAt: ZonedStamp }[]> =>
+      ((await db.all("SELECT * FROM breakdown_marks ORDER BY marked_at, client_key, item_id")) as Row[]).map((r) => ({ clientKey: r.client_key as string, itemId: r.item_id as number, markedAt: r.marked_at as string })),
     /** True the first time (kind, date) is marked, false after: "only once a day" across restarts. */
-    markOnce(kind: string, date: IsoDate): boolean {
-      const r = db.prepare("INSERT INTO markers (kind, date, at) VALUES (?, ?, ?) ON CONFLICT(kind, date) DO NOTHING").run(kind, date, stamp());
+    async markOnce(kind: string, date: IsoDate): Promise<boolean> {
+      const r = (await db.run("INSERT INTO markers (kind, date, at) VALUES (?, ?, ?) ON CONFLICT(kind, date) DO NOTHING", kind, date, stamp()));
       return Number(r.changes) === 1;
     },
+    /** Every date marked with this kind (A3: read once where a plain rule asks about several). */
+    markedDates: async (kind: string): Promise<Set<IsoDate>> => new Set(((await db.all("SELECT date FROM markers WHERE kind = ?", kind)) as Row[]).map((r) => r.date as string)),
+    /** The weeks whose plan is committed (A3: read once where a plain rule asks about several). */
+    committedWeeks: async (): Promise<Set<IsoDate>> => new Set(((await db.all("SELECT week_start FROM week_plans WHERE committed_at IS NOT NULL")) as Row[]).map((r) => r.week_start as string)),
     /** Whether (kind, date) was marked (step 15.4: the morning VM prompt dismissed for the day). */
-    marked(kind: string, date: IsoDate): boolean {
-      return !!db.prepare("SELECT 1 FROM markers WHERE kind = ? AND date = ?").get(kind, date);
+    async marked(kind: string, date: IsoDate): Promise<boolean> {
+      return !!(await db.get("SELECT 1 FROM markers WHERE kind = ? AND date = ?", kind, date));
     },
-    week(dates: IsoDate[]): PlanWeek {
+    async week(dates: IsoDate[]): Promise<PlanWeek> {
       const out: PlanWeek = {};
       for (const d of dates) {
-        const plan = getPlan(d);
-        if (plan) out[d] = { committedAt: plan.committedAt, closedOutAt: plan.closedOutAt, picks: picksBetween(d, d) };
+        const plan = (await getPlan(d));
+        if (plan) out[d] = { committedAt: plan.committedAt, closedOutAt: plan.closedOutAt, picks: (await picksBetween(d, d)) };
       }
       return out;
     },
     // ---- Timeboxes and Outlook writes (step 12) ----
-    timebox(id: number): Timebox | null {
-      const r = db.prepare("SELECT * FROM timeboxes WHERE id = ?").get(id) as Row | undefined;
+    async timebox(id: number): Promise<Timebox | null> {
+      const r = (await db.get("SELECT * FROM timeboxes WHERE id = ?", id)) as Row | undefined;
       return r ? toTimebox(r) : null;
     },
-    timeboxByUid(uid: string): Timebox | null {
-      const r = db.prepare("SELECT * FROM timeboxes WHERE uid = ?").get(uid) as Row | undefined;
+    async timeboxByUid(uid: string): Promise<Timebox | null> {
+      const r = (await db.get("SELECT * FROM timeboxes WHERE uid = ?", uid)) as Row | undefined;
       return r ? toTimebox(r) : null;
     },
     /** Timeboxes on these dates, including removed ones whose Outlook event is still to be taken off. */
-    timeboxesBetween(from: IsoDate, to: IsoDate): Timebox[] {
-      return (db.prepare("SELECT * FROM timeboxes WHERE date >= ? AND date <= ? ORDER BY date, start_at, id").all(from, to) as Row[]).map(toTimebox);
+    async timeboxesBetween(from: IsoDate, to: IsoDate): Promise<Timebox[]> {
+      return ((await db.all("SELECT * FROM timeboxes WHERE date >= ? AND date <= ? ORDER BY date, start_at, id", from, to)) as Row[]).map(toTimebox);
     },
-    addTimebox(t: NewTimebox): Timebox {
-      const at = stamp();
-      const uid = t.uid ?? `tb-${crypto.randomUUID()}`;
-      const r = db
-        .prepare("INSERT INTO timeboxes (uid, date, client_key, pick_id, item_id, title, url, start_at, end_at, outlook, show_as, removed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)")
-        .run(uid, t.date, t.clientKey, t.pickId ?? null, t.itemId ?? null, t.title, t.url ?? null, t.start, t.end, t.outlook ? 1 : 0, t.showAs ?? "busy", at, at);
-      return this.timebox(Number(r.lastInsertRowid))!;
+    async addTimebox(t: NewTimebox): Promise<Timebox> {
+      return tx(async () => {
+        const at = stamp();
+        const uid = t.uid ?? `tb-${crypto.randomUUID()}`;
+        const r = (await db.run("INSERT INTO timeboxes (uid, date, client_key, pick_id, item_id, title, url, start_at, end_at, outlook, show_as, removed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)", uid, t.date, t.clientKey, t.pickId ?? null, t.itemId ?? null, t.title, t.url ?? null, t.start, t.end, t.outlook ? 1 : 0, t.showAs ?? "busy", at, at));
+        return (await this.timebox(r.lastId!))!;
+      });
     },
     /** Step 13.6 (D246): several timeboxes in one transaction (Timebox my day); none if one fails. */
-    addTimeboxes(list: readonly NewTimebox[]): Timebox[] {
-      return tx(() => list.map((t) => this.addTimebox(t)));
+    async addTimeboxes(list: readonly NewTimebox[]): Promise<Timebox[]> {
+      return tx(async () => {
+        const out: Timebox[] = [];
+        for (const t of list) out.push(await this.addTimebox(t));
+        return out;
+      });
     },
     /** Move, resize, retitle, show as, toggle Outlook, put back (removedAt null), or a sync note and conflict (step 13). */
-    updateTimebox(id: number, patch: { start?: string; end?: string; date?: IsoDate; title?: string; showAs?: Timebox["showAs"]; outlook?: boolean; removedAt?: string | null; outlookNote?: string | null; conflict?: Timebox["conflict"]; pickId?: number | null }): Timebox {
-      const t = this.timebox(id);
-      if (!t) throw new PlanError("No such timebox");
-      const n = { ...t, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) } as Timebox;
-      db.prepare("UPDATE timeboxes SET date = ?, start_at = ?, end_at = ?, title = ?, show_as = ?, outlook = ?, removed_at = ?, outlook_note = ?, conflict = ?, pick_id = ?, updated_at = ? WHERE id = ?").run(
-        n.date, n.start, n.end, n.title, n.showAs, n.outlook ? 1 : 0, n.removedAt, n.outlookNote, n.conflict ? JSON.stringify(n.conflict) : null, n.pickId, stamp(), id,
-      );
-      return this.timebox(id)!;
+    async updateTimebox(id: number, patch: { start?: string; end?: string; date?: IsoDate; title?: string; showAs?: Timebox["showAs"]; outlook?: boolean; removedAt?: string | null; outlookNote?: string | null; conflict?: Timebox["conflict"]; pickId?: number | null }): Promise<Timebox> {
+      return tx(async () => {
+        const t = (await this.timebox(id));
+        if (!t) throw new PlanError("No such timebox");
+        const n = { ...t, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) } as Timebox;
+        (await db.run("UPDATE timeboxes SET date = ?, start_at = ?, end_at = ?, title = ?, show_as = ?, outlook = ?, removed_at = ?, outlook_note = ?, conflict = ?, pick_id = ?, updated_at = ? WHERE id = ?", n.date, n.start, n.end, n.title, n.showAs, n.outlook ? 1 : 0, n.removedAt, n.outlookNote, n.conflict ? JSON.stringify(n.conflict) : null, n.pickId, stamp(), id,));
+        return (await this.timebox(id))!;
+      });
     },
     /** Remove: kept as removed while its Outlook event still exists (so it can be taken off and undone), else deleted. */
-    removeTimebox(id: number): { kept: boolean } {
-      const t = this.timebox(id);
-      if (!t) throw new PlanError("No such timebox");
-      const own = this.ownEvent(t.uid);
-      if (own && !own.deletedAt) {
-        this.updateTimebox(id, { removedAt: stamp() });
-        return { kept: true };
-      }
-      db.prepare("DELETE FROM timeboxes WHERE id = ?").run(id);
-      return { kept: false };
+    async removeTimebox(id: number): Promise<{ kept: boolean }> {
+      return tx(async () => {
+        const t = (await this.timebox(id));
+        if (!t) throw new PlanError("No such timebox");
+        const own = (await this.ownEvent(t.uid));
+        if (own && !own.deletedAt) {
+          (await this.updateTimebox(id, { removedAt: stamp() }));
+          return { kept: true };
+        }
+        (await db.run("DELETE FROM timeboxes WHERE id = ?", id));
+        return { kept: false };
+      });
     },
-    ownEvent(uid: string): OwnEvent | null {
-      const r = db.prepare("SELECT * FROM outlook_events WHERE uid = ?").get(uid) as Row | undefined;
+    async ownEvent(uid: string): Promise<OwnEvent | null> {
+      const r = (await db.get("SELECT * FROM outlook_events WHERE uid = ?", uid)) as Row | undefined;
       return r ? toOwn(r) : null;
     },
     /** Every Outlook event FocusTime created and hasn't deleted. */
-    ownEvents(): OwnEvent[] {
-      return (db.prepare("SELECT * FROM outlook_events WHERE deleted_at IS NULL ORDER BY created_at, uid").all() as Row[]).map(toOwn);
+    async ownEvents(): Promise<OwnEvent[]> {
+      return ((await db.all("SELECT * FROM outlook_events WHERE deleted_at IS NULL ORDER BY created_at, uid")) as Row[]).map(toOwn);
     },
     /** Record a confirmed create or update: the event id and the fields now on Outlook. */
-    recordOwnEvent(uid: string, timeboxId: number | null, eventId: string, fields: Fields): void {
+    async recordOwnEvent(uid: string, timeboxId: number | null, eventId: string, fields: Fields): Promise<void> {
       const at = stamp();
-      db.prepare(
-        `INSERT INTO outlook_events (uid, timebox_id, event_id, fields, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, NULL)
-         ON CONFLICT(uid) DO UPDATE SET timebox_id = excluded.timebox_id, event_id = excluded.event_id, fields = excluded.fields, updated_at = excluded.updated_at, deleted_at = NULL`,
-      ).run(uid, timeboxId, eventId, JSON.stringify(fields), at, at);
+      (await db.run(`INSERT INTO outlook_events (uid, timebox_id, event_id, fields, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, NULL)
+         ON CONFLICT(uid) DO UPDATE SET timebox_id = excluded.timebox_id, event_id = excluded.event_id, fields = excluded.fields, updated_at = excluded.updated_at, deleted_at = NULL`, uid, timeboxId, eventId, JSON.stringify(fields), at, at));
     },
     /** A confirmed delete. A removed timebox stays (as removed) so undo can put it back. */
-    markOwnDeleted(uid: string): void {
+    async markOwnDeleted(uid: string): Promise<void> {
       const at = stamp();
-      db.prepare("UPDATE outlook_events SET deleted_at = ?, updated_at = ? WHERE uid = ?").run(at, at, uid);
+      (await db.run("UPDATE outlook_events SET deleted_at = ?, updated_at = ? WHERE uid = ?", at, at, uid));
     },
-    logWrite(w: NewWrite): WriteEntry {
-      const at = stamp();
-      const r = db
-        .prepare(
-          `INSERT INTO write_log (at, system, op, kind, uid, event_id, account, calendar, before, after, local_before, local_after, status, message, auto, undo_of, undone_by, attempts, updated_at)
-           VALUES (?, 'outlook', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?)`,
-        )
-        .run(at, w.op, w.kind ?? "timebox", w.uid, w.eventId, w.account, w.calendar, w.before ? JSON.stringify(w.before) : null, w.after ? JSON.stringify(w.after) : null, w.localBefore ? JSON.stringify(w.localBefore) : null, w.localAfter ? JSON.stringify(w.localAfter) : null, w.status ?? "pending", w.message ?? null, w.auto ? 1 : 0, w.undoOf ?? null, at);
-      return this.writeEntry(Number(r.lastInsertRowid))!;
+    async logWrite(w: NewWrite): Promise<WriteEntry> {
+      return tx(async () => {
+        const at = stamp();
+        const r = (await db.run(`INSERT INTO write_log (at, system, op, kind, uid, event_id, account, calendar, before, after, local_before, local_after, status, message, auto, undo_of, undone_by, attempts, updated_at)
+             VALUES (?, 'outlook', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?)`, at, w.op, w.kind ?? "timebox", w.uid, w.eventId, w.account, w.calendar, w.before ? JSON.stringify(w.before) : null, w.after ? JSON.stringify(w.after) : null, w.localBefore ? JSON.stringify(w.localBefore) : null, w.localAfter ? JSON.stringify(w.localAfter) : null, w.status ?? "pending", w.message ?? null, w.auto ? 1 : 0, w.undoOf ?? null, at));
+        return (await this.writeEntry(r.lastId!))!;
+      });
     },
-    writeEntry(id: number): WriteEntry | null {
-      const r = db.prepare("SELECT * FROM write_log WHERE id = ?").get(id) as Row | undefined;
+    async writeEntry(id: number): Promise<WriteEntry | null> {
+      const r = (await db.get("SELECT * FROM write_log WHERE id = ?", id)) as Row | undefined;
       return r ? toWrite(r) : null;
     },
     /** The result of an attempt (a retry adds one to attempts). */
-    settleWrite(id: number, s: { status: WriteStatus; message?: string | null; eventId?: string | null; before?: Fields | null; retry?: boolean }): WriteEntry {
-      const w = this.writeEntry(id);
-      if (!w) throw new PlanError("No such write");
-      db.prepare("UPDATE write_log SET status = ?, message = ?, event_id = ?, before = ?, attempts = attempts + ?, updated_at = ? WHERE id = ?").run(
-        s.status, s.message ?? null, s.eventId === undefined ? w.eventId : s.eventId, s.before === undefined ? (w.before ? JSON.stringify(w.before) : null) : s.before ? JSON.stringify(s.before) : null, s.retry ? 1 : 0, stamp(), id,
-      );
-      return this.writeEntry(id)!;
+    async settleWrite(id: number, s: { status: WriteStatus; message?: string | null; eventId?: string | null; before?: Fields | null; retry?: boolean }): Promise<WriteEntry> {
+      return tx(async () => {
+        const w = (await this.writeEntry(id));
+        if (!w) throw new PlanError("No such write");
+        (await db.run("UPDATE write_log SET status = ?, message = ?, event_id = ?, before = ?, attempts = attempts + ?, updated_at = ? WHERE id = ?", s.status, s.message ?? null, s.eventId === undefined ? w.eventId : s.eventId, s.before === undefined ? (w.before ? JSON.stringify(w.before) : null) : s.before ? JSON.stringify(s.before) : null, s.retry ? 1 : 0, stamp(), id,));
+        return (await this.writeEntry(id))!;
+      });
     },
-    markUndone(id: number, by: number): void {
-      db.prepare("UPDATE write_log SET undone_by = ?, updated_at = ? WHERE id = ?").run(by, stamp(), id);
+    async markUndone(id: number, by: number): Promise<void> {
+      (await db.run("UPDATE write_log SET undone_by = ?, updated_at = ? WHERE id = ?", by, stamp(), id));
     },
     // ---- Help invites (step 13) ----
     /** A help invite about to be sent: pending until Outlook confirms it (then sent, with its event id). */
-    addInvite(i: Omit<Invite, "id" | "createdAt" | "updatedAt" | "status" | "followUpId" | "eventId">): Invite {
-      const at = stamp();
-      db.prepare(
-        `INSERT INTO invites (uid, client_key, item_id, pick_id, timebox_id, title, url, start_at, end_at, attendees, teams, note, event_id, status, follow_up_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL, ?, ?)
-         ON CONFLICT(uid) DO NOTHING`,
-      ).run(i.uid, i.clientKey, i.itemId, i.pickId, i.timeboxId, i.title, i.url, i.start, i.end, JSON.stringify(i.attendees), i.teams ? 1 : 0, i.note, at, at);
-      return this.invite(i.uid)!;
+    async addInvite(i: Omit<Invite, "id" | "createdAt" | "updatedAt" | "status" | "followUpId" | "eventId">): Promise<Invite> {
+      return tx(async () => {
+        const at = stamp();
+        (await db.run(`INSERT INTO invites (uid, client_key, item_id, pick_id, timebox_id, title, url, start_at, end_at, attendees, teams, note, event_id, status, follow_up_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL, ?, ?)
+           ON CONFLICT(uid) DO NOTHING`, i.uid, i.clientKey, i.itemId, i.pickId, i.timeboxId, i.title, i.url, i.start, i.end, JSON.stringify(i.attendees), i.teams ? 1 : 0, i.note, at, at));
+        return (await this.invite(i.uid))!;
+      });
     },
-    invite(uid: string): Invite | null {
-      const r = db.prepare("SELECT * FROM invites WHERE uid = ?").get(uid) as Row | undefined;
+    async invite(uid: string): Promise<Invite | null> {
+      const r = (await db.get("SELECT * FROM invites WHERE uid = ?", uid)) as Row | undefined;
       return r ? toInvite(r) : null;
     },
     /** Invites (sent and cancelled) that start on or after `from`, by start. */
-    invitesFrom(from: string): Invite[] {
-      return (db.prepare("SELECT * FROM invites WHERE start_at >= ? ORDER BY start_at, id").all(from) as Row[]).map(toInvite);
+    async invitesFrom(from: string): Promise<Invite[]> {
+      return ((await db.all("SELECT * FROM invites WHERE start_at >= ? ORDER BY start_at, id", from)) as Row[]).map(toInvite);
     },
-    setInvite(uid: string, patch: { status?: Invite["status"]; followUpId?: number | null; eventId?: string | null }): void {
-      const i = this.invite(uid);
-      if (!i) return;
-      db.prepare("UPDATE invites SET status = ?, follow_up_id = ?, event_id = ?, updated_at = ? WHERE uid = ?").run(patch.status ?? i.status, patch.followUpId === undefined ? i.followUpId : patch.followUpId, patch.eventId === undefined ? i.eventId : patch.eventId, stamp(), uid);
+    async setInvite(uid: string, patch: { status?: Invite["status"]; followUpId?: number | null; eventId?: string | null }): Promise<void> {
+      return tx(async () => {
+        const i = (await this.invite(uid));
+        if (!i) return;
+        (await db.run("UPDATE invites SET status = ?, follow_up_id = ?, event_id = ?, updated_at = ? WHERE uid = ?", patch.status ?? i.status, patch.followUpId === undefined ? i.followUpId : patch.followUpId, patch.eventId === undefined ? i.eventId : patch.eventId, stamp(), uid));
+      });
     },
     /** Help session follow-ups close once the meeting has ended (step 13). */
-    closeHelpFollowUps(now: Temporal.Instant): number {
-      const open = (db.prepare("SELECT * FROM follow_ups WHERE kind = 'help' AND closed_at IS NULL AND ref_at IS NOT NULL").all() as Row[]).map(toFollowUp);
-      let n = 0;
-      for (const l of open) if (Temporal.Instant.compare(Temporal.Instant.from(l.refAt!), now) <= 0) (this.closeFollowUp(l.id, "The help session time has passed", "signal"), n++);
-      return n;
+    async closeHelpFollowUps(now: Temporal.Instant): Promise<number> {
+      return tx(async () => {
+        const open = ((await db.all("SELECT * FROM follow_ups WHERE kind = 'help' AND closed_at IS NULL AND ref_at IS NOT NULL")) as Row[]).map(toFollowUp);
+        let n = 0;
+        for (const l of open) if (Temporal.Instant.compare(Temporal.Instant.from(l.refAt!), now) <= 0) ((await this.closeFollowUp(l.id, "The help session time has passed", "signal")), n++);
+        return n;
+      });
     },
     /** The audit log, newest first. */
     /**
      * Step 16 (D280): today's done and open counts per item, one row per item per day (a later load that day
      * replaces it); rows older than 120 days are dropped.
      */
-    recordSnapshots(date: IsoDate, rows: readonly { clientKey: string; itemId: number; done: number; open: number }[]): void {
-      tx(() => {
-        const put = db.prepare("INSERT INTO delivery_snapshots (client_key, item_id, date, done, open) VALUES (?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id, date) DO UPDATE SET done = excluded.done, open = excluded.open");
-        for (const r of rows) put.run(r.clientKey, r.itemId, date, r.done, r.open);
-        db.prepare("DELETE FROM delivery_snapshots WHERE date < ?").run(Temporal.PlainDate.from(date).subtract({ days: 120 }).toString());
+    async recordSnapshots(date: IsoDate, rows: readonly { clientKey: string; itemId: number; done: number; open: number }[]): Promise<void> {
+      await tx(async () => {
+        for (const r of rows) await db.run("INSERT INTO delivery_snapshots (client_key, item_id, date, done, open) VALUES (?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id, date) DO UPDATE SET done = excluded.done, open = excluded.open", r.clientKey, r.itemId, date, r.done, r.open);
+        (await db.run("DELETE FROM delivery_snapshots WHERE date < ?", Temporal.PlainDate.from(date).subtract({ days: 120 }).toString()));
       });
     },
     /** Snapshots from a date on, per item ("<client>:<id>"), oldest first. */
-    snapshotsFrom(from: IsoDate): Map<string, { date: IsoDate; done: number; open: number }[]> {
+    async snapshotsFrom(from: IsoDate): Promise<Map<string, { date: IsoDate; done: number; open: number }[]>> {
       const out = new Map<string, { date: IsoDate; done: number; open: number }[]>();
-      for (const r of db.prepare("SELECT * FROM delivery_snapshots WHERE date >= ? ORDER BY date").all(from) as Row[]) {
+      for (const r of (await db.all("SELECT * FROM delivery_snapshots WHERE date >= ? ORDER BY date", from)) as Row[]) {
         const k = `${r.client_key as string}:${r.item_id as number}`;
         if (!out.has(k)) out.set(k, []);
         out.get(k)!.push({ date: r.date as string, done: r.done as number, open: r.open as number });
@@ -2388,60 +2447,72 @@ export function planStoreOn(raw: DatabaseSync, opts: { now: () => Temporal.Zoned
       return out;
     },
     /** Step 17: dates dragged on Plan ahead's timeline, per item ("<client>:<id>"). */
-    roadmapDates(): Map<string, { start: IsoDate; end: IsoDate }> {
+    async roadmapDates(): Promise<Map<string, { start: IsoDate; end: IsoDate }>> {
       const out = new Map<string, { start: IsoDate; end: IsoDate }>();
-      for (const r of db.prepare("SELECT * FROM roadmap_dates").all() as Row[]) out.set(`${r.client_key as string}:${r.item_id as number}`, { start: r.start_date as string, end: r.end_date as string });
+      for (const r of (await db.all("SELECT * FROM roadmap_dates")) as Row[]) out.set(`${r.client_key as string}:${r.item_id as number}`, { start: r.start_date as string, end: r.end_date as string });
       return out;
     },
     /** Keep dragged dates (null clears them: back to DevOps or the estimate). */
-    setRoadmapDates(clientKey: string, itemId: number, dates: { start: IsoDate; end: IsoDate } | null): void {
-      if (!dates) {
-        db.prepare("DELETE FROM roadmap_dates WHERE client_key = ? AND item_id = ?").run(clientKey, itemId);
-        return;
-      }
-      if (dates.end < dates.start) throw new PlanError("The end date is before the start date");
-      db.prepare("INSERT INTO roadmap_dates (client_key, item_id, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id) DO UPDATE SET start_date = excluded.start_date, end_date = excluded.end_date, updated_at = excluded.updated_at").run(clientKey, itemId, dates.start, dates.end, stamp());
+    async setRoadmapDates(clientKey: string, itemId: number, dates: { start: IsoDate; end: IsoDate } | null): Promise<void> {
+      return tx(async () => {
+        if (!dates) {
+          (await db.run("DELETE FROM roadmap_dates WHERE client_key = ? AND item_id = ?", clientKey, itemId));
+          return;
+        }
+        if (dates.end < dates.start) throw new PlanError("The end date is before the start date");
+        (await db.run("INSERT INTO roadmap_dates (client_key, item_id, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id) DO UPDATE SET start_date = excluded.start_date, end_date = excluded.end_date, updated_at = excluded.updated_at", clientKey, itemId, dates.start, dates.end, stamp()));
+      });
     },
-    writeLog(limit = 100): WriteEntry[] {
-      return (db.prepare("SELECT * FROM write_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toWrite);
+    async writeLog(limit = 100): Promise<WriteEntry[]> {
+      return ((await db.all("SELECT * FROM write_log ORDER BY id DESC LIMIT ?", limit)) as Row[]).map(toWrite);
     },
-    schemaVersion: () => schemaVersion(raw),
-    exportJson() {
+    schemaVersion: () => schemaVersion(conn),
+    async exportJson() {
+      const weeks = ((await db.all("SELECT DISTINCT week_start FROM week_features ORDER BY week_start")) as Row[]).map((r) => r.week_start as string);
+      const weekFeatures: WeekFeature[] = [];
+      for (const w of weeks) weekFeatures.push(...(await this.weekPlan(w)).features);
       return {
         exportedAt: stamp(),
-        schemaVersion: schemaVersion(raw),
-        dayPlans: (db.prepare("SELECT * FROM day_plans ORDER BY date").all() as Row[]).map(toPlan),
-        picks: (db.prepare(`${PICK_SELECT} ORDER BY p.date, p.half, p.position`).all() as Row[]).map(toPick),
-        draftStories: (db.prepare("SELECT * FROM draft_stories ORDER BY id").all() as Row[]).map(toDraft),
-        unavailable: (db.prepare("SELECT * FROM unavailable ORDER BY date, start_at, id").all() as Row[]).map(toUnavailable),
-        flexSessions: (db.prepare("SELECT * FROM flex_sessions ORDER BY date, start_at, id").all() as Row[]).map(toFlex),
-        followUps: (db.prepare("SELECT * FROM follow_ups ORDER BY id").all() as Row[]).map(toFollowUp),
-        resumeNotes: (db.prepare("SELECT * FROM resume_notes ORDER BY date, client_key").all() as Row[]).map(toNote),
-        borrowed: (db.prepare("SELECT * FROM borrowed ORDER BY id").all() as Row[]).map(toBorrowed),
-        weekPlans: db.prepare("SELECT * FROM week_plans ORDER BY week_start").all() as Row[],
-        weekFeatures: (db.prepare("SELECT DISTINCT week_start FROM week_features ORDER BY week_start").all() as Row[]).flatMap((r) => this.weekPlan(r.week_start as string).features),
-        breakdownMarks: this.breakdownMarks(),
-        weekDrafts: db.prepare("SELECT * FROM week_drafts ORDER BY week_start, created_at, draft_id").all() as Row[],
-        weekQuiet: db.prepare("SELECT * FROM week_quiet ORDER BY week_start, client_key").all() as Row[],
-        captures: (db.prepare("SELECT * FROM captures ORDER BY id").all() as Row[]).map(toCapture),
-        timeboxes: (db.prepare("SELECT * FROM timeboxes ORDER BY date, start_at, id").all() as Row[]).map(toTimebox),
-        outlookEvents: (db.prepare("SELECT * FROM outlook_events ORDER BY created_at, uid").all() as Row[]).map(toOwn),
-        writeLog: (db.prepare("SELECT * FROM write_log ORDER BY id").all() as Row[]).map(toWrite),
-        invites: (db.prepare("SELECT * FROM invites ORDER BY id").all() as Row[]).map(toInvite),
-        devopsIdentities: this.devopsIdentities(),
-        devopsWriteLog: (db.prepare("SELECT * FROM devops_write_log ORDER BY id").all() as Row[]).map(toDevopsWrite),
-        azureWriteLog: (db.prepare("SELECT * FROM azure_write_log ORDER BY id").all() as Row[]).map(toAzureWrite),
-        teamsStatusLog: (db.prepare("SELECT * FROM teams_status_log ORDER BY id").all() as Row[]).map(toTeamsStatus),
-        roadmapDates: [...this.roadmapDates()].map(([k, d]) => ({ item: k, ...d })),
+        // The user tables' version (the same from SQLite and SQL Server; store/user-data.ts).
+        schemaVersion: USER_SCHEMA_VERSION,
+        dayPlans: ((await db.all("SELECT * FROM day_plans ORDER BY date")) as Row[]).map(toPlan),
+        picks: ((await db.all(`${PICK_SELECT} ORDER BY p.date, p.half, p.position`)) as Row[]).map(toPick),
+        draftStories: ((await db.all("SELECT * FROM draft_stories ORDER BY id")) as Row[]).map(toDraft),
+        unavailable: ((await db.all("SELECT * FROM unavailable ORDER BY date, start_at, id")) as Row[]).map(toUnavailable),
+        flexSessions: ((await db.all("SELECT * FROM flex_sessions ORDER BY date, start_at, id")) as Row[]).map(toFlex),
+        followUps: ((await db.all("SELECT * FROM follow_ups ORDER BY id")) as Row[]).map(toFollowUp),
+        resumeNotes: ((await db.all("SELECT * FROM resume_notes ORDER BY date, client_key")) as Row[]).map(toNote),
+        borrowed: ((await db.all("SELECT * FROM borrowed ORDER BY id")) as Row[]).map(toBorrowed),
+        weekPlans: (await db.all("SELECT * FROM week_plans ORDER BY week_start")) as Row[],
+        weekFeatures,
+        breakdownMarks: (await this.breakdownMarks()),
+        weekDrafts: (await db.all("SELECT * FROM week_drafts ORDER BY week_start, created_at, draft_id")) as Row[],
+        weekQuiet: (await db.all("SELECT * FROM week_quiet ORDER BY week_start, client_key")) as Row[],
+        captures: ((await db.all("SELECT * FROM captures ORDER BY id")) as Row[]).map(toCapture),
+        timeboxes: ((await db.all("SELECT * FROM timeboxes ORDER BY date, start_at, id")) as Row[]).map(toTimebox),
+        outlookEvents: ((await db.all("SELECT * FROM outlook_events ORDER BY created_at, uid")) as Row[]).map(toOwn),
+        writeLog: ((await db.all("SELECT * FROM write_log ORDER BY id")) as Row[]).map(toWrite),
+        invites: ((await db.all("SELECT * FROM invites ORDER BY id")) as Row[]).map(toInvite),
+        devopsIdentities: (await this.devopsIdentities()),
+        devopsWriteLog: ((await db.all("SELECT * FROM devops_write_log ORDER BY id")) as Row[]).map(toDevopsWrite),
+        azureWriteLog: ((await db.all("SELECT * FROM azure_write_log ORDER BY id")) as Row[]).map(toAzureWrite),
+        teamsStatusLog: ((await db.all("SELECT * FROM teams_status_log ORDER BY id")) as Row[]).map(toTeamsStatus),
+        roadmapDates: [...(await this.roadmapDates())].map(([k, d]) => ({ item: k, ...d })),
       };
     },
-    close: () => db.close(),
+    close: () => conn.close(),
   };
 }
 
 export type PlanStore = ReturnType<typeof planStoreOn>;
 
-function schemaVersion(db: DatabaseSync): number {
+/** The schema version of a store: SQLite's migrations table, or SQL Server's schema_version (store/sql/migrate.ts). */
+export async function schemaVersion(conn: Conn): Promise<number> {
+  const table = conn.dialect === "sqlserver" ? "schema_version" : "schema_migrations";
+  return (((await conn.get(`SELECT COALESCE(MAX(version), 0) AS v FROM ${table}`)) as Row | undefined)?.v as number) ?? 0;
+}
+
+function sqliteVersion(db: DatabaseSync): number {
   return ((db.prepare("SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations").get() as Row).v as number) ?? 0;
 }
 
@@ -2450,7 +2521,7 @@ export const backupPath = (path: string, from: number, stamp: string) => `${path
 
 function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":memory:", files?: StoreFiles) {
   db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
-  const current = schemaVersion(db);
+  const current = sqliteVersion(db);
   if (current > MIGRATIONS.length) throw new Error(`Plan store is from a newer FocusTime (schema ${current}); not opening it`);
   // A store with data gets a full copy before any schema change (D125).
   if (current > 0 && current < MIGRATIONS.length && path !== ":memory:") {

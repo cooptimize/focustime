@@ -1,5 +1,6 @@
 // Settings actions (step 6b): load everything Settings shows, save one section, store an app secret in the keyring,
 // export the plan store. Secrets are never returned: only whether they are set and an expiry date I entered.
+import { mapSeq } from "./seq.ts";
 import { DEFAULT_THRESHOLDS } from "../plan/roadmap.ts";
 import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { DEFAULT_TIMEBOX, CLIENT_SLOTS, colorCss, DEFAULT_PLAN, inviteDomains, DEFAULT_COLLAB, type AppConfig, type ParseResult } from "../config/schema.ts";
@@ -63,14 +64,14 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
   ]);
   const mine = fetched ?? [];
   const keys = [...new Set([...mine.map((c) => c.clientKey), ...Object.keys(cfg.clientSettings), ...cfg.week.standingBlocks.map((b) => b.clientKey)])].sort((a, b) => a.localeCompare(b));
-  const clients = keys.map((key): SettingsClient => {
+  const clients = await mapSeq(keys, async (key): Promise<SettingsClient> => {
     const m = mine.find((c) => c.clientKey === key);
     const setting = cfg.clientSettings[key] ?? { color: null, name: null, openStates: [], follow: false };
     // Without the focus time read, only what doesn't need it is known (internal, standing block, Keep following).
     const sure = follow ? followState(key, follow.usable ? follow.patterns : [], follow.options) : null;
     const state = sure && (follow!.usable || sure.active) ? sure : null;
     // Step 14: whose write PAT this client has, if any (never the PAT).
-    const w = ctx.plan?.devopsIdentity(key) ?? null;
+    const w = (await ctx.plan?.devopsIdentity(key)) ?? null;
     const write = w ? { name: w.name, email: w.email, org: w.org, validatedAt: w.validatedAt, expires: w.expires } : null;
     return { key, dataverseName: m?.clientName ?? null, devopsEmail: m?.devopsEmail ?? null, devops: m?.devops ?? false, setting, css: setting.color ? colorCss(setting.color) : null, follow: state, write };
   });
@@ -147,7 +148,7 @@ export async function settingsAction(ctx: SettingsContext, action: SettingsActio
     case "data.export": {
       if (Object.keys(o).length) return bad("data.export takes {}");
       if (!ctx.plan || !ctx.exportPlan) return bad("The plan store isn't available", 503);
-      const path = await ctx.exportPlan(`${JSON.stringify(ctx.plan.exportJson(), null, 2)}\n`);
+      const path = await ctx.exportPlan(`${JSON.stringify((await ctx.plan.exportJson()), null, 2)}\n`);
       return { ok: true, data: { path } };
     }
   }

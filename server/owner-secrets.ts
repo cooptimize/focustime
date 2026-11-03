@@ -6,6 +6,16 @@ import { cacheKey } from "../sources/devops/source.ts";
 import type { Pat } from "../sources/devops/pat.ts";
 import type { UserSecrets } from "../store/user-secrets.ts";
 
+/** The marker kind that records the copy was made (in the person's own store, so it moves with an import). */
+export const OWNER_SECRETS_MARK = "owner_secrets_copied";
+
+/**
+ * A3: whether this sign-in copies the keyring's secrets: the store's owner at their first sign-in (A2), or the only
+ * person in a store their rows were imported into (their first sign-in there is a returning one), and only once: a
+ * PAT they remove afterwards is not copied back.
+ */
+export const copiesOwnerSecrets = (o: { owner: boolean; people: number; copiedBefore: boolean }): boolean => !o.copiedBefore && (o.owner || o.people === 1);
+
 export const writePatAccount = (clientKey: string) => `devops-write-pat:${cacheKey(clientKey)}` as const;
 
 /** The value inside a Pat, for this one copy (Pat has no getter on purpose). */
@@ -18,13 +28,13 @@ export async function copyOwnerSecrets(o: {
 }): Promise<{ pats: number; google: boolean }> {
   let pats = 0;
   for (const clientKey of o.clientKeys) {
-    if (o.mine.has(writePatAccount(clientKey))) continue;
+    if ((await o.mine.has(writePatAccount(clientKey)))) continue;
     const pat = await o.keyring.writePat(clientKey).catch(() => null);
     if (!pat) continue;
     await o.mine.set(writePatAccount(clientKey), patValue(pat)).then(() => pats++, () => null);
   }
   let google = false;
-  if (!o.mine.has("google-refresh-token")) {
+  if (!(await o.mine.has("google-refresh-token"))) {
     const token = await o.keyring.googleRefreshToken().catch(() => null);
     if (token) google = await o.mine.set("google-refresh-token", token).then(() => true, () => false);
   }

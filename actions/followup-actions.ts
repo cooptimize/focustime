@@ -1,6 +1,7 @@
 // Follow-ups (step 13.5): list, add, edit, Close the loop, Not needed, Snooze, Delete (only mine), Who suggestions and
 // the review of heads-ups under the new rule. All local to the plan store; the only reads elsewhere are Who
 // suggestions (Dataverse teammates and attendees of my own Outlook meetings in a client's domain, never stored).
+import { mapSeq } from "./seq.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { inviteDomains } from "../config/schema.ts";
 import { domainAllowed, isExcluded } from "../plan/collab.ts";
@@ -97,47 +98,47 @@ export async function followUpAction(ctx: FollowUpContext, action: FollowUpActio
   const now = Temporal.Instant.from(ctx.now());
   const today = now.toZonedDateTimeISO(tz).toPlainDate().toString();
   const name = nameOf(cfg, () => undefined);
-  const view = (f: Parameters<typeof followUpView>[1]): FollowUpView => followUpView(plan, f, today, name);
+  const view = async (f: Parameters<typeof followUpView>[1]): Promise<FollowUpView> => (await followUpView(plan, f, today, name));
   try {
     switch (action) {
       case "followups.list": {
         const o = fields(input ?? {}, [], ["includeClosed", "includeSnoozed"]);
         if (o.includeClosed !== undefined && typeof o.includeClosed !== "boolean") throw new Invalid("includeClosed must be true or false");
-        plan.openFlexFollowUps(now);
-        const open = plan.openFollowUps().filter((f) => o.includeSnoozed === true || !f.snoozedUntil || f.snoozedUntil <= today);
-        const closed = o.includeClosed ? plan.allFollowUps().filter((l) => l.closedAt).sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? "")) : [];
-        const snoozed = plan.openFollowUps().filter((f) => f.snoozedUntil && f.snoozedUntil > today).length;
-        return { ok: true, data: { followUps: [...dueOrder(open, today, (f) => f.due, (f) => f.openedAt), ...closed].map(view), snoozed } };
+        (await plan.openFlexFollowUps(now));
+        const open = (await plan.openFollowUps()).filter((f) => o.includeSnoozed === true || !f.snoozedUntil || f.snoozedUntil <= today);
+        const closed = o.includeClosed ? (await plan.allFollowUps()).filter((l) => l.closedAt).sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? "")) : [];
+        const snoozed = (await plan.openFollowUps()).filter((f) => f.snoozedUntil && f.snoozedUntil > today).length;
+        return { ok: true, data: { followUps: await mapSeq([...dueOrder(open, today, (f) => f.due, (f) => f.openedAt), ...closed], view), snoozed } };
       }
       case "followup.add": {
         const o = fields(input, ["what"], ["who", "due", "clientKey", "channel", "itemId"]);
         const f = editable(o);
         if (f.itemId && !f.clientKey) throw new Invalid("A work item needs the client it belongs to");
-        const added = plan.addFollowUp({ who: f.who ?? null, what: f.what!, due: f.due ?? null, clientKey: f.clientKey ?? null, channel: f.channel ?? null, itemId: f.itemId ?? null });
-        return { ok: true, data: { followUp: view(added) } };
+        const added = (await plan.addFollowUp({ who: f.who ?? null, what: f.what!, due: f.due ?? null, clientKey: f.clientKey ?? null, channel: f.channel ?? null, itemId: f.itemId ?? null }));
+        return { ok: true, data: { followUp: await view(added) } };
       }
       case "followup.edit": {
         const o = fields(input, ["id"], ["who", "what", "due", "clientKey", "channel", "itemId"]);
-        return { ok: true, data: { followUp: view(plan.editFollowUp(id(o.id), editable(o))) } };
+        return { ok: true, data: { followUp: await view((await plan.editFollowUp(id(o.id), editable(o)))) } };
       }
       case "followup.close": {
         const o = fields(input, ["id"], ["note", "how"]);
         const note = text(o.note, "note", 500, true);
-        return { ok: true, data: { followUp: view(plan.closeFollowUp(id(o.id), note, "me", { how: how(o.how), outcome: "done" })) } };
+        return { ok: true, data: { followUp: await view((await plan.closeFollowUp(id(o.id), note, "me", { how: how(o.how), outcome: "done" }))) } };
       }
       case "followup.not_needed": {
         const o = fields(input, ["id"]);
-        return { ok: true, data: { followUp: view(plan.closeFollowUp(id(o.id), null, "me", { outcome: "not_needed" })) } };
+        return { ok: true, data: { followUp: await view((await plan.closeFollowUp(id(o.id), null, "me", { outcome: "not_needed" }))) } };
       }
       case "followup.snooze": {
         const o = fields(input, ["id", "until"]);
         const until = day(o.until, "until");
         if (until !== null && until <= today) throw new Invalid("Snooze until a day after today");
-        return { ok: true, data: { followUp: view(plan.snoozeFollowUp(id(o.id), until)) } };
+        return { ok: true, data: { followUp: await view((await plan.snoozeFollowUp(id(o.id), until))) } };
       }
       case "followup.delete": {
         const o = fields(input, ["id"]);
-        plan.deleteFollowUp(id(o.id));
+        (await plan.deleteFollowUp(id(o.id)));
         return { ok: true, data: { deleted: true } };
       }
       case "followup.people": {
@@ -174,8 +175,8 @@ export async function followUpAction(ctx: FollowUpContext, action: FollowUpActio
       case "followups.review": {
         fields(input ?? {}, []);
         const work: WorkState[] | null = null;
-        const list = reviewOpenHeadsUps(plan, { today, work, internal: internalClients(cfg), clientName: name, isWorkday: workdayOf(cfg) });
-        return { ok: true, data: { headsUps: list.map((r) => ({ id: r.id, what: plan.getFollowUp(r.id)?.what ?? "", reason: r.reason })) } satisfies ReviewData };
+        const list = (await reviewOpenHeadsUps(plan, { today, work, internal: internalClients(cfg), clientName: name, isWorkday: workdayOf(cfg) }));
+        return { ok: true, data: { headsUps: await mapSeq(list, async (r) => ({ id: r.id, what: (await plan.getFollowUp(r.id))?.what ?? "", reason: r.reason })) } satisfies ReviewData };
       }
     }
   } catch (e) {

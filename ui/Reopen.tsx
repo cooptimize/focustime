@@ -2,7 +2,7 @@
 // with one button that signs in again. The developer loop's "bring the window up" (focustime-open) isn't sign-in and
 // isn't shown here.
 import { useEffect, useState } from "react";
-import { setSignInShownListener, setStaleListener, signInWithMicrosoft } from "./api.ts";
+import { setDbStateListener, setSignInShownListener, setStaleListener, signInWithMicrosoft, type DbState } from "./api.ts";
 
 export function SignInAgainButton() {
   const [busy, setBusy] = useState(false);
@@ -40,6 +40,21 @@ export function StaleBanner() {
     <div className="stale-banner" role="alert">
       <span>You're signed out of FocusTime.</span>
       <SignInAgainButton />
+    </div>
+  );
+}
+
+/** A3: while a call waits on a database that is waking up (Azure SQL pauses when nobody has used it for a while). */
+export function DbBanner() {
+  const [state, setState] = useState<DbState>("ok");
+  useEffect(() => {
+    setDbStateListener(setState);
+    return () => setDbStateListener(null);
+  }, []);
+  if (state === "ok") return null;
+  return (
+    <div className="stale-banner db-banner" role="status" aria-live="polite">
+      <span>{state === "waking" ? "Waking up the database. This can take up to a minute." : "The database isn't answering. FocusTime will keep trying; try again in a minute."}</span>
     </div>
   );
 }

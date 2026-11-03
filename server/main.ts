@@ -21,9 +21,10 @@ import { exportUser, hardDeleteDue, HARD_DELETE_AFTER_DAYS, recordSoftDelete } f
 import { starterToml } from "../config/starter.ts";
 import { mailboxZone } from "./auth/mailbox.ts";
 import { createPeople } from "./people.ts";
-import { copyOwnerSecrets, writePatAccount } from "./owner-secrets.ts";
+import { copiesOwnerSecrets, copyOwnerSecrets, OWNER_SECRETS_MARK, writePatAccount } from "./owner-secrets.ts";
 import { personTicks, type PersonTicks } from "./ticks.ts";
 import { createScheduler } from "./scheduler.ts";
+import { wakeStoreOn } from "../store/wake-store.ts";
 import { keepRoute, takeRoute } from "./open-route.ts";
 import { join, resolve } from "node:path";
 import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
@@ -39,8 +40,9 @@ import { createGoogleSource } from "../sources/google/source.ts";
 import { createOutlookSource } from "../sources/graph/source.ts";
 import { createDevOpsSource, type DevOpsSource } from "../sources/devops/source.ts";
 import type { Keyring } from "../sources/oauth/oauth.ts";
-import { openPlanDb, planStoreOn, type PlanStore } from "../store/plan-store.ts";
-import type { DatabaseSync } from "node:sqlite";
+import { planStoreOn, type PlanStore } from "../store/plan-store.ts";
+import type { Conn } from "../store/sql/conn.ts";
+import { openStore, StoreConfigError, type OpenedStore } from "../store/open.ts";
 import { createApp } from "./app.ts";
 import { moveFromOldName } from "../host/local/rename.ts";
 import { createDemoContext, seedDemo, type DemoControl } from "./demo.ts";
@@ -88,7 +90,7 @@ const cfgPath = host.facts().configPath ?? "in memory";
  * A2: what the server keeps in memory for a signed-in person: their settings and what it uses from them (zone, DevOps
  * choices), their encrypted secrets and their own snapshot cache.
  */
-type Person = { userId: string; zone: string; pickableTypes: string[]; openStates: Record<string, string[]>; settings: UserSettings; secrets: UserSecrets; snapshots: SnapshotStore };
+type Person = { userId: string; upn: string | null; zone: string; pickableTypes: string[]; openStates: Record<string, string[]>; settings: UserSettings; secrets: UserSecrets; snapshots: SnapshotStore };
 
 // One Dataverse source per person and config, so the in-memory token and results survive between requests.
 const sources = new Map<string, DataverseSource>();
@@ -136,7 +138,7 @@ const outlookFor = (who: Person) => (cfg: OutlookConfig, timeZone: string) =>
       config: cfg,
       ...(isWebApp(cfg)
         ? {
-            web: { login: () => { const u = accounts.users.get(who.userId); return `/auth/microsoft/login${u ? `?hint=${encodeURIComponent(u.upn)}` : ""}`; }, redirectUri: urls.microsoft },
+            web: { login: () => `/auth/microsoft/login${who.upn ? `?hint=${encodeURIComponent(who.upn)}` : ""}`, redirectUri: urls.microsoft },
             clientSecretAccount: "entra-client-secret" as const,
             calendarScope: "Calendars.ReadWrite" as const,
           }
@@ -198,25 +200,31 @@ const devopsFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
   return s;
 };
 
-let planDb: DatabaseSync | undefined;
+// A3: the plan store is SQL Server (the app config's [database]; Azure SQL in the hosted app, the local container
+// here), or the SQLite file when the config says sqlite (the fallback, and the store before the switch).
 const planPath = host.kind === "local" ? host.paths.planDb : ":memory:";
+let opened: OpenedStore | undefined;
 try {
-  planDb = openPlanDb({ path: planPath, now: () => zonedNow(host.clock.zone()), log, files: host.files.store });
-} catch {
-  log({ source: "plan", op: "open", kind: "failed" });
+  opened = await openStore(app.database, { sqlitePath: planPath, now: () => zonedNow(host.clock.zone()), log, files: host.files.store, password: () => host.secrets.get("sql-password") });
+} catch (e) {
+  log({ source: "plan", op: "open", kind: e instanceof StoreConfigError ? "config" : "failed" });
+  if (e instanceof StoreConfigError) console.error(e.message);
 }
-if (!planDb) {
+if (!opened) {
   console.error("FocusTime couldn't open its plan store, so nobody can sign in. See the log above.");
   process.exit(1);
 }
-const accounts = createAccountStore(planDb, instantNow);
-const db = planDb;
+const db: Conn = opened.conn;
+/** A3: when a signed-in person last used FocusTime (in memory; the idle rule's "someone is active"). */
+let lastUse = 0;
+const ACTIVE_MS = 15 * 60_000;
+const accounts = createAccountStore(db, instantNow);
 /** A2: each person's plan store on the one database (every statement scoped to them, store/scope.ts). */
 const plans = new Map<string, PlanStore>();
 /** The store's clock follows the person's time zone (A1: their setting, else the host clock's). */
 const planFor = (who: Person): PlanStore => {
   let p = plans.get(who.userId);
-  if (!p) plans.set(who.userId, (p = planStoreOn(db, { userId: who.userId, path: planPath, now: () => zonedNow(who.zone), files: host.files.store })));
+  if (!p) plans.set(who.userId, (p = planStoreOn(db, { userId: who.userId, now: () => zonedNow(who.zone), ...(opened.backup ? { path: planPath, backup: opened.backup } : {}) })));
   return p;
 };
 const appKeys: AppKeys = { dataverse: app.dataverse, entra: app.entra, google: app.google };
@@ -225,8 +233,8 @@ const settingsFor = (userId: string): UserSettings =>
     db,
     userId,
     app: appKeys,
-    person: () => {
-      const u = accounts.users.get(userId);
+    person: async () => {
+      const u = (await accounts.users.get(userId));
       return { email: u?.email ?? null, upn: u?.upn ?? "", timeZone: u?.timeZone ?? null };
     },
     setZone: (z) => accounts.users.setTimeZone(userId, z),
@@ -321,11 +329,15 @@ const server = createApp({
   // FOCUSTIME_DIST: a verification build elsewhere, so checking work never swaps the UI the service serves.
   ...(devMiddleware ? { devMiddleware } : { distDir: process.env.FOCUSTIME_DIST ?? join(root, "dist") }),
   // The launcher's request (capture), else the view a clicked notification asked for (step 15.5), taken once.
-  takeOpenRequest: async (s) => (s.demo ? null : ((await host.launch.takeOpenRequest()) ?? takeRouteFor(s.userId))),
+  takeOpenRequest: async (s) => (s.demo ? null : ((await host.launch.takeOpenRequest()) ?? (await takeRouteFor(s.userId)))),
   reopen: reopenWindow,
-  ctx: (s) => (s.demo ? demoFor(s.userId) : runtimeFor(s.userId)),
+  dbStatus: () => opened.status?.() ?? "ok",
+  ctx: (s) => {
+    if (s.demo) return demoFor(s.userId);
+    lastUse = Date.now();
+    return runtimeFor(s.userId);
+  },
 });
-setInterval(() => void accounts.sessions.sweep(), 15 * 60_000).unref();
 /**
  * A2: one person's runtime: their action context (their plan store; config, sources and secrets are still this
  * machine's until the settings and secrets steps) and their background ticks (reminders, the focus timer, Teams status),
@@ -333,12 +345,23 @@ setInterval(() => void accounts.sessions.sweep(), 15 * 60_000).unref();
  * ends on time after a restart without anyone signing in).
  */
 const runtimes = new Map<string, { ctx: ActionContext; who: Person; ticks: PersonTicks }>();
-function runtimeFor(userId: string): ActionContext {
+/** Runtimes being built (the store is async, so two requests at once must not build two). */
+const starting = new Map<string, Promise<ActionContext>>();
+function runtimeFor(userId: string): Promise<ActionContext> {
   const known = runtimes.get(userId);
-  if (known) return known.ctx;
+  if (known) return Promise.resolve(known.ctx);
+  let p = starting.get(userId);
+  if (!p) {
+    p = buildRuntime(userId).finally(() => starting.delete(userId));
+    starting.set(userId, p);
+  }
+  return p;
+}
+async function buildRuntime(userId: string): Promise<ActionContext> {
   const settings = settingsFor(userId);
-  if (!settings.has()) settings.seed(starterToml(accounts.users.get(userId)?.timeZone ?? host.clock.zone()));
-  const who: Person = { userId, zone: accounts.users.get(userId)?.timeZone ?? host.clock.zone(), pickableTypes: [], openStates: {}, settings, secrets: secretsFor(userId), snapshots: host.snapshotsFor(userId) };
+  const user = await accounts.users.get(userId);
+  if (!(await settings.has())) await settings.seed(starterToml(user?.timeZone ?? host.clock.zone()));
+  const who: Person = { userId, upn: user?.upn ?? null, zone: user?.timeZone ?? host.clock.zone(), pickableTypes: [], openStates: {}, settings, secrets: secretsFor(userId), snapshots: host.snapshotsFor(userId) };
   /** Their settings, with what the server keeps from them refreshed. */
   const loadConfig = async () => {
     const r = await settings.load();
@@ -360,8 +383,8 @@ function runtimeFor(userId: string): ActionContext {
     makeGoogle: googleFor(who),
     makeDevOps: devopsFor(who),
     saveSystemUserId: (id) => settings.saveSystemUserId(id),
-    get signedInAs() {
-      const u = accounts.users.get(userId);
+    signedInAs: async () => {
+      const u = await accounts.users.get(userId);
       return u ? { email: u.email, upn: u.upn } : undefined;
     },
     writeConfig: (edit) => settings.write(edit),
@@ -380,7 +403,7 @@ function runtimeFor(userId: string): ActionContext {
     exportPlan: (json) => host.files.exportPlan(json),
     myData: {
       export: async () => {
-        const u = accounts.users.get(userId);
+        const u = await accounts.users.get(userId);
         if (!u) throw new Error("Not signed in");
         log({ source: "plan", op: "data_export" });
         return exportUser(db, u, instantNow());
@@ -388,7 +411,7 @@ function runtimeFor(userId: string): ActionContext {
       remove: async () => deleteData(userId),
     },
   };
-  const ticks = personTicks({ log, now: instantNow, notifications: host.notifications, media: host.media, openRoute: (route) => openRouteFor(userId, route) }, plan, liveCtx, who);
+  const ticks = personTicks({ log, now: instantNow, notifications: host.notifications, media: host.media, openRoute: (route) => void openRouteFor(userId, route).catch(() => undefined) }, plan, liveCtx, who);
   runtimes.set(userId, { ctx: liveCtx, who, ticks });
   return liveCtx;
 }
@@ -396,18 +419,22 @@ function runtimeFor(userId: string): ActionContext {
 /**
  * A2: after a Microsoft sign-in, the person's refresh token goes into their encrypted secrets (the Outlook source and
  * everything on that sign-in use it), who they are is remembered in their store (as the Outlook sign-in did), and
- * their calendar sources start fresh. The store's owner, the first time: the DevOps write PATs and the Google refresh
- * token this machine's keyring holds are copied into their secrets (server/owner-secrets.ts; the keyring entries stay).
+ * their calendar sources start fresh. The store's owner, once (their first sign-in, or their first after an import as the
+ * store's only person): the DevOps write PATs and the Google refresh token this machine's keyring holds are copied into
+ * their secrets (server/owner-secrets.ts; the keyring entries stay).
  */
 async function keepSignIn(userId: string, u: SignedIn, refreshToken: string, owner: boolean): Promise<void> {
-  const ctx = runtimeFor(userId);
+  const ctx = (await runtimeFor(userId));
   const mine = secretsFor(userId);
   await mine.set("outlook-refresh-token", refreshToken).catch(() => log({ source: "auth", op: "refresh_token", kind: "not_kept" }));
   forgetCalendars(userId);
-  rememberIdentity(ctx.plan, { oid: u.oid, tid: u.tid, name: u.name, username: u.upn, email: u.email }, instantNow().toString());
-  if (!owner || !ctx.plan) return;
+  await rememberIdentity(ctx.plan, { oid: u.oid, tid: u.tid, name: u.name, username: u.upn, email: u.email }, instantNow().toString());
+  if (!ctx.plan) return;
+  const copiedBefore = (await ctx.plan.markedDates(OWNER_SECRETS_MARK)).size > 0;
+  if (!copiesOwnerSecrets({ owner, people: await accounts.users.count(), copiedBefore })) return;
+  await ctx.plan.markOnce(OWNER_SECRETS_MARK, instantNow().toZonedDateTimeISO("UTC").toPlainDate().toString());
   const r = await copyOwnerSecrets({
-    clientKeys: ctx.plan.devopsIdentities().map((i) => i.clientKey),
+    clientKeys: (await ctx.plan.devopsIdentities()).map((i) => i.clientKey),
     mine,
     keyring: { writePat: (k) => host.secrets.writePat.get(k), googleRefreshToken: () => host.secrets.get("google-refresh-token") },
   });
@@ -416,7 +443,7 @@ async function keepSignIn(userId: string, u: SignedIn, refreshToken: string, own
 
 /** A person's Google source for the web sign-in, from their settings (null without [google]). */
 async function googleOf(userId: string) {
-  runtimeFor(userId);
+  await runtimeFor(userId);
   const rt = runtimes.get(userId)!;
   const r = await rt.ctx.loadConfig();
   if (!r.parsed.ok || !r.parsed.config.google) return null;
@@ -429,34 +456,32 @@ async function googleOf(userId: string) {
  */
 async function deleteData(userId: string): Promise<{ hardDeleteOn: string }> {
   const at = instantNow();
-  accounts.users.setDeleted(userId, at.toString());
-  recordSoftDelete(db, userId, at);
-  accounts.sessions.endAllFor(userId);
+  await accounts.users.setDeleted(userId, at.toString());
+  await recordSoftDelete(db, userId, at);
+  await accounts.sessions.endAllFor(userId);
   // Their refresh tokens and write PATs go now (the rows of their data wait for the hard delete).
-  secretsFor(userId).clear();
+  await secretsFor(userId).clear();
   forgetCalendars(userId);
   runtimes.delete(userId);
   plans.delete(userId);
   log({ source: "plan", op: "data_delete", kind: "soft" });
   return { hardDeleteOn: at.add({ hours: 24 * HARD_DELETE_AFTER_DAYS }).toString().slice(0, 10) };
 }
-const hardDeletes = () => {
-  const n = hardDeleteDue(db, instantNow());
+const hardDeletes = async () => {
+  const n = await hardDeleteDue(db, instantNow()).catch(() => 0);
   if (n) log({ source: "plan", op: "data_delete", kind: "hard", count: n });
 };
-hardDeletes();
-setInterval(hardDeletes, 3600_000).unref();
 
 /** Step 15.5, A2: a clicked notification's view, kept in the person's store for their window, which is brought up. */
-function openRouteFor(userId: string, route: string): void {
+async function openRouteFor(userId: string, route: string): Promise<void> {
   const plan = plans.get(userId);
-  if (!plan || !keepRoute(plan, route, instantNow())) return;
+  if (!plan || !(await keepRoute(plan, route, instantNow()))) return;
   log({ source: "plan", op: "notify_route", kind: route.split(":")[0]! });
   void reopenWindow().then((ok) => log({ source: "plan", op: "notify_window", kind: ok ? "opened" : "unavailable" }));
 }
-function takeRouteFor(userId: string): string | null {
+async function takeRouteFor(userId: string): Promise<string | null> {
   const plan = plans.get(userId);
-  const r = plan ? takeRoute(plan, instantNow()) : null;
+  const r = plan ? await takeRoute(plan, instantNow()) : null;
   if (r) log({ source: "plan", op: "notify_route", kind: "taken" });
   return r;
 }
@@ -468,10 +493,31 @@ function reopenWindow(): Promise<boolean> {
 
 
 
-// Everyone who has signed in before gets their background work back at start (a timer that was running ends on time),
-// all of it run by one scheduler (server/scheduler.ts) that reads what is due from each person's rows.
-for (const u of accounts.users.all()) if (!u.deletedAt) runtimeFor(u.id);
-const scheduler = createScheduler({ people: () => [...runtimes.values()].map((r) => r.ticks), log });
+// Everyone who has signed in before gets their background work back (a timer that was running ends on time), all of it
+// run by one scheduler (server/scheduler.ts) that reads what is due from each person's rows. A3, the idle rule: the
+// passes run while someone has used FocusTime in the last 15 minutes; otherwise the scheduler sleeps until the stored
+// next-due time and makes no database call before it. Everyone's runtimes are built on the first pass (not at start,
+// so an idle start reads nothing), and the app's own upkeep (hard deletes, ended sessions) rides on the slow pass.
+let everyone = false;
+const scheduler = createScheduler({
+  people: async () => {
+    if (!everyone) {
+      for (const u of await accounts.users.all()) if (!u.deletedAt) await runtimeFor(u.id);
+      everyone = true;
+    }
+    return [...runtimes.values()].map((r) => r.ticks);
+  },
+  log,
+  active: () => Date.now() - lastUse < ACTIVE_MS,
+  wakeStore: wakeStoreOn(db, instantNow),
+  maintenance: {
+    everyMs: 3600_000,
+    run: async () => {
+      await hardDeletes();
+      await accounts.sessions.sweep();
+    },
+  },
+});
 const stopScheduler = scheduler.start();
 
 server.on("error", (e: NodeJS.ErrnoException) => {
@@ -492,7 +538,7 @@ server.listen(port, "127.0.0.1", async () => {
 const stop = async () => {
   stopScheduler();
   await host.launch.unpublish();
-  planDb?.close();
+  await opened.close().catch(() => undefined);
   process.exit(0);
 };
 process.on("SIGINT", stop);

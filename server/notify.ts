@@ -26,11 +26,11 @@ export type ReminderDeps = {
   hours: () => Promise<TimeModel | null>;
   /** Minutes after the day's start the reminder may first fire ([plan] reminder_offset_minutes). */
   offsetMinutes?: () => Promise<number>;
-  committed: (date: string) => boolean;
+  committed: (date: string) => boolean | Promise<boolean>;
   /** Whether a date is a PTO day (D106): no reminder then. Asked only when a reminder would otherwise be due. */
   off?: (date: string) => Promise<boolean>;
   /** True the first time for a date (the store's markOnce). */
-  once: (date: string) => boolean;
+  once: (date: string) => boolean | Promise<boolean>;
   send: (title: string, body: string) => void;
 };
 
@@ -41,9 +41,9 @@ export async function checkReminder(d: ReminderDeps): Promise<boolean> {
   const now = d.now().withTimeZone(userZone(model));
   const date = now.toPlainDate().toString();
   const offset = d.offsetMinutes ? await d.offsetMinutes().catch(() => 0) : 0;
-  if (!reminderDue(now, model, d.committed(date), offset)) return false;
+  if (!reminderDue(now, model, await d.committed(date), offset)) return false;
   if (d.off && (await d.off(date).catch(() => false))) return false;
-  if (!d.once(date)) return false;
+  if (!(await d.once(date))) return false;
   d.send("FocusTime", "Today isn't planned yet. Open FocusTime and press P to plan the day.");
   return true;
 }
@@ -73,7 +73,7 @@ export type DayReminderDeps = {
   /** Whether the reminder is due (the rule above, with today's plan state and the offset). */
   due: (now: Temporal.ZonedDateTime, model: TimeModel) => Promise<boolean> | boolean;
   off?: (date: string) => Promise<boolean>;
-  once: (date: string) => boolean;
+  once: (date: string) => boolean | Promise<boolean>;
   send: () => void;
 };
 
@@ -85,7 +85,7 @@ export async function checkDayReminder(d: DayReminderDeps): Promise<boolean> {
   const date = now.toPlainDate().toString();
   if (!(await d.due(now, model))) return false;
   if (d.off && (await d.off(date).catch(() => false))) return false;
-  if (!d.once(date)) return false;
+  if (!(await d.once(date))) return false;
   d.send();
   return true;
 }
@@ -101,9 +101,9 @@ export const CHECKIN_MESSAGE = "Midday check-in: what still fits this afternoon.
 export async function checkWeekNudges(d: {
   now: () => Temporal.ZonedDateTime;
   times: () => Promise<NudgeTimes | null>;
-  committed: (weekStart: string) => boolean;
+  committed: (weekStart: string) => boolean | Promise<boolean>;
   off: (date: string) => Promise<boolean>;
-  once: (key: string, weekStart: string) => boolean;
+  once: (key: string, weekStart: string) => boolean | Promise<boolean>;
   send: (body: string, weekStart: string) => void;
   /** Today's working start ("HH:MM"), or null with no working time today (Q50: a skipped nudge fires then). */
   workStart?: (date: string) => Promise<string | null>;
@@ -113,14 +113,19 @@ export async function checkWeekNudges(d: {
   const now = d.now();
   const today = now.toPlainDate().toString();
   const start = d.workStart ? await d.workStart(today).catch(() => null) : undefined;
-  const { due } = weekNudges(now, times, d.committed, start === undefined ? {} : { workStart: start ? Temporal.PlainTime.from(start) : null });
+  // The nudges look back 7 days, so they weigh last week, this one and next (A3: read up front; weekNudges is sync).
+  const monday = now.toPlainDate().subtract({ days: now.dayOfWeek - 1 });
+  const committed = new Set<string>();
+  for (const w of [monday.subtract({ days: 7 }), monday, monday.add({ days: 7 })].map(String)) if (await d.committed(w)) committed.add(w);
+  const { due } = weekNudges(now, times, (w) => committed.has(w), start === undefined ? {} : { workStart: start ? Temporal.PlainTime.from(start) : null });
   if (!due.length) return 0;
   if (await d.off(today).catch(() => false)) return 0;
   const thisWeek = now.toPlainDate().subtract({ days: now.dayOfWeek - 1 }).toString();
   let n = 0;
   // One message per week, however many of its nudges are due; each is marked so none repeats.
   for (const weekStart of [...new Set(due.map((x) => x.weekStart))]) {
-    const fresh = due.filter((x) => x.weekStart === weekStart).map((x) => d.once(x.key, weekStart));
+    const fresh: boolean[] = [];
+    for (const x of due.filter((x) => x.weekStart === weekStart)) fresh.push(await d.once(x.key, weekStart));
     if (!fresh.some(Boolean)) continue;
     d.send(WEEK_NUDGE_MESSAGE(weekStart, weekStart === thisWeek), weekStart);
     n++;

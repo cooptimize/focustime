@@ -5,7 +5,7 @@
 // fake. Values never leave the server: nothing here returns them except to the code that uses them, and the export,
 // the logs and the UI never see them.
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import type { DatabaseSync } from "node:sqlite";
+import type { Conn } from "./sql/conn.ts";
 import { SecretError, type KeyProvider } from "../host/types.ts";
 import { scopedDb } from "./scope.ts";
 
@@ -47,7 +47,7 @@ export function open(key: Uint8Array, userId: string, account: string, sealed: s
   }
 }
 
-export function createUserSecrets(o: { db: DatabaseSync; userId: string; keys: KeyProvider; now: () => Temporal.Instant }) {
+export function createUserSecrets(o: { db: Conn; userId: string; keys: KeyProvider; now: () => Temporal.Instant }) {
   const db = scopedDb(o.db, o.userId);
   let key: Promise<Uint8Array> | null = null;
   const dataKey = () => {
@@ -63,7 +63,7 @@ export function createUserSecrets(o: { db: DatabaseSync; userId: string; keys: K
   return {
     async get(account: UserSecretAccount): Promise<string> {
       check(account);
-      const r = db.prepare("SELECT sealed FROM user_secrets WHERE account = ?").get(account) as { sealed: string } | undefined;
+      const r = (await db.get("SELECT sealed FROM user_secrets WHERE account = ?", account)) as { sealed: string } | undefined;
       if (!r) throw new SecretError("not_found");
       return open(await dataKey(), o.userId, account, r.sealed);
     },
@@ -71,19 +71,19 @@ export function createUserSecrets(o: { db: DatabaseSync; userId: string; keys: K
       check(account);
       if (!value || value.length > 16_384) throw new Error("A secret is 1 to 16384 characters");
       const sealed = seal(await dataKey(), o.userId, account, value);
-      db.prepare("INSERT INTO user_secrets (account, sealed, updated_at) VALUES (?, ?, ?) ON CONFLICT (account) DO UPDATE SET sealed = excluded.sealed, updated_at = excluded.updated_at").run(account, sealed, o.now().toString());
+      await db.run("INSERT INTO user_secrets (account, sealed, updated_at) VALUES (?, ?, ?) ON CONFLICT (account) DO UPDATE SET sealed = excluded.sealed, updated_at = excluded.updated_at", account, sealed, o.now().toString());
     },
     async delete(account: UserSecretAccount): Promise<void> {
       check(account);
-      db.prepare("DELETE FROM user_secrets WHERE account = ?").run(account);
+      await db.run("DELETE FROM user_secrets WHERE account = ?", account);
     },
-    has(account: UserSecretAccount): boolean {
+    async has(account: UserSecretAccount): Promise<boolean> {
       check(account);
-      return !!db.prepare("SELECT 1 FROM user_secrets WHERE account = ?").get(account);
+      return !!(await db.get("SELECT 1 FROM user_secrets WHERE account = ?", account));
     },
     /** Every secret of the person, gone (sign-out of everything, or Delete my data). */
-    clear(): void {
-      db.prepare("DELETE FROM user_secrets").run();
+    async clear(): Promise<void> {
+      await db.run("DELETE FROM user_secrets");
     },
   };
 }

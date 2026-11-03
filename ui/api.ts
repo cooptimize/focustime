@@ -94,13 +94,54 @@ export async function call<T>(action: string, input: unknown): Promise<T> {
   }
 }
 
+/**
+ * A3: the database's state while a call waits ("waking": a paused Azure SQL database resuming, up to a minute). A call
+ * that hasn't answered in 1.5 seconds asks the server every second (from memory there, no database call) until it does.
+ */
+export type DbState = "ok" | "waking" | "unavailable";
+let onDbState: ((s: DbState) => void) | null = null;
+export const setDbStateListener = (f: typeof onDbState) => void (onDbState = f);
+let waiting = 0;
+let polling: ReturnType<typeof setInterval> | null = null;
+const askDbState = async () => {
+  try {
+    const r = await fetch("/api/db-status", { method: "POST", credentials: "same-origin", headers: postHeaders(), body: "{}" });
+    const s = ((await r.json()) as { status?: DbState }).status;
+    if (s && waiting > 0) onDbState?.(s);
+  } catch {
+    // The server itself isn't answering: the call's own error says so.
+  }
+};
+function watchSlowCall(): () => void {
+  waiting++;
+  const slow = setTimeout(() => {
+    if (polling || waiting === 0) return;
+    void askDbState();
+    polling = setInterval(() => void askDbState(), 1000);
+  }, 1500);
+  return () => {
+    clearTimeout(slow);
+    waiting--;
+    if (waiting > 0) return;
+    if (polling) clearInterval(polling);
+    polling = null;
+    onDbState?.("ok");
+  };
+}
+
 async function send<T>(action: string, input: unknown): Promise<T> {
-  const res = await fetch("/api/action", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: postHeaders(),
-    body: JSON.stringify({ action, input }),
-  });
+  const done = watchSlowCall();
+  let res: Response;
+  try {
+    res = await fetch("/api/action", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: postHeaders(),
+      body: JSON.stringify({ action, input }),
+    });
+  } finally {
+    done();
+  }
   return readResponse<T>(res);
 }
 

@@ -181,7 +181,7 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
       const windows = myWindows(cfg, dates, myPto);
       if (!windows.length) return { ok: true, data: { slots: [], checked: 0, problems: [...c.problems, "No working hours of yours in that range"] } satisfies SuggestData };
       const weeks = [...new Set(dates.map(mondayOf))];
-      const own = plan ? ownEventIds(plan.ownEvents()) : new Set<string>();
+      const own = plan ? ownEventIds((await plan.ownEvents())) : new Set<string>();
       const google = ctx.google(cfg);
       const loads = await Promise.all(weeks.flatMap((w) => [ol.source.load(w).catch(() => null), google ? google.load(w).catch(() => null) : Promise.resolve(null)]));
       const problems = [...c.problems];
@@ -189,8 +189,8 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
       const mine: CalEvent[] = withoutOwn(loads.flatMap((l) => l?.items ?? []), own);
       const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
       const myBusy: [number, number][] = mine.filter((e) => !e.allDay && BUSY_SHOW.has(e.showAs) && e.responseStatus !== "declined").map((e) => [ms(e.start), ms(e.end)]);
-      for (const u of plan?.unavailableBetween(r.from, r.to) ?? []) myBusy.push([ms(u.start), ms(u.end)]);
-      const myBoxes: [number, number][] = (plan?.timeboxesBetween(r.from, r.to) ?? []).filter((t) => !t.removedAt).map((t) => [ms(t.start), ms(t.end)]);
+      for (const u of (await plan?.unavailableBetween(r.from, r.to)) ?? []) myBusy.push([ms(u.start), ms(u.end)]);
+      const myBoxes: [number, number][] = ((await plan?.timeboxesBetween(r.from, r.to)) ?? []).filter((t) => !t.removedAt).map((t) => [ms(t.start), ms(t.end)]);
       // Free/busy for the chosen people, or the best-ranked candidates (not those away the whole range).
       const ask = chosen ?? c.candidates.filter((x) => x.away.length < dates.length).slice(0, MAX_CHECKED).map((x) => x.email);
       if (!ask.length) return { ok: true, data: { slots: [], checked: 0, problems: [...problems, "Nobody to check"] } satisfies SuggestData };

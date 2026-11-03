@@ -57,76 +57,83 @@ export function sessionOf(s: TimerState | null, now: Temporal.Instant): FocusSes
   return { kind: s.kind, startedAt: s.startedAt, running: !!s.runningSince, ended: s.ended, deep: !!s.deep, plannedMinutes: s.plannedMinutes, remainingMs: remainingMs(s, now) };
 }
 
-const readState = (plan: PlanStore) => plan.accountState<TeamsStatusState>(TEAMS_STATUS_KEY) ?? NO_TEAMS_STATUS;
+const readState = async (plan: PlanStore) => (await plan.accountState<TeamsStatusState>(TEAMS_STATUS_KEY)) ?? NO_TEAMS_STATUS;
 
 // One sync at a time per store (the tick and an action can meet).
 const running = new WeakMap<PlanStore, Promise<TeamsStatusState>>();
 
 /** Moves my Teams status toward what the timer and Settings say. Never throws; returns the state after. */
 export function syncTeamsStatus(ctx: PresenceContext): Promise<TeamsStatusState> {
-  const plan = ctx.plan;
+  return syncTeamsStatusWith(ctx.plan, async () => ctx);
+}
+
+/**
+ * The same, taking its place in the store's queue now and building its context when its turn comes (A3: the context
+ * is async; a timer action's sync must still run before anything queued after the action).
+ */
+export function syncTeamsStatusWith(plan: PlanStore | undefined, make: () => Promise<PresenceContext>): Promise<TeamsStatusState> {
   if (!plan) return Promise.resolve(NO_TEAMS_STATUS);
   const prev = running.get(plan) ?? Promise.resolve(NO_TEAMS_STATUS);
-  const next = prev.catch(() => NO_TEAMS_STATUS).then(() => syncOnce(ctx, plan));
+  const next = prev.catch(() => NO_TEAMS_STATUS).then(async () => syncOnce(await make(), plan));
   running.set(plan, next);
   return next;
 }
 
 async function syncOnce(ctx: PresenceContext, plan: PlanStore): Promise<TeamsStatusState> {
-  let state = readState(plan);
-  const save = (s: TeamsStatusState) => {
-    plan.setAccountState(TEAMS_STATUS_KEY, s);
+  let state = (await readState(plan));
+  const save = async (s: TeamsStatusState) => {
+    (await plan.setAccountState(TEAMS_STATUS_KEY, s));
     return (state = s);
   };
   const nowIso = ctx.now();
   const now = Temporal.Instant.from(nowIso);
   const cfg = await ctx.config().catch(() => null);
-  const session = sessionOf(plan.getState<TimerState>(TIMER_KEY) ?? null, now);
+  const session = sessionOf((await plan.getState<TimerState>(TIMER_KEY)) ?? null, now);
   const step = teamsStep(state, session, settingsOf(cfg), nowIso);
   const client = ctx.account?.presence ?? null;
-  const me = storedIdentity(plan);
+  const me = (await storedIdentity(plan));
   if (!client || !me) {
     // Signed out: nothing can be set; forget a set status (its expiration ends it).
-    if (state.set && step.do === "clear") save(afterStep(state, step, session, nowIso));
+    if (state.set && step.do === "clear") await save(afterStep(state, step, session, nowIso));
     return state;
   }
-  const fail = (op: "set" | "clear", e: unknown, status: FocusStatus | null, minutes: number | null) => {
+  const fail = async (op: "set" | "clear", e: unknown, status: FocusStatus | null, minutes: number | null) => {
     const { message } = accessOf(e);
     // A repeated failure is logged once, not every minute.
-    if (state.error !== message) plan.logTeamsStatus({ op, status, minutes, result: "failed", message });
-    save({ ...state, error: message, errorAt: nowIso });
+    if (state.error !== message) (await plan.logTeamsStatus({ op, status, minutes, result: "failed", message }));
+    await save({ ...state, error: message, errorAt: nowIso });
   };
   if (step.do === "set") {
     try {
       await client.setMine(me.oid, step.status, step.minutes);
     } catch (e) {
-      fail("set", e, step.status, step.minutes);
+      await fail("set", e, step.status, step.minutes);
       return state;
     }
-    plan.logTeamsStatus({ op: "set", status: step.status, minutes: step.minutes, result: "done", message: null });
-    return save(afterStep(state, step, session, nowIso));
+    (await plan.logTeamsStatus({ op: "set", status: step.status, minutes: step.minutes, result: "done", message: null }));
+    return await save(afterStep(state, step, session, nowIso));
   }
   if (step.do === "clear") {
     try {
       await client.clearMine(me.oid);
     } catch (e) {
-      fail("clear", e, null, null);
+      await fail("clear", e, null, null);
       return state;
     }
-    plan.logTeamsStatus({ op: "clear", status: null, minutes: null, result: "done", message: null });
-    return save(afterStep(state, step, session, nowIso));
+    (await plan.logTeamsStatus({ op: "clear", status: null, minutes: null, result: "done", message: null }));
+    return await save(afterStep(state, step, session, nowIso));
   }
   // Nothing to change: now and then, check whether I changed my status in Teams myself.
   if (checkDue(state, nowIso)) {
     try {
       const mine = await client.mine();
       if (manualChange(state, mine.availability, nowIso)) {
-        plan.logTeamsStatus({ op: "left", status: state.set, minutes: null, result: "done", message: "Changed in Teams: FocusTime leaves it until the next session" });
-        return save({ ...state, manual: true, checkedAt: nowIso });
+        (await plan.logTeamsStatus({ op: "left", status: state.set, minutes: null, result: "done", message: "Changed in Teams: FocusTime leaves it until the next session" }));
+        return await save({ ...state, manual: true, checkedAt: nowIso });
       }
-      return save({ ...state, checkedAt: nowIso });
+      return await save({ ...state, checkedAt: nowIso });
     } catch {
-      return save({ ...state, checkedAt: nowIso });
+      return await save({ ...state, checkedAt: nowIso });
     }
   }
   return state;
@@ -149,10 +156,10 @@ export async function presenceAction(ctx: PresenceContext, action: PresenceActio
       if (check !== undefined && typeof check !== "boolean") return bad("check must be true or false");
       const cfg = await ctx.config().catch(() => null);
       const s = settingsOf(cfg);
-      const st = ctx.plan ? readState(ctx.plan) : NO_TEAMS_STATUS;
+      const st = ctx.plan ? await readState(ctx.plan) : NO_TEAMS_STATUS;
       let access: TeamsAccess | null = null;
       if (check) {
-        if (!ctx.account?.presence || !storedIdentity(ctx.plan)) access = "signed_out";
+        if (!ctx.account?.presence || !(await storedIdentity(ctx.plan))) access = "signed_out";
         else access = await ctx.account.presence.mine().then(() => "ok" as const, (e: unknown) => accessOf(e).access);
       }
       const view: TeamsStatusView = { enabled: s.teamsStatus, plainFocus: s.plainFocus, access, set: st.set, until: st.until, manual: st.manual, error: st.error };
@@ -173,7 +180,7 @@ export async function presenceAction(ctx: PresenceContext, action: PresenceActio
       if (emails.length + names.length > MAX_PRESENCE_PEOPLE) return bad(`At most ${MAX_PRESENCE_PEOPLE} people at once`);
       const none = (reason: TeamsAccess): ActionResponse => ({ ok: true, data: { available: false, reason, people: [] } satisfies PresencePeopleData });
       const client = ctx.account?.presence ?? null;
-      if (!client || !storedIdentity(ctx.plan)) return none("signed_out");
+      if (!client || !(await storedIdentity(ctx.plan))) return none("signed_out");
       // Step 16.4: my own presence for the top bar (GET /me/presence; availability and activity only).
       let me: PresencePeopleData["me"];
       if (wantMe) {
@@ -221,7 +228,7 @@ export async function presenceAction(ctx: PresenceContext, action: PresenceActio
     }
     case "presence.log": {
       if (!onlyKeys(input, [])) return bad("presence.log takes no input");
-      return { ok: true, data: { entries: ctx.plan?.teamsStatusLog(100) ?? [] } };
+      return { ok: true, data: { entries: (await ctx.plan?.teamsStatusLog(100)) ?? [] } };
     }
   }
 }

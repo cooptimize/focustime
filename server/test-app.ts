@@ -7,17 +7,19 @@ import type { ActionContext } from "../actions/dispatch.ts";
 import type { Logger } from "../log/logger.ts";
 import { createAccountStore } from "../store/accounts.ts";
 import { MIGRATIONS } from "../store/plan-store.ts";
+import type { Conn } from "../store/sql/conn.ts";
+import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createApp, type AppOptions, type SignInHooks } from "./app.ts";
 import { CSRF_COOKIE, SESSION_COOKIE } from "./auth/cookies.ts";
 
 export type Res = { status: number; headers: Record<string, string | string[] | undefined>; body: string };
 
 /** A database with the app tables (users, sessions, auth_requests), for an account store. */
-export function accountsDb(): DatabaseSync {
+export function accountsDb(): Conn {
   const db = new DatabaseSync(":memory:");
   // The migration that adds users, sessions and auth_requests; the plan tables are not needed here.
   db.exec(MIGRATIONS.find((m) => m.includes("CREATE TABLE users"))!);
-  return db;
+  return sqliteConn(db);
 }
 
 export async function startTestApp(o: {
@@ -82,8 +84,8 @@ export async function startTestApp(o: {
       send(path, { origin: publicUrl, "content-type": "application/json", "x-csrf": jar.get(CSRF_COOKIE) ?? "", ...headers }, "POST", JSON.stringify(body));
     const action = (action: string, input: unknown = {}, headers: Record<string, string> = {}) => post("/api/action", { action, input }, headers);
     /** Signs this browser in as `userId` directly (the session the sign-in route would make). */
-    const signIn = (userId: string, demo = false) => {
-      const s = accounts.sessions.create(userId, { demo });
+    const signIn = async (userId: string, demo = false) => {
+      const s = (await accounts.sessions.create(userId, { demo }));
       jar.set(SESSION_COOKIE, s.cookie);
       jar.set(CSRF_COOKIE, s.csrf);
       return s;

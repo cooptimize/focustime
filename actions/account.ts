@@ -55,14 +55,14 @@ export function withMe(parsed: ParseResult, me: StoredIdentity | null): ParseRes
 }
 
 /** Keeps a newly signed-in identity; a different person starts without a Dataverse user. */
-export function rememberIdentity(plan: PlanStore | undefined, c: IdClaims, at: string): StoredIdentity {
-  const prev = plan?.accountState<StoredIdentity>(IDENTITY_KEY) ?? null;
+export async function rememberIdentity(plan: PlanStore | undefined, c: IdClaims, at: string): Promise<StoredIdentity> {
+  const prev = (await plan?.accountState<StoredIdentity>(IDENTITY_KEY)) ?? null;
   const same = prev?.oid === c.oid && prev.tid === c.tid;
   const next: StoredIdentity = { ...c, signedInAt: same ? prev.signedInAt : at, systemUserId: same ? prev.systemUserId : null, systemUserEmail: same ? prev.systemUserEmail : null };
-  plan?.setAccountState(IDENTITY_KEY, next);
+  (await plan?.setAccountState(IDENTITY_KEY, next));
   return next;
 }
-export const storedIdentity = (plan: PlanStore | undefined) => plan?.accountState<StoredIdentity>(IDENTITY_KEY) ?? null;
+export const storedIdentity = async (plan: PlanStore | undefined) => (await plan?.accountState<StoredIdentity>(IDENTITY_KEY)) ?? null;
 
 export type AccountContext = { plan?: PlanStore; account: MicrosoftAccount | null; now: () => string; /** Step 16.4: cleared on sign-out. */ clearPhotos?: () => Promise<void>; /** R1: the keyring move failed. */ renameNote?: string | null };
 
@@ -73,15 +73,15 @@ export async function authStatus(ctx: AccountContext): Promise<AuthStatus> {
 
 async function statusOf(ctx: AccountContext): Promise<Omit<AuthStatus, "renameNote">> {
   if (!ctx.account) return { configured: false, state: "signed_out", person: null, message: null };
-  const stored = storedIdentity(ctx.plan);
+  const stored = (await storedIdentity(ctx.plan));
   try {
     const c = await ctx.account.identity();
-    const me = rememberIdentity(ctx.plan, c, ctx.now());
+    const me = (await rememberIdentity(ctx.plan, c, ctx.now()));
     return { configured: true, state: "signed_in", person: personOf(me), message: null };
   } catch (e) {
     const kind = e instanceof AuthFailure ? e.kind : "error";
     if (kind === "network" || kind === "keyring") return { configured: true, state: "unavailable", person: stored ? personOf(stored) : null, message: (e as Error).message };
-    if (kind === "not_connected") ctx.plan?.setAccountState(IDENTITY_KEY, null);
+    if (kind === "not_connected") (await ctx.plan?.setAccountState(IDENTITY_KEY, null));
     const message = kind === "not_connected" ? null : kind === "expired" || kind === "consent" ? "Your Microsoft sign-in needs renewing. Sign in again" : "Microsoft sign-in isn't working right now. Sign in again";
     return { configured: true, state: "signed_out", person: kind === "not_connected" || !stored ? null : personOf(stored), message };
   }
@@ -106,21 +106,21 @@ export async function accountAction(ctx: AccountContext, action: "auth.status" |
       const photos = (input as { photos?: unknown } | null)?.photos;
       if (photos !== undefined && typeof photos !== "boolean") return { ok: false, status: 400, error: "photos must be true or false" };
       if (!ctx.account) return { ok: true, data: { status: "failed", message: "Add outlook.client_id (the app registration) to config first" } };
-      const stored = storedIdentity(ctx.plan);
+      const stored = (await storedIdentity(ctx.plan));
       // Keep calendar changes if this sign-in already had them; prefill the account for an incremental consent.
       const write = (await ctx.account.writeAccess().catch(() => null))?.status === "write";
       const r = await ctx.account.signIn({ azure: azure ?? true, ...(write ? { write } : {}), ...(teams ? { teams } : {}), ...(photos ? { photos } : {}), ...(stored ? { loginHint: stored.username } : {}) });
       if (r.status !== "connected") return { ok: true, data: r };
       const c = r.identity ?? (await ctx.account.identity().catch(() => null));
       if (!c) return { ok: true, data: { status: "failed", message: "Signed in, but Microsoft didn't say who you are. Try again" } };
-      const me = rememberIdentity(ctx.plan, c, ctx.now());
+      const me = (await rememberIdentity(ctx.plan, c, ctx.now()));
       return { ok: true, data: { status: "connected", person: personOf(me) } };
     }
     case "auth.sign_out": {
       if (!noInputOr(input, [])) return { ok: false, status: 400, error: "auth.sign_out takes no input" };
       // The local plan stays; so do my VM choice (kept per person) and any schedule change still to put back.
       await ctx.account?.signOut();
-      ctx.plan?.setAccountState(IDENTITY_KEY, null);
+      (await ctx.plan?.setAccountState(IDENTITY_KEY, null));
       // Step 16.4: the photo cache goes with the sign-in.
       await ctx.clearPhotos?.().catch(() => {});
       return { ok: true, data: { status: "signed_out" } };

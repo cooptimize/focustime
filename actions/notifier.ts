@@ -60,8 +60,8 @@ export type Notifier = {
   test: () => Promise<void>;
   /** A click, as the host reported it (exported for tests and for hosts that report clicks separately). */
   click: (n: Notice, key: string, held?: readonly Notice[], onClick?: OnClick) => Promise<void>;
-  handled: (key: string) => boolean;
-  held: () => Notice[];
+  handled: (key: string) => Promise<boolean>;
+  held: () => Promise<Notice[]>;
   /** Step 16.2 (Q91): closes shown notifications whose occasion was handled; returns how many. */
   sweep: () => Promise<number>;
   /** The keys of the notifications on screen now (shown, not yet clicked, dismissed or closed). */
@@ -71,13 +71,13 @@ export type Notifier = {
 export function createNotifier(d: NotifierDeps): Notifier {
   let facts: GateFacts | null = null;
   const log = d.log ?? (() => {});
-  const held = () => d.plan.getState<Notice[]>(HELD_KEY) ?? [];
-  const handled = (key: string) => d.plan.marked(HANDLED_MARK, key);
+  const held = async () => (await d.plan.getState<Notice[]>(HELD_KEY)) ?? [];
+  const handled = async (key: string) => (await d.plan.marked(HANDLED_MARK, key));
 
   const click = async (n: Notice, key: string, list: readonly Notice[] = [], onClick?: OnClick) => {
     const known = isOpen(key) || n.buttons.some((b) => b.key === key);
     if (!known) return;
-    for (const k of n.kind === "held" ? list.map((h) => h.key) : [n.key]) d.plan.markOnce(HANDLED_MARK, k);
+    for (const k of n.kind === "held" ? list.map((h) => h.key) : [n.key]) (await d.plan.markOnce(HANDLED_MARK, k));
     log("notify_click", isOpen(key) ? "open" : key);
     if (isOpen(key)) await d.open(n.route);
     if (onClick) await onClick(key);
@@ -115,9 +115,9 @@ export function createNotifier(d: NotifierDeps): Notifier {
         log("notify", `${String(n.kind)}_${g}`);
         return g;
       }
-      if (n.kind !== "test" && !d.plan.markOnce(SENT_MARK, n.key)) return "repeat";
+      if (n.kind !== "test" && !(await d.plan.markOnce(SENT_MARK, n.key))) return "repeat";
       if (g === "hold") {
-        d.plan.setState(HELD_KEY, [...held().filter((h) => h.key !== n.key), n].slice(-50));
+        (await d.plan.setState(HELD_KEY, [...(await held()).filter((h) => h.key !== n.key), n].slice(-50)));
         log("notify", `${String(n.kind)}_held`);
         return "hold";
       }
@@ -125,13 +125,13 @@ export function createNotifier(d: NotifierDeps): Notifier {
       return "send";
     },
     flush: async () => {
-      const list = held();
+      const list = (await held());
       if (!list.length) return 0;
       const f = facts ?? (await notifier.refresh());
       if (f.focusRunning) return 0;
-      d.plan.setState(HELD_KEY, []);
+      (await d.plan.setState(HELD_KEY, []));
       const keep: Notice[] = [];
-      for (const n of list) if (!handled(n.key) && (!d.still || (await Promise.resolve(d.still(n)).catch(() => true)))) keep.push(n);
+      for (const n of list) if (!(await handled(n.key)) && (!d.still || (await Promise.resolve(d.still(n)).catch(() => true)))) keep.push(n);
       const one = collapse(keep, d.now());
       if (!one) return 0;
       deliver(one, keep);
@@ -153,7 +153,7 @@ export function createNotifier(d: NotifierDeps): Notifier {
         for (const x of list) if (!(await isDone(x))) all = false;
         if (!all || shown.get(key) !== e) continue;
         shown.delete(key);
-        for (const x of list) d.plan.markOnce(HANDLED_MARK, x.key);
+        for (const x of list) (await d.plan.markOnce(HANDLED_MARK, x.key));
         d.host.close(e.handle);
         log("notify_closed", String(e.n.kind));
         closed++;

@@ -124,7 +124,7 @@ export async function timeAction(ctx: TimeContext, action: TimeAction, input: un
           const o = fields(input, ["date", "title", "start", "end"], ["note"]);
           const d = date(o.date);
           const s = span(o.start, o.end);
-          const unavailable = plan.addUnavailable({ date: d, title: text(o.title, "title"), start: zonedAt(d, s.start, tz).toInstant().toString(), end: zonedAt(d, s.end, tz).toInstant().toString(), note: note(o.note) });
+          const unavailable = (await plan.addUnavailable({ date: d, title: text(o.title, "title"), start: zonedAt(d, s.start, tz).toInstant().toString(), end: zonedAt(d, s.end, tz).toInstant().toString(), note: note(o.note) }));
           return { ok: true, data: { unavailable } };
         }
         const o = fields(input, ["date", "clientKey", "start", "end"], ["itemId", "note"]);
@@ -140,7 +140,7 @@ export async function timeAction(ctx: TimeContext, action: TimeAction, input: un
           item = ctx.devops?.(cfg).lookup(clientKey, itemId) ?? null;
           if (!item) return bad(`Item ${itemId} is not among the loaded DevOps items for ${clientKey}. Refresh and try again`, 409);
         }
-        const flex = plan.addFlex({
+        const flex = (await plan.addFlex({
           date: d,
           clientKey,
           start: zonedAt(d, s.start, tz).toInstant().toString(),
@@ -149,7 +149,7 @@ export async function timeAction(ctx: TimeContext, action: TimeAction, input: un
           itemTitle: item?.title ?? null,
           itemUrl: item && item.url.startsWith("https://dev.azure.com/") ? item.url : null,
           note: note(o.note),
-        });
+        }));
         return { ok: true, data: { flex, overlapMinutes } };
       }
       case "unavailable.remove":
@@ -157,10 +157,10 @@ export async function timeAction(ctx: TimeContext, action: TimeAction, input: un
         const plan = ctx.plan;
         if (!plan) return bad("The plan store isn't available", 503);
         const n = id(fields(input, ["id"]).id);
-        if (action === "unavailable.remove") return plan.removeUnavailable(n) ? { ok: true, data: { removed: n } } : bad(`No unavailable time ${n}`, 404);
-        if (!plan.getFlex(n)) return bad(`No flex session ${n}`, 404);
+        if (action === "unavailable.remove") return (await plan.removeUnavailable(n)) ? { ok: true, data: { removed: n } } : bad(`No unavailable time ${n}`, 404);
+        if (!(await plan.getFlex(n))) return bad(`No flex session ${n}`, 404);
         try {
-          plan.removeFlex(n);
+          (await plan.removeFlex(n));
         } catch (e) {
           if (e instanceof PlanError) return bad("This flex session has ended and its update is owed, so it stays on record", 409);
           throw e;

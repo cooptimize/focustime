@@ -51,14 +51,14 @@ export function timerView(s: TimerState | null, now: Temporal.Instant): TimerVie
 }
 
 /** Logs a focused stretch (focus sessions only; breaks aren't focus). */
-export function logSegment(plan: PlanStore, s: TimerState, seg: Segment | null): void {
-  if (seg && s.kind === "focus") plan.addFocus({ pickId: s.pickId, label: s.label, ...seg });
+export async function logSegment(plan: PlanStore, s: TimerState, seg: Segment | null): Promise<void> {
+  if (seg && s.kind === "focus") (await plan.addFocus({ pickId: s.pickId, label: s.label, ...seg }));
 }
 
 /** Today's next planned pick (morning, afternoon, evening, then position), other than `except`. */
-export function nextPick(plan: PlanStore, today: string, except: number | null): Pick | null {
+export async function nextPick(plan: PlanStore, today: string, except: number | null): Promise<Pick | null> {
   const order = ["AM", "PM", "EVE"];
-  return plan.picksFor(today).filter((p) => p.status === "planned" && p.id !== except).sort((a, b) => order.indexOf(a.half) - order.indexOf(b.half) || a.position - b.position)[0] ?? null;
+  return (await plan.picksFor(today)).filter((p) => p.status === "planned" && p.id !== except).sort((a, b) => order.indexOf(a.half) - order.indexOf(b.half) || a.position - b.position)[0] ?? null;
 }
 
 
@@ -74,11 +74,11 @@ const minutesOf = (v: unknown): number => {
 };
 
 export async function timerAction(ctx: TimerContext, action: TimerAction, input: unknown): Promise<ActionResponse> {
-  const before = action.startsWith("timer.") ? (ctx.plan?.getState<TimerState>(TIMER_KEY) ?? null) : undefined;
+  const before = action.startsWith("timer.") ? ((await ctx.plan?.getState<TimerState>(TIMER_KEY)) ?? null) : undefined;
   const r = await timerActionInner(ctx, action, input);
   // Step 10: media players follow focus (pause on end or break, resume what was paused when focus starts again).
   if (r.ok && before !== undefined && ctx.media && ctx.plan) {
-    const after = ctx.plan.getState<TimerState>(TIMER_KEY) ?? null;
+    const after = (await ctx.plan.getState<TimerState>(TIMER_KEY)) ?? null;
     const cfg = await ctx.config();
     await ctx.media.transition(timerLike(before), timerLike(after), (cfg?.focus ?? DEFAULT_FOCUS).pauseMedia);
   }
@@ -93,17 +93,17 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
   const planning = cfg?.plan ?? { ...DEFAULT_PLAN, pickablePortfolioTypes: [] };
   const tz = userZone(cfg);
   const today = now.toZonedDateTimeISO(tz).toPlainDate().toString();
-  const current = () => plan.getState<TimerState>(TIMER_KEY);
-  const save = (s: TimerState | null) => {
-    plan.setState(TIMER_KEY, s);
+  const current = async () => (await plan.getState<TimerState>(TIMER_KEY));
+  const save = async (s: TimerState | null) => {
+    (await plan.setState(TIMER_KEY, s));
     return s;
   };
   const respond = (s: TimerState | null, extra: Record<string, unknown> = {}): ActionResponse => ({ ok: true, data: { timer: timerView(s, now), ...extra } });
   /** Ends whatever runs now, logging its running part. */
-  const finish = () => {
-    const s = current();
-    if (s) logSegment(plan, s, stopTimer(s, now).segment);
-    save(null);
+  const finish = async () => {
+    const s = (await current());
+    if (s) await logSegment(plan, s, stopTimer(s, now).segment);
+    await save(null);
     return s;
   };
   let deep = false;
@@ -137,28 +137,28 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
         if (o.timeboxId !== undefined) {
           if (kind !== "focus" || o.pickId !== undefined) throw new Invalid("A timebox starts focus on its own pick");
           if (typeof o.timeboxId !== "number" || !Number.isInteger(o.timeboxId)) throw new Invalid("timeboxId must be a number");
-          const tb = plan.timebox(o.timeboxId);
+          const tb = (await plan.timebox(o.timeboxId));
           if (!tb || tb.removedAt) return bad("No such timebox", 404);
           const m = minutes ?? Math.min(MAX_MINUTES, boxMinutes(tb));
-          const p = tb.pickId !== null ? plan.getPick(tb.pickId) : null;
-          finish();
-          const started = p && p.status === "planned" ? startFor(p, m) : save(startTimer(now, { kind: "focus", pickId: null, label: tb.title, minutes: m, deep }));
+          const p = tb.pickId !== null ? (await plan.getPick(tb.pickId)) : null;
+          await finish();
+          const started = p && p.status === "planned" ? await startFor(p, m) : await save(startTimer(now, { kind: "focus", pickId: null, label: tb.title, minutes: m, deep }));
           return respond(started, await openList());
         }
         if (o.pickId !== undefined) {
           if (kind !== "focus") throw new Invalid("A break isn't for a pick");
           if (typeof o.pickId !== "number" || !Number.isInteger(o.pickId)) throw new Invalid("pickId must be a number");
-          const p = plan.getPick(o.pickId);
+          const p = (await plan.getPick(o.pickId));
           if (!p) return bad(`No pick ${o.pickId}`, 404);
           if (p.status !== "planned") return bad("Only a planned pick can be timeboxed", 409);
-          finish();
-          const started = startFor(p, minutes);
+          await finish();
+          const started = (await startFor(p, minutes));
           return respond(started, await openList());
         }
         const m = minutes ?? (kind === "focus" ? planning.focusMinutes : planning.breakMinutes);
         if (!m) return bad("Breaks are set to 0 minutes in Settings > Planning", 409);
-        finish();
-        const started = save(startTimer(now, { kind, pickId: null, label: kind === "focus" ? "Focus" : "Break", minutes: m, deep }));
+        await finish();
+        const started = (await save(startTimer(now, { kind, pickId: null, label: kind === "focus" ? "Focus" : "Break", minutes: m, deep })));
         return respond(started, await openList());
       }
       case "timer.pause":
@@ -168,40 +168,40 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
       case "timer.done":
       case "timer.next": {
         const o = fields(input, action === "timer.extend" ? ["minutes"] : []);
-        const s = current();
+        const s = (await current());
         if (!s) return bad("No timer is running", 409);
         if (action === "timer.pause") {
           const p = pauseTimer(s, now);
-          logSegment(plan, s, p.segment);
-          return respond(save(p.state));
+          await logSegment(plan, s, p.segment);
+          return respond((await save(p.state)));
         }
-        if (action === "timer.resume") return respond(save(resumeTimer(s, now)));
-        if (action === "timer.extend") return respond(save(extendTimer(s, now, o.minutes === undefined ? 15 : minutesOf(o.minutes))));
+        if (action === "timer.resume") return respond((await save(resumeTimer(s, now))));
+        if (action === "timer.extend") return respond((await save(extendTimer(s, now, o.minutes === undefined ? 15 : minutesOf(o.minutes)))));
         if (action === "timer.stop") {
-          finish();
+          await finish();
           return respond(null);
         }
         // Done ends the session and ticks its pick done; Next pick ends it and timeboxes today's next pick.
-        finish();
+        await finish();
         if (action === "timer.done") {
-          if (s.kind === "focus" && s.pickId !== null && plan.getPick(s.pickId)?.status === "planned") plan.setDone(s.pickId, true);
+          if (s.kind === "focus" && s.pickId !== null && (await plan.getPick(s.pickId))?.status === "planned") (await plan.setDone(s.pickId, true));
           return respond(null);
         }
         // Next pick keeps deep focus as it was.
         deep = !!s.deep;
-        const next = nextPick(plan, today, s.pickId);
-        return next ? respond(startFor(next)) : respond(null, { notice: "No planned picks left today" });
+        const next = (await nextPick(plan, today, s.pickId));
+        return next ? respond((await startFor(next))) : respond(null, { notice: "No planned picks left today" });
       }
       case "timer.deep": {
         // Step 16.3: switch the running focus session between deep (Do not disturb) and plain (Busy).
         const o = fields(input, ["on"]);
         if (typeof o.on !== "boolean") throw new Invalid("on must be true or false");
-        const s = current();
+        const s = (await current());
         if (!s || s.kind !== "focus") return bad("No focus session is running", 409);
         const next: TimerState = { ...s };
         if (o.on) next.deep = true;
         else delete next.deep;
-        return respond(save(next));
+        return respond((await save(next)));
       }
       case "playlist.open": {
         // Step 10: open a saved playlist now (the focus screen's per-session choice). Spotify or YouTube only.
@@ -223,9 +223,9 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
         const o = fields(input, ["confirm"]);
         // A typed confirmation, so neither a stray click nor a suggestion can reset by accident.
         if (o.confirm !== "reset") return bad('Type "reset" to confirm', 422);
-        const s = current();
-        if (s) logSegment(plan, s, stopTimer(s, now).segment);
-        const backup = plan.reset();
+        const s = (await current());
+        if (s) await logSegment(plan, s, stopTimer(s, now).segment);
+        const backup = (await plan.reset());
         return { ok: true, data: { backup: backup ? backup.split("/").pop() : null } };
       }
     }

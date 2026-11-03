@@ -20,7 +20,8 @@ import { DEFAULT_FOCUS } from "../plan/focussound.ts";
 import { DEFAULT_NOTIFY, dueFollowUps, inWorkingHours, noticeDone, notices, type Notice } from "../plan/notify.ts";
 import type { TeamsStatusState } from "../plan/presence.ts";
 import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
-import type { TimerState } from "../plan/timer.ts";
+import type { TimerState, WarnPoint } from "../plan/timer.ts";
+import { nextWake } from "../plan/wake.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { localToday, mondayOf } from "../week/dates.ts";
 import { hoursOn } from "../week/hours.ts";
@@ -38,7 +39,7 @@ export type TickDeps = {
 };
 
 /** One person's passes; the scheduler runs them for everyone, never two of the same kind at once. */
-export type PersonTicks = { fast: () => Promise<void>; slow: () => Promise<void> };
+export type PersonTicks = { fast: () => Promise<void>; slow: () => Promise<void>; wake?: () => Promise<Temporal.Instant> };
 
 export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContext, who: { zone: string }): PersonTicks {
   const log = d.log;
@@ -64,8 +65,8 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     ptoMemo.set(d, { at: Date.now(), off });
     return off;
   };
-  const focusRunning = () => {
-    const s = store.getState<TimerState>(TIMER_KEY);
+  const focusRunning = async () => {
+    const s = (await store.getState<TimerState>(TIMER_KEY));
     return !!s && s.kind === "focus" && !s.ended && !!s.runningSince;
   };
   const todayOf = (c: AppConfig) => localToday(instantNow().toString(), userZone(c));
@@ -91,12 +92,12 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const c = await configOrNull();
     if (!c) return true;
     const today = todayOf(c);
-    if (n.kind === "plan_day") return !store.day(today)?.committedAt;
-    if (n.kind === "closeout") return !store.day(today)?.closedOutAt;
-    if (n.kind === "checkin") return !!store.day(today)?.committedAt && !store.day(today)?.closedOutAt;
-    if (n.kind === "plan_week" || n.kind === "look_ahead") return !store.weekPlan(n.route.slice("planweek:".length)).committedAt;
-    if (n.kind === "followups") return dueFollowUps(store.openFollowUps(), today).length > 0;
-    if (n.kind === "plan_ahead" || n.kind === "direction") return !n.ref || !store.marked(AHEAD_SEEN_MARK, n.ref);
+    if (n.kind === "plan_day") return !(await store.day(today))?.committedAt;
+    if (n.kind === "closeout") return !(await store.day(today))?.closedOutAt;
+    if (n.kind === "checkin") return !!(await store.day(today))?.committedAt && !(await store.day(today))?.closedOutAt;
+    if (n.kind === "plan_week" || n.kind === "look_ahead") return !(await store.weekPlan(n.route.slice("planweek:".length))).committedAt;
+    if (n.kind === "followups") return dueFollowUps((await store.openFollowUps()), today).length > 0;
+    if (n.kind === "plan_ahead" || n.kind === "direction") return !n.ref || !(await store.marked(AHEAD_SEEN_MARK, n.ref));
     if (n.kind === "vm" && n.key.startsWith("vm_off:")) {
       const st = await vmAction(await vmCtx(), "vm.status", {});
       return st.ok && (st.data as VmStatus).prompt;
@@ -115,20 +116,25 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const c = await configOrNull();
     const today = c ? todayOf(c) : null;
     const vs = n.kind === "vm" ? await vmNow() : null;
+    // A3: the facts noticeDone weighs, read up front for this notice's ref (noticeDone is pure and sync).
+    const ref = n.ref ?? "";
+    const day = ref && ["plan_day", "checkin", "closeout"].includes(n.kind) ? await store.day(ref) : null;
+    const checked = n.kind === "checkin" && ref ? await store.marked(CHECKIN_DONE_MARK, ref) : false;
+    const week = ref && (n.kind === "plan_week" || n.kind === "look_ahead") ? await store.weekPlan(ref) : null;
+    const open = n.kind === "followups" ? await store.openFollowUps() : [];
+    const timer = n.kind === "timer" ? await store.getState<TimerState>(TIMER_KEY) : null;
+    const seen = ref && (n.kind === "plan_ahead" || n.kind === "direction") ? await store.marked(AHEAD_SEEN_MARK, ref) : false;
     return noticeDone(n, {
-      committed: (d) => !!store.day(d)?.committedAt,
-      checkedIn: (d) => store.marked(CHECKIN_DONE_MARK, d),
-      closedOut: (d) => !!store.day(d)?.closedOutAt,
-      weekCommitted: (w) => !!store.weekPlan(w).committedAt,
-      followUpOpen: (id) => store.openFollowUps().some((f) => f.id === id && !f.closedAt),
-      dueCount: () => (today ? dueFollowUps(store.openFollowUps(), today).length : 1),
-      timerWaiting: (startedAt) => {
-        const t = store.getState<TimerState>(TIMER_KEY);
-        return !!t && t.ended && t.startedAt === startedAt;
-      },
+      committed: () => !!day?.committedAt,
+      checkedIn: () => checked,
+      closedOut: () => !!day?.closedOutAt,
+      weekCommitted: () => !!week?.committedAt,
+      followUpOpen: (id) => open.some((f) => f.id === id && !f.closedAt),
+      dueCount: () => (today ? dueFollowUps(open, today).length : 1),
+      timerWaiting: (startedAt) => !!timer && timer.ended && timer.startedAt === startedAt,
       vmOff: () => (vs ? vs.prompt : null),
       vmChanged: () => (vs ? !!vs.change : null),
-      aheadSeen: (key) => store.marked(AHEAD_SEEN_MARK, key),
+      aheadSeen: () => seen,
     });
   };
   const notifier = createNotifier({
@@ -138,9 +144,9 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     facts: async () => {
       const c = await configOrNull();
       const settings = c?.notify ?? DEFAULT_NOTIFY;
-      if (!c) return { settings, inHours: false, pto: false, focusRunning: focusRunning() };
+      if (!c) return { settings, inHours: false, pto: false, focusRunning: await focusRunning() };
       const today = todayOf(c);
-      return { settings, inHours: inWorkingHours(c.week.hours, zonedNow(userZone(c))), pto: await ptoOff(today).catch(() => false), focusRunning: focusRunning() };
+      return { settings, inHours: inWorkingHours(c.week.hours, zonedNow(userZone(c))), pto: await ptoOff(today).catch(() => false), focusRunning: await focusRunning() };
     },
     now: () => instantNow().toString(),
     open: (route) => openRoute(route),
@@ -150,12 +156,12 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   });
 
   // Settings > Notifications > Send a test notification, and one sample per kind for the live check.
-  const samples = (c: AppConfig, live: boolean): Record<string, Notice | null> => {
+  const samples = async (c: AppConfig, live: boolean): Promise<Record<string, Notice | null>> => {
     const at = instantNow().toString();
     const today = todayOf(c);
     const monday = Temporal.PlainDate.from(today).subtract({ days: Temporal.PlainDate.from(today).dayOfWeek - 1 });
     const pfx = (n: Notice | null): Notice | null => (n ? { ...n, key: `sample:${live ? "live:" : ""}${n.key}:${at}` } : null);
-    const open = dueFollowUps(store.openFollowUps(), today);
+    const open = dueFollowUps((await store.openFollowUps()), today);
     return {
       plan_day: pfx(notices.planDay(today, at)),
       checkin: pfx(notices.checkin(today, at)),
@@ -177,7 +183,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     test: () => notifier.test(),
     sample: async (kind, live, gated) => {
       const c = await configOrNull();
-      const n = c ? samples(c, live)[kind] : null;
+      const n = c ? (await samples(c, live))[kind] : null;
       if (!n) return false;
       // Gated: through Settings > Notifications like a real one (switch, quiet hours, held during focus).
       if (gated) {
@@ -200,26 +206,26 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       now: () => zonedNow(who.zone),
       hours: hoursOrNull,
       offsetMinutes: async () => c.plan.reminderOffsetMinutes,
-      committed: (d) => !!store.day(d)?.committedAt,
+      committed: async (d) => !!(await store.day(d))?.committedAt,
       off: ptoOff,
-      once: (d) => notifier.allows("plan_day") && store.markOnce("reminder", d),
+      once: async (d) => (await notifier.allows("plan_day")) && (await store.markOnce("reminder", d)),
       send: () => void send(notices.planDay(todayOf(c), at)),
     }).catch(() => log({ source: "plan", op: "reminder", kind: "failed" }));
     // Check-in and Close out (step 7): once a day each.
     await checkDayReminder({
       now: () => zonedNow(who.zone),
       hours: hoursOrNull,
-      due: (n, m) => checkinReminderDue(n, m, !!store.day(n.toPlainDate().toString())?.committedAt, c.plan.checkinReminderMinutes),
+      due: async (n, m) => checkinReminderDue(n, m, !!(await store.day(n.toPlainDate().toString()))?.committedAt, c.plan.checkinReminderMinutes),
       off: ptoOff,
-      once: (d) => notifier.allows("checkin") && store.markOnce("checkin_reminder", d),
+      once: async (d) => (await notifier.allows("checkin")) && (await store.markOnce("checkin_reminder", d)),
       send: () => void send(notices.checkin(todayOf(c), at)),
     }).catch(() => log({ source: "plan", op: "checkin_reminder", kind: "failed" }));
     await checkDayReminder({
       now: () => zonedNow(who.zone),
       hours: hoursOrNull,
-      due: (n, m) => closeoutReminderDue(n, m, !!store.day(n.toPlainDate().toString())?.closedOutAt, c.plan.closeoutReminderMinutes),
+      due: async (n, m) => closeoutReminderDue(n, m, !!(await store.day(n.toPlainDate().toString()))?.closedOutAt, c.plan.closeoutReminderMinutes),
       off: ptoOff,
-      once: (d) => notifier.allows("closeout") && store.markOnce("closeout_reminder", d),
+      once: async (d) => (await notifier.allows("closeout")) && (await store.markOnce("closeout_reminder", d)),
       send: () => void send(notices.closeout(todayOf(c), at)),
     }).catch(() => log({ source: "plan", op: "closeout_reminder", kind: "failed" }));
     // Plan the week (Monday, this week) and Look ahead (Thursday and Friday, next week), step 8.
@@ -227,25 +233,27 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     await checkWeekNudges({
       now: () => zonedNow(who.zone),
       times: async () => ({ thu: c.plan.weekNudgeThu, fri: c.plan.weekNudgeFri, mon: c.plan.weekNudgeMon }),
-      committed: (w) => !!store.weekPlan(w).committedAt,
+      committed: async (w) => !!(await store.weekPlan(w)).committedAt,
       off: ptoOff,
       workStart: async (d) => hoursOn(c.week.hours, d).segments[0]?.start ?? null,
-      once: (key, w) => notifier.allows(w === thisWeek ? "plan_week" : "look_ahead") && store.markOnce(key, w),
+      once: async (key, w) => (await notifier.allows(w === thisWeek ? "plan_week" : "look_ahead")) && (await store.markOnce(key, w)),
       send: (_body, w) => void send(notices.week(w, w === thisWeek, at)),
     }).catch(() => log({ source: "plan", op: "week_nudge", kind: "failed" }));
     // Step 17: Look ahead 4 weeks (every other Thursday, once next week is planned) and the direction review (first
     // Thursday of the month), from work start on a working day; once each; both open Roadmap › Plan ahead.
     try {
       const today = todayOf(c);
+      const committedWeeks = await store.committedWeeks();
+      const seenKeys = await store.markedDates(AHEAD_SEEN_MARK);
       const due = aheadRitualsDue({
         today,
         time: zonedNow(who.zone).toPlainTime().toString().slice(0, 5),
         workStart: hoursOn(c.week.hours, today).segments[0]?.start ?? null,
         pto: await ptoOff(today).catch(() => true),
-        weekCommitted: (w) => !!store.weekPlan(w).committedAt,
-        seen: (k) => store.marked(AHEAD_SEEN_MARK, k),
+        weekCommitted: (w) => committedWeeks.has(w),
+        seen: (k) => seenKeys.has(k),
       });
-      for (const r of due) if (notifier.allows(r.kind) && store.markOnce("ahead_notice", r.key)) await send(r.kind === "plan_ahead" ? notices.planAhead(r.key, at) : notices.direction(r.key, r.occasion, at));
+      for (const r of due) if (notifier.allows(r.kind) && (await store.markOnce("ahead_notice", r.key))) await send(r.kind === "plan_ahead" ? notices.planAhead(r.key, at) : notices.direction(r.key, r.occasion, at));
     } catch {
       log({ source: "plan", op: "ahead_nudge", kind: "failed" });
     }
@@ -258,8 +266,8 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const ws = hoursOn(c.week.hours, today).segments[0]?.start ?? null;
     if (!ws || zonedNow(userZone(c)).toPlainTime().toString().slice(0, 5) < ws) return;
     const at = instantNow().toString();
-    if (notifier.allows("followups") && store.markOnce("followups_notice", today)) await send(notices.followUps(today, dueFollowUps(store.openFollowUps(), today), at));
-    if (notifier.allows("expiry") && store.markOnce("expiry_notice", today)) await send(notices.expiry(today, expiringFor(store, c, today), at));
+    if (notifier.allows("followups") && (await store.markOnce("followups_notice", today))) await send(notices.followUps(today, dueFollowUps((await store.openFollowUps()), today), at));
+    if (notifier.allows("expiry") && (await store.markOnce("expiry_notice", today))) await send(notices.expiry(today, (await expiringFor(store, c, today)), at));
   };
   // My VM (step 15.4): put back a changed auto-shutdown the next morning (first run after midnight, retried, and at work
   // start), and once a workday at work start say so when the VM is off. Never starts anything by itself.
@@ -273,7 +281,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const afterStart = !!ws && n.toPlainTime().toString().slice(0, 5) >= ws;
     const vc = await vmCtx();
     if (!vc.account) return;
-    const atWorkStart = afterStart && store.markOnce("vm_restore_workstart", today);
+    const atWorkStart = afterStart && (await store.markOnce("vm_restore_workstart", today));
     const r = await restoreTick(vc, { atWorkStart });
     if (r) log({ source: "azure", op: "shutdown_restore", kind: r });
     const at = instantNow().toString();
@@ -281,7 +289,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       const st = await vmAction(vc, "vm.status", {});
       await send(notices.vmChanged(today, st.ok ? ((st.data as VmStatus).change?.text ?? "Auto-shutdown is changed") : "Auto-shutdown is changed", at));
     }
-    if (afterStart && notifier.allows("vm") && store.markOnce("vm_prompt_notice", today)) {
+    if (afterStart && notifier.allows("vm") && (await store.markOnce("vm_prompt_notice", today))) {
       const st = await vmAction(vc, "vm.status", {});
       if (st.ok && (st.data as VmStatus).prompt) await send(notices.vmOff(today, (st.data as VmStatus).vm?.name ?? "Your VM", at));
     }
@@ -314,7 +322,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       .catch(() => log({ source: "plan", op: "timer", kind: "failed" }));
   // Held notifications go out once the focus session is over (collapsed into one when there are several).
   const flushHeld = async () => {
-    if (!notifier.held().length || focusRunning()) return;
+    if (!(await notifier.held()).length || (await focusRunning())) return;
     await notifier.refresh();
     const n = await notifier.flush();
     if (n) log({ source: "plan", op: "notify", kind: "held_delivered", count: n });
@@ -322,8 +330,8 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   // Fresher warnings (step 6d): while a timer runs, reload today's calendars every 5 minutes (their own cache
   // decides whether that is a live call) and recompute today's warning points.
   let lastCalendar: number | null = null;
-  const warningsTick = () => {
-    const s = store.getState<TimerState>(TIMER_KEY);
+  const warningsTick = async () => {
+    const s = (await store.getState<TimerState>(TIMER_KEY));
     const t = Date.now();
     if (!s?.runningSince) return void (lastCalendar = null);
     if (!calendarRefreshDue(s, lastCalendar, t)) return;
@@ -335,14 +343,32 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   /** Every 5 seconds: the timer, meeting warnings, held notices after focus, handled ones closed, Teams status. */
   const fast = async () => {
     await timerTick();
-    warningsTick();
+    await warningsTick().catch(() => log({ source: "plan", op: "warnings", kind: "failed" }));
     await flushHeld().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
     // Q91: close notifications on screen whose occasion was handled (the day planned, the follow-up closed...).
     if (notifier.onScreen().length) await notifier.sweep().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
     // Step 16.3: my Teams status follows focus (set, refreshed on +15, cleared however the session ends, even after a
     // restart). Only while a timer exists or a status FocusTime set is still to clear.
-    if (store.getState(TIMER_KEY) || store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY)?.set)
+    if ((await store.getState(TIMER_KEY)) || (await store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY))?.set)
       await presenceContext(liveCtx).then(syncTeamsStatus).catch(() => log({ source: "outlook", op: "teams_status", kind: "failed" }));
   };
-  return { fast, slow: tick };
+  /** A3, the idle rule: the next moment this person's passes could do something (plan/wake.ts). */
+  const wake = async (): Promise<Temporal.Instant> => {
+    const c = await configOrNull();
+    const timer = await store.getState<TimerState>(TIMER_KEY);
+    const points = (await store.getState<{ date: string; points: WarnPoint[] }>("warn_points"))?.points ?? [];
+    const running = !!timer?.runningSince && !timer.ended;
+    const pending = (!timer && !!(await store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY))?.set) || (!running && (await notifier.held()).length > 0);
+    const p = c?.plan;
+    return nextWake({
+      now: instantNow(),
+      zone: c ? userZone(c) : who.zone,
+      hours: c?.week.hours ?? null,
+      offsets: { reminderMinutes: p?.reminderOffsetMinutes ?? 0, checkinMinutes: p?.checkinReminderMinutes ?? 0, closeoutMinutes: p?.closeoutReminderMinutes ?? 0, weekNudges: p ? [p.weekNudgeThu, p.weekNudgeFri, p.weekNudgeMon] : [] },
+      timer,
+      warnPoints: points,
+      pending,
+    });
+  };
+  return { fast, slow: tick, wake };
 }

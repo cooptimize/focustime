@@ -5,7 +5,7 @@ import { localPaths } from "../host/local/paths.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 
 const store = createPlanStore({ path: localPaths().planDb, now: () => Temporal.Now.zonedDateTimeISO() });
-const json = JSON.stringify(store.exportJson(), null, 2) + "\n";
+const json = JSON.stringify((await store.exportJson()), null, 2) + "\n";
 store.close();
 const out = process.argv[2];
 if (out) {

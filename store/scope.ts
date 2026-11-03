@@ -20,7 +20,7 @@ const USER = new Set(USER_TABLES);
 
 export class ScopeError extends Error {}
 
-import type { DatabaseSync } from "node:sqlite";
+import type { Conn, Param, Row, RunResult, StatementContext } from "./sql/conn.ts";
 
 /** Words that end a WHERE (or a FROM clause with no WHERE) at the top level of a statement. */
 const CLAUSE_END = /\b(GROUP\s+BY|ORDER\s+BY|LIMIT|HAVING|RETURNING|UNION|ON\s+CONFLICT)\b/i;
@@ -120,8 +120,7 @@ export function scopeSql(sql: string): string {
   if (/^INSERT\b/i.test(s)) out = scopeInsert(s);
   else if (/^(UPDATE|DELETE)\b/i.test(s)) out = scopeUpdateDelete(s);
   else if (/^SELECT\b/i.test(s)) out = scopeSelect(s);
-  else if (/^(VACUUM|PRAGMA|BEGIN|COMMIT|ROLLBACK)\b/i.test(s)) out = s;
-  else throw new ScopeError("Unscoped statement form");
+    else throw new ScopeError("Unscoped statement form");
   // Belt and braces: a statement naming a user table must carry $uid once per table reference.
   const refs = [...out.matchAll(/\b(?:FROM|JOIN|INTO|UPDATE)\s+(\w+)/gi)].filter((m) => USER.has(m[1]!)).length;
   const binds = (out.match(/\$uid\b/g) ?? []).length;
@@ -130,46 +129,55 @@ export function scopeSql(sql: string): string {
   return out;
 }
 
-/** The part of a database the plan store uses, tied to one person. */
+/** The table a scoped SELECT reads from (its FROM), for the SQL Server driver's decoding of dates; null otherwise. */
+export function readTable(sql: string): string | null {
+  const s = sql.trim();
+  if (!/^SELECT\b/i.test(s)) return null;
+  const from = topLevel(s, word("FROM"));
+  return from < 0 ? null : (/^FROM\s+(\w+)/i.exec(s.slice(from))?.[1] ?? null);
+}
+
+/** The part of a database the plan store uses, tied to one person. Positional parameters only. */
 export type ScopedDb = {
-  prepare(sql: string): ScopedStatement;
-  /** Transaction control only; any other statement goes through prepare (so it is scoped). */
-  exec(sql: "BEGIN IMMEDIATE" | "COMMIT" | "ROLLBACK"): void;
-  close(): void;
-};
-type Param = null | number | bigint | string | NodeJS.ArrayBufferView;
-export type ScopedStatement = {
-  run(...params: Param[]): { changes: number | bigint; lastInsertRowid: number | bigint };
-  get(...params: Param[]): unknown;
-  all(...params: Param[]): unknown[];
+  get(sql: string, ...params: Param[]): Promise<Row | undefined>;
+  all(sql: string, ...params: Param[]): Promise<Row[]>;
+  run(sql: string, ...params: Param[]): Promise<RunResult>;
+  /** One transaction (joined when one is open already). */
+  tx<T>(fn: () => Promise<T>): Promise<T>;
+  readonly conn: Conn;
 };
 
 /**
  * The database as one person sees it: every statement scoped (scopeSql) and $uid bound to `userId`, which comes from
- * the server's session (or a demo or test person), never from a request. Statements take positional parameters only.
+ * the server's session (or a demo or test person), never from a request. `zone` is the person's time zone (the SQL
+ * Server driver shows stored times in it, the way the store wrote them).
  */
-export function scopedDb(db: DatabaseSync, userId: string): ScopedDb {
+export function scopedDb(conn: Conn, userId: string, zone?: () => string): ScopedDb {
   if (!userId) throw new ScopeError("A plan store needs a person");
-  const named = { uid: userId };
+  const ctx = (sql: string, scoped: string): StatementContext => {
+    const c: StatementContext = { table: readTable(sql) };
+    if (scoped.includes("$uid")) c.uid = userId;
+    if (zone) c.zone = zone();
+    return c;
+  };
+  const check = (p: Param[]) => {
+    for (const v of p) if (v !== null && typeof v === "object") throw new ScopeError("Named parameters aren't allowed here");
+    return p;
+  };
   return {
-    prepare(sql) {
+    get(sql, ...p) {
       const scoped = scopeSql(sql);
-      const st = db.prepare(scoped);
-      const bind = scoped.includes("$uid");
-      const args = (p: Param[]): [Record<string, Param>, ...Param[]] | Param[] => {
-        for (const v of p) if (v !== null && typeof v === "object" && !ArrayBuffer.isView(v)) throw new ScopeError("Named parameters aren't allowed here");
-        return bind ? [named, ...p] : p;
-      };
-      return {
-        run: (...p) => st.run(...(args(p) as Param[])),
-        get: (...p) => st.get(...(args(p) as Param[])),
-        all: (...p) => st.all(...(args(p) as Param[])),
-      };
+      return conn.get(scoped, check(p), ctx(sql, scoped));
     },
-    exec(sql) {
-      if (sql !== "BEGIN IMMEDIATE" && sql !== "COMMIT" && sql !== "ROLLBACK") throw new ScopeError("Only transaction control runs unprepared");
-      db.exec(sql);
+    all(sql, ...p) {
+      const scoped = scopeSql(sql);
+      return conn.all(scoped, check(p), ctx(sql, scoped));
     },
-    close: () => db.close(),
+    run(sql, ...p) {
+      const scoped = scopeSql(sql);
+      return conn.run(scoped, check(p), ctx(sql, scoped));
+    },
+    tx: (fn) => conn.tx(fn),
+    conn,
   };
 }

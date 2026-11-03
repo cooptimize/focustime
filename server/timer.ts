@@ -25,21 +25,21 @@ const ACTION_OF = TIMER_BUTTONS;
 
 /** One check. Returns what it did, for tests and logs. */
 export async function checkTimer(d: TimerTickDeps): Promise<"ended" | "warned" | null> {
-  const s = d.plan.getState<TimerState>(TIMER_KEY);
+  const s = (await d.plan.getState<TimerState>(TIMER_KEY));
   if (!s) return null;
   const now = d.now();
   const t = tickTimer(s, now);
   if (t.ended) {
-    logSegment(d.plan, s, t.segment);
-    d.plan.setState(TIMER_KEY, t.state);
+    await logSegment(d.plan, s, t.segment);
+    (await d.plan.setState(TIMER_KEY, t.state));
     if (d.ended) await d.ended(s, t.state).catch(() => {});
     if (await d.endSound().catch(() => false)) d.sound();
     // Not awaited: the notification stays until answered; the choice runs the same action as the UI.
     void d
       .notify(notices.timerEnd(s.kind === "break", s.label, s.startedAt, now.toString()))
-      .then((key) => {
+      .then(async (key) => {
         // Only if the session is still the one that ended (the UI may have answered first).
-        const still = d.plan.getState<TimerState>(TIMER_KEY);
+        const still = (await d.plan.getState<TimerState>(TIMER_KEY));
         if (key && key in ACTION_OF && still?.ended && still.startedAt === s.startedAt) return d.act(ACTION_OF[key as keyof typeof ACTION_OF]);
         return undefined;
       })
@@ -47,10 +47,10 @@ export async function checkTimer(d: TimerTickDeps): Promise<"ended" | "warned" |
     return "ended";
   }
   if (!s.runningSince) return null;
-  const today = d.plan.getState<{ date: string; points: WarnPoint[] }>("warn_points");
+  const today = (await d.plan.getState<{ date: string; points: WarnPoint[] }>("warn_points"));
   const due = today ? dueWarnings(today.points, now, s.warned) : [];
   if (!due.length) return null;
-  d.plan.setState(TIMER_KEY, { ...s, warned: [...s.warned, ...due.map((p) => p.key)] });
+  (await d.plan.setState(TIMER_KEY, { ...s, warned: [...s.warned, ...due.map((p) => p.key)] }));
   void d.notify(notices.meeting(due.map((p) => p.label), due.map((p) => p.key), now.toString())).catch(() => {});
   return "warned";
 }

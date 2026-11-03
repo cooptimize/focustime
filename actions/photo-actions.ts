@@ -86,7 +86,7 @@ export async function photoAction(ctx: PhotoContext, input: unknown): Promise<Ac
   if (emails.length > MAX_PHOTO_PEOPLE) return bad(`At most ${MAX_PHOTO_PEOPLE} people at once`);
   const none = (reason: PhotoAccess): ActionResponse => ({ ok: true, data: { available: false, reason, me: null, people: [] } satisfies PhotosData });
   const client = ctx.account?.photos ?? null;
-  const me = storedIdentity(ctx.plan);
+  const me = (await storedIdentity(ctx.plan));
   if (!client || !me) return none("signed_out");
 
   let access: PhotoAccess | null = null;
