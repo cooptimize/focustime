@@ -39,6 +39,13 @@ import { AddPane, AddSection, BoxHint } from "./plan/AddPane.tsx";
 import { FoldLine } from "./plan/FoldLine.tsx";
 import { planOpenClient, plannedCount, weekLines, type WeekLine } from "../plan/weekclients.ts";
 import { userZone } from "../week/zone.ts";
+import { dateInWeekWords, otherOwners, rowDue } from "../plan/rowdates.ts";
+import { usePhotos } from "./Presence.tsx";
+import { OwnerName, OwnerPhotos, OwnerStack } from "./Owners.tsx";
+import { createContext } from "react";
+
+/** D461: what rows need for their dates: the week being planned and today. */
+const WeekDates = createContext<{ weekStart: IsoDate; today: IsoDate }>({ weekStart: "", today: "" });
 
 type Props = { /** Step 16.2: the Week tab's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void; /** fix/planday-pane: the client to open first (from Plan the day's "plan the week"), once. */ openClient?: string | null; onOpenClientSeen?: () => void };
 type Half = "AM" | "PM";
@@ -70,16 +77,16 @@ function placesFor(days: WeekLoadData["week"]["days"], clientKey: string): Place
 }
 
 /** What DevOps says about an item now: a feature from the portfolio read, a story from the work read. */
-type Info = { type: string; state: string; feature: PortfolioItem | null; story: WorkItem | null };
+type Info = { type: string; state: string; feature: PortfolioItem | null; story: WorkItem | null; /** D461: its DevOps target date, when read. */ target: IsoDate | null };
 function infoFor(portfolios: WeekPlanState["portfolios"], work: readonly ClientWork[] | null) {
   return (k: string, id: number): Info | null => {
     const feature = portfolios.find((p) => p.clientKey === k)?.items.find((i) => i.id === id) ?? null;
-    if (feature) return { type: feature.type, state: feature.state, feature, story: null };
+    if (feature) return { type: feature.type, state: feature.state, feature, story: null, target: feature.targetDate };
     const w = work?.find((x) => x.clientKey === k);
     const story = w ? ([...w.items, ...w.children, ...(w.committed ?? []), ...(w.watched ?? [])].find((i) => i.id === id) ?? null) : null;
-    if (story) return { type: story.type, state: story.state, feature: null, story };
     const kid = portfolios.find((p) => p.clientKey === k)?.items.flatMap((i) => i.children).find((c) => c.id === id);
-    return kid ? { type: kid.type, state: kid.state, feature: null, story: null } : null;
+    if (story) return { type: story.type, state: story.state, feature: null, story, target: story.targetDate ?? kid?.targetDate ?? null };
+    return kid ? { type: kid.type, state: kid.state, feature: null, story: null, target: kid.targetDate ?? null } : null;
   };
 }
 /** U4 (Today's rule): a feature on the list with no open DevOps stories needs stories. */
@@ -110,6 +117,10 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const { open: openMenu } = useContext(MenuCtx);
   const openDraft = useContext(DraftEditorCtx);
   const tz = userZone(data);
+  // D460: one batched photo read for everyone who owns a story here (the per-user cache; no read per row or render).
+  const ownerEmails = useMemo(() => [...new Set((st?.portfolios ?? []).flatMap((p) => p.items.flatMap((i) => i.children.filter((c) => !c.mine && c.assignedToEmail).map((c) => c.assignedToEmail!))))], [st]);
+  const photos = usePhotos({ emails: ownerEmails });
+  const weekDates = useMemo(() => ({ weekStart, today: data.planDay.date }), [weekStart, data.planDay.date]);
   const weekReady = data.weekStart === weekStart;
 
   const load = useCallback(
@@ -387,6 +398,8 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     ) : undefined;
 
   return (
+    <WeekDates.Provider value={weekDates}>
+    <OwnerPhotos.Provider value={photos.photoFor}>
     <PlanFrame
       as="main"
       className={`planweek${panel ? " with-panel" : ""}`}
@@ -428,6 +441,8 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
         </>
       }
     />
+    </OwnerPhotos.Provider>
+    </WeekDates.Provider>
   );
 }
 
@@ -577,15 +592,22 @@ function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, clie
   const envl = item ? (estimate(clientItems).envelopes.find((e) => e.feature.id === item.id) ?? null) : null;
   const title = item?.title ?? f?.title ?? `#${itemId}`;
   const stories = (f?.children ?? []).filter((c) => c.level === "story");
+  const { weekStart } = useContext(WeekDates);
   void tz;
   return (
     <PanelShell title={title} sub={`${name} · #${itemId}${info ? ` · ${info.type} · ${info.state}` : ""}`} color={color} label={`Feature: ${title}`} onClose={onClose}>
       <section className="dp-section" aria-label="Dates">
         <h3>Dates</h3>
-        <p className="dp-line">
+        {/* D461: one line; Set (or Change) is an inline link, not a full-width button. */}
+        <p className="dp-line pw-dates">
           {f?.startDate ? `Starts ${dateShortIso(f.startDate)}` : "No start date"} · {f?.targetDate ? `target ${dateShortIso(f.targetDate)}` : "no target date"}
+          {!past && (
+            <>
+              {" · "}
+              <DevOpsAction clientKey={k} className="link-btn" label={f?.targetDate ? "Change" : "Set"} onRun={(w) => w.targetDate({ clientKey: k, itemId, title, current: f?.targetDate ?? null })} />
+            </>
+          )}
         </p>
-        {!past && <DevOpsAction clientKey={k} label="Set target date" onRun={(w) => w.targetDate({ clientKey: k, itemId, title, current: f?.targetDate ?? null })} />}
       </section>
       {item && envl && (
         <section className="dp-section" aria-label="Estimate">
@@ -611,7 +633,12 @@ function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, clie
           <ul className="pw-pstories">
             {stories.map((c) => (
               <li key={c.id} className={c.open ? "" : "closed"}>
-                <WorkLink clientKey={k} url={c.url}>{c.title}</WorkLink> <span className="muted">{c.state} · {c.mine ? "you" : c.assignedTo ?? "unassigned"}{listed.has(c.id) ? " · on the list" : ""}</span>
+                <WorkLink clientKey={k} url={c.url}>{c.title}</WorkLink>{" "}
+                <span className="muted pw-story-meta">
+                  {c.state} · <OwnerName name={c.assignedTo} email={c.assignedToEmail ?? null} mine={c.mine} />
+                  {c.targetDate ? ` · ${dateInWeekWords(c.targetDate, weekStart)}` : ""}
+                  {listed.has(c.id) ? " · on the list" : ""}
+                </span>
               </li>
             ))}
           </ul>
@@ -1031,6 +1058,11 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
   const needs = needsStories(i, info);
   // E1: its other open DevOps stories (not on the list) as one muted count line; the detail panel lists them.
   const rest = i.level === "feature" && !nestedIn ? otherStoriesLine(stories, listed ?? new Set()) : null;
+  // D460: the other people behind "N assigned to others", as avatars; D461: the target date only when it matters this week.
+  const owners = rest ? otherOwners(stories, listed ?? new Set()) : [];
+  const dates = useContext(WeekDates);
+  const lastBlock = places.reduce<IsoDate | null>((m, p) => (m === null || p.date > m ? p.date : m), null);
+  const due = past || i.done ? null : rowDue(info?.target, { weekStart: dates.weekStart, today: dates.today, pinned: i.slots.map((x) => x.date), lastBlock });
   const derived = !!envl?.derived;
   const other: Tier = i.tier === "must" ? "nice" : "must";
   const { env, open: openMenu } = useContext(MenuCtx);
@@ -1112,6 +1144,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
               )
             ))}
           {i.slots.length > 0 && <span className="pw-pin" title="Pinned to this block">{i.slots.map(pinLabel).join(", ")}</span>}
+          {due && <span className={`pw-due${due.late ? " late" : ""}`} title={due.title}>{due.text}</span>}
         </>
       }
       right={
@@ -1155,6 +1188,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
       {rest && (
         <button type="button" className="link-btn pw-kids" onClick={() => ops.feature(k, i.itemId)} title="Its other open stories in DevOps, not on the list: open the feature to see them">
           {rest}
+          <OwnerStack owners={owners} />
         </button>
       )}
     </PlanRow>

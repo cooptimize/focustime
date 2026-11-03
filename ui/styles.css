@@ -3410,3 +3410,15 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .size-chip.unsized { color: var(--text-muted); border-style: dashed; font-weight: 400; }
 .over-word { color: var(--watch); font-weight: 500; }
 .dp-estimate { display: flex; align-items: center; gap: 10px; }
+
+/* D460: owners. A 16 px photo or initials in the same circle (no shift when a photo arrives); others' avatars overlap. */
+.owner { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+.owner .avatar { margin-right: 0; }
+.owner-stack { display: inline-flex; align-items: center; margin-left: 6px; vertical-align: middle; }
+.owner-stack .avatar { margin-right: 0; box-shadow: 0 0 0 1.5px var(--surface); }
+.owner-stack .avatar + .avatar { margin-left: -5px; }
+.owner-more { margin-left: 4px; font-size: var(--fs-1); color: var(--text-muted); }
+/* D461: a row's target date, only when it matters this week; amber when it may land too late, never red. */
+.pw-due { flex: none; font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; }
+.pw-due.late { color: var(--watch); }
+.pw-dates .link-btn { font-size: inherit; }

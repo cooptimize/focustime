@@ -226,7 +226,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
   const targetFieldMemory = new Map<string, { at: number; fields: Record<string, string>; starts: Record<string, string>; size: string | null; ac: boolean }>();
 
   /**
-   * The target date field per portfolio type for a project, and (step 16) the size field on stories, cached like the
+   * The target date field per portfolio type (and, D461, per story type, for the dates in Plan the week) for a project, and (step 16) the size field on stories, cached like the
    * metadata. None found: no target dates, no sizes.
    */
   async function targetFieldsFor(c: Ctx, project: string, types: readonly string[], storyTypes: readonly string[] = []): Promise<{ fields: Record<string, string>; starts: Record<string, string>; size: string | null; ac: boolean }> {
@@ -242,13 +242,14 @@ export function createDevOpsSource(d: DevOpsDeps) {
     try {
       const all = await call<{ value?: FieldInfo[] }>(c, "fields", `${p}/_apis/wit/fields`);
       size = detectSizeField(all.value ?? []);
-      for (const type of types) {
+      // D461: story types too, for their target dates in Plan the week (Start Date stays a portfolio field).
+      for (const type of [...types, ...storyTypes.filter((x) => !types.includes(x))]) {
         const tf = await call<{ value?: { referenceName?: unknown }[] }>(c, "typefields", `${p}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields`);
         const has = new Set((tf.value ?? []).map((f) => f.referenceName).filter((r): r is string => typeof r === "string"));
         const found = detectTargetField(all.value ?? [], has);
         if (found) out[type] = found;
         // Step 17: Start Date where the process has it (detected per process, per type).
-        if (has.has(START_DATE_FIELD)) starts[type] = START_DATE_FIELD;
+        if (has.has(START_DATE_FIELD) && types.includes(type)) starts[type] = START_DATE_FIELD;
       }
       // Step 15.3: whether the first story type has acceptance criteria (the draft editor shows the field only then).
       const story = storyTypes[0];
@@ -318,7 +319,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
       why: [...(assigned.has(i.id) ? ["assigned" as const] : []), ...(parents.has(i.id) ? ["parent" as const] : []), ...(above.has(i.id) && !assigned.has(i.id) && !parents.has(i.id) ? ["above" as const] : [])],
       areaPath: i.areaPath ?? null,
       iterationPath: i.iterationPath ?? null,
-      children: kids.filter((k) => k.parentId === i.id).map((k) => ({ id: k.id, title: k.title, type: k.type, state: k.state, stateCategory: k.stateCategory, open: !DONE_CATEGORIES.has(k.stateCategory), level: k.level, order: k.order, url: k.url, assignedTo: k.assignedTo ?? null, assignedToEmail: k.assignedToEmail ?? null, mine: !!k.assignedToMe, changedAt: k.changedAt, size: k.size ?? null, blocked: !!k.blocked })),
+      children: kids.filter((k) => k.parentId === i.id).map((k) => ({ id: k.id, title: k.title, type: k.type, state: k.state, stateCategory: k.stateCategory, open: !DONE_CATEGORIES.has(k.stateCategory), level: k.level, order: k.order, url: k.url, assignedTo: k.assignedTo ?? null, assignedToEmail: k.assignedToEmail ?? null, mine: !!k.assignedToMe, changedAt: k.changedAt, size: k.size ?? null, blocked: !!k.blocked, ...(targetFields[k.type] ? { targetDate: k.targetDate ?? null } : {}) })),
     }));
     return { items, targetFields, startFields, sizeField, acceptanceField };
   }
