@@ -3,9 +3,9 @@
 // is in it), their settings and who they are; never a token, secret or session (those live elsewhere and are left
 // out by construction). The delete keeps only a hash of the user id, so the log can say it happened.
 import { createHash } from "node:crypto";
-import type { DatabaseSync } from "node:sqlite";
 import type { UserRow } from "./accounts.ts";
 import { scopedDb, USER_TABLES } from "./scope.ts";
+import type { Conn } from "./sql/conn.ts";
 
 /** User tables left out of the export: sealed secrets. */
 export const NOT_EXPORTED: readonly string[] = ["user_secrets"];
@@ -13,49 +13,63 @@ export const NOT_EXPORTED: readonly string[] = ["user_secrets"];
 /** How long a soft delete waits before everything is removed. */
 export const HARD_DELETE_AFTER_DAYS = 30;
 
+/** The export's format name (store/import.ts reads it back). */
+export const EXPORT_FORMAT = "focustime-export-1";
+/**
+ * The schema version of the user tables an export holds: SQLite's migration 26, SQL Server's baseline (later SQL
+ * Server migrations so far add only app tables). A migration that changes a user table raises it, and the import
+ * learns to read the older one. store/import.test.ts checks it against both.
+ */
+export const USER_SCHEMA_VERSION = 26;
+
+/**
+ * The user tables in an order where every table comes after the ones it references (picks after day_plans, draft
+ * stories and follow-ups; borrowed and timeboxes after picks; slots after week items): the import inserts in this
+ * order and the delete removes in the reverse. store/import.test.ts checks it against the schema's references.
+ */
+export const PARENTS_FIRST: readonly string[] = [
+  "day_plans", "draft_stories", "follow_ups", "week_features", "picks", "borrowed", "timeboxes", "week_feature_slots", "week_drafts",
+  ...USER_TABLES.filter((t) => !["day_plans", "draft_stories", "follow_ups", "week_features", "picks", "borrowed", "timeboxes", "week_feature_slots", "week_drafts"].includes(t)),
+];
+
 const hashOf = (userId: string) => createHash("sha256").update(`focustime-user:${userId}`).digest("hex");
 
-/** Everything of one person's, as JSON-ready data. */
-export function exportUser(db: DatabaseSync, user: UserRow, now: Temporal.Instant): Record<string, unknown> {
-  const s = scopedDb(db, user.id);
+/** Everything of one person's, as JSON-ready data, with the store's schema version (store/import.ts loads it). */
+export async function exportUser(db: Conn, user: UserRow, now: Temporal.Instant): Promise<Record<string, unknown>> {
+  const s = scopedDb(db, user.id, () => user.timeZone ?? "UTC");
   const tables: Record<string, unknown[]> = {};
   for (const t of USER_TABLES) {
     // Secrets (sealed or not) never leave the server.
     if (NOT_EXPORTED.includes(t)) continue;
-    const rows = s.prepare(`SELECT * FROM ${t}`).all() as Record<string, unknown>[];
+    const rows = await s.all(`SELECT * FROM ${t}`);
     tables[t] = rows.map(({ user_id: _u, ...rest }) => rest);
   }
   return {
     exportedAt: now.toString(),
-    format: "focustime-export-1",
-    you: { id: user.id, upn: user.upn, displayName: user.displayName, email: user.email, timeZone: user.timeZone, createdAt: user.createdAt, lastSignInAt: user.lastSignInAt },
+    format: EXPORT_FORMAT,
+    schemaVersion: USER_SCHEMA_VERSION,
+    you: { id: user.id, tenantId: user.tenantId, upn: user.upn, displayName: user.displayName, email: user.email, timeZone: user.timeZone, createdAt: user.createdAt, lastSignInAt: user.lastSignInAt },
     tables,
   };
 }
 
 /** A soft delete: recorded now; the rows stay until the hard delete. The caller ends sessions and forgets secrets. */
-export function recordSoftDelete(db: DatabaseSync, userId: string, at: Temporal.Instant): void {
-  db.prepare("INSERT INTO deletions (user_hash, requested_at) VALUES (?, ?)").run(hashOf(userId), at.toString());
+export async function recordSoftDelete(db: Conn, userId: string, at: Temporal.Instant): Promise<void> {
+  await db.run("INSERT INTO deletions (user_hash, requested_at) VALUES (?, ?)", [hashOf(userId), at.toString()]);
 }
 
 /** Removes every row of everyone whose soft delete is 30 days old; returns how many people. */
-export function hardDeleteDue(db: DatabaseSync, now: Temporal.Instant): number {
+export async function hardDeleteDue(db: Conn, now: Temporal.Instant): Promise<number> {
   const cutoff = now.subtract({ hours: 24 * HARD_DELETE_AFTER_DAYS }).toString();
-  const due = db.prepare("SELECT id FROM users WHERE deleted_at IS NOT NULL AND deleted_at <= ?").all(cutoff) as { id: string }[];
+  const due = (await db.all("SELECT id FROM users WHERE deleted_at IS NOT NULL AND deleted_at <= ?", [cutoff])) as { id: string }[];
   for (const { id } of due) {
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      db.exec("PRAGMA defer_foreign_keys = ON");
-      for (const t of [...USER_TABLES].reverse()) db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(id);
-      db.prepare("DELETE FROM sessions WHERE user_id = ?").run(id);
-      db.prepare("DELETE FROM auth_requests WHERE user_id = ?").run(id);
-      db.prepare("DELETE FROM users WHERE id = ?").run(id);
-      db.prepare("UPDATE deletions SET hard_deleted_at = ? WHERE user_hash = ? AND hard_deleted_at IS NULL").run(now.toString(), hashOf(id));
-      db.exec("COMMIT");
-    } catch (e) {
-      db.exec("ROLLBACK");
-      throw e;
-    }
+    await db.tx(async () => {
+      for (const t of [...PARENTS_FIRST].reverse()) await db.run(`DELETE FROM ${t} WHERE user_id = ?`, [id]);
+      await db.run("DELETE FROM sessions WHERE user_id = ?", [id]);
+      await db.run("DELETE FROM auth_requests WHERE user_id = ?", [id]);
+      await db.run("DELETE FROM users WHERE id = ?", [id]);
+      await db.run("UPDATE deletions SET hard_deleted_at = ? WHERE user_hash = ? AND hard_deleted_at IS NULL", [now.toString(), hashOf(id)]);
+    });
   }
   return due.length;
 }
