@@ -3488,3 +3488,23 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
   .pl-panes.with-panel { grid-template-columns: minmax(0, 1fr); }
   .pl-panel { position: static; }
 }
+
+/* F1: ⋯ › Send feedback. Write (kind, text, "Include where I am"), Preview (the exact title and description), Sent. */
+.feedback-dialog { width: min(600px, calc(100vw - 32px)); }
+.feedback-body { display: flex; flex-direction: column; gap: 10px; padding: 6px 14px 14px; font-size: var(--fs-3); }
+.feedback-kinds { display: flex; gap: 6px; }
+.feedback-kinds label { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; }
+.feedback-kinds label.on { border-color: var(--accent); }
+.feedback-kinds input { margin: 0; }
+.feedback-text textarea { width: 100%; box-sizing: border-box; min-height: 7.5em; resize: vertical; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: inherit; }
+.feedback-where { display: flex; align-items: baseline; gap: 6px; }
+.feedback-hint { margin: 0; font-size: var(--fs-2); }
+.feedback-note { margin: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); }
+.feedback-preview { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; }
+.feedback-preview dt { color: var(--text-muted); }
+.feedback-preview dd { margin: 0; overflow-wrap: anywhere; }
+.feedback-title { font-weight: 600; }
+.feedback-desc { white-space: pre-wrap; max-height: 40vh; overflow: auto; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.feedback-dest { margin: 0; color: var(--text-muted); }
+.feedback-done { margin: 4px 0; font-size: var(--fs-4, var(--fs-3)); }
+.feedback-actions { display: flex; align-items: center; gap: 12px; }

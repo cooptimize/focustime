@@ -213,3 +213,11 @@ export function planDayTitle(date: IsoDate, today: IsoDate): string {
   const d = Temporal.PlainDate.from(date).toLocaleString("en-US", { weekday: "long", month: "short", day: "numeric" });
   return `${date < today ? "Review" : "Plan"} ${d}`;
 }
+
+/** F1: the place's plain name for "Include where I am" ("Today › Plan", "Settings: connections", "Guide"). */
+export function viewName(loc: Loc): string {
+  const n = loc.nav;
+  const place = n.tab === "inbox" ? TAB_NAMES.inbox : n.tab === "roadmap" && n.mode === "roadmap" ? TAB_NAMES.roadmap : n.tab === "week" && n.mode === "week" ? TAB_NAMES.week : `${TAB_NAMES[n.tab]} › ${MODE_NAMES[n.mode]}`;
+  const o = loc.overlay;
+  return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;
+}

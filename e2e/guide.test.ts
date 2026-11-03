@@ -76,7 +76,7 @@ describe.skipIf(!CHROMIUM)("the Guide (G1)", () => {
         // Chapter 6 and the footer.
         await guide.locator(".guide-q summary").last().click();
         for (const q of ["Do I have to size everything?", "What's a block, then?"]) expect(await guide.locator(".guide-q summary", { hasText: q }).count(), q).toBe(1);
-        expect(await guide.locator(".guide-footer").textContent()).toContain("Message the FocusTime team in Teams.");
+        expect(await guide.locator(".guide-footer").textContent()).toContain("⋯ › Send feedback, or message the FocusTime team in Teams.");
         await guide.locator(".guide-footer .lumen, .guide-footer svg").first().waitFor();
 
         expect(await noSidewaysScroll(page)).toEqual({ page: true, guide: true, wide: [] });

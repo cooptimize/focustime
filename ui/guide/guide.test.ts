@@ -94,7 +94,8 @@ describe("estimates in the Guide are hours (E2)", () => {
     const qs = Object.fromEntries(C.QUESTIONS.items.map((x) => [x.q, x.a]));
     expect(qs["Do I have to size everything?"]).toBe("No. Unsized stories count as 2h so the plan still adds up, and nothing waits on a size. Size them when you know.");
     expect(qs["What's a block, then?"]).toBe("Where you work: a half-day set aside for a client in Focus Time. How much work fits is measured in hours.");
-    expect(C.FOOTER).toBe("FocusTime by Cooptimize. Questions or ideas? Message the FocusTime team in Teams.");
+    expect(C.FOOTER).toBe("FocusTime by Cooptimize. Questions or ideas? ⋯ › Send feedback, or message the FocusTime team in Teams.");
+    expect(qs["How do I send an idea, a problem or a question?"]).toMatch(/^⋯ › Send feedback, .*message the FocusTime team in Teams\.$/);
   });
 });
 
