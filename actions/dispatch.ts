@@ -58,6 +58,8 @@ import { userZone } from "../week/zone.ts";
 
 /** The plan store marker for the first launch (step 17.5). */
 const FIRST_LAUNCH_MARK = "first_launch";
+/** G1: the "Take the 2-minute tour" link on a person's first Today, once they open it or say Not now. */
+const TOUR_MARK = "tour_offer";
 
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
@@ -707,6 +709,19 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("ui.first_launch takes no input");
       if (ctx.demo?.on || !ctx.plan) return { ok: true, data: { first: false } };
       return { ok: true, data: { first: (await ctx.plan.markOnce(FIRST_LAUNCH_MARK, "once")) } };
+    }
+    case "ui.tour_offer": {
+      // G1: the tour link shows on a person's first Today until they open the Guide from it or dismiss it; then
+      // never again, on any device (a plan store marker, per user). {} asks; { done: true } records it.
+      const i = req.input as Record<string, unknown> | null | undefined;
+      const done = i !== undefined && i !== null && typeof i === "object" && !Array.isArray(i) && Object.keys(i).length === 1 && i.done === true;
+      if (i !== undefined && !done && (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).length)) return bad("input must be {} or { done: true }");
+      if (ctx.demo?.on || !ctx.plan) return { ok: true, data: { show: false } };
+      if (done) {
+        await ctx.plan.markOnce(TOUR_MARK, "once");
+        return { ok: true, data: { show: false } };
+      }
+      return { ok: true, data: { show: !(await ctx.plan.marked(TOUR_MARK, "once")) } };
     }
     case "ui.set_reduce_motion": {
       // Step 17.5: Settings > Display "Reduce motion", besides the system's reduced motion setting.

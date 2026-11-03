@@ -90,3 +90,45 @@ describe("ui.first_launch (step 17.5)", () => {
     expect(await dispatch(t.c, { action: "ui.first_launch", input: {} })).toEqual({ ok: true, data: { first: false } });
   });
 });
+
+describe("ui.tour_offer (G1): the tour link on a first Today, once per person", () => {
+  it("shows until done, then never again, across restarts; asking alone never marks it", async () => {
+    const t = setup();
+    const db = join(mkdtempSync(join(tmpdir(), "c-tour-")), "plan.db");
+    const now = () => Temporal.Instant.from("2026-11-02T14:00:00Z").toZonedDateTimeISO("America/New_York");
+    const run = async (input: unknown) => {
+      const plan = createPlanStore({ path: db, now });
+      try {
+        return (await dispatch({ ...t.c, plan }, { action: "ui.tour_offer", input })) as { ok: boolean; data: { show: boolean } };
+      } finally {
+        plan.close();
+      }
+    };
+    expect((await run({})).data.show).toBe(true);
+    expect((await run({})).data.show).toBe(true);
+    expect((await run({ done: true })).data.show).toBe(false);
+    expect((await run({})).data.show).toBe(false);
+    expect((await run({ done: true })).data.show).toBe(false);
+  });
+  it("is kept per person: one person's Not now doesn't hide it for another", async () => {
+    const t = setup();
+    const db = join(mkdtempSync(join(tmpdir(), "c-tour2-")), "plan.db");
+    const now = () => Temporal.Instant.from("2026-11-02T14:00:00Z").toZonedDateTimeISO("America/New_York");
+    const run = async (userId: string, input: unknown) => {
+      const plan = createPlanStore({ path: db, now, userId });
+      try {
+        return (await dispatch({ ...t.c, plan }, { action: "ui.tour_offer", input })) as { data: { show: boolean } };
+      } finally {
+        plan.close();
+      }
+    };
+    await run("ana", { done: true });
+    expect((await run("ana", {})).data.show).toBe(false);
+    expect((await run("ben", {})).data.show).toBe(true);
+  });
+  it("never in demo mode or without a plan store; anything else is a bad request", async () => {
+    const t = setup();
+    expect(await dispatch(t.c, { action: "ui.tour_offer", input: {} })).toEqual({ ok: true, data: { show: false } });
+    for (const input of [{ done: false }, { done: true, x: 1 }, [], "yes"]) expect((await dispatch(t.c, { action: "ui.tour_offer", input })).ok, JSON.stringify(input)).toBe(false);
+  });
+});
