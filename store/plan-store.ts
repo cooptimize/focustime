@@ -1131,6 +1131,23 @@ export const MIGRATIONS: readonly string[] = [
    CREATE INDEX unavailable_user ON unavailable(user_id);
    CREATE INDEX week_features_user ON week_features(user_id);
    CREATE INDEX write_log_user ON write_log(user_id);`,
+  // 25: A2, settings in the database. A person's settings, one row per top-level section of the settings text, in
+  // order (config/sections.ts; app-level keys never stored here). And people whose data was deleted: a soft delete
+  // (data kept, sign-in refused) becomes a hard delete after 30 days; the row keeps only a hash of the user id.
+  `CREATE TABLE user_settings (
+     user_id TEXT NOT NULL,
+     section TEXT NOT NULL,
+     position INTEGER NOT NULL,
+     body TEXT NOT NULL,
+     updated_at TEXT NOT NULL,
+     PRIMARY KEY (user_id, section)
+   );
+   CREATE TABLE deletions (
+     id INTEGER PRIMARY KEY,
+     user_hash TEXT NOT NULL,
+     requested_at TEXT NOT NULL,
+     hard_deleted_at TEXT
+   );`,
 ];
 
 import type { AzureWriteEntry, TeamsStatusEntry } from "../actions/account-types.ts";

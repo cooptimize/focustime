@@ -62,6 +62,7 @@ export function memoryConfig(initial = STARTER_TOML, app: string | null = null):
     text: () => text,
     app: async () => app,
     load: async () => ({ path: "memory", parsed: parseConfig(text) }),
+    raw: async () => text,
     write: async (edit) => {
       const next = edit(text);
       const parsed = parseConfig(next);

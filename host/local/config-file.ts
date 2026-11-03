@@ -78,6 +78,7 @@ export const fileConfig = (path: string, zone: () => string = machineZone): Host
   // A2: app.toml beside config.toml, when there is one.
   app: () => readFile(join(dirname(path), "app.toml"), "utf8").catch(() => null),
   load: () => loadConfigFile(path, zone()),
+  raw: () => readFile(path, "utf8").catch(() => null),
   write: (edit) => writeConfig(path, edit, undefined, zone()),
   saveSystemUserId: (id) => saveSystemUserId(path, id),
 });

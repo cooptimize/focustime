@@ -113,6 +113,8 @@ export type HostConfig = {
   /** A2: the app config's text (local: ~/.config/focustime/app.toml), null when there is none; env overrides it. */
   app(): Promise<string | null>;
   load(): Promise<LoadedConfig>;
+  /** A2: the settings file's text as it is (read once more to seed its owner's settings rows); null when none. */
+  raw(): Promise<string | null>;
   /** Validates the edited text before anything is written; keeps a backup. */
   write(edit: (text: string) => string): Promise<WriteResult>;
   saveSystemUserId(id: string): Promise<void>;

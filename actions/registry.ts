@@ -142,6 +142,8 @@ export const ACTIONS = [
   { name: "followup.people", title: "Suggest who", group: "Follow-ups", target: "none", summary: "Cooptimizers, then people from your meetings with that client (read-only)" },
   { name: "followups.review", title: "Review heads-ups", group: "Follow-ups", target: "none", summary: "Open heads-ups the new rule wouldn't open; nothing is closed for you" },
   { name: "data.export", title: "Export the plan", group: "Settings", target: "none", summary: "Picks, drafts and time entries as JSON in ~/.local/share/focustime/exports" },
+  { name: "data.export_mine", title: "Export my data", group: "Settings", target: "none", summary: "Everything FocusTime keeps for you (plans, follow-ups, logs, settings) as one JSON file; never a password or token" },
+  { name: "data.delete_mine", title: "Delete my data", group: "Settings", target: "none", summary: "Signs you out and deletes everything FocusTime keeps for you, for good after 30 days; asks you to confirm" },
   { name: "auth.connect_outlook_write", title: "Reconnect Outlook with calendar changes", group: "Sources", target: "none", summary: "Sign in again and allow FocusTime to create and change its own Outlook events (timeboxes)" },
   { name: "timebox.add", title: "Timebox…", group: "Timebox", target: "pick", summary: "Give a pick or item a start and length on the day's timeline (local; Outlook optional)" },
   { name: "timebox.add_many", title: "Timebox my day", group: "Timebox", target: "day", summary: "Place every planned pick without a timebox into its block's free gaps, after showing the resulting agenda" },

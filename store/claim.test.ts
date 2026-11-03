@@ -34,7 +34,9 @@ function v23Store(identity: boolean) {
   db.prepare("INSERT INTO kv (key, value, updated_at) VALUES ('timer', '{}', ?)").run(at);
   db.prepare("INSERT INTO markers (kind, date, at) VALUES ('reminder', '2026-11-02', ?)").run(at);
   if (identity) db.prepare("INSERT INTO account_state (key, value, updated_at) VALUES ('ms_identity', ?, ?)").run(JSON.stringify({ oid: OID, tid: TID, name: "Ana", username: ME.upn }), at);
-  const counts = Object.fromEntries(USER_TABLES.map((t) => [t, (db.prepare(`SELECT count(*) AS n FROM ${t}`).get() as { n: number }).n]));
+  // Tables added after schema 23 start empty.
+  const has = (t: string) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t);
+  const counts = Object.fromEntries(USER_TABLES.map((t) => [t, has(t) ? (db.prepare(`SELECT count(*) AS n FROM ${t}`).get() as { n: number }).n : 0]));
   db.close();
   return { dir, path, counts };
 }

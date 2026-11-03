@@ -189,7 +189,7 @@ export function Settings(props: Props) {
         <h2 ref={headRef} tabIndex={-1}>
           {title}
         </h2>
-        {data && props.section !== "about" && <p className="muted set-path">Saved to {data.configPath} (a backup is made on every save)</p>}
+        {data && props.section !== "about" && <p className="muted set-path">Saved to {data.configPath}</p>}
         {error && <p className="field-problem">{error}</p>}
         {data && data.problems.length > 0 && props.section !== "connections" && props.section !== "data" && (
           <div className="config-banner" role="alert">
@@ -1250,8 +1250,83 @@ function ResetPlan({ disabled, onDone }: { disabled: boolean; onDone: () => void
   );
 }
 
-function DataSection(p: Props & { data: SettingsData }) {
+/** A2: Export my data: everything FocusTime keeps for the signed-in person, downloaded as one JSON file. */
+function ExportMine() {
   const [status, setStatus] = useState<string | null>(null);
+  return (
+    <div className="set-field">
+      <span className="set-label">Export my data</span>
+      <button
+        type="button"
+        className="mini"
+        onClick={async () => {
+          try {
+            setStatus("Preparing…");
+            const r = await call<{ fileName: string; export: unknown }>("data.export_mine", {});
+            const url = URL.createObjectURL(new Blob([`${JSON.stringify(r.export, null, 2)}\n`], { type: "application/json" }));
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = r.fileName;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 10_000);
+            setStatus(`Downloaded ${r.fileName}`);
+          } catch (e) {
+            setStatus(e instanceof Error ? e.message : "Export failed");
+          }
+        }}
+      >
+        Download JSON
+      </button>
+      <span className="set-hint">{status ?? "Your plans, follow-ups, captures, logs and settings. Never a password or token."}</span>
+    </div>
+  );
+}
+
+/** A2: Delete my data: signs out and deletes everything kept for this person (kept 30 days, then removed for good). */
+function DeleteMine() {
+  const [asking, setAsking] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
+  return (
+    <div className="set-field">
+      <span className="set-label">Delete my data</span>
+      {asking ? (
+        <form
+          className="set-inline set-delete"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            try {
+              await call("data.delete_mine", { confirm: "delete" });
+              location.replace("/?signin=deleted");
+            } catch (err) {
+              setStatus(err instanceof Error ? err.message : "Not deleted");
+            }
+          }}
+        >
+          <input autoFocus value={typed} placeholder='Type "delete"' aria-label='Type "delete" to confirm' onChange={(e) => setTyped(e.target.value)} />
+          <button type="submit" className="mini danger" disabled={typed.trim() !== "delete"}>
+            Delete
+          </button>
+          <button type="button" className="mini" onClick={() => setAsking(false)}>
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <button type="button" className="mini" onClick={() => { setAsking(true); setStatus(null); }}>
+          Delete…
+        </button>
+      )}
+      <span className="set-hint">
+        {status ??
+          (asking
+            ? "Export first if you want a copy. You'll be signed out and can't sign in again. Everything is removed for good after 30 days. Outlook events, DevOps changes and your VM's schedule that FocusTime already made stay as they are."
+            : "Signs you out and deletes everything FocusTime keeps for you.")}
+      </span>
+    </div>
+  );
+}
+
+function DataSection(p: Props & { data: SettingsData }) {
   return (
     <div className="set-form">
       <WriteLog />
@@ -1259,27 +1334,9 @@ function DataSection(p: Props & { data: SettingsData }) {
       <AzureWriteLog tz={userZone(p.data.you)} />
       <TeamsStatusLog tz={userZone(p.data.you)} />
       <div className="set-grid">
-        <div className="set-field">
-          <span className="set-label">Export the plan</span>
-          <button
-            type="button"
-            className="mini"
-            disabled={!p.data.data.planStore}
-            onClick={async () => {
-              try {
-                const r = await call<{ path: string }>("data.export", {});
-                setStatus(`Written to ${r.path}`);
-              } catch (e) {
-                setStatus(e instanceof Error ? e.message : "Export failed");
-              }
-            }}
-          >
-            Export as JSON
-          </button>
-          <span className="set-hint">{status ?? "Picks, drafts, follow-ups and time. Local only."}</span>
-        </div>
-        <ReadOnly label="Config file" value={p.data.configPath} where="The last 30 backups are in backups/ next to it" />
+        <ExportMine />
         <ResetPlan disabled={!p.data.data.planStore} onDone={p.onSaved} />
+        <DeleteMine />
       </div>
     </div>
   );

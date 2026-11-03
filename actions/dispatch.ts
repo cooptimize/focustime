@@ -85,6 +85,8 @@ export type ActionContext = {
   /** Settings (step 6b): secret presence and app secret writes, plan export. */
   secrets?: SettingsContext["secrets"];
   exportPlan?: (json: string) => Promise<string>;
+  /** A2: the signed-in person's own data: everything as JSON (no secrets), and the delete (signs them out). */
+  myData?: { export: () => Promise<Record<string, unknown>>; remove: () => Promise<{ hardDeleteOn: string }> };
   /** Step 14: personal DevOps write PATs in the keyring, and the DevOps writer. Absent: DevOps stays read-only. */
   writePats?: WritePats;
   devopsWriter?: DevOpsWriter;
@@ -723,6 +725,17 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       const r = await ctx.writeConfig((text) => setValue(text, "ui", "show_personal", i.show as boolean, "Display (U5.1): show personal events on Week and Today."));
       if (!r.ok) return { ok: false, status: 409, error: `Fix the config first: ${r.parsed.ok ? "" : r.parsed.errors.map((e) => `${e.field} ${e.message}`).join("; ")}` };
       return { ok: true, data: { ui: r.parsed.config.ui } };
+    }
+    case "data.export_mine": {
+      if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("data.export_mine takes {}");
+      if (!ctx.myData) return { ok: false, status: 503, error: "Export isn't available here" };
+      return { ok: true, data: { fileName: `focustime-export-${ctx.now().slice(0, 10)}.json`, export: await ctx.myData.export() } };
+    }
+    case "data.delete_mine": {
+      const i = req.input as Record<string, unknown> | null;
+      if (typeof i !== "object" || i === null || Object.keys(i).some((k) => k !== "confirm") || i.confirm !== "delete") return bad('input must be { confirm: "delete" }');
+      if (!ctx.myData) return { ok: false, status: 503, error: "Delete isn't available here" };
+      return { ok: true, data: await ctx.myData.remove() };
     }
     case "settings.load":
     case "settings.save":

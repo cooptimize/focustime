@@ -5,11 +5,13 @@ import { describe, expect, it } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
 import { openPlanDb, planStoreOn, type PlanStore } from "./plan-store.ts";
 import { scopeSql, ScopeError, USER_TABLES } from "./scope.ts";
+import { createUserSettings } from "./user-settings.ts";
+import { starterToml } from "../config/starter.ts";
 import { createDemoContext, seedDemo } from "../server/demo.ts";
 import { DEMO_TZ } from "../sources/demo/data.ts";
 
 /** Tables that are the app's, not one person's (each keyed by its own id or holding user_id itself). */
-const APP_TABLES = ["schema_migrations", "users", "sessions", "auth_requests"];
+const APP_TABLES = ["schema_migrations", "users", "sessions", "auth_requests", "deletions"];
 
 const NOW = "2026-11-02T14:30:00Z";
 const zoned = () => Temporal.Instant.from(NOW).toZonedDateTimeISO(DEMO_TZ);
@@ -44,6 +46,7 @@ async function fill(db: DatabaseSync, userId: string): Promise<PlanStore> {
   plan.markOnce("reminder", MON);
   plan.setRoadmapDates("cooptimize", 7001, { start: "2026-11-02", end: "2026-11-20" });
   plan.logTeamsStatus({ op: "set", status: "Busy", minutes: 25, result: "done", message: null });
+  createUserSettings({ db, userId, app: { dataverse: null, entra: null, google: null }, person: () => ({ email: `${tag}@example.com`, upn: `${tag}@example.com`, timeZone: null }), setZone: () => {}, defaultZone: DEMO_TZ, now: () => Temporal.Instant.from(NOW) }).seed(starterToml(DEMO_TZ));
   // Only migration 21 writes the dedupe log; a row as it would have left one.
   db.prepare("INSERT INTO dedupe_log (user_id, at, table_name, removed_id, kept_id) VALUES (?, ?, 'week_features', 1, 2)").run(userId, NOW);
   return plan;
