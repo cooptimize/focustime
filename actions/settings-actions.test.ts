@@ -38,8 +38,10 @@ describe("Settings (step 6b)", () => {
     expect(r.ok).toBe(true);
     const d = (r as { data: SettingsData }).data;
     expect(d.hours?.weekdays.mon).toEqual([{ start: "09:00", end: "17:00" }]);
-    expect(d.clients.map((c) => c.key)).toContain("T&W");
+    // no-demo-leak: without Dataverse, only the internal client (always followed); a color in settings makes no client.
+    expect(d.clients.map((c) => c.key)).toEqual(["Cooptimize"]);
     expect(d.dataverseReached).toBe(false);
+    expect(d.dataverseProblem).toMatch(/Dataverse user isn't found yet/);
     expect(d.secrets.map((s) => [s.account, s.state])).toEqual([["dataverse-client-secret", "missing"], ["google-client-secret", "missing"]]);
   });
 

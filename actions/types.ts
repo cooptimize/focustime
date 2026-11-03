@@ -124,6 +124,8 @@ export type SettingsData = {
   clients: SettingsClient[];
   /** Whether Dataverse answered for the client list; when not, Dataverse-owned values are unknown, not empty. */
   dataverseReached: boolean;
+  /** no-demo-leak: why the client list is missing (Dataverse not reached), with where to fix it; null when reached. */
+  dataverseProblem?: string | null;
   palette: readonly string[];
   secrets: { account: AppSecret; label: string; state: SecretPresence; expires: string | null }[];
   display: AppConfig["ui"] | null;

@@ -64,12 +64,10 @@ min_focus_window_minutes = 90
 # client = "Cooptimize"
 
 # Client colors, keyed by the account's reporting nickname
-# (or the account name when it has no nickname).
-[clients]
-"T&W" = "#1f9e8f"
-Proseware = "#7b68ee"
-Adatum = "#d2892a"
-Cooptimize = "#4a7fd4"
+# (or the account name when it has no nickname). Your clients come from
+# Dataverse; Settings > Clients sets these. None by default, for example:
+# [clients]
+# Cooptimize = "#4a7fd4"
 
 # Plan the day. Epics, features and other portfolio types can't be picked,
 # except the types listed here (matched without regard to case).
