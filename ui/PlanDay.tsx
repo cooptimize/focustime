@@ -100,7 +100,8 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   const nowI = Temporal.Instant.from(now);
   const dayPicks = state.picks.filter((p) => p.date === day.date);
   const picked = new Set(dayPicks.filter(inPlay).map(pickedKey));
-  const halves = cardHalves(day).filter((h) => !slotOf(day, h)!.off || day.kind === "overflow" || dayPicks.some((p) => p.half === h && inPlay(p)));
+  // S1 (D453): a PTO half isn't a block to plan (a pick already there stays visible, to move).
+  const halves = cardHalves(day).filter((h) => ((!slotOf(day, h)!.off || day.kind === "overflow") && !slotOf(day, h)!.pto) || dayPicks.some((p) => p.half === h && inPlay(p)));
   const blocks = halves.map((h) => {
     const slot = slotOf(day, h)!;
     const picks = dayPicks.filter((p) => p.half === h && inPlay(p));
@@ -268,6 +269,11 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
   ) : (
     <>
       <AllDayRow events={cal.allDay} />
+      {day.ptoHalf && (
+        <p className="pd-pto half" role="note">
+          <strong>PTO this {day.ptoHalf.half === "AM" ? "morning" : "afternoon"}</strong> · {day.ptoHalf.titles.join(", ")}
+        </p>
+      )}
       <OutsideLine label="Before your blocks" events={split.before} tz={tz} />
       {state.carryOver.length > 0 && selBlock && <CarryOver picks={state.carryOver} date={day.date} to={selBlock.half} act={act} />}
       {state.carryTarget && state.carryTarget < day.date && <p className="muted pd-note">Unfinished work from earlier days shows on {dayLabel(state.carryTarget)}.</p>}

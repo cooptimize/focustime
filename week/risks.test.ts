@@ -138,11 +138,10 @@ describe("Outlook out of office and all-day events (Q7)", () => {
     id: `ad-${title}`, source: "outlook", title, start, end, allDay: true, showAs, isPersonal: false,
   });
 
-  it("puts both halves at risk for an all-day out-of-office event", () => {
+  it("an all-day out-of-office event makes the day PTO: no risks (S1, D453; was both halves at risk)", () => {
     const evs = [allDayOutlook("Vacation", "oof")];
-    expect(summary(risks(evs, "AM"))).toEqual(["out_of_office:at_risk"]);
-    expect(summary(risks(evs, "PM"))).toEqual(["out_of_office:at_risk"]);
-    expect(risks(evs, "AM")[0]?.reason).toBe("Out of office (Vacation) covers the Adatum block");
+    expect(summary(risks(evs, "AM"))).toEqual([]);
+    expect(summary(risks(evs, "PM"))).toEqual([]);
   });
 
   it("puts only the overlapped half at risk for a timed out-of-office event", () => {

@@ -3173,7 +3173,17 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .pw-cell.off .pw-cell-name { font-weight: 400; }
 .pw-cell.open-half { border-style: dashed; border-left-width: 1px; color: var(--text-muted); background: transparent; }
 .pw-cell.pto, .pw-cell.catchup { cursor: default; color: var(--text-muted); border-left-width: 1px; }
-.pw-cell.pto { background: repeating-linear-gradient(135deg, var(--surface) 0 6px, var(--raised) 6px 12px); }
+/* S1 (D453): PTO as on Week: the PTO hatch and tone, a whole day or one half. */
+.pw-cell.pto, .day .half.pto-half {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in oklab, var(--pto) 11%, transparent) 10px 12px),
+    color-mix(in oklab, var(--pto) 5%, var(--surface));
+  border-color: color-mix(in oklab, var(--pto) 40%, var(--border));
+}
+.pw-cell.pto { font-weight: 600; }
+.pw-cell-right.pin.warn { color: var(--watch); font-weight: 500; }
+.pw-pin-pto { color: var(--watch); font-size: var(--fs-2); font-weight: 500; }
+.pto-half-label { font-size: var(--fs-2); font-weight: 600; color: var(--pto); }
 .pw-cell.catchup { border-style: dashed; background: transparent; }
 .pw-grid.dragging .pw-cell.refuses { opacity: 0.45; cursor: no-drop; }
 .pw-grid.dragging .pw-cell.takes { box-shadow: inset 0 0 0 1px var(--focus); }

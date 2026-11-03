@@ -20,7 +20,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSS
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import type { DraftStory, WeekFeature } from "../plan/types.ts";
 import { addPaneRows, type AddRowInfo } from "../plan/weekadd.ts";
-import { borrowedForWeek, readiness, weekBudget, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
+import { borrowedForWeek, PINNED_TO_PTO, pinnedToPto, readiness, weekBudget, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
 import { aboutText, DEFAULT_FEATURE_MINUTES, estimate, hoursText, loadText, overLine, progressWords, sourceWords, type Envelope } from "../plan/estimate.ts";
 import { moveWithin, otherStoriesLine, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
 import type { ClientWork, IsoDate, PortfolioItem, Slot, WorkItem } from "../week/types.ts";
@@ -37,7 +37,7 @@ import { PlanLabel, UnitCard, UnitLine, type FitTone } from "./plan/UnitCard.tsx
 import { PlanRow } from "./plan/PlanRow.tsx";
 import { AddPane, AddSection, BoxHint } from "./plan/AddPane.tsx";
 import { FoldLine } from "./plan/FoldLine.tsx";
-import { planOpenClient, plannedCount, weekLines, type WeekLine } from "../plan/weekclients.ts";
+import { countedLines, planOpenClient, plannedCount, weekLines, type WeekLine } from "../plan/weekclients.ts";
 import { userZone } from "../week/zone.ts";
 
 type Props = { /** Step 16.2: the Week tab's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void; /** fix/planday-pane: the client to open first (from Plan the day's "plan the week"), once. */ openClient?: string | null; onOpenClientSeen?: () => void };
@@ -293,8 +293,9 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
 
   const keys = lines.map((l) => l.clientKey);
   const reordered = [...new Set(items.map((i) => i.clientKey))].filter((k) => items.some((i) => i.clientKey === k && i.position !== null));
-  const planned = plannedCount(lines);
-  const summary = past ? `${parts.when} · a review` : `${parts.when} · ${planned} of ${lines.length} client${lines.length === 1 ? "" : "s"} planned`;
+  const counted = countedLines(lines);
+  const planned = plannedCount(counted);
+  const summary = past ? `${parts.when} · a review` : `${parts.when} · ${planned} of ${counted.length} client${counted.length === 1 ? "" : "s"} planned`;
   const moreMenu = (e: React.MouseEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     openMenu({ x: r.right, y: r.bottom + 4 }, {
@@ -478,7 +479,21 @@ function WeekCells({ days, fits, items, open, past, colors, dragging, dragOver, 
             const whole = !!d.pto || d.kind === "overflow" || (d.am.off && d.pm.off);
             const allPins = items.filter((f) => f.slots.some((x) => x.date === d.date));
             if (whole && half === "PM") return null;
-            if (d.pto) return <span key={key} className="pw-cell pto" style={{ gridRow: "2 / span 2", gridColumn: col + 2 }} title={d.pto.titles.join(", ")} aria-label={`${dateShort(d.date)}: PTO`}>PTO</span>;
+            // S1 (D453): PTO reads PTO, styled as on Week, and takes nothing; a must already pinned there stays, flagged.
+            const ptoPins = (list: Item[]) => list.length > 0 && <span className="pw-cell-right pin warn">{`${list[0]!.title}${list.length > 1 ? ` +${list.length - 1}` : ""}`}</span>;
+            const ptoLabel = (when: string, list: Item[]) => `${when}: PTO${list.length ? `, pinned ${list.map((f) => f.title).join(", ")}: move it` : ""}`;
+            if (d.pto)
+              return (
+                <span key={key} className="pw-cell pto" style={{ gridRow: "2 / span 2", gridColumn: col + 2 }} title={d.pto.titles.join(", ")} aria-label={ptoLabel(dateShort(d.date), allPins)}>
+                  PTO{ptoPins(allPins)}
+                </span>
+              );
+            if (s.pto)
+              return (
+                <span key={key} className="pw-cell pto" style={at} title={d.ptoHalf?.titles.join(", ")} aria-label={ptoLabel(`${dateShort(d.date)} ${HALF_WORD[half]}`, here)}>
+                  PTO{ptoPins(here)}
+                </span>
+              );
             if (whole)
               return (
                 <span key={key} className="pw-cell catchup" style={{ gridRow: "2 / span 2", gridColumn: col + 2 }} aria-label={`${dateShort(d.date)}: Catch-up${allPins.length ? `, pinned ${allPins.map((f) => f.title).join(", ")}` : ""}`}>
@@ -790,7 +805,7 @@ function ClientCard(p: CardProps) {
   const niceOpen = p.folds.has(`nice:${k}`);
   const over = fit ? overLine(p.nameOf(k), fit.freeMinutes, fit.plannedMinutes, p.friday) : null;
   const row = (i: Item, n: number, group: Item[]) => (
-    <ItemRow key={i.id} i={i} first={n === 0} last={n === group.length - 1} past={p.past} info={p.info(k, i.itemId)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === i.itemId)}
+    <ItemRow key={i.id} i={i} ptoPinned={!p.past && i.tier === "must" && pinnedToPto({ days: p.days }, i.slots).length > 0} first={n === 0} last={n === group.length - 1} past={p.past} info={p.info(k, i.itemId)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === i.itemId)}
       places={places} ops={p.ops} env={envOf.get(i.id) ?? null} parentListed={i.parentId != null && listedFeatures.has(i.parentId)} infoOf={(id) => p.info(k, id)} listed={listed} />
   );
   const empty = !musts.length && !draftMusts.length;
@@ -1017,8 +1032,8 @@ function AddRow({ k, row, ops }: { k: string; row: AddRowInfo; ops: Ops }) {
   );
 }
 
-function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, parentListed, nestedIn, infoOf, listed }: {
-  i: Item; first: boolean; last: boolean; past: boolean; info: Info | null; drafts: DraftStory[]; places: Place[]; ops: Ops;
+function ItemRow({ i, ptoPinned = false, first, last, past, info, drafts, places, ops, env: envl, parentListed, nestedIn, infoOf, listed }: {
+  i: Item; /** S1 (D453): a must pinned to PTO: the amber line, never moved for the person. */ ptoPinned?: boolean; first: boolean; last: boolean; past: boolean; info: Info | null; drafts: DraftStory[]; places: Place[]; ops: Ops;
   /** A feature's envelope (its load in hours and the stories under it); a story nested in a feature's row. */
   env?: Envelope<Item> | null; parentListed?: boolean; nestedIn?: Item; infoOf?: (itemId: number) => Info | null; listed?: ReadonlySet<number>;
 }) {
@@ -1110,6 +1125,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
               )
             ))}
           {i.slots.length > 0 && <span className="pw-pin" title="Pinned to this block">{i.slots.map(pinLabel).join(", ")}</span>}
+          {ptoPinned && <span className="pw-pin-pto" role="note">{PINNED_TO_PTO}</span>}
         </>
       }
       right={

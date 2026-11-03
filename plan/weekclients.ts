@@ -32,7 +32,8 @@ export function weekLines<I extends ItemLike>(o: {
 }): WeekLine[] {
   const firsts = new Map<string, string>();
   for (const f of o.fits) {
-    const b = [...f.blocks].map((x) => order(x.date, x.half)).sort()[0];
+    // S1: a client whose blocks are all on PTO keeps its line ("No time this week").
+    const b = [...(f.blocks.length ? f.blocks : (f.ptoBlocks ?? []))].map((x) => order(x.date, x.half)).sort()[0];
     if (b) firsts.set(f.clientKey, b);
   }
   const fridays = new Set(o.days.filter((d) => d.kind === "overflow").map((d) => d.date));
@@ -54,6 +55,11 @@ export function weekLines<I extends ItemLike>(o: {
       return { clientKey, first, fit, musts: musts.length + drafts, needs, quiet: quiet.has(clientKey), trouble: fit?.status === "over" || needs > 0 };
     });
 }
+
+/** S1 (D453): a client whose blocks that week are all on PTO: its line says "No time this week"; the header leaves it out. */
+export const onlyPto = (l: WeekLine) => !!l.fit && l.fit.blocks.length === 0 && (l.fit.ptoBlocks?.length ?? 0) > 0;
+/** The lines the header counts: not the PTO-only ones. */
+export const countedLines = (lines: readonly WeekLine[]) => lines.filter((l) => !onlyPto(l));
 
 /** "N of M clients planned": a client with a must, or one marked Nothing this week. */
 export const plannedCount = (lines: readonly WeekLine[]) => lines.filter((l) => l.musts > 0 || l.quiet).length;

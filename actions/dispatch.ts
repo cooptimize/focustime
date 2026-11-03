@@ -250,10 +250,21 @@ const featureWeeks = (weekStart: string, todayDate: string) => {
   return [weekStart, thisWeek, Temporal.PlainDate.from(thisWeek).add({ days: 7 }).toString()];
 };
 
-/** The week's blocks from focus patterns and standing blocks only (no calendars): where a feature can go (step 8). */
+/**
+ * The week's blocks from focus patterns and standing blocks: where a feature can go (step 8). S1 (D453): PTO comes the
+ * same way as week.load's, so Plan the week's checks agree with Week: Dataverse PTO for the week, and out-of-office time
+ * from Outlook (only those events; meetings don't change where a feature can go). Reads are the memoized ones.
+ */
 async function patternWeek(ctx: ActionContext, cfg: AppConfig, weekStart: string): Promise<Week> {
-  const r = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart).catch(() => null) : null;
-  return buildWeek({ weekStart, patterns: r?.items ?? [], events: [], config: cfg.week });
+  const tz = userZone(cfg);
+  const dv = cfg.dataverse.mySystemUserId ? ctx.makeDataverse(cfg.dataverse, tz) : null;
+  const [r, ptoR, o] = await Promise.all([
+    dv ? dv.load(weekStart).catch(() => null) : null,
+    dv ? dv.pto(...weekRange(weekStart)).catch(() => null) : null,
+    cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(weekStart).catch(() => null) : null,
+  ]);
+  const away = (o?.items ?? []).filter((e) => e.showAs === "oof" && !e.isPersonal);
+  return buildWeek({ weekStart, patterns: r?.items ?? [], events: away, config: cfg.week, pto: ptoByDate(ptoR?.items ?? [], weekDates7(weekStart)) });
 }
 
 /**

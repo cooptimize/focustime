@@ -158,6 +158,7 @@ async function checkSlot(ctx: WeekPlanContext, cfg: AppConfig, weekStart: IsoDat
   const day = week.days.find((x) => x.date === d);
   if (!day) return "That day isn't in this week";
   const slot = h === "AM" ? day.am : day.pm;
+  if (slot.pto) return "That half-day is PTO. Nothing can be planned on it";
   if (slot.focus[0] && slot.focus[0].clientKey !== key) return `That block is ${slot.focus[0].clientName}'s`;
   if (!slot.focus[0] && !slot.open) return "That half-day isn't a focus block or an Open half-day";
   return null;

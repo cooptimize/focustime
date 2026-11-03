@@ -62,6 +62,11 @@ export function aMeeting(o: Partial<CalEvent> = {}): CalEvent {
   return { id: `m-${next()}`, source: "outlook", title: "Meeting", allDay: false, showAs: "busy", isPersonal: false, responseStatus: "accepted", ...o, start: local(o.start ?? `${WEEK}T10:00`), end: local(o.end ?? `${WEEK}T10:30`) };
 }
 
+/** Out of office in Outlook (show-as oof): Thursday morning, 9:00 to 12:30, unless told otherwise. */
+export function anOutOfOffice(o: Partial<CalEvent> = {}): CalEvent {
+  return aMeeting({ title: "Away", showAs: "oof", start: "2026-11-05T09:00", end: "2026-11-05T12:30", ...o });
+}
+
 /** A DevOps work item assigned to me: a story, active. */
 export function aWorkItem(o: Partial<WorkItem> = {}): WorkItem {
   const id = o.id ?? 1000 + next();

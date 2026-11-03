@@ -389,7 +389,9 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const style = { "--c": clientColor(primary?.clientKey, colors), ...(compact ? {} : { flexGrow: minutesOf(slot) }) } as CSSProperties;
   const state = eve ? "eve" : overflow ? "overflow" : slot.open ? "open" : slot.off ? "off" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
-  const name = primary ? primary.clientName : eve ? (slot.flex.length ? "Flex" : "Evening") : slot.off ? "No working hours" : overflow ? "Catch-up" : "Open";
+  // S1 (D453): a PTO half reads PTO (its block, if any, stays in the data, read only).
+  const ptoHalf = slot.pto && !eve;
+  const name = ptoHalf ? "PTO" : primary ? primary.clientName : eve ? (slot.flex.length ? "Flex" : "Evening") : slot.off ? "No working hours" : overflow ? "Catch-up" : "Open";
   const label = `${dayLabel} ${eve ? "evening" : slot.half}, ${name}${sev ? `, ${sev === "at_risk" ? "at risk" : "watch"}` : ""}`;
   const menu = useMenu((env) => slotMenu(env, slot.date, slot.half, primary?.clientKey ?? null, primary?.clientName ?? null));
   const status = blockStatus(cp.fit, slot.risks);
@@ -478,7 +480,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   return (
     <div
       ref={refFn}
-      className={`half ${state} ${span ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""}${ruler ? " has-ruler" : ""}`}
+      className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""}${ruler ? " has-ruler" : ""}`}
       style={style}
       tabIndex={selected ? 0 : -1}
       role="button"

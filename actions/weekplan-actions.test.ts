@@ -347,3 +347,17 @@ describe("Plan the week one client at a time (U6)", () => {
     expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT })).quiet).toEqual([]);
   });
 });
+
+describe("S1 (D453): Plan the week takes PTO the same way as Week", () => {
+  it("a block on a PTO day reads PTO on Week and can't be pinned in Plan the week", async () => {
+    const t = setup();
+    const w = "2026-11-16"; // the fake Dataverse has PTO Mon Nov 16 and Tue Nov 17 ("Trip")
+    const week = await t.run<WeekLoadData>("week.load", { weekStart: w });
+    const off = week.week.days.flatMap((d) => [d.am, d.pm]).filter((s) => s.pto);
+    expect(off.map((s) => s.date)).toEqual(["2026-11-16", "2026-11-16", "2026-11-17", "2026-11-17"]);
+    const blocked = off.find((s) => s.focus[0]);
+    expect(blocked).toBeTruthy();
+    const r = await t.fail("weekplan.place", { weekStart: w, clientKey: blocked!.focus[0]!.clientKey, itemId: 210, date: blocked!.date, half: blocked!.half, on: true });
+    expect([r.status, !r.ok && r.error]).toEqual([422, "That half-day is PTO. Nothing can be planned on it"]);
+  });
+});
