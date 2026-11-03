@@ -59,7 +59,14 @@ describe.skipIf(!CHROMIUM)("the Guide (G1)", () => {
         expect(await fit.textContent()).toBe(sandbox(SIZING.start, SIZING.block).fit.text);
         await guide.locator('[data-add="L"]').click();
         expect(await fit.textContent()).toBe(sandbox([...SIZING.start, "L"], SIZING.block).fit.text);
-        expect(await guide.getByTestId("guide-load").textContent()).toBe(SIZING.load(sandbox([...SIZING.start, "L"], SIZING.block).blocks));
+        const after = sandbox([...SIZING.start, "L"], SIZING.block);
+        expect(await guide.getByTestId("guide-load").textContent()).toBe(SIZING.load(after.load.planned, after.load.free));
+        // E2: an unsized story counts as 2h and its chip says so; the block's free time is in hours.
+        await guide.locator('[data-add="unsized"]').click();
+        expect(await fit.textContent()).toBe(sandbox([...SIZING.start, "L", null], SIZING.block).fit.text);
+        expect(await guide.locator(".stack button").last().textContent()).toBe("Size? · 2h ✕");
+        expect(await guide.getByTestId("guide-free").textContent()).toBe("4h free after meetings");
+        expect(await guide.locator(".adds button[data-add]").allTextContents()).toEqual(["+ S · 1h", "+ M · 2h", "+ L · 4h", "+ unsized"]);
         await guide.locator("[data-clear]").click();
         expect(await fit.textContent()).toBe(SIZING.empty);
         // Chapter 5: the cards draw keys.ts's keys.
@@ -68,6 +75,8 @@ describe.skipIf(!CHROMIUM)("the Guide (G1)", () => {
         expect(await guide.locator(".guide-every .key-list dt").count()).toBeGreaterThan(20);
         // Chapter 6 and the footer.
         await guide.locator(".guide-q summary").last().click();
+        for (const q of ["Do I have to size everything?", "What's a block, then?"]) expect(await guide.locator(".guide-q summary", { hasText: q }).count(), q).toBe(1);
+        expect(await guide.locator(".guide-footer").textContent()).toContain("Message the FocusTime team in Teams.");
         await guide.locator(".guide-footer .lumen, .guide-footer svg").first().waitFor();
 
         expect(await noSidewaysScroll(page)).toEqual({ page: true, guide: true, wide: [] });
