@@ -119,7 +119,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     const ctx = await h.browser.newContext({ viewport: { width: 1920, height: 1080 } });
     const page = await ctx.newPage();
     await page.goto(h.url);
-    await page.locator(".signin").waitFor({ timeout: 60_000 });
+    await page.locator(".signin-page").waitFor({ timeout: 60_000 });
     expect((await offScale(page)).out).toEqual([]);
     await ctx.close();
   }, T);

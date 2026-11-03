@@ -368,3 +368,28 @@ describe("web sign-in (A2: the server's own routes, no loopback)", () => {
     expect(tok.calls[0]!.body.get("client_secret")).toBe("FAKE-ENTRA-SECRET");
   });
 });
+
+describe("the web registration's calendar scope (A2)", () => {
+  it("reads and identity ask for Calendars.ReadWrite, which the FocusTime registration grants (not ReadBasic)", () => {
+    const web = microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }, { calendars: "Calendars.ReadWrite" });
+    expect(web.scope).toBe("offline_access https://graph.microsoft.com/Calendars.ReadWrite");
+    expect(web.kinds?.id).toBe("openid profile email offline_access https://graph.microsoft.com/Calendars.ReadWrite");
+    expect(`${web.scope} ${web.kinds?.id}`).not.toContain("ReadBasic");
+    // The old registration is unchanged.
+    expect(microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }).scope).toBe("offline_access https://graph.microsoft.com/Calendars.ReadBasic");
+  });
+
+  it("every scope the web client asks for is one the registration script grants", async () => {
+    const { readFileSync } = await import("node:fs");
+    const script = readFileSync(new URL("../../infra/scripts/app-registration.sh", import.meta.url), "utf8");
+    const granted = new Set((/GRAPH_SCOPES=\(([^)]*)\)/.exec(script)?.[1] ?? "").split(/\s+/).filter(Boolean));
+    const arm = new Set((/ARM_SCOPES=\(([^)]*)\)/.exec(script)?.[1] ?? "").split(/\s+/).filter(Boolean));
+    const web = microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }, { calendars: "Calendars.ReadWrite" });
+    const asked = [web.scope, web.writeScope, ...Object.values(web.kinds ?? {})].join(" ").split(" ").filter(Boolean);
+    for (const s of asked) {
+      const name = s.split("/").pop()!;
+      if (s.startsWith("https://management.azure.com/")) expect(arm.has(name), s).toBe(true);
+      else expect(granted.has(name), s).toBe(true);
+    }
+  });
+});

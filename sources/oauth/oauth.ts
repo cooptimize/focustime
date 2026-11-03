@@ -43,17 +43,24 @@ export const PRESENCE_SCOPE = "https://graph.microsoft.com/Presence.ReadWrite ht
 /** Profile photos (step 16.4): mine and teammates', read only. Delegated, but needs an admin's consent in Entra. */
 export const PHOTO_SCOPE = "https://graph.microsoft.com/ProfilePhoto.Read.All";
 
-export function microsoftProvider(cfg: OutlookConfig): OAuthProvider {
+/**
+ * `calendars`: the Graph calendar scope reads ask for. The old desktop registration has Calendars.ReadBasic; the A2
+ * web registration (infra/scripts/app-registration.sh) grants Calendars.ReadWrite, which covers reading, and a token
+ * request for a scope the app wasn't granted is refused. What FocusTime may change is still only its own events,
+ * through the write framework.
+ */
+export function microsoftProvider(cfg: OutlookConfig, o: { calendars?: "Calendars.ReadBasic" | "Calendars.ReadWrite" } = {}): OAuthProvider {
   const base = `https://login.microsoftonline.com/${cfg.tenantId}/oauth2/v2.0`;
+  const read = `https://graph.microsoft.com/${o.calendars ?? "Calendars.ReadBasic"}`;
   return {
     source: "outlook",
     label: "Outlook",
     authorizeUrl: `${base}/authorize`,
     tokenUrl: `${base}/token`,
     clientId: cfg.clientId,
-    scope: "offline_access https://graph.microsoft.com/Calendars.ReadBasic",
+    scope: `offline_access ${read}`,
     writeScope: "offline_access https://graph.microsoft.com/Calendars.ReadWrite",
-    kinds: { id: `${OIDC} offline_access https://graph.microsoft.com/Calendars.ReadBasic`, arm: `offline_access ${ARM_SCOPE}`, presence: `offline_access ${PRESENCE_SCOPE}`, photo: `offline_access ${PHOTO_SCOPE}` },
+    kinds: { id: `${OIDC} offline_access ${read}`, arm: `offline_access ${ARM_SCOPE}`, presence: `offline_access ${PRESENCE_SCOPE}`, photo: `offline_access ${PHOTO_SCOPE}` },
     redirectHost: "localhost",
     extraAuthParams: { response_mode: "query", prompt: "select_account" },
     scopeOnTokenRequests: true,

@@ -736,7 +736,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   font-weight: 600; font-size: var(--fs-2); padding: 3px 10px; border-radius: 99px;
   color: var(--sample); background: color-mix(in oklab, var(--sample) 14%, var(--surface));
 }
-.source { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.source { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
 .source .muted { font-weight: 400; }
 .source .dot { color: var(--text-faint); }
 .source.live .dot { color: var(--ok); }
@@ -752,6 +752,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .state.error { color: var(--risk); background: color-mix(in oklab, var(--risk) 12%, var(--surface)); }
 .source.signin .dot { color: var(--risk); }
 .state.signin { color: var(--risk); background: color-mix(in oklab, var(--risk) 12%, var(--surface)); }
+.state.state-link { border: 0; font: inherit; font-weight: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.state.state-link:disabled { cursor: default; text-decoration: none; }
 .mini { padding: 1px 8px; font-size: var(--fs-2); border-radius: 6px; margin-left: 2px; }
 .mini.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .mini.quiet { border-color: transparent; color: var(--text-faint); background: transparent; }
@@ -2202,7 +2204,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 }
 
 /* ---- Step 15.4: sign-in, the person and VM chips, VM banners and preview, Settings > You ---- */
-.signin { min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--text); }
+.signin-page { min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--text); }
 .signin-card { max-width: 440px; width: 100%; display: grid; gap: 14px; justify-items: start; padding: 32px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-panel); }
 .signin-card h1 { margin: 0; font-size: var(--fs-4); }
 .signin-card p { margin: 0; line-height: 1.5; }

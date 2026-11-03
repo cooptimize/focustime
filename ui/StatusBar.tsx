@@ -94,14 +94,21 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, lo
             <span key={s.source} className={`source ${st.cls}`} title={s.message ?? ""}>
               <span className="dot" aria-hidden="true" />
               {SOURCE_NAMES[s.source]}
-              <span className={`state ${st.cls}`}>{st.label}</span>
+              {/* A2: "needs sign-in" is the link that signs in again, inside the one-line chip. */}
+              {cal && st.cls === "signin" && actions.includes("reconnect") ? (
+                <button type="button" className="state signin state-link" disabled={busy !== null} onClick={() => onConnect(cal)} title={s.message ?? "Sign in again"}>
+                  {busy === cal ? "Waiting for sign-in…" : st.label}
+                </button>
+              ) : (
+                <span className={`state ${st.cls}`}>{st.label}</span>
+              )}
               {s.fetchedAt && st.cls !== "live" && (
                 <span className="muted" title={`${s.fromCache ? "Snapshot from" : "Fetched"} ${when(s.fetchedAt, shape.timeZone)}`}>
                   {updatedAgo(s.fetchedAt, clock, shape.timeZone)}
                 </span>
               )}
               {detail && <span className="muted">{detail}</span>}
-              {cal && (actions.includes("connect") || actions.includes("reconnect")) && (
+              {cal && (actions.includes("connect") || (actions.includes("reconnect") && st.cls !== "signin")) && (
                 <button type="button" className="mini primary" disabled={busy !== null} onClick={() => onConnect(cal)}>
                   {busy === cal ? "Waiting for sign-in…" : actions.includes("connect") ? "Connect" : "Reconnect"}
                 </button>

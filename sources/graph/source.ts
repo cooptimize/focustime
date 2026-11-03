@@ -25,6 +25,8 @@ export type CalendarDeps<C> = {
   /** A2: the web sign-in (the server's routes) in place of the loopback. */
   web?: { login: (opts: ConnectOptions) => string; redirectUri: string };
   clientSecretAccount?: AppSecretAccount;
+  /** A2: the web registration grants Calendars.ReadWrite (not ReadBasic); reads ask for what it grants. */
+  calendarScope?: "Calendars.ReadBasic" | "Calendars.ReadWrite";
   snapshots: SnapshotStore;
   log: Logger;
   timeZone: string;
@@ -35,7 +37,7 @@ export type CalendarDeps<C> = {
 
 export function createOutlookSource(deps: CalendarDeps<OutlookConfig>) {
   const timeoutMs = deps.timeoutMs ?? 20_000;
-  const auth = createOAuthClient(microsoftProvider(deps.config), {
+  const auth = createOAuthClient(microsoftProvider(deps.config, deps.calendarScope ? { calendars: deps.calendarScope } : {}), {
     fetch: deps.fetch, keyring: deps.keyring, openBrowser: deps.openBrowser, log: deps.log, timeoutMs,
     ...(deps.loopback ? { loopback: deps.loopback } : {}),
     ...(deps.web ? { web: deps.web } : {}),

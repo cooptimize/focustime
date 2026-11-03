@@ -84,7 +84,7 @@ export function SignInScreen({ message: first }: { message: string | null }) {
     return () => setSignInShowing(false);
   }, []);
   return (
-    <main className="signin">
+    <main className="signin-page">
       <div className="signin-card">
         <BentMark width={120} />
         <h1>FocusTime</h1>
@@ -140,7 +140,15 @@ export function PersonChip({ onOpen, onSettings }: { onOpen: (at: { x: number; y
   // Step 16.4: my Entra photo with my presence on its corner; initials when there's no photo or no permission.
   const photos = usePhotos({ me: !!p && signedIn });
   const presence = usePresence({ me: !!p && signedIn });
+  // A2: the top bar always offers the way back in: a Sign in button while Microsoft can't say who this is.
+  const needsSignIn = !!status?.configured && !signedIn;
   return (
+    <>
+    {needsSignIn && (
+      <button type="button" className="top-btn primary topbar-signin" title={status?.message ?? "Sign in with Microsoft"} onClick={() => void signIn()}>
+        Sign in
+      </button>
+    )}
     <button
       type="button"
       className={`person-chip${p ? " with-avatar" : ""}`}
@@ -157,6 +165,7 @@ export function PersonChip({ onOpen, onSettings }: { onOpen: (at: { x: number; y
     >
       {p ? <Avatar name={p.name} initials={p.initials} photo={photos.me} word={presence.me} size={28} /> : status?.configured ? "?" : "Me"}
     </button>
+    </>
   );
 }
 

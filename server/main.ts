@@ -138,6 +138,7 @@ const outlookFor = (who: Person) => (cfg: OutlookConfig, timeZone: string) =>
         ? {
             web: { login: () => { const u = accounts.users.get(who.userId); return `/auth/microsoft/login${u ? `?hint=${encodeURIComponent(u.upn)}` : ""}`; }, redirectUri: urls.microsoft },
             clientSecretAccount: "entra-client-secret" as const,
+            calendarScope: "Calendars.ReadWrite" as const,
           }
         : {}),
     }),
