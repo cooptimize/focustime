@@ -3439,3 +3439,8 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .setup-line { margin: 4px 0 0; font-size: var(--fs-2); color: var(--text-muted); }
 .setup-line .link-btn { color: var(--text-muted); }
 @media (max-width: 600px) { .setup-dialog { padding: 14px 16px; } .setup-steps li:not(.now) { display: none; } }
+
+/* S1 (D452): ⋯ › About: one line, Copy and the Guide. */
+.about-dialog { width: min(560px, calc(100vw - 32px)); }
+.about-line { margin: 4px 14px 0; font-size: var(--fs-3); overflow-wrap: anywhere; }
+.about-actions { display: flex; align-items: center; gap: 12px; padding: 10px 14px 12px; font-size: var(--fs-3); }

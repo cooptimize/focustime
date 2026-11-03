@@ -51,6 +51,8 @@ import { openStore, StoreConfigError, type OpenedStore } from "../store/open.ts"
 import { createApp } from "./app.ts";
 import { moveFromOldName } from "../host/local/rename.ts";
 import { createDemoContext, seedDemo, type DemoControl } from "./demo.ts";
+import { buildInfo } from "./buildinfo.ts";
+import { execFileSync } from "node:child_process";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -308,7 +310,7 @@ const demoFor = (userId: string): Promise<ActionContext> => {
   let c = demos.get(userId);
   if (!c) {
     c = (async () => {
-      const ctx = createDemoContext({ now: () => instantNow().toString(), demo: demoControl(true) });
+      const ctx = { ...createDemoContext({ now: () => instantNow().toString(), demo: demoControl(true) }), env: "demo" };
       await seedDemo(ctx);
       return ctx;
     })();
@@ -318,8 +320,19 @@ const demoFor = (userId: string): Promise<ActionContext> => {
   return c;
 };
 
+// S1 (D452): which build this is (baked into the image; in the developer loop, the source tree's commit).
+const build = buildInfo(process.env, () => {
+  if (hostKind !== "local") return null;
+  try {
+    return execFileSync("git", ["rev-parse", "--short=7", "HEAD"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 3000 });
+  } catch {
+    return null;
+  }
+});
+
 const server = createApp({
   publicUrl: app.publicUrl,
+  build,
   log,
   accounts,
   auth: {
@@ -408,6 +421,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
   const liveCtx: ActionContext = {
     renameNote: renamed.note,
     demo: demoControl(false),
+    env: build.env,
     loadConfig,
     makeDataverse: dataverseFor(who),
     makeOutlook: outlookFor(who),

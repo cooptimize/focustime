@@ -80,10 +80,16 @@ jobs:
           echo "ACR=$(az acr list -g "$RG" --query '[0].name' -o tsv)" >> "$GITHUB_ENV"
           echo "SQL_SERVER=$(az sql server list -g "$RG" --query '[0].name' -o tsv)" >> "$GITHUB_ENV"
           echo "SQL_FQDN=$(az sql server list -g "$RG" --query '[0].fullyQualifiedDomainName' -o tsv)" >> "$GITHUB_ENV"
+      # S1 (D452): the build info baked in: short sha, the PR (the reuse job's answer from GitHub, else the merge
+      # message's "(#N)"), the build time. No secrets.
+      - name: Build info
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: node scripts/build-info.ts "${{ github.sha }}" "${{ needs.reuse.outputs.pr }}" "$MESSAGE" >> "$GITHUB_ENV"
       - name: Build and push the image
         run: |
           az acr login -n "$ACR"
-          docker build -t "$ACR.azurecr.io/focustime:$TAG" .
+          docker build --build-arg BUILD_SHA="$BUILD_SHA" --build-arg BUILD_PR="$BUILD_PR" --build-arg BUILD_TIME="$BUILD_TIME" -t "$ACR.azurecr.io/focustime:$TAG" .
           docker push "$ACR.azurecr.io/focustime:$TAG"
       # The runner reaches the database through a firewall rule for its own address, added here and removed at the end
       # of the job whatever happens; the server otherwise allows Azure services only.
@@ -114,6 +120,14 @@ jobs:
           # The app may be scaled to zero and the database paused: allow a few minutes for both to wake.
           for i in $(seq 1 40); do curl -fsS "$APP_URL/healthz" && break; sleep 10; done
           curl -fsS "$APP_URL/healthz"
+          # S1 (D452): the app serves the commit just deployed (a new revision can take a moment to take traffic).
+          for i in $(seq 1 30); do
+            served=$(curl -fsS "$APP_URL/version" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const v=JSON.parse(s);console.log(`${v.env} ${v.sha}`)})')
+            [[ $served == "dev ${BUILD_SHA}" ]] && break
+            sleep 10
+          done
+          echo "served: $served, deployed: dev ${BUILD_SHA}"
+          [[ $served == "dev ${BUILD_SHA}" ]]
           curl -fsS "$APP_URL/" | grep -q "<title>FocusTime</title>"
           code=$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/auth/microsoft/login")
           loc=$(curl -s -o /dev/null -w '%{redirect_url}' "$APP_URL/auth/microsoft/login")

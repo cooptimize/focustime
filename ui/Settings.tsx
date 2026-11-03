@@ -1242,8 +1242,13 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
 function SetupSection(p: Props) {
   const [view, setView] = useState<SetupView | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [prod, setProd] = useState(true);
   useEffect(() => {
     call<SetupView>("setup.load", {}).then(setView, () => setView(null));
+    // Start over is for dev and local only (the server refuses it on prod too).
+    fetch("/version", { credentials: "same-origin" })
+      .then((r) => r.json() as Promise<{ env?: string }>)
+      .then((b) => setProd(b.env === "prod"), () => setProd(true));
   }, []);
   if (p.demo) return <p className="muted">Setup isn't part of the demo.</p>;
   const left = view?.line?.text;
@@ -1260,6 +1265,7 @@ function SetupSection(p: Props) {
             Run setup from the start
           </button>
         )}
+        {!prod && (
         <button
           type="button"
           className="mini quiet"
@@ -1275,6 +1281,7 @@ function SetupSection(p: Props) {
         >
           Start over
         </button>
+        )}
         {status && (
           <span className="muted" role="status">
             {status}

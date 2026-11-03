@@ -60,6 +60,7 @@ import { borrowStep, timerStep } from "./menu.ts";
 import { nowStrip } from "../plan/now.ts";
 import { cardHalves, slotOf, validHalf } from "./halves.ts";
 import { SetupFlow } from "./Setup.tsx";
+import { AboutDialog } from "./About.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
@@ -120,6 +121,8 @@ export function App() {
   // closed or skipped, Today keeps one quiet line to finish it. Never in demo mode (the server says so).
   const [setupView, setSetupView] = useState<SetupView | null>(null);
   const [setupAt, setSetupAt] = useState<SetupStep | null>(null);
+  /** S1 (D452): ⋯ › About, which build this is. */
+  const [aboutOpen, setAboutOpen] = useState(false);
   const loadSetup = useCallback(
     (openIt: boolean): Promise<SetupView | null> =>
       call<SetupView>("setup.load", {}).then(
@@ -1690,6 +1693,7 @@ export function App() {
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
               { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
+              { id: "about", label: "About", run: () => setAboutOpen(true) },
             ],
           }}
           onClose={() => setMoreAt(null)}
@@ -1734,6 +1738,7 @@ export function App() {
       )}
       {writes.dialog}
       {devopsWrites.dialog}
+      {aboutOpen && <AboutDialog zone={userZone(data)} onClose={() => setAboutOpen(false)} onGuide={() => openGuide()} />}
       {setupAt && (
         <SetupFlow
           start={setupAt}

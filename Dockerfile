@@ -11,9 +11,17 @@ COPY . .
 RUN npm run build
 
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
+# S1 (D452): which build this is, from the workflow (scripts/build-info.ts): the short sha, the PR number and the build
+# time in UTC. Not secret; "unknown" and "none" when built by hand. The env label (dev, prod) comes at run time.
+ARG BUILD_SHA=unknown
+ARG BUILD_PR=none
+ARG BUILD_TIME=
 ENV NODE_ENV=production \
     FOCUSTIME_HOST=azure \
-    PORT=8080
+    PORT=8080 \
+    FOCUSTIME_BUILD_SHA=${BUILD_SHA} \
+    FOCUSTIME_BUILD_PR=${BUILD_PR} \
+    FOCUSTIME_BUILD_TIME=${BUILD_TIME}
 WORKDIR /app
 # The source (run as TypeScript) and the built UI from the first stage, then production dependencies only.
 COPY --from=build /src ./
