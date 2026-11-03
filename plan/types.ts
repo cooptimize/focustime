@@ -90,7 +90,7 @@ export type WeekFeature = {
   /** Step 11: a feature or a story on the client's week list, a must or a nice to have. */
   level: "feature" | "story";
   tier: "must" | "nice";
-  /** Step 16.4: a feature's whole blocks, or null to take what its stories add up to; null for a story. */
+  /** E1: a feature's estimate in half blocks, or null for 1 block (its sized stories on the list win); null for a story. */
   blocks: number | null;
   /** Step 16.4: a story's size (S, M or L); null for a feature. */
   size: "S" | "M" | "L" | null;

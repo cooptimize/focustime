@@ -20,8 +20,8 @@ import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import type { DraftStory, WeekFeature } from "../plan/types.ts";
 import { addPaneRows, type AddRowInfo } from "../plan/weekadd.ts";
 import { borrowedForWeek, readiness, weekBudget, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
-import { estimate, fillWords, overLine, progressWords, type Envelope } from "../plan/estimate.ts";
-import { moveWithin, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
+import { blocksOf, blocksWord, estimate, fillWords, overLine, progressWords, type Envelope } from "../plan/estimate.ts";
+import { moveWithin, otherStoriesLine, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
 import type { ClientWork, IsoDate, PortfolioItem, Slot, WorkItem } from "../week/types.ts";
 import { call } from "./api.ts";
 import { clientColor } from "./labels.ts";
@@ -522,7 +522,7 @@ function WeekCells({ days, fits, items, open, past, colors, dragging, dragOver, 
 function ClientPanel({ k, name, color, fit, progress, items, reordered, past, onReset, onClose }: { k: string; name: string; color: string; fit: ClientBudget | undefined; progress: Progress | undefined; items: Item[]; reordered: boolean; past: boolean; onReset: () => void; onClose: () => void }) {
   const done = items.filter((i) => i.done);
   return (
-    <PanelShell title={name} sub={fit ? `${blocksText(fit.budget)} · ${fit.text}` : undefined} color={color} label={`${name}: blocks this week`} onClose={onClose}>
+    <PanelShell title={name} sub={fit ? `${blocksWord(fit.budgetQ)} · ${fit.text}` : undefined} color={color} label={`${name}: blocks this week`} onClose={onClose}>
       {fit && (
         <section className="dp-section" aria-label="Blocks">
           <h3>Blocks</h3>
@@ -534,8 +534,8 @@ function ClientPanel({ k, name, color, fit, progress, items, reordered, past, on
               </li>
             ))}
           </ul>
-          {fit.borrowedBlocks > 0 && <p className="dp-line">{blocksText(fit.borrowedBlocks)} of borrowed time to make up</p>}
-          <p className="dp-line">Musts take {blocksText(fit.planned)}{fit.nicePlanned ? `, nice to haves ${blocksText(fit.nicePlanned)} (not counted)` : ""}.</p>
+          {fit.borrowedQ > 0 && <p className="dp-line">{blocksWord(fit.borrowedQ)} of borrowed time to make up</p>}
+          <p className="dp-line">Musts take {blocksWord(fit.plannedQ)}{fit.nicePlannedQ ? `, nice to haves ${blocksWord(fit.nicePlannedQ)} (not counted)` : ""}.</p>
         </section>
       )}
       {progress && progress.musts > 0 && (
@@ -614,7 +614,7 @@ function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, past
 
 /** "Wed AM: mostly meetings" without the half-day it names: "mostly meetings". */
 const reasonWord = (r: string | null) => (r ?? "").replace(/^[^:]*:\s*/, "");
-const budgetWhy = (fit: ClientBudget) => [...fit.blocks.filter((b) => !b.counts).map((b) => b.reason ?? pinLabel(b)), ...(fit.borrowedBlocks ? [`${blocksText(fit.borrowedBlocks)} of borrowed time to make up`] : [])];
+const budgetWhy = (fit: ClientBudget) => [...fit.blocks.filter((b) => !b.counts).map((b) => b.reason ?? pinLabel(b)), ...(fit.borrowedQ ? [`${blocksWord(fit.borrowedQ)} of borrowed time to make up`] : [])];
 
 const KIND: Record<ReadinessFlag["kind"], string> = {
   block_needs_work: "Block with no work",
@@ -757,7 +757,7 @@ function ClientCard(p: CardProps) {
   const places = placesFor(p.days, k);
   const listed = new Set(mineAll.map((i) => i.itemId));
   const niceOpen = p.folds.has(`nice:${k}`);
-  const over = fit ? overLine(fit.budget, fit.planned, p.friday) : null;
+  const over = fit ? overLine(fit.budgetQ, fit.plannedQ, p.friday) : null;
   const row = (i: Item, n: number, group: Item[]) => (
     <ItemRow key={i.id} i={i} first={n === 0} last={n === group.length - 1} past={p.past} info={p.info(k, i.itemId)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === i.itemId)}
       places={places} ops={p.ops} env={envOf.get(i.id) ?? null} parentListed={i.parentId != null && listedFeatures.has(i.parentId)} infoOf={(id) => p.info(k, id)} listed={listed} />
@@ -776,7 +776,7 @@ function ClientCard(p: CardProps) {
         </button>
       }
       detail={lineDetail(p.line)}
-      fit={fit && <span className={`pw-fit2 pw-budget ${fit.status}`} title={`${blocksText(fit.budget)} this week${why.length ? `. Not counted: ${why.join("; ")}` : ". Nice to haves don't count against the blocks"}`}>{fit.text}</span>}
+      fit={fit && <span className={`pw-fit2 pw-budget ${fit.status}`} title={`${blocksWord(fit.budgetQ)} this week${why.length ? `. Not counted: ${why.join("; ")}` : ". Nice to haves don't count against the blocks"}`}>{fit.text}</span>}
       tone={fit ? TONE[fit.status] : "fits"}
       sub={port && (port.status !== "ok" || port.fromCache) ? `DevOps: ${port.status !== "ok" ? (port.message ?? port.status) : "from cache"}` : undefined}
     >
@@ -997,13 +997,14 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
   const stories = feature ? feature.children.filter((c) => c.level === "story") : [];
   const openStories = stories.filter((c) => c.open).length;
   const needs = needsStories(i, info);
-  // Its open DevOps stories not on the list: one muted line under the row.
-  const rest = i.level === "feature" && !nestedIn ? stories.filter((c) => c.open && !listed?.has(c.id)) : [];
+  // E1: its other open DevOps stories (not on the list) as one muted count line; the detail panel lists them.
+  const rest = i.level === "feature" && !nestedIn ? otherStoriesLine(stories, listed ?? new Set()) : null;
+  const derived = !!envl?.derived;
   const other: Tier = i.tier === "must" ? "nice" : "must";
   const { env, open: openMenu } = useContext(MenuCtx);
   const dw = useDevOpsWrite();
   const facts: WeekItemFacts = {
-    itemId: i.itemId, title: i.title, tier: i.tier, level: i.level, first, last, past, done: i.done ? (i.done === "local" ? "local" : "other") : null, blocks: envl?.blocks ?? i.blocks ?? 1, size: i.size, nested: !!nestedIn,
+    itemId: i.itemId, title: i.title, tier: i.tier, level: i.level, first, last, past, done: i.done ? (i.done === "local" ? "local" : "other") : null, blocks: envl ? blocksOf(envl.quarters) : (i.blocks ?? 1), derived, size: i.size, nested: !!nestedIn,
     places: places.map((pl) => ({ date: pl.date, half: pl.half, label: pl.label })), pinned: i.slots, openStories, targetDate: feature?.targetDate ?? null, drafts: drafts.length, canWrite: !!dw?.can(k),
   };
   const wops: WeekItemOps = {
@@ -1083,16 +1084,25 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
       }
       right={
         i.level === "feature" ? (
-          <span className="pw-stepper" role="group" aria-label={`Blocks for ${i.title}`}>
-            <button type="button" className="mini pw-step" disabled={past || facts.blocks <= 1} aria-label="One block less" onClick={() => ops.blocks(i, facts.blocks - 1)}>−</button>
-            <button type="button" className="pw-chip-btn" disabled={past} onClick={(e) => show(e, blocksStep(facts, wops))} title={envl?.auto ? "What its stories add up to. Choose to set it" : "How many of this client's blocks it needs"}>
-              {blocksText(facts.blocks)}
-            </button>
-            <button type="button" className="mini pw-step" disabled={past || facts.blocks >= 20} aria-label="One block more" onClick={() => ops.blocks(i, facts.blocks + 1)}>+</button>
-          </span>
+          derived ? (
+            <span className="pw-stepper pw-derived" role="group" aria-label={`Blocks for ${i.title}, from its stories`}>
+              {/* Placeholders keep the chip in line with the estimate chips above and below (their ± show on hover). */}
+              <button type="button" className="mini pw-step pw-step-ph" tabIndex={-1} aria-hidden="true" disabled>−</button>
+              <span className="pw-chip-btn pw-load" title="From its stories: the sizes of its stories on the list, rounded up to a half block">{blocksText(facts.blocks)}</span>
+              <button type="button" className="mini pw-step pw-step-ph" tabIndex={-1} aria-hidden="true" disabled>+</button>
+            </span>
+          ) : (
+            <span className="pw-stepper" role="group" aria-label={`Blocks for ${i.title}`}>
+              <button type="button" className="mini pw-step" disabled={past || facts.blocks <= 0.5} aria-label="Half a block less" onClick={() => ops.blocks(i, facts.blocks - 0.5)}>−</button>
+              <button type="button" className="pw-chip-btn pw-load" disabled={past} onClick={(e) => show(e, blocksStep(facts, wops))} title="Your estimate: how many of this client's blocks it needs. Size its stories to plan from them">
+                {blocksText(facts.blocks)}
+              </button>
+              <button type="button" className="mini pw-step" disabled={past || facts.blocks >= 20} aria-label="Half a block more" onClick={() => ops.blocks(i, facts.blocks + 0.5)}>+</button>
+            </span>
+          )
         ) : (
           <button type="button" className="pw-chip-btn pw-size" disabled={past} onClick={(e) => show(e, storySizeStep(facts, wops))} title="S about an hour, M a couple of hours, L about a whole block">
-            {i.size ?? "M"}
+            {i.size ?? "Size"}
           </button>
         )
       }
@@ -1110,16 +1120,10 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
           {!past && <button type="button" className="link-btn" onClick={() => ops.add(i.clientKey, i.parentId!, i.tier)} title="Put its feature on the list; this story moves under it">Add the feature</button>}
         </span>
       )}
-      {envl && (envl.doneBlocks > 0 || (envl.fill !== "filled" && envl.stories.length > 0)) && (
+      {envl && (envl.doneQuarters > 0 || (envl.unsized && !i.done)) && (
         <span className="pw-fill">
-          {envl.doneBlocks > 0 && <span className="pw-progress-blocks">{progressWords(envl)}</span>}
-          {envl.fill === "needs_stories" && !i.done && <span>{fillWords(envl)}</span>}
-          {envl.fill === "over" && (
-            <span className="pw-raise" role="status">
-              {fillWords(envl)}{" "}
-              {!past && <button type="button" className="mini primary" onClick={() => ops.blocks(i, envl.raiseTo!)}>Raise to {envl.raiseTo}</button>}
-            </span>
-          )}
+          {envl.doneQuarters > 0 && <span className="pw-progress-blocks">{progressWords(envl)}</span>}
+          {envl.unsized && !i.done && <span>{fillWords(envl)}</span>}
         </span>
       )}
       {envl && envl.stories.length > 0 && (
@@ -1129,7 +1133,11 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
           ))}
         </ul>
       )}
-      {rest.length > 0 && <span className="pw-kids" title="Its open stories in DevOps, not on the list">{rest.map((c) => c.title).join(" · ")}</span>}
+      {rest && (
+        <button type="button" className="link-btn pw-kids" onClick={() => ops.feature(k, i.itemId)} title="Its other open stories in DevOps, not on the list: open the feature to see them">
+          {rest}
+        </button>
+      )}
     </PlanRow>
   );
 }

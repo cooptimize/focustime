@@ -8,7 +8,7 @@ import type { Conn } from "./sql/conn.ts";
 import { sqliteConn } from "./sql/sqlite.ts";
 import { carryOver } from "../plan/rules.ts";
 import { type ItemLevel, type Tier } from "../plan/weeklist.ts";
-import { DEFAULT_STORY_SIZE, validStorySize, validWholeBlocks, type StorySize } from "../plan/estimate.ts";
+import { validHalfBlocks, validStorySize, type StorySize } from "../plan/estimate.ts";
 import type { Capture, DayPlan, DraftStory, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
@@ -1159,6 +1159,34 @@ export const MIGRATIONS: readonly string[] = [
      updated_at TEXT NOT NULL,
      PRIMARY KEY (user_id, account)
    );`,
+  // 27: E1 (D438), a feature's estimate in half blocks: blocks 0.5 to 20 in steps of a half (whole blocks stay valid;
+  // nothing to convert). SQLite can't change a CHECK in place, so the table is rebuilt with the same rows and ids.
+  `${FK_OFF}
+   CREATE TABLE week_features_v27 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        week_start TEXT NOT NULL CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        client_key TEXT NOT NULL,
+        item_id INTEGER NOT NULL,
+        level TEXT NOT NULL DEFAULT 'feature' CHECK (level IN ('feature','story')),
+        tier TEXT NOT NULL DEFAULT 'must' CHECK (tier IN ('must','nice')),
+        title TEXT NOT NULL,
+        item_type TEXT,
+        url TEXT,
+        blocks REAL CHECK (blocks IS NULL OR (blocks BETWEEN 0.5 AND 20 AND blocks * 2 = CAST(blocks * 2 AS INTEGER) AND level = 'feature')),
+        size TEXT CHECK (size IS NULL OR (size IN ('S','M','L') AND level = 'story')),
+        parent_id INTEGER,
+        position INTEGER,
+        done_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (user_id, week_start, client_key, item_id)
+      );
+   INSERT INTO week_features_v27 (user_id, id, week_start, client_key, item_id, level, tier, title, item_type, url, blocks, size, parent_id, position, done_at, created_at, updated_at)
+     SELECT user_id, id, week_start, client_key, item_id, level, tier, title, item_type, url, blocks, size, parent_id, position, done_at, created_at, updated_at FROM week_features;
+   DROP TABLE week_features;
+   ALTER TABLE week_features_v27 RENAME TO week_features;
+   CREATE INDEX week_features_user ON week_features(user_id);`,
 ];
 
 import type { AzureWriteEntry, TeamsStatusEntry } from "../actions/account-types.ts";
@@ -1229,7 +1257,7 @@ export type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
 import type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
 
 export type NewWeekFeature = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; blocks: number };
-export type NewWeekItem = Omit<NewWeekFeature, "blocks"> & { level: ItemLevel; tier?: Tier; /** Features: whole blocks, or null for what its stories add up to. */ blocks?: number | null; size?: StorySize; parentId?: number | null };
+export type NewWeekItem = Omit<NewWeekFeature, "blocks"> & { level: ItemLevel; tier?: Tier; /** Features: an estimate in half blocks, or null for 1 block. */ blocks?: number | null; size?: StorySize; parentId?: number | null };
 
 /** Most blocks one feature can take in a week (ten half-days, a little headroom). */
 export const MAX_FEATURE_BLOCKS = 20;
@@ -2115,7 +2143,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
      * tier and blocks when given. New items are musts with the level's default blocks unless told otherwise.
      */
     async addWeekItem(f: NewWeekItem): Promise<WeekFeature> {
-      if (f.level === "feature" && f.blocks != null && !validWholeBlocks(f.blocks)) throw new PlanError(`blocks must be a whole number from 1 to ${MAX_FEATURE_BLOCKS}`);
+      if (f.level === "feature" && f.blocks != null && !validHalfBlocks(f.blocks)) throw new PlanError(`blocks must be ½ to ${MAX_FEATURE_BLOCKS} in half-block steps`);
       if (f.level === "story" && f.size !== undefined && !validStorySize(f.size)) throw new PlanError("size must be S, M or L");
       return tx(async () => {
         const at = stamp();
@@ -2124,7 +2152,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         (await touchWeek(f.weekStart, at));
         let id: number;
         const blocks = f.level === "feature" ? (f.blocks ?? null) : null;
-        const size = f.level === "story" ? (f.size ?? DEFAULT_STORY_SIZE) : null;
+        const size = f.level === "story" ? (f.size ?? null) : null;
         if (row) {
           id = row.id as number;
           (await db.run("UPDATE week_features SET title = ?, item_type = ?, url = ?, level = ?, updated_at = ? WHERE id = ?", f.title, f.itemType, f.url, f.level, at, id));
@@ -2148,10 +2176,10 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
       });
     },
-    /** A feature's whole blocks, or null to take what its stories add up to (step 16.4). Stories have a size. */
+    /** A feature's estimate in half blocks, or null for 1 block (E1). Stories have a size. */
     async setWeekItemBlocks(id: number, blocks: number | null): Promise<WeekFeature> {
       return tx(async () => {
-        if (blocks !== null && !validWholeBlocks(blocks)) throw new PlanError(`blocks must be a whole number from 1 to ${MAX_FEATURE_BLOCKS}`);
+        if (blocks !== null && !validHalfBlocks(blocks)) throw new PlanError(`blocks must be ½ to ${MAX_FEATURE_BLOCKS} in half-block steps`);
         const row = (await db.get("SELECT level FROM week_features WHERE id = ?", id)) as Row | undefined;
         if (row && row.level !== "feature") throw new PlanError("A story has a size (S, M or L), not blocks");
         const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET blocks = ?, updated_at = ? WHERE id = ?", blocks, at, id))));

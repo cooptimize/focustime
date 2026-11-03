@@ -2,6 +2,7 @@
 // picks and work items. One model: a menu step is a titled list of items, or a text prompt; an item either runs
 // or opens the next step. The command menu is built from the action registry, so every action appears.
 import { alreadyPlanned } from "../plan/dup.ts";
+import { blocksWord, quartersOf } from "../plan/estimate.ts";
 import { addTargets, type AddTarget, type TargetBlock, type TargetGroup } from "../plan/addtargets.ts";
 import { freeMinutes } from "../week/free.ts";
 import { parseItemRef } from "../plan/lookup.ts";
@@ -1186,8 +1187,10 @@ export type WeekItemFacts = {
   past: boolean;
   /** How it is done: "local" (my own mark) can be undone; DevOps or a done pick can't from here. */
   done: "local" | "other" | null;
-  /** Step 16.4: a feature's whole blocks (shown: its count or what its stories add up to); a story's size. */
+  /** E1: a feature's load in blocks, a half-block amount (its estimate, or what its sized stories add up to). */
   blocks: number;
+  /** E1: the load comes from its sized stories, so there is no estimate to set. */
+  derived?: boolean;
   size?: "S" | "M" | "L" | null;
   /** A story under a listed feature: it takes the feature's tier (no tier choice of its own). */
   nested?: boolean;
@@ -1217,13 +1220,14 @@ export type WeekItemOps = {
   remove: () => void;
 };
 
-/** Block counts offered for a feature: whole blocks up to ten (step 16.4). */
-export const BLOCK_CHOICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
-export const blocksText = (n: number) => `${n} block${n === 1 ? "" : "s"}`;
+/** Estimates offered for a feature: half blocks from ½ to 10 (E1, D438). */
+export const BLOCK_CHOICES: readonly number[] = Array.from({ length: 20 }, (_, i) => (i + 1) / 2);
+/** Blocks (a half-block amount) in words: "½ block", "1½ blocks". */
+export const blocksText = (n: number) => blocksWord(quartersOf(n));
 export const SIZE_WORDS = { S: "S · about an hour", M: "M · a couple of hours", L: "L · about a whole block" } as const;
 
 export function storySizeStep(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
-  return { title: `Size of "${f.title}"`, items: (["S", "M", "L"] as const).map((z) => ({ id: `s${z}`, label: SIZE_WORDS[z], checked: (f.size ?? "M") === z, action: "weekplan.set_size", run: () => ops.size?.(z) })) };
+  return { title: `Size of "${f.title}"`, items: (["S", "M", "L"] as const).map((z) => ({ id: `s${z}`, label: SIZE_WORDS[z], checked: f.size === z, action: "weekplan.set_size", run: () => ops.size?.(z) })) };
 }
 
 export function blocksStep(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
@@ -1243,8 +1247,8 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
       { id: "down", label: "Move down", action: "weekplan.reorder", ...(f.past ? closed : f.last ? { disabled: "Already last" } : {}), run: () => ops.move(1) },
       { id: "tier", label: other === "nice" ? "Make it a nice to have" : "Make it a must", action: "weekplan.set_tier", ...(f.past ? closed : f.nested ? { disabled: "Stories take their feature's tier" } : {}), run: () => ops.tier(other) },
       f.level === "story"
-        ? { id: "size", label: "Size", hint: f.size ?? "M", action: "weekplan.set_size", ...closed, next: () => storySizeStep(f, ops) }
-        : { id: "blocks", label: "Blocks", hint: blocksText(f.blocks), action: "weekplan.set_blocks", ...closed, next: () => blocksStep(f, ops) },
+        ? { id: "size", label: "Size", hint: f.size ?? "not sized", action: "weekplan.set_size", ...closed, next: () => storySizeStep(f, ops) }
+        : { id: "blocks", label: "Blocks", hint: blocksText(f.blocks), action: "weekplan.set_blocks", ...(f.derived ? { disabled: "From its stories: size them to change it" } : closed), next: () => blocksStep(f, ops) },
       {
         id: "pin",
         label: "Pin to a block",

@@ -5,7 +5,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { createAccountStore } from "./accounts.ts";
 import { sqliteConn } from "./sql/sqlite.ts";
-import { USER_SCHEMA_VERSION, exportUser } from "./user-data.ts";
+import { READABLE_SCHEMA_VERSIONS, exportUser } from "./user-data.ts";
 
 export class ExportRefused extends Error {}
 
@@ -13,13 +13,14 @@ export class ExportRefused extends Error {}
 export async function exportLocal(raw: DatabaseSync, o: { userId?: string; now: Temporal.Instant }): Promise<{ userId: string; json: Record<string, unknown> }> {
   try {
     const v = (raw.prepare("SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations").get() as { v: number }).v;
-    if (v !== USER_SCHEMA_VERSION) throw new ExportRefused(`The store is at schema version ${v}; export-local reads ${USER_SCHEMA_VERSION}. Start this FocusTime once on it first.`);
+    // A store one version back (26) exports as it is, marked with its own version: the import reads it (D438).
+    if (!READABLE_SCHEMA_VERSIONS.includes(v)) throw new ExportRefused(`The store is at schema version ${v}; export-local reads ${READABLE_SCHEMA_VERSIONS.join(" and ")}. Start this FocusTime once on it first.`);
     const conn = sqliteConn(raw);
     const users = (await createAccountStore(conn, () => o.now).users.all()).filter((u) => !u.deletedAt);
     const user = o.userId ? users.find((u) => u.id === o.userId) : users.length === 1 ? users[0] : undefined;
     if (!user)
       throw new ExportRefused(o.userId ? `No person with id ${o.userId} in the store` : `The store has ${users.length} people; name one with --user (${users.map((u) => u.id).join(", ")})`);
-    return { userId: user.id, json: await exportUser(conn, user, o.now) };
+    return { userId: user.id, json: { ...(await exportUser(conn, user, o.now)), schemaVersion: v } };
   } finally {
     raw.close();
   }

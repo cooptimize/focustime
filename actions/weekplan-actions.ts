@@ -90,8 +90,8 @@ function tier(v: unknown): Tier {
   return v;
 }
 function blocks(v: unknown): number {
-  if (!validBlocks(v)) throw new Invalid("blocks must be a whole number from 1 to 20");
-  return v;
+  if (!validBlocks(v)) throw new Invalid("blocks must be ½ to 20 in half-block steps");
+  return v as number;
 }
 function size(v: unknown): StorySize {
   if (!validStorySize(v)) throw new Invalid("size must be S, M or L");

@@ -1,6 +1,6 @@
 // Step 17, slice 2: Plan ahead's timeline rules. Fictional data only.
 import { describe, expect, it } from "vitest";
-import { aheadColumns, aheadWeeks, barDates, cellChoices, dragBar, monthLoad, monthOf, overbooked, pastWords, readiness, stepCell, timelineScale, workedBlocks, type BarInput, type ReadinessInput } from "./ahead.ts";
+import { aheadColumns, aheadWeeks, barDates, cellChoices, dragBar, monthLoad, monthOf, overbooked, pastWords, readiness, stepCell, timelineScale, workedQuarters, type BarInput, type ReadinessInput } from "./ahead.ts";
 
 const weeks = aheadWeeks("2026-11-02");
 const cols = aheadColumns(weeks);
@@ -82,13 +82,15 @@ describe("dragging a bar (local estimates)", () => {
   });
 });
 
-describe("week cells and crowded months: whole numbers", () => {
-  it("cells offer 0 to the budget (or what is set, if more); + and − stay inside", () => {
-    expect(cellChoices(3, 1)).toEqual([0, 1, 2, 3]);
-    expect(cellChoices(2, 4)).toEqual([0, 1, 2, 3, 4]);
-    expect(stepCell(3, 1, 3)).toBe(3);
-    expect(stepCell(0, -1, 3)).toBe(0);
-    expect(stepCell(1, 1, 3)).toBe(2);
+describe("week cells (half blocks, E1) and crowded months", () => {
+  it("cells offer 0 to the budget in half blocks (or what is set, if more); + and − stay inside", () => {
+    // E1: in quarters, half a block a step.
+    expect(cellChoices(6, 2)).toEqual([0, 2, 4, 6]);
+    expect(cellChoices(4, 8)).toEqual([0, 2, 4, 6, 8]);
+    expect(stepCell(12, 1, 12)).toBe(12);
+    expect(stepCell(0, -1, 12)).toBe(0);
+    expect(stepCell(4, 1, 12)).toBe(6);
+    expect(stepCell(6, -1, 12)).toBe(4);
   });
   it("a month is crowded when its features due get fewer than 3 blocks each", () => {
     expect(monthLoad({ month: "2026-12", label: "Dec" }, 5, 2)).toEqual({ month: "2026-12", label: "Dec", available: 5, due: 2, crowded: true, text: "5 blocks, 2 features due" });
@@ -100,14 +102,14 @@ describe("week cells and crowded months: whole numbers", () => {
 describe("over-booked weeks", () => {
   it("counts client weeks with more musts than blocks, and the features in them", () => {
     const clients = [
-      { clientKey: "Contoso", weeks: [{ weekStart: "2026-11-02", planned: 3, budget: 2 }, { weekStart: "2026-11-09", planned: 2, budget: 2 }] },
-      { clientKey: "Fabrikam", weeks: [{ weekStart: "2026-11-02", planned: 1, budget: 0 }] },
+      { clientKey: "Contoso", weeks: [{ weekStart: "2026-11-02", plannedQ: 10, budgetQ: 8 }, { weekStart: "2026-11-09", plannedQ: 8, budgetQ: 8 }] },
+      { clientKey: "Fabrikam", weeks: [{ weekStart: "2026-11-02", plannedQ: 2, budgetQ: 0 }] },
     ];
     const cells = [
-      { clientKey: "Contoso", itemId: 1, weekStart: "2026-11-02", blocks: 2 },
-      { clientKey: "Contoso", itemId: 2, weekStart: "2026-11-09", blocks: 2 },
-      { clientKey: "Contoso", itemId: 3, weekStart: "2026-11-02", blocks: 0 },
-      { clientKey: "Fabrikam", itemId: 9, weekStart: "2026-11-02", blocks: 1 },
+      { clientKey: "Contoso", itemId: 1, weekStart: "2026-11-02", quarters: 10 },
+      { clientKey: "Contoso", itemId: 2, weekStart: "2026-11-09", quarters: 8 },
+      { clientKey: "Contoso", itemId: 3, weekStart: "2026-11-02", quarters: 0 },
+      { clientKey: "Fabrikam", itemId: 9, weekStart: "2026-11-02", quarters: 2 },
     ];
     const o = overbooked(clients, cells);
     expect(o.weeks).toBe(2);
@@ -123,13 +125,15 @@ describe("the last 2 weeks: planned vs worked, in plain words", () => {
     expect(s.x("2026-11-02")).toBe(200);
     expect(s.from).toBe("2026-10-19");
   });
-  it("worked blocks are focused minutes over a block (size L), rounded; never a fraction", () => {
-    expect(pastWords(2, 200, 210)).toBe("planned 2, worked about 1");
-    expect(pastWords(2, 0, 210)).toBe("planned 2, no focus time");
-    expect(pastWords(1, 60, 210)).toBe("planned 1, worked under a block");
+  it("worked blocks are focused minutes over a block (size L), to the nearest half block; never a decimal", () => {
+    expect(pastWords(8, 200, 210)).toBe("planned 2, worked about 1");
+    expect(pastWords(6, 0, 210)).toBe("planned 1½, no focus time");
+    expect(pastWords(4, 30, 210)).toBe("planned 1, worked under half a block");
+    expect(pastWords(2, 90, 210)).toBe("planned ½, worked about ½");
     expect(pastWords(0, 420, 210)).toBe("not planned, worked about 2");
     expect(pastWords(0, 0, 210)).toBeNull();
-    expect(workedBlocks(330, 210)).toBe(2);
+    expect(workedQuarters(330, 210)).toBe(6);
+    expect(workedQuarters(400, 210)).toBe(8);
   });
 });
 

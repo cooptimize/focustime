@@ -10,7 +10,7 @@
 // - Never a secret: an export has none, and user_secrets is refused if a file has it.
 // - Dry run: the same checks and counts, nothing written.
 import type { Conn, Param, Row } from "./sql/conn.ts";
-import { EXPORT_FORMAT, NOT_EXPORTED, PARENTS_FIRST, USER_SCHEMA_VERSION } from "./user-data.ts";
+import { EXPORT_FORMAT, NOT_EXPORTED, PARENTS_FIRST, READABLE_SCHEMA_VERSIONS, USER_SCHEMA_VERSION } from "./user-data.ts";
 
 export class ImportRefused extends Error {}
 
@@ -29,7 +29,7 @@ type Export = { format: string; schemaVersion: number; you?: Record<string, unkn
 function parse(json: unknown): Export {
   const e = json as Partial<Export> | null;
   if (!e || typeof e !== "object" || e.format !== EXPORT_FORMAT) throw new ImportRefused(`Not a FocusTime export (format ${String(e?.format)})`);
-  if (e.schemaVersion !== USER_SCHEMA_VERSION) throw new ImportRefused(`This export is schema version ${String(e.schemaVersion)}; this FocusTime reads ${USER_SCHEMA_VERSION}`);
+  if (typeof e.schemaVersion !== "number" || !READABLE_SCHEMA_VERSIONS.includes(e.schemaVersion)) throw new ImportRefused(`This export is schema version ${String(e.schemaVersion)}; this FocusTime reads ${USER_SCHEMA_VERSION}`);
   if (!e.tables || typeof e.tables !== "object") throw new ImportRefused("The export has no tables");
   for (const t of Object.keys(e.tables)) {
     if (NOT_EXPORTED.includes(t)) throw new ImportRefused(`The export has ${t}; secrets are never imported`);

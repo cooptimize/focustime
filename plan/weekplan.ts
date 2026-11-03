@@ -2,7 +2,7 @@
 // (committed blocks against that client's available focus blocks), the readiness ladder, the Coop brief and the week
 // nudges. No I/O; the server and UI hand in the week, DevOps results and the plan.
 import { freeMinutes } from "../week/free.ts";
-import { budgetWords, estimate, plannedBlocks, type StorySize } from "./estimate.ts";
+import { budgetWords, estimate, plannedQuarters, Q, type StorySize } from "./estimate.ts";
 import type { ClientPortfolio, IsoDate, PortfolioItem, Slot, Week, WorkItem } from "../week/types.ts";
 
 /** The week plan's items as these rules need them (the store's WeekFeature fits). */
@@ -10,7 +10,7 @@ export type FeatureLike = {
   clientKey: string;
   itemId: number;
   title: string;
-  /** Step 16.4: whole blocks for a feature, or null to take what its stories add up to. Stories: unused. */
+  /** E1: a feature's estimate in half blocks, or null for 1 block; ignored when a sized story of it is on the list. Stories: unused. */
   blocks: number | null;
   slots: readonly { date: IsoDate; half: "AM" | "PM" }[];
   /** Step 11: must or nice to have (missing: must, as step 8 stored them), and feature or story (missing: feature). */
@@ -44,16 +44,16 @@ export type ClientBudget = {
   clientKey: string;
   clientName: string;
   blocks: BudgetBlock[];
-  /** Whole blocks: its half-days less days off, mostly-meetings half-days and whole blocks of borrowed time. */
-  budget: number;
-  /** Whole blocks of unpaid borrowed time taken off the budget. */
-  borrowedBlocks: number;
+  /** Quarters of a block (E1): its half-days × 4, less days off, mostly-meetings half-days and borrowed time. */
+  budgetQ: number;
+  /** Quarters of unpaid borrowed time taken off the budget (in half blocks). */
+  borrowedQ: number;
   borrowedMinutes: number;
-  /** Whole blocks of its musts (nice to haves don't count against the budget). */
-  planned: number;
-  nicePlanned: number;
+  /** Quarters of its musts (nice to haves don't count against the budget). */
+  plannedQ: number;
+  nicePlannedQ: number;
   status: "none" | "all" | "free" | "over";
-  /** "All 3 planned", "1 block free", "4 planned, 3 available". */
+  /** "All 3 planned", "half a block free", "2½ planned, 2 available". */
   text: string;
 };
 
@@ -94,9 +94,9 @@ export function blockCounts(b: Block): { counts: boolean; reason: string | null 
 }
 
 /**
- * The budget per client (step 16.4): a whole number of blocks. Its half-days that week (and Open half-days an item is
- * pinned to), less days off and half-days with under 2 hours free after meetings (each says why), less whole blocks of
- * unpaid borrowed time. Planned: whole blocks of its musts, features as envelopes (plan/estimate.ts).
+ * The budget per client (step 16.4, E1): in quarters of a block. Its half-days that week (and Open half-days an item is
+ * pinned to) × 4, less days off and half-days with under 2 hours free after meetings (each says why), less unpaid
+ * borrowed time in half blocks. Planned: quarters of its musts, features as envelopes (plan/estimate.ts).
  */
 export function weekBudget(week: Week, items: readonly FeatureLike[], o: { borrowedMinutes: Readonly<Record<string, number>> }): ClientBudget[] {
   const names = new Map<string, string>();
@@ -121,12 +121,12 @@ export function weekBudget(week: Week, items: readonly FeatureLike[], o: { borro
     const working = blocks.filter((b) => b.totalMinutes > 0);
     const avg = working.length ? working.reduce((n, b) => n + b.totalMinutes, 0) / working.length : NOMINAL_BLOCK_MINUTES;
     const borrowed = o.borrowedMinutes[clientKey] ?? 0;
-    const counted = blocks.filter((b) => b.counts).length;
-    const borrowedBlocks = Math.min(counted, Math.floor(borrowed / avg));
-    const budget = counted - borrowedBlocks;
-    const planned = plannedBlocks(est, clientKey, "must");
-    const w = budgetWords(budget, planned);
-    return { clientKey, clientName, blocks, budget, borrowedBlocks, borrowedMinutes: borrowed, planned, nicePlanned: plannedBlocks(est, clientKey, "nice"), status: w.kind, text: w.text };
+    const countedQ = blocks.filter((b) => b.counts).length * Q;
+    const borrowedQ = Math.min(countedQ, Math.floor((borrowed * 2) / avg) * 2);
+    const budgetQ = countedQ - borrowedQ;
+    const plannedQ = plannedQuarters(est, clientKey, "must");
+    const w = budgetWords(budgetQ, plannedQ);
+    return { clientKey, clientName, blocks, budgetQ, borrowedQ, borrowedMinutes: borrowed, plannedQ, nicePlannedQ: plannedQuarters(est, clientKey, "nice"), status: w.kind, text: w.text };
   });
 }
 

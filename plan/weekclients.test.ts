@@ -3,7 +3,7 @@ import { planOpenClient, plannedCount, weekLines } from "./weekclients.ts";
 import type { ClientBudget } from "./weekplan.ts";
 
 const fit = (clientKey: string, blocks: [string, "AM" | "PM"][], status: ClientBudget["status"] = "free"): ClientBudget => ({
-  clientKey, clientName: clientKey, blocks: blocks.map(([date, half]) => ({ date, half, counts: true, reason: null, open: false })) as unknown as ClientBudget["blocks"], budget: blocks.length, borrowedBlocks: 0, borrowedMinutes: 0, planned: 0, nicePlanned: 0, status, text: "",
+  clientKey, clientName: clientKey, blocks: blocks.map(([date, half]) => ({ date, half, counts: true, reason: null, open: false })) as unknown as ClientBudget["blocks"], budgetQ: blocks.length * 4, borrowedQ: 0, borrowedMinutes: 0, plannedQ: 0, nicePlannedQ: 0, status, text: "",
 });
 const item = (clientKey: string, itemId: number, o: Partial<{ tier: "must" | "nice"; level: "feature" | "story"; parentId: number | null; slots: { date: string; half: "AM" | "PM" }[] }> = {}) => ({ clientKey, itemId, tier: o.tier ?? "must", level: o.level ?? "feature", parentId: o.parentId ?? null, slots: o.slots ?? [] });
 const days = ["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13"].map((date, i) => ({ date, kind: i === 4 ? "overflow" : "work" }));

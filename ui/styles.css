@@ -2478,6 +2478,8 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pa-cell.epic { cursor: default; pointer-events: auto; }
 .pa-segs { display: inline-flex; align-items: center; gap: 2px; padding: 1px 4px; border-radius: 4px; background: var(--surface); box-shadow: 0 0 0 1px var(--border-strong); }
 .pa-seg { width: 9px; height: 9px; border-radius: 2px; background: var(--c); }
+.pa-seg.half { width: 5px; }
+.pa-cell[aria-disabled="true"] { cursor: default; }
 .pa-cell.nice .pa-seg { background: transparent; box-shadow: inset 0 0 0 1.5px var(--c); }
 .pa-cell.epic .pa-seg { background: var(--text-muted); }
 .pa-seg-n { margin-left: 3px; font-size: var(--fs-1); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -2925,6 +2927,9 @@ button.att-chip { cursor: pointer; }
 .planweek .pw-progress-blocks { font-weight: 400; }
 .planweek .pw-nested { margin: 2px 0 0 22px; padding-left: 10px; }
 .pw-kids { flex-basis: 100%; font-size: var(--fs-2); color: var(--text-muted); padding-left: 22px; }
+button.pw-kids { text-align: left; padding-left: 22px; justify-self: start; text-decoration: none; color: var(--text-muted); }
+button.pw-kids:hover, button.pw-kids:focus-visible { text-decoration: underline; color: var(--text); }
+.planweek .pw-row > .pw-stepper .pw-step.pw-step-ph { visibility: hidden; }
 .pw-done { color: var(--ok); font-weight: 500; }
 .pw-over { margin: 6px 0 0; color: var(--watch); font-size: var(--fs-3); }
 .pw-nice .pw-features { margin-top: 6px; }
