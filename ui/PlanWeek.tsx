@@ -231,6 +231,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const pin = (k: string, itemId: number, date: IsoDate, half: Half, on: boolean) => void act("weekplan.place", { weekStart, clientKey: k, itemId, date, half, on });
   const dropped = (r: { headsUp: HeadsUp | null } | null) => setOffer(r?.headsUp ?? null);
   const ops: Ops = {
+    nameOf,
     // D437: an epic with no features: a local draft feature under it, opened in the draft editor to name and fill in.
     draftFeature: (k, epicId) =>
       void act<{ draft: DraftStory }>("draft.add_feature", { clientKey: k, parentItemId: epicId, title: "New feature" }).then((r) => {
@@ -714,6 +715,7 @@ function ReadyRow({ f, clientName, tz, drafts, onBrief, onMark, onAsk, onDraft, 
 }
 
 type Ops = {
+  nameOf: (k: string) => string;
   add: (k: string, itemId: number, tier: Tier) => void;
   tier: (i: Item, tier: Tier) => void;
   remove: (i: Item) => void;
@@ -1034,7 +1036,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
   const { env, open: openMenu } = useContext(MenuCtx);
   const dw = useDevOpsWrite();
   const facts: WeekItemFacts = {
-    itemId: i.itemId, title: i.title, tier: i.tier, level: i.level, first, last, past, done: i.done ? (i.done === "local" ? "local" : "other") : null, minutes: envl ? envl.minutes : (i.estimate ?? DEFAULT_FEATURE_MINUTES), derived, size: i.size, nested: !!nestedIn,
+    itemId: i.itemId, title: i.title, clientName: ops.nameOf(k), tier: i.tier, level: i.level, first, last, past, done: i.done ? (i.done === "local" ? "local" : "other") : null, minutes: envl ? envl.minutes : (i.estimate ?? DEFAULT_FEATURE_MINUTES), derived, size: i.size, nested: !!nestedIn,
     places: places.map((pl) => ({ date: pl.date, half: pl.half, label: pl.label })), pinned: i.slots, openStories, targetDate: feature?.targetDate ?? null, drafts: drafts.length, canWrite: !!dw?.can(k),
   };
   const wops: WeekItemOps = {
