@@ -1,6 +1,7 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import { clearPhotos, photoAction } from "./photo-actions.ts";
+import { chatAction, type ChatContext } from "./chat-actions.ts";
 import type { PhotoCache } from "../host/types.ts";
 import { expiringSoon } from "../plan/expiry.ts";
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
@@ -524,6 +525,24 @@ export async function presenceContext(ctx: ActionContext): Promise<PresenceConte
   };
 }
 
+/** T-2: delivery chats: the sign-in, Cooptimize's tenant, and the person's clients as Settings lists them. */
+export async function chatContext(ctx: ActionContext): Promise<ChatContext> {
+  return {
+    ...(ctx.plan ? { plan: ctx.plan } : {}),
+    account: await accountOf(ctx),
+    homeTenant: async () => (await configured(ctx))?.outlook?.tenantId ?? (await storedIdentity(ctx.plan))?.tid ?? null,
+    clientKeys: async () => {
+      const cfg = await configured(ctx);
+      if (!cfg) return null;
+      const mine = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).myClients().catch(() => null) : null;
+      if (!mine) return null;
+      const kept = Object.entries(cfg.clientSettings).filter(([, v]) => v.follow).map(([k]) => k);
+      return new Set([INTERNAL_CLIENT, ...mine.map((c) => c.clientKey), ...kept, ...cfg.week.standingBlocks.map((b) => b.clientKey)]);
+    },
+    now: ctx.now,
+  };
+}
+
 /** The pieces the account and VM actions need. */
 async function accountOf(ctx: ActionContext): Promise<MicrosoftAccount | null> {
   const cfg = await configured(ctx);
@@ -862,6 +881,14 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "presence.people":
     case "presence.log":
       return presenceAction(await presenceContext(ctx), action, req.input);
+    case "chats.registered":
+    case "chats.list":
+    case "chats.add":
+    case "chats.remove":
+    case "chats.primary":
+    case "chats.refresh":
+    case "permissions.status":
+      return chatAction(await chatContext(ctx), action, req.input);
     case "people.photos":
       return photoAction({ ...(await presenceContext(ctx)), cache: ctx.photoCache ?? null }, req.input);
     case "media.status": {

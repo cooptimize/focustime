@@ -1009,6 +1009,13 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // Step 16.3: deep focus switches the running session; Teams status lives in Settings > Focus; presence shows where Cooptimizers are listed.
     case "timer.deep": return env.timer?.kind === "focus" ? { run: () => env.runTimer("timer.deep", { on: !env.timer!.deep }) } : { next: () => ({ title: "Start deep focus", items: [{ id: "deep", label: "Deep focus", hint: `${env.planning.focusMinutes} min · Teams: Do not disturb`, action: "timer.start", run: () => env.runTimer("timer.start", { deep: true }) }] }) };
     case "presence.status": return { run: () => env.openSettings("focus") };
+    case "chats.registered":
+    case "chats.list":
+    case "chats.add":
+    case "chats.remove":
+    case "chats.primary":
+    case "chats.refresh": return { run: () => env.openSettings("clients") };
+    case "permissions.status": return { run: () => env.openSettings("connections") };
     case "people.photos": return { disabled: "Shown wherever you and Cooptimizers appear" };
     case "presence.people": return { disabled: "Shown next to Cooptimizers in Needs help from…, Who and Roadmap" };
     case "presence.log": return { run: () => env.openSettings("data") };

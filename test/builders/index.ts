@@ -102,3 +102,20 @@ export function aWeek(o: Partial<Omit<BuildWeekInput, "pto">> & { pto?: PtoDay[]
   const { pto, ...rest } = o;
   return buildWeek({ weekStart: WEEK, patterns: [], events: [], config: aWeekConfig(), ...rest, pto: Array.isArray(pto) ? ptoMap(...pto) : (pto ?? {}) });
 }
+
+// T-2: Teams delivery chats. Fictional tenants: Cooptimize's (HOME_TENANT) and one client's (CLIENT_TENANT).
+export const HOME_TENANT = "11111111-1111-4111-8111-111111111111";
+export const CLIENT_TENANT = "22222222-2222-4222-8222-222222222222";
+
+/** A chat member; a Cooptimizer by default (`external: true` puts them in the client's tenant). */
+export function aChatMember(o: Partial<import("../../plan/chats.ts").ChatMember> & { external?: boolean } = {}): import("../../plan/chats.ts").ChatMember {
+  const n = next();
+  const { external, ...rest } = o;
+  return { userId: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`, displayName: `Person ${n}`, email: `person${n}@${external ? "fabrikam" : "contoso"}.example`, tenantId: external ? CLIENT_TENANT : HOME_TENANT, ...rest };
+}
+
+/** A Teams group chat as the picker lists it. */
+export function aChat(o: Partial<import("../../plan/chats.ts").ChatSummary> = {}): import("../../plan/chats.ts").ChatSummary {
+  const n = next();
+  return { id: `19:chat${n}@thread.v2`, topic: `Chat ${n}`, webUrl: null, lastUpdated: "2026-10-20T15:00:00Z", lastRead: null, members: [aChatMember(), aChatMember({ external: true })], moreMembers: false, ...o };
+}

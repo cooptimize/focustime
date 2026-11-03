@@ -4,6 +4,7 @@
 // FOCUSTIME_HOST=local|azure (A1) picks the host: local (the default) is the developer loop on this machine; azure is
 // the hosted app's host, a stub until A2 (its secrets, snapshots and plan store are in memory).
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
+import { createChatsClient, type ChatsClient } from "../sources/graph/chats.ts";
 import type { Host, KeyProvider, SnapshotStore } from "../host/types.ts";
 import { perPerson } from "../host/per-person.ts";
 import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
@@ -174,6 +175,7 @@ const outlookFor = (who: Person) => (cfg: OutlookConfig, timeZone: string) =>
  */
 const presenceClients = new WeakMap<object, PresenceClient>();
 const photoClients = new WeakMap<object, PhotoClient>();
+const chatsClients = new WeakMap<object, ChatsClient>();
 const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null => {
   if (!cfg.outlook) return null;
   const src = outlookFor(who)(cfg.outlook, userZone(cfg));
@@ -183,9 +185,14 @@ const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null =>
   // Step 16.4: profile photos on their own token (ProfilePhoto.Read.All).
   let photos = photoClients.get(src);
   if (!photos) photoClients.set(src, (photos = createPhotoClient({ fetch, token: () => src.auth.accessToken("photo"), invalidate: () => src.auth.invalidate(), log })));
+  // T-2: Teams chat names and members on their own token (Chat.ReadBasic).
+  let chats = chatsClients.get(src);
+  if (!chats) chatsClients.set(src, (chats = createChatsClient({ fetch, token: () => src.auth.accessToken("chats"), invalidate: () => src.auth.invalidate(), log })));
   return {
     presence,
     photos,
+    chats,
+    probe: (kind) => src.auth.probe(kind),
     signIn: (o) => src.connect(o),
     identity: () => src.auth.identity(),
     armToken: () => src.auth.accessToken("arm"),

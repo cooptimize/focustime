@@ -7,6 +7,7 @@ import type { PresenceClient, RawPresence } from "../graph/presence.ts";
 import { DEMO_PEOPLE, DEMO_PRESENCE } from "./data.ts";
 import type { PhotoClient } from "../graph/photos.ts";
 import { demoAvatar } from "../../plan/photos.ts";
+import { demoChats } from "./chats.ts";
 
 /** Step 16.4: generated avatars for the fictional people (one has none, to show initials). No Graph calls. */
 export function demoPhotos(): PhotoClient {
@@ -48,6 +49,8 @@ export function createDemoAzure() {
     writeAccess: async () => ({ status: "read_only", message: "Demo data" }),
     presence: demoPresence(),
     photos: demoPhotos(),
+    chats: demoChats(),
+    probe: async (kind) => ({ kind, state: "granted", granted: kind === "arm" ? ["user_impersonation"] : ["User.Read", "Calendars.ReadWrite", "MailboxSettings.Read", "Presence.ReadWrite", "Presence.Read.All", "ProfilePhoto.Read.All", "Chat.ReadBasic"] }),
     signOut: async () => {},
   };
   return { account, azure: (token: () => Promise<string>) => createAzureClient({ fetch: arm.fetch, token, log: () => {} }), arm };

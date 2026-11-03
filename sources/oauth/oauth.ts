@@ -29,7 +29,7 @@ export type OAuthProvider = {
    * email), so a refresh returns an ID token with who signed in; "arm" is Azure Resource Manager (user_impersonation).
    * One token request covers one resource, so each set names one resource plus OpenID scopes.
    */
-  kinds?: Partial<Record<"id" | "arm" | "presence" | "photo", string>>;
+  kinds?: Partial<Record<"id" | "arm" | "presence" | "photo" | "chats", string>>;
   clientSecretAccount?: AppSecretAccount;
   refreshAccount: RefreshTokenAccount;
 };
@@ -42,6 +42,8 @@ export const ARM_SCOPE = "https://management.azure.com/user_impersonation";
 export const PRESENCE_SCOPE = "https://graph.microsoft.com/Presence.ReadWrite https://graph.microsoft.com/Presence.Read.All";
 /** Profile photos (step 16.4): mine and teammates', read only. Delegated, but needs an admin's consent in Entra. */
 export const PHOTO_SCOPE = "https://graph.microsoft.com/ProfilePhoto.Read.All";
+/** T-2: Teams chats, names and members only (no messages): the least scope that lists my chats and their members. */
+export const CHATS_SCOPE = "https://graph.microsoft.com/Chat.ReadBasic";
 
 /**
  * `calendars`: the Graph calendar scope reads ask for. The old desktop registration has Calendars.ReadBasic; the A2
@@ -60,7 +62,7 @@ export function microsoftProvider(cfg: OutlookConfig, o: { calendars?: "Calendar
     clientId: cfg.clientId,
     scope: `offline_access ${read}`,
     writeScope: "offline_access https://graph.microsoft.com/Calendars.ReadWrite",
-    kinds: { id: `${OIDC} offline_access ${read}`, arm: `offline_access ${ARM_SCOPE}`, presence: `offline_access ${PRESENCE_SCOPE}`, photo: `offline_access ${PHOTO_SCOPE}` },
+    kinds: { id: `${OIDC} offline_access ${read}`, arm: `offline_access ${ARM_SCOPE}`, presence: `offline_access ${PRESENCE_SCOPE}`, photo: `offline_access ${PHOTO_SCOPE}`, chats: `offline_access ${CHATS_SCOPE}` },
     redirectHost: "localhost",
     extraAuthParams: { response_mode: "query", prompt: "select_account" },
     scopeOnTokenRequests: true,
@@ -132,12 +134,16 @@ export type ConnectOptions = {
   teams?: boolean;
   /** Profile photos (step 16.4): a Graph scope, part of the Graph token the code exchange redeems. */
   photos?: boolean;
+  /** T-2: Teams chat names and members (Chat.ReadBasic), part of the Graph token the code exchange redeems. */
+  chats?: boolean;
   /** Prefills the account (an incremental consent for someone already signed in). */
   loginHint?: string;
 };
+/** T-2: one scope set's token: granted (with the scopes it holds), needs consent, signed out, or couldn't tell. */
+export type ScopeProbe = { kind: TokenKind; state: "granted" | "consent" | "signed_out" | "unavailable"; granted: string[] };
 /** Whether this sign-in can write (step 12): "write" only when a write token was granted with the write scope. */
 export type WriteAccess = { status: "write" } | { status: "read_only" | "not_connected" | "unavailable"; message: string };
-type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo";
+export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats";
 
 const DONE_PAGE = (ok: boolean) => `<!doctype html><meta charset="utf-8"><title>FocusTime</title>
 <body style="font:16px system-ui;padding:40px;max-width:560px">
@@ -151,7 +157,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
   const access = new Map<TokenKind, { token: string; expiresAt: number; scope: string }>();
   // Who signed in, from the last ID token (memory only; the caller keeps what it needs).
   let lastIdentity: IdClaims | null = null;
-  const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : (k === "id" || k === "arm" || k === "presence" || k === "photo") && p.kinds?.[k] ? p.kinds[k]! : p.scope);
+  const scopeOf = (k: TokenKind) => (k === "write" && p.writeScope ? p.writeScope : (k === "id" || k === "arm" || k === "presence" || k === "photo" || k === "chats") && p.kinds?.[k] ? p.kinds[k]! : p.scope);
   const log = (op: string, extra: { status?: number; kind?: string; durationMs?: number } = {}) => deps.log({ source: p.source, op, ...extra });
 
   const secretAccount = deps.clientSecretAccount ?? p.clientSecretAccount;
@@ -252,11 +258,26 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
     return { status: "write" };
   }
 
+  /**
+   * T-2: whether this sign-in can get a token for one scope set, and the scopes Microsoft says it holds (granted
+   * delegated scopes of that resource, bare names). For Settings > Connections; the token stays in memory as usual.
+   */
+  async function probe(kind: TokenKind): Promise<ScopeProbe> {
+    try {
+      await accessToken(kind);
+    } catch (e) {
+      const state = e instanceof AuthFailure ? (e.kind === "consent" ? "consent" : e.kind === "not_connected" || e.kind === "expired" ? "signed_out" : "unavailable") : "unavailable";
+      return { kind, state, granted: [] };
+    }
+    const bare = (x: string) => x.split("/").pop()!;
+    return { kind, state: "granted", granted: (access.get(kind)?.scope ?? "").split(" ").filter(Boolean).map(bare) };
+  }
+
   async function connect(opts: ConnectOptions = {}): Promise<ConnectResult> {
     // The browser visit asks for every scope set at once (it may span resources), so later refreshes for any of them
     // are a subset of what was consented. The code exchange redeems one resource: Graph, with OpenID for who it is.
     const join = (...sets: (string | undefined | false)[]) => [...new Set(sets.filter((x): x is string => !!x).flatMap((x) => x.split(" ")))].join(" ");
-    const graph = join(p.kinds?.id, p.scope, opts.write && p.writeScope, opts.teams && p.kinds?.presence, opts.photos && p.kinds?.photo);
+    const graph = join(p.kinds?.id, p.scope, opts.write && p.writeScope, opts.teams && p.kinds?.presence, opts.photos && p.kinds?.photo, opts.chats && p.kinds?.chats);
     const scope = join(graph, opts.azure && p.kinds?.arm);
     // A2: the web sign-in happens in this browser tab, through the server's routes.
     if (deps.web) return { status: "redirect", url: deps.web.login(opts) };
@@ -383,7 +404,7 @@ export function createOAuthClient(p: OAuthProvider, deps: OAuthDeps) {
     return lastIdentity;
   }
 
-  return { provider: p, connect, webStart, webFinish, accessToken, writeAccess, identity, disconnect, invalidate: () => access.clear() };
+  return { provider: p, connect, webStart, webFinish, accessToken, writeAccess, identity, disconnect, probe, invalidate: () => access.clear() };
 }
 
 export type OAuthClient = ReturnType<typeof createOAuthClient>;
