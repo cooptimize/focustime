@@ -22,7 +22,8 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
       await expect(form.locator(".set-notify-row", { hasText: name }).count()).resolves.toBeGreaterThan(0);
     await form.locator(".set-notify-row", { hasText: "Check-in" }).locator("input").uncheck();
     await form.locator("select").selectOption("off");
-    await form.getByRole("button", { name: "Save" }).click();
+    // Fix/settings-autosave: each change saves itself; no Save button.
+    await expect(form.getByRole("button", { name: "Save" }).count()).resolves.toBe(0);
     await expect.poll(() => form.textContent(), { timeout: 5000 }).toContain("Saved");
     const saved = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "settings.load", input: {} }) }).then((r) => r.json()));
     expect(saved.data.notify).toMatchObject({ quiet: "off", kinds: { checkin: false, closeout: true } });

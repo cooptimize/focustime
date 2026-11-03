@@ -1,17 +1,19 @@
-// Settings (step 6b): every setting FocusTime owns, read from and written to the same validated config file. Values
+// Settings (step 6b): every setting FocusTime owns, read from and written to the same validated settings (a person's
+// account, or the config file in the developer loop); each field saves itself (ui/settings/autosave.tsx). Values
 // owned by Dataverse are shown read-only with where to change them. Secrets are entered in masked fields that go
 // straight to the keyring; they are never shown again (only whether they are set, and an expiry date if entered).
 import { AzureWriteLog, TeamsAccessLine, TeamsStatusLog, YouAccount } from "./Account.tsx";
 import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import type { FieldProblem, SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
+import type { SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
+import { AutoSaveProvider, SaveMark, useAutoSave, type AutoSave } from "./settings/autosave.tsx";
 import { COLLAB_LENGTHS, TEXT_SIZES, THEME_NAMES, THEMES, type TextSize, type Theme } from "../config/schema.ts";
 import { TEXT_SIZE_NAMES } from "./textsize.ts";
 import type { ClientWork } from "../week/types.ts";
 import type { FollowState } from "../week/follow.ts";
 import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS, type ViewRange } from "../week/hours.ts";
-import { ActionRefusal, call } from "./api.ts";
+import { call } from "./api.ts";
 import { notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar } from "./status.ts";
 import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
@@ -79,9 +81,14 @@ type Props = {
   setDemo: (on: boolean) => void;
   /** Clears an override (hours.clear_day) and reloads. */
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
+  /** A setting that couldn't be saved after its form closed (said out loud, never dropped). */
+  onNotice?: (message: string) => void;
   /** S1 (D451): opens first-run setup at a step (Settings > Setup runs it again; it edits these same settings). */
   onSetup?: (step: SetupStep) => void;
 };
+
+/** Where an app-level value is changed when there is no config file here (hosted, signed in, the demo). */
+const ADMIN = "Set by your FocusTime admin";
 
 const DEVOPS_STATE: Record<ClientWork["status"], string> = { ok: "Live", identity_missing: "No identity", not_set_up: "Not set up", auth_failed: "PAT problem", no_access: "No access", unreachable: "Unreachable", error: "Error" };
 
@@ -94,19 +101,6 @@ const ZONES: readonly string[] = (() => {
     return [];
   }
 })();
-
-/** Problems for one field (and its sub-fields, e.g. hours.mon[0] under hours.mon). */
-const problemsFor = (all: FieldProblem[], field: string) => all.filter((p) => p.field === field || p.field.startsWith(`${field}[`) || p.field.startsWith(`${field}.`));
-
-function Problems({ all, field }: { all: FieldProblem[]; field: string }) {
-  const mine = problemsFor(all, field);
-  if (!mine.length) return null;
-  return (
-    <span className="field-problem" role="alert">
-      {mine.map((p) => p.message).join("; ")}
-    </span>
-  );
-}
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
   return (
@@ -128,30 +122,6 @@ function ReadOnly({ label, value, where }: { label: string; value: ReactNode; wh
   );
 }
 
-/** One save: the section's values, field problems back on refusal. */
-function useSave(onSaved: (d: SettingsData) => void) {
-  const [problems, setProblems] = useState<FieldProblem[]>([]);
-  const [status, setStatus] = useState<string | null>(null);
-  const save = useCallback(
-    async (section: string, values: unknown) => {
-      setStatus("Saving…");
-      try {
-        const r = await call<{ settings: SettingsData; backup: string }>("settings.save", { section, values });
-        setProblems([]);
-        setStatus(`Saved. Backup: ${r.backup}`);
-        onSaved(r.settings);
-        return true;
-      } catch (e) {
-        setProblems(e instanceof ActionRefusal ? e.fields : []);
-        setStatus(e instanceof ActionRefusal && e.fields.length ? "Not saved: fix the fields marked in red" : `Not saved: ${e instanceof Error ? e.message : "unknown error"}`);
-        return false;
-      }
-    },
-    [onSaved],
-  );
-  return { problems, status, save };
-}
-
 export function Settings(props: Props) {
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -167,7 +137,11 @@ export function Settings(props: Props) {
   useEffect(() => {
     void reload();
   }, [reload]);
-  useEffect(() => headRef.current?.focus(), [props.section]);
+  useEffect(() => {
+    // One scroll for the whole page: a new section starts at its top.
+    headRef.current?.closest(".settings")?.scrollTo({ top: 0 });
+    headRef.current?.focus({ preventScroll: true });
+  }, [props.section]);
   const saved = useCallback(
     (d: SettingsData) => {
       setData(d);
@@ -178,14 +152,16 @@ export function Settings(props: Props) {
 
   const title = SETTINGS_SECTIONS.find(([id]) => id === props.section)![1];
   return (
+    <AutoSaveProvider onNotice={props.onNotice}>
+      {(leave) => (
     <main className="settings" aria-label="Settings">
       <nav className="set-nav" aria-label="Settings sections">
         {SETTINGS_SECTIONS.map(([id, label]) => (
-          <button key={id} type="button" className="set-tab" aria-current={props.section === id ? "page" : undefined} onClick={() => props.onSection(id)}>
+          <button key={id} type="button" className="set-tab" aria-current={props.section === id ? "page" : undefined} onClick={() => leave(() => props.onSection(id))}>
             {label}
           </button>
         ))}
-        <button type="button" className="set-tab close" onClick={props.onClose} title="Back (Esc)">
+        <button type="button" className="set-tab close" onClick={() => leave(props.onClose)} title="Back (Esc)">
           Back
         </button>
       </nav>
@@ -193,11 +169,11 @@ export function Settings(props: Props) {
         <h2 ref={headRef} tabIndex={-1}>
           {title}
         </h2>
-        {data && props.section !== "about" && props.section !== "setup" && <p className="muted set-path">Saved to {data.configPath}</p>}
+        {data && props.section !== "about" && props.section !== "setup" && <p className="muted set-path">Changes save as you make them, to {data.configPath}</p>}
         {error && <p className="field-problem">{error}</p>}
         {data && data.problems.length > 0 && props.section !== "connections" && props.section !== "data" && (
           <div className="config-banner" role="alert">
-            <strong>The config file has problems, so only Connections and Data work here until it is fixed by hand.</strong>
+            <strong>{data.fromFile ? "The config file has problems, so only Connections and Data work here until it is fixed by hand." : "Your saved settings have problems, so only Connections and Data work here. Ask your FocusTime admin."}</strong>
             <ul>
               {data.problems.map((p) => (
                 <li key={p.field}>
@@ -210,6 +186,8 @@ export function Settings(props: Props) {
         {data && <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />}
       </section>
     </main>
+      )}
+    </AutoSaveProvider>
   );
 }
 
@@ -225,9 +203,9 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
         <VmStartForm {...p} />
         {d.you && (
         <div className="set-grid">
-          <ReadOnly label="Email when signed out" value={d.you.email} where="Used only when signed out ([dataverse] my_email in config.toml)" />
+          <ReadOnly label={d.fromFile ? "Email when signed out" : "Email"} value={d.you.email} where={d.fromFile ? "Used only when signed out ([dataverse] my_email in config.toml)" : "From your Microsoft sign-in"} />
           <ReadOnly label="Dataverse user" value={d.you.systemUserId ? "Found" : "Not found yet"} where="Change this in Dataverse" />
-          <ReadOnly label="Environment" value={d.you.environmentUrl} where="Set in config.toml ([dataverse] environment_url)" />
+          <ReadOnly label="Environment" value={d.you.environmentUrl} where={d.fromFile ? "Set in config.toml ([dataverse] environment_url)" : ADMIN} />
           <ReadOnly label="Time zone" value={userZone(d.you)} where="Change it under Working hours" />
         </div>
         )}
@@ -355,45 +333,50 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
 /** "09:00-17:00, 20:00-22:00" ⇄ spans. */
 const spansIn = (s: string) => s.split(/[,;]/).map((x) => x.replace(/\s+/g, "")).filter(Boolean);
 
-function HoursForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void; reload: () => Promise<void> }) {
-  const h = p.data.hours!;
-  const [tz, setTz] = useState(userZone(h));
-  const [lunch, setLunch] = useState(h.lunch ? spanText(h.lunch) : "");
-  const [days, setDays] = useState(() => Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, h.weekdays[k].map(spanText).join(", ")])) as Record<string, string>);
-  const { problems, status, save } = useSave(p.onSavedData);
+type FormProps = Props & { data: SettingsData; onSavedData: (d: SettingsData) => void };
+
+/** A field that saves itself: its input (from `children`), "Saved" or "Couldn't save. Retry" by it, an error under it. */
+function AutoField<V>({ a, k, label, hint, children }: { a: AutoSave<V>; k: keyof V; label: string; hint?: ReactNode; children: ReactNode }) {
   return (
-    <form
-      className="set-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save("hours", { timeZone: tz, lunch: lunch.replace(/\s+/g, ""), weekdays: Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, spansIn(days[k] ?? "")])) });
-      }}
-    >
+    <Field label={label} hint={hint}>
+      {children}
+      <SaveMark s={a.status(k)} retry={() => a.commit(k)} />
+    </Field>
+  );
+}
+
+function HoursForm(p: FormProps & { reload: () => Promise<void> }) {
+  const h = p.data.hours!;
+  const a = useAutoSave({
+    section: "hours",
+    initial: { tz: userZone(h), lunch: h.lunch ? spanText(h.lunch) : "", ...(Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, h.weekdays[k].map(spanText).join(", ")])) as Record<(typeof WEEKDAY_KEYS)[number], string>) },
+    payload: (v) => ({ timeZone: v.tz, lunch: v.lunch.replace(/\s+/g, ""), weekdays: Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, spansIn(v[k] ?? "")])) }),
+    onSaved: p.onSavedData,
+    label: (k) => (k === "tz" ? "Time zone" : k === "lunch" ? "Lunch" : `${DAY_NAMES[k as (typeof WEEKDAY_KEYS)[number]]} hours`),
+  });
+  return (
+    <div className="set-form">
       <p className="muted">Like 09:00-17:00; a second span is an evening. Empty is a day off.</p>
       <div className="set-days">
         {WEEKDAY_KEYS.map((k) => (
-          <Field key={k} label={DAY_NAMES[k]}>
-            <input value={days[k]} placeholder="day off" onChange={(e) => setDays({ ...days, [k]: e.target.value })} aria-invalid={problemsFor(problems, `hours.${k}`).length > 0} />
-            <Problems all={problems} field={`hours.${k}`} />
-          </Field>
+          <AutoField key={k} a={a} k={k} label={DAY_NAMES[k]}>
+            <input value={a.v[k]} placeholder="day off" onChange={(e) => a.set(k, e.target.value)} {...a.text(k)} />
+          </AutoField>
         ))}
       </div>
       <div className="set-grid">
-        <Field label="Lunch" hint="Like 12:00-12:30. Empty splits the day in the middle.">
-          <input value={lunch} placeholder="none" onChange={(e) => setLunch(e.target.value)} />
-          <Problems all={problems} field="hours.lunch" />
-        </Field>
-        <Field label="Time zone" hint="Where you work, as a Region/City name from the list.">
-          <input value={tz} list="set-zones" onChange={(e) => setTz(e.target.value)} />
+        <AutoField a={a} k="lunch" label="Lunch" hint="Like 12:00-12:30. Empty splits the day in the middle.">
+          <input value={a.v.lunch} placeholder="none" onChange={(e) => a.set("lunch", e.target.value)} {...a.text("lunch")} />
+        </AutoField>
+        <AutoField a={a} k="tz" label="Time zone" hint="Where you work, as a Region/City name from the list.">
+          <input value={a.v.tz} list="set-zones" onChange={(e) => a.set("tz", e.target.value)} {...a.text("tz")} />
           <datalist id="set-zones">
             {ZONES.map((z) => (
               <option key={z} value={z} />
             ))}
           </datalist>
-          <Problems all={problems} field="hours.time_zone" />
-        </Field>
+        </AutoField>
       </div>
-      <SaveRow status={status} />
       <h3>One-day changes</h3>
       {h.overrides.length === 0 ? (
         <p className="muted">None. Set a day's own hours from its ⋯ menu in the week.</p>
@@ -411,149 +394,140 @@ function HoursForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
           ))}
         </ul>
       )}
-    </form>
-  );
-}
-
-function SaveRow({ status, label = "Save" }: { status: string | null; label?: string }) {
-  return (
-    <div className="set-save">
-      <button type="submit" className="mini primary">
-        {label}
-      </button>
-      {status && (
-        <span className="muted" role="status">
-          {status}
-        </span>
-      )}
     </div>
   );
 }
 
-function StandingForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
-  const [rows, setRows] = useState(p.data.standingBlocks.map((b) => ({ day: b.day as string, half: b.half as string, client: b.clientKey })));
-  const { problems, status, save } = useSave(p.onSavedData);
+type StandingRow = { day: string; half: string; client: string };
+function StandingForm(p: FormProps) {
+  const a = useAutoSave({
+    section: "standing",
+    initial: { rows: p.data.standingBlocks.map((b): StandingRow => ({ day: b.day as string, half: b.half as string, client: b.clientKey })) },
+    payload: (v) => ({ blocks: v.rows }),
+    onSaved: p.onSavedData,
+    label: () => "Standing blocks",
+  });
+  const rows = a.v.rows;
   const keys = p.data.clients.map((c) => c.key);
+  const edit = (i: number, patch: Partial<StandingRow>) => a.change("rows", rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   return (
-    <form
-      className="set-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save("standing", { blocks: rows });
-      }}
-    >
+    <div className="set-form">
       <p className="muted">Shown when Dataverse has no focus block there.</p>
       {rows.map((r, i) => (
         <div key={i} className="set-row">
-          <select value={r.day} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, day: e.target.value } : x)))} aria-label="Day">
+          <select value={r.day} onChange={(e) => edit(i, { day: e.target.value })} aria-label="Day">
             {["Mon", "Tue", "Wed", "Thu"].map((d) => (
               <option key={d}>{d}</option>
             ))}
           </select>
-          <select value={r.half} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, half: e.target.value } : x)))} aria-label="Half">
+          <select value={r.half} onChange={(e) => edit(i, { half: e.target.value })} aria-label="Half">
             <option>AM</option>
             <option>PM</option>
           </select>
-          <select value={r.client} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, client: e.target.value } : x)))} aria-label="Client">
+          <select value={r.client} onChange={(e) => edit(i, { client: e.target.value })} aria-label="Client">
             {[...new Set([r.client, ...keys])].map((k) => (
               <option key={k}>{k}</option>
             ))}
           </select>
-          <button type="button" className="mini quiet" onClick={() => setRows(rows.filter((_, j) => j !== i))}>
+          <button type="button" className="mini quiet" onClick={() => a.change("rows", rows.filter((_, j) => j !== i))}>
             Remove
           </button>
-          <Problems all={problems} field={`standing_blocks[${i}]`} />
         </div>
       ))}
-      <button type="button" className="mini" onClick={() => setRows([...rows, { day: "Mon", half: "AM", client: keys[0] ?? "Internal" }])}>
-        Add a standing block
-      </button>
-      <SaveRow status={status} />
-    </form>
+      <span className="set-inline">
+        <button type="button" className="mini" onClick={() => a.change("rows", [...rows, { day: "Mon", half: "AM", client: keys[0] ?? "Internal" }])}>
+          Add a standing block
+        </button>
+        <SaveMark s={a.status("rows")} retry={() => a.commit("rows")} />
+      </span>
+    </div>
   );
 }
 
-function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
+const PLANNING_LABELS: Record<string, string> = {
+  minS: "Shortest useful time, S", minM: "Shortest useful time, M", minL: "Shortest useful time, L", types: "Portfolio types", carryDays: "Carry-over",
+  reminderOffsetMinutes: "Reminder", checkinReminderMinutes: "Check-in reminder", closeoutReminderMinutes: "Close out reminder", weekNudgeThu: "Thursday nudge",
+  weekNudgeFri: "Friday nudge", weekNudgeMon: "Monday nudge", followGraceDays: "Keep following", focusMinutes: "Focus length", breakMinutes: "Break length", endSound: "End sound",
+};
+
+function PlanningForm(p: FormProps) {
   const pl = p.data.planning;
-  const [types, setTypes] = useState(pl.pickablePortfolioTypes.join(", "));
-  const [v, setV] = useState({ minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes, focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes, checkinReminderMinutes: pl.checkinReminderMinutes });
-  const [nudges, setNudges] = useState({ weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon });
-  const { problems, status, save } = useSave(p.onSavedData);
-  const num = (k: Exclude<keyof typeof v, "endSound">, label: string, field: string, hint: string, step = 5, max = 480) => (
-    <Field label={label} hint={hint}>
-      <input type="number" min={0} max={max} step={step} value={v[k]} onChange={(e) => setV({ ...v, [k]: Number(e.target.value) })} />
-      <Problems all={problems} field={field} />
-    </Field>
+  const a = useAutoSave({
+    section: "planning",
+    initial: {
+      types: pl.pickablePortfolioTypes.join(", "), minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes,
+      focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes,
+      checkinReminderMinutes: pl.checkinReminderMinutes, weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon,
+    },
+    payload: (v) => ({
+      pickablePortfolioTypes: v.types.split(",").map((x) => x.trim()).filter(Boolean),
+      minSizes: { S: v.minS, M: v.minM, L: v.minL },
+      carryDays: v.carryDays,
+      reminderOffsetMinutes: v.reminderOffsetMinutes,
+      focusMinutes: v.focusMinutes,
+      breakMinutes: v.breakMinutes,
+      endSound: v.endSound,
+      followGraceDays: v.followGraceDays,
+      closeoutReminderMinutes: v.closeoutReminderMinutes,
+      checkinReminderMinutes: v.checkinReminderMinutes,
+      weekNudgeThu: v.weekNudgeThu,
+      weekNudgeFri: v.weekNudgeFri,
+      weekNudgeMon: v.weekNudgeMon,
+    }),
+    onSaved: p.onSavedData,
+    label: (k) => PLANNING_LABELS[k as string] ?? "Planning",
+  });
+  type NumKey = "minS" | "minM" | "minL" | "carryDays" | "reminderOffsetMinutes" | "focusMinutes" | "breakMinutes" | "followGraceDays" | "closeoutReminderMinutes" | "checkinReminderMinutes";
+  const num = (k: NumKey, label: string, hint: string, step = 5, max = 480) => (
+    <AutoField a={a} k={k} label={label} hint={hint}>
+      <input type="number" min={0} max={max} step={step} value={a.v[k]} onChange={(e) => a.set(k, Number(e.target.value))} {...a.text(k)} />
+    </AutoField>
   );
   return (
-    <form
-      className="set-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save("planning", {
-          pickablePortfolioTypes: types.split(",").map((x) => x.trim()).filter(Boolean),
-          minSizes: { S: v.minS, M: v.minM, L: v.minL },
-          carryDays: v.carryDays,
-          reminderOffsetMinutes: v.reminderOffsetMinutes,
-          focusMinutes: v.focusMinutes,
-          breakMinutes: v.breakMinutes,
-          endSound: v.endSound,
-          followGraceDays: v.followGraceDays,
-          closeoutReminderMinutes: v.closeoutReminderMinutes,
-          checkinReminderMinutes: v.checkinReminderMinutes,
-          ...nudges,
-        });
-      }}
-    >
+    <div className="set-form">
       <h3>Picks</h3>
       <div className="set-grid">
-        {num("minS", "Shortest useful time, S (minutes)", "plan.min_s", "The least Timebox my day gives an S pick (S is 1h, M 2h, L 4h).")}
-        {num("minM", "Shortest useful time, M (minutes)", "plan.min_m", "The same for M.")}
-        {num("minL", "Shortest useful time, L (minutes)", "plan.min_l", "The same for L.")}
-        <Field label="Portfolio types that can be picked" hint='Types above story level you pick directly, like "Recurring".'>
-          <input value={types} onChange={(e) => setTypes(e.target.value)} />
-          <Problems all={problems} field="plan.pickable_portfolio_types" />
-        </Field>
-        {num("carryDays", "Carry-over (days back)", "plan.carry_days", "Unfinished picks offered again. 0 turns it off.", 1, 30)}
-        {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "plan.reminder_offset_minutes", "Only when today isn't committed.", 5, 240)}
+        {num("minS", "Shortest useful time, S (minutes)", "The least Timebox my day gives an S pick (S is 1h, M 2h, L 4h).")}
+        {num("minM", "Shortest useful time, M (minutes)", "The same for M.")}
+        {num("minL", "Shortest useful time, L (minutes)", "The same for L.")}
+        <AutoField a={a} k="types" label="Portfolio types that can be picked" hint='Types above story level you pick directly, like "Recurring".'>
+          <input value={a.v.types} onChange={(e) => a.set("types", e.target.value)} {...a.text("types")} />
+        </AutoField>
+        {num("carryDays", "Carry-over (days back)", "Unfinished picks offered again. 0 turns it off.", 1, 30)}
+        {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "Only when today isn't committed.", 5, 240)}
       </div>
       <h3>Check-in and Close out</h3>
       <div className="set-grid">
-        {num("checkinReminderMinutes", "Check-in reminder (minutes after lunch)", "plan.checkin_reminder_minutes", "On a committed day. 0 is the end of lunch.", 5, 120)}
-        {num("closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "plan.closeout_reminder_minutes", "Only if Close out isn't done.", 5, 120)}
+        {num("checkinReminderMinutes", "Check-in reminder (minutes after lunch)", "On a committed day. 0 is the end of lunch.", 5, 120)}
+        {num("closeoutReminderMinutes", "Close out reminder (minutes before the day ends)", "Only if Close out isn't done.", 5, 120)}
       </div>
       <h3>Plan the week</h3>
       <div className="set-grid">
         {([
-          ["weekNudgeThu", "week_nudge_thu", "Thursday nudge", "For next week. Empty turns it off."],
-          ["weekNudgeFri", "week_nudge_fri", "Friday nudge", "For next week, if still not committed."],
-          ["weekNudgeMon", "week_nudge_mon", "Monday nudge", "For this week, if still not committed."],
-        ] as const).map(([k, toml, label, hint]) => (
-          <Field key={k} label={label} hint={hint}>
-            <input type="time" value={nudges[k]} onChange={(e) => setNudges({ ...nudges, [k]: e.target.value })} />
-            <Problems all={problems} field={`plan.${toml}`} />
-          </Field>
+          ["weekNudgeThu", "Thursday nudge", "For next week. Empty turns it off."],
+          ["weekNudgeFri", "Friday nudge", "For next week, if still not committed."],
+          ["weekNudgeMon", "Monday nudge", "For this week, if still not committed."],
+        ] as const).map(([k, label, hint]) => (
+          <AutoField key={k} a={a} k={k} label={label} hint={hint}>
+            <input type="time" value={a.v[k]} onChange={(e) => a.set(k, e.target.value)} {...a.text(k)} />
+          </AutoField>
         ))}
       </div>
       <h3>Clients followed</h3>
-      <div className="set-grid">
-        {num("followGraceDays", "Keep following after focus time ends (days)", "plan.follow_grace_days", "Clients stay followed this long after focus time ends.", 1, 90)}
-      </div>
+      <div className="set-grid">{num("followGraceDays", "Keep following after focus time ends (days)", "Clients stay followed this long after focus time ends.", 1, 90)}</div>
       <h3>Plan ahead rituals</h3>
       <AheadRituals />
       <h3>Focus timer</h3>
       <div className="set-grid">
-        {num("focusMinutes", "Focus length (minutes)", "plan.focus_minutes", "The default for a plain timer. A pick suggests its size instead.", 5, 240)}
-        {num("breakMinutes", "Break length (minutes)", "plan.break_minutes", "Offered when a session ends. 0 for none.", 5, 60)}
-        <Field label="End sound" hint="With the notification when a session ends.">
+        {num("focusMinutes", "Focus length (minutes)", "The default for a plain timer. A pick suggests its size instead.", 5, 240)}
+        {num("breakMinutes", "Break length (minutes)", "Offered when a session ends. 0 for none.", 5, 60)}
+        <AutoField a={a} k="endSound" label="End sound" hint="With the notification when a session ends.">
           <label className="set-check">
-            <input type="checkbox" checked={v.endSound} onChange={(e) => setV({ ...v, endSound: e.target.checked })} /> Play a sound
+            <input type="checkbox" checked={a.v.endSound} onChange={(e) => a.change("endSound", e.target.checked)} /> Play a sound
           </label>
-          <Problems all={problems} field="plan.end_sound" />
-        </Field>
+        </AutoField>
       </div>
-      <SaveRow status={status} />
-    </form>
+    </div>
   );
 }
 
@@ -576,83 +550,80 @@ function AheadRituals() {
 }
 
 /** Settings > Planning > Timeboxes (step 12): Put on Outlook by default, and asking before changing my own events. */
-function TimeboxForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
-  const [v, setV] = useState(p.data.timebox);
-  const { problems, status, save } = useSave(p.onSavedData);
+function TimeboxForm(p: FormProps) {
+  const t = p.data.timebox;
+  const a = useAutoSave({
+    section: "timebox",
+    initial: { ...t },
+    payload: (v) => v,
+    onSaved: p.onSavedData,
+    label: (k) => (k === "enabled" ? "Use timeboxing" : k === "outlookDefault" ? "Put on Outlook" : "Asking about my own timeboxes"),
+  });
   return (
-    <form
-      className="set-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save("timebox", v);
-      }}
-    >
+    <div className="set-form">
       <h3>Timeboxes</h3>
       <div className="set-grid">
-        <Field label="Use timeboxing" hint="Off hides the time controls; timeboxes are kept.">
+        <AutoField a={a} k="enabled" label="Use timeboxing" hint="Off hides the time controls; timeboxes are kept.">
           <label className="set-check">
-            <input type="checkbox" checked={v.enabled} onChange={(e) => setV({ ...v, enabled: e.target.checked })} /> Use timeboxing
+            <input type="checkbox" checked={a.v.enabled} onChange={(e) => a.change("enabled", e.target.checked)} /> Use timeboxing
           </label>
-          <Problems all={problems} field="timebox.enabled" />
-        </Field>
-        <Field label="Put on Outlook" hint="Every new event shows a preview first.">
+        </AutoField>
+        <AutoField a={a} k="outlookDefault" label="Put on Outlook" hint="Every new event shows a preview first.">
           <label className="set-check">
-            <input type="checkbox" checked={v.outlookDefault} onChange={(e) => setV({ ...v, outlookDefault: e.target.checked })} /> On by default
+            <input type="checkbox" checked={a.v.outlookDefault} onChange={(e) => a.change("outlookDefault", e.target.checked)} /> On by default
           </label>
-          <Problems all={problems} field="timebox.outlook_default" />
-        </Field>
-        <Field label="Changes to my own timebox events" hint="Off: no question; every change is still logged and can be undone.">
+        </AutoField>
+        <AutoField a={a} k="confirmOwn" label="Changes to my own timebox events" hint="Off: no question; every change is still logged and can be undone.">
           <label className="set-check">
-            <input type="checkbox" checked={!v.confirmOwn} onChange={(e) => setV({ ...v, confirmOwn: !e.target.checked })} /> Don't ask again for my own timeboxes
+            <input type="checkbox" checked={!a.v.confirmOwn} onChange={(e) => a.change("confirmOwn", !e.target.checked)} /> Don't ask again for my own timeboxes
           </label>
-          <Problems all={problems} field="timebox.confirm_own" />
-        </Field>
+        </AutoField>
       </div>
-      <SaveRow status={status} />
-    </form>
+    </div>
   );
 }
 
 /** Settings > Planning > Help sessions (step 13): length, Teams, how many workdays "Needs help from…" searches. */
-function CollabForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
+function CollabForm(p: FormProps) {
   const c = p.data.collab;
-  const [v, setV] = useState({ meetingMinutes: c.meetingMinutes, teams: c.teams, daysAhead: c.daysAhead, exclude: [...c.exclude] });
+  const a = useAutoSave({
+    section: "collab",
+    initial: { meetingMinutes: c.meetingMinutes, teams: c.teams, daysAhead: c.daysAhead, exclude: [...c.exclude] },
+    payload: (v) => v,
+    onSaved: p.onSavedData,
+    label: (k) => (k === "meetingMinutes" ? "Default length" : k === "teams" ? "Teams meeting" : k === "daysAhead" ? "Days to search" : "People to exclude"),
+  });
   const [adding, setAdding] = useState("");
-  const { problems, status, save } = useSave(p.onSavedData);
+  const add = () => {
+    if (!adding.trim()) return;
+    a.change("exclude", [...a.v.exclude, adding.trim()]);
+    setAdding("");
+  };
   return (
-    <form
-      className="set-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save("collab", v);
-      }}
-    >
+    <div className="set-form">
       <h3>Help sessions</h3>
       <div className="set-grid">
-        <Field label="Default length" hint="Where Needs help from… starts.">
-          <select value={v.meetingMinutes} onChange={(e) => setV({ ...v, meetingMinutes: Number(e.target.value) })}>
+        <AutoField a={a} k="meetingMinutes" label="Default length" hint="Where Needs help from… starts.">
+          <select value={a.v.meetingMinutes} onChange={(e) => a.change("meetingMinutes", Number(e.target.value))}>
             {COLLAB_LENGTHS.map((m) => (
               <option key={m} value={m}>{m} minutes</option>
             ))}
           </select>
-          <Problems all={problems} field="collab.meeting_minutes" />
-        </Field>
-        <Field label="Teams meeting" hint="You can turn it off per invite.">
+        </AutoField>
+        <AutoField a={a} k="teams" label="Teams meeting" hint="You can turn it off per invite.">
           <label className="set-check">
-            <input type="checkbox" checked={v.teams} onChange={(e) => setV({ ...v, teams: e.target.checked })} /> On by default
+            <input type="checkbox" checked={a.v.teams} onChange={(e) => a.change("teams", e.target.checked)} /> On by default
           </label>
-          <Problems all={problems} field="collab.teams" />
-        </Field>
-        <Field label="Days to search" hint="Workdays from today, for items not pinned to a day.">
-          <input type="number" min={1} max={10} step={1} value={v.daysAhead} onChange={(e) => setV({ ...v, daysAhead: Number(e.target.value) })} />
-          <Problems all={problems} field="collab.days_ahead" />
-        </Field>
-        <Field label="People to exclude" hint="Never suggested as helpers or as Who. By name or email.">
+        </AutoField>
+        <AutoField a={a} k="daysAhead" label="Days to search" hint="Workdays from today, for items not pinned to a day.">
+          <input type="number" min={1} max={10} step={1} value={a.v.daysAhead} onChange={(e) => a.set("daysAhead", Number(e.target.value))} {...a.text("daysAhead")} />
+        </AutoField>
+        <AutoField a={a} k="exclude" label="People to exclude" hint="Never suggested as helpers or as Who. By name or email.">
           <ul className="set-list">
-            {v.exclude.map((x, i) => (
+            {a.v.exclude.map((x, i) => (
               <li key={`${x}:${i}`}>
                 <span>{x}</span>
-                <button type="button" className="mini quiet" aria-label={`Remove ${x}`} onClick={() => setV({ ...v, exclude: v.exclude.filter((_, j) => j !== i) })}>Remove</button>
+                <button type="button" className="mini quiet" aria-label={`Remove ${x}`} onClick={() => a.change("exclude", a.v.exclude.filter((_, j) => j !== i))}>Remove</button>
               </li>
             ))}
           </ul>
@@ -661,28 +632,34 @@ function CollabForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  if (adding.trim()) setV({ ...v, exclude: [...v.exclude, adding.trim()] }), setAdding("");
+                  add();
                 }
               }} />
-            <button type="button" className="mini" disabled={!adding.trim()} onClick={() => { setV({ ...v, exclude: [...v.exclude, adding.trim()] }); setAdding(""); }}>Add</button>
+            <button type="button" className="mini" disabled={!adding.trim()} onClick={add}>Add</button>
           </span>
-          <Problems all={problems} field="collab.exclude" />
-        </Field>
-        <ReadOnly label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where="Set in config.toml ([collab] domains)" />
+        </AutoField>
+        <ReadOnly label="Invites go only to" value={c.domains.join(", ") || "No domain yet"} where={p.data.fromFile ? "Set in config.toml ([collab] domains)" : ADMIN} />
       </div>
-      <SaveRow status={status} />
-    </form>
+    </div>
   );
 }
 
+const FOCUS_LABELS: Record<string, string> = { sound: "Default sound", volume: "Volume", fadeSeconds: "Fade", onBreak: "When a break starts", pauseMedia: "Pause music", teamsStatus: "Teams status", plainFocusStatus: "Plain focus status", playlists: "Playlists" };
+
 /** Settings > Focus (step 10): the default sound, volume, fade, what a break sounds like, media pause, playlists. */
-function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
+function FocusForm(p: FormProps) {
   const f = p.data.focus;
-  const [v, setV] = useState({ sound: f.sound, volume: f.volume, fadeSeconds: f.fadeSeconds, onBreak: f.onBreak, pauseMedia: f.pauseMedia, teamsStatus: f.teamsStatus, plainFocusStatus: f.plainFocusStatus });
-  const [lists, setLists] = useState<Playlist[]>(f.playlists);
+  const a = useAutoSave({
+    section: "focus",
+    initial: { sound: f.sound, volume: f.volume, fadeSeconds: f.fadeSeconds, onBreak: f.onBreak, pauseMedia: f.pauseMedia, teamsStatus: f.teamsStatus, plainFocusStatus: f.plainFocusStatus, playlists: f.playlists as Playlist[] },
+    payload: (v) => ({ ...v, playlists: v.playlists.filter((l) => l.name.trim() || l.url.trim()) }),
+    onSaved: p.onSavedData,
+    label: (k) => FOCUS_LABELS[k as string] ?? "Focus",
+  });
+  const v = a.v;
+  const lists = v.playlists;
   const [media, setMedia] = useState<{ players: boolean; spotify: boolean } | null>(null);
   const [previewing, setPreviewing] = useState(false);
-  const { problems, status, save } = useSave(p.onSavedData);
   useEffect(() => {
     call<{ players: boolean; spotify: boolean }>("media.status", {}).then(setMedia, () => setMedia(null));
   }, []);
@@ -698,38 +675,35 @@ function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
     }, 6000);
   };
   const badLink = (u: string) => !!u.trim() && !playlistLink(u);
+  // A playlist row saves when you leave it, and only once its link is a good one (or empty).
+  const editList = (i: number, patch: Partial<Playlist>) => a.set("playlists", lists.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const leaveList = () => {
+    if (!lists.some((l) => badLink(l.url))) a.commit("playlists");
+  };
   return (
-    <form
-      className="set-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save("focus", { ...v, playlists: lists.filter((l) => l.name.trim() || l.url.trim()) });
-      }}
-    >
+    <div className="set-form">
       <h3>Teams status</h3>
       <p className="muted">Set while focus runs, back to automatic after. A change you make in Teams wins.</p>
       <div className="set-grid">
-        <Field label="Set Teams status during focus" hint="Logged in Data › Teams status log.">
+        <AutoField a={a} k="teamsStatus" label="Set Teams status during focus" hint="Logged in Data › Teams status log.">
           <label className="set-check">
-            <input type="checkbox" checked={v.teamsStatus} onChange={(e) => setV({ ...v, teamsStatus: e.target.checked })} /> Set my status while I focus
+            <input type="checkbox" checked={v.teamsStatus} onChange={(e) => a.change("teamsStatus", e.target.checked)} /> Set my status while I focus
           </label>
           <TeamsAccessLine />
-          <Problems all={problems} field="focus.teams_status" />
-        </Field>
-        <Field label="Plain focus sets" hint="Deep focus always sets Do not disturb.">
-          <select value={v.plainFocusStatus} disabled={!v.teamsStatus} onChange={(e) => setV({ ...v, plainFocusStatus: e.target.value as "busy" | "none" })}>
+        </AutoField>
+        <AutoField a={a} k="plainFocusStatus" label="Plain focus sets" hint="Deep focus always sets Do not disturb.">
+          <select value={v.plainFocusStatus} disabled={!v.teamsStatus} onChange={(e) => a.change("plainFocusStatus", e.target.value as "busy" | "none")}>
             <option value="busy">Busy</option>
             <option value="none">Nothing: leave my status alone</option>
           </select>
-          <Problems all={problems} field="focus.plain_focus_status" />
-        </Field>
+        </AutoField>
       </div>
       <h3>Sound while focusing</h3>
       <p className="muted">Plays only while focus runs. The focus screen can pick another.</p>
       <div className="set-grid">
-        <Field label="Default sound" hint={BINAURAL[v.sound as SoundKind] ? "Binaural beats need headphones." : "Brown is deep, pink brighter, rain a slow swell."}>
+        <AutoField a={a} k="sound" label="Default sound" hint={BINAURAL[v.sound as SoundKind] ? "Binaural beats need headphones." : "Brown is deep, pink brighter, rain a slow swell."}>
           <span className="set-inline">
-            <select value={v.sound} onChange={(e) => setV({ ...v, sound: e.target.value as SoundKind })}>
+            <select value={v.sound} onChange={(e) => a.change("sound", e.target.value as SoundKind)}>
               {SOUNDS.map((k) => (
                 <option key={k} value={k}>{SOUND_NAMES[k]}</option>
               ))}
@@ -738,27 +712,27 @@ function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
               {previewing ? "Playing…" : "Try it"}
             </button>
           </span>
-          <Problems all={problems} field="focus.sound" />
-        </Field>
-        <Field label={`Volume (${v.volume})`} hint="0 to 100.">
-          <input type="range" min={0} max={100} step={5} value={v.volume} onChange={(e) => { setV({ ...v, volume: Number(e.target.value) }); sound.setVolume(Number(e.target.value)); }} />
-          <Problems all={problems} field="focus.volume" />
-        </Field>
-        <Field label="Fade in and out (seconds)" hint="0 to 30.">
-          <input type="number" min={0} max={30} step={1} value={v.fadeSeconds} onChange={(e) => setV({ ...v, fadeSeconds: Number(e.target.value) })} />
-          <Problems all={problems} field="focus.fade_seconds" />
-        </Field>
-        <Field label="When a break starts" hint="The sound stops either way.">
-          <select value={v.onBreak} onChange={(e) => setV({ ...v, onBreak: e.target.value as "silence" | "chime" })}>
+        </AutoField>
+        <AutoField a={a} k="volume" label={`Volume (${v.volume})`} hint="0 to 100.">
+          <input type="range" min={0} max={100} step={5} value={v.volume}
+            onChange={(e) => { a.set("volume", Number(e.target.value)); sound.setVolume(Number(e.target.value)); }}
+            onPointerUp={() => a.commit("volume")} onKeyUp={() => a.commit("volume")} onBlur={() => a.commit("volume")} />
+        </AutoField>
+        <AutoField a={a} k="fadeSeconds" label="Fade in and out (seconds)" hint="0 to 30.">
+          <input type="number" min={0} max={30} step={1} value={v.fadeSeconds} onChange={(e) => a.set("fadeSeconds", Number(e.target.value))} {...a.text("fadeSeconds")} />
+        </AutoField>
+        <AutoField a={a} k="onBreak" label="When a break starts" hint="The sound stops either way.">
+          <select value={v.onBreak} onChange={(e) => a.change("onBreak", e.target.value as "silence" | "chime")}>
             <option value="silence">Silence</option>
             <option value="chime">A soft chime</option>
           </select>
-          <Problems all={problems} field="focus.on_break" />
-        </Field>
+        </AutoField>
       </div>
       <h3>Music players</h3>
       <div className="set-grid">
-        <Field
+        <AutoField
+          a={a}
+          k="pauseMedia"
           label="Pause and resume music"
           hint={
             media === null
@@ -769,135 +743,116 @@ function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
           }
         >
           <label className="set-check">
-            <input type="checkbox" checked={v.pauseMedia} disabled={media !== null && !media.players && !v.pauseMedia} onChange={(e) => setV({ ...v, pauseMedia: e.target.checked })} /> Pause music when focus ends
+            <input type="checkbox" checked={v.pauseMedia} disabled={media !== null && !media.players && !v.pauseMedia} onChange={(e) => a.change("pauseMedia", e.target.checked)} /> Pause music when focus ends
           </label>
-          <Problems all={problems} field="focus.pause_media" />
-        </Field>
+        </AutoField>
       </div>
       <h3>Playlists</h3>
       <p className="muted">
-        Save up to {MAX_PLAYLISTS} Spotify or YouTube links. Choosing one on the focus screen opens it: {media?.spotify ? "Spotify links in the Spotify app" : "in your default browser (the Spotify app isn't installed)"}.
+        Keep up to {MAX_PLAYLISTS} Spotify or YouTube links. Choosing one on the focus screen opens it: {media?.spotify ? "Spotify links in the Spotify app" : "in your default browser (the Spotify app isn't installed)"}.
       </p>
       <ul className="set-playlists">
         {lists.map((l, i) => (
           <li key={i}>
-            <input value={l.name} placeholder="Name" aria-label={`Playlist ${i + 1} name`} maxLength={60} onChange={(e) => setLists(lists.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-            <input value={l.url} placeholder="https://open.spotify.com/playlist/… or https://www.youtube.com/playlist?list=…" aria-label={`Playlist ${i + 1} link`} maxLength={500} aria-invalid={badLink(l.url)} onChange={(e) => setLists(lists.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} />
-            <button type="button" className="mini quiet" onClick={() => setLists(lists.filter((_, j) => j !== i))} aria-label={`Remove playlist ${l.name || i + 1}`}>
+            <input value={l.name} placeholder="Name" aria-label={`Playlist ${i + 1} name`} maxLength={60} onChange={(e) => editList(i, { name: e.target.value })} onBlur={leaveList} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), leaveList())} />
+            <input value={l.url} placeholder="https://open.spotify.com/playlist/… or https://www.youtube.com/playlist?list=…" aria-label={`Playlist ${i + 1} link`} maxLength={500} aria-invalid={badLink(l.url)} onChange={(e) => editList(i, { url: e.target.value })} onBlur={leaveList} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), leaveList())} />
+            <button type="button" className="mini quiet" onClick={() => a.change("playlists", lists.filter((_, j) => j !== i))} aria-label={`Remove playlist ${l.name || i + 1}`}>
               Remove
             </button>
             {badLink(l.url) && <span className="field-problem">Only Spotify or YouTube links (https)</span>}
-            <Problems all={problems} field={`focus.playlists[${i}]`} />
           </li>
         ))}
       </ul>
-      {lists.length < MAX_PLAYLISTS && (
-        <button type="button" className="mini" onClick={() => setLists([...lists, { name: "", url: "" }])}>
-          Add a playlist
-        </button>
-      )}
-      <Problems all={problems} field="focus.playlists" />
-      <SaveRow status={status} />
-    </form>
+      <span className="set-inline">
+        {lists.length < MAX_PLAYLISTS && (
+          <button type="button" className="mini" onClick={() => a.set("playlists", [...lists, { name: "", url: "" }])}>
+            Add a playlist
+          </button>
+        )}
+        <SaveMark s={a.status("playlists")} retry={() => a.commit("playlists")} />
+      </span>
+    </div>
   );
 }
 
 /** Settings > You (step 15.5, Q87): whether the morning box's Start starts the VM at once. */
-function VmStartForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
-  const [on, setOn] = useState(p.data.vm.startWithoutAsking);
-  const { problems, status, save } = useSave(p.onSavedData);
+function VmStartForm(p: FormProps) {
+  const a = useAutoSave({ section: "vm", initial: { startWithoutAsking: p.data.vm.startWithoutAsking }, payload: (v) => v, onSaved: p.onSavedData, label: () => "Start my VM without asking" });
   return (
     <div className="set-grid set-vm-start">
-      <Field label="Start my VM without asking" hint={'Start in the morning prompt skips the preview. Stop always previews.'}>
+      <AutoField a={a} k="startWithoutAsking" label="Start my VM without asking" hint={"Start in the morning prompt skips the preview. Stop always previews."}>
         <label className="set-check">
-          <input type="checkbox" checked={on} onChange={(e) => { setOn(e.target.checked); void save("vm", { startWithoutAsking: e.target.checked }); }} /> Start right away
+          <input type="checkbox" checked={a.v.startWithoutAsking} onChange={(e) => a.change("startWithoutAsking", e.target.checked)} /> Start right away
         </label>
-        <Problems all={problems} field="azure.start_without_asking" />
-        {status && <span className="set-hint" role="status">{status}</span>}
-      </Field>
+      </AutoField>
+    </div>
+  );
+}
+
+/** Settings > Roadmap (step 17): when a row reads Stalled or Watch. Whole numbers. */
+function RoadmapForm(p: FormProps) {
+  const r = p.data.roadmap;
+  const a = useAutoSave({ section: "roadmap", initial: { stalledDays: r.stalledDays, watchWeeks: r.watchWeeks }, payload: (v) => v, onSaved: p.onSavedData, label: (k) => (k === "stalledDays" ? "Stalled after" : "Watch within") });
+  return (
+    <div className="set-form">
+      <p className="muted">When a Roadmap row reads Stalled or Watch.</p>
+      <div className="set-grid">
+        <AutoField a={a} k="stalledDays" label="Stalled after (days)" hint="Days with no story change. 3 to 60.">
+          <input type="number" min={3} max={60} step={1} value={a.v.stalledDays} onChange={(e) => a.set("stalledDays", Math.round(Number(e.target.value)))} {...a.text("stalledDays")} />
+        </AutoField>
+        <AutoField a={a} k="watchWeeks" label="Watch within (weeks)" hint="Forecast this close to the target. 0 to 4; 0 is never.">
+          <input type="number" min={0} max={4} step={1} value={a.v.watchWeeks} onChange={(e) => a.set("watchWeeks", Math.round(Number(e.target.value)))} {...a.text("watchWeeks")} />
+        </AutoField>
+      </div>
     </div>
   );
 }
 
 /** Settings > Notifications (step 15.5): a switch per kind, quiet hours, held during focus, a test. */
-/** Settings > Roadmap (step 17): when a row reads Stalled or Watch. Whole numbers. */
-function RoadmapForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
-  const r = p.data.roadmap;
-  const [v, setV] = useState({ stalledDays: r.stalledDays, watchWeeks: r.watchWeeks });
-  const { problems, status, save } = useSave(p.onSavedData);
-  return (
-    <form
-      className="set-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save("roadmap", v);
-      }}
-    >
-      <p className="muted">When a Roadmap row reads Stalled or Watch.</p>
-      <div className="set-grid">
-        <Field label="Stalled after (days)" hint="Days with no story change. 3 to 60.">
-          <input type="number" min={3} max={60} step={1} value={v.stalledDays} onChange={(e) => setV({ ...v, stalledDays: Math.round(Number(e.target.value)) })} />
-          <Problems all={problems} field="roadmap.stalled_days" />
-        </Field>
-        <Field label="Watch within (weeks)" hint="Forecast this close to the target. 0 to 4; 0 is never.">
-          <input type="number" min={0} max={4} step={1} value={v.watchWeeks} onChange={(e) => setV({ ...v, watchWeeks: Math.round(Number(e.target.value)) })} />
-          <Problems all={problems} field="roadmap.watch_weeks" />
-        </Field>
-      </div>
-      <SaveRow status={status} />
-    </form>
-  );
-}
-
-function NotifyForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
+function NotifyForm(p: FormProps) {
   const n = p.data.notify;
-  const [kinds, setKinds] = useState<Record<NotifyKind, boolean>>({ ...n.kinds });
-  const [quiet, setQuiet] = useState(n.quiet);
-  const [quietPto, setQuietPto] = useState(n.quietPto);
+  const a = useAutoSave({
+    section: "notify",
+    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto },
+    payload: (v) => v,
+    onSaved: p.onSavedData,
+    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : "Quiet on PTO days"),
+  });
   const [test, setTest] = useState<string | null>(null);
-  const { problems, status, save } = useSave(p.onSavedData);
   const group = (title: string, list: readonly NotifyKind[]) => (
     <fieldset className="set-notify-group">
       <legend>{title}</legend>
       {list.map((k) => (
         <label key={k} className="set-notify-row">
-          <input type="checkbox" checked={kinds[k]} onChange={(e) => setKinds({ ...kinds, [k]: e.target.checked })} />
+          <input type="checkbox" checked={a.v.kinds[k]} onChange={(e) => a.change("kinds", { ...a.v.kinds, [k]: e.target.checked })} />
           <span className="set-notify-name">{KIND_LABEL[k]}</span>
           <span className="set-hint">{KIND_HINT[k]}</span>
-          <Problems all={problems} field={`notify.${k}`} />
         </label>
       ))}
     </fieldset>
   );
   return (
-    <form
-      className="set-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save("notify", { kinds, quiet, quietPto });
-      }}
-    >
+    <div className="set-form">
       <p className="muted">Each is sent once; a click opens FocusTime there.</p>
       <div className="set-notify">
         {group("Ritual reminders", RITUAL_KINDS)}
         {group("While you focus", ["timer", "meeting"])}
         {group("Other", ["vm", "followups", "expiry"])}
       </div>
+      <SaveMark s={a.status("kinds")} retry={() => a.commit("kinds")} />
       <h3>Quiet hours</h3>
       <div className="set-grid">
-        <Field label="Quiet" hint="Focus timer and meeting warnings still come.">
-          <select value={quiet} onChange={(e) => setQuiet(e.target.value as QuietMode)}>
+        <AutoField a={a} k="quiet" label="Quiet" hint="Focus timer and meeting warnings still come.">
+          <select value={a.v.quiet} onChange={(e) => a.change("quiet", e.target.value as QuietMode)}>
             <option value="outside_hours">Outside working hours</option>
             <option value="off">Never quiet</option>
           </select>
-          <Problems all={problems} field="notify.quiet" />
-        </Field>
-        <Field label="Days off" hint="PTO days from Dataverse.">
+        </AutoField>
+        <AutoField a={a} k="quietPto" label="Days off" hint="PTO days from Dataverse.">
           <label className="set-check">
-            <input type="checkbox" checked={quietPto} onChange={(e) => setQuietPto(e.target.checked)} /> Quiet on PTO days
+            <input type="checkbox" checked={a.v.quietPto} onChange={(e) => a.change("quietPto", e.target.checked)} /> Quiet on PTO days
           </label>
-          <Problems all={problems} field="notify.quiet_pto" />
-        </Field>
+        </AutoField>
       </div>
       <h3>During a focus session</h3>
       <p className="muted">The rest wait and come as one after the session.</p>
@@ -914,36 +869,32 @@ function NotifyForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDa
         </button>
         {test && <span className="set-hint" role="status">{test}</span>}
       </div>
-      <SaveRow status={status} />
-    </form>
+    </div>
   );
 }
 
-function RiskForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
+function RiskForm(p: FormProps) {
   const r = p.data.risk!;
-  const [v, setV] = useState({ meetingWatchMinutes: r.meetingWatchMinutes, meetingAtRiskMinutes: r.meetingAtRiskMinutes, minFocusWindowMinutes: r.minFocusWindowMinutes });
-  const { problems, status, save } = useSave(p.onSavedData);
-  const num = (k: keyof typeof v, label: string, field: string, hint: string) => (
-    <Field label={label} hint={hint}>
-      <input type="number" min={0} max={600} step={5} value={v[k]} onChange={(e) => setV({ ...v, [k]: Number(e.target.value) })} />
-      <Problems all={problems} field={field} />
-    </Field>
+  const a = useAutoSave({
+    section: "risk",
+    initial: { meetingWatchMinutes: r.meetingWatchMinutes, meetingAtRiskMinutes: r.meetingAtRiskMinutes, minFocusWindowMinutes: r.minFocusWindowMinutes },
+    payload: (v) => v,
+    onSaved: p.onSavedData,
+    label: (k) => (k === "meetingWatchMinutes" ? "Watch at" : k === "meetingAtRiskMinutes" ? "At risk at" : "Shortest useful focus window"),
+  });
+  const num = (k: keyof typeof a.v, label: string, hint: string) => (
+    <AutoField a={a} k={k} label={label} hint={hint}>
+      <input type="number" min={0} max={600} step={5} value={a.v[k]} onChange={(e) => a.set(k, Number(e.target.value))} {...a.text(k)} />
+    </AutoField>
   );
   return (
-    <form
-      className="set-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save("risk", v);
-      }}
-    >
+    <div className="set-form">
       <div className="set-grid">
-        {num("meetingWatchMinutes", "Watch at (minutes of meetings)", "risk.meeting_watch_minutes", "A block with this many minutes of meetings is marked Watch.")}
-        {num("meetingAtRiskMinutes", "At risk at (minutes of meetings)", "risk.meeting_at_risk_minutes", "At least the Watch value.")}
-        {num("minFocusWindowMinutes", "Shortest useful focus window (minutes)", "risk.min_focus_window_minutes", "With no free stretch this long, the block is at risk.")}
+        {num("meetingWatchMinutes", "Watch at (minutes of meetings)", "A block with this many minutes of meetings is marked Watch.")}
+        {num("meetingAtRiskMinutes", "At risk at (minutes of meetings)", "At least the Watch value.")}
+        {num("minFocusWindowMinutes", "Shortest useful focus window (minutes)", "With no free stretch this long, the block is at risk.")}
       </div>
-      <SaveRow status={status} />
-    </form>
+    </div>
   );
 }
 
@@ -978,55 +929,46 @@ function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSa
 
 function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; data: SettingsData; onSavedData: (d: SettingsData) => void }) {
   const reached = data.dataverseReached;
-  const [name, setName] = useState(c.setting.name ?? "");
-  const [color, setColor] = useState(c.setting.color ?? "");
-  const [open, setOpen] = useState(c.setting.openStates.join(", "));
-  const [keep, setKeep] = useState(c.setting.follow);
-  const { problems, status, save } = useSave(onSavedData);
-  const f = `clients.${c.key}`;
+  const a = useAutoSave({
+    section: "client",
+    initial: { name: c.setting.name ?? "", color: c.setting.color ?? "", open: c.setting.openStates.join(", "), keep: c.setting.follow },
+    payload: (v) => ({ key: c.key, name: v.name, color: v.color, openStates: v.open.split(",").map((x) => x.trim()).filter(Boolean), follow: v.keep }),
+    onSaved: onSavedData,
+    label: (k) => `${c.setting.name ?? c.key}: ${k === "name" ? "Shown as" : k === "color" ? "Color" : k === "open" ? "States treated as open" : "Keep following"}`,
+  });
+  const color = a.v.color;
   return (
-    <form
-      className="set-form set-client"
-      style={{ "--c": color ? (color.startsWith("#") ? color : `var(--client-${color})`) : "var(--client-none)" } as CSSProperties}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save("client", { key: c.key, name, color, openStates: open.split(",").map((x) => x.trim()).filter(Boolean), follow: keep });
-      }}
-    >
+    <div className="set-form set-client" style={{ "--c": color ? (color.startsWith("#") ? color : `var(--client-${color})`) : "var(--client-none)" } as CSSProperties}>
       <h3>
         <span className="swatch" /> {c.setting.name ?? c.key}
       </h3>
       <div className="set-grid">
         <ReadOnly label="Dataverse nickname" value={c.dataverseName ?? c.key} where="Change this in Dataverse" />
         <ReadOnly label="Your DevOps identity" value={c.devopsEmail ?? (reached ? null : "unknown until Dataverse connects")} where="Change this in Dataverse" />
-        <Field label="Shown as" hint="Empty shows the Dataverse nickname.">
-          <input value={name} placeholder={c.key} maxLength={60} onChange={(e) => setName(e.target.value)} />
-          <Problems all={problems} field={`${f}.name`} />
-        </Field>
+        <AutoField a={a} k="name" label="Shown as" hint="Empty shows the Dataverse nickname.">
+          <input value={a.v.name} placeholder={c.key} maxLength={60} onChange={(e) => a.set("name", e.target.value)} {...a.text("name")} />
+        </AutoField>
         <fieldset className="set-choice palette">
           <legend>Color</legend>
           {data.palette.map((slot) => (
             <label key={slot} className="slot" title={slot}>
-              <input type="radio" name={`color-${c.key}`} checked={color === slot} onChange={() => setColor(slot)} aria-label={slot} />
+              <input type="radio" name={`color-${c.key}`} checked={color === slot} onChange={() => a.change("color", slot)} aria-label={slot} />
               <span className="slot-swatch" style={{ background: `var(--client-${slot})` }} />
             </label>
           ))}
           {color.startsWith("#") && <span className="set-hint">Custom color {color} (pick a palette color to use theme-aware colors)</span>}
-          <Problems all={problems} field={`${f}.color`} />
+          <SaveMark s={a.status("color")} retry={() => a.commit("color")} />
         </fieldset>
-        <Field label="Followed" hint={followText(c.follow, data.planning.followGraceDays)}>
+        <AutoField a={a} k="keep" label="Followed" hint={followText(c.follow, data.planning.followGraceDays)}>
           <label className="set-check">
-            <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} disabled={c.follow?.why === "internal" || c.follow?.why === "standing"} /> Keep following
+            <input type="checkbox" checked={a.v.keep} onChange={(e) => a.change("keep", e.target.checked)} disabled={c.follow?.why === "internal" || c.follow?.why === "standing"} /> Keep following
           </label>
-          <Problems all={problems} field={`${f}.follow`} />
-        </Field>
-        <Field label='States treated as open' hint="Done states this client still works in, like Resolved.">
-          <input value={open} placeholder="none" onChange={(e) => setOpen(e.target.value)} />
-          <Problems all={problems} field={`${f}.open_states`} />
-        </Field>
+        </AutoField>
+        <AutoField a={a} k="open" label="States treated as open" hint="Done states this client still works in, like Resolved.">
+          <input value={a.v.open} placeholder="none" onChange={(e) => a.set("open", e.target.value)} {...a.text("open")} />
+        </AutoField>
       </div>
-      <SaveRow status={status} />
-    </form>
+    </div>
   );
 }
 
@@ -1209,7 +1151,7 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
         <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} title="DevOps doesn't tell FocusTime the expiry; copy it from the PAT page" />
       </label>
       <button type="submit" className="mini primary" disabled={busy}>
-        {busy ? "Checking…" : "Save"}
+        {busy ? "Checking…" : "Check and save"}
       </button>
       {w && (
         <button
