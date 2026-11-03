@@ -1,7 +1,7 @@
 // Step 15.4: who FocusTime works for (one Microsoft sign-in) and my Azure VM. The sign-in screen on first open and after
-// sign-out, the person in the top bar, the VM chip (top bar and Today) with Start, Stop and the auto-shutdown choices,
-// their preview, Today's morning prompt and "still changed" warning, Settings > You (sign out, find and confirm my VM)
-// and the Azure write log in Settings > Data.
+// sign-out, the person in the top bar, the VM chip (top bar) with Start and its preview, the auto-shutdown time shown
+// read only (D465), Today's morning prompt, Settings > You (sign out, find and confirm my VM) and the Azure write log
+// in Settings > Data.
 import { Avatar, forgetPhotos, usePhotos, usePresence } from "./Presence.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AuthStatus, AzureWriteEntry, Person, TeamsStatusEntry, VmPreview, VmPreviewOp, VmStatus } from "../actions/account-types.ts";
@@ -240,14 +240,7 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
     const items: MenuItem[] = [];
     if (s?.vm) {
       if (s.canStart) items.push({ id: "start", label: "Start", action: "vm.preview", run: () => act("start") });
-      if (s.canStop) items.push({ id: "stop", label: "Stop (deallocate)…", action: "vm.preview", danger: true, run: () => act("deallocate") });
-      if (s.schedule) {
-        const off = s.schedule.status === "Disabled" ? "Auto-shutdown is already off tonight" : undefined;
-        items.push({ id: "d1", label: "Delay shutdown 1h", group: "Auto-shutdown", action: "vm.preview", ...(off ? { disabled: off } : {}), run: () => act("delay60") });
-        items.push({ id: "d2", label: "Delay shutdown 2h", group: "Auto-shutdown", action: "vm.preview", ...(off ? { disabled: off } : {}), run: () => act("delay120") });
-        items.push({ id: "skip", label: "Skip tonight", group: "Auto-shutdown", action: "vm.preview", ...(off ? { disabled: off } : {}), run: () => act("skip") });
-      }
-      if (s.change) items.push({ id: "restore", label: "Restore auto-shutdown", group: "Auto-shutdown", hint: s.change.text, action: "vm.preview", run: () => act("restore") });
+      // D465: Start is the only change. No Stop, and nothing that touches the auto-shutdown schedule (the chip shows it).
       if (s.needsConsent) items.push({ id: "consent", label: "Allow Azure access…", run: () => void signIn(true).then((m) => (m ? notify(m) : void refresh(true))) });
       items.push({ id: "refresh", label: "Refresh", run: () => void refresh(true) });
     }
@@ -285,11 +278,6 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
 
 const DONE: Record<VmPreviewOp, string> = {
   start: "Starting your VM. FocusTime follows it until it's running",
-  deallocate: "Stopping your VM. FocusTime follows it until it's deallocated",
-  delay60: "Auto-shutdown delayed 1 hour. It goes back tomorrow morning",
-  delay120: "Auto-shutdown delayed 2 hours. It goes back tomorrow morning",
-  skip: "Auto-shutdown skipped tonight. It goes back tomorrow morning",
-  restore: "Auto-shutdown restored",
 };
 
 function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => void; onDone: (msg: string) => void }) {
@@ -319,7 +307,7 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
           <button
             ref={first}
             type="button"
-            className={`commit${p.op === "deallocate" ? " danger" : ""}`}
+            className="commit"
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -338,7 +326,7 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
           </button>
           <button type="button" className="mini quiet" disabled={busy} onClick={onClose}>Cancel</button>
         </div>
-        <p className="set-hint">Logged in Settings &gt; Data. {p.op === "start" || p.op === "deallocate" ? "No undo: use the opposite action instead." : "FocusTime puts the schedule back itself."}</p>
+        <p className="set-hint">Logged in Settings &gt; Data. FocusTime never changes your VM's auto-shutdown.</p>
       </div>
     </div>
   );
@@ -346,14 +334,14 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
 
 /**
  * The VM chip (step 16.3: the single place for VM status, in the header on every tab): "VM Running · off at 7:30 PM".
- * Opens the VM menu: Start, Stop, Delay 1h / 2h, Skip tonight, Restore, Allow Azure access.
+ * The auto-shutdown time is read from Azure and only shown (D465). Opens the VM menu: Start, Allow Azure access, Refresh.
  */
 export function VmChip() {
   const { status, openMenu } = useContext(VmCtx);
   if (!status?.vm) return null;
   const chip = status.chip ?? "unknown";
   const text = status.text ?? status.label ?? "Unknown";
-  const extra = [status.change?.text, status.needsConsent ? "FocusTime needs your OK to use Azure: open this menu and choose Allow Azure access" : status.error?.message].filter(Boolean).join(". ");
+  const extra = [status.needsConsent ? "FocusTime needs your OK to use Azure: open this menu and choose Allow Azure access" : status.error?.message].filter(Boolean).join(". ");
   return (
     <button
       type="button"
@@ -374,13 +362,12 @@ export function VmChip() {
 
 /** U2: whether Today's attention line has a VM prompt to show (VmToday renders it). */
 export function vmNeedsToday(status: VmApi["status"]): boolean {
-  return !!status?.vm && ((!!status.stillChanged && !!status.change) || !!status.prompt);
+  return !!status?.vm && !!status.prompt;
 }
 
 /**
  * Today (step 16.3, U2): only the prompts that need me now, as chips in the attention line. The morning "VM is off.
- * Start?" and "Auto-shutdown is still changed" after a restore failed (the hard rule: a changed schedule is put back
- * or shown on Today). Everything else is on the header chip.
+ * Start?". Everything else is on the header chip.
  */
 export function VmToday() {
   const { status, refresh, act } = useContext(VmCtx);
@@ -388,31 +375,6 @@ export function VmToday() {
   if (!status?.vm) return null;
   return (
     <>
-      {status.stillChanged && status.change && (
-        <span className="att-chip vm warn" role="alert" title={`${status.change.text}.${status.change.message ? ` FocusTime couldn't put it back: ${status.change.message}.` : ""}`}>
-          <span className="att-tag">Auto-shutdown is still changed</span>
-          <span>{status.change.text}</span>
-          <button
-            type="button"
-            className="mini"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                const r = await call<{ message: string }>("vm.restore", { vmId: status.vm!.id });
-                notify(r.message);
-              } catch (e) {
-                notify(errText(e));
-              } finally {
-                setBusy(false);
-                void refresh(true);
-              }
-            }}
-          >
-            Restore
-          </button>
-        </span>
-      )}
       {status.prompt && (
         <span className="att-chip vm" title={`${status.vm.name} · ${status.label}`}>
           <span className="att-tag">VM is off</span>
@@ -508,7 +470,7 @@ export function YouAccount() {
           <span className="set-value">
             {vm.status?.vm ? <>{vm.status.vm.name} <span className="muted">{vm.status.vm.resourceGroup} · {vm.status.vm.location}</span></> : <span className="muted">None chosen yet</span>}
           </span>
-          <span className="set-hint">FocusTime changes only this VM: start, stop and auto-shutdown.</span>
+          <span className="set-hint">FocusTime only starts this VM. It never stops it or changes its auto-shutdown.</span>
           <span className="set-actions">
             <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setFound(await call<Found>("vm.find", {})))}>Find my VM</button>
             {vm.status?.vm && <button type="button" className="mini quiet" disabled={busy} onClick={() => void choose(null)}>Forget</button>}
@@ -554,7 +516,7 @@ export function YouAccount() {
 
 // ---- Settings > Data ----
 
-const AZ_OP: Record<AzureWriteEntry["op"], string> = { start: "Started", deallocate: "Stopped (deallocated)", shutdown_change: "Changed auto-shutdown", shutdown_restore: "Restored auto-shutdown" };
+const AZ_OP: Record<AzureWriteEntry["op"], string> = { start: "Started", deallocate: "Stopped (deallocated)", shutdown_change: "Changed auto-shutdown", shutdown_restore: "Auto-shutdown restore" };
 const AZ_STATUS: Record<AzureWriteEntry["status"], string> = { pending: "In progress", confirmed: "Confirmed", failed: "Failed", timed_out: "Timed out", refused: "Refused" };
 const sched = (v: unknown) => {
   const o = v as { time?: string; status?: string; power?: string } | null;
@@ -574,7 +536,7 @@ export function AzureWriteLog({ tz }: { tz: string }) {
   return (
     <section className="write-log" aria-label="Azure write log">
       <h3>Azure write log</h3>
-      <p className="muted">Every start, stop and auto-shutdown change on your VM: when, the result and what it was before. Power actions have no undo; the opposite action is in the VM menu.</p>
+      <p className="muted">Every start of your VM: when, the result and what it was before. Older rows may show stops and auto-shutdown changes from before FocusTime stopped making them.</p>
       {error && <p className="set-problem">{error}</p>}
       {log && !log.length && <p className="muted">Nothing written yet.</p>}
       {log && log.length > 0 && (

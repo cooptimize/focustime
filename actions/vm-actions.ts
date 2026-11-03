@@ -1,27 +1,23 @@
-// My VM (step 15.4): find it by owner tag, confirm it, show its power state and auto-shutdown, start and stop it,
-// delay or skip tonight's shutdown and put the schedule back the next morning. Every change goes through the write
-// framework: preview, confirm, read back (the real power state, or the schedule read again), audit log. No undo for
-// power actions (the opposite action is offered instead); a schedule change is undone by its restore.
-// FocusTime only reads status, starts, deallocates and updates the auto-shutdown schedule, and only for the VM the
-// signed-in person confirmed: every call takes that VM from the store, never from the request.
+// My VM (step 15.4): find it by owner tag, confirm it, show its power state and its auto-shutdown time, and start it.
+// fix/vm-schedule (D465): FocusTime never changes a VM's auto-shutdown schedule (no delay, no skip, no restore) and
+// never stops a VM; the Azure client refuses anything but the reads and start (sources/azure/client.ts ALLOWED).
+// Start goes through the write framework: preview, confirm, read back (the real power state), audit log; no undo.
+// Only for the VM the signed-in person confirmed: every call takes that VM from the store, never from the request.
 import { randomUUID } from "node:crypto";
 import type { AppConfig } from "../config/schema.ts";
 import { hoursOn } from "../week/hours.ts";
 import { localToday } from "../week/dates.ts";
 import type { IsoDate } from "../week/types.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
-import { AzureError, parseVmId, sameVm, scheduleBody, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
-import {
-  applyChoice, canStart, canStop, chipOf, CHIP_LABEL, chipText, morningPrompt, reached, refreshMs, restoreAttemptDue, restorePlan, shutdownFrom, shutdownLabel, shutdownTime, stillChanged,
-  type PowerState, type Shutdown, type ShutdownChange, type ShutdownChoice, type VmOp, type VmTransition,
-} from "../plan/vm.ts";
-import type { AzureWriteEntry, PlanStore } from "../store/plan-store.ts";
+import { AzureError, parseVmId, sameVm, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
+import { canStart, chipOf, CHIP_LABEL, chipText, morningPrompt, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
+import type { PlanStore } from "../store/plan-store.ts";
 import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import type { ChosenVm, VmError, VmPreview, VmPreviewOp, VmStatus } from "./account-types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const VM_ACTIONS = ["vm.find", "vm.choose", "vm.status", "vm.preview", "vm.confirm", "vm.restore", "vm.dismiss_prompt", "vm.log", "vm.start_now"] as const;
+export const VM_ACTIONS = ["vm.find", "vm.choose", "vm.status", "vm.preview", "vm.confirm", "vm.dismiss_prompt", "vm.log", "vm.start_now"] as const;
 export type VmAction = (typeof VM_ACTIONS)[number];
 
 export type VmContext = {
@@ -32,16 +28,17 @@ export type VmContext = {
   azure: ((token: () => Promise<string>) => AzureClient) | null;
   now: () => string;
   sleep?: (ms: number) => Promise<void>;
-  /** Whether a focus session runs (Stop warns). */
+  /** Whether a focus session runs. */
   focusRunning: () => Promise<boolean>;
   /** A workday for the morning prompt: working hours and not PTO. */
   workday: (cfg: AppConfig, date: IsoDate) => Promise<boolean>;
 };
 
 export const vmKey = (oid: string) => `vm:${oid}`;
+/** A schedule change from before D465 (never acted on now; store/vm-restores.ts marks it cancelled). */
 export const shutdownKey = (vmId: string) => `vm_shutdown:${vmId.toLowerCase()}`;
 export const PROMPT_MARKER = "vm_prompt";
-/** How long a start or stop may take before FocusTime says it timed out. */
+/** How long a start may take before FocusTime says it timed out. */
 export const POWER_TIMEOUT_MS = 15 * 60_000;
 const PREVIEW_MS = 5 * 60_000;
 
@@ -101,16 +98,10 @@ function guard(vm: ChosenVm | null, asked: unknown): ActionResponse | null {
   return null;
 }
 
-async function readSchedule(c: AzureClient, vm: ChosenVm): Promise<{ raw: Record<string, unknown> | null; s: Shutdown | null }> {
+async function readSchedule(c: AzureClient, vm: ChosenVm): Promise<Shutdown | null> {
   const raw = await c.getSchedule(refOf(vm));
-  return { raw, s: raw ? shutdownFrom(raw) : null };
+  return raw ? shutdownFrom(raw) : null;
 }
-
-const changeText = (c: ShutdownChange, tz: string, today: IsoDate) => {
-  const orig = c.original.status === "Disabled" ? "off" : shutdownTime({ time: c.original.time, timeZoneId: c.timeZoneId ?? "UTC" }, tz, today);
-  const now = c.changed.status === "Disabled" ? "skipped tonight" : `set to ${shutdownTime({ time: c.changed.time, timeZoneId: c.timeZoneId ?? "UTC" }, tz, today)}`;
-  return `Auto-shutdown ${now}; normally ${orig}`;
-};
 
 export async function vmAction(ctx: VmContext, action: VmAction, input: unknown): Promise<ActionResponse> {
   const cfg = await ctx.config();
@@ -168,11 +159,12 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
     case "vm.preview": {
       if (!isObj(input) || Object.keys(input).some((k) => k !== "op" && k !== "vmId")) return bad("vm.preview takes { op, vmId? }");
       const op = input.op;
-      if (!["start", "deallocate", "delay60", "delay120", "skip", "restore"].includes(op as string)) return bad("op must be start, deallocate, delay60, delay120, skip or restore");
+      // D465: start is the only change FocusTime makes to a VM. No stop, no auto-shutdown changes.
+      if (op !== "start") return bad("op must be start. FocusTime only starts your VM; it never stops it or changes its auto-shutdown");
       const vm = (await chosen(ctx));
       const g = guard(vm, input.vmId);
       if (g) return g;
-      return preview(ctx, vm!, op as VmPreviewOp, tz, today);
+      return preview(ctx, vm!);
     }
     case "vm.confirm": {
       if (!isObj(input) || Object.keys(input).some((k) => k !== "previewId") || typeof input.previewId !== "string") return bad("vm.confirm takes { previewId }");
@@ -183,15 +175,7 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
       // The VM must still be the confirmed one.
       const g = guard(vm, held.vmId);
       if (g) return g;
-      return held.op === "start" || held.op === "deallocate" ? power(ctx, vm!, held.op) : held.op === "restore" ? restore(ctx, vm!, today, false) : change(ctx, vm!, held.op, today);
-    }
-    case "vm.restore": {
-      // Today's one-click Restore: putting back what FocusTime changed (the change's preview said it would).
-      if (!onlyKeys(input, ["vmId"])) return bad("vm.restore takes { vmId? }");
-      const vm = (await chosen(ctx));
-      const g = guard(vm, isObj(input) ? input.vmId : undefined);
-      if (g) return g;
-      return restore(ctx, vm!, today, false);
+      return power(ctx, vm!, held.op);
     }
     case "vm.start_now": {
       // Step 15.5 (Q87): the morning box's (or notification's) Start, at once when Settings > You says so. The box
@@ -226,10 +210,8 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
   const tz = userZone(cfg);
   const me = storedIdentity(ctx.plan);
   const vm = (await chosen(ctx));
-  const changeRec = vm ? ((await ctx.plan?.accountState<ShutdownChange>(shutdownKey(vm.id))) ?? null) : null;
   const base: VmStatus = {
-    signedIn: !!me, vm, chip: null, label: null, text: null, power: null, transition: null, canStart: false, canStop: false, schedule: null,
-    change: changeRec ? { ...changeRec, text: changeText(changeRec, tz, today) } : null, stillChanged: stillChanged(changeRec, today), prompt: false, startWithoutAsking: cfg?.azure.startWithoutAsking ?? true, refreshMs: 60_000, needsConsent: false, error: null,
+    signedIn: !!me, vm, chip: null, label: null, text: null, power: null, transition: null, canStart: false, schedule: null, prompt: false, startWithoutAsking: cfg?.azure.startWithoutAsking ?? true, refreshMs: 60_000, needsConsent: false, error: null,
   };
   if (!vm || !me) return base;
   const key = vm.id.toLowerCase();
@@ -243,7 +225,7 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
       let schedule: Shutdown | null = null;
       let scheduleError: VmError | null = null;
       try {
-        schedule = (await readSchedule(c, vm)).s;
+        schedule = await readSchedule(c, vm);
       } catch (e) {
         scheduleError = errOf(e);
       }
@@ -262,68 +244,34 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
   const prompt = cfg ? morningPrompt({ chip, workday: await ctx.workday(cfg, today).catch(() => false), nowMin: local.hour * 60 + local.minute, workStartMin: wsMin, dismissed: !!(await ctx.plan?.marked(PROMPT_MARKER, today)) }) : false;
   const label = shutdownLabel(m.schedule, tz, today);
   return {
-    ...base, chip, label: CHIP_LABEL[chip], text: chipText(chip, m.schedule, tz, today), power: m.power, transition: live ? { op: live.op, since: live.since } : null, canStart: canStart(chip), canStop: canStop(chip),
+    ...base, chip, label: CHIP_LABEL[chip], text: chipText(chip, m.schedule, tz, today), power: m.power, transition: live ? { op: live.op, since: live.since } : null, canStart: canStart(chip),
     schedule: m.schedule && label ? { label, time: m.schedule.time, status: m.schedule.status, timeZoneId: m.schedule.timeZoneId } : null,
     prompt, refreshMs: refreshMs(chip), error: m.scheduleError?.kind === "forbidden" ? m.scheduleError : null,
   };
 }
 
-/** Pending starts and stops from before a restart: settled from the power state Azure shows now. */
+/** Pending starts from before a restart: settled from the power state Azure shows now. */
 async function settleOrphans(ctx: VmContext, vm: ChosenVm, p: PowerState, t: number) {
   for (const e of (await ctx.plan?.azureWriteLog(20)) ?? []) {
-    if (e.status !== "pending" || (e.op !== "start" && e.op !== "deallocate") || !sameVm(e.vmId, vm.id)) continue;
+    if (e.status !== "pending" || e.op !== "start" || !sameVm(e.vmId, vm.id)) continue;
     if (reached(e.op, p)) (await ctx.plan!.settleAzureWrite(e.id, { status: "confirmed", message: `Read back: ${CHIP_LABEL[chipOf(p, null)]}`, after: { power: p } }));
     else if (t - Date.parse(e.at) > POWER_TIMEOUT_MS) (await ctx.plan!.settleAzureWrite(e.id, { status: "timed_out", message: "FocusTime stopped following this before Azure finished" }));
   }
 }
 
-async function preview(ctx: VmContext, vm: ChosenVm, op: VmPreviewOp, tz: string, today: IsoDate): Promise<ActionResponse> {
-  const hold = (p: Omit<VmPreview, "previewId" | "expiresAt" | "op" | "vm">, before: unknown, after: unknown): ActionResponse => {
+async function preview(ctx: VmContext, vm: ChosenVm): Promise<ActionResponse> {
+  try {
+    const p = await client(ctx).power(refOf(vm));
+    const chip = chipOf(p, transitions.get(vm.id.toLowerCase()) ?? null);
+    if (!canStart(chip)) return refuse(`Your VM is ${CHIP_LABEL[chip].toLowerCase()}; there's nothing to start`);
     const id = randomUUID();
     const expiresAt = nowMs(ctx) + PREVIEW_MS;
-    previews.set(id, { id, expiresAt, op, vmId: vm.id, before, after });
-    const out: VmPreview = { previewId: id, expiresAt: new Date(expiresAt).toISOString(), op, vm: `${vm.name} (${vm.resourceGroup})`, ...p };
+    previews.set(id, { id, expiresAt, op: "start", vmId: vm.id, before: { power: p }, after: { power: "running" } });
+    const out: VmPreview = {
+      previewId: id, expiresAt: new Date(expiresAt).toISOString(), op: "start", vm: `${vm.name} (${vm.resourceGroup})`,
+      title: "Start your VM", lines: [{ label: "State", before: CHIP_LABEL[chip], after: "Running" }], notes: ["Compute billing starts while it runs.", "FocusTime follows it until Azure shows it running."], warning: null, confirmLabel: "Start",
+    };
     return { ok: true, data: out };
-  };
-  try {
-    const c = client(ctx);
-    if (op === "start" || op === "deallocate") {
-      const p = await c.power(refOf(vm));
-      const chip = chipOf(p, transitions.get(vm.id.toLowerCase()) ?? null);
-      if (op === "start" && !canStart(chip)) return refuse(`Your VM is ${CHIP_LABEL[chip].toLowerCase()}; there's nothing to start`);
-      if (op === "deallocate" && !canStop(chip)) return refuse(`Your VM is ${CHIP_LABEL[chip].toLowerCase()}; there's nothing to stop`);
-      const focus = op === "deallocate" && (await ctx.focusRunning());
-      return hold(
-        op === "start"
-          ? { title: "Start your VM", lines: [{ label: "State", before: CHIP_LABEL[chip], after: "Running" }], notes: ["Compute billing starts while it runs.", "FocusTime follows it until Azure shows it running."], warning: null, confirmLabel: "Start" }
-          : {
-              title: "Stop your VM", lines: [{ label: "State", before: CHIP_LABEL[chip], after: "Stopped (deallocated)" }],
-              notes: ["Stop deallocates it: Windows shuts down, compute billing stops, disks are kept.", "Save your work in the VM first. Unsaved work there is lost."],
-              warning: focus ? "A focus session is running. Stopping the VM now may cut off what you're working on." : null, confirmLabel: "Stop",
-            },
-        { power: p }, { power: op === "start" ? "running" : "deallocated" },
-      );
-    }
-    const { s } = await readSchedule(c, vm);
-    if (!s) return refuse("This VM has no auto-shutdown schedule, so there's nothing to delay");
-    const rec = (await ctx.plan?.accountState<ShutdownChange>(shutdownKey(vm.id))) ?? null;
-    const fmt = (x: { time: string; status: string }) => (x.status === "Disabled" ? "Off tonight" : shutdownTime({ time: x.time, timeZoneId: s.timeZoneId }, tz, today));
-    if (op === "restore") {
-      if (!rec) return refuse("Auto-shutdown isn't changed by FocusTime; nothing to restore");
-      return hold({ title: "Restore auto-shutdown", lines: [{ label: "Auto-shutdown", before: fmt(s), after: fmt(rec.original) }], notes: ["Puts back the schedule as it was before FocusTime changed it."], warning: null, confirmLabel: "Restore" }, s, rec.original);
-    }
-    const next = applyChoice(s, op);
-    if ("error" in next) return refuse(next.error);
-    const original = rec?.original ?? { time: s.time, status: s.status };
-    return hold(
-      {
-        title: op === "skip" ? "Skip tonight's auto-shutdown" : `Delay auto-shutdown ${op === "delay60" ? "1 hour" : "2 hours"}`,
-        lines: [{ label: "Auto-shutdown", before: fmt(s), after: fmt(next) }],
-        notes: [`FocusTime puts it back to ${fmt(original)} tomorrow morning and checks it.`, "Only this VM's auto-shutdown schedule changes."],
-        warning: null, confirmLabel: op === "skip" ? "Skip tonight" : "Delay",
-      },
-      s, next,
-    );
   } catch (e) {
     return errResponse(e);
   }
@@ -340,10 +288,10 @@ async function power(ctx: VmContext, vm: ChosenVm, op: VmOp): Promise<ActionResp
   } catch (e) {
     return errResponse(e);
   }
-  const entry = (await plan.logAzureWrite({ op, vmId: vm.id, vmName: vm.name, before: { power: before }, after: { power: op === "start" ? "running" : "deallocated" }, auto: false }));
+  const entry = (await plan.logAzureWrite({ op, vmId: vm.id, vmName: vm.name, before: { power: before }, after: { power: "running" }, auto: false }));
   let poll: Poll | null;
   try {
-    poll = await c.powerOp(refOf(vm), op);
+    poll = await c.start(refOf(vm));
   } catch (e) {
     const x = errOf(e);
     (await plan.settleAzureWrite(entry.id, { status: x.kind === "forbidden" ? "refused" : "failed", message: x.message }));
@@ -362,7 +310,7 @@ async function power(ctx: VmContext, vm: ChosenVm, op: VmOp): Promise<ActionResp
   return { ok: true, data: { entry: (await plan.azureWrite(entry.id)), transition: { op, since: tr.since } } };
 }
 
-/** Polls the operation (Retry-After, else 10 s) and the power state until it reaches what was asked, fails, or times out. */
+/** Polls the start (Retry-After, else 10 s) and the power state until it runs, fails, or times out. */
 async function follow(ctx: VmContext, c: AzureClient, vm: ChosenVm, op: VmOp, poll: Poll | null, entryId: number): Promise<void> {
   const plan = ctx.plan!;
   const start = nowMs(ctx);
@@ -375,7 +323,7 @@ async function follow(ctx: VmContext, c: AzureClient, vm: ChosenVm, op: VmOp, po
         const r = await c.operation(poll);
         if (r.retryAfterMs) wait = Math.min(Math.max(r.retryAfterMs, 5_000), 30_000);
         if (r.status === "Failed" || r.status === "Canceled") {
-          (await plan.settleAzureWrite(entryId, { status: "failed", message: `Azure says the ${op === "start" ? "start" : "stop"} ${r.status === "Failed" ? "failed" : "was canceled"}` }));
+          (await plan.settleAzureWrite(entryId, { status: "failed", message: `Azure says the start ${r.status === "Failed" ? "failed" : "was canceled"}` }));
           return;
         }
         if (r.status === "Succeeded") opDone = true;
@@ -393,121 +341,8 @@ async function follow(ctx: VmContext, c: AzureClient, vm: ChosenVm, op: VmOp, po
       /* keep following */
     }
     if (nowMs(ctx) - start >= POWER_TIMEOUT_MS) {
-      (await plan.settleAzureWrite(entryId, { status: "timed_out", message: `Azure didn't show it ${op === "start" ? "running" : "stopped"} within 15 minutes. Check the VM in the Azure portal` }));
+      (await plan.settleAzureWrite(entryId, { status: "timed_out", message: "Azure didn't show it running within 15 minutes. Check the VM in the Azure portal" }));
       return;
     }
   }
-}
-
-/** Reads the schedule back, once more after a network error. */
-async function readBack(c: AzureClient, vm: ChosenVm, ctx: VmContext): Promise<Shutdown | null | "unreadable"> {
-  for (let i = 0; i < 2; i++) {
-    try {
-      const raw = await c.getSchedule(refOf(vm));
-      return raw ? shutdownFrom(raw) : null;
-    } catch (e) {
-      if (!(e instanceof AzureError && e.kind === "network") || i === 1) return "unreadable";
-      await sleep(ctx, 2_000);
-    }
-  }
-  return "unreadable";
-}
-
-async function change(ctx: VmContext, vm: ChosenVm, choice: ShutdownChoice, today: IsoDate): Promise<ActionResponse> {
-  const plan = ctx.plan;
-  if (!plan) return refuse("The local plan store isn't available, so there's no audit log to write to", 503);
-  let c: AzureClient;
-  let raw: Record<string, unknown> | null;
-  let s: Shutdown | null;
-  try {
-    c = client(ctx);
-    ({ raw, s } = await readSchedule(c, vm));
-  } catch (e) {
-    return errResponse(e);
-  }
-  if (!raw || !s) return refuse("This VM has no auto-shutdown schedule, so there's nothing to delay");
-  const next = applyChoice(s, choice);
-  if ("error" in next) return refuse(next.error);
-  const key = shutdownKey(vm.id);
-  const rec = (await plan.accountState<ShutdownChange>(key));
-  const original = rec?.original ?? { time: s.time, status: s.status };
-  const entry = (await plan.logAzureWrite({ op: "shutdown_change", vmId: vm.id, vmName: vm.name, before: { time: s.time, status: s.status, timeZoneId: s.timeZoneId }, after: next, auto: false }));
-  try {
-    await c.putSchedule(refOf(vm), scheduleBody(raw, next));
-  } catch (e) {
-    const x = errOf(e);
-    (await plan.settleAzureWrite(entry.id, { status: x.kind === "forbidden" ? "refused" : "failed", message: x.message }));
-    return errResponse(e);
-  }
-  // Written: from here it is recorded, so it is put back tomorrow whatever the read-back says.
-  const record: ShutdownChange = { vmId: vm.id, date: today, original, changed: next, timeZoneId: s.timeZoneId, failedAt: null, message: null };
-  (await plan.setAccountState(key, record));
-  memo.delete(vm.id.toLowerCase());
-  const back = await readBack(c, vm, ctx);
-  const ok = back !== "unreadable" && back !== null && back.time === next.time && back.status === next.status;
-  const settledEntry = (await plan.settleAzureWrite(entry.id, ok ? { status: "confirmed", message: "Read back: matches" } : { status: "failed", message: back === "unreadable" ? "Written, but FocusTime couldn't read it back. It will still be put back tomorrow" : "Azure shows something else than what was asked. It will still be put back tomorrow" }));
-  return { ok: true, data: { entry: settledEntry, change: record } };
-}
-
-/**
- * Puts back what FocusTime changed. Auto (the next-morning run) or by hand (Restore). Only when the schedule still shows
- * FocusTime's change; changed elsewhere since, it is left as it is (and said so). A failure keeps the record and the
- * Today warning; the first failure is logged, later automatic retries only update the record.
- */
-export async function restore(ctx: VmContext, vm: ChosenVm, _today: IsoDate, auto: boolean): Promise<ActionResponse> {
-  const plan = ctx.plan;
-  if (!plan) return refuse("The local plan store isn't available", 503);
-  const key = shutdownKey(vm.id);
-  const rec = (await plan.accountState<ShutdownChange>(key));
-  if (!rec) return refuse("Auto-shutdown isn't changed by FocusTime; nothing to restore");
-  const fail = async (e: unknown): Promise<ActionResponse> => {
-    const x = errOf(e);
-    if (!rec.failedAt || !auto) {
-      const entry = (await plan.logAzureWrite({ op: "shutdown_restore", vmId: vm.id, vmName: vm.name, before: rec.changed, after: rec.original, auto }));
-      (await plan.settleAzureWrite(entry.id, { status: "failed", message: x.message }));
-    }
-    (await plan.setAccountState(key, { ...rec, failedAt: ctx.now(), message: x.message }));
-    return errResponse(e);
-  };
-  let c: AzureClient;
-  let raw: Record<string, unknown> | null;
-  let s: Shutdown | null;
-  try {
-    c = client(ctx);
-    ({ raw, s } = await readSchedule(c, vm));
-  } catch (e) {
-    return fail(e);
-  }
-  const what = restorePlan(rec, s);
-  const done = async (status: AzureWriteEntry["status"], message: string) => {
-    const entry = (await plan.logAzureWrite({ op: "shutdown_restore", vmId: vm.id, vmName: vm.name, before: s ? { time: s.time, status: s.status } : null, after: rec.original, auto }));
-    (await plan.settleAzureWrite(entry.id, { status, message }));
-    (await plan.setAccountState(key, null));
-    memo.delete(vm.id.toLowerCase());
-    return { ok: true as const, data: { restored: status === "confirmed", message } };
-  };
-  if (what === "already") return done("confirmed", "Already back as it was; nothing to change");
-  if (what === "gone") return done("refused", "The auto-shutdown schedule no longer exists; nothing to put back");
-  if (what === "changed_elsewhere") return done("refused", "Changed outside FocusTime since; left as it is");
-  try {
-    await c.putSchedule(refOf(vm), scheduleBody(raw!, rec.original));
-  } catch (e) {
-    return fail(e);
-  }
-  const back = await readBack(c, vm, ctx);
-  if (back !== "unreadable" && back !== null && back.time === rec.original.time && back.status === rec.original.status) return done("confirmed", "Restored. Read back: matches");
-  return fail(new AzureError("failed", 0, back === "unreadable" ? "Restored, but FocusTime couldn't read it back to check" : "Azure doesn't show the restored schedule yet"));
-}
-
-/** The next-morning restore (server tick): first run after midnight, retried every 10 minutes, and at work start. */
-export async function restoreTick(ctx: VmContext, o: { atWorkStart: boolean }): Promise<"restored" | "failed" | null> {
-  const vm = (await chosen(ctx));
-  if (!vm || !ctx.plan) return null;
-  const rec = (await ctx.plan.accountState<ShutdownChange>(shutdownKey(vm.id)));
-  if (!rec) return null;
-  const cfg = await ctx.config();
-  const today = localToday(ctx.now(), userZone(cfg));
-  if (!restoreAttemptDue(rec, today, nowMs(ctx), o.atWorkStart)) return null;
-  const r = await restore(ctx, vm, today, true);
-  return r.ok ? "restored" : "failed";
 }

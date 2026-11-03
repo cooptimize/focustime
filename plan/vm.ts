@@ -1,5 +1,5 @@
-// My Azure VM (step 15.4): pure rules for its power state, the chip, the auto-shutdown schedule (delay, skip,
-// next-morning restore) and the morning prompt. No I/O.
+// My Azure VM (step 15.4): pure rules for its power state, the chip, the auto-shutdown schedule (read only: FocusTime
+// never changes it, D465) and the morning prompt. No I/O.
 import type { IsoDate } from "../week/types.ts";
 import { zoneOf } from "./timezones.ts";
 
@@ -20,8 +20,8 @@ export function powerFrom(statuses: unknown): PowerState {
   return "unknown";
 }
 
-/** A start or stop FocusTime asked for and is still waiting on. */
-export type VmOp = "start" | "deallocate";
+/** A start FocusTime asked for and is still waiting on (the one VM write; D465). */
+export type VmOp = "start";
 export type VmTransition = { op: VmOp; since: string };
 
 export type VmChip = "running" | "deallocated" | "billing" | "starting" | "stopping" | "unknown";
@@ -37,7 +37,6 @@ export const CHIP_LABEL: Record<VmChip, string> = {
 /** What the chip shows: Azure's state, or the transition FocusTime started while Azure still shows the old state. */
 export function chipOf(power: PowerState, transition: VmTransition | null): VmChip {
   if (transition?.op === "start" && power !== "running") return "starting";
-  if (transition?.op === "deallocate" && power !== "deallocated") return "stopping";
   switch (power) {
     case "running": return "running";
     case "deallocated": return "deallocated";
@@ -52,16 +51,15 @@ export function chipOf(power: PowerState, transition: VmTransition | null): VmCh
 export const isTransition = (c: VmChip) => c === "starting" || c === "stopping";
 /** Refresh every 60 s while visible, every 10 s during a transition. */
 export const refreshMs = (c: VmChip) => (isTransition(c) ? 10_000 : 60_000);
-/** Whether a start or stop has reached the state it asked for. */
-export const reached = (op: VmOp, p: PowerState) => (op === "start" ? p === "running" : p === "deallocated");
-/** Start is offered when the VM is off; Stop (deallocate) when it runs or is stopped but still billing. */
+/** Whether a start has reached running. */
+export const reached = (_op: VmOp, p: PowerState) => p === "running";
+/** Start is offered when the VM is off. */
 export const canStart = (c: VmChip) => c === "deallocated" || c === "billing" || c === "unknown";
-export const canStop = (c: VmChip) => c === "running" || c === "billing";
 
 // ---- Auto-shutdown (Microsoft.DevTestLab/schedules, shutdown-computevm-<vm>) ----
 
 export type ShutdownStatus = "Enabled" | "Disabled";
-/** The parts of a schedule FocusTime reads and changes: daily time "HHMM" in the schedule's own zone, and status. */
+/** The parts of a schedule FocusTime reads (never writes): daily time "HHMM" in the schedule's own zone, and status. */
 export type Shutdown = { time: string; status: ShutdownStatus; timeZoneId: string };
 
 export function minutesOf(hhmm: string): number | null {
@@ -79,13 +77,6 @@ export function shutdownFrom(body: unknown): Shutdown | null {
   if (typeof time !== "string" || minutesOf(time) === null) return null;
   const status: ShutdownStatus = o.status === "Disabled" ? "Disabled" : "Enabled";
   return { time, status, timeZoneId: typeof o.timeZoneId === "string" && o.timeZoneId ? o.timeZoneId : "UTC" };
-}
-
-/** The schedule's time later by some minutes, or null when that would pass midnight (Skip tonight is for that). */
-export function delayed(time: string, minutes: number): string | null {
-  const m = minutesOf(time);
-  if (m === null || m + minutes >= 24 * 60) return null;
-  return hhmmOf(m + minutes);
 }
 
 /** "7:00 PM", shown in my time zone (the schedule's zone may differ; today's date decides the offset). */
@@ -119,52 +110,20 @@ export function shutdownLabel(s: Shutdown | null, myZone: string, today: IsoDate
   return `Auto-shutdown ${shutdownTime(s, myZone, today)}`;
 }
 
-export type ShutdownChoice = "delay60" | "delay120" | "skip";
-/** The schedule after a choice, or why it can't be done. Delays add to the time it has now. */
-export function applyChoice(s: Shutdown, choice: ShutdownChoice): { time: string; status: ShutdownStatus } | { error: string } {
-  if (s.status === "Disabled") return { error: "Auto-shutdown is already off tonight" };
-  if (choice === "skip") return { time: s.time, status: "Disabled" };
-  const t = delayed(s.time, choice === "delay60" ? 60 : 120);
-  return t ? { time: t, status: "Enabled" } : { error: "That would be after midnight. Use Skip tonight instead" };
-}
-
 /**
- * A schedule FocusTime changed and will put back: the original (first one, kept across further delays), what it was
- * changed to, the local day of the change, and the last failed restore, if any.
+ * A schedule change from before fix/vm-schedule (D465), still in account state as `vm_shutdown:<vm>`: FocusTime no
+ * longer puts these back (that would write the schedule); they are marked cancelled once (store/vm-restores.ts).
  */
-export type ShutdownChange = {
+export type LegacyShutdownChange = {
   vmId: string;
   date: IsoDate;
   original: { time: string; status: ShutdownStatus };
   changed: { time: string; status: ShutdownStatus };
-  /** The schedule's own zone (Windows name), for showing its times. */
   timeZoneId?: string;
   failedAt: string | null;
   message: string | null;
+  cancelledAt?: string;
 };
-
-/** Restore is due from the first run after midnight (any later local day). */
-export const restoreDue = (c: ShutdownChange, today: IsoDate) => Temporal.PlainDate.compare(Temporal.PlainDate.from(today), Temporal.PlainDate.from(c.date)) > 0;
-
-/** What restoring does against the schedule as it is now: put it back, nothing (already back), or leave it (changed elsewhere). */
-export function restorePlan(c: ShutdownChange, now: Shutdown | null): "restore" | "already" | "changed_elsewhere" | "gone" {
-  if (!now) return "gone";
-  const same = (a: { time: string; status: string }) => a.time === now.time && a.status === now.status;
-  if (same(c.original)) return "already";
-  if (same(c.changed)) return "restore";
-  return "changed_elsewhere";
-}
-
-/** After a failed restore, try again at most this often (and at work start). */
-export const RESTORE_RETRY_MS = 10 * 60_000;
-export function restoreAttemptDue(c: ShutdownChange, today: IsoDate, nowMs: number, atWorkStart: boolean): boolean {
-  if (!restoreDue(c, today)) return false;
-  if (!c.failedAt || atWorkStart) return true;
-  return nowMs - Date.parse(c.failedAt) >= RESTORE_RETRY_MS;
-}
-
-/** Today's warning (step 16.3: only when a restore failed): a change still not put back after its day ended. */
-export const stillChanged = (c: ShutdownChange | null, today: IsoDate) => !!c && restoreDue(c, today) && !!c.failedAt;
 
 // ---- Morning prompt ----
 

@@ -1,5 +1,5 @@
-// Step 15.4: the Microsoft sign-in as the app's user, and my VM (find, confirm, status, start, stop, auto-shutdown
-// delay and skip, the next-morning restore, the morning prompt) against a fake Azure Resource Manager. Fictional only.
+// Step 15.4: the Microsoft sign-in as the app's user, and my VM (find, confirm, status, start, the morning prompt)
+// against a fake Azure Resource Manager. D465: no stop, and the auto-shutdown schedule is read only. Fictional only.
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
 import { FOUR_DAY_TOML as STARTER_TOML } from "../fixtures/four-day-week.ts";
@@ -10,8 +10,7 @@ import type { IdClaims } from "../sources/oauth/idtoken.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { IDENTITY_KEY, withMe, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
-import { clearVmState, restoreTick, settled, shutdownKey, vmKey, type VmPreview, type VmStatus } from "./vm-actions.ts";
-import { TIMER_KEY } from "./timer-actions.ts";
+import { clearVmState, settled, shutdownKey, vmKey, type VmPreview, type VmStatus } from "./vm-actions.ts";
 
 const SUB = "00000000-0000-4000-8000-0000000000aa";
 const VM = `/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.Compute/virtualMachines/vm-pat-01`;
@@ -20,12 +19,12 @@ const PAT: IdClaims = { oid: "0f0f0f0f-1111-4222-8333-444455556666", tid: "11111
 const TOML = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"').replace(/(\[outlook\]\ntenant_id = "[^"]*"\n)client_id = ""/, '$1client_id = "44444444-4444-4444-8444-444444444444"');
 
 type AccountOpts = { signedIn?: boolean; arm?: "ok" | "consent"; identityFails?: AuthFailure["kind"] };
-function setup(opts: AccountOpts & { start?: string; forbid?: string[]; failOps?: ("start" | "deallocate")[]; ignorePut?: boolean; toml?: string } = {}) {
+function setup(opts: AccountOpts & { start?: string; forbid?: string[]; failOps?: "start"[]; toml?: string } = {}) {
   clearVmState();
   let t = Date.parse(opts.start ?? "2026-11-02T14:00:00Z");
   const clock = { now: () => new Date(t).toISOString(), advance: (ms: number) => void (t += ms) };
   const offline = { on: false };
-  const arm = fakeArm({ now: () => t, transitionMs: 45_000, forbid: new Set(opts.forbid ?? []), failOps: new Set(opts.failOps ?? []), offline, ...(opts.ignorePut ? { ignorePut: true } : {}) });
+  const arm = fakeArm({ now: () => t, transitionMs: 45_000, forbid: new Set(opts.forbid ?? []), failOps: new Set(opts.failOps ?? []), offline });
   arm.addVm({ id: VM, name: "vm-pat-01", resourceGroup: "rg-dev", subscriptionId: SUB, location: "eastus", tags: { Owner: "Pat Example" }, power: "deallocated" }, { time: "1900" });
   arm.addVm({ id: OTHER, name: "vm-dana-01", resourceGroup: "rg-dev", subscriptionId: SUB, location: "eastus", tags: { Owner: "Dana Example" }, power: "running" }, { time: "1800" });
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(clock.now()).toZonedDateTimeISO("America/New_York") });
@@ -226,13 +225,13 @@ describe("my VM: find and confirm", () => {
   });
 });
 
-describe("my VM: status, start and stop through the write framework", () => {
+describe("my VM: status and start through the write framework", () => {
   it("shows the state and the auto-shutdown time", async () => {
     const s = await signedInWithVm();
     const st = await s.run<VmStatus>("vm.status");
-    expect(st).toMatchObject({ chip: "deallocated", label: "Stopped (deallocated)", canStart: true, canStop: false, refreshMs: 60_000, schedule: { label: "Auto-shutdown 7:00 PM", time: "1900", status: "Enabled" } });
+    expect(st).toMatchObject({ chip: "deallocated", label: "Stopped (deallocated)", canStart: true, refreshMs: 60_000, schedule: { label: "Auto-shutdown 7:00 PM", time: "1900", status: "Enabled" } });
     s.arm.setPower(VM, "stopped");
-    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ label: "Stopped (still billing)", canStart: true, canStop: true });
+    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ label: "Stopped (still billing)", canStart: true });
   });
 
   it("start: preview, confirm, Starting… with 10 s refresh, then read back running and logged", async () => {
@@ -248,27 +247,12 @@ describe("my VM: status, start and stop through the write framework", () => {
     expect(log[0]).toMatchObject({ op: "start", vmId: VM, status: "confirmed", message: "Read back: Running", before: { power: "deallocated" }, after: { power: "running" } });
     // It polled the operation, not just the state.
     expect(s.arm.calls.some((x) => x.path.includes("/operations/"))).toBe(true);
-    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ chip: "running", canStop: true, canStart: false });
-  });
-
-  it("stop = deallocate, warns when focus is running, no undo (Start is offered instead)", async () => {
-    const s = await signedInWithVm();
-    s.arm.setPower(VM, "running");
-    (await s.plan.setState(TIMER_KEY, { runningSince: s.clock.now() }));
-    const p = await s.run<VmPreview>("vm.preview", { op: "deallocate" });
-    expect(p).toMatchObject({ title: "Stop your VM", confirmLabel: "Stop", warning: expect.stringMatching(/focus session is running/) });
-    expect(p.lines[0]).toEqual({ label: "State", before: "Running", after: "Stopped (deallocated)" });
-    await s.run("vm.confirm", { previewId: p.previewId });
-    expect(s.arm.calls.find((x) => x.method === "POST")!.path).toMatch(/\/deallocate$/);
-    await settled();
-    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "deallocate", status: "confirmed" });
-    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ chip: "deallocated", canStart: true });
+    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ chip: "running", canStart: false });
   });
 
   it("refuses any VM other than the confirmed one", async () => {
     const s = await signedInWithVm();
     expect(await s.fail("vm.preview", { op: "start", vmId: OTHER })).toMatchObject({ status: 403, error: "FocusTime only acts on the VM you confirmed as yours" });
-    expect(await s.fail("vm.restore", { vmId: OTHER })).toMatchObject({ status: 403 });
     // A preview held for the VM I had, after choosing another: refused at confirm.
     const p = await s.run<VmPreview>("vm.preview", { op: "start" });
     await s.run("vm.choose", { vmId: OTHER });
@@ -312,96 +296,54 @@ describe("my VM: status, start and stop through the write framework", () => {
   });
 });
 
-describe("auto-shutdown: delay, skip, and the next-morning restore", () => {
-  it("delay 1h: the preview shows the current time and the change; written, read back, logged, recorded", async () => {
+describe("D465: FocusTime never changes a VM's auto-shutdown and never stops it", () => {
+  /** Every call that isn't a read, a start or its progress: none may ever reach Azure. */
+  const writes = (s: Awaited<ReturnType<typeof signedInWithVm>>) =>
+    s.arm.calls.filter((x) => x.path.includes("Microsoft.DevTestLab") ? x.method !== "GET" : x.method !== "GET" && !x.path.endsWith("/start") && !x.path.includes("ResourceGraph"));
+
+  it("the chip shows the schedule as Azure has it, read only", async () => {
     const s = await signedInWithVm();
-    const p = await s.run<VmPreview>("vm.preview", { op: "delay60" });
-    expect(p).toMatchObject({ title: "Delay auto-shutdown 1 hour", lines: [{ label: "Auto-shutdown", before: "7:00 PM", after: "8:00 PM" }], notes: [expect.stringMatching(/back to 7:00 PM tomorrow morning/), expect.any(String)] });
-    await s.run("vm.confirm", { previewId: p.previewId });
-    expect(s.arm.schedule(VM)).toEqual({ time: "2000", status: "Enabled" });
-    const put = s.arm.calls.find((x) => x.method === "PUT")!;
-    expect(put.path).toBe(`/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.DevTestLab/schedules/shutdown-computevm-vm-pat-01`);
-    expect(put.body).toMatchObject({ location: "eastus", properties: { taskType: "ComputeVmShutdownTask", dailyRecurrence: { time: "2000" }, status: "Enabled", targetResourceId: VM } });
-    expect((put.body as { properties: Record<string, unknown> }).properties.provisioningState).toBeUndefined();
-    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "shutdown_change", status: "confirmed", before: { time: "1900", status: "Enabled" }, after: { time: "2000", status: "Enabled" } });
-    expect((await s.plan.accountState(shutdownKey(VM)))).toMatchObject({ date: "2026-11-02", original: { time: "1900", status: "Enabled" }, changed: { time: "2000" } });
-    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ schedule: { label: "Auto-shutdown 8:00 PM" }, change: { text: "Auto-shutdown set to 8:00 PM; normally 7:00 PM" }, stillChanged: false });
+    s.arm.setPower(VM, "running");
+    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ text: "Running · off at 7:00 PM", schedule: { label: "Auto-shutdown 7:00 PM", time: "1900", status: "Enabled" } });
+    (s.arm.schedules.get(VM.toLowerCase())!.properties as { status: string }).status = "Disabled";
+    expect(await s.run<VmStatus>("vm.status", { fresh: true })).toMatchObject({ text: "Running · auto-shutdown off", schedule: { label: "Auto-shutdown off" } });
+    expect(Object.keys(await s.run<VmStatus>("vm.status"))).not.toEqual(expect.arrayContaining(["change", "stillChanged", "canStop"]));
+    expect(s.arm.calls.filter((x) => x.path.includes("DevTestLab")).every((x) => x.method === "GET")).toBe(true);
   });
 
-  it("a second delay keeps the first original; skip tonight turns it off", async () => {
+  it("delay, skip, restore and stop are refused before Azure is asked; vm.restore is gone", async () => {
     const s = await signedInWithVm();
-    await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "delay60" })).previewId });
-    await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "delay120" })).previewId });
-    expect(s.arm.schedule(VM)).toEqual({ time: "2200", status: "Enabled" });
-    expect((await s.plan.accountState(shutdownKey(VM)))).toMatchObject({ original: { time: "1900" }, changed: { time: "2200" } });
-    const t = await signedInWithVm();
-    const p = await t.run<VmPreview>("vm.preview", { op: "skip" });
-    expect(p.lines[0]).toMatchObject({ before: "7:00 PM", after: "Off tonight" });
-    await t.run("vm.confirm", { previewId: p.previewId });
-    expect(t.arm.schedule(VM)).toEqual({ time: "1900", status: "Disabled" });
-    expect(await t.fail("vm.preview", { op: "delay60" })).toMatchObject({ status: 409, error: expect.stringMatching(/already off/) });
-  });
-
-  it("a read-back that doesn't match is logged as failed, and still restored tomorrow", async () => {
-    const s = await signedInWithVm({ ignorePut: true });
-    await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "delay60" })).previewId });
-    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ status: "failed", message: expect.stringMatching(/still be put back/) });
-    expect((await s.plan.accountState(shutdownKey(VM)))).not.toBeNull();
-  });
-
-  it("restores the next morning (first run after midnight), with read-back", async () => {
-    const s = await signedInWithVm();
-    await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "delay120" })).previewId });
-    expect(await restoreTick((await s.vmCtx()), { atWorkStart: false })).toBeNull();
-    s.clock.advance(15 * 3600_000 + 60_000); // 00:01 on Tuesday in New York
-    expect(await restoreTick((await s.vmCtx()), { atWorkStart: false })).toBe("restored");
+    s.arm.setPower(VM, "running");
+    for (const op of ["delay60", "delay120", "skip", "restore", "deallocate", "powerOff"])
+      expect(await s.fail("vm.preview", { op }), op).toMatchObject({ status: 400, error: expect.stringMatching(/only starts your VM/) });
+    expect(await s.fail("vm.restore", {})).toMatchObject({ status: 400 });
+    expect(writes(s)).toEqual([]);
     expect(s.arm.schedule(VM)).toEqual({ time: "1900", status: "Enabled" });
-    expect((await s.plan.accountState(shutdownKey(VM)))).toBeNull();
-    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "shutdown_restore", status: "confirmed", auto: true, message: "Restored. Read back: matches" });
+    expect(await s.plan.azureWriteLog()).toEqual([]);
   });
 
-  it("can't restore (offline): a Today warning with one-click Restore; retries, then restores", async () => {
+  it("a restore left from an earlier Skip tonight never runs: days pass, the status is read, nothing is written", async () => {
     const s = await signedInWithVm();
-    await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "skip" })).previewId });
-    s.clock.advance(16 * 3600_000);
-    s.offline.on = true;
-    expect(await restoreTick((await s.vmCtx()), { atWorkStart: false })).toBe("failed");
-    expect(await restoreTick((await s.vmCtx()), { atWorkStart: false })).toBeNull(); // waits 10 minutes
-    expect((await s.plan.azureWriteLog()).filter((e) => e.op === "shutdown_restore")).toHaveLength(1);
-    s.offline.on = false;
-    clearVmState();
-    const st = await s.run<VmStatus>("vm.status");
-    expect(st).toMatchObject({ stillChanged: true, change: { text: "Auto-shutdown skipped tonight; normally 7:00 PM", message: "Azure unreachable" } });
-    expect(await s.run("vm.restore", {})).toMatchObject({ restored: true });
-    expect(s.arm.schedule(VM)).toEqual({ time: "1900", status: "Enabled" });
-    expect(await s.run<VmStatus>("vm.status")).toMatchObject({ stillChanged: false, change: null });
+    // As the old Skip tonight left it, with Azure still showing it off tonight.
+    (await s.plan.setAccountState(shutdownKey(VM), { vmId: VM, date: "2026-11-02", original: { time: "1900", status: "Enabled" }, changed: { time: "1900", status: "Disabled" }, timeZoneId: "Eastern Standard Time", failedAt: null, message: null }));
+    (s.arm.schedules.get(VM.toLowerCase())!.properties as { status: string }).status = "Disabled";
+    for (let day = 0; day < 3; day++) {
+      s.clock.advance(24 * 3600_000);
+      clearVmState();
+      const st = await s.run<VmStatus>("vm.status");
+      expect(st).toMatchObject({ schedule: { status: "Disabled" } });
+      expect(st).not.toHaveProperty("stillChanged");
+    }
+    expect(writes(s)).toEqual([]);
+    expect(s.arm.schedule(VM)).toEqual({ time: "1900", status: "Disabled" });
   });
 
-  it("changed in Azure since: left as it is and said so (never overwritten)", async () => {
+  it("the Azure write log names only starts", async () => {
     const s = await signedInWithVm();
-    await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "delay60" })).previewId });
-    const sched = s.arm.schedules.get(VM.toLowerCase())!;
-    (sched.properties as { dailyRecurrence: { time: string } }).dailyRecurrence.time = "1730";
-    s.clock.advance(16 * 3600_000);
-    await restoreTick((await s.vmCtx()), { atWorkStart: true });
-    expect(s.arm.schedule(VM)).toEqual({ time: "1730", status: "Enabled" });
-    expect((await s.plan.azureWriteLog())[0]).toMatchObject({ op: "shutdown_restore", status: "refused", message: "Changed outside FocusTime since; left as it is" });
-    expect((await s.plan.accountState(shutdownKey(VM)))).toBeNull();
-  });
-
-  it("refuses a delay past midnight and a VM without a schedule", async () => {
-    const s = await signedInWithVm();
-    (s.arm.schedules.get(VM.toLowerCase())!.properties as { dailyRecurrence: { time: string } }).dailyRecurrence.time = "2300";
-    expect(await s.fail("vm.preview", { op: "delay60" })).toMatchObject({ status: 409, error: expect.stringMatching(/Skip tonight/) });
-    s.arm.schedules.delete(VM.toLowerCase());
-    expect(await s.fail("vm.preview", { op: "skip" })).toMatchObject({ status: 409, error: expect.stringMatching(/no auto-shutdown/) });
-  });
-
-  it("missing schedule permission names Microsoft.DevTestLab/schedules/write", async () => {
-    const s = await signedInWithVm({ forbid: ["scheduleWrite"] });
-    const p = await s.run<VmPreview>("vm.preview", { op: "delay60" });
-    expect(await s.fail("vm.confirm", { previewId: p.previewId })).toMatchObject({ status: 403, error: expect.stringMatching(/Microsoft.DevTestLab\/schedules\/write/) });
-    expect((await s.plan.accountState(shutdownKey(VM)))).toBeNull();
+    await s.run("vm.confirm", { previewId: (await s.run<VmPreview>("vm.preview", { op: "start" })).previewId });
+    await settled();
+    expect((await s.plan.azureWriteLog()).map((e) => e.op)).toEqual(["start"]);
+    expect(writes(s)).toEqual([]);
   });
 });
 

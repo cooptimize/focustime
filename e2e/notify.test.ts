@@ -72,7 +72,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await expectView(`followup:${id}`, `[data-follow-up="${id}"].followup-highlight`);
     // My VM: Today with the VM chip's menu open.
     await expectView("vm", '.menu-list[role="menu"]');
-    await expect(page.locator(".menu-list").textContent()).resolves.toContain("Delay shutdown 1h");
+    await expect(page.locator(".menu-list").textContent()).resolves.toContain("Choose another VM");
     // Anything unknown does nothing.
     await go("javascript:alert(1)");
     expect(errors).toEqual([]);

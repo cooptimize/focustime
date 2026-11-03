@@ -137,7 +137,7 @@ export type MenuEnv = {
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
   /** Opens Settings, at a section when given (step 6b). */
   openSettings: (section?: string) => void;
-  /** Step 15.4: the VM chip's menu (start, stop, delay shutdown). */
+  /** Step 15.4: the VM chip's menu (Start; D465: nothing else changes the VM). */
   openVm: () => void;
   exportPlan: () => void;
   /** Step 15.2: the pick Focus suggests (today's next planned pick), or null. */
@@ -1136,7 +1136,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "vm.status":
     case "vm.preview":
     case "vm.confirm":
-    case "vm.restore":
     case "vm.dismiss_prompt":
     case "vm.start_now":
       return { run: env.openVm };
