@@ -14,13 +14,14 @@ import { mondayOf } from "../week/dates.ts";
 import type React from "react";
 import { DraftEditorCtx, DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps, DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
-import { blocksStep, blocksText, storySizeStep, weekItemMenu, type MenuStep, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
+import { weekItemMenu, type MenuStep, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
+import { HoursStepper, SizeChip } from "./plan/Estimate.tsx";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react";
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import type { DraftStory, WeekFeature } from "../plan/types.ts";
 import { addPaneRows, type AddRowInfo } from "../plan/weekadd.ts";
 import { borrowedForWeek, readiness, weekBudget, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
-import { blocksOf, blocksWord, estimate, fillWords, overLine, progressWords, type Envelope } from "../plan/estimate.ts";
+import { aboutText, DEFAULT_FEATURE_MINUTES, estimate, hoursText, loadText, overLine, progressWords, sourceWords, type Envelope } from "../plan/estimate.ts";
 import { moveWithin, otherStoriesLine, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
 import type { ClientWork, IsoDate, PortfolioItem, Slot, WorkItem } from "../week/types.ts";
 import { call } from "./api.ts";
@@ -86,9 +87,9 @@ const needsStories = (i: Item, info: Info | null) => i.level === "feature" && !!
 
 type PanelSel = { kind: "feature"; k: string; itemId: number } | { kind: "client"; k: string } | { kind: "health" } | null;
 
-/** U6: a draft feature on the week list, as a week item for the budget (one block, like a new feature). */
+/** U6: a draft feature on the week list, as a week item for the budget (4h, like a new feature). */
 const draftAsItem = (weekStart: IsoDate, d: DraftStory, tier: Tier): WeekFeature => ({
-  id: -d.id, weekStart, clientKey: d.clientKey, itemId: -d.id, title: d.title, itemType: "Feature", url: null, level: "feature", tier, blocks: 1, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: d.createdAt, updatedAt: d.createdAt,
+  id: -d.id, weekStart, clientKey: d.clientKey, itemId: -d.id, title: d.title, itemType: "Feature", url: null, level: "feature", tier, estimate: null, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: d.createdAt, updatedAt: d.createdAt,
 });
 
 export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, onChanged, onCaptures, openClient = null, onOpenClientSeen }: Props) {
@@ -168,7 +169,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     [weekReady, data.week, raw, weekDrafts, weekStart, borrowedMinutes],
   );
   const intentions = useMemo(
-    () => Object.entries(data.plan ?? {}).flatMap(([date, d]) => d.picks.filter((p) => p.kind === "intention").map((p) => ({ id: p.id, clientKey: p.clientKey, title: p.title, date, size: p.size, status: p.status }))),
+    () => Object.entries(data.plan ?? {}).flatMap(([date, d]) => d.picks.filter((p) => p.kind === "intention").map((p) => ({ id: p.id, clientKey: p.clientKey, title: p.title, date, size: p.size ?? "M", status: p.status }))),
     [data.plan],
   );
   const flags = useMemo(
@@ -238,7 +239,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     add: (k, itemId, tier) => void act("weekplan.add", { weekStart, clientKey: k, itemId, tier }, `#${itemId} added as ${tier === "must" ? "a must" : "a nice to have"}`),
     tier: (i, tier) => void act<{ headsUp: HeadsUp | null }>("weekplan.set_tier", { id: i.id, tier }, `#${i.itemId} is now ${tier === "must" ? "a must" : "a nice to have"}`).then(dropped),
     remove: (i) => void act<{ headsUp: HeadsUp | null }>("weekplan.remove", { id: i.id }, `Took #${i.itemId} off the week`).then(dropped),
-    blocks: (i, n) => void act("weekplan.set_blocks", { id: i.id, blocks: n }),
+    hours: (i, n) => void act("weekplan.set_estimate", { id: i.id, hours: n }),
     size: (i, z) => void act("weekplan.set_size", { id: i.id, size: z }),
     done: (i, on) => void act("weekplan.mark_done", { id: i.id, on }, on ? `#${i.itemId} marked done` : undefined),
     move: (i, by) => {
@@ -373,7 +374,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
                 prevName={n > 0 ? nameOf(keys[n - 1]!) : null} nextName={n < keys.length - 1 ? nameOf(keys[n + 1]!) : null} onPrev={() => go(-1)} onNext={() => go(1)} onFinish={() => void finish()} />
             </li>
           ) : (
-            <UnitLine key={l.clientKey} className="pw-line" color={clientColor(l.clientKey, data.clients)} name={nameOf(l.clientKey)} detail={lineDetail(l)} fit={l.fit?.text ?? ""} tone={l.fit ? TONE[l.fit.status] : "fits"} onOpen={() => setOpenK(l.clientKey)} />
+            <UnitLine key={l.clientKey} className="pw-line" color={clientColor(l.clientKey, data.clients)} name={nameOf(l.clientKey)} detail={lineDetail(l)} fit={l.fit ? fitWords(l.fit) : ""} tone={l.fit ? TONE[l.fit.status] : "fits"} onOpen={() => setOpenK(l.clientKey)} />
           ),
         )}
       </ul>
@@ -421,7 +422,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
           )}
           {panel?.kind === "feature" && (
             <FeaturePanel k={panel.k} itemId={panel.itemId} info={info(panel.k, panel.itemId)} item={items.find((i) => i.clientKey === panel.k && i.itemId === panel.itemId) ?? null} color={clientColor(panel.k, data.clients)} name={nameOf(panel.k)}
-              drafts={st.drafts.filter((d) => d.clientKey === panel.k && d.parentItemId === panel.itemId)} listed={new Set(items.filter((i) => i.clientKey === panel.k).map((i) => i.itemId))} past={past} ops={ops} tz={tz} onClose={() => setPanel(null)} />
+              drafts={st.drafts.filter((d) => d.clientKey === panel.k && d.parentItemId === panel.itemId)} listed={new Set(items.filter((i) => i.clientKey === panel.k).map((i) => i.itemId))} clientItems={items.filter((i) => i.clientKey === panel.k)} past={past} ops={ops} tz={tz} onClose={() => setPanel(null)} />
           )}
         </>
       }
@@ -442,7 +443,7 @@ function lineDetail(l: WeekLine): React.ReactNode {
 
 /**
  * U6: the week's half-days as a small grid, Mon to Fri, AM over PM. Each cell names its client on a colored edge;
- * a half-day that isn't counted is dimmed with its reason; a pinned must shows its title; PTO is hatched, Friday is
+ * a pinned must shows its title; PTO is hatched, Friday is
  * dashed Catch-up; the open client's cells read "Planning". Click a cell to open its client; drag a must onto one
  * of its client's cells (or an Open half-day) to pin it. PTO and other clients' cells don't take the drop.
  */
@@ -487,18 +488,18 @@ function WeekCells({ days, fits, items, open, past, colors, dragging, dragOver, 
               );
             if (!c && !s.open) return <span key={key} className="pw-cell catchup" style={at} aria-label={`${dateShort(d.date)} ${HALF_WORD[half]}: No block`}>No block</span>;
             const fb = c ? fits.find((f) => f.clientKey === c.clientKey)?.blocks.find((b) => b.date === d.date && b.half === half) : undefined;
-            const off = !!fb && !fb.counts;
+            const free = fb ? `${hoursText(fb.freeMinutes)} free` : "";
             const mine = !!c && c.clientKey === open;
             const takes = !past && !!dragging && (c ? c.clientKey === dragging.clientKey : s.open);
             const refuses = !!dragging && !takes;
             const label = c ? c.clientName : "Open";
-            const right = pinText || (off ? reasonWord(fb!.reason) : mine ? "Planning" : "");
+            const right = pinText || (mine ? "Planning" : "");
             return (
               <button key={key} type="button" style={{ ...at, "--c": clientColor(c?.clientKey, colors) } as CSSProperties}
-                className={`pw-cell${c ? "" : " open-half"}${off ? " off" : ""}${mine ? " on" : ""}${dragOver === key ? " over" : ""}${takes ? " takes" : ""}${refuses ? " refuses" : ""}`}
-                aria-label={`${dateShort(d.date)} ${HALF_WORD[half]}: ${label}${off ? `, not counted: ${reasonWord(fb!.reason)}` : ""}${here.length ? `, pinned ${here.map((f) => f.title).join(", ")}` : ""}${mine ? ", planning" : ""}`}
+                className={`pw-cell${c ? "" : " open-half"}${mine ? " on" : ""}${dragOver === key ? " over" : ""}${takes ? " takes" : ""}${refuses ? " refuses" : ""}`}
+                aria-label={`${dateShort(d.date)} ${HALF_WORD[half]}: ${label}${free ? `, ${free}` : ""}${here.length ? `, pinned ${here.map((f) => f.title).join(", ")}` : ""}${mine ? ", planning" : ""}`}
                 aria-pressed={mine}
-                title={here.length ? `Pinned: ${here.map((f) => f.title).join(", ")}` : off ? `Not counted: ${reasonWord(fb!.reason)}` : c ? `Plan ${c.clientName}` : "Open half-day: drag a must here to pin it"}
+                title={here.length ? `Pinned: ${here.map((f) => f.title).join(", ")}` : c ? `Plan ${c.clientName}${free ? ` · ${free}` : ""}` : "Open half-day: drag a must here to pin it"}
                 onClick={() => c && onOpen(c.clientKey)}
                 onDragOver={(e) => {
                   if (!takes || !e.dataTransfer.types.includes(DRAG_TYPE)) return;
@@ -524,24 +525,24 @@ function WeekCells({ days, fits, items, open, past, colors, dragging, dragOver, 
   );
 }
 
-/** U4: a client's budget in the panel: each half-day and whether it counts, borrowed time, musts done, and DevOps order. */
+/** U4: a client's budget in the panel: each block's free time, borrowed time, musts done, and DevOps order. */
 function ClientPanel({ k, name, color, fit, progress, items, reordered, past, onReset, onClose }: { k: string; name: string; color: string; fit: ClientBudget | undefined; progress: Progress | undefined; items: Item[]; reordered: boolean; past: boolean; onReset: () => void; onClose: () => void }) {
   const done = items.filter((i) => i.done);
   return (
-    <PanelShell title={name} sub={fit ? `${blocksWord(fit.budgetQ)} · ${fit.text}` : undefined} color={color} label={`${name}: blocks this week`} onClose={onClose}>
+    <PanelShell title={name} sub={fit ? fit.text : undefined} color={color} label={`${name}: free time this week`} onClose={onClose}>
       {fit && (
         <section className="dp-section" aria-label="Blocks">
           <h3>Blocks</h3>
           <ul className="pw-pblocks">
             {fit.blocks.map((b) => (
-              <li key={`${b.date}${b.half}`} className={b.counts ? "" : "off"}>
+              <li key={`${b.date}${b.half}`}>
                 <span>{pinLabel(b)}</span>
-                <span className="muted">{b.counts ? (b.open ? "Open, pinned" : "counts") : `not counted · ${reasonWord(b.reason)}`}</span>
+                <span className="muted">{b.pto ? "PTO" : `${hoursText(b.freeMinutes)} free${b.open ? " · Open, pinned" : ""}`}</span>
               </li>
             ))}
           </ul>
-          {fit.borrowedQ > 0 && <p className="dp-line">{blocksWord(fit.borrowedQ)} of borrowed time to make up</p>}
-          <p className="dp-line">Musts take {blocksWord(fit.plannedQ)}{fit.nicePlannedQ ? `, nice to haves ${blocksWord(fit.nicePlannedQ)} (not counted)` : ""}.</p>
+          {fit.borrowedMinutes > 0 && <p className="dp-line">{hoursText(fit.borrowedMinutes)} of borrowed time to make up</p>}
+          <p className="dp-line">Musts take {fit.plannedMinutes ? aboutText(fit.plannedMinutes) : "0h"}{fit.nicePlannedMinutes ? `, nice to haves ${aboutText(fit.nicePlannedMinutes)}` : ""}.</p>
         </section>
       )}
       {progress && progress.musts > 0 && (
@@ -569,8 +570,10 @@ function ClientPanel({ k, name, color, fit, progress, items, reordered, past, on
 }
 
 /** U4: a feature in the panel: dates, its stories in DevOps, drafts, Draft stories and the Coop brief. */
-function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, past, ops, tz, onClose }: { k: string; itemId: number; info: Info | null; item: Item | null; color: string; name: string; drafts: DraftStory[]; listed: ReadonlySet<number>; past: boolean; ops: Ops; tz: string; onClose: () => void }) {
+function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, clientItems, past, ops, tz, onClose }: { k: string; itemId: number; info: Info | null; item: Item | null; color: string; name: string; drafts: DraftStory[]; listed: ReadonlySet<number>; clientItems: Item[]; past: boolean; ops: Ops; tz: string; onClose: () => void }) {
   const f = info?.feature ?? null;
+  // E2: on the list, its load in hours: the stepper, or its stories' sizes (each with its chip).
+  const envl = item ? (estimate(clientItems).envelopes.find((e) => e.feature.id === item.id) ?? null) : null;
   const title = item?.title ?? f?.title ?? `#${itemId}`;
   const stories = (f?.children ?? []).filter((c) => c.level === "story");
   void tz;
@@ -583,6 +586,24 @@ function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, past
         </p>
         {!past && <DevOpsAction clientKey={k} label="Set target date" onRun={(w) => w.targetDate({ clientKey: k, itemId, title, current: f?.targetDate ?? null })} />}
       </section>
+      {item && envl && (
+        <section className="dp-section" aria-label="Estimate">
+          <h3>Estimate</h3>
+          <p className="dp-line dp-estimate">
+            <HoursStepper label={title} minutes={envl.minutes} derived={envl.derived} about={loadText(envl).startsWith("about")} disabled={past} onSet={(h) => ops.hours(item, h)} />
+            <span className="muted">{sourceWords(envl) ?? "your estimate this week"}</span>
+          </p>
+          {envl.stories.length > 0 && (
+            <ul className="pw-pstories">
+              {envl.stories.map((x) => (
+                <li key={x.id}>
+                  <SizeChip size={x.size} title={x.title} wide disabled={past} onSet={(z) => ops.size(x, z)} /> {x.title}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       <section className="dp-section" aria-label="Stories">
         <h3>Stories</h3>
         {stories.length ? (
@@ -618,9 +639,13 @@ function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, past
   );
 }
 
-/** "Wed AM: mostly meetings" without the half-day it names: "mostly meetings". */
-const reasonWord = (r: string | null) => (r ?? "").replace(/^[^:]*:\s*/, "");
-const budgetWhy = (fit: ClientBudget) => [...fit.blocks.filter((b) => !b.counts).map((b) => b.reason ?? pinLabel(b)), ...(fit.borrowedQ ? [`${blocksWord(fit.borrowedQ)} of borrowed time to make up`] : [])];
+/** A client's fit: "7h free · 9h planned", with the amber "about 2h over" when over. */
+const fitWords = (fit: ClientBudget) => (
+  <>
+    {fit.text}
+    {fit.over && <span className="over-word"> · {fit.over}</span>}
+  </>
+);
 
 const KIND: Record<ReadinessFlag["kind"], string> = {
   block_needs_work: "Block with no work",
@@ -692,8 +717,8 @@ type Ops = {
   add: (k: string, itemId: number, tier: Tier) => void;
   tier: (i: Item, tier: Tier) => void;
   remove: (i: Item) => void;
-  blocks: (i: Item, n: number) => void;
-  size: (i: Item, z: "S" | "M" | "L") => void;
+  hours: (i: Item, n: number) => void;
+  size: (i: Item, z: "S" | "M" | "L" | null) => void;
   done: (i: Item, on: boolean) => void;
   move: (i: Item, by: -1 | 1) => void;
   /** Drag within a list: put `itemId` where `before` is. */
@@ -763,12 +788,11 @@ function ClientCard(p: CardProps) {
   const places = placesFor(p.days, k);
   const listed = new Set(mineAll.map((i) => i.itemId));
   const niceOpen = p.folds.has(`nice:${k}`);
-  const over = fit ? overLine(fit.budgetQ, fit.plannedQ, p.friday) : null;
+  const over = fit ? overLine(p.nameOf(k), fit.freeMinutes, fit.plannedMinutes, p.friday) : null;
   const row = (i: Item, n: number, group: Item[]) => (
     <ItemRow key={i.id} i={i} first={n === 0} last={n === group.length - 1} past={p.past} info={p.info(k, i.itemId)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === i.itemId)}
       places={places} ops={p.ops} env={envOf.get(i.id) ?? null} parentListed={i.parentId != null && listedFeatures.has(i.parentId)} infoOf={(id) => p.info(k, id)} listed={listed} />
   );
-  const why = fit ? budgetWhy(fit) : [];
   const empty = !musts.length && !draftMusts.length;
   return (
     <UnitCard
@@ -777,12 +801,12 @@ function ClientCard(p: CardProps) {
       label={p.nameOf(k)}
       headClass="pw-card-head"
       name={
-        <button type="button" className="pw-name" onClick={() => p.ops.client(k)} title="Blocks, what counts and what's done">
+        <button type="button" className="pw-name" onClick={() => p.ops.client(k)} title="Its blocks, free time and what's done">
           {p.nameOf(k)}
         </button>
       }
       detail={lineDetail(p.line)}
-      fit={fit && <span className={`pw-fit2 pw-budget ${fit.status}`} title={`${blocksWord(fit.budgetQ)} this week${why.length ? `. Not counted: ${why.join("; ")}` : ". Nice to haves don't count against the blocks"}`}>{fit.text}</span>}
+      fit={fit && <span className={`pw-fit2 pw-budget ${fit.status}`} title={`Free focus time in ${p.nameOf(k)}'s blocks this week, after meetings${fit.borrowedMinutes ? " and borrowed time" : ""}. Nice to haves don't count against it`}>{fitWords(fit)}</span>}
       tone={fit ? TONE[fit.status] : "fits"}
       sub={port && (port.status !== "ok" || port.fromCache) ? `DevOps: ${port.status !== "ok" ? (port.message ?? port.status) : "from cache"}` : undefined}
     >
@@ -995,7 +1019,7 @@ function AddRow({ k, row, ops }: { k: string; row: AddRowInfo; ops: Ops }) {
 
 function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, parentListed, nestedIn, infoOf, listed }: {
   i: Item; first: boolean; last: boolean; past: boolean; info: Info | null; drafts: DraftStory[]; places: Place[]; ops: Ops;
-  /** Step 16.4: a feature's envelope (its blocks and the stories under it); a story nested in a feature's row. */
+  /** A feature's envelope (its load in hours and the stories under it); a story nested in a feature's row. */
   env?: Envelope<Item> | null; parentListed?: boolean; nestedIn?: Item; infoOf?: (itemId: number) => Info | null; listed?: ReadonlySet<number>;
 }) {
   const k = i.clientKey;
@@ -1010,14 +1034,14 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
   const { env, open: openMenu } = useContext(MenuCtx);
   const dw = useDevOpsWrite();
   const facts: WeekItemFacts = {
-    itemId: i.itemId, title: i.title, tier: i.tier, level: i.level, first, last, past, done: i.done ? (i.done === "local" ? "local" : "other") : null, blocks: envl ? blocksOf(envl.quarters) : (i.blocks ?? 1), derived, size: i.size, nested: !!nestedIn,
+    itemId: i.itemId, title: i.title, tier: i.tier, level: i.level, first, last, past, done: i.done ? (i.done === "local" ? "local" : "other") : null, minutes: envl ? envl.minutes : (i.estimate ?? DEFAULT_FEATURE_MINUTES), derived, size: i.size, nested: !!nestedIn,
     places: places.map((pl) => ({ date: pl.date, half: pl.half, label: pl.label })), pinned: i.slots, openStories, targetDate: feature?.targetDate ?? null, drafts: drafts.length, canWrite: !!dw?.can(k),
   };
   const wops: WeekItemOps = {
     move: (by) => ops.move(i, by),
     tier: () => ops.tier(i, other),
     pin: (date, half, on) => ops.pin(k, i.itemId, date, half, on),
-    blocks: (n) => ops.blocks(i, n),
+    hours: (n) => ops.hours(i, n),
     size: (z) => ops.size(i, z),
     done: (on) => ops.done(i, on),
     help: () => env?.openHelp({ clientKey: k, title: `#${i.itemId} ${i.title}`, url: i.url, itemId: i.itemId, pinned: i.slots[0]?.date ?? null }),
@@ -1091,25 +1115,12 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
       right={
         i.level === "feature" ? (
           derived ? (
-            <span className="pw-stepper pw-derived" role="group" aria-label={`Blocks for ${i.title}, from its stories`}>
-              {/* Placeholders keep the chip in line with the estimate chips above and below (their ± show on hover). */}
-              <button type="button" className="mini pw-step pw-step-ph" tabIndex={-1} aria-hidden="true" disabled>−</button>
-              <span className="pw-chip-btn pw-load" title="From its stories: the sizes of its stories on the list, rounded up to a half block">{blocksText(facts.blocks)}</span>
-              <button type="button" className="mini pw-step pw-step-ph" tabIndex={-1} aria-hidden="true" disabled>+</button>
-            </span>
+            <HoursStepper className="pw-stepper" label={i.title} minutes={facts.minutes} derived about={envl ? loadText(envl).startsWith("about") : true} />
           ) : (
-            <span className="pw-stepper" role="group" aria-label={`Blocks for ${i.title}`}>
-              <button type="button" className="mini pw-step" disabled={past || facts.blocks <= 0.5} aria-label="Half a block less" onClick={() => ops.blocks(i, facts.blocks - 0.5)}>−</button>
-              <button type="button" className="pw-chip-btn pw-load" disabled={past} onClick={(e) => show(e, blocksStep(facts, wops))} title="Your estimate: how many of this client's blocks it needs. Size its stories to plan from them">
-                {blocksText(facts.blocks)}
-              </button>
-              <button type="button" className="mini pw-step" disabled={past || facts.blocks >= 20} aria-label="Half a block more" onClick={() => ops.blocks(i, facts.blocks + 0.5)}>+</button>
-            </span>
+            <HoursStepper className="pw-stepper" label={i.title} minutes={facts.minutes} disabled={past} onSet={(h) => ops.hours(i, h)} />
           )
         ) : (
-          <button type="button" className="pw-chip-btn pw-size" disabled={past} onClick={(e) => show(e, storySizeStep(facts, wops))} title="S about an hour, M a couple of hours, L about a whole block">
-            {i.size ?? "Size"}
-          </button>
+          <SizeChip className="pw-size" size={i.size} title={i.title} wide disabled={past} onSet={(z) => ops.size(i, z)} />
         )
       }
       hover={
@@ -1126,10 +1137,10 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
           {!past && <button type="button" className="link-btn" onClick={() => ops.add(i.clientKey, i.parentId!, i.tier)} title="Put its feature on the list; this story moves under it">Add the feature</button>}
         </span>
       )}
-      {envl && (envl.doneQuarters > 0 || (envl.unsized && !i.done)) && (
+      {envl && (envl.doneMinutes > 0 || (sourceWords(envl) && !i.done)) && (
         <span className="pw-fill">
-          {envl.doneQuarters > 0 && <span className="pw-progress-blocks">{progressWords(envl)}</span>}
-          {envl.unsized && !i.done && <span>{fillWords(envl)}</span>}
+          {envl.doneMinutes > 0 && <span className="pw-progress-hours">{progressWords(envl)}</span>}
+          {!i.done && sourceWords(envl) && <span>{sourceWords(envl)}</span>}
         </span>
       )}
       {envl && envl.stories.length > 0 && (

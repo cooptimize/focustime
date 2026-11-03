@@ -220,7 +220,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
                 return (
                   <li key={u.pickId}>
                     <span className="df-title">
-                      {u.title} <span className="muted">({u.size})</span>
+                      {u.title} <span className="muted">({u.size ?? "not sized, 2h"})</span>
                     </span>
                     {nextDay && (
                       <button type="button" className="mini" onClick={() => void act("pick.move", { id: u.pickId, date: nextDay.date, half: dayPicks.find((p) => p.id === u.pickId)?.half ?? "AM" }).then((ok) => ok && settle(u.pickId))}>

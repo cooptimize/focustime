@@ -3,7 +3,7 @@
 // through the free time from now on. Pure: the UI passes the block's free gaps, the clock and the sizes.
 import type { FreeGap } from "../week/types.ts";
 
-export type RowPick = { id: number; status: string; size: string; position: number };
+export type RowPick = { id: number; status: string; size: string | null; position: number };
 export type BlockRow<E, P> = { kind: "event"; at: number; event: E } | { kind: "pick"; at: number; pick: P };
 
 const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
@@ -36,7 +36,7 @@ export function blockRows<E extends { start: string }, P extends RowPick>(
       cursor = gaps[gi]?.[0] ?? ms(o.end);
     }
     rows.push({ kind: "pick", at: gi < gaps.length ? cursor : ms(o.end), pick: p });
-    cursor += (o.sizes[p.size] ?? 60) * 60_000;
+    cursor += (o.sizes[p.size ?? "M"] ?? 120) * 60_000;
   }
   // Same time: a meeting first (it is fixed), then picks in plan order.
   return rows.sort((a, b) => a.at - b.at || (a.kind === b.kind ? 0 : a.kind === "event" ? -1 : 1) || (a.kind === "pick" && b.kind === "pick" ? a.pick.position - b.pick.position : 0));

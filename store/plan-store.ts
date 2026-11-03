@@ -8,7 +8,7 @@ import type { Conn } from "./sql/conn.ts";
 import { sqliteConn } from "./sql/sqlite.ts";
 import { carryOver } from "../plan/rules.ts";
 import { type ItemLevel, type Tier } from "../plan/weeklist.ts";
-import { validHalfBlocks, validStorySize, type StorySize } from "../plan/estimate.ts";
+import { MAX_ESTIMATE_HOURS, validEstimateMinutes, validStorySize, type StorySize } from "../plan/estimate.ts";
 import type { Capture, DayPlan, DraftStory, Pick, PickKind, PlanWeek, Size, ZonedStamp } from "../plan/types.ts";
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
@@ -1187,7 +1187,74 @@ export const MIGRATIONS: readonly string[] = [
    DROP TABLE week_features;
    ALTER TABLE week_features_v27 RENAME TO week_features;
    CREATE INDEX week_features_user ON week_features(user_id);`,
+  // 28: E2 (D446), estimates in hours. A feature's estimate becomes minutes (whole hours, 1h to 80h): what E1 (half
+  // blocks) and step 16.4 (whole blocks) stored converts at 1 block = 4h, to the nearest hour. A pick's size may be
+  // empty (not sized yet; it counts as 2h). Both tables are rebuilt with the same rows and ids.
+  `${FK_OFF}
+   CREATE TABLE week_features_v28 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        week_start TEXT NOT NULL CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        client_key TEXT NOT NULL,
+        item_id INTEGER NOT NULL,
+        level TEXT NOT NULL DEFAULT 'feature' CHECK (level IN ('feature','story')),
+        tier TEXT NOT NULL DEFAULT 'must' CHECK (tier IN ('must','nice')),
+        title TEXT NOT NULL,
+        item_type TEXT,
+        url TEXT,
+        size TEXT CHECK (size IS NULL OR (size IN ('S','M','L') AND level = 'story')),
+        parent_id INTEGER,
+        position INTEGER,
+        done_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        -- Last, as SQL Server's migration 30 adds it, so both stores export the same columns in the same order.
+        estimate INTEGER CHECK (estimate IS NULL OR (estimate BETWEEN 60 AND 4800 AND estimate % 60 = 0 AND level = 'feature')),
+        UNIQUE (user_id, week_start, client_key, item_id)
+      );
+   INSERT INTO week_features_v28 (user_id, id, week_start, client_key, item_id, level, tier, title, item_type, url, size, parent_id, position, done_at, created_at, updated_at, estimate)
+     SELECT user_id, id, week_start, client_key, item_id, level, tier, title, item_type, url, size, parent_id, position, done_at, created_at, updated_at,
+       CASE WHEN level = 'feature' AND blocks IS NOT NULL THEN MIN(80, MAX(1, CAST(ROUND(blocks * 4) AS INTEGER))) * 60 ELSE NULL END
+     FROM week_features;
+   DROP TABLE week_features;
+   ALTER TABLE week_features_v28 RENAME TO week_features;
+   CREATE INDEX week_features_user ON week_features(user_id);
+   CREATE TABLE picks_v28 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        date TEXT NOT NULL,
+        half TEXT NOT NULL CHECK (half IN ('AM','PM','EVE')),
+        client_key TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('item','draft','intention')),
+        item_id INTEGER,
+        draft_id INTEGER REFERENCES draft_stories(id),
+        title TEXT NOT NULL,
+        item_type TEXT,
+        item_url TEXT,
+        size TEXT CHECK (size IS NULL OR size IN ('S','M','L')),
+        status TEXT NOT NULL CHECK (status IN ('planned','done','moved','dropped')),
+        carried_from INTEGER REFERENCES picks(id),
+        notes TEXT,
+        position INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        follow_up_id INTEGER REFERENCES follow_ups(id),
+        FOREIGN KEY (user_id, date) REFERENCES day_plans(user_id, date),
+        CHECK ((kind = 'item') = (item_id IS NOT NULL)),
+        CHECK ((kind = 'draft') = (draft_id IS NOT NULL))
+      );
+   INSERT INTO picks_v28 (user_id, id, date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id)
+     SELECT user_id, id, date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id FROM picks;
+   DROP INDEX picks_date;
+   DROP INDEX picks_user;
+   DROP TABLE picks;
+   ALTER TABLE picks_v28 RENAME TO picks;
+   CREATE INDEX picks_date ON picks(user_id, date, half, position);
+   CREATE INDEX picks_user ON picks(user_id);`,
 ];
+
+/** E2: the feature estimates a migration converts, counted before it runs and logged (never the values). */
+export const ESTIMATE_CONVERSION = { sqliteVersion: 28, count: "SELECT COUNT(*) AS n FROM week_features WHERE level = 'feature' AND blocks IS NOT NULL" } as const;
 
 import type { AzureWriteEntry, TeamsStatusEntry } from "../actions/account-types.ts";
 import type { Logger } from "../log/logger.ts";
@@ -1256,11 +1323,12 @@ export type ResumeNote = { id: number; clientKey: string; date: IsoDate; note: s
 export type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
 import type { WeekFeature, WeekPlanRecord } from "../plan/types.ts";
 
-export type NewWeekFeature = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; blocks: number };
-export type NewWeekItem = Omit<NewWeekFeature, "blocks"> & { level: ItemLevel; tier?: Tier; /** Features: an estimate in half blocks, or null for 1 block. */ blocks?: number | null; size?: StorySize; parentId?: number | null };
+export type NewWeekFeature = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; /** Minutes (whole hours); 0 takes it off. */ estimate: number };
+export type NewWeekItem = Omit<NewWeekFeature, "estimate"> & { level: ItemLevel; tier?: Tier; /** Features: an estimate in minutes (whole hours), or null for 4h. */ estimate?: number | null; size?: StorySize | null; parentId?: number | null };
 
-/** Most blocks one feature can take in a week (ten half-days, a little headroom). */
-export const MAX_FEATURE_BLOCKS = 20;
+/** Most hours one feature can take in a week (E2). */
+export const MAX_FEATURE_HOURS = MAX_ESTIMATE_HOURS;
+const ESTIMATE_ERROR = `an estimate must be whole hours, 1 to ${MAX_ESTIMATE_HOURS}`;
 
 export type Borrowed = {
   id: number;
@@ -1291,7 +1359,8 @@ export type NewPick = {
   title: string;
   itemType?: string | null;
   itemUrl?: string | null;
-  size: Size;
+  /** E2: null when not sized yet (counts as 2h). */
+  size: Size | null;
   /** Step 13.5: a follow-up picked into a block (an intention pick tied to it). */
   followUpId?: number | null;
 };
@@ -1333,7 +1402,7 @@ const toPick = (r: Row): Pick => ({
   title: r.title as string,
   itemType: (r.item_type as string | null) ?? null,
   itemUrl: (r.item_url as string | null) ?? null,
-  size: r.size as Size,
+  size: (r.size as Size | null) ?? null,
   status: r.status as Pick["status"],
   carriedFrom: (r.carried_from as number | null) ?? null,
   carriedFromDate: (r.carried_from_date as string | null) ?? null,
@@ -1446,7 +1515,7 @@ export function openPlanDb(opts: PlanDbOptions): DatabaseSync {
   db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
   db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
   const before = sqliteVersion(db);
-  migrate(db, opts.now, opts.path, opts.files);
+  migrate(db, opts.now, opts.path, opts.files, opts.log);
   // U3 (D388): say how many duplicate week items migration 21 removed (counts only; the rows are in dedupe_log).
   if (before < 21 && opts.log) {
     const n = (db.prepare("SELECT COUNT(*) AS n FROM dedupe_log WHERE table_name = 'week_features'").get() as { n: number }).n;
@@ -1571,7 +1640,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await mustPick(id));
       });
     },
-    async setSize(id: number, size: Size): Promise<Pick> {
+    async setSize(id: number, size: Size | null): Promise<Pick> {
       return tx(async () => {
         (await mustPick(id));
         (await db.run("UPDATE picks SET size = ?, updated_at = ? WHERE id = ?", size, stamp(), id));
@@ -2115,7 +2184,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         title: r.title as string,
         itemType: (r.item_type as string | null) ?? null,
         url: (r.url as string | null) ?? null,
-        blocks: (r.blocks as number | null) ?? null,
+        estimate: (r.estimate as number | null) ?? null,
         size: (r.size as StorySize | null) ?? null,
         parentId: (r.parent_id as number | null) ?? null,
         slots: slots.filter((x) => x.feature_id === r.id).map((x) => ({ date: x.date as string, half: x.half as "AM" | "PM" })),
@@ -2127,10 +2196,10 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       const latest = [plan?.updated_at as string | undefined, ...features.map((x) => x.updatedAt)].filter((x): x is string => !!x).sort((a, b) => Temporal.Instant.compare(Temporal.ZonedDateTime.from(a).toInstant(), Temporal.ZonedDateTime.from(b).toInstant())).at(-1);
       return { weekStart, committedAt: (plan?.committed_at as string | null) ?? null, updatedAt: latest ?? null, features };
     },
-    /** Step 8's call: a feature on a week with a number of blocks (a must when new); 0 blocks takes it off. */
+    /** Step 8's call: a feature on a week with an estimate (a must when new); 0 takes it off. */
     async setWeekFeature(f: NewWeekFeature): Promise<WeekFeature | null> {
       return tx(async () => {
-        if (f.blocks === 0) {
+        if (f.estimate === 0) {
           const row = (await db.get("SELECT id FROM week_features WHERE week_start = ? AND client_key = ? AND item_id = ?", f.weekStart, f.clientKey, f.itemId)) as Row | undefined;
           if (row) (await this.removeWeekItem(row.id as number));
           return null;
@@ -2140,30 +2209,30 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     },
     /**
      * Put a feature or story on a client's week list (step 11), or update it if there: title, type and link always;
-     * tier and blocks when given. New items are musts with the level's default blocks unless told otherwise.
+     * tier, estimate and size when given. New items are musts with no estimate (4h) or size unless told otherwise.
      */
     async addWeekItem(f: NewWeekItem): Promise<WeekFeature> {
-      if (f.level === "feature" && f.blocks != null && !validHalfBlocks(f.blocks)) throw new PlanError(`blocks must be ½ to ${MAX_FEATURE_BLOCKS} in half-block steps`);
-      if (f.level === "story" && f.size !== undefined && !validStorySize(f.size)) throw new PlanError("size must be S, M or L");
+      if (f.level === "feature" && f.estimate != null && !validEstimateMinutes(f.estimate)) throw new PlanError(ESTIMATE_ERROR);
+      if (f.level === "story" && f.size != null && !validStorySize(f.size)) throw new PlanError("size must be S, M or L");
       return tx(async () => {
         const at = stamp();
         // U3 (D388): never a second row for the same item, even under a client key in another letter case.
         const row = (await db.get("SELECT id, tier, level FROM week_features WHERE week_start = ? AND lower(client_key) = lower(?) AND item_id = ? ORDER BY id LIMIT 1", f.weekStart, f.clientKey, f.itemId)) as Row | undefined;
         (await touchWeek(f.weekStart, at));
         let id: number;
-        const blocks = f.level === "feature" ? (f.blocks ?? null) : null;
+        const estimate = f.level === "feature" ? (f.estimate ?? null) : null;
         const size = f.level === "story" ? (f.size ?? null) : null;
         if (row) {
           id = row.id as number;
           (await db.run("UPDATE week_features SET title = ?, item_type = ?, url = ?, level = ?, updated_at = ? WHERE id = ?", f.title, f.itemType, f.url, f.level, at, id));
-          if (row.level !== f.level) (await db.run("UPDATE week_features SET blocks = ?, size = ? WHERE id = ?", blocks, size, id));
-          else if (f.level === "feature" && f.blocks !== undefined) (await db.run("UPDATE week_features SET blocks = ? WHERE id = ?", blocks, id));
+          if (row.level !== f.level) (await db.run("UPDATE week_features SET estimate = ?, size = ? WHERE id = ?", estimate, size, id));
+          else if (f.level === "feature" && f.estimate !== undefined) (await db.run("UPDATE week_features SET estimate = ? WHERE id = ?", estimate, id));
           else if (f.level === "story" && f.size !== undefined) (await db.run("UPDATE week_features SET size = ? WHERE id = ?", size, id));
           if (f.parentId !== undefined) (await db.run("UPDATE week_features SET parent_id = ? WHERE id = ?", f.parentId, id));
           if (f.tier && f.tier !== row.tier) (await db.run("UPDATE week_features SET tier = ?, position = NULL WHERE id = ?", f.tier, id));
         } else {
           id = Number(
-            (await db.run("INSERT INTO week_features (week_start, client_key, item_id, level, tier, title, item_type, url, blocks, size, parent_id, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)", f.weekStart, f.clientKey, f.itemId, f.level, f.tier ?? "must", f.title, f.itemType, f.url, blocks, size, f.parentId ?? null, at, at)).lastId,
+            (await db.run("INSERT INTO week_features (week_start, client_key, item_id, level, tier, title, item_type, url, estimate, size, parent_id, position, done_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)", f.weekStart, f.clientKey, f.itemId, f.level, f.tier ?? "must", f.title, f.itemType, f.url, estimate, size, f.parentId ?? null, at, at)).lastId,
           );
         }
         return (await this.weekPlan(f.weekStart)).features.find((x) => x.id === id)!;
@@ -2176,22 +2245,22 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
       });
     },
-    /** A feature's estimate in half blocks, or null for 1 block (E1). Stories have a size. */
-    async setWeekItemBlocks(id: number, blocks: number | null): Promise<WeekFeature> {
+    /** A feature's estimate in minutes (whole hours, 1h to 80h), or null for 4h (E2). Stories have a size. */
+    async setWeekItemEstimate(id: number, minutes: number | null): Promise<WeekFeature> {
       return tx(async () => {
-        if (blocks !== null && !validHalfBlocks(blocks)) throw new PlanError(`blocks must be ½ to ${MAX_FEATURE_BLOCKS} in half-block steps`);
+        if (minutes !== null && !validEstimateMinutes(minutes)) throw new PlanError(ESTIMATE_ERROR);
         const row = (await db.get("SELECT level FROM week_features WHERE id = ?", id)) as Row | undefined;
-        if (row && row.level !== "feature") throw new PlanError("A story has a size (S, M or L), not blocks");
-        const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET blocks = ?, updated_at = ? WHERE id = ?", blocks, at, id))));
+        if (row && row.level !== "feature") throw new PlanError("A story has a size (S, M or L), not an estimate");
+        const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET estimate = ?, updated_at = ? WHERE id = ?", minutes, at, id))));
         return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
       });
     },
-    /** A story's size on the week list (step 16.4). */
-    async setWeekItemSize(id: number, size: StorySize): Promise<WeekFeature> {
+    /** A story's size on the week list (step 16.4), or null to clear it (E2: unsized counts as 2h). */
+    async setWeekItemSize(id: number, size: StorySize | null): Promise<WeekFeature> {
       return tx(async () => {
-        if (!validStorySize(size)) throw new PlanError("size must be S, M or L");
+        if (size !== null && !validStorySize(size)) throw new PlanError("size must be S, M or L");
         const row = (await db.get("SELECT level FROM week_features WHERE id = ?", id)) as Row | undefined;
-        if (row && row.level !== "story") throw new PlanError("A feature has blocks, not a size");
+        if (row && row.level !== "story") throw new PlanError("A feature has an estimate, not a size");
         const w = (await weekItemChange(id, async (at) => (await db.run("UPDATE week_features SET size = ?, updated_at = ? WHERE id = ?", size, at, id))));
         return (await this.weekPlan(w)).features.find((x) => x.id === id)!;
       });
@@ -2240,7 +2309,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       const r = (await db.get("SELECT week_start FROM week_features WHERE id = ?", id)) as Row | undefined;
       return r ? ((await this.weekPlan(r.week_start as string)).features.find((x) => x.id === id) ?? null) : null;
     },
-    /** Pin a week item to a block of its week (on) or unpin it (off). Pins don't change its blocks (step 11). */
+    /** Pin a week item to a block of its week (on) or unpin it (off). Pins don't change its estimate (step 11). */
     async placeFeature(featureId: number, date: IsoDate, half: "AM" | "PM", on: boolean): Promise<WeekFeature> {
       return tx(async () => {
         const r = (await db.get("SELECT * FROM week_features WHERE id = ?", featureId)) as Row | undefined;
@@ -2547,7 +2616,7 @@ function sqliteVersion(db: DatabaseSync): number {
 /** Where the copy taken before a migration goes: plan.db.bak-v<from>-<stamp>, next to the store, 0600. */
 export const backupPath = (path: string, from: number, stamp: string) => `${path}.bak-v${from}-${stamp.replace(/[^0-9TZ]/g, "")}`;
 
-function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":memory:", files?: StoreFiles) {
+function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":memory:", files?: StoreFiles, log?: Logger) {
   db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
   const current = sqliteVersion(db);
   if (current > MIGRATIONS.length) throw new Error(`Plan store is from a newer FocusTime (schema ${current}); not opening it`);
@@ -2563,7 +2632,9 @@ function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":m
     if (rebuild) db.exec("PRAGMA foreign_keys = OFF");
     db.exec("BEGIN IMMEDIATE");
     try {
+      const converting = v === ESTIMATE_CONVERSION.sqliteVersion ? Number((db.prepare(ESTIMATE_CONVERSION.count).get() as { n: number }).n) : null;
       db.exec(MIGRATIONS[v - 1]!);
+      if (converting !== null) log?.({ source: "database", op: "convert_estimates", count: converting });
       if (rebuild && db.prepare("PRAGMA foreign_key_check").all().length) throw new Error(`Plan store migration ${v} would break references; not applied`);
       db.prepare("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)").run(v, now().toString({ smallestUnit: "second" }));
       db.exec("COMMIT");

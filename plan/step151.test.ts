@@ -35,6 +35,12 @@ describe("shortest useful time (D273)", () => {
     expect(r.placed).toEqual([]);
     expect(r.unplaced).toEqual([{ pickId: 1, half: "AM", title: "Pick 1", size: "M", reason: "No gap of 1h or more left in the morning" }]);
   });
+  it("E2: an unsized pick is placed as 2h, never left out for having no size", () => {
+    const am = slot("AM", [["09:00", "12:00"]]);
+    const r = planMyDay([pick(1, "AM", "M", { size: null })], { AM: am }, [], SIZES, new Set(), undefined, DEFAULT_MIN_SIZES);
+    expect(r.placed.map((p) => [p.pickId, p.start.slice(11, 16), p.end.slice(11, 16)])).toEqual([[1, "09:00", "11:00"]]);
+    expect(r.unplaced).toEqual([]);
+  });
   it("prefers a gap that holds the pick whole, then the largest gap of at least the minimum", () => {
     const pm = slot("PM", [["13:00", "13:20"], ["14:00", "15:15"], ["15:30", "17:00"]]);
     const r = planMyDay([pick(1, "PM", "L"), pick(2, "PM", "M"), pick(3, "PM", "S")], { PM: pm }, [], SIZES, new Set(), undefined, DEFAULT_MIN_SIZES);
@@ -51,10 +57,12 @@ describe("shortest useful time (D273)", () => {
     const plan = (lines: string) => base.replace("[plan]\n", `[plan]\n${lines}\n`);
     const ok = parseConfig(plan("min_s = 20\nmin_m = 45\nmin_l = 120"));
     expect(ok.ok && ok.config.plan.minSizes).toEqual({ S: 20, M: 45, L: 120 });
-    const bad = parseConfig(plan("size_s = 30\nmin_s = 45\nmin_m = 7"));
+    // E2: sizes are fixed (S 1h); a size_s set before is read and ignored, never an error.
+    const bad = parseConfig(plan("size_s = 30\nmin_s = 75\nmin_m = 7"));
     expect(bad.ok).toBe(false);
     if (!bad.ok) {
-      expect(bad.errors).toContainEqual({ field: "plan.min_s", message: "Must be at most size S (30)" });
+      expect(bad.errors).toContainEqual({ field: "plan.min_s", message: "Must be at most size S (60)" });
+      expect(bad.errors.some((e) => e.field === "plan.size_s")).toBe(false);
       expect(bad.errors).toContainEqual({ field: "plan.min_m", message: "Must be 15 to 480 in steps of 5" });
     }
   });

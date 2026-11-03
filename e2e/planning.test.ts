@@ -97,15 +97,15 @@ describe.skipIf(!CHROMIUM)("Plan the week and Plan the day (U4)", () => {
       const offered = (await page.locator(".pw-addpane .pw-addrow .pw-title a").allTextContents()).map((t) => t.replace(/^#\d+\s+/, "").trim());
       for (const t of offered) expect(listed).not.toContain(t);
     }
-    // Northwind's musts need 2½ blocks and it has 2: exactly one amber line. Cooptimize fits: none.
+    // Northwind's musts need about 10h and it has 8h free: exactly one amber line (E2). Cooptimize fits: none.
     const northwind = await weekClient(page, "Northwind");
     await expect(northwind.locator(".pw-over").count()).resolves.toBe(1);
-    await expect(northwind.locator(".pw-over").textContent()).resolves.toMatch(/^2½ blocks of musts, 2 blocks free\. Move one to nice to have/);
+    await expect(northwind.locator(".pw-over").textContent()).resolves.toBe("About 2h more than Northwind's free time this week. Make one a nice to have, or borrow Friday.");
     // A feature with no stories says so on its row, with the two ways forward.
     const supplier = northwind.locator(".pw-row", { hasText: "Supplier onboarding" });
     await expect(supplier.locator(".pw-needs").textContent()).resolves.toMatch(/Needs stories.*Draft stories.*Coop brief/);
     await expect((await weekClient(page, "Cooptimize")).locator(".pw-over").count()).resolves.toBe(0);
-    // Not counted half-days are on hover over the blocks number, not a line of their own.
+    // E2: the budget is real free time; nothing is "not counted".
     await expect(page.getByText("Not counted:").count()).resolves.toBe(0);
     expect(errors).toEqual([]);
     await page.close();

@@ -5,7 +5,7 @@ import type { FreeGap, IsoDate } from "../week/types.ts";
 import { fitOf, type Fit } from "./rules.ts";
 import { slotPlanned } from "./timebox.ts";
 
-type PickLike = { id: number; status: string; size: string };
+type PickLike = { id: number; status: string; size: string | null };
 type BoxLike = { date: IsoDate; pickId: number | null; start: string; end: string; removedAt: string | null };
 type SlotLike = { date: IsoDate; start: string; end: string; pto: boolean; freeGaps: FreeGap[]; longestFreeMinutes: number };
 
@@ -67,13 +67,13 @@ export function trimCandidates<P extends PickLike>(picks: readonly P[], overBy: 
   const order = picks
     .map((p, i) => ({ p, i }))
     .filter(({ p }) => p.status === "planned")
-    .sort((a, b) => Number(musts.has(a.p.id)) - Number(musts.has(b.p.id)) || (sizes[b.p.size] ?? 0) - (sizes[a.p.size] ?? 0) || Number(timed.has(a.p.id)) - Number(timed.has(b.p.id)) || b.i - a.i);
+    .sort((a, b) => Number(musts.has(a.p.id)) - Number(musts.has(b.p.id)) || (sizes[b.p.size ?? "M"] ?? 0) - (sizes[a.p.size ?? "M"] ?? 0) || Number(timed.has(a.p.id)) - Number(timed.has(b.p.id)) || b.i - a.i);
   const out: number[] = [];
   let covered = 0;
   for (const { p } of order) {
     if (covered >= overBy) break;
     out.push(p.id);
-    covered += sizes[p.size] ?? 0;
+    covered += sizes[p.size ?? "M"] ?? 0;
   }
   return out;
 }
@@ -104,11 +104,12 @@ export function blockFitWords(f: Fit | null): FitWords {
 }
 
 /**
- * Plan the day's header line (U4): "about 5 hours free" and, only when some block is over, "about 2 hours over"
- * (the amber part): the sum of each block's overage, so it agrees with the block fit words.
+ * Plan the day's header line (U4, E2: whole hours as everywhere else): "about 5h free" and, only when some block is
+ * over, "about 2h over" (the amber part): the sum of each block's overage, so it agrees with the block fit words.
  */
 export function dayHeadline(blocks: readonly { planned: number; free: number }[]): { free: string; over: string | null } {
   const free = blocks.reduce((s, b) => s + b.free, 0);
   const over = blocks.reduce((s, b) => s + (b.planned - b.free > OVER_GRACE ? b.planned - b.free : 0), 0);
-  return { free: `${aboutHours(free)} free`, over: over > 0 ? `${aboutHours(over)} over` : null };
+  const h = (m: number) => (m < 30 ? "under 1h" : `about ${Math.round(m / 60)}h`);
+  return { free: free > 0 ? `${h(free)} free` : "no free time", over: over > 0 ? (over < 45 ? "a little over" : `${h(over)} over`) : null };
 }

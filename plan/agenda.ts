@@ -87,7 +87,7 @@ export function placeInGap(gap: FreeGap, want: number, min = TIMEBOX_MIN): Place
 }
 
 export type DayPlacement = Placement & { pickId: number; half: Half; title: string; clientKey: string };
-export type Unplaced = { pickId: number; half: Half; title: string; size: Size; reason: string };
+export type Unplaced = { pickId: number; half: Half; title: string; size: Size | null; reason: string };
 
 /** The shortest useful time per size (D273): Timebox my day never places a pick in less. */
 export const DEFAULT_MIN_SIZES: Readonly<Record<Size, number>> = { S: 30, M: 60, L: 90 };
@@ -105,15 +105,16 @@ export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, S
   const boxed = new Set(timeboxes.filter((t) => !t.removedAt && t.pickId !== null).map((t) => t.pickId));
   const todo = picks
     .filter((p) => p.status === "planned" && !boxed.has(p.id) && blocks[p.half])
-    .sort((a, b) => Number(musts.has(b.id)) - Number(musts.has(a.id)) || SIZE_RANK[a.size] - SIZE_RANK[b.size] || a.position - b.position || a.id - b.id);
+    .sort((a, b) => Number(musts.has(b.id)) - Number(musts.has(a.id)) || SIZE_RANK[a.size ?? "M"] - SIZE_RANK[b.size ?? "M"] || a.position - b.position || a.id - b.id);
   const gaps = new Map<Half, FreeGap[]>();
   for (const [h, s] of Object.entries(blocks) as [Half, Slot][]) gaps.set(h, openGaps(s, timeboxes, now));
   const placed: DayPlacement[] = [];
   const unplaced: Unplaced[] = [];
   for (const p of todo) {
     const list = gaps.get(p.half)!;
-    const want = sizes[p.size];
-    const min = Math.min(minSizes[p.size], want);
+    // E2: an unsized pick takes 2h, like M (never left out for having no size).
+    const want = sizes[p.size ?? "M"];
+    const min = Math.min(minSizes[p.size ?? "M"], want);
     let i = list.findIndex((g) => placeInGap(g, want, min)?.trimmed === false);
     if (i < 0) i = list.reduce((best, g, k) => (placeInGap(g, want, min) && (best < 0 || g.minutes > list[best]!.minutes) ? k : best), -1);
     const at = i >= 0 ? placeInGap(list[i]!, want, min) : null;
@@ -131,17 +132,17 @@ export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, S
 }
 
 /** What didn't fit, said plainly (D274): "2 picks didn't fit: Export spec draft (M), Delay alerts (S)." */
-export function didntFitText(picks: readonly { title: string; size: Size }[]): string {
+export function didntFitText(picks: readonly { title: string; size: Size | null }[]): string {
   if (!picks.length) return "";
-  return `${picks.length} ${picks.length === 1 ? "pick" : "picks"} didn't fit: ${picks.map((p) => `${p.title} (${p.size})`).join(", ")}.`;
+  return `${picks.length} ${picks.length === 1 ? "pick" : "picks"} didn't fit: ${picks.map((p) => `${p.title} (${p.size ?? "not sized, 2h"})`).join(", ")}.`;
 }
 
-/** One size smaller, for "Make smaller"; S has nothing smaller. */
-export function smallerSize(s: Size): Size | null {
-  return s === "L" ? "M" : s === "M" ? "S" : null;
+/** One size smaller, for "Make smaller"; S has nothing smaller. An unsized pick counts as M, so S. */
+export function smallerSize(s: Size | null): Size | null {
+  return s === "L" ? "M" : s === "M" || s === null ? "S" : null;
 }
 
-export type DidntFit = { pickId: number; title: string; size: Size };
+export type DidntFit = { pickId: number; title: string; size: Size | null };
 
 /**
  * After Timebox my day runs (D274): the "no time yet" offer is cleared, a summary names what didn't fit,

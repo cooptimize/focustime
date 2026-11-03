@@ -274,37 +274,37 @@ describe("step 6c: follow-ups, timer state, focused time and reset", () => {
 describe("week plan (step 8)", () => {
   const W = "2026-11-09";
   const f = { weekStart: W, clientKey: "Adatum", itemId: 210, title: "Dana's feature", itemType: "Feature", url: "https://dev.azure.com/x/y/_workitems/edit/210" };
-  it("commits features to a week by a number of blocks; 0 blocks takes it off", async () => {
+  it("commits features to a week with an estimate in minutes (whole hours); 0 takes it off", async () => {
     const { store } = await fresh();
     expect((await store.weekPlan(W))).toEqual({ weekStart: W, committedAt: null, updatedAt: null, features: [] });
-    const a = (await store.setWeekFeature({ ...f, blocks: 2 }));
-    expect(a).toMatchObject({ clientKey: "Adatum", itemId: 210, blocks: 2, slots: [] });
-    (await store.setWeekFeature({ ...f, blocks: 3 }));
-    (await store.setWeekFeature({ ...f, itemId: 240, title: "Mine", blocks: 1 }));
-    expect((await store.weekPlan(W)).features.map((x) => [x.itemId, x.blocks])).toEqual([[210, 3], [240, 1]]);
-    (await store.setWeekFeature({ ...f, itemId: 240, title: "Mine", blocks: 0 }));
+    const a = (await store.setWeekFeature({ ...f, estimate: 480 }));
+    expect(a).toMatchObject({ clientKey: "Adatum", itemId: 210, estimate: 480, slots: [] });
+    (await store.setWeekFeature({ ...f, estimate: 720 }));
+    (await store.setWeekFeature({ ...f, itemId: 240, title: "Mine", estimate: 240 }));
+    expect((await store.weekPlan(W)).features.map((x) => [x.itemId, x.estimate])).toEqual([[210, 720], [240, 240]]);
+    (await store.setWeekFeature({ ...f, itemId: 240, title: "Mine", estimate: 0 }));
     expect((await store.weekPlan(W)).features.map((x) => x.itemId)).toEqual([210]);
-    await expect(store.setWeekFeature({ ...f, blocks: 99 })).rejects.toThrow(/blocks/);
+    await expect(store.setWeekFeature({ ...f, estimate: 90 })).rejects.toThrow(/whole hours/);
   });
-  it("pins a feature to specific blocks without changing its blocks (step 11)", async () => {
+  it("pins a feature to specific blocks without changing its estimate (step 11)", async () => {
     const { store } = await fresh();
-    const a = (await store.setWeekFeature({ ...f, blocks: 1 }))!;
+    const a = (await store.setWeekFeature({ ...f, estimate: 240 }))!;
     (await store.placeFeature(a.id, "2026-11-10", "PM", true));
     (await store.placeFeature(a.id, "2026-11-09", "AM", true));
-    expect((await store.weekPlan(W)).features[0]).toMatchObject({ blocks: 1, slots: [{ date: "2026-11-09", half: "AM" }, { date: "2026-11-10", half: "PM" }] });
+    expect((await store.weekPlan(W)).features[0]).toMatchObject({ estimate: 240, slots: [{ date: "2026-11-09", half: "AM" }, { date: "2026-11-10", half: "PM" }] });
     (await store.placeFeature(a.id, "2026-11-09", "AM", true)); // again: no change
     (await store.placeFeature(a.id, "2026-11-09", "AM", false));
-    expect((await store.weekPlan(W)).features[0]).toMatchObject({ blocks: 1, slots: [{ date: "2026-11-10", half: "PM" }] });
+    expect((await store.weekPlan(W)).features[0]).toMatchObject({ estimate: 240, slots: [{ date: "2026-11-10", half: "PM" }] });
     await expect(store.placeFeature(a.id, "2026-11-17", "AM", true)).rejects.toThrow(/week/);
     await expect(store.placeFeature(999, "2026-11-09", "AM", true)).rejects.toThrow();
   });
   it("commits the week, stays editable, and knows when it changed since the commit", async () => {
     const { store } = await fresh();
-    (await store.setWeekFeature({ ...f, blocks: 2 }));
+    (await store.setWeekFeature({ ...f, estimate: 480 }));
     const c = (await store.commitWeek(W));
     expect(c.committedAt).toBe(clock.toString({ smallestUnit: "second" }));
     clock = clock.add({ minutes: 5 });
-    (await store.setWeekFeature({ ...f, blocks: 3 }));
+    (await store.setWeekFeature({ ...f, estimate: 720 }));
     const p = (await store.weekPlan(W));
     expect(p.updatedAt! > p.committedAt!).toBe(true);
     clock = clock.add({ minutes: 5 });
@@ -316,7 +316,7 @@ describe("week plan (step 8)", () => {
     expect((await store.breakdownMarks())).toEqual([{ clientKey: "Adatum", itemId: 240, markedAt: clock.toString({ smallestUnit: "second" }) }]);
     (await store.markBreakdown("Adatum", 240, false));
     expect((await store.breakdownMarks())).toEqual([]);
-    (await store.setWeekFeature({ ...f, blocks: 2 }));
+    (await store.setWeekFeature({ ...f, estimate: 480 }));
     (await store.commitWeek(W));
     (await store.markBreakdown("Adatum", 240, true));
     const e = (await store.exportJson());
@@ -352,9 +352,10 @@ describe("week plan by client (step 11)", () => {
     expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v7-"))).toHaveLength(1);
     const p = (await store.weekPlan(W));
     expect(p.committedAt).toBe("2026-11-06T16:00:00-05:00[America/New_York]");
-    expect(p.features.map((x) => [x.id, x.itemId, x.level, x.tier, x.blocks, x.position, x.doneAt, x.slots.length])).toEqual([
-      [7, 210, "feature", "must", 3, null, null, 2],
-      [9, 300, "feature", "must", 1, null, null, 0],
+    // E2 (migration 28): 3 blocks and 1 block become 12h and 4h.
+    expect(p.features.map((x) => [x.id, x.itemId, x.level, x.tier, x.estimate, x.position, x.doneAt, x.slots.length])).toEqual([
+      [7, 210, "feature", "must", 720, null, null, 2],
+      [9, 300, "feature", "must", 240, null, null, 0],
     ]);
     await store.close();
   });
@@ -381,36 +382,39 @@ describe("week plan by client (step 11)", () => {
     expect((await store.schemaVersion())).toBe(MIGRATIONS.length);
     expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v18-"))).toHaveLength(1);
     const f = (await store.weekPlan(W)).features;
-    expect(f.map((x) => [x.id, x.level, x.tier, x.blocks, x.size, x.parentId, x.position, !!x.doneAt, x.slots.length])).toEqual([
-      [3, "feature", "must", 2, null, null, null, false, 1],
-      [4, "feature", "nice", 1, null, null, 2, false, 0],
-      [5, "feature", "must", 2, null, null, null, false, 0],
+    // Then E2 (migration 28): whole blocks at 4h each.
+    expect(f.map((x) => [x.id, x.level, x.tier, x.estimate, x.size, x.parentId, x.position, !!x.doneAt, x.slots.length])).toEqual([
+      [3, "feature", "must", 480, null, null, null, false, 1],
+      [4, "feature", "nice", 240, null, null, 2, false, 0],
+      [5, "feature", "must", 480, null, null, null, false, 0],
       [6, "story", "must", null, "M", null, null, true, 0],
       [8, "story", "nice", null, "L", null, null, false, 0],
     ]);
     // No fraction survives anywhere in the week plan.
-    expect(f.every((x) => x.blocks === null || Number.isInteger(x.blocks))).toBe(true);
+    expect(f.every((x) => x.estimate === null || x.estimate % 60 === 0)).toBe(true);
     await store.close();
   });
 
-  it("adds features (half blocks or none) and stories (S, M, L, or not sized yet: E1) as musts or nice to haves, sets tier and a done mark", async () => {
+  it("adds features (an estimate in whole hours, or none) and stories (S, M, L, or not sized yet) as musts or nice to haves, sets tier and a done mark", async () => {
     const { store } = await fresh();
     const a = (await store.addWeekItem({ ...base, itemId: 210, level: "feature" }));
-    expect(a).toMatchObject({ level: "feature", tier: "must", blocks: null, size: null, position: null, doneAt: null });
+    expect(a).toMatchObject({ level: "feature", tier: "must", estimate: null, size: null, position: null, doneAt: null });
     const b = (await store.addWeekItem({ ...base, itemId: 501, itemType: "User Story", level: "story", tier: "nice", parentId: 210 }));
-    expect(b).toMatchObject({ level: "story", tier: "nice", blocks: null, size: null, parentId: 210 });
+    expect(b).toMatchObject({ level: "story", tier: "nice", estimate: null, size: null, parentId: 210 });
     // Adding again updates it in place.
-    expect((await store.addWeekItem({ ...base, itemId: 210, title: "Renamed", level: "feature", tier: "nice", blocks: 3 }))).toMatchObject({ id: a.id, title: "Renamed", tier: "nice", blocks: 3 });
+    expect((await store.addWeekItem({ ...base, itemId: 210, title: "Renamed", level: "feature", tier: "nice", estimate: 720 }))).toMatchObject({ id: a.id, title: "Renamed", tier: "nice", estimate: 720 });
     expect((await store.setWeekItemTier(a.id, "must")).tier).toBe("must");
-    expect((await store.setWeekItemBlocks(a.id, 2)).blocks).toBe(2);
-    expect((await store.setWeekItemBlocks(a.id, 1.5)).blocks).toBe(1.5);
-    expect((await store.setWeekItemBlocks(a.id, 0.5)).blocks).toBe(0.5);
-    await expect(store.setWeekItemBlocks(a.id, 1.25)).rejects.toThrow(/half-block steps/);
-    await expect(store.setWeekItemBlocks(a.id, 0)).rejects.toThrow(/half-block steps/);
-    await expect(store.setWeekItemBlocks(a.id, 21)).rejects.toThrow(/half-block steps/);
-    await expect(store.setWeekItemBlocks(b.id, 1)).rejects.toThrow(/size/);
+    expect((await store.setWeekItemEstimate(a.id, 360)).estimate).toBe(360);
+    expect((await store.setWeekItemEstimate(a.id, 4800)).estimate).toBe(4800);
+    expect((await store.setWeekItemEstimate(a.id, null)).estimate).toBeNull();
+    await expect(store.setWeekItemEstimate(a.id, 90)).rejects.toThrow(/whole hours/);
+    await expect(store.setWeekItemEstimate(a.id, 0)).rejects.toThrow(/whole hours/);
+    await expect(store.setWeekItemEstimate(a.id, 4860)).rejects.toThrow(/whole hours/);
+    await expect(store.setWeekItemEstimate(b.id, 60)).rejects.toThrow(/size/);
     expect((await store.setWeekItemSize(b.id, "L")).size).toBe("L");
-    await expect(store.setWeekItemSize(a.id, "S")).rejects.toThrow(/blocks, not a size/);
+    expect((await store.setWeekItemSize(b.id, null)).size).toBeNull();
+    expect((await store.setWeekItemSize(b.id, "L")).size).toBe("L");
+    await expect(store.setWeekItemSize(a.id, "S")).rejects.toThrow(/estimate, not a size/);
     (await store.setWeekItemParents(W, [{ clientKey: base.clientKey, itemId: 501, parentId: 220 }]));
     expect((await store.weekItem(b.id))?.parentId).toBe(220);
     expect((await store.markWeekItemDone(b.id, true)).doneAt).toBe(clock.toString({ smallestUnit: "second" }));
@@ -678,10 +682,57 @@ describe("week plan duplicates (U3, D388)", () => {
       [3, 210, 1],
       [6, 211, 0],
     ]);
-    expect(logged).toEqual([{ source: "plan", op: "dedupe_week_items", count: 1 }]);
+    // Then E2's migration 28 converts the two features left with an estimate in blocks.
+    expect(logged).toEqual([{ source: "database", op: "convert_estimates", count: 2 }, { source: "plan", op: "dedupe_week_items", count: 1 }]);
     const db = new DatabaseSync(path);
     expect(db.prepare("SELECT removed_id, kept_id, item_id FROM dedupe_log").all().map((r) => ({ ...r }))).toEqual([{ removed_id: 5, kept_id: 3, item_id: 210 }]);
     db.close();
+  });
+
+  itSqlite("migration 28 (E2) turns estimates in blocks into minutes at 1 block = 4h, logs the count, leaves the rest; picks may be unsized", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "focustime-plan-"));
+    const path = join(dir, "plan.db");
+    const old = new DatabaseSync(path);
+    old.exec("PRAGMA foreign_keys = ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+    for (let v = 1; v <= 27; v++) {
+      const sql = MIGRATIONS[v - 1]!;
+      old.exec("PRAGMA foreign_keys = OFF");
+      old.exec(sql);
+      old.exec("PRAGMA foreign_keys = ON");
+      old.prepare("INSERT INTO schema_migrations VALUES (?, 'x')").run(v);
+    }
+    const at = "2026-11-06T15:00:00-05:00[America/New_York]";
+    old.prepare("INSERT INTO week_plans (user_id, week_start, committed_at, created_at, updated_at) VALUES ('', ?, NULL, ?, ?)").run(W, at, at);
+    const ins = old.prepare("INSERT INTO week_features (user_id, id, week_start, client_key, item_id, level, tier, title, item_type, url, blocks, size, parent_id, position, done_at, created_at, updated_at) VALUES ('', ?, ?, 'Adatum', ?, ?, 'must', 'T', NULL, NULL, ?, ?, NULL, NULL, NULL, ?, ?)");
+    ins.run(1, W, 210, "feature", 0.5, null, at, at); // E1: half a block
+    ins.run(2, W, 211, "feature", 2.5, null, at, at); // E1
+    ins.run(3, W, 212, "feature", 3, null, at, at); // step 16.4: whole blocks
+    ins.run(4, W, 213, "feature", null, null, at, at); // no estimate
+    ins.run(5, W, 501, "story", null, "S", at, at);
+    old.prepare("INSERT INTO day_plans (user_id, date, committed_at, created_at, updated_at, closed_out_at) VALUES ('', ?, NULL, ?, ?, NULL)").run(W, at, at);
+    old.prepare("INSERT INTO picks (user_id, id, date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id) VALUES ('', 9, ?, 'AM', 'Adatum', 'intention', NULL, NULL, 'Kept', NULL, NULL, 'L', 'planned', NULL, NULL, 1, ?, ?, NULL)").run(W, at, at);
+    old.close();
+    const logged: { op: string; count?: number }[] = [];
+    const store = await createPlanStore({ path, now, files: localStoreFiles, log: (r) => logged.push(r) });
+    expect((await store.schemaVersion())).toBe(MIGRATIONS.length);
+    expect(readdirSync(dir).filter((x) => x.startsWith("plan.db.bak-v27-"))).toHaveLength(1);
+    expect(logged).toContainEqual({ source: "database", op: "convert_estimates", count: 3 });
+    const f = (await store.weekPlan(W)).features;
+    expect(f.map((x) => [x.id, x.level, x.estimate, x.size])).toEqual([
+      [1, "feature", 120, null],
+      [2, "feature", 600, null],
+      [3, "feature", 720, null],
+      [4, "feature", null, null],
+      [5, "story", null, "S"],
+    ]);
+    // New data is minutes already, and a pick can be added with no size.
+    expect((await store.setWeekItemEstimate(4, 360)).estimate).toBe(360);
+    expect((await store.getPick(9))?.size).toBe("L");
+    const p = (await store.addPick({ date: W, half: "PM", clientKey: "Adatum", kind: "intention", title: "Not sized", size: null }));
+    expect(p.size).toBeNull();
+    expect((await store.setSize(p.id, "M")).size).toBe("M");
+    expect((await store.setSize(p.id, null)).size).toBeNull();
+    await store.close();
   });
 
   it("adding an item already on the week (any letter case of the client key) updates that row instead of adding a second", async () => {

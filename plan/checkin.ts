@@ -43,7 +43,7 @@ export function checkIn(slots: readonly { half: Half; slot: SlotIn }[], picks: r
       const focusedMinutes = Math.floor(focused(p.id) / 60);
       if (p.status === "done") return { pick: p, needMinutes: 0, focusedMinutes, fits: true };
       // A timeboxed pick needs its timeboxed time (step 12), else its size.
-      const need = Math.max(0, (boxed(p.id) ?? sizes[p.size]) - focusedMinutes);
+      const need = Math.max(0, (boxed(p.id) ?? sizes[p.size ?? "M"]) - focusedMinutes);
       used += need;
       if (used > left) broken = true;
       return { pick: p, needMinutes: need, focusedMinutes, fits: !broken };

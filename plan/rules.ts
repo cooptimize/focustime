@@ -14,7 +14,7 @@ export function capacityMinutes(slot: Parameters<typeof freeMinutes>[0], now: st
 
 /** Planned minutes of the picks still to do (planned); done, moved and dropped don't use capacity. */
 export function plannedMinutes(picks: readonly Pick[], sizes: Readonly<Record<Size, number>> = SIZE_MINUTES): number {
-  return picks.filter((p) => p.status === "planned").reduce((sum, p) => sum + sizes[p.size], 0);
+  return picks.filter((p) => p.status === "planned").reduce((sum, p) => sum + sizes[p.size ?? "M"], 0);
 }
 
 export type Fit = { kind: "empty" } | { kind: "fits"; spare: number } | { kind: "tight"; spare: number } | { kind: "over"; by: number };

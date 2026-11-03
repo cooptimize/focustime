@@ -356,19 +356,22 @@ function Rhythm({ cur, setCur }: { cur: number; setCur: (i: number) => void }) {
 }
 
 function Sizing() {
-  const [stories, setStories] = useState<StorySize[]>(SIZING.start);
+  const [stories, setStories] = useState<(StorySize | null)[]>(SIZING.start);
   const sb = useMemo(() => sandbox(stories, SIZING.block), [stories]);
-  const sizes: StorySize[] = ["S", "M", "L"];
+  const sizes: (StorySize | null)[] = ["S", "M", "L", null];
+  const freeHours = Math.round(SIZING.block.freeMinutes / 60);
   return (
     <Chapter id="sizing" eyebrow={SIZING.eyebrow} title={SIZING.title} sub={SIZING.sub}>
       <div className="guide-sandbox">
         <div className="guide-blockviz" style={tint(color(SIZING.block.color))}>
           <div className="head">
             <b>{SIZING.blockTitle}</b>
-            <span className="muted">{SIZING.block.label}</span>
+            <span className="muted">
+              {SIZING.block.label} · <span data-testid="guide-free">{SIZING.block.free}</span>
+            </span>
           </div>
           <div className="bar" aria-hidden="true">
-            {[0, 1, 2, 3].map((q) => (
+            {Array.from({ length: freeHours }, (_, q) => (
               <div key={q} className={`q${q < sb.filled ? " fill" : ""}${q % 2 ? " alt" : ""}`} />
             ))}
           </div>
@@ -379,16 +382,16 @@ function Sizing() {
           </div>
           <div className="foot">
             <span className={`fitword ${sb.fit.tone}`} data-testid="guide-fit" role="status">
-              {sb.quarters === 0 ? SIZING.empty : sb.fit.text}
+              {sb.minutes === 0 ? SIZING.empty : sb.fit.text}
             </span>
             <span className="load" data-testid="guide-load">
-              {SIZING.load(sb.blocks)}
+              {SIZING.load(sb.load.planned, sb.load.free)}
             </span>
           </div>
           <div className="adds">
             {sizes.map((s) => (
-              <button key={s} type="button" className="quiet" data-add={s} onClick={() => sb.quarters < SIZING.maxQuarters && setStories((x) => [...x, s])}>
-                {SIZING.add(s)}
+              <button key={s ?? "unsized"} type="button" className="quiet" data-add={s ?? "unsized"} onClick={() => sb.minutes < SIZING.maxMinutes && setStories((x) => [...x, s])}>
+                + {SIZING.add(s)}
               </button>
             ))}
             <button type="button" className="quiet" data-clear onClick={() => setStories([])}>
@@ -396,9 +399,9 @@ function Sizing() {
             </button>
           </div>
           <div className="stack" aria-label={SIZING.stackLabel}>
-            {stories.map((s, i) => (
-              <button key={i} type="button" aria-label={SIZING.remove(s)} onClick={() => setStories((x) => x.filter((_, j) => j !== i))}>
-                {s} ✕
+            {sb.chips.map((chip, i) => (
+              <button key={i} type="button" className={stories[i] ? "" : "unsized"} aria-label={SIZING.remove(chip)} onClick={() => setStories((x) => x.filter((_, j) => j !== i))}>
+                {chip} ✕
               </button>
             ))}
           </div>

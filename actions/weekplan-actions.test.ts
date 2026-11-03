@@ -75,31 +75,31 @@ describe("Plan the week actions (step 8)", () => {
     for (const call of t.ado.calls) if (call.method === "POST") expect(call.url).toMatch(/\/_apis\/wit\/(wiql|workitemsbatch)\?/);
   });
 
-  it("commits features by blocks or by placing them on Adatum's blocks; refuses other clients' blocks and unknown features", async () => {
+  it("commits features by hours or by placing them on Adatum's blocks; refuses other clients' blocks and unknown features", async () => {
     const t = setup();
     const week = await t.run<WeekLoadData>("week.load", { weekStart: NEXT });
     const { adatum, other, open } = slots(week);
     expect(adatum.length).toBeGreaterThan(0);
     await t.run("weekplan.load", { weekStart: NEXT });
-    const a = await t.run<{ plan: WeekPlanView }>("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, blocks: 2 });
-    expect(a.plan.features).toEqual([expect.objectContaining({ clientKey: "Adatum", itemId: 210, title: "Dana's feature", itemType: "Feature", blocks: 2 })]);
+    const a = await t.run<{ plan: WeekPlanView }>("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 8 });
+    expect(a.plan.features).toEqual([expect.objectContaining({ clientKey: "Adatum", itemId: 210, title: "Dana's feature", itemType: "Feature", estimate: 480 })]);
     // Placing a feature not yet on the plan commits it with one block.
     const p = await t.run<{ plan: WeekPlanView }>("weekplan.place", { weekStart: NEXT, clientKey: "Adatum", itemId: 240, date: adatum[0]!.date, half: adatum[0]!.half, on: true });
-    expect(p.plan.features.find((f) => f.itemId === 240)).toMatchObject({ blocks: null, slots: [{ date: adatum[0]!.date, half: adatum[0]!.half }] });
+    expect(p.plan.features.find((f) => f.itemId === 240)).toMatchObject({ estimate: null, slots: [{ date: adatum[0]!.date, half: adatum[0]!.half }] });
     if (open) expect((await t.run<{ plan: WeekPlanView }>("weekplan.place", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, date: open.date, half: open.half, on: true })).plan.features.find((f) => f.itemId === 210)!.slots).toHaveLength(1);
     if (other) expect((await t.fail("weekplan.place", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, date: other.date, half: other.half, on: true })).status).toBe(422);
-    expect((await t.fail("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 999, blocks: 1 })).status).toBe(422);
+    expect((await t.fail("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 999, hours: 4 })).status).toBe(422);
     // An epic is not committed to a week; its features are.
-    expect((await t.fail("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 250, blocks: 1 })).status).toBe(422);
+    expect((await t.fail("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 250, hours: 4 })).status).toBe(422);
     expect((await t.fail("weekplan.place", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, date: "2026-11-16", half: "AM", on: true })).status).toBe(422);
   });
 
   it("Q51: shows the current DevOps title; the stored title only when DevOps can't give one", async () => {
     const t = setup();
     await t.run("weekplan.load", { weekStart: NEXT });
-    await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, blocks: 1 });
+    await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 4 });
     // The title stored at commit differs from DevOps's (as after a rename in DevOps).
-    (await t.plan.setWeekFeature({ weekStart: NEXT, clientKey: "Adatum", itemId: 210, title: "Name at commit", itemType: "Feature", url: null, blocks: 1 }));
+    (await t.plan.setWeekFeature({ weekStart: NEXT, clientKey: "Adatum", itemId: 210, title: "Name at commit", itemType: "Feature", url: null, estimate: 240 }));
     const s = await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT });
     expect(s.plan.features[0]).toMatchObject({ title: "Dana's feature", titleSource: "devops" });
     const w = await t.run<WeekLoadData>("week.load", { weekStart: NEXT });
@@ -111,22 +111,22 @@ describe("Plan the week actions (step 8)", () => {
   it("commits the week, stays editable and re-committable, and week.load shows it", async () => {
     const t = setup();
     await t.run("weekplan.load", { weekStart: NEXT });
-    await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, blocks: 2 });
+    await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 8 });
     const c = await t.run<{ plan: WeekPlanView }>("weekplan.commit", { weekStart: NEXT });
     expect(c.plan.committedAt).toBeTruthy();
     expect(c.plan.changed).toBe(false);
     t.at("2026-11-05T19:45:00Z");
-    const e = await t.run<{ plan: WeekPlanView }>("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, blocks: 3 });
+    const e = await t.run<{ plan: WeekPlanView }>("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 12 });
     expect(e.plan.changed).toBe(true);
     const week = await t.run<WeekLoadData>("week.load", { weekStart: NEXT });
-    expect(week.weekPlan?.features.map((f) => [f.itemId, f.blocks])).toEqual([[210, 3]]);
+    expect(week.weekPlan?.features.map((f) => [f.itemId, f.estimate])).toEqual([[210, 720]]);
     expect(week.weekFeatures.map((f) => f.itemId)).toEqual([210]);
   });
 
   it("Plan the day for that week offers the committed feature's stories: the feature and its open children come with the DevOps read", async () => {
     const t = setup();
     await t.run("weekplan.load", { weekStart: NEXT });
-    await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, blocks: 2 });
+    await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 8 });
     await t.run("weekplan.commit", { weekStart: NEXT });
     t.at("2026-11-09T13:30:00Z"); // Mon Nov 9, 8:30 AM
     const week = await t.run<WeekLoadData>("week.load", { weekStart: NEXT });
@@ -146,7 +146,7 @@ describe("Plan the week actions (step 8)", () => {
     expect(s.access).toBe("past");
     expect(s.portfolios).toEqual([]);
     for (const [a, i] of [
-      ["weekplan.set_feature", { weekStart: "2026-10-26", clientKey: "Adatum", itemId: 210, blocks: 1 }],
+      ["weekplan.set_feature", { weekStart: "2026-10-26", clientKey: "Adatum", itemId: 210, hours: 4 }],
       ["weekplan.commit", { weekStart: "2026-10-26" }],
       ["weekplan.place", { weekStart: "2026-10-26", clientKey: "Adatum", itemId: 210, date: "2026-10-26", half: "AM", on: true }],
     ] as const)
@@ -183,7 +183,7 @@ describe("Plan the week actions (step 8)", () => {
     const t = setup();
     expect((await t.run<WeekLoadData>("week.load", {})).weekNudge.badge).toBe(NEXT);
     await t.run("weekplan.load", { weekStart: NEXT });
-    await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, blocks: 1 });
+    await t.run("weekplan.set_feature", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 4 });
     await t.run("weekplan.commit", { weekStart: NEXT });
     expect((await t.run<WeekLoadData>("week.load", {})).weekNudge.badge).toBeNull();
   });
@@ -196,18 +196,18 @@ describe("week plan by client (step 11)", () => {
     await t.run("week.load", { weekStart: NEXT });
     await t.run("weekplan.load", { weekStart: NEXT });
     const a = await t.run<{ plan: WeekPlanView }>("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210 });
-    expect(a.plan.features).toEqual([expect.objectContaining({ itemId: 210, level: "feature", tier: "must", blocks: null })]);
+    expect(a.plan.features).toEqual([expect.objectContaining({ itemId: 210, level: "feature", tier: "must", estimate: null })]);
     // A story of mine (work read) and a story under a feature that isn't mine (portfolio read).
     await t.run("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 204, tier: "nice" });
     const c = await t.run<{ plan: WeekPlanView }>("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 212, size: "L" });
-    expect(c.plan.features.map((f) => [f.itemId, f.level, f.tier, f.blocks, f.size])).toEqual([[210, "feature", "must", null, null], [204, "story", "nice", null, null], [212, "story", "must", null, "L"]]);
-    // E1: half blocks for features (never a quarter), sizes for stories.
-    expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, blocks: 1.25 })).status).toBe(400);
-    expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 204, blocks: 1 })).status).toBe(400);
+    expect(c.plan.features.map((f) => [f.itemId, f.level, f.tier, f.estimate, f.size])).toEqual([[210, "feature", "must", null, null], [204, "story", "nice", null, null], [212, "story", "must", null, "L"]]);
+    // E2: whole hours for features (1 to 80), sizes for stories.
+    expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 1.5 })).status).toBe(400);
+    expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 204, hours: 4 })).status).toBe(400);
     expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, size: "M" })).status).toBe(400);
     expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 999 })).status).toBe(422);
     expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 250 })).status).toBe(422); // an epic
-    expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, blocks: 0.3 })).status).toBe(400);
+    expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, hours: 81 })).status).toBe(400);
     expect((await t.fail("weekplan.add", { weekStart: NEXT, clientKey: "Adatum", itemId: 210, tier: "maybe" })).status).toBe(400);
   });
 
@@ -223,11 +223,15 @@ describe("week plan by client (step 11)", () => {
     const s = await t.run<Res>("weekplan.set_tier", { id: await id(240), tier: "nice" });
     expect(s.headsUp).toBeNull(); // not committed yet
     expect(s.plan.features.find((f) => f.itemId === 240)).toMatchObject({ tier: "nice", position: null });
-    await t.run("weekplan.set_blocks", { id: await id(210), blocks: 2.5 });
-    expect((await t.plan.weekPlan(NEXT)).features.find((f) => f.itemId === 210)!.blocks).toBe(2.5);
-    await t.run("weekplan.set_blocks", { id: await id(210), blocks: 3 });
-    expect((await t.fail("weekplan.set_blocks", { id: await id(210), blocks: 2.75 })).status).toBe(400);
-    expect((await t.fail("weekplan.set_blocks", { id: await id(201), blocks: 1 })).status).toBe(422);
+    await t.run("weekplan.set_estimate", { id: await id(210), hours: 10 });
+    expect((await t.plan.weekPlan(NEXT)).features.find((f) => f.itemId === 210)!.estimate).toBe(600);
+    await t.run("weekplan.set_estimate", { id: await id(210), hours: 12 });
+    for (const hours of [0, 2.5, 81, "6"]) expect((await t.fail("weekplan.set_estimate", { id: await id(210), hours })).status).toBe(400);
+    expect((await t.fail("weekplan.set_estimate", { id: await id(201), hours: 4 })).status).toBe(422);
+    await t.run("weekplan.set_size", { id: await id(201), size: "S" });
+    // Sizing is optional: clearing it is allowed.
+    await t.run("weekplan.set_size", { id: await id(201), size: null });
+    expect((await t.plan.weekPlan(NEXT)).features.find((f) => f.itemId === 201)!.size).toBeNull();
     await t.run("weekplan.set_size", { id: await id(201), size: "S" });
     expect((await t.fail("weekplan.set_size", { id: await id(210), size: "S" })).status).toBe(422);
     await t.run("weekplan.mark_done", { id: await id(201), on: true });
@@ -270,7 +274,7 @@ describe("week plan by client (step 11)", () => {
     const { adatum } = slots(week);
     await t.run("weekplan.load", { weekStart: NEXT });
     const p = await t.run<{ plan: WeekPlanView }>("weekplan.place", { weekStart: NEXT, clientKey: "Adatum", itemId: 201, date: adatum[0]!.date, half: adatum[0]!.half, on: true });
-    expect(p.plan.features).toEqual([expect.objectContaining({ itemId: 201, level: "story", tier: "must", blocks: null, size: null, slots: [{ date: adatum[0]!.date, half: adatum[0]!.half }] })]);
+    expect(p.plan.features).toEqual([expect.objectContaining({ itemId: 201, level: "story", tier: "must", estimate: null, size: null, slots: [{ date: adatum[0]!.date, half: adatum[0]!.half }] })]);
     if (adatum[1]) expect((await t.run<{ plan: WeekPlanView }>("weekplan.place", { weekStart: NEXT, clientKey: "Adatum", itemId: 201, date: adatum[1].date, half: adatum[1].half, on: true })).plan.features[0]!.size).toBeNull();
   });
 

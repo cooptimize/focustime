@@ -6,7 +6,7 @@
 import { mapSeq } from "./seq.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { briefMarkdown, prioritiesKey, withCurrentTitles } from "../plan/weekplan.ts";
-import { headsUpKey, offersHeadsUp, validBlocks, weekHeadsUpDraft, type ItemLevel, type Tier } from "../plan/weeklist.ts";
+import { headsUpKey, offersHeadsUp, validHours, weekHeadsUpDraft, type ItemLevel, type Tier } from "../plan/weeklist.ts";
 import { validStorySize, type StorySize } from "../plan/estimate.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import { PlanError, type PlanStore, type WeekFeature, type WeekPlanRecord } from "../store/plan-store.ts";
@@ -23,7 +23,7 @@ export type WeekPlanAction =
   | "weekplan.commit"
   | "weekplan.add"
   | "weekplan.set_tier"
-  | "weekplan.set_blocks"
+  | "weekplan.set_estimate"
   | "weekplan.set_size"
   | "weekplan.reorder"
   | "weekplan.remove"
@@ -89,14 +89,17 @@ function tier(v: unknown): Tier {
   if (v !== "must" && v !== "nice") throw new Invalid("tier must be must or nice");
   return v;
 }
-function blocks(v: unknown): number {
-  if (!validBlocks(v)) throw new Invalid("blocks must be ½ to 20 in half-block steps");
-  return v as number;
+/** E2: an estimate in whole hours, 1 to 80; kept in minutes. */
+function hours(v: unknown): number {
+  if (!validHours(v)) throw new Invalid("hours must be a whole number from 1 to 80");
+  return (v as number) * 60;
 }
 function size(v: unknown): StorySize {
   if (!validStorySize(v)) throw new Invalid("size must be S, M or L");
   return v;
 }
+/** A size, or null to clear it (E2: unsized counts as 2h). */
+const sizeOrNull = (v: unknown): StorySize | null => (v === null ? null : size(v));
 function bool(v: unknown, name: string): boolean {
   if (typeof v !== "boolean") throw new Invalid(`${name} must be true or false`);
   return v;
@@ -212,12 +215,12 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         return { ok: true, data: state };
       }
       case "weekplan.set_feature": {
-        const o = fields(input, ["weekStart", "clientKey", "itemId", "blocks"]);
+        const o = fields(input, ["weekStart", "clientKey", "itemId", "hours"]);
         const weekStart = monday(o.weekStart);
         editable(weekStart);
         const key = clientKey(o.clientKey);
         const itemId = id(o.itemId, "itemId");
-        const n = o.blocks === 0 ? 0 : blocks(o.blocks);
+        const n = o.hours === 0 ? 0 : hours(o.hours);
         const existing = (await plan.weekPlan(weekStart)).features.find((f) => f.clientKey === key && f.itemId === itemId);
         let title = existing?.title ?? "";
         let itemType = existing?.itemType ?? null;
@@ -228,7 +231,7 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
           if (!found && !existing) return bad(`#${itemId} isn't one of your features for ${key}`, 422);
           if (found) ({ title, type: itemType, url } = { title: found.item.title, type: found.item.type, url: found.item.url });
         }
-        const feature = (await plan.setWeekFeature({ weekStart, clientKey: key, itemId, title, itemType, url, blocks: n }));
+        const feature = (await plan.setWeekFeature({ weekStart, clientKey: key, itemId, title, itemType, url, estimate: n }));
         return { ok: true, data: { feature, plan: weekPlanView((await plan.weekPlan(weekStart))) } };
       }
       case "weekplan.place": {
@@ -267,23 +270,23 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         return { ok: true, data: { plan: weekPlanView((await plan.commitWeek(weekStart))) } };
       }
       case "weekplan.add": {
-        const o = fields(input, ["weekStart", "clientKey", "itemId"], ["tier", "blocks", "size"]);
+        const o = fields(input, ["weekStart", "clientKey", "itemId"], ["tier", "hours", "size"]);
         const weekStart = monday(o.weekStart);
         editable(weekStart);
         const key = clientKey(o.clientKey);
         const itemId = id(o.itemId, "itemId");
         const t = o.tier === undefined ? undefined : tier(o.tier);
-        const b = o.blocks === undefined ? undefined : blocks(o.blocks);
-        const z = o.size === undefined ? undefined : size(o.size);
+        const b = o.hours === undefined ? undefined : hours(o.hours);
+        const z = o.size === undefined ? undefined : sizeOrNull(o.size);
         // DevOps first: only what DevOps shows as this client's feature or story now goes on the list.
         const feature = await featureOf(ctx, cfg, weekStart, key, itemId);
         const story = feature ? null : await storyOf(ctx, cfg, weekStart, key, itemId);
         if (!feature && !story) return bad(`#${itemId} isn't one of ${key}'s features or stories in DevOps`, 422);
         const level: ItemLevel = feature ? "feature" : "story";
         const src = feature ? { title: feature.item.title, type: feature.item.type, url: feature.item.url } : story!;
-        if (level === "story" && b !== undefined) throw new Invalid("A story has a size (S, M or L), not blocks");
-        if (level === "feature" && z !== undefined) throw new Invalid("A feature has blocks, not a size");
-        const item = (await plan.addWeekItem({ weekStart, clientKey: key, itemId, title: src.title, itemType: src.type, url: src.url, level, ...(t ? { tier: t } : {}), ...(b !== undefined ? { blocks: b } : {}), ...(z ? { size: z } : {}), ...(story ? { parentId: story.parentId } : {}) }));
+        if (level === "story" && b !== undefined) throw new Invalid("A story has a size (S, M or L), not an estimate");
+        if (level === "feature" && z !== undefined) throw new Invalid("A feature has an estimate, not a size");
+        const item = (await plan.addWeekItem({ weekStart, clientKey: key, itemId, title: src.title, itemType: src.type, url: src.url, level, ...(t ? { tier: t } : {}), ...(b !== undefined ? { estimate: b } : {}), ...(z !== undefined ? { size: z } : {}), ...(story ? { parentId: story.parentId } : {}) }));
         return { ok: true, data: { item, plan: weekPlanView((await plan.weekPlan(weekStart))) } };
       }
       case "weekplan.set_tier":
@@ -304,13 +307,13 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const dropped = to !== "must" && offersHeadsUp(before, committedAt) && !internalClients(cfg).has(before.clientKey);
         return { ok: true, data: { plan: weekPlanView((await plan.weekPlan(before.weekStart))), headsUp: dropped ? { weekStart: before.weekStart, clientKey: before.clientKey, itemId: before.itemId, title: before.title, trigger: to ? "demoted" : "dropped" } : null } };
       }
-      case "weekplan.set_blocks": {
-        const o = fields(input, ["id", "blocks"]);
+      case "weekplan.set_estimate": {
+        const o = fields(input, ["id", "hours"]);
         const before = (await plan.weekItem(id(o.id, "id")));
         if (!before) return bad("That item isn't on a week plan", 422);
         editable(before.weekStart);
-        if (before.level !== "feature") return bad("A story has a size (S, M or L), not blocks", 422);
-        const item = (await plan.setWeekItemBlocks(before.id, blocks(o.blocks)));
+        if (before.level !== "feature") return bad("A story has a size (S, M or L), not an estimate", 422);
+        const item = (await plan.setWeekItemEstimate(before.id, hours(o.hours)));
         return { ok: true, data: { item, plan: weekPlanView((await plan.weekPlan(before.weekStart))) } };
       }
       case "weekplan.set_size": {
@@ -318,8 +321,8 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
         const before = (await plan.weekItem(id(o.id, "id")));
         if (!before) return bad("That item isn't on a week plan", 422);
         editable(before.weekStart);
-        if (before.level !== "story") return bad("A feature has blocks, not a size", 422);
-        const item = (await plan.setWeekItemSize(before.id, size(o.size)));
+        if (before.level !== "story") return bad("A feature has an estimate, not a size", 422);
+        const item = (await plan.setWeekItemSize(before.id, sizeOrNull(o.size)));
         return { ok: true, data: { item, plan: weekPlanView((await plan.weekPlan(before.weekStart))) } };
       }
       case "weekplan.mark_done": {

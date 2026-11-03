@@ -118,11 +118,14 @@ function id(v: unknown, name = "id"): number {
   if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) throw new Invalid(`${name} must be a positive whole number`);
   return v;
 }
-function size(v: unknown): Size {
-  if (v === undefined) return DEFAULT_SIZE;
+/** A pick's size: S, M or L, or none (E2: not sized yet, counts as 2h; sizing is optional). */
+function size(v: unknown): Size | null {
+  if (v === undefined || v === null) return null;
   if (typeof v === "string" && (SIZES as readonly string[]).includes(v)) return v as Size;
   throw new Invalid("size must be S, M or L. Nothing above L: split it first");
 }
+/** A draft story keeps a size (M when not given). */
+const draftSize = (v: unknown): Size => size(v) ?? DEFAULT_SIZE;
 function text(v: unknown, name: string, max = 200): string {
   if (typeof v !== "string") throw new Invalid(`${name} must be text`);
   const t = v.replace(/\s+/g, " ").trim();
@@ -178,7 +181,7 @@ async function state(ctx: PlanContext, plan: PlanStore, d: IsoDate, opened = tru
   const resumeNotes = Object.fromEntries(Object.entries((await plan.latestNotes(d))).map(([k, n]) => [k, { clientKey: n.clientKey, date: n.date, note: n.note }]));
   // Committed features of this date's week (step 8).
   const monday = Temporal.PlainDate.from(d).subtract({ days: Temporal.PlainDate.from(d).dayOfWeek - 1 }).toString();
-  const weekFeatures = (await plan.weekPlan(monday)).features.map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, url: f.url, slots: f.slots, level: f.level, tier: f.tier, blocks: f.blocks, size: f.size, parentId: f.parentId, position: f.position, doneAt: f.doneAt }));
+  const weekFeatures = (await plan.weekPlan(monday)).features.map((f) => ({ clientKey: f.clientKey, itemId: f.itemId, title: f.title, url: f.url, slots: f.slots, level: f.level, tier: f.tier, estimate: f.estimate, size: f.size, parentId: f.parentId, position: f.position, doneAt: f.doneAt }));
   return { date: d, plan: day, picks, carryOver, carryTarget: carry.target, access: d < today ? "past" : "plan", drafts: (await plan.drafts()), opened, focused, resumeNotes, weekFeatures };
 }
 
@@ -298,7 +301,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         // Step 11: a draft can have no feature yet (an intention made a draft: "nudge to make them drafts").
         const parentItemId = o.parentItemId === null ? null : id(o.parentItemId, "parentItemId");
         const title = text(o.title, "title");
-        const sz = size(o.size);
+        const sz = draftSize(o.size);
         const cfg = await ctx.config();
         if (!cfg) return bad("Fix the config first", 409);
         if (parentItemId === null) return { ok: true, data: { draft: (await plan.addDraft({ clientKey: key, parentItemId: null, title, size: sz })) } };
@@ -340,7 +343,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
           if (draft.level !== "story" && o.acceptance) return bad("Acceptance criteria are for stories", 422);
           patch.acceptance = long(o.acceptance, "acceptance");
         }
-        if (o.size !== undefined) patch.size = size(o.size);
+        if (o.size !== undefined) patch.size = draftSize(o.size);
         if (o.clientKey !== undefined) patch.clientKey = clientKey(o.clientKey);
         for (const k of ["startDate", "targetDate"] as const) {
           if (o[k] === undefined) continue;

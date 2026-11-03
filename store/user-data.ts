@@ -16,13 +16,16 @@ export const HARD_DELETE_AFTER_DAYS = 30;
 /** The export's format name (store/import.ts reads it back). */
 export const EXPORT_FORMAT = "focustime-export-1";
 /**
- * The schema version of the user tables an export holds: SQLite's migration 27, SQL Server's migration 29 (27 and 28
+ * The schema version of the user tables an export holds: SQLite's migration 28, SQL Server's migration 30 (27 and 28
  * add only app tables). A migration that changes a user table raises it, and the import learns to read the older one.
  * store/import.test.ts checks it against both.
  */
-export const USER_SCHEMA_VERSION = 27;
-/** Older exports the import still reads: 26 differs only in allowing whole feature blocks (a subset of 27's). */
-export const READABLE_SCHEMA_VERSIONS: readonly number[] = [26, 27];
+export const USER_SCHEMA_VERSION = 28;
+/**
+ * Older exports the import still reads: 26 (whole feature blocks) and 27 (half blocks) hold week_features.blocks, which
+ * the import turns into estimate minutes at 1 block = 4h (E2).
+ */
+export const READABLE_SCHEMA_VERSIONS: readonly number[] = [26, 27, 28];
 
 /**
  * The user tables in an order where every table comes after the ones it references (picks after day_plans, draft

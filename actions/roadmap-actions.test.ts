@@ -109,44 +109,43 @@ describe("roadmap.ahead and roadmap.set_dates (step 17, slice 2)", () => {
     if (!r.ok) throw new Error(r.error);
     return r.data as AheadState;
   };
-  it("12 weeks from this week; budgets for weeks 1 to 4 and feature blocks from the week plans; months after", async () => {
+  it("12 weeks from this week; budgets for weeks 1 to 4 and feature hours from the week plans; months after", async () => {
     const { ctx, plan, asked } = withWeeks();
-    (await plan.addWeekItem({ weekStart: "2026-11-09", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 3 }));
-    (await plan.addWeekItem({ weekStart: "2026-11-16", clientKey: "Fabrikam", itemId: 11, title: "Feature 11", itemType: "Feature", url: null, level: "feature", tier: "nice", blocks: 1 }));
+    (await plan.addWeekItem({ weekStart: "2026-11-09", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", estimate: 12 * 60 }));
+    (await plan.addWeekItem({ weekStart: "2026-11-16", clientKey: "Fabrikam", itemId: 11, title: "Feature 11", itemType: "Feature", url: null, level: "feature", tier: "nice", estimate: 4 * 60 }));
     const d = await ahead(ctx, { refresh: true });
     expect(asked).toEqual([{ n: 12, withCalendars: 4, refresh: true }]);
     expect(d.today).toBe("2026-11-02");
     expect(d.weeks[0]).toBe("2026-11-02");
     expect(d.columns.map((c) => c.label)).toEqual(["Oct 19", "Oct 26", "Nov 2", "Nov 9", "Nov 16", "Nov 23", "Dec", "Jan"]);
     const fab = d.clients.find((c) => c.clientKey === "Fabrikam")!;
-    expect(fab.weeks.map((w) => [w.weekStart, w.budgetQ, w.plannedQ, w.status, w.text])).toEqual([
-      ["2026-11-02", 8, 0, "none", "2 blocks free"],
-      ["2026-11-09", 8, 12, "over", "3 planned, 2 available"],
-      ["2026-11-16", 8, 0, "none", "2 blocks free"],
-      ["2026-11-23", 8, 0, "none", "2 blocks free"],
+    expect(fab.weeks.map((w) => [w.weekStart, w.freeMinutes, w.plannedMinutes, w.status, w.text])).toEqual([
+      ["2026-11-02", 480, 0, "none", "8h free"],
+      ["2026-11-09", 480, 720, "over", "8h free · 12h planned"],
+      ["2026-11-16", 480, 0, "none", "8h free"],
+      ["2026-11-23", 480, 0, "none", "8h free"],
     ]);
     // Weeks 5 to 12: Tuesdays all day, two blocks a week (December has five weeks by their Thursdays).
-    expect(fab.months).toEqual([{ month: "2026-12", available: 10 }, { month: "2027-01", available: 6 }]);
-    expect(d.cells.map((c) => [c.itemId, c.weekStart, c.quarters, c.tier, c.derived])).toEqual([[10, "2026-11-09", 12, "must", false], [11, "2026-11-16", 4, "nice", false]]);
-    // Every number is a whole number of quarters, and no words have a decimal.
-    expect(JSON.stringify(d.clients)).not.toMatch(/\d\.\d/);
+    expect(fab.months).toEqual([{ month: "2026-12", available: 10 * 240 }, { month: "2027-01", available: 6 * 240 }]);
+    expect(d.cells.map((c) => [c.itemId, c.weekStart, c.minutes, c.tier, c.derived])).toEqual([[10, "2026-11-09", 720, "must", false], [11, "2026-11-16", 240, "nice", false]]);
+    // Every word is whole hours: no decimals, no blocks.
+    expect(JSON.stringify(d.clients)).not.toMatch(/\d\.\d|block/);
   });
   it("slice 3: the last 2 weeks, musts planned and focused minutes per pick item; whether each cell is derived", async () => {
     const { ctx, plan } = withWeeks();
-    (await plan.addWeekItem({ weekStart: "2026-10-26", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 2 }));
-    (await plan.addWeekItem({ weekStart: "2026-10-26", clientKey: "Fabrikam", itemId: 11, title: "Feature 11", itemType: "Feature", url: null, level: "feature", tier: "nice", blocks: 1 }));
+    (await plan.addWeekItem({ weekStart: "2026-10-26", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", estimate: 8 * 60 }));
+    (await plan.addWeekItem({ weekStart: "2026-10-26", clientKey: "Fabrikam", itemId: 11, title: "Feature 11", itemType: "Feature", url: null, level: "feature", tier: "nice", estimate: 4 * 60 }));
     (await plan.commitWeek("2026-10-26"));
     const pick = (await plan.addPick({ date: "2026-10-27", half: "AM", clientKey: "Fabrikam", kind: "item", itemId: 2, title: "Story 2", size: "L" }));
     (await plan.addFocus({ pickId: pick.id, label: "Story 2", startedAt: "2026-10-27T09:00:00-05:00[America/Chicago]", endedAt: "2026-10-27T12:20:00-05:00[America/Chicago]", seconds: 200 * 60 }));
-    (await plan.addWeekItem({ weekStart: "2026-11-02", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", blocks: 1 }));
+    (await plan.addWeekItem({ weekStart: "2026-11-02", clientKey: "Fabrikam", itemId: 10, title: "Feature 10", itemType: "Feature", url: null, level: "feature", tier: "must", estimate: 4 * 60 }));
     const d = await ahead(ctx);
     expect(d.columns.slice(0, 2).map((c) => [c.kind, c.label])).toEqual([["past", "Oct 19"], ["past", "Oct 26"]]);
     expect(d.past).toEqual([
       { weekStart: "2026-10-19", committed: false, planned: [], worked: [] },
-      { weekStart: "2026-10-26", committed: true, planned: [{ clientKey: "Fabrikam", itemId: 10, quarters: 8 }], worked: [{ clientKey: "Fabrikam", itemId: 2, minutes: 200 }] },
+      { weekStart: "2026-10-26", committed: true, planned: [{ clientKey: "Fabrikam", itemId: 10, minutes: 480 }], worked: [{ clientKey: "Fabrikam", itemId: 2, minutes: 200 }] },
     ]);
-    expect(d.blockMinutes).toBe(210);
-    expect(d.cells[0]).toMatchObject({ itemId: 10, quarters: 4, derived: false });
+    expect(d.cells[0]).toMatchObject({ itemId: 10, minutes: 240, derived: false });
   });
   it("slice 4: opening Plan ahead (seen) answers this month's direction review, and the look ahead once next week is planned", async () => {
     const { ctx, plan } = withWeeks();

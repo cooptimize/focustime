@@ -13,10 +13,9 @@ import type { IsoDate } from "../week/types.ts";
 import type { ActionResponse, RoadmapClient, RoadmapRow, RoadmapState, RoadmapStory } from "./types.ts";
 import type { PortfolioItem, Week } from "../week/types.ts";
 import { aheadColumns, aheadWeeks, pastWeeks, PLAN_WEEKS } from "../plan/ahead.ts";
-import { DEFAULT_PLAN } from "../config/schema.ts";
 import { AHEAD_SEEN_MARK, directionOccasion, lookAheadOccasion } from "../plan/rituals.ts";
 import { borrowedForWeek, weekBudget } from "../plan/weekplan.ts";
-import { blocksOf, blocksWord, estimate } from "../plan/estimate.ts";
+import { estimate, loadText } from "../plan/estimate.ts";
 import type { AheadState } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -33,8 +32,8 @@ export type RoadmapContext = {
   /** Step 16.4: Cooptimizers (Dataverse), to match DevOps people by email; null when they can't be read. */
   team?: (cfg: AppConfig) => Promise<Teammate[] | null>;
   /**
-   * Step 17: the week models for Plan ahead: the first `withCalendars` weeks with meetings and personal events (for
-   * "mostly meetings"), the rest from focus patterns, standing blocks and PTO only.
+   * Step 17: the week models for Plan ahead: the first `withCalendars` weeks with meetings and personal events (their
+   * real free time, E2), the rest from focus patterns, standing blocks and PTO only.
    */
   weeks?: (cfg: AppConfig, weekStarts: IsoDate[], withCalendars: number, refresh: boolean) => Promise<Week[]>;
 };
@@ -137,10 +136,10 @@ const isoDate = (v: unknown): IsoDate | null => {
 };
 
 /**
- * Step 17 (slice 2): Plan ahead's 12 weeks. Weeks 1 to 4: each client's whole-block budget (the same rules as Plan the
- * week: half-days less PTO and mostly-meetings half-days, less borrowed time) against the musts planned, and every
- * feature's blocks that week, from the week plans themselves (one source of truth with Plan the week). Weeks 5 to 12:
- * blocks available per month from focus patterns and PTO. Read only; nothing external is written.
+ * Step 17 (slice 2): Plan ahead's 12 weeks. Weeks 1 to 4: each client's free time (E2: the same budget as Plan the
+ * week, its blocks' real free time less borrowed time) against the musts planned, and every feature's hours that
+ * week, from the week plans themselves (one source of truth with Plan the week). Weeks 5 to 12: free time per month
+ * from focus patterns and PTO. Read only; nothing external is written.
  */
 async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionResponse> {
   const o = (input ?? {}) as Record<string, unknown>;
@@ -178,14 +177,13 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     const w = weekStarts[i]!;
     const items = (await plan.weekPlan(w)).features;
     for (const b of weekBudget(week, items, { borrowedMinutes: borrowedForWeek(borrowed, w) })) {
-      const reasons = [...b.blocks.filter((x) => !x.counts).map((x) => x.reason!).filter(Boolean), ...(b.borrowedQ ? [`${blocksWord(b.borrowedQ)} of borrowed time to make up`] : [])];
-      capOf(b.clientKey, b.clientName).weeks.push({ weekStart: w, budgetQ: b.budgetQ, plannedQ: b.plannedQ, nicePlannedQ: b.nicePlannedQ, status: b.status, text: b.text, notCounted: reasons });
+      capOf(b.clientKey, b.clientName).weeks.push({ weekStart: w, freeMinutes: b.freeMinutes, plannedMinutes: b.plannedMinutes, nicePlannedMinutes: b.nicePlannedMinutes, borrowedMinutes: b.borrowedMinutes, status: b.status, text: b.text, over: b.over });
     }
-    // Each feature's load that week: from its sized stories on that week's list, else its estimate (E1).
+    // Each feature's load that week: from its stories on that week's list once one is sized, else its estimate (E2).
     const est = estimate(items.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })));
-    for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, quarters: env.quarters, derived: env.derived, tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length });
+    for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, minutes: env.minutes, derived: env.derived, unsized: env.unsized, exact: !loadText(env).startsWith("about"), tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length });
   }
-  // Weeks 5 to 12: blocks available per month column (patterns and PTO; meetings aren't known that far ahead).
+  // Weeks 5 to 12: free time per month column (patterns and PTO; meetings aren't known that far ahead).
   for (const col of columns) {
     if (col.kind !== "month") continue;
     const per = new Map<string, { name: string; n: number }>();
@@ -194,19 +192,19 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
       if (!week) continue;
       for (const b of weekBudget(week, [], { borrowedMinutes: {} })) {
         const x = per.get(b.clientKey) ?? { name: b.clientName, n: 0 };
-        x.n += blocksOf(b.budgetQ);
+        x.n += b.freeMinutes;
         per.set(b.clientKey, x);
       }
     }
     for (const [k, x] of per) capOf(k, x.name).months.push({ month: col.month, available: x.n });
   }
-  // A client with blocks only after week 4 still gets its four weeks (none available).
+  // A client with blocks only after week 4 still gets its four weeks (no free time).
   for (const c of caps.values())
     for (const w of weekStarts.slice(0, PLAN_WEEKS))
-      if (!c.weeks.some((x) => x.weekStart === w)) c.weeks.push({ weekStart: w, budgetQ: 0, plannedQ: 0, nicePlannedQ: 0, status: "none", text: "No blocks this week", notCounted: [] });
+      if (!c.weeks.some((x) => x.weekStart === w)) c.weeks.push({ weekStart: w, freeMinutes: 0, plannedMinutes: 0, nicePlannedMinutes: 0, borrowedMinutes: 0, status: "none", text: "No focus time this week", over: null });
   for (const c of caps.values()) c.weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const dates = Object.fromEntries((await plan.roadmapDates()));
-  // The last 2 weeks: each feature's blocks on that week's plan against the focused time on its picks (slice 3).
+  // The last 2 weeks: each feature's hours on that week's plan against the focused time on its picks (slice 3).
   const pastOut: AheadState["past"] = await mapSeq(past, async (w) => {
     const wp = (await plan.weekPlan(w));
     const est = estimate(wp.features.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })));
@@ -222,15 +220,14 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     return {
       weekStart: w,
       committed: !!wp.committedAt,
-      planned: est.envelopes.filter((e) => e.feature.tier === "must").map((e) => ({ clientKey: e.feature.clientKey, itemId: e.feature.itemId, quarters: e.quarters })),
+      planned: est.envelopes.filter((e) => e.feature.tier === "must").map((e) => ({ clientKey: e.feature.clientKey, itemId: e.feature.itemId, minutes: e.minutes })),
       worked: [...worked].map(([k, minutes]) => {
         const [clientKey, id] = k.split("|");
         return { clientKey: clientKey!, itemId: id ? Number(id) : null, minutes };
       }),
     };
   });
-  const blockMinutes = (cfg.plan ?? DEFAULT_PLAN).sizes.L;
-  const state: AheadState = { today, weeks: weekStarts, columns, clients: [...caps.values()], cells, dates, past: pastOut, blockMinutes };
+  const state: AheadState = { today, weeks: weekStarts, columns, clients: [...caps.values()], cells, dates, past: pastOut };
   return { ok: true, data: state };
 }
 

@@ -131,7 +131,7 @@ describe("⋯ menus", () => {
     const m = pickMenu(t.e, pick);
     expect(items(m).map((i) => i.label)).toEqual(["Open in browser", "Set size", "Move", "Start focus", "Timebox", "Needs help from…", "Mark done", "I'll make it up…", "Drop"]);
     await find(m, "Open in browser").run!();
-    await find(find(m, "Set size").next!(), "S").run!();
+    await find(find(m, "Set size").next!(), "S · 1h").run!();
     expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
   });
   it("moving offers the other half, Friday and every other half-day, with full PTO days disabled", () => {

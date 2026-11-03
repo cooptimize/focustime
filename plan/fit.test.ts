@@ -78,7 +78,7 @@ describe("U4: a block's fit once, and the day's headline", () => {
     expect(blockFitWords({ kind: "empty" }).text).toBe("");
   });
   it("the headline adds each block's overage; no over part when nothing is over", () => {
-    expect(dayHeadline([{ planned: 330, free: 210 }, { planned: 60, free: 90 }])).toEqual({ free: "about 5 hours free", over: "about 2 hours over" });
-    expect(dayHeadline([{ planned: 60, free: 90 }])).toEqual({ free: "about 2 hours free", over: null });
+    expect(dayHeadline([{ planned: 330, free: 210 }, { planned: 60, free: 90 }])).toEqual({ free: "about 5h free", over: "about 2h over" });
+    expect(dayHeadline([{ planned: 60, free: 90 }])).toEqual({ free: "about 2h free", over: null });
   });
 });

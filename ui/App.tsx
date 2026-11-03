@@ -1697,7 +1697,7 @@ export function App() {
       />
       {tbTarget && (() => {
         const pick = "pickId" in tbTarget ? Object.values(data.plan ?? {}).flatMap((d) => d.picks).concat(pd?.picks ?? []).find((p) => p.id === tbTarget.pickId) : null;
-        return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "Pick"} defaultMinutes={pick ? data.planning.sizes[pick.size] : 60} onClose={() => setTbTarget(null)} />;
+        return <TimeboxDialog target={tbTarget} env={tbEnv} title={pick ? pick.title : "title" in tbTarget ? tbTarget.title : "Pick"} defaultMinutes={pick ? data.planning.sizes[pick.size ?? "M"] : 60} onClose={() => setTbTarget(null)} />;
       })()}
       {helpTarget && (
         <HelpFinder

@@ -66,7 +66,7 @@ export const BASICS = {
     { name: "Client", tone: "client-teal", short: "Who the block is for, with its own color.", more: "Cooptimize counts as a client too. Each client's work, notes and follow-ups stay with that client and never mix." },
     { name: "Feature & story", tone: "accent", short: "The week commits features. The day commits stories.", more: "A feature is the outcome a client cares about this week. Stories are the pieces you actually sit down and do. Both live in DevOps." },
     { name: "Must & nice to have", tone: "action", short: "What you'll definitely touch this week, and what fits if there's room.", more: "A must is a target, not a contract. Moving one is one click and nobody gets scolded. Dropping a promised one offers to draft a heads-up." },
-    { name: "Size", tone: "watch", short: "{size:S} {size:M} {size:L} for stories, blocks for features.", more: "S is about an hour, M a couple of hours, L most of a block. Once a feature's stories are sized, they decide how big the feature is. Try it in Chapter 3." },
+    { name: "Size", tone: "watch", short: "Everything is sized in hours. {size:S} {size:M} {size:L} are shortcuts.", more: "S is 1h, M is 2h, L is 4h. Sizing is optional: an unsized story counts as 2h until you size it. Once a feature's stories are sized, they decide how big the feature is." },
     { name: "Follow-up", tone: "risk", short: "Something you owe someone, until you close the loop.", more: "An update, an answer, a DevOps change. Some open on their own (a slipped must, a done story still Active in DevOps). Close the loop when it's done." },
     { name: "Capture", tone: "brand", short: "Get a thought out of your head in one line.", more: "Press {key:capture.add} anywhere. Save it as is, or as a follow-up, a draft story or a draft feature. Sort the rest later in Inbox." },
     { name: "At risk", tone: "risk", short: "A block that meetings or life are eating into.", more: 'The reason is always written on the card: "At risk · Dentist 12:00". It\'s a heads-up, not a failure.' },
@@ -79,9 +79,9 @@ export const BASICS = {
 /** The little example screens beside each rhythm step. */
 export type Mini =
   | { kind: "week"; title: string; meta: string; chips: (ExampleColor | null)[]; client: { name: string; color: ExampleColor; meta: string; rows: { title: string; meta: string; flag?: boolean }[] }; next: string }
-  | { kind: "plan"; title: string; meta: string; client: string; color: ExampleColor; fit: string; stories: { title: string; size: "S" | "M" | "L" }[]; meeting: string; free: string }
+  | { kind: "plan"; title: string; meta: string; client: string; color: ExampleColor; fit: string; stories: { title: string; size: string }[]; meeting: string; free: string }
   | { kind: "now"; title: string; risk: string; color: ExampleColor; rows: ({ kind: "meeting"; text: string } | { kind: "done"; text: string } | { kind: "next"; text: string; action: string } | { kind: "todo"; text: string })[] }
-  | { kind: "check"; title: string; meta: string; client: string; color: ExampleColor; done: string; story: string; size: "S" | "M" | "L"; move: string; warn: string }
+  | { kind: "check"; title: string; meta: string; client: string; color: ExampleColor; done: string; story: string; size: string; move: string; warn: string }
   | { kind: "close"; title: string; meta: string; noteLabel: string; note: string; devops: string; devopsAction: string; overdue: string; overdueText: string };
 
 export type RhythmStep = { name: string; when: string; keys: KeyRef[]; what: string[]; lit: { half: "AM" | "PM"; day: number }[]; mini: Mini };
@@ -108,7 +108,7 @@ export const RHYTHM = {
         title: "Plan the week",
         meta: "2 of 4 planned",
         chips: ["blue", "violet", "teal", null, null, "teal", "ochre", "teal", null, null],
-        client: { name: "Northwind", color: "teal", meta: "1½ of 2 blocks", rows: [{ title: "Order history export", meta: "1 block" }, { title: "Supplier onboarding", meta: "Needs stories", flag: true }] },
+        client: { name: "Northwind", color: "teal", meta: "9h planned · 7h free", rows: [{ title: "Order history export", meta: "about 6h" }, { title: "Supplier onboarding", meta: "Needs stories", flag: true }] },
         next: "Next client: Harbor ›",
       },
     },
@@ -116,9 +116,9 @@ export const RHYTHM = {
       name: "Plan the day",
       when: "Each morning · about 5 minutes",
       keys: [{ command: "view.plan" }],
-      what: ["Each of today's blocks shows its meetings and free gaps.", "This week's musts for that client come first; add their stories.", "Size each story S, M or L and watch the fit.", "Done. Optionally, Timebox my day places stories into the gaps."],
+      what: ["Each of today's blocks shows its meetings and free gaps.", "This week's musts for that client come first; add their stories.", "Size stories S, M or L if you like (1h, 2h, 4h). Unsized ones count as 2h.", "Done. Optionally, Timebox my day places stories into the gaps."],
       lit: [{ half: "AM", day: 0 }, { half: "PM", day: 0 }],
-      mini: { kind: "plan", title: "Plan today", meta: "about 5 hours free", client: "Cooptimize", color: "blue", fit: "Fits", stories: [{ title: "Utilization chart", size: "S" }, { title: "Onboarding guide", size: "M" }], meeting: "11:00 Proposal review", free: "Free · 1h 45m" },
+      mini: { kind: "plan", title: "Plan today", meta: "about 5h free", client: "Cooptimize", color: "blue", fit: "Fits", stories: [{ title: "Utilization chart", size: "S · 1h" }, { title: "Onboarding guide", size: "Size?" }], meeting: "11:00 Proposal review", free: "Free · 1h 45m" },
     },
     {
       name: "Now",
@@ -146,7 +146,7 @@ export const RHYTHM = {
       keys: [{ command: "view.checkin" }],
       what: ["The same cards, re-fit to the time that's actually left.", "Anything that no longer fits gets one suggested move.", "Walk-on work? Add it once at the bottom.", "Done, and back to Now."],
       lit: [{ half: "PM", day: 0 }],
-      mini: { kind: "check", title: "Check-in", meta: "4h left today", client: "Northwind", color: "teal", done: "2 done", story: "Invoice totals", size: "S", move: "Move to Wed", warn: "About an hour over. Move one?" },
+      mini: { kind: "check", title: "Check-in", meta: "4h left today", client: "Northwind", color: "teal", done: "2 done", story: "Invoice totals", size: "S · 1h", move: "Move to Wed", warn: "About an hour over. Move one?" },
     },
     {
       name: "Close out",
@@ -164,24 +164,26 @@ export const RHYTHM = {
 export const SIZING = {
   eyebrow: "Chapter 3",
   title: "How much fits in a block?",
-  sub: "A block is half a day. Add stories and watch the fit. This is the same math FocusTime uses on every card.",
+  sub: "A block is where you work: half a day for one client. Hours are how big the work is. Add stories and watch them fill the free time.",
   blockTitle: "One focus block",
-  /** The example block: an afternoon with no meetings (its free time is what the fit is measured against). */
-  block: { label: "Northwind · Mon PM · example", color: "teal" as ExampleColor, start: "12:30", end: "17:00" },
+  /** The example block: an afternoon with 4h of focus time left after its meetings (what the fit is measured against). */
+  block: { label: "Northwind · Mon PM · example", color: "teal" as ExampleColor, freeMinutes: 240, free: "4h free after meetings" },
   empty: "Empty block",
-  /** "1 of 1 block": the stories in half blocks, against the one block. */
-  load: (blocks: string) => `${blocks} of 1 block`,
-  add: (size: string) => `+ ${size} story`,
+  /** "3h of 4h": the stories' hours against the block's free time. */
+  load: (planned: string, free: string) => `${planned} of ${free}`,
+  /** The add buttons: S, M and L with their hours, and an unsized story. */
+  add: (size: "S" | "M" | "L" | null) => (size ? `${size} · ${{ S: "1h", M: "2h", L: "4h" }[size]}` : "unsized"),
   clear: "Clear",
   stackLabel: "Stories in this block",
-  remove: (size: string) => `Remove ${size} story`,
-  start: ["M", "S"] as ("S" | "M" | "L")[],
-  /** Most stories the sandbox takes (three blocks' worth of quarters). */
-  maxQuarters: 12,
+  remove: (chip: string) => `Remove ${chip} story`,
+  start: ["M", "S"] as ("S" | "M" | "L" | null)[],
+  /** Most the sandbox takes: three blocks' worth of hours (12h). */
+  maxMinutes: 720,
   legend: [
-    "{b:S} about an hour. {b:M} a couple of hours. {b:L} most of a block.",
-    "Four S, two M or one L fill a block. Anything past that spills over, shown in amber, never red: it's a nudge to move one, not a mistake.",
-    'For the week, features are counted in {b:half blocks}: "½ block", "1½ blocks". Once a feature\'s stories are sized, they decide its size automatically. No decimals, ever.',
+    "{b:S} 1h · {b:M} 2h · {b:L} 4h",
+    "Sizing is optional. An unsized story counts as 2h until you size it.",
+    "Too much? It turns amber. Move something, or keep it. Your call.",
+    "Features are their stories added up, or your estimate until they're sized.",
   ],
   hint: "Tap a story chip to remove it.",
 };
@@ -234,13 +236,15 @@ export const QUESTIONS = {
     { q: "Where do my clients and blocks come from?", a: "From Focus Time in Dataverse, the schedule Cooptimize already keeps. If a block is wrong, change it there and FocusTime picks it up on the next refresh." },
     { q: "What does FocusTime change in DevOps or Outlook?", a: "Only what you confirm. Every change shows a preview first, is checked afterwards, and can be undone from Settings > Data. In Outlook it only edits events it created, or your own events with no one else on them. It never deletes anything in DevOps." },
     { q: 'Why is "over" amber and not red?', a: "Because plans change and that's normal. Red is only for real trouble, like a block at risk or a follow-up that's overdue." },
+    { q: "Do I have to size everything?", a: "No. Unsized stories count as 2h so the plan still adds up, and nothing waits on a size. Size them when you know." },
+    { q: "What's a block, then?", a: "Where you work: a half-day set aside for a client in Focus Time. How much work fits is measured in hours." },
     { q: "Do I need to connect my personal calendar?", a: "No. Google Calendar is optional. If you connect it, personal events count against your free time so the plan stays realistic, and you can hide them with {key:ui.set_show_personal}." },
     { q: "Can anyone else see my plan?", a: "No. Your plan, notes, follow-ups and settings are yours. Teammates only ever see your free and busy times and your Teams presence, the same as in Outlook and Teams today." },
     { q: "Where do I add my DevOps write access?", a: "Settings > Clients, on each client: enter a personal access token with work item read and write. FocusTime checks it against your DevOps identity, stores it encrypted, and never shows it again." },
   ],
 };
 
-export const FOOTER = "FocusTime by Cooptimize. Questions or ideas? Capture them with {key:capture.add} and tag them @focustime.";
+export const FOOTER = "FocusTime by Cooptimize. Questions or ideas? Message the FocusTime team in Teams.";
 
 // ---------- Ways in ----------
 

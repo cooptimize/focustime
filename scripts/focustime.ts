@@ -107,7 +107,7 @@ switch (cmd) {
     const store = await sqlServer();
     try {
       const r = await importUser(store.conn, a.user!, json, { dryRun: !!a["dry-run"], now });
-      process.stdout.write(`${r.dryRun ? "Dry run: nothing written.\n" : ""}${r.userCreated ? "The person is new to this database.\n" : ""}`);
+      process.stdout.write(`${r.dryRun ? "Dry run: nothing written.\n" : ""}${r.userCreated ? "The person is new to this database.\n" : ""}${r.estimatesConverted ? `Feature estimates converted from blocks to hours (1 block = 4h): ${r.estimatesConverted}\n` : ""}`);
       process.stdout.write(table(r.tables.map((t) => ({ table: t.table, "in file": t.inFile, "already there": t.present, [r.dryRun ? "would add" : "added"]: t.added }))) + "\n");
     } catch (e) {
       fail(e instanceof Error ? e.message : String(e));

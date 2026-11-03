@@ -5,7 +5,8 @@
 // U4: density "plan" is Plan the day's row: a drag handle, no checkbox (ticking is Today's job; a done pick shows a ✓
 // and is struck), the title, a due badge, the size chip always (planning is where sizes live), + time and ⋯ on hover.
 import { useContext, type DragEvent, type ReactNode } from "react";
-import { SIZES, type Pick, type Size } from "../plan/types.ts";
+import type { Pick } from "../plan/types.ts";
+import { SizeChip } from "./plan/Estimate.tsx";
 import { focusLabel } from "../plan/focus.ts";
 import { pickMenu } from "./menu.ts";
 import { MenuCtx, useMenu } from "./Menus.tsx";
@@ -16,9 +17,6 @@ import { useTimeboxes } from "./Timeboxes.tsx";
 import { useFocused } from "./planview.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { PlanRow } from "./plan/PlanRow.tsx";
-
-/** The next size when the chip is clicked: S, M, L, then S again. */
-export const nextSize = (s: Size): Size => SIZES[(SIZES.indexOf(s) + 1) % SIZES.length]!;
 
 export const PICK_DRAG = "application/x-focustime-pick";
 
@@ -64,14 +62,11 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
     e.dataTransfer.setData(PICK_DRAG, String(pick.id));
     e.dataTransfer.effectAllowed = "move";
   };
-  const sizeChip =
-    readOnly || pick.status !== "planned" || !env ? (
-      <span className="size-chip static" title={focused ? `${focused} focused` : `Size ${pick.size}`}>{pick.size}</span>
-    ) : (
-      <button type="button" className="size-chip" tabIndex={tabIndex} title={`Size ${pick.size}. Click for ${nextSize(pick.size)}`} aria-label={`Size ${pick.size}, change to ${nextSize(pick.size)}`} onClick={(e) => (stop(e), void env.runPlan("pick.set_size", { id: pick.id, size: nextSize(pick.size) }))} onDoubleClick={stop}>
-        {pick.size}
-      </button>
-    );
+  // E2: S, M, L or a muted "Size?"; a click opens S, M, L, Clear. "M · 2h" on Plan the day's roomy row.
+  const sizeChip = (
+    <SizeChip size={pick.size} title={pick.title} wide={planD} tabIndex={tabIndex} note={focused ? `${focused} focused` : null}
+      {...(readOnly || pick.status !== "planned" || !env ? {} : { onSet: (size) => void env.runPlan("pick.set_size", { id: pick.id, size }) })} />
+  );
   if (planD)
     // U6: Plan the day's row is the shared planning row (ui/plan/PlanRow.tsx).
     return (

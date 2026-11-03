@@ -53,7 +53,7 @@ export function resumeSlots(days: readonly { date: IsoDate; am: Slot; pm: Slot }
   }
   return out;
 }
-type FeatureOnWeek = { clientKey: string; itemId: number; title: string; blocks: number | null; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; tier?: "must" | "nice"; doneAt?: string | null };
+type FeatureOnWeek = { clientKey: string; itemId: number; title: string; slots: readonly { date: IsoDate; half: "AM" | "PM" }[]; tier?: "must" | "nice"; doneAt?: string | null };
 
 /**
  * Week items to show on a block (step 11): those pinned to it, then (on a client's own block) that client's musts not
@@ -71,12 +71,6 @@ export const PlanCtx = createContext<PlanView>({ week: null, toggle: () => {}, s
 export function useFocused(): (id: number) => number {
   const v = useContext(PlanCtx);
   return (id) => liveFocused(id, v.focused, v.timer, v.nowMs);
-}
-
-/** "about 1 h" for a size's minutes. */
-export function sizeNote(minutes: number): string {
-  const h = Math.floor(minutes / 60), m = minutes % 60;
-  return `about ${h ? `${h} h` : ""}${h && m ? " " : ""}${m ? `${m} min` : ""}`;
 }
 
 /** The checklist for a half-day: shown once the day is committed; planned and done picks only. */

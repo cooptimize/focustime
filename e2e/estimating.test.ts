@@ -1,15 +1,19 @@
-// Step 16.4 and E1: estimating in half blocks (a feature's load from its sized stories, else its estimate; stories S, M
-// or L) and profile photos, in demo mode (fictional data, generated avatars, no Graph calls). The scan reads every
-// view's text for decimals and quarters: none may show anywhere (half blocks are the unit).
+// E2 (D446): estimating in hours. A feature's load comes from its stories on the list (S 1h, M 2h, L 4h, unsized 2h)
+// once one is sized, else its estimate in whole hours (the shared "− 6h +" stepper); a client's fit is its real free
+// time against its musts ("8h free · 10h planned", the amber "about 2h over"). Profile photos, in demo mode (fictional
+// data, generated avatars, no Graph calls). The scans read every view for decimals and fractions, and Plan the week,
+// Plan the day and Plan ahead for blocks used as an amount: none may show anywhere (hours are the unit).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, startDemo, weekClient, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, openPlanDay, startDemo, weekClient, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
-/** Decimals and quarters: "0.8 blocks", "1.5 h", "¼", "¾". Half blocks ("½ block", "1½ blocks", "half a block") are the unit (E1). Times (9:30) and dates are fine. */
-const FRACTION = /(?<![\d:])\d+[.,]\d+(?![\d:])|¼|¾/i;
+/** Decimals and fractions: "0.8 blocks", "1.5 h", "½", "¼", "¾". Times (9:30) and dates are fine. */
+const FRACTION = /(?<![\d:])\d+[.,]\d+(?![\d:])|½|¼|¾/i;
+/** A block as an amount of work: "2 blocks", "1½ blocks", "half a block free", "blocks planned". A block as the place is fine. */
+const BLOCK_AMOUNT = /\d\s*(½\s*)?blocks?\b|½\s*blocks?|half a block\b|\bblocks? (free|planned|available|over|left)\b|\bof \d+ blocks?/i;
 
-describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", () => {
+describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)", () => {
   beforeAll(async () => {
     h = await startDemo();
   }, 120_000);
@@ -24,51 +28,103 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
     return { page, errors };
   };
 
-  it("each client: its blocks, a plain status in half blocks, and why a half-day doesn't count", async () => {
+  it("each client: its free time and what's planned in hours, amber when over, never red; the over line names the way out", async () => {
     const { page, errors } = await planWeek();
-    const northwind = (await weekClient(page, "Northwind")).locator(".pw-card-head");
-    await expect.poll(() => northwind.locator(".pw-fit2").textContent()).toBe("2½ planned, 2 available");
-    // U4: why a half-day doesn't count is on hover over the fit words (and in the client's panel).
-    await expect(northwind.locator(".pw-budget").getAttribute("title")).resolves.toMatch(/^2 blocks this week\. Not counted: Wed AM: mostly meetings/);
-    await expect((await weekClient(page, "Cooptimize")).locator(".pw-card-head .pw-fit2").textContent()).resolves.toBe("All 1 planned");
+    const nw = await weekClient(page, "Northwind");
+    const northwind = nw.locator(".pw-card-head");
+    await expect.poll(() => northwind.locator(".pw-fit2").textContent()).toBe("8h free · 10h planned · about 2h over");
+    await expect(northwind.locator(".pw-fit2 .over-word").textContent()).resolves.toBe(" · about 2h over");
+    await expect(northwind.locator(".pw-fit2").evaluate((e) => getComputedStyle(e).color)).resolves.toBe(await page.evaluate(() => { const d = document.createElement("span"); d.style.color = "var(--watch)"; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; }));
+    await expect(northwind.locator(".pw-budget").getAttribute("title")).resolves.toMatch(/^Free focus time in Northwind's blocks this week, after meetings/);
+    await expect(nw.locator("p.pw-over").textContent()).resolves.toBe("About 2h more than Northwind's free time this week. Make one a nice to have, or borrow Friday.");
+    await expect((await weekClient(page, "Cooptimize")).locator(".pw-card-head .pw-fit2").textContent()).resolves.toBe("2h free · 2h planned");
+    // The client lines say the same.
+    await expect(page.locator('.pw-line[aria-label="Northwind"] .pl-fit').textContent()).resolves.toBe("8h free · 10h planned · about 2h over");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
 
-  it("stories nest in their feature and its load comes from their sizes, rounded up to a half block; no stepper", async () => {
+  it("stories nest in their feature and its load is their hours; no stepper; sizing a story changes it", async () => {
     const { page } = await planWeek();
     const harbor = await weekClient(page, "Harbor");
     const feature = harbor.locator(".pw-row").first();
     await expect.poll(() => feature.locator(".pw-nested > li").count()).toBe(2);
-    // An L and an S: 1¼, shown as 1½. Its estimate (1 block) is ignored.
-    await expect(feature.locator(".pw-stepper .pw-load").first().textContent()).resolves.toBe("1½ blocks");
-    await expect(feature.locator(".pw-stepper .pw-load").first().getAttribute("title")).resolves.toMatch(/^From its stories/);
-    await expect(feature.locator(":scope > .pw-stepper button.pw-step:not(.pw-step-ph)").count()).resolves.toBe(0);
-    // Sizing a story changes the load: the S becomes an L, 2 blocks.
-    await feature.locator(".pw-nested > li").nth(1).locator(".pw-size").click();
-    await page.getByRole("menuitem", { name: /^L · about a whole block/ }).click();
-    await expect.poll(() => feature.locator(".pw-stepper .pw-load").first().textContent()).toBe("2 blocks");
+    // An S and an S: 2h, exact (every story sized). Its estimate (4h) is ignored.
+    const load = feature.locator(":scope > .hours-stepper .hs-value");
+    await expect(load.textContent()).resolves.toBe("2h");
+    await expect(load.getAttribute("title")).resolves.toBe("From its stories");
+    await expect(feature.locator(":scope > .hours-stepper button").count()).resolves.toBe(0);
+    await expect(feature.locator(":scope > .pw-fill").textContent()).resolves.toBe("from stories");
+    await expect(feature.locator(".pw-nested > li .size-chip").allTextContents()).resolves.toEqual(["S · 1h", "S · 1h"]);
+    // The first S becomes an L: 5h.
+    await feature.locator(".pw-nested > li").first().locator(".size-chip").click();
+    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringContaining("S · 1h"), expect.stringContaining("M · 2h"), expect.stringContaining("L · 4h"), expect.stringContaining("Clear")]);
+    await page.getByRole("menuitem", { name: /^L · 4h/ }).click();
+    await expect.poll(() => load.textContent()).toBe("5h");
+    await expect.poll(() => harbor.locator(".pw-card-head .pw-fit2").textContent()).toBe("2h free · 5h planned · about 3h over");
+    // Clearing a size: it counts as 2h, marked as an estimate, never an error.
+    await feature.locator(".pw-nested > li").first().locator(".size-chip").click();
+    await page.getByRole("menuitem", { name: /^Clear/ }).click();
+    await expect.poll(() => feature.locator(".pw-nested > li").first().locator(".size-chip").textContent()).toBe("Size? · 2h");
+    await expect.poll(() => load.textContent()).toBe("about 3h");
     await page.close();
   }, T);
 
-  it("a feature with no stories on the list: its estimate, ±½ on hover; a story has S, M or L, never blocks", async () => {
+  it("a feature with no stories on the list: its estimate on the stepper, 1h steps, click to type; Enter saves, Esc cancels", async () => {
     const { page } = await planWeek();
     const northwind = await weekClient(page, "Northwind");
-    const est = northwind.locator(".pw-row", { has: page.locator(":scope > .pw-stepper:not(.pw-derived)") }).first();
-    await expect(est.locator(".pw-stepper .pw-load").first().textContent()).resolves.toBe("1 block");
+    const est = northwind.locator(".pw-row", { has: page.locator(":scope > .hours-stepper:not(.derived)") }).first();
+    const value = est.locator(":scope > .hours-stepper .hs-value");
+    await expect(value.textContent()).resolves.toBe("about 4h");
     await est.hover();
-    await est.getByRole("button", { name: "Half a block more" }).click();
-    await expect.poll(() => est.locator(".pw-stepper .pw-load").first().textContent()).toBe("1½ blocks");
-    await expect.poll(() => northwind.locator(".pw-card-head .pw-fit2").textContent()).toBe("3 planned, 2 available");
-    await est.getByRole("button", { name: "Half a block less" }).first().click();
-    await est.getByRole("button", { name: "Half a block less" }).first().click();
-    await expect.poll(() => est.locator(".pw-stepper .pw-load").first().textContent()).toBe("½ block");
-    await expect(est.getByRole("button", { name: "Half a block less" }).first().isDisabled()).resolves.toBe(true);
-    const feature = northwind.locator(".pw-row").first();
-    const story = feature.locator(".pw-nested > li").first();
-    await story.locator(".pw-size").click();
-    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual(expect.arrayContaining([expect.stringContaining("S · about an hour"), expect.stringContaining("M · a couple of hours"), expect.stringContaining("L · about a whole block")]));
-    await page.keyboard.press("Escape");
+    await est.getByRole("button", { name: "More: 5h" }).click();
+    await expect.poll(() => value.textContent()).toBe("about 5h");
+    await expect.poll(() => northwind.locator(".pw-card-head .pw-fit2").textContent()).toBe("8h free · 11h planned · about 3h over");
+    // Click the value: a number box. Esc keeps the old value; Enter saves whole hours.
+    await value.click();
+    const box = est.locator(".hs-input");
+    await box.fill("30");
+    await box.press("Escape");
+    await expect.poll(() => value.textContent()).toBe("about 5h");
+    await value.click();
+    await box.fill("12");
+    await box.press("Enter");
+    await expect.poll(() => value.textContent()).toBe("about 12h");
+    // Above 8h the arrows step 2h.
+    await est.hover();
+    await est.getByRole("button", { name: "More: 14h" }).click();
+    await expect.poll(() => value.textContent()).toBe("about 14h");
+    // A typed value out of range changes nothing.
+    await value.click();
+    await box.fill("81");
+    await box.press("Enter");
+    await expect.poll(() => value.textContent()).toBe("about 14h");
+    // Down to 1h, the floor.
+    await value.click();
+    await box.fill("1");
+    await box.press("Enter");
+    await expect.poll(() => value.textContent()).toBe("about 1h");
+    await est.hover();
+    await expect(est.locator(":scope > .hours-stepper .hs-step").first().isDisabled()).resolves.toBe(true);
+    // A story has a size chip, never hours of its own to set: S, M, L, or a muted Size?.
+    const story = northwind.locator(".pw-row").first().locator(".pw-nested > li");
+    await expect(story.locator(".size-chip").allTextContents()).resolves.toEqual(["L · 4h", "Size? · 2h"]);
+    await expect(story.nth(1).locator(".size-chip").evaluate((e) => e.classList.contains("unsized"))).resolves.toBe(true);
+    await page.close();
+  }, T);
+
+  it("the feature's panel has the same stepper and size chips", async () => {
+    const { page, errors } = await planWeek();
+    const northwind = await weekClient(page, "Northwind");
+    await northwind.locator(".pw-row .pw-open", { hasText: "Order history export" }).click();
+    const panel = page.locator(".dp-section[aria-label='Estimate']");
+    await expect(panel.locator(".hs-value").textContent()).resolves.toBe("about 6h");
+    await expect(panel.locator(".muted").first().textContent()).resolves.toBe("from stories");
+    await expect(panel.locator(".size-chip").allTextContents()).resolves.toEqual(["L · 4h", "Size? · 2h"]);
+    await panel.locator(".size-chip").nth(1).click();
+    await page.getByRole("menuitem", { name: /^S · 1h/ }).click();
+    await expect.poll(() => panel.locator(".hs-value").textContent()).toBe("5h");
+    expect(errors).toEqual([]);
     await page.close();
   }, T);
 
@@ -111,10 +167,9 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
     await page.close();
   }, T);
 
-  it("no decimals or quarters anywhere: Plan the week, Week, Today, Plan the day, Check-in, Close out, Roadmap", async () => {
-    // The scan catches decimals and quarters (step 16.4, E1), and leaves half blocks, times and dates alone.
-    for (const bad of ["Room for about 1.5 blocks more", "0.8 blocks", "¼ block", "¾ blocks", "1.5 h"]) expect(bad).toMatch(FRACTION);
-    for (const ok of ["9:30 AM", "Nov 2, 2026", "2½ planned, 2 available", "half a block free", "½ block", "1:30 PM to 5:00 PM"]) expect(ok).not.toMatch(FRACTION);
+  it("no decimals or fractions anywhere: Plan the week, Week, Today, Plan the day, Check-in, Close out, Roadmap, Plan ahead", async () => {
+    for (const bad of ["Room for about 1.5 blocks more", "0.8 blocks", "¼ block", "¾ blocks", "1.5 h", "½ block", "2½ planned"]) expect(bad).toMatch(FRACTION);
+    for (const ok of ["9:30 AM", "Nov 2, 2026", "8h free · 10h planned", "about 6h", "1:30 PM to 5:00 PM"]) expect(ok).not.toMatch(FRACTION);
     const { page } = await freshPage(h);
     const views: [string, string][] = [
       ["#/week/plan/2026-11-02", ".pw-client"],
@@ -124,6 +179,7 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
       ["#/today/checkin", "main"],
       ["#/today/closeout", "main"],
       ["#/roadmap", ".dl-row"],
+      ["#/roadmap/ahead", ".pa-cap"],
     ];
     for (const [hash, ready] of views) {
       await page.evaluate((x) => (location.hash = x), hash);
@@ -133,6 +189,37 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
       const titles = await page.locator("[title]").evaluateAll((els) => els.map((e) => e.getAttribute("title") ?? ""));
       for (const t of [text, ...titles]) expect(t.match(FRACTION)?.[0] ?? null, `${hash}: ${t.slice(Math.max(0, (t.search(FRACTION) ?? 0) - 40), (t.search(FRACTION) ?? 0) + 40)}`).toBeNull();
     }
+    await page.close();
+  }, T);
+
+  it("no block as an amount in Plan the week, Plan the day or Plan ahead: estimates are hours, with about where estimated", async () => {
+    for (const bad of ["2 blocks", "1½ blocks", "½ block", "half a block free", "2 blocks free", "1 of 2 blocks", "blocks planned"]) expect(bad).toMatch(BLOCK_AMOUNT);
+    for (const ok of ["One focus block", "Pinned to this block", "No block", "Click a block to plan", "8h free · 10h planned", "Free focus time in Northwind's blocks this week"]) expect(ok).not.toMatch(BLOCK_AMOUNT);
+    const { page, errors } = await freshPage(h);
+    const scan = async (where: string) => {
+      const text = (await page.evaluate(() => document.body.innerText)).replace(/\s+/g, " ");
+      const titles = await page.locator("[title], [aria-label]").evaluateAll((els) => els.flatMap((e) => [e.getAttribute("title") ?? "", e.getAttribute("aria-label") ?? ""]));
+      for (const t of [text, ...titles]) expect(t.match(BLOCK_AMOUNT)?.[0] ?? null, `${where}: ${t.slice(Math.max(0, t.search(BLOCK_AMOUNT) - 40), t.search(BLOCK_AMOUNT) + 40)}`).toBeNull();
+      // Every estimate a stepper shows is whole hours, "about" unless it comes from sized stories.
+      for (const v of await page.locator(".hours-stepper .hs-value").allTextContents()) expect(v, where).toMatch(/^(about )?\d+h$/);
+      for (const v of await page.locator(".size-chip").allTextContents()) expect(v, where).toMatch(/^(S|M|L|Size\?)( · \d+h)?$/);
+    };
+    await page.evaluate(() => (location.hash = "#/week/plan/2026-11-02"));
+    await page.locator(".pw-client").first().waitFor({ timeout: 20_000 });
+    await page.waitForTimeout(600);
+    for (const n of ["Cooptimize", "Northwind", "Harbor", "Atlas"]) {
+      await weekClient(page, n);
+      await scan(`Plan the week, ${n}`);
+    }
+    await openPlanDay(page);
+    await page.waitForTimeout(600);
+    await scan("Plan the day");
+    await page.evaluate(() => (location.hash = "#/roadmap/ahead"));
+    await page.locator(".pa-cap").first().waitFor({ timeout: 20_000 });
+    await page.waitForTimeout(600);
+    await scan("Plan ahead");
+    await expect(page.locator(".pa-cell .hs-value").first().textContent()).resolves.toMatch(/^(about )?\d+h$/);
+    expect(errors).toEqual([]);
     await page.close();
   }, T);
 });

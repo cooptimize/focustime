@@ -82,8 +82,8 @@ export function extendTimer(s: TimerState, now: Temporal.Instant, minutes: numbe
 }
 
 /** A pick's suggested length: its size's minutes, to the 5-minute step below, within 5 to 240. */
-export function suggestMinutes(size: Size, sizes: Readonly<Record<Size, number>>): number {
-  return Math.max(5, Math.min(MAX_MINUTES, Math.floor(sizes[size] / 5) * 5));
+export function suggestMinutes(size: Size | null, sizes: Readonly<Record<Size, number>>): number {
+  return Math.max(5, Math.min(MAX_MINUTES, Math.floor(sizes[size ?? "M"] / 5) * 5));
 }
 
 // ---- warnings ----

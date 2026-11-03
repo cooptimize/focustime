@@ -10,10 +10,10 @@ export function liveFocused(pickId: number, logged: Readonly<Record<number, numb
   return base + Math.max(0, Math.floor((nowMs - Temporal.Instant.from(timer.runningSince).epochMilliseconds) / 1000));
 }
 
-/** "45m of M"; null under a minute, so untouched picks show just their size. */
-export function focusLabel(seconds: number, size: Size): string | null {
+/** "45m of M" ("45m of 2h" when unsized); null under a minute, so untouched picks show just their size. */
+export function focusLabel(seconds: number, size: Size | null): string | null {
   const minutes = Math.floor(seconds / 60);
-  return minutes < 1 ? null : `${formatDuration(minutes)} of ${size}`;
+  return minutes < 1 ? null : `${formatDuration(minutes)} of ${size ?? "2h"}`;
 }
 
 /** A day's focused minutes (every pick, dropped too: the time was spent) and planned minutes (picks not dropped). */
@@ -22,5 +22,5 @@ export function dayFocus(picks: readonly Pick[], focused: Readonly<Record<number
 export function dayFocus(picks: readonly Pick[], focused: Readonly<Record<number, number>> | ((id: number) => number), sizes: Readonly<Record<Size, number>>) {
   const of = typeof focused === "function" ? focused : (id: number) => focused[id] ?? 0;
   const seconds = picks.reduce((n, p) => n + of(p.id), 0);
-  return { focusedMinutes: Math.floor(seconds / 60), plannedMinutes: picks.filter((p) => p.status !== "dropped").reduce((n, p) => n + sizes[p.size], 0) };
+  return { focusedMinutes: Math.floor(seconds / 60), plannedMinutes: picks.filter((p) => p.status !== "dropped").reduce((n, p) => n + sizes[p.size ?? "M"], 0) };
 }

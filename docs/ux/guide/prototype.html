@@ -244,8 +244,8 @@ footer{margin-top:48px;color:var(--faint);font-size:13px;display:flex;gap:10px;a
       </button>
       <button class="concept" aria-expanded="false">
         <span class="k"><i style="background:var(--amber)"></i>Size</span>
-        <span class="s"><span class="tag">S</span> <span class="tag">M</span> <span class="tag">L</span> for stories, blocks for features.</span>
-        <span class="more" hidden>S is about an hour, M a couple of hours, L most of a block. Once a feature's stories are sized, they decide how big the feature is. Try it in Chapter 3.</span>
+        <span class="s">Everything is sized in hours. <span class="tag">S</span> <span class="tag">M</span> <span class="tag">L</span> are shortcuts.</span>
+        <span class="more" hidden>S is 1h, M is 2h, L is 4h. Sizing is optional: an unsized story counts as 2h until you size it. Once a feature's stories are sized, they decide how big the feature is. Try it in Chapter 3.</span>
       </button>
       <button class="concept" aria-expanded="false">
         <span class="k"><i style="background:var(--risk)"></i>Follow-up</span>
@@ -283,30 +283,32 @@ footer{margin-top:48px;color:var(--faint);font-size:13px;display:flex;gap:10px;a
   <section class="ch" id="sizing" aria-labelledby="h-sizing">
     <div class="eyebrow">Chapter 3</div>
     <h2 id="h-sizing">How much fits in a block?</h2>
-    <p class="sub">A block is half a day. Add stories and watch the fit. This is the same math FocusTime uses on every card.</p>
+    <p class="sub">A block is where you work: half a day for one client. Hours are how big the work is. Add stories and watch them fill the free time. This is the same math FocusTime uses on every card.</p>
     <div class="sandbox">
       <div class="blockviz">
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
-          <b>One focus block</b><span style="color:var(--muted);font-size:13px">Northwind · Mon PM</span>
+          <b>One focus block</b><span style="color:var(--muted);font-size:13px">Northwind · Mon PM · 4h free after meetings</span>
         </div>
         <div class="bar" id="bar"><div class="q"></div><div class="q"></div><div class="q"></div><div class="q"></div></div>
         <div class="over" id="over" aria-hidden="true"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
           <span class="fitword ok" id="fit">Empty block</span>
-          <span id="load" style="color:var(--muted);font-size:13px;font-family:var(--mono)">0 of 1 block</span>
+          <span id="load" style="color:var(--muted);font-size:13px;font-family:var(--mono)">0h of 4h</span>
         </div>
         <div class="adds">
-          <button class="btn" data-add="1">+ <b>S</b> story</button>
-          <button class="btn" data-add="2">+ <b>M</b> story</button>
-          <button class="btn" data-add="4">+ <b>L</b> story</button>
+          <button class="btn" data-add="1">+ <b>S</b> · 1h</button>
+          <button class="btn" data-add="2">+ <b>M</b> · 2h</button>
+          <button class="btn" data-add="4">+ <b>L</b> · 4h</button>
+          <button class="btn" data-add="2" data-unsized="1">+ unsized</button>
           <button class="btn" id="clear">Clear</button>
         </div>
         <div class="stack" id="stack" aria-label="Stories in this block"></div>
       </div>
       <div class="legend">
-        <div><b>S</b> about an hour. <b>M</b> a couple of hours. <b>L</b> most of a block.</div>
-        <div>Four S, two M or one L fill a block. Anything past that spills over, shown in amber, never red: it's a nudge to move one, not a mistake.</div>
-        <div>For the week, features are counted in <b>half blocks</b>: "½ block", "1½ blocks". Once a feature's stories are sized, they decide its size automatically. No decimals, ever.</div>
+        <div><b>S</b> is 1h. <b>M</b> is 2h. <b>L</b> is 4h. One unit everywhere: hours.</div>
+        <div><b>Sizing is optional.</b> An unsized story counts as 2h so the math still works, and nothing waits on it. Size it when you know.</div>
+        <div>Anything past the free time spills over, shown in amber, never red: it's a nudge to move one, not a mistake.</div>
+        <div>For the week, a feature is "about 6h". Once its stories are sized, they add up to its size automatically. Whole hours, no decimals, ever.</div>
         <div style="color:var(--faint)">Tap a story chip to remove it.</div>
       </div>
     </div>
@@ -381,7 +383,7 @@ footer{margin-top:48px;color:var(--faint);font-size:13px;display:flex;gap:10px;a
      what:['Open one client at a time: their blocks next week are already laid out.','Pick the features you\'ll definitely touch (musts) and the ones that fit if there\'s room.','Anything without stories gets a nudge: draft them now or send a Coop brief.','Click Next client until all are planned, then Done.'],
      lit:[0,1,2,5,6,7],mini:'week'},
     {n:'Plan the day',when:'Each morning · about 5 minutes',key:['P'],
-     what:['Each of today\'s blocks shows its meetings and free gaps.','This week\'s musts for that client come first; add their stories.','Size each story S, M or L and watch the fit.','Done. Optionally, Timebox my day places stories into the gaps.'],
+     what:['Each of today\'s blocks shows its meetings and free gaps.','This week\'s musts for that client come first; add their stories.','Size stories S, M or L if you like (1h, 2h, 4h). Unsized ones count as 2h.','Done. Optionally, Timebox my day places stories into the gaps.'],
      lit:[0,5],mini:'plan'},
     {n:'Now',when:'All day',key:['1','F'],
      what:['Today shows each block\'s meetings and stories in time order.','The next story has the one Start focus button.','Focus sets Teams to Busy and counts the time.','Tick stories off as you finish them.'],
@@ -397,10 +399,10 @@ footer{margin-top:48px;color:var(--faint);font-size:13px;display:flex;gap:10px;a
   var stepsEl=document.getElementById('steps'), panel=document.getElementById('panel');
   var cur=0;
   function mini(kind){
-    if(kind==='week') return '<div class="mini"><div class="hd"><span>Plan the week</span><span class="muted">2 of 4 planned</span></div><div class="chips"><i style="background:var(--c1)"></i><i style="background:var(--c3)"></i><i style="background:var(--c2)"></i><i></i><i></i><i style="background:var(--c2)"></i><i style="background:var(--c4)"></i><i style="background:var(--c2)"></i><i></i><i></i></div><div class="card" style="border-left-color:var(--c2)"><div class="row"><b>Northwind</b><span class="muted" style="margin-left:auto">1½ of 2 blocks</span></div><div class="row"><span>Order history export</span><span class="muted" style="margin-left:auto">1 block</span></div><div class="row"><span>Supplier onboarding</span><span class="pill a" style="margin-left:auto">Needs stories</span></div></div><div class="row muted"><span>Next client: Harbor ›</span></div></div>';
-    if(kind==='plan') return '<div class="mini"><div class="hd"><span>Plan today</span><span class="muted">about 5h free</span></div><div class="card"><div class="row"><b>Cooptimize</b><span class="muted" style="margin-left:auto">Fits</span></div><div class="row"><span>Utilization chart</span><span class="tag" style="margin-left:auto">S</span></div><div class="row"><span>Onboarding guide</span><span class="tag" style="margin-left:auto">M</span></div><div class="row meet"><span>11:00 Proposal review</span></div><div class="row" style="color:var(--accent)"><span>Free · 1h 45m</span></div></div></div>';
+    if(kind==='week') return '<div class="mini"><div class="hd"><span>Plan the week</span><span class="muted">2 of 4 planned</span></div><div class="chips"><i style="background:var(--c1)"></i><i style="background:var(--c3)"></i><i style="background:var(--c2)"></i><i></i><i></i><i style="background:var(--c2)"></i><i style="background:var(--c4)"></i><i style="background:var(--c2)"></i><i></i><i></i></div><div class="card" style="border-left-color:var(--c2)"><div class="row"><b>Northwind</b><span class="muted" style="margin-left:auto">9h planned · 7h free</span></div><div class="row"><span>Order history export</span><span class="muted" style="margin-left:auto">about 6h</span></div><div class="row"><span>Supplier onboarding</span><span class="pill a" style="margin-left:auto">Needs stories</span></div></div><div class="row muted"><span>Next client: Harbor ›</span></div></div>';
+    if(kind==='plan') return '<div class="mini"><div class="hd"><span>Plan today</span><span class="muted">about 5h free</span></div><div class="card"><div class="row"><b>Cooptimize</b><span class="muted" style="margin-left:auto">Fits</span></div><div class="row"><span>Utilization chart</span><span class="tag" style="margin-left:auto">S · 1h</span></div><div class="row"><span>Onboarding guide</span><span class="tag" style="margin-left:auto">Size?</span></div><div class="row meet"><span>11:00 Proposal review</span></div><div class="row" style="color:var(--accent)"><span>Free · 1h 45m</span></div></div></div>';
     if(kind==='now') return '<div class="mini"><div class="hd"><span>Today</span><span class="pill r">At risk · Dentist 12:00</span></div><div class="card"><div class="row meet"><span>9:00 Team standup</span></div><div class="row"><i class="chk on"></i><span style="text-decoration:line-through;color:var(--muted)">Timesheet summary</span></div><div class="row"><i class="chk"></i><b>Utilization chart</b><span class="go">Start focus</span></div><div class="row"><i class="chk"></i><span>Onboarding guide</span></div><div class="row meet"><span>11:00 Proposal review · Next</span></div></div></div>';
-    if(kind==='check') return '<div class="mini"><div class="hd"><span>Check-in</span><span class="muted">4h left today</span></div><div class="card" style="border-left-color:var(--c2)"><div class="row"><b>Northwind</b><span class="muted" style="margin-left:auto">2 done</span></div><div class="row"><span>Invoice totals</span><span class="tag" style="margin-left:auto">S</span><span class="pill a">Move to Wed</span></div><div class="warn">About 1h over. Move one?</div></div></div>';
+    if(kind==='check') return '<div class="mini"><div class="hd"><span>Check-in</span><span class="muted">4h left today</span></div><div class="card" style="border-left-color:var(--c2)"><div class="row"><b>Northwind</b><span class="muted" style="margin-left:auto">2 done</span></div><div class="row"><span>Invoice totals</span><span class="tag" style="margin-left:auto">S · 1h</span><span class="pill a">Move to Wed</span></div><div class="warn">About 1h over. Move one?</div></div></div>';
     return '<div class="mini"><div class="hd"><span>Close out</span><span class="muted">4 done · 3h 10m focused</span></div><div class="card"><div class="row muted"><span>Where you left off</span></div><div class="row"><span>Chart renders; next, the client filter.</span></div></div><div class="card" style="border-left-color:var(--amber)"><div class="row"><span>#4411 still Active in DevOps</span><span class="go">Mark done</span></div></div><div class="card" style="border-left-color:var(--risk)"><div class="row"><span class="pill r">Overdue</span><span>Reply to Jordan</span></div></div></div>';
   }
   function render(i,focus){
@@ -425,22 +427,21 @@ footer{margin-top:48px;color:var(--faint);font-size:13px;display:flex;gap:10px;a
   // sizing sandbox: quarters
   var items=[], bar=document.getElementById('bar'), over=document.getElementById('over'), fit=document.getElementById('fit'), load=document.getElementById('load'), stack=document.getElementById('stack');
   var names={1:'S',2:'M',4:'L'};
-  function words(q){ var half=Math.ceil(q/2); var whole=Math.floor(half/2), h=half%2; if(half===0) return '0'; return (whole?whole:'')+(h?'½':''); }
   function draw(){
-    var total=items.reduce(function(a,b){return a+b;},0);
+    var total=items.reduce(function(a,b){return a+b.v;},0);
     var qs=bar.querySelectorAll('.q'); var colors=['var(--c2)','color-mix(in srgb,var(--c2) 75%,var(--raised))'];
     qs.forEach(function(q,j){ var f=j<total; q.classList.toggle('fill',f); q.style.background=f?colors[j%2]:''; });
     over.innerHTML=''; for(var k=4;k<total;k++){ over.appendChild(document.createElement('i')); }
     var free=4-total;
     if(total===0){fit.textContent='Empty block';fit.className='fitword ok';}
-    else if(total<=4){fit.textContent=free===0?'Fits, full':'Fits · '+(free===1?'about 1h':free===2?'about 2h':'about 3h')+' spare';fit.className='fitword ok';}
-    else {var o=total-4; fit.textContent='About '+(o===1?'1h':o===2?'2h':o===3?'3h':Math.round(o/4*3.5)+'h')+' over · move one?';fit.className='fitword warn';}
-    var w=words(total); load.textContent=(w==='0'?'0':w)+' of 1 block';
-    stack.innerHTML=''; items.forEach(function(v,i){ var b=document.createElement('button'); b.textContent=names[v]+' ✕'; b.setAttribute('aria-label','Remove '+names[v]+' story'); b.onclick=function(){items.splice(i,1);draw();}; stack.appendChild(b); });
+    else if(total<=4){fit.textContent=free===0?'Fits, full':'Fits · '+free+'h spare';fit.className='fitword ok';}
+    else {fit.textContent='About '+(total-4)+'h over · move one?';fit.className='fitword warn';}
+    load.textContent=total+'h of 4h';
+    stack.innerHTML=''; items.forEach(function(it,i){ var lab=it.u?'Size? · 2h':names[it.v]+' · '+it.v+'h'; var b=document.createElement('button'); b.textContent=lab+' ✕'; b.setAttribute('aria-label','Remove '+lab+' story'); b.onclick=function(){items.splice(i,1);draw();}; stack.appendChild(b); });
   }
-  document.querySelectorAll('[data-add]').forEach(function(b){ b.onclick=function(){ if(items.reduce(function(a,c){return a+c;},0)<12){items.push(+b.dataset.add);draw();} }; });
+  document.querySelectorAll('[data-add]').forEach(function(b){ b.onclick=function(){ if(items.reduce(function(a,c){return a+c.v;},0)<12){items.push({v:+b.dataset.add,u:!!b.dataset.unsized});draw();} }; });
   document.getElementById('clear').onclick=function(){items=[];draw();};
-  items=[2,1]; draw();
+  items=[{v:2},{v:1}]; draw();
 
   // chapter highlight
   var links=Array.prototype.slice.call(document.querySelectorAll('.chapters a'));
