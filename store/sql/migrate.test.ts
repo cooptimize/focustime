@@ -3,6 +3,7 @@
 import { expect, it } from "vitest";
 import { emptySqlServer, onSqlServer } from "../../test/db.ts";
 import { BASELINE_VERSION } from "./baseline.ts";
+import { NAMED_MIGRATIONS } from "../migrations/index.ts";
 import { migrateSqlServer, SQLSERVER_MIGRATIONS, SQLSERVER_VERSION, sqlServerVersion } from "./migrate.ts";
 
 await onSqlServer("SQL Server migrations (A3)", () => {
@@ -10,7 +11,7 @@ await onSqlServer("SQL Server migrations (A3)", () => {
     const db = await emptySqlServer();
     try {
       expect(await sqlServerVersion(db.conn)).toBe(0);
-      expect(await migrateSqlServer(db.conn)).toEqual(SQLSERVER_MIGRATIONS.map((m) => m.version));
+      expect(await migrateSqlServer(db.conn)).toEqual([...SQLSERVER_MIGRATIONS.map((m) => m.version), ...NAMED_MIGRATIONS.map((m) => m.name).sort()]);
       expect(await sqlServerVersion(db.conn)).toBe(SQLSERVER_VERSION);
       const tables = (await db.conn.all("SELECT LOWER(name) AS name FROM sys.tables")).map((r) => r.name);
       expect(tables).toEqual(expect.arrayContaining(["users", "picks", "day_plans", "user_secrets", "scheduler_state", "schema_version"]));
@@ -25,7 +26,7 @@ await onSqlServer("SQL Server migrations (A3)", () => {
     const db = await emptySqlServer();
     try {
       expect(await migrateSqlServer(db.conn, { migrations: SQLSERVER_MIGRATIONS.slice(0, 1) })).toEqual([BASELINE_VERSION]);
-      expect(await migrateSqlServer(db.conn)).toEqual(SQLSERVER_MIGRATIONS.slice(1).map((m) => m.version));
+      expect(await migrateSqlServer(db.conn, { named: [] })).toEqual(SQLSERVER_MIGRATIONS.slice(1).map((m) => m.version));
     } finally {
       await db.drop();
     }
@@ -58,7 +59,7 @@ await onSqlServer("SQL Server migrations (A3)", () => {
       await add(4, "feature", null, null); // no estimate: stays empty (4h by default)
       await add(5, "story", null, "M");
       const log: { op: string; count?: number }[] = [];
-      expect(await migrateSqlServer(db.conn, { log: (r) => void log.push(r) })).toEqual([30]);
+      expect(await migrateSqlServer(db.conn, { log: (r) => void log.push(r), named: [] })).toEqual([30]);
       expect(log).toContainEqual(expect.objectContaining({ op: "convert_estimates", count: 3 }));
       const rows = await db.conn.all("SELECT item_id, estimate, size FROM week_features ORDER BY item_id");
       expect(rows.map((r) => [r.item_id, r.estimate, r.size])).toEqual([[1, 120], [2, 360], [3, 720], [4, null], [5, null, "M"]].map((x) => (x.length === 2 ? [...x, null] : x)));
