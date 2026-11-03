@@ -187,7 +187,8 @@ Roll back: run deploy-prod with the previous SHA. The last run's summary prints 
 gh workflow run deploy-prod.yml --repo cooptimize/focustime -f ref=<previous sha>
 ```
 
-Roll forward: the same with the newer SHA. Single revision mode: each deploy makes a new revision and the old ones stay
+Roll forward: the same with the newer SHA. Only the app changes: the image is the chosen commit's, while the
+migrations and the Bicep are always main's (D472). Nothing older than prod's first commit, `a347188`, can be deployed. Single revision mode: each deploy makes a new revision and the old ones stay
 listed, inactive (`az containerapp revision list -g FocusTime -n ft-prod-app -o table`). Migrations only add (D468), so
 the older build runs on the database as it is; no restore is needed for a rollback.
 
