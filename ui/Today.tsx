@@ -46,6 +46,8 @@ import { MenuCtx, MoreButton, PopupMenu } from "./Menus.tsx";
 import { DEFAULT_MIN_SIZES, openGaps } from "../plan/agenda.ts";
 import { timeChoices } from "../plan/picktime.ts";
 import { updatedAgo } from "./refresh.ts";
+import { usePhone } from "./viewport.ts";
+import { PhoneFollowUps, PhoneNow } from "./Phone.tsx";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
 import { DetailPanel, DraftStories, interactive } from "./DetailPanel.tsx";
 import type { PanelFocus } from "./WeekGrid.tsx";
@@ -112,6 +114,9 @@ export function Today(props: Props) {
   const { data, target, now, nowMs, mode, wide, switcher } = props;
   const date = data.planDay.date;
   const tz = userZone(data);
+  // P1: on the phone, Now leads with one card (the block under way, its next pick, Start focus or the timer).
+  const phone = usePhone();
+  const view = useContext(PlanCtx);
   const day = data.week.days.find((d) => d.date === date) ?? null;
   const plan = data.plan?.[date];
   const picks = useMemo(() => plan?.picks ?? [], [plan]);
@@ -230,7 +235,7 @@ export function Today(props: Props) {
       </h1>
     );
 
-  const attention = mode === "now" ? <Attention data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
+  const attention = mode === "now" ? <Attention noDue={phone} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
   const panelSlot = panel ? blocks.find((s) => s.half === panel.half) ?? null : null;
 
   return (
@@ -295,6 +300,20 @@ export function Today(props: Props) {
           <div className="today-main">
             {mode !== "checkin" && cal && <AllDayRow events={cal.allDay} />}
             {mode !== "checkin" && split && !wide && <OutsideLine label="Before your blocks" events={split.before} tz={tz} />}
+            {mode === "now" && phone && (
+              <PhoneNow
+                data={data}
+                block={blocks.find((s) => !ended(s)) ?? null}
+                pick={nextPick}
+                nowMs={nowMs}
+                nameOf={nameOf}
+                onStart={props.onStart}
+                onTimer={props.onTimer}
+                onFocusScreen={props.onFocusScreen}
+                onDone={committed ? (p) => view.toggle(p.id, true) : null}
+              />
+            )}
+            {mode === "now" && phone && blocks.length > 0 && <h2 className="section-label phone-agenda">Agenda</h2>}
             <section className={`today-blocks${blocks.length === 1 ? " one" : ""}`} style={{ "--blocks": blocks.length } as CSSProperties} aria-label="Today's blocks">
               {blocks.map((s) => (
                 <BlockCard
@@ -309,7 +328,8 @@ export function Today(props: Props) {
                   now={now}
                   nowMs={nowMs}
                   nameOf={nameOf}
-                  nextPick={nextPick?.id ?? null}
+                  nextPick={phone && mode === "now" ? null : (nextPick?.id ?? null)}
+                  phone={phone}
                   leftOff={leftOffOn.has(s.half)}
                   ended={ended(s)}
                   later={blocks.filter((b) => b.half !== s.half && !ended(b) && ms(b.start) > ms(s.start)).map((b) => ({ half: b.half, clientKey: b.focus[0]?.clientKey ?? null }))}
@@ -323,7 +343,8 @@ export function Today(props: Props) {
               ))}
             </section>
             {mode !== "checkin" && split && !wide && <OutsideLine label="After your blocks" events={split.after} tz={tz} />}
-            {mode === "now" && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} onNotice={setNotice} onError={setError} />}
+            {mode === "now" && phone && <PhoneFollowUps data={data} date={date} onChanged={(m) => (m && setNotice(m), props.onChanged())} />}
+            {mode === "now" && !phone && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} onNotice={setNotice} onError={setError} />}
             {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} />}
           </div>
         </div>
@@ -364,9 +385,10 @@ function checkLeft(check: readonly CheckSlot[]): string {
  * The attention line: only when something needs it. Follow-ups due collapse to one chip that opens into rows; a source
  * that failed shows with how old its data is and Retry; an expiring secret links to its setting. Nothing when healthy.
  */
-function Attention({ data, date, clockMs, onInbox, onRetry, onFix, onSettings }: { data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void }) {
+function Attention({ noDue = false, data, date, clockMs, onInbox, onRetry, onFix, onSettings }: { noDue?: boolean; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void }) {
   const [open, setOpen] = useState(false);
-  const due: FollowUpView[] = urgentFollowUps(data.followUps, date);
+  // P1: the phone lists due follow-ups at the foot of Today instead.
+  const due: FollowUpView[] = noDue ? [] : urgentFollowUps(data.followUps, date);
   const down = causeLines(data.sources, data.devops);
   const vm = vmNeedsToday(useContext(VmCtx).status);
   if (!due.length && !down.length && !data.expiring.length && !vm) return null;
@@ -438,6 +460,8 @@ type BlockProps = {
   leftOff: boolean;
   ended: boolean;
   later: { half: Half; clientKey: string | null }[];
+  /** P1: on the phone a card has no planning links. */
+  phone?: boolean;
   carryTo: IsoDate | null;
   selected: number | null;
   /** U3: opens the detail panel on this block (a click on the card body; on a pick row, focused on that pick). */
@@ -604,10 +628,15 @@ function BlockCard(b: BlockProps) {
       </ul>
       {!b.picks.some(live) && !ended && (
         <p className="tb-empty">
-          Nothing planned.{" "}
-          <button type="button" className="link-btn" onClick={() => b.props.onPlan(slot.date)}>
-            Plan it
-          </button>
+          Nothing planned.
+          {!b.phone && (
+            <>
+              {" "}
+              <button type="button" className="link-btn" onClick={() => b.props.onPlan(slot.date)}>
+                Plan it
+              </button>
+            </>
+          )}
         </p>
       )}
       {b.leftOff && note && <p className="today-resume" title={`Where you left off: ${note.note}`}>Left off: {note.note}</p>}

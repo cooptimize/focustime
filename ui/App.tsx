@@ -64,7 +64,8 @@ import { AboutDialog } from "./About.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
-import { useLayout } from "./viewport.ts";
+import { useLayout, usePhone } from "./viewport.ts";
+import { BottomBar, PhoneReadOnly, type BottomTab } from "./Phone.tsx";
 import { commandList, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
 import { WeekItems } from "./ItemLookup.tsx";
@@ -113,6 +114,9 @@ const CAPTURE_HASH = "#/capture";
 export function App() {
   const now = useRef(nowOverride()).current;
   const { layout, compact } = useLayout();
+  // P1: under 600 px, the phone app (bottom bar, one day at a time, planning read-only).
+  const phone = usePhone();
+  const [phoneMoreAt, setPhoneMoreAt] = useState<{ x: number; y: number } | null>(null);
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<Selection>({ dayIndex: 0, half: "AM" });
@@ -1352,7 +1356,7 @@ export function App() {
     <MenuHost env={env}>
     <VmProvider onSettings={() => setSettingsAt("you")}>
     <DraftEditorCtx.Provider value={setDraftEdit}>
-    <div className={`app ${layout}${compact ? " compact" : ""}`}>
+    <div className={`app ${layout}${compact ? " compact" : ""}${phone ? " phone" : ""}`}>
       <header className="topbar">
         <div className="brand">
           <button type="button" className="brand-home" onClick={() => setView("today")} title="Today">
@@ -1365,16 +1369,17 @@ export function App() {
             </button>
           )}
         </div>
-        <nav className="views" aria-label="Tabs">
+        {!phone && <nav className="views" aria-label="Tabs">
           {TABS.map((t, n) => (
             <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} title={TAB_TITLES[t] + ` (${n + 1})`}>
               {TAB_NAMES[t]}
               {t === "inbox" && inboxCount > 0 && <span className="count" aria-label={`${inboxCount} waiting`}>{inboxCount}</span>}
             </button>
           ))}
-        </nav>
+        </nav>}
         <div className="top-actions">
-          <VmChip />
+          <VmChip dot={phone} />
+          {!phone && <>
           {/* Step 15.2: Focus is always here. Idle it opens the start menu (next pick first); running it is the countdown. */}
           {data.timer ? (
             <TopTimer
@@ -1414,6 +1419,7 @@ export function App() {
           >
             ⋯
           </button>
+          </>}
           <PersonChip
             onOpen={(at, step) => setPersonMenu({ at, step })}
             onSettings={() => setSettingsAt(settingsAt === null ? "you" : null)}
@@ -1525,18 +1531,22 @@ export function App() {
           }
         />
       ) : planWeekAt !== null ? (
-        <PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
+        <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Week"><PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} /></PhoneGate>
       ) : followUpsOpen ? (
         <Inbox data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
       ) : roadmapOpen ? (
-        nav.tab === "roadmap" && nav.mode === "ahead" ? <PlanAhead data={data} switcher={switches.roadmap} onDone={leavePlanning} onChanged={reloadQuiet} /> : <Roadmap switcher={switches.roadmap} data={data} onChanged={reloadQuiet} />
+        nav.tab === "roadmap" && nav.mode === "ahead" ? (
+          <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Roadmap"><PlanAhead data={data} switcher={switches.roadmap} onDone={leavePlanning} onChanged={reloadQuiet} /></PhoneGate>
+        ) : (
+          <PhoneGate phone={phone}><Roadmap switcher={switches.roadmap} data={data} onChanged={reloadQuiet} /></PhoneGate>
+        )
       ) : nav.tab === "today" && nav.mode === "plan" ? (
         pd && week.days.some((d) => d.date === pd.date) ? (
           (() => {
             const dayIndex = week.days.findIndex((d) => d.date === pd.date);
             const fri = week.days[4]!.date;
             return (
-                    <PlanDay
+                    <PhoneGate phone={phone} onBack={() => goNav(navOf.today())} backLabel="Back to Today"><PlanDay
                       switcher={switches.today}
                       key={pd.date}
                       day={week.days[dayIndex]!}
@@ -1568,7 +1578,7 @@ export function App() {
                         setPlanWeekClient(clientKey);
                         openPlanWeek(week.days[0]!.date);
                       }}
-                    />
+                    /></PhoneGate>
           );
           })()
         ) : (
@@ -1702,6 +1712,38 @@ export function App() {
       {detailsOpen && base === "week" && !planWeekAt && !pd && (
         <DetailPanel data={data} day={day} slot={slot} focus={panelFocus} now={now ?? new Date(clock).toISOString()} onClose={() => (setDetailsOpen(false), setPanelFocus(null), cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true }))} onStart={startFocus} onChanged={reloadQuiet} onNotice={setNotice} />
       )}
+      {phone && (
+        <BottomBar
+          current={captureOpen ? "capture" : phoneMoreAt ? "more" : settingsAt !== null || guideAt || focusOpen ? null : nav.tab === "today" || nav.tab === "week" ? nav.tab : "more"}
+          inboxCount={inboxCount}
+          dot={false}
+          onTab={(t: BottomTab, e) => {
+            if (t === "capture") return setCaptureOpen(true);
+            if (t === "more") {
+              const r = e.currentTarget.getBoundingClientRect();
+              return setPhoneMoreAt({ x: r.right, y: r.top - 4 });
+            }
+            openTab(t);
+          }}
+        />
+      )}
+      {phoneMoreAt && (
+        <PopupMenu
+          at={phoneMoreAt}
+          step={{
+            title: "More",
+            items: [
+              { id: "inbox", label: "Inbox", ...(inboxCount > 0 ? { hint: String(inboxCount) } : {}), run: () => openTab("inbox") },
+              { id: "roadmap", label: "Roadmap", run: () => openTab("roadmap") },
+              ...(data.timer ? [{ id: "focus", label: "Focus screen", run: () => setView("focus") }] : [{ id: "focus", label: "Start focus", run: () => setTimerMenuAt(phoneMoreAt) }]),
+              { id: "settings", label: "Settings", run: () => setSettingsAt("you") },
+              { id: "guide", label: "Guide", run: () => openGuide() },
+              { id: "about", label: "About", run: () => setAboutOpen(true) },
+            ],
+          }}
+          onClose={() => setPhoneMoreAt(null)}
+        />
+      )}
       {cmdOpen && <CommandMenu commands={commandList(env)} onClose={() => setCmdOpen(false)} />}
       {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}
       {moreAt && (
@@ -1786,5 +1828,16 @@ export function App() {
     </DevOpsWork.Provider>
     </SampleSources.Provider>
     </>
+  );
+}
+
+/** P1: a planning screen on the phone is read-only under one line (PhoneReadOnly); elsewhere it is as it was. */
+function PhoneGate({ phone, onBack, backLabel, children }: { phone: boolean; onBack?: () => void; backLabel?: string; children: React.ReactNode }) {
+  return phone ? (
+    <PhoneReadOnly onBack={onBack} {...(backLabel ? { backLabel } : {})}>
+      {children}
+    </PhoneReadOnly>
+  ) : (
+    <>{children}</>
   );
 }

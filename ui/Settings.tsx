@@ -26,6 +26,8 @@ import type { WriteEntry } from "../plan/timebox.ts";
 import { version as APP_VERSION } from "../package.json";
 import { InlineMoment } from "./brand/Opening.tsx";
 import { Lockup } from "./brand/Brand.tsx";
+import { usePhone } from "./viewport.ts";
+import { PhoneReadOnly } from "./Phone.tsx";
 import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 
@@ -46,6 +48,9 @@ export const SETTINGS_SECTIONS = [
   ["about", "About"],
 ] as const;
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number][0];
+
+/** P1: the sections laid out for a big screen (a week of hours, the standing blocks grid, client tables, the logs) read on the phone; the rest are simple fields that work there. */
+export const PHONE_READ_ONLY: ReadonlySet<SettingsSectionId> = new Set(["hours", "standing", "clients", "data"]);
 
 type Props = {
   section: SettingsSectionId;
@@ -151,6 +156,7 @@ export function Settings(props: Props) {
   );
 
   const title = SETTINGS_SECTIONS.find(([id]) => id === props.section)![1];
+  const phone = usePhone();
   return (
     <AutoSaveProvider onNotice={props.onNotice}>
       {(leave) => (
@@ -183,7 +189,13 @@ export function Settings(props: Props) {
             </ul>
           </div>
         )}
-        {data && <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />}
+        {data && (phone && PHONE_READ_ONLY.has(props.section) ? (
+          <PhoneReadOnly>
+            <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />
+          </PhoneReadOnly>
+        ) : (
+          <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />
+        ))}
       </section>
     </main>
       )}

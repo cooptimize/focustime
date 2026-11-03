@@ -24,6 +24,7 @@ import { WorkLink } from "./WorkLink.tsx";
 import { topOverlay } from "./keys.ts";
 import type { PanelFocus } from "./WeekGrid.tsx";
 import { userZone } from "../week/zone.ts";
+import { usePhone } from "./viewport.ts";
 
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
 
@@ -50,6 +51,7 @@ export function interactive(e: ReactMouseEvent): boolean {
 
 export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onChanged, onNotice }: Props) {
   const ref = useRef<HTMLElement>(null);
+  const phone = usePhone();
   const plan = useContext(PlanCtx);
   const allWork = useContext(DevOpsWork);
   const tz = userZone(data);
@@ -100,6 +102,7 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
   return (
     <aside ref={ref} className="detail-panel" aria-label={`Details: ${title}, ${longDate(slot.date)}`} style={{ "--c": clientColor(client ?? undefined, data.clients) } as CSSProperties}>
       <header className="dp-head">
+        {phone && <PanelBack onClose={onClose} />}
         <div className="dp-title">
           <h2>
             {client && <span className="swatch" aria-hidden="true" />}
@@ -110,9 +113,11 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
           </span>
         </div>
         <HalfScope.Provider value={true}>{menu.button(`Actions for ${title}`)}</HalfScope.Provider>
-        <button type="button" className="dp-close" onClick={onClose} aria-label="Close details (Esc)" title="Close (Esc)">
-          ×
-        </button>
+        {!phone && (
+          <button type="button" className="dp-close" onClick={onClose} aria-label="Close details (Esc)" title="Close (Esc)">
+            ×
+          </button>
+        )}
       </header>
 
       <div className="dp-body">
@@ -263,8 +268,18 @@ function usePanelEsc(ref: RefObject<HTMLElement | null>, onClose: () => void) {
  * U4: the same panel for other subjects (Plan the week's feature, client budget and DevOps health): the title with an
  * optional swatch, a muted line, an optional ⋯, the close button and Esc; the body scrolls on its own.
  */
+/** P1: on the phone a panel is full screen and starts with Back instead of ×. */
+function PanelBack({ onClose }: { onClose: () => void }) {
+  return (
+    <button type="button" className="dp-back" onClick={onClose}>
+      ‹ Back
+    </button>
+  );
+}
+
 export function PanelShell({ title, sub, color, menu, label, onClose, children }: { title: ReactNode; sub?: ReactNode; color?: string | undefined; menu?: ReactNode; label: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
+  const phone = usePhone();
   // D462: Esc or × puts focus back where the panel was opened from (the row), when it is still there.
   const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -280,6 +295,7 @@ export function PanelShell({ title, sub, color, menu, label, onClose, children }
   return (
     <aside ref={ref} className="detail-panel" aria-label={label} style={color ? ({ "--c": color } as CSSProperties) : undefined}>
       <header className="dp-head">
+        {phone && <PanelBack onClose={close} />}
         <div className="dp-title">
           <h2>
             {color && <span className="swatch" aria-hidden="true" />}
@@ -288,9 +304,11 @@ export function PanelShell({ title, sub, color, menu, label, onClose, children }
           {sub && <span className="dp-when">{sub}</span>}
         </div>
         {menu}
-        <button type="button" className="dp-close" onClick={close} aria-label="Close details (Esc)" title="Close (Esc)">
-          ×
-        </button>
+        {!phone && (
+          <button type="button" className="dp-close" onClick={close} aria-label="Close details (Esc)" title="Close (Esc)">
+            ×
+          </button>
+        )}
       </header>
       <div className="dp-body">{children}</div>
     </aside>

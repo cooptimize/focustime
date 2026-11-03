@@ -53,3 +53,15 @@ export function useLayout(): { layout: Layout; compact: boolean } {
   const [layout, compact] = key.split(":") as [Layout, string];
   return { layout, compact: compact === "true" };
 }
+
+/**
+ * P1 (phone): under 600 CSS px wide, FocusTime is a phone app for checking and doing, not planning (bottom bar, one
+ * day at a time, planning read-only). The same width as the CSS breakpoint `@media (max-width: 599.98px)`.
+ */
+export const PHONE_MAX_PX = 600;
+export const isPhoneWidth = (widthPx: number) => widthPx < PHONE_MAX_PX;
+
+/** Whether the window is phone width; re-renders live when it crosses the breakpoint. */
+export function usePhone(): boolean {
+  return useSyncExternalStore(subscribe, () => isPhoneWidth(window.innerWidth), () => false);
+}
