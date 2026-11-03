@@ -3422,3 +3422,13 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .pw-due { flex: none; font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; }
 .pw-due.late { color: var(--watch); }
 .pw-dates .link-btn { font-size: inherit; }
+
+/* D462: in Plan the week and Plan the day the detail panel takes the right pane's place while open: same column,
+   same sticky card, its own scroll. The header and the whole week grid stay in view; nothing is covered. */
+.pl-panes.with-panel { grid-template-columns: minmax(0, 1fr) var(--pl-right); }
+.pl-panel { position: sticky; top: 0; align-self: stretch; min-width: 0; min-height: 0; margin-bottom: 16px; display: flex; }
+.pl-panel > .detail-panel { position: static; inset: auto; z-index: auto; flex: 1; width: auto; min-height: 0; border: 1px solid var(--border); border-radius: 12px; box-shadow: none; overflow: hidden; }
+@media (max-width: 1199px) {
+  .pl-panes.with-panel { grid-template-columns: minmax(0, 1fr); }
+  .pl-panel { position: static; }
+}

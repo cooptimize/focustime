@@ -3,7 +3,7 @@
 // and Today's 3840 pick detail. Contents: client and time range with the risk reasons, the block's agenda with free
 // gaps (as Plan the day's), the picks as full rows, the client's features this week with story counts and Needs
 // stories actions, the client's follow-ups, DevOps items assigned to me there and not planned yet, and the ⋯ actions.
-import { useContext, useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useContext, useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import { rankRisks } from "../week/risks.ts";
 import type { Day, IsoDate, Slot } from "../week/types.ts";
@@ -265,7 +265,18 @@ function usePanelEsc(ref: RefObject<HTMLElement | null>, onClose: () => void) {
  */
 export function PanelShell({ title, sub, color, menu, label, onClose, children }: { title: ReactNode; sub?: ReactNode; color?: string | undefined; menu?: ReactNode; label: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
-  usePanelEsc(ref, onClose);
+  // D462: Esc or × puts focus back where the panel was opened from (the row), when it is still there.
+  const opener = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const a = document.activeElement as HTMLElement | null;
+    if (a && a !== document.body && !ref.current?.contains(a)) opener.current = a;
+  }, [label]);
+  const close = useCallback(() => {
+    const back = opener.current;
+    onClose();
+    if (back?.isConnected) requestAnimationFrame(() => back.focus({ preventScroll: true }));
+  }, [onClose]);
+  usePanelEsc(ref, close);
   return (
     <aside ref={ref} className="detail-panel" aria-label={label} style={color ? ({ "--c": color } as CSSProperties) : undefined}>
       <header className="dp-head">
@@ -277,7 +288,7 @@ export function PanelShell({ title, sub, color, menu, label, onClose, children }
           {sub && <span className="dp-when">{sub}</span>}
         </div>
         {menu}
-        <button type="button" className="dp-close" onClick={onClose} aria-label="Close details (Esc)" title="Close (Esc)">
+        <button type="button" className="dp-close" onClick={close} aria-label="Close details (Esc)" title="Close (Esc)">
           ×
         </button>
       </header>

@@ -409,7 +409,8 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
       leftClass="pw-left"
       left={left}
       right={right}
-      after={
+      panel={
+        panel && (
         <>
           {panel?.kind === "health" && (
             <PanelShell title="DevOps health" sub={flags.length ? `${flags.length} to look at` : "All good"} label="DevOps health" onClose={() => setPanel(null)}>
@@ -439,6 +440,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
               drafts={st.drafts.filter((d) => d.clientKey === panel.k && d.parentItemId === panel.itemId)} listed={new Set(items.filter((i) => i.clientKey === panel.k).map((i) => i.itemId))} clientItems={items.filter((i) => i.clientKey === panel.k)} past={past} ops={ops} tz={tz} onClose={() => setPanel(null)} />
           )}
         </>
+        )
       }
     />
     </OwnerPhotos.Provider>
