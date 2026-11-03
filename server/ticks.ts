@@ -145,10 +145,11 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     host: {
       // P1: what passes the gate also goes into the in-app list (⋯ › Notifications) and to the devices with push on.
       // The handle carries both the list row and the host's own, so a handled occasion closes both.
-      show: async (n, shown) => {
-        const row = await store.addNotice({ key: n.key, kind: String(n.kind), title: n.title, body: n.body, route: n.route }).catch(() => null);
+      // The host shows it at once (never waiting on the database); the handle names the list row once it is written.
+      show: (n, shown) => {
+        const row = store.addNotice({ key: n.key, kind: String(n.kind), title: n.title, body: n.body, route: n.route }).catch(() => null);
         if (d.push) void configOrNull().then((c) => d.push!.send(n, c?.notify.pushDetails ?? false)).catch(() => log({ source: "server", op: "push_failed" }));
-        return host.notifications.show(n, (h) => shown?.(`${row ?? ""}|${h}`));
+        return host.notifications.show(n, (h) => void row.then((r) => shown?.(`${r ?? ""}|${h}`)));
       },
       close: (h) => {
         const [row, own = ""] = h.split(/\|(.*)/s);
