@@ -278,6 +278,10 @@ export type WeekPlanState = {
   drafts: DraftStory[];
   /** Captures not sorted yet (step 9). */
   captures: number;
+  /** U6: draft features on this week's list, with their tier (drafts has the draft itself). */
+  weekDrafts: { draftId: number; tier: "must" | "nice" }[];
+  /** U6: clients marked "Nothing this week". */
+  quiet: string[];
 };
 
 

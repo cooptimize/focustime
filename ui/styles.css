@@ -1420,15 +1420,11 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .co-other { display: inline-block; margin: 0 0 8px; }
 
 /* ---- Plan the week (step 8) ---- */
-.planweek { flex: 1; overflow: auto; padding: 8px 24px 32px; }
-.planweek .follow-ups-head { flex-wrap: wrap; row-gap: 8px; }
-.planweek .follow-ups-head .top-btn.primary { margin-left: auto; }
 .planweek input:not([type="checkbox"]), .planweek select, .planweek textarea {
   font: inherit; font-size: var(--fs-3); color: inherit; background: var(--raised);
   border: 1px solid var(--border-strong); border-radius: 7px; padding: 4px 8px; min-width: 0;
 }
 .view-tab .count.nudge { color: var(--watch); font-weight: 600; }
-.planweek .co-section { max-width: 1400px; }
 .pw-ready { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .pw-flag { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; align-items: center; gap: 6px 14px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: var(--fs-3); }
 .pw-kind { font-weight: 600; color: var(--watch); }
@@ -1467,8 +1463,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .pw-flag { grid-template-columns: minmax(0, 1fr); }
   .pw-feature { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "kids" "blocks" "placed" "children"; }
 }
-.planweek .follow-ups-head { max-width: 1400px; justify-content: flex-start; }
-.planweek .follow-ups-head .top-btn.primary + .top-btn { margin-left: 0; }
 
 /* ---- Quick capture (step 9) ---- */
 .capture { flex: 1; overflow: auto; padding: 8px 24px 32px; }
@@ -1614,10 +1608,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Step 10 slice 3: Plan the week. The block grid sits on top (pinned while the list scrolls) and is larger; the
    feature list is a right-hand panel when the window is wide enough, below the grid otherwise. */
-.planweek .follow-ups-head, .planweek .co-section, .pw-summary { max-width: none; }
-.pw-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 4px 0 10px; }
-.pw-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-.planweek input.pw-search { margin-left: auto; min-width: 220px; }
 
 /* Step 11: Plan the week by client. Must and Nice to have lists per client, musts per client above the grid, the
    on-track question, the heads-up offer. */
@@ -2054,8 +2044,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Plan the week rows (D267): title, state, stories, blocks, pin, ⋯ */
 .pw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.pw-row .pw-title { flex: 1 1 280px; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
-.pw-row .pw-title a { font-weight: 600; }
 .pw-chip-btn, .pw-chip-static { padding: 1px 10px; border-radius: 99px; border: 1px solid var(--border-strong); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-2); cursor: pointer; }
 .pw-chip-static { cursor: default; border-style: dashed; }
 .pw-chip-btn:hover:not(:disabled) { color: var(--text); }
@@ -2370,7 +2358,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pw-progress-blocks { color: var(--text-muted); font-weight: 600; }
 .pw-raise { color: var(--watch); font-weight: 600; }
 .pw-nested { flex-basis: 100%; list-style: none; margin: 4px 0 0; padding: 0 0 0 16px; border-left: 2px solid color-mix(in srgb, var(--c, var(--accent)) 40%, transparent); }
-.pw-nested > .pw-row { padding: 4px 0; border: none; background: none; }
 .help-people label { display: inline-flex; align-items: center; gap: 2px; }
 .wd-people li { display: flex; align-items: center; gap: 2px; }
 
@@ -2915,60 +2902,21 @@ button.att-chip { cursor: pointer; }
    Header: ‹ ›, title, a muted state, DevOps health as a link, ⋯, Done and the mode switch. One strip of block chips
    (drag a row onto one to pin it; the chips grow while dragging). One card per client in a grid. The U3 type scale. */
 .mode-area .done-btn { font-size: var(--fs-3); font-weight: 600; }
-.planweek { padding: 8px 24px 32px; font-size: var(--fs-3); }
-.planweek.with-panel { padding-right: 464px; }
-@media (min-width: 3000px) { .planweek.with-panel { padding-right: 584px; } }
-.planweek .pw-head { gap: 10px; flex-wrap: wrap; max-width: none; }
-.planweek .pw-head h2 { font-size: var(--fs-4); font-weight: 600; }
-.planweek .pw-head .mode-area { margin-left: 0; }
-.planweek .pw-head .co-step { display: inline-flex; gap: 4px; }
-.planweek .pw-head .co-step .mini { font-size: var(--fs-4); font-weight: 600; padding: 0 8px; }
 .pw-when { font-size: var(--fs-3); color: var(--text-muted); }
 .pw-when.changed { color: var(--watch); }
-.pw-health-link { margin-left: auto; font-size: var(--fs-3); font-weight: 400; color: var(--text-muted); }
 .pw-health-link.some { color: var(--watch); }
-.planweek .pw-more { font-size: var(--fs-4); font-weight: 600; }
-.pw-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 10px; }
-.pw-strip-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-right: 4px; }
-.pw-blk { font: inherit; font-size: var(--fs-2); font-weight: 400; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--c, var(--border)); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: padding 0.12s ease; }
-.pw-blk:hover { border-color: var(--border-strong); border-left-color: var(--c, var(--border-strong)); }
-.pw-blk.dashed { border-style: dashed; border-left-width: 1px; color: var(--text-muted); background: transparent; cursor: default; }
-.pw-blk.on { background: var(--raised); }
-.pw-blk.over { outline: 2px solid var(--focus); outline-offset: 1px; }
-.pw-blk-off, .pw-blk-pins { color: var(--text-muted); }
-.pw-strip.dragging .pw-blk:not(.dashed) { padding: 16px 12px; }
-.planweek .pw-filter { margin: 0 0 10px; }
-.planweek .chip-btn { font-size: var(--fs-3); font-weight: 500; }
-.planweek input.pw-search { font-size: var(--fs-3); }
-.pw-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
-@media (max-width: 1399px) { .pw-cards { grid-template-columns: minmax(0, 1fr); } }
-@media (min-width: 3000px) { .pw-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.planweek .pw-client { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: none; margin: 0; }
-.planweek .pw-card-head { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: var(--fs-3); font-weight: 400; }
 .pw-name { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: var(--fs-4); font-weight: 600; color: var(--text); background: none; border: 0; padding: 0; cursor: pointer; }
 .pw-name:hover { text-decoration: underline; }
-.pw-name .pw-swatch { align-self: center; }
-.planweek .pw-card-head .pw-budget { color: var(--text-muted); margin: 0; font-weight: 400; cursor: help; }
-.planweek .pw-card-head .pw-fit2 { margin-left: auto; font-size: var(--fs-3); font-weight: 500; color: var(--text-muted); }
 .planweek .pw-fit2.all { color: var(--ok); }
 .planweek .pw-fit2.over { color: var(--watch); }
 .pw-src { font-size: var(--fs-2); color: var(--text-muted); }
 .planweek .pw-tier { margin: 0; }
-.planweek .pw-tier h4, .planweek .pw-add h4, .planweek .pw-under h4 { margin: 0 0 6px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
-.pw-add-n { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; font-size: var(--fs-2); }
-.planweek .pw-add { margin: 0; padding-top: 10px; border-top: 1px solid var(--border); }
 .planweek .pw-under { margin-top: 6px; }
 .planweek .pw-features { display: flex; flex-direction: column; gap: 4px; }
-.planweek .pw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font-size: var(--fs-3); cursor: default; }
-.planweek .pw-row.needs { border-color: color-mix(in oklab, var(--watch) 55%, var(--border)); background: color-mix(in oklab, var(--watch) 10%, var(--bg)); }
-.planweek .pw-row.nested { border: 0; background: none; padding: 2px 0; }
 .planweek .pw-row.done .pw-open, .planweek .pw-row.done .pw-title a { color: var(--text-muted); }
 .pw-handle { color: var(--text-faint); cursor: grab; font-size: var(--fs-2); letter-spacing: -2px; user-select: none; }
-.planweek .pw-row .pw-title { flex: 1 1 180px; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
 .pw-open { font: inherit; font-weight: 500; color: var(--text); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
 .pw-open:hover { text-decoration: underline; }
-.planweek .pw-row .pw-title a { font-weight: 500; color: var(--text); text-decoration: none; }
-.planweek .pw-row .pw-title a:hover { text-decoration: underline; }
 .pw-count { font: inherit; font-size: var(--fs-2); color: var(--text-muted); background: none; border: 0; padding: 0; cursor: pointer; }
 .pw-count:hover { color: var(--text); }
 .pw-needs { display: inline-flex; gap: 10px; align-items: baseline; font-size: var(--fs-2); }
@@ -2976,9 +2924,6 @@ button.att-chip { cursor: pointer; }
 .pw-needs .link-btn { font-size: var(--fs-2); font-weight: 400; }
 .planweek .pw-chip-btn { font-size: var(--fs-2); font-weight: 500; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border-strong); color: var(--text); background: transparent; }
 .planweek .pw-step { font-size: var(--fs-2); font-weight: 400; }
-.planweek .pw-row > .pw-stepper .pw-step, .planweek .pw-row > .more { opacity: 0; transition: opacity 0.1s; }
-.planweek .pw-row:hover > .pw-stepper .pw-step, .planweek .pw-row:focus-within > .pw-stepper .pw-step, .planweek .pw-row:hover > .more, .planweek .pw-row:focus-within > .more { opacity: 1; }
-.planweek .pw-row > .more { font-size: var(--fs-4); font-weight: 600; }
 .planweek .pw-pin { font-size: var(--fs-2); }
 .planweek .pw-parent { font-size: var(--fs-2); color: var(--text-muted); flex-basis: 100%; padding-left: 22px; }
 .planweek .pw-parent .link-btn { font-size: var(--fs-2); }
@@ -2989,8 +2934,6 @@ button.att-chip { cursor: pointer; }
 .pw-kids { flex-basis: 100%; font-size: var(--fs-2); color: var(--text-muted); padding-left: 22px; }
 .pw-done { color: var(--ok); font-weight: 500; }
 .pw-over { margin: 6px 0 0; color: var(--watch); font-size: var(--fs-3); }
-.pw-fold { font: inherit; font-size: var(--fs-3); color: var(--text-muted); background: none; border: 0; padding: 0; cursor: pointer; }
-.pw-fold:hover { color: var(--text); }
 .pw-nice .pw-features { margin-top: 6px; }
 .planweek .pw-addrow { display: flex; align-items: center; gap: 8px; padding: 3px 8px; border: 0; background: none; }
 .planweek .pw-addrow .pw-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3000,7 +2943,6 @@ button.att-chip { cursor: pointer; }
 .pw-flagword { font-size: var(--fs-2); color: var(--watch); }
 .planweek .pw-must { border: 1px solid var(--border-strong); font-size: var(--fs-2); font-weight: 500; }
 .planweek .pw-nice-btn { font-size: var(--fs-2); }
-.pw-show-more { font-size: var(--fs-2); font-weight: 400; color: var(--text-muted); margin: 4px 0 0 8px; }
 .pw-empty-line { margin: 0; font-size: var(--fs-2); color: var(--text-muted); }
 .pw-draft-tag { font-size: var(--fs-2); font-weight: 500; }
 .planweek .pw-drafts { font-size: var(--fs-3); }
@@ -3020,7 +2962,6 @@ button.att-chip { cursor: pointer; }
 .pw-pstories li.closed a { color: var(--text-faint); text-decoration: line-through; }
 .pw-pacts { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: var(--fs-2); }
 .pw-pacts .link-btn, .pw-pacts .mini { font-size: var(--fs-2); }
-.planweek .pw-row.nested { padding: 0; min-height: 26px; }
 .planweek .pw-row.nested .pw-chip-btn { line-height: calc(18px * var(--text-scale)); }
 .pw-health-link, .pw-show-more { text-decoration: none; }
 .pw-health-link:hover, .pw-show-more:hover { text-decoration: underline; }
@@ -3205,3 +3146,68 @@ section.day > .day-allday .chip { display: block; min-width: 0; overflow: hidden
 .pl-hover { flex: none; display: inline-flex; align-items: center; gap: 6px; opacity: 0; transition: opacity 0.1s; }
 .pl-row:hover > .pl-hover, .pl-row:focus-within > .pl-hover, .pl-hover:has(.pt-hint), .pl-hover:has([aria-expanded="true"]) { opacity: 1; }
 .pl-hover .more-btn, .pl-hover > button.more { font-size: var(--fs-4); font-weight: 600; }
+
+/* U6: Plan the week on the planning layout. The week grid at the top (the client filter), client lines, the open
+   client's card, its rows on the shared row, the right pane's rows. */
+.planweek.pl-frame { overflow: hidden; }
+.pw-grid-wrap { margin: 0 24px 12px; }
+.pw-grid { display: grid; grid-template-columns: 28px repeat(5, minmax(0, 1fr)); gap: 6px 8px; align-items: stretch; }
+.pw-grid-corner { display: block; }
+.pw-grid-day { font-size: var(--fs-2); font-weight: 500; color: var(--text); padding-left: 2px; }
+.pw-grid-date { font-weight: 400; color: var(--text-muted); }
+.pw-grid-half { align-self: center; font-size: var(--fs-2); font-weight: 500; color: var(--text-muted); }
+.pw-cell {
+  display: flex; align-items: center; gap: 8px; min-width: 0; min-height: calc(40px * var(--text-scale)); padding: 0 12px;
+  border: 1px solid var(--border); border-left: 4px solid var(--c, var(--border-strong)); border-radius: 8px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); text-align: left; cursor: pointer;
+}
+button.pw-cell:hover { border-color: var(--border-strong); border-left-color: var(--c, var(--border-strong)); }
+.pw-cell-name { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.pw-cell-right { margin-left: auto; min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2); color: var(--text-muted); }
+.pw-cell-right.planning { color: var(--accent); font-weight: 500; }
+.pw-cell.on { background: color-mix(in oklab, var(--accent) 12%, var(--surface)); border-color: color-mix(in oklab, var(--accent) 55%, var(--border)); border-left-color: var(--c, var(--accent)); }
+.pw-cell.off { color: var(--text-muted); }
+.pw-cell.off .pw-cell-name { font-weight: 400; }
+.pw-cell.open-half { border-style: dashed; border-left-width: 1px; color: var(--text-muted); background: transparent; }
+.pw-cell.pto, .pw-cell.catchup { cursor: default; color: var(--text-muted); border-left-width: 1px; }
+.pw-cell.pto { background: repeating-linear-gradient(135deg, var(--surface) 0 6px, var(--raised) 6px 12px); }
+.pw-cell.catchup { border-style: dashed; background: transparent; }
+.pw-grid.dragging .pw-cell.refuses { opacity: 0.45; cursor: no-drop; }
+.pw-grid.dragging .pw-cell.takes { box-shadow: inset 0 0 0 1px var(--focus); }
+.pw-cell.over { box-shadow: 0 0 0 2px var(--focus); background: color-mix(in oklab, var(--focus) 14%, var(--surface)); }
+.pw-grid-hint { margin: 6px 0 0 36px; font-size: var(--fs-2); color: var(--text-muted); }
+.pw-lines > .pw-open-card { list-style: none; }
+.pw-line-needs { color: var(--watch); }
+.pw-client { gap: 10px; }
+.pw-name { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: var(--fs-4); font-weight: 600; cursor: pointer; }
+.pw-name:hover { text-decoration: underline; }
+.pw-budget { cursor: help; }
+.pw-fit2.all { color: var(--ok); }
+.pw-fit2.over { color: var(--watch); }
+.planweek .pw-tier { margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.planweek .pw-features { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.planweek .pw-row.needs { background: color-mix(in oklab, var(--watch) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--watch) 45%, transparent); }
+.planweek .pw-row.nested { min-height: 0; padding: 1px 4px; }
+.planweek .pw-row.nested .pw-chip-btn { line-height: calc(18px * var(--text-scale)); }
+.planweek .pw-row .pw-open { font: inherit; font-weight: 400; color: var(--text); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.planweek .pw-row.done .pw-open, .planweek .pw-row.done .pl-title a { color: var(--text-muted); }
+.planweek .pw-row > .pw-stepper .pw-step { opacity: 0; transition: opacity 0.1s; }
+.planweek .pw-row:hover > .pw-stepper .pw-step, .planweek .pw-row:focus-within > .pw-stepper .pw-step { opacity: 1; }
+.planweek .pw-row > .pw-parent, .planweek .pw-row > .pw-fill, .planweek .pw-row > .pw-kids, .planweek .pw-row > .pw-nested { flex-basis: 100%; }
+.planweek .pw-nested { list-style: none; margin: 2px 0 0 22px; padding: 0 0 0 10px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 1px; }
+.pw-chip-static { flex: none; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); font-size: var(--fs-2); font-weight: 500; color: var(--text-muted); line-height: calc(20px * var(--text-scale)); }
+.pw-quiet { font-size: var(--fs-2); }
+.pw-card-foot { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.pw-next { padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); font-weight: 500; cursor: pointer; }
+.pw-next:hover { border-color: var(--text-muted); }
+.pw-prev { font-size: var(--fs-3); font-weight: 500; }
+.pw-addpane .pw-features, .pw-addpane .pw-epics { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pw-addpane .pw-addrow { display: flex; align-items: center; gap: 8px; min-height: calc(28px * var(--text-scale)); padding: 2px 6px; border-radius: 6px; }
+.pw-addpane .pw-addrow:hover { background: var(--raised); }
+.pw-addpane .pw-addrow .pw-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-3); }
+.pw-addpane .pw-addrow .pw-title a { color: var(--text); text-decoration: none; }
+.pw-addpane .pw-addrow .pw-title a:hover { text-decoration: underline; }
+.pw-addpane .pw-acts { flex: none; display: inline-flex; gap: 4px; }
+.pw-addpane .pw-must { white-space: nowrap; }
+.pw-addpane .pw-epics li { padding: 2px 6px; }
+.pw-type-input { width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-3); }

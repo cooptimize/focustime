@@ -18,6 +18,7 @@ describe.skipIf(!CHROMIUM)("Teams presence and status (browser, demo mode)", () 
     await page.keyboard.press("p");
     // This week has the demo's week lists.
     await page.locator(".planweek .co-step button[aria-label='Previous week']").click();
+    await page.locator(".pw-row").first().hover();
     await page.locator(".pw-row button.more").first().click();
     await page.getByRole("menuitem", { name: /Needs help from/ }).click();
     const dlg = page.getByRole("dialog", { name: /Needs help from/ });

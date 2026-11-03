@@ -1042,6 +1042,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "weekplan.remove":
     case "weekplan.mark_done":
     case "weekplan.headsup":
+    case "weekplan.add_draft":
+    case "weekplan.draft_tier":
+    case "weekplan.nothing":
     case "feature.brief":
     case "feature.mark_breakdown":
     case "followup.ask_priorities":

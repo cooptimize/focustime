@@ -1,7 +1,7 @@
 // Step 16.4: simple estimating (whole blocks and S/M/L) and profile photos, in demo mode (fictional data, generated
 // avatars, no Graph calls). The scan reads every view's text for fractional amounts: none may show anywhere.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, weekClient, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -25,18 +25,18 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
 
   it("each client: its whole blocks, a plain status, and why a half-day doesn't count", async () => {
     const { page, errors } = await planWeek();
-    const northwind = page.locator('.pw-client[aria-label="Northwind"] h3');
-    await expect.poll(() => northwind.textContent()).toMatch(/Northwind2 blocks3 planned, 2 available/);
-    // U4: why a half-day doesn't count is on hover over the blocks number (and in the client's panel).
-    await expect(northwind.locator(".pw-budget").getAttribute("title")).resolves.toContain("Not counted: Wed AM: mostly meetings");
-    await expect(page.locator('.pw-client[aria-label="Cooptimize"] h3').textContent()).resolves.toMatch(/1 block.*All 1 planned/);
+    const northwind = (await weekClient(page, "Northwind")).locator(".pw-card-head");
+    await expect.poll(() => northwind.locator(".pw-fit2").textContent()).toBe("3 planned, 2 available");
+    // U4: why a half-day doesn't count is on hover over the fit words (and in the client's panel).
+    await expect(northwind.locator(".pw-budget").getAttribute("title")).resolves.toMatch(/^2 blocks this week\. Not counted: Wed AM: mostly meetings/);
+    await expect((await weekClient(page, "Cooptimize")).locator(".pw-card-head .pw-fit2").textContent()).resolves.toBe("All 1 planned");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
 
   it("stories nest in their feature and fill it; over asks once to raise, one click", async () => {
     const { page } = await planWeek();
-    const harbor = page.locator('.pw-client[aria-label="Harbor"]');
+    const harbor = await weekClient(page, "Harbor");
     const feature = harbor.locator(".pw-row").first();
     await expect.poll(() => feature.locator(".pw-nested > li").count()).toBe(2);
     await expect(feature.locator(".pw-raise").textContent()).resolves.toContain("Stories need more than 1 block. Raise to 2?");
@@ -44,14 +44,14 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
     await expect.poll(() => feature.locator(".pw-stepper .pw-chip-btn").textContent()).toBe("2 blocks");
     await expect.poll(() => feature.locator(".pw-raise").count()).toBe(0);
     // Northwind's export: an L and an M in 2 blocks needs more stories (no numbers).
-    const exp = page.locator('.pw-client[aria-label="Northwind"] .pw-row').first();
+    const exp = (await weekClient(page, "Northwind")).locator(".pw-row").first();
     await expect(exp.locator(".pw-fill").textContent()).resolves.toBe("needs more stories");
     await page.close();
   }, T);
 
   it("whole-block steppers; a story has S, M or L, never blocks", async () => {
     const { page } = await planWeek();
-    const feature = page.locator('.pw-client[aria-label="Northwind"] .pw-row').first();
+    const feature = (await weekClient(page, "Northwind")).locator(".pw-row").first();
     await feature.getByRole("button", { name: "One block more" }).click();
     await expect.poll(() => feature.locator(".pw-stepper .pw-chip-btn").first().textContent()).toBe("3 blocks");
     await feature.getByRole("button", { name: "One block less" }).first().click();
@@ -65,7 +65,7 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
 
   it("a story without its feature on the list says where it belongs; Add the feature moves it under", async () => {
     const { page } = await planWeek();
-    const atlas = page.locator('.pw-client[aria-label="Atlas"]');
+    const atlas = await weekClient(page, "Atlas");
     await expect(atlas.locator(".pw-parent").first().textContent()).resolves.toContain("Under Shipment tracking dashboard");
     await atlas.getByRole("button", { name: "Add the feature" }).click();
     await expect.poll(() => atlas.locator(".pw-nested > li").count(), { timeout: 10_000 }).toBe(1);
@@ -76,6 +76,7 @@ describe.skipIf(!CHROMIUM)("simple estimating and photos (browser, demo mode)", 
   it("photos: generated avatars with presence on the corner; initials when someone has none", async () => {
     const { page, errors } = await planWeek();
     await expect.poll(() => page.locator(".topbar .person-chip .avatar img").count(), { timeout: 10_000 }).toBe(1);
+    await page.locator(".pw-row").first().hover();
     await page.locator(".pw-row button.more").first().click();
     await page.getByRole("menuitem", { name: /Needs help from/ }).click();
     const dlg = page.getByRole("dialog", { name: /Needs help from/ });

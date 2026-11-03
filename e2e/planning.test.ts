@@ -5,7 +5,7 @@
 // word guards (U1 method).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { blockPicks, CHROMIUM, freshPage, openPlanDay, selectBlock, startDemo, type Harness } from "./harness.ts";
+import { blockPicks, CHROMIUM, freshPage, openPlanDay, selectBlock, startDemo, weekClient, weekClientNames, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -48,7 +48,7 @@ const uiWords = (page: Page) =>
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0 && r.left < innerWidth && r.right > 0 && el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
     };
-    const TITLE = ".ev-title, .pr-title, .what, .ag-title, .feat-link, .pw-title, .pw-kids, .pd2-feat-name, .pd2-note, .day-allday-ev, a, input, textarea";
+    const TITLE = ".ev-title, .pr-title, .what, .ag-title, .feat-link, .pw-title, .pw-kids, .pd2-feat-name, .pd2-note, .day-allday-ev, .pw-cell-name, .pw-cell-right.pin, .pl-line-text, .pl-add-client, .pw-name, .pw-next-name, a, input, textarea";
     let n = 0;
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let t: Node | null;
@@ -85,46 +85,48 @@ describe.skipIf(!CHROMIUM)("Plan the week and Plan the day (U4)", () => {
   it("Plan the week: the fit once per client, one amber line when musts are over, Needs stories, Add without listed items", async () => {
     const { page, errors } = await freshPage(h);
     await go(page, `#/week/plan/${D}`, ".pw-client");
-    for (const card of await page.locator(".pw-client").all()) {
+    for (const name of await weekClientNames(page)) {
+      const card = await weekClient(page, name);
       const fit = (await card.locator(".pw-fit2").textContent())!;
-      // Said once: in the card's header, and not again in the card or in the blocks strip (U1 had it twice).
+      // Said once: in the card's header, and not again in the card or in the week grid (U1 had it twice).
       expect(((await card.innerText()).split(fit).length - 1), fit).toBe(1);
-      await expect(page.locator(".pw-strip").innerText()).resolves.not.toContain(fit);
+      await expect(page.locator(".pw-grid").innerText()).resolves.not.toContain(fit);
+      // The right pane follows the open client and never offers what is on its list (Everything else opened too).
+      await expect(page.locator(".pw-addpane .pl-add-client").textContent()).resolves.toBe(name);
+      const rest = page.locator(".pw-addpane .pw-rest .pl-fold");
+      if ((await rest.count()) && (await rest.getAttribute("aria-expanded")) === "false") await rest.click();
+      const listed = (await card.locator(".pw-row .pl-title").allTextContents()).map((t) => t.replace("✓", "").trim());
+      const offered = (await page.locator(".pw-addpane .pw-addrow .pw-title a").allTextContents()).map((t) => t.replace(/^#\d+\s+/, "").trim());
+      for (const t of offered) expect(listed).not.toContain(t);
     }
     // Northwind's musts need 3 blocks and it has 2: exactly one amber line. Cooptimize fits: none.
-    const northwind = page.locator('.pw-client[aria-label="Northwind"]');
+    const northwind = await weekClient(page, "Northwind");
     await expect(northwind.locator(".pw-over").count()).resolves.toBe(1);
     await expect(northwind.locator(".pw-over").textContent()).resolves.toMatch(/^3 blocks of musts, 2 blocks free\. Move one to nice to have/);
-    await expect(page.locator('.pw-client[aria-label="Cooptimize"] .pw-over').count()).resolves.toBe(0);
     // A feature with no stories says so on its row, with the two ways forward.
     const supplier = northwind.locator(".pw-row", { hasText: "Supplier onboarding" });
     await expect(supplier.locator(".pw-needs").textContent()).resolves.toMatch(/Needs stories.*Draft stories.*Coop brief/);
-    // Add from DevOps never offers what is already on a list (Show more opens the rest).
-    for (const card of await page.locator(".pw-client").all()) {
-      const more = card.locator(".pw-show-more");
-      if (await more.count()) await more.click();
-      const listed = (await card.locator(".pw-tier .pw-row .pw-title").allTextContents()).map((t) => t.replace("✓", "").trim());
-      const offered = (await card.locator(".pw-addrow .pw-title a").allTextContents()).map((t) => t.replace(/^#\d+\s+/, "").trim());
-      for (const t of offered) expect(listed).not.toContain(t);
-    }
+    await expect((await weekClient(page, "Cooptimize")).locator(".pw-over").count()).resolves.toBe(0);
     // Not counted half-days are on hover over the blocks number, not a line of their own.
     await expect(page.getByText("Not counted:").count()).resolves.toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
 
-  it("Plan the week: dragging a must onto a block chip pins it there, the same pin as before", async () => {
+  it("Plan the week: dragging a must onto one of its client's cells in the week grid pins it there, the same pin as before", async () => {
     const { page, errors } = await freshPage(h);
     await go(page, `#/week/plan/${D}`, ".pw-client");
-    const row = page.locator('.pw-client[aria-label="Northwind"] .pw-tier .pw-row:not(.nested)').first();
-    const title = (await row.locator(".pw-open, .pw-title a").first().textContent())!.trim();
-    await row.locator(".pw-handle").dragTo(page.locator(".pw-blk", { hasText: "Wed PM · Northwind" }));
+    const row = (await weekClient(page, "Northwind")).locator(".pw-tier .pw-row:not(.nested)").first();
+    const title = (await row.locator(".pw-open, .pl-title a").first().textContent())!.trim();
+    await row.locator(".pl-handle").dragTo(page.locator('.pw-cell[aria-label^="Wed, Nov 4 afternoon"]'));
     const pinned = async () => {
       const st = (await call(page, "weekplan.load", { weekStart: D })).data as { plan: { features: { title: string; slots: { date: string; half: string }[] }[] } };
       return st.plan.features.find((f) => f.title === title)?.slots ?? [];
     };
     await expect.poll(pinned, { timeout: 10_000 }).toContainEqual(expect.objectContaining({ date: "2026-11-04", half: "PM" }));
     await expect.poll(() => row.locator(".pw-pin").textContent()).toContain("Wed PM");
+    // The pinned must's title shows on its cell.
+    await expect.poll(() => page.locator('.pw-cell[aria-label^="Wed, Nov 4 afternoon"] .pw-cell-right').textContent()).toContain(title.slice(0, 12));
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -176,11 +178,11 @@ describe.skipIf(!CHROMIUM)("Plan the week and Plan the day (U4)", () => {
     await page.close();
   }, T);
 
-  it("word guards on the demo data: Plan the week (next week) under 200, Plan the day under 100", async () => {
+  it("word guards on the demo data: Plan the week (next week) under 120, Plan the day under 100", async () => {
     const { page, errors } = await freshPage(h);
     await seedDay(page);
     await go(page, "#/week/plan/2026-11-09", ".pw-client");
-    expect(await uiWords(page)).toBeLessThan(200);
+    expect(await uiWords(page)).toBeLessThan(120);
     await go(page, `#/today/plan/${D}/AM`, ".pd2-left");
     expect(await uiWords(page)).toBeLessThan(100);
     expect(errors).toEqual([]);

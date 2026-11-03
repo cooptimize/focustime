@@ -562,6 +562,22 @@ export const MIGRATIONS: readonly string[] = [
    INSERT OR IGNORE INTO week_feature_slots (feature_id, date, half)
      SELECT l.kept_id, s.date, s.half FROM week_feature_slots s JOIN dedupe_log l ON l.table_name = 'week_features' AND l.removed_id = s.feature_id;
    DELETE FROM week_features WHERE id IN (SELECT removed_id FROM dedupe_log WHERE table_name = 'week_features');`,
+  // 22: U6 (D414, D415), Plan the week one client at a time. A draft feature typed in Plan the week sits on that week's
+  // list as a must or a nice to have until it is created in DevOps (then it becomes a week item); a client can be
+  // marked "Nothing this week". Both local; the week_features records are unchanged.
+  `CREATE TABLE week_drafts (
+     week_start TEXT NOT NULL CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     draft_id INTEGER NOT NULL REFERENCES draft_stories(id) ON DELETE CASCADE,
+     tier TEXT NOT NULL CHECK (tier IN ('must', 'nice')),
+     created_at TEXT NOT NULL,
+     PRIMARY KEY (week_start, draft_id)
+   );
+   CREATE TABLE week_quiet (
+     week_start TEXT NOT NULL CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+     client_key TEXT NOT NULL,
+     marked_at TEXT NOT NULL,
+     PRIMARY KEY (week_start, client_key)
+   );`,
 ];
 
 import type { AzureWriteEntry, TeamsStatusEntry } from "../actions/account-types.ts";
@@ -580,7 +596,7 @@ const toAzureWrite = (r: Row): AzureWriteEntry => ({
 });
 
 /** The tables "Reset local plan" empties (Q37). Markers (reminder and auto-open once a day) are kept. */
-const RESET_TABLES = ["timeboxes", "captures", "week_feature_slots", "week_features", "week_plans", "breakdown_marks", "borrowed", "resume_notes", "focus_log", "kv", "follow_ups", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
+const RESET_TABLES = ["week_drafts", "week_quiet", "timeboxes", "captures", "week_feature_slots", "week_features", "week_plans", "breakdown_marks", "borrowed", "resume_notes", "focus_log", "kv", "follow_ups", "flex_sessions", "unavailable", "picks", "draft_stories", "day_plans"] as const;
 export type FocusSegment = { pickId: number | null; label: string; startedAt: string; endedAt: string; seconds: number };
 
 export type NewUnavailable = { date: IsoDate; title: string; start: string; end: string; note?: string | null };
@@ -1017,6 +1033,8 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     },
     /** Drafts not yet created in DevOps (step 14: a created one leaves every draft list). */
     drafts: (): DraftStory[] => (db.prepare("SELECT * FROM draft_stories WHERE devops_id IS NULL ORDER BY id").all() as Row[]).map(toDraft),
+    /** U6: every draft, created in DevOps or not (a week-list draft feature turns into its week item once created). */
+    allDrafts: (): DraftStory[] => (db.prepare("SELECT * FROM draft_stories ORDER BY id").all() as Row[]).map(toDraft),
     /**
      * Step 14: a draft now exists in DevOps. The draft keeps its row with the new item, and its picks become item picks
      * for the new id (title, type, link), so the plan keeps them. Returns those pick ids, for undo.
@@ -1579,6 +1597,26 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     weekFeaturesFor(weekStarts: readonly IsoDate[]): WeekFeature[] {
       return [...new Set(weekStarts)].flatMap((w) => this.weekPlan(w).features);
     },
+    /** U6: draft features on a week's list, with their tier, in the order they were added. */
+    weekDrafts: (weekStart: IsoDate): { draftId: number; tier: "must" | "nice" }[] =>
+      (db.prepare("SELECT draft_id, tier FROM week_drafts WHERE week_start = ? ORDER BY created_at, draft_id").all(weekStart) as Row[]).map((r) => ({ draftId: r.draft_id as number, tier: r.tier as "must" | "nice" })),
+    /** U6: put a draft feature on a week's list as a must or a nice to have, or take it off (null). */
+    setWeekDraft(weekStart: IsoDate, draftId: number, tier: "must" | "nice" | null): void {
+      if (tier === null) {
+        db.prepare("DELETE FROM week_drafts WHERE week_start = ? AND draft_id = ?").run(weekStart, draftId);
+        return;
+      }
+      const d = db.prepare("SELECT level FROM draft_stories WHERE id = ?").get(draftId) as Row | undefined;
+      if (!d) throw new PlanError("No such draft");
+      if (d.level !== "feature") throw new PlanError("Only a draft feature goes on the week list");
+      db.prepare("INSERT INTO week_drafts (week_start, draft_id, tier, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(week_start, draft_id) DO UPDATE SET tier = excluded.tier").run(weekStart, draftId, tier, stamp());
+    },
+    /** U6: clients marked "Nothing this week" for a week. */
+    weekQuiet: (weekStart: IsoDate): string[] => (db.prepare("SELECT client_key FROM week_quiet WHERE week_start = ? ORDER BY client_key").all(weekStart) as Row[]).map((r) => r.client_key as string),
+    setWeekQuiet(weekStart: IsoDate, clientKey: string, on: boolean): void {
+      if (on) db.prepare("INSERT INTO week_quiet (week_start, client_key, marked_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").run(weekStart, clientKey, stamp());
+      else db.prepare("DELETE FROM week_quiet WHERE week_start = ? AND client_key = ?").run(weekStart, clientKey);
+    },
     markBreakdown(clientKey: string, itemId: number, on: boolean): void {
       if (on) db.prepare("INSERT INTO breakdown_marks (client_key, item_id, marked_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").run(clientKey, itemId, stamp());
       else db.prepare("DELETE FROM breakdown_marks WHERE client_key = ? AND item_id = ?").run(clientKey, itemId);
@@ -1782,6 +1820,8 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
         weekPlans: db.prepare("SELECT * FROM week_plans ORDER BY week_start").all() as Row[],
         weekFeatures: (db.prepare("SELECT DISTINCT week_start FROM week_features ORDER BY week_start").all() as Row[]).flatMap((r) => this.weekPlan(r.week_start as string).features),
         breakdownMarks: this.breakdownMarks(),
+        weekDrafts: db.prepare("SELECT * FROM week_drafts ORDER BY week_start, created_at, draft_id").all() as Row[],
+        weekQuiet: db.prepare("SELECT * FROM week_quiet ORDER BY week_start, client_key").all() as Row[],
         captures: (db.prepare("SELECT * FROM captures ORDER BY id").all() as Row[]).map(toCapture),
         timeboxes: (db.prepare("SELECT * FROM timeboxes ORDER BY date, start_at, id").all() as Row[]).map(toTimebox),
         outlookEvents: (db.prepare("SELECT * FROM outlook_events ORDER BY created_at, uid").all() as Row[]).map(toOwn),

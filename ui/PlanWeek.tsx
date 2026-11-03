@@ -1,18 +1,21 @@
+// Plan the week (step 8, by client since step 11): each followed client's week list of DevOps features and stories,
+// split into Must and Nice to have, in DevOps stack rank order unless reordered here. Pins to a block are optional
+// (dependencies). U6 (D409 to D415): one client at a time on the planning layout shared with Plan the day. At the top
+// a small week grid (Mon to Fri, AM over PM) is the client filter: each half-day names its client, a pinned must shows
+// its title, the open client's cells read "Planning"; click a cell to open that client, drag a must onto one of its
+// cells to pin it. Below, one line per client with blocks this week; one is open as a card with its musts, the amber
+// over line, nice to haves folded and Next client. On the right, "Add to <client>": DevOps items not on a list with
+// + Must and Nice, everything else folded, and the type box (Enter a draft feature as a must, Shift+Enter a nice to
+// have). DevOps health, a feature and a client's budget open in the shared detail panel. DevOps is read-only; the
+// week plan lives only in the local plan store. A past week is a review.
 import { ModeArea } from "./ModeSwitch.tsx";
 import { planWeekParts } from "./nav.ts";
 import { mondayOf } from "../week/dates.ts";
 import type React from "react";
-// Plan the week (step 8, by client since step 11): each followed client's week list of DevOps features and stories,
-// split into Must and Nice to have, in DevOps stack rank order unless reordered here. Pins to a block are optional
-// (dependencies). U4 (D391 to D395): one strip of block chips replaces the block grid (drag a row onto a chip to pin
-// it); one card per client with its blocks and fit said once, musts with a visible drag handle and their story count
-// or "Needs stories", one amber line when musts need more blocks than there are, nice to haves folded to a count, and
-// Add from DevOps open with its first rows. DevOps health, a feature and a client's budget open in the shared detail
-// panel. DevOps is read-only; the week plan lives only in the local plan store. A past week is a review.
 import { DraftTitle } from "./DraftEditor.tsx";
 import { CreateInDevOps, DevOpsAction, useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { blocksStep, blocksText, storySizeStep, weekItemMenu, type MenuStep, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react";
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import type { DraftStory, WeekFeature } from "../plan/types.ts";
 import { borrowedForWeek, readiness, weekBudget, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
@@ -25,12 +28,21 @@ import { copy } from "./FollowUps.tsx";
 import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 import { DraftStories, PanelShell } from "./DetailPanel.tsx";
+import { isTypingTarget, topOverlay } from "./keys.ts";
+import { PlanFrame } from "./plan/PlanFrame.tsx";
+import { PlanHeader } from "./plan/PlanHeader.tsx";
+import { PlanLabel, UnitCard, UnitLine, type FitTone } from "./plan/UnitCard.tsx";
+import { PlanRow } from "./plan/PlanRow.tsx";
+import { AddPane, AddSection, BoxHint } from "./plan/AddPane.tsx";
+import { FoldLine } from "./plan/FoldLine.tsx";
+import { planOpenClient, plannedCount, weekLines, type WeekLine } from "../plan/weekclients.ts";
 
 type Props = { /** Step 16.2: the Week tab's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
 type Half = "AM" | "PM";
 type Place = { date: IsoDate; half: Half; label: string };
 type Item = Listed<WeekFeature>;
 type HeadsUp = { weekStart: IsoDate; clientKey: string; itemId: number; title: string; trigger?: "dropped" | "demoted" };
+type Drag = { clientKey: string; itemId: number; tier: Tier };
 
 const DRAG_TYPE = "application/x-coopilot-feature";
 const HALF_WORD: Record<Half, string> = { AM: "morning", PM: "afternoon" };
@@ -42,8 +54,8 @@ const stamp = (s: string, tz: string) => {
   const z = Temporal.ZonedDateTime.from(s).withTimeZone(tz);
   return `${z.toPlainDate().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}, ${z.toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 };
-/** Fit per client in plain words (step 11): fits, tight, too much. */
 const DONE_WORD: Record<DoneBy, string> = { devops: "Done in DevOps", resolved: "Resolved in DevOps", local: "Done", pick: "Done (picked and ticked)" };
+const TONE: Record<ClientBudget["status"], FitTone> = { over: "over", all: "all", free: "fits", none: "fits" };
 
 /** Where a client's item can be pinned: its own blocks, or an Open half-day. */
 function placesFor(days: WeekLoadData["week"]["days"], clientKey: string): Place[] {
@@ -67,8 +79,15 @@ function infoFor(portfolios: WeekPlanState["portfolios"], work: readonly ClientW
     return kid ? { type: kid.type, state: kid.state, feature: null, story: null } : null;
   };
 }
+/** U4 (Today's rule): a feature on the list with no open DevOps stories needs stories. */
+const needsStories = (i: Item, info: Info | null) => i.level === "feature" && !!info?.feature && !info.feature.children.some((c) => c.level === "story" && c.open) && !i.done;
 
 type PanelSel = { kind: "feature"; k: string; itemId: number } | { kind: "client"; k: string } | { kind: "health" } | null;
+
+/** U6: a draft feature on the week list, as a week item for the budget (one block, like a new feature). */
+const draftAsItem = (weekStart: IsoDate, d: DraftStory, tier: Tier): WeekFeature => ({
+  id: -d.id, weekStart, clientKey: d.clientKey, itemId: -d.id, title: d.title, itemType: "Feature", url: null, level: "feature", tier, blocks: 1, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: d.createdAt, updatedAt: d.createdAt,
+});
 
 export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, onChanged, onCaptures }: Props) {
   const [st, setSt] = useState<WeekPlanState | null>(null);
@@ -76,14 +95,14 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const [notice, setNotice] = useState<string | null>(null);
   const [offer, setOffer] = useState<HeadsUp | null>(null);
   const [brief, setBrief] = useState<{ id: number; text: string } | null>(null);
-  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [folds, setFolds] = useState<Set<string>>(new Set());
   const [dragOver, setDragOver] = useState<string | null>(null);
-  // U4: while a row is dragged, the blocks strip grows so a chip is an easy target.
-  const [dragging, setDragging] = useState(false);
+  const [dragging, setDragging] = useState<Drag | null>(null);
   const [panel, setPanel] = useState<PanelSel>(null);
-  const [only, setOnly] = useState<string | null>(null);
+  const [openK, setOpenK] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const head = useRef<HTMLHeadingElement>(null);
+  const search = useRef<HTMLInputElement>(null);
   const briefArea = useRef<HTMLTextAreaElement>(null);
   const { open: openMenu } = useContext(MenuCtx);
   const tz = data.hours.timeZone;
@@ -107,6 +126,8 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     setBrief(null);
     setPanel(null);
     setOffer(null);
+    setOpenK(null);
+    setQuery("");
     head.current?.focus();
   }, [weekStart]);
 
@@ -131,9 +152,18 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const portfolios = st?.portfolios ?? [];
   const list = useMemo(() => weekList(raw, work, portfolios, pickDoneFrom(data.plan)), [raw, work, portfolios, data.plan]);
   const items = list.items;
+  const drafts = st?.drafts ?? [];
+  // U6: draft features on the list (typed in the right pane), with their tier.
+  const weekDrafts = useMemo(() => (st?.weekDrafts ?? []).flatMap((w) => {
+    const d = drafts.find((x) => x.id === w.draftId);
+    return d ? [{ draft: d, tier: w.tier }] : [];
+  }), [st?.weekDrafts, drafts]);
   // Q48: only borrowed time paid back in this week counts against its fit.
   const borrowedMinutes = useMemo(() => borrowedForWeek(data.borrowed, weekStart), [data.borrowed, weekStart]);
-  const fits = useMemo(() => (weekReady ? weekBudget(data.week, raw, { borrowedMinutes }) : []), [weekReady, data.week, raw, borrowedMinutes]);
+  const fits = useMemo(
+    () => (weekReady ? weekBudget(data.week, [...raw, ...weekDrafts.map((w) => draftAsItem(weekStart, w.draft, w.tier))], { borrowedMinutes }) : []),
+    [weekReady, data.week, raw, weekDrafts, weekStart, borrowedMinutes],
+  );
   const intentions = useMemo(
     () => Object.entries(data.plan ?? {}).flatMap(([date, d]) => d.picks.filter((p) => p.kind === "intention").map((p) => ({ id: p.id, clientKey: p.clientKey, title: p.title, date, size: p.size, status: p.status }))),
     [data.plan],
@@ -145,27 +175,48 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
         : [],
     [st, weekReady, data.week, data.devops, raw, weekStart, intentions],
   );
+  const days = data.week.days.filter((d) => d.kind !== "weekend");
+  const info = useMemo(() => infoFor(portfolios, work), [portfolios, work]);
+  // U6: one line per client with blocks this week, in the order of their first block (and a client with a must pinned
+  // to Friday); the view opens on the first one with trouble.
+  const lines: WeekLine[] = useMemo(
+    () => (st && weekReady ? weekLines({ fits, items, days, drafts: weekDrafts.map((w) => ({ clientKey: w.draft.clientKey, tier: w.tier })), quiet: st.quiet, needs: (i) => needsStories(i as Item, info(i.clientKey, i.itemId)) }) : []),
+    [st, weekReady, fits, items, days, weekDrafts, info],
+  );
+  useEffect(() => {
+    if (!lines.length) return;
+    if (openK === null || !lines.some((l) => l.clientKey === openK)) setOpenK(planOpenClient(lines));
+  }, [lines, openK]);
 
   const parts = planWeekParts(weekStart, st?.thisWeek ?? mondayOf(data.planDay.date));
+  const past = st?.access === "past";
+  const keyRef = useRef<(e: globalThis.KeyboardEvent) => void>(() => {});
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => keyRef.current(e);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   if (!st || !weekReady)
     return (
-      <main className="planweek" aria-label="Plan the week">
-        <div className="follow-ups-head pw-head">
-          <h2 tabIndex={-1}>{parts.title}</h2>
-          <ModeArea>{switcher}</ModeArea>
+      <main className="planweek pl-frame" aria-label="Plan the week">
+        <PlanHeader className="pw-head" title={parts.title} titleRef={head} mode={<ModeArea>{switcher}</ModeArea>} />
+        <div className="pl-panes single">
+          <div className="pl-left">{error ? <p className="set-problem">{error}</p> : <p className="muted">Loading…</p>}</div>
         </div>
-        {error ? <p className="set-problem">{error}</p> : <p className="muted">Loading…</p>}
       </main>
     );
 
-  const past = st.access === "past";
   const names = new Map<string, string>([...data.planClients.map((c) => [c.clientKey, c.clientName] as const), ...st.portfolios.map((p) => [p.clientKey, p.clientName] as const), ...fits.map((f) => [f.clientKey, f.clientName] as const)]);
   const nameOf = (k: string) => names.get(k) ?? k;
   const prev = plainDate(weekStart).subtract({ days: 7 }).toString();
   const next = plainDate(weekStart).add({ days: 7 }).toString();
-  const days = data.week.days.filter((d) => d.kind !== "weekend");
-  const info = infoFor(st.portfolios, work);
   const friday = days.some((d) => d.kind === "overflow" && !d.pto);
+  const open = lines.find((l) => l.clientKey === openK) ?? null;
+  const openIndex = open ? lines.indexOf(open) : -1;
+  const go = (by: 1 | -1) => {
+    const to = lines[Math.max(0, Math.min(lines.length - 1, openIndex + by))];
+    if (to) setOpenK(to.clientKey);
+  };
 
   const pin = (k: string, itemId: number, date: IsoDate, half: Half, on: boolean) => void act("weekplan.place", { weekStart, clientKey: k, itemId, date, half, on });
   const dropped = (r: { headsUp: HeadsUp | null } | null) => setOffer(r?.headsUp ?? null);
@@ -192,6 +243,9 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     dragging: setDragging,
     feature: (k, itemId) => setPanel({ kind: "feature", k, itemId }),
     client: (k) => setPanel({ kind: "client", k }),
+    draftTier: (d, tier) => void act("weekplan.draft_tier", { weekStart, draftId: d.id, tier }, tier === "off" ? `Took the draft ${d.title} off the week` : undefined),
+    typed: (k, title, tier) => act("weekplan.add_draft", { weekStart, clientKey: k, title, tier }, `Draft feature saved as ${tier === "must" ? "a must" : "a nice to have"}: ${title}. Add it in DevOps when you can`).then((r) => r !== null),
+    quiet: (k, on) => void act("weekplan.nothing", { weekStart, clientKey: k, on }),
   };
   const copyBrief = async (k: string, id: number) => {
     try {
@@ -206,64 +260,64 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
       setError(e instanceof Error ? e.message : "Could not build the brief");
     }
   };
-  const toggleOpen = (key: string) => setOpen((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  const toggleFold = (key: string) => setFolds((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
 
-  const onDrop = (e: DragEvent, date: IsoDate, half: Half, slot: Slot) => {
-    e.preventDefault();
-    setDragOver(null);
-    setDragging(false);
-    try {
-      const f = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)) as { clientKey: string; itemId: number };
-      if (slot.focus[0] && slot.focus[0].clientKey !== f.clientKey) return setError(`That block is ${slot.focus[0].clientName}'s`);
-      pin(f.clientKey, f.itemId, date, half, true);
-    } catch {
-      /* not a week item */
-    }
+  // Step 16.2: Done commits (or commits the changes again), then goes back to Week.
+  const finish = async () => {
+    if (!past && (!st.plan.committedAt || st.plan.changed) && (await act("weekplan.commit", { weekStart }, "Week committed")) === null) return;
+    onClose();
+  };
+  // U6: J and K (or ↓ ↑ with nothing focused) move between clients; / goes to Search.
+  keyRef.current = (e) => {
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || topOverlay(document) !== "none" || isTypingTarget(e.target as HTMLElement | null)) return;
+    const idle = !document.activeElement || document.activeElement === document.body || document.activeElement === head.current;
+    if (e.key === "j" || e.key === "J" || (idle && e.key === "ArrowDown")) (e.preventDefault(), go(1));
+    else if (e.key === "k" || e.key === "K" || (idle && e.key === "ArrowUp")) (e.preventDefault(), go(-1));
+    else if (e.key === "/" && !past) (e.preventDefault(), search.current?.focus());
   };
 
-  const keys = [...new Set([...fits.map((f) => f.clientKey), ...st.portfolios.map((x) => x.clientKey), ...items.map((i) => i.clientKey)])];
-  const reordered = keys.filter((k) => items.some((i) => i.clientKey === k && i.position !== null));
-  const state = past ? "a review" : !st.plan.committedAt ? "not planned yet" : st.plan.changed ? "changed since planned" : "planned";
+  const keys = lines.map((l) => l.clientKey);
+  const reordered = [...new Set(items.map((i) => i.clientKey))].filter((k) => items.some((i) => i.clientKey === k && i.position !== null));
+  const planned = plannedCount(lines);
+  const summary = past ? `${parts.when} · a review` : `${parts.when} · ${planned} of ${lines.length} client${lines.length === 1 ? "" : "s"} planned`;
   const moreMenu = (e: React.MouseEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     openMenu({ x: r.right, y: r.bottom + 4 }, {
       title: "Plan the week",
       items: [
         ...(past ? [] : [{ id: "refresh", label: "Refresh DevOps", hint: "R", run: () => void load(true) }]),
-        ...(st.plan.committedAt ? [{ id: "when", label: `Planned ${stamp(st.plan.committedAt, tz)}`, disabled: "When this week was last planned", expected: true }] : []),
+        ...(st.plan.committedAt ? [{ id: "when", label: `Planned ${stamp(st.plan.committedAt, tz)}${st.plan.changed ? ", changed since" : ""}`, disabled: "When this week was last planned", expected: true }] : []),
         ...reordered.map((k) => ({ id: `reset:${k}`, label: `${nameOf(k)}: back to DevOps order`, run: () => ops.reset(k) })),
       ],
     });
   };
 
-  return (
-    <main className={`planweek${panel ? " with-panel" : ""}`} aria-label="Plan the week">
-      <div className="follow-ups-head pw-head">
-        <span className="co-step">
-          <button type="button" className="mini" onClick={() => onWeek(prev)} aria-label="Previous week" title="Previous week">‹</button>
-          <button type="button" className="mini" onClick={() => onWeek(next)} aria-label="Next week" title="Next week">›</button>
-        </span>
-        <h2 ref={head} tabIndex={-1}>{parts.title}</h2>
-        <span className={`pw-when${st.plan.changed && !past ? " changed" : ""}`}>{parts.when} · {state}</span>
-        {!past && (
+  const header = (
+    <PlanHeader
+      className="pw-head"
+      step={{ prev: () => onWeek(prev), next: () => onWeek(next), prevLabel: "Previous week", nextLabel: "Next week", label: "Week", className: "co-step" }}
+      title={parts.title}
+      titleRef={head}
+      summary={summary}
+      summaryClass={`pw-when${st.plan.changed && !past ? " changed" : ""}`}
+      secondary={
+        past ? null : (
           <button type="button" className={`link-btn pw-health-link${flags.length ? " some" : ""}`} aria-expanded={panel?.kind === "health"} onClick={() => setPanel(panel?.kind === "health" ? null : { kind: "health" })}>
-            DevOps health · {flags.length ? `${flags.length} to look at` : "all good"}
+            DevOps health · {flags.length ? flags.length : "all good"}
           </button>
-        )}
-        <button type="button" className="more pw-more" aria-label="More for Plan the week" onClick={moreMenu}>⋯</button>
-        <ModeArea
-          done={{
-            title: past || (st.plan.committedAt && !st.plan.changed) ? "Back to the week (Esc)" : "Commit this week's lists, then back to the week",
-            onClick: async () => {
-              // Step 16.2: Done commits (or commits the changes again), then goes back to Week.
-              if (!past && (!st.plan.committedAt || st.plan.changed) && (await act("weekplan.commit", { weekStart }, "Week committed")) === null) return;
-              onClose();
-            },
-          }}
-        >
+        )
+      }
+      more={{ label: "More for Plan the week", onClick: moreMenu }}
+      mode={
+        <ModeArea done={{ title: past || (st.plan.committedAt && !st.plan.changed) ? "Back to the week (Esc)" : "Commit this week's lists, then back to the week", onClick: () => void finish() }}>
           {switcher}
         </ModeArea>
-      </div>
+      }
+    />
+  );
+
+  const notices = (
+    <>
       {error && <p className="set-problem" role="alert">{error} <button type="button" className="mini" onClick={() => setError(null)}>Dismiss</button></p>}
       {offer ? (
         <p className="co-notice pw-offer" role="status">
@@ -280,72 +334,179 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
           <textarea ref={briefArea} readOnly value={brief.text} rows={10} />
         </section>
       )}
+      <WeekCells days={days} fits={fits} items={items} open={openK} past={past} colors={data.clients} dragging={dragging} dragOver={dragOver} setDragOver={setDragOver}
+        onOpen={setOpenK}
+        onPin={(d, date, half) => {
+          setDragOver(null);
+          setDragging(null);
+          pin(d.clientKey, d.itemId, date, half, true);
+        }} />
+    </>
+  );
 
-      {/* U4: one strip of chips, one per half-day; drag a row onto a chip to pin it there. */}
-      <div className={`pw-strip${dragging ? " dragging" : ""}`} role="group" aria-label="The week's blocks" title={past ? "What was pinned" : "Drag a must onto a block to pin it there"}>
-        <span className="pw-strip-label">Blocks</span>
-        {days.flatMap((d) => {
-          const dow = plainDate(d.date).toLocaleString("en-US", { weekday: "short" });
-          if (d.pto) return [<span key={d.date} className="pw-blk dashed" title={d.pto.titles.join(", ")}>{dow} · PTO</span>];
-          if (d.kind === "overflow" || (d.am.off && d.pm.off)) return [<span key={d.date} className="pw-blk dashed">{dow} · Catch-up</span>];
-          return (["AM", "PM"] as Half[]).map((half) => {
+  const left =
+    past && !items.length ? (
+      <p className="muted pw-empty">Nothing was planned for this week.</p>
+    ) : !lines.length ? (
+      <p className="muted pw-empty">No client has blocks this week.</p>
+    ) : (
+      <ul className="pl-lines pw-lines" aria-label="Clients this week">
+        {lines.map((l, n) =>
+          l.clientKey === openK ? (
+            <li key={l.clientKey} className="pw-open-card">
+              <ClientCard k={l.clientKey} line={l} st={st} past={past} items={items} fit={fits.find((f) => f.clientKey === l.clientKey)} days={days} info={info} nameOf={nameOf} colors={data.clients} friday={friday}
+                folds={folds} toggleFold={toggleFold} ops={ops} weekDrafts={weekDrafts.filter((w) => w.draft.clientKey === l.clientKey)}
+                prevName={n > 0 ? nameOf(keys[n - 1]!) : null} nextName={n < keys.length - 1 ? nameOf(keys[n + 1]!) : null} onPrev={() => go(-1)} onNext={() => go(1)} onFinish={() => void finish()} />
+            </li>
+          ) : (
+            <UnitLine key={l.clientKey} className="pw-line" color={clientColor(l.clientKey, data.clients)} name={nameOf(l.clientKey)} detail={lineDetail(l)} fit={l.fit?.text ?? ""} tone={l.fit ? TONE[l.fit.status] : "fits"} onOpen={() => setOpenK(l.clientKey)} />
+          ),
+        )}
+      </ul>
+    );
+
+  const right =
+    !past && open ? (
+      <AddWeek key={`${weekStart}:${open.clientKey}`} k={open.clientKey} st={st} items={items} work={work} nameOf={nameOf} colors={data.clients} ops={ops} query={query} setQuery={setQuery} search={search} folds={folds} toggleFold={toggleFold} />
+    ) : undefined;
+
+  return (
+    <PlanFrame
+      as="main"
+      className={`planweek${panel ? " with-panel" : ""}`}
+      label="Plan the week"
+      header={header}
+      notices={notices}
+      leftClass="pw-left"
+      left={left}
+      right={right}
+      after={
+        <>
+          {panel?.kind === "health" && (
+            <PanelShell title="DevOps health" sub={flags.length ? `${flags.length} to look at` : "All good"} label="DevOps health" onClose={() => setPanel(null)}>
+              {flags.length > 0 ? (
+                <ul className="pw-ready">
+                  {flags.map((f) => (
+                    <ReadyRow key={`${f.kind}:${f.clientKey}:${f.itemId ?? f.pickId ?? ""}`} f={f} clientName={nameOf(f.clientKey)} tz={tz} drafts={f.itemId ? st.drafts.filter((d) => d.clientKey === f.clientKey && d.parentItemId === f.itemId) : []}
+                      onBrief={() => void copyBrief(f.clientKey, f.itemId!)}
+                      onMark={(on) => void act("feature.mark_breakdown", { clientKey: f.clientKey, itemId: f.itemId, on }, on ? `#${f.itemId} marked as being broken down` : undefined)}
+                      onAsk={() => void act("followup.ask_priorities", { weekStart, clientKey: f.clientKey }, `Follow-up opened: ask ${nameOf(f.clientKey)} about priorities`)}
+                      onDraft={() => void act("draft.add_story", { clientKey: f.clientKey, parentItemId: null, title: f.title, size: f.size ?? "M" }, `Draft story saved: ${f.title}. Add it in DevOps when you can`)}
+                      onDraftFeature={(title) => act("draft.add_feature", { clientKey: f.clientKey, parentItemId: f.itemId, title }, `Draft feature saved under #${f.itemId}: ${title}. Add it in DevOps when you can`).then((r) => r !== null)}
+                      onCaptures={onCaptures} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="dp-empty">Every must has stories and a target date.</p>
+              )}
+            </PanelShell>
+          )}
+          {panel?.kind === "client" && (
+            <ClientPanel k={panel.k} name={nameOf(panel.k)} color={clientColor(panel.k, data.clients)} fit={fits.find((f) => f.clientKey === panel.k)} progress={list.progress.find((x) => x.clientKey === panel.k)}
+              items={items.filter((i) => i.clientKey === panel.k)} reordered={reordered.includes(panel.k)} past={past} onReset={() => ops.reset(panel.k)} onClose={() => setPanel(null)} />
+          )}
+          {panel?.kind === "feature" && (
+            <FeaturePanel k={panel.k} itemId={panel.itemId} info={info(panel.k, panel.itemId)} item={items.find((i) => i.clientKey === panel.k && i.itemId === panel.itemId) ?? null} color={clientColor(panel.k, data.clients)} name={nameOf(panel.k)}
+              drafts={st.drafts.filter((d) => d.clientKey === panel.k && d.parentItemId === panel.itemId)} listed={new Set(items.filter((i) => i.clientKey === panel.k).map((i) => i.itemId))} past={past} ops={ops} tz={tz} onClose={() => setPanel(null)} />
+          )}
+        </>
+      }
+    />
+  );
+}
+
+/** "2 musts · 1 needs stories", "No musts yet" or "Nothing this week". */
+function lineDetail(l: WeekLine): React.ReactNode {
+  if (!l.musts) return l.quiet ? "Nothing this week" : "No musts yet";
+  return (
+    <>
+      {l.musts} must{l.musts === 1 ? "" : "s"}
+      {l.needs > 0 && <span className="pw-line-needs"> · {l.needs} need{l.needs === 1 ? "s" : ""} stories</span>}
+    </>
+  );
+}
+
+/**
+ * U6: the week's half-days as a small grid, Mon to Fri, AM over PM. Each cell names its client on a colored edge;
+ * a half-day that isn't counted is dimmed with its reason; a pinned must shows its title; PTO is hatched, Friday is
+ * dashed Catch-up; the open client's cells read "Planning". Click a cell to open its client; drag a must onto one
+ * of its client's cells (or an Open half-day) to pin it. PTO and other clients' cells don't take the drop.
+ */
+function WeekCells({ days, fits, items, open, past, colors, dragging, dragOver, setDragOver, onOpen, onPin }: {
+  days: WeekLoadData["week"]["days"]; fits: ClientBudget[]; items: Item[]; open: string | null; past: boolean; colors: Record<string, string>;
+  dragging: Drag | null; dragOver: string | null; setDragOver: (k: string | null) => void; onOpen: (k: string) => void; onPin: (d: Drag, date: IsoDate, half: Half) => void;
+}) {
+  const read = (e: DragEvent): Drag | null => {
+    try {
+      return JSON.parse(e.dataTransfer.getData(DRAG_TYPE)) as Drag;
+    } catch {
+      return null;
+    }
+  };
+  return (
+    <div className="pw-grid-wrap">
+      <div className={`pw-grid${dragging ? " dragging" : ""}`} role="group" aria-label="The week's half-days">
+        <span className="pw-grid-corner" aria-hidden="true" style={{ gridRow: 1, gridColumn: 1 }} />
+        {days.map((d, col) => (
+          <span key={d.date} style={{ gridRow: 1, gridColumn: col + 2 }} className="pw-grid-day" title={dateShort(d.date)}>{plainDate(d.date).toLocaleString("en-US", { weekday: "short" })} <span className="pw-grid-date">{plainDate(d.date).day}</span></span>
+        ))}
+        {(["AM", "PM"] as Half[]).map((half, row) => [
+          <span key={`l${half}`} className="pw-grid-half" style={{ gridRow: row + 2, gridColumn: 1 }}>{half}</span>,
+          ...days.map((d, col) => {
             const s = half === "AM" ? d.am : d.pm;
             const key = `${d.date}${half}`;
             const c = s.focus[0];
             const here = items.filter((f) => f.slots.some((x) => x.date === d.date && x.half === half));
-            const target = !past && (!!c || s.open);
+            const pinText = here.length ? `${here[0]!.title}${here.length > 1 ? ` +${here.length - 1}` : ""}` : "";
+            const at = { gridRow: row + 2, gridColumn: col + 2 } as CSSProperties;
+            // PTO and a whole catch-up day are one cell over both halves, as on Week (U3).
+            const whole = !!d.pto || d.kind === "overflow" || (d.am.off && d.pm.off);
+            const allPins = items.filter((f) => f.slots.some((x) => x.date === d.date));
+            if (whole && half === "PM") return null;
+            if (d.pto) return <span key={key} className="pw-cell pto" style={{ gridRow: "2 / span 2", gridColumn: col + 2 }} title={d.pto.titles.join(", ")} aria-label={`${dateShort(d.date)}: PTO`}>PTO</span>;
+            if (whole)
+              return (
+                <span key={key} className="pw-cell catchup" style={{ gridRow: "2 / span 2", gridColumn: col + 2 }} aria-label={`${dateShort(d.date)}: Catch-up${allPins.length ? `, pinned ${allPins.map((f) => f.title).join(", ")}` : ""}`}>
+                  Catch-up
+                  {allPins.length > 0 && <span className="pw-cell-right pin">{`${allPins[0]!.title}${allPins.length > 1 ? ` +${allPins.length - 1}` : ""}`}</span>}
+                </span>
+              );
+            if (!c && !s.open) return <span key={key} className="pw-cell catchup" style={at} aria-label={`${dateShort(d.date)} ${HALF_WORD[half]}: No block`}>No block</span>;
             const fb = c ? fits.find((f) => f.clientKey === c.clientKey)?.blocks.find((b) => b.date === d.date && b.half === half) : undefined;
-            const off = fb && !fb.counts;
-            const label = c ? c.clientName : s.open ? "Open" : "No block";
+            const off = !!fb && !fb.counts;
+            const mine = !!c && c.clientKey === open;
+            const takes = !past && !!dragging && (c ? c.clientKey === dragging.clientKey : s.open);
+            const refuses = !!dragging && !takes;
+            const label = c ? c.clientName : "Open";
+            const right = pinText || (off ? reasonWord(fb!.reason) : mine ? "Planning" : "");
             return (
-              <button key={key} type="button" className={`pw-blk${c ? "" : " dashed"}${dragOver === key ? " over" : ""}${only && c?.clientKey === only ? " on" : ""}`}
-                style={{ "--c": clientColor(c?.clientKey, data.clients) } as CSSProperties}
-                aria-label={`${dateShort(d.date)} ${HALF_WORD[half]}: ${label}${off ? `, not counted: ${fb.reason ?? ""}` : ""}${here.length ? `, pinned ${here.map((f) => `#${f.itemId}`).join(", ")}` : ""}`}
-                title={here.length ? `Pinned: ${here.map((f) => f.title).join(", ")}` : off ? `Not counted: ${fb.reason ?? ""}` : undefined}
-                onClick={() => c && setOnly(only === c.clientKey ? null : c.clientKey)}
-                onDragOver={target ? (e) => { if (e.dataTransfer.types.includes(DRAG_TYPE)) { e.preventDefault(); setDragOver(key); } } : undefined}
-                onDragLeave={target ? () => setDragOver(null) : undefined}
-                onDrop={target ? (e) => onDrop(e, d.date, half, s) : undefined}>
-                {dow} {half} · {label}
-                {off && <span className="pw-blk-off"> {reasonWord(fb.reason)}</span>}
-                {here.length > 0 && <span className="pw-blk-pins" aria-hidden="true"> · {here.length} pinned</span>}
+              <button key={key} type="button" style={{ ...at, "--c": clientColor(c?.clientKey, colors) } as CSSProperties}
+                className={`pw-cell${c ? "" : " open-half"}${off ? " off" : ""}${mine ? " on" : ""}${dragOver === key ? " over" : ""}${takes ? " takes" : ""}${refuses ? " refuses" : ""}`}
+                aria-label={`${dateShort(d.date)} ${HALF_WORD[half]}: ${label}${off ? `, not counted: ${reasonWord(fb!.reason)}` : ""}${here.length ? `, pinned ${here.map((f) => f.title).join(", ")}` : ""}${mine ? ", planning" : ""}`}
+                aria-pressed={mine}
+                title={here.length ? `Pinned: ${here.map((f) => f.title).join(", ")}` : off ? `Not counted: ${reasonWord(fb!.reason)}` : c ? `Plan ${c.clientName}` : "Open half-day: drag a must here to pin it"}
+                onClick={() => c && onOpen(c.clientKey)}
+                onDragOver={(e) => {
+                  if (!takes || !e.dataTransfer.types.includes(DRAG_TYPE)) return;
+                  e.preventDefault();
+                  setDragOver(key);
+                }}
+                onDragLeave={() => setDragOver(null)}
+                onDrop={(e) => {
+                  const f = read(e);
+                  if (!f || !takes) return;
+                  e.preventDefault();
+                  onPin(f, d.date, half);
+                }}>
+                <span className="pw-cell-name">{label}</span>
+                {right && <span className={`pw-cell-right${pinText ? " pin" : mine ? " planning" : ""}`}>{right}</span>}
               </button>
             );
-          });
-        })}
+          }),
+        ])}
       </div>
-
-      <ClientLists st={st} past={past} keys={keys} items={items} progress={list.progress} fits={fits} days={days} info={info} work={work} nameOf={nameOf} colors={data.clients} friday={friday}
-        open={open} toggleOpen={toggleOpen} ops={ops} only={only} setOnly={setOnly} query={query} setQuery={setQuery} />
-
-      {panel?.kind === "health" && (
-        <PanelShell title="DevOps health" sub={flags.length ? `${flags.length} to look at` : "All good"} label="DevOps health" onClose={() => setPanel(null)}>
-          {flags.length > 0 ? (
-            <ul className="pw-ready">
-              {flags.map((f) => (
-                <ReadyRow key={`${f.kind}:${f.clientKey}:${f.itemId ?? f.pickId ?? ""}`} f={f} clientName={nameOf(f.clientKey)} tz={tz} drafts={f.itemId ? st.drafts.filter((d) => d.clientKey === f.clientKey && d.parentItemId === f.itemId) : []}
-                  onBrief={() => void copyBrief(f.clientKey, f.itemId!)}
-                  onMark={(on) => void act("feature.mark_breakdown", { clientKey: f.clientKey, itemId: f.itemId, on }, on ? `#${f.itemId} marked as being broken down` : undefined)}
-                  onAsk={() => void act("followup.ask_priorities", { weekStart, clientKey: f.clientKey }, `Follow-up opened: ask ${nameOf(f.clientKey)} about priorities`)}
-                  onDraft={() => void act("draft.add_story", { clientKey: f.clientKey, parentItemId: null, title: f.title, size: f.size ?? "M" }, `Draft story saved: ${f.title}. Add it in DevOps when you can`)}
-                  onDraftFeature={(title) => act("draft.add_feature", { clientKey: f.clientKey, parentItemId: f.itemId, title }, `Draft feature saved under #${f.itemId}: ${title}. Add it in DevOps when you can`).then((r) => r !== null)}
-                  onCaptures={onCaptures} />
-              ))}
-            </ul>
-          ) : (
-            <p className="dp-empty">Every must has stories and a target date.</p>
-          )}
-        </PanelShell>
-      )}
-      {panel?.kind === "client" && (
-        <ClientPanel k={panel.k} name={nameOf(panel.k)} color={clientColor(panel.k, data.clients)} fit={fits.find((f) => f.clientKey === panel.k)} progress={list.progress.find((x) => x.clientKey === panel.k)}
-          items={items.filter((i) => i.clientKey === panel.k)} reordered={reordered.includes(panel.k)} past={past} onReset={() => ops.reset(panel.k)} onClose={() => setPanel(null)} />
-      )}
-      {panel?.kind === "feature" && (
-        <FeaturePanel k={panel.k} itemId={panel.itemId} info={info(panel.k, panel.itemId)} item={items.find((i) => i.clientKey === panel.k && i.itemId === panel.itemId) ?? null} color={clientColor(panel.k, data.clients)} name={nameOf(panel.k)}
-          drafts={st.drafts.filter((d) => d.clientKey === panel.k && d.parentItemId === panel.itemId)} listed={new Set(items.filter((i) => i.clientKey === panel.k).map((i) => i.itemId))} past={past} ops={ops} tz={tz} onClose={() => setPanel(null)} />
-      )}
-    </main>
+      <p className="pw-grid-hint">{past ? "What was pinned that week." : "Click to plan; drag a must here to pin."}</p>
+    </div>
   );
 }
 
@@ -526,201 +687,308 @@ type Ops = {
   reset: (k: string) => void;
   pin: (k: string, itemId: number, date: IsoDate, half: Half, on: boolean) => void;
   brief: (k: string, id: number) => void;
-  /** U4: a row is being dragged (the blocks strip grows). */
-  dragging: (on: boolean) => void;
+  /** A row is being dragged: the grid shows which cells take it. */
+  dragging: (d: Drag | null) => void;
   /** U4: open the detail panel on a feature, or on a client's budget. */
   feature: (k: string, itemId: number) => void;
   client: (k: string) => void;
+  /** U6: a draft feature on the list: must, nice or off. */
+  draftTier: (d: DraftStory, tier: Tier | "off") => void;
+  /** U6: the type box: a draft feature as a must (Enter) or a nice to have (Shift+Enter). */
+  typed: (k: string, title: string, tier: Tier) => Promise<boolean>;
+  /** U6: Nothing this week for a client. */
+  quiet: (k: string, on: boolean) => void;
 };
-type ListsProps = {
+
+type CardProps = {
+  k: string;
+  line: WeekLine;
   st: WeekPlanState;
   past: boolean;
-  keys: string[];
   items: Item[];
-  progress: Progress[];
-  fits: ClientBudget[];
+  fit: ClientBudget | undefined;
   days: WeekLoadData["week"]["days"];
   info: (k: string, id: number) => Info | null;
-  work: readonly ClientWork[] | null;
   nameOf: (k: string) => string;
   colors: Record<string, string>;
   friday: boolean;
-  open: Set<string>;
-  toggleOpen: (key: string) => void;
+  folds: Set<string>;
+  toggleFold: (key: string) => void;
   ops: Ops;
-  only: string | null;
-  setOnly: (k: string | null) => void;
-  query: string;
-  setQuery: (q: string) => void;
+  weekDrafts: { draft: DraftStory; tier: Tier }[];
+  prevName: string | null;
+  nextName: string | null;
+  onPrev: () => void;
+  onNext: () => void;
+  onFinish: () => void;
 };
 
-/** The client filter chips and search, then one card per client (two columns at 1920, one when narrow, three at 3840). */
-function ClientLists(p: ListsProps) {
-  const keys = p.keys.filter((k) => (p.only ? k === p.only : true));
-  if (p.past && !p.items.length) return <p className="muted pw-empty">Nothing was planned for this week.</p>;
-  return (
-    <>
-      <div className="pw-filter" role="group" aria-label="Filter the lists">
-        {p.keys.length > 1 && (
-          <span className="pw-chips">
-            <button type="button" className="chip-btn" aria-pressed={!p.only} onClick={() => p.setOnly(null)}>All</button>
-            {p.keys.map((k) => (
-              <button key={k} type="button" className="chip-btn" aria-pressed={p.only === k} style={{ "--c": clientColor(k, p.colors) } as CSSProperties} onClick={() => p.setOnly(p.only === k ? null : k)}>
-                <span className="swatch" />{p.nameOf(k)}
-              </button>
-            ))}
-          </span>
-        )}
-        <input type="search" className="pw-search" value={p.query} onChange={(e) => p.setQuery(e.target.value)} placeholder="Search" aria-label="Search the lists by title or number" />
-      </div>
-      <div className="pw-cards">{keys.map((k) => <ClientList key={k} k={k} {...p} />)}</div>
-    </>
-  );
-}
-
-/** Rows shown in Add from DevOps before "Show N more". */
-const ADD_FIRST = 3;
-
-function ClientList(p: ListsProps & { k: string }) {
-  const { k } = p;
-  const q = p.query.trim().toLowerCase();
-  const match = (i: { id: number; title: string }) => !q || i.title.toLowerCase().includes(q) || String(i.id).includes(q.replace(/^#/, ""));
+/**
+ * U6: the open client. Its name, blocks and fit once; MUST rows (a feature with its stories nested, or Needs stories
+ * with Draft stories and Coop brief, and its blocks); the amber over line; Nice to have folded; Previous and Next
+ * client (Done on the last).
+ */
+function ClientCard(p: CardProps) {
+  const { k, fit } = p;
   const port = p.st.portfolios.find((x) => x.clientKey === k);
-  const w = p.work?.find((x) => x.clientKey === k);
-  const fit = p.fits.find((f) => f.clientKey === k);
   // Step 16.4: features are envelopes; a story under a listed feature shows inside its row and takes its tier.
-  const est = estimate(p.items.filter((i) => i.clientKey === k));
+  const mineAll = p.items.filter((i) => i.clientKey === k);
+  const est = estimate(mineAll);
   const envOf = new Map(est.envelopes.map((e) => [e.feature.id, e] as const));
   const nested = new Set(est.envelopes.flatMap((e) => e.stories.map((x) => x.id)));
   const listedFeatures = new Set(est.envelopes.map((e) => e.feature.itemId));
-  const mine = p.items.filter((i) => i.clientKey === k && !nested.has(i.id) && (match({ id: i.itemId, title: i.title }) || (envOf.get(i.id)?.stories ?? []).some((x) => match({ id: x.itemId, title: x.title }))));
+  const mine = mineAll.filter((i) => !nested.has(i.id));
   const musts = mine.filter((i) => i.tier === "must");
   const nice = mine.filter((i) => i.tier === "nice");
+  const draftMusts = p.weekDrafts.filter((w) => w.tier === "must");
+  const draftNice = p.weekDrafts.filter((w) => w.tier === "nice");
   const places = placesFor(p.days, k);
-  const listed = new Set(p.items.filter((i) => i.clientKey === k).map((i) => i.itemId));
-  // A story whose feature is on the list belongs to that feature's row, not to Add (U4).
-  const underListed = (parentId: number | null | undefined) => parentId != null && listed.has(parentId);
-  // What can go on the list, in DevOps order: features (portfolio read), then my stories (work read).
-  const features = (port?.items ?? []).filter((i) => i.tier === "feature" && !listed.has(i.id) && match(i));
-  const stories = (w?.items ?? []).filter((i) => i.level === "story" && !listed.has(i.id) && !underListed(i.parentId) && match(i));
-  // Q64: open stories under the client's features (any assignee), not already offered above, grouped by feature.
-  const offered = new Set(stories.map((x) => x.id));
-  const under = (port?.items ?? [])
-    .filter((f) => f.tier === "feature" && !listed.has(f.id))
-    .map((f) => ({ f, kids: f.children.filter((c) => c.level === "story" && c.open && !listed.has(c.id) && !offered.has(c.id) && match(c)) }))
-    .filter((g) => g.kids.length);
-  // Q66: draft stories with no feature yet, listed under their client.
-  const loose = p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === null && (!q || d.title.toLowerCase().includes(q)));
-  const epics = (port?.items ?? []).filter((i) => i.tier === "epic" && match(i));
-  const niceOpen = p.open.has(`nice:${k}`) || !!q;
-  const more = p.open.has(`more:${k}`) || !!q;
-  const flat = [
-    ...features.map((f) => ({ id: f.id, title: f.title, url: f.url, what: `${f.type.toLowerCase()} · ${f.state}${f.targetDate ? ` · target ${dateShortIso(f.targetDate)}` : ""}`, flag: f.children.some((c) => c.level === "story") ? null : "no stories" })),
-    ...stories.map((s) => ({ id: s.id, title: s.title, url: s.url, what: `${s.type === "User Story" ? "story" : s.type.toLowerCase()} · ${s.state}`, flag: null })),
-  ];
-  const underCount = under.reduce((n, g) => n + g.kids.length, 0);
-  const hidden = Math.max(0, flat.length - ADD_FIRST) + underCount;
+  const listed = new Set(mineAll.map((i) => i.itemId));
+  const niceOpen = p.folds.has(`nice:${k}`);
   const over = fit ? overLine(fit.budget, fit.planned, p.friday) : null;
   const row = (i: Item, n: number, group: Item[]) => (
     <ItemRow key={i.id} i={i} first={n === 0} last={n === group.length - 1} past={p.past} info={p.info(k, i.itemId)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === i.itemId)}
       places={places} ops={p.ops} env={envOf.get(i.id) ?? null} parentListed={i.parentId != null && listedFeatures.has(i.parentId)} infoOf={(id) => p.info(k, id)} listed={listed} />
   );
   const why = fit ? budgetWhy(fit) : [];
+  const empty = !musts.length && !draftMusts.length;
   return (
-    <section className="pw-client" style={{ "--c": clientColor(k, p.colors) } as CSSProperties} aria-label={p.nameOf(k)}>
-      <h3 className="pw-card-head">
+    <UnitCard
+      className="pw-client"
+      color={clientColor(k, p.colors)}
+      label={p.nameOf(k)}
+      headClass="pw-card-head"
+      name={
         <button type="button" className="pw-name" onClick={() => p.ops.client(k)} title="Blocks, what counts and what's done">
-          <span className="pw-swatch" aria-hidden="true" />
           {p.nameOf(k)}
         </button>
-        {fit && (
-          <>
-            <span className="pw-budget" title={why.length ? `Not counted: ${why.join("; ")}` : "Nice to haves don't count against the blocks"}>{blocksText(fit.budget)}</span>
-            <span className={`pw-fit2 ${fit.status}`}>{fit.text}</span>
-          </>
-        )}
-        {port && port.status !== "ok" && <span className="pw-src">DevOps: {port.message ?? port.status}</span>}
-        {port?.fromCache && <span className="pw-src">from cache</span>}
-      </h3>
-      {musts.length > 0 && (
-        <div className="pw-tier">
-          <h4>Must</h4>
-          <ul className="pw-features">{musts.map((i, n) => row(i, n, musts))}</ul>
-          {over && !p.past && <p className="pw-over" role="status">{over}</p>}
-        </div>
-      )}
-      {nice.length > 0 && (
-        <div className="pw-tier pw-nice">
-          <button type="button" className="pw-fold" aria-expanded={niceOpen} onClick={() => p.toggleOpen(`nice:${k}`)}>
-            <span aria-hidden="true">{niceOpen ? "▾" : "▸"}</span> Nice to have · {nice.length}
-          </button>
-          {niceOpen && <ul className="pw-features">{nice.map((i, n) => row(i, n, nice))}</ul>}
-        </div>
-      )}
-      {loose.length > 0 && (
-        <div className="pw-tier pw-loose">
-          <h4>Draft stories</h4>
-          <ul className="pw-drafts">
-            {loose.map((d) => (
-              <li key={d.id}><span className="pw-draft-tag">Draft</span> <DraftTitle draft={d} /> <span className="muted">{d.size}</span> <CreateInDevOps drafts={[d]} /></li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {!p.past && (
-        <div className="pw-add">
-          <h4>Add from DevOps <span className="pw-add-n">{flat.length ? `${flat.length} more of yours` : ""}</span></h4>
-          {!port && !w && <p className="pw-empty-line">No DevOps for this client.</p>}
-          {(port?.status === "ok" || w?.status === "ok") && !flat.length && !underCount && (
-            <p className="pw-empty-line">{q ? "Nothing matches." : listed.size ? "Everything assigned to you is on the list." : `Nothing in DevOps is assigned to you for ${p.nameOf(k)}.`}</p>
-          )}
+      }
+      detail={lineDetail(p.line)}
+      fit={fit && <span className={`pw-fit2 pw-budget ${fit.status}`} title={`${blocksText(fit.budget)} this week${why.length ? `. Not counted: ${why.join("; ")}` : ". Nice to haves don't count against the blocks"}`}>{fit.text}</span>}
+      tone={fit ? TONE[fit.status] : "fits"}
+      sub={port && (port.status !== "ok" || port.fromCache) ? `DevOps: ${port.status !== "ok" ? (port.message ?? port.status) : "from cache"}` : undefined}
+    >
+      <div className="pw-tier">
+        {!empty && <PlanLabel>Must</PlanLabel>}
+        {empty ? (
+          !p.past && (
+            <p className="pw-empty-line">
+              <button type="button" className="link-btn pw-quiet" aria-pressed={p.line.quiet} onClick={() => p.ops.quiet(k, !p.line.quiet)} title={p.line.quiet ? "Count it as not planned again" : "Nothing for this client this week: count it as planned"}>
+                {p.line.quiet ? "Undo Nothing this week" : "Nothing this week"}
+              </button>
+            </p>
+          )
+        ) : (
           <ul className="pw-features">
-            {(more ? flat : flat.slice(0, ADD_FIRST)).map((f) => <AddRow key={f.id} k={k} id={f.id} title={f.title} url={f.url} what={f.what} flag={f.flag} ops={p.ops} />)}
+            {musts.map((i, n) => row(i, n, musts))}
+            {draftMusts.map((w) => <DraftRow key={`d${w.draft.id}`} d={w.draft} tier="must" past={p.past} ops={p.ops} />)}
           </ul>
-          {more &&
-            under.map((g) => (
-              <div key={g.f.id} className="pw-under">
-                <h4>Stories under #{g.f.id} {g.f.title}</h4>
-                <ul className="pw-features">
-                  {g.kids.map((c) => <AddRow key={c.id} k={k} id={c.id} title={c.title} url={c.url} what={`story · ${c.state} · ${c.mine ? "you" : c.assignedTo ?? "unassigned"}`} flag={null} ops={p.ops} />)}
-                </ul>
-              </div>
-            ))}
-          {more && epics.length > 0 && (
-            <div className="pw-under">
-              <h4>Epics</h4>
-              <ul className="pw-epics">
-                {epics.map((e) => {
-                  const openKids = e.children.filter((c) => c.open).length;
-                  return (
-                    <li key={e.id}>
-                      <WorkLink clientKey={k} url={e.url}>#{e.id} {e.title}</WorkLink> <span className="muted">{e.state} · {openKids} open of {e.children.length} feature{e.children.length === 1 ? "" : "s"}{e.targetDate ? ` · target ${dateShortIso(e.targetDate)}` : ""}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-          {!q && (hidden > 0 || (epics.length > 0 && !more)) && (
-            <button type="button" className="link-btn pw-show-more" aria-expanded={more} onClick={() => p.toggleOpen(`more:${k}`)}>
-              {more ? "Show less" : hidden > 0 ? `Show ${hidden} more` : "Show epics"}
-            </button>
+        )}
+        {over && !p.past && <p className="pw-over" role="status">{over}</p>}
+      </div>
+      {nice.length + draftNice.length > 0 && (
+        <div className="pw-tier pw-nice">
+          <FoldLine className="pw-fold" open={niceOpen} onToggle={() => p.toggleFold(`nice:${k}`)} label="Nice to have" count={nice.length + draftNice.length} />
+          {niceOpen && (
+            <ul className="pw-features">
+              {nice.map((i, n) => row(i, n, nice))}
+              {draftNice.map((w) => <DraftRow key={`d${w.draft.id}`} d={w.draft} tier="nice" past={p.past} ops={p.ops} />)}
+            </ul>
           )}
         </div>
       )}
-    </section>
+      <div className="pw-card-foot">
+        {p.prevName !== null && (
+          <button type="button" className="link-btn pw-prev" onClick={p.onPrev} title={`${p.prevName} (K)`}>
+            ‹ Previous
+          </button>
+        )}
+        <span className="pl-spacer" />
+        {p.nextName !== null ? (
+          <button type="button" className="pw-next" onClick={p.onNext} title="Next client (J)">
+            Next client: <span className="pw-next-name">{p.nextName}</span> ›
+          </button>
+        ) : (
+          <button type="button" className="pw-next done-btn" onClick={p.onFinish} title={p.past ? "Back to the week" : "Commit this week's lists, then back to the week"}>
+            Done
+          </button>
+        )}
+      </div>
+    </UnitCard>
+  );
+}
+
+/** U6: a draft feature on the list: its Draft marker, the title (opens the draft editor), its one block and ⋯. */
+function DraftRow({ d, tier, past, ops }: { d: DraftStory; tier: Tier; past: boolean; ops: Ops }) {
+  const { open: openMenu } = useContext(MenuCtx);
+  const other: Tier = tier === "must" ? "nice" : "must";
+  const more = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    openMenu({ x: r.right, y: r.bottom + 4 }, {
+      title: d.title,
+      items: [
+        { id: "tier", label: other === "must" ? "Make it a must" : "Make it a nice to have", action: "weekplan.draft_tier", run: () => ops.draftTier(d, other) },
+        { id: "off", label: "Take off the week", action: "weekplan.draft_tier", danger: true, run: () => ops.draftTier(d, "off") },
+      ],
+    });
+  };
+  return (
+    <PlanRow className="pw-row pw-draft-row" handle={past ? null : "⋮⋮"} title={<DraftTitle draft={d} />} titleText={`${d.title} (draft feature, not in DevOps yet)`}
+      badges={<span className="pw-draft-tag">Draft</span>}
+      right={<span className="pw-chip-static">1 block</span>}
+      hover={past ? undefined : <><CreateInDevOps drafts={[d]} label="Create in DevOps" /><button type="button" className="more" aria-label={`More for ${d.title}`} onClick={more}>⋯</button></>} />
+  );
+}
+
+type AddProps = {
+  k: string;
+  st: WeekPlanState;
+  items: Item[];
+  work: readonly ClientWork[] | null;
+  nameOf: (k: string) => string;
+  colors: Record<string, string>;
+  ops: Ops;
+  query: string;
+  setQuery: (q: string) => void;
+  search: React.RefObject<HTMLInputElement | null>;
+  folds: Set<string>;
+  toggleFold: (key: string) => void;
+};
+
+/**
+ * U6: "Add to <client>", following the open client. FROM DEVOPS: its features and my stories not on a list (never a
+ * story under a listed feature), each with + Must and Nice; Everything else folded (other open stories under its
+ * features, its epics); Search over both (Enter adds the first match as a must, Esc clears); the type box at the foot.
+ */
+function AddWeek({ k, st, items, work, nameOf, colors, ops, query, setQuery, search, folds, toggleFold }: AddProps) {
+  const q = query.trim().toLowerCase();
+  const match = (i: { id: number; title: string }) => !q || i.title.toLowerCase().includes(q) || String(i.id).includes(q.replace(/^#/, ""));
+  const port = st.portfolios.find((x) => x.clientKey === k);
+  const w = work?.find((x) => x.clientKey === k);
+  const listed = new Set(items.filter((i) => i.clientKey === k).map((i) => i.itemId));
+  // A story whose feature is on the list belongs to that feature's row, not to Add (U4).
+  const underListed = (parentId: number | null | undefined) => parentId != null && listed.has(parentId);
+  const features = (port?.items ?? []).filter((i) => i.tier === "feature" && !listed.has(i.id));
+  const stories = (w?.items ?? []).filter((i) => i.level === "story" && !listed.has(i.id) && !underListed(i.parentId));
+  const flat = [
+    ...features.map((f) => ({ id: f.id, title: f.title, url: f.url, what: `${f.type.toLowerCase()}${f.targetDate ? ` · target ${dateShortIso(f.targetDate)}` : ""}`, flag: f.children.some((c) => c.level === "story") ? null : "no stories" })),
+    ...stories.map((s) => ({ id: s.id, title: s.title, url: s.url, what: s.type === "User Story" ? "story" : s.type.toLowerCase(), flag: null })),
+  ];
+  // Q64: open stories under its features (any assignee) not offered above, grouped by feature; then its epics.
+  const offered = new Set(flat.map((x) => x.id));
+  const under = features.map((f) => ({ f, kids: f.children.filter((c) => c.level === "story" && c.open && !listed.has(c.id) && !offered.has(c.id) && match(c)) })).filter((g) => g.kids.length);
+  const epics = (port?.items ?? []).filter((i) => i.tier === "epic" && match(i));
+  const shown = flat.filter(match);
+  const restCount = features.reduce((n, f) => n + f.children.filter((c) => c.level === "story" && c.open && !listed.has(c.id) && !offered.has(c.id)).length, 0) + (port?.items ?? []).filter((i) => i.tier === "epic").length;
+  const restOpen = folds.has(`rest:${k}`) || !!q;
+  const firstMatch = shown[0]?.id ?? under[0]?.kids[0]?.id ?? null;
+  const name = nameOf(k);
+  return (
+    <AddPane
+      className="pw-addpane"
+      color={clientColor(k, colors)}
+      client={name}
+      count={`${flat.length} of yours not on the list`}
+      top={
+        <input ref={search} type="search" className="pw-search pl-search" value={query} placeholder="Search" aria-label={`Search ${name}'s DevOps by title or number`}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === "Escape" && query) {
+              e.preventDefault();
+              e.stopPropagation();
+              setQuery("");
+            } else if (e.key === "Enter" && q && firstMatch !== null) {
+              e.preventDefault();
+              ops.add(k, firstMatch, "must");
+              setQuery("");
+            }
+          }} />
+      }
+      box={<TypeBox k={k} name={name} ops={ops} />}
+    >
+      <AddSection className="pw-add" label="From DevOps">
+        {!port && !w && <p className="pw-empty-line">No DevOps for this client.</p>}
+        {(port?.status === "ok" || w?.status === "ok") && !shown.length && (
+          <p className="pw-empty-line">{q ? "Nothing matches." : listed.size ? "Everything of yours is on the list." : `Nothing in DevOps is assigned to you for ${name}.`}</p>
+        )}
+        <ul className="pw-features">
+          {shown.map((f) => <AddRow key={f.id} k={k} id={f.id} title={f.title} url={f.url} what={f.what} flag={f.flag} ops={ops} />)}
+        </ul>
+      </AddSection>
+      {restCount + under.length > 0 && (
+        <AddSection className="pw-rest" label="Everything else" title={null}>
+          <FoldLine className="pw-fold" open={restOpen} onToggle={() => toggleFold(`rest:${k}`)} label="Everything else" count={`${restCount} in DevOps order`} />
+          {restOpen && (
+            <>
+              {under.map((g) => (
+                <div key={g.f.id} className="pw-under">
+                  <PlanLabel>Under {g.f.title}</PlanLabel>
+                  <ul className="pw-features">
+                    {g.kids.map((c) => <AddRow key={c.id} k={k} id={c.id} title={c.title} url={c.url} what={`story · ${c.mine ? "you" : c.assignedTo ?? "unassigned"}`} flag={null} ops={ops} />)}
+                  </ul>
+                </div>
+              ))}
+              {epics.length > 0 && (
+                <div className="pw-under">
+                  <PlanLabel>Epics</PlanLabel>
+                  <ul className="pw-epics">
+                    {epics.map((e) => {
+                      const openKids = e.children.filter((c) => c.open).length;
+                      return (
+                        <li key={e.id}>
+                          <WorkLink clientKey={k} url={e.url}>#{e.id} {e.title}</WorkLink> <span className="muted">{openKids} open of {e.children.length} feature{e.children.length === 1 ? "" : "s"}{e.targetDate ? ` · target ${dateShortIso(e.targetDate)}` : ""}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </AddSection>
+      )}
+    </AddPane>
+  );
+}
+
+/** U6 (D414): "Type a feature for <client>, then Enter": a draft feature as a must; Shift+Enter a nice to have. */
+function TypeBox({ k, name, ops }: { k: string; name: string; ops: Ops }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="pw-type">
+      <input type="text" className="pw-type-input" value={text} maxLength={200} placeholder={`Type a feature for ${name}, then Enter`} aria-label={`A draft feature for ${name}`} disabled={busy}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && text) {
+            e.preventDefault();
+            e.stopPropagation();
+            setText("");
+            return;
+          }
+          if (e.key !== "Enter" || !text.trim()) return;
+          e.preventDefault();
+          setBusy(true);
+          void ops.typed(k, text.trim(), e.shiftKey ? "nice" : "must").then((ok) => {
+            setBusy(false);
+            if (ok) setText("");
+          });
+        }} />
+      <BoxHint>Enter: a must. Shift+Enter: nice to have.</BoxHint>
+    </div>
   );
 }
 
 function AddRow({ k, id, title, url, what, flag, ops }: { k: string; id: number; title: string; url: string; what: string; flag: string | null; ops: Ops }) {
   return (
-    <li className="pw-feature pw-addrow">
-      <span className="pw-title">
+    <li className="pw-addrow" data-item={id}>
+      <span className="pw-title" title={`#${id} ${title}`}>
         <WorkLink clientKey={k} url={url}>#{id} {title}</WorkLink> <span className="pw-meta">{what}</span>
         {flag && <span className="pw-flagword"> · {flag}</span>}
       </span>
       <span className="pw-acts">
-        <button type="button" className="mini pw-must" onClick={() => ops.add(k, id, "must")}>+ Must</button>
+        <button type="button" className="mini pw-must" onClick={() => ops.add(k, id, "must")} aria-label={`Add #${id} as a must`}>+ Must</button>
         <button type="button" className="mini quiet pw-nice-btn" onClick={() => ops.add(k, id, "nice")} aria-label={`Add #${id} as a nice to have`}>Nice</button>
       </span>
     </li>
@@ -736,8 +1004,7 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
   const feature = info?.feature ?? null;
   const stories = feature ? feature.children.filter((c) => c.level === "story") : [];
   const openStories = stories.filter((c) => c.open).length;
-  // U4 (Today's rule): a feature with no open DevOps stories needs stories.
-  const needs = i.level === "feature" && !!feature && openStories === 0 && !i.done;
+  const needs = needsStories(i, info);
   // Its open DevOps stories not on the list: one muted line under the row.
   const rest = i.level === "feature" && !nestedIn ? stories.filter((c) => c.open && !listed?.has(c.id)) : [];
   const other: Tier = i.tier === "must" ? "nice" : "must";
@@ -769,22 +1036,23 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
   };
   const stateWord = info ? info.state : "not in this DevOps read";
   return (
-    <li
-      className={`pw-feature pw-item pw-row${i.done ? " done" : ""}${needs ? " needs" : ""}${nestedIn ? " nested" : ""}`}
+    <PlanRow
+      className={`pw-row${i.done ? " done" : ""}${needs ? " needs" : ""}${nestedIn ? " nested" : ""}`}
       draggable={!past}
       onContextMenu={(e) => show(e, weekItemMenu(facts, wops))}
       onDragStart={(e) => {
         e.stopPropagation();
-        e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ clientKey: k, itemId: i.itemId, tier: i.tier }));
+        const d: Drag = { clientKey: k, itemId: i.itemId, tier: i.tier };
+        e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(d));
         e.dataTransfer.effectAllowed = "copyMove";
-        setTimeout(() => ops.dragging(true), 0);
+        setTimeout(() => ops.dragging(d), 0);
       }}
-      onDragEnd={() => ops.dragging(false)}
+      onDragEnd={() => ops.dragging(null)}
       onDragOver={(e) => !past && e.dataTransfer.types.includes(DRAG_TYPE) && e.preventDefault()}
       onDrop={(e) => {
-        ops.dragging(false);
+        ops.dragging(null);
         try {
-          const f = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)) as { clientKey: string; itemId: number; tier: Tier };
+          const f = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)) as Drag;
           if (f.clientKey !== k || f.tier !== i.tier || f.itemId === i.itemId) return;
           e.preventDefault();
           e.stopPropagation();
@@ -793,49 +1061,57 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
           /* not a week item */
         }
       }}
-    >
-      {!nestedIn && !past && <span className="pw-handle" aria-hidden="true" title="Drag to reorder, or onto a block to pin it">⋮⋮</span>}
-      <span className="pw-title">
-        {i.level === "feature" ? (
-          <button type="button" className="pw-open" onClick={() => ops.feature(k, i.itemId)} title={`${stateWord}. Stories, dates and the Coop brief`}>{i.title}</button>
-        ) : (
-          <WorkLink clientKey={k} url={i.url} title={stateWord}>{i.title}</WorkLink>
-        )}
-        {i.done && <span className="pw-done" title={DONE_WORD[i.done]}>✓</span>}
-      </span>
-      {i.level === "feature" &&
-        (needs ? (
-          <span className="pw-needs">
-            <span className="pw-needs-word">Needs stories</span>
-            {!past && <DraftStories clientKey={k} item={{ id: i.itemId, title: i.title }} />}
-            {!past && <button type="button" className="link-btn pw-brief-btn" onClick={() => ops.brief(k, i.itemId)}>Coop brief</button>}
+      handle={nestedIn || past ? null : i.done ? "✓" : "⋮⋮"}
+      handleTitle="Drag to reorder, or onto a block to pin it"
+      titleText={`${i.title} · ${stateWord}`}
+      title={i.level === "feature" ? (
+        <button type="button" className="pw-open" onClick={() => ops.feature(k, i.itemId)} title={`${stateWord}. Stories, dates and the Coop brief`}>{i.title}</button>
+      ) : (
+        <WorkLink clientKey={k} url={i.url} title={stateWord}>{i.title}</WorkLink>
+      )}
+      badges={
+        <>
+          {i.done && <span className="pw-done" title={DONE_WORD[i.done]}>✓</span>}
+          {i.level === "feature" &&
+            (needs ? (
+              <span className="pw-needs">
+                <span className="pw-needs-word">Needs stories</span>
+                {!past && <DraftStories clientKey={k} item={{ id: i.itemId, title: i.title }} />}
+                {!past && <button type="button" className="link-btn pw-brief-btn" onClick={() => ops.brief(k, i.itemId)}>Coop brief</button>}
+              </span>
+            ) : (
+              feature && (
+                <button type="button" className="pw-count" onClick={() => ops.feature(k, i.itemId)}>
+                  {openStories} stor{openStories === 1 ? "y" : "ies"}
+                </button>
+              )
+            ))}
+          {i.slots.length > 0 && <span className="pw-pin" title="Pinned to this block">{i.slots.map(pinLabel).join(", ")}</span>}
+        </>
+      }
+      right={
+        i.level === "feature" ? (
+          <span className="pw-stepper" role="group" aria-label={`Blocks for ${i.title}`}>
+            <button type="button" className="mini pw-step" disabled={past || facts.blocks <= 1} aria-label="One block less" onClick={() => ops.blocks(i, facts.blocks - 1)}>−</button>
+            <button type="button" className="pw-chip-btn" disabled={past} onClick={(e) => show(e, blocksStep(facts, wops))} title={envl?.auto ? "What its stories add up to. Choose to set it" : "How many of this client's blocks it needs"}>
+              {blocksText(facts.blocks)}
+            </button>
+            <button type="button" className="mini pw-step" disabled={past || facts.blocks >= 20} aria-label="One block more" onClick={() => ops.blocks(i, facts.blocks + 1)}>+</button>
           </span>
         ) : (
-          feature && (
-            <button type="button" className="pw-count" onClick={() => ops.feature(k, i.itemId)}>
-              {openStories} stor{openStories === 1 ? "y" : "ies"}
-            </button>
-          )
-        ))}
-      {i.slots.length > 0 && <span className="pw-pin" title="Pinned to this block">{i.slots.map(pinLabel).join(", ")}</span>}
-      {i.level === "feature" ? (
-        <span className="pw-stepper" role="group" aria-label={`Blocks for ${i.title}`}>
-          <button type="button" className="mini pw-step" disabled={past || facts.blocks <= 1} aria-label="One block less" onClick={() => ops.blocks(i, facts.blocks - 1)}>−</button>
-          <button type="button" className="pw-chip-btn" disabled={past} onClick={(e) => show(e, blocksStep(facts, wops))} title={envl?.auto ? "What its stories add up to. Choose to set it" : "How many of this client's blocks it needs"}>
-            {blocksText(facts.blocks)}
+          <button type="button" className="pw-chip-btn pw-size" disabled={past} onClick={(e) => show(e, storySizeStep(facts, wops))} title="S about an hour, M a couple of hours, L about a whole block">
+            {i.size ?? "M"}
           </button>
-          <button type="button" className="mini pw-step" disabled={past || facts.blocks >= 20} aria-label="One block more" onClick={() => ops.blocks(i, facts.blocks + 1)}>+</button>
-        </span>
-      ) : (
-        <button type="button" className="pw-chip-btn pw-size" disabled={past} onClick={(e) => show(e, storySizeStep(facts, wops))} title="S about an hour, M a couple of hours, L about a whole block">
-          {i.size ?? "M"}
-        </button>
-      )}
-      {env && (
-        <button type="button" className="more" aria-label={`More for ${i.title}`} onClick={(e) => show(e, weekItemMenu(facts, wops))}>
-          ⋯
-        </button>
-      )}
+        )
+      }
+      hover={
+        env ? (
+          <button type="button" className="more" aria-label={`More for ${i.title}`} onClick={(e) => show(e, weekItemMenu(facts, wops))}>
+            ⋯
+          </button>
+        ) : undefined
+      }
+    >
       {i.level === "story" && !nestedIn && i.parentId != null && !parentListed && (
         <span className="pw-parent">
           Under {infoOf?.(i.parentId)?.feature?.title ?? `#${i.parentId}`}
@@ -862,6 +1138,6 @@ function ItemRow({ i, first, last, past, info, drafts, places, ops, env: envl, p
         </ul>
       )}
       {rest.length > 0 && <span className="pw-kids" title="Its open stories in DevOps, not on the list">{rest.map((c) => c.title).join(" · ")}</span>}
-    </li>
+    </PlanRow>
   );
 }

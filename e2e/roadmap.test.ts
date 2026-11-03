@@ -1,6 +1,6 @@
 // Step 17: Roadmap (the status board) and Plan ahead, in demo mode (fictional features covering every state).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, startDemo, weekRow, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -129,9 +129,9 @@ describe.skipIf(!CHROMIUM)("Roadmap and Plan ahead (browser, demo mode)", () => 
     await expect.poll(() => cell(page, "Store locator", "Nov 9").getAttribute("aria-label")).toContain(": 2 blocks.");
     // Plan the week (next week, Nov 9): the feature is there as a must with 2 blocks.
     await page.evaluate(() => (location.hash = "#/week/plan/2026-11-09"));
-    const row = page.locator(".pw-row", { hasText: "Store locator" });
-    await row.waitFor({ timeout: 20_000 });
+    const row = await weekRow(page, "Store locator");
     await expect.poll(() => row.locator(".pw-stepper .pw-chip-btn").first().textContent()).toBe("2 blocks");
+    await row.hover();
     await row.getByRole("button", { name: "One block less" }).first().click();
     await expect.poll(() => row.locator(".pw-stepper .pw-chip-btn").first().textContent()).toBe("1 block");
     await page.evaluate(() => (location.hash = "#/roadmap/ahead"));

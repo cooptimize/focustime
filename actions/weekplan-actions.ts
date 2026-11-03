@@ -28,6 +28,9 @@ export type WeekPlanAction =
   | "weekplan.remove"
   | "weekplan.mark_done"
   | "weekplan.headsup"
+  | "weekplan.add_draft"
+  | "weekplan.draft_tier"
+  | "weekplan.nothing"
   | "feature.brief"
   | "feature.mark_breakdown"
   | "followup.ask_priorities";
@@ -192,8 +195,19 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
           }
           if (parents.length) plan.setWeekItemParents(weekStart, parents);
         }
+        // U6: a week-list draft feature now created in DevOps becomes a week item with its tier, once DevOps shows it.
+        if (weekStart >= thisWeek) {
+          const created = new Map(plan.allDrafts().filter((d) => d.devopsId != null).map((d) => [d.id, d] as const));
+          for (const wd of plan.weekDrafts(weekStart)) {
+            const d = created.get(wd.draftId);
+            const item = d ? portfolios.find((p) => p.clientKey === d.clientKey && p.status === "ok")?.items.find((i) => i.id === d.devopsId && i.tier === "feature") : undefined;
+            if (!d || !item) continue;
+            if (!plan.weekPlan(weekStart).features.some((f) => f.clientKey === d.clientKey && f.itemId === item.id)) plan.addWeekItem({ weekStart, clientKey: d.clientKey, itemId: item.id, title: item.title, itemType: item.type, url: item.url, level: "feature", tier: wd.tier });
+            plan.setWeekDraft(weekStart, wd.draftId, null);
+          }
+        }
         const current = (k: string, id: number) => portfolios.find((p) => p.clientKey === k && p.status === "ok" && !p.fromCache)?.items.find((i) => i.id === id)?.title ?? fromWork(k, id);
-        const state: WeekPlanState = { weekStart, thisWeek, today, access: weekStart < thisWeek ? "past" : "plan", plan: withTitles(weekPlanView(plan.weekPlan(weekStart)), current), portfolios, marks: plan.breakdownMarks(), followUps, drafts: plan.drafts(), captures: plan.inboxCount() };
+        const state: WeekPlanState = { weekStart, thisWeek, today, access: weekStart < thisWeek ? "past" : "plan", plan: withTitles(weekPlanView(plan.weekPlan(weekStart)), current), portfolios, marks: plan.breakdownMarks(), followUps, drafts: plan.drafts(), captures: plan.inboxCount(), weekDrafts: plan.weekDrafts(weekStart), quiet: plan.weekQuiet(weekStart) };
         return { ok: true, data: state };
       }
       case "weekplan.set_feature": {
@@ -346,6 +360,37 @@ export async function weekPlanAction(ctx: WeekPlanContext, action: WeekPlanActio
           origin: { trigger: o.trigger === "demoted" ? "A committed must was made a nice to have" : "A committed must was taken off the week", items: [{ itemId, title: o.title.trim() }], at: ctx.now() } });
         const existing = followUp ?? plan.allFollowUps().find((l) => l.ruleKey === headsUpKey(weekStart, key, itemId)) ?? null;
         return { ok: true, data: { followUp: existing ? followUpView(plan, existing, today, () => name) : null, created: !!followUp } };
+      }
+      case "weekplan.add_draft": {
+        // U6 (D414): the type box in Plan the week. A local draft feature on the client's list (Enter a must,
+        // Shift+Enter a nice to have), shown with its Draft marker until it is created in DevOps.
+        const o = fields(input, ["weekStart", "clientKey", "title", "tier"], ["parentItemId"]);
+        const weekStart = monday(o.weekStart);
+        editable(weekStart);
+        const key = clientKey(o.clientKey);
+        const t = tier(o.tier);
+        if (typeof o.title !== "string" || !o.title.trim() || o.title.length > 200) throw new Invalid("A draft feature needs a title (up to 200 characters)");
+        const parentItemId = o.parentItemId === undefined || o.parentItemId === null ? null : id(o.parentItemId, "parentItemId");
+        const draft = plan.addDraft({ clientKey: key, parentItemId, title: o.title.trim(), size: "M", level: "feature" });
+        plan.setWeekDraft(weekStart, draft.id, t);
+        return { ok: true, data: { draft, weekDrafts: plan.weekDrafts(weekStart) } };
+      }
+      case "weekplan.draft_tier": {
+        const o = fields(input, ["weekStart", "draftId", "tier"]);
+        const weekStart = monday(o.weekStart);
+        editable(weekStart);
+        const draftId = id(o.draftId, "draftId");
+        if (!plan.weekDrafts(weekStart).some((d) => d.draftId === draftId) && o.tier === "off") return bad("That draft isn't on this week's list", 422);
+        plan.setWeekDraft(weekStart, draftId, o.tier === "off" ? null : tier(o.tier));
+        return { ok: true, data: { weekDrafts: plan.weekDrafts(weekStart) } };
+      }
+      case "weekplan.nothing": {
+        // U6: "Nothing this week" for a client counts it as planned in the header's "N of M clients planned".
+        const o = fields(input, ["weekStart", "clientKey", "on"]);
+        const weekStart = monday(o.weekStart);
+        editable(weekStart);
+        plan.setWeekQuiet(weekStart, clientKey(o.clientKey), bool(o.on, "on"));
+        return { ok: true, data: { quiet: plan.weekQuiet(weekStart) } };
       }
       case "feature.brief": {
         const o = fields(input, ["clientKey", "itemId"], ["weekStart"]);

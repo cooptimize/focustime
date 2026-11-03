@@ -96,3 +96,26 @@ export async function openSettings(page: Page): Promise<void> {
   await page.locator(".person-chip").click();
   await page.getByRole("menuitem", { name: /^Settings/ }).click();
 }
+
+/** U6: Plan the week has one client open at a time; open this one (its line's name) and return its card. */
+export async function weekClient(page: Page, name: string) {
+  const card = page.locator(`.pw-client[aria-label="${name}"]`);
+  await page.locator(".pw-client").first().waitFor({ timeout: 20_000 });
+  if (!(await card.count())) await page.locator(`.pw-line[aria-label="${name}"] .pl-line-name`).click();
+  await card.waitFor();
+  return card;
+}
+
+/** U6: the client names in Plan the week, in line order (the open one included). */
+export const weekClientNames = (page: Page) => page.locator(".pw-lines > li").evaluateAll((els) => els.map((e) => e.querySelector(".pw-client")?.getAttribute("aria-label") ?? e.getAttribute("aria-label") ?? ""));
+
+/** U6: a row on any client's list in Plan the week, opening clients in turn until one has it. */
+export async function weekRow(page: Page, text: string) {
+  const row = page.locator(".pw-client .pw-row", { hasText: text }).first();
+  await page.locator(".pw-client").first().waitFor({ timeout: 20_000 });
+  for (const name of await weekClientNames(page)) {
+    await weekClient(page, name);
+    if (await row.count()) return row;
+  }
+  throw new Error(`No row "${text}" in Plan the week`);
+}
