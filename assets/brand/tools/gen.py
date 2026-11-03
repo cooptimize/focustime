@@ -1,4 +1,4 @@
-"""Generate the Coopilot identity SVGs from measured Cooptimize geometry."""
+"""Generate the FocusTime identity SVGs from measured Cooptimize geometry."""
 import math, os
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")  # assets/brand/
 os.makedirs(OUT, exist_ok=True)
@@ -75,12 +75,12 @@ def write(name, content):
 CX, CY = 118, 118
 bent_color = ring_segments(CX, CY, "var(--brand-am)", "var(--brand-pm)", "var(--ghost)")
 bent_color += lumen(206, 103, 30, "var(--accent)", "var(--lime)", light=True, light_dir=-1, gid="beam-bent")
-write("mark-bent.svg", svg(260, 236, bent_color, "Coopilot mark, bent week",
+write("mark-bent.svg", svg(260, 236, bent_color, "FocusTime mark, bent week",
       "Eight ring segments opening right, AM above PM, inner AM segment ghosted; Lumen stands outside the opening, light pointing in."))
 
 bent_mono = ring_segments(CX, CY, "currentColor", "currentColor", "currentColor")
 bent_mono += lumen(206, 103, 30, "currentColor", "currentColor", light=False)
-write("mark-bent-mono.svg", svg(260, 236, bent_mono, "Coopilot mark, bent week, mono", "Single color form.", tokens=False))
+write("mark-bent-mono.svg", svg(260, 236, bent_mono, "FocusTime mark, bent week, mono", "Single color form.", tokens=False))
 
 # ---------- mark-week ----------
 def week(am, pm, hollow, hollow_stroke=True):
@@ -97,9 +97,9 @@ def week(am, pm, hollow, hollow_stroke=True):
     return "\n".join(out), x0*2 + 4*bw + 3*cg, y0*2 + amh + rg + pmh
 
 wk, ww, wh = week("var(--brand-am)", "var(--brand-pm)", "var(--accent)")
-write("mark-week.svg", svg(ww, wh, wk, "Coopilot mark, unrolled week", "Four columns Mon to Thu, AM over PM, Mon AM hollow."))
+write("mark-week.svg", svg(ww, wh, wk, "FocusTime mark, unrolled week", "Four columns Mon to Thu, AM over PM, Mon AM hollow."))
 wkm, _, _ = week("currentColor", "currentColor", "currentColor")
-write("mark-week-mono.svg", svg(ww, wh, wkm, "Coopilot mark, unrolled week, mono", "Single color form.", tokens=False))
+write("mark-week-mono.svg", svg(ww, wh, wkm, "FocusTime mark, unrolled week, mono", "Single color form.", tokens=False))
 
 # symbolic: 16x16 grid, pixel-aligned
 sym = []
@@ -110,7 +110,7 @@ for c in range(4):
     else:
         sym.append(f'<rect x="{x}" y="2" width="3" height="3" fill="currentColor"/>')
     sym.append(f'<rect x="{x}" y="7" width="3" height="5" fill="currentColor"/>')
-write("coopilot-symbolic.svg", svg(16, 16, "\n".join(sym), "Coopilot symbolic icon", "16 px grid, one hollow block.", tokens=False))
+write("focustime-symbolic.svg", svg(16, 16, "\n".join(sym), "FocusTime symbolic icon", "16 px grid, one hollow block.", tokens=False))
 
 # ---------- lumen ----------
 write("lumen.svg", svg(240, 120, lumen(160, 30, 60, "var(--accent)", "var(--lime)", light=True, light_dir=-1, gid="beam-lumen"),
@@ -150,13 +150,13 @@ for k, f in enumerate([0, 0.25, 0.5, 0.75, 1.0]):
     write(f"unroll-frame-{k}.svg", frames[-1])
 
 # ---------- wordmark and lockup ----------
-word = '<text x="0" y="44" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="600" font-size="48" letter-spacing="-1.2" fill="currentColor">Coopilot</text>'
-write("wordmark.svg", svg(230, 60, word, "Coopilot wordmark", "IBM Plex Sans 600, outlined to paths by tools/outline.mjs.", tokens=False))
+word = '<text x="0" y="44" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="600" font-size="48" letter-spacing="-1.2" fill="currentColor">FocusTime</text>'
+write("wordmark.svg", svg(285, 60, word, "FocusTime wordmark", "IBM Plex Sans 600, outlined to paths by tools/outline.mjs.", tokens=False))
 
 lock = f'<g transform="translate(0,6) scale(0.34)">{ring_segments(CX, CY, "var(--brand-am)", "var(--brand-pm)", "var(--ghost)", w_scale=1.2)}{lumen(206, 103, 30, "var(--accent)", "var(--lime)", light=True, gid="beam-lockup")}</g>'
-lock += '<text x="100" y="52" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="600" font-size="40" letter-spacing="-1" fill="currentColor">Coopilot</text>'
+lock += '<text x="100" y="52" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="600" font-size="40" letter-spacing="-1" fill="currentColor">FocusTime</text>'
 lock += '<text x="101" y="74" font-family="IBM Plex Sans, Inter, system-ui, sans-serif" font-weight="400" font-size="14" fill="currentColor" opacity="0.6">by Cooptimize</text>'
-write("lockup-horizontal.svg", svg(300, 92, lock, "Coopilot lockup", "Bent mark, Lumen, wordmark and by-line."))
+write("lockup-horizontal.svg", svg(346, 92, lock, "FocusTime lockup", "Bent mark, Lumen, wordmark and by-line."))
 print("ok", sorted(os.listdir(OUT)))
 
 # ---------- favicon (step 17.5): mark-week in a square, dark by default, light under prefers-color-scheme ----------
