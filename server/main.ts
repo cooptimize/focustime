@@ -13,6 +13,7 @@ import { randomBytes } from "node:crypto";
 import { readAppSettings, redirectUris } from "./appconfig.ts";
 import { createEntraSignIn } from "./auth/entra.ts";
 import { createAccountStore } from "../store/accounts.ts";
+import { claimUnowned, unownedRows } from "../store/claim.ts";
 import { join, resolve } from "node:path";
 import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
 import type { MicrosoftAccount } from "../actions/account.ts";
@@ -170,12 +171,10 @@ const loadConfig = async () => {
   return r;
 };
 await loadConfig().catch(() => null);
-let plan: PlanStore | undefined;
 let planDb: DatabaseSync | undefined;
 const planPath = host.kind === "local" ? host.paths.planDb : ":memory:";
 try {
   planDb = openPlanDb({ path: planPath, now: () => zonedNow(timeZone), log, files: host.files.store });
-  plan = planStoreOn(planDb, { path: planPath, now: () => zonedNow(timeZone), files: host.files.store });
 } catch {
   log({ source: "plan", op: "open", kind: "failed" });
 }
@@ -184,6 +183,14 @@ if (!planDb) {
   process.exit(1);
 }
 const accounts = createAccountStore(planDb, instantNow);
+const db = planDb;
+/** A2: each person's plan store on the one database (every statement scoped to them, store/scope.ts). */
+const plans = new Map<string, PlanStore>();
+const planFor = (userId: string): PlanStore => {
+  let p = plans.get(userId);
+  if (!p) plans.set(userId, (p = planStoreOn(db, { userId, path: planPath, now: () => zonedNow(timeZone), files: host.files.store })));
+  return p;
+};
 
 // Microsoft sign-in (A2): the "FocusTime" web registration, single tenant, confidential client.
 const entra = app.entra
@@ -225,8 +232,18 @@ const server = createApp({
   auth: {
     microsoft: entra,
     signedIn: async (u) => {
+      const known = accounts.users.get(u.oid);
+      if (known?.deletedAt) return { refused: "deleted" };
       const { created } = accounts.users.signedIn({ id: u.oid, tenantId: u.tid, upn: u.upn, displayName: u.name, email: u.email });
       log({ source: "auth", op: "user", kind: created ? "created" : "returning" });
+      // The first sign-in after migration 24: the store's existing rows go to the person they were made by.
+      if (unownedRows(db) > 0) {
+        const cfg = await host.config.load().catch(() => null);
+        const myEmail = cfg?.parsed.ok ? cfg.parsed.config.dataverse.myEmail : "";
+        const r = claimUnowned(db, { oid: u.oid, tid: u.tid, email: u.email, upn: u.upn }, myEmail);
+        log({ source: "plan", op: "claim", kind: r.claimed ? "claimed" : r.reason, count: r.rows });
+      }
+      runtimeFor(u.oid);
       return { userId: u.oid };
     },
     demo: app.demo ? async () => {
@@ -245,13 +262,21 @@ const server = createApp({
   // The launcher's request (capture), else the view a clicked notification asked for (step 15.5), taken once.
   takeOpenRequest: async (s) => (s.demo ? null : ((await host.launch.takeOpenRequest()) ?? takeRoute())),
   reopen: reopenWindow,
-  ctx: (s) => (s.demo ? demoFor(s.userId) : liveCtx),
+  ctx: (s) => (s.demo ? demoFor(s.userId) : runtimeFor(s.userId)),
 });
 setInterval(() => void accounts.sessions.sweep(), 15 * 60_000).unref();
-/** The plan store the timer ticks on. */
-const activePlan = () => plan;
-const demoCtx: ActionContext | null = null;
-const liveCtx: ActionContext = {
+/**
+ * A2: one person's runtime: their action context (their plan store; config, sources and secrets are still this
+ * machine's until the settings and secrets steps) and their background ticks (reminders, the focus timer, Teams status),
+ * started once per process for each person who signs in, and at start for everyone with a store (so a running timer
+ * ends on time after a restart without anyone signing in).
+ */
+const runtimes = new Map<string, ActionContext>();
+function runtimeFor(userId: string): ActionContext {
+  const known = runtimes.get(userId);
+  if (known) return known;
+  const plan = planFor(userId);
+  const liveCtx: ActionContext = {
   renameNote: renamed.note,
     demo: demoControl(false),
     loadConfig,
@@ -262,7 +287,7 @@ const liveCtx: ActionContext = {
     saveSystemUserId: (id) => host.config.saveSystemUserId(id),
     writeConfig: (edit) => host.config.write(edit),
     now: () => instantNow().toString(),
-    ...(plan ? { plan } : {}),
+    plan,
     links: host.links,
     media,
     secrets: { state: (a) => host.secrets.state(a), set: (a, v) => host.secrets.setApp(a, v) },
@@ -273,7 +298,11 @@ const liveCtx: ActionContext = {
     photoCache: host.photos,
     azure: azureFor,
     exportPlan: (json) => host.files.exportPlan(json),
-};
+  };
+  runtimes.set(userId, liveCtx);
+  startTicks(plan, liveCtx);
+  return liveCtx;
+}
 
 /**
  * Step 15.5: clicking a notification opens FocusTime on its view. The route waits here (validated, 2 minutes) for the
@@ -302,8 +331,7 @@ function reopenWindow(): Promise<boolean> {
 // Notifications (step 15.5): every reminder, the timer, my VM, follow-ups due and expiring secrets go through one
 // notifier, which applies Settings > Notifications (switches, quiet hours, holding during focus) and routes clicks.
 // Checked every 30 s (the timer every 5 s), so day rollover is handled while running for days.
-if (plan) {
-  const store = plan;
+function startTicks(store: PlanStore, liveCtx: ActionContext): void {
   const configOrNull = async () => {
     const r = await loadConfig();
     return r.parsed.ok ? r.parsed.config : null;
@@ -542,9 +570,7 @@ if (plan) {
       if (st.ok && (st.data as VmStatus).prompt) await send(notices.vmOff(today, (st.data as VmStatus).vm?.name ?? "Your VM", at));
     }
   };
-  // No reminders while demo mode is on (D272): the demo shouldn't pop real nudges.
   const tick = async () => {
-    if (demoCtx) return;
     await notifier.refresh().catch(() => null);
     await dayReminders();
     await workdayNotices().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
@@ -554,19 +580,17 @@ if (plan) {
   void tick();
 
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.
-  const timerCtx = () => ({ plan: activePlan() ?? store, config: configOrNull, now: () => instantNow().toString(), media });
+  const timerCtx = () => ({ plan: store, config: configOrNull, now: () => instantNow().toString(), media });
   const timerTick = () =>
     checkTimer({
-      plan: activePlan() ?? store,
+      plan: store,
       now: () => instantNow(),
       endSound: async () => (await configOrNull())?.plan.endSound ?? false,
       // Through the notifier (its switch); the buttons come back here, where the session is checked.
       notify: (n) =>
-        demoCtx
-          ? Promise.resolve(null)
-          : new Promise((resolve) => {
-              void notifier.offer(n, (key) => resolve(key || null)).then((g) => g !== "send" && resolve(null), () => resolve(null));
-            }),
+        new Promise((resolve) => {
+          void notifier.offer(n, (key) => resolve(key || null)).then((g) => g !== "send" && resolve(null), () => resolve(null));
+        }),
       sound: () => host.media.endSound(),
       act: (action) => timerAction(timerCtx(), action, {}),
       // Step 10: a session that ends on its own pauses media too (when Settings > Focus asks for it).
@@ -576,7 +600,7 @@ if (plan) {
       .catch(() => log({ source: "plan", op: "timer", kind: "failed" }));
   // Held notifications go out once the focus session is over (collapsed into one when there are several).
   const flushHeld = async () => {
-    if (demoCtx || !notifier.held().length || focusRunning()) return;
+    if (!notifier.held().length || focusRunning()) return;
     await notifier.refresh();
     const n = await notifier.flush();
     if (n) log({ source: "plan", op: "notify", kind: "held_delivered", count: n });
@@ -585,7 +609,6 @@ if (plan) {
   // decides whether that is a live call) and recompute today's warning points.
   let lastCalendar: number | null = null;
   const warningsTick = () => {
-    if (demoCtx) return void (lastCalendar = null);
     const s = store.getState<TimerState>(TIMER_KEY);
     const t = Date.now();
     if (!s?.runningSince) return void (lastCalendar = null);
@@ -603,14 +626,15 @@ if (plan) {
     if (notifier.onScreen().length) void notifier.sweep().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
     // Step 16.3: my Teams status follows focus (set, refreshed on +15, cleared however the session ends, even after a
     // restart). Only while a timer exists or a status FocusTime set is still to clear.
-    for (const c of demoCtx ? [liveCtx, demoCtx] : [liveCtx]) {
-      if (!c.plan || (!c.plan.getState(TIMER_KEY) && !c.plan.accountState<TeamsStatusState>(TEAMS_STATUS_KEY)?.set)) continue;
-      void presenceContext(c).then(syncTeamsStatus).catch(() => log({ source: "outlook", op: "teams_status", kind: "failed" }));
-    }
+    if (store.getState(TIMER_KEY) || store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY)?.set)
+      void presenceContext(liveCtx).then(syncTeamsStatus).catch(() => log({ source: "outlook", op: "teams_status", kind: "failed" }));
   }, 5_000).unref();
   void timerTick();
 }
 
+
+// Everyone who has signed in before gets their ticks back at start (a timer that was running ends on time).
+for (const u of accounts.users.all()) if (!u.deletedAt) runtimeFor(u.id);
 
 server.on("error", (e: NodeJS.ErrnoException) => {
   if (e.code === "EADDRINUSE") {

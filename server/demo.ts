@@ -6,16 +6,16 @@ import type { ActionContext } from "../actions/dispatch.ts";
 import { dispatch } from "../actions/dispatch.ts";
 import { createDemoSources } from "../sources/demo/sources.ts";
 import { DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
-import { createPlanStore } from "../store/plan-store.ts";
+import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
 import { mondayOf } from "../week/dates.ts";
 import { createDemoAzure, DEMO_VM_ID } from "../sources/demo/azure.ts";
 
 export type DemoControl = { on: boolean; set: (on: boolean) => Promise<void> };
 
-export function createDemoContext(opts: { now: () => string; demo: DemoControl }): ActionContext {
+export function createDemoContext(opts: { now: () => string; demo: DemoControl; /** A2 tests: a store on a shared database. */ plan?: PlanStore }): ActionContext {
   let text = DEMO_CONFIG;
   const sources = createDemoSources(opts.now);
-  const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ) });
+  const plan = opts.plan ?? createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ) });
   // Step 15.4: a fictional signed-in person and VM, simulated (no Azure calls).
   const demoAzure = createDemoAzure();
   return {

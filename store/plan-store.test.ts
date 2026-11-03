@@ -4,7 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { createPlanStore, MIGRATIONS } from "./plan-store.ts";
+import { giveUnowned } from "./claim.ts";
+import { MIGRATIONS, openPlanDb, planStoreOn, SOLO_USER, type PlanDbOptions } from "./plan-store.ts";
+
+/** A2: opens (and migrates) a store; rows from before migration 24 go to the test's one person, as at a first sign-in. */
+function createPlanStore(o: PlanDbOptions) {
+  const db = openPlanDb(o);
+  giveUnowned(db, SOLO_USER);
+  return planStoreOn(db, { ...o, userId: SOLO_USER });
+}
 
 const NY = "America/New_York";
 let clock = Temporal.ZonedDateTime.from("2026-11-02T08:01:00-05:00[America/New_York]");

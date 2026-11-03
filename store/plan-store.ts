@@ -610,10 +610,532 @@ export const MIGRATIONS: readonly string[] = [
      user_id TEXT,
      created_at TEXT NOT NULL
    );`,
+  // 24: A2, one plan store for everyone. Every plan table gets user_id (the Entra object id of the person the row
+  // belongs to), first in every primary and unique key; picks reference their day plan by (user_id, date). Existing
+  // rows are kept with user_id '' (no one's yet): the first sign-in that proves it is the store's owner claims them
+  // (server/claim.ts). The store adds `user_id = <the session's person>` to every statement (store/scope.ts).
+  `${FK_OFF}
+   DROP INDEX flex_date;
+   DROP INDEX focus_pick;
+   DROP INDEX follow_ups_rule;
+   DROP INDEX invites_start;
+   DROP INDEX picks_date;
+   DROP INDEX timeboxes_date;
+   DROP INDEX unavailable_date;
+   CREATE TABLE account_state_v24 (
+        user_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, key)
+      );
+   INSERT INTO account_state_v24 (user_id, key, value, updated_at) SELECT '', key, value, updated_at FROM account_state;
+   CREATE TABLE azure_write_log_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        at TEXT NOT NULL,
+        op TEXT NOT NULL CHECK (op IN ('start', 'deallocate', 'shutdown_change', 'shutdown_restore')),
+        vm_id TEXT NOT NULL,
+        vm_name TEXT NOT NULL,
+        before TEXT,
+        after TEXT,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'failed', 'timed_out', 'refused')),
+        message TEXT,
+        auto INTEGER NOT NULL DEFAULT 0,
+        attempts INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT NOT NULL
+      );
+   INSERT INTO azure_write_log_v24 (user_id, id, at, op, vm_id, vm_name, before, after, status, message, auto, attempts, updated_at) SELECT '', id, at, op, vm_id, vm_name, before, after, status, message, auto, attempts, updated_at FROM azure_write_log;
+   CREATE TABLE borrowed_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        pick_id INTEGER NOT NULL REFERENCES picks(id),
+        from_pick_id INTEGER NOT NULL REFERENCES picks(id),
+        client_key TEXT NOT NULL,
+        title TEXT NOT NULL,
+        date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        minutes INTEGER NOT NULL CHECK (minutes > 0),
+        payback TEXT NOT NULL CHECK (payback IN ('tonight','friday','day')),
+        payback_date TEXT NOT NULL,
+        payback_half TEXT NOT NULL CHECK (payback_half IN ('AM','PM','EVE')),
+        created_at TEXT NOT NULL,
+        paid_at TEXT,
+        paid_by TEXT CHECK (paid_by IN ('picks','me'))
+      );
+   INSERT INTO borrowed_v24 (user_id, id, pick_id, from_pick_id, client_key, title, date, minutes, payback, payback_date, payback_half, created_at, paid_at, paid_by) SELECT '', id, pick_id, from_pick_id, client_key, title, date, minutes, payback, payback_date, payback_half, created_at, paid_at, paid_by FROM borrowed;
+   CREATE TABLE breakdown_marks_v24 (
+        user_id TEXT NOT NULL,
+        client_key TEXT NOT NULL,
+        item_id INTEGER NOT NULL,
+        marked_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, client_key, item_id)
+      );
+   INSERT INTO breakdown_marks_v24 (user_id, client_key, item_id, marked_at) SELECT '', client_key, item_id, marked_at FROM breakdown_marks;
+   CREATE TABLE captures_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        text TEXT NOT NULL CHECK (length(text) BETWEEN 1 AND 1000),
+        client_key TEXT,
+        created_at TEXT NOT NULL,
+        routed_at TEXT,
+        routed_as TEXT CHECK (routed_as IN ('follow_up', 'draft', 'draft_feature', 'left_off', 'dismissed')),
+        routed_id INTEGER,
+        CHECK ((routed_at IS NULL) = (routed_as IS NULL))
+      );
+   INSERT INTO captures_v24 (user_id, id, text, client_key, created_at, routed_at, routed_as, routed_id) SELECT '', id, text, client_key, created_at, routed_at, routed_as, routed_id FROM captures;
+   CREATE TABLE day_plans_v24 (
+        user_id TEXT NOT NULL,
+        date TEXT CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]') NOT NULL,
+        committed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        closed_out_at TEXT,
+        PRIMARY KEY (user_id, date)
+      );
+   INSERT INTO day_plans_v24 (user_id, date, committed_at, created_at, updated_at, closed_out_at) SELECT '', date, committed_at, created_at, updated_at, closed_out_at FROM day_plans;
+   CREATE TABLE dedupe_log_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        at TEXT NOT NULL,
+        table_name TEXT NOT NULL,
+        removed_id INTEGER NOT NULL,
+        kept_id INTEGER NOT NULL,
+        week_start TEXT,
+        client_key TEXT,
+        item_id INTEGER
+      );
+   INSERT INTO dedupe_log_v24 (user_id, id, at, table_name, removed_id, kept_id, week_start, client_key, item_id) SELECT '', id, at, table_name, removed_id, kept_id, week_start, client_key, item_id FROM dedupe_log;
+   CREATE TABLE delivery_snapshots_v24 (
+        user_id TEXT NOT NULL,
+        client_key TEXT NOT NULL,
+        item_id INTEGER NOT NULL CHECK (item_id > 0),
+        date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        done INTEGER NOT NULL CHECK (done >= 0),
+        open INTEGER NOT NULL CHECK (open >= 0),
+        PRIMARY KEY (user_id, client_key, item_id, date)
+      );
+   INSERT INTO delivery_snapshots_v24 (user_id, client_key, item_id, date, done, open) SELECT '', client_key, item_id, date, done, open FROM delivery_snapshots;
+   CREATE TABLE devops_identities_v24 (
+        user_id TEXT NOT NULL,
+        client_key TEXT NOT NULL,
+        org TEXT NOT NULL,
+        identity_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        validated_at TEXT NOT NULL,
+        expires TEXT CHECK (expires IS NULL OR expires GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        PRIMARY KEY (user_id, client_key)
+      );
+   INSERT INTO devops_identities_v24 (user_id, client_key, org, identity_id, name, email, validated_at, expires) SELECT '', client_key, org, identity_id, name, email, validated_at, expires FROM devops_identities;
+   CREATE TABLE devops_write_log_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        at TEXT NOT NULL,
+        client_key TEXT NOT NULL,
+        org TEXT NOT NULL,
+        project TEXT NOT NULL,
+        op TEXT NOT NULL CHECK (op IN ('state', 'comment', 'create', 'target_date', 'undo_state', 'undo_comment', 'undo_create', 'undo_target_date')),
+        item_id INTEGER,
+        parent_id INTEGER,
+        title TEXT NOT NULL,
+        identity TEXT NOT NULL,
+        before TEXT NOT NULL,
+        after TEXT NOT NULL,
+        ops TEXT,
+        rev_before INTEGER,
+        rev_after INTEGER,
+        comment_id INTEGER,
+        draft_id INTEGER,
+        pick_ids TEXT NOT NULL DEFAULT '[]',
+        follow_up_id INTEGER,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'unconfirmed', 'failed', 'refused')),
+        message TEXT,
+        undo_of INTEGER REFERENCES devops_write_log(id),
+        undone_by INTEGER REFERENCES devops_write_log(id),
+        attempts INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT NOT NULL
+      );
+   INSERT INTO devops_write_log_v24 (user_id, id, at, client_key, org, project, op, item_id, parent_id, title, identity, before, after, ops, rev_before, rev_after, comment_id, draft_id, pick_ids, follow_up_id, status, message, undo_of, undone_by, attempts, updated_at) SELECT '', id, at, client_key, org, project, op, item_id, parent_id, title, identity, before, after, ops, rev_before, rev_after, comment_id, draft_id, pick_ids, follow_up_id, status, message, undo_of, undone_by, attempts, updated_at FROM devops_write_log;
+   CREATE TABLE draft_stories_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        client_key TEXT NOT NULL,
+        parent_item_id INTEGER,
+        title TEXT NOT NULL,
+        size TEXT NOT NULL CHECK (size IN ('S','M','L')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        level TEXT NOT NULL DEFAULT 'story' CHECK (level IN ('story', 'feature')),
+        devops_id INTEGER,
+        devops_url TEXT,
+        description TEXT,
+        acceptance TEXT,
+        start_date TEXT,
+        target_date TEXT
+      );
+   INSERT INTO draft_stories_v24 (user_id, id, client_key, parent_item_id, title, size, created_at, updated_at, level, devops_id, devops_url, description, acceptance, start_date, target_date) SELECT '', id, client_key, parent_item_id, title, size, created_at, updated_at, level, devops_id, devops_url, description, acceptance, start_date, target_date FROM draft_stories;
+   CREATE TABLE flex_sessions_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        client_key TEXT NOT NULL,
+        start_at TEXT NOT NULL,
+        end_at TEXT NOT NULL,
+        item_id INTEGER,
+        item_title TEXT,
+        item_url TEXT,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+   INSERT INTO flex_sessions_v24 (user_id, id, date, client_key, start_at, end_at, item_id, item_title, item_url, note, created_at, updated_at) SELECT '', id, date, client_key, start_at, end_at, item_id, item_title, item_url, note, created_at, updated_at FROM flex_sessions;
+   CREATE TABLE focus_log_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        pick_id INTEGER,
+        label TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT NOT NULL,
+        seconds INTEGER NOT NULL CHECK (seconds >= 0)
+      );
+   INSERT INTO focus_log_v24 (user_id, id, pick_id, label, started_at, ended_at, seconds) SELECT '', id, pick_id, label, started_at, ended_at, seconds FROM focus_log;
+   CREATE TABLE follow_ups_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        kind TEXT NOT NULL,
+        client_key TEXT,
+        what TEXT NOT NULL,
+        channel TEXT,
+        due TEXT,
+        source_kind TEXT,
+        source_id INTEGER,
+        opened_at TEXT NOT NULL,
+        closed_at TEXT,
+        close_note TEXT,
+        who TEXT,
+        item_id INTEGER,
+        rule_key TEXT,
+        ref_at TEXT,
+        draft TEXT,
+        detail TEXT,
+        closed_by TEXT,
+        outcome TEXT CHECK (outcome IN ('done', 'not_needed')),
+        close_how TEXT CHECK (close_how IN ('teams', 'email', 'devops', 'call')),
+        snoozed_until TEXT CHECK (snoozed_until IS NULL OR snoozed_until GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        origin TEXT,
+        UNIQUE (user_id, source_kind, source_id)
+      );
+   INSERT INTO follow_ups_v24 (user_id, id, kind, client_key, what, channel, due, source_kind, source_id, opened_at, closed_at, close_note, who, item_id, rule_key, ref_at, draft, detail, closed_by, outcome, close_how, snoozed_until, origin) SELECT '', id, kind, client_key, what, channel, due, source_kind, source_id, opened_at, closed_at, close_note, who, item_id, rule_key, ref_at, draft, detail, closed_by, outcome, close_how, snoozed_until, origin FROM follow_ups;
+   CREATE TABLE invites_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        uid TEXT NOT NULL,
+        client_key TEXT NOT NULL,
+        item_id INTEGER,
+        pick_id INTEGER,
+        timebox_id INTEGER,
+        title TEXT NOT NULL,
+        url TEXT,
+        start_at TEXT NOT NULL,
+        end_at TEXT NOT NULL,
+        attendees TEXT NOT NULL,
+        teams INTEGER NOT NULL CHECK (teams IN (0, 1)),
+        note TEXT,
+        event_id TEXT,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'cancelled')),
+        follow_up_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (user_id, uid)
+      );
+   INSERT INTO invites_v24 (user_id, id, uid, client_key, item_id, pick_id, timebox_id, title, url, start_at, end_at, attendees, teams, note, event_id, status, follow_up_id, created_at, updated_at) SELECT '', id, uid, client_key, item_id, pick_id, timebox_id, title, url, start_at, end_at, attendees, teams, note, event_id, status, follow_up_id, created_at, updated_at FROM invites;
+   CREATE TABLE kv_v24 (
+        user_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, key)
+      );
+   INSERT INTO kv_v24 (user_id, key, value, updated_at) SELECT '', key, value, updated_at FROM kv;
+   CREATE TABLE markers_v24 (
+        user_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        date TEXT NOT NULL,
+        at TEXT NOT NULL,
+        PRIMARY KEY (user_id, kind, date)
+      );
+   INSERT INTO markers_v24 (user_id, kind, date, at) SELECT '', kind, date, at FROM markers;
+   CREATE TABLE outlook_events_v24 (
+        user_id TEXT NOT NULL,
+        uid TEXT NOT NULL,
+        timebox_id INTEGER,
+        event_id TEXT NOT NULL,
+        fields TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deleted_at TEXT,
+        PRIMARY KEY (user_id, uid)
+      );
+   INSERT INTO outlook_events_v24 (user_id, uid, timebox_id, event_id, fields, created_at, updated_at, deleted_at) SELECT '', uid, timebox_id, event_id, fields, created_at, updated_at, deleted_at FROM outlook_events;
+   CREATE TABLE picks_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        date TEXT NOT NULL,
+        half TEXT NOT NULL CHECK (half IN ('AM','PM','EVE')),
+        client_key TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('item','draft','intention')),
+        item_id INTEGER,
+        draft_id INTEGER REFERENCES draft_stories(id),
+        title TEXT NOT NULL,
+        item_type TEXT,
+        item_url TEXT,
+        size TEXT NOT NULL CHECK (size IN ('S','M','L')),
+        status TEXT NOT NULL CHECK (status IN ('planned','done','moved','dropped')),
+        carried_from INTEGER REFERENCES picks(id),
+        notes TEXT,
+        position INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        follow_up_id INTEGER REFERENCES follow_ups(id),
+        FOREIGN KEY (user_id, date) REFERENCES day_plans(user_id, date),
+        CHECK ((kind = 'item') = (item_id IS NOT NULL)),
+        CHECK ((kind = 'draft') = (draft_id IS NOT NULL))
+      );
+   INSERT INTO picks_v24 (user_id, id, date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id) SELECT '', id, date, half, client_key, kind, item_id, draft_id, title, item_type, item_url, size, status, carried_from, notes, position, created_at, updated_at, follow_up_id FROM picks;
+   CREATE TABLE resume_notes_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        client_key TEXT NOT NULL,
+        date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        note TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (user_id, client_key, date)
+      );
+   INSERT INTO resume_notes_v24 (user_id, id, client_key, date, note, created_at, updated_at) SELECT '', id, client_key, date, note, created_at, updated_at FROM resume_notes;
+   CREATE TABLE roadmap_dates_v24 (
+        user_id TEXT NOT NULL,
+        client_key TEXT NOT NULL,
+        item_id INTEGER NOT NULL CHECK (item_id > 0),
+        start_date TEXT NOT NULL CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        end_date TEXT NOT NULL CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND end_date >= start_date),
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, client_key, item_id)
+      );
+   INSERT INTO roadmap_dates_v24 (user_id, client_key, item_id, start_date, end_date, updated_at) SELECT '', client_key, item_id, start_date, end_date, updated_at FROM roadmap_dates;
+   CREATE TABLE teams_status_log_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        at TEXT NOT NULL,
+        op TEXT NOT NULL CHECK (op IN ('set', 'clear', 'left')),
+        status TEXT,
+        minutes INTEGER,
+        result TEXT NOT NULL CHECK (result IN ('done', 'failed')),
+        message TEXT
+      );
+   INSERT INTO teams_status_log_v24 (user_id, id, at, op, status, minutes, result, message) SELECT '', id, at, op, status, minutes, result, message FROM teams_status_log;
+   CREATE TABLE timeboxes_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        uid TEXT NOT NULL,
+        date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        client_key TEXT NOT NULL,
+        pick_id INTEGER REFERENCES picks(id) ON DELETE SET NULL,
+        item_id INTEGER,
+        title TEXT NOT NULL,
+        url TEXT,
+        start_at TEXT NOT NULL,
+        end_at TEXT NOT NULL,
+        outlook INTEGER NOT NULL DEFAULT 0 CHECK (outlook IN (0, 1)),
+        removed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        show_as TEXT NOT NULL DEFAULT 'busy' CHECK (show_as IN ('busy', 'tentative', 'free', 'oof', 'workingElsewhere')),
+        outlook_note TEXT,
+        conflict TEXT,
+        UNIQUE (user_id, uid)
+      );
+   INSERT INTO timeboxes_v24 (user_id, id, uid, date, client_key, pick_id, item_id, title, url, start_at, end_at, outlook, removed_at, created_at, updated_at, show_as, outlook_note, conflict) SELECT '', id, uid, date, client_key, pick_id, item_id, title, url, start_at, end_at, outlook, removed_at, created_at, updated_at, show_as, outlook_note, conflict FROM timeboxes;
+   CREATE TABLE unavailable_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        title TEXT NOT NULL,
+        start_at TEXT NOT NULL,
+        end_at TEXT NOT NULL,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+   INSERT INTO unavailable_v24 (user_id, id, date, title, start_at, end_at, note, created_at, updated_at) SELECT '', id, date, title, start_at, end_at, note, created_at, updated_at FROM unavailable;
+   CREATE TABLE week_drafts_v24 (
+        user_id TEXT NOT NULL,
+        week_start TEXT NOT NULL CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        draft_id INTEGER NOT NULL REFERENCES draft_stories(id) ON DELETE CASCADE,
+        tier TEXT NOT NULL CHECK (tier IN ('must', 'nice')),
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, week_start, draft_id)
+      );
+   INSERT INTO week_drafts_v24 (user_id, week_start, draft_id, tier, created_at) SELECT '', week_start, draft_id, tier, created_at FROM week_drafts;
+   CREATE TABLE week_feature_slots_v24 (
+        user_id TEXT NOT NULL,
+        feature_id INTEGER NOT NULL REFERENCES week_features(id) ON DELETE CASCADE,
+        date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        half TEXT NOT NULL CHECK (half IN ('AM','PM')),
+        PRIMARY KEY (user_id, feature_id, date, half)
+      );
+   INSERT INTO week_feature_slots_v24 (user_id, feature_id, date, half) SELECT '', feature_id, date, half FROM week_feature_slots;
+   CREATE TABLE week_features_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        week_start TEXT NOT NULL CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        client_key TEXT NOT NULL,
+        item_id INTEGER NOT NULL,
+        level TEXT NOT NULL DEFAULT 'feature' CHECK (level IN ('feature','story')),
+        tier TEXT NOT NULL DEFAULT 'must' CHECK (tier IN ('must','nice')),
+        title TEXT NOT NULL,
+        item_type TEXT,
+        url TEXT,
+        blocks INTEGER CHECK (blocks IS NULL OR (blocks BETWEEN 1 AND 20 AND level = 'feature')),
+        size TEXT CHECK (size IS NULL OR (size IN ('S','M','L') AND level = 'story')),
+        parent_id INTEGER,
+        position INTEGER,
+        done_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (user_id, week_start, client_key, item_id)
+      );
+   INSERT INTO week_features_v24 (user_id, id, week_start, client_key, item_id, level, tier, title, item_type, url, blocks, size, parent_id, position, done_at, created_at, updated_at) SELECT '', id, week_start, client_key, item_id, level, tier, title, item_type, url, blocks, size, parent_id, position, done_at, created_at, updated_at FROM week_features;
+   CREATE TABLE week_plans_v24 (
+        user_id TEXT NOT NULL,
+        week_start TEXT CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]') NOT NULL,
+        committed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, week_start)
+      );
+   INSERT INTO week_plans_v24 (user_id, week_start, committed_at, created_at, updated_at) SELECT '', week_start, committed_at, created_at, updated_at FROM week_plans;
+   CREATE TABLE week_quiet_v24 (
+        user_id TEXT NOT NULL,
+        week_start TEXT NOT NULL CHECK (week_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        client_key TEXT NOT NULL,
+        marked_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, week_start, client_key)
+      );
+   INSERT INTO week_quiet_v24 (user_id, week_start, client_key, marked_at) SELECT '', week_start, client_key, marked_at FROM week_quiet;
+   CREATE TABLE write_log_v24 (
+        user_id TEXT NOT NULL,
+        id INTEGER PRIMARY KEY,
+        at TEXT NOT NULL,
+        system TEXT NOT NULL CHECK (system IN ('outlook')),
+        op TEXT NOT NULL CHECK (op IN ('create', 'update', 'delete')),
+        kind TEXT NOT NULL DEFAULT 'timebox' CHECK (kind IN ('timebox', 'event', 'invite', 'sync', 'rsvp')),
+        uid TEXT NOT NULL,
+        event_id TEXT,
+        account TEXT,
+        calendar TEXT,
+        before TEXT,
+        after TEXT,
+        local_before TEXT,
+        local_after TEXT,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'unconfirmed', 'failed', 'refused')),
+        message TEXT,
+        auto INTEGER NOT NULL DEFAULT 0,
+        undo_of INTEGER REFERENCES write_log(id),
+        undone_by INTEGER REFERENCES write_log(id),
+        attempts INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT NOT NULL
+      );
+   INSERT INTO write_log_v24 (user_id, id, at, system, op, kind, uid, event_id, account, calendar, before, after, local_before, local_after, status, message, auto, undo_of, undone_by, attempts, updated_at) SELECT '', id, at, system, op, kind, uid, event_id, account, calendar, before, after, local_before, local_after, status, message, auto, undo_of, undone_by, attempts, updated_at FROM write_log;
+   DROP TABLE account_state;
+   DROP TABLE azure_write_log;
+   DROP TABLE borrowed;
+   DROP TABLE breakdown_marks;
+   DROP TABLE captures;
+   DROP TABLE day_plans;
+   DROP TABLE dedupe_log;
+   DROP TABLE delivery_snapshots;
+   DROP TABLE devops_identities;
+   DROP TABLE devops_write_log;
+   DROP TABLE draft_stories;
+   DROP TABLE flex_sessions;
+   DROP TABLE focus_log;
+   DROP TABLE follow_ups;
+   DROP TABLE invites;
+   DROP TABLE kv;
+   DROP TABLE markers;
+   DROP TABLE outlook_events;
+   DROP TABLE picks;
+   DROP TABLE resume_notes;
+   DROP TABLE roadmap_dates;
+   DROP TABLE teams_status_log;
+   DROP TABLE timeboxes;
+   DROP TABLE unavailable;
+   DROP TABLE week_drafts;
+   DROP TABLE week_feature_slots;
+   DROP TABLE week_features;
+   DROP TABLE week_plans;
+   DROP TABLE week_quiet;
+   DROP TABLE write_log;
+   ALTER TABLE account_state_v24 RENAME TO account_state;
+   ALTER TABLE azure_write_log_v24 RENAME TO azure_write_log;
+   ALTER TABLE borrowed_v24 RENAME TO borrowed;
+   ALTER TABLE breakdown_marks_v24 RENAME TO breakdown_marks;
+   ALTER TABLE captures_v24 RENAME TO captures;
+   ALTER TABLE day_plans_v24 RENAME TO day_plans;
+   ALTER TABLE dedupe_log_v24 RENAME TO dedupe_log;
+   ALTER TABLE delivery_snapshots_v24 RENAME TO delivery_snapshots;
+   ALTER TABLE devops_identities_v24 RENAME TO devops_identities;
+   ALTER TABLE devops_write_log_v24 RENAME TO devops_write_log;
+   ALTER TABLE draft_stories_v24 RENAME TO draft_stories;
+   ALTER TABLE flex_sessions_v24 RENAME TO flex_sessions;
+   ALTER TABLE focus_log_v24 RENAME TO focus_log;
+   ALTER TABLE follow_ups_v24 RENAME TO follow_ups;
+   ALTER TABLE invites_v24 RENAME TO invites;
+   ALTER TABLE kv_v24 RENAME TO kv;
+   ALTER TABLE markers_v24 RENAME TO markers;
+   ALTER TABLE outlook_events_v24 RENAME TO outlook_events;
+   ALTER TABLE picks_v24 RENAME TO picks;
+   ALTER TABLE resume_notes_v24 RENAME TO resume_notes;
+   ALTER TABLE roadmap_dates_v24 RENAME TO roadmap_dates;
+   ALTER TABLE teams_status_log_v24 RENAME TO teams_status_log;
+   ALTER TABLE timeboxes_v24 RENAME TO timeboxes;
+   ALTER TABLE unavailable_v24 RENAME TO unavailable;
+   ALTER TABLE week_drafts_v24 RENAME TO week_drafts;
+   ALTER TABLE week_feature_slots_v24 RENAME TO week_feature_slots;
+   ALTER TABLE week_features_v24 RENAME TO week_features;
+   ALTER TABLE week_plans_v24 RENAME TO week_plans;
+   ALTER TABLE week_quiet_v24 RENAME TO week_quiet;
+   ALTER TABLE write_log_v24 RENAME TO write_log;
+   CREATE INDEX flex_date ON flex_sessions(user_id, date);
+   CREATE INDEX focus_pick ON focus_log(user_id, pick_id);
+   CREATE UNIQUE INDEX follow_ups_rule ON follow_ups(user_id, rule_key);
+   CREATE INDEX invites_start ON invites(user_id, start_at);
+   CREATE INDEX picks_date ON picks(user_id, date, half, position);
+   CREATE INDEX timeboxes_date ON timeboxes(user_id, date);
+   CREATE INDEX unavailable_date ON unavailable(user_id, date);
+   CREATE INDEX azure_write_log_user ON azure_write_log(user_id);
+   CREATE INDEX borrowed_user ON borrowed(user_id);
+   CREATE INDEX captures_user ON captures(user_id);
+   CREATE INDEX dedupe_log_user ON dedupe_log(user_id);
+   CREATE INDEX devops_write_log_user ON devops_write_log(user_id);
+   CREATE INDEX draft_stories_user ON draft_stories(user_id);
+   CREATE INDEX flex_sessions_user ON flex_sessions(user_id);
+   CREATE INDEX focus_log_user ON focus_log(user_id);
+   CREATE INDEX follow_ups_user ON follow_ups(user_id);
+   CREATE INDEX invites_user ON invites(user_id);
+   CREATE INDEX picks_user ON picks(user_id);
+   CREATE INDEX resume_notes_user ON resume_notes(user_id);
+   CREATE INDEX teams_status_log_user ON teams_status_log(user_id);
+   CREATE INDEX timeboxes_user ON timeboxes(user_id);
+   CREATE INDEX unavailable_user ON unavailable(user_id);
+   CREATE INDEX week_features_user ON week_features(user_id);
+   CREATE INDEX write_log_user ON write_log(user_id);`,
 ];
 
 import type { AzureWriteEntry, TeamsStatusEntry } from "../actions/account-types.ts";
 import type { Logger } from "../log/logger.ts";
+import { scopedDb } from "./scope.ts";
 export type { TeamsStatusEntry };
 const toTeamsStatus = (r: Row): TeamsStatusEntry => ({
   id: r.id as number, at: r.at as string, op: r.op as TeamsStatusEntry["op"], status: (r.status as TeamsStatusEntry["status"]) ?? null,
@@ -878,12 +1400,17 @@ export function openPlanDb(opts: PlanDbOptions): DatabaseSync {
 }
 
 /** A plan store on its own database (tests, demo sessions and scripts): opened, migrated, closed with the store. */
-export function createPlanStore(opts: PlanDbOptions) {
-  return planStoreOn(openPlanDb(opts), opts);
+export function createPlanStore(opts: PlanDbOptions & { userId?: string }) {
+  return planStoreOn(openPlanDb(opts), { ...opts, userId: opts.userId ?? SOLO_USER });
 }
 
+/** The person a store opened on its own belongs to when none is named (tests, scripts, the demo's own database). */
+export const SOLO_USER = "solo";
+
 /** The plan store on an open database. `close` closes the database (so only the database's one owner calls it). */
-export function planStoreOn(db: DatabaseSync, opts: { now: () => Temporal.ZonedDateTime; path?: string; files?: StoreFiles }) {
+export function planStoreOn(raw: DatabaseSync, opts: { now: () => Temporal.ZonedDateTime; userId: string; path?: string; files?: StoreFiles }) {
+  // A2: every statement below is this person's only (store/scope.ts); nothing here names user_id itself.
+  const db = scopedDb(raw, opts.userId);
 
   const stamp = (): ZonedStamp => opts.now().toString({ smallestUnit: "second" });
   const tx = <T>(fn: () => T): T => {
@@ -1475,13 +2002,13 @@ export function planStoreOn(db: DatabaseSync, opts: { now: () => Temporal.ZonedD
       let bak: string | null = null;
       if (opts.path && opts.path !== ":memory:") {
         bak = `${opts.path}.bak-reset-${opts.now().toInstant().toString().replace(/[^0-9TZ]/g, "")}`;
-        db.prepare("VACUUM INTO ?").run(bak);
+        raw.prepare("VACUUM INTO ?").run(bak);
         opts.files?.secure(bak);
       }
       tx(() => {
         // FocusTime's Outlook events and the audit log stay: they are what lets it find, undo and remove its own events.
-        db.exec("UPDATE outlook_events SET timebox_id = NULL");
-        for (const t of RESET_TABLES) db.exec(`DELETE FROM ${t}`);
+        db.prepare("UPDATE outlook_events SET timebox_id = NULL").run();
+        for (const t of RESET_TABLES) db.prepare(`DELETE FROM ${t}`).run();
       });
       return bak;
     },
@@ -1853,11 +2380,11 @@ export function planStoreOn(db: DatabaseSync, opts: { now: () => Temporal.ZonedD
     writeLog(limit = 100): WriteEntry[] {
       return (db.prepare("SELECT * FROM write_log ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map(toWrite);
     },
-    schemaVersion: () => schemaVersion(db),
+    schemaVersion: () => schemaVersion(raw),
     exportJson() {
       return {
         exportedAt: stamp(),
-        schemaVersion: schemaVersion(db),
+        schemaVersion: schemaVersion(raw),
         dayPlans: (db.prepare("SELECT * FROM day_plans ORDER BY date").all() as Row[]).map(toPlan),
         picks: (db.prepare(`${PICK_SELECT} ORDER BY p.date, p.half, p.position`).all() as Row[]).map(toPick),
         draftStories: (db.prepare("SELECT * FROM draft_stories ORDER BY id").all() as Row[]).map(toDraft),
