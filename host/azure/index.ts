@@ -25,6 +25,9 @@ const noPaths: HostPaths = Object.defineProperties({} as HostPaths, Object.fromE
 
 export function createAzureHost(p: AzureHostParts): Host {
   let demo = false;
+  // Shown notices not yet closed, by handle (each resolves its show() when closed).
+  const open = new Map<string, () => void>();
+  let seq = 0;
   return {
     kind: "azure",
     secrets: p.secrets,
@@ -41,12 +44,20 @@ export function createAzureHost(p: AzureHostParts): Host {
     },
     loopback: { listen: async () => desktopOnly("Desktop sign-in")() },
     notifications: {
-      show: async (n, shown) => {
-        shown?.(p.inbox.add(n));
-        // A click in the page routes through the app (A6), never back through here.
-        return null;
+      // P1: a notice stays shown until FocusTime closes it (its occasion was handled, Q91), like a desktop one that
+      // waits to be clicked, so the notifier can close it; a click in the page routes through the app, never back
+      // through here. The in-app list and push are fed by the person's notifier (server/ticks.ts).
+      show: (n, shown) =>
+        new Promise<string | null>((resolve) => {
+          const h = `${p.inbox.add(n)}-${++seq}`;
+          open.set(h, () => resolve(null));
+          shown?.(h);
+        }),
+      close: (h) => {
+        open.get(h)?.();
+        open.delete(h);
+        p.inbox.remove(h.replace(/-\d+$/, ""));
       },
-      close: (h) => p.inbox.remove(h),
       line: () => {},
     },
     links: { open: async () => "client" },

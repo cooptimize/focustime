@@ -12,7 +12,7 @@
 export const USER_TABLES: readonly string[] = [
   "account_state", "azure_write_log", "borrowed", "breakdown_marks", "captures", "day_plans", "dedupe_log",
   "delivery_snapshots", "devops_identities", "devops_write_log", "draft_stories", "flex_sessions", "focus_log",
-  "follow_ups", "invites", "kv", "markers", "outlook_events", "picks", "resume_notes", "roadmap_dates", "setup_state",
+  "follow_ups", "invites", "kv", "markers", "notices", "outlook_events", "picks", "push_devices", "resume_notes", "roadmap_dates", "setup_state",
   "teams_status_log", "timeboxes", "unavailable", "user_secrets", "user_settings", "week_drafts", "week_feature_slots", "week_features",
   "week_plans", "week_quiet", "write_log",
 ];

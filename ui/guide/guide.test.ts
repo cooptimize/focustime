@@ -20,11 +20,11 @@ describe("the Guide's shortcuts are ui/keys.ts's", () => {
       expect(keysFor(card.keys, card.all), card.label).toEqual(rows.flatMap((r) => ("all" in card && card.all ? r!.keys : [r!.keys[0]!])));
     }
   });
-  it("the cards say what the keys do (the tabs are 1 2 3 4, capture N, check-in M, close out E, plan the week W)", () => {
+  it("the cards say what the keys do (the tabs are 1 2 3 4, capture N or C, check-in M, close out E, plan the week W)", () => {
     const shown = Object.fromEntries(C.SHORTCUTS.cards.map((c) => [c.label, keysFor(c.keys, c.all)]));
     expect(shown["Today, Week, Roadmap, Inbox"]).toEqual(["1", "2", "3", "4"]);
     expect(shown["Plan this view"]).toEqual(["P"]);
-    expect(shown["Capture a thought"]).toEqual(["N"]);
+    expect(shown["Capture a thought"]).toEqual(["N", "C"]);
     expect(shown["Check-in"]).toEqual(["M"]);
     expect(shown["Close out"]).toEqual(["E"]);
     expect(shown["Plan the week"]).toEqual(["W"]);

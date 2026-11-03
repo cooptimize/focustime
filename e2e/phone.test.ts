@@ -1,5 +1,6 @@
 // P1: the phone layout (under 600 px) in the browser, demo mode, clock pinned to Mon Nov 2, 9:30 AM. The layout
-// (bottom bar, no hover-only controls, planning read-only) and the main path: Today, start focus, mark done, capture.
+// (bottom bar, no hover-only controls, planning read-only) and the main path: Today, start focus, mark done, capture,
+// then ⋯ › Notifications.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
@@ -88,6 +89,22 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     await sheet.locator("input").first().fill("Ask Jordan about the invoice");
     await page.keyboard.press("Enter");
     await expect.poll(async () => JSON.stringify((await call(page, "capture.load", {})).data)).toContain("Ask Jordan about the invoice");
+    await page.keyboard.press("Escape").catch(() => undefined);
+
+    // Part B: this morning's notifications: ⋯ has its dot; in the list the new one keeps its mark while it's open.
+    await open(page, "#/today");
+    await page.locator(".bottom-bar .bb-dot").waitFor();
+    await page.locator(".bottom-bar .bb-tab", { hasText: "⋯" }).click();
+    await page.getByRole("menuitem", { name: /Notifications/ }).click();
+    const panel = page.locator(".notices-panel");
+    await panel.waitFor();
+    expect(await panel.locator(".notice-row").count()).toBeGreaterThanOrEqual(2);
+    expect(await panel.locator(".notice-row.unread .nr-title").first().textContent()).toContain("Follow-ups due");
+    await panel.getByRole("button", { name: "Close" }).click();
+    // Read now: ⋯ no longer counts them (its dot stays while the Inbox has something).
+    expect((await call(page, "notices.list", {})).data.unread).toBe(0);
+    await page.locator(".bottom-bar .bb-tab", { hasText: "⋯" }).click();
+    expect(await page.getByRole("menuitem", { name: /Notifications/ }).textContent()).not.toContain("new");
     expect(errors).toEqual([]);
   }, T);
 });

@@ -3639,3 +3639,41 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .app.phone .set-tab { white-space: nowrap; flex: none; }
   .app.phone .set-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---- P1 Part B: in-app notifications, install, offline, push devices ---- */
+.top-more { position: relative; }
+.top-dot { position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.notices-panel { max-height: 70vh; }
+.notice-list { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; }
+.notice-row button { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 16px; border: 0; border-radius: 0; background: none; color: var(--text); font-size: var(--fs-3); }
+.notice-row button:hover:not(:disabled) { background: var(--selected); }
+.notice-row + .notice-row button { border-top: 1px solid var(--border); }
+.nr-title { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+.notice-row:not(.unread) .nr-title { font-weight: 400; color: var(--text-muted); }
+.nr-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+.nr-body { color: var(--text-muted); }
+.nr-when { font-size: var(--fs-2); }
+.notice-empty { padding: 16px; margin: 0; font-size: var(--fs-3); }
+.notice-toasts { position: fixed; z-index: 70; right: 16px; bottom: 44px; display: grid; gap: 8px; width: min(360px, calc(100vw - 32px)); }
+.notice-toast { display: flex; align-items: flex-start; gap: 4px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow-pop); }
+.nt-main { flex: 1; display: grid; gap: 2px; text-align: left; padding: 10px 12px; border: 0; background: none; color: var(--text); font-size: var(--fs-3); }
+.nt-title { font-weight: 600; }
+.nt-body { color: var(--text-muted); }
+.nt-x { margin: 6px 6px 0 0; }
+.install-howto { max-width: 440px; }
+.howto-steps { margin: 0; padding: 14px 16px 4px 36px; display: grid; gap: 10px; font-size: var(--fs-3); }
+.howto-icon { display: inline-block; padding: 0 4px; border: 1px solid var(--border); border-radius: 4px; }
+.howto-foot { margin: 0; padding: 8px 16px 16px; font-size: var(--fs-2); }
+.offline-line { position: fixed; z-index: 90; top: 0; left: 0; right: 0; padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px; text-align: center; font-size: var(--fs-3); font-weight: 500; background: var(--watch); color: var(--bg); }
+.set-push { display: grid; gap: 8px; margin-bottom: 12px; }
+.push-devices { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.push-devices li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.pd-name { font-weight: 500; }
+.push-devices .mini { margin-left: auto; }
+
+@media (max-width: 599.98px) {
+  .notices-panel, .install-howto { width: 100%; max-width: none; max-height: none; height: 100dvh; border-radius: 0; border: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  .command-backdrop:has(.notices-panel), .command-backdrop:has(.install-howto) { padding-top: 0; }
+  .notice-row button { min-height: var(--tap); }
+  .notice-toasts { left: 16px; right: 16px; width: auto; bottom: calc(64px + env(safe-area-inset-bottom)); }
+}

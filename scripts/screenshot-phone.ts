@@ -1,7 +1,8 @@
 // P1 phone screenshots: Playwright's iPhone 15 (WebKit) and Pixel 7 (Chromium) emulation, dark and light, on a
 // throwaway demo server (e2e/harness.ts: fictional data, its own temp folder and port, the clock pinned to Monday
 // Nov 2, 2026 9:30 AM). Each run plans the demo Monday (two stories per block, committed) so Today has picks, then
-// shoots Today, Week, a card's detail panel, Capture, Plan the week read-only and Today with a running timer.
+// shoots Today, Week, a card's detail panel, Capture, Plan the week read-only and Today with a running timer, then
+// (Part B) the unread dot, ⋯ › Notifications, the iPhone install how-to, Settings › Notifications and a toast.
 // Usage: node scripts/screenshot-phone.ts <outDir> [today,week,...]
 import { mkdirSync } from "node:fs";
 import { devices, type Page } from "playwright-core";
@@ -115,6 +116,31 @@ try {
       await page.waitForTimeout(800);
       await go("#/today");
       await shot("today-timer");
+      // Part B: ⋯ › Notifications (the demo's two from this morning), the unread dot first.
+      await page.locator(".phone-now button", { hasText: "Done" }).click().catch(() => undefined);
+      await go("#/today");
+      await shot("unread-dot");
+      await page.locator(".bottom-bar .bb-tab", { hasText: "⋯" }).click();
+      await page.getByRole("menuitem", { name: /Notifications/ }).click();
+      await page.waitForSelector(".notices-panel");
+      await shot("notifications");
+      await page.keyboard.press("Escape");
+      // Install app: on iPhone the how-to (Safari has no install button).
+      if (run.device === "iPhone 15") {
+        await page.locator(".bottom-bar .bb-tab", { hasText: "⋯" }).click();
+        await page.getByRole("menuitem", { name: /Install app/ }).click();
+        await page.waitForSelector(".install-howto");
+        await shot("install-howto");
+        await page.keyboard.press("Escape");
+      }
+      // Settings › Notifications: push per device, Show details; a test lands as a toast and in the list.
+      await go("#/settings/notifications");
+      await page.waitForSelector(".set-push");
+      await page.locator(".set-push").scrollIntoViewIfNeeded();
+      await shot("settings-notifications");
+      await page.getByRole("button", { name: "Send a test notification" }).click();
+      await page.waitForSelector(".notice-toast", { timeout: 10_000 });
+      await shot("toast");
       await ctx.close();
     }
   }

@@ -65,12 +65,15 @@ import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
 import { useLayout, usePhone } from "./viewport.ts";
-import { BottomBar, PhoneReadOnly, type BottomTab } from "./Phone.tsx";
+import { BottomBar, InstallHowTo, PhoneReadOnly, type BottomTab } from "./Phone.tsx";
 import { commandList, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
 import { WeekItems } from "./ItemLookup.tsx";
 import { NoHoursPrompt } from "./NoHoursPrompt.tsx";
 import { KeyLegend } from "./KeyLegend.tsx";
+import { NoticesPanel, NoticeToasts, useNotices } from "./Notices.tsx";
+import type { InAppNotice } from "../plan/push.ts";
+import { promptInstall, takeLaunchRoute, useInstall } from "./pwa.ts";
 import { Guide, TourLink } from "./guide/Guide.tsx";
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
@@ -130,6 +133,12 @@ export function App() {
   const [setupAt, setSetupAt] = useState<SetupStep | null>(null);
   /** S1 (D452): ⋯ › About, which build this is. */
   const [aboutOpen, setAboutOpen] = useState(false);
+  // P1: ⋯ › Notifications (the in-app list), its toasts, and Install app's iPhone how-to.
+  const notices = useNotices(true);
+  /** The list as it was when opened (what was new keeps its dot while the panel is open). */
+  const [noticesOpen, setNoticesOpen] = useState<InAppNotice[] | null>(null);
+  const [installHowTo, setInstallHowTo] = useState(false);
+  const install = useInstall();
   const loadSetup = useCallback(
     (openIt: boolean): Promise<SetupView | null> =>
       call<SetupView>("setup.load", {}).then(
@@ -213,6 +222,11 @@ export function App() {
     void call("ui.tour_offer", { done: true }).catch(() => {});
   }, [showTour]);
   const openGuide = useCallback((chapter: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "guide", chapter } })), [go]);
+  // P1: opening the list marks every notice read (the dot goes).
+  const readAllNotices = notices.readAll;
+  const openNotices = useCallback(() => setNoticesOpen(readAllNotices()), [readAllNotices]);
+  /** P1: Install app, where the browser can install (Chromium's prompt) or on iPhone (the how-to); gone once installed. */
+  const installItem = install === "prompt" ? [{ id: "install", label: "Install app", run: () => void promptInstall() }] : install === "ios" ? [{ id: "install", label: "Install app", run: () => setInstallHowTo(true) }] : [];
   const setFocusOpen = useCallback((on: boolean) => go((l) => ({ nav: on ? l.nav : l.nav, overlay: on ? { kind: "focus" } : null })), [go]);
   /** Bumped when something outside Plan the week (the command menu) changes its plan, so it reloads. */
   const [planWeekVersion, setPlanWeekVersion] = useState(0);
@@ -879,6 +893,9 @@ export function App() {
     }
     const check = () => void takeOpenRequest().then((v) => (v === "capture" ? setCaptureOpen(true) : v ? openRouteRef.current(v) : undefined));
     check();
+    // P1: a tapped push that opened the app asked for a view.
+    const launched = takeLaunchRoute();
+    if (launched) openRouteRef.current(launched);
     const onFocus = () => check();
     window.addEventListener("focus", onFocus);
     const id = setInterval(() => document.hasFocus() && check(), 2000);
@@ -1019,7 +1036,8 @@ export function App() {
       } else if ((k === "m" || k === "M") && free && settingsAt === null) {
         e.preventDefault();
         goNav(checkInOpen ? navOf.today() : navOf.today("checkin"));
-      } else if ((e.key === "n" || e.key === "N") && !typing && !captureOpen) {
+      } else if ((e.key === "n" || e.key === "N" || ((e.key === "c" || e.key === "C") && !pd && !e.ctrlKey && !e.metaKey && !e.altKey)) && !typing && !captureOpen) {
+        // P1: C opens Capture too, everywhere but Today › Plan, where C is still Done.
         e.preventDefault();
         setCaptureOpen(true);
       } else if ((e.key === "f" || e.key === "F") && !typing) {
@@ -1203,6 +1221,7 @@ export function App() {
       borrowed: data.borrowed,
       resetPlan: () => setSettingsAt("data"),
       openVm: () => window.dispatchEvent(new Event(VM_MENU_EVENT)),
+      openNotifications: () => openNotices(),
       openSettings: (section) => {
         setDetailsOpen(false);
         setSettingsAt(SETTINGS_SECTIONS.some(([id]) => id === section) ? (section as SettingsSectionId) : "you");
@@ -1258,7 +1277,7 @@ export function App() {
     return (
       <>
         {opening}
-        {state.kind === "failed" && <div className="center-note"><p>{state.message}. Is <code>npm start</code> still running?</p></div>}
+        {state.kind === "failed" && <div className="center-note"><p>Nothing to show without a connection. Reload when you’re back online.</p></div>}
       </>
     );
   }
@@ -1418,6 +1437,7 @@ export function App() {
             }}
           >
             ⋯
+            {notices.unread > 0 && <span className="top-dot" aria-label={`${notices.unread} new notifications`} />}
           </button>
           </>}
           <PersonChip
@@ -1716,7 +1736,7 @@ export function App() {
         <BottomBar
           current={captureOpen ? "capture" : phoneMoreAt ? "more" : settingsAt !== null || guideAt || focusOpen ? null : nav.tab === "today" || nav.tab === "week" ? nav.tab : "more"}
           inboxCount={inboxCount}
-          dot={false}
+          dot={notices.unread > 0}
           onTab={(t: BottomTab, e) => {
             if (t === "capture") return setCaptureOpen(true);
             if (t === "more") {
@@ -1734,10 +1754,12 @@ export function App() {
             title: "More",
             items: [
               { id: "inbox", label: "Inbox", ...(inboxCount > 0 ? { hint: String(inboxCount) } : {}), run: () => openTab("inbox") },
+              { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
               { id: "roadmap", label: "Roadmap", run: () => openTab("roadmap") },
               ...(data.timer ? [{ id: "focus", label: "Focus screen", run: () => setView("focus") }] : [{ id: "focus", label: "Start focus", run: () => setTimerMenuAt(phoneMoreAt) }]),
               { id: "settings", label: "Settings", run: () => setSettingsAt("you") },
               { id: "guide", label: "Guide", run: () => openGuide() },
+              ...installItem,
               { id: "about", label: "About", run: () => setAboutOpen(true) },
             ],
           }}
@@ -1745,6 +1767,9 @@ export function App() {
         />
       )}
       {cmdOpen && <CommandMenu commands={commandList(env)} onClose={() => setCmdOpen(false)} />}
+      {noticesOpen && <NoticesPanel items={noticesOpen} onClose={() => setNoticesOpen(null)} onOpen={(r) => (setNoticesOpen(null), openRouteRef.current(r))} />}
+      <NoticeToasts toasts={notices.toasts} onDismiss={notices.dismiss} onOpen={(n) => (notices.dismiss(n.id), n.route && openRouteRef.current(n.route))} />
+      {installHowTo && <InstallHowTo onClose={() => setInstallHowTo(false)} />}
       {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}
       {moreAt && (
         <PopupMenu
@@ -1752,9 +1777,11 @@ export function App() {
           step={{
             title: "More",
             items: [
+              { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
               { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
+              ...installItem,
               { id: "about", label: "About", run: () => setAboutOpen(true) },
             ],
           }}
