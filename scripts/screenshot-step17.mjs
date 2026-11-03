@@ -7,7 +7,7 @@ import { join } from "node:path";
 const [runtime, out, scheme, size, ...shots] = process.argv.slice(2);
 const [w, h] = size.split("x").map(Number);
 mkdirSync(out, { recursive: true });
-const launch = JSON.parse(readFileSync(join(runtime, "coopilot", "launch.json"), "utf8")).url;
+const launch = JSON.parse(readFileSync(join(runtime, "focustime", "launch.json"), "utf8")).url;
 const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--disable-gpu"] });
 const page = await browser.newPage({ viewport: { width: w, height: h }, colorScheme: scheme, deviceScaleFactor: 1 });
 const errors = [];
@@ -18,7 +18,7 @@ await page.waitForSelector(".topbar", { timeout: 60000 });
 await post("demo.set", { on: false });
 await post("demo.set", { on: true });
 await post("ui.set_theme", { theme: scheme === "light" ? "cooptimize-light" : "cooptimize-dark" });
-await page.evaluate(() => { localStorage.setItem("coopilot.hint.flow", "dismissed"); localStorage.setItem("coopilot.hint.picktime", "1"); });
+await page.evaluate(() => { localStorage.setItem("focustime.hint.flow", "dismissed"); localStorage.setItem("focustime.hint.picktime", "1"); });
 await page.reload();
 await page.waitForSelector(".demo-tag", { timeout: 30000 });
 for (const s of shots) {

@@ -1,4 +1,4 @@
-// Open the Coopilot app window for a running server (the systemd service or npm start).
+// Open the FocusTime app window for a running server (the systemd service or npm start).
 // Waits up to 60 s for the server's private launch file, checks the server answers, then starts Chromium.
 // The launch URL holds the per-launch token, so it is never printed.
 import { spawn } from "node:child_process";
@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const launchFile = join(process.env.XDG_RUNTIME_DIR || tmpdir(), "coopilot", "launch.json");
+const launchFile = join(process.env.XDG_RUNTIME_DIR || tmpdir(), "focustime", "launch.json");
 const deadline = Date.now() + 60_000;
 
 async function ready(): Promise<string | null> {
@@ -25,7 +25,7 @@ async function ready(): Promise<string | null> {
 let url: string | null = null;
 while (!(url = await ready())) {
   if (Date.now() > deadline) {
-    console.error("Coopilot server is not running. Start it with: systemctl --user start coopilot (or npm start)");
+    console.error("FocusTime server is not running. Start it with: systemctl --user start focustime (or npm start)");
     process.exit(1);
   }
   await new Promise((r) => setTimeout(r, 1000));

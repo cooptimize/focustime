@@ -1,7 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Coopilot
-Comment=Open the Coopilot week planner window after login
-Exec=/home/tanner/.local/bin/coopilot-open
-Terminal=false
-NoDisplay=true

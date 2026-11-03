@@ -1,32 +1,32 @@
 #!/bin/bash
-# Open Coopilot, or focus its window if one is already open. One launch path for the launcher,
+# Open FocusTime, or focus its window if one is already open. One launch path for the launcher,
 # the key binding and login autostart.
 #
-#   coopilot-open           start the service if needed, wait for it, then launch or focus the window
-#   coopilot-open --capture same, then the window opens Quick capture (step 9)
-#   coopilot-open --window  (used by the step above) launch the app window
+#   focustime-open           start the service if needed, wait for it, then launch or focus the window
+#   focustime-open --capture same, then the window opens Quick capture (step 9)
+#   focustime-open --window  (used by the step above) launch the app window
 #
 # The launch link holds the per-launch token. It is read from the server's private file
-# ($XDG_RUNTIME_DIR/coopilot/launch.json, mode 0600) and handed straight to the browser.
+# ($XDG_RUNTIME_DIR/focustime/launch.json, mode 0600) and handed straight to the browser.
 # It is never printed, logged or passed through eval.
 #
-# --capture leaves a one-shot request file ($XDG_RUNTIME_DIR/coopilot/open-request, mode 0600) holding only the
+# --capture leaves a one-shot request file ($XDG_RUNTIME_DIR/focustime/open-request, mode 0600) holding only the
 # word "capture". The window takes it (POST /api/open-request) when it loads or gains focus. No token is involved.
 set -euo pipefail
 
-LAUNCH_FILE="${XDG_RUNTIME_DIR:-/tmp}/coopilot/launch.json"
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/coopilot/browser"
+LAUNCH_FILE="${XDG_RUNTIME_DIR:-/tmp}/focustime/launch.json"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/focustime/browser"
 # Chromium names an --app window after its host and profile, and ignores --class for it. The
 # dedicated data directory always uses profile "Default", so the class is stable: chrome-127.0.0.1__-Default.
-WINDOW_PATTERN='^(coopilot|chrome-127\.0\.0\.1__-default)$'
+WINDOW_PATTERN='^(focustime|chrome-127\.0\.0\.1__-default)$'
 WAIT_SECONDS=60
 # Which server the open window was launched for. After a service restart the window's token is stale,
 # so that window is replaced instead of focused.
-WINDOW_FILE="${XDG_RUNTIME_DIR:-/tmp}/coopilot/window-server-pid"
+WINDOW_FILE="${XDG_RUNTIME_DIR:-/tmp}/focustime/window-server-pid"
 
 fail() {
-  echo "coopilot-open: $1" >&2
-  command -v notify-send >/dev/null && notify-send -a Coopilot -i coopilot "Coopilot" "$1" || true
+  echo "focustime-open: $1" >&2
+  command -v notify-send >/dev/null && notify-send -a FocusTime -i focustime "FocusTime" "$1" || true
   exit 1
 }
 
@@ -49,7 +49,7 @@ read_link() {
 wait_for_link() {
   local deadline=$((SECONDS + WAIT_SECONDS))
   until read_link; do
-    ((SECONDS < deadline)) || fail "Coopilot did not start. Check: systemctl --user status coopilot"
+    ((SECONDS < deadline)) || fail "FocusTime did not start. Check: systemctl --user status focustime"
     sleep 1
   done
 }
@@ -70,8 +70,8 @@ elif [[ -n ${1:-} ]]; then
   fail "Unknown option: $1 (use --capture, or nothing)"
 fi
 
-if ! systemctl --user is-active --quiet coopilot.service; then
-  systemctl --user start coopilot.service || fail "Could not start the Coopilot service. Check: systemctl --user status coopilot"
+if ! systemctl --user is-active --quiet focustime.service; then
+  systemctl --user start focustime.service || fail "Could not start the FocusTime service. Check: systemctl --user status focustime"
 fi
 LINK=""
 wait_for_link
@@ -85,7 +85,7 @@ if ((CAPTURE)); then
     tmp=$(mktemp "$REQUEST_DIR/open-request.XXXXXX")
     printf 'capture\n' >"$tmp"
     mv -f "$tmp" "$REQUEST_DIR/open-request"
-  ) || fail "Could not ask Coopilot to open Quick capture"
+  ) || fail "Could not ask FocusTime to open Quick capture"
 fi
 
 window_address() {
@@ -102,7 +102,7 @@ if [[ -n $address && $(cat "$WINDOW_FILE" 2>/dev/null) != "$SERVER_PID" ]]; then
   done
 fi
 
-# Focus the window titled exactly "Coopilot" or with that class, or launch it. (A plain "coopilot"
+# Focus the window titled exactly "FocusTime" or with that class, or launch it. (A plain "focustime"
 # would also match a terminal titled after the project.) The launch command is a fixed
 # string, so nothing from the launch file reaches eval inside omarchy-launch-or-focus.
 exec omarchy-launch-or-focus "$WINDOW_PATTERN" "$(printf '%q' "$(readlink -f "$0")") --window"

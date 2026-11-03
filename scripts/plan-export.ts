@@ -1,5 +1,5 @@
 // Export the local plan store to JSON. Usage: node scripts/plan-export.ts [out.json]   (stdout without a file)
-// Reads only Coopilot's own plan; contains no tokens or secrets.
+// Reads only FocusTime's own plan; contains no tokens or secrets.
 import { writeFileSync } from "node:fs";
 import { planDbPath } from "../config/load.ts";
 import { createPlanStore } from "../store/plan-store.ts";

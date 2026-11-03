@@ -1,7 +1,7 @@
 #!/bin/sh
-# Coopilot's icons in the user's hicolor theme (step 17.5), the name the launcher entry (Icon=coopilot) and every
-# notification (-i coopilot) use. Freedesktop Icon Theme paths:
-#   $XDG_DATA_HOME/icons/hicolor/<size>x<size>/apps/coopilot.png and hicolor/symbolic/apps/coopilot-symbolic.svg
+# FocusTime's icons in the user's hicolor theme (step 17.5), the name the launcher entry (Icon=focustime) and every
+# notification (-i focustime) use. Freedesktop Icon Theme paths:
+#   $XDG_DATA_HOME/icons/hicolor/<size>x<size>/apps/focustime.png and hicolor/symbolic/apps/focustime-symbolic.svg
 # Usage: system/install-icons.sh [install|uninstall]   (install is the default)
 # Touches only those files and the user folder's icon cache; nothing system-wide, no other .desktop file.
 set -eu
@@ -18,17 +18,17 @@ refresh() {
 case "${1:-install}" in
   install)
     for s in $sizes; do
-      install -D -m 644 "$src/icons/coopilot-$s.png" "$theme/${s}x${s}/apps/coopilot.png"
+      install -D -m 644 "$src/icons/focustime-$s.png" "$theme/${s}x${s}/apps/focustime.png"
     done
-    install -D -m 644 "$src/coopilot-symbolic.svg" "$theme/symbolic/apps/coopilot-symbolic.svg"
+    install -D -m 644 "$src/focustime-symbolic.svg" "$theme/symbolic/apps/focustime-symbolic.svg"
     refresh
-    echo "Coopilot icons installed in $theme"
+    echo "FocusTime icons installed in $theme"
     ;;
   uninstall)
-    for s in $sizes; do rm -f "$theme/${s}x${s}/apps/coopilot.png"; done
-    rm -f "$theme/symbolic/apps/coopilot-symbolic.svg"
+    for s in $sizes; do rm -f "$theme/${s}x${s}/apps/focustime.png"; done
+    rm -f "$theme/symbolic/apps/focustime-symbolic.svg"
     refresh
-    echo "Coopilot icons removed from $theme"
+    echo "FocusTime icons removed from $theme"
     ;;
   *) echo "usage: $0 [install|uninstall]" >&2; exit 2 ;;
 esac

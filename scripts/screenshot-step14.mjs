@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const launchUrl = JSON.parse(readFileSync(join(process.env.XDG_RUNTIME_DIR || tmpdir(), "coopilot", "launch.json"), "utf8")).url;
+const launchUrl = JSON.parse(readFileSync(join(process.env.XDG_RUNTIME_DIR || tmpdir(), "focustime", "launch.json"), "utf8")).url;
 const out = process.argv[2] ?? "screenshots";
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--disable-gpu"] });

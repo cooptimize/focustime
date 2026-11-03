@@ -1,4 +1,4 @@
-// Browser tests (step 15.2): a throwaway Coopilot server in demo mode (fictional data, in-memory store, nothing
+// Browser tests (step 15.2): a throwaway FocusTime server in demo mode (fictional data, in-memory store, nothing
 // fetched), its own XDG dirs and port, the clock pinned to Monday Nov 2, 2026 9:30 AM, the UI through Vite in the
 // server (no build). Chromium from the system (playwright-core, already a dev dependency). Never touches the real
 // config, plan store, cache or the running service.
@@ -25,17 +25,17 @@ const freePort = () =>
 export type Harness = { url: string; browser: Browser; stop: () => Promise<void> };
 
 export async function startDemo(): Promise<Harness> {
-  const dir = await mkdtemp(join(tmpdir(), "coopilot-e2e-"));
+  const dir = await mkdtemp(join(tmpdir(), "focustime-e2e-"));
   const env = { ...process.env, XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"), XDG_CACHE_HOME: join(dir, "cache"), XDG_RUNTIME_DIR: join(dir, "run") };
-  await mkdir(join(dir, "data", "coopilot"), { recursive: true });
-  await writeFile(join(dir, "data", "coopilot", "demo-mode"), "on\n");
+  await mkdir(join(dir, "data", "focustime"), { recursive: true });
+  await writeFile(join(dir, "data", "focustime", "demo-mode"), "on\n");
   const port = await freePort();
   const root = resolve(import.meta.dirname, "..");
   const child: ChildProcess = spawn(process.execPath, ["server/main.ts", "--dev", "--no-open", "--no-reopen", "--headless", "--port", String(port), "--clock", NOW], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
   let out = "";
   child.stdout?.on("data", (b) => (out += b));
   child.stderr?.on("data", (b) => (out += b));
-  const launch = join(dir, "run", "coopilot", "launch.json");
+  const launch = join(dir, "run", "focustime", "launch.json");
   for (let i = 0; i < 300 && !existsSync(launch); i++) {
     if (child.exitCode !== null) throw new Error(`server exited: ${out.slice(-500)}`);
     await new Promise((r) => setTimeout(r, 100));
@@ -65,8 +65,8 @@ export async function freshPage(h: Harness, viewport = { width: 1920, height: 10
   for (const on of [false, true])
     await page.evaluate((on) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "demo.set", input: { on } }) }), on);
   await page.evaluate(() => {
-    localStorage.setItem("coopilot.hint.flow", "dismissed");
-    localStorage.setItem("coopilot.hint.picktime", "1");
+    localStorage.setItem("focustime.hint.flow", "dismissed");
+    localStorage.setItem("focustime.hint.picktime", "1");
   });
   await page.reload();
   await page.waitForSelector(".demo-tag", { timeout: 30_000 });

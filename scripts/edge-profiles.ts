@@ -18,7 +18,7 @@ if (!edge) {
 }
 console.log(`Install: ${edge.install} (${edge.desktopFile})`);
 console.log(`Launch command: ${JSON.stringify(edge.command)}`);
-// Through uwsm-app, Edge runs in its own unit, so restarting the Coopilot service never closes it.
+// Through uwsm-app, Edge runs in its own unit, so restarting the FocusTime service never closes it.
 if (read("/usr/bin/uwsm-app") !== null) console.log(`For config: command = ${JSON.stringify(["uwsm-app", "--", ...edge.command])}`);
 console.log(`Profiles in ${edge.profilesDir}:`);
 for (const p of profilesFromLocalState(read(`${edge.profilesDir}/Local State`) ?? "")) console.log(`  ${JSON.stringify(p.directory)}  ${p.name}`);

@@ -14,10 +14,10 @@ function runner(result: RunResult | Error) {
 }
 
 describe("keyring", () => {
-  it("looks up service coopilot by account and returns the secret without a trailing newline", async () => {
+  it("looks up service focustime by account and returns the secret without a trailing newline", async () => {
     const r = runner({ code: 0, stdout: `${SECRET}\n`, stderr: "" });
     expect(await getSecret("dataverse-client-secret", r.run)).toBe(SECRET);
-    expect(r.seen).toEqual([["lookup", "service", "coopilot", "account", "dataverse-client-secret"]]);
+    expect(r.seen).toEqual([["lookup", "service", "focustime", "account", "dataverse-client-secret"]]);
   });
 
   it("only allows known accounts", async () => {
@@ -54,14 +54,14 @@ describe("keyring writes (refresh tokens only)", () => {
   it("stores a refresh token through stdin, never argv", async () => {
     const r = recorder();
     await setSecret("outlook-refresh-token", TOKEN, r.run);
-    expect(r.seen).toEqual([{ args: ["store", "--label=Coopilot outlook-refresh-token", "service", "coopilot", "account", "outlook-refresh-token"], stdin: TOKEN }]);
+    expect(r.seen).toEqual([{ args: ["store", "--label=FocusTime outlook-refresh-token", "service", "focustime", "account", "outlook-refresh-token"], stdin: TOKEN }]);
     expect(r.seen[0]!.args.join(" ")).not.toContain(TOKEN);
   });
 
   it("clears one account", async () => {
     const r = recorder();
     await deleteSecret("google-refresh-token", r.run);
-    expect(r.seen).toEqual([{ args: ["clear", "service", "coopilot", "account", "google-refresh-token"], stdin: undefined }]);
+    expect(r.seen).toEqual([{ args: ["clear", "service", "focustime", "account", "google-refresh-token"], stdin: undefined }]);
   });
 
   it.each(["dataverse-client-secret", "google-client-secret"] as const)("refuses to write or clear %s", async (account) => {
@@ -83,7 +83,7 @@ describe("app secrets from Settings (step 6b)", () => {
   it("stores the Dataverse or Google client secret through stdin only", async () => {
     const seen: { args: string[]; stdin: string | undefined }[] = [];
     await setAppSecret("dataverse-client-secret", VALUE, async (args, stdin) => (seen.push({ args, stdin }), { code: 0, stdout: "", stderr: "" }));
-    expect(seen).toEqual([{ args: ["store", "--label=Coopilot dataverse-client-secret", "service", "coopilot", "account", "dataverse-client-secret"], stdin: VALUE }]);
+    expect(seen).toEqual([{ args: ["store", "--label=FocusTime dataverse-client-secret", "service", "focustime", "account", "dataverse-client-secret"], stdin: VALUE }]);
     expect(seen[0]!.args.join(" ")).not.toContain(VALUE);
   });
   it("refuses other accounts and multi-line values, without the value in the error", async () => {

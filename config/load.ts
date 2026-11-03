@@ -7,16 +7,16 @@ import { migrateDayShapeText, writeConfig } from "./edit.ts";
 import { STARTER_TOML } from "./starter.ts";
 
 export function configPath(env = process.env): string {
-  return join(env.XDG_CONFIG_HOME || join(homedir(), ".config"), "coopilot", "config.toml");
+  return join(env.XDG_CONFIG_HOME || join(homedir(), ".config"), "focustime", "config.toml");
 }
 
 export function cacheRoot(env = process.env): string {
-  return join(env.XDG_CACHE_HOME || join(homedir(), ".cache"), "coopilot");
+  return join(env.XDG_CACHE_HOME || join(homedir(), ".cache"), "focustime");
 }
 
 /** The local plan store lives here (XDG data, not cache: it is my own data). */
 export function planDbPath(env = process.env): string {
-  return join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "coopilot", "plan.db");
+  return join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "focustime", "plan.db");
 }
 
 export type LoadedConfig = { path: string; parsed: ParseResult; created?: boolean };

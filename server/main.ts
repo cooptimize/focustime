@@ -1,4 +1,4 @@
-// Start Coopilot: local server on 127.0.0.1, per-launch token, opens a Chromium app window.
+// Start FocusTime: local server on 127.0.0.1, per-launch token, opens a Chromium app window.
 // Usage: node server/main.ts [--dev] [--no-open] [--no-reopen] [--port 5317] [--clock <ISO instant>]
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
 import { createHostBrowsers } from "./host.ts";
@@ -40,6 +40,7 @@ import { createDevOpsSource, type DevOpsSource } from "../sources/devops/source.
 import type { Keyring } from "../sources/oauth/oauth.ts";
 import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
 import { createApp } from "./app.ts";
+import { moveFromOldName } from "./rename.ts";
 import { createDemoContext, seedDemo, type DemoControl } from "./demo.ts";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { existsSync } from "node:fs";
@@ -69,6 +70,8 @@ const clockOffsetMs = clockArg >= 0 ? Temporal.Instant.from(args[clockArg + 1] ?
 const instantNow = () => (clockOffsetMs ? Temporal.Instant.fromEpochMilliseconds(Date.now() + clockOffsetMs) : Temporal.Now.instant());
 const zonedNow = (tz: string) => instantNow().toZonedDateTimeISO(tz);
 
+// R1: the one-time move from Coopilot's folders and keyring entries, before anything reads config, the store or a secret.
+const renamed = await moveFromOldName({ today: Temporal.Now.plainDateISO().toString(), log: stderrLogger });
 const root = resolve(import.meta.dirname, "..");
 const token = randomBytes(32).toString("base64url");
 const cfgPath = configPath();
@@ -203,14 +206,15 @@ const server = createApp({
   port,
   token,
   log,
-  // COOPILOT_DIST: a verification build elsewhere, so checking work never swaps the UI the service serves.
-  ...(devMiddleware ? { devMiddleware } : { distDir: process.env.COOPILOT_DIST ?? join(root, "dist") }),
+  // FOCUSTIME_DIST: a verification build elsewhere, so checking work never swaps the UI the service serves.
+  ...(devMiddleware ? { devMiddleware } : { distDir: process.env.FOCUSTIME_DIST ?? join(root, "dist") }),
   // The launcher's request (capture), else the view a clicked notification asked for (step 15.5), taken once.
   takeOpenRequest: async () => (await takeOpenRequest(runtimeDir)) ?? takeRoute(),
   reopen: reopenWindow,
   ctx: () => demoCtx ?? liveCtx,
 });
 const liveCtx: ActionContext = {
+  renameNote: renamed.note,
     demo: demoControl(false),
     loadConfig,
     makeDataverse,
@@ -251,8 +255,8 @@ const liveCtx: ActionContext = {
 };
 
 /**
- * Step 15.5: clicking a notification opens Coopilot on its view. The route waits here (validated, 2 minutes) for the
- * window to take it when it loads or gains focus; coopilot-open focuses the window or opens one.
+ * Step 15.5: clicking a notification opens FocusTime on its view. The route waits here (validated, 2 minutes) for the
+ * window to take it when it loads or gains focus; focustime-open focuses the window or opens one.
  */
 let pendingRoute: { route: string; at: number } | null = null;
 function openRoute(route: string): void {
@@ -270,12 +274,12 @@ function takeRoute(): string | null {
 }
 
 /**
- * Step 15.4 fix (host adapter): "Reopen Coopilot" from a window whose launch token is old. Under the service,
- * coopilot-open replaces a window opened for an earlier server run; with npm start, a new app window opens with the
+ * Step 15.4 fix (host adapter): "Reopen FocusTime" from a window whose launch token is old. Under the service,
+ * focustime-open replaces a window opened for an earlier server run; with npm start, a new app window opens with the
  * launch link. --no-reopen (the browser tests) turns it off.
  */
 async function reopenWindow(): Promise<boolean> {
-  const script = join(homedir(), ".local", "bin", "coopilot-open");
+  const script = join(homedir(), ".local", "bin", "focustime-open");
   if (headless || args.includes("--no-reopen")) return false;
   const argv = process.env.INVOCATION_ID && existsSync(script) ? [script] : open ? ["chromium", `--app=http://127.0.0.1:${port}/?token=${token}`] : null;
   if (!argv) return false;
@@ -335,7 +339,7 @@ if (plan) {
       // Start asks first (Settings > You), or it couldn't: open the VM menu, where the preview and the reason show.
       if (!r.ok) {
         openRoute("vm");
-        if (r.code !== "ask_first") notifySend("Coopilot", `Couldn't ${key === "start" ? "start your VM" : "restore auto-shutdown"}: ${r.error}.`);
+        if (r.code !== "ask_first") notifySend("FocusTime", `Couldn't ${key === "start" ? "start your VM" : "restore auto-shutdown"}: ${r.error}.`);
       }
     }
   };
@@ -599,7 +603,7 @@ if (plan) {
     // Q91: close notifications on screen whose occasion was handled (the day planned, the follow-up closed...).
     if (notifier.onScreen().length) void notifier.sweep().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
     // Step 16.3: my Teams status follows focus (set, refreshed on +15, cleared however the session ends, even after a
-    // restart). Only while a timer exists or a status Coopilot set is still to clear.
+    // restart). Only while a timer exists or a status FocusTime set is still to clear.
     for (const c of demoCtx ? [liveCtx, demoCtx] : [liveCtx]) {
       if (!c.plan || (!c.plan.getState(TIMER_KEY) && !c.plan.accountState<TeamsStatusState>(TEAMS_STATUS_KEY)?.set)) continue;
       void presenceContext(c).then(syncTeamsStatus).catch(() => log({ source: "outlook", op: "teams_status", kind: "failed" }));
@@ -608,12 +612,12 @@ if (plan) {
   void timerTick();
 }
 
-const runtimeDir = join(process.env.XDG_RUNTIME_DIR || tmpdir(), "coopilot");
+const runtimeDir = join(process.env.XDG_RUNTIME_DIR || tmpdir(), "focustime");
 const launchFile = join(runtimeDir, "launch.json");
 
 server.on("error", (e: NodeJS.ErrnoException) => {
   if (e.code === "EADDRINUSE") {
-    console.error(`Coopilot is already running on port ${port} (perhaps as the coopilot service). Open its window with: node scripts/open-window.ts`);
+    console.error(`FocusTime is already running on port ${port} (perhaps as the focustime service). Open its window with: node scripts/open-window.ts`);
     process.exit(1);
   }
   throw e;
@@ -623,7 +627,7 @@ server.listen(port, "127.0.0.1", async () => {
   await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
   await writeFile(launchFile, JSON.stringify({ url, pid: process.pid }), { mode: 0o600 });
   // The launch URL holds the per-launch token, so it goes to a private file, not the terminal.
-  process.stdout.write(`Coopilot running on http://127.0.0.1:${port} (${dev ? "dev" : "built"} UI)\nConfig: ${cfgPath}\nLaunch link: ${launchFile}\n`);
+  process.stdout.write(`FocusTime running on http://127.0.0.1:${port} (${dev ? "dev" : "built"} UI)\nConfig: ${cfgPath}\nLaunch link: ${launchFile}\n`);
   if (open) spawn("chromium", [`--app=${url}`], { detached: true, stdio: "ignore" }).unref();
 });
 

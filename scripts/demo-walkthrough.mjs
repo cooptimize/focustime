@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const runtime = process.argv.includes("--runtime") ? (process.argv[process.argv.indexOf("--runtime") + 1] ?? "") : process.env.XDG_RUNTIME_DIR || tmpdir();
-const launchUrl = JSON.parse(readFileSync(join(runtime, "coopilot", "launch.json"), "utf8")).url;
+const launchUrl = JSON.parse(readFileSync(join(runtime, "focustime", "launch.json"), "utf8")).url;
 const out = process.argv[2] ?? "docs/demo";
 const scheme = process.argv[3] === "light" ? "light" : "dark";
 const nowArg = process.argv.includes("--now") ? process.argv[process.argv.indexOf("--now") + 1] : "";
@@ -31,7 +31,7 @@ try {
   await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "demo.set", input: { on: true } }) }));
   await page.reload();
   await page.waitForSelector(".demo-tag", { timeout: 15000 });
-  await page.evaluate(() => localStorage.setItem("coopilot.hint.flow", "dismissed"));
+  await page.evaluate(() => localStorage.setItem("focustime.hint.flow", "dismissed"));
   await page.reload();
   await page.waitForSelector(".demo-tag", { timeout: 15000 });
   await page.waitForTimeout(1200);

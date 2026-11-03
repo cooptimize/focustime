@@ -1,4 +1,4 @@
-// Step 15.5 live check: sends one notification of a kind through the running Coopilot (its real path: text, buttons,
+// Step 15.5 live check: sends one notification of a kind through the running FocusTime (its real path: text, buttons,
 // click routing), without waiting for its occasion. Reads the launch link from the private launch file; never prints it.
 //   node scripts/notify-sample.mjs <kind> [--live] [--gated]
 // kinds: test plan_day checkin closeout plan_week look_ahead timer meeting vm vm_changed followups expiry
@@ -14,7 +14,7 @@ if (!kind) {
 const live = process.argv.includes("--live");
 // --gated: through Settings > Notifications like a real one (switch, quiet hours, held during focus).
 const gated = process.argv.includes("--gated");
-const { url } = JSON.parse(readFileSync(join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "coopilot", "launch.json"), "utf8"));
+const { url } = JSON.parse(readFileSync(join(process.env.XDG_RUNTIME_DIR ?? "/tmp", "focustime", "launch.json"), "utf8"));
 const origin = new URL(url).origin;
 const first = await fetch(url, { redirect: "manual" });
 const cookie = (first.headers.get("set-cookie") ?? "").split(";")[0] ?? "";

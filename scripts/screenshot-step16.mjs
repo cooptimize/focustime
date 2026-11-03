@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 const arg = (k) => (process.argv.includes(k) ? process.argv[process.argv.indexOf(k) + 1] : "");
 const runtime = arg("--runtime") || process.env.XDG_RUNTIME_DIR || tmpdir();
-const launchUrl = JSON.parse(readFileSync(join(runtime, "coopilot", "launch.json"), "utf8")).url;
+const launchUrl = JSON.parse(readFileSync(join(runtime, "focustime", "launch.json"), "utf8")).url;
 const out = process.argv[2] ?? "screenshots";
 const scheme = process.argv[3] === "light" ? "light" : "dark";
 const demo = process.argv.includes("--demo");

@@ -1,7 +1,7 @@
 // @ts-nocheck -- a capture script driven by Playwright; checked by running it
 // Explainer footage in demo mode (step 15): the footage 2 shot list and clips, re-captured with fictional data only.
 // Demo mode is turned on first and every shot checks the "Demo data" tag. The same browser-side guard as footage 2
-// refuses anything that could write outside Coopilot or change settings, timers or follow-ups; local plan changes go to
+// refuses anything that could write outside FocusTime or change settings, timers or follow-ups; local plan changes go to
 // the in-memory demo store, which is reset (demo off, then on) before each flow. The launch token is never printed.
 // Usage: node scripts/footage-demo.mjs <outDir> [--now <ISO>] [--only shots|video]
 import { chromium } from "playwright-core";
@@ -9,7 +9,7 @@ import { mkdirSync, readFileSync, renameSync, readdirSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const launchUrl = JSON.parse(readFileSync(join(process.env.XDG_RUNTIME_DIR || tmpdir(), "coopilot", "launch.json"), "utf8")).url;
+const launchUrl = JSON.parse(readFileSync(join(process.env.XDG_RUNTIME_DIR || tmpdir(), "focustime", "launch.json"), "utf8")).url;
 const out = process.argv[2] ?? "footage";
 const arg = (n, d = "") => (process.argv.includes(n) ? process.argv[process.argv.indexOf(n) + 1] : d);
 const NOW = arg("--now", "2026-11-02T11:05:00-05:00");
@@ -59,8 +59,8 @@ async function freshDemo(page, now = NOW) {
   await call(page, "demo.set", { on: true });
   await page.evaluate(() => {
     try {
-      localStorage.setItem("coopilot.hint.flow", "dismissed");
-      localStorage.setItem("coopilot.hint.picktime", "1");
+      localStorage.setItem("focustime.hint.flow", "dismissed");
+      localStorage.setItem("focustime.hint.picktime", "1");
     } catch {}
   });
   await page.reload();

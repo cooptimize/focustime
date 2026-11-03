@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 const arg = (k) => (process.argv.includes(k) ? process.argv[process.argv.indexOf(k) + 1] : "");
 const runtime = arg("--runtime") || process.env.XDG_RUNTIME_DIR || tmpdir();
-const launch = JSON.parse(readFileSync(join(runtime, "coopilot", "launch.json"), "utf8")).url;
+const launch = JSON.parse(readFileSync(join(runtime, "focustime", "launch.json"), "utf8")).url;
 const url = arg("--now") ? `${launch}${launch.includes("?") ? "&" : "?"}now=${encodeURIComponent(arg("--now"))}` : launch;
 const out = process.argv[2] ?? "screenshots";
 const scheme = process.argv[3] === "light" ? "light" : "dark";
@@ -44,8 +44,8 @@ try {
       await post(page, "ui.set_theme", { theme: scheme === "light" ? "cooptimize-light" : "cooptimize-dark" });
     }
     await page.evaluate(() => {
-      localStorage.setItem("coopilot.hint.flow", "dismissed");
-      localStorage.setItem("coopilot.hint.picktime", "1");
+      localStorage.setItem("focustime.hint.flow", "dismissed");
+      localStorage.setItem("focustime.hint.picktime", "1");
     });
     await page.reload();
     await page.waitForSelector(demo ? ".demo-tag" : ".topbar", { timeout: 30000 });

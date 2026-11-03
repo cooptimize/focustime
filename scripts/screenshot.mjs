@@ -1,4 +1,4 @@
-// UI inspection: drives the system Chromium (no browser download) against the running Coopilot server.
+// UI inspection: drives the system Chromium (no browser download) against the running FocusTime server.
 // Reads the per-launch link from the private launch file; the token is never printed.
 // Usage: node scripts/screenshot.mjs [outDir]
 import { chromium } from "playwright-core";
@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const launchFile = join(process.env.XDG_RUNTIME_DIR || tmpdir(), "coopilot", "launch.json");
+const launchFile = join(process.env.XDG_RUNTIME_DIR || tmpdir(), "focustime", "launch.json");
 const launchUrl = /** @type {{ url: string }} */ (JSON.parse(readFileSync(launchFile, "utf8"))).url;
 const out = process.argv[2] ?? "screenshots";
 mkdirSync(out, { recursive: true });

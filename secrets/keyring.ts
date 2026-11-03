@@ -5,10 +5,10 @@ import { execFile } from "node:child_process";
 import { Pat } from "../sources/devops/pat.ts";
 import { cacheKey } from "../sources/devops/source.ts";
 
-export const KEYRING_SERVICE = "coopilot";
-/** App secrets set up by me outside Coopilot: read-only here. */
+export const KEYRING_SERVICE = "focustime";
+/** App secrets set up by me outside FocusTime: read-only here. */
 export type AppSecretAccount = "dataverse-client-secret" | "google-client-secret";
-/** Refresh tokens Coopilot writes after sign-in and clears on disconnect. */
+/** Refresh tokens FocusTime writes after sign-in and clears on disconnect. */
 export type RefreshTokenAccount = "outlook-refresh-token" | "google-refresh-token";
 export type SecretAccount = AppSecretAccount | RefreshTokenAccount;
 const ACCOUNTS: readonly SecretAccount[] = ["dataverse-client-secret", "google-client-secret", "outlook-refresh-token", "google-refresh-token"];
@@ -28,7 +28,7 @@ export class SecretError extends Error {
 export type RunResult = { code: number; stdout: string; stderr: string };
 export type Runner = (args: string[], stdin?: string) => Promise<RunResult>;
 
-const runSecretTool: Runner = (args, stdin) =>
+export const runSecretTool: Runner = (args, stdin) =>
   new Promise((resolve, reject) => {
     const child = execFile("secret-tool", args, { timeout: 30_000, maxBuffer: 64 * 1024, encoding: "utf8" }, (error, stdout, stderr) => {
       if (error && (error as NodeJS.ErrnoException).code === "ENOENT") return reject(error);
@@ -47,10 +47,10 @@ function failure(r: RunResult): SecretError {
 }
 
 export async function setSecret(account: RefreshTokenAccount, value: string, run: Runner = runSecretTool): Promise<void> {
-  if (!WRITABLE.includes(account)) throw new Error("This keyring account is read-only for Coopilot");
+  if (!WRITABLE.includes(account)) throw new Error("This keyring account is read-only for FocusTime");
   let r: RunResult;
   try {
-    r = await run(["store", `--label=Coopilot ${account}`, "service", KEYRING_SERVICE, "account", account], value);
+    r = await run(["store", `--label=FocusTime ${account}`, "service", KEYRING_SERVICE, "account", account], value);
   } catch {
     throw new SecretError("unavailable");
   }
@@ -66,7 +66,7 @@ export async function setAppSecret(account: AppSecretAccount, value: string, run
   if (!value || value.length > 1024 || /[\r\n]/.test(value)) throw new Error("A secret is one line of 1 to 1024 characters");
   let r: RunResult;
   try {
-    r = await run(["store", `--label=Coopilot ${account}`, "service", KEYRING_SERVICE, "account", account], value);
+    r = await run(["store", `--label=FocusTime ${account}`, "service", KEYRING_SERVICE, "account", account], value);
   } catch {
     throw new SecretError("unavailable");
   }
@@ -85,7 +85,7 @@ export async function secretState(account: SecretAccount, run: Runner = runSecre
 }
 
 export async function deleteSecret(account: RefreshTokenAccount, run: Runner = runSecretTool): Promise<void> {
-  if (!WRITABLE.includes(account)) throw new Error("This keyring account is read-only for Coopilot");
+  if (!WRITABLE.includes(account)) throw new Error("This keyring account is read-only for FocusTime");
   let r: RunResult;
   try {
     r = await run(["clear", "service", KEYRING_SERVICE, "account", account]);
@@ -119,7 +119,7 @@ export async function setWritePat(clientKey: string, value: string, run: Runner 
   const account = writePatAccount(clientKey);
   let r: RunResult;
   try {
-    r = await run(["store", `--label=Coopilot DevOps write PAT (${account})`, "service", KEYRING_SERVICE, "account", account], value);
+    r = await run(["store", `--label=FocusTime DevOps write PAT (${account})`, "service", KEYRING_SERVICE, "account", account], value);
   } catch {
     throw new SecretError("unavailable");
   }

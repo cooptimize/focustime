@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=FocusTime
+Comment=Open the FocusTime week planner window after login
+Exec=/home/tanner/.local/bin/focustime-open
+Terminal=false
+NoDisplay=true
