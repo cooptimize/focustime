@@ -2,12 +2,12 @@
 // Mon Nov 2, 9:30 AM). Behavior only: no colors, sizes or curves.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { BrowserContext, Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, openApp, startDemo, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
 const call = (page: Page, action: string, input: unknown) =>
-  page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean; data: any }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean; data: any }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /** Records, from the first paint, whether the loader, the unroll and the sweep ever appeared. */
 const WATCH = () => {
@@ -37,7 +37,7 @@ async function slowOpen(ctx: BrowserContext, delay: number): Promise<Page> {
   });
   await ctx.addInitScript(WATCH);
   const page = await ctx.newPage();
-  await page.goto(h.url);
+  await openApp(page, h);
   return page;
 }
 
@@ -110,7 +110,7 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
   it("reduced motion (Settings > Display): the same, after it's saved", async () => {
     const ctx = await h.browser.newContext({ viewport: { width: 1920, height: 1080 } });
     const first = await ctx.newPage();
-    await first.goto(h.url);
+    await openApp(first, h);
     await first.waitForSelector(".topbar", { timeout: 60_000 });
     expect((await call(first, "ui.set_reduce_motion", { on: true })).ok).toBe(true);
     await first.reload(); // the week brings the setting; it's kept locally for the next opening

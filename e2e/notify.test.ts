@@ -24,7 +24,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await form.locator("select").selectOption("off");
     await form.getByRole("button", { name: "Save" }).click();
     await expect.poll(() => form.textContent(), { timeout: 5000 }).toContain("Saved");
-    const saved = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "settings.load", input: {} }) }).then((r) => r.json()));
+    const saved = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "settings.load", input: {} }) }).then((r) => r.json()));
     expect(saved.data.notify).toMatchObject({ quiet: "off", kinds: { checkin: false, closeout: true } });
     await expect(form.getByRole("button", { name: "Send a test notification" }).count()).resolves.toBe(1);
     expect(errors).toEqual([]);
@@ -68,7 +68,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await expectView("settings:notifications", ".set-notify");
     await expectView("today", ".today-view");
     // A follow-up opens the Inbox with that follow-up outlined.
-    const id = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "followups.list", input: {} }) }).then((r) => r.json()).then((j) => j.data.followUps[0].id as number));
+    const id = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "followups.list", input: {} }) }).then((r) => r.json()).then((j) => j.data.followUps[0].id as number));
     await expectView(`followup:${id}`, `[data-follow-up="${id}"].followup-highlight`);
     // My VM: Today with the VM chip's menu open.
     await expectView("vm", '.menu-list[role="menu"]');

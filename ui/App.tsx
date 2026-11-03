@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addWeeks, mondayOf } from "../week/dates.ts";
 import { hidePersonal, personalCount } from "../week/personal.ts";
 import type { Half, IsoDate } from "../week/types.ts";
-import { ReopenButton } from "./Reopen.tsx";
+import { SignInAgainButton } from "./Reopen.tsx";
 import { parseRoute, ROUTE_EVENT } from "../plan/notify.ts";
-import { ActionRefusal, call, connectSource, disconnectSource, planAction, SessionError, setThemeAction, takeOpenRequest, weekLoad } from "./api.ts";
+import { ActionRefusal, call, connectSource, disconnectSource, endSession, planAction, SessionError, setThemeAction, startDemo, takeOpenRequest, weekLoad } from "./api.ts";
 import { dayEndOf, hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type ViewRange } from "../week/hours.ts";
 import { applyTheme, initialTheme } from "./theme.ts";
 import { rememberReduceMotion } from "./brand/motion.ts";
@@ -653,13 +653,13 @@ export function App() {
   }, [pd, data, reloadQuiet, goNav, nav]);
 
   /** Step 15 (D272): demo mode on or off; the server swaps every source and the plan store, then the week reloads. */
+  // A2: the demo is its own session. Turning it on starts a demo session in place of this one (sign in again for your own
+  // data); turning it off ends the demo session and goes back to the sign-in screen.
   const switchDemo = useCallback(async (on: boolean) => {
     try {
-      await call("demo.set", { on });
-      setPd(null);
-      pdTried.current = null;
-      setNotice(on ? "Demo data on: fictional clients and work. Nothing leaves FocusTime" : "Demo data off: your own data again");
-      reloadRef.current();
+      if (on) await startDemo();
+      else await endSession();
+      location.replace(`/${location.search}`);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Couldn't switch demo mode");
     }
@@ -1169,9 +1169,9 @@ export function App() {
     return (
       <div className="center-note">
         {opening}
-        <h1>Reopen FocusTime</h1>
-        <p>FocusTime was restarted, so this window is out of date. Reopen it to continue; the new window replaces this one.</p>
-        <ReopenButton />
+        <h1>Signed out</h1>
+        <p>Your FocusTime session ended. Sign in again to continue; your plan is as you left it.</p>
+        <SignInAgainButton />
       </div>
     );
   }

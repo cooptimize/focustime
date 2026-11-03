@@ -1,18 +1,30 @@
-// The UI's only way to get data or act: named actions on the local server (same origin, token cookie).
+// The UI's only way to get data or act: named actions on the server (same origin, the session cookie, and the
+// session's CSRF token in X-CSRF on every call; A2).
 import type { ActionResponse, FieldProblem, WeekLoadData } from "../actions/types.ts";
 import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
 
 /**
- * The window's launch token is old (FocusTime was restarted): only the server's guard says this, with code
- * "launch_token". An action's own refusal is never one, whatever its status (step 15.4 fix: missing Azure consent
+ * No live session (signed out, or it ended after 12 idle hours or 7 days): only the server says this, with code
+ * "signed_out". An action's own refusal is never one, whatever its status (step 15.4 fix: missing Azure consent
  * is a 401 refusal with code "consent").
  */
 export class SessionError extends Error {}
-export const STALE_MESSAGE = "FocusTime was restarted, so this window is out of date. Reopen FocusTime to continue";
+export const STALE_MESSAGE = "You're signed out. Sign in to continue";
 
-/** Who shows "Reopen FocusTime" when a call finds the window out of date (set by the root). */
+/** Who shows the sign-in screen when a call finds the session ended (set by the root). */
 let onStale: (() => void) | null = null;
 export const setStaleListener = (f: typeof onStale) => void (onStale = f);
+
+/** The session's CSRF token (a readable cookie the server set with the session). */
+export function csrfToken(): string {
+  if (typeof document === "undefined") return "";
+  for (const part of document.cookie.split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === "__Host-focustime-csrf") return v.join("=");
+  }
+  return "";
+}
+const postHeaders = () => ({ "content-type": "application/json", "x-csrf": csrfToken() });
 
 /** What a response from /api/action means: data, an action's refusal, or an out-of-date window. */
 export async function readResponse<T>(res: Response): Promise<T> {
@@ -24,7 +36,7 @@ export async function readResponse<T>(res: Response): Promise<T> {
   }
   if (body && typeof body === "object" && "ok" in body) {
     if (body.ok) return body.data;
-    if (body.code !== "launch_token") throw new ActionRefusal(body.error, body.status, body.fields ?? [], body.code);
+    if (body.code !== "signed_out") throw new ActionRefusal(body.error, body.status, body.fields ?? [], body.code);
   } else if (res.status !== 401) {
     throw new ActionRefusal(res.status === 403 ? "FocusTime refused that request" : `FocusTime answered ${res.status}`, res.status);
   }
@@ -35,7 +47,7 @@ export async function readResponse<T>(res: Response): Promise<T> {
 /** Asks the host to open a fresh window (focustime-open replaces this one). False when it can't. */
 export async function reopenFocusTime(): Promise<boolean> {
   try {
-    const r = await fetch("/api/reopen", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: "{}" });
+    const r = await fetch("/api/reopen", { method: "POST", credentials: "same-origin", headers: postHeaders(), body: "{}" });
     return r.status === 202;
   } catch {
     return false;
@@ -78,7 +90,7 @@ async function send<T>(action: string, input: unknown): Promise<T> {
   const res = await fetch("/api/action", {
     method: "POST",
     credentials: "same-origin",
-    headers: { "content-type": "application/json" },
+    headers: postHeaders(),
     body: JSON.stringify({ action, input }),
   });
   return readResponse<T>(res);
@@ -86,9 +98,27 @@ async function send<T>(action: string, input: unknown): Promise<T> {
 
 export const weekLoad = (input: { weekStart?: string; now?: string; refresh?: boolean; viewRange?: string }) => call<WeekLoadData>("week.load", input);
 
-export type ConnectResult = { status: "connected" | "cancelled" | "failed"; message?: string };
-export const connectSource = (source: "outlook" | "google") =>
-  call<ConnectResult>(source === "outlook" ? "auth.connect_microsoft" : "auth.connect_google", {});
+export type ConnectResult = { status: "connected" | "cancelled" | "failed" | "redirect"; message?: string; url?: string };
+/** Connecting a calendar is a visit to Microsoft or Google and back (A2): the server says where, the page goes there. */
+export async function connectSource(source: "outlook" | "google"): Promise<ConnectResult> {
+  const r = await call<ConnectResult>(source === "outlook" ? "auth.connect_microsoft" : "auth.connect_google", {});
+  if (r.status === "redirect" && r.url && r.url.startsWith("/auth/")) location.assign(r.url);
+  return r;
+}
+
+/** Microsoft sign-in (A2): the page goes to the server's sign-in route, which sends it on to Microsoft and back. */
+export const signInWithMicrosoft = (loginHint?: string) => location.assign(`/auth/microsoft/login${loginHint ? `?hint=${encodeURIComponent(loginHint)}` : ""}`);
+
+/** "Try the demo": a demo session with fictional data, in place of any session this browser had. */
+export async function startDemo(): Promise<void> {
+  const r = await fetch("/auth/demo", { method: "POST", credentials: "same-origin", headers: postHeaders(), body: "{}" });
+  if (!r.ok) throw new Error("The demo isn't available right now");
+}
+
+/** Signs out of FocusTime (or leaves the demo): the session ends on the server and its cookies are cleared. */
+export async function endSession(): Promise<void> {
+  await fetch("/auth/logout", { method: "POST", credentials: "same-origin", headers: postHeaders(), body: "{}" }).catch(() => null);
+}
 export const disconnectSource = (source: "outlook" | "google") => call<{ status: string }>("auth.disconnect", { source });
 
 export type PlanResult = { pick?: Pick; state?: PlanDayState; draft?: DraftStory; result?: string };
@@ -101,7 +131,7 @@ export const setThemeAction = (theme: string) => call<{ ui: { theme: string } }>
 /** Step 9: the view focustime-open asked for ("capture"), taken once; null when none or on any failure. */
 export async function takeOpenRequest(): Promise<string | null> {
   try {
-    const r = await fetch("/api/open-request", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    const r = await fetch("/api/open-request", { method: "POST", credentials: "same-origin", headers: postHeaders(), body: "{}" });
     if (!r.ok) return null;
     const j = (await r.json()) as { view?: unknown };
     return typeof j.view === "string" ? j.view : null;

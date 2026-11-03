@@ -1,29 +1,29 @@
-// Step 15.4 fix: when FocusTime was restarted, this window's launch token is old. Say so in plain words with one
-// button that asks the host to open a fresh window (focustime-open replaces this one), never "Session expired".
+// A2: when a call finds the session ended (signed out elsewhere, or 12 idle hours, or 7 days), say so in plain words
+// with one button that signs in again. The developer loop's "bring the window up" (focustime-open) isn't sign-in and
+// isn't shown here.
 import { useEffect, useState } from "react";
-import { reopenFocusTime, setStaleListener } from "./api.ts";
+import { setStaleListener, signInWithMicrosoft } from "./api.ts";
 
-export function ReopenButton() {
-  const [state, setState] = useState<"idle" | "opening" | "manual">("idle");
+export function SignInAgainButton() {
+  const [busy, setBusy] = useState(false);
   return (
     <span className="reopen-actions">
       <button
         type="button"
         className="commit"
-        disabled={state === "opening"}
+        disabled={busy}
         onClick={() => {
-          setState("opening");
-          void reopenFocusTime().then((ok) => setState(ok ? "opening" : "manual"));
+          setBusy(true);
+          signInWithMicrosoft();
         }}
       >
-        {state === "opening" ? "Opening…" : "Reopen FocusTime"}
+        {busy ? "Opening sign-in…" : "Sign in again"}
       </button>
-      {state === "manual" && <span className="muted"> FocusTime couldn't open a window from here. Open it again the way you started it.</span>}
     </span>
   );
 }
 
-/** A banner over everything once any call finds the window out of date. */
+/** A banner over everything once any call finds the session ended. */
 export function StaleBanner() {
   const [stale, setStale] = useState(false);
   useEffect(() => {
@@ -33,8 +33,8 @@ export function StaleBanner() {
   if (!stale) return null;
   return (
     <div className="stale-banner" role="alert">
-      <span>FocusTime was restarted, so this window is out of date.</span>
-      <ReopenButton />
+      <span>You're signed out of FocusTime.</span>
+      <SignInAgainButton />
     </div>
   );
 }

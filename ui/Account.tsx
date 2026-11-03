@@ -6,7 +6,7 @@ import { Avatar, forgetPhotos, usePhotos, usePresence } from "./Presence.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AuthStatus, AzureWriteEntry, Person, TeamsStatusEntry, VmPreview, VmPreviewOp, VmStatus } from "../actions/account-types.ts";
 import type { PhotosData, TeamsStatusView } from "../actions/types.ts";
-import { ActionRefusal, call } from "./api.ts";
+import { ActionRefusal, call, endSession, SessionError, signInWithMicrosoft, startDemo } from "./api.ts";
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
 import { NOTICE_EVENT } from "./WorkLink.tsx";
@@ -20,77 +20,104 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't w
 type AuthApi = { status: AuthStatus | null; refresh: () => Promise<void>; signIn: (azure?: boolean, teams?: boolean, photos?: boolean) => Promise<string | null>; signOut: () => Promise<void> };
 export const AuthCtx = createContext<AuthApi>({ status: null, refresh: async () => {}, signIn: async () => null, signOut: async () => {} });
 
-/** Shows the sign-in screen until someone is signed in (when a Microsoft app registration is set up); then the app. */
+/** Why a sign-in came back without a session (the server's ?signin= reason), in plain words. */
+export const SIGN_IN_MESSAGES: Record<string, string> = {
+  denied: "Sign-in was cancelled.",
+  wrong_tenant: "That account isn't a Cooptimize work account. Sign in with your Cooptimize account.",
+  expired: "That sign-in took too long or was started in another window. Try again.",
+  invalid: "Microsoft's answer couldn't be checked, so you weren't signed in. Try again.",
+  unavailable: "Microsoft can't be reached right now. Check your connection and try again.",
+  misconfigured: "Microsoft sign-in isn't set up for this FocusTime yet. Ask the admin.",
+  deleted: "Your FocusTime data was deleted, so this account can't sign in for now. Ask the admin.",
+  refused: "FocusTime couldn't sign you in. Try again.",
+};
+
+/** The ?signin= reason the server sent back with, taken once (removed from the address bar). */
+function takeSignInReason(): string | null {
+  if (typeof location === "undefined") return null;
+  const u = new URL(location.href);
+  const r = u.searchParams.get("signin");
+  if (!r) return null;
+  u.searchParams.delete("signin");
+  history.replaceState(null, "", u.pathname + u.search + u.hash);
+  return SIGN_IN_MESSAGES[r] ?? SIGN_IN_MESSAGES.refused!;
+}
+
+/** A2: shows the sign-in screen until there is a session (Microsoft, or the demo); then the app. */
 export function AuthGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus | null>(null);
   const [failed, setFailed] = useState(false);
-  const [skipped, setSkipped] = useState(false);
+  const [noSession, setNoSession] = useState(false);
+  const [reason] = useState(takeSignInReason);
   const refresh = useCallback(async () => {
     try {
       setStatus(await call<AuthStatus>("auth.status", {}));
-    } catch {
-      // The app shows what's wrong (a stale launch link, a stopped server).
-      setFailed(true);
+      setNoSession(false);
+    } catch (e) {
+      // No session: the sign-in screen. Anything else: the app shows what's wrong (a stopped server).
+      if (e instanceof SessionError) setNoSession(true);
+      else setFailed(true);
     }
   }, []);
   useEffect(() => void refresh(), [refresh]);
-  const [offline, setOffline] = useState(false);
-  const signIn = useCallback(async (azure = true, teams = false, photos = false) => {
-    const r = await call<{ status: string; message?: string; offline?: boolean }>("auth.sign_in", { azure, ...(teams ? { teams } : {}), ...(photos ? { photos } : {}) });
-    setOffline(!!r.offline);
-    await refresh();
-    return r.status === "connected" ? null : (r.message ?? "Sign-in not completed");
-  }, [refresh]);
+  // Signing in (again) is a visit to Microsoft and back; the page returns signed in.
+  const signIn = useCallback(async () => {
+    signInWithMicrosoft(status?.person?.username);
+    return null;
+  }, [status]);
   const signOut = useCallback(async () => {
-    await call("auth.sign_out", {});
+    await endSession();
     forgetPhotos();
-    setSkipped(false);
-    await refresh();
-  }, [refresh]);
+    location.replace("/");
+  }, []);
   const api = useMemo(() => ({ status, refresh, signIn, signOut }), [status, refresh, signIn, signOut]);
+  if (noSession) return <SignInScreen message={reason} />;
   if (!status && !failed) return <div className="center-note"><p>Loading…</p></div>;
-  // Q88 (step 15.5): real data needs the sign-in. Without it: the demo, or, when Microsoft can't be reached, offline use.
-  if (status?.configured && status.state === "signed_out" && !skipped)
-    return <SignInScreen status={status} signIn={signIn} offline={offline || (typeof navigator !== "undefined" && navigator.onLine === false)} onSkip={() => setSkipped(true)} />;
   return <AuthCtx.Provider value={api}>{children}</AuthCtx.Provider>;
 }
 
-function SignInScreen({ status, signIn, offline, onSkip }: { status: AuthStatus; signIn: (azure?: boolean) => Promise<string | null>; offline: boolean; onSkip: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(status.message);
+export function SignInScreen({ message: first }: { message: string | null }) {
+  const [busy, setBusy] = useState<"microsoft" | "demo" | null>(null);
+  const [message, setMessage] = useState<string | null>(first);
   return (
     <main className="signin">
       <div className="signin-card">
         <BentMark width={120} />
         <h1>FocusTime</h1>
-        <p>Sign in with your Microsoft work account. FocusTime uses it for your calendar and your Azure VM, and to find you in Dataverse.</p>
+        <p>Sign in with your Cooptimize Microsoft account. FocusTime uses it for your calendar and your Azure VM, and to find you in Dataverse.</p>
         <button
           type="button"
           className="top-btn primary signin-btn"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
+          disabled={busy !== null}
+          onClick={() => {
+            setBusy("microsoft");
             setMessage(null);
-            try {
-              setMessage(await signIn(true));
-            } catch (e) {
-              setMessage(errText(e));
-            } finally {
-              setBusy(false);
-            }
+            signInWithMicrosoft();
           }}
         >
-          {busy ? "Waiting for your browser…" : "Sign in with Microsoft"}
+          {busy === "microsoft" ? "Opening Microsoft sign-in…" : "Sign in with Microsoft"}
         </button>
-        {busy && <p className="muted">Your browser opened Microsoft's sign-in page. Come back here when it says you can close the tab.</p>}
         {message && <p className="set-problem" role="alert">{message}</p>}
-        {status.renameNote && <p className="set-problem" role="alert">{status.renameNote}</p>}
-        <p className="set-hint">The first time, Microsoft asks you to allow calendar and Azure access for this app. Tokens stay in your keyring on this computer.</p>
+        <p className="set-hint">Your sign-in stays on the FocusTime server; FocusTime never sees your password.</p>
         <div className="signin-alt">
-          <button type="button" className="link-btn muted" onClick={() => void call("demo.set", { on: true }).then(() => location.reload(), (e: unknown) => setMessage(errText(e)))}>Try the demo (fictional data)</button>
-          {offline && <button type="button" className="link-btn muted signin-skip" onClick={onSkip}>Continue offline</button>}
+          <button
+            type="button"
+            className="link-btn muted"
+            disabled={busy !== null}
+            onClick={() => {
+              setBusy("demo");
+              void startDemo().then(
+                () => location.replace(`/${location.search}`),
+                (e: unknown) => {
+                  setBusy(null);
+                  setMessage(errText(e));
+                },
+              );
+            }}
+          >
+            Try the demo (fictional data)
+          </button>
         </div>
-        {offline && <p className="set-hint">Offline: FocusTime shows your local plan and what it saved from the last sign-in. Sign in when you're back online.</p>}
       </div>
     </main>
   );

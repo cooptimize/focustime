@@ -8,7 +8,7 @@ let h: Harness;
 const T = 60_000;
 const api = <R = unknown>(page: Page, action: string, input: unknown) =>
   page.evaluate(
-    ([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()),
+    ([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()),
     [action, input] as const,
   ) as Promise<{ ok: boolean; data: R }>;
 const kindChip = (page: Page, name: string) => page.locator(".cap-box .cap-box-kinds [role=radio]", { hasText: name });

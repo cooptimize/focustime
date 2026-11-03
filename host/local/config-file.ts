@@ -75,6 +75,8 @@ export async function writeConfig(path: string, edit: (text: string) => string, 
 
 /** The HostConfig for one config file; zone is the host clock's, the default for a person who hasn't set one. */
 export const fileConfig = (path: string, zone: () => string = machineZone): HostConfig => ({
+  // A2: app.toml beside config.toml, when there is one.
+  app: () => readFile(join(dirname(path), "app.toml"), "utf8").catch(() => null),
   load: () => loadConfigFile(path, zone()),
   write: (edit) => writeConfig(path, edit, undefined, zone()),
   saveSystemUserId: (id) => saveSystemUserId(path, id),

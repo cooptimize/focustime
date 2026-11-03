@@ -5,13 +5,13 @@
 // survive a restart, not while typing; an Inbox row has one primary action and no "New today" or "Added by me".
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, sameSession, startDemo, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 120_000;
 const MON = "2026-11-02";
 const call = (page: Page, action: string, input: unknown) =>
-  page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean; data: any; error?: string }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean; data: any; error?: string }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const go = async (page: Page, hash: string) => {
   await page.evaluate((x) => (location.hash = x), hash);
   await page.waitForTimeout(1000);
@@ -116,16 +116,12 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
   }, 3 * T);
 
   it("the sign-in screen is on the scale", async () => {
-    const { page } = await freshPage(h);
-    await page.route("**/api/action", async (route) => {
-      const b = route.request().postDataJSON?.() ?? {};
-      if (b.action === "auth.status") return route.fulfill({ json: { ok: true, data: { configured: true, state: "signed_out", message: null } } });
-      return route.fallback();
-    });
-    await page.reload();
-    await page.locator(".signin").waitFor();
+    const ctx = await h.browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    const page = await ctx.newPage();
+    await page.goto(h.url);
+    await page.locator(".signin").waitFor({ timeout: 60_000 });
     expect((await offScale(page)).out).toEqual([]);
-    await page.close();
+    await ctx.close();
   }, T);
 
   it("Settings > Display Text size changes every screen at once and survives a restart; Default puts it back", async () => {
@@ -140,7 +136,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--text-base").trim()), hash).toBe("17px");
     }
     // A new window with nothing stored locally: the size comes from config.
-    const ctx = await h.browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    const ctx = await sameSession(h, page);
     const fresh = await ctx.newPage();
     await fresh.goto(h.url);
     await fresh.waitForSelector(".topbar", { timeout: 60_000 });

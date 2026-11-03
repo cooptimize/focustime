@@ -23,12 +23,15 @@ export class HostUnavailable extends Error {
 
 // ---- Secrets ----
 
-/** App secrets set up outside FocusTime: read-only, except Settings may replace them. */
-export type AppSecretAccount = "dataverse-client-secret" | "google-client-secret";
+/**
+ * App secrets set up outside FocusTime: read-only, except Settings may replace the first two. A2: the "FocusTime" Entra
+ * registration's client secret (written by infra/scripts/app-registration.sh, never by FocusTime).
+ */
+export type AppSecretAccount = "dataverse-client-secret" | "google-client-secret" | "entra-client-secret";
 /** Refresh tokens FocusTime writes after sign-in and clears on disconnect. */
 export type RefreshTokenAccount = "outlook-refresh-token" | "google-refresh-token";
 export type SecretAccount = AppSecretAccount | RefreshTokenAccount;
-export const SECRET_ACCOUNTS: readonly SecretAccount[] = ["dataverse-client-secret", "google-client-secret", "outlook-refresh-token", "google-refresh-token"];
+export const SECRET_ACCOUNTS: readonly SecretAccount[] = ["dataverse-client-secret", "google-client-secret", "entra-client-secret", "outlook-refresh-token", "google-refresh-token"];
 export const WRITABLE_ACCOUNTS: readonly RefreshTokenAccount[] = ["outlook-refresh-token", "google-refresh-token"];
 
 export type SecretErrorKind = "not_found" | "unavailable" | "locked";
@@ -107,6 +110,8 @@ export type HostFiles = {
 export type LoadedConfig = { path: string; parsed: ParseResult; created?: boolean };
 /** The person's settings (local: config.toml with backups; hosted: the database in A2). */
 export type HostConfig = {
+  /** A2: the app config's text (local: ~/.config/focustime/app.toml), null when there is none; env overrides it. */
+  app(): Promise<string | null>;
   load(): Promise<LoadedConfig>;
   /** Validates the edited text before anything is written; keeps a backup. */
   write(edit: (text: string) => string): Promise<WriteResult>;

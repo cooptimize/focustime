@@ -1,29 +1,58 @@
-// The local HTTP host: 127.0.0.1 only, guarded requests, one action endpoint, and the UI.
+// The HTTP app (A2): guarded requests (server/guard.ts), sign-in routes, server-side sessions with a CSRF token on
+// every state change, one action endpoint per signed-in person, and the UI. The same app serves the developer loop
+// (http://localhost:<port>) and the hosted app.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
+import { timingSafeEqual } from "node:crypto";
 import { dispatch, type ActionContext } from "../actions/dispatch.ts";
 import type { Logger } from "../log/logger.ts";
+import type { AccountStore, Session } from "../store/accounts.ts";
+import { DEMO_SESSION_MS, SESSION_MAX_MS } from "../store/accounts.ts";
 import { checkRequest, REOPEN_PATH } from "./guard.ts";
+import { AUTH_COOKIE, authCookie, clearAuthCookie, clearSessionCookies, CSRF_HEADER, readCookie, SESSION_COOKIE, sessionCookies } from "./auth/cookies.ts";
+import { SignInError, type SignedIn, type SignInTokens } from "./auth/entra.ts";
+
+/** What the sign-in routes need: Microsoft (null when not set up), Google, the demo, and what to do with a sign-in. */
+export type SignInHooks = {
+  microsoft: {
+    start: (o?: { loginHint?: string }) => Promise<{ url: string; pending: { state: string; nonce: string; verifier: string } }>;
+    finish: (callback: URL, pending: { state: string; nonce: string; verifier: string }) => Promise<{ user: SignedIn; tokens: SignInTokens }>;
+  } | null;
+  /** A validated Microsoft sign-in: records the person (and their tokens). The user id to start a session for, or why not. */
+  signedIn: (user: SignedIn, tokens: SignInTokens) => Promise<{ userId: string } | { refused: SignInRefusal }>;
+  /** Google Calendar for a signed-in person (optional). Null: not offered. */
+  google?: {
+    start: (userId: string) => Promise<{ url: string; pending: { state: string; nonce: string; verifier: string } }>;
+    finish: (userId: string, callback: URL, pending: { state: string; nonce: string; verifier: string }) => Promise<"connected" | "failed">;
+  } | null;
+  /** "Try the demo": a fictional person's id, with their demo data ready. Null: no demo here. */
+  demo: (() => Promise<string>) | null;
+  /** A session ended (signed out): forget anything held for it (a demo's data). */
+  ended?: (s: Session) => void;
+};
+export type SignInRefusal = "deleted" | "refused";
 
 export type AppOptions = {
-  port: number;
-  token: string;
-  /** The action context, or a getter (step 15: the live or the demo one, D272). */
-  ctx: ActionContext | (() => ActionContext);
+  /** Where people reach FocusTime: the Host and Origin checks and every redirect. */
+  publicUrl: string;
   log: Logger;
+  accounts: Pick<AccountStore, "sessions" | "authRequests">;
+  auth: SignInHooks;
+  /** The signed-in person's action context (or the demo session's). */
+  ctx: (s: Session) => ActionContext | Promise<ActionContext>;
   /** Serve built files from here (production). */
   distDir?: string;
   /** Or hand UI requests to Vite (development). */
   devMiddleware?: (req: IncomingMessage, res: ServerResponse, next: () => void) => void;
-  /** Step 9: the view focustime-open asked for (e.g. "capture"), taken once; null when none. */
-  takeOpenRequest?: () => Promise<string | null>;
-  /** Step 15.4 fix: open a fresh window with the current launch link (the host's focustime-open); false when it can't. */
+  /** Step 9: the view the launcher or a clicked notification asked for, taken once; null when none. */
+  takeOpenRequest?: (s: Session) => Promise<string | null>;
+  /** The developer loop: bring the app window up (the host's launcher); false when it can't. Not authentication. */
   reopen?: () => Promise<boolean>;
 };
 
-/** Step 15.4 fix: an API call refused by the guard says why in a shape the UI tells apart from an action's refusal. */
-export const LAUNCH_TOKEN_CODE = "launch_token";
+/** An API call without a live session: the page shows the sign-in screen. */
+export const SIGNED_OUT_CODE = "signed_out";
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -35,18 +64,17 @@ const TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
-const SESSION_PAGE = `<!doctype html><meta charset="utf-8"><title>FocusTime</title>
-<body style="font:16px system-ui;padding:40px;max-width:640px">
-<h1 style="font-size:20px">FocusTime needs a fresh launch link</h1>
-<p>This page is protected by a token that changes every time FocusTime starts. Open FocusTime again the way you started it. It replaces this window.</p>`;
+export const CSP = "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
 
-function baseHeaders(res: ServerResponse, csp: boolean) {
+function baseHeaders(res: ServerResponse, csp: boolean, https: boolean) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
-  if (csp) res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  if (https) res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  if (csp) res.setHeader("Content-Security-Policy", CSP);
 }
 
 async function readBody(req: IncomingMessage, limit = 64 * 1024): Promise<string> {
@@ -60,79 +88,172 @@ async function readBody(req: IncomingMessage, limit = 64 * 1024): Promise<string
   return Buffer.concat(chunks).toString("utf8");
 }
 
+const same = (a: string | undefined, b: string) => {
+  if (a === undefined) return false;
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+};
+
 export function createApp(opts: AppOptions) {
   let lastReopen = 0;
+  const https = opts.publicUrl.startsWith("https://");
+  const json = (res: ServerResponse, status: number, body: unknown, cookies: string[] = []) => {
+    res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", ...(cookies.length ? { "set-cookie": cookies } : {}) });
+    res.end(JSON.stringify(body));
+  };
+  const redirect = (res: ServerResponse, to: string, cookies: string[] = []) => {
+    res.writeHead(302, { location: to, "cache-control": "no-store", ...(cookies.length ? { "set-cookie": cookies } : {}) });
+    res.end();
+  };
+  /** Back to the app, with why a sign-in didn't complete (the sign-in screen words it). */
+  const signInFailed = (res: ServerResponse, reason: string) => redirect(res, `/?signin=${encodeURIComponent(reason)}`, [clearAuthCookie()]);
+  const startSession = (userId: string, demo: boolean) => {
+    const s = opts.accounts.sessions.create(userId, { demo });
+    return sessionCookies(s.cookie, s.csrf, Math.floor((demo ? DEMO_SESSION_MS : SESSION_MAX_MS) / 1000));
+  };
+
   const handler = async (req: IncomingMessage, res: ServerResponse) => {
-    const url = new URL(req.url ?? "/", "http://placeholder");
+    const url = new URL(req.url ?? "/", opts.publicUrl);
+    const method = req.method ?? "GET";
     const header = (n: string) => {
       const v = req.headers[n];
       return Array.isArray(v) ? v[0] : v;
     };
-    baseHeaders(res, !!opts.distDir);
+    baseHeaders(res, !!opts.distDir, https);
 
-    const g = checkRequest(
-      { method: req.method ?? "GET", path: url.pathname, search: url.search, host: header("host"), origin: header("origin"), secFetchSite: header("sec-fetch-site"), cookie: header("cookie") },
-      { port: opts.port, token: opts.token },
-    );
+    const g = checkRequest({ method, path: url.pathname, search: url.search, host: header("host"), origin: header("origin"), secFetchSite: header("sec-fetch-site"), secFetchMode: header("sec-fetch-mode") }, { publicUrl: opts.publicUrl });
     if (g.action === "deny") {
       opts.log({ source: "server", op: "denied", status: g.status, kind: g.reason.replace(/\s+/g, "_").toLowerCase() });
-      if (g.status === 401 && (req.method ?? "GET") === "GET" && !url.pathname.startsWith("/api/")) {
-        res.writeHead(401, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-        return res.end(SESSION_PAGE);
-      }
-      if (url.pathname.startsWith("/api/")) {
-        res.writeHead(g.status, { "content-type": "application/json", "cache-control": "no-store" });
-        return res.end(JSON.stringify(g.status === 401 ? { ok: false, status: 401, code: LAUNCH_TOKEN_CODE, error: "FocusTime was restarted, so this window is out of date" } : { ok: false, status: 403, code: "forbidden", error: "Forbidden" }));
-      }
-      res.writeHead(g.status, { "content-type": "text/plain; charset=utf-8" });
-      return res.end(g.status === 401 ? "FocusTime was restarted: open it again" : "Forbidden");
+      if (url.pathname.startsWith("/api/")) return json(res, 403, { ok: false, status: 403, code: "forbidden", error: "Forbidden" });
+      res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
+      return res.end("Forbidden");
     }
-    if (g.action === "redirect") {
-      res.writeHead(302, { location: g.location, "set-cookie": g.setCookie, "cache-control": "no-store" });
+    if (g.action === "redirect") return redirect(res, g.location);
+
+    const cookieHeader = header("cookie");
+    const session = () => opts.accounts.sessions.resolve(readCookie(cookieHeader, SESSION_COOKIE));
+    /** A state change: a live session and its CSRF token in the X-CSRF header. */
+    const changeAllowed = (s: Session | null): s is Session => !!s && opts.accounts.sessions.csrfOk(s, header(CSRF_HEADER));
+
+    // ---- Sign-in ----
+    if (url.pathname === "/auth/microsoft/login" && method === "GET") {
+      if (!opts.auth.microsoft) return signInFailed(res, "misconfigured");
+      try {
+        const hint = url.searchParams.get("hint");
+        const { url: to, pending } = await opts.auth.microsoft.start(hint && hint.length < 256 ? { loginHint: hint } : {});
+        opts.accounts.authRequests.put("microsoft", pending);
+        return redirect(res, to, [authCookie(pending.state)]);
+      } catch (e) {
+        return signInFailed(res, e instanceof SignInError ? e.reason : "unavailable");
+      }
+    }
+    if (url.pathname === "/auth/microsoft/callback" && method === "GET") {
+      if (!opts.auth.microsoft) return signInFailed(res, "misconfigured");
+      // The state must be the one this browser started (its auth cookie) and one the server is waiting for.
+      const state = url.searchParams.get("state");
+      if (!state || !same(readCookie(cookieHeader, AUTH_COOKIE), state)) return signInFailed(res, "expired");
+      const pending = opts.accounts.authRequests.take("microsoft", state);
+      if (!pending) return signInFailed(res, "expired");
+      try {
+        const done = await opts.auth.microsoft.finish(url, pending);
+        const r = await opts.auth.signedIn(done.user, done.tokens);
+        if ("refused" in r) return signInFailed(res, r.refused);
+        // A fresh session id at sign-in (never one the browser brought).
+        opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
+        return redirect(res, "/", [...startSession(r.userId, false), clearAuthCookie()]);
+      } catch (e) {
+        return signInFailed(res, e instanceof SignInError ? e.reason : "invalid");
+      }
+    }
+    if (url.pathname === "/auth/google/login" && method === "GET") {
+      const s = session();
+      if (!s || s.demo || !opts.auth.google) return redirect(res, "/#/settings/connections");
+      try {
+        const { url: to, pending } = await opts.auth.google.start(s.userId);
+        opts.accounts.authRequests.put("google", pending, s.userId);
+        return redirect(res, to, [authCookie(pending.state)]);
+      } catch {
+        return redirect(res, "/?google=failed#/settings/connections", [clearAuthCookie()]);
+      }
+    }
+    if (url.pathname === "/auth/google/callback" && method === "GET") {
+      const s = session();
+      const state = url.searchParams.get("state");
+      const pending = state && same(readCookie(cookieHeader, AUTH_COOKIE), state) ? opts.accounts.authRequests.take("google", state) : null;
+      // The person who started it must be the one it comes back to.
+      if (!s || !opts.auth.google || !pending || pending.userId !== s.userId) return redirect(res, "/?google=expired#/settings/connections", [clearAuthCookie()]);
+      const r = await opts.auth.google.finish(s.userId, url, pending).catch(() => "failed" as const);
+      return redirect(res, `/?google=${r}#/settings/connections`, [clearAuthCookie()]);
+    }
+    if (url.pathname === "/auth/demo" && method === "POST") {
+      if (!opts.auth.demo) return json(res, 404, { ok: false, status: 404, error: "The demo isn't available here" });
+      const userId = await opts.auth.demo();
+      // The demo replaces whatever session this browser had (sign in again for your own data).
+      const before = session();
+      opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
+      if (before) opts.auth.ended?.(before);
+      opts.log({ source: "auth", op: "demo", kind: "started" });
+      return json(res, 200, { ok: true, data: { status: "demo" } }, startSession(userId, true));
+    }
+    if (url.pathname === "/auth/logout" && method === "POST") {
+      const s = session();
+      // Without a live session there is nothing to end; the cookies are cleared either way.
+      if (s && !changeAllowed(s)) return json(res, 403, { ok: false, status: 403, code: "csrf", error: "Forbidden" });
+      opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
+      if (s) {
+        opts.auth.ended?.(s);
+        opts.log({ source: "auth", op: "sign_out", kind: s.demo ? "demo" : "signed_out" });
+      }
+      return json(res, 200, { ok: true, data: { status: "signed_out" } }, clearSessionCookies());
+    }
+    if (url.pathname.startsWith("/auth/")) {
+      res.writeHead(404);
       return res.end();
     }
 
+    // ---- API ----
     if (url.pathname === REOPEN_PATH) {
-      // At most once every 5 seconds, so a stuck page can't open windows in a loop.
+      // The developer loop's "bring the window up": opens nothing but FocusTime's own window, at most every 5 seconds.
+      if (method !== "POST") {
+        res.writeHead(405, { allow: "POST" });
+        return res.end();
+      }
       const now = Date.now();
       const ok = !!opts.reopen && now - lastReopen > 5000 && (lastReopen = now) > 0 && (await opts.reopen().catch(() => false));
       opts.log({ source: "server", op: "reopen", kind: ok ? "opened" : "unavailable" });
-      res.writeHead(ok ? 202 : 503, { "content-type": "application/json", "cache-control": "no-store" });
-      return res.end(JSON.stringify({ opened: ok }));
-    }
-    if (url.pathname === "/api/action") {
-      if (req.method !== "POST") {
-        res.writeHead(405, { allow: "POST" });
-        return res.end();
-      }
-      if (!(header("content-type") ?? "").startsWith("application/json")) {
-        res.writeHead(415);
-        return res.end();
-      }
-      const started = performance.now();
-      let out: Awaited<ReturnType<typeof dispatch>>;
-      try {
-        const body = JSON.parse(await readBody(req)) as { action?: unknown; input?: unknown };
-        out = await dispatch(typeof opts.ctx === "function" ? opts.ctx() : opts.ctx, { action: body.action, input: body.input });
-      } catch {
-        out = { ok: false, status: 400, error: "bad request" };
-      }
-      const status = out.ok ? 200 : out.status;
-      opts.log({ source: "server", op: typeof out === "object" && out.ok ? "action" : "action_rejected", status, durationMs: performance.now() - started });
-      res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
-      return res.end(JSON.stringify(out));
-    }
-    // The launcher's one-shot request (focustime-open --capture). Guarded like actions; POST so a link can't take it.
-    if (url.pathname === "/api/open-request") {
-      if (req.method !== "POST") {
-        res.writeHead(405, { allow: "POST" });
-        return res.end();
-      }
-      const view = (await opts.takeOpenRequest?.().catch(() => null)) ?? null;
-      res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-      return res.end(JSON.stringify({ view }));
+      return json(res, ok ? 202 : 503, { opened: ok });
     }
     if (url.pathname.startsWith("/api/")) {
+      if (method !== "POST") {
+        res.writeHead(405, { allow: "POST" });
+        return res.end();
+      }
+      const s = session();
+      if (!s) return json(res, 401, { ok: false, status: 401, code: SIGNED_OUT_CODE, error: "Sign in to continue" }, clearSessionCookies());
+      if (!changeAllowed(s)) {
+        opts.log({ source: "server", op: "denied", status: 403, kind: "csrf" });
+        return json(res, 403, { ok: false, status: 403, code: "csrf", error: "This page is out of date. Reload it" });
+      }
+      if (url.pathname === "/api/action") {
+        if (!(header("content-type") ?? "").startsWith("application/json")) {
+          res.writeHead(415);
+          return res.end();
+        }
+        const started = performance.now();
+        let out: Awaited<ReturnType<typeof dispatch>>;
+        try {
+          const body = JSON.parse(await readBody(req)) as { action?: unknown; input?: unknown };
+          out = await dispatch(await opts.ctx(s), { action: body.action, input: body.input });
+        } catch {
+          out = { ok: false, status: 400, error: "bad request" };
+        }
+        const status = out.ok ? 200 : out.status;
+        opts.log({ source: "server", op: typeof out === "object" && out.ok ? "action" : "action_rejected", status, durationMs: performance.now() - started });
+        return json(res, status, out);
+      }
+      // The view the launcher or a clicked notification asked for, taken once.
+      if (url.pathname === "/api/open-request") return json(res, 200, { view: (await opts.takeOpenRequest?.(s).catch(() => null)) ?? null });
       res.writeHead(404);
       return res.end();
     }

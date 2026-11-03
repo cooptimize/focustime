@@ -35,7 +35,6 @@ export const localLinks = (launch: (argv: string[]) => Promise<void> = launchDet
 export type LaunchOptions = {
   runtimeDir: string;
   port: number;
-  token: string;
   /** No windows at all (the browser tests). */
   headless: boolean;
   /** The server may open a window (not --no-open). */
@@ -51,13 +50,13 @@ export function localLaunch(o: LaunchOptions): HostLaunch {
   return {
     detached: launchDetached,
     /**
-     * "Reopen FocusTime" from a window whose launch token is old. Under the service, focustime-open replaces a window
-     * opened for an earlier server run; with npm start, a new app window opens with the launch link.
+     * Brings the app window up (the developer loop only; A2: not sign-in). Under the service, focustime-open focuses
+     * the window or opens one; with npm start, a new app window opens on the app's address.
      */
     reopen: async () => {
       if (o.headless || o.noReopen) return false;
       const script = join(homedir(), ".local", "bin", "focustime-open");
-      const argv = o.service && existsSync(script) ? [script] : o.open ? ["chromium", `--app=http://127.0.0.1:${o.port}/?token=${o.token}`] : null;
+      const argv = o.service && existsSync(script) ? [script] : o.open ? ["chromium", `--app=http://localhost:${o.port}/`] : null;
       if (!argv) return false;
       return launchDetached(argv).then(() => true, () => false);
     },
@@ -66,7 +65,7 @@ export function localLaunch(o: LaunchOptions): HostLaunch {
       spawn("chromium", [`--app=${url}`], { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
     },
     takeOpenRequest: () => takeOpenRequest(o.runtimeDir),
-    // The launch URL holds the per-launch token, so it goes to a private file, not the terminal.
+    // Where the launcher finds the running app (A2: its address; nobody gets in without signing in).
     publish: async (url) => {
       await mkdir(o.runtimeDir, { recursive: true, mode: 0o700 });
       await writeFile(launchFile, JSON.stringify({ url, pid: process.pid }), { mode: 0o600 });

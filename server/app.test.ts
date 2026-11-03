@@ -1,154 +1,170 @@
 import { createSnapshotStore } from "../host/local/snapshots.ts";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
-import { request } from "node:http";
-import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { ActionContext } from "../actions/dispatch.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { createDataverseSource } from "../sources/dataverse/source.ts";
 import { dvConfig, ENV, FAKE_SECRET, FAKE_TOKEN, fakeFetch } from "../sources/dataverse/test-fakes.ts";
-import { createApp } from "./app.ts";
+import { SESSION_IDLE_MS } from "../store/accounts.ts";
+import { SESSION_COOKIE, CSRF_COOKIE } from "./auth/cookies.ts";
+import { startTestApp } from "./test-app.ts";
 
-const TOKEN = "launch-token-for-tests";
 const logs: LogRecord[] = [];
-let port = 0;
-let close: () => void;
+let app: Awaited<ReturnType<typeof startTestApp>>;
+let openRequest: string | null = "capture";
+let reopened = 0;
+let now = Temporal.Instant.from("2026-11-03T15:00:00Z");
+
+function liveCtx(): ActionContext {
+  const text = STARTER_TOML.replace("https://cooptimize.crm.dynamics.com", ENV)
+    .replace('my_email = ""', 'my_email = "me@example.com"')
+    .replace('my_systemuserid = ""', `my_systemuserid = "${dvConfig.mySystemUserId}"`);
+  const f = fakeFetch("ok");
+  return {
+    loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(text) }),
+    makeDataverse: (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: f.fetch, snapshots: createSnapshotStore(mkdtempSync(join(tmpdir(), "c-"))), log: (r) => logs.push(r) }),
+    makeOutlook: () => { throw new Error("not configured"); },
+    makeGoogle: () => { throw new Error("not configured"); },
+    makeDevOps: () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined }),
+    saveSystemUserId: async () => {},
+    now: () => "2026-11-03T15:00:00Z",
+  } as ActionContext;
+}
 
 beforeAll(async () => {
   const dist = mkdtempSync(join(tmpdir(), "dist-"));
   writeFileSync(join(dist, "index.html"), "<!doctype html><title>FocusTime</title>");
   mkdirSync(join(dist, "assets"));
   writeFileSync(join(dist, "assets", "app.js"), "console.log(1)");
-  const text = STARTER_TOML.replace("https://cooptimize.crm.dynamics.com", ENV)
-    .replace('my_email = ""', 'my_email = "me@example.com"')
-    .replace('my_systemuserid = ""', `my_systemuserid = "${dvConfig.mySystemUserId}"`);
-  const f = fakeFetch("ok");
-  // Port must be known before the guard is built, so listen on 0 then rebuild with the port.
-  const probe = createApp({ port: 1, token: TOKEN, log: () => {}, distDir: dist, ctx: {} as never });
-  await new Promise<void>((r) => probe.listen(0, "127.0.0.1", r));
-  port = (probe.address() as AddressInfo).port;
-  await new Promise<void>((r) => probe.close(() => r()));
-  const server = createApp({
-    port,
-    token: TOKEN,
+  const ctx = liveCtx();
+  app = await startTestApp({
+    ctx: () => ctx,
     log: (r) => logs.push(r),
     distDir: dist,
-    reopen: async () => {
-      reopened++;
-      return true;
-    },
-    takeOpenRequest: async () => {
-      const v = openRequest;
-      openRequest = null;
-      return v;
-    },
-    ctx: {
-      loadConfig: async () => ({ path: "/x/config.toml", parsed: parseConfig(text) }),
-      makeDataverse: (cfg, tz) => createDataverseSource({ config: cfg, timeZone: tz, getSecret: async () => FAKE_SECRET, fetch: f.fetch, snapshots: createSnapshotStore(mkdtempSync(join(tmpdir(), "c-"))), log: (r) => logs.push(r) }),
-      makeOutlook: () => { throw new Error("not configured"); },
-      makeGoogle: () => { throw new Error("not configured"); },
-      makeDevOps: () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined }),
-      saveSystemUserId: async () => {},
-      now: () => "2026-11-03T15:00:00Z",
+    now: () => now,
+    extra: {
+      reopen: async () => {
+        reopened++;
+        return true;
+      },
+      takeOpenRequest: async () => {
+        const v = openRequest;
+        openRequest = null;
+        return v;
+      },
     },
   });
-  await new Promise<void>((r) => server.listen(port, "127.0.0.1", r));
-  close = () => server.close();
 });
-afterAll(() => close());
-let openRequest: string | null = "capture";
-let reopened = 0;
+afterAll(() => app.close());
 
-type Res = { status: number; headers: Record<string, string | string[] | undefined>; body: string };
-function send(path: string, headers: Record<string, string> = {}, method = "GET", body?: string): Promise<Res> {
-  return new Promise((resolve, reject) => {
-    const req = request({ host: "127.0.0.1", port, path, method, headers: { host: `127.0.0.1:${port}`, ...headers } }, (res) => {
-      let data = "";
-      res.on("data", (c) => (data += c));
-      res.on("end", () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: data }));
-    });
-    req.on("error", reject);
-    if (body) req.write(body);
-    req.end();
-  });
-}
-const cookie = () => `focustime_${port}=${TOKEN}`;
-const api = (input: unknown, headers: Record<string, string> = {}) =>
-  send("/api/action", { cookie: cookie(), origin: `http://127.0.0.1:${port}`, "content-type": "application/json", ...headers }, "POST", JSON.stringify({ action: "week.load", input }));
-
-describe("local server", () => {
-  it("refuses every path without the launch token", async () => {
-    expect((await send("/")).status).toBe(401);
-    expect((await send("/assets/app.js")).status).toBe(401);
-    expect((await api({}, { cookie: "" })).status).toBe(401);
-  });
-
-  it("swaps the launch token for a cookie and serves the app with it", async () => {
-    const r = await send(`/?token=${TOKEN}`);
-    expect(r.status).toBe(302);
-    expect(r.headers.location).toBe("/");
-    expect(String(r.headers["set-cookie"])).toContain("HttpOnly; SameSite=Strict");
-    const page = await send("/", { cookie: cookie() });
+describe("server", () => {
+  it("serves the page without a session (the page shows sign-in), with security headers", async () => {
+    const page = await app.browser().send("/");
     expect(page.status).toBe(200);
     expect(page.headers["content-security-policy"]).toContain("default-src 'self'");
+    expect(page.headers["x-frame-options"]).toBe("DENY");
+    expect(page.headers["x-content-type-options"]).toBe("nosniff");
+    expect(page.headers["referrer-policy"]).toBe("no-referrer");
+    expect((await app.browser().send("/assets/app.js")).status).toBe(200);
   });
 
-  it("refuses a foreign Host even with the token (DNS rebinding)", async () => {
-    expect((await send("/", { cookie: cookie(), host: "evil.example" })).status).toBe(403);
+  it("refuses an API call without a session, as JSON with code signed_out", async () => {
+    const r = await app.browser().action("week.load", {});
+    expect(r.status).toBe(401);
+    expect(JSON.parse(r.body)).toMatchObject({ ok: false, code: "signed_out" });
+  });
+
+  it("refuses a state change without the session's CSRF token", async () => {
+    const b = app.browser();
+    b.signIn("user-a");
+    expect((await b.action("week.load", { weekStart: "2026-11-02" }, { "x-csrf": "" })).status).toBe(403);
+    expect((await b.action("week.load", { weekStart: "2026-11-02" }, { "x-csrf": "wrong" })).status).toBe(403);
+    const other = app.browser();
+    other.signIn("user-a");
+    // Another session's token doesn't do.
+    expect((await b.action("week.load", { weekStart: "2026-11-02" }, { "x-csrf": other.jar.get(CSRF_COOKIE)! })).status).toBe(403);
+  });
+
+  it("refuses a foreign Host even with a session (DNS rebinding)", async () => {
+    const b = app.browser();
+    b.signIn("user-a");
+    expect((await b.send("/", { host: "evil.example" })).status).toBe(403);
   });
 
   it("refuses API calls from another origin or without an Origin", async () => {
-    expect((await api({}, { origin: "http://127.0.0.1:8080" })).status).toBe(403);
-    expect((await send("/api/action", { cookie: cookie(), "content-type": "application/json" }, "POST", "{}")).status).toBe(403);
+    const b = app.browser();
+    b.signIn("user-a");
+    expect((await b.action("week.load", {}, { origin: `http://localhost:${app.port + 1}` })).status).toBe(403);
+    expect((await b.send("/api/action", { "content-type": "application/json" }, "POST", "{}")).status).toBe(403);
   });
 
   it("serves week.load with real focus blocks, and nothing secret goes over the wire or into logs", async () => {
-    const r = await api({ weekStart: "2026-11-02" });
+    const b = app.browser();
+    const s = b.signIn("user-a");
+    const r = await b.action("week.load", { weekStart: "2026-11-02" });
     expect(r.status).toBe(200);
     const data = JSON.parse(r.body).data;
     expect(data.week.days[0].am.focus[0].clientName).toBe("Proseware");
     expect(r.body).not.toContain(FAKE_SECRET);
     expect(r.body).not.toContain(FAKE_TOKEN);
     const logged = JSON.stringify(logs);
-    for (const s of [FAKE_SECRET, FAKE_TOKEN, TOKEN]) expect(logged).not.toContain(s);
+    for (const v of [FAKE_SECRET, FAKE_TOKEN, s.cookie, s.csrf]) expect(logged).not.toContain(v);
+  });
+
+  it("ends a session after the idle timeout, and the next call is signed out", async () => {
+    const b = app.browser();
+    b.signIn("user-a");
+    expect((await b.action("week.load", { weekStart: "2026-11-02" })).status).toBe(200);
+    now = now.add({ milliseconds: SESSION_IDLE_MS + 1000 });
+    const r = await b.action("week.load", { weekStart: "2026-11-02" });
+    expect(r.status).toBe(401);
+    expect(JSON.parse(r.body).code).toBe("signed_out");
+    expect(b.jar.has(SESSION_COOKIE)).toBe(false);
   });
 
   it("hands the launcher's open request to the window once, guarded like actions and POST only (step 9)", async () => {
-    const at = (method = "POST", headers: Record<string, string> = {}) => send("/api/open-request", { cookie: cookie(), origin: `http://127.0.0.1:${port}`, "content-type": "application/json", ...headers }, method, method === "POST" ? "{}" : undefined);
-    expect((await at("POST", { cookie: "" })).status).toBe(401);
-    expect((await at("POST", { origin: "http://evil.example" })).status).toBe(403);
-    expect((await at("GET")).status).toBe(405);
-    expect(JSON.parse((await at()).body)).toEqual({ view: "capture" });
-    expect(JSON.parse((await at()).body)).toEqual({ view: null });
+    const b = app.browser();
+    b.signIn("user-a");
+    expect((await app.browser().post("/api/open-request", {})).status).toBe(401);
+    expect((await b.post("/api/open-request", {}, { origin: "http://evil.example" })).status).toBe(403);
+    expect((await b.send("/api/open-request", { origin: app.publicUrl })).status).toBe(405);
+    expect(JSON.parse((await b.post("/api/open-request", {})).body)).toEqual({ view: "capture" });
+    expect(JSON.parse((await b.post("/api/open-request", {})).body)).toEqual({ view: null });
   });
 
   it("rejects unknown actions", async () => {
-    const r = await send("/api/action", { cookie: cookie(), origin: `http://127.0.0.1:${port}`, "content-type": "application/json" }, "POST", JSON.stringify({ action: "dataverse.write", input: {} }));
-    expect(r.status).toBe(400);
+    const b = app.browser();
+    b.signIn("user-a");
+    expect((await b.action("dataverse.write", {})).status).toBe(400);
   });
 
-  it("says an old launch token apart from an action's refusal, as JSON with code launch_token (step 15.4 fix)", async () => {
-    const r = await api({}, { cookie: `focustime_${port}=an-old-token` });
-    expect(r.status).toBe(401);
-    expect(JSON.parse(r.body)).toMatchObject({ ok: false, code: "launch_token" });
-    expect(r.body).not.toContain("Session expired");
+  it("signs out: the session ends at the server and its cookies are cleared", async () => {
+    const b = app.browser();
+    b.signIn("user-a");
+    const before = b.jar.get(SESSION_COOKIE)!;
+    expect((await b.post("/auth/logout", {}, { "x-csrf": "wrong" })).status).toBe(403);
+    expect(app.accounts.sessions.resolve(before)).not.toBeNull();
+    const r = await b.post("/auth/logout", {});
+    expect(r.status).toBe(200);
+    expect(b.jar.has(SESSION_COOKIE)).toBe(false);
+    expect(app.accounts.sessions.resolve(before)).toBeNull();
   });
 
-  it("opens a fresh window for a window with an old token: same origin only, POST only, once per 5 seconds", async () => {
-    const reopen = (headers: Record<string, string> = {}, method = "POST") =>
-      send("/api/reopen", { cookie: `focustime_${port}=an-old-token`, origin: `http://127.0.0.1:${port}`, "content-type": "application/json", ...headers }, method, method === "POST" ? "{}" : undefined);
-    expect((await reopen({ origin: "http://evil.example" })).status).toBe(403);
-    expect((await reopen({ host: "evil.example" })).status).toBe(403);
-    expect((await send("/api/reopen", { "content-type": "application/json" }, "POST", "{}")).status).toBe(403);
+  it("brings the window up for the developer loop: same origin only, POST only, once per 5 seconds; no session needed", async () => {
+    const b = app.browser();
+    expect((await b.post("/api/reopen", {}, { origin: "http://evil.example" })).status).toBe(403);
+    expect((await b.post("/api/reopen", {}, { host: "evil.example" })).status).toBe(403);
+    expect((await b.send("/api/reopen", { "content-type": "application/json" }, "POST", "{}")).status).toBe(403);
     expect(reopened).toBe(0);
-    const first = await reopen();
+    const first = await b.post("/api/reopen", {});
     expect(first.status).toBe(202);
     expect(JSON.parse(first.body)).toEqual({ opened: true });
     expect(reopened).toBe(1);
-    expect((await reopen()).status).toBe(503);
+    expect((await b.post("/api/reopen", {})).status).toBe(503);
     expect(reopened).toBe(1);
   });
 });

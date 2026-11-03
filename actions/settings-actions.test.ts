@@ -1,7 +1,5 @@
 import { createSnapshotStore } from "../host/local/snapshots.ts";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { request } from "node:http";
-import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -9,7 +7,7 @@ import { writeConfig } from "../host/local/config-file.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { createApp } from "../server/app.ts";
+import { startTestApp } from "../server/test-app.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 import type { SettingsData } from "./types.ts";
 
@@ -126,24 +124,12 @@ describe("secrets from Settings never come back", () => {
   it("never puts the value in the server's logs or HTTP response", async () => {
     const t = setup();
     const logs: LogRecord[] = [];
-    const TOKEN = "t0ken-for-settings";
-    const probe = createApp({ port: 1, token: TOKEN, log: () => {}, ctx: t.c });
-    await new Promise<void>((ok) => probe.listen(0, "127.0.0.1", ok));
-    const port = (probe.address() as AddressInfo).port;
-    await new Promise<void>((ok) => probe.close(() => ok()));
-    const app = createApp({ port, token: TOKEN, log: (r) => logs.push(r), ctx: t.c });
-    await new Promise<void>((ok) => app.listen(port, "127.0.0.1", ok));
-    const body = JSON.stringify({ action: "secret.set", input: { account: "google-client-secret", value: SECRET } });
-    const res = await new Promise<string>((ok, fail) => {
-      const req = request({ host: "127.0.0.1", port, path: "/api/action", method: "POST", headers: { host: `127.0.0.1:${port}`, origin: `http://127.0.0.1:${port}`, cookie: `focustime_${port}=${TOKEN}`, "content-type": "application/json", "content-length": Buffer.byteLength(body) } }, (r) => {
-        let s = "";
-        r.on("data", (c) => (s += c));
-        r.on("end", () => ok(`${r.statusCode} ${s}`));
-      });
-      req.on("error", fail);
-      req.end(body);
-    });
-    app.close();
+    const app = await startTestApp({ ctx: t.c, log: (r) => logs.push(r) });
+    const b = app.browser();
+    b.signIn("user-a");
+    const r = await b.action("secret.set", { account: "google-client-secret", value: SECRET });
+    const res = `${r.status} ${r.body}`;
+    await app.close();
     expect(res).toMatch(/^200 /);
     expect(res).not.toContain(SECRET);
     expect(JSON.stringify(logs)).not.toContain(SECRET);

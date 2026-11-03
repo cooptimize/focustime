@@ -1,5 +1,5 @@
-// Step 15.4 fix: an action's refusal (even a 401 or 403) is never shown as an out-of-date window, and only the
-// guard's launch_token answer asks to reopen FocusTime.
+// Step 15.4 fix, A2: an action's refusal (even a 401 or 403) is never shown as signed out; only the server's
+// signed_out answer (no live session) asks the person to sign in again.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionRefusal, readResponse, SessionError, setStaleListener, STALE_MESSAGE } from "./api.ts";
 
@@ -24,17 +24,17 @@ describe("readResponse", () => {
     expect((e as Error).message).toContain("VM you confirmed");
   });
 
-  it("turns the guard's launch_token answer into Reopen FocusTime, never Session expired", async () => {
+  it("turns the server's signed_out answer into Sign in again, never Session expired", async () => {
     const stale = vi.fn();
     setStaleListener(stale);
-    const e = await readResponse(json(401, { ok: false, status: 401, code: "launch_token", error: "out of date" })).catch((x: unknown) => x);
+    const e = await readResponse(json(401, { ok: false, status: 401, code: "signed_out", error: "Sign in to continue" })).catch((x: unknown) => x);
     expect(e).toBeInstanceOf(SessionError);
     expect((e as Error).message).toBe(STALE_MESSAGE);
     expect((e as Error).message).not.toMatch(/session expired/i);
     expect(stale).toHaveBeenCalledOnce();
   });
 
-  it("treats a plain-text 401 (an older server) as out of date too, and other plain errors as refusals", async () => {
+  it("treats a plain-text 401 (an older server) as signed out too, and other plain errors as refusals", async () => {
     await expect(readResponse(new Response("Session expired: restart FocusTime", { status: 401 }))).rejects.toBeInstanceOf(SessionError);
     await expect(readResponse(new Response("Forbidden", { status: 403 }))).rejects.toBeInstanceOf(ActionRefusal);
   });

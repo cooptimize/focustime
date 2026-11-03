@@ -4,14 +4,14 @@
 // Week and Today, the status bar counts them, risk reasons still name them, and the choice survives a restart.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, sameSession, startDemo, type Harness } from "./harness.ts";
 
 let h: Harness;
 const T = 90_000;
 const MON = "2026-11-02";
 const SUMMIT = "Fabrikam partner summit 2026"; // demo: all day, Wed Nov 4 to Fri Nov 6
 const call = (page: Page, action: string, input: unknown) =>
-  page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean; data: any; error?: string }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean; data: any; error?: string }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const go = async (page: Page, hash: string) => {
   await page.evaluate((x) => (location.hash = x), hash);
   await page.waitForTimeout(1000);
@@ -91,7 +91,7 @@ describe.skipIf(!CHROMIUM)("Week's all-day chips and view switches (U5.1)", () =
     await expect(page.locator(".popup-menu .menu-item", { hasText: "Personal events" }).getAttribute("class")).resolves.not.toContain("checked");
     await page.keyboard.press("Escape");
     // A restart: a new window reads it from config.
-    const ctx = await h.browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    const ctx = await sameSession(h, page);
     const fresh = await ctx.newPage();
     await fresh.goto(h.url);
     await fresh.waitForSelector(".topbar", { timeout: 60_000 });

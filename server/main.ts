@@ -1,4 +1,5 @@
-// Start FocusTime: local server on 127.0.0.1, per-launch token, opens a Chromium app window.
+// Start FocusTime: the server (A2: Microsoft sign-in and server-side sessions; the developer loop serves
+// http://localhost:<port> and opens an app window on it).
 // Usage: node server/main.ts [--dev] [--no-open] [--no-reopen] [--port 5317] [--clock <ISO instant>]
 // FOCUSTIME_HOST=local|azure (A1) picks the host: local (the default) is the developer loop on this machine; azure is
 // the hosted app's host, a stub until A2 (its secrets, snapshots and plan store are in memory).
@@ -9,6 +10,9 @@ import { createAzureHost } from "../host/azure/index.ts";
 import { memoryConfig, memoryPhotos, memorySecrets, memorySnapshots } from "../host/fakes.ts";
 import { hoursOn } from "../week/hours.ts";
 import { randomBytes } from "node:crypto";
+import { readAppSettings, redirectUris } from "./appconfig.ts";
+import { createEntraSignIn } from "./auth/entra.ts";
+import { createAccountStore } from "../store/accounts.ts";
 import { join, resolve } from "node:path";
 import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
 import type { MicrosoftAccount } from "../actions/account.ts";
@@ -30,7 +34,8 @@ import { createGoogleSource } from "../sources/google/source.ts";
 import { createOutlookSource } from "../sources/graph/source.ts";
 import { createDevOpsSource, type DevOpsSource } from "../sources/devops/source.ts";
 import type { Keyring } from "../sources/oauth/oauth.ts";
-import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
+import { openPlanDb, planStoreOn, type PlanStore } from "../store/plan-store.ts";
+import type { DatabaseSync } from "node:sqlite";
 import { createApp } from "./app.ts";
 import { moveFromOldName } from "../host/local/rename.ts";
 import { createDemoContext, seedDemo, type DemoControl } from "./demo.ts";
@@ -61,7 +66,6 @@ const clockOffsetMs = clockArg >= 0 ? Temporal.Instant.from(args[clockArg + 1] ?
 const instantNow = () => (clockOffsetMs ? Temporal.Instant.fromEpochMilliseconds(Date.now() + clockOffsetMs) : Temporal.Now.instant());
 const zonedNow = (tz: string) => instantNow().toZonedDateTimeISO(tz);
 const root = resolve(import.meta.dirname, "..");
-const token = randomBytes(32).toString("base64url");
 const log = stderrLogger;
 
 const hostKind = process.env.FOCUSTIME_HOST ?? "local";
@@ -69,7 +73,16 @@ if (hostKind !== "local" && hostKind !== "azure") throw new Error("FOCUSTIME_HOS
 const host: Host =
   hostKind === "azure"
     ? createAzureHost({ secrets: memorySecrets(), config: memoryConfig(), snapshots: memorySnapshots(), photos: memoryPhotos(), inbox: { add: () => "0", remove: () => {} }, now: instantNow })
-    : createLocalHost({ port, token, headless, open, noReopen: args.includes("--no-reopen"), now: instantNow });
+    : createLocalHost({ port, headless, open, noReopen: args.includes("--no-reopen"), now: instantNow });
+
+// A2: app-level settings (public URL, the Entra and Google registrations, Dataverse, the demo): env over the host's app
+// config. Per-person settings are rows in the plan store.
+const appRead = readAppSettings(process.env, await host.config.app().catch(() => null), `http://localhost:${port}`);
+if (!appRead.ok) {
+  console.error(`FocusTime's app config has problems:\n- ${appRead.errors.join("\n- ")}`);
+  process.exit(1);
+}
+const app = appRead.settings;
 
 // R1: the one-time move from Coopilot's folders and keyring entries, before anything reads config, the store or a secret.
 const renamed = host.kind === "local" ? await moveFromOldName({ today: Temporal.Now.plainDateISO().toString(), log: stderrLogger }) : { note: null };
@@ -158,11 +171,24 @@ const loadConfig = async () => {
 };
 await loadConfig().catch(() => null);
 let plan: PlanStore | undefined;
+let planDb: DatabaseSync | undefined;
+const planPath = host.kind === "local" ? host.paths.planDb : ":memory:";
 try {
-  plan = createPlanStore({ path: host.kind === "local" ? host.paths.planDb : ":memory:", now: () => zonedNow(timeZone), log, files: host.files.store });
+  planDb = openPlanDb({ path: planPath, now: () => zonedNow(timeZone), log, files: host.files.store });
+  plan = planStoreOn(planDb, { path: planPath, now: () => zonedNow(timeZone), files: host.files.store });
 } catch {
   log({ source: "plan", op: "open", kind: "failed" });
 }
+if (!planDb) {
+  console.error("FocusTime couldn't open its plan store, so nobody can sign in. See the log above.");
+  process.exit(1);
+}
+const accounts = createAccountStore(planDb, instantNow);
+
+// Microsoft sign-in (A2): the "FocusTime" web registration, single tenant, confidential client.
+const entra = app.entra
+  ? createEntraSignIn({ tenantId: app.entra.tenantId, clientId: app.entra.clientId, redirectUri: redirectUris(app).microsoft, clientSecret: () => host.secrets.get("entra-client-secret"), log })
+  : null;
 
 let devMiddleware: Parameters<typeof createApp>[0]["devMiddleware"];
 if (dev) {
@@ -174,41 +200,57 @@ if (dev) {
 /** Media control for focus (step 10): the host's (local: playerctl when installed, playlist links through xdg-open). */
 const media = host.media;
 
-// Demo mode (step 15, D272): the host keeps a flag (local: a file next to the plan store); the demo context is built
-// (and seeded) on demand.
-let demoCtx: ActionContext | null = null;
-const demoControl = (on: boolean): DemoControl => ({ on, set: async (v) => setDemo(v) });
-async function setDemo(on: boolean): Promise<void> {
-  if (on) {
-    if (!demoCtx) {
+// The demo (A2, was D272's switch): "Try the demo" starts a demo session with its own fictional person, plan store
+// in memory and data, built on first use and dropped when the session ends. Never mixed with anyone's real data.
+const demos = new Map<string, Promise<ActionContext>>();
+const demoControl = (on: boolean): DemoControl => ({ on, set: async () => {} });
+const demoFor = (userId: string): Promise<ActionContext> => {
+  let c = demos.get(userId);
+  if (!c) {
+    c = (async () => {
       const ctx = createDemoContext({ now: () => instantNow().toString(), demo: demoControl(true) });
       await seedDemo(ctx);
-      demoCtx = ctx;
-    }
-    await host.files.demoFlag.set(true);
-    log({ source: "plan", op: "demo", kind: "on" });
-  } else {
-    await host.files.demoFlag.set(false);
-    demoCtx?.plan?.close();
-    demoCtx = null;
-    log({ source: "plan", op: "demo", kind: "off" });
+      return ctx;
+    })();
+    demos.set(userId, c);
+    c.catch(() => demos.delete(userId));
   }
-}
-if (host.files.demoFlag.get()) await setDemo(true).catch(() => log({ source: "plan", op: "demo", kind: "failed" }));
-/** The plan store the timer ticks on: the demo one while demo mode is on. */
-const activePlan = () => demoCtx?.plan ?? plan;
+  return c;
+};
 
 const server = createApp({
-  port,
-  token,
+  publicUrl: app.publicUrl,
   log,
+  accounts,
+  auth: {
+    microsoft: entra,
+    signedIn: async (u) => {
+      const { created } = accounts.users.signedIn({ id: u.oid, tenantId: u.tid, upn: u.upn, displayName: u.name, email: u.email });
+      log({ source: "auth", op: "user", kind: created ? "created" : "returning" });
+      return { userId: u.oid };
+    },
+    demo: app.demo ? async () => {
+      const id = `demo-${randomBytes(12).toString("base64url")}`;
+      await demoFor(id);
+      return id;
+    } : null,
+    ended: (s) => {
+      if (!s.demo) return;
+      void demos.get(s.userId)?.then((c) => c.plan?.close());
+      demos.delete(s.userId);
+    },
+  },
   // FOCUSTIME_DIST: a verification build elsewhere, so checking work never swaps the UI the service serves.
   ...(devMiddleware ? { devMiddleware } : { distDir: process.env.FOCUSTIME_DIST ?? join(root, "dist") }),
   // The launcher's request (capture), else the view a clicked notification asked for (step 15.5), taken once.
-  takeOpenRequest: async () => (await host.launch.takeOpenRequest()) ?? takeRoute(),
+  takeOpenRequest: async (s) => (s.demo ? null : ((await host.launch.takeOpenRequest()) ?? takeRoute())),
   reopen: reopenWindow,
-  ctx: () => demoCtx ?? liveCtx,
+  ctx: (s) => (s.demo ? demoFor(s.userId) : liveCtx),
 });
+setInterval(() => void accounts.sessions.sweep(), 15 * 60_000).unref();
+/** The plan store the timer ticks on. */
+const activePlan = () => plan;
+const demoCtx: ActionContext | null = null;
 const liveCtx: ActionContext = {
   renameNote: renamed.note,
     demo: demoControl(false),
@@ -578,16 +620,16 @@ server.on("error", (e: NodeJS.ErrnoException) => {
   throw e;
 });
 server.listen(port, "127.0.0.1", async () => {
-  const url = `http://127.0.0.1:${port}/?token=${token}`;
-  // The launch URL holds the per-launch token, so it goes to a private file, not the terminal.
+  // A2: the launch link is the public URL; signing in is what lets a window in, not the link.
+  const url = `${app.publicUrl}/`;
   const launchFile = await host.launch.publish(url);
-  process.stdout.write(`FocusTime running on http://127.0.0.1:${port} (${dev ? "dev" : "built"} UI, ${host.kind} host)\nConfig: ${cfgPath}\n${launchFile ? `Launch link: ${launchFile}\n` : ""}`);
+  process.stdout.write(`FocusTime running on ${app.publicUrl} (${dev ? "dev" : "built"} UI, ${host.kind} host)\nConfig: ${cfgPath}\nSign-in: ${entra ? "Microsoft" : "not set up (add [entra] to the app config)"}${app.demo ? ", demo" : ""}\n${launchFile ? `Launch link: ${launchFile}\n` : ""}`);
   host.launch.openWindow(url);
 });
 
 const stop = async () => {
   await host.launch.unpublish();
-  plan?.close();
+  planDb?.close();
   process.exit(0);
 };
 process.on("SIGINT", stop);

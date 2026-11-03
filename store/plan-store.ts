@@ -578,6 +578,38 @@ export const MIGRATIONS: readonly string[] = [
      marked_at TEXT NOT NULL,
      PRIMARY KEY (week_start, client_key)
    );`,
+  // 23: A2, people and sign-in. App-level tables (not one person's plan): who has signed in (the Entra object id is the
+  // user id), their server-side sessions (the cookie holds a random id; only its SHA-256 is kept), and sign-ins on their
+  // way through Microsoft or Google (state, nonce and PKCE verifier, kept 10 minutes, by the state's hash).
+  `CREATE TABLE users (
+     id TEXT PRIMARY KEY CHECK (length(id) BETWEEN 1 AND 64),
+     tenant_id TEXT NOT NULL,
+     upn TEXT NOT NULL,
+     display_name TEXT NOT NULL,
+     email TEXT,
+     time_zone TEXT,
+     created_at TEXT NOT NULL,
+     last_sign_in_at TEXT NOT NULL,
+     deleted_at TEXT
+   );
+   CREATE TABLE sessions (
+     id TEXT PRIMARY KEY,
+     user_id TEXT NOT NULL,
+     demo INTEGER NOT NULL DEFAULT 0 CHECK (demo IN (0, 1)),
+     csrf TEXT NOT NULL,
+     created_at TEXT NOT NULL,
+     last_seen_at TEXT NOT NULL,
+     expires_at TEXT NOT NULL
+   );
+   CREATE INDEX sessions_user ON sessions(user_id);
+   CREATE TABLE auth_requests (
+     state TEXT PRIMARY KEY,
+     kind TEXT NOT NULL CHECK (kind IN ('microsoft', 'google')),
+     nonce TEXT NOT NULL,
+     verifier TEXT NOT NULL,
+     user_id TEXT,
+     created_at TEXT NOT NULL
+   );`,
 ];
 
 import type { AzureWriteEntry, TeamsStatusEntry } from "../actions/account-types.ts";
@@ -826,7 +858,10 @@ export class PlanError extends Error {}
  * `files` (the host's, A1): makes the store's folder and keeps the file and its backups private. Absent: the path is
  * used as given (in-memory stores and tests).
  */
-export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedDateTime; log?: Logger; files?: StoreFiles }) {
+export type PlanDbOptions = { path: string; now: () => Temporal.ZonedDateTime; log?: Logger; files?: StoreFiles };
+
+/** The plan store's database, opened and migrated once per process (A2: shared by everyone; each person gets a store on it). */
+export function openPlanDb(opts: PlanDbOptions): DatabaseSync {
   if (opts.path !== ":memory:") opts.files?.prepare(opts.path);
   const db = new DatabaseSync(opts.path);
   if (opts.path !== ":memory:") opts.files?.secure(opts.path);
@@ -839,6 +874,16 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
     const n = (db.prepare("SELECT COUNT(*) AS n FROM dedupe_log WHERE table_name = 'week_features'").get() as { n: number }).n;
     if (n > 0) opts.log({ source: "plan", op: "dedupe_week_items", count: n });
   }
+  return db;
+}
+
+/** A plan store on its own database (tests, demo sessions and scripts): opened, migrated, closed with the store. */
+export function createPlanStore(opts: PlanDbOptions) {
+  return planStoreOn(openPlanDb(opts), opts);
+}
+
+/** The plan store on an open database. `close` closes the database (so only the database's one owner calls it). */
+export function planStoreOn(db: DatabaseSync, opts: { now: () => Temporal.ZonedDateTime; path?: string; files?: StoreFiles }) {
 
   const stamp = (): ZonedStamp => opts.now().toString({ smallestUnit: "second" });
   const tx = <T>(fn: () => T): T => {
@@ -1428,7 +1473,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
      */
     reset(): string | null {
       let bak: string | null = null;
-      if (opts.path !== ":memory:") {
+      if (opts.path && opts.path !== ":memory:") {
         bak = `${opts.path}.bak-reset-${opts.now().toInstant().toString().replace(/[^0-9TZ]/g, "")}`;
         db.prepare("VACUUM INTO ?").run(bak);
         opts.files?.secure(bak);
@@ -1842,7 +1887,7 @@ export function createPlanStore(opts: { path: string; now: () => Temporal.ZonedD
   };
 }
 
-export type PlanStore = ReturnType<typeof createPlanStore>;
+export type PlanStore = ReturnType<typeof planStoreOn>;
 
 function schemaVersion(db: DatabaseSync): number {
   return ((db.prepare("SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations").get() as Row).v as number) ?? 0;

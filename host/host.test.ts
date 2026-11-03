@@ -144,7 +144,7 @@ describe("local host", () => {
   });
   it("keeps the demo flag and the plan store private", async () => {
     const root = mkdtempSync(join(tmpdir(), "focustime-host-"));
-    const h = createLocalHost({ port: 5999, token: "t", headless: true, open: false, noReopen: true, now: () => Temporal.Now.instant(), env: { XDG_DATA_HOME: root, XDG_CONFIG_HOME: root, XDG_CACHE_HOME: root, XDG_RUNTIME_DIR: root } });
+    const h = createLocalHost({ port: 5999, headless: true, open: false, noReopen: true, now: () => Temporal.Now.instant(), env: { XDG_DATA_HOME: root, XDG_CONFIG_HOME: root, XDG_CACHE_HOME: root, XDG_RUNTIME_DIR: root } });
     expect(h.kind).toBe("local");
     expect(h.files.demoFlag.get()).toBe(false);
     await h.files.demoFlag.set(true);

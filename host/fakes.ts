@@ -56,10 +56,11 @@ export function memorySecrets(initial: Record<string, string> = {}, opts: { lock
 }
 
 /** Settings kept as config text in memory: validated like the file, with no backups. */
-export function memoryConfig(initial = STARTER_TOML): HostConfig & { text: () => string } {
+export function memoryConfig(initial = STARTER_TOML, app: string | null = null): HostConfig & { text: () => string } {
   let text = initial;
   return {
     text: () => text,
+    app: async () => app,
     load: async () => ({ path: "memory", parsed: parseConfig(text) }),
     write: async (edit) => {
       const next = edit(text);

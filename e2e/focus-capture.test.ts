@@ -66,7 +66,7 @@ describe.skipIf(!CHROMIUM)("Top bar Focus and Quick capture (browser, demo mode)
     await input.press("Enter");
     // Step 15.3: Sort later (nothing the rules recognize) saves it unsorted, with the chosen client.
     await expect.poll(() => page.locator(".cap-box .co-notice").textContent()).toBe("Saved to the inbox to sort later");
-    const inbox = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "capture.load", input: {} }) }).then((r) => r.json()));
+    const inbox = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "capture.load", input: {} }) }).then((r) => r.json()));
     expect(inbox.data.inbox.find((c: { text: string }) => c.text === "ask about the intake form")).toMatchObject({ clientKey: "Atlas" });
     await page.keyboard.press("Escape");
     await page.keyboard.press("n");

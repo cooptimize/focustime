@@ -104,19 +104,17 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("an out-of-date window (old launch token) says Reopen FocusTime with a button, never Session expired", async () => {
+  it("an ended session says You're signed out with Sign in again, never Session expired (A2)", async () => {
     const { page } = await freshPage(h);
     await today(page);
-    const port = new URL(page.url()).port;
-    await page.context().addCookies([{ name: `focustime_${port}`, value: "an-old-token", url: `http://127.0.0.1:${port}/`, httpOnly: true, sameSite: "Strict" }]);
+    // The session ends at the server (signed out in another window): the next call finds no session.
+    await page.evaluate(() => fetch("/auth/logout", { method: "POST", headers: { "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" } }));
     await openSettings(page);
     const banner = page.locator(".stale-banner");
     await banner.waitFor({ timeout: 15_000 });
-    await expect(banner.textContent()).resolves.toContain("FocusTime was restarted, so this window is out of date.");
+    await expect(banner.textContent()).resolves.toContain("You're signed out of FocusTime.");
     await expect(page.getByText(/session expired/i).count()).resolves.toBe(0);
-    // The test server can't open windows, so the button says how to reopen by hand.
-    await banner.getByRole("button", { name: "Reopen FocusTime" }).click();
-    await expect.poll(() => banner.textContent(), { timeout: 5000 }).toContain("Open it again the way you started it.");
+    await expect(banner.getByRole("button", { name: "Sign in again" }).count()).resolves.toBe(1);
     await page.close();
   }, T);
 });

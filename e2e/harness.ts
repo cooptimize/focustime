@@ -4,7 +4,7 @@
 // config, plan store, cache or the running service.
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -26,9 +26,9 @@ export type Harness = { url: string; browser: Browser; stop: () => Promise<void>
 
 export async function startDemo(): Promise<Harness> {
   const dir = await mkdtemp(join(tmpdir(), "focustime-e2e-"));
-  const env = { ...process.env, XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"), XDG_CACHE_HOME: join(dir, "cache"), XDG_RUNTIME_DIR: join(dir, "run") };
+  // A2: no sign-in is set up here; the sign-in page offers "Try the demo", which every test uses.
+  const env = { ...process.env, FOCUSTIME_DEMO: "1", XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"), XDG_CACHE_HOME: join(dir, "cache"), XDG_RUNTIME_DIR: join(dir, "run") };
   await mkdir(join(dir, "data", "focustime"), { recursive: true });
-  await writeFile(join(dir, "data", "focustime", "demo-mode"), "on\n");
   const port = await freePort();
   const root = resolve(import.meta.dirname, "..");
   const child: ChildProcess = spawn(process.execPath, ["server/main.ts", "--dev", "--no-open", "--no-reopen", "--headless", "--port", String(port), "--clock", NOW], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
@@ -43,7 +43,7 @@ export async function startDemo(): Promise<Harness> {
   const url = (JSON.parse(await readFile(launch, "utf8")) as { url: string }).url;
   const browser = await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu"] });
   return {
-    url: `${url}&now=${encodeURIComponent(NOW)}`,
+    url: `${url}?now=${encodeURIComponent(NOW)}`,
     browser,
     stop: async () => {
       await browser.close().catch(() => {});
@@ -54,25 +54,41 @@ export async function startDemo(): Promise<Harness> {
   };
 }
 
-/** A fresh page on a fresh demo store (demo off and on again reseeds it). */
+/** A fresh page in its own browser context: the sign-in page, then "Try the demo" (a new demo session, a fresh store). */
 export async function freshPage(h: Harness, viewport = { width: 1920, height: 1080 }): Promise<{ page: Page; errors: string[] }> {
   const page = await h.browser.newPage({ viewport });
   const errors: string[] = [];
   // Vite's dev client reports its websocket (HMR is off in the server): not an app error.
   page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
-  await page.goto(h.url);
-  await page.waitForSelector(".topbar", { timeout: 60_000 });
-  for (const on of [false, true])
-    await page.evaluate((on) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "demo.set", input: { on } }) }), on);
-  await page.evaluate(() => {
+  await page.addInitScript(() => {
     localStorage.setItem("focustime.hint.flow", "dismissed");
     localStorage.setItem("focustime.hint.picktime", "1");
   });
-  await page.reload();
+  await page.goto(h.url);
+  await page.getByRole("button", { name: /Try the demo/ }).click({ timeout: 60_000 });
   await page.waitForSelector(".demo-tag", { timeout: 30_000 });
   // Step 17.5: a slow first load plays the opening over the app; tests start once it's gone.
   await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
   return { page, errors };
+}
+
+/**
+ * Opens FocusTime in this page: the app if its context already has a session, else the sign-in page and "Try the
+ * demo". Returns once the app is up (the opening may still be playing).
+ */
+export async function openApp(page: Page, h: Harness): Promise<void> {
+  await page.goto(h.url);
+  const demo = page.getByRole("button", { name: /Try the demo/ });
+  // The app (or its opening) means a session; the sign-in page means none.
+  await Promise.race([page.waitForSelector(".topbar, .brand-stage", { timeout: 60_000 }), demo.waitFor({ timeout: 60_000 })]);
+  if (await demo.count()) await demo.click();
+}
+
+/** A new window on the same session (its cookies, nothing stored locally), like opening FocusTime again. */
+export async function sameSession(h: Harness, page: Page, opts: Parameters<Browser["newContext"]>[0] = { viewport: { width: 1920, height: 1080 } }) {
+  const ctx = await h.browser.newContext(opts);
+  await ctx.addCookies(await page.context().cookies());
+  return ctx;
 }
 
 /** Opens Today › Plan on today (Monday): P from Today › Now (step 16.2). */
