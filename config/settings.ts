@@ -3,7 +3,6 @@
 // throw SettingsInputError with the field they belong to; value problems come back from parseConfig per field.
 import { WEEKDAY_KEYS, type WeekdayKey } from "../week/hours.ts";
 import { hoursBody, removeValue, replaceArrayTables, replaceSection, setValue, tomlValue, type TomlValue } from "./edit.ts";
-import { parseConfig } from "./schema.ts";
 import { NOTIFY_KINDS } from "../plan/notify.ts";
 
 export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap"] as const;
@@ -45,11 +44,8 @@ const clientKey = (v: unknown) => {
   return k;
 };
 
-/**
- * The text edit for one section. `extra.chromiumCommand` is written to [chromium] when a client switches to Chromium
- * and none is set yet.
- */
-export function settingsEdit(section: SettingsSection, input: unknown, extra: { chromiumCommand?: string[] | null } = {}): (text: string) => string {
+/** The text edit for one section. */
+export function settingsEdit(section: SettingsSection, input: unknown): (text: string) => string {
   const v = obj(input, section);
   switch (section) {
     case "hours": {
@@ -220,7 +216,7 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
       };
     }
     case "client": {
-      only(v, ["key", "color", "name", "browser", "profile", "openStates", "follow"], "clients");
+      only(v, ["key", "color", "name", "openStates", "follow"], "clients");
       const key = clientKey(v.key);
       const f = `clients.${key}`;
       const table: Record<string, TomlValue> = {};
@@ -228,24 +224,13 @@ export function settingsEdit(section: SettingsSection, input: unknown, extra: { 
       if (color) table.color = color;
       const name = v.name == null ? "" : str(v.name, `${f}.name`, 60);
       if (name) table.name = name;
-      const browser = v.browser == null ? "edge" : str(v.browser, `${f}.browser`, 20);
-      table.browser = browser;
-      const profile = v.profile == null ? "" : str(v.profile, `${f}.profile`, 64);
-      if (profile) table.profile = profile;
       const open = v.openStates == null ? [] : strList(v.openStates, `${f}.open_states`).filter(Boolean);
       if (open.length) table.open_states = open;
       if (v.follow !== undefined && v.follow !== null && v.follow !== false) {
         if (v.follow !== true) throw new SettingsInputError(`${f}.follow`, "Must be true or false");
         table.follow = true;
       }
-      return (text) => {
-        let t = setValue(text, "clients", key, table);
-        if (browser === "chromium" && extra.chromiumCommand?.length) {
-          const now = parseConfig(t);
-          if (now.ok && !now.config.chromium.command.length) t = setValue(t, "chromium", "command", extra.chromiumCommand, "Chromium for client links (Settings > Clients).");
-        }
-        return t;
-      };
+      return (text) => setValue(text, "clients", key, table);
     }
   }
 }

@@ -91,7 +91,7 @@ describe("demo mode (D272)", () => {
     expect(DEMO_REFUSED).toEqual(expect.arrayContaining(["write.confirm", "devops.confirm", "devops.set_write_pat", "secret.set", "link.open", "data.export"]));
     expect(ctx.writePats).toBeUndefined();
     expect(ctx.devopsWriter).toBeUndefined();
-    expect(ctx.launch).toBeUndefined();
+    expect(ctx.links).toBeUndefined();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

@@ -14,7 +14,7 @@ import { WeekMark } from "./brand/Brand.tsx";
 import { CloseReverse, MomentOverlay, Opening } from "./brand/Opening.tsx";
 import { mustsDone, sourceLines } from "./brand/opening.ts";
 import type { Theme } from "../config/schema.ts";
-import { NOTICE_EVENT, openWorkItem } from "./WorkLink.tsx";
+import { NOTICE_EVENT, openChecked, openWorkItem, type Opened } from "./WorkLink.tsx";
 import { DevOpsWriteCtx, useDevOpsWriteFlow } from "./DevOpsWrite.tsx";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
 import { HelpFinder } from "./HelpFinder.tsx";
@@ -188,7 +188,7 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   // Step 17: after Done in Plan the week, offer Look ahead 4 weeks when it is due (every other Thursday).
   const [offerAhead, setOfferAhead] = useState(false);
-  // Notices from work item links (e.g. "No Edge profile set for Fabrikam"), shown for a few seconds.
+  // Notices from work item links (e.g. "Could not start the browser"), shown for a few seconds.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const on = (e: Event) => {
@@ -1136,7 +1136,7 @@ export function App() {
       canWrite: !!data.canWrite,
       editEvent: (input) => void writes.edit(input),
       rsvp: (input) => void writes.rsvp(input),
-      openOutlook: (url) => void call("outlook.open", { url }).catch((e: unknown) => setNotice(e instanceof Error ? e.message : "Could not open Outlook")),
+      openOutlook: (url) => void call<Opened>("outlook.open", { url }).then(openChecked).catch((e: unknown) => setNotice(e instanceof Error ? e.message : "Could not open Outlook")),
       timeboxChange: (action, input) => void (tbEnvRef.current && tbChange(tbEnvRef.current, action, input)),
       startTimeboxFocus: (tb) => void runTimer("timer.start", { timeboxId: tb.id }).then((ok) => ok && setFocusOpen(true)),
       openHelp: (t) => {

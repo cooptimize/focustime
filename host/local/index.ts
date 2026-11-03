@@ -6,6 +6,7 @@ import { localPaths } from "./paths.ts";
 import { createSnapshotStore } from "./snapshots.ts";
 import { createPhotoCache } from "./photos.ts";
 import { localFiles } from "./files.ts";
+import { fileConfig } from "./config-file.ts";
 import { createLoopback } from "./loopback.ts";
 import { closeDesktopNotification, desktopNotify, notifySend } from "./notify.ts";
 import { localLaunch, localLinks, type LaunchOptions } from "./launch.ts";
@@ -32,6 +33,7 @@ export function createLocalHost(o: LocalHostOptions): Host {
       setApp: (a, v) => setAppSecret(a, v),
       writePat: { get: (k) => getWritePat(k), set: (k, v) => setWritePat(k, v), clear: (k) => clearWritePat(k) },
     },
+    config: fileConfig(paths.config),
     paths,
     snapshots: createSnapshotStore(paths.cache),
     photos: createPhotoCache(paths.cache),

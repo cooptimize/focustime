@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createAzureHost, type NoticeInbox } from "./azure/index.ts";
-import { createFakeHost, memoryPhotos, memorySecrets, memorySnapshots } from "./fakes.ts";
+import { createFakeHost, memoryConfig, memoryPhotos, memorySecrets, memorySnapshots } from "./fakes.ts";
 import { createLocalHost } from "./local/index.ts";
 import { localLinks } from "./local/launch.ts";
 import { localPaths } from "./local/paths.ts";
@@ -21,7 +21,7 @@ function inbox(): NoticeInbox & { items: Map<string, Notice> } {
 }
 const azure = () => {
   const box = inbox();
-  return { host: createAzureHost({ secrets: memorySecrets(), snapshots: memorySnapshots(), photos: memoryPhotos(), inbox: box }), box };
+  return { host: createAzureHost({ secrets: memorySecrets(), config: memoryConfig(), snapshots: memorySnapshots(), photos: memoryPhotos(), inbox: box }), box };
 };
 
 function snapshotContract(name: string, make: () => SnapshotStore) {
@@ -82,6 +82,13 @@ function hostContract(name: string, make: () => Host) {
       expect(h.clock.now()).toBeInstanceOf(Temporal.Instant);
       expect(() => Temporal.Now.instant().toZonedDateTimeISO(h.clock.zone())).not.toThrow();
       expect(h.facts().kind).toBe(h.kind);
+    });
+    it("loads settings and refuses an edit that doesn't validate", async () => {
+      const h = make();
+      const before = await h.config.load();
+      const bad = await h.config.write((t) => `${t}\n[nonsense]\nx = 1\n`);
+      expect(bad.ok).toBe(false);
+      expect((await h.config.load()).parsed).toEqual(before.parsed);
     });
     it("keeps the demo flag", async () => {
       const h = make();

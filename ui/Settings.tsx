@@ -940,21 +940,17 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
   const reached = data.dataverseReached;
   const [name, setName] = useState(c.setting.name ?? "");
   const [color, setColor] = useState(c.setting.color ?? "");
-  const [browser, setBrowser] = useState(c.setting.browser);
-  const [profile, setProfile] = useState(c.profile ?? "");
   const [open, setOpen] = useState(c.setting.openStates.join(", "));
   const [keep, setKeep] = useState(c.setting.follow);
   const { problems, status, save } = useSave(onSavedData);
   const f = `clients.${c.key}`;
-  const info = data.browsers[browser];
-  const profiles = info.profiles;
   return (
     <form
       className="set-form set-client"
       style={{ "--c": color ? (color.startsWith("#") ? color : `var(--client-${color})`) : "var(--client-none)" } as CSSProperties}
       onSubmit={(e) => {
         e.preventDefault();
-        void save("client", { key: c.key, name, color, browser, profile, openStates: open.split(",").map((x) => x.trim()).filter(Boolean), follow: keep });
+        void save("client", { key: c.key, name, color, openStates: open.split(",").map((x) => x.trim()).filter(Boolean), follow: keep });
       }}
     >
       <h3>
@@ -978,35 +974,6 @@ function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; 
           {color.startsWith("#") && <span className="set-hint">Custom color {color} (pick a palette color to use theme-aware colors)</span>}
           <Problems all={problems} field={`${f}.color`} />
         </fieldset>
-        <Field label="Open links in">
-          <select
-            value={browser}
-            onChange={(e) => {
-              setBrowser(e.target.value as typeof browser);
-              setProfile("");
-            }}
-          >
-            <option value="edge" disabled={!data.browsers.edge.found}>
-              Edge{data.browsers.edge.found ? "" : " (not installed)"}
-            </option>
-            <option value="chromium" disabled={!data.browsers.chromium.found}>
-              Chromium{data.browsers.chromium.found ? "" : " (not installed)"}
-            </option>
-          </select>
-          <Problems all={problems} field={`${f}.browser`} />
-        </Field>
-        <Field label="Profile" hint={info.found ? "Profiles read from the browser (names only)." : "That browser isn't installed."}>
-          <select value={profile} onChange={(e) => setProfile(e.target.value)} disabled={!info.found}>
-            <option value="">None (default browser)</option>
-            {profile && !profiles.some((x) => x.directory === profile) && <option value={profile}>{profile} (not found)</option>}
-            {profiles.map((x) => (
-              <option key={x.directory} value={x.directory}>
-                {x.name} ({x.directory})
-              </option>
-            ))}
-          </select>
-          <Problems all={problems} field={`${f}.profile`} />
-        </Field>
         <Field label="Followed" hint={followText(c.follow, data.planning.followGraceDays)}>
           <label className="set-check">
             <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} disabled={c.follow?.why === "internal" || c.follow?.why === "standing"} /> Keep following

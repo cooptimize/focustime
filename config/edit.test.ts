@@ -2,7 +2,8 @@ import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { backupDir, KEEP_BACKUPS, removeValue, replaceArrayTables, replaceSection, setValue, tomlValue, writeConfig } from "./edit.ts";
+import { removeValue, replaceArrayTables, replaceSection, setValue, tomlValue } from "./edit.ts";
+import { backupDir, KEEP_BACKUPS, writeConfig } from "../host/local/config-file.ts";
 import { parseConfig } from "./schema.ts";
 import { STARTER_TOML } from "./starter.ts";
 

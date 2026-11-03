@@ -111,7 +111,7 @@ describe("command menu (built from the action registry)", () => {
   it("searches by words in any order", () => {
     const list = commandList(env().e);
     expect(filterCommands(list, "pick drop").map((c) => c.action)).toEqual(["pick.remove"]);
-    expect(filterCommands(list, "EDGE open").map((c) => c.action)).toEqual(["ui.open_focused", "link.open"]);
+    expect(filterCommands(list, "BROWSER open").map((c) => c.action)).toEqual(["ui.open_focused", "link.open"]);
     expect(filterCommands(list, "plan a day")[0]?.label).toBe("Plan a day…");
   });
   it("commit is only available while Plan the day is open", () => {
@@ -129,8 +129,8 @@ describe("⋯ menus", () => {
   it("a pick: open in Edge, size, move, start focus, done, drop", async () => {
     const t = env();
     const m = pickMenu(t.e, pick);
-    expect(items(m).map((i) => i.label)).toEqual(["Open in Edge", "Set size", "Move", "Start focus", "Timebox", "Needs help from…", "Mark done", "I'll make it up…", "Drop"]);
-    await find(m, "Open in Edge").run!();
+    expect(items(m).map((i) => i.label)).toEqual(["Open in browser", "Set size", "Move", "Start focus", "Timebox", "Needs help from…", "Mark done", "I'll make it up…", "Drop"]);
+    await find(m, "Open in browser").run!();
     await find(find(m, "Set size").next!(), "S").run!();
     expect(t.calls).toEqual([["link", "internal", pick.itemUrl], ["pick.set_size", { id: 7, size: "S" }]]);
   });
@@ -143,7 +143,7 @@ describe("⋯ menus", () => {
   });
   it("a work item: open, add to the plan (stories only), draft story for an empty feature", () => {
     const story = itemMenu(env().e, "internal", item(1));
-    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Open in Edge", ""], ["Add to the plan", ""], ["Timebox…", ""], ["Needs help from…", ""]]);
+    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Open in browser", ""], ["Add to the plan", ""], ["Timebox…", ""], ["Needs help from…", ""]]);
     const feature = itemMenu(env().e, "internal", item(2, "portfolio"));
     expect(find(feature, "Add to the plan").disabled).toMatch(/above story level/);
     expect(find(feature, "Add a draft story")).toBeTruthy();

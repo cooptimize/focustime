@@ -71,14 +71,6 @@ Cooptimize = "#4a7fd4"
 [plan]
 pickable_portfolio_types = ["Recurring"]
 
-# Work item links open in the client's Edge profile. See the profiles with:
-#   node scripts/edge-profiles.ts
-# A client with no profile opens in the default browser.
-# [edge]
-# command = ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]
-# [edge.profiles]
-# Cooptimize = "Default"
-
 # Display. Theme: "cooptimize-dark" (default), "cooptimize-light" or "neutral". Settings changes it too.
 [ui]
 theme = "cooptimize-dark"

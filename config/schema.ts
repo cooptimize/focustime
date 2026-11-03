@@ -1,6 +1,5 @@
 // Parse and validate ~/.config/focustime/config.toml. Pure: text in, config or per-field errors out.
 import { parse, TomlError } from "smol-toml";
-import { PROFILE_DIR } from "../links/edge.ts";
 import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
 import { DEFAULT_THRESHOLDS, type RoadmapThresholds } from "../plan/roadmap.ts";
 import { DEFAULT_NOTIFY, NOTIFY_KINDS, type NotifyKind, type NotifySettings } from "../plan/notify.ts";
@@ -28,16 +27,12 @@ export type AppConfig = {
   week: WeekConfig;
   /** Client colors keyed by reporting nickname (or account name when there is none): a hex or a palette slot's CSS variable. */
   clients: Record<string, string>;
-  /** Per-client settings from [clients] (step 6b, Settings): display name, color, link browser and profile, open states. */
+  /** Per-client settings from [clients] (step 6b, Settings): display name, color, open states. */
   clientSettings: Record<string, ClientSetting>;
-  /** Chromium for client links (step 6b). Empty: not set up. */
-  chromium: { command: string[] };
   /** Expiry dates I entered for keyring secrets (the keyring doesn't know them). */
   secretExpiry: Partial<Record<"dataverse-client-secret" | "google-client-secret", string>>;
   /** Plan settings (step 5). */
   plan: PlanConfig;
-  /** Where work item links open (step 5.5). */
-  edge: EdgeConfig;
   /** Display (step 6b). */
   ui: UiConfig;
   /** Focus sounds, playlists and media control (step 10). */
@@ -82,17 +77,12 @@ export const DEFAULT_UI: UiConfig = { theme: "cooptimize-dark", viewRange: "busi
 /** The style guide's client palette (tokens --client-<slot> in every theme). */
 export const CLIENT_SLOTS = ["teal", "violet", "ochre", "blue", "rose", "earth", "green", "slate"] as const;
 export type ClientSlot = (typeof CLIENT_SLOTS)[number];
-export const BROWSERS = ["edge", "chromium"] as const;
-export type Browser = (typeof BROWSERS)[number];
 
 export type ClientSetting = {
   /** "#rrggbb" or a palette slot. */
   color: string | null;
   /** Shown instead of the Dataverse nickname; null keeps the nickname. */
   name: string | null;
-  browser: Browser;
-  /** Profile directory in that browser ("Default", "Profile 3"); null: none set here (Edge falls back to [edge.profiles]). */
-  profile: string | null;
   /** DevOps states treated as open although DevOps files them as Completed or Removed. */
   openStates: string[];
   /** Keep following this client although it has no current Focus Time (step 6d). */
@@ -102,16 +92,6 @@ export type ClientSetting = {
 /** A color setting as CSS: a hex as is, a slot as its token. */
 export const colorCss = (c: string) => ((CLIENT_SLOTS as readonly string[]).includes(c) ? `var(--client-${c})` : c);
 
-export type EdgeConfig = {
-  /** Edge's launch command as an argument array, e.g. ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]. Empty: no Edge. */
-  command: string[];
-  /** clientKey → Edge profile directory ("Default", "Profile 3"). */
-  profiles: Record<string, string>;
-  /** Runs with the link for clients with no profile. */
-  fallbackCommand: string[];
-};
-
-export const DEFAULT_FALLBACK_COMMAND = ["omarchy-launch-browser"];
 
 export type PlanConfig = {
   /** Portfolio-level work item types that can still be picked (Q20), matched without regard to case. */
@@ -292,7 +272,7 @@ export function parseConfig(text: string): ParseResult {
     for (const [k, v] of Object.entries(cl)) {
       if (typeof v === "string") {
         if (!HEX.test(v)) err(`clients.${k}`, 'Must be a color like "#1f9e8f" or a table');
-        else (clients[k] = v), (clientSettings[k] = { color: v, name: null, browser: "edge", profile: null, openStates: [], follow: false });
+        else (clients[k] = v), (clientSettings[k] = { color: v, name: null, openStates: [], follow: false });
         continue;
       }
       if (!isTable(v)) {
@@ -301,7 +281,8 @@ export function parseConfig(text: string): ParseResult {
       }
       const f = `clients.${k}`;
       for (const x of Object.keys(v)) if (!["color", "name", "browser", "profile", "open_states", "follow"].includes(x)) err(`${f}.${x}`, "Unknown field");
-      const c: ClientSetting = { color: null, name: null, browser: "edge", profile: null, openStates: [], follow: false };
+      // browser and profile (A1): the removed browser profiles, accepted and ignored in older files.
+      const c: ClientSetting = { color: null, name: null, openStates: [], follow: false };
       if (v.color !== undefined) {
         if (!colorOk(v.color)) err(`${f}.color`, `Must be a palette color (${CLIENT_SLOTS.join(", ")}) or "#rrggbb"`);
         else c.color = v.color as string;
@@ -309,14 +290,6 @@ export function parseConfig(text: string): ParseResult {
       if (v.name !== undefined) {
         if (typeof v.name !== "string" || !v.name.trim() || v.name.length > 60) err(`${f}.name`, "Must be 1 to 60 characters");
         else c.name = v.name.trim();
-      }
-      if (v.browser !== undefined) {
-        if (typeof v.browser !== "string" || !(BROWSERS as readonly string[]).includes(v.browser)) err(`${f}.browser`, 'Must be "edge" or "chromium"');
-        else c.browser = v.browser as Browser;
-      }
-      if (v.profile !== undefined) {
-        if (typeof v.profile !== "string" || !PROFILE_DIR.test(v.profile)) err(`${f}.profile`, 'Must be a profile directory, e.g. "Default" or "Profile 3"');
-        else c.profile = v.profile;
       }
       if (v.open_states !== undefined) {
         if (!Array.isArray(v.open_states) || v.open_states.some((s) => typeof s !== "string" || !s.trim() || s.length > 60)) err(`${f}.open_states`, 'Must be a list of DevOps state names, e.g. ["Resolved"]');
@@ -328,18 +301,6 @@ export function parseConfig(text: string): ParseResult {
       }
       clientSettings[k] = c;
       if (c.color) clients[k] = colorCss(c.color);
-    }
-  }
-
-  // [chromium] (optional): launch command for clients whose links open in Chromium.
-  const chromium = { command: [] as string[] };
-  if (raw.chromium !== undefined) {
-    const t = isTable(raw.chromium) ? raw.chromium : (err("chromium", "Must be a [chromium] table"), null);
-    if (t) for (const k of Object.keys(t)) if (k !== "command") err(`chromium.${k}`, "Unknown field");
-    const v = t?.command;
-    if (v !== undefined) {
-      if (!Array.isArray(v) || !v.length || v.some((w) => typeof w !== "string" || !w.trim() || w.length > 300)) err("chromium.command", 'Must be a non-empty list of words, e.g. ["uwsm-app", "--", "/usr/bin/chromium"]');
-      else chromium.command = v as string[];
     }
   }
 
@@ -425,31 +386,9 @@ export function parseConfig(text: string): ParseResult {
       });
   }
 
-  // [edge] (optional): launch command and clientKey → profile directory
-  const edge: EdgeConfig = { command: [], profiles: {}, fallbackCommand: DEFAULT_FALLBACK_COMMAND };
-  if (raw.edge !== undefined) {
-    const t = isTable(raw.edge) ? raw.edge : (err("edge", "Must be an [edge] table"), null);
-    if (t) for (const k of Object.keys(t)) if (!["command", "fallback_command", "profiles"].includes(k)) err(`edge.${k}`, "Unknown field");
-    const argv = (key: string): string[] | null => {
-      const v = t?.[key];
-      if (v === undefined) return null;
-      if (!Array.isArray(v) || !v.length || v.some((w) => typeof w !== "string" || !w.trim() || w.length > 300)) {
-        err(`edge.${key}`, 'Must be a non-empty list of words, e.g. ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]');
-        return null;
-      }
-      return v as string[];
-    };
-    edge.command = argv("command") ?? [];
-    edge.fallbackCommand = argv("fallback_command") ?? DEFAULT_FALLBACK_COMMAND;
-    const prof = t?.profiles;
-    if (prof !== undefined && !isTable(prof)) err("edge.profiles", "Must be an [edge.profiles] table");
-    else if (prof)
-      for (const [k, v] of Object.entries(prof)) {
-        if (typeof v !== "string" || !PROFILE_DIR.test(v)) err(`edge.profiles.${k}`, 'Must be an Edge profile directory, e.g. "Default" or "Profile 3"');
-        else edge.profiles[k] = v;
-      }
-    if (Object.keys(edge.profiles).length && !edge.command.length) err("edge.command", "Missing (needed for edge.profiles)");
-  }
+  // [edge] and [chromium] (A1): browser profiles were removed; links open in the person's browser. Older files keep
+  // the sections, accepted and ignored.
+  for (const k of ["edge", "chromium"] as const) if (raw[k] !== undefined && !isTable(raw[k])) err(k, `Must be a [${k}] table`);
 
   // [ui] (optional): theme
   const ui: UiConfig = { ...DEFAULT_UI };
@@ -686,10 +625,8 @@ export function parseConfig(text: string): ParseResult {
       },
       clients,
       clientSettings,
-      chromium,
       secretExpiry,
       plan: { pickablePortfolioTypes, ...planOpts },
-      edge,
       ui,
       focus,
       timebox,

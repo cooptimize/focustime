@@ -1,13 +1,14 @@
 // The hosted app's host (A1 stub). Desktop-only operations throw HostUnavailable with a plain message; the rest is
 // handed in (secrets, snapshots, photos, the in-app notice inbox), so A2 can back them with Key Vault and the database
 // and A6 with in-app notifications without changing core modules. Links open in the page that asked ("client").
-import { HostUnavailable, type Host, type HostPaths, type HostSecrets, type Notice, type PhotoCache, type SnapshotStore } from "../types.ts";
+import { HostUnavailable, type Host, type HostConfig, type HostPaths, type HostSecrets, type Notice, type PhotoCache, type SnapshotStore } from "../types.ts";
 
 /** Where in-app notices go until the page takes them (A6). */
 export type NoticeInbox = { add(n: Notice): string; remove(handle: string): void };
 
 export type AzureHostParts = {
   secrets: HostSecrets;
+  config: HostConfig;
   snapshots: SnapshotStore;
   photos: PhotoCache;
   inbox: NoticeInbox;
@@ -26,6 +27,7 @@ export function createAzureHost(p: AzureHostParts): Host {
   return {
     kind: "azure",
     secrets: p.secrets,
+    config: p.config,
     paths: noPaths,
     snapshots: p.snapshots,
     photos: p.photos,

@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { writeConfig } from "../config/edit.ts";
+import { writeConfig } from "../host/local/config-file.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../config/starter.ts";
 import { createPlanStore } from "../store/plan-store.ts";

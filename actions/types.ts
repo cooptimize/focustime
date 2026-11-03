@@ -102,24 +102,12 @@ export type SettingsClient = {
   devopsEmail: string | null;
   devops: boolean;
   setting: ClientSetting;
-  /** The profile links use now (a legacy [edge.profiles] entry counts for Edge). */
-  profile: string | null;
   /** The color as CSS (hex or palette token). */
   css: string | null;
   /** Whether FocusTime follows it (DevOps, Open half-days) and why (step 6d); null when it couldn't be worked out. */
   follow: FollowState | null;
   /** Step 14: the checked DevOps write PAT's owner (never the PAT), or null: this client stays read-only. */
   write: { name: string; email: string; org: string; validatedAt: string; expires: string | null } | null;
-};
-
-export type BrowserProfile = { directory: string; name: string };
-export type BrowserInfo = { found: boolean; profiles: BrowserProfile[] };
-/** The host's browsers (step 12, Q63): implemented in server/host.ts so no OS-specific code sits in actions/. */
-export type HostBrowsers = {
-  /** Installed Edge and Chromium and their profiles by name (read-only). */
-  detect: () => { edge: BrowserInfo; chromium: BrowserInfo & { command: string[] | null } };
-  /** The argument array that opens a client's link (its browser and profile, or the default browser). */
-  linkCommand: (cfg: AppConfig, clientKey: string, url: string) => { argv: string[]; profile: string | null; notice: string | null; browser: "edge" | "chromium" | "default" };
 };
 
 export type SettingsData = {
@@ -137,7 +125,6 @@ export type SettingsData = {
   /** Whether Dataverse answered for the client list; when not, Dataverse-owned values are unknown, not empty. */
   dataverseReached: boolean;
   palette: readonly string[];
-  browsers: { edge: BrowserInfo; chromium: BrowserInfo };
   secrets: { account: AppSecret; label: string; state: SecretPresence; expires: string | null }[];
   display: AppConfig["ui"] | null;
   data: { planStore: boolean };

@@ -47,7 +47,8 @@ import { titleFrom, weekPlanAction, weekPlanView, withTitles } from "./weekplan-
 import { weekNudges, withCurrentTitles, type NudgeTimes } from "../plan/weekplan.ts";
 import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
 
-import type { ActionResponse, HostBrowsers, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
+import type { HostLinks } from "../host/types.ts";
+import type { ActionResponse, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
 import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
 import { vmAction, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatus, type PresenceContext } from "./presence-actions.ts";
@@ -78,12 +79,10 @@ export type ActionContext = {
   plan?: PlanStore;
   /** Safe config write (config/edit.ts writeConfig): validate, back up, atomic replace. Absent: settings are read-only. */
   writeConfig?: (edit: (text: string) => string) => Promise<WriteResult>;
-  /** Start a program from an argument array, never a shell (link.open). Rejects when it can't start. */
-  launch?: (argv: string[]) => Promise<void>;
-  /** Settings (step 6b): keyring presence and app secret writes, local file reads for browser profiles, plan export. */
+  /** The host's links (A1): open a link in the person's browser (link.open, outlook.open). Absent: links don't open. */
+  links?: HostLinks;
+  /** Settings (step 6b): secret presence and app secret writes, plan export. */
   secrets?: SettingsContext["secrets"];
-  /** The host's browsers (step 12, Q63): detection and the link command, from server/host.ts. */
-  host?: HostBrowsers;
   exportPlan?: (json: string) => Promise<string>;
   /** Step 14: personal DevOps write PATs in the keyring, and the DevOps writer. Absent: DevOps stays read-only. */
   writePats?: WritePats;
@@ -536,21 +535,13 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       return { ok: true, data: await ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).connect({ write: true }) };
     }
     case "outlook.open": {
-      // Step 13: Outlook on the web, for meetings FocusTime won't change. Only Outlook links, in Cooptimize's profile.
+      // Step 13: Outlook on the web, for meetings FocusTime won't change. Only Outlook links, in the person's browser.
       const i = req.input as Record<string, unknown> | null;
       if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "url")) return bad("outlook.open takes { url }");
       const url = outlookLink(i.url);
       if (!url) return { ok: false, status: 422, error: "Only Outlook on the web links open from here" };
-      const cfg = await configured(ctx);
-      if (!cfg) return { ok: false, status: 409, error: "Fix the config first" };
-      if (!ctx.launch || !ctx.host) return { ok: false, status: 503, error: "Opening links is not available here" };
-      const cmd = ctx.host.linkCommand(cfg, INTERNAL_CLIENT, url);
-      try {
-        await ctx.launch(cmd.argv);
-      } catch {
-        return { ok: false, status: 500, error: "Could not start the browser" };
-      }
-      return { ok: true, data: { opened: cmd.profile ? "edge" : "default" } };
+      if (!ctx.links) return { ok: false, status: 503, error: "Opening links is not available here" };
+      return openLink(ctx.links, url);
     }
     case "collab.candidates":
     case "collab.suggest":
@@ -669,7 +660,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       return { ok: true, data: await weekLoad(ctx, input) };
     }
     case "link.open": {
-      // Open a work item link in that client's Edge profile. The link must be on the client's own DevOps org.
+      // Open a work item link in the person's browser. The link must be on the client's own DevOps org.
       const input = req.input as { clientKey?: unknown; url?: unknown } | undefined;
       if (typeof input !== "object" || input === null || Array.isArray(input)) return bad("link.open takes { clientKey, url }");
       for (const k of Object.keys(input)) if (k !== "clientKey" && k !== "url") return bad(`unknown input field ${k}`);
@@ -680,14 +671,8 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       const org = ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone).orgOf(key);
       const checked = checkDevOpsUrl(input.url, org);
       if (!checked.ok) return { ok: false, status: 422, error: checked.error };
-      if (!ctx.launch || !ctx.host) return { ok: false, status: 503, error: "Opening links is not available here" };
-      const plan = ctx.host.linkCommand(cfg, key, checked.url);
-      try {
-        await ctx.launch(plan.argv);
-      } catch {
-        return { ok: false, status: 500, error: plan.profile ? "Could not start Edge. Check [edge] command in config" : "Could not start the default browser" };
-      }
-      return { ok: true, data: { opened: plan.profile ? "edge" : "default", notice: plan.notice } };
+      if (!ctx.links) return { ok: false, status: 503, error: "Opening links is not available here" };
+      return openLink(ctx.links, checked.url);
     }
     case "source.status": {
       if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("source.status takes no input");
@@ -750,7 +735,6 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
           ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}),
           ...(ctx.plan ? { plan: ctx.plan } : {}),
           ...(ctx.secrets ? { secrets: ctx.secrets } : {}),
-          ...(ctx.host ? { host: ctx.host } : {}),
           ...(ctx.exportPlan ? { exportPlan: ctx.exportPlan } : {}),
         },
         action,
@@ -952,4 +936,16 @@ export function expiringFor(plan: PlanStore | undefined, cfg: AppConfig | null, 
     ],
     today,
   );
+}
+
+/**
+ * A1: a checked link opens in the person's browser through the host. "browser": the host opened it; "page": the page
+ * that asked opens it (the hosted app), so the link comes back.
+ */
+async function openLink(links: HostLinks, url: string): Promise<ActionResponse> {
+  try {
+    return (await links.open(url)) === "opened" ? { ok: true, data: { opened: "browser" } } : { ok: true, data: { opened: "page", url } };
+  } catch {
+    return { ok: false, status: 500, error: "Could not start the browser" };
+  }
 }

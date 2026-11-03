@@ -263,7 +263,7 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
   return {
     title: p.title,
     items: [
-      { id: "open", label: "Open in Edge", action: "link.open", ...(p.itemUrl ? {} : { disabled: p.kind === "intention" ? "An intention has no work item" : "A draft story isn't in DevOps yet" }), run: () => { if (p.itemUrl) env.openLink(p.clientKey, p.itemUrl); } },
+      { id: "open", label: "Open in browser", action: "link.open", ...(p.itemUrl ? {} : { disabled: p.kind === "intention" ? "An intention has no work item" : "A draft story isn't in DevOps yet" }), run: () => { if (p.itemUrl) env.openLink(p.clientKey, p.itemUrl); } },
       { id: "size", label: "Set size", hint: p.size, action: "pick.set_size", ...(past ? { disabled: PAST } : {}), next: () => sizeStep(env, p) },
       { id: "move", label: "Move", hint: past ? "to today or later" : "AM, PM, another day, Friday", action: "pick.move", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be moved", expected: true } : {}), next: () => moveStep(env, p) },
       {
@@ -412,7 +412,7 @@ export function itemMenu(env: MenuEnv, clientKey: string, item: WorkItem): MenuS
   return {
     title: `${item.type} ${item.id}: ${item.title}`,
     items: [
-      { id: "open", label: "Open in Edge", action: "link.open", run: () => env.openLink(clientKey, item.url) },
+      { id: "open", label: "Open in browser", action: "link.open", run: () => env.openLink(clientKey, item.url) },
       {
         id: "add",
         label: "Add to the plan",
@@ -1140,7 +1140,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
       id: "ui.open_focused",
       action: "ui.open_focused",
       group: "Keyboard",
-      label: "Open the focused work item in Edge",
+      label: "Open the focused work item in your browser",
       hint: "O",
       ...(env.focusedItem ? { run: () => env.openLink(env.focusedItem!.clientKey, env.focusedItem!.url) } : { disabled: "Focus a work item first (Tab to it)" }),
     },

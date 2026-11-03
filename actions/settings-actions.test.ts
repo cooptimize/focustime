@@ -1,12 +1,11 @@
 import { createSnapshotStore } from "../host/local/snapshots.ts";
-import { createHostBrowsers } from "../server/host.ts";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { writeConfig } from "../config/edit.ts";
+import { writeConfig } from "../host/local/config-file.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../config/starter.ts";
 import type { LogRecord } from "../log/logger.ts";
@@ -15,12 +14,6 @@ import { dispatch, type ActionContext } from "./dispatch.ts";
 import type { SettingsData } from "./types.ts";
 
 const SECRET = "FAKE-SETTINGS-SECRET-5d1e";
-const HOME = "/home/test";
-const LOCAL_STATE = JSON.stringify({ profile: { info_cache: { Default: { name: "Personal", other: "ignored" }, "Profile 2": { name: "Adatum work" } } } });
-const files: Record<string, string> = {
-  [`${HOME}/.local/share/applications/chromium.desktop`]: "[Desktop Entry]\nExec=/usr/bin/chromium %U\n",
-  [`${HOME}/.config/chromium/Local State`]: LOCAL_STATE,
-};
 
 function setup(text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"')) {
   const dir = mkdtempSync(join(tmpdir(), "c-settings-"));
@@ -35,41 +28,38 @@ function setup(text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@exam
     now: () => "2026-11-02T14:00:00Z",
     writeConfig: (edit) => writeConfig(path, edit),
     secrets: { state: async (a) => (stored.some((s) => s.account === a) ? "set" : "missing"), set: async (account, value) => void stored.push({ account, value }) },
-    host: createHostBrowsers({ readText: (p) => files[p] ?? null, home: HOME }),
   };
   const run = (action: string, input: unknown) => dispatch(c, { action, input });
   return { c, path, run, stored, dir };
 }
 
 describe("Settings (step 6b)", () => {
-  it("loads every section without any secret, with browser profiles by name only", async () => {
+  it("loads every section without any secret", async () => {
     const t = setup();
     const r = await t.run("settings.load", {});
     expect(r.ok).toBe(true);
     const d = (r as { data: SettingsData }).data;
     expect(d.hours?.weekdays.mon).toEqual([{ start: "09:00", end: "17:00" }]);
     expect(d.clients.map((c) => c.key)).toContain("T&S");
-    expect(d.browsers.chromium).toEqual({ found: true, profiles: [{ directory: "Default", name: "Personal" }, { directory: "Profile 2", name: "Adatum work" }] });
-    expect(JSON.stringify(d)).not.toContain("ignored");
     expect(d.dataverseReached).toBe(false);
     expect(d.secrets.map((s) => [s.account, s.state])).toEqual([["dataverse-client-secret", "missing"], ["google-client-secret", "missing"]]);
   });
 
-  it("saves a client as a table, keeps comments and the other clients, and sets Chromium up when chosen", async () => {
+  it("saves a client as a table and keeps comments and the other clients", async () => {
     const t = setup();
-    const r = await t.run("settings.save", { section: "client", values: { key: "Adatum", name: "Adatum Steel", color: "ochre", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"] } });
+    const r = await t.run("settings.save", { section: "client", values: { key: "Adatum", name: "Adatum Steel", color: "ochre", openStates: ["Resolved"] } });
     expect(r.ok).toBe(true);
     const text = readFileSync(t.path, "utf8");
     expect(text).toContain("# my own note at the top");
     expect(text).toContain("# T&S keeps its old color form");
     expect(text).toContain('"T&S" = "#1f9e8f"');
-    expect(text).toContain('Adatum = { color = "ochre", name = "Adatum Steel", browser = "chromium", profile = "Profile 2", open_states = ["Resolved"] }');
-    expect(text).toContain('[chromium]\ncommand = ["/usr/bin/chromium"]');
+    expect(text).toContain('Adatum = { color = "ochre", name = "Adatum Steel", open_states = ["Resolved"] }');
+    expect(text).not.toContain("[chromium]");
     const cfg = parseConfig(text);
-    expect(cfg.ok && cfg.config.clientSettings.Adatum).toEqual({ color: "ochre", name: "Adatum Steel", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"], follow: false });
+    expect(cfg.ok && cfg.config.clientSettings.Adatum).toEqual({ color: "ochre", name: "Adatum Steel", openStates: ["Resolved"], follow: false });
     expect(cfg.ok && cfg.config.clients.Adatum).toBe("var(--client-ochre)");
     // Round trip: saving the same values again changes nothing but the backup.
-    await t.run("settings.save", { section: "client", values: { key: "Adatum", name: "Adatum Steel", color: "ochre", browser: "chromium", profile: "Profile 2", openStates: ["Resolved"] } });
+    await t.run("settings.save", { section: "client", values: { key: "Adatum", name: "Adatum Steel", color: "ochre", openStates: ["Resolved"] } });
     expect(readFileSync(t.path, "utf8")).toBe(text);
   });
 
@@ -82,7 +72,7 @@ describe("Settings (step 6b)", () => {
     expect(hours.ok).toBe(false);
     const fields = (hours as { fields: { field: string }[] }).fields.map((f) => f.field);
     expect(fields).toEqual(expect.arrayContaining(["hours.time_zone", "hours.mon[0]"]));
-    const color = await t.run("settings.save", { section: "client", values: { key: "Adatum", color: "purple", browser: "edge" } });
+    const color = await t.run("settings.save", { section: "client", values: { key: "Adatum", color: "purple" } });
     expect(color).toMatchObject({ ok: false, fields: [{ field: "clients.Adatum.color" }] });
     expect(await t.run("settings.save", { section: "nope", values: {} })).toMatchObject({ ok: false, status: 400 });
     expect(readFileSync(t.path, "utf8")).toBe(before);

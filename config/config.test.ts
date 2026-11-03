@@ -209,25 +209,16 @@ describe("[plan] planning settings (step 6c, Q36)", () => {
   });
 });
 
-describe("[edge] link profiles (step 5.5)", () => {
-  it("is optional: no Edge, links fall back to the default browser", () => {
-    const r = parseConfig(valid);
-    expect(r.ok && r.config.edge).toEqual({ command: [], profiles: {}, fallbackCommand: ["omarchy-launch-browser"] });
+describe("removed browser profiles (A1)", () => {
+  it("an older file's [edge], [chromium] and client browser and profile still load, and are ignored", () => {
+    const r = parseConfig(`${valid.replace("[clients]\n", '[clients]\nAdatum = { color = "teal", browser = "chromium", profile = "Profile 3" }\n')}\n[edge]\ncommand = ["edge"]\n[edge.profiles]\nAdatum = "Profile 3"\n[chromium]\ncommand = ["chromium"]\n`);
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.config.clientSettings.Adatum).toEqual({ color: "teal", name: null, openStates: [], follow: false });
+    expect(r.ok && JSON.stringify(r.config)).not.toMatch(/Profile 3|chromium/);
   });
-  it("reads the launch command and client profiles", () => {
-    const r = parseConfig(`${valid}\n[edge]\ncommand = ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"]\n[edge.profiles]\nAdatum = "Profile 3"\n"T&S" = "Default"\n`);
-    expect(r.ok && r.config.edge).toEqual({ command: ["uwsm-app", "--", "/usr/bin/microsoft-edge-stable"], profiles: { Adatum: "Profile 3", "T&S": "Default" }, fallbackCommand: ["omarchy-launch-browser"] });
-  });
-  it("names bad values: a shell string, a flag as a profile, profiles with no command", () => {
-    expect(fields(`${valid}\n[edge]\ncommand = "microsoft-edge-stable --x"\n`)).toEqual(["edge.command"]);
-    expect(fields(`${valid}\n[edge]\ncommand = ["edge"]\n[edge.profiles]\nAdatum = "--user-data-dir=/tmp"\n`)).toEqual(["edge.profiles.Adatum"]);
-    expect(fields(`${valid}\n[edge.profiles]\nAdatum = "Default"\n`)).toEqual(["edge.command"]);
-    expect(fields(`${valid}\n[edge]\nbrowser = "x"\n`)).toEqual(["edge.browser"]);
-  });
-  it("the starter file mentions it, commented out", () => {
-    const r = parseConfig(STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'));
-    expect(r.ok && r.config.edge.command).toEqual([]);
-    expect(STARTER_TOML).toContain("# [edge]");
+  it("the sections must still be tables, and the starter file doesn't mention them", () => {
+    expect(fields(`edge = "x"\n${valid}`)).toEqual(["edge"]);
+    expect(STARTER_TOML).not.toMatch(/\[edge\]|chromium/);
   });
 });
 
@@ -306,7 +297,7 @@ describe("loading a config with the old day shape", () => {
     const { mkdtemp, readFile, readdir, writeFile } = await import("node:fs/promises");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const { loadConfigFile } = await import("./load.ts");
+    const { loadConfigFile } = await import("../host/local/config-file.ts");
     const dir = await mkdtemp(join(tmpdir(), "focustime-cfg-"));
     const path = join(dir, "config.toml");
     await writeFile(path, valid, { mode: 0o600 });

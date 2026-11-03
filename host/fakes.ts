@@ -1,6 +1,8 @@
 // An in-memory Host for tests (A1): every part works without the machine, and records what it was asked to do.
 import { Pat } from "../sources/devops/pat.ts";
-import { SECRET_ACCOUNTS, SecretError, WRITABLE_ACCOUNTS, type CachedPhoto, type Host, type HostSecrets, type Notice, type PhotoCache, type Snapshot, type SnapshotStore } from "./types.ts";
+import { parseConfig, setSystemUserIdInText } from "../config/schema.ts";
+import { STARTER_TOML } from "../config/starter.ts";
+import { SECRET_ACCOUNTS, SecretError, WRITABLE_ACCOUNTS, type CachedPhoto, type Host, type HostConfig, type HostSecrets, type Notice, type PhotoCache, type Snapshot, type SnapshotStore } from "./types.ts";
 
 export function memorySecrets(initial: Record<string, string> = {}, opts: { locked?: boolean } = {}): HostSecrets & { store: Map<string, string> } {
   const store = new Map(Object.entries(initial));
@@ -50,6 +52,23 @@ export function memorySecrets(initial: Record<string, string> = {}, opts: { lock
   };
 }
 
+/** Settings kept as config text in memory: validated like the file, with no backups. */
+export function memoryConfig(initial = STARTER_TOML): HostConfig & { text: () => string } {
+  let text = initial;
+  return {
+    text: () => text,
+    load: async () => ({ path: "memory", parsed: parseConfig(text) }),
+    write: async (edit) => {
+      const next = edit(text);
+      const parsed = parseConfig(next);
+      if (!parsed.ok) return { ok: false, parsed };
+      text = next;
+      return { ok: true, parsed, backup: "memory" };
+    },
+    saveSystemUserId: async (id) => void (text = setSystemUserIdInText(text, id)),
+  };
+}
+
 export function memorySnapshots(): SnapshotStore & { data: Map<string, unknown> } {
   const data = new Map<string, unknown>();
   return {
@@ -78,6 +97,7 @@ export function createFakeHost(o: { now?: () => Temporal.Instant; zone?: string;
     kind: "local",
     record,
     secrets: memorySecrets(o.secrets),
+    config: memoryConfig(),
     paths: { config: "/fake/config.toml", data: "/fake/data", cache: "/fake/cache", runtime: "/fake/run", planDb: ":memory:" },
     snapshots: memorySnapshots(),
     photos: memoryPhotos(),

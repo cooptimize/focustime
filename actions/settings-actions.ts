@@ -12,7 +12,7 @@ import type { PlanStore } from "../store/plan-store.ts";
 import { localToday } from "../week/dates.ts";
 import { followState } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
-import type { ActionResponse, AppSecret, FieldProblem, HostBrowsers, SecretPresence, SettingsClient, SettingsData } from "./types.ts";
+import type { ActionResponse, AppSecret, FieldProblem, SecretPresence, SettingsClient, SettingsData } from "./types.ts";
 
 export type SettingsAction = "settings.load" | "settings.save" | "secret.set" | "data.export";
 
@@ -25,20 +25,13 @@ export type SettingsContext = {
   /** The server clock (ISO instant), for which clients are followed today. */
   now?: () => string;
   plan?: PlanStore;
-  /** Keyring presence and app secret writes (secrets/keyring.ts). Absent: shown as unavailable, can't be set. */
+  /** Secret presence and app secret writes (the host's secret store). Absent: shown as unavailable, can't be set. */
   secrets?: { state: (a: AppSecret) => Promise<SecretPresence>; set: (a: AppSecret, value: string) => Promise<void> };
-  /** The host's browsers and profiles (server/host.ts). Absent: none found. */
-  host?: HostBrowsers;
   /** Where data.export writes (0600), and how. */
   exportPlan?: (json: string) => Promise<string>;
 };
 
 const SECRET_LABELS: Record<AppSecret, string> = { "dataverse-client-secret": "Dataverse client secret", "google-client-secret": "Google client secret" };
-
-function browsers(ctx: SettingsContext): SettingsData["browsers"] {
-  const d = ctx.host?.detect();
-  return { edge: d?.edge ?? { found: false, profiles: [] }, chromium: d ? { found: d.chromium.found, profiles: d.chromium.profiles } : { found: false, profiles: [] } };
-}
 
 const bad = (error: string, status = 400, fields?: FieldProblem[]): ActionResponse => ({ ok: false, status, error, ...(fields ? { fields } : {}) });
 
@@ -52,7 +45,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
       expires: loaded.parsed.ok ? (loaded.parsed.config.secretExpiry[account] ?? null) : null,
     })),
   );
-  const base = { configPath: loaded.path, palette: CLIENT_SLOTS, browsers: browsers(ctx), secrets, data: { planStore: !!ctx.plan } };
+  const base = { configPath: loaded.path, palette: CLIENT_SLOTS, secrets, data: { planStore: !!ctx.plan } };
   if (!loaded.parsed.ok)
     return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX }, collab: { ...DEFAULT_COLLAB, domains: [] }, notify: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, vm: { startWithoutAsking: DEFAULT_AZURE.startWithoutAsking }, roadmap: { ...DEFAULT_THRESHOLDS } };
   const cfg = loaded.parsed.config;
@@ -69,15 +62,14 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
   const keys = [...new Set([...mine.map((c) => c.clientKey), ...Object.keys(cfg.clientSettings), ...cfg.week.standingBlocks.map((b) => b.clientKey)])].sort((a, b) => a.localeCompare(b));
   const clients = keys.map((key): SettingsClient => {
     const m = mine.find((c) => c.clientKey === key);
-    const setting = cfg.clientSettings[key] ?? { color: null, name: null, browser: "edge", profile: null, openStates: [], follow: false };
-    const profile = setting.profile ?? (setting.browser === "edge" && Object.hasOwn(cfg.edge.profiles, key) ? cfg.edge.profiles[key]! : null);
+    const setting = cfg.clientSettings[key] ?? { color: null, name: null, openStates: [], follow: false };
     // Without the focus time read, only what doesn't need it is known (internal, standing block, Keep following).
     const sure = follow ? followState(key, follow.usable ? follow.patterns : [], follow.options) : null;
     const state = sure && (follow!.usable || sure.active) ? sure : null;
     // Step 14: whose write PAT this client has, if any (never the PAT).
     const w = ctx.plan?.devopsIdentity(key) ?? null;
     const write = w ? { name: w.name, email: w.email, org: w.org, validatedAt: w.validatedAt, expires: w.expires } : null;
-    return { key, dataverseName: m?.clientName ?? null, devopsEmail: m?.devopsEmail ?? null, devops: m?.devops ?? false, setting, profile, css: setting.color ? colorCss(setting.color) : null, follow: state, write };
+    return { key, dataverseName: m?.clientName ?? null, devopsEmail: m?.devopsEmail ?? null, devops: m?.devops ?? false, setting, css: setting.color ? colorCss(setting.color) : null, follow: state, write };
   });
   return {
     ...base,
@@ -115,10 +107,7 @@ export async function settingsAction(ctx: SettingsContext, action: SettingsActio
       if (!ctx.writeConfig) return bad("Settings can't be saved here", 503);
       let edit: (text: string) => string;
       try {
-        const chromium = o.section === "client" ? ctx.host?.detect().chromium ?? null : null;
-        const uwsm = (await ctx.loadConfig()).parsed;
-        const prefix = uwsm.ok && uwsm.config.edge.command[0] === "uwsm-app" ? ["uwsm-app", "--"] : [];
-        edit = settingsEdit(o.section as SettingsSection, o.values, { chromiumCommand: chromium?.command ? [...prefix, ...chromium.command] : null });
+        edit = settingsEdit(o.section as SettingsSection, o.values);
       } catch (e) {
         if (e instanceof SettingsInputError) return bad(`${e.field}: ${e.message}`, 422, [{ field: e.field, message: e.message }]);
         throw e;

@@ -106,7 +106,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["Tab", "Shift Tab"], does: "Items and menus of the selected half-day, then on to the next part of the window" },
   { keys: ["F6"], does: "Next region: top bar, week, panel, status bar", command: "ui.region_next" },
   { keys: ["Shift F6"], does: "Previous region", command: "ui.region_prev" },
-  { keys: ["O"], does: "Open the focused work item in its client's Edge profile", command: "ui.open_focused" },
+  { keys: ["O"], does: "Open the focused work item in your browser", command: "ui.open_focused" },
   { keys: ["Shift F10", "Menu"], does: "Actions (⋯) for what has focus" },
   { keys: ["1", "T"], does: "Today: Now, Plan, Check-in and Close out", command: "view.today" },
   { keys: ["2"], does: "Week: every half-day of the week, and Plan the week", command: "view.week" },

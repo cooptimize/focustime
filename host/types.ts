@@ -7,6 +7,8 @@ import type { Notice } from "../plan/notify.ts";
 
 export type { Notice };
 import type { TimerLike } from "../plan/focussound.ts";
+import type { ParseResult } from "../config/schema.ts";
+import type { WriteResult } from "../config/edit.ts";
 
 export type HostKind = "local" | "azure";
 
@@ -100,6 +102,17 @@ export type HostFiles = {
   demoFlag: { get(): boolean; set(on: boolean): Promise<void> };
 };
 
+// ---- Settings ----
+
+export type LoadedConfig = { path: string; parsed: ParseResult; created?: boolean };
+/** The person's settings (local: config.toml with backups; hosted: the database in A2). */
+export type HostConfig = {
+  load(): Promise<LoadedConfig>;
+  /** Validates the edited text before anything is written; keeps a backup. */
+  write(edit: (text: string) => string): Promise<WriteResult>;
+  saveSystemUserId(id: string): Promise<void>;
+};
+
 // ---- Sign-in ----
 
 export type LoopbackResult = { code: string } | { error: "denied" | "timeout" | "failed" };
@@ -176,6 +189,7 @@ export type HostFacts = {
 export interface Host {
   readonly kind: HostKind;
   secrets: HostSecrets;
+  config: HostConfig;
   paths: HostPaths;
   snapshots: SnapshotStore;
   photos: PhotoCache;

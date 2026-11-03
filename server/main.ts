@@ -3,16 +3,13 @@
 // FOCUSTIME_HOST=local|azure (A1) picks the host: local (the default) is the developer loop on this machine; azure is
 // the hosted app's host, a stub until A2 (its secrets, snapshots and plan store are in memory).
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
-import { createHostBrowsers } from "./host.ts";
 import type { Host } from "../host/types.ts";
 import { createLocalHost } from "../host/local/index.ts";
 import { createAzureHost } from "../host/azure/index.ts";
-import { memoryPhotos, memorySecrets, memorySnapshots } from "../host/fakes.ts";
+import { memoryConfig, memoryPhotos, memorySecrets, memorySnapshots } from "../host/fakes.ts";
 import { hoursOn } from "../week/hours.ts";
 import { randomBytes } from "node:crypto";
 import { join, resolve } from "node:path";
-import { loadConfigFile, saveSystemUserId } from "../config/load.ts";
-import { writeConfig } from "../config/edit.ts";
 import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
 import type { MicrosoftAccount } from "../actions/account.ts";
 import { presenceContext, vmContext } from "../actions/dispatch.ts";
@@ -27,8 +24,6 @@ import { createAzureClient } from "../sources/azure/client.ts";
 import { localToday } from "../week/dates.ts";
 import { stderrLogger } from "../log/logger.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
-import { readFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
 import type { CalendarSource } from "../sources/calendar/source.ts";
 import { createDataverseSource, type DataverseSource } from "../sources/dataverse/source.ts";
 import { createGoogleSource } from "../sources/google/source.ts";
@@ -72,13 +67,13 @@ const hostKind = process.env.FOCUSTIME_HOST ?? "local";
 if (hostKind !== "local" && hostKind !== "azure") throw new Error("FOCUSTIME_HOST must be local or azure");
 const host: Host =
   hostKind === "azure"
-    ? createAzureHost({ secrets: memorySecrets(), snapshots: memorySnapshots(), photos: memoryPhotos(), inbox: { add: () => "0", remove: () => {} }, now: instantNow })
+    ? createAzureHost({ secrets: memorySecrets(), config: memoryConfig(), snapshots: memorySnapshots(), photos: memoryPhotos(), inbox: { add: () => "0", remove: () => {} }, now: instantNow })
     : createLocalHost({ port, token, headless, open, noReopen: args.includes("--no-reopen"), now: instantNow });
 
 // R1: the one-time move from Coopilot's folders and keyring entries, before anything reads config, the store or a secret.
 const renamed = host.kind === "local" ? await moveFromOldName({ today: Temporal.Now.plainDateISO().toString(), log: stderrLogger }) : { note: null };
-/** The config file. The hosted app has none until A2 moves settings to the database: a scratch one meanwhile. */
-const cfgPath = host.kind === "local" ? host.paths.config : join(tmpdir(), "focustime-hosted", "config.toml");
+/** Where settings live, for the start line: the config file (local), or in memory (the hosted stub, until A2). */
+const cfgPath = host.facts().configPath ?? "in memory";
 
 // One Dataverse source per distinct config, so the in-memory token and results survive between requests.
 const sources = new Map<string, DataverseSource>();
@@ -152,7 +147,7 @@ let timeZone = "America/New_York";
 let pickableTypes: string[] = [];
 let openStates: Record<string, string[]> = {};
 const loadConfig = async () => {
-  const r = await loadConfigFile(cfgPath);
+  const r = await host.config.load();
   if (r.parsed.ok) {
     timeZone = r.parsed.config.week.hours.timeZone;
     pickableTypes = r.parsed.config.plan.pickablePortfolioTypes;
@@ -221,11 +216,11 @@ const liveCtx: ActionContext = {
     makeOutlook,
     makeGoogle,
     makeDevOps,
-    saveSystemUserId: (id) => saveSystemUserId(cfgPath, id),
-    writeConfig: (edit) => writeConfig(cfgPath, edit),
+    saveSystemUserId: (id) => host.config.saveSystemUserId(id),
+    writeConfig: (edit) => host.config.write(edit),
     now: () => instantNow().toString(),
     ...(plan ? { plan } : {}),
-    launch: (argv) => host.launch.detached(argv),
+    links: host.links,
     media,
     secrets: { state: (a) => host.secrets.state(a), set: (a, v) => host.secrets.setApp(a, v) },
     // Step 14: personal DevOps write PATs (the host's secret store) and the writer (dev.azure.com of one client per call).
@@ -234,17 +229,6 @@ const liveCtx: ActionContext = {
     account: accountFor,
     photoCache: host.photos,
     azure: azureFor,
-    // Browser .desktop entries and Local State only; profile names are all that is kept.
-    host: createHostBrowsers({
-      readText: (path) => {
-        try {
-          return readFileSync(path, "utf8");
-        } catch {
-          return null;
-        }
-      },
-      home: homedir(),
-    }),
     exportPlan: (json) => host.files.exportPlan(json),
 };
 

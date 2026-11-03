@@ -1,9 +1,7 @@
 // Edits to config.toml that keep the file I can read (step 6b, D121): comments, order and every other line
 // stay as they are. Pure text functions here; writeConfig does the safe write (validate, back up, atomic rename).
-import { chmod, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { spanText, WEEKDAY_KEYS, type DayOverride, type TimeModel } from "../week/hours.ts";
-import { parseConfig, type ParseResult } from "./schema.ts";
+import type { ParseResult } from "./schema.ts";
 
 /** A TOML value written by FocusTime: strings are quoted and escaped, lists and inline tables nest. */
 export type TomlValue = string | number | boolean | TomlValue[] | { [k: string]: TomlValue };
@@ -144,34 +142,4 @@ export function migrateDayShapeText(text: string, model: TimeModel): string | nu
   return lines.join("\n");
 }
 
-/** How many backups are kept (oldest removed first). */
-export const KEEP_BACKUPS = 30;
-
-export const backupDir = (configPath: string) => join(dirname(configPath), "backups");
-
 export type WriteResult = { ok: true; parsed: ParseResult & { ok: true }; backup: string } | { ok: false; parsed: ParseResult };
-
-/**
- * Writes a change to config.toml safely: the new text must validate (otherwise nothing is written and the
- * per-field errors come back), the current file is copied to backups/config-<stamp>.toml first (0600), and the
- * new file replaces it atomically. Keeps the last KEEP_BACKUPS backups.
- */
-export async function writeConfig(path: string, edit: (text: string) => string, stamp: string = new Date().toISOString()): Promise<WriteResult> {
-  const before = await readFile(path, "utf8");
-  const next = edit(before);
-  const parsed = parseConfig(next);
-  if (!parsed.ok) return { ok: false, parsed };
-  const dir = backupDir(path);
-  await mkdir(dir, { recursive: true, mode: 0o700 });
-  const name = `config-${stamp.replace(/[^0-9TZ]/g, "")}.toml`;
-  const backup = join(dir, name);
-  await writeFile(backup, before, { mode: 0o600 });
-  await chmod(backup, 0o600);
-  const tmp = `${path}.tmp`;
-  await writeFile(tmp, next, { mode: 0o600 });
-  await chmod(tmp, 0o600);
-  await rename(tmp, path);
-  const all = (await readdir(dir)).filter((f) => /^config-[0-9TZ]+\.toml$/.test(f)).sort();
-  for (const old of all.slice(0, Math.max(0, all.length - KEEP_BACKUPS))) await rm(join(dir, old), { force: true });
-  return { ok: true, parsed, backup };
-}
