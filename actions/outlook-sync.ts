@@ -1,20 +1,20 @@
 // Two-way sync for FocusTime's own Outlook events and edit facts for the tiers (step 13), on each Outlook refresh with
 // write access. One calendarView scan of the week on the write token: marked events are compared with what FocusTime
 // last wrote (plan/outlooksync.ts); a change made only in Outlook moves the timebox ("Changed in Outlook"), a change
-// on both sides becomes a conflict to choose, and a marked event with no record is rebuilt (Q69). Nothing is written
+// on both sides becomes a conflict to choose, and a marked event with no record of this person's is left alone as an ordinary event (D470). Nothing is written
 // to Outlook here; sync changes are logged as "from Outlook". Failures only mean no sync and no edit facts this time.
 import type { AppConfig } from "../config/schema.ts";
 import type { EditFacts } from "../plan/caltier.ts";
-import { TIMEBOX_MARKER } from "../plan/caltier.ts";
-import { rebuildFrom, REMOVED_IN_OUTLOOK, syncDecision, timeboxFrom, type SeenEvent } from "../plan/outlooksync.ts";
+import { INVITE_MARKER, TIMEBOX_MARKER } from "../plan/caltier.ts";
+import { REMOVED_IN_OUTLOOK, syncDecision, timeboxFrom, type SeenEvent } from "../plan/outlooksync.ts";
 import { outlookFields, type Timebox } from "../plan/timebox.ts";
 import type { OutlookWrite } from "../sources/graph/source.ts";
 import type { PlanStore } from "../store/plan-store.ts";
-import { INTERNAL_CLIENT } from "../week/follow.ts";
 import { clientName, localOf, wantFields } from "./timebox-actions.ts";
 import { userZone } from "../week/zone.ts";
 
-export type SyncResult = { facts: Record<string, EditFacts>; changed: number; conflicts: number; rebuilt: number };
+/** `earlier`: FocusTime-marked events this person's store has no record of (D470): left alone, shown as ordinary events. */
+export type SyncResult = { facts: Record<string, EditFacts>; changed: number; conflicts: number; earlier: number };
 
 const memo = new Map<string, { at: number; result: SyncResult }>();
 const MEMO_MS = 5 * 60_000;
@@ -37,8 +37,10 @@ export async function syncWeek(o: { plan: PlanStore; ow: OutlookWrite; cfg: AppC
   const startIso = mon.toInstant().toString();
   const endIso = mon.add({ days: 7 }).toInstant().toString();
   const events = await ow.writer.scan(startIso, endIso);
-  const result: SyncResult = { facts: {}, changed: 0, conflicts: 0, rebuilt: 0 };
+  const result: SyncResult = { facts: {}, changed: 0, conflicts: 0, earlier: 0 };
   for (const e of events) result.facts[`outlook:${e.id}`] = e.facts;
+  // D470: a help invite this person's store doesn't know was sent by an earlier FocusTime: not cancellable from here.
+  for (const e of events) if (e.facts.marker && INVITE_MARKER.test(e.facts.marker) && !(await plan.invite(e.facts.marker))) result.facts[`outlook:${e.id}`] = { ...e.facts, earlier: true };
 
   const seen = new Map<string, SeenEvent>();
   for (const e of events) if (e.facts.marker && TIMEBOX_MARKER.test(e.facts.marker) && e.subject !== null) seen.set(e.facts.marker, { id: e.id, subject: e.subject, start: e.start, end: e.end, showAs: e.showAs, marker: e.facts.marker });
@@ -51,17 +53,17 @@ export async function syncWeek(o: { plan: PlanStore; ow: OutlookWrite; cfg: AppC
     const own = (await plan.ownEvent(uid));
     let tb = (await plan.timeboxByUid(uid));
     if (!own || own.deletedAt) {
-      // Q69: no record (or one marked deleted while the event is still there): rebuild it from the marker.
+      // D470 (replaces Q69's rebuild): a marked event this person has no timebox for was made by an earlier FocusTime
+      // (the local app, another store). It is theirs, not ours: an ordinary event, never changed or deleted, nothing
+      // recorded. Only a timebox of their own whose event record went missing is linked again.
       if (!tb) {
-        const r = rebuildFrom(ev, o.clients, tz, INTERNAL_CLIENT);
-        if (!r) continue;
-        tb = (await plan.addTimebox({ uid, date: r.date, clientKey: r.clientKey, title: r.title, start: r.start, end: r.end, outlook: true, showAs: r.showAs }));
-        tb = (await plan.updateTimebox(tb.id, { outlookNote: "Rebuilt from Outlook" }));
-        log(tb, "create", "From Outlook: rebuilt from its FocusTime marker", null, tb, ev.id, null, wantFields(cfg, tb));
-      } else log(tb, "update", "From Outlook: record rebuilt from its FocusTime marker", tb, tb, ev.id, null, null);
+        result.facts[`outlook:${ev.id}`] = { ...result.facts[`outlook:${ev.id}`]!, earlier: true };
+        result.earlier++;
+        continue;
+      }
+      log(tb, "update", "From Outlook: record linked again from its FocusTime marker", tb, tb, ev.id, null, null);
       const fields = wantFields(cfg, tb) ?? outlookFields({ ...tb }, clientName(cfg, tb.clientKey));
       (await plan.recordOwnEvent(uid, tb.id, ev.id, { ...fields, subject: ev.subject, start: instant(ev.start).toString(), end: instant(ev.end).toString(), showAs: (tb.showAs) }));
-      result.rebuilt++;
       continue;
     }
     if (!tb) continue; // An orphan after Reset local plan: listed in Settings > Data for removal.

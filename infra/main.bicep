@@ -12,6 +12,17 @@ param adminGroupName string = 'FocusTime DB Admins'
 @description('false on the very first deploy (placeholder image, before the image and secrets exist); true after.')
 param appReady bool = true
 param imageTag string = 'latest'
+@description('A5: prod deploys the exact image dev tested, by digest (sha256:...); empty uses imageTag.')
+param imageDigest string = ''
+@description('A5: prod pulls from dev\'s registry ({ name, resourceGroup }) with a pull identity; empty: its own registry (dev).')
+param sharedRegistry object = {}
+@description('A5: the user-assigned identity (in this resource group) that pulls from the shared registry; made by bootstrap.sh.')
+param pullIdentityName string = ''
+@description('A5: the SQL database\'s vCores (serverless max) and days of point-in-time restore.')
+param sqlMaxVCores int = 1
+param sqlRetentionDays int = 7
+@description('A5: the only domains help invites may go to, for everyone (comma list); empty: each person\'s work email.')
+param inviteDomains string = ''
 @description('dev 0 (scale to zero); prod 1 so the scheduler keeps running.')
 param minReplicas int
 param entraClientId string
@@ -30,10 +41,12 @@ module monitoring 'modules/monitoring.bicep' = {
   params: { prefix: prefix, location: location, tags: tags }
 }
 
-module registry 'modules/registry.bicep' = {
+var shared = !empty(sharedRegistry)
+module registry 'modules/registry.bicep' = if (!shared) {
   name: 'registry'
   params: { name: 'ft${env}acr${suffix}', location: location, tags: tags }
 }
+var registryName = shared ? sharedRegistry.name : 'ft${env}acr${suffix}'
 
 module keyvault 'modules/keyvault.bicep' = {
   name: 'keyvault'
@@ -57,6 +70,8 @@ module sql 'modules/sql.bicep' = {
     adminGroupName: adminGroupName
     adminGroupObjectId: adminGroupObjectId
     workspaceId: monitoring.outputs.workspaceId
+    maxVCores: sqlMaxVCores
+    retentionDays: sqlRetentionDays
   }
 }
 
@@ -69,11 +84,15 @@ module app 'modules/app.bicep' = {
     tags: tags
     workspaceName: monitoring.outputs.workspaceName
     insightsName: monitoring.outputs.insightsName
-    registryName: registry.outputs.name
+    registryName: registryName
+    registryLoginServer: '${registryName}.azurecr.io'
+    pullIdentityId: empty(pullIdentityName) ? '' : resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', pullIdentityName)
     vaultName: keyvault.outputs.name
     vaultUri: keyvault.outputs.uri
     appReady: appReady
     imageTag: imageTag
+    imageDigest: imageDigest
+    inviteDomains: inviteDomains
     minReplicas: minReplicas
     tenantId: tenantId
     entraClientId: entraClientId
@@ -90,8 +109,8 @@ output appName string = app.outputs.name
 output appFqdn string = app.outputs.fqdn
 output publicUrl string = app.outputs.publicUrl
 output appPrincipalId string = app.outputs.principalId
-output registryName string = registry.outputs.name
-output registryLoginServer string = registry.outputs.loginServer
+output registryName string = registryName
+output registryLoginServer string = '${registryName}.azurecr.io'
 output vaultName string = keyvault.outputs.name
 output vaultUri string = keyvault.outputs.uri
 output sqlServerName string = sql.outputs.serverName

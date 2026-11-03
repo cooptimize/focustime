@@ -1,5 +1,5 @@
 // A fake Azure Resource Manager (step 15.4) behind a fetch function: Resource Graph by tag, VMs with power states and
-// timed starts, async operations, and auto-shutdown schedules (GET only; D465). Used by tests and by demo mode (no
+// timed starts, async operations, and auto-shutdown schedules (GET only; D472). Used by tests and by demo mode (no
 // Azure calls). Every call is recorded in `calls`, so tests can check no schedule write was ever sent.
 // Fictional IDs only.
 import { ARM } from "./client.ts";

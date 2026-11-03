@@ -6,7 +6,7 @@
 
 import type { Logger } from "../../log/logger.ts";
 import { NAMED_MIGRATIONS } from "../migrations/index.ts";
-import { NAMES_TABLE, pending, type NamedMigration } from "../migrations/named.ts";
+import { NAMES_TABLE, newerThanBuild, pending, type NamedMigration } from "../migrations/named.ts";
 import { BASELINE, BASELINE_VERSION } from "./baseline.ts";
 import type { SqlServerConn } from "./sqlserver.ts";
 
@@ -110,7 +110,11 @@ export async function migrateSqlServer(conn: SqlServerConn, o: { log?: Logger; m
   }
   // Timestamped migrations only on a database at the newest numbered version (a test can stop the numbered list early).
   if (!o.migrations || newest === SQLSERVER_VERSION) {
-    for (const m of pending(o.named ?? NAMED_MIGRATIONS, await appliedNames(conn))) {
+    const recorded = await appliedNames(conn);
+    const newer = newerThanBuild(o.named ?? NAMED_MIGRATIONS, recorded);
+    // D468: a newer database is fine (migrations only add): an older revision after a rollback runs on it.
+    if (newer.length) o.log?.({ source: "database", op: "newer_schema", count: newer.length });
+    for (const m of pending(o.named ?? NAMED_MIGRATIONS, recorded)) {
       await conn.tx(async () => {
         const done = await conn.get(`SELECT name FROM ${NAMES_TABLE} WITH (UPDLOCK, HOLDLOCK) WHERE name = ?`, [m.name]);
         if (done) return;

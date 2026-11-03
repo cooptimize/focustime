@@ -1,4 +1,4 @@
-// Step 15.4: the signed-in person, my VM chip, the morning prompt, the chip's menu (D465: Start only; the
+// Step 15.4: the signed-in person, my VM chip, the morning prompt, the chip's menu (D472: Start only; the
 // auto-shutdown time is shown, never changed), Settings > You and the Inbox's kind chips, clicked in a real browser on
 // demo data (a fictional person and VM, no Azure calls). Screenshots when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -54,7 +54,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("D465: the chip shows the auto-shutdown time read only; its menu has no Stop, Delay, Skip tonight or Restore", async () => {
+  it("D472: the chip shows the auto-shutdown time read only; its menu has no Stop, Delay, Skip tonight or Restore", async () => {
     const { page, errors } = await freshPage(h);
     const actions: string[] = [];
     page.on("request", (r) => {

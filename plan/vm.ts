@@ -1,5 +1,5 @@
 // My Azure VM (step 15.4): pure rules for its power state, the chip, the auto-shutdown schedule (read only: FocusTime
-// never changes it, D465) and the morning prompt. No I/O.
+// never changes it, D472) and the morning prompt. No I/O.
 import type { IsoDate } from "../week/types.ts";
 import { zoneOf } from "./timezones.ts";
 
@@ -20,7 +20,7 @@ export function powerFrom(statuses: unknown): PowerState {
   return "unknown";
 }
 
-/** A start FocusTime asked for and is still waiting on (the one VM write; D465). */
+/** A start FocusTime asked for and is still waiting on (the one VM write; D472). */
 export type VmOp = "start";
 export type VmTransition = { op: VmOp; since: string };
 
@@ -111,7 +111,7 @@ export function shutdownLabel(s: Shutdown | null, myZone: string, today: IsoDate
 }
 
 /**
- * A schedule change from before fix/vm-schedule (D465), still in account state as `vm_shutdown:<vm>`: FocusTime no
+ * A schedule change from before fix/vm-schedule (D472), still in account state as `vm_shutdown:<vm>`: FocusTime no
  * longer puts these back (that would write the schedule); they are marked cancelled once (store/vm-restores.ts).
  */
 export type LegacyShutdownChange = {

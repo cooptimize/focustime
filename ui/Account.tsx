@@ -1,6 +1,6 @@
 // Step 15.4: who FocusTime works for (one Microsoft sign-in) and my Azure VM. The sign-in screen on first open and after
 // sign-out, the person in the top bar, the VM chip (top bar) with Start and its preview, the auto-shutdown time shown
-// read only (D465), Today's morning prompt, Settings > You (sign out, find and confirm my VM) and the Azure write log
+// read only (D472), Today's morning prompt, Settings > You (sign out, find and confirm my VM) and the Azure write log
 // in Settings > Data.
 import { Avatar, forgetPhotos, usePhotos, usePresence } from "./Presence.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -240,7 +240,7 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
     const items: MenuItem[] = [];
     if (s?.vm) {
       if (s.canStart) items.push({ id: "start", label: "Start", action: "vm.preview", run: () => act("start") });
-      // D465: Start is the only change. No Stop, and nothing that touches the auto-shutdown schedule (the chip shows it).
+      // D472: Start is the only change. No Stop, and nothing that touches the auto-shutdown schedule (the chip shows it).
       if (s.needsConsent) items.push({ id: "consent", label: "Allow Azure access…", run: () => void signIn(true).then((m) => (m ? notify(m) : void refresh(true))) });
       items.push({ id: "refresh", label: "Refresh", run: () => void refresh(true) });
     }
@@ -334,7 +334,7 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
 
 /**
  * The VM chip (step 16.3: the single place for VM status, in the header on every tab): "VM Running · off at 7:30 PM".
- * The auto-shutdown time is read from Azure and only shown (D465). Opens the VM menu: Start, Allow Azure access, Refresh.
+ * The auto-shutdown time is read from Azure and only shown (D472). Opens the VM menu: Start, Allow Azure access, Refresh.
  */
 export function VmChip() {
   const { status, openMenu } = useContext(VmCtx);
@@ -506,7 +506,7 @@ export function YouAccount() {
             <input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="/subscriptions/…/resourceGroups/…/providers/Microsoft.Compute/virtualMachines/…" aria-label="VM resource ID" spellCheck={false} />
             <button type="submit" className="mini" disabled={busy || !manual.trim()}>Use this VM</button>
           </form>
-          <span className="set-hint">By the Owner tag ([azure] owner_tag in config.toml).</span>
+          <span className="set-hint">Found by the VM's Owner tag.</span>
         </div>
       )}
       {message && <p className="set-problem" role="alert">{message}</p>}

@@ -9,6 +9,10 @@
 // - false: a public placeholder image, no registry, no Key Vault references. Creates the app and its identity, which
 //   then gets AcrPull and the Key Vault roles below.
 // - true: the FocusTime image from ACR, pulled with the system identity, and the app secrets as Key Vault references.
+//
+// A5: prod pulls from dev's registry (one image, promoted by digest) with a user-assigned pull identity that
+// bootstrap.sh made and gave AcrPull on that registry; the system identity keeps Key Vault and SQL. Dev pulls from its
+// own registry with the system identity, as before.
 param prefix string
 @description('S1 (D452): the env label the app shows in About and at /version (dev or prod).')
 param env string
@@ -17,11 +21,16 @@ param tags object
 param workspaceName string
 param insightsName string
 param registryName string
+param registryLoginServer string
+@description('A5: resource id of the user-assigned identity that pulls from a shared registry; empty: the system identity (own registry).')
+param pullIdentityId string = ''
 param vaultName string
 @description('The vault URI (a parameter so the secret references can be computed at the start).')
 param vaultUri string
 param appReady bool
 param imageTag string
+param imageDigest string = ''
+param inviteDomains string = ''
 param minReplicas int
 param tenantId string
 param entraClientId string
@@ -34,6 +43,7 @@ param sqlDatabaseName string
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = { name: workspaceName }
 resource insights 'Microsoft.Insights/components@2020-02-02' existing = { name: insightsName }
+var ownRegistry = empty(pullIdentityId)
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = { name: registryName }
 resource vault 'Microsoft.KeyVault/vaults@2023-07-01' existing = { name: vaultName }
 
@@ -83,7 +93,9 @@ var settings = [
   { name: 'FOCUSTIME_KEYVAULT_URL', value: vaultUri }
   { name: 'FOCUSTIME_DATA_KEY_NAME', value: 'ft-data-key' }
   { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: insights.properties.ConnectionString }
+  { name: 'FOCUSTIME_INVITE_DOMAINS', value: inviteDomains }
 ]
+var image = empty(imageDigest) ? '${registryLoginServer}/focustime:${imageTag}' : '${registryLoginServer}/focustime@${imageDigest}'
 
 var secretRefs = [for s in appSecrets: { name: s.name, keyVaultUrl: '${vaultUri}secrets/${s.vault}', identity: 'system' }]
 var secretEnv = [for s in appSecrets: { name: s.env, secretRef: s.name }]
@@ -94,7 +106,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
   name: appName
   location: location
   tags: tags
-  identity: { type: 'SystemAssigned' }
+  identity: ownRegistry ? { type: 'SystemAssigned' } : { type: 'SystemAssigned,UserAssigned', userAssignedIdentities: { '${pullIdentityId}': {} } }
   properties: {
     environmentId: environment.id
     workloadProfileName: 'Consumption'
@@ -106,14 +118,14 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
         allowInsecure: false
       }
-      registries: appReady ? [ { server: registry.properties.loginServer, identity: 'system' } ] : []
+      registries: appReady ? [ { server: registryLoginServer, identity: ownRegistry ? 'system' : pullIdentityId } ] : []
       secrets: appReady ? secretRefs : []
     }
     template: {
       containers: [
         {
           name: 'focustime'
-          image: appReady ? '${registry.properties.loginServer}/focustime:${imageTag}' : 'mcr.microsoft.com/k8se/quickstart:latest'
+          image: appReady ? image : 'mcr.microsoft.com/k8se/quickstart:latest'
           resources: { cpu: json('0.5'), memory: '1Gi' }
           env: appReady ? concat(settings, secretEnv) : []
           probes: appReady ? [
@@ -132,7 +144,7 @@ var acrPull = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var kvSecretsUser = '4633458b-17de-408a-b874-0445c86b69e6'
 var kvCryptoUser = '12338af0-0e69-4776-bea7-57ae8d297424'
 
-resource pull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource pull 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (ownRegistry) {
   scope: registry
   name: guid(registry.id, app.id, acrPull)
   properties: {

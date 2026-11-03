@@ -16,7 +16,7 @@ export type AuthStatus = {
 /** My VM, kept per signed-in person (their object id), in account state. */
 export type ChosenVm = { id: string; name: string; resourceGroup: string; subscriptionId: string; location: string; chosenAt: string };
 
-/** D465: start is the only VM change FocusTime makes. */
+/** D472: start is the only VM change FocusTime makes. */
 export type VmPreviewOp = VmOp;
 export type VmPreview = {
   previewId: string;
@@ -42,7 +42,7 @@ export type VmStatus = {
   power: PowerState | null;
   transition: VmTransition | null;
   canStart: boolean;
-  /** The auto-shutdown schedule as Azure has it, read only (D465: FocusTime never changes it). */
+  /** The auto-shutdown schedule as Azure has it, read only (D472: FocusTime never changes it). */
   schedule: { label: string; time: string; status: Shutdown["status"]; timeZoneId: string } | null;
   /** "Your VM is off. Start it?" */
   prompt: boolean;
@@ -54,7 +54,7 @@ export type VmStatus = {
   error: VmError | null;
 };
 
-/** One Azure write: a start. Older rows may be a deallocate, an auto-shutdown change or its restore (before D465). */
+/** One Azure write: a start. Older rows may be a deallocate, an auto-shutdown change or its restore (before D472). */
 export type AzureWriteEntry = {
   id: number;
   at: string;

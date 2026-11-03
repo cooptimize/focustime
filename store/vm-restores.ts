@@ -1,4 +1,4 @@
-// fix/vm-schedule (D465): FocusTime never changes a VM's auto-shutdown schedule. Before that, Delay and Skip tonight
+// fix/vm-schedule (D472): FocusTime never changes a VM's auto-shutdown schedule. Before that, Delay and Skip tonight
 // left a `vm_shutdown:<vm>` record in account state for a next-morning restore that wrote the schedule back. Those
 // restores no longer run (the code is gone). This marks each record still waiting as cancelled, once, for everyone, and
 // logs it in that person's Azure write log (status refused) with what the schedule should be, so they can check it in

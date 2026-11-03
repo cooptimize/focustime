@@ -107,6 +107,9 @@ const TAB_TITLES: Record<Tab, string> = {
 
 const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
+/** A5: the address that opens Quick capture (Super+Alt+N on the hosted app). */
+const CAPTURE_HASH = "#/capture";
+
 export function App() {
   const now = useRef(nowOverride()).current;
   const { layout, compact } = useLayout();
@@ -153,7 +156,11 @@ export function App() {
    * Step 16.2: where the window is: a tab and its mode (Today · Week · Roadmap · Inbox), or an overlay (the focus
    * screen, Settings). Mirrored in the address (#/…) so browser back and reopening land in the same place.
    */
-  const [loc, setLocState] = useState<Loc>(() => parseHash(location.hash) ?? (location.hash ? HOME : storedLoc()) ?? HOME);
+  // A5: #/capture (the hosted app's Super+Alt+N) opens Quick capture over the last place, then leaves the address.
+  const captureAsked = useRef(location.hash === CAPTURE_HASH);
+  const [loc, setLocState] = useState<Loc>(() => parseHash(location.hash) ?? (location.hash && !captureAsked.current ? HOME : storedLoc()) ?? HOME);
+  const locRef = useRef(loc);
+  locRef.current = loc;
   const go = useCallback((next: Loc | ((l: Loc) => Loc)) => setLocState((l) => {
     const n = typeof next === "function" ? next(l) : next;
     return sameLoc(n, l) ? l : n;
@@ -161,7 +168,8 @@ export function App() {
   const goNav = useCallback((nav: Nav) => go({ nav, overlay: null }), [go]);
   useEffect(() => {
     const h = hashOf(loc);
-    if (location.hash !== h) history.pushState(null, "", h);
+    if (location.hash === CAPTURE_HASH) history.replaceState(null, "", h);
+    else if (location.hash !== h) history.pushState(null, "", h);
     try {
       localStorage.setItem(LOC_KEY, h);
     } catch {
@@ -169,7 +177,14 @@ export function App() {
     }
   }, [loc]);
   useEffect(() => {
-    const on = () => setLocState(parseHash(location.hash) ?? HOME);
+    const on = () => {
+      if (location.hash === CAPTURE_HASH) {
+        history.replaceState(null, "", hashOf(locRef.current));
+        setCaptureOpen(true);
+        return;
+      }
+      setLocState(parseHash(location.hash) ?? HOME);
+    };
     window.addEventListener("popstate", on);
     return () => window.removeEventListener("popstate", on);
   }, []);
@@ -854,6 +869,10 @@ export function App() {
   const hasData = !!data;
   useEffect(() => {
     if (!hasData) return;
+    if (captureAsked.current) {
+      captureAsked.current = false;
+      setCaptureOpen(true);
+    }
     const check = () => void takeOpenRequest().then((v) => (v === "capture" ? setCaptureOpen(true) : v ? openRouteRef.current(v) : undefined));
     check();
     const onFocus = () => check();
@@ -1439,6 +1458,7 @@ export function App() {
           onSection={setSettingsAt}
           onClose={() => setSettingsAt(null)}
           onSaved={reloadQuiet}
+          onNotice={setNotice}
           sources={data.sources}
           devops={data.devops}
           busy={busy}

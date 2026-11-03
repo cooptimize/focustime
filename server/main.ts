@@ -239,7 +239,7 @@ if (!opened) {
   process.exit(1);
 }
 const db: Conn = opened.conn;
-// D465: next-morning auto-shutdown restores from before (they'd write the schedule) never run; mark them cancelled.
+// D472: next-morning auto-shutdown restores from before (they'd write the schedule) never run; mark them cancelled.
 await cancelShutdownRestores(db, instantNow).then(
   (c) => c.length && log({ source: "azure", op: "restore_cancelled", count: c.length }),
   () => log({ source: "azure", op: "restore_cancelled", kind: "failed" }),
@@ -265,7 +265,7 @@ const planFor = (who: Person): PlanStore => {
   if (!p) plans.set(who.userId, (p = planStoreOn(db, { userId: who.userId, now: () => zonedNow(who.zone), ...(opened.backup ? { path: planPath, backup: opened.backup } : {}) })));
   return p;
 };
-const appKeys: AppKeys = { dataverse: app.dataverse, entra: app.entra, google: app.google };
+const appKeys: AppKeys = { dataverse: app.dataverse, entra: app.entra, google: app.google, inviteDomains: app.inviteDomains };
 const settingsFor = (userId: string): UserSettings =>
   createUserSettings({
     db,

@@ -9,6 +9,8 @@ const APP_KEYS: Record<string, readonly string[] | "all"> = {
   dataverse: ["environment_url", "tenant_id", "client_id"],
   outlook: "all",
   google: ["client_id"],
+  // Invite domains are app-level (fix/settings-autosave): never kept in a person's rows.
+  collab: ["domains"],
   // A1 removed these; older files still have them.
   edge: "all",
   chromium: "all",

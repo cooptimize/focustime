@@ -1,5 +1,5 @@
 // My VM (step 15.4): find it by owner tag, confirm it, show its power state and its auto-shutdown time, and start it.
-// fix/vm-schedule (D465): FocusTime never changes a VM's auto-shutdown schedule (no delay, no skip, no restore) and
+// fix/vm-schedule (D472): FocusTime never changes a VM's auto-shutdown schedule (no delay, no skip, no restore) and
 // never stops a VM; the Azure client refuses anything but the reads and start (sources/azure/client.ts ALLOWED).
 // Start goes through the write framework: preview, confirm, read back (the real power state), audit log; no undo.
 // Only for the VM the signed-in person confirmed: every call takes that VM from the store, never from the request.
@@ -35,7 +35,7 @@ export type VmContext = {
 };
 
 export const vmKey = (oid: string) => `vm:${oid}`;
-/** A schedule change from before D465 (never acted on now; store/vm-restores.ts marks it cancelled). */
+/** A schedule change from before D472 (never acted on now; store/vm-restores.ts marks it cancelled). */
 export const shutdownKey = (vmId: string) => `vm_shutdown:${vmId.toLowerCase()}`;
 export const PROMPT_MARKER = "vm_prompt";
 /** How long a start may take before FocusTime says it timed out. */
@@ -159,7 +159,7 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
     case "vm.preview": {
       if (!isObj(input) || Object.keys(input).some((k) => k !== "op" && k !== "vmId")) return bad("vm.preview takes { op, vmId? }");
       const op = input.op;
-      // D465: start is the only change FocusTime makes to a VM. No stop, no auto-shutdown changes.
+      // D472: start is the only change FocusTime makes to a VM. No stop, no auto-shutdown changes.
       if (op !== "start") return bad("op must be start. FocusTime only starts your VM; it never stops it or changes its auto-shutdown");
       const vm = (await chosen(ctx));
       const g = guard(vm, input.vmId);

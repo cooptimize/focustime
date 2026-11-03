@@ -252,7 +252,7 @@ export type DoneFacts = {
 /**
  * Whether a sent notification no longer applies and can be closed (Q91): the day got planned, checked in or closed
  * out, the week planned, the follow-up closed (or none due any more), the timer answered in the app, the VM started.
- * An "auto-shutdown still changed" notice from before D465 closes at once (there is nothing to restore). Meeting warnings, expiring secrets and tests stay until dismissed.
+ * An "auto-shutdown still changed" notice from before D472 closes at once (there is nothing to restore). Meeting warnings, expiring secrets and tests stay until dismissed.
  */
 export function noticeDone(n: Notice, f: DoneFacts): boolean {
   const ref = n.ref;
