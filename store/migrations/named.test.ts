@@ -10,7 +10,7 @@ import { localStoreFiles } from "../../host/local/files.ts";
 import { MIGRATIONS, openPlanDb } from "../plan-store.ts";
 import { migrateSqlServer, SQLSERVER_MIGRATIONS, SQLSERVER_VERSION, sqlServerVersion } from "../sql/migrate.ts";
 import { NAMED_MIGRATIONS } from "./index.ts";
-import { inOrder, namedProblems, pending, prefixOf, type NamedMigration } from "./named.ts";
+import { inOrder, namedProblems, newerThanBuild, pending, prefixOf, type NamedMigration } from "./named.ts";
 
 const now = () => Temporal.ZonedDateTime.from("2026-11-03T12:00:00-05:00[America/New_York]");
 const table = (name: string, t: string): NamedMigration => ({ name, sqlite: `CREATE TABLE ${t} (id INTEGER);`, sqlserver: `CREATE TABLE ${t} (id int);` });
@@ -34,10 +34,12 @@ describe("the list", () => {
     expect(pending([later, earlier], new Set()).map((m) => m.name)).toEqual([earlier.name, later.name]);
     expect(pending([later, earlier], new Set([earlier.name])).map((m) => m.name)).toEqual([later.name]);
   });
-  it("refuses a database with a newer migration this build doesn't know", () => {
-    expect(() => pending([earlier], new Set(["20271231T2359_future"]))).toThrow(/newer than this build/);
+  it("runs on a database with a newer migration this build doesn't know (D468: migrations only add, so a rollback is safe)", () => {
+    expect(pending([earlier], new Set(["20271231T2359_future"]))).toEqual([earlier]);
+    expect(newerThanBuild([earlier], new Set([earlier.name, "20271231T2359_future"]))).toEqual(["20271231T2359_future"]);
     // An unknown one older than this build's newest isn't "newer": another branch's, not ours to judge.
     expect(pending([later], new Set(["20261101T0000_elsewhere"]))).toEqual([later]);
+    expect(newerThanBuild([later], new Set(["20261101T0000_elsewhere"]))).toEqual([]);
   });
 });
 

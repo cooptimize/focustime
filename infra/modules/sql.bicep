@@ -1,6 +1,6 @@
 // Azure SQL: a logical server with Entra-only authentication (no SQL logins), its Entra admin the "FocusTime DB Admins"
-// group; one database `focustime`, General Purpose serverless 0.5 to 1 vCore, auto-pause after 60 minutes, 32 GB,
-// zone redundancy off, 7 days of point-in-time restore. Public endpoint with only "Allow Azure services" (a private
+// group; one database `focustime`, General Purpose serverless from 0.5 vCore to maxVCores (dev 1, prod 2), auto-pause
+// after 60 minutes, 32 GB, zone redundancy off, retentionDays of point-in-time restore (dev 7, prod 14). Public endpoint with only "Allow Azure services" (a private
 // endpoint is a later step).
 param name string
 param location string
@@ -9,6 +9,8 @@ param tenantId string
 param adminGroupName string
 param adminGroupObjectId string
 param workspaceId string
+param maxVCores int = 1
+param retentionDays int = 7
 
 resource server 'Microsoft.Sql/servers@2023-08-01' = {
   name: name
@@ -40,7 +42,7 @@ resource database 'Microsoft.Sql/servers/databases@2023-08-01' = {
   name: 'focustime'
   location: location
   tags: tags
-  sku: { name: 'GP_S_Gen5', tier: 'GeneralPurpose', family: 'Gen5', capacity: 1 }
+  sku: { name: 'GP_S_Gen5', tier: 'GeneralPurpose', family: 'Gen5', capacity: maxVCores }
   properties: {
     minCapacity: json('0.5')
     autoPauseDelay: 60
@@ -54,7 +56,7 @@ resource database 'Microsoft.Sql/servers/databases@2023-08-01' = {
 resource shortTerm 'Microsoft.Sql/servers/databases/backupShortTermRetentionPolicies@2023-08-01' = {
   parent: database
   name: 'default'
-  properties: { retentionDays: 7 }
+  properties: { retentionDays: retentionDays }
 }
 
 resource diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
