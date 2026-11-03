@@ -298,3 +298,43 @@ describe("draft stories with no feature (step 11)", () => {
     expect(d.draft).toMatchObject({ parentItemId: null, title: "Paging for the export" });
   });
 });
+
+describe("Plan the week one client at a time (U6)", () => {
+  it("the type box: a draft feature as a must or a nice to have; its tier changes; off takes it off; a past week refuses", async () => {
+    const t = setup();
+    const a = await t.run<{ draft: { id: number; level: string; parentItemId: number | null }; weekDrafts: { draftId: number; tier: string }[] }>("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "Self-service export", tier: "must" });
+    expect(a.draft).toMatchObject({ level: "feature", parentItemId: null });
+    await t.run("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "Audit trail", tier: "nice" });
+    let s = await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT });
+    expect(s.weekDrafts.map((d) => d.tier)).toEqual(["must", "nice"]);
+    expect(s.drafts.filter((d) => d.level === "feature").map((d) => d.title)).toEqual(["Self-service export", "Audit trail"]);
+    // The week list's records (week_features) are not touched by drafts.
+    expect(s.plan.features).toEqual([]);
+    await t.run("weekplan.draft_tier", { weekStart: NEXT, draftId: a.draft.id, tier: "nice" });
+    await t.run("weekplan.draft_tier", { weekStart: NEXT, draftId: s.weekDrafts[1]!.draftId, tier: "off" });
+    s = await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT });
+    expect(s.weekDrafts).toEqual([{ draftId: a.draft.id, tier: "nice" }]);
+    expect((await t.fail("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: " ", tier: "must" })).status).toBe(400);
+    expect((await t.fail("weekplan.add_draft", { weekStart: "2026-10-26", clientKey: "Adatum", title: "Late", tier: "must" })).status).toBe(409);
+  });
+
+  it("a week-list draft created in DevOps becomes a week item with its tier once DevOps shows it", async () => {
+    const t = setup();
+    const a = await t.run<{ draft: { id: number } }>("weekplan.add_draft", { weekStart: NEXT, clientKey: "Adatum", title: "Reporting", tier: "must" });
+    const s0 = await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT });
+    const feature = s0.portfolios.find((p) => p.clientKey === "Adatum")!.items.find((i) => i.tier === "feature")!;
+    t.plan.markDraftCreated(a.draft.id, { itemId: feature.id, url: feature.url, title: feature.title, type: feature.type });
+    const s = await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT });
+    expect(s.weekDrafts).toEqual([]);
+    expect(s.plan.features.map((f) => [f.itemId, f.tier, f.level])).toEqual([[feature.id, "must", "feature"]]);
+  });
+
+  it("Nothing this week is kept per week and client, and taken back", async () => {
+    const t = setup();
+    await t.run("weekplan.nothing", { weekStart: NEXT, clientKey: "Adatum", on: true });
+    expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT })).quiet).toEqual(["Adatum"]);
+    expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: "2026-11-16" })).quiet).toEqual([]);
+    await t.run("weekplan.nothing", { weekStart: NEXT, clientKey: "Adatum", on: false });
+    expect((await t.run<WeekPlanState>("weekplan.load", { weekStart: NEXT })).quiet).toEqual([]);
+  });
+});

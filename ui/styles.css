@@ -1615,19 +1615,10 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pw-track { margin: 0 0 8px; font-size: var(--fs-3); color: var(--text-muted); }
 .pw-track.at_risk { color: var(--text); }
 .pw-track.done { color: var(--ok); }
-.pw-tier { margin-top: 6px; }
-.pw-tier h4 { margin: 4px 0 6px; font-size: var(--fs-3); color: var(--text); }
-.pw-tier h4 .muted, .pw-add h4 .muted { font-weight: 400; margin-left: 6px; text-transform: none; letter-spacing: 0; }
-.pw-tier + .pw-tier h4 { color: var(--text-muted); }
 .pw-item { grid-template-columns: minmax(240px, 1fr) auto auto minmax(120px, auto) auto; grid-template-areas: "title kids blocks placed acts" "children children children children children"; border-left: 4px solid var(--c); }
 .pw-item .pw-row-acts { grid-area: acts; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .pw-item.done .pw-title a { color: var(--text-muted); }
 .pw-done { color: var(--ok); font-weight: 600; }
-.pw-addrow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title placed"; cursor: default; border-style: dashed; }
-.pw-addrow .pw-acts { grid-area: placed; }
-.pw-add { margin-top: 10px; }
-.pw-add h4 { margin: 4px 0 6px; font-size: var(--fs-3); }
-.pw-under h4 { margin: 10px 0 6px; font-size: var(--fs-2); color: var(--text-muted); }
 .pw-drafts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--fs-3); }
 .pw-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pd-pin { font-size: var(--fs-2); margin-left: 6px; }

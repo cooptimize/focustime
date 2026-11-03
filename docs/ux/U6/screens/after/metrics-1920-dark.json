@@ -1,0 +1,170 @@
+{
+ "planweek-next": {
+  "words": {
+   "ui": 144,
+   "titles": 38
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 131,
+    "titles": 38
+   }
+  },
+  "elements": 57,
+  "kinds": {
+   "button": 48,
+   "icon": 1,
+   "input": 2,
+   "link": 6
+  },
+  "textStyles": 9,
+  "colors": 22,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  done-btn Done",
+   "12px/400/normal/none/none  pw-grid-date 9",
+   "12px/400/normal/none/underline  link-btn pw-quiet Nothing this week",
+   "13px/500/normal/none/underline  link-btn pl-line-open Open",
+   "11px/600/normal/uppercase/none  pl-label From DevOps"
+  ],
+  "uiText": [
+   "Plan the week of Nov 9",
+   "next week · 0 of 4 clients planned",
+   "DevOps health ·",
+   "2",
+   "Done",
+   "Week",
+   "Plan the week",
+   "Mon",
+   "9",
+   "Tue",
+   "10",
+   "Wed",
+   "11",
+   "Thu",
+   "12",
+   "Fri",
+   "13",
+   "AM",
+   "Cooptimize ×3",
+   "Planning",
+   "Harbor ×2",
+   "Northwind ×5",
+   "mostly meetings ×2",
+   "PTO",
+   "Catch-up",
+   "PM",
+   "Atlas ×2",
+   "Click to plan; drag a must here to pin.",
+   "No musts yet ×4",
+   "1 block free ×2",
+   "Nothing this week",
+   "Next client:",
+   "2 blocks free",
+   "Open ×3",
+   "No blocks this week",
+   "Add to",
+   "6 of yours not on the list",
+   "From DevOps",
+   "+ Must ×6",
+   "Nice ×6",
+   "Everything else",
+   "1 in DevOps order",
+   "Enter: a must. Shift+Enter: nice to have.",
+   "Refresh"
+  ]
+ },
+ "planday": {
+  "words": {
+   "ui": 107,
+   "titles": 84
+  },
+  "regions": {
+   "topbar": {
+    "ui": 13,
+    "titles": 0
+   },
+   "body": {
+    "ui": 94,
+    "titles": 84
+   }
+  },
+  "elements": 54,
+  "kinds": {
+   "button": 40,
+   "icon": 1,
+   "link": 8,
+   "badge/chip/tag": 4,
+   "input": 1
+  },
+  "textStyles": 9,
+  "colors": 26,
+  "scrollHeight": 1080,
+  "innerHeight": 1080,
+  "innerScroll": [],
+  "styleList": [
+   "15px/600/normal/none/none  name Coopilot",
+   "12px/500/normal/none/none  demo-tag Demo data",
+   "13px/500/normal/none/none  view-tab Today",
+   "13px/400/normal/none/none  vm-label Stopped (deallocated",
+   "13px/600/normal/none/none  done-btn Done",
+   "13px/500/normal/none/underline  link-btn Trim",
+   "12px/400/normal/none/none  pl-handle pr-handle ✓",
+   "11px/500/normal/none/none  size-chip static M",
+   "11px/600/normal/uppercase/none  pl-label This week's musts"
+  ],
+  "uiText": [
+   "Plan today",
+   "about 5 hours free",
+   "about 9 hours over",
+   "Timebox my day",
+   "Done",
+   "Now",
+   "Plan",
+   "Check-in",
+   "Close out",
+   "Cooptimize ×2",
+   "9:00–12:30",
+   "About 5h over",
+   "Trim ×2",
+   "M ×4",
+   "S ×5",
+   "Overdue 1 day ×2",
+   "Agenda ×2",
+   "9:00–9:15",
+   "9:30–11:00",
+   "11:00–11:45",
+   "Next",
+   "11:45–12:00",
+   "12:00–12:30",
+   "Northwind",
+   "12:30–5:00",
+   "About 4h over",
+   "not in DevOps",
+   "2 meetings · 1 personal · 2h 30m free",
+   "Add to",
+   "morning",
+   "This week's musts",
+   "2 ×2",
+   "of",
+   "stories",
+   "planned",
+   "Follow-ups",
+   "Everything else",
+   "4 in DevOps order",
+   "Enter adds a draft story",
+   ". Shift+Enter adds a plain note.",
+   "Refresh"
+  ]
+ }
+}
