@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_PLAN, legacyHours, parseConfig, type AppConfig } from "../config/schema.ts";
 import { settingsEdit } from "../config/settings.ts";
 import { DEFAULT_FOCUS, type FocusSettings } from "../plan/focussound.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { timerAction, type MediaControl } from "./timer-actions.ts";
 

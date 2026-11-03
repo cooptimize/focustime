@@ -7,6 +7,7 @@ import { warnPoints, type WarnPoint } from "../plan/timer.ts";
 import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
 import type { CalEvent } from "../week/types.ts";
 import type { ActionContext } from "./dispatch.ts";
+import { userZone } from "../week/zone.ts";
 
 export type WarningsContext = Pick<ActionContext, "loadConfig" | "makeOutlook" | "makeGoogle" | "plan" | "now">;
 
@@ -17,7 +18,7 @@ export async function refreshTodayWarnings(ctx: WarningsContext): Promise<number
   const loaded = await ctx.loadConfig();
   if (!loaded.parsed.ok) return null;
   const cfg = loaded.parsed.config;
-  const tz = cfg.week.hours.timeZone;
+  const tz = userZone(cfg);
   const today = localToday(ctx.now(), tz);
   const weekStart = mondayOf(today);
   // Each calendar falls back to its cache inside the source and never throws; anything unexpected drops just that one.

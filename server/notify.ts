@@ -2,6 +2,7 @@
 // repeats: the store keeps a marker per date, so a restart or a second check the same day sends nothing.
 import { WEEK_NUDGE_MESSAGE, weekNudges, type NudgeTimes } from "../plan/weekplan.ts";
 import { hoursOn, type TimeModel } from "../week/hours.ts";
+import { userZone } from "../week/zone.ts";
 
 /** The reminder can fire only this long after the day's start (Q23). */
 export const REMINDER_WINDOW_MINUTES = 90;
@@ -37,7 +38,7 @@ export type ReminderDeps = {
 export async function checkReminder(d: ReminderDeps): Promise<boolean> {
   const model = await d.hours();
   if (!model) return false;
-  const now = d.now().withTimeZone(model.timeZone);
+  const now = d.now().withTimeZone(userZone(model));
   const date = now.toPlainDate().toString();
   const offset = d.offsetMinutes ? await d.offsetMinutes().catch(() => 0) : 0;
   if (!reminderDue(now, model, d.committed(date), offset)) return false;
@@ -80,7 +81,7 @@ export type DayReminderDeps = {
 export async function checkDayReminder(d: DayReminderDeps): Promise<boolean> {
   const model = await d.hours();
   if (!model) return false;
-  const now = d.now().withTimeZone(model.timeZone);
+  const now = d.now().withTimeZone(userZone(model));
   const date = now.toPlainDate().toString();
   if (!(await d.due(now, model))) return false;
   if (d.off && (await d.off(date).catch(() => false))) return false;

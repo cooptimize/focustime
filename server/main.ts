@@ -45,6 +45,7 @@ import { DEFAULT_NOTIFY, dueFollowUps, inWorkingHours, noticeDone, notices, pars
 import { createNotifier } from "../actions/notifier.ts";
 import { expiringFor } from "../actions/dispatch.ts";
 import { mondayOf } from "../week/dates.ts";
+import { userZone } from "../week/zone.ts";
 
 const args = process.argv.slice(2);
 const dev = args.includes("--dev");
@@ -108,7 +109,7 @@ const presenceClients = new WeakMap<object, PresenceClient>();
 const photoClients = new WeakMap<object, PhotoClient>();
 const accountFor = (cfg: AppConfig): MicrosoftAccount | null => {
   if (!cfg.outlook) return null;
-  const src = makeOutlook(cfg.outlook, cfg.week.hours.timeZone);
+  const src = makeOutlook(cfg.outlook, userZone(cfg));
   // Step 16.3: Teams presence on its own token from the same sign-in (one client per sign-in).
   let presence = presenceClients.get(src);
   if (!presence) presenceClients.set(src, (presence = createPresenceClient({ fetch, token: () => src.auth.accessToken("presence"), invalidate: () => src.auth.invalidate(), log })));
@@ -141,15 +142,15 @@ const makeDevOps = (cfg: DataverseConfig, timeZone: string) => {
   return s;
 };
 
-// Local plan store (step 5). Its clock follows the configured day shape time zone. If it can't open,
-// the week view still works and the plan actions say the store is unavailable.
-let timeZone = "America/New_York";
+// Local plan store (step 5). Its clock follows the person's time zone (A1: their setting, else the host clock's).
+// If it can't open, the week view still works and the plan actions say the store is unavailable.
+let timeZone = host.clock.zone();
 let pickableTypes: string[] = [];
 let openStates: Record<string, string[]> = {};
 const loadConfig = async () => {
   const r = await host.config.load();
   if (r.parsed.ok) {
-    timeZone = r.parsed.config.week.hours.timeZone;
+    timeZone = userZone(r.parsed.config);
     pickableTypes = r.parsed.config.plan.pickablePortfolioTypes;
     openStates = Object.fromEntries(Object.entries(r.parsed.config.clientSettings).map(([k, v]) => [k, v.openStates]));
   }
@@ -273,7 +274,7 @@ if (plan) {
     if (hit && Date.now() - hit.at < 30 * 60_000) return hit.off;
     const c = await configOrNull();
     if (!c?.dataverse.mySystemUserId) return false;
-    const off = (await makeDataverse(c.dataverse, c.week.hours.timeZone).pto(d, d)).items.some((e) => e.date === d);
+    const off = (await makeDataverse(c.dataverse, userZone(c)).pto(d, d)).items.some((e) => e.date === d);
     ptoMemo.set(d, { at: Date.now(), off });
     return off;
   };
@@ -281,7 +282,7 @@ if (plan) {
     const s = store.getState<TimerState>(TIMER_KEY);
     return !!s && s.kind === "focus" && !s.ended && !!s.runningSince;
   };
-  const todayOf = (c: AppConfig) => localToday(instantNow().toString(), c.week.hours.timeZone);
+  const todayOf = (c: AppConfig) => localToday(instantNow().toString(), userZone(c));
   const vmCtx = () => vmContext(liveCtx);
 
   /** A button on a notification: the VM's Start and Restore (the timer's buttons go to checkTimer). */
@@ -353,7 +354,7 @@ if (plan) {
       const settings = c?.notify ?? DEFAULT_NOTIFY;
       if (!c) return { settings, inHours: false, pto: false, focusRunning: focusRunning() };
       const today = todayOf(c);
-      return { settings, inHours: inWorkingHours(c.week.hours, zonedNow(c.week.hours.timeZone)), pto: await ptoOff(today).catch(() => false), focusRunning: focusRunning() };
+      return { settings, inHours: inWorkingHours(c.week.hours, zonedNow(userZone(c))), pto: await ptoOff(today).catch(() => false), focusRunning: focusRunning() };
     },
     now: () => instantNow().toString(),
     open: (route) => openRoute(route),
@@ -469,7 +470,7 @@ if (plan) {
     if (!c) return;
     const today = todayOf(c);
     const ws = hoursOn(c.week.hours, today).segments[0]?.start ?? null;
-    if (!ws || zonedNow(c.week.hours.timeZone).toPlainTime().toString().slice(0, 5) < ws) return;
+    if (!ws || zonedNow(userZone(c)).toPlainTime().toString().slice(0, 5) < ws) return;
     const at = instantNow().toString();
     if (notifier.allows("followups") && store.markOnce("followups_notice", today)) await send(notices.followUps(today, dueFollowUps(store.openFollowUps(), today), at));
     if (notifier.allows("expiry") && store.markOnce("expiry_notice", today)) await send(notices.expiry(today, expiringFor(store, c, today), at));
@@ -479,7 +480,7 @@ if (plan) {
   const vmTick = async () => {
     const c = await configOrNull();
     if (!c) return;
-    const tz = c.week.hours.timeZone;
+    const tz = userZone(c);
     const n = zonedNow(tz);
     const today = todayOf(c);
     const ws = hoursOn(c.week.hours, today).segments[0]?.start ?? null;

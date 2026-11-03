@@ -11,6 +11,7 @@
     "build": "npm run typecheck && vite build",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "test": "vitest run",
+    "test:zones": "for z in America/New_York America/Chicago America/Denver America/Los_Angeles; do echo \"TZ=$z\"; TZ=$z vitest run --silent || exit 1; done",
     "test:watch": "vitest",
     "screenshot": "node scripts/screenshot.mjs",
     "start": "vite build && node server/main.ts",

@@ -5,6 +5,7 @@ import { allDayOn, placeTimed, type Bucket } from "./placement.ts";
 import type { PtoDay } from "./pto.ts";
 import { evaluateRisks } from "./risks.ts";
 import type { CalEvent, Day, FlexSession, FocusPattern, Half, IsoDate, PlacedEvent, Slot, Unavailable, Week, WeekConfig } from "./types.ts";
+import { userZone } from "./zone.ts";
 
 export type BuildWeekInput = {
   weekStart: IsoDate;
@@ -55,7 +56,7 @@ export function weekendHasPlans(h: DayHours, flexOn: number, unavailableOn: numb
 /** Build the whole week view model. Pure: same input, same output. */
 export function buildWeek({ weekStart, patterns, events, config, pto = {}, unavailable = [], flex = [], viewRange: mode = "business", weekendPlanned = new Set() }: BuildWeekInput): Week {
   const model = config.hours;
-  const tz = model.timeZone;
+  const tz = userZone(model);
   const all7 = weekDates7(weekStart);
   const hours = new Map(all7.map((d) => [d, hoursOn(model, d)]));
   const startDate = (x: { start: string }) => Temporal.Instant.from(x.start).toZonedDateTimeISO(tz).toPlainDate().toString();

@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "./schema.ts";
 import { settingsEdit } from "./settings.ts";
-import { STARTER_TOML } from "./starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 
 const TOML = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"');
 

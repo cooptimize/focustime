@@ -1,7 +1,7 @@
 // Step 14: DevOps writes through the write framework, against a fake dev.azure.com. Client orgs are fakes only.
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 import { BATCH_LIMIT, createOps, identityFrom, identityMatches, onOrg, stateOps, targetDateOps, undoTops, type DevOpsWriteEntry } from "../plan/devopswrite.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { DevOpsTarget } from "../sources/devops/types.ts";

@@ -1,7 +1,7 @@
 // Step 13: calendar editing tiers, two-way sync (with conflicts), Q69 rebuild, and the collaboration finder's invite.
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { fakeGraph, FAKE_WRITE_TOKEN } from "../sources/graph/test-fakes.ts";
 import { createGraphWriter } from "../sources/graph/write.ts";

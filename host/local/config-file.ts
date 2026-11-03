@@ -4,12 +4,15 @@ import { chmod, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/
 import { dirname, join } from "node:path";
 import { parseConfig, setSystemUserIdInText } from "../../config/schema.ts";
 import { migrateDayShapeText, type WriteResult } from "../../config/edit.ts";
-import { STARTER_TOML } from "../../config/starter.ts";
+import { starterToml } from "../../config/starter.ts";
 import type { HostConfig, LoadedConfig } from "../types.ts";
 
 export type { LoadedConfig, WriteResult };
 
-export async function loadConfigFile(path: string): Promise<LoadedConfig> {
+/** The machine's zone: the default for someone whose settings don't name one. */
+const machineZone = () => Temporal.Now.timeZoneId();
+
+export async function loadConfigFile(path: string, defaultZone: string = machineZone()): Promise<LoadedConfig> {
   let text: string;
   let created = false;
   try {
@@ -17,15 +20,15 @@ export async function loadConfigFile(path: string): Promise<LoadedConfig> {
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-    await writeFile(path, STARTER_TOML, { mode: 0o600, flag: "wx" });
-    text = STARTER_TOML;
+    text = starterToml(defaultZone);
+    await writeFile(path, text, { mode: 0o600, flag: "wx" });
     created = true;
   }
-  let parsed = parseConfig(text);
+  let parsed = parseConfig(text, { defaultZone });
   // The old [day_shape] becomes [hours] once, with a backup (D124). A failed write leaves the file as it was.
   if (parsed.ok && parsed.legacyDayShape) {
     const model = parsed.config.week.hours;
-    const r = await writeConfig(path, (t) => migrateDayShapeText(t, model) ?? t).catch(() => null);
+    const r = await writeConfig(path, (t) => migrateDayShapeText(t, model) ?? t, undefined, defaultZone).catch(() => null);
     if (r?.ok) parsed = r.parsed;
   }
   return { path, parsed, created };
@@ -50,10 +53,10 @@ export const backupDir = (configPath: string) => join(dirname(configPath), "back
  * per-field errors come back), the current file is copied to backups/config-<stamp>.toml first (0600), and the
  * new file replaces it atomically. Keeps the last KEEP_BACKUPS backups.
  */
-export async function writeConfig(path: string, edit: (text: string) => string, stamp: string = new Date().toISOString()): Promise<WriteResult> {
+export async function writeConfig(path: string, edit: (text: string) => string, stamp: string = new Date().toISOString(), defaultZone: string = machineZone()): Promise<WriteResult> {
   const before = await readFile(path, "utf8");
   const next = edit(before);
-  const parsed = parseConfig(next);
+  const parsed = parseConfig(next, { defaultZone });
   if (!parsed.ok) return { ok: false, parsed };
   const dir = backupDir(path);
   await mkdir(dir, { recursive: true, mode: 0o700 });
@@ -70,9 +73,9 @@ export async function writeConfig(path: string, edit: (text: string) => string, 
   return { ok: true, parsed, backup };
 }
 
-/** The HostConfig for one config file. */
-export const fileConfig = (path: string): HostConfig => ({
-  load: () => loadConfigFile(path),
-  write: (edit) => writeConfig(path, edit),
+/** The HostConfig for one config file; zone is the host clock's, the default for a person who hasn't set one. */
+export const fileConfig = (path: string, zone: () => string = machineZone): HostConfig => ({
+  load: () => loadConfigFile(path, zone()),
+  write: (edit) => writeConfig(path, edit, undefined, zone()),
   saveSystemUserId: (id) => saveSystemUserId(path, id),
 });

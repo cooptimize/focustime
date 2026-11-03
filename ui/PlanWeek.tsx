@@ -36,6 +36,7 @@ import { PlanRow } from "./plan/PlanRow.tsx";
 import { AddPane, AddSection, BoxHint } from "./plan/AddPane.tsx";
 import { FoldLine } from "./plan/FoldLine.tsx";
 import { planOpenClient, plannedCount, weekLines, type WeekLine } from "../plan/weekclients.ts";
+import { userZone } from "../week/zone.ts";
 
 type Props = { /** Step 16.2: the Week tab's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
 type Half = "AM" | "PM";
@@ -105,7 +106,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const search = useRef<HTMLInputElement>(null);
   const briefArea = useRef<HTMLTextAreaElement>(null);
   const { open: openMenu } = useContext(MenuCtx);
-  const tz = data.hours.timeZone;
+  const tz = userZone(data);
   const weekReady = data.weekStart === weekStart;
 
   const load = useCallback(

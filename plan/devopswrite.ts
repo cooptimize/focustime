@@ -1,6 +1,7 @@
 // DevOps writes (step 14), pure: the JSON Patch for each named change, the preview's rows, how each write is undone,
 // what changed since an item was loaded, and the identity rule. No I/O, no PATs. Requests are built from an org name
 // that has been validated, so a write can only go to that client's own organization.
+import { NEUTRAL_ZONE } from "../week/zone.ts";
 
 /** Azure DevOps REST, checked Nov 1, 2026: work items GA at 7.1; comments only as 7.1-preview.4. */
 export const WIT_API = "7.1";
@@ -104,8 +105,8 @@ export function createOps(s: CreateSpec): PatchOp[] {
     { op: "add", path: "/fields/System.Title", value: s.title },
     ...(s.description ? [{ op: "add" as const, path: "/fields/System.Description", value: textToHtml(s.description) }] : []),
     ...(s.acceptance && s.acField ? [{ op: "add" as const, path: `/fields/${AC_FIELD}`, value: textToHtml(s.acceptance) }] : []),
-    ...(s.startDate ? [{ op: "add" as const, path: `/fields/${s.startDate.field}`, value: dateValue(s.startDate.date, s.timeZone ?? "UTC") }] : []),
-    ...(s.targetDate ? [{ op: "add" as const, path: `/fields/${s.targetDate.field}`, value: dateValue(s.targetDate.date, s.timeZone ?? "UTC") }] : []),
+    ...(s.startDate ? [{ op: "add" as const, path: `/fields/${s.startDate.field}`, value: dateValue(s.startDate.date, s.timeZone ?? NEUTRAL_ZONE) }] : []),
+    ...(s.targetDate ? [{ op: "add" as const, path: `/fields/${s.targetDate.field}`, value: dateValue(s.targetDate.date, s.timeZone ?? NEUTRAL_ZONE) }] : []),
     { op: "add", path: "/fields/System.AssignedTo", value: s.assignedTo },
     { op: "add", path: "/fields/System.AreaPath", value: s.areaPath },
     { op: "add", path: "/fields/System.IterationPath", value: s.iterationPath },

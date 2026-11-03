@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { createDataverseSource } from "../sources/dataverse/source.ts";
 import { dvConfig, ENV, FAKE_SECRET, FAKE_TOKEN, fakeFetch } from "../sources/dataverse/test-fakes.ts";

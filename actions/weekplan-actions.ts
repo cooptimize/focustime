@@ -3,7 +3,6 @@
 // down" marks; the "ask about priorities" follow-up; a heads-up follow-up when a committed must is dropped. Local only: the week
 // plan lives in the plan store and nothing is written back to DevOps (features through the portfolio read, stories
 // from the work read, one description on demand).
-import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { briefMarkdown, prioritiesKey, withCurrentTitles } from "../plan/weekplan.ts";
 import { headsUpKey, offersHeadsUp, validBlocks, weekHeadsUpDraft, type ItemLevel, type Tier } from "../plan/weeklist.ts";
@@ -14,6 +13,7 @@ import { mondayOf } from "../week/dates.ts";
 import type { ClientPortfolio, ClientWork, IsoDate, PortfolioItem, Week } from "../week/types.ts";
 import { internalClients, followUpView, nameOf } from "./followup-rules.ts";
 import type { ActionResponse, WeekPlanState, WeekPlanView } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 
 export type WeekPlanAction =
   | "weekplan.load"
@@ -103,7 +103,7 @@ function bool(v: unknown, name: string): boolean {
 
 async function clock(ctx: WeekPlanContext) {
   const cfg = await ctx.config();
-  const tz = cfg?.week.hours.timeZone ?? defaultWeekConfig.hours.timeZone;
+  const tz = userZone(cfg);
   const today = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz).toPlainDate().toString();
   return { cfg, today, thisWeek: mondayOf(today) };
 }

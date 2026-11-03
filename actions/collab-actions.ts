@@ -16,6 +16,7 @@ import { localToday, mondayOf } from "../week/dates.ts";
 import type { Week, CalEvent, IsoDate } from "../week/types.ts";
 import { hold, type InviteMeta } from "./timebox-actions.ts";
 import type { ActionResponse, CandidatesData, CandidateView, SuggestData } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 
 export const COLLAB_ACTIONS = ["collab.candidates", "collab.suggest", "collab.preview_invite"] as const;
 export type CollabAction = (typeof COLLAB_ACTIONS)[number];
@@ -128,7 +129,7 @@ function range(o: Obj, cfg: AppConfig, today: IsoDate): { from: IsoDate; to: Iso
 
 /** My working time per date (lunch out, PTO days out), as epoch ms. */
 function myWindows(cfg: AppConfig, dates: readonly IsoDate[], away: ReadonlySet<IsoDate>) {
-  const tz = cfg.week.hours.timeZone;
+  const tz = userZone(cfg);
   const at = (d: IsoDate, hm: string) => Temporal.PlainDate.from(d).toZonedDateTime({ timeZone: tz, plainTime: Temporal.PlainTime.from(hm) }).epochMilliseconds;
   const out: { date: IsoDate; start: number; end: number }[] = [];
   for (const d of dates) {
@@ -150,7 +151,7 @@ async function run(ctx: CollabContext, action: CollabAction, input: unknown): Pr
   const plan = ctx.plan;
   const cfg = await ctx.config();
   if (!cfg) return bad("Fix the config first", 409);
-  const tz = cfg.week.hours.timeZone;
+  const tz = userZone(cfg);
   const today = localToday(ctx.now(), tz);
 
   switch (action) {

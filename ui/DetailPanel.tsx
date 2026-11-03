@@ -23,6 +23,7 @@ import { DevOpsWork, workStatusLabel } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { topOverlay } from "./keys.ts";
 import type { PanelFocus } from "./WeekGrid.tsx";
+import { userZone } from "../week/zone.ts";
 
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
 
@@ -51,7 +52,7 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
   const ref = useRef<HTMLElement>(null);
   const plan = useContext(PlanCtx);
   const allWork = useContext(DevOpsWork);
-  const tz = data.hours.timeZone;
+  const tz = userZone(data);
   const nameOf = clientNames(data);
   const primary = slot.focus[0] ?? null;
   const client = primary?.clientKey ?? null;

@@ -7,6 +7,7 @@ import { hoursOn, parseSpan, toMin, VIEW_RANGES, type DayOverride, type Span } f
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
 import type { ActionResponse } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 
 export type TimeAction = "ui.set_view_range" | "hours.set_day" | "hours.clear_day" | "unavailable.add" | "unavailable.remove" | "flex.add" | "flex.remove";
 
@@ -118,7 +119,7 @@ export async function timeAction(ctx: TimeContext, action: TimeAction, input: un
         if (!plan) return bad("The plan store isn't available", 503);
         const cfg = await ctx.config();
         if (!cfg) return bad("Fix the config first", 409);
-        const tz = cfg.week.hours.timeZone;
+        const tz = userZone(cfg);
         if (action === "unavailable.add") {
           const o = fields(input, ["date", "title", "start", "end"], ["note"]);
           const d = date(o.date);

@@ -53,6 +53,7 @@ import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAcco
 import { vmAction, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatus, type PresenceContext } from "./presence-actions.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
+import { userZone } from "../week/zone.ts";
 
 /** The plan store marker for the first launch (step 17.5). */
 const FIRST_LAUNCH_MARK = "first_launch";
@@ -159,7 +160,7 @@ const AHEAD_DAYS = 7 * 5 - 3;
 /** PTO for one date, for the server-side pick check. Null when there is none or Dataverse can't say. */
 async function ptoOn(ctx: ActionContext, cfg: AppConfig, date: string): Promise<PtoDay | null> {
   if (!cfg.dataverse.mySystemUserId) return null;
-  const r = await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).pto(...weekRange(date)).catch(() => null);
+  const r = await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).pto(...weekRange(date)).catch(() => null);
   return ptoByDate(r?.items ?? [], [date])[date] ?? null;
 }
 
@@ -167,7 +168,7 @@ async function ptoOn(ctx: ActionContext, cfg: AppConfig, date: string): Promise<
 async function ptoAheadOf(ctx: ActionContext, cfg: AppConfig, monday: string): Promise<ReadonlySet<string>> {
   if (!cfg.dataverse.mySystemUserId) return new Set();
   const to = Temporal.PlainDate.from(monday).add({ days: AHEAD_DAYS }).toString();
-  const r = await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).pto(monday, to).catch(() => null);
+  const r = await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).pto(monday, to).catch(() => null);
   return new Set((r?.items ?? []).map((e) => e.date));
 }
 
@@ -223,7 +224,7 @@ export function weekClients(week: Week, standing: readonly { clientKey: string; 
  */
 async function devopsClients(ctx: ActionContext, cfg: AppConfig, weekStart: string, todayDate: string, refresh: { refresh?: boolean }, patterns: readonly FocusPattern[]): Promise<{ planClients: ClientRef[]; fetch: ClientRef[] }> {
   const weekConfig = cfg.week;
-  const dvSource = ctx.makeDataverse(cfg.dataverse, weekConfig.hours.timeZone);
+  const dvSource = ctx.makeDataverse(cfg.dataverse, userZone(weekConfig));
   const [mineR, follow] = await Promise.all([dvSource.myClients?.().catch(() => null), followOptions(dvSource, cfg, todayDate, refresh, patterns)]);
   const mine = mineR ?? [];
   const clients = followedKeys(weekClients(buildWeek({ weekStart, patterns, events: [], config: weekConfig }), weekConfig.standingBlocks), follow.patterns, follow.options);
@@ -241,7 +242,7 @@ const featureWeeks = (weekStart: string, todayDate: string) => {
 
 /** The week's blocks from focus patterns and standing blocks only (no calendars): where a feature can go (step 8). */
 async function patternWeek(ctx: ActionContext, cfg: AppConfig, weekStart: string): Promise<Week> {
-  const r = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).load(weekStart).catch(() => null) : null;
+  const r = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart).catch(() => null) : null;
   return buildWeek({ weekStart, patterns: r?.items ?? [], events: [], config: cfg.week });
 }
 
@@ -251,7 +252,7 @@ async function patternWeek(ctx: ActionContext, cfg: AppConfig, weekStart: string
  * meetings only for a calendar that isn't configured at all), so "mostly meetings" counts as in Plan the week.
  */
 async function aheadWeekModels(ctx: ActionContext, cfg: AppConfig, weekStarts: string[], withCalendars: number, refresh: boolean): Promise<Week[]> {
-  const tz = cfg.week.hours.timeZone;
+  const tz = userZone(cfg);
   const opts = refresh ? { refresh: true } : {};
   const first = weekStarts[0]!;
   const last = Temporal.PlainDate.from(weekStarts[weekStarts.length - 1]!).add({ days: 6 }).toString();
@@ -282,7 +283,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
   // With an invalid config nothing is guessed: no standing blocks either.
   const weekConfig = cfg?.week ?? { ...defaultWeekConfig, standingBlocks: [] };
   const model = weekConfig.hours;
-  const tz = model.timeZone;
+  const tz = userZone(model);
   const now = input.now ?? ctx.now();
   const todayDate = localToday(now, tz);
   // A flex session that has ended opens its update follow-up (D126), on any read. By the server's clock, never the UI's
@@ -453,7 +454,7 @@ async function configured(ctx: ActionContext): Promise<AppConfig | null> {
 async function connect(ctx: ActionContext, which: "outlook" | "google") {
   const cfg = await configured(ctx);
   if (!cfg) return { status: "failed", message: "Fix the config first" };
-  const tz = cfg.week.hours.timeZone;
+  const tz = userZone(cfg);
   if (which === "outlook") return cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).connect() : { status: "failed", message: "Add outlook.client_id to config first" };
   return cfg.google ? ctx.makeGoogle(cfg.google, tz).connect() : { status: "failed", message: "Add google.client_id to config first" };
 }
@@ -485,7 +486,7 @@ export async function presenceContext(ctx: ActionContext): Promise<PresenceConte
     config: () => configured(ctx),
     account: await accountOf(ctx),
     team: async (cfg) => {
-      const r = await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).teammates();
+      const r = await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).teammates();
       return r.ok ? r.people : null;
     },
     now: ctx.now,
@@ -532,7 +533,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (!noInput(req.input)) return bad(`${req.action} takes no input`);
       const cfg = await configured(ctx);
       if (!cfg?.outlook) return { ok: true, data: { status: "failed", message: "Add outlook.client_id to config first" } };
-      return { ok: true, data: await ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).connect({ write: true }) };
+      return { ok: true, data: await ctx.makeOutlook(cfg.outlook, userZone(cfg)).connect({ write: true }) };
     }
     case "outlook.open": {
       // Step 13: Outlook on the web, for meetings FocusTime won't change. Only Outlook links, in the person's browser.
@@ -550,13 +551,13 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         {
           plan: ctx.plan,
           config: () => configured(ctx),
-          dataverse: (cfg) => ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone),
+          dataverse: (cfg) => ctx.makeDataverse(cfg.dataverse, userZone(cfg)),
           outlook: (cfg) => {
             if (!cfg.outlook) return null;
-            const o = ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone);
+            const o = ctx.makeOutlook(cfg.outlook, userZone(cfg));
             return { write: o.write ?? null, schedule: o.schedule ?? null, source: o };
           },
-          google: (cfg) => (cfg.google ? ctx.makeGoogle(cfg.google, cfg.week.hours.timeZone) : null),
+          google: (cfg) => (cfg.google ? ctx.makeGoogle(cfg.google, userZone(cfg)) : null),
           blocks: (cfg, w) => patternWeek(ctx, cfg, w),
           now: ctx.now,
         },
@@ -575,7 +576,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "write.retry":
     case "write.log":
       return timeboxAction(
-        { plan: ctx.plan, config: () => configured(ctx), outlook: (cfg) => (cfg.outlook ? ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).write ?? null : null), now: ctx.now, ...(ctx.sleep ? { sleep: ctx.sleep } : {}) },
+        { plan: ctx.plan, config: () => configured(ctx), outlook: (cfg) => (cfg.outlook ? ctx.makeOutlook(cfg.outlook, userZone(cfg)).write ?? null : null), now: ctx.now, ...(ctx.sleep ? { sleep: ctx.sleep } : {}) },
         action,
         req.input,
       );
@@ -592,10 +593,10 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
           plan: ctx.plan,
           config: () => configured(ctx),
           // Never the company read PAT: this read doesn't select it.
-          targets: (cfg, keys) => ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).devopsTargets(keys, { withPat: false }),
+          targets: (cfg, keys) => ctx.makeDataverse(cfg.dataverse, userZone(cfg)).devopsTargets(keys, { withPat: false }),
           writer: ctx.devopsWriter ?? null,
           pats: ctx.writePats ?? null,
-          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
           now: ctx.now,
           ...(ctx.sleep ? { sleep: ctx.sleep } : {}),
         },
@@ -645,7 +646,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (input.source === "dataverse") return bad("Dataverse uses an app secret set up outside FocusTime; remove it with secret-tool if needed");
       if (input.source !== "outlook" && input.source !== "google") return bad("source must be outlook or google");
       const cfg = await configured(ctx);
-      const tz = cfg?.week.hours.timeZone ?? "UTC";
+      const tz = userZone(cfg);
       const section = input.source === "outlook" ? cfg?.outlook : cfg?.google;
       if (!section) return { ok: true, data: { status: "not_configured" } };
       const src = input.source === "outlook" ? ctx.makeOutlook(section as OutlookConfig, tz) : ctx.makeGoogle(section as GoogleConfig, tz);
@@ -668,7 +669,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       const key = input.clientKey;
       const cfg = await configured(ctx);
       if (!cfg) return { ok: false, status: 409, error: "Fix the config first" };
-      const org = ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone).orgOf(key);
+      const org = ctx.makeDevOps(cfg.dataverse, userZone(cfg)).orgOf(key);
       const checked = checkDevOpsUrl(input.url, org);
       if (!checked.ok) return { ok: false, status: 422, error: checked.error };
       if (!ctx.links) return { ok: false, status: 503, error: "Opening links is not available here" };
@@ -748,7 +749,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "flex.add":
     case "flex.remove":
       return timeAction(
-        { plan: ctx.plan, config: () => configured(ctx), ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}), devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone) },
+        { plan: ctx.plan, config: () => configured(ctx), ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}), devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)) },
         action,
         req.input,
       );
@@ -788,7 +789,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         {
           plan: ctx.plan,
           config: () => configured(ctx),
-          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
           ptoAhead: (cfg, monday) => ptoAheadOf(ctx, cfg, monday),
           now: ctx.now,
         },
@@ -808,8 +809,8 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         {
           plan: ctx.plan,
           config: () => configured(ctx),
-          dataverse: (cfg) => ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone),
-          people: (cfg) => (cfg.outlook ? ctx.makeOutlook(cfg.outlook, cfg.week.hours.timeZone).people ?? null : null),
+          dataverse: (cfg) => ctx.makeDataverse(cfg.dataverse, userZone(cfg)),
+          people: (cfg) => (cfg.outlook ? ctx.makeOutlook(cfg.outlook, userZone(cfg)).people ?? null : null),
           now: ctx.now,
         },
         action,
@@ -827,10 +828,10 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
             const loaded = await ctx.loadConfig().catch(() => null);
             return loaded?.parsed.ok ? loaded.parsed.config : null;
           },
-          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
           clients: async (cfg, weekStart) => {
-            const today = localToday(ctx.now(), cfg.week.hours.timeZone);
-            const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).load(weekStart, {}).catch(() => null) : null;
+            const today = localToday(ctx.now(), userZone(cfg));
+            const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart, {}).catch(() => null) : null;
             return (await devopsClients(ctx, cfg, weekStart, today, {}, dv?.items ?? [])).fetch;
           },
           now: ctx.now,
@@ -847,15 +848,15 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         {
           plan: ctx.plan,
           config: () => configured(ctx),
-          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
           clients: async (cfg, weekStart, refresh) => {
-            const today = localToday(ctx.now(), cfg.week.hours.timeZone);
-            const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).load(weekStart, refresh ? { refresh } : {}).catch(() => null) : null;
+            const today = localToday(ctx.now(), userZone(cfg));
+            const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart, refresh ? { refresh } : {}).catch(() => null) : null;
             return (await devopsClients(ctx, cfg, weekStart, today, refresh ? { refresh } : {}, dv?.items ?? [])).fetch;
           },
           now: ctx.now,
           team: async (cfg) => {
-            const r = await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).teammates();
+            const r = await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).teammates();
             return r.ok ? r.people : null;
           },
           weeks: (cfg, weekStarts, withCalendars, refresh) => aheadWeekModels(ctx, cfg, weekStarts, withCalendars, refresh),
@@ -885,10 +886,10 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         {
           plan: ctx.plan,
           config: () => configured(ctx),
-          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
           clients: async (cfg, weekStart, refresh) => {
-            const today = localToday(ctx.now(), cfg.week.hours.timeZone);
-            const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, cfg.week.hours.timeZone).load(weekStart, refresh ? { refresh } : {}).catch(() => null) : null;
+            const today = localToday(ctx.now(), userZone(cfg));
+            const dv = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart, refresh ? { refresh } : {}).catch(() => null) : null;
             return (await devopsClients(ctx, cfg, weekStart, today, refresh ? { refresh } : {}, dv?.items ?? [])).fetch;
           },
           blocks: (cfg, weekStart) => patternWeek(ctx, cfg, weekStart),
@@ -912,7 +913,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
         {
           plan: ctx.plan,
           config: () => configured(ctx),
-          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, cfg.week.hours.timeZone),
+          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
           pto: (cfg, date) => ptoOn(ctx, cfg, date),
           ptoAhead: (cfg, monday) => ptoAheadOf(ctx, cfg, monday),
           now: ctx.now,

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 import { createDataverseSource } from "../sources/dataverse/source.ts";
 import { dvConfig, FAKE_SECRET, fakeFetch } from "../sources/dataverse/test-fakes.ts";
 import { createDevOpsSource } from "../sources/devops/source.ts";

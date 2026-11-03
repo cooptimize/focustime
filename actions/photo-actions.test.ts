@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createPhotoCache } from "../host/local/photos.ts";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 import { demoAvatar, photoAge } from "../plan/photos.ts";
 import { HttpError } from "../sources/calendar/http.ts";
 import { createPhotoClient, type Photo, type PhotoClient } from "../sources/graph/photos.ts";

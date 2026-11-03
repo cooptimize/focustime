@@ -24,6 +24,7 @@ import type { WriteEntry } from "../plan/timebox.ts";
 import { version as APP_VERSION } from "../package.json";
 import { InlineMoment } from "./brand/Opening.tsx";
 import { Lockup } from "./brand/Brand.tsx";
+import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 
 export const SETTINGS_SECTIONS = [
   ["you", "You"],
@@ -81,6 +82,14 @@ type Props = {
 const DEVOPS_STATE: Record<ClientWork["status"], string> = { ok: "Live", identity_missing: "No identity", not_set_up: "Not set up", auth_failed: "PAT problem", no_access: "No access", unreachable: "Unreachable", error: "Error" };
 
 const DAY_NAMES = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" } as const;
+/** Zones the browser knows, for the time zone field (A1: each person sets their own). */
+const ZONES: readonly string[] = (() => {
+  try {
+    return Intl.supportedValuesOf("timeZone");
+  } catch {
+    return [];
+  }
+})();
 
 /** Problems for one field (and its sub-fields, e.g. hours.mon[0] under hours.mon). */
 const problemsFor = (all: FieldProblem[], field: string) => all.filter((p) => p.field === field || p.field.startsWith(`${field}[`) || p.field.startsWith(`${field}.`));
@@ -213,7 +222,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
           <ReadOnly label="Email when signed out" value={d.you.email} where="Used only when signed out ([dataverse] my_email in config.toml)" />
           <ReadOnly label="Dataverse user" value={d.you.systemUserId ? "Found" : "Not found yet"} where="Change this in Dataverse" />
           <ReadOnly label="Environment" value={d.you.environmentUrl} where="Set in config.toml ([dataverse] environment_url)" />
-          <ReadOnly label="Time zone" value={d.you.timeZone} where="Change it under Working hours" />
+          <ReadOnly label="Time zone" value={userZone(d.you)} where="Change it under Working hours" />
         </div>
         )}
         </>
@@ -331,7 +340,7 @@ const spansIn = (s: string) => s.split(/[,;]/).map((x) => x.replace(/\s+/g, ""))
 
 function HoursForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void; reload: () => Promise<void> }) {
   const h = p.data.hours!;
-  const [tz, setTz] = useState(h.timeZone);
+  const [tz, setTz] = useState(userZone(h));
   const [lunch, setLunch] = useState(h.lunch ? spanText(h.lunch) : "");
   const [days, setDays] = useState(() => Object.fromEntries(WEEKDAY_KEYS.map((k) => [k, h.weekdays[k].map(spanText).join(", ")])) as Record<string, string>);
   const { problems, status, save } = useSave(p.onSavedData);
@@ -357,8 +366,13 @@ function HoursForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
           <input value={lunch} placeholder="none" onChange={(e) => setLunch(e.target.value)} />
           <Problems all={problems} field="hours.lunch" />
         </Field>
-        <Field label="Time zone" hint="Like America/New_York.">
-          <input value={tz} onChange={(e) => setTz(e.target.value)} />
+        <Field label="Time zone" hint="Where you work, as a Region/City name from the list.">
+          <input value={tz} list="set-zones" onChange={(e) => setTz(e.target.value)} />
+          <datalist id="set-zones">
+            {ZONES.map((z) => (
+              <option key={z} value={z} />
+            ))}
+          </datalist>
           <Problems all={problems} field="hours.time_zone" />
         </Field>
       </div>
@@ -1242,8 +1256,8 @@ function DataSection(p: Props & { data: SettingsData }) {
     <div className="set-form">
       <WriteLog />
       <DevOpsWriteLog />
-      <AzureWriteLog tz={p.data.you?.timeZone ?? "UTC"} />
-      <TeamsStatusLog tz={p.data.you?.timeZone ?? "UTC"} />
+      <AzureWriteLog tz={userZone(p.data.you)} />
+      <TeamsStatusLog tz={userZone(p.data.you)} />
       <div className="set-grid">
         <div className="set-field">
           <span className="set-label">Export the plan</span>
@@ -1304,7 +1318,7 @@ function WriteLog() {
   useEffect(() => {
     call<WriteLogView>("write.log", {}).then(setLog, (e: unknown) => setError(e instanceof Error ? e.message : "The write log could not load"));
   }, [env?.timeboxes]);
-  const tz = env?.tz ?? "UTC";
+  const tz = env?.tz ?? NEUTRAL_ZONE;
   const stamp = (s: string) => Temporal.ZonedDateTime.from(s).withTimeZone(tz).toPlainDateTime().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   return (
     <section className="write-log" aria-label="Write log">

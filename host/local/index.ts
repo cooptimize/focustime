@@ -33,7 +33,7 @@ export function createLocalHost(o: LocalHostOptions): Host {
       setApp: (a, v) => setAppSecret(a, v),
       writePat: { get: (k) => getWritePat(k), set: (k, v) => setWritePat(k, v), clear: (k) => clearWritePat(k) },
     },
-    config: fileConfig(paths.config),
+    config: fileConfig(paths.config, () => Temporal.Now.timeZoneId()),
     paths,
     snapshots: createSnapshotStore(paths.cache),
     photos: createPhotoCache(paths.cache),

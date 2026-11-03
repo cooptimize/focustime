@@ -12,6 +12,7 @@ import { PlanError, type Borrowed, type PlanStore, type ResumeNote } from "../st
 import { hasHoursOn } from "./plan-actions.ts";
 import { applyFollowUpRules, internalClients, followUpView, nameOf, newestFirst, workdayOf } from "./followup-rules.ts";
 import type { ActionResponse, BorrowedView, CloseOutState, ResumeNoteView } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 
 export type CloseoutAction = "closeout.load" | "closeout.commit" | "checkin.done" | "pick.make_up" | "note.set" | "borrow.pay";
 
@@ -70,7 +71,7 @@ export { borrowedView, noteView };
 async function clock(ctx: CloseoutContext) {
   const cfg = await ctx.config();
   const model = cfg?.week.hours ?? defaultWeekConfig.hours;
-  const now = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(model.timeZone);
+  const now = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(userZone(model));
   return { cfg, model, now, today: now.toPlainDate().toString() };
 }
 

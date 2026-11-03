@@ -1,6 +1,11 @@
 // Commented starter config, written to ~/.config/focustime/config.toml when it is missing.
 // Not secret, but keep it out of public repos.
-export const STARTER_TOML = `# FocusTime configuration.
+/** The starter config, its working hours in the given zone (the host clock's for a new person). */
+export function starterToml(timeZone: string): string {
+  return STARTER.replace("@TIME_ZONE@", timeZone);
+}
+
+const STARTER = `# FocusTime configuration.
 # Not secret, but don't commit it publicly. Secrets never go in this file:
 # the Dataverse client secret lives in the OS keyring
 # (service "focustime", account "dataverse-client-secret").
@@ -32,7 +37,7 @@ calendars = ["primary"]
 
 # Working hours (step 6b). Used for capacity, risks, planning and the view range.
 [hours]
-time_zone = "America/New_York"
+time_zone = "@TIME_ZONE@"
 # The lunch is where the morning ends and the afternoon starts. "" for none (the day splits in the middle).
 lunch = "12:00-12:00"
 # Working spans per weekday; [] is a day off. A second span (e.g. an evening) forms its own slot.

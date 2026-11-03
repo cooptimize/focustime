@@ -1,7 +1,6 @@
 // Quick capture (step 9): save first, sort later. A capture is written to the local plan store only, so it works
 // with every source offline; routing makes a follow-up, a draft story or (step 13.5) a draft feature, also local.
 // The only DevOps read is a client's open features and epics (to put a draft under), read-only and optional. No AI.
-import { weekConfig as defaultWeekConfig } from "../config/defaults.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { Size } from "../plan/types.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
@@ -9,6 +8,7 @@ import { MAX_CAPTURE, PlanError, type CaptureRoute, type PlanStore } from "../st
 import { mondayOf } from "../week/dates.ts";
 import type { IsoDate } from "../week/types.ts";
 import type { ActionResponse, CaptureFeatures, CaptureState } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 export type { CaptureFeatures, CaptureState } from "./types.ts";
 
 export const CAPTURE_ACTIONS = ["capture.add", "capture.load", "capture.route", "capture.features", "draft.add_feature"] as const;
@@ -67,7 +67,7 @@ const size = (v: unknown): Size => {
 };
 
 async function todayOf(ctx: CaptureContext, cfg: AppConfig | null): Promise<IsoDate> {
-  const tz = cfg?.week.hours.timeZone ?? defaultWeekConfig.hours.timeZone;
+  const tz = userZone(cfg);
   return Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(tz).toPlainDate().toString();
 }
 

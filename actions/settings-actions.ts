@@ -13,6 +13,7 @@ import { localToday } from "../week/dates.ts";
 import { followState } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import type { ActionResponse, AppSecret, FieldProblem, SecretPresence, SettingsClient, SettingsData } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 
 export type SettingsAction = "settings.load" | "settings.save" | "secret.set" | "data.export";
 
@@ -49,7 +50,7 @@ async function load(ctx: SettingsContext): Promise<SettingsData> {
   if (!loaded.parsed.ok)
     return { ...base, problems: loaded.parsed.errors, dataverseReached: false, you: null, hours: null, standingBlocks: [], risk: null, planning: { pickablePortfolioTypes: [], ...DEFAULT_PLAN, sizes: { ...DEFAULT_PLAN.sizes } }, focus: { ...DEFAULT_FOCUS, playlists: [] }, clients: [], display: null, timebox: { ...DEFAULT_TIMEBOX }, collab: { ...DEFAULT_COLLAB, domains: [] }, notify: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds } }, vm: { startWithoutAsking: DEFAULT_AZURE.startWithoutAsking }, roadmap: { ...DEFAULT_THRESHOLDS } };
   const cfg = loaded.parsed.config;
-  const tz = cfg.week.hours.timeZone;
+  const tz = userZone(cfg);
   const dv = cfg.dataverse.mySystemUserId ? ctx.makeDataverse(cfg.dataverse, tz) : null;
   const [fetched, follow] = await Promise.all([
     dv ? dv.myClients().catch(() => null) : Promise.resolve(null),

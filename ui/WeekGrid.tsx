@@ -23,6 +23,7 @@ import { mondayOf } from "../week/dates.ts";
 
 import { HalfScope } from "./scope.ts";
 import { interactive } from "./DetailPanel.tsx";
+import { userZone } from "../week/zone.ts";
 
 export type Selection = { dayIndex: number; half: Half };
 /** U3: where the detail panel opens: the features list, one follow-up or one pick. */
@@ -89,7 +90,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
       key={day.date}
       day={day}
       dayIndex={i}
-      tz={week.timeZone}
+      tz={userZone(week)}
       hasEve={week.days.some((d) => d.eve)}
       colors={colors}
       minFocusWindow={minFocusWindow}

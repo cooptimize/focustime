@@ -86,7 +86,7 @@ export function showAsLabel(e: CalEvent): string {
 
 /**
  * A stored time as "Nov 1, 2:05 PM" in the given zone (step 15, D271). The plan store stamps zoned times
- * ("…-05:00[America/New_York]"), which `new Date` can't read; Temporal reads both kinds. "Unknown time" otherwise.
+ * ("…-05:00[Region/City]"), which `new Date` can't read; Temporal reads both kinds. "Unknown time" otherwise.
  */
 export function whenText(stamp: string, tz: string): string {
   try {

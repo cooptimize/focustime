@@ -17,6 +17,7 @@ import { AHEAD_SEEN_MARK, directionOccasion, lookAheadOccasion } from "../plan/r
 import { borrowedForWeek, weekBudget } from "../plan/weekplan.ts";
 import { estimate } from "../plan/estimate.ts";
 import type { AheadState } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 
 export const ROADMAP_ACTIONS = ["roadmap.load", "roadmap.ahead", "roadmap.set_dates"] as const;
 export type RoadmapAction = (typeof ROADMAP_ACTIONS)[number];
@@ -51,7 +52,7 @@ export async function roadmapAction(ctx: RoadmapContext, action: RoadmapAction, 
   const cfg = await ctx.config();
   if (!cfg) return bad("Fix the config first", 409);
   const now = ctx.now();
-  const today = localToday(now, cfg.week.hours.timeZone);
+  const today = localToday(now, userZone(cfg));
   const refresh = o.refresh === true;
   const clients = await ctx.clients(cfg, mondayOf(today), refresh);
   const portfolios = clients.length ? await ctx.devops(cfg).portfolio(clients, refresh ? { refresh } : {}) : [];
@@ -150,7 +151,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
   if (!ctx.weeks) return bad("Plan ahead isn't available here", 503);
   const cfg = await ctx.config();
   if (!cfg) return bad("Fix the config first", 409);
-  const today = localToday(ctx.now(), cfg.week.hours.timeZone);
+  const today = localToday(ctx.now(), userZone(cfg));
   const weekStarts = aheadWeeks(mondayOf(today));
   // Step 17 (slice 4): opening Plan ahead (seen) answers the rituals of the moment: the look ahead once next week is
   // planned, and this month's direction review. Their dot goes and their notification closes.

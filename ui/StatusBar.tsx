@@ -6,6 +6,7 @@ import { devopsSummary, workStatusLabel } from "./work.ts";
 import { causeLines, notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar, type Fix } from "./status.ts";
 import { shortDate } from "./labels.ts";
 import { updatedAgo } from "./refresh.ts";
+import { userZone } from "../week/zone.ts";
 
 type Props = {
   sources: SourceSummary[];
@@ -34,7 +35,7 @@ function when(iso: string, tz: string): string {
 
 export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, loading, busy, notice, extra, clock, onRefresh, onConnect, onDisconnect }: Props) {
   const samples = sources.filter((s) => s.sample);
-  const shape = { timeZone: hours.timeZone };
+  const shape = { timeZone: userZone({ hours }) };
   const lines = causeLines(sources, devops);
   // Step 10: one quiet line when everything is live; it opens on a click and on its own when something needs attention.
   const [open, setOpen] = useState(false);
@@ -123,7 +124,7 @@ export function StatusBar({ sources, devops, sampleWeek, isSampleWeek, hours, lo
           </span>
         )}
         {chips}
-        <span className="muted shape" title={`Working hours. Change them in Settings or a day's menu. Times in ${hours.timeZone}`}>
+        <span className="muted shape" title={`Working hours. Change them in Settings or a day's menu. Times in ${userZone({ hours })}`}>
           {hoursSummary(hours)}
         </span>
         <button type="button" className="refresh" onClick={onRefresh} disabled={loading} aria-label="Refresh all sources">

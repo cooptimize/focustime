@@ -12,6 +12,7 @@ import { dayEndOf, hoursOn, noHoursPrompt, type TimeModel } from "../week/hours.
 import type { PtoDay } from "../week/pto.ts";
 import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 
 export const PLAN_ACTIONS = ["planday.start", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
@@ -38,7 +39,7 @@ export function hasHoursOn(plan: PlanStore | undefined, model: TimeModel, date: 
 async function clock(ctx: PlanContext): Promise<{ cfg: AppConfig | null; today: IsoDate; upcoming: IsoDate; model: TimeModel; hasHours: HasHours }> {
   const cfg = await ctx.config();
   const model = cfg?.week.hours ?? defaultWeekConfig.hours;
-  const now = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(model.timeZone);
+  const now = Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(userZone(model));
   const today = now.toPlainDate().toString();
   const hasHours: HasHours = (d) => hasHoursOn(ctx.plan, model, d);
   return { cfg, today, upcoming: upcomingStart(now, dayEndOf(model, today) ?? "24:00"), model, hasHours };
@@ -133,13 +134,13 @@ function pendingSession(ctx: PlanContext, plan: PlanStore, cfg: AppConfig | null
   return (p) => {
     // Flex ends are date-times; as local times on the pick's date (a session past midnight counts as midnight).
     const flexEnds = plan.flexBetween(p.date, p.date).map((f) => {
-      const z = Temporal.Instant.from(f.end).toZonedDateTimeISO(model.timeZone);
+      const z = Temporal.Instant.from(f.end).toZonedDateTimeISO(userZone(model));
       return z.toPlainDate().toString() > p.date ? "24:00" : z.toPlainTime().toString({ smallestUnit: "minute" });
     });
     const end = sessionEnd(p, hoursOn(model, p.date), flexEnds);
     if (!end) return false;
     const [h, m] = end.split(":").map(Number) as [number, number];
-    const at = Temporal.PlainDate.from(p.date).toZonedDateTime({ timeZone: model.timeZone }).add({ hours: h, minutes: m });
+    const at = Temporal.PlainDate.from(p.date).toZonedDateTime({ timeZone: userZone(model) }).add({ hours: h, minutes: m });
     return Temporal.Instant.compare(now, at.toInstant()) < 0;
   };
 }
@@ -259,7 +260,7 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         if (past) return bad(`${past}. Move it to today or a later day`, 409);
         // Step 13.5: a day with no working hours asks first (Add hours, or Move anyway).
         const cfgNow = await ctx.config().catch(() => null);
-        const ask = o.anyway === true || !cfgNow ? null : noHoursPrompt(cfgNow.week.hours, to, Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(cfgNow.week.hours.timeZone).toPlainDate().toString());
+        const ask = o.anyway === true || !cfgNow ? null : noHoursPrompt(cfgNow.week.hours, to, Temporal.Instant.from(ctx.now()).toZonedDateTimeISO(userZone(cfgNow)).toPlainDate().toString());
         if (ask) return { ok: false, status: 409, error: ask, code: "no_hours" };
         // Step 15.1 (D277): never two copies of one item in a block.
         if (alreadyPlanned(plan.picksFor(to), before, to, h, pid)) return { ok: false, status: 409, error: "Already planned here", code: "duplicate" };

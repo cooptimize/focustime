@@ -7,7 +7,7 @@ export type PickStatus = "planned" | "done" | "moved" | "dropped";
 /** What a pick points at: a DevOps item, a local draft story, or a typed intention. */
 export type PickKind = "item" | "draft" | "intention";
 
-/** ISO date-time with offset and zone, e.g. "2026-11-02T08:01:00-05:00[America/New_York]". */
+/** ISO date-time with offset and zone, e.g. "2026-11-02T08:01:00-05:00[Region/City]". */
 export type ZonedStamp = string;
 
 export type DayPlan = { date: IsoDate; committedAt: ZonedStamp | null; /** When Close out was done for this day (step 7). */ closedOutAt: ZonedStamp | null; createdAt: ZonedStamp; updatedAt: ZonedStamp };

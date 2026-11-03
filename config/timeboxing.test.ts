@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "./schema.ts";
 import { settingsEdit } from "./settings.ts";
-import { STARTER_TOML } from "./starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 
 const base = STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"').replace('my_email = ""', 'my_email = "me@example.com"');
 

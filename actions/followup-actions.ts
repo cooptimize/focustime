@@ -13,6 +13,7 @@ import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { IsoDate } from "../week/types.ts";
 import { followUpView, internalClients, nameOf, reviewOpenHeadsUps, workdayOf } from "./followup-rules.ts";
 import type { ActionResponse, FollowUpView, PeopleData, ReviewData } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 
 export const FOLLOWUP_ACTIONS = ["followups.list", "followup.add", "followup.edit", "followup.close", "followup.not_needed", "followup.snooze", "followup.delete", "followup.people", "followups.review"] as const;
 export type FollowUpAction = (typeof FOLLOWUP_ACTIONS)[number];
@@ -92,7 +93,7 @@ export async function followUpAction(ctx: FollowUpContext, action: FollowUpActio
   const plan = ctx.plan;
   if (!plan) return bad("The local plan store isn't available", 503);
   const cfg = await ctx.config().catch(() => null);
-  const tz = cfg?.week.hours.timeZone ?? "UTC";
+  const tz = userZone(cfg);
   const now = Temporal.Instant.from(ctx.now());
   const today = now.toZonedDateTimeISO(tz).toPlainDate().toString();
   const name = nameOf(cfg, () => undefined);

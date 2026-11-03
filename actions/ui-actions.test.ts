@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { writeConfig } from "../host/local/config-file.ts";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 import { createPlanStore } from "../store/plan-store.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 

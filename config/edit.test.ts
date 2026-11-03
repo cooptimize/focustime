@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { removeValue, replaceArrayTables, replaceSection, setValue, tomlValue } from "./edit.ts";
 import { backupDir, KEEP_BACKUPS, writeConfig } from "../host/local/config-file.ts";
 import { parseConfig } from "./schema.ts";
-import { STARTER_TOML } from "./starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 
 const valid = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"');
 

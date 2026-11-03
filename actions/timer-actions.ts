@@ -14,6 +14,7 @@ export type TimerAction = "timer.start" | "timer.pause" | "timer.resume" | "time
 
 /** Media control (step 10): pausing players and playlist links; the host's (host/types.ts). */
 import type { MediaControl } from "../host/types.ts";
+import { userZone } from "../week/zone.ts";
 export type { MediaControl };
 
 export type TimerContext = {
@@ -90,7 +91,7 @@ async function timerActionInner(ctx: TimerContext, action: TimerAction, input: u
   const now = Temporal.Instant.from(ctx.now());
   const cfg = await ctx.config();
   const planning = cfg?.plan ?? { ...DEFAULT_PLAN, pickablePortfolioTypes: [] };
-  const tz = cfg?.week.hours.timeZone ?? "America/New_York";
+  const tz = userZone(cfg);
   const today = now.toZonedDateTimeISO(tz).toPlainDate().toString();
   const current = () => plan.getState<TimerState>(TIMER_KEY);
   const save = (s: TimerState | null) => {

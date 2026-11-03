@@ -1,5 +1,6 @@
 import { hoursOn, toMin, type TimeModel } from "./hours.ts";
 import type { Half, IsoDate, IsoDateTime, Weekday } from "./types.ts";
+import { userZone } from "./zone.ts";
 
 export const WEEKDAYS: readonly Weekday[] = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 export const WEEKDAYS_7: readonly Weekday[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -43,7 +44,7 @@ export type TodayTarget = { weekStart: IsoDate; dayIndex: number; half: Half };
  * planned, the coming Monday morning. `dayIndex` counts from Monday (Saturday is 5, Sunday 6).
  */
 export function todayTarget(now: IsoDateTime, model: TimeModel, opts: { todayHasPlans?: boolean; hasEve?: boolean } = {}): TodayTarget {
-  const zdt = Temporal.Instant.from(now).toZonedDateTimeISO(model.timeZone);
+  const zdt = Temporal.Instant.from(now).toZonedDateTimeISO(userZone(model));
   const date = zdt.toPlainDate();
   if (date.dayOfWeek >= 6 && !opts.todayHasPlans) return { weekStart: defaultWeekStart(date.toString()), dayIndex: 0, half: "AM" };
   const h = hoursOn(model, date.toString());

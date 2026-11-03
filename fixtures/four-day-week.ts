@@ -1,7 +1,7 @@
 // A test fixture (A1): the week shape many tests were written against, now that the starter config and the no-config
 // defaults are neutral (Mon–Fri 9:00–5:00, no standing block). Mon–Thu 9:00–5:00 split at 12:30, Fridays off, and a
 // standing Monday AM block for the internal account. Fictional, and only for tests.
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "./starter.ts";
 import { weekConfig } from "../config/defaults.ts";
 import { legacyHours } from "../config/schema.ts";
 import type { WeekConfig } from "../week/types.ts";

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrateDayShapeText } from "./edit.ts";
 import { DEFAULT_PLAN, legacyHours, parseConfig, setSystemUserIdInText } from "./schema.ts";
-import { STARTER_TOML } from "./starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 
 const valid = `
 [dataverse]

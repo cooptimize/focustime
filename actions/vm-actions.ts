@@ -19,6 +19,7 @@ import type { AzureWriteEntry, PlanStore } from "../store/plan-store.ts";
 import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import type { ChosenVm, VmError, VmPreview, VmPreviewOp, VmStatus } from "./account-types.ts";
 import type { ActionResponse } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 
 export const VM_ACTIONS = ["vm.find", "vm.choose", "vm.status", "vm.preview", "vm.confirm", "vm.restore", "vm.dismiss_prompt", "vm.log", "vm.start_now"] as const;
 export type VmAction = (typeof VM_ACTIONS)[number];
@@ -113,7 +114,7 @@ const changeText = (c: ShutdownChange, tz: string, today: IsoDate) => {
 
 export async function vmAction(ctx: VmContext, action: VmAction, input: unknown): Promise<ActionResponse> {
   const cfg = await ctx.config();
-  const tz = cfg?.week.hours.timeZone ?? "UTC";
+  const tz = userZone(cfg);
   const today = localToday(ctx.now(), tz);
   switch (action) {
     case "vm.find": {
@@ -214,7 +215,7 @@ export async function vmAction(ctx: VmContext, action: VmAction, input: unknown)
 }
 
 async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fresh: boolean): Promise<VmStatus> {
-  const tz = cfg?.week.hours.timeZone ?? "UTC";
+  const tz = userZone(cfg);
   const me = storedIdentity(ctx.plan);
   const vm = chosen(ctx);
   const changeRec = vm ? (ctx.plan?.accountState<ShutdownChange>(shutdownKey(vm.id)) ?? null) : null;
@@ -497,7 +498,7 @@ export async function restoreTick(ctx: VmContext, o: { atWorkStart: boolean }): 
   const rec = ctx.plan.accountState<ShutdownChange>(shutdownKey(vm.id));
   if (!rec) return null;
   const cfg = await ctx.config();
-  const today = localToday(ctx.now(), cfg?.week.hours.timeZone ?? "UTC");
+  const today = localToday(ctx.now(), userZone(cfg));
   if (!restoreAttemptDue(rec, today, nowMs(ctx), o.atWorkStart)) return null;
   const r = await restore(ctx, vm, today, true);
   return r.ok ? "restored" : "failed";

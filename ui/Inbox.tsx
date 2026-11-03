@@ -11,6 +11,7 @@ import type { CaptureClient } from "../plan/capture.ts";
 import type { IsoDate } from "../week/types.ts";
 import { Fading, FollowUpRow } from "./FollowUps.tsx";
 import { EmptyState } from "./brand/Opening.tsx";
+import { userZone } from "../week/zone.ts";
 
 type Entry = { kind: "follow_up"; at: string; followUp: FollowUpView } | { kind: "capture"; at: string; capture: Capture };
 
@@ -34,7 +35,7 @@ export function Inbox({ data, version, onChanged, defaultClient = null, highligh
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const head = useRef<HTMLHeadingElement>(null);
-  const tz = data.hours.timeZone;
+  const tz = userZone(data);
   // Step 15.5: a follow-up's notification opens it here: scrolled to and outlined.
   const scrolledTo = useRef<number | null>(null);
   useEffect(() => {

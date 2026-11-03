@@ -12,6 +12,7 @@ import type { OutlookWrite } from "../sources/graph/source.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
 import { clientName, localOf, wantFields } from "./timebox-actions.ts";
+import { userZone } from "../week/zone.ts";
 
 export type SyncResult = { facts: Record<string, EditFacts>; changed: number; conflicts: number; rebuilt: number };
 
@@ -28,7 +29,7 @@ const instant = (s: string) => Temporal.Instant.from(s);
  */
 export async function syncWeek(o: { plan: PlanStore; ow: OutlookWrite; cfg: AppConfig; weekStart: string; refresh: boolean; now: () => string; clients: readonly { key: string; name: string }[] }): Promise<SyncResult> {
   const { plan, ow, cfg } = o;
-  const tz = cfg.week.hours.timeZone;
+  const tz = userZone(cfg);
   const t = Date.now();
   const hit = memo.get(o.weekStart);
   if (hit && !o.refresh && t - hit.at < MEMO_MS) return hit.result;
@@ -88,7 +89,7 @@ export async function syncWeek(o: { plan: PlanStore; ow: OutlookWrite; cfg: AppC
 
 function apply(o: { plan: PlanStore; cfg: AppConfig; now: () => string }, tb: Timebox, last: ReturnType<typeof outlookFields>, ev: SeenEvent | null, log: (tb: Timebox | null, op: "create" | "update" | "delete", message: string, before: Timebox | null, after: Timebox | null, eventId: string | null, fBefore: ReturnType<typeof outlookFields> | null, fAfter: ReturnType<typeof outlookFields> | null) => unknown, result: SyncResult): number {
   const { plan, cfg } = o;
-  const tz = cfg.week.hours.timeZone;
+  const tz = userZone(cfg);
   const name = clientName(cfg, tb.clientKey);
   const d = syncDecision(last, ev, wantFields(cfg, tb));
   const own = plan.ownEvent(tb.uid)!;

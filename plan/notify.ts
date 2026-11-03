@@ -2,6 +2,7 @@
 // ones collapse into one, and where clicking one opens FocusTime. Pure: no I/O, no host. The host only shows a
 // notification and says which button was clicked (desktop today, browser notifications in a hosted version).
 import { hoursOn, type TimeModel } from "../week/hours.ts";
+import { userZone } from "../week/zone.ts";
 
 /** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
 export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry"] as const;
@@ -127,7 +128,7 @@ export function gate(kind: AnyKind, f: GateFacts): Gate {
 
 /** Whether a time is inside one of the day's working spans (start inclusive, end exclusive). */
 export function inWorkingHours(model: TimeModel, now: Temporal.ZonedDateTime): boolean {
-  const z = now.withTimeZone(model.timeZone);
+  const z = now.withTimeZone(userZone(model));
   const t = z.toPlainTime().toString({ smallestUnit: "minute" });
   return hoursOn(model, z.toPlainDate().toString()).segments.some((s) => t >= s.start && (s.end === "24:00" || t < s.end));
 }

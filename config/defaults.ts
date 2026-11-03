@@ -2,6 +2,7 @@
 // ~/.config/focustime/config.toml; for step 1 they are compiled in.
 import type { WeekConfig } from "../week/types.ts";
 import { legacyHours } from "./schema.ts";
+import { NEUTRAL_ZONE } from "../week/zone.ts";
 
 export type ClientStyle = { key: string; name: string; shortName: string; color: string };
 
@@ -16,8 +17,8 @@ export const clients: Record<string, ClientStyle> = {
 export const fallbackClientColor = "#8a8f98";
 
 export const weekConfig: WeekConfig = {
-  hours: legacyHours({ start: "09:00", split: "12:00", end: "17:00", timeZone: "America/New_York" }),
+  hours: legacyHours({ start: "09:00", split: "12:00", end: "17:00", timeZone: NEUTRAL_ZONE }),
   thresholds: { meetingWatchMinutes: 90, meetingAtRiskMinutes: 150, minFocusWindowMinutes: 90 },
-  // A1: standing blocks are per person, none by default.
+  // A1: standing blocks are per person, none by default. The zone stands in until settings load (userZone).
   standingBlocks: [],
 };

@@ -73,7 +73,7 @@ export function zoneOf(z: GraphZone | null | undefined): string | null {
   if (name && WINDOWS[name]) return WINDOWS[name]!;
   if (name && name !== "Customized Time Zone") {
     try {
-      // Already an IANA name ("America/Chicago").
+      // Already an IANA Region/City name.
       return Temporal.Now.zonedDateTimeISO(name).timeZoneId;
     } catch {
       /* not a zone Temporal knows */

@@ -20,6 +20,7 @@ import { isRsvpResponse, proposalProblem, responseLabel, rsvpProblem, rsvpVisibi
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import type { IsoDate } from "../week/types.ts";
 import type { ActionResponse, PreviewField, TimeboxView, WritePreview, WriteResult, WriteState } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 
 export const TIMEBOX_ACTIONS = [
   "timebox.add", "timebox.add_many", "timebox.update", "timebox.remove", "timebox.set_outlook", "timebox.resolve",
@@ -184,7 +185,7 @@ async function run(ctx: TimeboxContext, action: TimeboxAction, input: unknown): 
   if (!plan) return bad("The local plan store isn't available", 503);
   const cfg = await ctx.config();
   if (!cfg) return bad("Fix the config first", 409);
-  const tz = cfg.week.hours.timeZone;
+  const tz = userZone(cfg);
   const settings = cfg.timebox ?? DEFAULT_TIMEBOX;
   const sync = (tb: Timebox) => syncNeed(tb, plan.ownEvent(tb.uid), want(cfg, tb));
   const out = (tb: Timebox) => ({ ok: true as const, data: { timebox: timeboxView(tb, plan, cfg), sync: sync(tb) } });

@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 import type { WriteEntry } from "../plan/timebox.ts";
 import { fakeGraph, FAKE_WRITE_TOKEN } from "../sources/graph/test-fakes.ts";
 import { createGraphWriter, MARKER_PROP } from "../sources/graph/write.ts";

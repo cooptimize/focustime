@@ -5,6 +5,7 @@ import { DEFAULT_THRESHOLDS, type RoadmapThresholds } from "../plan/roadmap.ts";
 import { DEFAULT_NOTIFY, NOTIFY_KINDS, type NotifyKind, type NotifySettings } from "../plan/notify.ts";
 import { DEFAULT_FOCUS, MAX_PLAYLISTS, playlistLink, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
+import { NEUTRAL_ZONE } from "../week/zone.ts";
 
 export type DataverseConfig = {
   environmentUrl: string;
@@ -137,7 +138,10 @@ const WORK_DAYS: WorkWeekday[] = ["Mon", "Tue", "Wed", "Thu"];
 type Table = Record<string, unknown>;
 const isTable = (v: unknown): v is Table => typeof v === "object" && v !== null && !Array.isArray(v) && !(v instanceof Date);
 
-export function parseConfig(text: string): ParseResult {
+/** defaultZone: the zone for someone whose settings don't name one (the host clock's); the neutral zone without it. */
+export type ParseOptions = { defaultZone?: string };
+
+export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult {
   let raw: Table;
   try {
     raw = parse(text) as Table;
@@ -215,7 +219,7 @@ export function parseConfig(text: string): ParseResult {
       Temporal.Now.zonedDateTimeISO(v);
       return null;
     } catch {
-      return "Unknown time zone; use an IANA name like America/New_York";
+      return "Unknown time zone; use an IANA name like Region/City";
     }
   };
   let hours: TimeModel;
@@ -232,7 +236,7 @@ export function parseConfig(text: string): ParseResult {
     }
     hours = legacyHours({ start, split, end, timeZone });
   } else {
-    hours = parseHours(raw.hours, err, zone);
+    hours = parseHours(raw.hours, err, zone, opts.defaultZone ?? NEUTRAL_ZONE);
   }
   // [risk]
   const rk = section("risk", ["meeting_watch_minutes", "meeting_at_risk_minutes", "min_focus_window_minutes"]);
@@ -656,14 +660,16 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const SPAN_HINT = 'Use "HH:MM-HH:MM", e.g. "09:00-17:00"';
 
 /** Parses [hours]: time_zone, lunch, mon..sun span lists and [[hours.override]] tables. */
-function parseHours(v: unknown, err: (field: string, message: string) => void, zone: (s: string) => string | null): TimeModel {
-  const model: TimeModel = { timeZone: "UTC", weekdays: { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] }, lunch: null, overrides: [] };
+function parseHours(v: unknown, err: (field: string, message: string) => void, zone: (s: string) => string | null, defaultZone: string): TimeModel {
+  const model: TimeModel = { timeZone: defaultZone, weekdays: { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] }, lunch: null, overrides: [] };
   if (!isTable(v)) {
     err("hours", v === undefined ? "Missing [hours] section" : "Must be an [hours] table");
     return model;
   }
   for (const k of Object.keys(v)) if (!["time_zone", "lunch", "override", ...WEEKDAY_KEYS].includes(k)) err(`hours.${k}`, "Unknown field");
-  if (typeof v.time_zone !== "string") err("hours.time_zone", v.time_zone === undefined ? "Missing" : "Must be a quoted string");
+  // A1: the zone is the person's own setting; left out, the host clock's zone (the neutral default) applies.
+  if (v.time_zone === undefined) model.timeZone = defaultZone;
+  else if (typeof v.time_zone !== "string") err("hours.time_zone", "Must be a quoted string");
   else {
     const z = zone(v.time_zone);
     if (z) err("hours.time_zone", z);

@@ -48,6 +48,7 @@ import { updatedAgo } from "./refresh.ts";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
 import { DetailPanel, DraftStories, interactive } from "./DetailPanel.tsx";
 import type { PanelFocus } from "./WeekGrid.tsx";
+import { userZone } from "../week/zone.ts";
 
 export type TodayMode = "now" | "checkin" | "closeout";
 
@@ -106,7 +107,7 @@ function slotsOf(day: Day): Slot[] {
 export function Today(props: Props) {
   const { data, target, now, nowMs, mode, wide, switcher } = props;
   const date = data.planDay.date;
-  const tz = data.hours.timeZone;
+  const tz = userZone(data);
   const day = data.week.days.find((d) => d.date === date) ?? null;
   const plan = data.plan?.[date];
   const picks = useMemo(() => plan?.picks ?? [], [plan]);
@@ -374,7 +375,7 @@ function Attention({ data, date, clockMs, onInbox, onRetry, onFix, onSettings }:
         {down.map((c) => (
           <span key={c.key} className="att-chip source" title={c.step ?? ""}>
             <span className="att-tag">{c.affected.join(", ")}</span>
-            <span>{c.missing ? "no data yet" : c.since ? `showing data ${updatedAgo(c.since, clockMs, data.hours.timeZone).replace(/^updated /, "from ")}` : c.text}</span>
+            <span>{c.missing ? "no data yet" : c.since ? `showing data ${updatedAgo(c.since, clockMs, userZone(data)).replace(/^updated /, "from ")}` : c.text}</span>
             {c.fixes.some((f) => f.kind === "retry") ? (
               <button type="button" className="mini" onClick={onRetry}>
                 Retry
@@ -439,7 +440,7 @@ type BlockProps = {
 function BlockCard(b: BlockProps) {
   const { slot, mode, data, committed, nameOf, ended } = b;
   const view = useContext(PlanCtx);
-  const tz = data.hours.timeZone;
+  const tz = userZone(data);
   const client = slot.focus[0]?.clientKey ?? null;
   const planned = b.picks.filter((p) => p.status === "planned");
   const done = b.picks.filter((p) => p.status === "done");
@@ -781,7 +782,7 @@ function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onError, onD
   const work = useContext(DevOpsWork);
   useEffect(() => setExtra([]), [date]);
   useEffect(() => head.current?.focus(), [date]);
-  const tz = data.hours.timeZone;
+  const tz = userZone(data);
   const prev = Temporal.PlainDate.from(date).subtract({ days: 1 }).toString();
   const next = Temporal.PlainDate.from(date).add({ days: 1 }).toString();
   const done = async () => {
@@ -993,7 +994,7 @@ function DayTimeline({ day, blocks, data, picks, now, nowMs, events, onNotice }:
   const PX_PER_MIN = PX_PER_MIN_BASE * useTextScale();
   const { env } = useContext(MenuCtx);
   const [over, setOver] = useState<string | null>(null);
-  const tz = data.hours.timeZone;
+  const tz = userZone(data);
   if (!blocks.length) return null;
   const start = Math.min(...blocks.map((s) => ms(s.start)));
   const end = Math.max(...blocks.map((s) => ms(s.end)));

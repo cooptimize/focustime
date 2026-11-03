@@ -2,7 +2,7 @@
 // Settings), and teammates' presence (one batched read, words only, never kept, nothing when it can't be read).
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 import { HttpError } from "../sources/calendar/http.ts";
 import type { PresenceClient, RawPresence } from "../sources/graph/presence.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";

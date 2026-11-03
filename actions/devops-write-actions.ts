@@ -15,6 +15,7 @@ import type { TargetsResult } from "../sources/devops/types.ts";
 import { WriteFailure, type DevOpsWriter } from "../sources/devops/write.ts";
 import { PlanError, type DevOpsIdentityRow, type PlanStore } from "../store/plan-store.ts";
 import type { ActionResponse, DevOpsPreview, DevOpsResult } from "./types.ts";
+import { userZone } from "../week/zone.ts";
 export type { DevOpsPreview, DevOpsResult };
 
 export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log"] as const;
@@ -107,7 +108,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
   if (!plan) return bad("The local plan store isn't available", 503);
   const cfg = await ctx.config();
   if (!cfg) return bad("Fix the config first", 409);
-  const tz = cfg.week.hours.timeZone;
+  const tz = userZone(cfg);
   const clientName = (k: string) => cfg.clientSettings[k]?.name ?? k;
 
   /** The client's org and project (never its company PAT) and my write PAT, checked to belong together. */

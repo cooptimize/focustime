@@ -69,6 +69,7 @@ import { WeekItems } from "./ItemLookup.tsx";
 import { NoHoursPrompt } from "./NoHoursPrompt.tsx";
 import { KeyLegend } from "./KeyLegend.tsx";
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
+import { userZone } from "../week/zone.ts";
 
 const FOCUSABLE = 'button:not(:disabled), a[href], input:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
@@ -488,14 +489,14 @@ export function App() {
   const target = useMemo(() => {
     if (!data) return null;
     const pto = new Set([...data.ptoAhead, ...data.week.days.filter((d) => d.pto).map((d) => d.date)]);
-    const now = zonedNow(data.hours.timeZone);
+    const now = zonedNow(userZone(data));
     return planTarget(now, dayEndOf(data.hours, now.toPlainDate().toString()) ?? "24:00", pto, hasHours);
   }, [data, zonedNow, clock, hasHours]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** The Now strip (slice 4): from the loaded week and today's picks, recomputed on the 30 s clock. */
   const strip = useMemo(() => {
     if (!data || !target) return null;
-    const now = zonedNow(data.hours.timeZone);
+    const now = zonedNow(userZone(data));
     const date = now.toPlainDate().toString();
     const names = new Map(data.planClients.map((c) => [c.clientKey, c.clientName]));
     return nowStrip({
@@ -815,7 +816,7 @@ export function App() {
   // (step 16.2): the mode switch shows what's due.
   useEffect(() => {
     if (!data) return;
-    if (dayRolledOver(zonedNow(data.hours.timeZone), data.planDay.date)) {
+    if (dayRolledOver(zonedNow(userZone(data)), data.planDay.date)) {
       const onTodaysWeek = data.today.weekStart === data.weekStart;
       void load(onTodaysWeek ? {} : { weekStart: data.weekStart }, { selectToday: onTodaysWeek, quiet: true });
     }
@@ -1145,7 +1146,7 @@ export function App() {
       },
       invites: data.invites ?? [],
       undoWrite: (id) => void writes.undo(id),
-      tz: data.week.timeZone,
+      tz: userZone(data.week),
       timeboxes: data.timeboxes,
       now: now ?? new Date(clock).toISOString(),
       addWork,
@@ -1201,7 +1202,7 @@ export function App() {
   const samples = new Set(data.sources.filter((s) => s.sample).map((s) => s.source));
 
   // Step 16.2: the mode switches. Today's modes show ✓ and due dots for the day they are on; Plan the week for its week.
-  const zn = zonedNow(data.hours.timeZone);
+  const zn = zonedNow(userZone(data));
   const statusDay: IsoDate = nav.tab === "today" && nav.mode === "plan" ? (pd?.date ?? nav.date ?? target.date) : nav.tab === "today" && nav.mode === "closeout" && closeOutAt ? closeOutAt : localToday;
   const sh = hoursOn(data.hours, statusDay);
   const statusPlan = data.plan?.[statusDay] ?? null;
@@ -1246,7 +1247,7 @@ export function App() {
     timeboxes: data.timeboxes,
     settings: data.timeboxSettings,
     colors: data.clients,
-    tz: week.timeZone,
+    tz: userZone(week),
     access: writeAccess,
     loadAccess,
     changed: reloadQuiet,
@@ -1466,7 +1467,7 @@ export function App() {
                         return { date: next, label };
                       })()}
                       now={now ?? new Date(clock).toISOString()}
-                      tz={week.timeZone}
+                      tz={userZone(week)}
                       colors={data.clients}
                       clients={data.planClients}
                       error={pdError}
@@ -1659,7 +1660,7 @@ export function App() {
           target={helpTarget}
           clientName={data.planClients.find((c) => c.clientKey === helpTarget.clientKey)?.clientName ?? helpTarget.clientKey}
           settings={data.collab}
-          tz={week.timeZone}
+          tz={userZone(week)}
           onPreview={(p) => writes.show(p)}
           onClose={() => setHelpTarget(null)}
         />

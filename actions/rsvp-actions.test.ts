@@ -1,7 +1,7 @@
 // Step 16, slice 2: meeting RSVP through the write framework (D283, D284). Fictional people and meetings only.
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 import { fakeGraph, FAKE_WRITE_TOKEN } from "../sources/graph/test-fakes.ts";
 import { createGraphWriter } from "../sources/graph/write.ts";
 import { createPlanStore } from "../store/plan-store.ts";

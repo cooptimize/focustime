@@ -1,7 +1,10 @@
 // An in-memory Host for tests (A1): every part works without the machine, and records what it was asked to do.
 import { Pat } from "../sources/devops/pat.ts";
 import { parseConfig, setSystemUserIdInText } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { starterToml } from "../config/starter.ts";
+import { NEUTRAL_ZONE } from "../week/zone.ts";
+
+const STARTER_TOML = starterToml(NEUTRAL_ZONE);
 import { SECRET_ACCOUNTS, SecretError, WRITABLE_ACCOUNTS, type CachedPhoto, type Host, type HostConfig, type HostSecrets, type Notice, type PhotoCache, type Snapshot, type SnapshotStore } from "./types.ts";
 
 export function memorySecrets(initial: Record<string, string> = {}, opts: { locked?: boolean } = {}): HostSecrets & { store: Map<string, string> } {
@@ -128,7 +131,7 @@ export function createFakeHost(o: { now?: () => Temporal.Instant; zone?: string;
       publish: async () => null,
       unpublish: async () => {},
     },
-    clock: { now: o.now ?? (() => Temporal.Now.instant()), zone: () => o.zone ?? "UTC" },
+    clock: { now: o.now ?? (() => Temporal.Now.instant()), zone: () => o.zone ?? NEUTRAL_ZONE },
     facts: () => ({ kind: "local", service: false, configPath: "/fake/config.toml" }),
   };
 }

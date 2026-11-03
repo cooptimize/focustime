@@ -24,6 +24,7 @@ import { overlapHint, RSVP_RESPONSES, RSVP_VERB, type RsvpResponse } from "../pl
 import type { CalEvent } from "../week/types.ts";
 import { PRESETS, suggestMinutes } from "../plan/timer.ts";
 import { sizeNote } from "./planview.ts";
+import { userZone } from "../week/zone.ts";
 
 export type MenuItem = {
   id: string;
@@ -717,7 +718,7 @@ function timeItems(env: MenuEnv, date: IsoDate): MenuItem[] {
   const day = env.week.days.find((d) => d.date === date);
   const h = hoursOn(env.hours, date);
   const pto = day?.pto ? ptoReason(env, date) : undefined;
-  const tz = env.week.timeZone;
+  const tz = userZone(env.week);
   const slots = day ? [day.am, day.pm, ...(day.eve ? [day.eve] : [])] : [];
   const blocked = slots.flatMap((s) => s.events.filter((e) => e.event.unavailable)).filter((e, i, all) => all.findIndex((x) => x.event.id === e.event.id) === i);
   const flex = slots.flatMap((s) => s.flex).filter((f, i, all) => all.findIndex((x) => x.id === f.id) === i);

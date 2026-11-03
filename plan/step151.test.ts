@@ -7,7 +7,7 @@ import { offerAfterTimebox } from "./agenda.ts";
 import type { Slot } from "../week/types.ts";
 import type { Pick } from "./types.ts";
 import { DEFAULT_PLAN, parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { STARTER_TOML } from "../fixtures/starter.ts";
 
 const T = (hm: string) => `2026-11-02T${hm}:00-05:00`;
 const mins = (a: string, b: string) => (Number(b.slice(0, 2)) * 60 + Number(b.slice(3))) - (Number(a.slice(0, 2)) * 60 + Number(a.slice(3)));
