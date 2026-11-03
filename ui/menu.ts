@@ -43,8 +43,10 @@ export type MenuItem = {
   run?: () => void | Promise<unknown>;
   next?: () => MenuStep;
 };
+/** A row menu's header: a label naming the row it was opened from, never an action (D459). */
+export type MenuHead = { text: string; full: string };
 export type MenuStep =
-  | { title: string; items: MenuItem[] }
+  | { title: string; items: MenuItem[]; head?: MenuHead }
   | {
       title: string;
       prompt: string;
@@ -204,6 +206,28 @@ export type HelpTarget = { clientKey: string; title: string; url: string | null;
 export type TimeboxTarget = { pickId: number; date: IsoDate } | { clientKey: string; itemId: number | null; title: string; url: string | null; date: IsoDate };
 
 /** "Harbor's", "Northwind Foods'". */
+/** The client's name as the screen shows it. */
+const clientNameOf = (env: MenuEnv, k: string) => env.week.days.flatMap((d) => [d.am, d.pm]).find((sl) => sl.focus[0]?.clientKey === k)?.focus[0]?.clientName ?? env.work.get(k)?.clientName ?? k;
+
+/** Drops a leading client name from a title ("Northwind - Export" under Northwind reads "Export"). */
+export function withoutClient(title: string, client: string | null | undefined): string {
+  const t = title.trim();
+  if (!client) return t;
+  const c = client.trim();
+  if (!c || t.length <= c.length || t.slice(0, c.length).toLowerCase() !== c.toLowerCase()) return t;
+  const rest = t.slice(c.length);
+  const m = /^\s*[-–:·|/]\s*/.exec(rest) ?? /^\s+/.exec(rest);
+  if (!m) return t; // "Northwinds" is not "Northwind"
+  return rest.slice(m[0].length).trim() || t;
+}
+
+/** D459: the header of a row's menu, built from the row it was opened on: "#412 · Work Management App". */
+export function rowHead(row: { id?: number | null; title: string; client?: string | null }): MenuHead {
+  const title = withoutClient(row.title, row.client);
+  const text = row.id != null ? `#${row.id} · ${title}` : title;
+  return { text, full: row.id != null ? `#${row.id} ${row.title.trim()}` : row.title.trim() };
+}
+
 export const possessive = (name: string) => (name.endsWith("s") ? `${name}'` : `${name}'s`);
 const weekday = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "long" });
 const dayName = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -271,6 +295,7 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
   const past = isPast(env, p.date);
   return {
     title: p.title,
+    head: rowHead({ id: p.itemId, title: p.title, client: clientNameOf(env, p.clientKey) }),
     items: [
       { id: "open", label: "Open in browser", action: "link.open", ...(p.itemUrl ? {} : { disabled: p.kind === "intention" ? "An intention has no work item" : "A draft story isn't in DevOps yet" }), run: () => { if (p.itemUrl) env.openLink(p.clientKey, p.itemUrl); } },
       { id: "size", label: "Set size", hint: p.size ?? "Size?", action: "pick.set_size", ...(past ? { disabled: PAST } : {}), next: () => sizeStep(env, p) },
@@ -284,7 +309,7 @@ export function pickMenu(env: MenuEnv, p: Pick): MenuStep {
         next: () => lengthStep(`Focus on "${p.title}"`, suggestMinutes(p.size, env.planning.sizes), (m) => env.runTimer("timer.start", { pickId: p.id, minutes: m })),
       },
       { id: "timebox", label: "Timebox", hint: "a free gap in its block", action: "timebox.add", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be timeboxed" } : past ? { disabled: PAST } : {}), next: () => timeboxStep(env, p) },
-      { id: "help", label: "Needs help from…", hint: "Cooptimizers who are free", action: "collab.candidates", ...(past ? { disabled: PAST } : {}), run: () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date }) },
+      { id: "help", label: "Needs help from…", hint: "who is free", action: "collab.candidates", ...(past ? { disabled: PAST } : {}), run: () => env.openHelp({ clientKey: p.clientKey, title: p.title, url: p.itemUrl, itemId: p.itemId, pickId: p.id, pinned: p.date }) },
       { id: "done", label: p.status === "done" ? "Mark not done" : "Mark done", action: "pick.mark_done", run: () => env.runPlan("pick.mark_done", { id: p.id, done: p.status !== "done" }) },
       { id: "makeup", label: "I'll make it up…", hint: "tonight, Friday, another day", action: "pick.make_up", ...(p.status !== "planned" ? { disabled: "Only a planned pick can be made up" } : {}), next: () => makeUpStep(env, p) },
       { id: "drop", label: "Drop", danger: true, action: "pick.remove", ...(past && p.status !== "planned" ? { disabled: "Only a planned pick can be dropped on a past day" } : {}), run: () => env.runPlan("pick.remove", { id: p.id }) },
@@ -386,7 +411,7 @@ export function addStep(env: MenuEnv, clientKey: string, item: WorkItem | { draf
   const draftId = "draftId" in item ? item.draftId : null;
   const planDate = env.planState?.date ?? env.selection.date;
   const targets = weekTargets(env, clientKey, draftId !== null ? { draftId } : { itemId: (item as WorkItem).id });
-  const clientName = (k: string) => env.week.days.flatMap((d) => [d.am, d.pm]).find((sl) => sl.focus[0]?.clientKey === k)?.focus[0]?.clientName ?? env.work.get(k)?.clientName ?? k;
+  const clientName = (k: string) => clientNameOf(env, k);
   const own = clientName(clientKey);
   const heading: Record<TargetGroup, string> = { here: `${own} on ${weekday(planDate)}`, client: `Other ${own} blocks`, open: "Open half-days", other: "Different client" };
   const add = (t: AddTarget) => () => env.runPlan("pick.add", { date: t.date, half: t.half, clientKey, ...(draftId !== null ? { draftId, ...("size" in item && item.size ? { size: item.size } : {}) } : { itemId: (item as WorkItem).id }) });
@@ -420,6 +445,7 @@ export function itemMenu(env: MenuEnv, clientKey: string, item: WorkItem): MenuS
   const kids = env.work.get(clientKey)?.children.some((c) => c.parentId === item.id) ?? false;
   return {
     title: `${item.type} ${item.id}: ${item.title}`,
+    head: rowHead({ id: item.id, title: item.title, client: clientNameOf(env, clientKey) }),
     items: [
       { id: "open", label: "Open in browser", action: "link.open", run: () => env.openLink(clientKey, item.url) },
       {
@@ -430,7 +456,7 @@ export function itemMenu(env: MenuEnv, clientKey: string, item: WorkItem): MenuS
         next: () => addStep(env, clientKey, item),
       },
       { id: "timebox", label: "Timebox…", hint: "start and length on the planned day", action: "timebox.add", run: () => env.openTimebox({ clientKey, itemId: item.id, title: item.title, url: item.url, date: env.planState?.date ?? env.today }) },
-      { id: "help", label: "Needs help from…", hint: "Cooptimizers who are free", action: "collab.candidates", run: () => env.openHelp({ clientKey, title: `#${item.id} ${item.title}`, url: item.url, itemId: item.id, pinned: env.planState?.date ?? null }) },
+      { id: "help", label: "Needs help from…", hint: "who is free", action: "collab.candidates", run: () => env.openHelp({ clientKey, title: `#${item.id} ${item.title}`, url: item.url, itemId: item.id, pinned: env.planState?.date ?? null }) },
       ...(item.level === "portfolio" && !kids ? [{ id: "draft", label: "Add a draft story", action: "draft.add_story", next: () => draftPrompt(env, clientKey, item) } as MenuItem] : []),
     ],
   };
@@ -1187,6 +1213,8 @@ export function filterCommands(items: MenuItem[], query: string): MenuItem[] {
 export type WeekItemFacts = {
   itemId: number;
   title: string;
+  /** The row's client, so the header doesn't repeat it. */
+  clientName?: string | null;
   tier: "must" | "nice";
   level: "feature" | "story";
   /** First or last in its list (no Move up / Move down). */
@@ -1262,6 +1290,7 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
   const other = f.tier === "must" ? "nice" : "must";
   return {
     title: f.title,
+    head: rowHead({ id: f.itemId, title: f.title, client: f.clientName ?? null }),
     items: [
       { id: "up", label: "Move up", action: "weekplan.reorder", ...(f.past ? closed : f.first ? { disabled: "Already first" } : {}), run: () => ops.move(-1) },
       { id: "down", label: "Move down", action: "weekplan.reorder", ...(f.past ? closed : f.last ? { disabled: "Already last" } : {}), run: () => ops.move(1) },
@@ -1278,7 +1307,7 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
         next: () => ({ title: `Pin "${f.title}"`, items: f.places.map((p) => ({ id: `pin-${p.date}-${p.half}`, label: p.label, checked: isPinned(p), action: "weekplan.place", run: () => ops.pin(p.date, p.half, !isPinned(p)) })) }),
       },
       { id: "done", label: f.done ? "Mark not done" : "Mark done", action: "weekplan.mark_done", ...(f.past ? closed : f.done === "other" ? { disabled: "Done in DevOps or by a done pick" } : {}), run: () => ops.done(!f.done) },
-      { id: "help", label: "Needs help from…", hint: "Cooptimizers who are free", action: "collab.candidates", ...(f.past || f.done ? { disabled: f.past ? "A past week is a review" : "Already done" } : {}), run: ops.help },
+      { id: "help", label: "Needs help from…", hint: "who is free", action: "collab.candidates", ...(f.past || f.done ? { disabled: f.past ? "A past week is a review" : "Already done" } : {}), run: ops.help },
       ...(f.level === "feature"
         ? ([
             { id: "target", label: f.targetDate ? "Change target date" : "Set target date", ...writes("target"), action: "devops.preview", ...closed, run: f.canWrite ? ops.targetDate : ops.enableWrites },
@@ -1292,7 +1321,7 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
 }
 
 /** Step 16 (D282): what a Roadmap row's ⋯ menu needs to know. */
-export type RoadmapRowFacts = { title: string; tier: "feature" | "epic"; targetDate: string | null; open: number; onWeek: boolean; canWrite: boolean; hasLink: boolean; /** Step 17: assigned to me (a contributing row can't have its dates set). */ owned?: boolean };
+export type RoadmapRowFacts = { id?: number; clientName?: string | null; title: string; tier: "feature" | "epic"; targetDate: string | null; open: number; onWeek: boolean; canWrite: boolean; hasLink: boolean; /** Step 17: assigned to me (a contributing row can't have its dates set). */ owned?: boolean };
 export type RoadmapRowOps = { open: () => void; brief: () => void; help: () => void; addToWeek: () => void; targetDate: () => void; enableWrites: () => void };
 
 /** A Roadmap row's ⋯ menu (D282). Only Set target date writes, through the DevOps write flow. */
@@ -1300,10 +1329,11 @@ export function roadmapRowMenu(f: RoadmapRowFacts, ops: RoadmapRowOps): MenuStep
   const epic = f.tier === "epic";
   return {
     title: f.title,
+    head: rowHead({ id: f.id ?? null, title: f.title, client: f.clientName ?? null }),
     items: [
       { id: "open", label: "Open in browser", hint: "O", ...(f.hasLink ? {} : { disabled: "No link for this item" }), run: ops.open },
       { id: "brief", label: "Copy Coop brief", action: "feature.brief", ...(epic ? { disabled: "Briefs are for features" } : { hint: f.open ? `${f.open} open ${f.open === 1 ? "story" : "stories"} already` : "ask Coop for stories" }), run: ops.brief },
-      { id: "help", label: "Needs help from…", hint: "Cooptimizers who are free", action: "collab.candidates", run: ops.help },
+      { id: "help", label: "Needs help from…", hint: "who is free", action: "collab.candidates", run: ops.help },
       { id: "week", label: "Add to this week's plan", action: "weekplan.add", ...(epic ? { disabled: "Add its features instead" } : f.onWeek ? { disabled: "Already on this week's plan" } : { hint: "as a nice to have" }), run: ops.addToWeek },
       { id: "target", label: f.targetDate ? "Change target date" : "Set target date", action: "devops.preview", ...(f.owned === false ? { disabled: "Only on features and epics assigned to you" } : f.canWrite ? {} : { hint: "Enable DevOps writes first" }), run: f.canWrite ? ops.targetDate : ops.enableWrites },
     ],

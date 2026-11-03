@@ -1,6 +1,7 @@
 // U6 (D409): the one planning layout, shared by Today › Plan (Plan the day) and Week › Plan the week. Two panes: the
 // work on the left (it scrolls), "Add to <client>" pinned on the right with its own scroll and the type box at its
-// foot; 420 px at 1920, 520 px at 3840, one column under 1200 px with the right pane below the left.
+// foot; 420 px at 1920, 520 px at 3840, one column under 1200 px with the right pane below the left. D462: a detail
+// panel takes the right pane's place while open (the pane stays mounted, hidden), so it never covers the plan.
 import type { KeyboardEvent, ReactNode, Ref } from "react";
 
 type Props = {
@@ -16,22 +17,26 @@ type Props = {
   leftLabel?: string | undefined;
   /** The right pane (an AddPane); none makes one column. */
   right?: ReactNode | undefined;
-  /** Anything outside the panes (a drop strip, a dialog, a detail panel). */
+  /** D462: a detail panel, shown in the right pane's place while open. */
+  panel?: ReactNode | undefined;
+  /** Anything outside the panes (a drop strip, a dialog). */
   after?: ReactNode | undefined;
   frameRef?: Ref<HTMLElement> | undefined;
   onKeyDown?: ((e: KeyboardEvent) => void) | undefined;
 };
 
-export function PlanFrame({ as = "section", className = "", label, header, notices, left, leftClass = "", leftLabel, right, after, frameRef, onKeyDown }: Props) {
+export function PlanFrame({ as = "section", className = "", label, header, notices, left, leftClass = "", leftLabel, right, panel, after, frameRef, onKeyDown }: Props) {
+  const open = panel != null && panel !== false;
   const body = (
     <>
       {header}
       {notices}
-      <div className={`pl-panes${right ? "" : " single"}`}>
+      <div className={`pl-panes${right || open ? "" : " single"}${open ? " with-panel" : ""}`}>
         <div className={`pl-left ${leftClass}`} aria-label={leftLabel}>
           {left}
         </div>
-        {right}
+        {right && (open ? <div className="pl-right-held" hidden>{right}</div> : right)}
+        {open && <div className="pl-panel">{panel}</div>}
       </div>
       {after}
     </>
