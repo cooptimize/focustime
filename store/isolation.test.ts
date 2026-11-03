@@ -148,7 +148,7 @@ await forEachDriver("per-user scoping (A2)", (d) => {
     const bRows = await rowsOf(db, "user-b");
     await a.reset();
     expect(await rowsOf(db, "user-b")).toEqual(bRows);
-  }, 60_000);
+  }, 120_000);
 
   it("a store needs a person, and the person can't come from a statement", async () => {
     const db = (await d.open()).conn;

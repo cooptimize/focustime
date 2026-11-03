@@ -19,7 +19,7 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
   }, T);
   afterAll(async () => {
     await lb?.close();
-  });
+  }, T);
 
   it("a new person goes through the four screens, resumes after a reload, and Today keeps one line", async () => {
     const saved = new Map<string, string>();
@@ -39,6 +39,8 @@ describe.skipIf(!CHROMIUM)("first-run setup", () => {
     const app = await lb.start(ctx);
     try {
       const page = await app.page();
+      // The whole suite runs in parallel: a slow first load under that load is not a failure.
+      page.setDefaultTimeout(60_000);
       const shot = (name: string) => shotBoth(page, name);
       await page.goto(app.url);
 

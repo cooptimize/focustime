@@ -54,9 +54,17 @@ export function SetupFlow(p: Props) {
   }, [step, p]);
 
   const index = step === "done" ? SETUP_STEPS.length : SETUP_STEPS.indexOf(step);
+  // Between screens (the next one may still be loading), focus stays in the dialog, so Esc and Tab keep working; each
+  // screen then moves it to its first field once it's ready.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (box.current && !box.current.contains(document.activeElement)) box.current.focus({ preventScroll: true });
+  }, [step]);
   return (
     <div className="cap-backdrop setup-backdrop">
       <div
+        ref={box}
+        tabIndex={-1}
         className="cap-dialog setup-dialog"
         data-overlay="modal"
         role="dialog"

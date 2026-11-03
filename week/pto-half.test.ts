@@ -55,7 +55,7 @@ describe("PTO per half (Week, Plan the week and Plan the day read the same slots
 });
 
 describe("PTO in Plan the week's budget", () => {
-  const item = (clientKey: string, itemId: number, slots: { date: string; half: "AM" | "PM" }[] = []) => ({ clientKey, itemId, tier: "must" as const, level: "feature" as const, estimate: 240, slots });
+  const item = (clientKey: string, itemId: number, slots: { date: string; half: "AM" | "PM" }[] = []) => ({ clientKey, itemId, title: `Feature ${itemId}`, tier: "must" as const, level: "feature" as const, estimate: 240, parentId: null, slots });
 
   it("PTO adds no free hours and is left out of the client's blocks", () => {
     const plain = weekBudget(aWeek({ patterns: blocks }), [], { borrowedMinutes: {} }).find((b) => b.clientKey === "adatum")!;

@@ -3420,6 +3420,7 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 /* S1 (D451): first-run setup. The capture dialog's frame; a step list on top, one screen at a time. */
 .setup-backdrop { padding-top: 8vh; }
 .setup-dialog { width: min(760px, 100%); max-height: 84vh; gap: 14px; padding: 18px 22px; }
+.setup-dialog:focus { outline: none; }
 .setup-head { display: flex; align-items: center; gap: 12px; }
 .setup-steps { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; list-style: none; flex: 1 1 auto; min-width: 0; font-size: var(--fs-2); color: var(--text-faint); counter-reset: setup; }
 .setup-steps li { counter-increment: setup; white-space: nowrap; }

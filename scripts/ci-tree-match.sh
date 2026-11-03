@@ -17,7 +17,7 @@ pr=$(gh api "repos/$repo/commits/$sha/pulls" --jq '[.[] | select(.merged_at != n
 [[ -n $pr ]] || answer false none "no merged PR for $sha"
 head=$(gh api "repos/$repo/pulls/$pr" --jq .head.sha)
 # The newest passing pull_request run of ci on the PR's last commit.
-run=$(gh api "repos/$repo/actions/workflows/ci.yml/runs?head_sha=$head&event=pull_request&status=success&per_page=1" --jq '.workflow_runs[0].id // empty')
+run=$(gh api "repos/$repo/actions/workflows/ci.yml/runs?head_sha=$head&status=success&event=pull_request&per_page=1" --jq '.workflow_runs[0].id // empty')
 [[ -n $run ]] || answer false "$pr" "no passing ci run for the PR's head $head"
 dir=$(mktemp -d)
 gh run download "$run" -R "$repo" -n tested-tree -D "$dir" >/dev/null 2>&1 || answer false "$pr" "run $run has no tested-tree artifact"
