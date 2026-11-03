@@ -10,12 +10,14 @@
 // - Never a secret: an export has none, and user_secrets is refused if a file has it.
 // - Dry run: the same checks and counts, nothing written.
 import type { Conn, Param, Row } from "./sql/conn.ts";
+import { blocksToMinutes } from "../plan/estimate.ts";
 import { EXPORT_FORMAT, NOT_EXPORTED, PARENTS_FIRST, READABLE_SCHEMA_VERSIONS, USER_SCHEMA_VERSION } from "./user-data.ts";
 
 export class ImportRefused extends Error {}
 
 export type TableCount = { table: string; inFile: number; present: number; added: number };
-export type ImportReport = { dryRun: boolean; userCreated: boolean; tables: TableCount[] };
+/** estimatesConverted: features whose estimate in blocks (an export before E2) became minutes, at 1 block = 4h. */
+export type ImportReport = { dryRun: boolean; userCreated: boolean; tables: TableCount[]; estimatesConverted: number };
 
 /** Links inside one table, filled in after its rows are in (the referenced row may come later in the file). */
 const SELF_LINKS: Readonly<Record<string, readonly string[]>> = {
@@ -26,7 +28,7 @@ const SELF_LINKS: Readonly<Record<string, readonly string[]>> = {
 
 type Export = { format: string; schemaVersion: number; you?: Record<string, unknown>; tables: Record<string, Row[]> };
 
-function parse(json: unknown): Export {
+function parse(json: unknown): Export & { converted: number } {
   const e = json as Partial<Export> | null;
   if (!e || typeof e !== "object" || e.format !== EXPORT_FORMAT) throw new ImportRefused(`Not a FocusTime export (format ${String(e?.format)})`);
   if (typeof e.schemaVersion !== "number" || !READABLE_SCHEMA_VERSIONS.includes(e.schemaVersion)) throw new ImportRefused(`This export is schema version ${String(e.schemaVersion)}; this FocusTime reads ${USER_SCHEMA_VERSION}`);
@@ -36,7 +38,24 @@ function parse(json: unknown): Export {
     if (!PARENTS_FIRST.includes(t)) throw new ImportRefused(`Unknown table in the export: ${t}`);
     if (!Array.isArray(e.tables[t])) throw new ImportRefused(`${t} is not a list of rows`);
   }
-  return e as Export;
+  return upgrade(e as Export);
+}
+
+/**
+ * Exports before E2 (schema 26, 27) hold a feature's estimate in blocks (whole, or half blocks): each becomes minutes
+ * at 1 block = 4h to the nearest hour, as the store's own migration does. A story's blocks were never set.
+ */
+function upgrade(e: Export): Export & { converted: number } {
+  if (e.schemaVersion >= 28) return { ...e, converted: 0 };
+  let converted = 0;
+  const rows = (e.tables.week_features ?? []).map((r) => {
+    const { blocks, ...rest } = r as Row & { blocks?: unknown };
+    const feature = (rest.level ?? "feature") === "feature";
+    const has = typeof blocks === "number" && feature;
+    if (has) converted++;
+    return { ...rest, estimate: has ? blocksToMinutes(blocks) : null } as Row;
+  });
+  return { ...e, tables: e.tables.week_features ? { ...e.tables, week_features: rows } : e.tables, converted };
 }
 
 /** A table's columns and primary key, from the database's own catalog. */
@@ -60,7 +79,7 @@ export async function importUser(conn: Conn, userId: string, json: unknown, o: {
   if (!/^[\w-]{1,64}$/.test(userId)) throw new ImportRefused("The user id must be the person's Entra object id");
   const e = parse(json);
   const run = async (): Promise<ImportReport> => {
-    const report: ImportReport = { dryRun: o.dryRun, userCreated: false, tables: [] };
+    const report: ImportReport = { dryRun: o.dryRun, userCreated: false, tables: [], estimatesConverted: e.converted };
     // The users row: theirs, or made from the export.
     if (!(await conn.get("SELECT id FROM users WHERE id = ?", [userId]))) {
       const y = e.you ?? {};

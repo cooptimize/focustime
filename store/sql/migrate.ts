@@ -8,7 +8,13 @@ import type { Logger } from "../../log/logger.ts";
 import { BASELINE, BASELINE_VERSION } from "./baseline.ts";
 import type { SqlServerConn } from "./sqlserver.ts";
 
-export type SqlServerMigration = { version: number; name: string; sql: string };
+export type SqlServerMigration = {
+  version: number;
+  name: string;
+  sql: string;
+  /** A count (SELECT ... AS n) taken in the migration's transaction before it runs, logged as `op` (never the values). */
+  count?: { op: string; sql: string };
+};
 
 export const SQLSERVER_MIGRATIONS: readonly SqlServerMigration[] = [
   { version: BASELINE_VERSION, name: "baseline (SQLite migrations 1 to 26)", sql: BASELINE },
@@ -32,6 +38,25 @@ export const SQLSERVER_MIGRATIONS: readonly SqlServerMigration[] = [
     sql: `ALTER TABLE week_features DROP CONSTRAINT week_features_blocks;
 ALTER TABLE week_features ALTER COLUMN blocks decimal(3,1) NULL;
 ALTER TABLE week_features ADD CONSTRAINT week_features_blocks CHECK (blocks IS NULL OR (blocks BETWEEN 0.5 AND 20 AND blocks * 2 = FLOOR(blocks * 2) AND level = 'feature'));`,
+  },
+  // E2 (D446): estimates in hours. A feature's estimate becomes minutes (whole hours, 1h to 80h), converted from blocks
+  // (E1's half blocks, step 16.4's whole blocks) at 1 block = 4h to the nearest hour; blocks goes. A pick's size may be
+  // empty (not sized yet). The user tables' version 28, as SQLite's migration 28. Statements naming the new column run
+  // through EXEC so the batch compiles before it exists.
+  {
+    version: 30,
+    name: "estimates in hours; picks may be unsized",
+    count: { op: "convert_estimates", sql: "SELECT COUNT(*) AS n FROM week_features WHERE level = 'feature' AND blocks IS NOT NULL" },
+    sql: `ALTER TABLE week_features ADD estimate int NULL;
+EXEC(N'UPDATE week_features SET estimate = 60 * (CASE WHEN ROUND(blocks * 4, 0) < 1 THEN 1 WHEN ROUND(blocks * 4, 0) > 80 THEN 80 ELSE CAST(ROUND(blocks * 4, 0) AS int) END) WHERE level = ''feature'' AND blocks IS NOT NULL');
+ALTER TABLE week_features DROP CONSTRAINT week_features_blocks;
+ALTER TABLE week_features DROP COLUMN blocks;
+EXEC(N'ALTER TABLE week_features ADD CONSTRAINT week_features_estimate CHECK (estimate IS NULL OR (estimate BETWEEN 60 AND 4800 AND estimate % 60 = 0 AND level = ''feature''))');
+DECLARE @ck sysname = (SELECT cc.name FROM sys.check_constraints cc JOIN sys.columns c ON c.object_id = cc.parent_object_id AND c.column_id = cc.parent_column_id WHERE cc.parent_object_id = OBJECT_ID(N'picks') AND c.name = N'size');
+DECLARE @drop nvarchar(400) = N'ALTER TABLE picks DROP CONSTRAINT ' + QUOTENAME(@ck);
+IF @ck IS NOT NULL EXEC sp_executesql @drop;
+ALTER TABLE picks ALTER COLUMN size nvarchar(1) NULL;
+ALTER TABLE picks ADD CONSTRAINT picks_size CHECK (size IS NULL OR size IN ('S','M','L'));`,
   },
 ];
 
@@ -63,7 +88,9 @@ export async function migrateSqlServer(conn: SqlServerConn, o: { log?: Logger; m
       // A second server migrating at the same moment waits here, then sees the row and skips.
       const done = await conn.get("SELECT version FROM schema_version WITH (UPDLOCK, HOLDLOCK) WHERE version = ?", [m.version]);
       if (done) return;
+      const n = m.count ? Number((await conn.get(m.count.sql))?.n ?? 0) : null;
       await conn.batch(m.sql);
+      if (m.count && n !== null) o.log?.({ source: "database", op: m.count.op, count: n });
       await conn.run("INSERT INTO schema_version (version, name, applied_at) VALUES (?, ?, SYSUTCDATETIME())", [m.version, m.name]);
       applied.push(m.version);
     });

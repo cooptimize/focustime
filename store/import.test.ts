@@ -111,6 +111,34 @@ await forEachDriver("import an export", ({ driver, open }) => {
     expect(Object.values(await countRows(db, "oid-ana")).every((n) => n === 0)).toBe(true);
   });
 
+  it("an export from before E2 (schema 27, estimates in blocks) loads with each estimate in hours, 1 block = 4h", async () => {
+    const { json } = await source();
+    const feats = json.tables.week_features!.filter((r) => r.level === "feature");
+    expect(feats.length).toBeGreaterThan(0);
+    const blocks = [0.5, 1.5, 3];
+    const old = {
+      ...json,
+      schemaVersion: 27,
+      tables: {
+        ...json.tables,
+        week_features: json.tables.week_features!.map((r) => {
+          const { estimate: _e, ...rest } = r;
+          const i = feats.indexOf(r);
+          return { ...rest, blocks: r.level === "feature" ? (blocks[i % blocks.length] ?? null) : null };
+        }),
+      },
+    };
+    const db = (await open()).conn;
+    const r = await importUser(db, "oid-ana", old, { dryRun: false, now });
+    expect(r.estimatesConverted).toBe(feats.length);
+    const got = await db.all("SELECT id, estimate FROM week_features WHERE user_id = 'oid-ana' AND level = 'feature' ORDER BY id");
+    const want = feats.map((f, i) => ({ id: f.id, estimate: ([2, 6, 12][i % 3]!) * 60 })).sort((a, b) => Number(a.id) - Number(b.id));
+    expect(got.map((g) => ({ id: Number(g.id), estimate: Number(g.estimate) }))).toEqual(want.map((w) => ({ id: Number(w.id), estimate: w.estimate })));
+    // A current export converts nothing.
+    const db2 = (await open()).conn;
+    expect((await importUser(db2, "oid-ana", json, { dryRun: true, now })).estimatesConverted).toBe(0);
+  });
+
   it("refuses what isn't a current export, secrets, and someone else's ids, writing nothing", async () => {
     const { json } = await source();
     const db = (await open()).conn;
