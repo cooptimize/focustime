@@ -89,6 +89,26 @@ commit, the PR number from the merge message, and the build time in UTC. The env
 Settings > Setup > Start over clears your own setup state, so the four screens show again on the next load. It is
 refused on prod (403) and hidden there.
 
+## Web Push: the VAPID key per environment (P1)
+
+Push needs one VAPID key per environment, the Key Vault secret `ft-vapid-key` (a P-256 JWK). The app reads it at run time with its own identity, so it is not in the Bicep and an environment without it still deploys: Settings › Notifications then says "Push isn't set up for this app yet" and in-app notifications work as usual.
+
+```
+az login
+infra/scripts/vapid-key.sh --vault ft-dev-kv-5bthbn          # dev
+infra/scripts/vapid-key.sh --vault ft-prod-kv-kkzllj         # prod
+```
+
+The key goes from node through a pipe into Key Vault; it is never printed, written to a file or passed as an argument. An existing key is left alone. `--force` replaces it, which ends push on every device (each subscribed with the old public key): people tap Notify this device again. The app picks a new key up within 5 minutes, no restart needed.
+
+### Test push on dev
+
+1. Make the key once (above), then open dev on the phone: Android in Chrome, or iPhone in Safari, then Share › Add to Home Screen and open FocusTime from the home screen (iOS 16.4 or later).
+2. Settings › Notifications › Notify this device, and allow notifications. The device shows in the list as "iPhone · Safari" or "Android · Chrome".
+3. Send a test notification (same page). It shows in ⋯ › Notifications and, with the app closed or in the background, as a notification on the phone saying "FocusTime · Notifications reach this device". Tapping it opens Settings › Notifications.
+4. Logs (Application Insights or the replica's console) have `server push_sent kind=test count=1`; `push_gone` means the push service dropped the subscription (the device was removed), `push_failed` that it refused (look at the time on the phone and the key). Never an endpoint or a key in the logs.
+5. Show details in notifications is off by default: the lock screen says only what kind of notice it is.
+
 ## Roll back a revision
 
 Single revision mode: the previous image is redeployed, not reactivated.
