@@ -1,4 +1,4 @@
-# Coopilot wording guide
+# FocusTime wording guide
 
 Step 15 (D270). Applies to every string a person sees: views, buttons, menus, hints, notices, notifications and the command menu. Code names (`planday.commit`, `slot`) stay as they are; only visible copy follows this guide. Terms follow the glossary in `CLAUDE.md`.
 

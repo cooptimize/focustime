@@ -5,7 +5,7 @@ Nov 2, 2026. Read-only on the app: no code, config or data changed. Six screens:
 ## How this was measured
 
 - **Demo:** a throwaway demo-mode server (fictional data, in-memory store, clock pinned to Mon Nov 2, 9:30 AM). The day was planned through the app's own actions: 4 picks in the morning (one done, one a follow-up), 4 in the afternoon (one an intention), committed. Both of Monday's blocks are at risk, and there are follow-ups that are overdue and due today. The failed source is Google, shown as cached with a network cause. I made it fail by rewriting the source status in the browser for that run only, because demo mode can't fail a source.
-- **Live:** your running Coopilot, read-only, at about 12:50 PM. The browser only opened screens; no action was posted except the reads each screen makes on its own. Personal events, the PTO title and your photo are blurred. Work meeting subjects, client nicknames and item titles are not blurred, per your answer to question 5.
+- **Live:** your running FocusTime, read-only, at about 12:50 PM. The browser only opened screens; no action was posted except the reads each screen makes on its own. Personal events, the PTO title and your photo are blurred. Work meeting subjects, client nicknames and item titles are not blurred, per your answer to question 5.
 - **Sizes:** 1920x1080 dark for everything. 1920 light and 3840x1600 dark and light for each screen. When a screen scrolls inside its own panel, I also captured the next page (`-p2`, `-p3`).
 - **Counts:** taken by a script in the page, over everything rendered on the screen, including the parts below the fold. They include the status bar but not the top bar, which is counted once in the cross-screen section.
   - *UI words:* every visible word except item, pick, meeting and follow-up titles and note text. Titles are counted separately.
@@ -340,7 +340,7 @@ Screens: `demo/1920-dark-week.png`, `demo/1920-dark-week-p2.png`, `demo/3840-dar
 **Confusion log**
 - Live: "THIS WEEK: …" lines on Mon AM and Tue AM show only an ellipsis.
   - Cause, measured in the page: the label plus a long title is wider than the card's line, so the title wraps to a second line that's clipped, leaving the line's "…".
-  - On Mon AM it is "Coopilot - Cooptimize Work Management App".
+  - On Mon AM it is "FocusTime - Cooptimize Work Management App".
 - Live: the same feature is listed twice on one card (Wed AM "Create Alert Framework in DWM", Tue PM "Resource Data Model"). It's likely listed once as pinned here and once as unpinned for the client.
 - "At risk" never says why on the card. The reason is in a tooltip and in Details ("At risk: Personal").
 - In the demo, the Dentist (12:00 to 1:00) shows in the PM card's list as "12:00 Dentist", at the bottom, after 3:00.

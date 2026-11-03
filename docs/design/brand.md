@@ -1,6 +1,6 @@
-# Coopilot brand in the app
+# FocusTime brand in the app
 
-Step 17.5, Nov 2 2026. How the identity in `assets/brand/` is used in Coopilot. The why is in `brand-brief.md` (B01 to B08); the motion feel is in `motion-reference.html` (a reference only, none of its code is used). Decisions: D358 to D365.
+Step 17.5, Nov 2 2026. How the identity in `assets/brand/` is used in FocusTime. The why is in `brand-brief.md` (B01 to B08); the motion feel is in `motion-reference.html` (a reference only, none of its code is used). Decisions: D358 to D365.
 
 ## Files
 
@@ -8,14 +8,14 @@ Step 17.5, Nov 2 2026. How the identity in `assets/brand/` is used in Coopilot. 
 |---|---|
 | `assets/brand/mark-bent.svg`, `mark-bent-mono.svg` | The brand mark: four ring bands opening right, AM above PM, the inner AM band dashed (ghost); Lumen upright outside the opening, its beam pointing in |
 | `assets/brand/mark-week.svg`, `mark-week-mono.svg` | The unrolled week: four columns Mon to Thu, AM over PM, Mon AM hollow. The app icon and the in-app mark |
-| `assets/brand/coopilot-symbolic.svg` | 16 px grid, one hollow block, `currentColor` |
+| `assets/brand/focustime-symbolic.svg` | 16 px grid, one hollow block, `currentColor` |
 | `assets/brand/lumen.svg` | Lumen alone, upright, with its beam |
 | `assets/brand/lumen-loading.svg` | Lumen at the ring's centre with the radial sweep (stops under reduced motion) |
-| `assets/brand/wordmark.svg`, `lockup-horizontal.svg` | "Coopilot" in IBM Plex Sans 600, "by Cooptimize" in 400, outlined to paths |
+| `assets/brand/wordmark.svg`, `lockup-horizontal.svg` | "FocusTime" in IBM Plex Sans 600, "by Cooptimize" in 400, outlined to paths |
 | `assets/brand/unroll-frame-0..4.svg` | Five keyframes, bent to flat (preview only; the app computes the unroll) |
 | `assets/brand/favicon.svg` | mark-week in a square, dark by default, light under `prefers-color-scheme: light` |
 | `assets/brand/baked/{dark,light}/` | Every SVG with the tokens replaced by literal colors, for places without CSS |
-| `assets/brand/icons/coopilot-{16..512}.png`, `mark-week-icon.svg` | The icon set (AM #2F5F8C, brighter than the dark token so it reads on dark panels) |
+| `assets/brand/icons/focustime-{16..512}.png`, `mark-week-icon.svg` | The icon set (AM #2F5F8C, brighter than the dark token so it reads on dark panels) |
 | `assets/brand/tools/gen.py`, `outline.mjs`, `bake.py` | Generate, outline the text, bake (see Re-baking) |
 | `ui/brand/` | The components: `Brand.tsx` (WeekMark, BentMark, Lockup, Lumen, LumenLoading, Unroll), `Opening.tsx` (Opening, CloseReverse, MomentOverlay, EmptyState, InlineMoment), `geometry.ts`, `opening.ts`, `motion.ts`, `brand.css` |
 | `system/install-icons.sh` | Installs the icons into the user's hicolor theme, or removes them (`uninstall`) |
@@ -26,8 +26,8 @@ The SVGs name their colors `--brand-am`, `--brand-pm`, `--accent`, `--lime`, `--
 
 | Place | Mark |
 |---|---|
-| Top bar | WeekMark (18 px tall) and the live "Coopilot" text, one button to Today |
-| Launcher, notifications, window icon | `coopilot` hicolor PNGs (mark-week); symbolic: `coopilot-symbolic` |
+| Top bar | WeekMark (18 px tall) and the live "FocusTime" text, one button to Today |
+| Launcher, notifications, window icon | `focustime` hicolor PNGs (mark-week); symbolic: `focustime-symbolic` |
 | Browser tab | `favicon.svg`, with the 32 px PNG as fallback |
 | Sign-in screen | BentMark |
 | Settings > About | Lockup, the version, the credit line |
@@ -36,7 +36,7 @@ The SVGs name their colors `--brand-am`, `--brand-pm`, `--accent`, `--lime`, `--
 
 ## Clear space and minimum sizes
 
-Coopilot's own rules (the brief sets none):
+FocusTime's own rules (the brief sets none):
 
 - **Clear space:** around WeekMark, the height of one AM bar (about a third of the mark's height) on every side; around BentMark and the lockup, the width of the outer band. No text, border or other mark inside it. The top bar's text sits 9 px from the mark.
 - **Minimum sizes:** WeekMark 14 px tall (the 16 px icon is the smallest raster); BentMark 48 px wide (below that the ring gaps close); the lockup 220 px wide (the by-line stays at 10 px or more); the wordmark 80 px wide; Lumen's body 20 px (its beam still reads).
@@ -76,7 +76,7 @@ The system's `prefers-reduced-motion: reduce` or Settings > Display "Reduce moti
 ```
 cd assets/brand
 python3 tools/gen.py        # SVGs from the measured geometry (paths are repo-relative)
-node tools/outline.mjs      # "Coopilot" and "by Cooptimize" to paths, in Plex Sans from @fontsource (opentype.js)
+node tools/outline.mjs      # "FocusTime" and "by Cooptimize" to paths, in Plex Sans from @fontsource (opentype.js)
 python3 tools/bake.py       # baked/dark and baked/light with literal colors (the brand token values)
 ```
 

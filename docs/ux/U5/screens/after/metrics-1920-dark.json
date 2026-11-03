@@ -28,7 +28,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -104,7 +104,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -189,7 +189,7 @@
    "planweek:1089/985"
   ],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -298,7 +298,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -387,7 +387,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -472,7 +472,7 @@
    "roadmap:1764/985"
   ],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -586,7 +586,7 @@
    "roadmap plan-ahead:1160/985"
   ],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -680,7 +680,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -751,7 +751,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -788,7 +788,7 @@
    "vm-demo-alex",
    "rg-demo-dev",
    "eastus",
-   "Coopilot changes only this VM: start, stop and auto-shutdown.",
+   "FocusTime changes only this VM: start, stop and auto-shutdown.",
    "Find my VM",
    "Forget",
    "Use this VM",
@@ -837,7 +837,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -908,7 +908,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -970,7 +970,7 @@
    "set-body:1613/967"
   ],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -1100,7 +1100,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -1148,7 +1148,7 @@
    "Music players",
    "Pause and resume music",
    "Pause music when focus ends",
-   "playerctl isn't installed, so Coopilot can't pause or resume music players. Install the playerctl package to use this; nothing is installed for you.",
+   "playerctl isn't installed, so FocusTime can't pause or resume music players. Install the playerctl package to use this; nothing is installed for you.",
    "Playlists",
    "Save up to",
    "8",
@@ -1188,7 +1188,7 @@
    "set-body:1020/967"
   ],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -1214,7 +1214,7 @@
    "Saved to",
    "Demo data (in memory, not your config file)",
    "(a backup is made on every save)",
-   "Each is sent once; a click opens Coopilot there.",
+   "Each is sent once; a click opens FocusTime there.",
    "Ritual reminders",
    "Plan the day",
    "At the start of a workday when the day isn't planned yet.",
@@ -1282,7 +1282,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -1344,7 +1344,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -1409,7 +1409,7 @@
    "set-body:1937/967"
   ],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -1496,7 +1496,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -1533,7 +1533,7 @@
    "Disconnect ×2",
    "Google",
    "Outlook calendar changes",
-   "Allowed: Coopilot can create, change and remove the Outlook events it created (timeboxes), each after a preview. It can't change any other event.",
+   "Allowed: FocusTime can create, change and remove the Outlook events it created (timeboxes), each after a preview. It can't change any other event.",
    "Asks for Calendars.ReadWrite only when you reconnect here.",
    "DevOps per client",
    "Read from Dataverse only when fetching; never shown.",
@@ -1582,7 +1582,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -1623,7 +1623,7 @@
    "Business hours",
    "12 hours",
    "24 hours",
-   "H on Week changes it until you close Coopilot.",
+   "H on Week changes it until you close FocusTime.",
    "Motion",
    "Reduce motion",
    "No opening or Close out animation; Lumen stays still.",
@@ -1661,7 +1661,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -1687,10 +1687,10 @@
    "Demo data (in memory, not your config file) ×2",
    "(a backup is made on every save)",
    "Write log",
-   "Every change Coopilot made outside this computer.",
+   "Every change FocusTime made outside this computer.",
    "Nothing written yet. ×2",
    "DevOps write log",
-   "Every change Coopilot made in DevOps, with your write PAT. Nothing is ever deleted: undoing a new item sets it to Removed.",
+   "Every change FocusTime made in DevOps, with your write PAT. Nothing is ever deleted: undoing a new item sets it to Removed.",
    "Nothing written to DevOps yet.",
    "Azure write log",
    "Every start, stop and auto-shutdown change on your VM: when, the result and what it was before. Power actions have no undo; the opposite action is in the VM menu.",
@@ -1734,12 +1734,12 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
    "13px/600/normal/none/none  set-tab About",
-   "12px/400/normal/none/none  set-hint Coopilot is made by "
+   "12px/400/normal/none/none  set-hint FocusTime is made by "
   ],
   "uiText": [
    "You",
@@ -1758,7 +1758,7 @@
    "Back",
    "Version",
    "0.1.0",
-   "Coopilot is made by Cooptimize, for planning a week of client focus blocks.",
+   "FocusTime is made by Cooptimize, for planning a week of client focus blocks.",
    "Refresh"
   ]
  },
@@ -1788,7 +1788,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -1831,7 +1831,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -1922,7 +1922,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -2013,7 +2013,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -2066,7 +2066,7 @@
    "to",
    "Running",
    "Compute billing starts while it runs.",
-   "Coopilot follows it until Azure shows it running.",
+   "FocusTime follows it until Azure shows it running.",
    "Cancel",
    "Logged in Settings > Data.",
    "No undo: use the opposite action instead."
@@ -2101,7 +2101,7 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -2203,14 +2203,14 @@
   "innerHeight": 1080,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none   Coopilot",
+   "15px/600/normal/none/none   FocusTime",
    "13px/400/normal/none/none   Sign in with your Mi",
    "12px/400/normal/none/none  set-hint The first time, Micr",
    "13px/400/normal/none/underline  link-btn muted Try the demo (fictio"
   ],
   "uiText": [
-   "Coopilot",
-   "Sign in with your Microsoft work account. Coopilot uses it for your calendar and your Azure VM, and to find you in Dataverse.",
+   "FocusTime",
+   "Sign in with your Microsoft work account. FocusTime uses it for your calendar and your Azure VM, and to find you in Dataverse.",
    "Sign in with Microsoft",
    "The first time, Microsoft asks you to allow calendar and Azure access for Coopilot Desktop. Tokens stay in your keyring on this computer.",
    "Try the demo (fictional data)"

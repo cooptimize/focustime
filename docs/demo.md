@@ -1,4 +1,4 @@
-# Coopilot demo (about 5 minutes)
+# FocusTime demo (about 5 minutes)
 
 A scripted walkthrough in demo mode, in the step 16.2 navigation: four tabs (Today · Week · Roadmap · Inbox, keys 1–4), one mode switch at the right of each page header, and planning as a mode with a green Done. Verified end to end at 1920x1080 on Nov 2, 2026 with `scripts/demo-walkthrough.mjs` (demo clock Monday Nov 2, 9:30 AM). Screenshots are in `docs/demo/`.
 
@@ -6,10 +6,10 @@ The demo is signed in as a fictional person (Alex Rivera) with a fictional VM: t
 
 ## Before you start
 1. Turn on demo mode: my initials (top right) > Settings > Display > "Show demo data", or Ctrl+K > "Demo mode". The top bar shows **Demo data**.
-2. Everything you see is fictional: Northwind Foods, Harbor Health, Atlas Freight and Cooptimize (internal), with made-up people, DevOps items, meetings and a Thursday day off, generated for the current week. Nothing is fetched and nothing leaves Coopilot: links, export, sign-ins and every external write are refused with "Demo data: nothing leaves Coopilot in demo mode".
+2. Everything you see is fictional: Northwind Foods, Harbor Health, Atlas Freight and Cooptimize (internal), with made-up people, DevOps items, meetings and a Thursday day off, generated for the current week. Nothing is fetched and nothing leaves FocusTime: links, export, sign-ins and every external write are refused with "Demo data: nothing leaves FocusTime in demo mode".
 3. Changes you make during the demo (picks, timeboxes, closed follow-ups) go to an in-memory store. Turning demo mode off throws them away and brings back your real data untouched. Turning it off and on again starts a fresh demo.
 
-To run the script yourself against a running Coopilot: `node scripts/demo-walkthrough.mjs docs/demo dark --now 2026-11-02T09:30:00-05:00` (it turns demo mode on first and stops if the "Demo data" tag is missing; `--runtime <dir>` points it at a throwaway server's launch link).
+To run the script yourself against a running FocusTime: `node scripts/demo-walkthrough.mjs docs/demo dark --now 2026-11-02T09:30:00-05:00` (it turns demo mode on first and stops if the "Demo data" tag is missing; `--runtime <dir>` points it at a throwaway server's launch link).
 
 ## Where things are
 - **Today** (1): Now · Plan · Check-in · Close out. A ✓ on a mode means it's done for the day; a small dot means it's due now (Plan in the morning, Check-in after lunch, Close out near the end of the day). Nothing switches by itself.
@@ -23,7 +23,7 @@ To run the script yourself against a running Coopilot: `node scripts/demo-walkth
 
 | # | Do | Say | Screenshot |
 |---|---|---|---|
-| 1 | Open Coopilot (Today › Now, `1`) | "This is Today: what's now and next, what's due, and one big button. The switch on the right says Plan is due this morning." | `01-today.png` |
+| 1 | Open FocusTime (Today › Now, `1`) | "This is Today: what's now and next, what's due, and one big button. The switch on the right says Plan is due this morning." | `01-today.png` |
 | 2 | Press `2` | "The week: each half-day is a focus block for a client, from Dataverse, with meetings and personal events on it. The header shows this week's musts." | `02-week.png` |
 | 3 | Click **Plan the week** on the switch, then ‹ to this week | "Plan the week opens on next week. Each client's musts and nice to haves, from DevOps in stack rank order, with the fit in plain words." | `03-plan-week.png` |
 | 4 | Click ⋯ on a row | "Everything else about an item lives here: reorder, blocks, pin, mark done, get help, target date, Coop brief." | `04-plan-week-menu.png` |

@@ -1,4 +1,4 @@
-# Coopilot style guide (proposal)
+# FocusTime style guide (proposal)
 
 Status: proposal, Oct 31 2026. Step 6.1 built the token layers (section 3) with the step 6 palette, the AA contrast fixes, and parts of section 6 (Tab scope, F6, O, the legend); see D110 to D115. Step 6b built the themes (Cooptimize Dark default, Cooptimize Light, Neutral) and self-hosted Red Hat Display (D120); the Omarchy option stays a proposal. It describes the token system, themes and components that Phase 5 would implement, starting with a token layer and theme switcher that changes no layout. Words follow the glossary in `CLAUDE.md` (Plan the day, Check-in, Close out, focus block, Open, PTO). Step 17.5 replaced the font with IBM Plex Sans and Plex Mono (D358) and added the brand tokens and components (section 4.1, docs/design/brand.md).
 
@@ -31,7 +31,7 @@ Computed styles read in Chromium from the home page. Only palette and type were 
 | Weights in use | body 300, headings 600, buttons 700, nav 500 | `body`, `h1`–`h3`, `.wp-block-button__link`, nav links |
 | Button radius | 3 px | `--primarybtnborderradius` |
 
-**Logo treatment:** a horizontal lockup. A "C" mark made of concentric arcs (navy, forest green, logo green and lime) around a red-orange dot, then the lowercase wordmark "cooptimize" in navy. Coopilot uses only the mark, as a small app glyph, never the wordmark, so it reads as a Cooptimize tool, not the company site.
+**Logo treatment:** a horizontal lockup. A "C" mark made of concentric arcs (navy, forest green, logo green and lime) around a red-orange dot, then the lowercase wordmark "cooptimize" in navy. FocusTime uses only the mark, as a small app glyph, never the wordmark, so it reads as a Cooptimize tool, not the company site.
 
 **Tone:** plain, friendly, confident. Light weights at large sizes, generous whitespace, green as the action color, navy as the trust color.
 

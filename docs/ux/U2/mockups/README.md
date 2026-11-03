@@ -12,5 +12,5 @@ Mockups for the UX overhaul, drawn from the U1 audit and the decisions in `docs/
 | Week.png | Week: rail replaces the meeting list, risk with reason, counts over lists |
 | Plan-the-week.png | Plan the week: blocks as one strip, fit once per client, Add from DevOps open |
 
-`source/` holds the HTML the PNGs were rendered from (one file per screen, inline styles; colors are the brand tokens' dark values). The live canvas with the same boards: "Coopilot UX Overhaul" in Tanner's Claude artifacts.
+`source/` holds the HTML the PNGs were rendered from (one file per screen, inline styles; colors are the brand tokens' dark values). The live canvas with the same boards: "FocusTime UX Overhaul" in Tanner's Claude artifacts.
 | Plan-the-week-U6.png | Plan the week, one client at a time: summary lines per client, one client open, Add from DevOps in a side picker (U6) |

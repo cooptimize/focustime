@@ -1,4 +1,4 @@
-# Coopilot | Brand Brief v0.2 (repo copy)
+# FocusTime | Brand Brief v0.2 (repo copy)
 
 November 2, 2026. Repo copy of the planning brief. The v0.1 sections that v0.2 refers back to (voice, palette, type, token mapping) are inlined so this file stands alone. The drawing step (old section 9) has already run; integration notes are at the end. Everything not marked **[confirmed]** is a proposal.
 
@@ -6,23 +6,23 @@ November 2, 2026. Repo copy of the planning brief. The v0.1 sections that v0.2 r
 
 ## 1. Name and story
 
-**Coopilot** is the companion that helps a Cooptimizer see the week clearly and steer it. [confirmed]
+**FocusTime** is the companion that helps a Cooptimizer see the week clearly and steer it. [confirmed]
 
-**The found connection.** [confirmed] The Cooptimize mark is four concentric arcs (navy, deep green, mid green, lime) opening to the right as a C, with a red dot at the center. The opening cuts each ring into an upper arc and a lower arc. Four rings, two halves each: eight segments. The parent mark already contains a four-day week of half-days, bent into a circle. Coopilot's identity is that circle unrolled into time.
+**The found connection.** [confirmed] The Cooptimize mark is four concentric arcs (navy, deep green, mid green, lime) opening to the right as a C, with a red dot at the center. The opening cuts each ring into an upper arc and a lower arc. Four rings, two halves each: eight segments. The parent mark already contains a four-day week of half-days, bent into a circle. FocusTime's identity is that circle unrolled into time.
 
-**Story in one line:** Cooptimize is the whole; Coopilot is the week; Lumen is the segment that stepped out to look at both.
+**Story in one line:** Cooptimize is the whole; FocusTime is the week; Lumen is the segment that stepped out to look at both.
 
 Coop (the coding agent) remains visually unrelated. [confirmed]
 
 ## 2. Personality and voice
 
-- **Lucid.** Coopilot shows what is true, in plain words, with the source and freshness attached. Rules out: hedged copy, decorative abstraction, anything that hides a failure behind a smooth state.
-- **Guided.** Coopilot always offers the next step and makes the healthy path the easy path. Rules out: scolding, alarms, guilt framing, and "productivity" cheerleading.
-- **Rhythmic.** Coopilot respects the beat of the week: Plan the week, Plan the day, Check-in, Close out, AM and PM. Rules out: constant notifications, loops that never settle, motion in working views.
+- **Lucid.** FocusTime shows what is true, in plain words, with the source and freshness attached. Rules out: hedged copy, decorative abstraction, anything that hides a failure behind a smooth state.
+- **Guided.** FocusTime always offers the next step and makes the healthy path the easy path. Rules out: scolding, alarms, guilt framing, and "productivity" cheerleading.
+- **Rhythmic.** FocusTime respects the beat of the week: Plan the week, Plan the day, Check-in, Close out, AM and PM. Rules out: constant notifications, loops that never settle, motion in working views.
 
 **Voice rules for UI copy.** Say what happened, say who it touches, offer one action. Never "you failed to", "overdue", "warning". Prefer "slipped", "moved", "needs", "ready". Second person is fine; no exclamation marks in working views. Numbers and times are exact; feelings are not assigned to the user.
 
-| Situation | Before (avoid) | After (Coopilot) |
+| Situation | Before (avoid) | After (FocusTime) |
 |---|---|---|
 | A block slips | "Warning: you missed your W&C block." | "W&C PM slipped: 2h 10m of meetings ran through it. Move it to Thu AM, Fri, or an evening?" |
 | A source fails | "Error 401: authentication failed." | "Google Calendar needs reconnecting. Showing events from 8:02 this morning. Reconnect?" |
@@ -30,7 +30,7 @@ Coop (the coding agent) remains visually unrelated. [confirmed]
 
 ## 3. Marks
 
-**Derived from the Cooptimize rings.** [confirmed] The week was already inside the parent mark, and a visible family link matters if Coopilot is later hosted for other Cooptimizers. Caveat (B07): mention it to the other members before the mark is final.
+**Derived from the Cooptimize rings.** [confirmed] The week was already inside the parent mark, and a visible family link matters if FocusTime is later hosted for other Cooptimizers. Caveat (B07): mention it to the other members before the mark is final.
 
 **Bent week (brand mark).** The parent's four rings, stroke-based, opening on the right. Each ring cut at the horizontal centerline into an AM (upper) and PM (lower) segment. Eight segments. AM in `brand-am`, PM in `brand-pm`. The innermost AM segment is a dashed ghost: that segment is Lumen, who has stepped out through the opening and stands outside it, light pointing back in. Used on: splash, About, the lockup, shared or hosted surfaces. Not the app icon.
 
@@ -42,7 +42,7 @@ Coop (the coding agent) remains visually unrelated. [confirmed]
 
 **Must not resemble:** Microsoft four squares, Microsoft Copilot, generic calendar icons, and at icon size the Cooptimize icon itself.
 
-**Lockup.** Bent mark small, Lumen beside the opening, "Coopilot" in IBM Plex Sans 600, "by Cooptimize" in `muted` beneath.
+**Lockup.** Bent mark small, Lumen beside the opening, "FocusTime" in IBM Plex Sans 600, "by Cooptimize" in `muted` beneath.
 
 ## 4. Lumen
 
@@ -125,3 +125,7 @@ Bands, Open block, Tide, Nudge, Lens; Beam, Lantern, Level; Stepped out, Live ma
 - **App icon:** use the delivered icon PNGs as-is (AM slightly brighter than the in-app mark so it reads on the dark tile).
 - **Typeface confirmed:** IBM Plex Sans, chosen over Red Hat Display after a side-by-side on the Today screen.
 - The delivered `wordmark.svg` is live text; outline it with the real font before it ships as a standalone file.
+
+## Name history
+
+The app was called **Coopilot** from its start (Oct 31, 2026) until Nov 2, 2026, when it was renamed **FocusTime** (R1, see `docs/decisions.md`). The marks, Lumen, icons and the week mark did not change. Only the wordmark and the lockup were re-set, in IBM Plex Sans 600 with the same tracking. One trace of the old name remains on purpose: the Outlook marker property is still named `CoopilotId`, because renaming it would orphan every event created before the rename.

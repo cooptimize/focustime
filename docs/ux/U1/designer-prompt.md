@@ -1,18 +1,18 @@
-# Design brief: Coopilot UX overhaul (U1)
+# Design brief: FocusTime UX overhaul (U1)
 
 You are a principal UI/UX designer with deep experience in dense productivity tools for experts (calendars, planning, issue trackers). You cut ruthlessly, design for an economy of clicks, and defend every pixel.
 
 You can't see the code. Everything you need is in this brief and the attached files (listed at the end). Read `report.md` alongside this brief: it holds the full element inventories, counts and confusion logs.
 
-## 1. What Coopilot is
+## 1. What FocusTime is
 
-Coopilot is a local desktop app for one consultant at Cooptimize, a consulting firm. It plans the week and protects focus time. It runs as a web page in a browser app window on Linux (Omarchy). It has no AI in the working views.
+FocusTime is a local desktop app for one consultant at Cooptimize, a consulting firm. It plans the week and protects focus time. It runs as a web page in a browser app window on Linux (Omarchy). It has no AI in the working views.
 
-- **Coopilot vs Coop.** Coopilot is this app. Coop is a separate coding agent the firm runs inside client environments. They are unrelated, visually and in wording.
+- **FocusTime vs Coop.** FocusTime is this app. Coop is a separate coding agent the firm runs inside client environments. They are unrelated, visually and in wording.
 - **Clients.** The user works for several clients each week. "Internal" counts as a client. Each client has a color, used only as a thin edge and a small swatch, never a fill.
 - **Focus block.** A half-day (morning or afternoon) set aside for one client. The week is Monday to Thursday, 8 blocks. Friday is a catch-up day.
 - **Sources.** Read live: Dataverse (who has which block, time off), Outlook and Google calendars (meetings and personal events), Azure DevOps (work items). Each source can be live, cached (with a time) or failed (with a cause and a fix).
-- **DevOps first.** If it isn't in DevOps, it isn't planned yet. Work is planned as DevOps features (worth whole blocks) broken into user stories (sized S about 1 hour, M about 2 hours, L about a block). Coopilot should make breaking a feature into stories, and keeping DevOps up to date, the easy path.
+- **DevOps first.** If it isn't in DevOps, it isn't planned yet. Work is planned as DevOps features (worth whole blocks) broken into user stories (sized S about 1 hour, M about 2 hours, L about a block). FocusTime should make breaking a feature into stories, and keeping DevOps up to date, the easy path.
 - **Pick.** One planned piece of work in a block for a day: usually a DevOps story, sometimes a follow-up or a typed intention.
 - **Must / Nice to have.** A week's list per client. Musts should be done or at least started this week. Nice to haves are done if there's room.
 - **Follow-up.** Something the user owes someone (an answer, an update). It has a due date and is closed with "Close the loop".
@@ -30,7 +30,7 @@ Coopilot is a local desktop app for one consultant at Cooptimize, a consulting f
 
 ### Navigation (keep it)
 
-- **Top bar:** the mark and "Coopilot", then four tabs: Today · Week · Roadmap · Inbox (keys 1 to 4).
+- **Top bar:** the mark and "FocusTime", then four tabs: Today · Week · Roadmap · Inbox (keys 1 to 4).
 - **Right of the top bar:** a VM status chip, Focus (the timer), Capture, ⋯ (Commands, Keyboard shortcuts) and the user's photo.
 - **Mode switch:** each tab has one at the right of its page header. Today: Now · Plan · Check-in · Close out. Week: Week · Plan the week. A ✓ shows when a mode is done, a small dot while it's due. Planning modes have a green Done.
 - **Status bar:** at the bottom, one line when all sources are live.

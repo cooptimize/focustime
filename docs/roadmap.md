@@ -1,4 +1,4 @@
-# Coopilot | Roadmap and Vision
+# FocusTime | Roadmap and Vision
 
 November 1, 2026. Planning-chat record. The repo's docs/ folder is the living source for built behavior (spec.md, decisions.md, open-questions.md); this file holds direction and the staged path to it.
 
@@ -9,7 +9,7 @@ November 1, 2026. Planning-chat record. The repo's docs/ folder is the living so
 3. Outlook and Google calendars, read-only. 3.5 Auto refresh and single risk badge
 4. DevOps items assigned to me per client (board order, client isolation, PAT in memory only). 4.5 Responsive layouts (1920x1080 matters: used over Moonlight from the laptop)
 5. Morning planning, now **Plan the day**: story-level picks, S/M/L sizing, carry-over, local plan store, reminder, autostart
-   - 5.5 Coopilot as an Omarchy app (launcher, Super + Alt + C, autostart), work items open in the client's Edge profile, card polish, Follow-up concept recorded
+   - 5.5 FocusTime as an Omarchy app (launcher, Super + Alt + C, autostart), work items open in the client's Edge profile, card polish, Follow-up concept recorded
 6. Top bar views, ⋯ menus and Ctrl+K command menu from one action registry, ignition renamed to Plan the day, plan the next workday, PTO from Dataverse, Outlook show-as styling, free time per block
    - 6.1 UX review fixes on a token foundation (AA contrast, status bar by root cause, keyboard legend)
    - **Plan any day**: any date, ← →, date picker, past days settle-only, one carry-over day
@@ -18,7 +18,7 @@ November 1, 2026. Planning-chat record. The repo's docs/ folder is the living so
    - 6d Focused time on picks and days, calendar refresh while a timer runs, followed clients (DevOps and Open half-days only for clients with current focus time, plus "Keep following")
 7. **Check-in and Close out** built around closing loops: follow-up rules, resume notes, borrowed time and payback, walk-on work, two reminders
 8. **Plan the week**: features and epics from DevOps, blocks per feature with a fit check, readiness ladder, Coop brief, week commit shown in the week and in Plan the day, Thursday/Friday/Monday nudges
-9. **Quick capture**: one box saved locally, @client tags, rule-based routing to a follow-up, draft story or note, notes, `coopilot-open --capture`
+9. **Quick capture**: one box saved locally, @client tags, rule-based routing to a follow-up, draft story or note, notes, `focustime-open --capture`
 10. **Simpler experience and focus mode**:
     - Today as the home view; top bar reduced to Today · Week · Plan · Inbox
     - One Plan button that opens the right ritual for the moment
@@ -31,9 +31,9 @@ November 1, 2026. Planning-chat record. The repo's docs/ folder is the living so
 11. **Plan the week by client** (DevOps first): each client's Must and Nice to have lists from DevOps in stack rank order (local reorder), optional pins, fit per client on musts, one-click re-planning with a heads-up offer for a dropped committed must, "Anything shifted?" in Check-in, "2 of 4 musts done" and a midweek "Still realistic?" question, Plan the day drawing from the week, DevOps health at the top of Plan the week
 
 12. **Write framework and timeboxing**: named external writes with preview, confirm, read back, audit log and undo; timeboxes on the day strip with optional Put on Outlook (marker-owned events only)
-13. **Calendar editing tiers and the collaboration finder**: Coopilot events fully editable and synced both ways (conflicts ask), my own no-attendee events movable with preview, meetings only opened in Outlook; "Needs help from…" ranks Cooptimizers by client, finds free times in everyone's working hours (free/busy only) and sends an invite after preview, undo cancels
+13. **Calendar editing tiers and the collaboration finder**: FocusTime events fully editable and synced both ways (conflicts ask), my own no-attendee events movable with preview, meetings only opened in Outlook; "Needs help from…" ranks Cooptimizers by client, finds free times in everyone's working hours (free/busy only) and sends an invite after preview, undo cancels
 
-13.5. **Follow-ups overhaul, capture simplification and a keyboard fix**: Loop renamed Follow-up; Close the loop, Not needed, Snooze and Delete; a follow-up form with client and Who suggestions; due badges in words and color, due order; follow-ups on week cards, Today, Plan the day (pickable) and Close out; a narrower heads-up rule that says where it came from; capture sorts into follow-up, draft story or draft feature, and notes moved into "where I left off"; shortcuts never act while typing or under a dialog; Add hours or Move anyway; Coopilot events deleted in Outlook kept as "Removed in Outlook"
+13.5. **Follow-ups overhaul, capture simplification and a keyboard fix**: Loop renamed Follow-up; Close the loop, Not needed, Snooze and Delete; a follow-up form with client and Who suggestions; due badges in words and color, due order; follow-ups on week cards, Today, Plan the day (pickable) and Close out; a narrower heads-up rule that says where it came from; capture sorts into follow-up, draft story or draft feature, and notes moved into "where I left off"; shortcuts never act while typing or under a dialog; Add hours or Move anyway; FocusTime events deleted in Outlook kept as "Removed in Outlook"
 
 13.6. **Planning visibility, Plan panel fixes and timeboxing redesign**: Plan / Planned ✓ in each day header, "+ Add work" on blocks and key A, Friday as catch-up without a prompt, three follow-ups per card, a fixed-height Plan panel that scrolls on its own, Draft feature for epics, a per-block agenda with free gaps instead of the day strip, one-click Timebox into a gap, Timebox my day, and one combined Outlook preview
 
@@ -47,11 +47,11 @@ In progress: nothing.
 
 ## Calendar editing rule (agreed Nov 1, built in step 13)
 
-Coopilot only edits what it created or what only I can see. Coopilot events (marked) are fully editable and follow changes made in Outlook; my own events with no other attendees can be moved, resized and shown as free or busy, never retitled or marked; meetings with anyone else are never edited (Open in Outlook). Every write goes through the write framework. Backlog: RSVP (accept, tentative, decline with a note) behind preview and confirm.
+FocusTime only edits what it created or what only I can see. FocusTime events (marked) are fully editable and follow changes made in Outlook; my own events with no other attendees can be moved, resized and shown as free or busy, never retitled or marked; meetings with anyone else are never edited (Open in Outlook). Every write goes through the write framework. Backlog: RSVP (accept, tentative, decline with a note) behind preview and confirm.
 
 ## Principle #1: DevOps first (agreed Nov 1)
 
-We plan, track and show work in DevOps. If it isn't in DevOps, it isn't planned yet. Coopilot makes the healthy path the easy path, without policing: it guides toward decomposed, dated, prioritized DevOps work and never makes re-planning feel like failure.
+We plan, track and show work in DevOps. If it isn't in DevOps, it isn't planned yet. FocusTime makes the healthy path the easy path, without policing: it guides toward decomposed, dated, prioritized DevOps work and never makes re-planning feel like failure.
 
 ## Step 11, week plan by client (agreed Nov 1, built Nov 1)
 
@@ -63,17 +63,17 @@ We plan, track and show work in DevOps. If it isn't in DevOps, it isn't planned 
 
 ## After step 11 (agreed Nov 1)
 
-12. Write framework (preview, confirm, audit log, undo) + timeboxing: drag picks onto the day timeline (local first); per-timebox "Put on Outlook" toggle; Coopilot edits only its own events.
+12. Write framework (preview, confirm, audit log, undo) + timeboxing: drag picks onto the day timeline (local first); per-timebox "Put on Outlook" toggle; FocusTime edits only its own events.
 13. ~~Collaboration finder~~ (built): "Needs help from…" ranks Cooptimizers (1) on the client that same day per Focus Time, (2) on the client per Account Worker, (3) anyone else; PTO shown as "away" only; Graph free/busy finds real overlap within each person's working hours and time zone; invites only after preview and confirm. Reads teammates' focus time and PTO (decided: not sensitive at Cooptimize).
 14. DevOps writes: update state, comment, drafts become real stories.
 
 Later: schedule a meeting for an item (pre-filled Outlook first); chat panel on the same actions as the command menu; Ownership area (epics/features I own, contributors, target-date risk); browser access from machines that can't run Moonlight.
 
-Dropped (Nov 2): Remmina launch and resume. The VM is reached the usual way; Coopilot only manages its power and auto-shutdown (step 15.4).
+Dropped (Nov 2): Remmina launch and resume. The VM is reached the usual way; FocusTime only manages its power and auto-shutdown (step 15.4).
 
 ## Direction: hosted for other Cooptimizers (later, needs buy-in)
 
-Updated Nov 2: Coopilot will likely become an Azure-hosted web app for any Cooptimizer. Each person has one VM with a Windows profile per client. Groundwork in step 15.4: one Microsoft sign-in per person on the shared app registration (no per-person registrations), identity and VM features keyed by the signed-in person, delegated Azure access so each person's own RBAC applies, OS-specific code kept in the host. Notifications sit behind the host's `NotifyHost` (browser notifications when hosted). Still to revisit for hosting: Dataverse read delegated per user instead of the app-only identity (Q89), a server-side token store instead of the OS keyring, and a confidential-client redirect instead of loopback.
+Updated Nov 2: FocusTime will likely become an Azure-hosted web app for any Cooptimizer. Each person has one VM with a Windows profile per client. Groundwork in step 15.4: one Microsoft sign-in per person on the shared app registration (no per-person registrations), identity and VM features keyed by the signed-in person, delegated Azure access so each person's own RBAC applies, OS-specific code kept in the host. Notifications sit behind the host's `NotifyHost` (browser notifications when hosted). Still to revisit for hosting: Dataverse read delegated per user instead of the app-only identity (Q89), a server-side token store instead of the OS keyring, and a confidential-client redirect instead of loopback.
 
 Interest from other Cooptimizers. A hosted version would use Azure with per-user Entra sign-in, Key Vault for secrets, a per-user database, and normal link opening (Edge profile switching would need an optional local helper). Cost estimate and secure design to be explored in a separate thread before any resources are created. Rule from now (a principle in CLAUDE.md since step 11): nothing machine-specific in the core modules; OS integrations stay behind thin host adapters.
 
@@ -94,7 +94,7 @@ Interest from other Cooptimizers. A hosted version would use Azure with per-user
   - **Feature needs stories** before the day it is worked ("needs breakdown"; stays open like a follow-up until stories exist in DevOps). Since step 10, Plan the day offers a "Break down #id" pick with "Copy Coop brief" beside it.
   - **Block needs work**: focus time booked with a client but nothing open assigned to you there. Becomes a follow-up: reach out to the client lead or team about priorities.
   - **No target date** (soft) and **captures to sort**.
-- Breakdown itself usually happens with **Coop** on the client VM, which knows the code, data and current state. Coopilot notices, flags and hands off a short brief; Coop shapes the stories.
+- Breakdown itself usually happens with **Coop** on the client VM, which knows the code, data and current state. FocusTime notices, flags and hands off a short brief; Coop shapes the stories.
 - **Target dates** (field detected per client process) are treated as a promise to the client. Blocks-vs-free-time fit is built; checking planned blocks against target dates is still to come and feeds the Ownership area.
 - Goal: build the habit of keeping DevOps healthy (decomposed, dated, reviewed) by making planning depend on it.
 
@@ -127,8 +127,8 @@ Open (step 10 questions, see docs/open-questions.md):
 
 - **Working hours:** a default start and end per weekday, editable per day for squeezed days (e.g. 9:00–4:00 plus 8:00–10:00 pm). Capacity is computed from working hours, not a fixed half-day assumption.
 - **Lunch:** an optional default window, adjustable per day. It also serves as the AM/PM split.
-- **Unavailable:** time blocked in Coopilot for things on no calendar. It counts against capacity.
-- **Flex session:** planned work outside normal hours (deployments, evenings, weekends), with client and optional DevOps item. Opens a "post the update" follow-up afterwards. Once the write step exists, it auto-blocks Outlook as a Coopilot-tagged event.
+- **Unavailable:** time blocked in FocusTime for things on no calendar. It counts against capacity.
+- **Flex session:** planned work outside normal hours (deployments, evenings, weekends), with client and optional DevOps item. Opens a "post the update" follow-up afterwards. Once the write step exists, it auto-blocks Outlook as a FocusTime-tagged event.
 - **View range:** a toggle between business hours, 12h and 24h. The view auto-expands to show anything planned outside the current range. Saturday and Sunday appear only in weeks where something is planned on them.
 
 ## Settings area (agreed Oct 31, built in step 6b)
@@ -142,7 +142,7 @@ Rules: the UI reads and writes the same validated config file, so file and scree
 A follow-up is something Tanner owes someone (an update, answer or follow-through): who, what, channel, optional due date, open until closed.
 
 - Built (step 7 and on): opened by rule (DevOps update after a pick is done, slip heads-up, blocker nudge, flex session ended, ask about priorities, a promise in a capture) or manually; closed by a signal that proves it (DevOps state or comment changed) or by "Mark as told" with an optional note. Listed in the Inbox; due ones show on Today.
-- Not built yet: closing on a Coopilot-drafted message confirmed sent (needs the write framework), and waiting-on follow-ups (others owe Tanner), ideally detected rather than hand-entered.
+- Not built yet: closing on a FocusTime-drafted message confirmed sent (needs the write framework), and waiting-on follow-ups (others owe Tanner), ideally detected rather than hand-entered.
 
 ## North star: synthesized intelligence
 

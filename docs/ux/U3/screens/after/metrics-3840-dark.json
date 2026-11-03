@@ -28,7 +28,7 @@
   "innerHeight": 1600,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -120,7 +120,7 @@
   "innerHeight": 1600,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -228,7 +228,7 @@
   "innerHeight": 1600,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
@@ -364,7 +364,7 @@
   "innerHeight": 1600,
   "innerScroll": [],
   "styleList": [
-   "15px/600/normal/none/none  name Coopilot",
+   "15px/600/normal/none/none  name FocusTime",
    "12px/500/normal/none/none  demo-tag Demo data",
    "13px/500/normal/none/none  view-tab Today",
    "13px/400/normal/none/none  vm-label Stopped (deallocated",
