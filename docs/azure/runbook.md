@@ -187,7 +187,8 @@ Roll back: run deploy-prod with the previous SHA. The last run's summary prints 
 gh workflow run deploy-prod.yml --repo cooptimize/focustime -f ref=<previous sha>
 ```
 
-Roll forward: the same with the newer SHA. Single revision mode: each deploy makes a new revision and the old ones stay
+Roll forward: the same with the newer SHA. Only the app changes: the image is the chosen commit's, while the
+migrations and the Bicep are always main's (D472). Nothing older than prod's first commit, `a347188`, can be deployed. Single revision mode: each deploy makes a new revision and the old ones stay
 listed, inactive (`az containerapp revision list -g FocusTime -n ft-prod-app -o table`). Migrations only add (D468), so
 the older build runs on the database as it is; no restore is needed for a rollback.
 
@@ -224,7 +225,7 @@ per person. Settings shows the ones a person sees as "Set by your FocusTime admi
    console: there is no API for it).
 6. deploy-prod with the SHA to promote.
 
-### Dev and prod parity (D472)
+### Dev and prod parity (D473)
 
 Every prod deploy (a dry run too) first runs `infra/scripts/parity.sh`: it fails if dev has an app setting, app
 secret reference or Key Vault secret name that prod lacks, now or after the deploy. Fix a missing secret with

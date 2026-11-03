@@ -107,7 +107,7 @@ Welcome message for the two pilot users (sent by Tanner; their names stay out of
 After each signs in, the report back is only: matched in Dataverse yes or no, the number of followed clients, sources
 live, setup steps done or skipped. Never plan content.
 
-## After the pilot started: Settings › Clients empty on prod (D472, D473)
+## After the pilot started: Settings › Clients empty on prod (D473, D474)
 
 **Symptom.** On prod, Settings › Clients said "Your Dataverse user isn't found yet. Sign in with your work account, or
 check your email under You", and everything Settings shows from Dataverse was empty (clients, their DevOps identities,

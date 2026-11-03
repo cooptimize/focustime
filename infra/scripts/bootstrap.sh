@@ -14,7 +14,7 @@
 #   6. Prod only (A5, D471): prod runs dev's tested image, so it pulls from dev's registry. The pull identity
 #      ft-prod-pull (in FocusTime) and the deploy identity ft-prod-deploy get AcrPull on that one registry, nothing
 #      else in FocusTime-dev. PROD_DEPLOYERS (--deployer, GitHub logins) is who may run deploy-prod.yml (D466).
-#   7. Prod only (D472): the parity check's reads for ft-prod-deploy: Reader on ft-dev-app, Key Vault Reader on both
+#   7. Prod only (D473): the parity check's reads for ft-prod-deploy: Reader on ft-dev-app, Key Vault Reader on both
 #      vaults (names, never values).
 #
 # Prints names and ids, never a secret (there are none here).

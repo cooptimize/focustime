@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FocusTime: dev and prod parity (D472), run by deploy-prod.yml before anything changes, and by hand any time.
+# FocusTime: dev and prod parity (D473), run by deploy-prod.yml before anything changes, and by hand any time.
 # Fails when dev has an app setting, an app secret reference or a Key Vault secret whose name prod lacks, unless
 # infra/parity-allow.txt allows it. Names only: it never reads a value (Reader can't list the app's secret values, and
 # Key Vault Reader sees secret metadata only), and it prints nothing but names.

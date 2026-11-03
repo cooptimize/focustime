@@ -1,4 +1,4 @@
-// D472: deploy-prod.yml's parity check (infra/scripts/parity.sh) against a fake `az`: it fails on a name dev has and
+// D473: deploy-prod.yml's parity check (infra/scripts/parity.sh) against a fake `az`: it fails on a name dev has and
 // prod lacks, honours the allowlist and this deploy's what-if, fails on a read it can't make, and only ever reads.
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -47,7 +47,7 @@ esac
   return { code: r.status, out: r.stdout + r.stderr };
 }
 
-describe.skipIf(!hasJq)("dev and prod parity (D472)", () => {
+describe.skipIf(!hasJq)("dev and prod parity (D473)", () => {
   it("passes when prod has every name dev has", () => {
     expect(run(BOTH, BOTH).code).toBe(0);
   });
