@@ -470,7 +470,7 @@ function StandingForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
 function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void }) {
   const pl = p.data.planning;
   const [types, setTypes] = useState(pl.pickablePortfolioTypes.join(", "));
-  const [v, setV] = useState({ S: pl.sizes.S, M: pl.sizes.M, L: pl.sizes.L, minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes, focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes, checkinReminderMinutes: pl.checkinReminderMinutes });
+  const [v, setV] = useState({ minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes, focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes, checkinReminderMinutes: pl.checkinReminderMinutes });
   const [nudges, setNudges] = useState({ weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon });
   const { problems, status, save } = useSave(p.onSavedData);
   const num = (k: Exclude<keyof typeof v, "endSound">, label: string, field: string, hint: string, step = 5, max = 480) => (
@@ -486,7 +486,6 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
         e.preventDefault();
         void save("planning", {
           pickablePortfolioTypes: types.split(",").map((x) => x.trim()).filter(Boolean),
-          sizes: { S: v.S, M: v.M, L: v.L },
           minSizes: { S: v.minS, M: v.minM, L: v.minL },
           carryDays: v.carryDays,
           reminderOffsetMinutes: v.reminderOffsetMinutes,
@@ -502,10 +501,7 @@ function PlanningForm(p: Props & { data: SettingsData; onSavedData: (d: Settings
     >
       <h3>Picks</h3>
       <div className="set-grid">
-        {num("S", "Size S (minutes)", "plan.size_s", "In steps of 5.")}
-        {num("M", "Size M (minutes)", "plan.size_m", "More than S.")}
-        {num("L", "Size L (minutes)", "plan.size_l", "More than M.")}
-        {num("minS", "Shortest useful time, S (minutes)", "plan.min_s", "The least Timebox my day gives an S pick.")}
+        {num("minS", "Shortest useful time, S (minutes)", "plan.min_s", "The least Timebox my day gives an S pick (S is 1h, M 2h, L 4h).")}
         {num("minM", "Shortest useful time, M (minutes)", "plan.min_m", "The same for M.")}
         {num("minL", "Shortest useful time, L (minutes)", "plan.min_l", "The same for L.")}
         <Field label="Portfolio types that can be picked" hint='Types above story level you pick directly, like "Recurring".'>

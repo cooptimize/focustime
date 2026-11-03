@@ -108,7 +108,7 @@ function StripLine({ strip: s, onSelect }: { strip: Strip; onSelect: () => void 
   );
 }
 
-type MustsRow = { clientKey: string; name: string; musts: number; done: number; left: number; leftQuarters: number; nice: number; track?: { kind: string; text: string } | null };
+type MustsRow = { clientKey: string; name: string; musts: number; done: number; left: number; leftMinutes: number; nice: number; track?: { kind: string; text: string } | null };
 
 /**
  * Step 15 (D268): one context line under the top bar instead of the Now strip, the ritual chips and the Musts strip:

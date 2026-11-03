@@ -2479,20 +2479,22 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pa-cell:focus-visible { outline: 2px solid var(--selected); outline-offset: 0; }
 .pa-cell.span { border-color: var(--selected); background: color-mix(in oklab, var(--selected) 14%, transparent); }
 .pa-cell.epic { cursor: default; pointer-events: auto; }
-.pa-segs { display: inline-flex; align-items: center; gap: 2px; padding: 1px 4px; border-radius: 4px; background: var(--surface); box-shadow: 0 0 0 1px var(--border-strong); }
-.pa-seg { width: 9px; height: 9px; border-radius: 2px; background: var(--c); }
-.pa-seg.half { width: 5px; }
 .pa-cell[aria-disabled="true"] { cursor: default; }
-.pa-cell.nice .pa-seg { background: transparent; box-shadow: inset 0 0 0 1.5px var(--c); }
-.pa-cell.epic .pa-seg { background: var(--text-muted); }
-.pa-seg-n { margin-left: 3px; font-size: var(--fs-1); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* E2: a planned week shows its hours ("about 6h"); the stepper's arrows show on hover or focus. */
+.pa-cell .pa-stepper { max-width: 100%; }
+.pa-cell .pa-stepper .hs-value { min-width: 0; padding: 0 6px; font-size: var(--fs-1); line-height: calc(18px * var(--text-scale)); border-color: color-mix(in oklab, var(--c, var(--text-muted)) 70%, transparent); background: var(--surface); }
+.pa-cell.nice .pa-stepper .hs-value { border-style: dashed; }
+.pa-cell .pa-stepper .hs-step { min-width: 16px; padding: 0 2px; font-size: var(--fs-1); line-height: calc(18px * var(--text-scale)); opacity: 0; }
+.pa-cell:hover .pa-stepper .hs-step, .pa-cell:focus-within .pa-stepper .hs-step, .pa-cell:focus .pa-stepper .hs-step { opacity: 1; }
+.pa-cell .pa-stepper .hs-ph { display: none; }
+.pa-hours { padding: 0 6px; border-radius: 4px; font-size: var(--fs-1); font-weight: 500; color: var(--text-muted); background: var(--surface); box-shadow: 0 0 0 1px var(--border-strong); white-space: nowrap; }
 .pa-cap { min-height: calc(var(--fs-2) * 2.5 + 8px); border-bottom: 1px solid var(--border); }
 .pa-cap .pa-label { font-size: var(--fs-2); }
 .pa-capcell { position: absolute; top: 4px; bottom: 4px; display: flex; flex-direction: column; justify-content: center; padding: 0 8px; border-radius: 5px; font-size: var(--fs-2); font-weight: 500; line-height: 1.25; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   background: var(--sunken); color: var(--text); }
 .pa-capcell.all { color: var(--ok); }
 .pa-capcell.free { color: var(--text); }
-.pa-capcell.over { color: var(--risk); background: color-mix(in oklab, var(--risk) 12%, var(--surface)); }
+.pa-capcell.over { color: var(--watch); background: color-mix(in oklab, var(--watch) 12%, var(--surface)); }
 .pa-capcell.none { color: var(--text-muted); font-weight: 400; }
 .pa-capcell.month { font-weight: 400; }
 .pa-capcell.crowded { background: color-mix(in oklab, var(--watch) 16%, var(--surface)); box-shadow: inset 0 0 0 1.5px var(--watch); }
@@ -2927,7 +2929,7 @@ button.att-chip { cursor: pointer; }
 .planweek .pw-parent .link-btn { font-size: var(--fs-2); }
 .planweek .pw-fill { font-size: var(--fs-2); padding-left: 22px; color: var(--text-muted); }
 .planweek .pw-raise { color: var(--watch); font-weight: 500; }
-.planweek .pw-progress-blocks { font-weight: 400; }
+.planweek .pw-progress-hours { font-weight: 400; }
 .planweek .pw-nested { margin: 2px 0 0 22px; padding-left: 10px; }
 .pw-kids { flex-basis: 100%; font-size: var(--fs-2); color: var(--text-muted); padding-left: 22px; }
 button.pw-kids { text-align: left; padding-left: 22px; justify-self: start; text-decoration: none; color: var(--text-muted); }
@@ -3335,6 +3337,7 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .guide-blockviz .adds { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .guide-blockviz .stack { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; min-height: 28px; }
 .guide-blockviz .stack button { background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; font: 400 var(--fs-2)/1.4 var(--font-mono); }
+.guide-blockviz .stack button.unsized { border-style: dashed; color: var(--text-muted); }
 .guide-legend { font-size: var(--fs-3); color: var(--text-muted); display: flex; flex-direction: column; gap: 8px; }
 .guide-legend b { color: var(--text); }
 
@@ -3386,3 +3389,20 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 }
 @media (prefers-reduced-motion: reduce) { .guide * { transition: none !important; } }
 :root[data-reduce-motion] .guide * { transition: none !important; }
+
+/* E2 (D446): the shared hours stepper ("− 6h +") and size chip ("M · 2h", a muted "Size?"). Over is amber, never red. */
+.hours-stepper { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.hours-stepper .hs-step { min-width: 22px; padding: 0 4px; font: inherit; font-size: var(--fs-2); line-height: calc(20px * var(--text-scale)); color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 6px; cursor: pointer; }
+.hours-stepper .hs-step:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+.hours-stepper .hs-step:disabled { opacity: 0.4; cursor: default; }
+.hours-stepper .hs-ph { visibility: hidden; cursor: default; }
+.hours-stepper .hs-value { min-width: 5.5ch; padding: 0 8px; font: inherit; font-size: var(--fs-2); font-weight: 500; line-height: calc(20px * var(--text-scale)); text-align: center; white-space: nowrap; color: var(--text); background: transparent; border: 1px solid var(--border-strong); border-radius: 6px; cursor: text; }
+.hours-stepper .hs-value.static { border-style: dashed; color: var(--text-muted); cursor: default; }
+.hours-stepper .hs-value:disabled { cursor: default; opacity: 0.8; }
+.hours-stepper .hs-input { width: 5.5ch; padding: 0 6px; font: inherit; font-size: var(--fs-2); line-height: calc(20px * var(--text-scale)); text-align: center; color: var(--text); background: var(--surface); border: 1px solid var(--accent, var(--text-muted)); border-radius: 6px; }
+.planweek .pw-row > .hours-stepper .hs-step { opacity: 0; transition: opacity 0.1s; }
+.planweek .pw-row:hover > .hours-stepper .hs-step, .planweek .pw-row:focus-within > .hours-stepper .hs-step { opacity: 1; }
+.size-chip { white-space: nowrap; }
+.size-chip.unsized { color: var(--text-muted); border-style: dashed; font-weight: 400; }
+.over-word { color: var(--watch); font-weight: 500; }
+.dp-estimate { display: flex; align-items: center; gap: 10px; }

@@ -4,7 +4,7 @@
 // Plan the week.
 import type { WeekLoadData } from "../actions/types.ts";
 import { borrowedForWeek, weekBudget } from "../plan/weekplan.ts";
-import { blocksLeft, onTrack, pickDoneFrom, weekList } from "../plan/weeklist.ts";
+import { freeLeft, onTrack, pickDoneFrom, weekList } from "../plan/weeklist.ts";
 import type { IsoDate } from "../week/types.ts";
 
 
@@ -19,7 +19,7 @@ export function weekMusts(data: WeekLoadData, weekStart: IsoDate, now: string | 
     .filter((p) => p.musts > 0 || p.nice > 0)
     .map((p) => {
       const fit = fits.find((f) => f.clientKey === p.clientKey);
-      return { ...p, name: names.get(p.clientKey) ?? p.clientKey, track: now && fit ? onTrack(p, blocksLeft(fit.blocks, now)) : null };
+      return { ...p, name: names.get(p.clientKey) ?? p.clientKey, track: now && fit ? onTrack(p, freeLeft(fit.blocks, now)) : null };
     });
   return { items: list.items, rows };
 }

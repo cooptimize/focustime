@@ -1,18 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import { blocksStep, weekItemMenu, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
+import { estimateStep, weekItemMenu, type WeekItemFacts, type WeekItemOps } from "./menu.ts";
 
 const facts = (over: Partial<WeekItemFacts> = {}): WeekItemFacts => ({
-  itemId: 10, title: "Order history export", tier: "must", level: "feature", first: false, last: false, past: false, done: null, blocks: 2,
+  itemId: 10, title: "Order history export", tier: "must", level: "feature", first: false, last: false, past: false, done: null, minutes: 8 * 60,
   places: [{ date: "2026-11-02", half: "PM", label: "Mon PM" }, { date: "2026-11-04", half: "AM", label: "Wed AM" }], pinned: [{ date: "2026-11-04", half: "AM" }],
   openStories: 2, targetDate: null, drafts: 0, canWrite: true, ...over,
 });
-const ops = (): WeekItemOps & Record<string, ReturnType<typeof vi.fn>> => ({ move: vi.fn(), tier: vi.fn(), pin: vi.fn(), blocks: vi.fn(), done: vi.fn(), help: vi.fn(), targetDate: vi.fn(), brief: vi.fn(), createDrafts: vi.fn(), enableWrites: vi.fn(), remove: vi.fn() }) as never;
+const ops = (): WeekItemOps & Record<string, ReturnType<typeof vi.fn>> => ({ move: vi.fn(), tier: vi.fn(), pin: vi.fn(), hours: vi.fn(), done: vi.fn(), help: vi.fn(), targetDate: vi.fn(), brief: vi.fn(), createDrafts: vi.fn(), enableWrites: vi.fn(), remove: vi.fn() }) as never;
 const items = (s: ReturnType<typeof weekItemMenu>) => ("items" in s ? s.items : []);
 const item = (s: ReturnType<typeof weekItemMenu>, id: string) => items(s).find((i) => i.id === id)!;
 
 describe("weekItemMenu (Plan the week row ⋯, D267)", () => {
   it("holds every action that left the row, in order", () => {
-    expect(items(weekItemMenu(facts(), ops())).map((i) => i.id)).toEqual(["up", "down", "tier", "blocks", "pin", "done", "help", "target", "brief", "remove"]);
+    expect(items(weekItemMenu(facts(), ops())).map((i) => i.id)).toEqual(["up", "down", "tier", "estimate", "pin", "done", "help", "target", "brief", "remove"]);
     expect(items(weekItemMenu(facts({ level: "story" }), ops())).map((i) => i.id)).not.toContain("brief");
     expect(items(weekItemMenu(facts({ drafts: 3 }), ops())).find((i) => i.id === "create")?.label).toBe("Create 3 drafts in DevOps");
   });
@@ -43,30 +43,35 @@ describe("weekItemMenu (Plan the week row ⋯, D267)", () => {
     pins[1]!.run!();
     expect(o.pin.mock.calls).toEqual([["2026-11-02", "PM", true], ["2026-11-04", "AM", false]]);
   });
-  it("sets half blocks, ½ to 10 (E1; was whole blocks in step 16.4)", () => {
+  it("sets the estimate in whole hours, 1 to 80 (E2; was half blocks in E1)", () => {
     const o = ops();
-    const step = blocksStep(facts(), o);
-    const list = "items" in step ? step.items : [];
-    expect(list.find((i) => i.checked)?.label).toBe("2 blocks");
-    expect(list.slice(0, 4).map((i) => i.label)).toEqual(["½ block", "1 block", "1½ blocks", "2 blocks"]);
-    expect(list.every((i) => /^\d*½? blocks?$/.test(i.label))).toBe(true);
-    list.find((i) => i.label === "1½ blocks")!.run!();
-    expect(o.blocks).toHaveBeenCalledWith(1.5);
+    expect(item(weekItemMenu(facts(), o), "estimate").hint).toBe("about 8h");
+    const step = estimateStep(facts(), o);
+    if (!("submit" in step)) throw new Error("a prompt");
+    expect(step.value).toBe("8");
+    void step.submit("6h");
+    void step.submit("1.5");
+    void step.submit("81");
+    expect(o.hours.mock.calls).toEqual([[6]]);
   });
   it("a feature whose load comes from its stories has no estimate to set", () => {
     const m = weekItemMenu({ ...facts(), derived: true }, ops());
-    const blocks = ("items" in m ? m.items : []).find((i) => i.id === "blocks");
-    expect(blocks?.disabled).toMatch(/From its stories/);
+    const est = ("items" in m ? m.items : []).find((i) => i.id === "estimate");
+    expect(est?.disabled).toMatch(/From its stories/);
+    expect(est?.hint).toBe("8h");
   });
-  it("a story has a size, not blocks; nested under its feature it takes the feature's tier", () => {
+  it("a story has a size, not an estimate; nested under its feature it takes the feature's tier", () => {
     const o = { ...ops(), size: vi.fn() };
     const m = weekItemMenu(facts({ level: "story", size: "S", nested: true }), o);
     expect(items(m).map((i) => i.id)).toContain("size");
-    expect(items(m).map((i) => i.id)).not.toContain("blocks");
+    expect(items(m).map((i) => i.id)).not.toContain("estimate");
     expect(item(m, "tier").disabled).toBe("Stories take their feature's tier");
     const step = item(m, "size").next!();
     const list = "items" in step ? step.items : [];
-    expect(list.find((i) => i.checked)?.label).toBe("S · about an hour");
+    expect(list.find((i) => i.checked)?.label).toBe("S · 1h");
+    expect(list.map((i) => i.label)).toEqual(["S · 1h", "M · 2h", "L · 4h", "Clear"]);
+    list.find((i) => i.id === "sclear")!.run!();
+    expect(o.size).toHaveBeenCalledWith(null);
     list.find((i) => i.id === "sL")!.run!();
     expect(o.size).toHaveBeenCalledWith("L");
   });
@@ -87,7 +92,7 @@ describe("weekItemMenu (Plan the week row ⋯, D267)", () => {
   });
   it("a past week is a review: everything that changes is disabled", () => {
     const m = weekItemMenu(facts({ past: true }), ops());
-    for (const id of ["up", "down", "tier", "blocks", "pin", "done", "help", "target", "remove"]) expect(item(m, id).disabled, id).toBeTruthy();
+    for (const id of ["up", "down", "tier", "estimate", "pin", "done", "help", "target", "remove"]) expect(item(m, id).disabled, id).toBeTruthy();
     expect(item(m, "brief").disabled).toBeUndefined();
   });
 });

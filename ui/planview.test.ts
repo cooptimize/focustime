@@ -31,9 +31,9 @@ describe("a card's plan (step 6.1)", () => {
     expect(cp.collapsed).toBe(true);
   });
 
-  it("tight under 30 minutes spare, over by the excess", () => {
-    expect(fitLabel(cardPlan(plan([pick({ size: "L" })]), slot, "Adatum", ITEMS, NOW).fit!)).toBe("just fits, no time to spare"); // 210 of 210
-    expect(fitLabel(cardPlan(plan([pick({ size: "L" }), pick({ itemId: 3, size: "S" })]), slot, "Adatum", ITEMS, NOW).fit!)).toBe("too much: 1h more than the free time");
+  it("over by the excess; an unsized pick counts as 2h (E2: L is 4h)", () => {
+    expect(fitLabel(cardPlan(plan([pick({ size: "L" })]), slot, "Adatum", ITEMS, NOW).fit!)).toBe("too much: 30m more than the free time"); // 240 of 210
+    expect(cardPlan(plan([pick({ size: null }), pick({ itemId: 3, size: "S" })]), slot, "Adatum", ITEMS, NOW).fit).toEqual({ kind: "fits", spare: 30 });
   });
 
   it("an item picked here is not listed again; another client's pick with the same id is", () => {
