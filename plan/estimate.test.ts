@@ -93,6 +93,16 @@ describe("a client's week in words", () => {
     expect(budgetWords(7 * H, 7 * H + 20).over).toBe("a little over");
     expect(budgetWords(7 * H, 7 * H + 5).kind).not.toBe("over");
   });
+  it("the over amount matches the hours shown: 8h free · 10h planned is about 2h over", () => {
+    expect(budgetWords(450, 600)).toMatchObject({ free: "8h free", planned: "10h planned", over: "about 2h over" });
+    expect(overLine("Northwind", 450, 600, false)).toBe("About 2h more than Northwind's free time this week. Make one a nice to have.");
+    expect(budgetWords(450, 480).over).toBe("a little over");
+    for (let f = 0; f <= 900; f += 25)
+      for (let p = f + 15; p <= 1200; p += 35) {
+        const w = budgetWords(f, p);
+        if (w.over && w.over !== "a little over" && !w.free.startsWith("under")) expect(Number(w.planned!.match(/\d+/)![0]) - (f ? Number(w.free.match(/\d+/)![0]) : 0), `${f} ${p}`).toBe(Number(w.over.match(/\d+/)![0]));
+      }
+  });
   it("the over line names the client and the ways out; Friday only when there is one", () => {
     expect(overLine("Northwind", 7 * H, 9 * H, true)).toBe("About 2h more than Northwind's free time this week. Make one a nice to have, or borrow Friday.");
     expect(overLine("Northwind", 7 * H, 9 * H, false)).toBe("About 2h more than Northwind's free time this week. Make one a nice to have.");

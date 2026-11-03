@@ -3,7 +3,7 @@
 // through the free time from now on. Pure: the UI passes the block's free gaps, the clock and the sizes.
 import type { FreeGap } from "../week/types.ts";
 
-export type RowPick = { id: number; status: string; size: string; position: number };
+export type RowPick = { id: number; status: string; size: string | null; position: number };
 export type BlockRow<E, P> = { kind: "event"; at: number; event: E } | { kind: "pick"; at: number; pick: P };
 
 const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;

@@ -132,17 +132,17 @@ export function planMyDay(picks: readonly Pick[], blocks: Partial<Record<Half, S
 }
 
 /** What didn't fit, said plainly (D274): "2 picks didn't fit: Export spec draft (M), Delay alerts (S)." */
-export function didntFitText(picks: readonly { title: string; size: Size }[]): string {
+export function didntFitText(picks: readonly { title: string; size: Size | null }[]): string {
   if (!picks.length) return "";
-  return `${picks.length} ${picks.length === 1 ? "pick" : "picks"} didn't fit: ${picks.map((p) => `${p.title} (${p.size})`).join(", ")}.`;
+  return `${picks.length} ${picks.length === 1 ? "pick" : "picks"} didn't fit: ${picks.map((p) => `${p.title} (${p.size ?? "not sized, 2h"})`).join(", ")}.`;
 }
 
-/** One size smaller, for "Make smaller"; S has nothing smaller. */
-export function smallerSize(s: Size): Size | null {
-  return s === "L" ? "M" : s === "M" ? "S" : null;
+/** One size smaller, for "Make smaller"; S has nothing smaller. An unsized pick counts as M, so S. */
+export function smallerSize(s: Size | null): Size | null {
+  return s === "L" ? "M" : s === "M" || s === null ? "S" : null;
 }
 
-export type DidntFit = { pickId: number; title: string; size: Size };
+export type DidntFit = { pickId: number; title: string; size: Size | null };
 
 /**
  * After Timebox my day runs (D274): the "no time yet" offer is cleared, a summary names what didn't fit,

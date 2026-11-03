@@ -61,22 +61,22 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   await run("vm.choose", { vmId: DEMO_VM_ID });
   await run("week.load", { weekStart });
   await run("weekplan.load", { weekStart });
-  // E2: a feature's load comes from its stories on the list once one is sized (Harbor's L and S: 5h; Northwind 1110's
+  // E2: a feature's load comes from its stories on the list once one is sized (Harbor's S and S: 2h; Northwind 1110's
   // L and an unsized one: 4h + 2h), else its estimate in hours (Northwind 1120: 4h, none set); stories S, M, L or not
-  // sized yet.
+  // sized yet. Northwind needs about 2h more than its free time (the amber line); the others fit.
   const list: [string, number, "must" | "nice", { hours?: number; size?: "S" | "M" | "L" }][] = [
     ["Cooptimize", 4410, "must", { hours: 4 }],
-    ["Cooptimize", 4411, "must", { size: "M" }],
-    ["Cooptimize", 4412, "must", { size: "M" }],
+    ["Cooptimize", 4411, "must", { size: "S" }],
+    ["Cooptimize", 4412, "must", { size: "S" }],
     ["Northwind", 1110, "must", { hours: 8 }],
     ["Northwind", 1111, "must", { size: "L" }],
     ["Northwind", 1112, "must", {}],
     ["Northwind", 1120, "must", {}],
     ["Northwind", 1130, "nice", { size: "M" }],
     ["Harbor", 2210, "must", { hours: 4 }],
-    ["Harbor", 2211, "must", { size: "L" }],
+    ["Harbor", 2211, "must", { size: "S" }],
     ["Harbor", 2212, "must", { size: "S" }],
-    ["Atlas", 3311, "must", { size: "L" }],
+    ["Atlas", 3311, "must", { size: "S" }],
     ["Atlas", 3330, "nice", { size: "S" }],
   ];
   for (const [clientKey, itemId, tier, est] of list) await run("weekplan.add", { weekStart, clientKey, itemId, tier, ...est });

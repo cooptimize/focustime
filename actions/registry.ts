@@ -58,7 +58,7 @@ export const ACTIONS = [
   { name: "vm.log", title: "Show the Azure write log", group: "My VM", target: "none", summary: "Every start, stop and auto-shutdown change: when, the result and what it was before" },
   { name: "auth.connect_google", title: "Connect Google Calendar", group: "Sources", target: "none", summary: "Sign in to Google in your browser (read-only calendar)" },
   { name: "auth.disconnect", title: "Disconnect a calendar", group: "Sources", target: "calendar", summary: "Forget a calendar sign-in and its cached events" },
-  { name: "roadmap.ahead", title: "Plan ahead", group: "Work items", target: "none", summary: "The next 12 weeks on a timeline: half blocks per week for weeks 1 to 4, and how crowded each month after looks" },
+  { name: "roadmap.ahead", title: "Plan ahead", group: "Work items", target: "none", summary: "The next 12 weeks on a timeline: hours per feature per week for weeks 1 to 4, and how crowded each month after looks" },
   { name: "roadmap.set_dates", title: "Move a bar on the timeline", group: "Work items", target: "item", summary: "Keep a feature's dragged dates locally until you save them to DevOps" },
   { name: "roadmap.load", title: "Roadmap", group: "Work items", target: "none", shortcut: "3", summary: "Features and epics you own: stories done and open, who's on them, and whether they're on track for the target date" },
   { name: "weekplan.load", title: "Plan the week", group: "Plan the week", target: "week", shortcut: "W", summary: "Each client's week: musts and nice to haves from DevOps (next week by default); a past week is a review" },

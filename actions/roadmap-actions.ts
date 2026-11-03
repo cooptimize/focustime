@@ -15,7 +15,7 @@ import type { PortfolioItem, Week } from "../week/types.ts";
 import { aheadColumns, aheadWeeks, pastWeeks, PLAN_WEEKS } from "../plan/ahead.ts";
 import { AHEAD_SEEN_MARK, directionOccasion, lookAheadOccasion } from "../plan/rituals.ts";
 import { borrowedForWeek, weekBudget } from "../plan/weekplan.ts";
-import { estimate } from "../plan/estimate.ts";
+import { estimate, loadText } from "../plan/estimate.ts";
 import type { AheadState } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -181,7 +181,7 @@ async function aheadAction(ctx: RoadmapContext, input: unknown): Promise<ActionR
     }
     // Each feature's load that week: from its stories on that week's list once one is sized, else its estimate (E2).
     const est = estimate(items.map((f) => ({ ...f, level: f.level ?? "feature", tier: f.tier ?? "must" })));
-    for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, minutes: env.minutes, derived: env.derived, unsized: env.unsized, tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length });
+    for (const env of est.envelopes) cells.push({ clientKey: env.feature.clientKey, itemId: env.feature.itemId, weekStart: w, minutes: env.minutes, derived: env.derived, unsized: env.unsized, exact: !loadText(env).startsWith("about"), tier: env.feature.tier, weekItemId: env.feature.id, stories: env.stories.length });
   }
   // Weeks 5 to 12: free time per month column (patterns and PTO; meetings aren't known that far ahead).
   for (const col of columns) {

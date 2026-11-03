@@ -407,9 +407,10 @@ export type AheadState = {
   }[];
   /**
    * Each feature's load per week in weeks 1 to 4, in minutes, from the week plans (what Plan the week shows). derived:
-   * from its stories on that week's list (one sized), so the cell can't be set by hand; unsized: most aren't sized.
+   * from its stories on that week's list (one sized), so the cell can't be set by hand; unsized: most aren't sized;
+   * exact: every story under it is sized (its hours read "6h", else "about 6h").
    */
-  cells: { clientKey: string; itemId: number; weekStart: string; minutes: number; derived: boolean; unsized: boolean; tier: "must" | "nice"; weekItemId: number; stories: number }[];
+  cells: { clientKey: string; itemId: number; weekStart: string; minutes: number; derived: boolean; unsized: boolean; exact: boolean; tier: "must" | "nice"; weekItemId: number; stories: number }[];
   /** Dates dragged on the timeline, not saved to DevOps yet, per "<client>:<id>". */
   dates: Record<string, { start: string; end: string }>;
   /**

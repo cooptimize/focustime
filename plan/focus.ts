@@ -10,10 +10,10 @@ export function liveFocused(pickId: number, logged: Readonly<Record<number, numb
   return base + Math.max(0, Math.floor((nowMs - Temporal.Instant.from(timer.runningSince).epochMilliseconds) / 1000));
 }
 
-/** "45m of M"; null under a minute, so untouched picks show just their size. */
-export function focusLabel(seconds: number, size: Size): string | null {
+/** "45m of M" ("45m of 2h" when unsized); null under a minute, so untouched picks show just their size. */
+export function focusLabel(seconds: number, size: Size | null): string | null {
   const minutes = Math.floor(seconds / 60);
-  return minutes < 1 ? null : `${formatDuration(minutes)} of ${size}`;
+  return minutes < 1 ? null : `${formatDuration(minutes)} of ${size ?? "2h"}`;
 }
 
 /** A day's focused minutes (every pick, dropped too: the time was spent) and planned minutes (picks not dropped). */

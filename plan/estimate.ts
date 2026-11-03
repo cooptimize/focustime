@@ -151,8 +151,16 @@ export const progressWords = (env: Pick<Envelope<Pick<EstItem, "size">>, "minute
 export const OVER_GRACE_MINUTES = 10;
 /** Planned past free time by more than the grace. */
 export const isOver = (plannedMinutes: number, freeMinutes: number) => plannedMinutes - freeMinutes > OVER_GRACE_MINUTES;
-/** "about 2h over", or "a little over" under 45 minutes. */
-export const overText = (by: number) => (by < 45 ? "a little over" : `about ${hoursText(by)} over`);
+/**
+ * Hours over, as the words beside it show them: the rounded planned hours less the rounded free hours, so "8h free ·
+ * 10h planned" is "about 2h over", never 3h. Under an hour that way (but over the grace) is "a little over".
+ */
+export const overHours = (plannedMinutes: number, freeMinutes: number) => Math.round(Math.max(0, plannedMinutes) / 60) - Math.round(Math.max(0, freeMinutes) / 60);
+/** "about 2h over", or "a little over". */
+export const overText = (plannedMinutes: number, freeMinutes: number) => {
+  const h = overHours(plannedMinutes, freeMinutes);
+  return h < 1 ? "a little over" : `about ${h}h over`;
+};
 
 /**
  * A client's week in words (Plan the week's line and header, Plan ahead): "7h free" and "9h planned", with the amber
@@ -162,7 +170,7 @@ export function budgetWords(freeMin: number, plannedMin: number): { kind: "none"
   const free = freeMin > 0 ? `${hoursText(freeMin)} free` : "No focus time this week";
   const planned = plannedMin > 0 ? `${hoursText(plannedMin)} planned` : null;
   const text = [free, planned].filter(Boolean).join(" · ");
-  if (isOver(plannedMin, freeMin)) return { kind: "over", free, planned, over: overText(plannedMin - freeMin), text };
+  if (isOver(plannedMin, freeMin)) return { kind: "over", free, planned, over: overText(plannedMin, freeMin), text };
   if (!plannedMin) return { kind: "none", free, planned, over: null, text };
   return { kind: freeMin - plannedMin < 30 ? "all" : "free", free, planned, over: null, text };
 }
@@ -173,8 +181,8 @@ export function budgetWords(freeMin: number, plannedMin: number): { kind: "none"
  */
 export function overLine(clientName: string, freeMin: number, plannedMin: number, friday: boolean): string | null {
   if (!isOver(plannedMin, freeMin)) return null;
-  const by = plannedMin - freeMin;
-  const amount = by < 45 ? "A little more" : `About ${hoursText(by)} more`;
+  const h = overHours(plannedMin, freeMin);
+  const amount = h < 1 ? "A little more" : `About ${h}h more`;
   return `${amount} than ${clientName}'s free time this week. Make one a nice to have${friday ? ", or borrow Friday" : ""}.`;
 }
 
