@@ -2,20 +2,11 @@
 
 October 31, 2026. Status: proposed, not authorized. Reads with Discovery Brief v0.3 and Build Plan v0.3.
 
-## 0. Machine inventory (collected Oct 31, read-only)
+## 0. Machine inventory
 
-| Item | Finding | Implication |
-|---|---|---|
-| OS / desktop | Omarchy 4.0.6, Hyprland 0.56.2 (Lua config), Quickshell 0.3.2 | Shell plugins possible later; not for main app |
-| Hardware | 20 threads, 31 GB RAM, Intel UHD (Raptor Lake), 441 GB free | No resource constraints; Intel GPU avoids most WebKitGTK/NVIDIA issues |
-| Display | One 3840x1080 ultrawide at 119 Hz, scale 1 (seen at 1920x1080 on Oct 31) | Wide and short by default; since step 4.5 the view also adapts to medium and narrow windows (D69) |
-| Runtimes | Node 26.12 (via mise), npm 11, Deno 2.9, Python 3.14. No Rust, Bun or pnpm | Option A needs nothing new at the system level; Option B would require installing Rust |
-| Browser | Chromium 155, default `omarchy-browser.desktop` | App-window approach and Playwright inspection both available |
-| Secrets | Secret Service on the session bus, `secret-tool` present; gnome-keyring and kwallet both installed | Keyring works; which daemon owns Secret Service still to confirm (not blocking) |
-| Storage | sqlite 3.54 | Fine for Milestone 3 |
-| Remote | Remmina 1.4.43, FreeRDP 3, 4 saved profiles (gvnc plugin warning, harmless for RDP) | Ready for the launch/resume slice later |
-| Cloud CLI | Azure CLI not installed | Schema check uses the browser instead (see open questions) |
-| Audio | Shure MV7 is the default input | Good basis for voice capture later |
+The first slice was built on one Linux developer machine (Node 26 through mise, Chromium, SQLite, a Secret Service
+keyring). Since A1 that machine is only the developer loop (`system/README.md`); FocusTime itself is a hosted web app,
+and its environment is in `docs/azure/A0-inventory.md`. The original inventory is in the git history of this file.
 
 ## 0b. Dataverse mapping (read from schema metadata, Oct 31; no rows read)
 
@@ -38,7 +29,7 @@ There is no Friday column. Cooptimize works a four-day week, Mon–Thu (confirme
 
 Expansion rule (confirmed): for each active row overlapping the week, for each weekday Mon–Thu between start and end date, emit an AM block, a PM block, or both (All Day) for that client and person. **A blank end date means ongoing** (25 of 49 active rows, Oct 31).
 
-**Person and client (corrected Oct 31):** the Account Worker link is the reliable source for both. `coop_systemuser` is filled on only 13 of 49 active rows and Focus Time's own `coop_account` on only 2 of 25 ongoing rows, while all 25 ongoing rows have an Account Worker with a user and an account. Person = `coop_AccountWorker/coop_user`, client = `coop_AccountWorker/coop_account`, each falling back to the Focus Time column. Tanner has 4 ongoing patterns (verified Oct 31). The app identifies Tanner by his `systemuserid` (resolved once at setup from his Entra object ID via `systemuser.azureactivedirectoryobjectid`, stored in config), never by name matching. The name match in the test script was a one-off shortcut.
+**Person and client (corrected Oct 31):** the Account Worker link is the reliable source for both. `coop_systemuser` is filled on only 13 of 49 active rows and Focus Time's own `coop_account` on only 2 of 25 ongoing rows, while all 25 ongoing rows have an Account Worker with a user and an account. Person = `coop_AccountWorker/coop_user`, client = `coop_AccountWorker/coop_account`, each falling back to the Focus Time column. The first user had 4 ongoing patterns (verified Oct 31). The app identifies the user by their `systemuserid` (resolved once at setup from their Entra object ID via `systemuser.azureactivedirectoryobjectid`, stored in their settings), never by name matching. The name match in the test script was a one-off shortcut.
 
 **Identity isolation (found Oct 31):** the application user inherits roles from its business unit's default team ("Cooptimize": Project User, Project Common, Roadmap User), so it could read Contacts despite its own narrow role. Fix: place the application user in a child business unit (e.g. "FocusTime Integrations") whose default team has no roles; Coopilot Reader at Organization depth still reads org-wide.
 
@@ -46,7 +37,7 @@ Expansion rule (confirmed): for each active row overlapping the week, for each w
 
 **Internal (confirmed fact, open proposal):** Cooptimize exists as an account with DevOps settings, but internal focus time is usually not recorded. Decided: Mon–Thu half-days with no focus block show as "Open", meaning available for client or internal work.
 
-**Standing Internal block (being considered by Tanner):** Monday AM as default fixed Internal (Cooptimize) focus time. Implemented as a config setting `standing_blocks = [{ day = "Mon", half = "AM", client = "Internal" }]`, labeled as coming from FocusTime config rather than Dataverse. If Dataverse has a client block in the same half-day, the client block shows and the slot is flagged "double-booked" so the conflict is visible. Recording internal focus time in Dataverse is a possible team practice change, not part of this slice.
+**Standing blocks (per user, none by default since A1):** for example Monday AM as fixed Internal (Cooptimize) focus time. Implemented as a setting `standing_blocks = [{ day = "Mon", half = "AM", client = "Internal" }]`, labeled as coming from FocusTime config rather than Dataverse. If Dataverse has a client block in the same half-day, the client block shows and the slot is flagged "double-booked" so the conflict is visible. Recording internal focus time in Dataverse is a possible team practice change, not part of this slice.
 
 **Client and DevOps config** = `account`: `name`, `coop_reportingnickname` (likely short name for UI), `coop_devopsorg`, `coop_devopsprojectid`, `coop_devopsprojectname`, `coop_devopsteam`, `coop_devopstoken` (PAT). Also present but out of scope: Teams IDs, invoice fields.
 
@@ -56,7 +47,7 @@ Expansion rule (confirmed): for each active row overlapping the week, for each w
 
 ## 1. User story
 
-On Monday morning I open FocusTime and see this week as a grid of half-days. Each half-day shows my focus block (client or Internal, colored), my Outlook meetings and my personal Gmail events layered on top. Half-days at risk are highlighted with a plain reason, such as "3h 15m of meetings inside the Woodard & Curran block". I can see where each item came from and when it was fetched. If Google sign-in has expired, the rest of the week still shows, with a clear "Reconnect Google" path.
+On Monday morning I open FocusTime and see this week as a grid of half-days. Each half-day shows my focus block (client or Internal, colored), my Outlook meetings and my personal Gmail events layered on top. Half-days at risk are highlighted with a plain reason, such as "3h 15m of meetings inside the Tailspin & Wingtip block". I can see where each item came from and when it was fetched. If Google sign-in has expired, the rest of the week still shows, with a clear "Reconnect Google" path.
 
 ## 2. Non-goals for this slice
 
@@ -64,9 +55,9 @@ On Monday morning I open FocusTime and see this week as a grid of half-days. Eac
 - No AI provider calls. The whole slice works without AI.
 - ~~No DevOps reads and no PAT access.~~ Superseded by step 4 (Oct 31): read-only DevOps work items assigned to me, PATs read per fetch (D59–D66). Still no DevOps writes.
 - No writes to Dataverse, Outlook, Google or anywhere else.
-- No teammate focus blocks on screen (fetch only Tanner's rows).
-- No Remmina, Azure VM, Teams or Coop integration.
-- No Hyprland keybinding or shell plugin. ~~No autostart.~~ Step 5 adds a systemd user service and an XDG autostart entry, with no Hyprland config change (D79).
+- No teammate focus blocks on screen (fetch only the user's rows).
+- No remote desktop, Azure VM, Teams or Coop integration.
+- No desktop key binding or shell plugin. ~~No autostart.~~ Step 5 adds a systemd user service and an XDG autostart entry (D79); since A1 these are the developer loop only.
 
 ## 3. Architecture map
 
@@ -131,11 +122,11 @@ Inputs validated (zod or equivalent). Unknown action names rejected. These are t
 
 ## 6. Half-day and risk rules (deterministic)
 
-**Half-days are units of commitment, not fixed clock windows (confirmed).** Tanner's real day: start around 9:00 after preschool drop-off, sometimes a break when school lets out around 3:30, then either resume or stop, flexing into the evening, another day or Friday.
+**Half-days are units of commitment, not fixed clock windows (confirmed).** A real day: start around 9:00, sometimes a break mid-afternoon, then either resume or stop, flexing into the evening, another day or Friday.
 
 So the slice uses a soft "day shape" in config only to place meetings and events into AM or PM and to estimate capacity: default start 09:00, AM/PM split 12:30, usual end 17:00, America/New_York. Events outside that shape (evenings) are shown, not hidden. Risk is about how much of a half-day's usable time is consumed, not about exact hours.
 
-**Borrowed time (confirmed problem, proposal for Milestone 3):** Tanner sometimes makes up a slipped block in the evening or later in the week, outside focus time, and that borrowing can pile up unnoticed. Proposal: when a block slips, the recap or triage records it as borrowed time with a planned repayment (evening, another day, Friday). The week view shows the running total so overcommitment is visible early. Not part of Milestones 1–2.
+**Borrowed time (confirmed problem, proposal for Milestone 3):** A consultant sometimes makes up a slipped block in the evening or later in the week, outside focus time, and that borrowing can pile up unnoticed. Proposal: when a block slips, the recap or triage records it as borrowed time with a planned repayment (evening, another day, Friday). The week view shows the running total so overcommitment is visible early. Not part of Milestones 1–2.
 
 Proposed v1 rules, thresholds in config:
 
@@ -150,7 +141,7 @@ Events marked free are ignored. Declined Outlook events are excluded. Rules are 
 
 | Data | Where it lives | Notes |
 |---|---|---|
-| Dataverse focus blocks (Tanner's rows only) | Memory + cache file | Cache holds only normalized fields |
+| Dataverse focus blocks (the user's rows only) | Memory + cache file | Cache holds only normalized fields |
 | Outlook events | Memory + cache | Subject, times, showAs, response status. No bodies, no attendee lists in this slice |
 | Google events | Memory + cache | Title, times, all-day flag |
 | Tenant ID, client IDs, environment URL, table/column names, half-day hours, colors | `~/.config/focustime/config.toml` | Not secret, but not committed to a public repo |
@@ -163,15 +154,15 @@ Never logged: tokens, secrets, Authorization headers, raw HTTP bodies. Logs reco
 
 If a local HTTP server is used: bind 127.0.0.1 only, check `Host` and `Origin`, require a per-launch random token for every request.
 
-## 8. Auth approach (proposed decision D21, needs Tanner's agreement)
+## 8. Auth approach (proposed decision D21, agreed)
 
-- **Dataverse:** dedicated app registration + Dataverse application user with a custom security role granting **read on the focus block table only** (and the client table if needed for names/colors). Certificate credential stored in keyring. This keeps FocusTime from inheriting Tanner's admin rights.
-- **Outlook (Graph):** dedicated public-client app registration, **delegated** sign-in as Tanner, scope `Calendars.ReadBasic` (Microsoft lists it as least privileged for calendarView). Application permissions would cover every mailbox in the tenant unless separately restricted in Exchange, so delegated is the tighter choice for one person's calendar.
-- **Google:** desktop OAuth client, loopback redirect with PKCE, scope `calendar.events.readonly` (or `calendar.events.owned.readonly` if only Tanner-owned calendars matter). Note for setup: Google OAuth apps left in "Testing" status issue refresh tokens that expire after about a week; confirm current behavior when setting up and decide whether to publish the app for internal personal use.
+- **Dataverse:** dedicated app registration + Dataverse application user with a custom security role granting **read on the focus block table only** (and the client table if needed for names/colors). Certificate credential stored in keyring. This keeps FocusTime from inheriting the user's admin rights.
+- **Outlook (Graph):** dedicated public-client app registration, **delegated** sign-in as the user, scope `Calendars.ReadBasic` (Microsoft lists it as least privileged for calendarView). Application permissions would cover every mailbox in the tenant unless separately restricted in Exchange, so delegated is the tighter choice for one person's calendar.
+- **Google:** desktop OAuth client, loopback redirect with PKCE, scope `calendar.events.readonly` (or `calendar.events.owned.readonly` if only the user's own calendars matter). Note for setup: Google OAuth apps left in "Testing" status issue refresh tokens that expire after about a week; confirm current behavior when setting up and decide whether to publish the app for internal personal use.
 
 ## 9. Failure states (each visible in the source status bar)
 
-| Situation | What Tanner sees | Recovery |
+| Situation | What the user sees | Recovery |
 |---|---|---|
 | Google refresh token expired/revoked | Google events greyed out, "Google needs reconnecting", last cached time | Reconnect button runs `auth.connect_google` |
 | Microsoft sign-in needed | Same pattern for Outlook | `auth.connect_microsoft` |
@@ -189,11 +180,11 @@ Created by the slice (after authorization):
 - Config: `~/.config/focustime/config.toml`
 - Cache: `~/.cache/focustime/` (safe to delete anytime)
 - Keyring entries under service name `focustime`
-- Optional: `~/.local/share/applications/focustime.desktop` (only if Tanner wants a launcher entry now)
+- Optional: `~/.local/share/applications/focustime.desktop` (a launcher entry)
 
-Not touched: Hyprland config, Omarchy config, existing browser profiles, Remmina, any existing keyring entries.
+Not touched: the desktop's own configuration, existing browser profiles, remote desktop profiles, any existing keyring entries.
 
-Outside the machine (Tanner does these in Entra/Dataverse, Claude can write the click-path):
+Outside the machine (an admin does these in Entra/Dataverse, Claude can write the click-path):
 - App registration "Coopilot Dataverse Reader" + application user + custom read-only role + column security on PAT column
 - App registration "Coopilot Desktop" (public client, delegated `Calendars.ReadBasic`)
 - Google Cloud project with Calendar API enabled and a desktop OAuth client
@@ -210,16 +201,16 @@ Rollback: stop the app, run `auth.disconnect` for each source (or delete `focust
 
 ## 13. Stack options (inventory done: A recommended)
 
-**A. Local TypeScript app in an Omarchy web-app window (recommended for the first slice).** Runs on the existing mise-managed Node 26 and Chromium 155 with no system-level installs.
-A small Node or Bun backend on 127.0.0.1 serves a React UI, opened as an app-style Chromium window (the same pattern Omarchy uses for web apps).
+**A. Local TypeScript app in a browser app window (recommended for the first slice).** Runs on the existing Node 26 and Chromium with no system-level installs.
+A small Node or Bun backend on 127.0.0.1 serves a React UI, opened as an app-style Chromium window.
 - For: one language, fastest feedback loop, Chromium rendering, Playwright can inspect the exact UI, easy to maintain, chat panel later is just another client of the same actions.
 - Against: it's a browser window, not a "real" app; a localhost server needs the hardening in section 7; keyring access via a native Node binding.
 
 **B. Tauri 2 desktop app (Rust core, same React UI).**
 - For: native window and lifecycle, no open local port, secrets and HTTP stay in Rust, small footprint.
-- Against: two languages; WebKitGTK rendering and its Wayland/GPU quirks on Hyprland; heavier build toolchain; slower iteration while the product is still being discovered.
+- Against: two languages; WebKitGTK rendering and its Wayland/GPU quirks; heavier build toolchain; slower iteration while the product is still being discovered.
 
-Both keep the same `actions/`, `week/` and UI, so moving from A to B later means replacing the thin host layer. An Omarchy 4 shell plugin (QML) is a good later candidate for a quick-capture hotkey, but not for the main app, since it runs inside the long-lived desktop shell process.
+Both keep the same `actions/`, `week/` and UI, so moving from A to B later means replacing the thin host layer. A desktop shell plugin was a later candidate for a quick-capture hotkey; the hosted app (A1) makes it moot.
 
 ## 14. Acceptance steps
 
@@ -231,7 +222,7 @@ Both keep the same `actions/`, `week/` and UI, so moving from A to B later means
 6. Week grid is fully usable by keyboard: arrow keys move between half-days, Enter opens details, `t` jumps to today, `[` and `]` change week.
 7. Grep of logs and cache after a full run finds no token, secret or Authorization header.
 8. Dataverse app user cannot read the PAT column (verified with a deliberate read attempt that must fail).
-9. Real UI inspected on Tanner's monitor layout via screenshot; no AI provider needed for any step.
+9. Real UI inspected on a wide monitor layout via screenshot; no AI provider needed for any step.
 
 ## 15. Tests that matter
 
@@ -262,7 +253,7 @@ Not blocking this slice:
 - Client color choices (defaults until chosen).
 
 Raised in step 1 (not blocking):
-- Q6. Which client is on which pattern? The sample guesses Mon AM Quiddity, Mon PM + Tue PM CSC, Tue AM Internal, Wed All Day + Thu AM Woodard & Curran. Real data replaces this in step 2.
+- Q6. Which client is on which pattern? The sample guesses Mon AM Proseware, Mon PM + Tue PM Adatum, Tue AM Internal, Wed All Day + Thu AM Tailspin & Wingtip. Real data replaces this in step 2.
 - Q7. ~~All-day and OOO Outlook events~~ Resolved in step 3 (D54): out of office puts covered half-days at risk; other all-day Outlook events are a watch only if busy.
 - Q8. ~~Personal events on Open half-days~~ Resolved in step 3 (D54): shown, never flagged.
 - Q9. The kickoff folder and zip (`coopilot-kickoff/`, `coopilot-kickoff.zip`) are still in the repo folder and git-ignored. Their docs were copied to the repo root. Delete them when you're happy.
@@ -276,11 +267,11 @@ Raised in step 3 (not blocking):
 - Q13. Ranking of double-booked block and all-day event in the single badge (D58) was my placement, not requested. Confirm or reorder.
 
 Raised in step 4 (not blocking):
-- Q14. W&C has no DevOps email on my Account Worker row, so W&C shows "DevOps identity missing". Fill in `coop_devopsemail` in Dataverse to see W&C items.
-- Q15. CSC's `coop_devopsprojectid` in Dataverse does not match the real project ID (the name works, so FocusTime uses names first). W&C and Quiddity have no project ID. Correct them in Dataverse if IDs are wanted.
+- Q14. T&W has no DevOps email on my Account Worker row, so T&W shows "DevOps identity missing". Fill in `coop_devopsemail` in Dataverse to see T&W items.
+- Q15. Adatum's `coop_devopsprojectid` in Dataverse does not match the real project ID (the name works, so FocusTime uses names first). T&W and Proseware have no project ID. Correct them in Dataverse if IDs are wanted.
 - Q16. PAT column security (D24) matters more now that FocusTime reads PATs: any identity with read on Accounts can read every client's PAT. Consider securing `coop_devopstoken` and granting the FocusTime app user read on it only.
 - Q17. Microsoft retires global PATs on December 1, 2026. Any client PAT created as a global PAT stops working then; recreate as organization-scoped PATs before that date.
-- Q18. Some client processes put Blocked states in the Removed category (Quiddity: Task "10-Blocked", User Story "07-Blocked"), so blocked items are hidden, as the metadata says. Keep that, or treat Blocked as open?
+- Q18. Some client processes put Blocked states in the Removed category (Proseware: Task "10-Blocked", User Story "07-Blocked"), so blocked items are hidden, as the metadata says. Keep that, or treat Blocked as open?
 - Q19. Cooptimize items show because the Monday AM standing block is Cooptimize. If that block is removed, Cooptimize work only shows in weeks with a Cooptimize focus block. Always include it?
 
 ## 17. Decisions proposed this round
@@ -313,10 +304,10 @@ Raised in step 4 (not blocking):
 | D58 | Done | One badge per half-day card: the most serious risk, then "+N more". Order: at risk before watch; within a level out of office, personal conflict, double-booked block, no focus window, all-day event, meetings. Double-booked and all-day event were not in the requested order; they sit where shown. The details panel lists every reason in the same order |
 | D59 | Done | The week view shows personal assigned work: DevOps work items assigned to me, open (state category not Completed or Removed), any type, no sprint filter, in each client's focus blocks. Ownership (epics and features I own, contributors' progress, target dates) is a separate future area, not this view |
 | D60 | Done | PATs: Dataverse `devopsTargets(clientKeys)` is the only query that selects `coop_devopstoken`. It runs at DevOps fetch time, only for clients with a block this week, only for accounts I am an active Account Worker on, and wraps each PAT in `Pat` at once (String, JSON and inspect show `[PAT]`). The cached focus block path never selects it. The PAT is used only to build `Authorization: Basic base64(":" + PAT)` for `https://dev.azure.com/<org>/`, with redirects not followed. Not kept between fetches |
-| D61 | Done | Identity per client = my Account Worker `coop_devopsemail`, used as `[System.AssignedTo] = '<email>'` in WIQL. Blank means "DevOps identity missing for <client>" and no call. Verified Oct 31: matches in the Cooptimize, Quiddity and CSC orgs |
+| D61 | Done | Identity per client = my Account Worker `coop_devopsemail`, used as `[System.AssignedTo] = '<email>'` in WIQL. Blank means "DevOps identity missing for <client>" and no call. Verified Oct 31: matches in the Cooptimize, Proseware and Adatum orgs |
 | D62 | Done | Open = per work item type, states whose category (from that project's `workitemtypes` metadata) is not Completed or Removed. WIQL has one clause per type, since state names differ per type ("Ready for Go-live" is Completed for Bug but Resolved for Issue in one real project). Items are re-checked after the batch |
 | D63 | Done | Board order = `typeFields.Order.referenceName` from the project's process configuration (StackRank or BacklogPriority), detected per project. No order field: sorted by last change. Unranked items go last. Type, state and order metadata are kept in memory for 1 hour |
-| D64 | Done | API: api-version 7.1. WIQL (`$top=1000`, ids only) then `workitemsbatch` (200 ids per call, documented maximum) for System.Id, Title, WorkItemType, State, Parent, ChangedDate and the order field, `errorPolicy: omit`. The item link is built as `https://dev.azure.com/<org>/<project name>/_workitems/edit/<id>`. Project paths use the project name first, then the ID: CSC's stored ID is wrong and two accounts have none (Q15) |
+| D64 | Done | API: api-version 7.1. WIQL (`$top=1000`, ids only) then `workitemsbatch` (200 ids per call, documented maximum) for System.Id, Title, WorkItemType, State, Parent, ChangedDate and the order field, `errorPolicy: omit`. The item link is built as `https://dev.azure.com/<org>/<project name>/_workitems/edit/<id>`. Project paths use the project name first, then the ID: Adatum's stored ID is wrong and two accounts have none (Q15) |
 | D65 | Done | Isolation: each client is fetched in its own try/catch and cached in its own file (`devops/<slug>-<hash>.json`, items only). Results are keyed by exact client key, the same key focus blocks use (`clientKeyOf`: nickname, else name); two accounts with one key are refused, not merged. A block shows only its own client's items; Open half-days and Friday show none. If DevOps fails as a whole, the week still loads |
 | D66 | Done | Failure messages: "DevOps PAT expired or invalid for X" (401, 203, redirect or non-JSON), "No access to DevOps project P for X" (403, 404), "DevOps organization O unreachable" (network), "DevOps identity missing for X", "DevOps not set up for X (missing ...)", "No Account Worker for X in Dataverse", "DevOps settings unavailable (Dataverse ...)". Failures fall back to the client's last good items with their time |
 | D67 | Done | Refresh: DevOps follows the step 3.5 triggers, throttled more because items do not depend on the week: a normal load (changing weeks) reuses results up to 5 minutes old; a forced refresh refetches a client at most once a minute; metadata is cached for 1 hour. That keeps a refresh to about 2 DevOps calls per client and avoids refetching on every week change |
@@ -342,14 +333,14 @@ Purpose: in about two minutes, turn today's real capacity into a short, committe
 - **Always on:** `~/.config/systemd/user/focustime.service` (from `system/focustime.service`, restart on failure) and `~/.config/autostart/focustime.desktop` (from `system/focustime-autostart.desktop`, runs `scripts/open-window.ts`).
 - **Rollback:** `systemctl --user disable --now focustime && rm ~/.config/systemd/user/focustime.service ~/.config/autostart/focustime.desktop && systemctl --user daemon-reload`. The plan store can be removed with `rm -r ~/.local/share/focustime` (export first).
 
-## 20. Step 5.5: Omarchy app, Edge profile links, polish (authorized Oct 31)
+## 20. Step 5.5: desktop app, work item links, polish (authorized Oct 31; launch path is the developer loop and browser profiles were removed in A1)
 
-- **Launch path (D85–D88):** `focustime-open` starts the service if needed, waits for it, then focuses the FocusTime window or opens it with Omarchy's web-app pattern (own Chromium data directory, class `chrome-127.0.0.1__-Default`). A window from an earlier server run is replaced. Used by the launcher entry "FocusTime", Super + Alt + C and login autostart.
+- **Launch path (D85–D88):** `focustime-open` starts the service if needed, waits for it, then focuses the FocusTime window or opens it as a web-app window (own Chromium data directory, class `chrome-127.0.0.1__-Default`). A window from an earlier server run is replaced. Used by the launcher entry "FocusTime", a key binding and login autostart.
 - **Links (D89, D90):** `link.open(clientKey, url)` checks the link is on that client's DevOps org, then starts Edge with the client's profile (`[edge]` in config) from an argument array. Unmapped clients open in the default browser with "No Edge profile set for <client>". Week cards, details, Plan the day picks and candidates all use it.
 - **Polish (D91):** the source line is gone from cards in every layout; details keep it.
 - **Recorded only:** Follow-up (D92), the AI direction (D93) and the end-of-day recap as the next step (section 18).
-- **Files installed:** `~/.local/bin/focustime-open` (link to `system/focustime-open`), `~/.local/share/applications/FocusTime.desktop`, `~/.local/share/icons/hicolor/256x256/apps/focustime.png`, one line appended to `~/.config/hypr/bindings.lua`, Exec line of `~/.config/autostart/focustime.desktop`, `[edge]` appended to `~/.config/focustime/config.toml`. Created on first open: `~/.local/share/focustime/browser` and `$XDG_RUNTIME_DIR/focustime/window-server-pid`.
-- **Rollback:** `cp ~/.config/hypr/bindings.lua.bak-step55 ~/.config/hypr/bindings.lua && hyprctl reload`; `cp ~/.config/autostart/focustime.desktop.bak-step5 ~/.config/autostart/focustime.desktop`; `rm ~/.local/bin/focustime-open ~/.local/share/applications/FocusTime.desktop ~/.local/share/icons/hicolor/256x256/apps/focustime.png`; `rm -r ~/.local/share/focustime/browser`; `cp ~/.config/focustime/config.toml.bak-step55 ~/.config/focustime/config.toml` (or delete the `[edge]` section).
+- **Files installed:** `~/.local/bin/focustime-open` (link to `system/focustime-open`), `~/.local/share/applications/FocusTime.desktop`, `~/.local/share/icons/hicolor/256x256/apps/focustime.png`, a desktop key binding, Exec line of `~/.config/autostart/focustime.desktop`, `[edge]` appended to `~/.config/focustime/config.toml`. Created on first open: `~/.local/share/focustime/browser` and `$XDG_RUNTIME_DIR/focustime/window-server-pid`.
+- **Rollback:** remove the desktop key binding; `cp ~/.config/autostart/focustime.desktop.bak-step5 ~/.config/autostart/focustime.desktop`; `rm ~/.local/bin/focustime-open ~/.local/share/applications/FocusTime.desktop ~/.local/share/icons/hicolor/256x256/apps/focustime.png`; `rm -r ~/.local/share/focustime/browser`; `cp ~/.config/focustime/config.toml.bak-step55 ~/.config/focustime/config.toml` (or delete the `[edge]` section).
 
 ## 21. Step 6: navigation, menus, Plan the day, PTO, show-as (authorized Oct 31)
 
@@ -406,7 +397,7 @@ Purpose: in about two minutes, turn today's real capacity into a short, committe
 - **Inbox (D175):** the Capture view; "N unprocessed captures" in Close out; "Captures to sort" in Plan the week readiness; drafts under features in Plan the week.
 - **Notes (D175):** per client, searchable, deletable, in the export.
 - **Contract change:** plan store migration 7 (captures, notes, nullable draft parent; D173); actions `capture.add`, `capture.load`, `capture.features`, `capture.route`, `note.delete` (D174); `POST /api/open-request` and `focustime-open --capture` (D176); follow-up kind `capture`; `week.load`, `closeout.load` and `weekplan.load` return the unsorted count; `weekplan.load` returns local drafts. Still no writes to any external system.
-- **Not done:** the global Hyprland key (D178, needs confirmation).
+- **Not done:** the global capture key (D178, needs confirmation).
 - **Rollback:** revert the commit. Migration 7 adds tables and rebuilds `draft_stories` with the same rows; the pre-migration copy `plan.db.bak-v6-<stamp>` is next to the store.
 
 ## 26. Step 10: simpler, week → day → focus, focus mode and sounds (authorized Nov 1)
@@ -416,9 +407,9 @@ Purpose: in about two minutes, turn today's real capacity into a short, committe
 - **Week → day (D185 to D187):** Plan the week grid on top with a filtering click and Place target, chips and search, readiness folded. Plan the day one block at a time, committed features first, "Break down #id" and Copy Coop brief. "This week: #id" on cards and Today. A first-run hint.
 - **Focus mode (D188):** a calm focus screen; the top-bar timer on every view; Start focus from Today, a pick and the Now strip.
 - **Focus sounds (D189 to D191):** Web Audio sounds, Settings > Focus, saved playlists, playerctl pause and resume when installed.
-- **Global capture key (D192):** Super + Alt + N.
+- **Global capture key (D192):** a desktop key binding (developer loop).
 - **Contract change:** optional `[focus]` table; `week.load` and `settings.load` return `focus` (and `week.load` returns `media`); `timer.start` takes `playlist`; new actions `media.status` and `playlist.open`; settings section `focus`. No store migration. Still no writes to any external system.
-- **Rollback:** revert the step 10 commits, rebuild and restart the service; remove `[focus]` from config.toml if it was saved; remove the Super + Alt + N lines from bindings.lua or restore `bindings.lua.bak-step10`.
+- **Rollback:** revert the step 10 commits, rebuild and restart the service; remove `[focus]` from config.toml if it was saved; remove the capture key binding.
 
 ## 27. Step 11: Plan the week by client, flexible musts, DevOps first (authorized Nov 1)
 
@@ -429,7 +420,7 @@ Principles: **DevOps first** (if it isn't in DevOps, it isn't planned yet; the h
 - **Flexible (D197):** move, swap, demote or take off in one click, no reason. Dropping a must the week was committed with offers a heads-up follow-up and nothing else. Progress is against the current list.
 - **Check-in:** "Anything shifted?" lists each client's open musts and nice to haves with one-click swaps and the on-track question.
 - **Plan the day (D202):** musts first, then nice to haves, then the rest; pinned items first on their day; "Break down #id" for a must with no stories.
-- **Tracking (D200, D201):** "CSC: 2 of 4 musts done" from DevOps state, local done marks and done picks, in Today, the Week strip, Plan the day and Plan the week; midweek "Still realistic?" question.
+- **Tracking (D200, D201):** "Adatum: 2 of 4 musts done" from DevOps state, local done marks and done picks, in Today, the Week strip, Plan the day and Plan the week; midweek "Still realistic?" question.
 - **DevOps health (D203):** top of Plan the week, folded to a count, one action each.
 - **Contract change:** store migration 8 (backup first); `WeekFeature` gains `level`, `tier`, `position` (nullable) and `doneAt`, and `blocks` may be a half; new actions (D204); `weekplan.place` pins without raising blocks; `draft.add_story` takes `parentItemId: null`; `week.load` reads list items by id; Plan the day's `weekFeatures` carry the list fields. Still no writes to any external system.
 - **Rollback:** stop the service, restore `plan.db.bak-v7-<stamp>` over `plan.db` (and remove `plan.db-wal`, `plan.db-shm`), check out the commit before step 11, rebuild and start the service.
@@ -510,7 +501,7 @@ Step 14 additive contract changes found during UI wiring: `capture.load` returns
 
 ### Step 14 live verification (Nov 1, Cooptimize org only, each write approved in chat)
 
-- Identity: write PAT saved by Tanner in Settings; `connectionData` (no api-version) answered the identity live: my name and work address, org cooptimize.
+- Identity: write PAT saved by the user in Settings; `connectionData` (no api-version) answered the identity live: my name and work address, org cooptimize.
 - Baseline #437: rev 1, New, parent #291, no children.
 - 1 create: #495 "[FocusTime test] safe to remove", User Story, New, under #437, assigned to me, area and iteration from #437. Confirmed. #437 gained only the Hierarchy-Forward link and kept rev 1 (DevOps doesn't add a parent revision; the fake does, harmless).
 - 2 comment (7.1-preview.4): confirmed, id 23514739. A comment moves the item's rev (1 to 2).
@@ -518,14 +509,14 @@ Step 14 additive contract changes found during UI wiring: `capture.load` returns
 - 4 undo state: Active → New with test rev 3, confirmed.
 - 5 undo comment: DELETE answered 204 with no body (handled as success), comment read back as deleted, confirmed. The delete moved the rev (4 to 5).
 - 6 undo create: test rev 5, State Removed plus the removal comment, confirmed. The local draft came back.
-- Final: #495 Removed at rev 6, still under #437. #437 identical to the baseline apart from the child link to #495. Nothing written to W&C, Quiddity or CSC.
+- Final: #495 Removed at rev 6, still under #437. #437 identical to the baseline apart from the child link to #495. Nothing written to T&W, Proseware or Adatum.
 
 ## 33. Step 14.5: timeboxing made obvious and editable, plus step 14 follow-ups (authorized Nov 1)
 
 No new external system or kind of write. Outlook and DevOps writes stay inside their write frameworks. Contract changes, before any code:
 
 - **Read-back retry (D255):** a write that landed but whose read-back fails on a network error waits briefly (1.5 s) and reads once more before settling Not confirmed. Shared helper `readBack(read, isNetwork, sleep)` in `actions/readback.ts`, used by every read-back in `devops-write-actions.ts` and `timebox-actions.ts` (timeboxes, my own events, help invites). `ActionContext.sleep?` (tests pass an instant one). Other errors are not retried.
-- **Expiry lines (D256, Q82):** `plan/expiry.ts` `expiringSoon(list, today, days = 14)`: each DevOps write PAT with an expiry and each app secret expiry ([secrets]) within 14 days (or past) gives one line, "W&C DevOps write access expires in 9 days. Update in Settings" ("expires today", "expired 2 days ago"). New `WeekLoadData.expiring: { key, text, days, section }[]`; Today shows them under Needs attention, each opening Settings at its section. Settings keeps its own warning.
+- **Expiry lines (D256, Q82):** `plan/expiry.ts` `expiringSoon(list, today, days = 14)`: each DevOps write PAT with an expiry and each app secret expiry ([secrets]) within 14 days (or past) gives one line, "T&W DevOps write access expires in 9 days. Update in Settings" ("expires today", "expired 2 days ago"). New `WeekLoadData.expiring: { key, text, days, section }[]`; Today shows them under Needs attention, each opening Settings at its section. Settings keeps its own warning.
 - **Parent first (D257, Q81):** a draft with no parent can't be created in DevOps (unchanged on the server). "Create in DevOps" on such a draft opens "Choose a parent": that client's open features (for a story) or epics (for a feature) from the DevOps read. Choosing calls the new local `draft.set_parent {id, parentItemId}` (checked against the loaded items: right tier, open), then the usual create preview. New local `draft.remove {id}` (refused while a planned pick uses it), with Delete on drafts in the Inbox.
 - **Q80 (D258):** keep `connectionData` as the only identity check; no Profiles API fallback (it needs another scope and host). If it can't name an identity, the PAT is refused and nothing is saved, with "DevOps didn't say who this PAT belongs to".
 - **One row per pick (D259):** `plan/picktime.ts` (pure): `pickTime(pick, timeboxes)` gives `{ state: "untimed" | "timed" | "outlook", timebox }` ("outlook" when Put on Outlook is on); `timeChoices(slot, timeboxes, pick, sizes, now)` gives the block's free gaps with the pick's own timebox treated as free, "Keep current" first for a timed pick, so it never says "no free time" because of itself; `dragTimes(mode: "move" | "start" | "end", start, end, deltaMinutes)` snaps to 15 minutes and keeps 15 minutes at least. The row shows "+ time", "9:00–11:00" or "9:00–11:00 · Outlook" (calendar icon). Clicking opens a small editor: the gap list, start, length, Put on Outlook (preview through the write framework), Remove time; its show as, conflict and Removed in Outlook choices move there. Week cards, Today and Plan the day use the same row (`ui/PickTime.tsx`). Separate timebox rows go from cards and agendas: in Plan the day a timed pick shows in the agenda at its time as its pick row; untimed picks follow. Timeboxes without a pick (from week lists) keep their own row. Timed picks stay on the wide card timelines in client color with titles; drag to move, either edge to resize, Outlook follows after a preview; a click opens the same editor.
@@ -543,7 +534,7 @@ No new external system and no new kind of external write. Goal: usable and demoa
 - **Header and Done (D265).** "Plan Monday, Nov 2", a status line ("7h of work · 6h 15m free", from `dayTotals`), ‹ › for the day, and one primary "Done". `doneAction(committedAt)`: not committed → `planday.commit` then close; committed → close only. Changes save as you go; no "Commit again", no explanatory paragraph. Heads-up rules are unchanged (they read `committedAt`, set once by the first Done). Timebox my day: in the header after Done, and offered once right after the first Done (D254 unchanged). Key C still commits; Esc closes.
 - **Fit while planning (D266, plan/fit.ts).** `planFit(picks, sizes, timeboxes, slot)`: planned and done picks (timebox minutes when timed) against the block's whole free time (`freeMinutes(slot)` with no "now"). Used by Plan the day, week cards, Today and Plan the week's client fit. Check-in alone keeps time left (`capacityMinutes(slot, now)`). `fitWords(fit)`: "Fits" (neutral) when spare is under 30 minutes or over by 10 minutes or less; "Room for about 45m more" (neutral, spare rounded down to 15 minutes) at 30 minutes or more; "About 1h over" (amber, rounded to the nearest 15 minutes, at least 15m) when over by more than 10 minutes. No red for fit anywhere. Over shows a small "trim" link: `trimCandidates(picks, over, sizes, musts)` marks the fewest planned picks (not musts first, larger first, untimed before timed) whose sizes cover the overage; those rows are highlighted. The card status (`blockStatus`) uses the same words: At risk (red, a real problem), then "About 1h over" (amber), then "Fits"/"Room for…" (neutral).
 - **Plan the week rows (D267).** A row shows: title (link), state, story count, block count (click opens a 0.5 to 5 chooser), pin (if any). Everything else moves to the row's ⋯ menu and right-click, built by `weekItemMenu(env, item, ctx)` (ui/menu.ts): Move up, Move down, Make nice to have / Make a must, Pin to…, Mark done / Not done, Needs help from…, Set target date, Copy Coop brief, Create drafts in DevOps, Take off the week. Reorder also by drag within a list. The client header uses `fitWords` on musts against the client's blocks.
-- **One context line (D268).** The Now strip, the ritual chips and the Musts strip become one line under the top bar (`ContextLine`): now / next in a few words, then the musts per client from `mustsSummary` ("Cooptimize 0/2 · W&C 0/1 · CSC 0/1"); a click opens a small popover with the details (each client's musts and blocks left). The ritual chips move into the Plan view's own header. "Still realistic?" and "too much planned" sentences leave the strips; that question stays in Check-in only. Not on Today or the focus screen (Today has its own now line).
+- **One context line (D268).** The Now strip, the ritual chips and the Musts strip become one line under the top bar (`ContextLine`): now / next in a few words, then the musts per client from `mustsSummary` ("Cooptimize 0/2 · T&W 0/1 · Adatum 0/1"); a click opens a small popover with the details (each client's musts and blocks left). The ritual chips move into the Plan view's own header. "Still realistic?" and "too much planned" sentences leave the strips; that question stays in Check-in only. Not on Today or the focus screen (Today has its own now line).
 - **Consistency (D269).** Week cards, Today and Plan the day use one pick row (`PickRow`: checkbox, title, size chip, time, ⋯). A card's "This week: <feature>" opens Plan the day on that block with the right pane filtered to that feature.
 - **Wording (D270).** `docs/design/wording.md`: plain, short, calm; red only for real problems (overdue, failures, at risk); no jargon ("slot", "carry target", "free share", "capacity"). Applied to every visible string.
 - **Bugs (D271).** The DevOps write log's When shows "Invalid Date" because the store stamps zoned times (`…-05:00[America/New_York]`), which `new Date` can't read: `whenText(stamp, tz)` (ui/labels.ts) reads them with Temporal. Wide layout: an event that spans the AM/PM boundary is drawn with its title once, in the block it starts in; the next block shows only its unlabelled continuation (`labelHere(placed, earlierIds)`). View range: the H key and the menu change the view for this session only (the UI passes `viewRange` to `week.load`, which overrides the saved range for that load); Settings > Display sets the saved default through `ui.set_view_range` (unchanged; business hours unless changed).
@@ -631,7 +622,7 @@ No new external writes and no new source. Contract changes:
 - **Step 15.4 decisions (D316).** `vm.start_now {vmId?}` (the morning box's and its notification's Start; 409 `ask_first` when the setting is off). `VmStatus.startWithoutAsking`. Config `[azure] start_without_asking` (default true), Settings > You. `auth.sign_in` may answer `{status: "failed", offline: true}`; the sign-in screen offers the demo, and Continue offline only when offline.
 - **Notifications (D317 to D321).** Config `[notify]`: one boolean per kind (`plan_day`, `checkin`, `closeout`, `plan_week`, `look_ahead`, `timer`, `meeting`, `vm`, `followups`, `expiry`), `quiet` (`outside_hours` | `off`), `quiet_pto`. Settings section `notify` (Settings > Notifications) and `vm`. New actions `notify.test`, `notify.sample {kind, live?, gated?}`. `/api/open-request` also returns a clicked notification's route. New notifications: follow-ups due, expiring secrets. Texts changed: each says what a click does.
 - **Kept:** each occasion once (the existing markers), plus a key per notification; Reset local plan doesn't touch them.
-- **Not done:** buttons on Omarchy's notification cards (the shell draws none, Q90); withdrawing sent notifications (Q91).
+- **Not done:** buttons on the developer desktop's notification cards (its shell draws none, Q90); withdrawing sent notifications (Q91).
 - **Rollback:** revert the step 15.5 commit, rebuild, restart. `[notify]` and `start_without_asking` in config.toml would then be unknown fields: remove them (the older build says so per field).
 
 ## 41. Step 16.2: navigation restructure and small cleanup (authorized Nov 2)
@@ -762,5 +753,5 @@ The identity from `assets/brand/` in the app, with no layout or domain token cha
 - **Bug:** Today › Now showed no meetings (never built, D366). Plan the day hid them behind a collapsed link.
 - **Rules (`plan/todaycal.ts`, D367):** one entry per event in time order, declined hidden, tentative and free kept with their show-as, all-day apart, the configured time zone decides the day, FocusTime's own timebox events never shown as meetings, Now and Next on today only.
 - **UI (`ui/DayCalendar.tsx`, D368):** meetings inside each block on Today, all-day row and before/after lines; Plan the day's agendas open by default with Now and Next.
-- **Launcher check:** `system/FocusTime.desktop` passes `desktop-file-validate`; Omarchy 4.0.6's launcher is the quickshell shell (`/usr/share/omarchy/shell`, `services/AppLibrary.qml`, Quickshell `DesktopEntries` over `~/.local/share/applications` and `XDG_DATA_DIRS`), hiding only NoDisplay/Hidden/OnlyShowIn entries and `default/omarchy/launcher.hides`; FocusTime is in neither. No repo change.
+- **Launcher check:** `system/FocusTime.desktop` passes `desktop-file-validate`, and the desktop's launcher lists it. No repo change.
 - **Contract change:** none (no new action, source or store change). `AgendaItem` gains an optional `showAs`.

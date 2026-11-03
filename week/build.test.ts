@@ -57,7 +57,7 @@ describe("focus blocks per half-day", () => {
       weekStart: WEEK,
       patterns: [
         pattern({ id: "a", clientKey: "adatum", clientName: "Adatum", days: { Tue: "AM" } }),
-        pattern({ id: "b", clientKey: "wc", clientName: "Tailspin & Sons", days: { Tue: "AllDay" } }),
+        pattern({ id: "b", clientKey: "tw", clientName: "Tailspin & Wingtip", days: { Tue: "AllDay" } }),
       ],
       events: [],
       config: noStanding,

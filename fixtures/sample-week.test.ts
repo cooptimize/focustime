@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { weekConfig } from "../config/defaults.ts";
+import { fourDayWeekConfig as weekConfig } from "./four-day-week.ts";
 import { buildWeek } from "../week/build.ts";
 import { SAMPLE_WEEK, sampleGoogle, sampleOutlook, samplePatterns } from "./sample-week.ts";
 
@@ -14,7 +14,7 @@ describe("sample week fixture", () => {
     const shown = slots.filter((s) => s.focus.length).map((s) => `${s.date.slice(8)} ${s.half} ${s.focus[0]!.clientName}`);
     expect(shown).toEqual([
       "02 AM Proseware", "02 PM Adatum", "03 AM Internal", "03 PM Adatum",
-      "04 AM Tailspin & Sons", "04 PM Tailspin & Sons", "05 AM Tailspin & Sons",
+      "04 AM Tailspin & Wingtip", "04 PM Tailspin & Wingtip", "05 AM Tailspin & Wingtip",
     ]);
     expect(slots.filter((s) => s.open).map((s) => `${s.date} ${s.half}`)).toEqual(["2026-11-05 PM"]);
   });

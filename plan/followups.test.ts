@@ -106,15 +106,15 @@ describe("follow-up rule: slipped work owes the client a heads-up", () => {
     expect(r2.open).toEqual([expect.objectContaining({ ruleKey: "slip:2026-11-02:Adatum:6", detail: { picks: [6], date: "2026-11-02" } })]);
   });
   it("keeps each client's draft to its own items", () => {
-    const other = pick({ id: 7, clientKey: "T&S", itemId: 7001, title: "Pump curve", status: "dropped", updatedAt: T("17:12") });
+    const other = pick({ id: 7, clientKey: "T&W", itemId: 7001, title: "Pump curve", status: "dropped", updatedAt: T("17:12") });
     const r = detectFollowUps(input({ picks: [moved, other], movedTo }));
     expect(r.open.map((l) => [l.clientKey, l.draft!.includes("Pump curve"), l.draft!.includes("Export report")])).toEqual([
       ["Adatum", false, true],
-      ["T&S", true, false],
+      ["T&W", true, false],
     ]);
   });
   it("names the slip in the draft template", () => {
-    expect(slipDraft("T&S", "2026-11-03", [pick({ itemId: 7, title: "X", status: "dropped" })], () => null)).toContain("- #7 X: off my plan for now");
+    expect(slipDraft("T&W", "2026-11-03", [pick({ itemId: 7, title: "X", status: "dropped" })], () => null)).toContain("- #7 X: off my plan for now");
   });
 });
 
@@ -157,22 +157,22 @@ describe("follow-up rule: a blocked item assigned to me", () => {
 });
 
 describe("follow-up rule: asked a client about priorities (step 8)", () => {
-  const asked = followUp({ id: 7, kind: "priorities", clientKey: "T&S", itemId: null, ruleKey: "priorities:2026-11-09:T&S", refAt: null });
+  const asked = followUp({ id: 7, kind: "priorities", clientKey: "T&W", itemId: null, ruleKey: "priorities:2026-11-09:T&W", refAt: null });
   it("closes when a fresh fetch shows open work assigned to me for that client again", () => {
-    const w = work([item({ id: 7001 })], { clientKey: "T&S" });
-    expect(detectFollowUps(input({ work: [w], followUps: [asked] })).close).toEqual([{ id: 7, note: "Work is assigned to you at T&S again" }]);
+    const w = work([item({ id: 7001 })], { clientKey: "T&W" });
+    expect(detectFollowUps(input({ work: [w], followUps: [asked] })).close).toEqual([{ id: 7, note: "Work is assigned to you at T&W again" }]);
   });
   it("stays open while nothing is assigned, or DevOps can't say", () => {
-    expect(detectFollowUps(input({ work: [work([], { clientKey: "T&S" })], followUps: [asked] })).close).toEqual([]);
-    expect(detectFollowUps(input({ work: [work([item({ id: 7001 })], { clientKey: "T&S", fromCache: true })], followUps: [asked] })).close).toEqual([]);
+    expect(detectFollowUps(input({ work: [work([], { clientKey: "T&W" })], followUps: [asked] })).close).toEqual([]);
+    expect(detectFollowUps(input({ work: [work([item({ id: 7001 })], { clientKey: "T&W", fromCache: true })], followUps: [asked] })).close).toEqual([]);
     expect(detectFollowUps(input({ work: null, followUps: [asked] })).close).toEqual([]);
   });
 });
 
 describe("watched items", () => {
   it("lists the items of open DevOps follow-ups per client, so a fetch can read them by id", () => {
-    const followUps = [followUp({}), followUp({ id: 2, kind: "blocked", itemId: 202 }), followUp({ id: 3, kind: "blocked", itemId: 303, closedAt: T("18:00") }), followUp({ id: 4, kind: "slip", itemId: null }), followUp({ id: 5, clientKey: "T&S", itemId: 7 })];
-    expect(watchedIds(followUps)).toEqual({ Adatum: [101, 202], "T&S": [7] });
+    const followUps = [followUp({}), followUp({ id: 2, kind: "blocked", itemId: 202 }), followUp({ id: 3, kind: "blocked", itemId: 303, closedAt: T("18:00") }), followUp({ id: 4, kind: "slip", itemId: null }), followUp({ id: 5, clientKey: "T&W", itemId: 7 })];
+    expect(watchedIds(followUps)).toEqual({ Adatum: [101, 202], "T&W": [7] });
   });
 });
 
@@ -209,7 +209,7 @@ describe("heads-up rule (step 13.5): only when the client would notice", () => {
   it("planned picks (reordered, resized) never open one", () => {
     expect(detectFollowUps(input({ picks: [pick({ position: 3, updatedAt: T("17:00") }), pick({ id: 2, size: "L", updatedAt: T("17:01") })] })).open).toEqual([]);
   });
-  it("lists each item once, with its latest status (the live T&S case: moved twice, re-added and dropped)", () => {
+  it("lists each item once, with its latest status (the live T&W case: moved twice, re-added and dropped)", () => {
     const fri1 = pick({ id: 9, date: "2026-11-06", half: "AM", carriedFrom: 6 });
     const fri2 = pick({ id: 11, date: "2026-11-06", half: "AM", carriedFrom: 10 });
     const picks = [
@@ -220,7 +220,7 @@ describe("heads-up rule (step 13.5): only when the client would notice", () => {
       fri2,
     ];
     const movedTo = (id: number) => (id === 6 ? fri1 : id === 10 ? fri2 : null);
-    const draft = slipDraft("T&S", "2026-11-02", picks.slice(0, 3), movedTo, picks);
+    const draft = slipDraft("T&W", "2026-11-02", picks.slice(0, 3), movedTo, picks);
     expect(draft.split("\n").filter((l) => l.startsWith("- "))).toEqual(["- #101 Export report: moving to Fri, Nov 6 (morning)"]);
     const r = detectFollowUps(input({ picks, movedTo }));
     expect(r.open[0]!.what).toBe("Heads-up to Adatum about the slip");

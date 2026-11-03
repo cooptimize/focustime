@@ -32,7 +32,7 @@ const week = buildWeek({
   unavailable: [{ id: 1, title: "Unavailable", start: "2026-11-04T14:00:00-05:00", end: "2026-11-04T15:30:00-05:00", note: null }],
   flex: [flex],
 });
-const colors = { proseware: "var(--client-violet)", adatum: "var(--client-ochre)", internal: "var(--client-slate)", wc: "var(--client-teal)" };
+const colors = { proseware: "var(--client-violet)", adatum: "var(--client-ochre)", internal: "var(--client-slate)", tw: "var(--client-teal)" };
 
 let n = 0;
 const pick = (half: Pick["half"], clientKey: string, title: string, size: Pick["size"], status: Pick["status"] = "planned"): Pick => ({
@@ -325,7 +325,7 @@ export function StyleGuide() {
           {timers.map(([label, t]) => (
             <div key={label} className="sg-strip">
               <span className="muted">{label}</span>
-              <TopTimer t={t} nowMs={Date.parse(NOW)} color="var(--accent)" client="T&S" onClick={noop} />
+              <TopTimer t={t} nowMs={Date.parse(NOW)} color="var(--accent)" client="T&W" onClick={noop} />
             </div>
           ))}
         </div>

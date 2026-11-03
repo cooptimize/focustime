@@ -21,7 +21,7 @@ const model = (over: Partial<TimeModel> = {}): TimeModel => ({
 const cfg = (m: TimeModel): WeekConfig => ({ ...config, standingBlocks: [], hours: m });
 const flex = (id: number, date: string, start: string, end: string, over: Partial<FlexSession> = {}): FlexSession => ({
   id,
-  clientKey: "wc",
+  clientKey: "tw",
   start: at(`${date}T${start}`),
   end: at(`${date}T${end}`),
   itemId: null,

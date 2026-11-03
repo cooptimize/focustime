@@ -122,7 +122,7 @@ describe("azure host: desktop-only operations", () => {
     expect(box.items.size).toBe(0);
     expect(await host.links.open("https://example.com")).toBe("client");
     expect(await host.launch.reopen()).toBe(false);
-    expect(await host.media.status()).toEqual({ playerctl: false, spotify: false });
+    expect(await host.media.status()).toEqual({ players: false, spotify: false });
     expect(host.facts()).toEqual({ kind: "azure", service: false, configPath: null });
   });
 });

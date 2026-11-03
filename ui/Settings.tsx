@@ -653,11 +653,11 @@ function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
   const f = p.data.focus;
   const [v, setV] = useState({ sound: f.sound, volume: f.volume, fadeSeconds: f.fadeSeconds, onBreak: f.onBreak, pauseMedia: f.pauseMedia, teamsStatus: f.teamsStatus, plainFocusStatus: f.plainFocusStatus });
   const [lists, setLists] = useState<Playlist[]>(f.playlists);
-  const [media, setMedia] = useState<{ playerctl: boolean; spotify: boolean } | null>(null);
+  const [media, setMedia] = useState<{ players: boolean; spotify: boolean } | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const { problems, status, save } = useSave(p.onSavedData);
   useEffect(() => {
-    call<{ playerctl: boolean; spotify: boolean }>("media.status", {}).then(setMedia, () => setMedia(null));
+    call<{ players: boolean; spotify: boolean }>("media.status", {}).then(setMedia, () => setMedia(null));
   }, []);
   const preview = async () => {
     if (v.sound === "none") return;
@@ -735,14 +735,14 @@ function FocusForm(p: Props & { data: SettingsData; onSavedData: (d: SettingsDat
           label="Pause and resume music"
           hint={
             media === null
-              ? "Checking for playerctl…"
-              : media.playerctl
-                ? "Pauses what is playing when focus ends or a break starts, and resumes it when the next focus starts. Uses playerctl (MPRIS)."
-                : "playerctl isn't installed, so FocusTime can't pause or resume music players. Install the playerctl package to use this; nothing is installed for you."
+              ? "Checking for music players…"
+              : media.players
+                ? "Pauses what is playing when focus ends or a break starts, and resumes it when the next focus starts."
+                : "FocusTime can't pause or resume music players here. Nothing is installed for you."
           }
         >
           <label className="set-check">
-            <input type="checkbox" checked={v.pauseMedia} disabled={media !== null && !media.playerctl && !v.pauseMedia} onChange={(e) => setV({ ...v, pauseMedia: e.target.checked })} /> Pause music when focus ends
+            <input type="checkbox" checked={v.pauseMedia} disabled={media !== null && !media.players && !v.pauseMedia} onChange={(e) => setV({ ...v, pauseMedia: e.target.checked })} /> Pause music when focus ends
           </label>
           <Problems all={problems} field="focus.pause_media" />
         </Field>

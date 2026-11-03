@@ -1,16 +1,16 @@
-# FocusTime server as a systemd user service (step 5). Install with system/install.sh, which sets WorkingDirectory to
-# wherever the repo is.
+# FocusTime server as a systemd user service, for the developer loop only (system/README.md). A template: install with
+# system/install.sh, which fills in the repo folder and the node it finds.
 [Unit]
-Description=FocusTime local week planner (127.0.0.1:5317)
+Description=FocusTime developer server (127.0.0.1:5317)
 PartOf=graphical-session.target
 After=graphical-session.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/tanner/Code/focustime
+WorkingDirectory=@REPO@
 # Build the UI so the service always serves the current code, then run the server without opening a window.
-ExecStartPre=/home/tanner/.local/share/mise/shims/node node_modules/vite/bin/vite.js build --logLevel warn
-ExecStart=/home/tanner/.local/share/mise/shims/node server/main.ts --no-open
+ExecStartPre=@NODE@ node_modules/vite/bin/vite.js build --logLevel warn
+ExecStart=@NODE@ server/main.ts --no-open
 Restart=on-failure
 RestartSec=5
 

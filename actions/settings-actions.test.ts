@@ -18,7 +18,7 @@ const SECRET = "FAKE-SETTINGS-SECRET-5d1e";
 function setup(text = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"')) {
   const dir = mkdtempSync(join(tmpdir(), "c-settings-"));
   const path = join(dir, "config.toml");
-  writeFileSync(path, `# my own note at the top\n${text.replace('"T&S" = "#1f9e8f"', '# T&S keeps its old color form\n"T&S" = "#1f9e8f"')}`);
+  writeFileSync(path, `# my own note at the top\n${text.replace('"T&W" = "#1f9e8f"', '# T&W keeps its old color form\n"T&W" = "#1f9e8f"')}`);
   const no = () => { throw new Error("n/a"); };
   const stored: { account: string; value: string }[] = [];
   const c: ActionContext = {
@@ -40,7 +40,7 @@ describe("Settings (step 6b)", () => {
     expect(r.ok).toBe(true);
     const d = (r as { data: SettingsData }).data;
     expect(d.hours?.weekdays.mon).toEqual([{ start: "09:00", end: "17:00" }]);
-    expect(d.clients.map((c) => c.key)).toContain("T&S");
+    expect(d.clients.map((c) => c.key)).toContain("T&W");
     expect(d.dataverseReached).toBe(false);
     expect(d.secrets.map((s) => [s.account, s.state])).toEqual([["dataverse-client-secret", "missing"], ["google-client-secret", "missing"]]);
   });
@@ -51,8 +51,8 @@ describe("Settings (step 6b)", () => {
     expect(r.ok).toBe(true);
     const text = readFileSync(t.path, "utf8");
     expect(text).toContain("# my own note at the top");
-    expect(text).toContain("# T&S keeps its old color form");
-    expect(text).toContain('"T&S" = "#1f9e8f"');
+    expect(text).toContain("# T&W keeps its old color form");
+    expect(text).toContain('"T&W" = "#1f9e8f"');
     expect(text).toContain('Adatum = { color = "ochre", name = "Adatum Steel", open_states = ["Resolved"] }');
     expect(text).not.toContain("[chromium]");
     const cfg = parseConfig(text);
@@ -166,7 +166,7 @@ describe("Settings > Clients follow state (step 6d)", () => {
     const by = (cs: SettingsData["clients"], k: string) => cs.find((c) => c.key === k)?.follow;
     let cs = await load();
     expect(by(cs, "Cooptimize")).toEqual({ active: true, why: "internal" });
-    expect(by(cs, "T&S")).toEqual({ active: true, why: "ongoing" });
+    expect(by(cs, "T&W")).toEqual({ active: true, why: "ongoing" });
     expect(by(cs, "HM Electronics")).toEqual({ active: false, why: "none" });
     expect((await t.run("settings.save", { section: "client", values: { key: "HM Electronics", follow: true } })).ok).toBe(true);
     expect(readFileSync(t.path, "utf8")).toMatch(/"HM Electronics" = \{[^}]*follow = true/);

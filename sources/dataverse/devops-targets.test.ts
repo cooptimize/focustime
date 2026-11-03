@@ -24,7 +24,7 @@ const leaks = (s: string) => s.includes(FAKE_PAT_Adatum) || s.includes(FAKE_PAT_
 describe("Dataverse → DevOps settings", () => {
   it("reads my active Account Worker rows, then only this week's accounts, with the PAT wrapped", async () => {
     const s = setup();
-    const r = await s.source.devopsTargets(["Adatum", "T&S"]);
+    const r = await s.source.devopsTargets(["Adatum", "T&W"]);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const adatum = r.targets.find((t) => t.clientKey === "Adatum")!;
@@ -33,20 +33,20 @@ describe("Dataverse → DevOps settings", () => {
     expect(adatum.pat).toBeInstanceOf(Pat);
     expect(adatum.pat!.basicAuth()).toBe(`Basic ${Buffer.from(`:${FAKE_PAT_Adatum}`).toString("base64")}`);
     // A blank DevOps email stays null (never guessed).
-    expect(r.targets.find((t) => t.clientKey === "T&S")).toMatchObject({ project: "WC Project", email: null });
+    expect(r.targets.find((t) => t.clientKey === "T&W")).toMatchObject({ project: "TW Project", email: null });
     // HME has an Account Worker but no block this week: not returned.
-    expect(r.targets.map((t) => t.clientKey).sort()).toEqual(["Adatum", "T&S"]);
+    expect(r.targets.map((t) => t.clientKey).sort()).toEqual(["Adatum", "T&W"]);
 
     const workers = decodeURIComponent(s.calls.find((c) => c.url.includes("coop_accountworkers"))!.url);
     expect(workers).toContain(`_coop_user_value eq ${ME} and statecode eq 0`);
     const accts = decodeURIComponent(s.calls.find((c) => c.url.includes("coop_devopstoken"))!.url);
     expect(accts).toContain(`accountid eq ${ACCT.adatum}`);
-    expect(accts).toContain("coop_reportingnickname eq 'Adatum' or name eq 'Adatum' or coop_reportingnickname eq 'T&S' or name eq 'T&S'");
+    expect(accts).toContain("coop_reportingnickname eq 'Adatum' or name eq 'Adatum' or coop_reportingnickname eq 'T&W' or name eq 'T&W'");
   });
 
   it("the PAT cannot be serialized, printed or logged from the targets", async () => {
     const s = setup();
-    const r = await s.source.devopsTargets(["Adatum", "T&S"]);
+    const r = await s.source.devopsTargets(["Adatum", "T&W"]);
     expect(leaks(JSON.stringify(r))).toBe(false);
     expect(leaks(inspect(r, { depth: 10 }))).toBe(false);
     expect(leaks(JSON.stringify(s.logs))).toBe(false);
@@ -93,7 +93,7 @@ describe("my clients for Open half-days (Q21)", () => {
     expect(mine).toEqual([
       { clientKey: "Adatum", clientName: "Adatum", devops: true, devopsEmail: "me@contoso.example" },
       { clientKey: "HM Electronics", clientName: "HM Electronics", devops: true, devopsEmail: "c.someone@hme.example" },
-      { clientKey: "T&S", clientName: "T&S", devops: true, devopsEmail: null },
+      { clientKey: "T&W", clientName: "T&W", devops: true, devopsEmail: null },
     ]);
     const urls = calls.map((c) => decodeURIComponent(c.url));
     expect(urls.some((u) => u.includes("coop_accountworkers") && u.includes(`_coop_user_value eq ${dvConfig.mySystemUserId}`))).toBe(true);

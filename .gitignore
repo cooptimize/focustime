@@ -1,8 +1,9 @@
 node_modules/
 dist/
 screenshots/
-coopilot-kickoff/
-coopilot-kickoff.zip
+# Local leftovers from earlier steps (kickoff material, footage)
+/*-kickoff/
+/*-kickoff.zip
 *.log
 
 # Local data and output: never commit (real plans, calendars and screenshots)
@@ -13,7 +14,7 @@ coopilot-kickoff.zip
 *.bak
 *.bak-*
 demo-mode
-coopilot-footage*/
+/*-footage*/
 footage/
 scratch/
 test-results/

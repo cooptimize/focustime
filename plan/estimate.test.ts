@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { blocksFor, budgetWords, estimate, fillWords, migrateBlocks, overLine, plannedBlocks, progressWords, tierOf, validWholeBlocks, type EstItem } from "./estimate.ts";
 
-const f = (itemId: number, blocks: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "W&C", itemId, level: "feature", tier: "must", blocks, ...o });
-const s = (itemId: number, size: "S" | "M" | "L", parentId: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "W&C", itemId, level: "story", tier: "must", blocks: null, size, parentId, ...o });
+const f = (itemId: number, blocks: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "T&W", itemId, level: "feature", tier: "must", blocks, ...o });
+const s = (itemId: number, size: "S" | "M" | "L", parentId: number | null, o: Partial<EstItem> = {}): EstItem => ({ clientKey: "T&W", itemId, level: "story", tier: "must", blocks: null, size, parentId, ...o });
 
 describe("two units, whole numbers", () => {
   it("blocks are whole numbers 1 to 20", () => {
@@ -55,16 +55,16 @@ describe("features as envelopes", () => {
   });
   it("nested stories never add to the client's total; loose ones do, rounded up together", () => {
     const e = estimate([f(10, 2), s(11, "L", 10), s(12, "L", 10), s(20, "M", 99), s(21, "S", null)]);
-    expect(plannedBlocks(e, "W&C", "must")).toBe(3);
-    expect(plannedBlocks(estimate([f(10, 2), s(11, "L", 10), s(12, "L", 10), s(13, "L", 10)]), "W&C", "must")).toBe(2);
+    expect(plannedBlocks(e, "T&W", "must")).toBe(3);
+    expect(plannedBlocks(estimate([f(10, 2), s(11, "L", 10), s(12, "L", 10), s(13, "L", 10)]), "T&W", "must")).toBe(2);
   });
   it("stories take their feature's tier; loose ones keep their own", () => {
     const items = [f(10, 1, { tier: "nice" }), s(11, "M", 10, { tier: "must" }), s(12, "M", null, { tier: "must" })];
     const e = estimate(items);
     expect(tierOf(e, items[1]!)).toBe("nice");
     expect(tierOf(e, items[2]!)).toBe("must");
-    expect(plannedBlocks(e, "W&C", "must")).toBe(1);
-    expect(plannedBlocks(e, "W&C", "nice")).toBe(1);
+    expect(plannedBlocks(e, "T&W", "must")).toBe(1);
+    expect(plannedBlocks(e, "T&W", "nice")).toBe(1);
   });
   it("done stories count toward their feature's progress in whole blocks", () => {
     const e = estimate([f(10, 2), s(11, "M", 10, { done: "devops" }), s(12, "M", 10, { done: "local" }), s(13, "L", 10)]).envelopes[0]!;

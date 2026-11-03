@@ -7,7 +7,7 @@ const cw = (clientKey: string, ids: number[], over: Partial<ClientWork> = {}): C
 
 describe("work shown on a block", () => {
   it("looks up only the block's own client, by exact key", () => {
-    const m = workByClient([cw("Adatum", [1, 2]), cw("T&S", [3])]);
+    const m = workByClient([cw("Adatum", [1, 2]), cw("T&W", [3])]);
     expect(m.get("Adatum")?.items.map((i) => i.id)).toEqual([1, 2]);
     expect(m.get("adatum")).toBeUndefined();
     expect(m.get("Proseware")).toBeUndefined();

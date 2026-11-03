@@ -13,8 +13,8 @@ describe("which clients FocusTime follows (step 6d)", () => {
   });
 
   it("a pattern ending today or later makes it active until that day", () => {
-    expect(followState("T&S", [p("T&S", "2026-01-05", TODAY)], opts)).toEqual({ active: true, why: "until", date: TODAY });
-    expect(followState("T&S", [p("T&S", "2026-01-05", "2026-12-31")], opts)).toEqual({ active: true, why: "until", date: "2026-12-31" });
+    expect(followState("T&W", [p("T&W", "2026-01-05", TODAY)], opts)).toEqual({ active: true, why: "until", date: TODAY });
+    expect(followState("T&W", [p("T&W", "2026-01-05", "2026-12-31")], opts)).toEqual({ active: true, why: "until", date: "2026-12-31" });
   });
 
   it("an ended pattern keeps it active for the grace days, then not", () => {
@@ -41,7 +41,7 @@ describe("which clients FocusTime follows (step 6d)", () => {
 
   it("filters a client list to the followed ones, keeping order", () => {
     const rows = [p("Adatum", "2026-01-05", null), p("HME", "2025-01-06", "2026-06-30")];
-    const list = ["Adatum", "HME", "Antigua", "Cooptimize", "T&S"].map((clientKey) => ({ clientKey }));
-    expect(followedKeys(list, rows, { ...opts, kept: ["T&S"] }).map((c) => c.clientKey)).toEqual(["Adatum", "Cooptimize", "T&S"]);
+    const list = ["Adatum", "HME", "Antigua", "Cooptimize", "T&W"].map((clientKey) => ({ clientKey }));
+    expect(followedKeys(list, rows, { ...opts, kept: ["T&W"] }).map((c) => c.clientKey)).toEqual(["Adatum", "Cooptimize", "T&W"]);
   });
 });

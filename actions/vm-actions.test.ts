@@ -2,7 +2,7 @@
 // delay and skip, the next-morning restore, the morning prompt) against a fake Azure Resource Manager. Fictional only.
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { FOUR_DAY_TOML as STARTER_TOML } from "../fixtures/four-day-week.ts";
 import { createAzureClient } from "../sources/azure/client.ts";
 import { fakeArm } from "../sources/azure/fake-arm.ts";
 import { AuthFailure, type ConnectOptions } from "../sources/oauth/oauth.ts";

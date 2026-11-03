@@ -3,16 +3,16 @@ import { defaultRange, domainAllowed, freeFor, helpFollowUpText, isExcluded, inv
 import { zoneOf } from "./timezones.ts";
 
 const TZ = "America/Chicago";
-const ME = { id: "00000000-0000-4000-8000-000000000001", email: "avery@cooptimize.org" };
+const ME = { id: "00000000-0000-4000-8000-000000000001", email: "avery@cooptimize.example" };
 const team: Teammate[] = [
   { id: ME.id, name: "Avery", email: ME.email },
-  { id: "u-ana", name: "Ana", email: "ana@cooptimize.org" },
-  { id: "u-ben", name: "Ben", email: "Ben@Cooptimize.org" },
-  { id: "u-cy", name: "Cy", email: "cy@cooptimize.org" },
-  { id: "u-ext", name: "Client Person", email: "pat@wc.example" },
+  { id: "u-ana", name: "Ana", email: "ana@cooptimize.example" },
+  { id: "u-ben", name: "Ben", email: "Ben@Cooptimize.example" },
+  { id: "u-cy", name: "Cy", email: "cy@cooptimize.example" },
+  { id: "u-ext", name: "Client Person", email: "pat@tw.example" },
 ];
 const dates = ["2026-11-09", "2026-11-10", "2026-11-11"]; // Mon to Wed
-const DOM = ["cooptimize.org"];
+const DOM = ["cooptimize.example"];
 
 describe("candidate tiers (Cooptimize staff only)", () => {
   const rank = (away: { userId: string; date: string }[] = []) =>
@@ -26,8 +26,8 @@ describe("candidate tiers (Cooptimize staff only)", () => {
     expect(c.map((x) => [x.name, x.tier])).toEqual([["Ana", 1], ["Ben", 2], ["Cy", 3]]);
     expect(c[0]!.tierByDate).toEqual({ "2026-11-09": 2, "2026-11-10": 1, "2026-11-11": 2 });
     expect(c[0]!.onClient).toEqual(["2026-11-10"]);
-    expect(c[1]!.email).toBe("ben@cooptimize.org");
-    expect(c.some((x) => x.email.endsWith("wc.example") || x.email === ME.email)).toBe(false);
+    expect(c[1]!.email).toBe("ben@cooptimize.example");
+    expect(c.some((x) => x.email.endsWith("tw.example") || x.email === ME.email)).toBe(false);
   });
   it("PTO shows only as away dates, and an away day doesn't count toward the tier", () => {
     const c = rank([{ userId: "u-ana", date: "2026-11-10" }]);
@@ -37,9 +37,9 @@ describe("candidate tiers (Cooptimize staff only)", () => {
     expect(Object.keys(ana)).not.toContain("title");
   });
   it("limits attendee domains exactly", () => {
-    expect(domainAllowed("ana@cooptimize.org", DOM)).toBe(true);
-    expect(domainAllowed("ana@COOPTIMIZE.org", DOM)).toBe(true);
-    for (const e of ["ana@evil-cooptimize.org", "ana@cooptimize.org.evil.com", "Ana <ana@cooptimize.org>", "a@b@cooptimize.org", "ana@sub.cooptimize.org"]) expect(domainAllowed(e, DOM)).toBe(false);
+    expect(domainAllowed("ana@cooptimize.example", DOM)).toBe(true);
+    expect(domainAllowed("ana@COOPTIMIZE.example", DOM)).toBe(true);
+    for (const e of ["ana@evil-cooptimize.example", "ana@cooptimize.example.evil.com", "Ana <ana@cooptimize.example>", "a@b@cooptimize.example", "ana@sub.cooptimize.example"]) expect(domainAllowed(e, DOM)).toBe(false);
   });
 });
 
@@ -58,7 +58,7 @@ function scheduleBody(view: Record<string, string>, wh: Record<string, { tz: unk
 describe("free/busy from getSchedule", () => {
   const start = "2026-11-09T14:00:00Z", end = "2026-11-09T18:00:00Z"; // 8:00 to 12:00 Central
   it("keeps only free/busy and working hours, never subjects or locations", () => {
-    const av = parseSchedule(scheduleBody({ "ana@cooptimize.org": "0022000000000000" }, { "ana@cooptimize.org": { tz: { name: "Eastern Standard Time" } } }), start, end, 15);
+    const av = parseSchedule(scheduleBody({ "ana@cooptimize.example": "0022000000000000" }, { "ana@cooptimize.example": { tz: { name: "Eastern Standard Time" } } }), start, end, 15);
     expect(JSON.stringify(av)).not.toMatch(/SECRET/);
     expect(av[0]!.busy).toEqual([[Date.parse("2026-11-09T14:30:00Z"), Date.parse("2026-11-09T15:00:00Z")]]);
     expect(av[0]!.workingHours).toEqual({ days: ["monday", "tuesday", "wednesday", "thursday", "friday"], start: "08:00", end: "17:00", zone: "America/New_York" });
@@ -100,7 +100,7 @@ describe("slot suggestions", () => {
   const base = { minutes: 30, myWindows, myBusy: [] as [number, number][], myBoxes: [] as [number, number][], candidates: cands, now: Date.parse("2026-11-09T13:00:00Z"), tz: TZ };
 
   it("auto: ranks the top tier first (Ana on the client Wednesday), then Ben (tier 2), at most two a day, up to 5", () => {
-    const s = suggestSlots({ ...base, chosen: null, availability: av({ "ana@cooptimize.org": freeAll, "ben@cooptimize.org": freeAll, "cy@cooptimize.org": freeAll }) });
+    const s = suggestSlots({ ...base, chosen: null, availability: av({ "ana@cooptimize.example": freeAll, "ben@cooptimize.example": freeAll, "cy@cooptimize.example": freeAll }) });
     expect(s.length).toBe(5);
     expect(s.slice(0, 2).map((x) => [x.date, x.people[0]!.name, x.tier])).toEqual([["2026-11-11", "Ana", 1], ["2026-11-11", "Ana", 1]]);
     expect(s.slice(2).every((x) => x.tier === 2)).toBe(true);
@@ -114,7 +114,7 @@ describe("slot suggestions", () => {
   it("chosen people must all be free in their own working hours, not away, and I must be free too", () => {
     // Cy is away Monday; Ana works 9 to 5 Eastern (8 to 4 Central) so 8:00 Central is fine; I'm busy 8:00 to 9:00 Tuesday.
     const myBusy: [number, number][] = [[day("2026-11-10", "08:00", "09:00").start, day("2026-11-10", "08:00", "09:00").end]];
-    const s = suggestSlots({ ...base, myBusy, chosen: ["ana@cooptimize.org", "cy@cooptimize.org"], availability: av({ "ana@cooptimize.org": freeAll, "cy@cooptimize.org": freeAll }, { "ana@cooptimize.org": "Eastern Standard Time" }), max: 20, perDay: 20 });
+    const s = suggestSlots({ ...base, myBusy, chosen: ["ana@cooptimize.example", "cy@cooptimize.example"], availability: av({ "ana@cooptimize.example": freeAll, "cy@cooptimize.example": freeAll }, { "ana@cooptimize.example": "Eastern Standard Time" }), max: 20, perDay: 20 });
     expect(s.some((x) => x.date === "2026-11-09")).toBe(false);
     expect(s.some((x) => x.date === "2026-11-10" && x.start < "2026-11-10T09:00")).toBe(false);
     expect(s.every((x) => x.people.length === 2)).toBe(true);
@@ -122,14 +122,14 @@ describe("slot suggestions", () => {
 
   it("a person in a zone whose day ends earlier only gets slots inside it", () => {
     // Ana works 8 to 9 London time only (2:00 to 3:00 AM Central): no overlap with my 8 to 12.
-    const views = { "ana@cooptimize.org": freeAll };
-    const body = scheduleBody(views, { "ana@cooptimize.org": { tz: { name: "GMT Standard Time" }, start: "08:00", end: "09:00" } });
-    expect(suggestSlots({ ...base, chosen: ["ana@cooptimize.org"], availability: parseSchedule(body, rangeStart, rangeEnd, 15) })).toEqual([]);
+    const views = { "ana@cooptimize.example": freeAll };
+    const body = scheduleBody(views, { "ana@cooptimize.example": { tz: { name: "GMT Standard Time" }, start: "08:00", end: "09:00" } });
+    expect(suggestSlots({ ...base, chosen: ["ana@cooptimize.example"], availability: parseSchedule(body, rangeStart, rangeEnd, 15) })).toEqual([]);
   });
 
   it("avoids my timeboxes where possible: overlapping slots rank after clear ones", () => {
     const box = day("2026-11-11", "08:00", "10:00");
-    const s = suggestSlots({ ...base, myBoxes: [[box.start, box.end]], chosen: ["ana@cooptimize.org"], availability: av({ "ana@cooptimize.org": freeAll }) });
+    const s = suggestSlots({ ...base, myBoxes: [[box.start, box.end]], chosen: ["ana@cooptimize.example"], availability: av({ "ana@cooptimize.example": freeAll }) });
     expect(s[0]!.date).toBe("2026-11-11");
     expect(s[0]!.overTimebox).toBe(0);
     expect(s[0]!.start >= "2026-11-11T10:00").toBe(true);
@@ -137,7 +137,7 @@ describe("slot suggestions", () => {
 
   it("step 13.5: slots inside my focus blocks for that client come first, then other free time", () => {
     const block = day("2026-11-10", "10:00", "12:00");
-    const s = suggestSlots({ ...base, focus: [[block.start, block.end]], chosen: ["ana@cooptimize.org"], availability: av({ "ana@cooptimize.org": freeAll }) });
+    const s = suggestSlots({ ...base, focus: [[block.start, block.end]], chosen: ["ana@cooptimize.example"], availability: av({ "ana@cooptimize.example": freeAll }) });
     expect(s[0]!.inFocus).toBe(true);
     expect(s[0]!.date).toBe("2026-11-10");
     expect(s[0]!.start >= "2026-11-10T10:00").toBe(true);
@@ -146,8 +146,8 @@ describe("slot suggestions", () => {
   });
 
   it("step 13.5: a teammate with no working hours shared gets 9:00 to 5:00 in my zone, marked hours unknown", () => {
-    const body = { value: [{ scheduleId: "ana@cooptimize.org", availabilityView: freeAll }] };
-    const s = suggestSlots({ ...base, chosen: ["ana@cooptimize.org"], availability: parseSchedule(body, rangeStart, rangeEnd, 15, TZ) });
+    const body = { value: [{ scheduleId: "ana@cooptimize.example", availabilityView: freeAll }] };
+    const s = suggestSlots({ ...base, chosen: ["ana@cooptimize.example"], availability: parseSchedule(body, rangeStart, rangeEnd, 15, TZ) });
     expect(s.length).toBeGreaterThan(0);
     expect(s.every((x) => x.start.slice(11, 16) >= "09:00")).toBe(true);
     expect(s[0]!.people[0]!.hoursUnknown).toBe(true);
@@ -155,16 +155,16 @@ describe("slot suggestions", () => {
 
   it("busy in Graph is busy", () => {
     const busyAll = "2".repeat(quarters);
-    expect(suggestSlots({ ...base, chosen: null, availability: av({ "ana@cooptimize.org": busyAll, "ben@cooptimize.org": busyAll, "cy@cooptimize.org": busyAll }) })).toEqual([]);
+    expect(suggestSlots({ ...base, chosen: null, availability: av({ "ana@cooptimize.example": busyAll, "ben@cooptimize.example": busyAll, "cy@cooptimize.example": busyAll }) })).toEqual([]);
     expect(freeFor(undefined, 0, 1)).toBe(false);
   });
 });
 
 describe("the invite and its range", () => {
   it("names the client and item, carries the DevOps link and note, lowercases attendee emails", () => {
-    const f = inviteFields({ clientName: "T&S", itemTitle: "#4512 Import mapping", url: "https://dev.azure.com/wc/p/_workitems/edit/4512", note: "  stuck on the lookup  ", start: "2026-11-10T09:00:00-06:00", end: "2026-11-10T09:30:00-06:00", people: [{ name: "Ana", email: "Ana@cooptimize.org" }], teams: true });
-    expect(f).toMatchObject({ subject: "T&S: help on #4512 Import mapping", start: "2026-11-10T15:00:00Z", attendees: [{ name: "Ana", email: "ana@cooptimize.org" }], teams: true, showAs: "busy" });
-    expect(f.body).toBe("https://dev.azure.com/wc/p/_workitems/edit/4512\n\nstuck on the lookup\n\nHelp session planned in FocusTime.");
+    const f = inviteFields({ clientName: "T&W", itemTitle: "#4512 Import mapping", url: "https://dev.azure.com/tw/p/_workitems/edit/4512", note: "  stuck on the lookup  ", start: "2026-11-10T09:00:00-06:00", end: "2026-11-10T09:30:00-06:00", people: [{ name: "Ana", email: "Ana@cooptimize.example" }], teams: true });
+    expect(f).toMatchObject({ subject: "T&W: help on #4512 Import mapping", start: "2026-11-10T15:00:00Z", attendees: [{ name: "Ana", email: "ana@cooptimize.example" }], teams: true, showAs: "busy" });
+    expect(f.body).toBe("https://dev.azure.com/tw/p/_workitems/edit/4512\n\nstuck on the lookup\n\nHelp session planned in FocusTime.");
     expect(helpFollowUpText(["Ana", "Ben", "Cy"], "#4512 Import mapping")).toBe("Help session with Ana, Ben and Cy on #4512 Import mapping");
   });
   it("defaults to the pinned day, else the next 3 workdays", () => {
@@ -176,10 +176,10 @@ describe("the invite and its range", () => {
 
 describe("people to exclude (step 13.5)", () => {
   it("matches a name or an address, any case, and is never a candidate", () => {
-    expect(isExcluded({ name: "Kat 🤖", email: "kat@cooptimize.org" }, ["Kat 🤖"])).toBe(true);
-    expect(isExcluded({ name: "Kat", email: "KAT-BOT@cooptimize.org" }, ["kat-bot@cooptimize.org"])).toBe(true);
-    expect(isExcluded({ name: "Ana", email: "ana@cooptimize.org" }, ["Kat 🤖"])).toBe(false);
-    const bot = { id: "u-kat", name: "Kat 🤖", email: "kat@cooptimize.org" };
+    expect(isExcluded({ name: "Kat 🤖", email: "kat@cooptimize.example" }, ["Kat 🤖"])).toBe(true);
+    expect(isExcluded({ name: "Kat", email: "KAT-BOT@cooptimize.example" }, ["kat-bot@cooptimize.example"])).toBe(true);
+    expect(isExcluded({ name: "Ana", email: "ana@cooptimize.example" }, ["Kat 🤖"])).toBe(false);
+    const bot = { id: "u-kat", name: "Kat 🤖", email: "kat@cooptimize.example" };
     const r = rankCandidates({ team: [...team, bot], meId: ME.id, meEmail: ME.email, domains: DOM, dates, away: [], patterns: [], workers: new Set(), exclude: ["Kat 🤖"] });
     expect(r.some((c) => c.name === "Kat 🤖")).toBe(false);
   });

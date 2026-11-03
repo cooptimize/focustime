@@ -111,7 +111,7 @@ export function FocusScreen({ t, nowMs, pick, client, color, event, onTimer, onS
 /** The focus screen's sound control (step 10 slice 5): this session's sound, volume, and a saved playlist to open. */
 export function SoundControl({ settings, media, choice, onChoice, volume, onVolume, onPlaylist, blocked, onUnlock }: {
   settings: FocusSettings;
-  media: { playerctl: boolean; spotify: boolean };
+  media: { players: boolean; spotify: boolean };
   choice: SoundKind;
   onChoice: (k: SoundKind) => void;
   volume: number;
@@ -151,7 +151,7 @@ export function SoundControl({ settings, media, choice, onChoice, volume, onVolu
           </select>
         </label>
       )}
-      {settings.pauseMedia && !media.playerctl && <span className="muted">Media pause is on, but playerctl isn't installed</span>}
+      {settings.pauseMedia && !media.players && <span className="muted">Media pause is on, but music players can't be paused here</span>}
     </>
   );
 }

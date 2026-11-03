@@ -34,7 +34,7 @@ describe("ui.set_theme (step 6b)", () => {
   });
   it("refuses unknown themes and extra fields", async () => {
     const t = setup();
-    expect(await dispatch(t.c, { action: "ui.set_theme", input: { theme: "omarchy" } })).toMatchObject({ ok: false, status: 400 });
+    expect(await dispatch(t.c, { action: "ui.set_theme", input: { theme: "desktop" } })).toMatchObject({ ok: false, status: 400 });
     expect(await dispatch(t.c, { action: "ui.set_theme", input: { theme: "neutral", x: 1 } })).toMatchObject({ ok: false, status: 400 });
   });
   it("says so when settings can't be saved", async () => {

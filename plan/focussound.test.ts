@@ -24,7 +24,7 @@ describe("the focus sound follows the timer", () => {
   });
 });
 
-describe("media pause and resume (playerctl)", () => {
+describe("media pause and resume", () => {
   it("pauses when focus ends, stops or turns into a break, and resumes only what it paused", () => {
     expect(mediaStep(focus(), null, false, true)).toEqual({ command: "pause", pausedByUs: true });
     expect(mediaStep(focus(), brk, false, true)).toEqual({ command: "pause", pausedByUs: true });

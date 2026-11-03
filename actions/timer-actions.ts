@@ -12,7 +12,7 @@ import type { ActionResponse, TimerView } from "./types.ts";
 
 export type TimerAction = "timer.start" | "timer.pause" | "timer.resume" | "timer.stop" | "timer.extend" | "timer.done" | "timer.next" | "timer.deep" | "playlist.open" | "plan.reset";
 
-/** Media control (step 10): playerctl and playlist links; the server's implementation is server/media.ts. */
+/** Media control (step 10): pausing players and playlist links; the host's (host/types.ts). */
 import type { MediaControl } from "../host/types.ts";
 export type { MediaControl };
 

@@ -54,7 +54,7 @@ describe("media control follows focus", () => {
     expect(await b.m.transition(focus, null, false)).toBeNull();
     expect(a.ran).toEqual([]);
     expect(b.ran).toEqual([]);
-    expect(await a.m.status()).toEqual({ playerctl: false, spotify: false });
-    expect(await b.m.status()).toEqual({ playerctl: true, spotify: false });
+    expect(await a.m.status()).toEqual({ players: false, spotify: false });
+    expect(await b.m.status()).toEqual({ players: true, spotify: false });
   });
 });

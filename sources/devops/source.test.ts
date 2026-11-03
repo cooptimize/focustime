@@ -114,11 +114,11 @@ describe("client isolation", () => {
   });
 
   it("items never cross clients, even when two clients share an org", async () => {
-    const s = setup({ cooptimize: "agile" }, [target("T&S", "cooptimize", { project: "WC Project", projectName: "WC Project" }), target("Cooptimize", "cooptimize", { project: "Cooptimize Internal", projectName: "Cooptimize Internal" })]);
-    const r = await s.src.load([ref("T&S"), ref("Cooptimize")]);
-    expect(byKey(r, "T&S").items.every((i) => i.url.includes("/WC%20Project/"))).toBe(true);
+    const s = setup({ cooptimize: "agile" }, [target("T&W", "cooptimize", { project: "TW Project", projectName: "TW Project" }), target("Cooptimize", "cooptimize", { project: "Cooptimize Internal", projectName: "Cooptimize Internal" })]);
+    const r = await s.src.load([ref("T&W"), ref("Cooptimize")]);
+    expect(byKey(r, "T&W").items.every((i) => i.url.includes("/TW%20Project/"))).toBe(true);
     expect(byKey(r, "Cooptimize").items.every((i) => i.url.includes("/Cooptimize%20Internal/"))).toBe(true);
-    expect(r.map((c) => c.clientKey)).toEqual(["T&S", "Cooptimize"]);
+    expect(r.map((c) => c.clientKey)).toEqual(["T&W", "Cooptimize"]);
   });
 
   it("a slow or failing org does not stop the others from returning", async () => {
@@ -150,9 +150,9 @@ describe("client isolation", () => {
 
 describe("setup problems are stated, never guessed", () => {
   it("identity missing: says so, makes no DevOps call, shows no cached items", async () => {
-    const s = setup({ cooptimize: "agile" }, [target("T&S", "cooptimize", { email: null })]);
-    const r = await s.src.load([ref("T&S")]);
-    expect(byKey(r, "T&S")).toEqual({ clientKey: "T&S", clientName: "T&S", status: "identity_missing", message: "DevOps identity missing for T&S", fetchedAt: null, fromCache: false, items: [], children: [] });
+    const s = setup({ cooptimize: "agile" }, [target("T&W", "cooptimize", { email: null })]);
+    const r = await s.src.load([ref("T&W")]);
+    expect(byKey(r, "T&W")).toEqual({ clientKey: "T&W", clientName: "T&W", status: "identity_missing", message: "DevOps identity missing for T&W", fetchedAt: null, fromCache: false, items: [], children: [] });
     expect(s.calls).toHaveLength(0);
   });
 
@@ -317,8 +317,8 @@ describe("Pat wrapper", () => {
 
 describe("cache keys", () => {
   it("are safe file names and differ per client", () => {
-    expect(cacheKey("T&S")).toMatch(/^t-s-[0-9a-f]{8}$/);
-    expect(cacheKey("T&S")).not.toBe(cacheKey("T S"));
+    expect(cacheKey("T&W")).toMatch(/^t-w-[0-9a-f]{8}$/);
+    expect(cacheKey("T&W")).not.toBe(cacheKey("T W"));
     expect(cacheKey("../../etc")).toMatch(/^etc-[0-9a-f]{8}$/);
   });
 });
@@ -438,13 +438,13 @@ describe("Plan the week: features and epics (step 8)", () => {
     expect(off!.items.map((i) => i.id)).toEqual([210, 220, 230, 240, 250]);
   });
   it("Q47: a project whose backlog levels give no story level is a clear per-client error, never a guess", async () => {
-    const s = setup({ planweek: "planweek", nostory: "no_story_level" }, [target("Adatum", "planweek"), target("T&S", "nostory")]);
-    const [adatum, wc] = await s.src.load([ref("Adatum"), ref("T&S")]);
+    const s = setup({ planweek: "planweek", nostory: "no_story_level" }, [target("Adatum", "planweek"), target("T&W", "nostory")]);
+    const [adatum, tw] = await s.src.load([ref("Adatum"), ref("T&W")]);
     expect(adatum!.status).toBe("ok");
-    expect(wc).toMatchObject({ status: "error", items: [] });
-    expect(wc!.message).toMatch(/no story level/i);
-    expect(wc!.message).toMatch(/T&S Project/);
-    const [, pw] = await s.src.portfolio([ref("Adatum"), ref("T&S")]);
+    expect(tw).toMatchObject({ status: "error", items: [] });
+    expect(tw!.message).toMatch(/no story level/i);
+    expect(tw!.message).toMatch(/T&W Project/);
+    const [, pw] = await s.src.portfolio([ref("Adatum"), ref("T&W")]);
     expect(pw).toMatchObject({ status: "error", items: [] });
   });
   it("reads one feature's description on demand as plain text, never cached", async () => {

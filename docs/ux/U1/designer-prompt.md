@@ -6,7 +6,7 @@ You can't see the code. Everything you need is in this brief and the attached fi
 
 ## 1. What FocusTime is
 
-FocusTime is a local desktop app for one consultant at Cooptimize, a consulting firm. It plans the week and protects focus time. It runs as a web page in a browser app window on Linux (Omarchy). It has no AI in the working views.
+FocusTime is a local desktop app for one consultant at Cooptimize, a consulting firm. It plans the week and protects focus time. It runs as a web page in a browser. It has no AI in the working views.
 
 - **FocusTime vs Coop.** FocusTime is this app. Coop is a separate coding agent the firm runs inside client environments. They are unrelated, visually and in wording.
 - **Clients.** The user works for several clients each week. "Internal" counts as a client. Each client has a color, used only as a thin edge and a small swatch, never a fill.
@@ -38,13 +38,13 @@ FocusTime is a local desktop app for one consultant at Cooptimize, a consulting 
 ## 2. Who uses it and how
 
 - **One expert user, all day,** on two screens:
-  - 1920x1080, often over a Moonlight stream from a laptop;
+  - 1920x1080, often streamed to a laptop;
   - a 3840x1600 ultrawide.
 - **Mostly mouse.** Keyboard shortcuts must stay for frequent actions.
 - **ADHD-friendly:** low noise, one clear next step, nothing to read that doesn't change a decision.
 - **The user's own words** (answers to four questions, verbatim, typos kept):
 
-  > **On Today, what do you look at and never read?** this is unnecessary at the top: Cooptimize focus until 12:30 PM. Next: CSC / Cooptimize • Weekly Feature Review at 1:00 PM.. under THIS WEEK i dont see a ton of value of listing these here. if the day is planned it should be focused on the calendar items and commited  planned user stories  - the feautres ear marked should be broken down. so maybe if those are listed at the bottom not top and indicated if they need decomposition
+  > **On Today, what do you look at and never read?** this is unnecessary at the top: Cooptimize focus until 12:30 PM. Next: Adatum / Cooptimize • Weekly Feature Review at 1:00 PM.. under THIS WEEK i dont see a ton of value of listing these here. if the day is planned it should be focused on the calendar items and commited  planned user stories  - the feautres ear marked should be broken down. so maybe if those are listed at the bottom not top and indicated if they need decomposition
 
   > **Mouse or keyboard?** mostly mouse, but having quick keys for keyboards if the application is used a lot is great.
 

@@ -1,8 +1,8 @@
 #!/bin/sh
-# Installs FocusTime for this user (R1): the systemd user service (WorkingDirectory set to this repo), the
-# focustime-open launcher in ~/.local/bin, the FocusTime launcher entry, the login autostart entry and the icons.
-# Run it again after moving the repo folder. With --remove-coopilot it also removes what the app installed under its
-# old name (the coopilot service, launcher, entries and icons). Nothing else is touched: no Hyprland or Omarchy file.
+# Installs the developer loop for this user (system/README.md): the systemd user service (this repo and the node on
+# PATH filled in), the focustime-open launcher in ~/.local/bin, the launcher entry, the login autostart entry and the
+# icons. Run it again after moving the repo folder. With --remove-coopilot it also removes what the app installed under
+# its old name (the coopilot service, launcher, entries and icons). Nothing outside those is touched.
 # Usage: system/install.sh [--remove-coopilot]
 set -eu
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -11,11 +11,16 @@ apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 autostart="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
 bin="$HOME/.local/bin"
 
+node=$(command -v node) || { echo "node is not on PATH" >&2; exit 1; }
+case "$repo$node$bin" in *"|"*) echo "A path holds |, which the templates can't take" >&2; exit 1 ;; esac
+fill() { sed -e "s|@REPO@|$repo|g" -e "s|@NODE@|$node|g" -e "s|@BIN@|$bin|g" "$1"; }
+
 mkdir -p "$units" "$apps" "$autostart" "$bin"
-sed "s|^WorkingDirectory=.*|WorkingDirectory=$repo|" "$repo/system/focustime.service" > "$units/focustime.service"
+fill "$repo/system/focustime.service" > "$units/focustime.service"
 ln -sfn "$repo/system/focustime-open" "$bin/focustime-open"
-install -m 644 "$repo/system/FocusTime.desktop" "$apps/FocusTime.desktop"
-install -m 644 "$repo/system/focustime-autostart.desktop" "$autostart/focustime.desktop"
+fill "$repo/system/FocusTime.desktop" > "$apps/FocusTime.desktop"
+fill "$repo/system/focustime-autostart.desktop" > "$autostart/focustime.desktop"
+chmod 644 "$apps/FocusTime.desktop" "$autostart/focustime.desktop"
 "$repo/system/install-icons.sh" install
 
 if [ "${1:-}" = "--remove-coopilot" ]; then

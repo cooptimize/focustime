@@ -87,7 +87,7 @@ export type ActionContext = {
   /** Step 14: personal DevOps write PATs in the keyring, and the DevOps writer. Absent: DevOps stays read-only. */
   writePats?: WritePats;
   devopsWriter?: DevOpsWriter;
-  /** Media control for focus (step 10): playerctl and playlist links. Absent: none (tests, no desktop). */
+  /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
   demo?: { on: boolean; set: (on: boolean) => Promise<void> };
@@ -409,7 +409,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     thresholds: weekConfig.thresholds,
     planning: planningOf(cfg),
     focus: cfg?.focus ?? DEFAULT_FOCUS,
-    media: ctx.media ? await ctx.media.status() : { playerctl: false, spotify: false },
+    media: ctx.media ? await ctx.media.status() : { players: false, spotify: false },
     timer: timerView(ctx.plan?.getState<TimerState>(TIMER_KEY) ?? null, Temporal.Instant.from(ctx.now())),
     openFollowUps: ctx.plan?.openFollowUps().length ?? 0,
     captures: ctx.plan?.inboxCount() ?? 0,
@@ -774,9 +774,9 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "people.photos":
       return photoAction({ ...(await presenceContext(ctx)), cache: ctx.photoCache ?? null }, req.input);
     case "media.status": {
-      // Step 10: read-only check for playerctl (MPRIS) and the Spotify app. Nothing is run or installed.
+      // Step 10: read-only check of the host's media control and the Spotify app. Nothing is run or installed.
       if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("media.status takes {}");
-      return { ok: true, data: ctx.media ? await ctx.media.status() : { playerctl: false, spotify: false } };
+      return { ok: true, data: ctx.media ? await ctx.media.status() : { players: false, spotify: false } };
     }
     case "closeout.load":
     case "closeout.commit":

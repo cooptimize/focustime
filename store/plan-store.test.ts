@@ -314,7 +314,7 @@ describe("week plan by client (step 11)", () => {
     old.exec("INSERT INTO week_plans VALUES ('2026-11-09', '2026-11-06T16:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T16:00:00-05:00[America/New_York]')");
     old.exec(`INSERT INTO week_features (id, week_start, client_key, item_id, title, item_type, url, blocks, position, created_at, updated_at) VALUES
               (7, '2026-11-09', 'Adatum', 210, 'Export', 'Feature', NULL, 3, 1, '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]'),
-              (9, '2026-11-09', 'T&S', 300, 'Paging', 'Feature', NULL, 1, 2, '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]')`);
+              (9, '2026-11-09', 'T&W', 300, 'Paging', 'Feature', NULL, 1, 2, '2026-11-06T15:00:00-05:00[America/New_York]', '2026-11-06T15:00:00-05:00[America/New_York]')`);
     old.exec("INSERT INTO week_feature_slots VALUES (7, '2026-11-10', 'PM'), (7, '2026-11-11', 'AM')");
     old.close();
     const store = createPlanStore({ path, now, files: localStoreFiles });
@@ -391,12 +391,12 @@ describe("week plan by client (step 11)", () => {
   it("keeps a local order per client and tier, resets to DevOps order, and a tier change drops the position", () => {
     const { store } = fresh();
     const ids = [210, 220, 230].map((itemId) => store.addWeekItem({ ...base, itemId, level: "feature" }).id);
-    store.addWeekItem({ ...base, clientKey: "T&S", itemId: 300, level: "feature" });
+    store.addWeekItem({ ...base, clientKey: "T&W", itemId: 300, level: "feature" });
     store.reorderWeekItems(W, "Adatum", "must", [{ itemId: 230, position: 1 }, { itemId: 210, position: 2 }]);
     const pos = () => Object.fromEntries(store.weekPlan(W).features.map((x) => [x.itemId, x.position]));
     expect(pos()).toEqual({ 210: 2, 220: null, 230: 1, 300: null });
     expect(() => store.reorderWeekItems(W, "Adatum", "nice", [{ itemId: 230, position: 1 }])).toThrow(/nice to have/);
-    expect(() => store.reorderWeekItems(W, "T&S", "must", [{ itemId: 210, position: 1 }])).toThrow();
+    expect(() => store.reorderWeekItems(W, "T&W", "must", [{ itemId: 210, position: 1 }])).toThrow();
     store.setWeekItemTier(ids[2]!, "nice");
     expect(pos()[230]).toBeNull();
     store.reorderWeekItems(W, "Adatum", "must", null);
@@ -432,7 +432,7 @@ describe("quick capture (step 9)", () => {
     const { store } = fresh();
     const a = store.addCapture({ text: "  Told Dana I'd send the export by Thursday  ", clientKey: "Adatum" });
     expect(a).toMatchObject({ text: "Told Dana I'd send the export by Thursday", clientKey: "Adatum", routedAt: null });
-    const b = store.addCapture({ text: "need to add paging", clientKey: "T&S" });
+    const b = store.addCapture({ text: "need to add paging", clientKey: "T&W" });
     const c = store.addCapture({ text: "their CFO prefers email", clientKey: null });
     const d = store.addCapture({ text: "never mind", clientKey: null });
     expect(() => store.addCapture({ text: "   ", clientKey: null })).toThrow(/Type something/);
@@ -442,8 +442,8 @@ describe("quick capture (step 9)", () => {
     const la = store.routeCapture(a.id, { as: "follow_up", clientKey: "Adatum", who: "Dana", what: "Send the export", due: "2026-11-05" });
     expect(la).toMatchObject({ routedAs: "follow_up" });
     expect(store.openFollowUps().find((l) => l.id === la.routedId)).toMatchObject({ kind: "capture", who: "Dana", what: "Send the export", due: "2026-11-05", clientKey: "Adatum" });
-    const db = store.routeCapture(b.id, { as: "draft", clientKey: "T&S", parentItemId: null, title: "Add paging", size: "M" });
-    expect(store.getDraft(db.routedId!)).toMatchObject({ clientKey: "T&S", parentItemId: null, title: "Add paging", size: "M" });
+    const db = store.routeCapture(b.id, { as: "draft", clientKey: "T&W", parentItemId: null, title: "Add paging", size: "M" });
+    expect(store.getDraft(db.routedId!)).toMatchObject({ clientKey: "T&W", parentItemId: null, title: "Add paging", size: "M" });
     const nc = store.routeCapture(c.id, { as: "draft", clientKey: "Proseware", parentItemId: null, title: "Their CFO prefers email", size: "S" });
     expect(store.getDraft(nc.routedId!)).toMatchObject({ level: "story", clientKey: "Proseware" });
     store.routeCapture(d.id, { as: "dismissed" });
@@ -466,13 +466,13 @@ describe("quick capture (step 9)", () => {
     }
     const at = "2026-10-30T16:00:00-04:00[America/New_York]";
     old.exec(`INSERT INTO loops (id, kind, client_key, who, what, opened_at) VALUES (2, 'manual', NULL, 'Dana', 'Send it', '${at}')`);
-    old.exec(`INSERT INTO loops (id, kind, client_key, who, what, opened_at, closed_at, close_note, closed_by, rule_key) VALUES (1, 'slip', 'T&S', 'T&S', 'Heads-up', '${at}', '${at}', 'told', 'me', 'slip:x')`);
+    old.exec(`INSERT INTO loops (id, kind, client_key, who, what, opened_at, closed_at, close_note, closed_by, rule_key) VALUES (1, 'slip', 'T&W', 'T&W', 'Heads-up', '${at}', '${at}', 'told', 'me', 'slip:x')`);
     old.exec(`INSERT INTO resume_notes (client_key, date, note, created_at, updated_at) VALUES ('Adatum', '2026-10-30', 'Left off at mapping', '${at}', '${at}')`);
     old.exec(`INSERT INTO captures (id, text, client_key, created_at, routed_at, routed_as, routed_id) VALUES
               (1, 'Adatum wants Git', 'Adatum', '${at}', '${at}', 'note', 1), (2, 'caching idea', NULL, '${at}', '${at}', 'note', 2),
               (3, 'told Dana', NULL, '${at}', '${at}', 'loop', 2), (4, 'never mind', NULL, '${at}', '${at}', 'dismissed', NULL), (5, 'to sort', NULL, '${at}', NULL, NULL, NULL)`);
     old.exec(`INSERT INTO notes (id, client_key, text, capture_id, created_at, updated_at) VALUES
-              (1, 'Adatum', 'Adatum wants Git', 1, '${at}', '${at}'), (2, NULL, 'caching idea', 2, '${at}', '${at}'), (3, 'T&S', 'Mark approves timesheets', NULL, '${at}', '${at}'), (4, NULL, 'Read the docs', NULL, '${at}', '${at}')`);
+              (1, 'Adatum', 'Adatum wants Git', 1, '${at}', '${at}'), (2, NULL, 'caching idea', 2, '${at}', '${at}'), (3, 'T&W', 'Mark approves timesheets', NULL, '${at}', '${at}'), (4, NULL, 'Read the docs', NULL, '${at}', '${at}')`);
     old.close();
     const store = createPlanStore({ path, now, files: localStoreFiles });
     expect(store.schemaVersion()).toBe(MIGRATIONS.length);
@@ -481,7 +481,7 @@ describe("quick capture (step 9)", () => {
     expect(store.allFollowUps().map((f) => [f.id, f.kind, f.outcome, f.byHand]).sort()).toEqual([[1, "slip", "done", false], [2, "manual", null, true]]);
     // Notes with a client join that client's left-off line on their day; appended to one already there.
     expect(store.latestNotes("2026-10-31").Adatum?.note).toBe("Left off at mapping · Adatum wants Git");
-    expect(store.latestNotes("2026-10-31")["T&S"]?.note).toBe("Mark approves timesheets");
+    expect(store.latestNotes("2026-10-31")["T&W"]?.note).toBe("Mark approves timesheets");
     // Notes with no client go back to the inbox: their own capture un-sorted, or a new capture.
     expect(store.inbox().map((c) => c.text).sort()).toEqual(["Read the docs", "caching idea", "to sort"]);
     const ex = store.exportJson() as Record<string, unknown>;

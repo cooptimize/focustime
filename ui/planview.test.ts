@@ -37,7 +37,7 @@ describe("a card's plan (step 6.1)", () => {
   });
 
   it("an item picked here is not listed again; another client's pick with the same id is", () => {
-    const cp = cardPlan(plan([pick({ itemId: 2 }), pick({ itemId: 4, clientKey: "T&S" })]), slot, "Adatum", ITEMS, NOW);
+    const cp = cardPlan(plan([pick({ itemId: 2 }), pick({ itemId: 4, clientKey: "T&W" })]), slot, "Adatum", ITEMS, NOW);
     expect(cp.items.map((i) => i.id)).toEqual([1, 3, 4, 5]);
   });
 
@@ -59,24 +59,24 @@ describe("a card's plan (step 6.1)", () => {
 });
 
 describe("resume notes on the week (step 7)", () => {
-  // Adatum on Mon PM and Wed PM; T&S on Tue AM.
+  // Adatum on Mon PM and Wed PM; T&W on Tue AM.
   const days = buildWeek({
     weekStart: "2026-11-02",
-    patterns: [pattern({ clientKey: "Adatum", clientName: "Adatum", days: { Mon: "PM", Wed: "PM" } }), pattern({ id: "p2", clientKey: "T&S", clientName: "T&S", days: { Tue: "AM" } })],
+    patterns: [pattern({ clientKey: "Adatum", clientName: "Adatum", days: { Mon: "PM", Wed: "PM" } }), pattern({ id: "p2", clientKey: "T&W", clientName: "T&W", days: { Tue: "AM" } })],
     events: [],
     config: noStanding,
   }).days;
   it("shows each client's latest note on its next block after the note's day, from today on", () => {
-    const notes = { Adatum: { clientKey: "Adatum", date: "2026-11-02", note: "Mapping half done" }, "T&S": { clientKey: "T&S", date: "2026-10-29", note: "Pump curves next" } };
+    const notes = { Adatum: { clientKey: "Adatum", date: "2026-11-02", note: "Mapping half done" }, "T&W": { clientKey: "T&W", date: "2026-10-29", note: "Pump curves next" } };
     expect(Object.keys(resumeSlots(days, notes, "2026-11-02")).sort()).toEqual(["2026-11-03:AM", "2026-11-04:PM"]);
-    // Later in the week the T&S block has passed: nothing shown for it.
+    // Later in the week the T&W block has passed: nothing shown for it.
     expect(Object.keys(resumeSlots(days, notes, "2026-11-04"))).toEqual(["2026-11-04:PM"]);
   });
 });
 
 describe("week items on a block (step 11)", () => {
   type F = { clientKey: string; itemId: number; title: string; blocks: number; slots: { date: string; half: "AM" | "PM" }[]; tier?: "must" | "nice"; doneAt?: string | null };
-  const f = (over: Partial<F>): F => ({ clientKey: "T&S", itemId: 1, title: "Export", blocks: 2, slots: [], ...over });
+  const f = (over: Partial<F>): F => ({ clientKey: "T&W", itemId: 1, title: "Export", blocks: 2, slots: [], ...over });
   it("shows what is pinned to this block, then the client's unpinned musts that aren't done", () => {
     const placed = f({ itemId: 1, title: "Pinned here", slots: [{ date: "2026-11-09", half: "PM" }] });
     const floating = f({ itemId: 2, title: "Unpinned must" });
@@ -85,7 +85,7 @@ describe("week items on a block (step 11)", () => {
     const done = f({ itemId: 6, title: "Done", doneAt: "x" });
     const other = f({ clientKey: "Adatum", itemId: 4, title: "Adatum's" });
     const all = [elsewhere, floating, placed, nice, done, other];
-    expect(featuresOn(all, "2026-11-09", "PM", "T&S").map((x) => x.title)).toEqual(["Pinned here", "Unpinned must"]);
+    expect(featuresOn(all, "2026-11-09", "PM", "T&W").map((x) => x.title)).toEqual(["Pinned here", "Unpinned must"]);
     // An Open half-day shows only what is pinned to it.
     expect(featuresOn(all, "2026-11-09", "PM", null).map((x) => x.title)).toEqual(["Pinned here"]);
     expect(featuresOn(all, "2026-11-11", "AM", "Adatum").map((x) => x.title)).toEqual(["Adatum's"]);

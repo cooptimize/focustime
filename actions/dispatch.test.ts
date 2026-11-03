@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { FOUR_DAY_TOML as STARTER_TOML } from "../fixtures/four-day-week.ts";
 import { createDataverseSource } from "../sources/dataverse/source.ts";
 import { dvConfig, FAKE_SECRET, FAKE_TOKEN, fakeFetch, type Scenario } from "../sources/dataverse/test-fakes.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";

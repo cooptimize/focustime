@@ -16,7 +16,7 @@ function setup(focus: Partial<FocusSettings> = {}, spotify = false) {
   const opened: string[] = [];
   const moves: [string | null, string | null, boolean][] = [];
   const media: MediaControl = {
-    status: async () => ({ playerctl: true, spotify }),
+    status: async () => ({ players: true, spotify }),
     transition: async (prev, next, enabled) => (moves.push([prev ? `${prev.kind}${prev.running ? "" : " paused"}${prev.ended ? " ended" : ""}` : null, next ? `${next.kind}${next.running ? "" : " paused"}${next.ended ? " ended" : ""}` : null, enabled]), null),
     open: async (t) => void opened.push(t),
   };

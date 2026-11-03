@@ -7,9 +7,9 @@ November 1, 2026. Planning-chat record. The repo's docs/ folder is the living so
 1. Week model and grid (Mon–Thu, Friday overflow, Open half-days, standing Monday AM Cooptimize block, soft day shape, risk rules)
 2. Dataverse focus patterns via a read-only application user in its own business unit
 3. Outlook and Google calendars, read-only. 3.5 Auto refresh and single risk badge
-4. DevOps items assigned to me per client (board order, client isolation, PAT in memory only). 4.5 Responsive layouts (1920x1080 matters: used over Moonlight from the laptop)
+4. DevOps items assigned to me per client (board order, client isolation, PAT in memory only). 4.5 Responsive layouts (1920x1080 matters: often streamed to a laptop)
 5. Morning planning, now **Plan the day**: story-level picks, S/M/L sizing, carry-over, local plan store, reminder, autostart
-   - 5.5 FocusTime as an Omarchy app (launcher, Super + Alt + C, autostart), work items open in the client's Edge profile, card polish, Follow-up concept recorded
+   - 5.5 FocusTime as a desktop app (launcher, key binding, autostart; the developer loop since A1), work item links, card polish, Follow-up concept recorded
 6. Top bar views, ⋯ menus and Ctrl+K command menu from one action registry, ignition renamed to Plan the day, plan the next workday, PTO from Dataverse, Outlook show-as styling, free time per block
    - 6.1 UX review fixes on a token foundation (AA contrast, status bar by root cause, keyboard legend)
    - **Plan any day**: any date, ← →, date picker, past days settle-only, one carry-over day
@@ -27,7 +27,7 @@ November 1, 2026. Planning-chat record. The repo's docs/ folder is the living so
     - Week → day → focus flow: Plan the week grid on top with click-to-filter and Place, "Break down #id" picks in Plan the day, "This week: #id" on cards
     - Calm focus screen and a top-bar timer on every view
     - Focus sounds made in the app (brown, pink, rain, binaural), saved Spotify/YouTube playlists, optional music pause via playerctl
-    - Global capture key Super + Alt + N
+    - Global capture key (developer loop)
 11. **Plan the week by client** (DevOps first): each client's Must and Nice to have lists from DevOps in stack rank order (local reorder), optional pins, fit per client on musts, one-click re-planning with a heads-up offer for a dropped committed must, "Anything shifted?" in Check-in, "2 of 4 musts done" and a midweek "Still realistic?" question, Plan the day drawing from the week, DevOps health at the top of Plan the week
 
 12. **Write framework and timeboxing**: named external writes with preview, confirm, read back, audit log and undo; timeboxes on the day strip with optional Put on Outlook (marker-owned events only)
@@ -67,9 +67,9 @@ We plan, track and show work in DevOps. If it isn't in DevOps, it isn't planned 
 13. ~~Collaboration finder~~ (built): "Needs help from…" ranks Cooptimizers (1) on the client that same day per Focus Time, (2) on the client per Account Worker, (3) anyone else; PTO shown as "away" only; Graph free/busy finds real overlap within each person's working hours and time zone; invites only after preview and confirm. Reads teammates' focus time and PTO (decided: not sensitive at Cooptimize).
 14. DevOps writes: update state, comment, drafts become real stories.
 
-Later: schedule a meeting for an item (pre-filled Outlook first); chat panel on the same actions as the command menu; Ownership area (epics/features I own, contributors, target-date risk); browser access from machines that can't run Moonlight.
+Later: schedule a meeting for an item (pre-filled Outlook first); chat panel on the same actions as the command menu; Ownership area (epics/features I own, contributors, target-date risk); browser access from any machine (the hosted app, A1 to A6).
 
-Dropped (Nov 2): Remmina launch and resume. The VM is reached the usual way; FocusTime only manages its power and auto-shutdown (step 15.4).
+Dropped (Nov 2): launching and resuming the remote desktop session. The VM is reached the usual way; FocusTime only manages its power and auto-shutdown (step 15.4).
 
 ## Direction: hosted for other Cooptimizers (later, needs buy-in)
 
@@ -100,7 +100,7 @@ Interest from other Cooptimizers. A hosted version would use Azure with per-user
 
 ## Built for any Cooptimizer
 
-Currently tailored to Tanner, but nothing person-specific belongs in code: identity, blocks, roles, Edge profiles and preferences come from Dataverse and config. Roles differ (lead owns epics/features; others mainly stories), so views adapt to what the person has assigned.
+Built first for one consultant, but nothing person-specific belongs in code: identity, blocks, roles and preferences come from Dataverse and per-user settings. Roles differ (lead owns epics/features; others mainly stories), so views adapt to what the person has assigned.
 
 ## Queued features
 
@@ -139,24 +139,24 @@ Rules: the UI reads and writes the same validated config file, so file and scree
 
 ## Concept: Follow-ups ("closing the loop")
 
-A follow-up is something Tanner owes someone (an update, answer or follow-through): who, what, channel, optional due date, open until closed.
+A follow-up is something the user owes someone (an update, answer or follow-through): who, what, channel, optional due date, open until closed.
 
 - Built (step 7 and on): opened by rule (DevOps update after a pick is done, slip heads-up, blocker nudge, flex session ended, ask about priorities, a promise in a capture) or manually; closed by a signal that proves it (DevOps state or comment changed) or by "Mark as told" with an optional note. Listed in the Inbox; due ones show on Today.
-- Not built yet: closing on a FocusTime-drafted message confirmed sent (needs the write framework), and waiting-on follow-ups (others owe Tanner), ideally detected rather than hand-entered.
+- Not built yet: closing on a FocusTime-drafted message confirmed sent (needs the write framework), and waiting-on follow-ups (others owe the user), ideally detected rather than hand-entered.
 
 ## North star: synthesized intelligence
 
-Tanner's stated goal: AI that interprets Teams, email and DevOps activity to detect follow-ups in both directions and maintain a synthesized picture of his work, acting as orchestrator, personal assistant and project manager.
+The stated goal: AI that interprets Teams, email and DevOps activity to detect follow-ups in both directions and maintain a synthesized picture of the user's work, acting as orchestrator, personal assistant and project manager.
 
 Staged path, each stage useful on its own:
 
 - A. Deterministic follow-ups: rules plus manual close. No AI. **Built.**
 - B. Signals without AI: DevOps changes auto-close follow-ups (built); message metadata (unanswered threads, who is waiting) from reachable mailboxes and chats (not started).
-- C. AI interpretation with explicit scope: proposes follow-ups, summaries and per-client working notes. Tanner confirms. Notes are inspectable, editable, exportable.
+- C. AI interpretation with explicit scope: proposes follow-ups, summaries and per-client working notes. The user confirms. Notes are inspectable, editable, exportable.
 - D. Orchestrator: proposes plans, drafts updates, flags delivery risk. Always through the same named actions, previews and confirmations; never acts silently.
 
 Boundaries to settle before B/C:
 
-- Which communications are reachable: Cooptimize tenant (Tanner is admin) vs client tenants (e.g. his W&C account), which need each client's consent and policies.
+- Which communications are reachable: Cooptimize tenant (where the user may be an admin) vs client tenants (e.g. a T&W account), which need each client's consent and policies.
 - AI provider data terms for message content (stricter than calendar metadata already approved).
 - Noise control, cost, and retention of synthesized notes.

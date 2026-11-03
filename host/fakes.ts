@@ -119,7 +119,7 @@ export function createFakeHost(o: { now?: () => Temporal.Instant; zone?: string;
       line: (t, b) => void record.lines.push(`${t}: ${b}`),
     },
     links: { open: async (url) => (record.links.push(url), "opened") },
-    media: { status: async () => ({ playerctl: false, spotify: false }), transition: async () => null, open: async () => {}, endSound: () => {} },
+    media: { status: async () => ({ players: false, spotify: false }), transition: async () => null, open: async () => {}, endSound: () => {} },
     launch: {
       reopen: async () => false,
       openWindow: () => {},

@@ -127,7 +127,7 @@ export const ACTIONS = [
   { name: "presence.people", title: "Teammates' presence", group: "Focus", target: "none", summary: "Available, Busy, In a meeting and so on for the Cooptimizers on screen; read-only, never kept" },
   { name: "presence.log", title: "Show the Teams status log", group: "Focus", target: "none", summary: "Every time focus set or cleared your Teams status" },
   { name: "playlist.open", title: "Open a focus playlist", group: "Focus", target: "none", summary: "One of your saved Spotify or YouTube playlists (Settings > Focus)" },
-  { name: "media.status", title: "Check media control", group: "Focus", target: "none", summary: "Whether playerctl (pause and resume music) and the Spotify app are on this computer; read-only" },
+  { name: "media.status", title: "Check media control", group: "Focus", target: "none", summary: "Whether music can be paused and resumed, and whether the Spotify app is there; read-only" },
   { name: "capture.add", title: "Quick capture", group: "Capture", target: "none", shortcut: "N", summary: "One line, saved at once (works offline); sort it into a follow-up, a draft story or a draft feature" },
   { name: "capture.load", title: "Show captures", group: "Capture", target: "none", summary: "The inbox of captures to sort into follow-ups, draft stories and draft features" },
   { name: "capture.route", title: "Sort a capture", group: "Capture", target: "capture", summary: "Make it a follow-up, a draft story or a draft feature, or dismiss it (rules suggest one)" },

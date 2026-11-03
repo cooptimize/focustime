@@ -8,7 +8,7 @@
    Themes (step 6b, D120): Cooptimize Dark is the default (:root), Cooptimize Light and Neutral redefine
    layers 2 and 3 under data-theme on <html>; Neutral follows prefers-color-scheme for light or dark.
    Every theme assigns the same token names (ui/tokens.test.ts). Risk and every other domain color is
-   FocusTime's own, never taken from the Omarchy theme. */
+   FocusTime's own, never taken from the desktop or browser theme. */
 
 /* Fonts: IBM Plex Sans and Plex Mono, self-hosted from @fontsource (ui/fonts.css, step 17.5). */
 

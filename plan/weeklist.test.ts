@@ -15,7 +15,7 @@ describe("tiers and order", () => {
     expect(orderList(moved, rank).map((i) => i.itemId)).toEqual([10, 30, 99, 20]); // placed by hand first, the rest by rank
   });
   it("keeps clients apart and in the order they come", () => {
-    const list = [item({ itemId: 1, clientKey: "T&S" }), item({ itemId: 2 }), item({ itemId: 3, clientKey: "T&S", tier: "nice" }), item({ itemId: 4, clientKey: "T&S" })];
+    const list = [item({ itemId: 1, clientKey: "T&W" }), item({ itemId: 2 }), item({ itemId: 3, clientKey: "T&W", tier: "nice" }), item({ itemId: 4, clientKey: "T&W" })];
     expect(orderList(list, () => null).map((i) => i.itemId)).toEqual([1, 4, 3, 2]);
   });
   it("moving one item renumbers the whole group", () => {
@@ -49,11 +49,11 @@ describe("done and progress against the current plan", () => {
     expect(itemDone(item({ itemId: 1 }), devops, noPick)).toBeNull();
   });
   it("counts musts done of musts on the list now, and the blocks the open ones need", () => {
-    const list = [item({ itemId: 1, doneAt: "x" }), item({ itemId: 2, blocks: 2 }), item({ itemId: 3, blocks: 0.5 }), item({ itemId: 4, tier: "nice" }), item({ itemId: 5, clientKey: "T&S" })];
+    const list = [item({ itemId: 1, doneAt: "x" }), item({ itemId: 2, blocks: 2 }), item({ itemId: 3, blocks: 0.5 }), item({ itemId: 4, tier: "nice" }), item({ itemId: 5, clientKey: "T&W" })];
     const p = progress(list, (i) => !!i.doneAt);
     expect(p).toEqual([
       { clientKey: "Adatum", musts: 3, done: 1, left: 2, leftBlocks: 2.5, nice: 1 },
-      { clientKey: "T&S", musts: 1, done: 0, left: 1, leftBlocks: 1, nice: 0 },
+      { clientKey: "T&W", musts: 1, done: 0, left: 1, leftBlocks: 1, nice: 0 },
     ]);
     expect(progressLabel(p[0]!)).toBe("1 of 3 musts done");
     // A must swapped out no longer counts: progress follows the current plan.

@@ -144,7 +144,8 @@ export type HostLinks = {
 };
 
 export type MediaControl = {
-  status: () => Promise<{ playerctl: boolean; spotify: boolean }>;
+  /** players: whether music players can be paused and resumed here. */
+  status: () => Promise<{ players: boolean; spotify: boolean }>;
   /** Pause or resume players on a timer change (only when enabled and a player control is there). Never throws. */
   transition: (prev: TimerLike, next: TimerLike, enabled: boolean) => Promise<"pause" | "play" | null>;
   /** Opens one validated playlist target (https:// or spotify:). */

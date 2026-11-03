@@ -22,8 +22,8 @@ describe("config text edits keep the file readable", () => {
     expect(setValue("[risk]\nx = 1\n", "ui", "theme", "neutral", "Display")).toBe("[risk]\nx = 1\n\n# Display\n[ui]\ntheme = \"neutral\"\n");
   });
   it("quotes keys and escapes strings so the result parses back to the same values", () => {
-    const t = setValue("[clients]\n", "clients", "T&S", 'say "hi"\\now');
-    expect(t).toContain('"T&S" = "say \\"hi\\"\\\\now"');
+    const t = setValue("[clients]\n", "clients", "T&W", 'say "hi"\\now');
+    expect(t).toContain('"T&W" = "say \\"hi\\"\\\\now"');
     expect(tomlValue({ start: "09:00", list: [1, true] })).toBe('{ start = "09:00", list = [1, true] }');
   });
   it("removes a key, replaces a section body and replaces array tables", () => {
@@ -55,7 +55,7 @@ describe("writeConfig", () => {
 
   it("writes nothing when the result is invalid, and returns the field errors", async () => {
     const path = setup();
-    const r = await writeConfig(path, (t) => setValue(t, "ui", "theme", "omarchy"));
+    const r = await writeConfig(path, (t) => setValue(t, "ui", "theme", "desktop"));
     expect(r.ok).toBe(false);
     expect(r.parsed.ok ? [] : r.parsed.errors).toEqual([{ field: "ui.theme", message: 'Must be one of "cooptimize-dark", "cooptimize-light", "neutral"' }]);
     expect(readFileSync(path, "utf8")).toBe(valid);
@@ -76,6 +76,6 @@ describe("[ui] theme", () => {
     const noUi = valid.replace(/\[ui\]\ntheme = "[^"]*"\n/, "");
     expect(parseConfig(noUi)).toMatchObject({ ok: true, config: { ui: { theme: "cooptimize-dark" } } });
     for (const t of ["cooptimize-dark", "cooptimize-light", "neutral"]) expect(parseConfig(setValue(valid, "ui", "theme", t))).toMatchObject({ ok: true, config: { ui: { theme: t } } });
-    expect(parseConfig(setValue(valid, "ui", "theme", "omarchy")).ok).toBe(false);
+    expect(parseConfig(setValue(valid, "ui", "theme", "desktop")).ok).toBe(false);
   });
 });

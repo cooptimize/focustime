@@ -10,6 +10,12 @@
 # ($XDG_RUNTIME_DIR/focustime/launch.json, mode 0600) and handed straight to the browser.
 # It is never printed, logged or passed through eval.
 #
+# Developer loop only (see system/README.md). The window is launched and focused through two optional helpers named
+# in ${XDG_CONFIG_HOME:-~/.config}/focustime/launcher.env, one KEY=program line each (read as data, never sourced):
+#   FOCUSTIME_WEBAPP=<program>  launches the app window: <program> <url> <browser flags...>
+#   FOCUSTIME_FOCUS=<program>   focuses a matching window or runs a launch command: <program> <window pattern> <command>
+# Without them: Chromium --app, and a new window each time.
+#
 # --capture leaves a one-shot request file ($XDG_RUNTIME_DIR/focustime/open-request, mode 0600) holding only the
 # word "capture". The window takes it (POST /api/open-request) when it loads or gains focus. No token is involved.
 set -euo pipefail
@@ -23,6 +29,20 @@ WAIT_SECONDS=60
 # Which server the open window was launched for. After a service restart the window's token is stale,
 # so that window is replaced instead of focused.
 WINDOW_FILE="${XDG_RUNTIME_DIR:-/tmp}/focustime/window-server-pid"
+LAUNCHER_ENV="${XDG_CONFIG_HOME:-$HOME/.config}/focustime/launcher.env"
+
+# The two helpers: program names or paths only, from a file of ours that only we can write.
+WEBAPP=""
+FOCUS=""
+if [[ -f $LAUNCHER_ENV && -O $LAUNCHER_ENV && ! -L $LAUNCHER_ENV ]] && ! find "$LAUNCHER_ENV" -perm /022 | grep -q .; then
+  while IFS='=' read -r key value; do
+    [[ $value =~ ^[A-Za-z0-9_./-]+$ ]] || continue
+    case $key in
+      FOCUSTIME_WEBAPP) WEBAPP=$value ;;
+      FOCUSTIME_FOCUS) FOCUS=$value ;;
+    esac
+  done <"$LAUNCHER_ENV"
+fi
 
 fail() {
   echo "focustime-open: $1" >&2
@@ -58,9 +78,11 @@ if [[ ${1:-} == "--window" ]]; then
   LINK=""
   wait_for_link
   printf '%s\n' "$SERVER_PID" >"$WINDOW_FILE"
-  # Omarchy's web-app pattern, in a data directory of its own: a stable window class, and the
-  # window stays apart from browsing profiles.
-  exec omarchy-launch-webapp "$LINK" --user-data-dir="$DATA_DIR" --no-first-run --no-default-browser-check
+  # A data directory of its own: a stable window class, and the window stays apart from browsing profiles.
+  if [[ -n $WEBAPP ]]; then
+    exec "$WEBAPP" "$LINK" --user-data-dir="$DATA_DIR" --no-first-run --no-default-browser-check
+  fi
+  exec chromium --app="$LINK" --user-data-dir="$DATA_DIR" --no-first-run --no-default-browser-check
 fi
 
 CAPTURE=0
@@ -88,7 +110,9 @@ if ((CAPTURE)); then
   ) || fail "Could not ask FocusTime to open Quick capture"
 fi
 
+# Window lookup and close need a compositor with hyprctl; elsewhere this step is skipped.
 window_address() {
+  command -v hyprctl >/dev/null || return 0
   hyprctl clients -j | jq -r --arg p "$WINDOW_PATTERN" '.[]|select((.class|test("\\b" + $p + "\\b";"i")) or (.title|test("\\b" + $p + "\\b";"i")))|.address' | head -n1
 }
 
@@ -104,5 +128,8 @@ fi
 
 # Focus the window titled exactly "FocusTime" or with that class, or launch it. (A plain "focustime"
 # would also match a terminal titled after the project.) The launch command is a fixed
-# string, so nothing from the launch file reaches eval inside omarchy-launch-or-focus.
-exec omarchy-launch-or-focus "$WINDOW_PATTERN" "$(printf '%q' "$(readlink -f "$0")") --window"
+# string, so nothing from the launch file reaches eval inside the focus helper.
+if [[ -n $FOCUS ]]; then
+  exec "$FOCUS" "$WINDOW_PATTERN" "$(printf '%q' "$(readlink -f "$0")") --window"
+fi
+exec "$(readlink -f "$0")" --window

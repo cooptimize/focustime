@@ -36,8 +36,8 @@ export type WeekLoadData = {
   timer: TimerView | null;
   /** Focus sounds, playlists and media control from [focus] (step 10); defaults when unset. */
   focus: FocusSettings;
-  /** What media control is on this machine (read-only check): playerctl, and the Spotify app for playlist links. */
-  media: { playerctl: boolean; spotify: boolean };
+  /** What media control the host has (read-only check): pausing players, and the Spotify app for playlist links. */
+  media: { players: boolean; spotify: boolean };
   /** Open follow-ups, for the Follow-ups count in the top bar (step 6c). */
   openFollowUps: number;
   /** Focused seconds per pick on the week shown (focus log, step 6c). */

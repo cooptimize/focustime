@@ -14,8 +14,8 @@ export const noStanding: WeekConfig = { ...config, standingBlocks: [] };
 export function pattern(over: Partial<FocusPattern> & Pick<FocusPattern, "days">): FocusPattern {
   return {
     id: "p1",
-    clientKey: "wc",
-    clientName: "Tailspin & Sons",
+    clientKey: "tw",
+    clientName: "Tailspin & Wingtip",
     startDate: "2026-01-05",
     endDate: null,
     active: true,

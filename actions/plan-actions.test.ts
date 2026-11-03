@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
-import { STARTER_TOML } from "../config/starter.ts";
+import { FOUR_DAY_TOML as STARTER_TOML } from "../fixtures/four-day-week.ts";
 import type { PlanDayState, Pick } from "../plan/types.ts";
 import { createDataverseSource } from "../sources/dataverse/source.ts";
 import { dvConfig, FAKE_SECRET, fakeFetch } from "../sources/dataverse/test-fakes.ts";
@@ -495,8 +495,8 @@ describe("draft editor (step 15.3): draft.update", () => {
     const t = setup();
     await t.run("week.load", { weekStart: "2026-11-02" });
     const d = t.plan.addDraft({ clientKey: "Adatum", parentItemId: 130, title: "Story", size: "M" });
-    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: d.id, clientKey: "T&S" })).draft).toMatchObject({ clientKey: "T&S", parentItemId: null });
-    await t.run("pick.add", { date: D, half: "AM", clientKey: "T&S", draftId: d.id });
+    expect((await t.run<{ draft: Record<string, unknown> }>("draft.update", { id: d.id, clientKey: "T&W" })).draft).toMatchObject({ clientKey: "T&W", parentItemId: null });
+    await t.run("pick.add", { date: D, half: "AM", clientKey: "T&W", draftId: d.id });
     expect((await t.fail("draft.update", { id: d.id, clientKey: "Adatum" })).status).toBe(409);
     expect((await t.fail("draft.update", { id: d.id, title: "" })).status).toBe(400);
     // A new title shows on the planned pick (Plan it, then edit).

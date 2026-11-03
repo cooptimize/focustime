@@ -1,6 +1,6 @@
 # FocusTime style guide (proposal)
 
-Status: proposal, Oct 31 2026. Step 6.1 built the token layers (section 3) with the step 6 palette, the AA contrast fixes, and parts of section 6 (Tab scope, F6, O, the legend); see D110 to D115. Step 6b built the themes (Cooptimize Dark default, Cooptimize Light, Neutral) and self-hosted Red Hat Display (D120); the Omarchy option stays a proposal. It describes the token system, themes and components that Phase 5 would implement, starting with a token layer and theme switcher that changes no layout. Words follow the glossary in `CLAUDE.md` (Plan the day, Check-in, Close out, focus block, Open, PTO). Step 17.5 replaced the font with IBM Plex Sans and Plex Mono (D358) and added the brand tokens and components (section 4.1, docs/design/brand.md).
+Status: proposal, Oct 31 2026. Step 6.1 built the token layers (section 3) with the step 6 palette, the AA contrast fixes, and parts of section 6 (Tab scope, F6, O, the legend); see D110 to D115. Step 6b built the themes (Cooptimize Dark default, Cooptimize Light, Neutral) and self-hosted Red Hat Display (D120); a desktop-theme option was dropped in A1 (the hosted app has no desktop theme). It describes the token system, themes and components that Phase 5 would implement, starting with a token layer and theme switcher that changes no layout. Words follow the glossary in `CLAUDE.md` (Plan the day, Check-in, Close out, focus block, Open, PTO). Step 17.5 replaced the font with IBM Plex Sans and Plex Mono (D358) and added the brand tokens and components (section 4.1, docs/design/brand.md).
 
 ## 1. Principles
 
@@ -112,13 +112,13 @@ A theme is one file that assigns every semantic and domain token. Switching a th
 
 ### 3.4 Client colors
 
-Eight named slots, each with a value per theme. Config maps a client to a slot (`CSC = "ochre"`); a raw hex still works but is used as is in every theme (no contrast guarantee). The current four clients keep their hues.
+Eight named slots, each with a value per theme. Config maps a client to a slot (`Adatum = "ochre"`); a raw hex still works but is used as is in every theme (no contrast guarantee). The current four clients keep their hues.
 
 | Slot | Dark | Light | Today's client |
 |---|---|---|---|
-| 1 `teal` | `#3FC1AE` | `#0F8576` | W&C |
-| 2 `violet` | `#B8A2FF` | `#6B4FD8` | Quiddity |
-| 3 `ochre` | `#E3A24A` | `#A8620C` | CSC |
+| 1 `teal` | `#3FC1AE` | `#0F8576` | T&W |
+| 2 `violet` | `#B8A2FF` | `#6B4FD8` | Proseware |
+| 3 `ochre` | `#E3A24A` | `#A8620C` | Adatum |
 | 4 `blue` | `#4F8DE8` | `#1F5FB8` | Cooptimize |
 | 5 `rose` | `#F0B0E8` | `#D0457A` | |
 | 6 `earth` | `#EFE3C4` | `#5E5040` | |
@@ -130,7 +130,7 @@ Checked numerically (WCAG contrast; color-vision simulation with Machado 2009 ma
 - Against the card surface: dark 5.2 to 13.6:1, light 4.2 to 7.8:1. Swatches and rails need 3:1, so all pass. Client names are always drawn in `--text`, never in the client color.
 - First 6 slots, closest pair: dark normal 10.4, deuteranopia ≥ 7.3, protanopia 7.3, tritanopia 8.9; light normal 10.6, deuteranopia 5.3, protanopia 5.2, tritanopia 4.4 (violet and blue, the weakest pair).
 - Slots 7 and 8 fall below 3 for some color-vision types (green against ochre in deuteranopia, earth against slate in protanopia). They rely on the client name, which is always on the card. Assign them last.
-- Today's palette: closest pair (Quiddity and Cooptimize) 9.1 normal, 4.9 deuteranopia.
+- Today's palette: closest pair (Proseware and Cooptimize) 9.1 normal, 4.9 deuteranopia.
 
 **Risk overlays:** risk never tints the whole card in client-like hues. At risk is a labeled badge plus a 1 px risk outline; watch is a labeled badge only. Every client slot sits at least 10 (dark) or 9 (light) away from `--risk` in normal vision, and the badge text carries the meaning regardless.
 
@@ -258,9 +258,9 @@ Today's dark theme fails AA for faint text: 4.48:1 on cards, 3.93:1 on meeting c
 - **Neutral Graphite:** today's palette with the faint text fixed. It proves the system carries a non-brand theme and gives a no-surprise fallback.
 - **System** (setting, not a theme): Cooptimize Dark or Light by `prefers-color-scheme`.
 
-Stored in config through Settings (step 6b): `[ui] theme = "cooptimize-dark" | "cooptimize-light" | "neutral" | "system" | "omarchy"`.
+Stored in config through Settings (step 6b): `[ui] theme = "cooptimize-dark" | "cooptimize-light" | "neutral" | "system"`.
 
-**Following the Omarchy theme (proposal, not for the first slice):** an `omarchy` option that reads the active theme's `colors.toml` read-only (found through `omarchy theme current` and `omarchy theme dir`, rechecked on window focus) and maps only `mode`, the background tiers, `foreground`, `accent` and `selection` onto the semantic tokens. Domain tokens (risk, watch, PTO, client slots) stay from Cooptimize Dark or Light by `mode`. Omarchy palettes reuse ANSI names freely: Lumon's `red` is a blue (`#4D86B0`), so risk can never come from the theme. If the theme's text on background contrast is under 4.5:1, it falls back to the Cooptimize theme for that mode. Nothing is written into `~/.config/omarchy`. A template under `~/.config/omarchy/themed/` would be cleaner but touches Omarchy and needs your approval first.
+**Following a desktop theme:** dropped in A1. FocusTime is a hosted web app, so its colors are its own; risk and the other domain colors never come from outside.
 
 ## 9. `/styleguide` route (proposal)
 

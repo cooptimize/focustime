@@ -18,7 +18,7 @@ export function ReopenButton() {
       >
         {state === "opening" ? "Opening…" : "Reopen FocusTime"}
       </button>
-      {state === "manual" && <span className="muted"> FocusTime couldn't open a window from here. Press Super + Alt + C or run focustime-open.</span>}
+      {state === "manual" && <span className="muted"> FocusTime couldn't open a window from here. Open it again the way you started it.</span>}
     </span>
   );
 }

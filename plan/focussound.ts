@@ -18,7 +18,7 @@ export type FocusSettings = {
   /** Fade in and out, 0 to 30 seconds. */
   fadeSeconds: number;
   onBreak: "silence" | "chime";
-  /** Pause media players when focus ends or a break starts, resume them when the next focus starts (playerctl). */
+  /** Pause media players when focus ends or a break starts, resume them when the next focus starts (the host's media control). */
   pauseMedia: boolean;
   playlists: Playlist[];
   /** Step 16.3: set my Teams status while focus runs (Busy, or Do not disturb for deep focus). */

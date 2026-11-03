@@ -116,7 +116,7 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await expect(page.getByText(/session expired/i).count()).resolves.toBe(0);
     // The test server can't open windows, so the button says how to reopen by hand.
     await banner.getByRole("button", { name: "Reopen FocusTime" }).click();
-    await expect.poll(() => banner.textContent(), { timeout: 5000 }).toContain("Super + Alt + C");
+    await expect.poll(() => banner.textContent(), { timeout: 5000 }).toContain("Open it again the way you started it.");
     await page.close();
   }, T);
 });

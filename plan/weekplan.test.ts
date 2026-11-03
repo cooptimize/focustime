@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { buildWeek } from "../week/build.ts";
-import { weekConfig } from "../config/defaults.ts";
+import { fourDayWeekConfig as weekConfig } from "../fixtures/four-day-week.ts";
 import type { ClientPortfolio, FocusPattern, PortfolioItem, WorkItem } from "../week/types.ts";
 import type { WeekFeature } from "../store/plan-store.ts";
 import { withCurrentTitles, borrowedForWeek, briefMarkdown, clientBlocks, readiness, weekBudget, weekNudges, type NudgeTimes } from "./weekplan.ts";
 
 const W = "2026-11-09";
 const pattern = (clientKey: string, days: FocusPattern["days"]): FocusPattern => ({ id: clientKey, clientKey, clientName: clientKey, startDate: "2026-01-01", endDate: null, active: true, days });
-// Next week: T&S Mon PM, Tue AM+PM (All Day), Wed PM; Adatum Wed AM. Monday AM is the standing Cooptimize block.
-const patterns = [pattern("T&S", { Mon: "PM", Tue: "AllDay", Wed: "PM" }), pattern("Adatum", { Wed: "AM" })];
+// Next week: T&W Mon PM, Tue AM+PM (All Day), Wed PM; Adatum Wed AM. Monday AM is the standing Cooptimize block.
+const patterns = [pattern("T&W", { Mon: "PM", Tue: "AllDay", Wed: "PM" }), pattern("Adatum", { Wed: "AM" })];
 const week = (over: Partial<Parameters<typeof buildWeek>[0]> = {}) => buildWeek({ weekStart: W, patterns, events: [], config: weekConfig, ...over });
 
 const feature = (over: Partial<WeekFeature>): WeekFeature => ({
-  id: 1, weekStart: W, clientKey: "T&S", itemId: 210, title: "Export", itemType: "Feature", url: null, blocks: 2, size: null, parentId: null, slots: [], position: 1, level: "feature", tier: "must", doneAt: null, createdAt: "", updatedAt: "", ...over,
+  id: 1, weekStart: W, clientKey: "T&W", itemId: 210, title: "Export", itemType: "Feature", url: null, blocks: 2, size: null, parentId: null, slots: [], position: 1, level: "feature", tier: "must", doneAt: null, createdAt: "", updatedAt: "", ...over,
 }) as WeekFeature;
 const pItem = (over: Partial<PortfolioItem>): PortfolioItem => ({
   id: 210, title: "Export", type: "Feature", state: "Active", stateCategory: "InProgress", tier: "feature", order: 1, parentId: null, url: "https://dev.azure.com/o/p/_workitems/edit/210",
@@ -29,7 +29,7 @@ describe("a client's blocks next week (step 8)", () => {
       events: [{ id: "m", source: "outlook", title: "Status", start: "2026-11-09T13:00:00-05:00", end: "2026-11-09T14:30:00-05:00", allDay: false, showAs: "busy", isPersonal: false, responseStatus: "accepted" }],
       pto: { "2026-11-11": { date: "2026-11-11", titles: ["Vacation"], entries: [] } as never },
     });
-    const b = clientBlocks(w, "T&S");
+    const b = clientBlocks(w, "T&W");
     expect(b.map((x) => [x.date, x.half, x.pto])).toEqual([["2026-11-09", "PM", false], ["2026-11-10", "AM", false], ["2026-11-10", "PM", false], ["2026-11-11", "PM", true]]);
     expect(b[0]!.freeMinutes).toBe(b[0]!.totalMinutes - 90);
     expect(b[3]!.freeMinutes).toBe(0);
@@ -40,10 +40,10 @@ describe("the budget per client (step 16.4): whole blocks", () => {
   const ev = (start: string, end: string) => ({ id: start, source: "outlook" as const, title: "Busy", start, end, allDay: false, showAs: "busy" as const, isPersonal: false, responseStatus: "accepted" as const });
   it("is the client's half-days, a whole number, and says how the musts compare", () => {
     const w = week();
-    const b = weekBudget(w, [feature({ blocks: 2 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!;
+    const b = weekBudget(w, [feature({ blocks: 2 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!;
     expect(b).toMatchObject({ budget: 4, planned: 2, status: "free", text: "2 blocks free" });
-    expect(weekBudget(w, [feature({ blocks: 4 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.text).toBe("All 4 planned");
-    expect(weekBudget(w, [feature({ blocks: 5 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.text).toBe("5 planned, 4 available");
+    expect(weekBudget(w, [feature({ blocks: 4 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!.text).toBe("All 4 planned");
+    expect(weekBudget(w, [feature({ blocks: 5 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!.text).toBe("5 planned, 4 available");
   });
   it("leaves out days off and half-days with under 2 hours free, and says why", () => {
     const w = week({
@@ -51,46 +51,46 @@ describe("the budget per client (step 16.4): whole blocks", () => {
       // Mon PM mostly meetings: 13:00 to 16:00 busy.
       events: [ev("2026-11-09T13:00:00-05:00", "2026-11-09T16:00:00-05:00")],
     });
-    const b = weekBudget(w, [feature({ blocks: 1 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!;
+    const b = weekBudget(w, [feature({ blocks: 1 })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!;
     expect(b.budget).toBe(1);
     expect(b.blocks.filter((x) => !x.counts).map((x) => x.reason)).toEqual(["Mon PM: mostly meetings", "Tue AM: day off", "Tue PM: day off"]);
     expect(Number.isInteger(b.budget)).toBe(true);
   });
   it("a meeting that leaves 2 hours or more still counts the half-day", () => {
     const w = week({ events: [ev("2026-11-09T13:00:00-05:00", "2026-11-09T14:00:00-05:00")] });
-    expect(weekBudget(w, [], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.budget).toBe(4);
+    expect(weekBudget(w, [], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!.budget).toBe(4);
   });
   it("unpaid borrowed time takes whole blocks only", () => {
     const w = week();
-    expect(weekBudget(w, [], { borrowedMinutes: { "T&S": 120 } }).find((f) => f.clientKey === "T&S")).toMatchObject({ budget: 4, borrowedBlocks: 0 });
-    expect(weekBudget(w, [], { borrowedMinutes: { "T&S": 600 } }).find((f) => f.clientKey === "T&S")).toMatchObject({ budget: 2, borrowedBlocks: 2 });
+    expect(weekBudget(w, [], { borrowedMinutes: { "T&W": 120 } }).find((f) => f.clientKey === "T&W")).toMatchObject({ budget: 4, borrowedBlocks: 0 });
+    expect(weekBudget(w, [], { borrowedMinutes: { "T&W": 600 } }).find((f) => f.clientKey === "T&W")).toMatchObject({ budget: 2, borrowedBlocks: 2 });
   });
   it("counts an Open half-day an item is pinned to as that client's block", () => {
     const w = week();
     expect(w.days.find((d) => d.date === "2026-11-12")!.am.open).toBe(true);
-    expect(weekBudget(w, [feature({ blocks: 5, slots: [{ date: "2026-11-12", half: "AM" }] })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.text).toBe("All 5 planned");
+    expect(weekBudget(w, [feature({ blocks: 5, slots: [{ date: "2026-11-12", half: "AM" }] })], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!.text).toBe("All 5 planned");
   });
   it("stories under a listed feature fill it and never add to the total", () => {
     const items = [feature({ itemId: 210, blocks: 2 }), feature({ id: 2, itemId: 211, level: "story", blocks: null, size: "L", parentId: 210 }), feature({ id: 3, itemId: 212, level: "story", blocks: null, size: "L", parentId: 210 }), feature({ id: 4, itemId: 213, level: "story", blocks: null, size: "M", parentId: null })];
-    expect(weekBudget(week(), items, { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!.planned).toBe(3);
+    expect(weekBudget(week(), items, { borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!.planned).toBe(3);
   });
   it("shows every client with blocks or commitments", () => {
-    expect(weekBudget(week(), [], { borrowedMinutes: {} }).map((f) => [f.clientKey, f.status])).toEqual([["internal", "none"], ["T&S", "none"], ["Adatum", "none"]]);
+    expect(weekBudget(week(), [], { borrowedMinutes: {} }).map((f) => [f.clientKey, f.status])).toEqual([["internal", "none"], ["T&W", "none"], ["Adatum", "none"]]);
   });
 });
 
 describe("borrowed time against a week's fit (Q48)", () => {
   it("counts only unpaid borrows paid back in that week, or with no payback date", () => {
     const b = (clientKey: string, minutes: number, paybackDate: string | null, paidAt: string | null = null) => ({ clientKey, minutes, paybackDate, paidAt });
-    const list = [b("T&S", 120, "2026-11-10"), b("T&S", 60, "2026-11-15"), b("T&S", 90, "2026-11-06"), b("T&S", 45, "2026-11-11", "x"), b("Adatum", 30, null), b("Adatum", 15, "2026-11-16")];
-    expect(borrowedForWeek(list, W)).toEqual({ "T&S": 180, Adatum: 30 });
+    const list = [b("T&W", 120, "2026-11-10"), b("T&W", 60, "2026-11-15"), b("T&W", 90, "2026-11-06"), b("T&W", 45, "2026-11-11", "x"), b("Adatum", 30, null), b("Adatum", 15, "2026-11-16")];
+    expect(borrowedForWeek(list, W)).toEqual({ "T&W": 180, Adatum: 30 });
   });
 });
 
 describe("committed feature titles (Q51)", () => {
   it("shows the current DevOps title, and the stored one only when DevOps can't give it", () => {
     const fs = [feature({ itemId: 210, title: "Old name" }), feature({ id: 2, itemId: 220, title: "Kept name" })];
-    const now = withCurrentTitles(fs, (k, id) => (k === "T&S" && id === 210 ? "Export, renamed" : null));
+    const now = withCurrentTitles(fs, (k, id) => (k === "T&W" && id === 210 ? "Export, renamed" : null));
     expect(now.map((f) => [f.itemId, f.title, f.titleSource])).toEqual([[210, "Export, renamed", "devops"], [220, "Kept name", "saved"]]);
   });
 });
@@ -100,44 +100,44 @@ describe("readiness ladder", () => {
   it("an epic with no open features needs features", () => {
     const epic = pItem({ id: 250, tier: "epic", type: "Epic", children: [child(251, false, "portfolio")] });
     const ok = pItem({ id: 260, tier: "epic", type: "Epic", children: [child(261, true, "portfolio")] });
-    const r = readiness({ week: w, portfolios: [portfolio("T&S", [epic, ok])], features: [], work: [{ clientKey: "T&S", status: "ok", fromCache: false, items: [mine(1)] }], marks: [], followUps: [] });
+    const r = readiness({ week: w, portfolios: [portfolio("T&W", [epic, ok])], features: [], work: [{ clientKey: "T&W", status: "ok", fromCache: false, items: [mine(1)] }], marks: [], followUps: [] });
     expect(r.map((x) => [x.kind, x.itemId])).toEqual([["needs_features", 250]]);
   });
   it("step 13.5: draft features under an epic are counted on its flag (draft stories aren't)", () => {
     const epic = pItem({ id: 250, tier: "epic", type: "Epic", children: [] });
-    const drafts = [{ clientKey: "T&S", parentItemId: 250, title: "Import", level: "feature" as const }, { clientKey: "T&S", parentItemId: 250, title: "Story", level: "story" as const }, { clientKey: "Adatum", parentItemId: 250, title: "Other", level: "feature" as const }];
-    const r = readiness({ week: w, portfolios: [portfolio("T&S", [epic])], features: [], work: [{ clientKey: "T&S", status: "ok", fromCache: false, items: [mine(1)] }], marks: [], followUps: [], drafts });
+    const drafts = [{ clientKey: "T&W", parentItemId: 250, title: "Import", level: "feature" as const }, { clientKey: "T&W", parentItemId: 250, title: "Story", level: "story" as const }, { clientKey: "Adatum", parentItemId: 250, title: "Other", level: "feature" as const }];
+    const r = readiness({ week: w, portfolios: [portfolio("T&W", [epic])], features: [], work: [{ clientKey: "T&W", status: "ok", fromCache: false, items: [mine(1)] }], marks: [], followUps: [], drafts });
     expect(r.find((x) => x.kind === "needs_features")?.drafts).toBe(1);
   });
   it("step 13.5: a follow-up picked into a block is not an intention missing from DevOps", () => {
-    const intentions = [{ id: 1, clientKey: "T&S", title: "Reply to Dana", date: W, size: "S" as const, status: "planned", followUpId: 4 }, { id: 2, clientKey: "T&S", title: "Look at logs", date: W, size: "S" as const, status: "planned", followUpId: null }];
-    const r = readiness({ week: w, portfolios: [], features: [], work: [{ clientKey: "T&S", status: "ok", fromCache: false, items: [mine(1)] }], marks: [], followUps: [], intentions });
+    const intentions = [{ id: 1, clientKey: "T&W", title: "Reply to Dana", date: W, size: "S" as const, status: "planned", followUpId: 4 }, { id: 2, clientKey: "T&W", title: "Look at logs", date: W, size: "S" as const, status: "planned", followUpId: null }];
+    const r = readiness({ week: w, portfolios: [], features: [], work: [{ clientKey: "T&W", status: "ok", fromCache: false, items: [mine(1)] }], marks: [], followUps: [], intentions });
     expect(r.filter((x) => x.kind === "intention_not_in_devops").map((x) => x.title)).toEqual(["Look at logs"]);
   });
   it("a committed feature with no open stories (anyone's) needs breakdown, showing when it was marked as being broken down", () => {
     const empty = pItem({ id: 240, children: [child(241, false)] });
     const ready = pItem({ id: 210, children: [child(211, true)] });
-    const input = { week: w, portfolios: [portfolio("T&S", [empty, ready])], features: [feature({ itemId: 240 }), feature({ id: 2, itemId: 210 })], work: [{ clientKey: "T&S", status: "ok", fromCache: false, items: [mine(1)] }], followUps: [] };
-    expect(readiness({ ...input, marks: [] }).filter((x) => x.kind === "needs_breakdown")).toEqual([expect.objectContaining({ clientKey: "T&S", itemId: 240, markedAt: null })]);
-    expect(readiness({ ...input, marks: [{ clientKey: "T&S", itemId: 240, markedAt: "2026-11-05T10:00:00-05:00[America/New_York]" }] }).find((x) => x.kind === "needs_breakdown")!.markedAt).toBe("2026-11-05T10:00:00-05:00[America/New_York]");
+    const input = { week: w, portfolios: [portfolio("T&W", [empty, ready])], features: [feature({ itemId: 240 }), feature({ id: 2, itemId: 210 })], work: [{ clientKey: "T&W", status: "ok", fromCache: false, items: [mine(1)] }], followUps: [] };
+    expect(readiness({ ...input, marks: [] }).filter((x) => x.kind === "needs_breakdown")).toEqual([expect.objectContaining({ clientKey: "T&W", itemId: 240, markedAt: null })]);
+    expect(readiness({ ...input, marks: [{ clientKey: "T&W", itemId: 240, markedAt: "2026-11-05T10:00:00-05:00[America/New_York]" }] }).find((x) => x.kind === "needs_breakdown")!.markedAt).toBe("2026-11-05T10:00:00-05:00[America/New_York]");
     // Not committed: no flag.
     expect(readiness({ ...input, features: [], marks: [] }).some((x) => x.kind === "needs_breakdown")).toBe(false);
   });
   it("a client focus block next week with no open work assigned to me needs work, with any follow-up already asked", () => {
-    const r = readiness({ week: w, portfolios: [], features: [], marks: [], followUps: [], work: [{ clientKey: "T&S", status: "ok", fromCache: false, items: [] }, { clientKey: "Adatum", status: "ok", fromCache: false, items: [mine(5)] }] });
-    expect(r).toEqual([expect.objectContaining({ kind: "block_needs_work", clientKey: "T&S", blocks: 4, followUpId: null })]);
-    const asked = readiness({ week: w, portfolios: [], features: [], marks: [], followUps: [{ id: 9, kind: "priorities", clientKey: "T&S", ruleKey: `priorities:${W}:T&S`, closedAt: null }], work: [{ clientKey: "T&S", status: "ok", fromCache: false, items: [] }] });
+    const r = readiness({ week: w, portfolios: [], features: [], marks: [], followUps: [], work: [{ clientKey: "T&W", status: "ok", fromCache: false, items: [] }, { clientKey: "Adatum", status: "ok", fromCache: false, items: [mine(5)] }] });
+    expect(r).toEqual([expect.objectContaining({ kind: "block_needs_work", clientKey: "T&W", blocks: 4, followUpId: null })]);
+    const asked = readiness({ week: w, portfolios: [], features: [], marks: [], followUps: [{ id: 9, kind: "priorities", clientKey: "T&W", ruleKey: `priorities:${W}:T&W`, closedAt: null }], work: [{ clientKey: "T&W", status: "ok", fromCache: false, items: [] }] });
     expect(asked[0]).toMatchObject({ followUpId: 9 });
     // DevOps not loaded, failed or from cache: nothing can be said.
-    expect(readiness({ week: w, portfolios: [], features: [], marks: [], followUps: [], work: [{ clientKey: "T&S", status: "auth_failed", fromCache: false, items: [] }] })).toEqual([]);
+    expect(readiness({ week: w, portfolios: [], features: [], marks: [], followUps: [], work: [{ clientKey: "T&W", status: "auth_failed", fromCache: false, items: [] }] })).toEqual([]);
     expect(readiness({ week: w, portfolios: [], features: [], marks: [], followUps: [], work: null })).toEqual([]);
   });
   it("step 9: a feature needing breakdown counts its local draft stories; unsorted captures are one line to sort", () => {
     const empty = pItem({ id: 240, children: [] });
     const r = readiness({
-      week: w, portfolios: [portfolio("T&S", [empty])], features: [feature({ itemId: 240 })], marks: [], followUps: [],
-      work: [{ clientKey: "T&S", status: "ok", fromCache: false, items: [mine(1)] }, { clientKey: "Adatum", status: "ok", fromCache: false, items: [mine(2)] }],
-      drafts: [{ clientKey: "T&S", parentItemId: 240 }, { clientKey: "T&S", parentItemId: 240 }, { clientKey: "T&S", parentItemId: null }, { clientKey: "Adatum", parentItemId: 240 }],
+      week: w, portfolios: [portfolio("T&W", [empty])], features: [feature({ itemId: 240 })], marks: [], followUps: [],
+      work: [{ clientKey: "T&W", status: "ok", fromCache: false, items: [mine(1)] }, { clientKey: "Adatum", status: "ok", fromCache: false, items: [mine(2)] }],
+      drafts: [{ clientKey: "T&W", parentItemId: 240 }, { clientKey: "T&W", parentItemId: 240 }, { clientKey: "T&W", parentItemId: null }, { clientKey: "Adatum", parentItemId: 240 }],
       captures: 3,
     });
     expect(r.find((x) => x.kind === "needs_breakdown")).toMatchObject({ itemId: 240, drafts: 2 });
@@ -145,15 +145,15 @@ describe("readiness ladder", () => {
     expect(readiness({ week: w, portfolios: [], features: [], marks: [], followUps: [], work: null, captures: 0 }).some((x) => x.kind === "captures_to_sort")).toBe(false);
   });
   it("a committed feature with no target date gets a soft flag", () => {
-    const r = readiness({ week: w, portfolios: [portfolio("T&S", [pItem({ targetDate: null, children: [child(211, true)] })])], features: [feature({})], work: null, marks: [], followUps: [] });
+    const r = readiness({ week: w, portfolios: [portfolio("T&W", [pItem({ targetDate: null, children: [child(211, true)] })])], features: [feature({})], work: null, marks: [], followUps: [] });
     expect(r).toEqual([expect.objectContaining({ kind: "no_target_date", itemId: 210, soft: true })]);
   });
   it("orders the list: blocks needing work, breakdown, target dates, intentions, epics", () => {
     const r = readiness({
       week: w,
-      portfolios: [portfolio("T&S", [pItem({ id: 240, targetDate: null }), pItem({ id: 250, tier: "epic", type: "Epic" })])],
+      portfolios: [portfolio("T&W", [pItem({ id: 240, targetDate: null }), pItem({ id: 250, tier: "epic", type: "Epic" })])],
       features: [feature({ itemId: 240 })],
-      work: [{ clientKey: "T&S", status: "ok", fromCache: false, items: [] }],
+      work: [{ clientKey: "T&W", status: "ok", fromCache: false, items: [] }],
       marks: [],
       followUps: [],
     });
@@ -163,36 +163,36 @@ describe("readiness ladder", () => {
 
 describe("the budget counts musts only (step 11)", () => {
   it("nice-to-haves are listed but don't count against the client's blocks", () => {
-    const b = weekBudget(week(), [feature({ itemId: 1, blocks: 2 }), { ...feature({ itemId: 2, blocks: 3 }), tier: "nice" }], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&S")!;
+    const b = weekBudget(week(), [feature({ itemId: 1, blocks: 2 }), { ...feature({ itemId: 2, blocks: 3 }), tier: "nice" }], { borrowedMinutes: {} }).find((f) => f.clientKey === "T&W")!;
     expect(b).toMatchObject({ planned: 2, nicePlanned: 3 });
   });
 });
 
 describe("DevOps health (step 11)", () => {
   const base = { week: week(), work: null, marks: [], followUps: [] };
-  const ports = [portfolio("T&S", [pItem({ id: 240, targetDate: null }), pItem({ id: 241, targetDate: null }), pItem({ id: 242, targetDate: "2026-11-20", children: [child(1, true)] })])];
+  const ports = [portfolio("T&W", [pItem({ id: 240, targetDate: null }), pItem({ id: 241, targetDate: null }), pItem({ id: 242, targetDate: "2026-11-20", children: [child(1, true)] })])];
   it("flags list features with no stories (must or nice) and musts with no target date; stories aren't checked as features", () => {
     const r = readiness({ ...base, portfolios: ports, features: [feature({ itemId: 240 }), { ...feature({ itemId: 241 }), tier: "nice" }, feature({ itemId: 242 }), { ...feature({ itemId: 243 }), level: "story" }] });
     expect(r.map((x) => `${x.kind}:${x.itemId}`)).toEqual(["needs_breakdown:240", "needs_breakdown:241", "no_target_date:240"]);
   });
   it("nudges typed intentions into DevOps, unless already a draft, dropped, or a Break down pick", () => {
     const intentions = [
-      { id: 1, clientKey: "T&S", title: "Review the export", date: "2026-11-09", size: "M" as const, status: "planned" },
-      { id: 2, clientKey: "T&S", title: "Already drafted", date: "2026-11-09", size: "S" as const, status: "done" },
-      { id: 3, clientKey: "T&S", title: "Gone", date: "2026-11-09", size: "S" as const, status: "dropped" },
-      { id: 4, clientKey: "T&S", title: "Break down #240 Export", date: "2026-11-09", size: "M" as const, status: "planned" },
+      { id: 1, clientKey: "T&W", title: "Review the export", date: "2026-11-09", size: "M" as const, status: "planned" },
+      { id: 2, clientKey: "T&W", title: "Already drafted", date: "2026-11-09", size: "S" as const, status: "done" },
+      { id: 3, clientKey: "T&W", title: "Gone", date: "2026-11-09", size: "S" as const, status: "dropped" },
+      { id: 4, clientKey: "T&W", title: "Break down #240 Export", date: "2026-11-09", size: "M" as const, status: "planned" },
     ];
-    const r = readiness({ ...base, portfolios: [], features: [], intentions, drafts: [{ clientKey: "T&S", parentItemId: null, title: "already drafted " }] });
-    expect(r).toEqual([expect.objectContaining({ kind: "intention_not_in_devops", pickId: 1, clientKey: "T&S", title: "Review the export", size: "M" })]);
+    const r = readiness({ ...base, portfolios: [], features: [], intentions, drafts: [{ clientKey: "T&W", parentItemId: null, title: "already drafted " }] });
+    expect(r).toEqual([expect.objectContaining({ kind: "intention_not_in_devops", pickId: 1, clientKey: "T&W", title: "Review the export", size: "M" })]);
   });
 });
 
 describe("Coop brief", () => {
   const item = pItem({ children: [child(211, false), child(212, true)] });
   it("is markdown with the client, feature, description, link, child items and states, target date, and the request", () => {
-    const md = briefMarkdown({ clientName: "T&S", item, description: "Export the weekly report.\n- CSV" });
+    const md = briefMarkdown({ clientName: "T&W", item, description: "Export the weekly report.\n- CSV" });
     expect(md).toContain("# Coop brief: Feature #210 Export");
-    expect(md).toContain("- Client: T&S");
+    expect(md).toContain("- Client: T&W");
     expect(md).toContain("- Target date: Fri, Nov 20, 2026");
     expect(md).toContain("- Link: https://dev.azure.com/o/p/_workitems/edit/210");
     expect(md).toContain("Export the weekly report.\n- CSV");
@@ -203,11 +203,11 @@ describe("Coop brief", () => {
     expect(md).toContain("S (about an hour), M (a couple of hours) or L (about a whole block)");
   });
   it("carries only DevOps fields: no assignees, nothing from the plan", () => {
-    const md = briefMarkdown({ clientName: "T&S", item, description: "" });
+    const md = briefMarkdown({ clientName: "T&W", item, description: "" });
     expect(md).not.toContain("Dana");
     expect(md).toContain("No description in DevOps.");
-    expect(briefMarkdown({ clientName: "T&S", item: pItem({ targetDate: null }), description: null })).toContain("- Target date: not set");
-    expect(briefMarkdown({ clientName: "T&S", item: pItem({ children: [] }), description: null })).toContain("None yet.");
+    expect(briefMarkdown({ clientName: "T&W", item: pItem({ targetDate: null }), description: null })).toContain("- Target date: not set");
+    expect(briefMarkdown({ clientName: "T&W", item: pItem({ children: [] }), description: null })).toContain("None yet.");
   });
 });
 

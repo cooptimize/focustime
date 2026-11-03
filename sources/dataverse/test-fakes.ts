@@ -44,16 +44,16 @@ const leakyError = (status: number, code: string) =>
 
 export const FAKE_PAT_Adatum = "FAKE-DV-PAT-Adatum-0d9e";
 export const FAKE_PAT_WC = "FAKE-DV-PAT-WC-41aa";
-export const ACCT = { adatum: "a0000000-0000-4000-8000-00000000c5c0", wc: "a0000000-0000-4000-8000-0000000000dc", hme: "a0000000-0000-4000-8000-000000000e1e" };
+export const ACCT = { adatum: "a0000000-0000-4000-8000-00000000c5c0", tw: "a0000000-0000-4000-8000-0000000000dc", hme: "a0000000-0000-4000-8000-000000000e1e" };
 export const accountWorkers = {
   value: [
     { _coop_account_value: ACCT.adatum, coop_devopsemail: "me@contoso.example" },
-    { _coop_account_value: ACCT.wc, coop_devopsemail: null },
+    { _coop_account_value: ACCT.tw, coop_devopsemail: null },
     { _coop_account_value: ACCT.hme, coop_devopsemail: "c.someone@hme.example" },
   ],
 };
 /**
- * T&S focus time for me that starts the week after the test week (Nov 9), so the fixture weeks are unchanged.
+ * T&W focus time for me that starts the week after the test week (Nov 9), so the fixture weeks are unchanged.
  * Returned only when the query's dates include it, as Dataverse would: the following read (step 6d) sees it, a
  * week read for Nov 2 doesn't.
  */
@@ -61,13 +61,13 @@ export const WC_FOCUS = {
   "@odata.etag": 'W/"1000009"', coop_focustimeid: "f0000000-0000-4000-8000-000000000009", _coop_account_value: null, _coop_systemuser_value: null,
   _coop_accountworker_value: "a0000000-0000-4000-8000-000000000009", coop_startdate: "2026-11-09", coop_enddate: null,
   coop_mondaydaypart: null, coop_tuesdaydaypart: 2, coop_wednesdaydaypart: null, coop_thursdaydaypart: null, statecode: 0,
-  coop_AccountWorker: { _coop_user_value: ME, _coop_account_value: ACCT.wc, coop_accountworkerid: "a0000000-0000-4000-8000-000000000009" },
+  coop_AccountWorker: { _coop_user_value: ME, _coop_account_value: ACCT.tw, coop_accountworkerid: "a0000000-0000-4000-8000-000000000009" },
 };
-const WC_ACCOUNT = { accountid: ACCT.wc, name: "Tailspin & Sons", coop_reportingnickname: "T&S" };
+const TW_ACCOUNT = { accountid: ACCT.tw, name: "Tailspin & Wingtip", coop_reportingnickname: "T&W" };
 export const devopsAccounts = {
   value: [
     { accountid: ACCT.adatum, name: "Adatum Example Corp", coop_reportingnickname: "Adatum", coop_devopsorg: "contoso", coop_devopsprojectid: "11111111-2222-4333-8444-555555555555", coop_devopsprojectname: "Project Ada", coop_devopstoken: FAKE_PAT_Adatum },
-    { accountid: ACCT.wc, name: "Tailspin & Sons", coop_reportingnickname: "T&S", coop_devopsorg: "cooptimize", coop_devopsprojectid: null, coop_devopsprojectname: "WC Project", coop_devopstoken: FAKE_PAT_WC },
+    { accountid: ACCT.tw, name: "Tailspin & Wingtip", coop_reportingnickname: "T&W", coop_devopsorg: "cooptimize", coop_devopsprojectid: null, coop_devopsprojectname: "TW Project", coop_devopstoken: FAKE_PAT_WC },
     { accountid: ACCT.hme, name: "HM Electronics", coop_reportingnickname: null, coop_devopsorg: "hme", coop_devopsprojectid: null, coop_devopsprojectname: "DW", coop_devopstoken: "FAKE-DV-PAT-HME-UNNEEDED" },
   ],
 };
@@ -117,7 +117,7 @@ export function fakeFetch(scenario: Scenario, extra: { users?: unknown[]; devops
     if (path.startsWith("accounts") && path.includes("coop_devopstoken")) return json(200, extra.devopsAccounts ?? devopsAccounts);
     // My clients (Q21): same accounts, never with the token.
     if (path.startsWith("accounts") && path.includes("coop_devopsorg")) return json(200, { value: devopsAccounts.value.map(({ coop_devopstoken: _t, ...rest }) => rest) });
-    if (path.startsWith("accounts")) return json(200, decodeURIComponent(path).includes(ACCT.wc) ? { value: [...accounts.value, WC_ACCOUNT] } : accounts);
+    if (path.startsWith("accounts")) return json(200, decodeURIComponent(path).includes(ACCT.tw) ? { value: [...accounts.value, TW_ACCOUNT] } : accounts);
     if (path.startsWith("coop_timeofftracker")) {
       if (extra.pto === "forbidden") return leakyError(403, "0x80040220");
       if (extra.pto === "none") return json(200, { value: [] });

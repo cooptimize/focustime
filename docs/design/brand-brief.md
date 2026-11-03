@@ -24,7 +24,7 @@ Coop (the coding agent) remains visually unrelated. [confirmed]
 
 | Situation | Before (avoid) | After (FocusTime) |
 |---|---|---|
-| A block slips | "Warning: you missed your W&C block." | "W&C PM slipped: 2h 10m of meetings ran through it. Move it to Thu AM, Fri, or an evening?" |
+| A block slips | "Warning: you missed your T&W block." | "T&W PM slipped: 2h 10m of meetings ran through it. Move it to Thu AM, Fri, or an evening?" |
 | A source fails | "Error 401: authentication failed." | "Google Calendar needs reconnecting. Showing events from 8:02 this morning. Reconnect?" |
 | A plan is reset | "Are you sure? All changes will be lost." | "Reset this week to source data? Your local moves (3) will be cleared. Keep a copy first?" |
 

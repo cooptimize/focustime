@@ -5,7 +5,7 @@ import { parseDue, boxKind, parseTag, suggest, takeTag, type CaptureClient } fro
 const SUN = "2026-11-01";
 const WED = "2026-11-04";
 const clients: CaptureClient[] = [
-  { clientKey: "T&S", clientName: "Tailspin & Sons" },
+  { clientKey: "T&W", clientName: "Tailspin & Wingtip" },
   { clientKey: "Adatum", clientName: "Adatum Steel" },
   { clientKey: "Proseware", clientName: "Proseware" },
   { clientKey: "Cooptimize", clientName: "Cooptimize" },
@@ -46,9 +46,9 @@ describe("due dates", () => {
 describe("client tags", () => {
   it("@nickname by key or name, any case, and takes the tag out of the text", () => {
     expect(parseTag("@adatum ask about the schema", clients)).toEqual({ clientKey: "Adatum", text: "ask about the schema" });
-    expect(parseTag("ask @T&S about timesheets", clients)).toEqual({ clientKey: "T&S", text: "ask about timesheets" });
+    expect(parseTag("ask @T&W about timesheets", clients)).toEqual({ clientKey: "T&W", text: "ask about timesheets" });
     expect(parseTag("note for @proseware.", clients)).toEqual({ clientKey: "Proseware", text: "note for." });
-    expect(parseTag("@tailspin renewal", clients)).toEqual({ clientKey: "T&S", text: "renewal" }); // a unique prefix of the name
+    expect(parseTag("@tailspin renewal", clients)).toEqual({ clientKey: "T&W", text: "renewal" }); // a unique prefix of the name
   });
   it("an unknown or ambiguous tag stays as text, untagged", () => {
     expect(parseTag("@nobody hello", clients)).toEqual({ clientKey: null, text: "@nobody hello" });
@@ -61,7 +61,7 @@ describe("takeTag: a finished @tag sets the client chip while typing (step 15.2)
   it("takes a known tag out once a space follows it, keeping the rest and the trailing space", () => {
     expect(takeTag("@adatum ", clients)).toEqual({ clientKey: "Adatum", text: "" });
     expect(takeTag("ask @adatum ", clients)).toEqual({ clientKey: "Adatum", text: "ask " });
-    expect(takeTag("ask @T&S about ", clients)).toEqual({ clientKey: "T&S", text: "ask about " });
+    expect(takeTag("ask @T&W about ", clients)).toEqual({ clientKey: "T&W", text: "ask about " });
   });
   it("waits while the tag is still being typed, and leaves unknown tags and email addresses alone", () => {
     expect(takeTag("ask @adat", clients)).toBeNull();
@@ -77,13 +77,13 @@ describe("routing suggestions (rules, no AI)", () => {
     expect(suggest("I'll review Mark's PR tomorrow", null, WED, clients)).toMatchObject({ kind: "follow_up", due: "2026-11-05", what: "Review Mark's PR" });
     expect(suggest("promised Priya the numbers", "Adatum", WED, clients)).toMatchObject({ kind: "follow_up", who: "Priya", clientKey: "Adatum" });
     // A due date alone ("by Friday") reads as a commitment; with no name, Who stays empty (Q84), even with a client.
-    expect(suggest("status update by Friday", "T&S", WED, clients)).toMatchObject({ kind: "follow_up", who: "", clientKey: "T&S", due: "2026-11-06" });
+    expect(suggest("status update by Friday", "T&W", WED, clients)).toMatchObject({ kind: "follow_up", who: "", clientKey: "T&W", due: "2026-11-06" });
     expect(suggest("I'll send the release notes @coop", "Cooptimize", WED, clients).who).toBe("");
     expect(suggest("I will call the vendor", null, WED, clients)).toMatchObject({ kind: "follow_up", who: "", due: null });
   });
   it("work to do for a client becomes a draft story", () => {
-    expect(suggest("need to add paging to the resource API", "T&S", WED, clients)).toMatchObject({ kind: "draft", clientKey: "T&S", title: "Add paging to the resource API" });
-    expect(suggest("story: export timesheets as CSV", "T&S", WED, clients)).toMatchObject({ kind: "draft", title: "Export timesheets as CSV" });
+    expect(suggest("need to add paging to the resource API", "T&W", WED, clients)).toMatchObject({ kind: "draft", clientKey: "T&W", title: "Add paging to the resource API" });
+    expect(suggest("story: export timesheets as CSV", "T&W", WED, clients)).toMatchObject({ kind: "draft", title: "Export timesheets as CSV" });
     expect(suggest("todo retry failed syncs", "Adatum", WED, clients)).toMatchObject({ kind: "draft", title: "Retry failed syncs" });
     // Tagged with a client and not a promise: work for that client.
     expect(suggest("schema manager git support edge cases", "Adatum", WED, clients)).toMatchObject({ kind: "draft", clientKey: "Adatum" });
@@ -94,7 +94,7 @@ describe("routing suggestions (rules, no AI)", () => {
     expect(suggest("I'll need to fix the build by Monday", "Adatum", WED, clients)).toMatchObject({ kind: "follow_up", due: "2026-11-09" });
   });
   it("feature words read as a draft feature (step 13.5)", () => {
-    expect(suggest("feature: self-service onboarding", "T&S", WED, clients)).toMatchObject({ kind: "draft_feature", title: "Self-service onboarding" });
+    expect(suggest("feature: self-service onboarding", "T&W", WED, clients)).toMatchObject({ kind: "draft_feature", title: "Self-service onboarding" });
     expect(suggest("new feature for bulk export", "Adatum", WED, clients)).toMatchObject({ kind: "draft_feature", title: "Bulk export" });
   });
   it("there are no notes any more: anything else is a draft story (step 13.5)", () => {

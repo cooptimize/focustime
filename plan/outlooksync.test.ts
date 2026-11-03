@@ -4,7 +4,7 @@ import { outlookFields, type Fields } from "./timebox.ts";
 
 const TZ = "America/Chicago";
 const UID = "tb-0b6c1d2e-3f40-4152-8a6b-7c8d9e0f1a2b";
-const last: Fields = outlookFields({ title: "#4512 Import mapping", url: "https://dev.azure.com/wc/p/_workitems/edit/4512", start: "2026-11-03T09:00:00-06:00", end: "2026-11-03T10:30:00-06:00" }, "T&S");
+const last: Fields = outlookFields({ title: "#4512 Import mapping", url: "https://dev.azure.com/tw/p/_workitems/edit/4512", start: "2026-11-03T09:00:00-06:00", end: "2026-11-03T10:30:00-06:00" }, "T&W");
 const seen = (over: Partial<SeenEvent> = {}): SeenEvent => ({ id: "EV1", subject: last.subject, start: last.start, end: last.end, showAs: "busy", marker: UID, ...over });
 
 describe("two-way sync for FocusTime events", () => {
@@ -13,11 +13,11 @@ describe("two-way sync for FocusTime events", () => {
   });
 
   it("follows Outlook when only Outlook changed: time, title, show as", () => {
-    const d = syncDecision(last, seen({ start: "2026-11-03T16:00:00Z", end: "2026-11-03T17:00:00Z", subject: "T&S: Import mapping v2", showAs: "tentative" }), last);
+    const d = syncDecision(last, seen({ start: "2026-11-03T16:00:00Z", end: "2026-11-03T17:00:00Z", subject: "T&W: Import mapping v2", showAs: "tentative" }), last);
     expect(d.kind).toBe("adopt");
     if (d.kind !== "adopt") return;
     expect(d.changed).toEqual(["time", "title", "show as"]);
-    expect(timeboxFrom(d.fields, "T&S", TZ)).toEqual({ date: "2026-11-03", start: "2026-11-03T10:00:00-06:00", end: "2026-11-03T11:00:00-06:00", title: "Import mapping v2", showAs: "tentative" });
+    expect(timeboxFrom(d.fields, "T&W", TZ)).toEqual({ date: "2026-11-03", start: "2026-11-03T10:00:00-06:00", end: "2026-11-03T11:00:00-06:00", title: "Import mapping v2", showAs: "tentative" });
   });
 
   it("deleted in Outlook: the timebox is kept and asks (step 13.5), whether or not FocusTime changed it", () => {
@@ -28,8 +28,8 @@ describe("two-way sync for FocusTime events", () => {
 
   it("both changed since the last sync: a conflict, nothing overwritten", () => {
     const mine = { ...last, start: "2026-11-03T15:30:00Z", end: "2026-11-03T17:00:00Z" };
-    const d = syncDecision(last, seen({ subject: "T&S: renamed in Outlook" }), mine);
-    expect(d).toMatchObject({ kind: "conflict", changed: ["title"], outlook: { subject: "T&S: renamed in Outlook" } });
+    const d = syncDecision(last, seen({ subject: "T&W: renamed in Outlook" }), mine);
+    expect(d).toMatchObject({ kind: "conflict", changed: ["title"], outlook: { subject: "T&W: renamed in Outlook" } });
     // Moved in FocusTime, deleted in Outlook: kept and asks too, never a re-create.
     expect(syncDecision(last, null, mine)).toEqual({ kind: "removed_in_outlook" });
     // Removed in FocusTime, changed in Outlook.
@@ -37,15 +37,15 @@ describe("two-way sync for FocusTime events", () => {
   });
 
   it("an Outlook version that can't be a timebox (over 8 hours) gives no timebox fields", () => {
-    expect(timeboxFrom({ ...last, start: "2026-11-03T13:00:00Z", end: "2026-11-03T23:00:00Z" }, "T&S", TZ)).toBeNull();
+    expect(timeboxFrom({ ...last, start: "2026-11-03T13:00:00Z", end: "2026-11-03T23:00:00Z" }, "T&W", TZ)).toBeNull();
   });
 });
 
 describe("Q69: rebuild a FocusTime event's record from its marker", () => {
-  const clients = [{ key: "T&S", name: "Tailspin & Sons" }, { key: "Adatum", name: "Adatum" }];
+  const clients = [{ key: "T&W", name: "Tailspin & Wingtip" }, { key: "Adatum", name: "Adatum" }];
   it("finds the client from the subject and keeps the marker as the uid", () => {
-    expect(rebuildFrom(seen({ subject: "Tailspin & Sons: #4512 Import mapping" }), clients, TZ, "Cooptimize")).toMatchObject({ uid: UID, clientKey: "T&S", title: "#4512 Import mapping", date: "2026-11-03", start: "2026-11-03T09:00:00-06:00", outlook: true, showAs: "busy" });
-    expect(rebuildFrom(seen({ subject: "T&S: #4512 Import mapping" }), clients, TZ, "Cooptimize")).toMatchObject({ clientKey: "T&S", title: "#4512 Import mapping" });
+    expect(rebuildFrom(seen({ subject: "Tailspin & Wingtip: #4512 Import mapping" }), clients, TZ, "Cooptimize")).toMatchObject({ uid: UID, clientKey: "T&W", title: "#4512 Import mapping", date: "2026-11-03", start: "2026-11-03T09:00:00-06:00", outlook: true, showAs: "busy" });
+    expect(rebuildFrom(seen({ subject: "T&W: #4512 Import mapping" }), clients, TZ, "Cooptimize")).toMatchObject({ clientKey: "T&W", title: "#4512 Import mapping" });
   });
   it("falls back to the subject's prefix, else Internal", () => {
     expect(rebuildFrom(seen({ subject: "Acme: kickoff" }), clients, TZ, "Cooptimize")).toMatchObject({ clientKey: "Acme", title: "kickoff" });

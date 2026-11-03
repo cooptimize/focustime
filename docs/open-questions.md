@@ -22,7 +22,7 @@ Not blocking this slice:
 - Client color choices (defaults until chosen).
 
 Raised in step 1 (not blocking):
-- Q6. Which client is on which pattern? The sample guesses Mon AM Quiddity, Mon PM + Tue PM CSC, Tue AM Internal, Wed All Day + Thu AM Woodard & Curran. Real data replaces this in step 2.
+- Q6. Which client is on which pattern? The sample guesses Mon AM Proseware, Mon PM + Tue PM Adatum, Tue AM Internal, Wed All Day + Thu AM Tailspin & Wingtip. Real data replaces this in step 2.
 - Q7. ~~All-day and OOO Outlook events~~ Resolved in step 3 (D54): out of office puts covered half-days at risk; other all-day Outlook events are a watch only if busy.
 - Q8. ~~Personal events on Open half-days~~ Resolved in step 3 (D54): shown, never flagged.
 - Q9. The kickoff folder and zip (`coopilot-kickoff/`, `coopilot-kickoff.zip`) are still in the repo folder and git-ignored. Their docs were copied to the repo root. Delete them when you're happy.
@@ -36,11 +36,11 @@ Raised in step 3 (not blocking):
 - Q13. Ranking of double-booked block and all-day event in the single badge (D58) was my placement, not requested. Confirm or reorder.
 
 Raised in step 4 (not blocking):
-- Q14. W&C had no DevOps email on my Account Worker row. As of Oct 31 (step 4.5) it is filled in, and W&C now shows "No access to DevOps project Woodard Curran for W&C" (403 or 404): check the W&C PAT scope and the project name in Dataverse.
-- Q15. CSC's `coop_devopsprojectid` in Dataverse does not match the real project ID (the name works, so FocusTime uses names first). W&C and Quiddity have no project ID. Correct them in Dataverse if IDs are wanted.
+- Q14. T&W had no DevOps email on my Account Worker row. As of Oct 31 (step 4.5) it is filled in, and T&W now shows "No access to DevOps project Tailspin Wingtip for T&W" (403 or 404): check the T&W PAT scope and the project name in Dataverse.
+- Q15. Adatum's `coop_devopsprojectid` in Dataverse does not match the real project ID (the name works, so FocusTime uses names first). T&W and Proseware have no project ID. Correct them in Dataverse if IDs are wanted.
 - Q16. PAT column security (D24) matters more now that FocusTime reads PATs: any identity with read on Accounts can read every client's PAT. Consider securing `coop_devopstoken` and granting the FocusTime app user read on it only.
 - Q17. Microsoft retires global PATs on December 1, 2026. Any client PAT created as a global PAT stops working then; recreate as organization-scoped PATs before that date.
-- Q18. (Still open; not the cause of Quiddity's 0, D84. A per-project "treat as open" state list is ready to build when wanted.) Some client processes put Blocked states in the Removed category (Quiddity: Task "10-Blocked", User Story "07-Blocked"), so blocked items are hidden, as the metadata says. Keep that, or treat Blocked as open?
+- Q18. (Still open; not the cause of Proseware's 0, D84. A per-project "treat as open" state list is ready to build when wanted.) Some client processes put Blocked states in the Removed category (Proseware: Task "10-Blocked", User Story "07-Blocked"), so blocked items are hidden, as the metadata says. Keep that, or treat Blocked as open?
 - Q19. (Answered in step 5, D75: standing-block clients are always fetched.) Cooptimize items show because the Monday AM standing block is Cooptimize. If that block is removed, Cooptimize work only shows in weeks with a Cooptimize focus block. Always include it?
 
 Raised in step 5 (not blocking):
@@ -48,8 +48,8 @@ Raised in step 5 (not blocking):
 - Q21. (Answered, D81: every Account Worker client. Superseded for DevOps and Open half-days by D144: only clients followed by focus time.) Open half-days offered only this week's DevOps clients (focus clients plus Cooptimize). Should they offer every client you're an Account Worker on (HME, Antigua), at the cost of more DevOps calls?
 - Q22. (Answered, D82: local until the write step.) Draft stories live only in FocusTime. Creating them in DevOps would be a write, which is out of scope; for now copy them by hand when you break the feature down.
 - Q23. (Answered, D83: start to start + 90 minutes.) The reminder fired once between the day start and the usual end, even if the server started late (for example 2 PM). Prefer it only near the start time?
-- Q24. ~~Window after a service restart~~ Resolved (D85, D87): `focustime-open` (launcher, Super + Alt + C, autostart) starts the service if needed and replaces a window left from an earlier server run.
-- Q25. (Explained, D84: the Quiddity DevOps email in Dataverse ends in @quiddity.org, your DevOps identity in @quiddity.com; fix it in Dataverse.) Quiddity returned 0 open items assigned to you (it had 2 in step 4), and W&C is now readable (3 items). Worth a glance that both match your boards.
+- Q24. ~~Window after a service restart~~ Resolved (D85, D87): `focustime-open` (launcher, key binding, autostart; the developer loop since A1) starts the service if needed and replaces a window left from an earlier server run.
+- Q25. (Explained, D84: the Proseware DevOps email in Dataverse ends in @proseware.example, your DevOps identity in @proseware-devops.example; fix it in Dataverse.) Proseware returned 0 open items assigned to you (it had 2 in step 4), and T&W is now readable (3 items). Worth a glance that both match your boards.
 - Q26. HM Electronics now shows "DevOps PAT expired or invalid" (fetched since D81). Renew its PAT in Dataverse, or say if HME should be left out.
 - Q27. Cooptimize's "Ongoing" type is also on a portfolio backlog and stays unpickable. Add it to `pickable_portfolio_types` too?
 
@@ -71,7 +71,7 @@ Raised in step 6b (not blocking):
 - Q40. ~~Fresher warnings~~ Answered: calendars reload every 5 minutes while a timer runs (D143). Was: Timer warnings use meetings known at the last week load (D139). Should the server refresh today's calendar on its own while a timer runs, or is the auto refresh enough?
 
 Raised in step 7 (not blocking):
-- Q41. Quiddity's blocked states sit in the Removed category (Q18), so those items never come back from the open-items query and the blocker rule can't see them. Treating Blocked as open for Quiddity (`open_states` in Settings > Clients) would let it. Do that?
+- Q41. Proseware's blocked states sit in the Removed category (Q18), so those items never come back from the open-items query and the blocker rule can't see them. Treating Blocked as open for Proseware (`open_states` in Settings > Clients) would let it. Do that?
 - Q42. ~~Closes on completion or a change by me~~ Answered: closes only on a Completed or Removed state category, or a change after it opened whose System.ChangedBy is my DevOps identity for that client (D156). Was: The DevOps update follow-up also closes when the item changed after the follow-up opened, whoever changed it (a comment or a field edit by someone else counts). Good enough, or should it wait for a state change only?
 - Q43. ~~Blockers nudge again~~ Answered: a blocker follow-up closed by hand opens again if the item is still blocked 3 workdays later (D157). Was: A blocker follow-up closed by hand stays closed while the item stays blocked; it opens again only after the block clears and returns. Should a long block nudge again (say, weekly)?
 - Q44. The slip rule skips internal clients (Cooptimize, standing blocks) and uncommitted days. Should a slip on an internal block open a follow-up too (for example, to tell a teammate)?
@@ -86,7 +86,7 @@ Raised in step 8 (not blocking):
 - Q51. ~~Current titles~~ Answered: the current DevOps title always; the stored one only when DevOps is unreachable (D169). Was: Committed features are stored with their title at commit time. A renamed feature keeps its old title in the week cards and in a past week's review until it is committed again. Refresh titles from DevOps on each read of the current or next week?
 
 Raised in step 9 (not blocking):
-- Q52. ~~Global capture key~~ Answered: Super + Alt + N (D192). Was: The global capture key isn't bound (D178). Add `SUPER + ALT + SHIFT + C` (or Super + Alt + N) to bindings.lua?
+- Q52. ~~Global capture key~~ Answered (D192): a desktop key binding in the developer loop. Was: The global capture key isn't bound (D178).
 - Q53. Draft stories with no feature show only in Plan the day for that client. Should Plan the week list them per client too, so they can be put under a feature later (today that means deleting and capturing again)?
 - Q54. Numeric dates are read US style (11/14 is Nov 14). A bare weekday word ("monday standup notes") is read as a date but only makes a follow-up when led by by/due/before/until. Keep both?
 - Q55. Notes can be searched and deleted but not edited, and a sorted capture can't be re-sorted. Add edit, or "undo sort" for a few minutes?
@@ -138,8 +138,8 @@ Raised in step 13 (not blocking):
 - Q87. (Step 15.4. Answered Nov 2, step 15.5, D316: Start in the morning box starts at once, setting "Start my VM without asking", default on.) Start from the morning prompt is one click (the prompt says which VM and that it starts; it's logged like any other start), while Start from the chip shows a preview first. Keep that difference?
 - Q88. (Step 15.4. Answered Nov 2, step 15.5, D316: only for demo mode and offline use; real data needs the sign-in.) "Continue without signing in" on the sign-in screen works for that window only (calendars and Azure stay unavailable; Dataverse and the plan work as before). Keep it, or remove it once hosting starts?
 - Q89. (Step 15.4.) Hosted direction: Dataverse is still read with the app-only identity (client secret in the keyring). A hosted FocusTime for any Cooptimizer should read Dataverse delegated per user (the signed-in person's own Dataverse permissions). Revisit with the hosting design.
-- Q90. (Step 15.5. Decided Nov 2, step 16.2, D322: no further work on buttons; keep "Click to…".) Omarchy's notification service (the Quickshell shell, notifications plugin) reports the "actions" capability but its notification card draws no buttons; only a click on the card (the "default" action) works. FocusTime still sends its buttons (Done, +15 min, Next pick, Start, Restore) for desktops that show them, says "Click to…" in each body, and a click opens the view where those buttons are. Revisit if the shell adds action buttons (or ask upstream)?
-- Q91. (Step 15.5. Done Nov 2, step 16.2, D323: closed through CloseNotification, which the Omarchy shell honors.) A held notification checks whether it still matters when focus ends (the day got planned, the follow-up closed). Sent ones aren't withdrawn from the shell when that happens; FocusTime doesn't close notifications it sent. Close them (CloseNotification) when the thing is done?
+- Q90. (Step 15.5. Decided Nov 2, step 16.2, D322: no further work on buttons; keep "Click to…".) The developer desktop's notification service reports the "actions" capability but its notification card draws no buttons; only a click on the card (the "default" action) works. FocusTime still sends its buttons (Done, +15 min, Next pick, Start, Restore) for desktops that show them, says "Click to…" in each body, and a click opens the view where those buttons are. Revisit if the shell adds action buttons (or ask upstream)?
+- Q91. (Step 15.5. Done Nov 2, step 16.2, D323: closed through CloseNotification, which the developer desktop honors.) A held notification checks whether it still matters when focus ends (the day got planned, the follow-up closed). Sent ones aren't withdrawn from the shell when that happens; FocusTime doesn't close notifications it sent. Close them (CloseNotification) when the thing is done?
 - Q92. (Step 16.3. Decided Nov 2, step 16.4, D343: accept as is.) Graph can't read a preferred presence apart from the aggregate, so a manual Busy set in Teams during a FocusTime Busy session looks the same as FocusTime's and is cleared at the end. Accept, or offer "Keep my status after focus" in the focus screen?
 - Q93. (Step 17.5.) The brand brief's full surface and text palette (backgrounds, panels, text greys) is not applied; only the brand tokens are. Apply it to the Cooptimize themes later, with a contrast check of every view, or keep the current surfaces?
 - Q94. (Step 17.5.) A "zero at-risk week" moment (Lumen bobs once when the week has no at-risk blocks) is not built. Suggested place: Week › Plan the week, right after Done when the planned week has no at-risk block, as a moment over the app like Close out's (never in the Week view itself, which stays Lumen-free). Build it?

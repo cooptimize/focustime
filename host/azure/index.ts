@@ -48,7 +48,7 @@ export function createAzureHost(p: AzureHostParts): Host {
     },
     links: { open: async () => "client" },
     media: {
-      status: async () => ({ playerctl: false, spotify: false }),
+      status: async () => ({ players: false, spotify: false }),
       transition: async () => null,
       open: async () => desktopOnly("Opening a playlist from the server")(),
       endSound: () => {},

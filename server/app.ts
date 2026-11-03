@@ -38,7 +38,7 @@ const TYPES: Record<string, string> = {
 const SESSION_PAGE = `<!doctype html><meta charset="utf-8"><title>FocusTime</title>
 <body style="font:16px system-ui;padding:40px;max-width:640px">
 <h1 style="font-size:20px">FocusTime needs a fresh launch link</h1>
-<p>This page is protected by a token that changes every time FocusTime starts. Open FocusTime again from the launcher, with Super + Alt + C, or with <code>focustime-open</code>. It replaces this window.</p>`;
+<p>This page is protected by a token that changes every time FocusTime starts. Open FocusTime again the way you started it. It replaces this window.</p>`;
 
 function baseHeaders(res: ServerResponse, csp: boolean) {
   res.setHeader("X-Content-Type-Options", "nosniff");

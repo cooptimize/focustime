@@ -34,13 +34,13 @@ calendars = ["primary"]
 [hours]
 time_zone = "America/New_York"
 # The lunch is where the morning ends and the afternoon starts. "" for none (the day splits in the middle).
-lunch = "12:30-12:30"
+lunch = "12:00-12:00"
 # Working spans per weekday; [] is a day off. A second span (e.g. an evening) forms its own slot.
 mon = ["09:00-17:00"]
 tue = ["09:00-17:00"]
 wed = ["09:00-17:00"]
 thu = ["09:00-17:00"]
-fri = []
+fri = ["09:00-17:00"]
 sat = []
 sun = []
 
@@ -52,16 +52,16 @@ min_focus_window_minutes = 90
 
 # Standing blocks from FocusTime config. A Dataverse block for a different client
 # in the same half-day wins and the half-day is flagged double-booked.
-# client is the account's reporting nickname (Cooptimize is the internal account).
-[[standing_blocks]]
-day = "Mon"
-half = "AM"
-client = "Cooptimize"
+# client is the account's reporting nickname (Cooptimize is the internal account). None by default, for example:
+# [[standing_blocks]]
+# day = "Mon"
+# half = "AM"
+# client = "Cooptimize"
 
 # Client colors, keyed by the account's reporting nickname
 # (or the account name when it has no nickname).
 [clients]
-"T&S" = "#1f9e8f"
+"T&W" = "#1f9e8f"
 Proseware = "#7b68ee"
 Adatum = "#d2892a"
 Cooptimize = "#4a7fd4"

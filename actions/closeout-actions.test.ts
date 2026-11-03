@@ -226,7 +226,7 @@ describe("follow-ups (step 7, step 13.5)", () => {
     expect(a.itemId).toBe(101);
     expect((await t.run<{ followUp: { itemId: number | null } }>("followup.edit", { id: a.id, itemId: null })).followUp.itemId).toBeNull();
     expect((await t.run<{ followUp: { itemId: number | null } }>("followup.edit", { id: a.id, itemId: 102 })).followUp.itemId).toBe(102);
-    expect((await t.run<{ followUp: { itemId: number | null } }>("followup.edit", { id: a.id, clientKey: "T&S" })).followUp.itemId).toBeNull();
+    expect((await t.run<{ followUp: { itemId: number | null } }>("followup.edit", { id: a.id, clientKey: "T&W" })).followUp.itemId).toBeNull();
     expect((await t.fail("followup.add", { what: "y", itemId: "abc" })).status).toBe(400);
     expect((await t.fail("followup.add", { what: "y", itemId: 5 })).status).toBe(400); // no client to own the item
   });

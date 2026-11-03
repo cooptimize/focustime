@@ -70,7 +70,7 @@ export function mediaControl(deps: { has?: (name: string) => boolean; exec?: Run
   const open = deps.open ?? detach;
   let paused: string[] = [];
   return {
-    status: async () => ({ playerctl: has("playerctl"), spotify: has("spotify") || has("spotify-launcher") }),
+    status: async () => ({ players: has("playerctl"), spotify: has("spotify") || has("spotify-launcher") }),
     transition: async (prev: TimerLike, next: TimerLike, enabled: boolean) => {
       if (!enabled || !has("playerctl")) {
         paused = [];

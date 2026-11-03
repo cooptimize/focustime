@@ -10,7 +10,7 @@ export const samplePatterns: FocusPattern[] = [
   { id: "ft-proseware", clientKey: "proseware", clientName: "Proseware", startDate: "2026-03-02", endDate: null, active: true, days: { Mon: "AM" } },
   { id: "ft-adatum", clientKey: "adatum", clientName: "Adatum", startDate: "2026-01-05", endDate: null, active: true, days: { Mon: "PM", Tue: "PM" } },
   { id: "ft-internal", clientKey: "internal", clientName: "Internal", startDate: "2026-06-01", endDate: null, active: true, days: { Tue: "AM" } },
-  { id: "ft-wc", clientKey: "wc", clientName: "Tailspin & Sons", startDate: "2025-09-08", endDate: null, active: true, days: { Wed: "AllDay", Thu: "AM" } },
+  { id: "ft-tw", clientKey: "tw", clientName: "Tailspin & Wingtip", startDate: "2025-09-08", endDate: null, active: true, days: { Wed: "AllDay", Thu: "AM" } },
   // An old pattern that ended before this week: must not show.
   { id: "ft-old", clientKey: "adatum", clientName: "Adatum", startDate: "2025-01-06", endDate: "2026-02-26", active: true, days: { Thu: "PM" } },
 ];

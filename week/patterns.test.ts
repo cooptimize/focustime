@@ -8,7 +8,7 @@ describe("expandPatterns", () => {
   it("emits one block per weekday half for an ongoing pattern", () => {
     const blocks = expandPatterns([pattern({ days: { Mon: "PM", Tue: "PM" } })], "2026-11-02");
     expect(slots(blocks)).toEqual(["2026-11-02 PM", "2026-11-03 PM"]);
-    expect(blocks[0]).toMatchObject({ clientKey: "wc", source: "dataverse", patternId: "p1" });
+    expect(blocks[0]).toMatchObject({ clientKey: "tw", source: "dataverse", patternId: "p1" });
   });
 
   it("expands All Day into both halves", () => {

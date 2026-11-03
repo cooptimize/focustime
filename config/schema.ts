@@ -515,7 +515,7 @@ export function parseConfig(text: string): ParseResult {
         else collab.daysAhead = t.days_ahead;
       }
       if (t.domains !== undefined) {
-        if (!Array.isArray(t.domains) || t.domains.length > 5 || t.domains.some((d) => typeof d !== "string" || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(d))) err("collab.domains", "Must be a list of up to 5 domains, like \"cooptimize.org\"");
+        if (!Array.isArray(t.domains) || t.domains.length > 5 || t.domains.some((d) => typeof d !== "string" || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(d))) err("collab.domains", "Must be a list of up to 5 domains, like \"cooptimize.example\"");
         else collab.domains = (t.domains as string[]).map((d) => d.toLowerCase());
       }
       if (t.exclude !== undefined) {

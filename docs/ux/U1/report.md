@@ -21,7 +21,7 @@ Screenshots are in `screens/demo/` and `screens/live/`, named `<width>-<theme>-<
 ## Your answers (verbatim)
 
 0.1 On Today, during the day, what do you actually look at, and what do you never read?
-> this is unnecessary at the top: Cooptimize focus until 12:30 PM. Next: CSC / Cooptimize • Weekly Feature Review at 1:00 PM.. under THIS WEEK i dont see a ton of value of listing these here. if the day is planned it should be focused on the calendar items and commited  planned user stories  - the feautres ear marked should be broken down. so maybe if those are listed at the bottom not top and indicated if they need decomposition
+> this is unnecessary at the top: Cooptimize focus until 12:30 PM. Next: Adatum / Cooptimize • Weekly Feature Review at 1:00 PM.. under THIS WEEK i dont see a ton of value of listing these here. if the day is planned it should be focused on the calendar items and commited  planned user stories  - the feautres ear marked should be broken down. so maybe if those are listed at the bottom not top and indicated if they need decomposition
 
 0.2 Mouse, keyboard, or both equally?
 > mostly mouse, but having quick keys for keyboards if the application is used a lot is great.
@@ -96,7 +96,7 @@ Counted from opening Today › Now (or the named screen), mouse first. *Key* is 
 | Move a pick to another block | 3 to 4 | ⋯ → Move → target, with a submenu for another day. 1 drag in Plan the day only. Check-in: 1 click "Move to Tue" | 2, or 1 drag on Today too |
 | See why a block is at risk | 0 clicks but hover only (tooltip); Week: 2 (⋯ → Details, or select + Enter) | The reason is never written on the card | 0: a short reason on the card |
 | Open an item in DevOps | 1 (title, no link look) or 2 (⋯ → Open in Edge); Week "This week:" links don't open DevOps | Hidden affordance; the links that do look like links do something else | 1, with a visible cue |
-| Capture a follow-up | N + type + 0 to 1 (Follow-up chip) + Enter; Super+Alt+N anywhere | Fine | hotkey + Enter |
+| Capture a follow-up | N + type + 0 to 1 (Follow-up chip) + Enter; a global capture key (developer loop) | Fine | hotkey + Enter |
 | Add a must to a client's week | 5 to 6 + a scroll | Week → Plan the week → (‹ to this week) → scroll to the client → "Add from DevOps" → + Must → Done | 3 |
 | Reorder musts | 1 drag (no visible handle) or 2 clicks per step (⋯ → Move up) | Drag isn't discoverable | 1 drag with a handle |
 | Finish Plan the day | 2 + one offer | Plan → (picks) → Done → "Timebox my day?" offer | 1 Done |
@@ -195,7 +195,7 @@ You said "the day plan is pretty solid" (0.4). The pruning here is light.
 | 14 | Feature row: title, Must chip, "all on the plan" or "8 to add" | week plan | which stories remain | always | no | KEEP | Add "needs stories" when it has none |
 | 15 | Story rows: "STORY" label, title, "Already planned here", ⋯ | stories | add | always | | KEEP the title and +; REMOVE "STORY" and the "Already planned here" text (a check says it) | |
 | 16 | "+ Draft a story" | drafts | break a feature down | sometimes | no | KEEP, promoted | DevOps first (0.4) |
-| 17 | FOLLOW-UPS section; "Nothing owed to W&C." when empty | follow-ups | pick a follow-up | sometimes | yes, Today | KEEP when not empty; REMOVE the empty line | |
+| 17 | FOLLOW-UPS section; "Nothing owed to T&W." when empty | follow-ups | pick a follow-up | sometimes | yes, Today | KEEP when not empty; REMOVE the empty line | |
 | 18 | "EVERYTHING ELSE 3 more, in DevOps order" (folded) | items | other work | sometimes | no | KEEP | Counts over lists |
 | 19 | "Or type what you'll do for X, then Enter" | intentions | free-text pick | sometimes | no | KEEP, changed | Offer "Make it a draft story" on Enter (open question 3) |
 | 20 | Status bar | | | | as Today | as Today | |
