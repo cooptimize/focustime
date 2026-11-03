@@ -1931,8 +1931,12 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pt-time.conflict { border-color: var(--risk); }
 .pt-ol { display: inline-flex; align-items: center; gap: 3px; font-weight: 500; color: var(--text-muted); }
 .pt-cal { flex: none; color: var(--accent); }
-.pt-hint { order: 99; flex: 1 0 100%; font-size: var(--fs-2); color: var(--text-muted); background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
-.today-picks li:has(.pt-hint), .checklist li:has(.pt-hint), .pd-picks li:has(.pt-hint) { flex-wrap: wrap; row-gap: 4px; }
+/* fix/planday-pane: the one-time hint is a small popover anchored under "+ time", kept inside its card (PickTime.tsx
+   shifts it right with --pt-shift, or puts it above with .up, when the card's edge is close). */
+.pt-anchor { position: relative; display: inline-flex; flex: none; }
+.pt-hint { --pt-shift: 0px; position: absolute; top: calc(100% + 6px); right: 0; z-index: 6; width: max-content; max-width: 230px; white-space: normal; text-align: left; font-size: var(--fs-2); font-weight: 400; line-height: 1.4; color: var(--text-muted); background: var(--raised); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 10px; box-shadow: var(--shadow-pop); transform: translateX(var(--pt-shift)); }
+.pt-hint.up { top: auto; bottom: calc(100% + 6px); }
+.pt-hint .link-btn { font-size: inherit; }
 .checklist li .pt-add, .checklist li .pt-time { flex: none; }
 .checklist li .pt-time { font-size: var(--fs-1); padding: 0 5px; }
 .today-picks li .pt-time, .today-picks li .pt-add { flex: none; }
@@ -2047,7 +2051,6 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pw-fit2.over { color: var(--watch); font-weight: 600; }
 .status-pill.too_much { color: var(--watch); border-color: color-mix(in oklab, var(--watch) 45%, var(--border)); }
 .status-pill.tight, .status-pill.fits { color: var(--text-muted); border-color: var(--border); }
-.pick-row:has(.pt-hint) { flex-wrap: wrap; row-gap: 4px; }
 
 /* ---------- Compact timelines on medium cards (step 15.1, D276) ---------- */
 /* A narrow ruler on the card's right edge for the block's working hours. The list on the left keeps its content. */

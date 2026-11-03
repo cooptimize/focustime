@@ -51,7 +51,7 @@ describe("the planning layout's components (U6)", () => {
   it("the right pane: Add to <client> with a count, the sections, the type box pinned last; the fold reads ▸ Label · count", () => {
     const out = html(h(AddPane, { color: "#123", client: "Northwind", count: "4 of yours not on the list", box: h(BoxHint, null, "Enter: a must."), children: h(AddSection, { label: "From DevOps" }, "rows") }));
     expect(out).toMatch(/pl-add-title.*Add to .*pl-add-client">Northwind.*4 of yours not on the list.*pl-add-scroll.*pl-label">From DevOps.*pl-add-box.*Enter: a must\./);
-    expect(html(h(FoldLine, { open: false, onToggle: noop, label: "Everything else", count: "9 in DevOps order" }))).toMatch(/aria-expanded="false".*▸.*Everything else.*· .*9 in DevOps order/);
+    expect(html(h(FoldLine, { open: false, onToggle: noop, label: "More from Proseware's DevOps", count: 11 }))).toMatch(/aria-expanded="false".*▸.*More from Proseware&#x27;s DevOps.*· .*11/);
     expect(html(h(FoldLine, { open: true, onToggle: noop, label: "Nice to have", count: 1 }))).toMatch(/▾.*Nice to have/);
   });
 });

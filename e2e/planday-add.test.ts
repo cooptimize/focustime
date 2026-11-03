@@ -15,6 +15,12 @@ describe.skipIf(!CHROMIUM)("Plan the day: adding work (browser, demo mode)", () 
 
   // U4: "This week's musts" (or "This week" when nice to haves are listed too).
   const section = (page: Page, name: string) => page.locator(name === "This week's priorities" ? `.pd2-right section[aria-label^="This week"]` : `.pd2-right section[aria-label="${name}"]`);
+  // fix/planday-pane: "More from <client>'s DevOps · N", open on its own when nothing is above it.
+  const more = (page: Page) => page.locator('.pd2-right section[aria-label^="More from "]');
+  const openMore = async (page: Page) => {
+    const fold = more(page).locator(".pd2-fold");
+    if ((await fold.getAttribute("aria-expanded")) !== "true") await fold.click();
+  };
   const expandAll = async (page: Page) => {
     // U4: a feature's stories always show; nothing to expand.
     const closed = page.locator(".pd2-right .pd2-feature > .pd2-toggle[aria-expanded=false]");
@@ -52,12 +58,12 @@ describe.skipIf(!CHROMIUM)("Plan the day: adding work (browser, demo mode)", () 
     await page.close();
   }, T);
 
-  it("+ in Everything else", async () => {
+  it("+ in More from <client>'s DevOps", async () => {
     const { page } = await freshPage(h);
     await openPlanDay(page);
     await selectBlock(page, "Cooptimize");
-    await section(page, "Everything else").locator(".pd2-fold").click();
-    const row = section(page, "Everything else").locator("li.pd2-add:not(.planned)").first();
+    await openMore(page);
+    const row = more(page).locator("li.pd2-add:not(.planned)").first();
     const title = (await row.locator(".pr-title").textContent())!;
     await row.locator("button.pd2-plus").click();
     await expect.poll(() => blockPicks(page, "Cooptimize")).toContain(title);
@@ -70,8 +76,8 @@ describe.skipIf(!CHROMIUM)("Plan the day: adding work (browser, demo mode)", () 
     await openPlanDay(page);
     // The afternoon block, while the Week view still has the morning selected: the bug was adding to the morning.
     await selectBlock(page, "Northwind");
-    await section(page, "Everything else").locator(".pd2-fold").click();
-    const row = section(page, "Everything else").locator("li.pd2-add:not(.planned)").first();
+    await openMore(page);
+    const row = more(page).locator("li.pd2-add:not(.planned)").first();
     const title = (await row.locator(".pr-title").textContent())!;
     await row.locator("button.more-btn").click();
     await page.getByRole("menuitem", { name: /^Add to the plan/ }).click();
@@ -88,8 +94,8 @@ describe.skipIf(!CHROMIUM)("Plan the day: adding work (browser, demo mode)", () 
     const { page } = await freshPage(h);
     await openPlanDay(page);
     await selectBlock(page, "Northwind");
-    await section(page, "Everything else").locator(".pd2-fold").click();
-    const row = section(page, "Everything else").locator("li.pd2-add:not(.planned)").first();
+    await openMore(page);
+    const row = more(page).locator("li.pd2-add:not(.planned)").first();
     const title = (await row.locator(".pr-title").textContent())!;
     await row.locator("button.more-btn").click();
     await page.getByRole("menuitem", { name: /^Add to the plan/ }).click();

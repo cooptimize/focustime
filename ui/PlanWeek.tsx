@@ -39,7 +39,7 @@ import { FoldLine } from "./plan/FoldLine.tsx";
 import { planOpenClient, plannedCount, weekLines, type WeekLine } from "../plan/weekclients.ts";
 import { userZone } from "../week/zone.ts";
 
-type Props = { /** Step 16.2: the Week tab's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void };
+type Props = { /** Step 16.2: the Week tab's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void; /** fix/planday-pane: the client to open first (from Plan the day's "plan the week"), once. */ openClient?: string | null; onOpenClientSeen?: () => void };
 type Half = "AM" | "PM";
 type Place = { date: IsoDate; half: Half; label: string };
 type Item = Listed<WeekFeature>;
@@ -91,7 +91,7 @@ const draftAsItem = (weekStart: IsoDate, d: DraftStory, tier: Tier): WeekFeature
   id: -d.id, weekStart, clientKey: d.clientKey, itemId: -d.id, title: d.title, itemType: "Feature", url: null, level: "feature", tier, blocks: 1, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: d.createdAt, updatedAt: d.createdAt,
 });
 
-export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, onChanged, onCaptures }: Props) {
+export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, onChanged, onCaptures, openClient = null, onOpenClientSeen }: Props) {
   const [st, setSt] = useState<WeekPlanState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -190,6 +190,12 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     if (!lines.length) return;
     if (openK === null || !lines.some((l) => l.clientKey === openK)) setOpenK(planOpenClient(lines));
   }, [lines, openK]);
+  // fix/planday-pane: opened from Plan the day's "plan the week" on a client: that client's card first, once.
+  useEffect(() => {
+    if (!openClient || !lines.some((l) => l.clientKey === openClient)) return;
+    setOpenK(openClient);
+    onOpenClientSeen?.();
+  }, [lines, openClient, onOpenClientSeen]);
 
   const parts = planWeekParts(weekStart, st?.thisWeek ?? mondayOf(data.planDay.date));
   const past = st?.access === "past";

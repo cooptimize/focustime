@@ -1,4 +1,4 @@
-// U6: the one fold control, "▸ Label · count", on both planning screens (Nice to have, Everything else, Agenda).
+// U6: the one fold control, "▸ Label · count", on both planning screens (Nice to have, More from <client>'s DevOps, Agenda).
 import type { ReactNode } from "react";
 
 export function FoldLine({ open, onToggle, label, count, className = "", title }: { open: boolean; onToggle: () => void; label: ReactNode; count?: ReactNode | undefined; className?: string | undefined; title?: string | undefined }) {
