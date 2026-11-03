@@ -3177,7 +3177,17 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .pw-cell.off .pw-cell-name { font-weight: 400; }
 .pw-cell.open-half { border-style: dashed; border-left-width: 1px; color: var(--text-muted); background: transparent; }
 .pw-cell.pto, .pw-cell.catchup { cursor: default; color: var(--text-muted); border-left-width: 1px; }
-.pw-cell.pto { background: repeating-linear-gradient(135deg, var(--surface) 0 6px, var(--raised) 6px 12px); }
+/* S1 (D453): PTO as on Week: the PTO hatch and tone, a whole day or one half. */
+.pw-cell.pto, .day .half.pto-half {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in oklab, var(--pto) 11%, transparent) 10px 12px),
+    color-mix(in oklab, var(--pto) 5%, var(--surface));
+  border-color: color-mix(in oklab, var(--pto) 40%, var(--border));
+}
+.pw-cell.pto { font-weight: 600; }
+.pw-cell-right.pin.warn { color: var(--watch); font-weight: 500; }
+.pw-pin-pto { color: var(--watch); font-size: var(--fs-2); font-weight: 500; }
+.pto-half-label { font-size: var(--fs-2); font-weight: 600; color: var(--pto); }
 .pw-cell.catchup { border-style: dashed; background: transparent; }
 .pw-grid.dragging .pw-cell.refuses { opacity: 0.45; cursor: no-drop; }
 .pw-grid.dragging .pw-cell.takes { box-shadow: inset 0 0 0 1px var(--focus); }
@@ -3385,7 +3395,7 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 @media (max-width: 520px) {
   .guide-concepts, .guide-keygrid { grid-template-columns: minmax(0, 1fr); }
   .guide-ladder .rung { grid-template-columns: minmax(0, 1fr); gap: 2px; }
-  .guide-every .key-list { grid-template-columns: minmax(0, 1fr); }
+  .guide-every .key-list { grid-template-columns: minmax(0, 1fr); }a
   .guide-every .key-list dt { justify-content: flex-start; }
   .guide-week { grid-template-columns: 22px repeat(5, minmax(0, 1fr)); gap: 4px; }
   .guide-weekbox { padding: 14px; }
@@ -3411,6 +3421,44 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .over-word { color: var(--watch); font-weight: 500; }
 .dp-estimate { display: flex; align-items: center; gap: 10px; }
 
+/* S1 (D451): first-run setup. The capture dialog's frame; a step list on top, one screen at a time. */
+.setup-backdrop { padding-top: 8vh; }
+.setup-dialog { width: min(760px, 100%); max-height: 84vh; gap: 14px; padding: 18px 22px; }
+.setup-dialog:focus { outline: none; }
+.setup-head { display: flex; align-items: center; gap: 12px; }
+.setup-steps { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; list-style: none; flex: 1 1 auto; min-width: 0; font-size: var(--fs-2); color: var(--text-faint); counter-reset: setup; }
+.setup-steps li { counter-increment: setup; white-space: nowrap; }
+.setup-steps li::before { content: counter(setup) ". "; }
+.setup-steps li.past { color: var(--text-muted); }
+.setup-steps li.now { color: var(--text); font-weight: 600; }
+.setup-screen { display: grid; gap: 12px; }
+.setup-screen h2 { margin: 0; font-size: var(--fs-4); }
+.setup-intro { margin: 0; color: var(--text-muted); font-size: var(--fs-3); }
+.setup-note { margin: 0; font-size: var(--fs-3); }
+.setup-fields { display: grid; gap: 12px; }
+.setup-row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
+.setup-row .set-field { flex: 1 1 140px; }
+.setup-row input[type="password"] { flex: 1 1 260px; min-width: 0; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; }
+.setup-days { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; border: 0; }
+.setup-days legend { margin-bottom: 4px; padding: 0; }
+.setup-day { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-3); }
+.setup-clients { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.setup-client { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.setup-client-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.setup-client-head strong { flex: 1 1 auto; min-width: 0; font-size: var(--fs-3); }
+.setup-choice { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.setup-pat { display: grid; gap: 8px; font-size: var(--fs-3); }
+.setup-pat ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.setup-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 4px; }
+.setup-actions .mini:first-child { margin-right: auto; }
+.setup-line { margin: 4px 0 0; font-size: var(--fs-2); color: var(--text-muted); }
+.setup-line .link-btn { color: var(--text-muted); }
+@media (max-width: 600px) { .setup-dialog { padding: 14px 16px; } .setup-steps li:not(.now) { display: none; } }
+
+/* S1 (D452): ⋯ › About: one line, Copy and the Guide. */
+.about-dialog { width: min(560px, calc(100vw - 32px)); }
+.about-line { margin: 4px 14px 0; font-size: var(--fs-3); overflow-wrap: anywhere; }
+.about-actions { display: flex; align-items: center; gap: 12px; padding: 10px 14px 12px; font-size: var(--fs-3); }
 /* D460: owners. A 16 px photo or initials in the same circle (no shift when a photo arrives); others' avatars overlap. */
 .owner { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
 .owner .avatar { margin-right: 0; }

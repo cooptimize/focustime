@@ -37,11 +37,26 @@ export function clientBlocks(week: Week, clientKey: string): Block[] {
   return week.days.flatMap((d) => [d.am, d.pm].filter((s) => s.focus[0]?.clientKey === clientKey).map((s) => blockOf(s, false)));
 }
 
+/** S1 (D453): a must pinned to a PTO half stays pinned, flagged; never moved or unpinned for the person. */
+export const PINNED_TO_PTO = "Pinned to PTO, move it";
+/** The PTO halves an item is pinned to (Week's PTO: a whole day or one half). */
+export function pinnedToPto(week: Pick<Week, "days">, slots: readonly { date: IsoDate; half: "AM" | "PM" }[]): { date: IsoDate; half: "AM" | "PM" }[] {
+  return slots.filter((p) => {
+    const d = week.days.find((x) => x.date === p.date);
+    return !!d && (p.half === "AM" ? d.am : d.pm).pto;
+  });
+}
+
+/** S1 (D453): a client whose blocks that week are all on PTO. */
+export const NO_TIME = "No time this week";
+
 export type ClientBudget = {
   clientKey: string;
   clientName: string;
-  /** Its blocks that week (the calendar unit: where the work happens), each with its real free minutes. */
+  /** Its blocks that week (the calendar unit: where the work happens), each with its real free minutes. PTO left out. */
   blocks: Block[];
+  /** S1: its blocks that fall on PTO (left out of `blocks` and the fit), so a client with only PTO still has a line. */
+  ptoBlocks: { date: IsoDate; half: "AM" | "PM" }[];
   /** E2: minutes of real free focus time in its blocks (after meetings, personal events even when hidden, unavailable
    * time and days off), less unpaid borrowed time: what Plan the day's fit uses per block, summed over the week. */
   freeMinutes: number;
@@ -107,13 +122,17 @@ export function weekBudget(week: Week, items: readonly FeatureLike[], o: { borro
         const s = slotAt(p.date, p.half);
         if (s?.open && !placedOpen.has(`${p.date}${p.half}`)) placedOpen.set(`${p.date}${p.half}`, blockOf(s, true));
       }
-    const blocks = [...clientBlocks(week, clientKey), ...placedOpen.values()].sort((a, b) => a.date.localeCompare(b.date) || a.half.localeCompare(b.half));
+    // S1 (D453): PTO blocks are left out of the summary, the counts and the fit; a client with only PTO has no time.
+    const all = [...clientBlocks(week, clientKey), ...placedOpen.values()].sort((a, b) => a.date.localeCompare(b.date) || a.half.localeCompare(b.half));
+    const blocks = all.filter((b) => !b.pto);
+    const onlyPto = blocks.length === 0 && all.length > 0;
     const inBlocks = blocks.reduce((n, b) => n + b.freeMinutes, 0);
     const borrowed = o.borrowedMinutes[clientKey] ?? 0;
     const freeMinutes = Math.max(0, inBlocks - borrowed);
     const plannedMinutes = plannedMinutesOf(est, clientKey, "must");
-    const w = budgetWords(freeMinutes, plannedMinutes);
-    return { clientKey, clientName, blocks, freeMinutes, borrowedMinutes: Math.min(borrowed, inBlocks), plannedMinutes, nicePlannedMinutes: plannedMinutesOf(est, clientKey, "nice"), status: w.kind, text: w.text, free: w.free, planned: w.planned, over: w.over };
+    const w0 = budgetWords(freeMinutes, plannedMinutes);
+    const w = onlyPto ? { ...w0, free: NO_TIME, text: [NO_TIME, w0.planned].filter(Boolean).join(" · ") } : w0;
+    return { clientKey, clientName, blocks, ptoBlocks: all.filter((b) => b.pto).map((b) => ({ date: b.date, half: b.half })), freeMinutes, borrowedMinutes: Math.min(borrowed, inBlocks), plannedMinutes, nicePlannedMinutes: plannedMinutesOf(est, clientKey, "nice"), status: w.kind, text: w.text, free: w.free, planned: w.planned, over: w.over };
   });
 }
 

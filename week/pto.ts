@@ -1,6 +1,7 @@
 // PTO from Dataverse Time Off Tracker rows, per day. Pure: rows in, PTO days out. No I/O.
-// Every PTO day is a whole day off (D105): hours are not read. Detail rows (one per day) win; a tracker with
-// no detail rows covers every weekday from its start to its end date (D109).
+// Every Dataverse PTO day is a whole day off (D105): hours are not read. Detail rows (one per day) win; a tracker with
+// no detail rows covers every weekday from its start to its end date (D109). A half-day comes from Outlook (S1, D453):
+// out-of-office time covering all of a half's working hours makes that half PTO (week/build.ts).
 import type { IsoDate } from "./types.ts";
 
 /** A Time Off Tracker row as read (only the fields FocusTime selects). */
@@ -26,8 +27,11 @@ export const PTO_DETAIL_FILTER_COLUMNS = ["statecode"] as const;
 /** One PTO entry for one day (one tracker). */
 export type PtoEntry = { date: IsoDate; title: string; trackerId: string };
 
-/** A PTO day: the whole day is off. */
-export type PtoDay = { date: IsoDate; titles: string[] };
+/** A PTO day: the whole day is off, or only one half when `half` is set (S1, D453). */
+export type PtoDay = { date: IsoDate; titles: string[]; half?: "AM" | "PM" };
+
+/** The title an out-of-office half-day or day shows (the event's own title is never shown as PTO). */
+export const OOF_TITLE = "Out of office";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const isWeekday = (d: Temporal.PlainDate) => d.dayOfWeek <= 5;

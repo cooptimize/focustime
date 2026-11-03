@@ -109,7 +109,7 @@ const ZONE_NAME = /["'`[](?:Africa|America|Antarctica|Asia|Atlantic|Australia|Eu
 const DIRECT_READ = /\b(?:hours|week)\??\.timeZone\b/;
 /** Files allowed to name zones: the Windows-to-IANA map, demo and style guide sample data, and test support. */
 const MAY_NAME_ZONES = (f: string) =>
-  f === "plan/timezones.ts" || f === "sources/demo/data.ts" || f === "ui/StyleGuide.tsx" || f.startsWith("fixtures/") || f === "week/test-helpers.ts";
+  f === "plan/timezones.ts" || f === "sources/demo/data.ts" || f === "ui/StyleGuide.tsx" || f.startsWith("fixtures/") || f.startsWith("test/") || f === "week/test-helpers.ts";
 const SOURCE = /\.(ts|tsx|mjs|js)$/;
 const TEST = /\.test\.tsx?$|(^|\/)test-[\w-]+\.ts$|^e2e\//;
 

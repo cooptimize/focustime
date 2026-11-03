@@ -13,6 +13,9 @@ import type { Capture, DayPlan, DraftStory, Pick, PickKind, PlanWeek, Size, Zone
 import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
 import type { DevOpsWriteEntry } from "../plan/devopswrite.ts";
+import { NAMED_MIGRATIONS } from "./migrations/index.ts";
+import { validSetupStatus, validSetupStep, type SetupState, type SetupStatus, type SetupStep } from "../plan/setup.ts";
+import { NAMES_TABLE, pending, type NamedMigration } from "./migrations/named.ts";
 export type { WriteEntry, WriteStatus } from "../plan/timebox.ts";
 
 /** Marks a migration that rebuilds a referenced table: run with foreign keys off, then checked (see migrate). */
@@ -1505,7 +1508,7 @@ export class PlanError extends Error {}
  * `files` (the host's, A1): makes the store's folder and keeps the file and its backups private. Absent: the path is
  * used as given (in-memory stores and tests).
  */
-export type PlanDbOptions = { path: string; now: () => Temporal.ZonedDateTime; log?: Logger; files?: StoreFiles };
+export type PlanDbOptions = { path: string; now: () => Temporal.ZonedDateTime; log?: Logger; files?: StoreFiles; /** Tests: the timestamped migrations to apply instead of store/migrations/index.ts. */ named?: readonly NamedMigration[] };
 
 /** The plan store's database, opened and migrated once per process (A2: shared by everyone; each person gets a store on it). */
 export function openPlanDb(opts: PlanDbOptions): DatabaseSync {
@@ -1515,7 +1518,7 @@ export function openPlanDb(opts: PlanDbOptions): DatabaseSync {
   db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
   db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
   const before = sqliteVersion(db);
-  migrate(db, opts.now, opts.path, opts.files, opts.log);
+  migrate(db, opts.now, opts.path, opts.files, opts.log, opts.named);
   // U3 (D388): say how many duplicate week items migration 21 removed (counts only; the rows are in dedupe_log).
   if (before < 21 && opts.log) {
     const n = (db.prepare("SELECT COUNT(*) AS n FROM dedupe_log WHERE table_name = 'week_features'").get() as { n: number }).n;
@@ -2560,6 +2563,20 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         (await db.run("INSERT INTO roadmap_dates (client_key, item_id, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id) DO UPDATE SET start_date = excluded.start_date, end_date = excluded.end_date, updated_at = excluded.updated_at", clientKey, itemId, dates.start, dates.end, stamp()));
       });
     },
+    /** S1 (D451): first-run setup, each step done, skipped or dismissed. Empty: never started. */
+    async setupState(): Promise<SetupState> {
+      const out: SetupState = {};
+      for (const r of (await db.all("SELECT step, status FROM setup_state")) as Row[]) if (validSetupStep(r.step) && validSetupStatus(r.status)) out[r.step] = r.status;
+      return out;
+    },
+    async setSetupStep(step: SetupStep, status: SetupStatus): Promise<void> {
+      if (!validSetupStep(step) || !validSetupStatus(status)) throw new PlanError("Unknown setup step");
+      return tx(async () => void (await db.run("INSERT INTO setup_state (step, status, updated_at) VALUES (?, ?, ?) ON CONFLICT (step) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at", step, status, stamp())));
+    },
+    /** Forgets the setup record (Settings > Setup > Start over; the dev reset): the flow shows again on the next open. */
+    async resetSetup(): Promise<void> {
+      return tx(async () => void (await db.run("DELETE FROM setup_state")));
+    },
     async writeLog(limit = 100): Promise<WriteEntry[]> {
       return ((await db.all("SELECT * FROM write_log ORDER BY id DESC LIMIT ?", limit)) as Row[]).map(toWrite);
     },
@@ -2616,12 +2633,15 @@ function sqliteVersion(db: DatabaseSync): number {
 /** Where the copy taken before a migration goes: plan.db.bak-v<from>-<stamp>, next to the store, 0600. */
 export const backupPath = (path: string, from: number, stamp: string) => `${path}.bak-v${from}-${stamp.replace(/[^0-9TZ]/g, "")}`;
 
-function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":memory:", files?: StoreFiles, log?: Logger) {
+function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":memory:", files?: StoreFiles, log?: Logger, named: readonly NamedMigration[] = NAMED_MIGRATIONS) {
   db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+  db.exec(`CREATE TABLE IF NOT EXISTS ${NAMES_TABLE} (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)`);
   const current = sqliteVersion(db);
   if (current > MIGRATIONS.length) throw new Error(`Plan store is from a newer FocusTime (schema ${current}); not opening it`);
+  // S1 (D458): the timestamped migrations still to apply, after every numbered one, in name order.
+  const todo = pending(named, new Set((db.prepare(`SELECT name FROM ${NAMES_TABLE}`).all() as { name: string }[]).map((r) => r.name)));
   // A store with data gets a full copy before any schema change (D125).
-  if (current > 0 && current < MIGRATIONS.length && path !== ":memory:") {
+  if (current > 0 && (current < MIGRATIONS.length || todo.length) && path !== ":memory:") {
     const bak = backupPath(path, current, now().toInstant().toString());
     db.prepare("VACUUM INTO ?").run(bak);
     files?.secure(bak);
@@ -2643,6 +2663,17 @@ function migrate(db: DatabaseSync, now: () => Temporal.ZonedDateTime, path = ":m
       throw e;
     } finally {
       if (rebuild) db.exec("PRAGMA foreign_keys = ON");
+    }
+  }
+  for (const m of todo) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.exec(m.sqlite);
+      db.prepare(`INSERT INTO ${NAMES_TABLE} (name, applied_at) VALUES (?, ?)`).run(m.name, now().toString({ smallestUnit: "second" }));
+      db.exec("COMMIT");
+    } catch (e) {
+      db.exec("ROLLBACK");
+      throw e;
     }
   }
 }

@@ -189,6 +189,19 @@ describe("the database's state for a waiting page (A3)", () => {
 });
 
 describe("the platform's probes (A4)", () => {
+  it("S1: /version says which build runs (env, PR, short sha, build time), like the health check: no session needed", async () => {
+    const build = { env: "dev" as const, pr: "8", sha: "abc1234", builtAt: "2026-11-03T17:05:00Z" };
+    const t = await startTestApp({ ctx: () => ({}) as ActionContext, extra: { build } });
+    try {
+      const r = await t.browser().send("/version", { host: "10.0.0.7:8080" });
+      expect(r.status).toBe(200);
+      expect(JSON.parse(r.body)).toEqual(build);
+      expect((await t.browser().send("/version", {}, "POST", "{}")).status).toBe(405);
+    } finally {
+      await t.close();
+    }
+  });
+
   it("answer from any Host, with no session and no database call; requests reach telemetry by route name only", async () => {
     const seen: { route: string; status: number }[] = [];
     let calls = 0;

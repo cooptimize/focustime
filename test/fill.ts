@@ -39,6 +39,7 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   (await plan.logWrite({ op: "create", uid: box.uid, eventId: `E-${tag}`, account: null, calendar: null, before: null, after: F, localBefore: null, localAfter: null, auto: false }));
   (await plan.addInvite({ uid: `inv-${tag}`, clientKey: "cooptimize", itemId: null, pickId: null, timeboxId: null, title: tag, url: null, start: "2026-11-03T15:00:00Z", end: "2026-11-03T15:30:00Z", attendees: [], teams: false, note: null }));
   (await plan.markOnce("reminder", MON));
+  (await plan.setSetupStep("day", "done"));
   (await plan.setRoadmapDates("cooptimize", 7001, { start: "2026-11-02", end: "2026-11-20" }));
   (await plan.logTeamsStatus({ op: "set", status: "Busy", minutes: 25, result: "done", message: null }));
   await createUserSettings({ db, userId, app: { dataverse: null, entra: null, google: null }, person: () => ({ email: `${tag}@example.com`, upn: `${tag}@example.com`, timeZone: null }), setZone: () => {}, defaultZone: DEMO_TZ, now: () => Temporal.Instant.from(NOW) }).seed(starterToml(DEMO_TZ));

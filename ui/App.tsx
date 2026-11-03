@@ -59,6 +59,9 @@ import { MoreButton, PopupMenu } from "./Menus.tsx";
 import { borrowStep, timerStep } from "./menu.ts";
 import { nowStrip } from "../plan/now.ts";
 import { cardHalves, slotOf, validHalf } from "./halves.ts";
+import { SetupFlow } from "./Setup.tsx";
+import { AboutDialog } from "./About.tsx";
+import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
 import { useLayout } from "./viewport.ts";
@@ -114,11 +117,31 @@ export function App() {
   const [welcome, setWelcome] = useState(false);
   const [closing, setClosing] = useState<{ musts: boolean } | null>(null);
   const [reconnected, setReconnected] = useState<"outlook" | "google" | null>(null);
+  // S1 (D451): first-run setup. It opens by itself for a new person (and resumes after a sign-out halfway); once
+  // closed or skipped, Today keeps one quiet line to finish it. Never in demo mode (the server says so).
+  const [setupView, setSetupView] = useState<SetupView | null>(null);
+  const [setupAt, setSetupAt] = useState<SetupStep | null>(null);
+  /** S1 (D452): ⋯ › About, which build this is. */
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const loadSetup = useCallback(
+    (openIt: boolean): Promise<SetupView | null> =>
+      call<SetupView>("setup.load", {}).then(
+        (v) => {
+          setSetupView(v);
+          if (openIt && v.open) setSetupAt(v.open);
+          return v;
+        },
+        () => null,
+      ),
+    [],
+  );
   const afterOpening = useCallback(() => {
-    call<{ first: boolean }>("ui.first_launch", {}).then((r) => r.first && setWelcome(true), () => {});
+    // When setup opens by itself it is the welcome: the first launch's moment (which takes the first key) waits.
+    const first = call<{ first: boolean }>("ui.first_launch", {});
+    void loadSetup(true).then((v) => first.then((r) => r.first && !v?.open && setWelcome(true), () => {}));
     // G1: a person's first Today offers the tour once (per person, in the plan store).
     call<{ show: boolean }>("ui.tour_offer", {}).then((r) => setTourOffer(r.show), () => {});
-  }, []);
+  }, [loadSetup]);
   const [tourOffer, setTourOffer] = useState(false);
   const endTourOffer = useCallback(() => setTourOffer(false), []);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -1445,6 +1468,7 @@ export function App() {
           demo={data.demo}
           setDemo={(on) => void switchDemo(on)}
           runTime={runTime}
+          onSetup={(step) => setSetupAt(step)}
         />
       ) : guideAt ? (
         <Guide chapter={guideAt.chapter} onClose={() => go((l) => ({ nav: l.nav, overlay: null }))} />
@@ -1563,6 +1587,8 @@ export function App() {
           onLeave={(msg) => (msg && setNotice(msg), leavePlanning())}
           onCloseOutDate={(d) => goNav(navOf.today("closeout", d))}
           onClosedOut={(st) => setClosing({ musts: st.date === st.today && mustsDone(st.picks, data.weekFeatures) })}
+          setupLine={setupView?.line ?? null}
+          onSetup={(step) => setSetupAt(step)}
         />
       ) : (
         <>
@@ -1667,6 +1693,7 @@ export function App() {
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
               { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
+              { id: "about", label: "About", run: () => setAboutOpen(true) },
             ],
           }}
           onClose={() => setMoreAt(null)}
@@ -1711,6 +1738,21 @@ export function App() {
       )}
       {writes.dialog}
       {devopsWrites.dialog}
+      {aboutOpen && <AboutDialog zone={userZone(data)} onClose={() => setAboutOpen(false)} onGuide={() => openGuide()} />}
+      {setupAt && (
+        <SetupFlow
+          start={setupAt}
+          googleConnected={data.sources.some((x) => x.source === "google" && x.status === "ok")}
+          onConnectGoogle={() => void connect("google")}
+          onClose={(changed) => {
+            setSetupAt(null);
+            loadSetup(false);
+            if (changed) reloadQuiet();
+          }}
+          onPlanWeek={() => openPlanWeek(data.today.weekStart)}
+          onGuide={() => openGuide()}
+        />
+      )}
       {captureOpen && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {draftEdit && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
     </div>

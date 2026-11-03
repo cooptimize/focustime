@@ -151,7 +151,7 @@ export type Slot = {
   /** Every gap with no busy item, in order. */
   freeGaps: FreeGap[];
   busyMeetingMinutes: number;
-  /** The day is a PTO day (D105): the whole half-day is off, so it has no free time and raises no risks. */
+  /** This half is PTO (the whole day, D105, or only this half, S1 D453): no free time, no risks, nothing planned on it. */
   pto: boolean;
 };
 
@@ -172,8 +172,10 @@ export type Day = {
   hours: DayHours;
   /** Minutes of flex sessions on this day. */
   flexMinutes: number;
-  /** PTO from Dataverse (step 6); null when none. A full PTO day has no risks. */
+  /** A whole PTO day (Dataverse, step 6, or out of office all day, D453); null when none or only a half. No risks. */
   pto: PtoDay | null;
+  /** S1 (D453): PTO for one half only (morning or afternoon); null when none or the whole day. */
+  ptoHalf: PtoDay | null;
 };
 
 export type Week = {

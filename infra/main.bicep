@@ -64,6 +64,7 @@ module app 'modules/app.bicep' = {
   name: 'app'
   params: {
     prefix: prefix
+    env: env
     location: location
     tags: tags
     workspaceName: monitoring.outputs.workspaceName

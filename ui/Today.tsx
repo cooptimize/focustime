@@ -6,6 +6,7 @@
 //   Close out: a side panel over the dimmed cards (numbers, where you left off, DevOps updates owed, follow-ups due).
 // At 3840 wide a day timeline sits on the left (drop a pick onto a free gap to timebox it) and a detail panel under
 // the cards. Lumen never appears here.
+import type { SetupStep } from "../plan/setup.ts";
 import { useTextScale } from "./textsize.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
@@ -89,6 +90,9 @@ type Props = {
   onClosedOut: (st: CloseOutState) => void;
   /** Step 16.2: Today's mode switch (Now · Plan · Check-in · Close out), at the right of the header. */
   switcher?: React.ReactNode;
+  /** S1 (D451): "2 setup steps left", opening setup at the first step not done; null when nothing is left. */
+  setupLine?: { text: string; step: SetupStep } | null;
+  onSetup?: (step: SetupStep) => void;
 };
 
 const clock = (iso: string, tz: string) => {
@@ -266,6 +270,13 @@ export function Today(props: Props) {
         />
       )}
       {!wide && attention}
+      {mode === "now" && props.setupLine && props.onSetup && (
+        <p className="setup-line">
+          <button type="button" className="link-btn" onClick={() => props.onSetup!(props.setupLine!.step)} title="Finish setting up FocusTime">
+            {props.setupLine.text}
+          </button>
+        </p>
+      )}
       {error && <p className="set-problem" role="alert">{error}</p>}
       <Fading text={notice} onGone={clearNotice} />
       {offer && <FlexOfferBar offer={offer.offer} clientKey={offer.pick.clientKey} clientName={nameOf(offer.pick.clientKey)} title={offer.pick.title} onDone={(m) => { setOffer(null); setNotice(m); props.onChanged(); }} />}

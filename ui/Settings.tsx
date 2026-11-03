@@ -25,6 +25,7 @@ import { version as APP_VERSION } from "../package.json";
 import { InlineMoment } from "./brand/Opening.tsx";
 import { Lockup } from "./brand/Brand.tsx";
 import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
+import type { SetupStep, SetupView } from "../plan/setup.ts";
 
 export const SETTINGS_SECTIONS = [
   ["you", "You"],
@@ -39,6 +40,7 @@ export const SETTINGS_SECTIONS = [
   ["connections", "Connections"],
   ["display", "Display"],
   ["data", "Data"],
+  ["setup", "Setup"],
   ["about", "About"],
 ] as const;
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number][0];
@@ -77,6 +79,8 @@ type Props = {
   setDemo: (on: boolean) => void;
   /** Clears an override (hours.clear_day) and reloads. */
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
+  /** S1 (D451): opens first-run setup at a step (Settings > Setup runs it again; it edits these same settings). */
+  onSetup?: (step: SetupStep) => void;
 };
 
 const DEVOPS_STATE: Record<ClientWork["status"], string> = { ok: "Live", identity_missing: "No identity", not_set_up: "Not set up", auth_failed: "PAT problem", no_access: "No access", unreachable: "Unreachable", error: "Error" };
@@ -189,7 +193,7 @@ export function Settings(props: Props) {
         <h2 ref={headRef} tabIndex={-1}>
           {title}
         </h2>
-        {data && props.section !== "about" && <p className="muted set-path">Saved to {data.configPath}</p>}
+        {data && props.section !== "about" && props.section !== "setup" && <p className="muted set-path">Saved to {data.configPath}</p>}
         {error && <p className="field-problem">{error}</p>}
         {data && data.problems.length > 0 && props.section !== "connections" && props.section !== "data" && (
           <div className="config-banner" role="alert">
@@ -212,6 +216,8 @@ export function Settings(props: Props) {
 function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsData) => void; reload: () => Promise<void> }) {
   const d = p.data;
   switch (p.section) {
+    case "setup":
+      return <SetupSection {...p} />;
     case "you":
       return (
         <>
@@ -1225,6 +1231,64 @@ function WriteAccess({ client: c, onDone }: { client: SettingsData["clients"][nu
         </span>
       )}
     </form>
+  );
+}
+
+/**
+ * S1 (D451): Settings > Setup. Run setup again opens the four screens on the same settings (nothing is duplicated:
+ * each screen saves Working hours, Clients, Standing blocks or Connections as those sections do). Start over forgets
+ * the setup record so the flow opens by itself again; dev and local only.
+ */
+function SetupSection(p: Props) {
+  const [view, setView] = useState<SetupView | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [prod, setProd] = useState(true);
+  useEffect(() => {
+    call<SetupView>("setup.load", {}).then(setView, () => setView(null));
+    // Start over is for dev and local only (the server refuses it on prod too).
+    fetch("/version", { credentials: "same-origin" })
+      .then((r) => r.json() as Promise<{ env?: string }>)
+      .then((b) => setProd(b.env === "prod"), () => setProd(true));
+  }, []);
+  if (p.demo) return <p className="muted">Setup isn't part of the demo.</p>;
+  const left = view?.line?.text;
+  return (
+    <div className="set-form">
+      <p className="muted">The four first-run screens: your day, your clients, standing blocks and calendars. They change the same settings as the sections here.</p>
+      <p>{view ? (left ? `${left}.` : "Every step is done.") : ""}</p>
+      <div className="set-save">
+        <button type="button" className="mini primary" onClick={() => p.onSetup?.(view?.line?.step ?? "day")}>
+          {left ? "Finish setup" : "Run setup again"}
+        </button>
+        {left && (
+          <button type="button" className="mini" onClick={() => p.onSetup?.("day")}>
+            Run setup from the start
+          </button>
+        )}
+        {!prod && (
+        <button
+          type="button"
+          className="mini quiet"
+          title="Forget your setup record, so the screens open by themselves next time (dev and local only)"
+          onClick={async () => {
+            try {
+              setView(await call<SetupView>("setup.reset", {}));
+              setStatus("Setup record cleared. The screens open by themselves the next time FocusTime opens");
+            } catch (e) {
+              setStatus(e instanceof Error ? e.message : "Not cleared");
+            }
+          }}
+        >
+          Start over
+        </button>
+        )}
+        {status && (
+          <span className="muted" role="status">
+            {status}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 

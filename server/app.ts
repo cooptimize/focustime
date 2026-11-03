@@ -1,6 +1,7 @@
 // The HTTP app (A2): guarded requests (server/guard.ts), sign-in routes, server-side sessions with a CSRF token on
 // every state change, one action endpoint per signed-in person, and the UI. The same app serves the developer loop
 // (http://localhost:<port>) and the hosted app.
+import type { BuildInfo } from "./buildinfo.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
@@ -36,6 +37,8 @@ export type SignInRefusal = "deleted" | "refused";
 export type AppOptions = {
   /** Where people reach FocusTime: the Host and Origin checks and every redirect. */
   publicUrl: string;
+  /** S1 (D452): the running build, at /version (env, PR, short sha, build time; nothing else). */
+  build?: BuildInfo;
   log: Logger;
   accounts: Pick<AccountStore, "sessions" | "authRequests">;
   auth: SignInHooks;
@@ -61,6 +64,8 @@ export type AppOptions = {
 /** A4: liveness and readiness for the platform's probes (no session, no database call). */
 export const HEALTH_PATH = "/healthz";
 export const READY_PATH = "/readyz";
+/** S1 (D452): the running build; public like the health check (it holds no secret, hostname or user data). */
+export const VERSION_PATH = "/version";
 
 /** A finished request, for telemetry: never a path with ids, a query, a header or a body. */
 export type RequestRecord = { method: string; route: string; status: number; durationMs: number };
@@ -150,11 +155,12 @@ export function createApp(opts: AppOptions) {
 
     // A4: the platform's probes (liveness and readiness). Before the Host check: a probe calls the replica's own
     // address. Never a database call, so probes don't keep a serverless database awake.
-    if (url.pathname === HEALTH_PATH || url.pathname === READY_PATH) {
+    if (url.pathname === HEALTH_PATH || url.pathname === READY_PATH || url.pathname === VERSION_PATH) {
       if (method !== "GET" && method !== "HEAD") {
         res.writeHead(405, { allow: "GET, HEAD" });
         return res.end();
       }
+      if (url.pathname === VERSION_PATH) return json(res, 200, opts.build ?? { env: "local", pr: "none", sha: "unknown", builtAt: null });
       return json(res, 200, { status: "ok" });
     }
     if (opts.onRequest) {

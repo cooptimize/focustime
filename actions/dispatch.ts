@@ -55,6 +55,7 @@ import { vmAction, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
+import { setupAction, type SetupClient } from "./setup-actions.ts";
 
 /** The plan store marker for the first launch (step 17.5). */
 const FIRST_LAUNCH_MARK = "first_launch";
@@ -64,6 +65,8 @@ const TOUR_MARK = "tour_offer";
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
 export type ActionContext = {
+  /** S1 (D452): where this runs: local, dev, prod or demo (runtime config). Absent: local. */
+  env?: string;
   /** R1: what to do when the one-time move from Coopilot's keyring entries failed; shown on the sign-in screen. */
   renameNote?: string | null;
   /** Step 16.4: the profile photo cache (~/.cache/focustime/photos). Absent: photos aren't cached (demo mode, tests). */
@@ -247,10 +250,21 @@ const featureWeeks = (weekStart: string, todayDate: string) => {
   return [weekStart, thisWeek, Temporal.PlainDate.from(thisWeek).add({ days: 7 }).toString()];
 };
 
-/** The week's blocks from focus patterns and standing blocks only (no calendars): where a feature can go (step 8). */
+/**
+ * The week's blocks from focus patterns and standing blocks: where a feature can go (step 8). S1 (D453): PTO comes the
+ * same way as week.load's, so Plan the week's checks agree with Week: Dataverse PTO for the week, and out-of-office time
+ * from Outlook (only those events; meetings don't change where a feature can go). Reads are the memoized ones.
+ */
 async function patternWeek(ctx: ActionContext, cfg: AppConfig, weekStart: string): Promise<Week> {
-  const r = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).load(weekStart).catch(() => null) : null;
-  return buildWeek({ weekStart, patterns: r?.items ?? [], events: [], config: cfg.week });
+  const tz = userZone(cfg);
+  const dv = cfg.dataverse.mySystemUserId ? ctx.makeDataverse(cfg.dataverse, tz) : null;
+  const [r, ptoR, o] = await Promise.all([
+    dv ? dv.load(weekStart).catch(() => null) : null,
+    dv ? dv.pto(...weekRange(weekStart)).catch(() => null) : null,
+    cfg.outlook ? ctx.makeOutlook(cfg.outlook, tz).load(weekStart).catch(() => null) : null,
+  ]);
+  const away = (o?.items ?? []).filter((e) => e.showAs === "oof" && !e.isPersonal);
+  return buildWeek({ weekStart, patterns: r?.items ?? [], events: away, config: cfg.week, pto: ptoByDate(ptoR?.items ?? [], weekDates7(weekStart)) });
 }
 
 /**
@@ -709,6 +723,46 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (req.input !== undefined && (typeof req.input !== "object" || req.input === null || Object.keys(req.input).length)) return bad("ui.first_launch takes no input");
       if (ctx.demo?.on || !ctx.plan) return { ok: true, data: { first: false } };
       return { ok: true, data: { first: (await ctx.plan.markOnce(FIRST_LAUNCH_MARK, "once")) } };
+    }
+    case "setup.load":
+    case "setup.prefill":
+    case "setup.mark":
+    case "setup.reset": {
+      return setupAction(
+        {
+          plan: ctx.plan,
+          demo: !!ctx.demo?.on,
+          env: ctx.env ?? "local",
+          config: () => configured(ctx),
+          clients: async (cfg): Promise<SetupClient[] | null> => {
+            const dv = ctx.makeDataverse(cfg.dataverse, userZone(cfg));
+            const mine = await dv.myClients();
+            if (!mine) return null;
+            // The DevOps organization per client (for the PAT page link); never the company PAT.
+            const t = mine.length ? await dv.devopsTargets(mine.map((c) => c.clientKey), { withPat: false }).catch(() => null) : null;
+            return Promise.all(
+              mine.map(async (c) => {
+                const w = (await ctx.plan?.devopsIdentity(c.clientKey)) ?? null;
+                const org = t?.ok ? (t.targets.find((x) => x.clientKey === c.clientKey)?.org ?? null) : null;
+                return { key: c.clientKey, name: c.clientName, org, write: w ? { name: w.name, email: w.email } : null };
+              }),
+            );
+          },
+          workingHours: async (cfg) => {
+            // Outlook's working hours are the mailbox settings'; getSchedule on my own address returns them on the
+            // read token (Calendars.ReadBasic), so no new permission.
+            const reader = cfg.outlook ? ctx.makeOutlook(cfg.outlook, userZone(cfg)).schedule : undefined;
+            const me = (await ctx.signedInAs?.())?.email ?? cfg.dataverse.myEmail;
+            if (!reader || !me) return null;
+            const zone = userZone(cfg);
+            const day = Temporal.PlainDate.from(localToday(ctx.now(), zone)).toZonedDateTime({ timeZone: zone });
+            const [mine] = await reader.schedule([me], day.toInstant().toString(), day.add({ days: 1 }).toInstant().toString(), zone);
+            return mine && !mine.hoursUnknown && !mine.problem ? mine.workingHours : null;
+          },
+        },
+        action,
+        req.input ?? {},
+      );
     }
     case "ui.tour_offer": {
       // G1: the tour link shows on a person's first Today until they open the Guide from it or dismiss it; then

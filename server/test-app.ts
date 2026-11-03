@@ -1,7 +1,6 @@
 // Starts the HTTP app for a test (A2): an in-memory account store, a signed-in session, and a client that sends the
 // session cookie, the CSRF header and a same-origin Origin like the page does. Test-only.
 import { request } from "node:http";
-import type { AddressInfo } from "node:net";
 import { DatabaseSync } from "node:sqlite";
 import type { ActionContext } from "../actions/dispatch.ts";
 import type { Logger } from "../log/logger.ts";
@@ -9,6 +8,7 @@ import { createAccountStore } from "../store/accounts.ts";
 import { MIGRATIONS } from "../store/plan-store.ts";
 import type { Conn } from "../store/sql/conn.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
+import { onFreePort } from "../test/ports.ts";
 import { createApp, type AppOptions, type SignInHooks } from "./app.ts";
 import { CSRF_COOKIE, SESSION_COOKIE } from "./auth/cookies.ts";
 
@@ -34,22 +34,25 @@ export async function startTestApp(o: {
   let clock = o.now ?? (() => Temporal.Now.instant());
   const accounts = createAccountStore(db, () => clock());
   const ctx = typeof o.ctx === "function" ? o.ctx : () => o.ctx as ActionContext;
-  // Listen on a free port first: the public URL (Host and Origin checks) needs it.
-  const probe = createApp({ publicUrl: "http://localhost:1", log: () => {}, accounts, auth: { microsoft: null, signedIn: async () => ({ refused: "refused" }), demo: null }, ctx });
-  await new Promise<void>((r) => probe.listen(0, "127.0.0.1", r));
-  const port = (probe.address() as AddressInfo).port;
-  await new Promise<void>((r) => probe.close(() => r()));
-  const publicUrl = `http://localhost:${port}`;
-  const server = createApp({
-    publicUrl,
-    log: o.log ?? (() => {}),
-    accounts,
-    auth: { microsoft: null, signedIn: async () => ({ refused: "refused" }), demo: null, ...o.auth },
-    ctx,
-    ...(o.distDir ? { distDir: o.distDir } : {}),
-    ...o.extra,
+  // The public URL (Host and Origin checks) needs the port before the app starts: a free port from the OS, and a new
+  // one if another test takes it first (test/ports.ts).
+  const { server, port } = await onFreePort(async (port) => {
+    const server = createApp({
+      publicUrl: `http://localhost:${port}`,
+      log: o.log ?? (() => {}),
+      accounts,
+      auth: { microsoft: null, signedIn: async () => ({ refused: "refused" }), demo: null, ...o.auth },
+      ctx,
+      ...(o.distDir ? { distDir: o.distDir } : {}),
+      ...o.extra,
+    });
+    await new Promise<void>((ok, fail) => {
+      server.once("error", fail);
+      server.listen(port, "127.0.0.1", () => ok());
+    });
+    return { server, port };
   });
-  await new Promise<void>((r) => server.listen(port, "127.0.0.1", r));
+  const publicUrl = `http://localhost:${port}`;
 
   /** A browser: keeps the cookies the app sets and sends them back. */
   function browser() {

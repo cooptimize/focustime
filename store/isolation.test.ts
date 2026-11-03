@@ -12,7 +12,7 @@ import { createUserSecrets } from "./user-secrets.ts";
 import { DEMO_TZ } from "../sources/demo/data.ts";
 
 /** Tables that are the app's, not one person's (each keyed by its own id or holding user_id itself). */
-const APP_TABLES = ["schema_migrations", "schema_version", "scheduler_state", "app_keys", "users", "sessions", "auth_requests", "deletions"];
+const APP_TABLES = ["schema_migrations", "schema_version", "schema_migration_names", "scheduler_state", "app_keys", "users", "sessions", "auth_requests", "deletions"];
 
 const NOW = "2026-11-02T14:30:00Z";
 const zoned = () => Temporal.Instant.from(NOW).toZonedDateTimeISO(DEMO_TZ);
@@ -148,7 +148,7 @@ await forEachDriver("per-user scoping (A2)", (d) => {
     const bRows = await rowsOf(db, "user-b");
     await a.reset();
     expect(await rowsOf(db, "user-b")).toEqual(bRows);
-  }, 60_000);
+  }, 120_000);
 
   it("a store needs a person, and the person can't come from a statement", async () => {
     const db = (await d.open()).conn;

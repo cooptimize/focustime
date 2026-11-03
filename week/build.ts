@@ -2,7 +2,7 @@ import { iso, minutesOn, WEEKDAYS_7, weekDates7, zonedAt } from "./dates.ts";
 import { hoursOn, mergeSpans, nominalHours, toHm, toMin, viewRange, type DayHours, type Span, type ViewRange } from "./hours.ts";
 import { expandPatterns, mergeFocus, standingBlocksFor } from "./patterns.ts";
 import { allDayOn, placeTimed, type Bucket } from "./placement.ts";
-import type { PtoDay } from "./pto.ts";
+import { OOF_TITLE, type PtoDay } from "./pto.ts";
 import { evaluateRisks } from "./risks.ts";
 import type { CalEvent, Day, FlexSession, FocusPattern, Half, IsoDate, PlacedEvent, Slot, Unavailable, Week, WeekConfig } from "./types.ts";
 import { userZone } from "./zone.ts";
@@ -22,6 +22,14 @@ export type BuildWeekInput = {
   /** Weekend dates with picks on them, so their columns show (the plan store knows; this function doesn't). */
   weekendPlanned?: ReadonlySet<IsoDate>;
 };
+
+/** True when a timed event covers all of a working window (HH:MM, that date, that zone). */
+function covers(e: CalEvent, date: IsoDate, w: Span, tz: string): boolean {
+  if (e.allDay) return false;
+  const s = Temporal.Instant.from(e.start).epochMilliseconds;
+  const en = Temporal.Instant.from(e.end).epochMilliseconds;
+  return s <= zonedAt(date, w.start, tz).epochMilliseconds && en >= zonedAt(date, w.end, tz).epochMilliseconds;
+}
 
 /** Unavailable time as a busy calendar item, so every rule treats it like a meeting's time (not as a meeting). */
 export function unavailableEvent(u: Unavailable): CalEvent {
@@ -78,7 +86,7 @@ export function buildWeek({ weekStart, patterns, events, config, pto = {}, unava
     const i = WEEKDAYS_7.indexOf(WEEKDAYS_7[Temporal.PlainDate.from(date).dayOfWeek - 1]!);
     const kind = i < 4 ? "work" : i === 4 ? "overflow" : "weekend";
     const h = hours.get(date)!;
-    const off = pto[date] ?? null;
+    const listed = pto[date] ?? null;
     // Q34 (step 6c): a session may overlap working hours; that part is already working time, so it is noted, not counted.
     const dayFlex = flexOn(date).map((f) => {
       const sp = spanOn(date, f.start, f.end, tz);
@@ -127,6 +135,19 @@ export function buildWeek({ weekStart, patterns, events, config, pto = {}, unava
     ];
     const placed = placeTimed(busyItems, buckets, tz);
     const allDay = allDayOn(events, date);
+    // S1 (D453): one PTO answer per half, shared by Week, Plan the week and Plan the day. Dataverse PTO is a whole day
+    // (D105); out-of-office time covering all of a half's working hours makes that half PTO; both halves, the day.
+    const oofHalf = (win: Span[]) => win.length > 0 && win.every((w) => events.some((e) => !e.isPersonal && e.showAs === "oof" && covers(e, date, w, tz)));
+    const amOof = kind === "work" || kind === "overflow" ? oofHalf(amWin) : false;
+    const pmOof = kind === "work" || kind === "overflow" ? oofHalf(pmWin) : false;
+    const allDayOof = allDay.some((e) => !e.isPersonal && e.showAs === "oof") && (amWin.length > 0 || pmWin.length > 0);
+    const listedHalf = listed?.half ?? null;
+    const amOff = !!listed && listedHalf !== "PM" ? true : amOof || allDayOof;
+    const pmOff = !!listed && listedHalf !== "AM" ? true : pmOof || allDayOof;
+    const whole = (amOff || !amWin.length) && (pmOff || !pmWin.length) && (amOff || pmOff);
+    const off: PtoDay | null = whole ? (listed && !listed.half ? listed : { date, titles: listed?.titles ?? [OOF_TITLE] }) : null;
+    const ptoHalf: PtoDay | null = !whole && (amOff || pmOff) ? { date, titles: listed?.titles ?? [OOF_TITLE], half: amOff ? "AM" : "PM" } : null;
+    const halfOff = (half: Half) => (half === "AM" ? amOff : half === "PM" ? pmOff : !!off);
 
     const slot = (half: Half, bounds: Span, view: [number, number], win: Span[]): Slot => {
       const at2 = (x: string) => iso(zonedAt(date, x, tz));
@@ -136,8 +157,9 @@ export function buildWeek({ weekStart, patterns, events, config, pto = {}, unava
       const start = at2(bounds.start);
       const end = at2(bounds.end);
       const r = evaluateRisks({ focus, events: evs, allDay, start, end, windows, timeZone: tz }, config.thresholds);
-      // A PTO day is simply off: nothing there is at risk (D99, D105).
-      const risks = off ? [] : r.risks;
+      // A PTO day or half is simply off: nothing there is at risk (D99, D105, D453).
+      const isOff = halfOff(half);
+      const risks = isOff ? [] : r.risks;
       const slotFlex = dayFlex.filter((f) => {
         const m = minutesOn(date, f.start, tz);
         return half === "EVE" ? !h.main || m >= toMin(h.main.end) || m < 0 : half === "AM" ? !!h.main && m < toMin(h.pm!.start) && m >= 0 : !!h.main && m >= toMin(h.pm!.start) && m < toMin(h.main.end);
@@ -152,11 +174,11 @@ export function buildWeek({ weekStart, patterns, events, config, pto = {}, unava
         off: windows.length === 0,
         flex: half === "EVE" ? dayFlex.filter((f) => !slotFlexElsewhere(f)) : slotFlex,
         focus,
-        open: kind === "work" && half !== "EVE" && focus.length === 0 && windows.length > 0,
+        open: kind === "work" && half !== "EVE" && focus.length === 0 && windows.length > 0 && !isOff,
         events: evs,
         ...r,
         risks,
-        pto: !!off,
+        pto: isOff,
       };
     };
     // Flex sessions shown on the morning or afternoon card are not repeated on EVE.
@@ -180,6 +202,7 @@ export function buildWeek({ weekStart, patterns, events, config, pto = {}, unava
       hours: h,
       flexMinutes: dayFlex.reduce((n, f) => n + Math.max(0, (Temporal.Instant.from(f.end).epochMilliseconds - Temporal.Instant.from(f.start).epochMilliseconds) / 60000 - f.overlapMinutes), 0),
       pto: off,
+      ptoHalf,
     };
   });
 

@@ -10,6 +10,8 @@
 //   then gets AcrPull and the Key Vault roles below.
 // - true: the FocusTime image from ACR, pulled with the system identity, and the app secrets as Key Vault references.
 param prefix string
+@description('S1 (D452): the env label the app shows in About and at /version (dev or prod).')
+param env string
 param location string
 param tags object
 param workspaceName string
@@ -64,6 +66,7 @@ var appSecrets = [
 
 var settings = [
   { name: 'FOCUSTIME_HOST', value: 'azure' }
+  { name: 'FOCUSTIME_ENV', value: env }
   { name: 'PORT', value: '8080' }
   { name: 'FOCUSTIME_PUBLIC_URL', value: publicUrl }
   { name: 'FOCUSTIME_ENTRA_TENANT_ID', value: tenantId }

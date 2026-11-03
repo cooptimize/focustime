@@ -5,6 +5,8 @@
 // version before it, and a re-run skips what is recorded (idempotent).
 
 import type { Logger } from "../../log/logger.ts";
+import { NAMED_MIGRATIONS } from "../migrations/index.ts";
+import { NAMES_TABLE, pending, type NamedMigration } from "../migrations/named.ts";
 import { BASELINE, BASELINE_VERSION } from "./baseline.ts";
 import type { SqlServerConn } from "./sqlserver.ts";
 
@@ -65,6 +67,15 @@ export const SQLSERVER_VERSION = SQLSERVER_MIGRATIONS[SQLSERVER_MIGRATIONS.lengt
 const VERSION_TABLE = `IF OBJECT_ID(N'schema_version', N'U') IS NULL
   CREATE TABLE schema_version (version int NOT NULL PRIMARY KEY, name nvarchar(200) NOT NULL, applied_at datetime2(7) NOT NULL)`;
 
+const NAMES = `IF OBJECT_ID(N'${NAMES_TABLE}', N'U') IS NULL
+  CREATE TABLE ${NAMES_TABLE} (name nvarchar(200) NOT NULL PRIMARY KEY, applied_at datetime2(7) NOT NULL)`;
+
+/** The timestamped migrations applied, by full name (S1, D458). */
+export async function appliedNames(conn: SqlServerConn): Promise<Set<string>> {
+  await conn.batch(NAMES);
+  return new Set(((await conn.all(`SELECT name FROM ${NAMES_TABLE}`)) as { name: string }[]).map((r) => r.name));
+}
+
 /** The applied version (0 on an empty database). */
 export async function sqlServerVersion(conn: SqlServerConn): Promise<number> {
   await conn.batch(VERSION_TABLE);
@@ -73,15 +84,16 @@ export async function sqlServerVersion(conn: SqlServerConn): Promise<number> {
 }
 
 /**
- * Brings the database to the newest version. Returns the versions applied. A database newer than this build is
- * refused (an older server against a newer schema could lose columns it doesn't know).
+ * Brings the database to the newest version: the numbered migrations, then the timestamped ones in name order (D458).
+ * Returns what it applied (versions, then names). A database newer than this build is refused (an older server against
+ * a newer schema could lose columns it doesn't know).
  */
-export async function migrateSqlServer(conn: SqlServerConn, o: { log?: Logger; migrations?: readonly SqlServerMigration[] } = {}): Promise<number[]> {
+export async function migrateSqlServer(conn: SqlServerConn, o: { log?: Logger; migrations?: readonly SqlServerMigration[]; named?: readonly NamedMigration[] } = {}): Promise<(number | string)[]> {
   const list = o.migrations ?? SQLSERVER_MIGRATIONS;
   const newest = list[list.length - 1]!.version;
   const at = await sqlServerVersion(conn);
   if (at > newest) throw new Error(`The database is at schema version ${at}, newer than this build (${newest})`);
-  const applied: number[] = [];
+  const applied: (number | string)[] = [];
   for (const m of list) {
     if (m.version <= at) continue;
     await conn.tx(async () => {
@@ -95,6 +107,19 @@ export async function migrateSqlServer(conn: SqlServerConn, o: { log?: Logger; m
       applied.push(m.version);
     });
     o.log?.({ source: "database", op: "migrate", count: m.version });
+  }
+  // Timestamped migrations only on a database at the newest numbered version (a test can stop the numbered list early).
+  if (!o.migrations || newest === SQLSERVER_VERSION) {
+    for (const m of pending(o.named ?? NAMED_MIGRATIONS, await appliedNames(conn))) {
+      await conn.tx(async () => {
+        const done = await conn.get(`SELECT name FROM ${NAMES_TABLE} WITH (UPDLOCK, HOLDLOCK) WHERE name = ?`, [m.name]);
+        if (done) return;
+        await conn.batch(m.sqlserver);
+        await conn.run(`INSERT INTO ${NAMES_TABLE} (name, applied_at) VALUES (?, SYSUTCDATETIME())`, [m.name]);
+        applied.push(m.name);
+      });
+      o.log?.({ source: "database", op: "migrate_named", count: applied.length });
+    }
   }
   if (applied.length) await conn.refreshCatalog();
   return applied;
