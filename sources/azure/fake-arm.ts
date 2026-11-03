@@ -1,21 +1,20 @@
 // A fake Azure Resource Manager (step 15.4) behind a fetch function: Resource Graph by tag, VMs with power states and
-// timed transitions, async operations, and auto-shutdown schedules. Used by tests and by demo mode (no Azure calls).
+// timed starts, async operations, and auto-shutdown schedules (GET only; D465). Used by tests and by demo mode (no
+// Azure calls). Every call is recorded in `calls`, so tests can check no schedule write was ever sent.
 // Fictional IDs only.
 import { ARM } from "./client.ts";
 
 export type FakeVm = { id: string; name: string; resourceGroup: string; subscriptionId: string; location: string; tags: Record<string, string>; power: string };
 export type FakeArmOptions = {
   now: () => number;
-  /** How long a start or deallocate takes. */
+  /** How long a start takes. */
   transitionMs?: number;
-  /** Calls Azure refuses with 403 AuthorizationFailed: "start", "deallocate", "read", "scheduleRead", "scheduleWrite". */
+  /** Calls Azure refuses with 403 AuthorizationFailed: "start", "read", "instanceView", "scheduleRead". */
   forbid?: Set<string>;
   /** Operations that end Failed. */
-  failOps?: Set<"start" | "deallocate">;
+  failOps?: Set<"start">;
   /** Every call fails as a network error while true. */
   offline?: { on: boolean };
-  /** Schedule PUTs are accepted but not applied (a read-back mismatch). */
-  ignorePut?: boolean;
 };
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
@@ -25,7 +24,7 @@ const notFound = () => json(404, { error: { code: "ResourceNotFound", message: "
 export function fakeArm(o: FakeArmOptions) {
   const vms = new Map<string, FakeVm>();
   const schedules = new Map<string, Record<string, unknown>>();
-  const ops = new Map<string, { vm: string; op: "start" | "deallocate"; doneAt: number; fail: boolean }>();
+  const ops = new Map<string, { vm: string; op: "start"; doneAt: number; fail: boolean }>();
   const calls: { method: string; path: string; body: unknown }[] = [];
   let seq = 0;
 
@@ -33,7 +32,7 @@ export function fakeArm(o: FakeArmOptions) {
     for (const op of ops.values()) {
       const vm = vms.get(op.vm);
       if (!vm || o.now() < op.doneAt) continue;
-      if (vm.power === "starting" || vm.power === "deallocating") vm.power = op.fail ? (op.op === "start" ? "deallocated" : "running") : op.op === "start" ? "running" : "deallocated";
+      if (vm.power === "starting") vm.power = op.fail ? "deallocated" : "running";
     }
   }
 
@@ -73,18 +72,18 @@ export function fakeArm(o: FakeArmOptions) {
       if (o.now() < op.doneAt) return json(200, { status: "InProgress" }, { "retry-after": "5" });
       return json(200, op.fail ? { status: "Failed", error: { code: "OSProvisioningTimedOut", message: "x" } } : { status: "Succeeded" });
     }
-    const vmMatch = /^(\/subscriptions\/[^/]+\/resourceGroups\/[^/]+\/providers\/Microsoft\.Compute\/virtualMachines\/[^/]+)(\/(instanceView|start|deallocate))?$/i.exec(path);
+    const vmMatch = /^(\/subscriptions\/[^/]+\/resourceGroups\/[^/]+\/providers\/Microsoft\.Compute\/virtualMachines\/[^/]+)(\/(instanceView|start))?$/i.exec(path);
     if (vmMatch) {
       const vm = vms.get(decodeURIComponent(vmMatch[1]!).toLowerCase());
       const sub = vmMatch[3];
       if (!vm) return notFound();
       if (!sub && method === "GET") return o.forbid?.has("read") ? denied() : json(200, { id: vm.id, name: vm.name, location: vm.location, tags: vm.tags });
       if (sub === "instanceView" && method === "GET") return o.forbid?.has("instanceView") ? denied() : json(200, { statuses: [{ code: "ProvisioningState/succeeded" }, { code: `PowerState/${vm.power}`, displayStatus: `VM ${vm.power}` }] });
-      if ((sub === "start" || sub === "deallocate") && method === "POST") {
+      if (sub === "start" && method === "POST") {
         if (o.forbid?.has(sub)) return denied();
         const id = `op-${++seq}`;
         ops.set(id, { vm: vm.id.toLowerCase(), op: sub, doneAt: o.now() + (o.transitionMs ?? 60_000), fail: !!o.failOps?.has(sub) });
-        vm.power = sub === "start" ? "starting" : "deallocating";
+        vm.power = "starting";
         const opUrl = `${ARM}/subscriptions/${vm.subscriptionId}/providers/Microsoft.Compute/locations/${vm.location}/operations/${id}?api-version=2026-04-01`;
         return new Response(null, { status: 202, headers: { "azure-asyncoperation": opUrl, location: `${opUrl}&monitor=true`, "retry-after": "10" } });
       }
@@ -97,14 +96,6 @@ export function fakeArm(o: FakeArmOptions) {
         if (o.forbid?.has("scheduleRead")) return denied();
         const s = schedules.get(key);
         return s ? json(200, s) : notFound();
-      }
-      if (method === "PUT") {
-        if (o.forbid?.has("scheduleWrite")) return denied();
-        const prev = schedules.get(key);
-        if (!prev) return notFound();
-        const b = body as { properties: Record<string, unknown> };
-        if (!o.ignorePut) schedules.set(key, { ...prev, properties: { ...(prev.properties as object), ...b.properties, provisioningState: "Succeeded" } });
-        return json(200, schedules.get(key));
       }
     }
     return notFound();

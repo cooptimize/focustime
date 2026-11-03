@@ -1,6 +1,8 @@
 // Azure Resource Manager for my VM (step 15.4), delegated (user_impersonation): the signed-in person's own Azure
-// permissions decide what works. Reads: Resource Graph (VMs by owner tag), the VM, its instance view and its
-// auto-shutdown schedule. Writes: start, deallocate, and that schedule (a full PUT; PATCH only changes tags).
+// permissions decide what works. fix/vm-schedule (D465): every request passes a fixed allowlist (ALLOWED) before a
+// token is asked for or anything is sent. Reads: Resource Graph (VMs by owner tag), the VM, its instance view, its
+// auto-shutdown schedule and a start's progress. The one write: start the VM. Nothing else: no stop, and never any
+// write to an auto-shutdown schedule (PUT, PATCH, DELETE, execute, retarget); the schedule is the person's own.
 // Only https://management.azure.com is called. Errors carry a kind, the HTTP status and Azure's error code, never
 // bodies, tokens or Azure's messages (they can name principals and scopes).
 import type { Logger } from "../../log/logger.ts";
@@ -9,11 +11,11 @@ import { powerFrom, type PowerState } from "../../plan/vm.ts";
 export const ARM = "https://management.azure.com";
 /** api-versions, checked against Microsoft Learn on Nov 2, 2026. */
 export const API = {
-  /** Microsoft.Compute virtualMachines: GET, instanceView, start, deallocate. */
+  /** Microsoft.Compute virtualMachines: GET, instanceView, start. */
   compute: "2026-04-01",
   /** Microsoft.ResourceGraph resources (POST query). */
   resourceGraph: "2024-04-01",
-  /** Microsoft.DevTestLab global schedules (a VM's auto-shutdown). */
+  /** Microsoft.DevTestLab global schedules (a VM's auto-shutdown): GET only. */
   schedules: "2018-09-15",
 } as const;
 
@@ -69,12 +71,43 @@ export const PERMISSION = {
   read: "Microsoft.Compute/virtualMachines/read",
   instanceView: "Microsoft.Compute/virtualMachines/instanceView/read",
   start: "Microsoft.Compute/virtualMachines/start/action",
-  deallocate: "Microsoft.Compute/virtualMachines/deallocate/action",
   operation: "Microsoft.Compute/locations/operations/read",
   scheduleRead: "Microsoft.DevTestLab/schedules/read",
-  scheduleWrite: "Microsoft.DevTestLab/schedules/write",
 } as const;
 export type AzureCall = keyof typeof PERMISSION;
+
+const GUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const SEG = "[^/]+";
+const VM_PATH = `/subscriptions/${GUID}/resourceGroups/${SEG}/providers/Microsoft\\.Compute/virtualMachines/${SEG}`;
+const rule = (call: AzureCall, method: "GET" | "POST", path: string) => ({ call, method, path: new RegExp(`^${path}$`, "i") });
+
+/**
+ * The only Azure calls FocusTime makes (D465). Anything else, any other method or path, throws before a token is
+ * asked for or a request is sent. There is deliberately no rule for Microsoft.DevTestLab/schedules other than GET.
+ */
+export const ALLOWED = [
+  rule("find", "POST", "/providers/Microsoft\\.ResourceGraph/resources"),
+  rule("read", "GET", VM_PATH),
+  rule("instanceView", "GET", `${VM_PATH}/instanceView`),
+  rule("start", "POST", `${VM_PATH}/start`),
+  rule("operation", "GET", `/subscriptions/${GUID}/providers/Microsoft\\.Compute/locations/${SEG}/operations/${SEG}`),
+  rule("scheduleRead", "GET", `/subscriptions/${GUID}/resourceGroups/${SEG}/providers/Microsoft\\.DevTestLab/schedules/shutdown-computevm-${SEG}`),
+] as const;
+
+/** Which allowed call a request is, or null: refused. Azure Resource Manager only; no encoded slashes or dot segments. */
+export function allowedCall(method: string, url: string): AzureCall | null {
+  if (!url.startsWith(`${ARM}/`)) return null;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.origin !== ARM || u.username || u.password || u.hash) return null;
+  const raw = url.slice(ARM.length).split("?")[0]!;
+  if (/%2f|%5c|\\|\/\.\.?(\/|$)/i.test(raw)) return null;
+  return ALLOWED.find((r) => r.method === method && r.path.test(u.pathname))?.call ?? null;
+}
 
 export type VmCandidate = { id: string; name: string; resourceGroup: string; subscriptionId: string; location: string; power: PowerState };
 export type VmInfo = { id: string; name: string; location: string };
@@ -92,8 +125,13 @@ const retryAfter = (h: string | null) => (h && /^\d{1,4}$/.test(h) ? Number(h) *
 export function createAzureClient(d: AzureDeps) {
   const timeoutMs = d.timeoutMs ?? 20_000;
 
-  async function send(call: AzureCall, method: "GET" | "POST" | "PUT", url: string, body?: unknown): Promise<Response> {
-    if (!url.startsWith(`${ARM}/`)) throw new AzureError("refused", 0, "FocusTime only calls Azure Resource Manager");
+  /** Every request: the allowlist decides, before the token or the network. */
+  async function send(method: string, url: string, body?: unknown): Promise<Response> {
+    const call = allowedCall(method, url);
+    if (!call) {
+      d.log({ source: "azure", op: "refused", kind: "refused" });
+      throw new AzureError("refused", 0, url.startsWith(`${ARM}/`) ? "FocusTime doesn't make that Azure call. It only reads your VM and its auto-shutdown, and starts it" : "FocusTime only calls Azure Resource Manager");
+    }
     const token = await d.token();
     const started = performance.now();
     let res: Response;
@@ -134,7 +172,7 @@ export function createAzureClient(d: AzureDeps) {
     let skipToken: string | null = null;
     for (let page = 0; page < 5; page++) {
       const body: Record<string, unknown> = { query, options: { resultFormat: "objectArray", ...(skipToken ? { $skipToken: skipToken } : {}) } };
-      const res = await send("find", "POST", `${ARM}/providers/Microsoft.ResourceGraph/resources?api-version=${API.resourceGraph}`, body);
+      const res = await send("POST", `${ARM}/providers/Microsoft.ResourceGraph/resources?api-version=${API.resourceGraph}`, body);
       const j = (await res.json().catch(() => ({}))) as { data?: unknown; $skipToken?: unknown };
       for (const row of Array.isArray(j.data) ? j.data : []) {
         const r = row as Record<string, unknown>;
@@ -149,20 +187,20 @@ export function createAzureClient(d: AzureDeps) {
   }
 
   async function getVm(r: VmRef): Promise<VmInfo> {
-    const res = await send("read", "GET", `${ARM}${vmPath(r)}?api-version=${API.compute}`);
+    const res = await send("GET", `${ARM}${vmPath(r)}?api-version=${API.compute}`);
     const j = (await res.json().catch(() => ({}))) as { id?: unknown; name?: unknown; location?: unknown };
     return { id: typeof j.id === "string" ? j.id : r.id, name: typeof j.name === "string" ? j.name : r.name, location: typeof j.location === "string" ? j.location : "" };
   }
 
   async function power(r: VmRef): Promise<PowerState> {
-    const res = await send("instanceView", "GET", `${ARM}${vmPath(r)}/instanceView?api-version=${API.compute}`);
+    const res = await send("GET", `${ARM}${vmPath(r)}/instanceView?api-version=${API.compute}`);
     const j = (await res.json().catch(() => ({}))) as { statuses?: unknown };
     return powerFrom(j.statuses);
   }
 
-  /** Start or deallocate (never force, never hibernate). Null poll: Azure finished at once (200). */
-  async function powerOp(r: VmRef, op: "start" | "deallocate"): Promise<Poll | null> {
-    const res = await send(op, "POST", `${ARM}${vmPath(r)}/${op}?api-version=${API.compute}`);
+  /** Start (the one write). Null poll: Azure finished at once (200). */
+  async function start(r: VmRef): Promise<Poll | null> {
+    const res = await send("POST", `${ARM}${vmPath(r)}/start?api-version=${API.compute}`);
     await res.body?.cancel();
     if (res.status !== 202 && res.status !== 201) return null;
     const asyncUrl = res.headers.get("azure-asyncoperation");
@@ -175,7 +213,7 @@ export function createAzureClient(d: AzureDeps) {
 
   /** One look at a running operation. */
   async function operation(p: Poll): Promise<{ status: OpStatus; retryAfterMs: number | null }> {
-    const res = await send("operation", "GET", p.url);
+    const res = await send("GET", p.url);
     const ra = retryAfter(res.headers.get("retry-after"));
     if (p.style === "location") {
       await res.body?.cancel();
@@ -190,7 +228,7 @@ export function createAzureClient(d: AzureDeps) {
   /** The VM's auto-shutdown schedule as Azure returns it, or null when there is none. */
   async function getSchedule(r: VmRef): Promise<Record<string, unknown> | null> {
     try {
-      const res = await send("scheduleRead", "GET", `${ARM}${schedulePath(r)}?api-version=${API.schedules}`);
+      const res = await send("GET", `${ARM}${schedulePath(r)}?api-version=${API.schedules}`);
       return (await res.json()) as Record<string, unknown>;
     } catch (e) {
       if (e instanceof AzureError && e.kind === "not_found") return null;
@@ -198,25 +236,10 @@ export function createAzureClient(d: AzureDeps) {
     }
   }
 
-  /** Replaces the schedule (Global Schedules CreateOrUpdate). The body is the one read, with time or status changed. */
-  async function putSchedule(r: VmRef, body: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const res = await send("scheduleWrite", "PUT", `${ARM}${schedulePath(r)}?api-version=${API.schedules}`, body);
-    return (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  }
-
-  return { findVms, getVm, power, powerOp, operation, getSchedule, putSchedule };
+  return {
+    findVms, getVm, power, start, operation, getSchedule,
+    /** Any request, through the same allowlist (tests; nothing in FocusTime calls this). */
+    request: (method: string, url: string, body?: unknown) => send(method, url, body),
+  };
 }
 export type AzureClient = ReturnType<typeof createAzureClient>;
-
-/** The schedule body to PUT: the one read back, with only the daily time and status changed (and read-only parts dropped). */
-export function scheduleBody(current: Record<string, unknown>, change: { time: string; status: "Enabled" | "Disabled" }): Record<string, unknown> {
-  const props = { ...((current.properties as Record<string, unknown> | undefined) ?? {}) };
-  delete props.provisioningState;
-  delete props.createdDate;
-  delete props.uniqueIdentifier;
-  props.status = change.status;
-  props.dailyRecurrence = { ...((props.dailyRecurrence as Record<string, unknown> | undefined) ?? {}), time: change.time };
-  const out: Record<string, unknown> = { location: current.location, properties: props };
-  if (current.tags) out.tags = current.tags;
-  return out;
-}

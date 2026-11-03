@@ -1,5 +1,5 @@
 // Demo mode (step 15.4): a fictional signed-in person and VM. The Azure side is the fake Resource Manager behind a fetch
-// that never leaves the process: start and stop take about 20 seconds, the auto-shutdown is 7:00 PM. No Azure calls.
+// that never leaves the process: a start takes about 20 seconds, the auto-shutdown is 7:00 PM (read only). No Azure calls.
 import type { MicrosoftAccount } from "../../actions/account.ts";
 import { createAzureClient } from "../azure/client.ts";
 import { fakeArm } from "../azure/fake-arm.ts";
