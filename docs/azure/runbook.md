@@ -21,12 +21,15 @@ Rules: every cloud change goes through the Bicep (`infra/`) and the deploy workf
 
 Push to `main` (from A5 on: merge a pull request). `.github/workflows/deploy-dev.yml` then:
 
-1. runs the CI checks (`ci.yml`: typecheck, tests on SQLite and SQL Server, browser tests, Bicep build, image smoke);
+1. checks whether the pull request's own ci run already tested this exact tree (below); if it did, runs only the
+   typecheck, otherwise the full CI checks (`ci.yml`: typecheck, tests on SQLite and SQL Server, browser tests, Bicep
+   build, image smoke);
 2. builds the image and pushes `ftdevacr5bthbn.azurecr.io/focustime:<commit sha>`;
 3. adds a firewall rule for the runner's address (removed at the end of the job, whatever happens);
 4. runs `focustime migrate` and `scripts/db-user.ts` with the deploy identity's token (a DB admin);
 5. prints the Bicep what-if, then deploys `infra/main.bicep` with `infra/dev.bicepparam` and the new image tag;
-6. smoke tests `/healthz`, the page title, the Microsoft sign-in redirect and the security headers.
+6. smoke tests `/healthz`, `/version` (it must name this commit), the page title, the Microsoft sign-in redirect and
+   the security headers.
 
 Watch it: `gh run watch --repo cooptimize/focustime`, or the Actions tab. A re-run of the same commit is safe (every step
 is idempotent).
@@ -47,6 +50,37 @@ A brand new environment: `infra/scripts/bootstrap.sh --env dev --member <upn> ..
 (`gh variable set AZURE_DEV_APP_IDENTITY_CLIENT_ID --body $(az ad sp show --id $(az containerapp show -g FocusTime-dev -n ft-dev-app --query identity.principalId -o tsv) --query appId -o tsv)`;
 `scripts/db-user.ts` makes the database user from it), then the workflow. If the app is ever deleted and recreated, its
 identity changes: set the variable again.
+
+### The tree check (S1, D456)
+
+`ci.yml`'s test job saves `git rev-parse HEAD^{tree}` as the artifact `tested-tree`. On a pull request, HEAD is
+GitHub's merge of the PR into main at that moment. `scripts/ci-tree-match.sh <owner/repo> <sha>` (deploy-dev's `reuse`
+job) finds the merged PR for the commit on main, the newest passing `pull_request` run of ci on the PR's last commit,
+downloads its `tested-tree` and compares it with the tree of the commit on main. Equal trees mean the same files were
+tested, so the full suite is skipped (the typecheck and the post-deploy smoke test still run). Anything missing or
+different answers no and the full suite runs: a direct push, no passing run, an expired artifact (90 days), or main
+having moved between the PR's last ci run and the merge. It prints its reason in the job log
+(`reuse: tested=true pr=12 (run 123 tested tree abc…)`). Run it by hand with `gh` signed in:
+`scripts/ci-tree-match.sh cooptimize/focustime <sha>`.
+
+## What's deployed where (S1, D452)
+
+The image carries its build info, baked at build time (`scripts/build-info.ts` into Docker build args): the short
+commit, the PR number from the merge message, and the build time in UTC. The environment comes from runtime config
+(`FOCUSTIME_ENV`, set by Bicep). Nothing else: no secrets, host names or user data.
+
+- Dev or prod: open `https://<host>/version` (public, like `/healthz`): `{"env":"dev","pr":"7","sha":"8f6d963","builtAt":"2026-11-03T19:14:00Z"}`.
+  Or in the app, ⋯ › About: "FocusTime · dev · #7 · 8f6d963 · built Nov 3, 2:14 PM", with links to the PR and commit.
+  From a shell: `curl -s https://<host>/version`; or `az containerapp show -g FocusTime-dev -n ft-dev-app --query
+  properties.template.containers[0].image -o tsv` (the image tag is the full commit).
+- Locally: ⋯ › About reads "FocusTime · local · <sha>" (the commit the service was started from, `git rev-parse`), and
+  `curl -s http://127.0.0.1:<port>/version` says the same.
+- deploy-dev fails if `/version` on dev doesn't name the commit it just built (an old revision still serving).
+
+## Reset first-run setup on dev (S1, D451)
+
+Settings > Setup > Start over clears your own setup state, so the four screens show again on the next load. It is
+refused on prod (403) and hidden there.
 
 ## Roll back a revision
 
