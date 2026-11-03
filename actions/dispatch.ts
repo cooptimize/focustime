@@ -50,6 +50,7 @@ import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
 
 import type { HostLinks } from "../host/types.ts";
 import type { ActionResponse, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
+import { DATAVERSE_UNREACHABLE, manyDataverseMatches, noDataverseMatch, type MatchResult } from "./dataverse-words.ts";
 import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
 import { vmAction, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
@@ -338,16 +339,18 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     };
   } else {
     let dv = cfg.dataverse;
-    let resolveError: string | null = null;
+    let resolveError: Extract<MatchResult, { ok: false }> | null = null;
     if (!dv.mySystemUserId) {
       const r = await matchMe(ctx, dv, tz);
       if (r.ok) {
         await ctx.saveSystemUserId(r.id);
         dv = { ...dv, mySystemUserId: r.id };
-      } else resolveError = r.message;
+      } else resolveError = r;
     }
     dataverse = resolveError
-      ? { source: "dataverse", status: "misconfigured", fetchedAt: null, fromCache: false, items: [], message: resolveError, fixAction: "open_settings" }
+      ? resolveError.reason === "failed"
+        ? { source: "dataverse", status: "unreachable", fetchedAt: null, fromCache: false, items: [], message: resolveError.message }
+        : { source: "dataverse", status: "misconfigured", fetchedAt: null, fromCache: false, items: [], message: resolveError.message, fixAction: "open_settings" }
       : await ctx.makeDataverse(dv, tz).load(weekStart, refresh);
     if (!resolveError) {
       // PTO (step 6) alongside everything else; a failure falls back to its cache inside the source.
@@ -548,7 +551,10 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
   // to the registry without a case, or a case for a name not in the registry, fails the type check.
   if (!isActionName(req.action)) return bad("unknown action");
   const action: ActionName = req.action;
-  // Step 15.4: "me" comes from the Microsoft sign-in (config's my_email stays the fallback); Settings shows the file as is.
+  // Step 15.4: "me" comes from the Microsoft sign-in (config's my_email stays the fallback). Settings writes the file as
+  // is (raw), but shows "me" and finds the Dataverse user the same way as every other action (settingsCtx below): it
+  // once read the raw file only, so a person whose Dataverse user was kept with their sign-in saw no clients (A5 fix).
+  const raw = ctx;
   if (action !== "settings.load" && action !== "settings.save") ctx = withSignedIn(ctx);
   if (ctx.demo?.on && DEMO_REFUSED.includes(action)) return { ok: false, status: 403, error: DEMO_REFUSAL, code: "demo" };
   switch (action) {
@@ -830,15 +836,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "secret.set":
     case "data.export":
       return settingsAction(
-        {
-          loadConfig: ctx.loadConfig,
-          makeDataverse: ctx.makeDataverse,
-          now: ctx.now,
-          ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}),
-          ...(ctx.plan ? { plan: ctx.plan } : {}),
-          ...(ctx.secrets ? { secrets: ctx.secrets } : {}),
-          ...(ctx.exportPlan ? { exportPlan: ctx.exportPlan } : {}),
-        },
+        settingsCtx(raw, ctx),
         action,
         req.input,
       );
@@ -1052,15 +1050,32 @@ async function openLink(links: HostLinks, url: string): Promise<ActionResponse> 
   }
 }
 
-/** A2: the words when nobody in Dataverse has the signed-in person's email or sign-in name. */
-export const NO_DATAVERSE_MATCH = "We couldn't match you in Dataverse yet. Your work email and sign-in name aren't on a Dataverse user. Ask an admin to add you, or set your Dataverse user in Settings > You";
+/** Settings' context: writes go to the file as is; what it shows and the Dataverse user come from the sign-in. */
+function settingsCtx(raw: ActionContext, ctx: ActionContext): SettingsContext {
+  const signed = withSignedIn(raw);
+  return {
+    loadConfig: ctx.loadConfig,
+    viewConfig: signed.loadConfig,
+    findMe: async (dv, tz) => {
+      const r = await matchMe(signed, dv, tz);
+      if (r.ok) await signed.saveSystemUserId(r.id);
+      return r;
+    },
+    makeDataverse: ctx.makeDataverse,
+    now: ctx.now,
+    ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}),
+    ...(ctx.plan ? { plan: ctx.plan } : {}),
+    ...(ctx.secrets ? { secrets: ctx.secrets } : {}),
+    ...(ctx.exportPlan ? { exportPlan: ctx.exportPlan } : {}),
+  };
+}
 
 /**
  * A2: who the signed-in person is in Dataverse (Account Worker, Focus Time and Time Off are read for them): the
  * first Dataverse user that has their email, else their UPN. A stored my_systemuserid (from an earlier match, or set
- * by hand in Settings) is used as is and skips this.
+ * by hand in Settings) is used as is and skips this. A failure says which case it is (dataverse-words.ts).
  */
-export async function matchMe(ctx: Pick<ActionContext, "makeDataverse" | "signedInAs">, dv: DataverseConfig, tz: string): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+export async function matchMe(ctx: Pick<ActionContext, "makeDataverse" | "signedInAs">, dv: DataverseConfig, tz: string): Promise<MatchResult> {
   const me = await ctx.signedInAs?.();
   const names = [...new Set([dv.myEmail, me?.email ?? "", me?.upn ?? ""].map((x) => x.trim().toLowerCase()).filter((x) => x.includes("@")))];
   const src = ctx.makeDataverse(dv, tz);
@@ -1068,7 +1083,8 @@ export async function matchMe(ctx: Pick<ActionContext, "makeDataverse" | "signed
     const r = await src.resolveUserId(name);
     if (r.ok) return r;
     // Not found under this name: try the next. Anything else (more than one, Dataverse down) is the answer.
-    if (r.reason !== "none") return r;
+    if (r.reason === "many") return { ok: false, reason: "many", message: manyDataverseMatches(name) };
+    if (r.reason !== "none") return { ok: false, reason: "failed", message: DATAVERSE_UNREACHABLE };
   }
-  return { ok: false, message: NO_DATAVERSE_MATCH };
+  return { ok: false, reason: "none", message: noDataverseMatch(names[0] ?? null) };
 }

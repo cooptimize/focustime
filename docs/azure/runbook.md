@@ -245,6 +245,14 @@ per person. Settings shows the ones a person sees as "Set by your FocusTime admi
    console: there is no API for it).
 6. deploy-prod with the SHA to promote.
 
+### Dev and prod parity (D473)
+
+Every prod deploy (a dry run too) first runs `infra/scripts/parity.sh`: it fails if dev has an app setting, app
+secret reference or Key Vault secret name that prod lacks, now or after the deploy. Fix a missing secret with
+`infra/scripts/copy-secrets.sh --vault ft-prod-kv-kkzllj`, a missing setting through `infra/`, or allow a name that is
+meant to be dev-only in `infra/parity-allow.txt` with a reason. Run it by hand any time: `infra/scripts/parity.sh`. If it
+says it can't read a name, ft-prod-deploy is missing its read roles: run `bootstrap.sh --env prod` again (step 7).
+
 ### First run for a new person
 
 Nothing to set up for them in Azure: anyone in the Cooptimize tenant can sign in.

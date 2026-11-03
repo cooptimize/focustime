@@ -1,6 +1,6 @@
 // P1 (phone): under 600 px FocusTime is for checking and doing, not planning. The bottom bar, the read-only frame for
 // planning screens, Today's Now card, its due follow-ups and the iPhone install how-to. Planning stays on a bigger
-// screen (D473).
+// screen (D475).
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { IsoDate, Slot } from "../week/types.ts";
