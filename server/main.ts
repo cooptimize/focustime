@@ -4,7 +4,7 @@
 // FOCUSTIME_HOST=local|azure (A1) picks the host: local (the default) is the developer loop on this machine; azure is
 // the hosted app's host, a stub until A2 (its secrets, snapshots and plan store are in memory).
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
-import { createChatsClient, type ChatsClient } from "../sources/graph/chats.ts";
+import { createChatsClient, type ChatMessagesClient, type ChatsClient } from "../sources/graph/chats.ts";
 import type { Host, KeyProvider, SnapshotStore } from "../host/types.ts";
 import { perPerson } from "../host/per-person.ts";
 import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
@@ -180,6 +180,7 @@ const outlookFor = (who: Person) => (cfg: OutlookConfig, timeZone: string) =>
 const presenceClients = new WeakMap<object, PresenceClient>();
 const photoClients = new WeakMap<object, PhotoClient>();
 const chatsClients = new WeakMap<object, ChatsClient>();
+const messageClients = new WeakMap<object, ChatMessagesClient>();
 const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null => {
   if (!cfg.outlook) return null;
   const src = outlookFor(who)(cfg.outlook, userZone(cfg));
@@ -192,10 +193,14 @@ const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null =>
   // T-2: Teams chat names and members on their own token (Chat.ReadBasic).
   let chats = chatsClients.get(src);
   if (!chats) chatsClients.set(src, (chats = createChatsClient({ fetch, token: () => src.auth.accessToken("chats"), invalidate: () => src.auth.invalidate(), log })));
+  // AP-1: a registered chat's messages on their own token (Chat.Read, which each person allows when switching Asks on).
+  let chatMessages = messageClients.get(src);
+  if (!chatMessages) messageClients.set(src, (chatMessages = createChatsClient({ fetch, token: () => src.auth.accessToken("messages"), invalidate: () => src.auth.invalidate(), log })));
   return {
     presence,
     photos,
     chats,
+    chatMessages,
     probe: (kind) => src.auth.probe(kind),
     signIn: (o) => src.connect(o),
     identity: () => src.auth.identity(),
@@ -442,6 +447,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
   const plan = planFor(who);
   const push = pushFor(userId);
   const liveCtx: ActionContext = {
+    log,
     renameNote: renamed.note,
     demo: demoControl(false),
     env: build.env,

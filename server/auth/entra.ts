@@ -8,6 +8,13 @@ import type { Logger } from "../../log/logger.ts";
 
 /** Graph with every permission the tenant consented to (one token), plus who signed in and a refresh token. */
 export const SIGN_IN_SCOPE = "openid profile email offline_access https://graph.microsoft.com/.default";
+/**
+ * AP-1 (D490): incremental consents, each a scope that isn't on the app registration, asked for on its own (Entra
+ * doesn't mix .default with named scopes of the same resource). The refresh token that comes back serves every scope
+ * the person has allowed.
+ */
+export const CONSENTS = { chat_read: "openid profile email offline_access https://graph.microsoft.com/Chat.Read" } as const;
+export type Consent = keyof typeof CONSENTS;
 
 export type EntraOptions = {
   tenantId: string;
@@ -63,7 +70,7 @@ export function createEntraSignIn(o: EntraOptions) {
   }
 
   /** Where to send the browser, and what to keep until it comes back. */
-  async function start(opts: { loginHint?: string } = {}): Promise<{ url: string; pending: PendingSignIn }> {
+  async function start(opts: { loginHint?: string; consent?: Consent } = {}): Promise<{ url: string; pending: PendingSignIn }> {
     let c: oidc.Configuration;
     try {
       c = await configuration();
@@ -74,7 +81,7 @@ export function createEntraSignIn(o: EntraOptions) {
     const pending: PendingSignIn = { state: oidc.randomState(), nonce: oidc.randomNonce(), verifier: oidc.randomPKCECodeVerifier() };
     const params: Record<string, string> = {
       redirect_uri: o.redirectUri,
-      scope: SIGN_IN_SCOPE,
+      scope: opts.consent ? CONSENTS[opts.consent] : SIGN_IN_SCOPE,
       response_type: "code",
       response_mode: "query",
       state: pending.state,
@@ -87,7 +94,7 @@ export function createEntraSignIn(o: EntraOptions) {
       params.login_hint = opts.loginHint;
       delete params.prompt;
     }
-    o.log({ source: "auth", op: "sign_in_started" });
+    o.log({ source: "auth", op: opts.consent ? "consent_started" : "sign_in_started", ...(opts.consent ? { kind: opts.consent } : {}) });
     return { url: oidc.buildAuthorizationUrl(c, params).href, pending };
   }
 

@@ -159,3 +159,65 @@ export const ASK_STATUSES: readonly AskStatus[] = ["open", "created", "linked", 
 
 /** Which kind of DevOps item to create from an ask; the client's process names it. */
 export type AskItemLevel = "bug" | "story" | "feature";
+
+/** A delivery chat's Read for asks state (plan store). Times are instants. */
+export type AsksState = {
+  on: boolean;
+  /** Switched on at: nothing older is read (no backfill). */
+  since: string | null;
+  /** The newest message time seen; the next read asks for messages changed after it. */
+  seenAt: string | null;
+  polledAt: string | null;
+  /** Throttled or failing: not read again before this. */
+  retryAt: string | null;
+  failures: number;
+  /** A plain line for Settings > Connections when the last read failed (null when healthy). */
+  status: string | null;
+};
+export const ASKS_OFF: AsksState = { on: false, since: null, seenAt: null, polledAt: null, retryAt: null, failures: 0, status: null };
+
+/** A stored ask: the message the rules matched, the rule, and how it ended. */
+export type Ask = {
+  chatId: string;
+  messageId: string;
+  clientKey: string;
+  rule: AskRule;
+  ruleDetail: string | null;
+  status: AskStatus;
+  itemId: number | null;
+  itemUrl: string | null;
+  itemTitle: string | null;
+  note: string | null;
+  writeId: number | null;
+  resolvedAt: string | null;
+  /** The message's time. */
+  createdAt: string;
+};
+
+/**
+ * The idle rule (plan/wake.ts): when the next chat with Read for asks on is due to be read (its interval after the last
+ * read, or the end of a throttle wait), or null with none on. Working hours are weighed by the caller.
+ */
+export function nextPollAt(chats: readonly { on: boolean; polledAt: string | null; retryAt: string | null }[], pollMinutes: number, nowIso: string): string | null {
+  let best: number | null = null;
+  for (const c of chats) {
+    if (!c.on) continue;
+    const due = Math.max(c.polledAt ? Date.parse(c.polledAt) + pollMinutes * 60_000 : Date.parse(nowIso), c.retryAt ? Date.parse(c.retryAt) : 0);
+    best = best === null ? due : Math.min(best, due);
+  }
+  return best === null ? null : new Date(best).toISOString();
+}
+
+// AP-1: what the Asks tab is sent (actions/ask-actions.ts builds it).
+/** One ask card. `text` is shown only on its own client's card. */
+export type AskView = {
+  chatId: string; messageId: string; clientKey: string; clientName: string; chatName: string;
+  author: string; external: boolean; at: string; text: string; hasImage: boolean; hasFile: boolean;
+  matched: string; status: AskStatus; item: { id: number; url: string | null; title: string | null } | null; note: string | null; resolvedAt: string | null;
+  /** Open in Teams: the message in its chat. */
+  link: string;
+};
+/** A chat with Read for asks on, for the Asks tab's footer and Settings > Connections: its last read and any problem. */
+export type AskChatStatus = { clientKey: string; clientName: string; chatId: string; chatName: string; polledAt: string | null; status: string | null; retryAt: string | null };
+export type AsksData = { open: number; asks: AskView[]; chats: AskChatStatus[]; writeClients: string[]; pollMinutes: number };
+export type ContextMessage = { messageId: string; author: string; external: boolean; mine: boolean; at: string; text: string; hasImage: boolean; hasFile: boolean };

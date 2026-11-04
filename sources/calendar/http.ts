@@ -1,9 +1,12 @@
 // One authorized GET for calendar APIs. Errors carry only a kind and an HTTP status, never bodies.
 export class HttpError extends Error {
   readonly status: number;
-  constructor(status: number) {
+  /** AP-1: seconds from a Retry-After header (429 or 503), when there was one. */
+  readonly retryAfter: number | null;
+  constructor(status: number, retryAfter: number | null = null) {
     super(`HTTP ${status}`);
     this.status = status;
+    this.retryAfter = retryAfter;
   }
 }
 export class NetworkError extends Error {}

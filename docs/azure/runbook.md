@@ -328,3 +328,36 @@ az ad app delete --id <that appId>
 SQL compute is most of it; what keeps it down is the idle rule (D431) letting the database pause outside people's
 working hours. The actual cost after the first week goes here (Cost Management, resource group FocusTime, or
 `az consumption usage list --start-date <d> --end-date <d>`): _not measured yet_.
+
+## Asks (AP-1)
+
+### Graph permissions and consent
+
+Asks uses two delegated Microsoft Graph permissions, both ones a person can allow for themselves (no admin consent):
+
+| Permission | What for | How it's granted |
+|---|---|---|
+| Chat.ReadBasic | The chat picker and members (names, tenants) | On the app registration (`infra/scripts/app-registration.sh`, GRAPH_SCOPES; granted tenant-wide on Nov 4), so the sign-in asks for it |
+| Chat.Read | Reading new messages in a chat switched on for asks | **Not** on the registration (D490). Each person allows it the first time they switch Read for asks on: FocusTime sends them to Microsoft (`/auth/microsoft/login?consent=chat_read`) and back to Settings › Clients |
+
+Nothing to run for Chat.Read. Don't add it to GRAPH_SCOPES: everyone would then be asked for it at sign-in. If a tenant admin turns off user consent, an admin can grant Chat.Read for the FocusTime registration in Entra (Enterprise applications › FocusTime › Permissions › Grant admin consent); FocusTime's code doesn't change. ChatMember.Read and any app-only (application) Teams permission are never needed and must not be added. Settings › Connections shows each person's state: Chat.Read reads "Missing" until they allow it.
+
+### Switching Asks on for a client
+
+Each person, for themselves (no admin step):
+
+1. Settings › Clients › the client › Delivery chats › Add a chat (if it isn't there yet).
+2. Switch **Read for asks** on for that chat. The first time, Microsoft asks to allow FocusTime to read chat messages; accept, and FocusTime comes back and switches it on. Reading starts from that moment (no history).
+3. Optional: Settings › Clients › Asks sets how often (default every 5 minutes, only in working hours, not on PTO days) and the phrase lists.
+4. Asks show in Inbox › Asks. Create bug, story or feature needs that client's DevOps write access (Settings › Clients › DevOps write access).
+
+Off is the same switch; it stops the reads at once and keeps what was stored (see below to delete it).
+
+### Purging a client's stored chat text
+
+- **One person, one client:** Settings › Clients › the client › Delivery chats › **Delete stored messages** (asks the person to confirm). Deletes every stored message and ask for that client in their plan; DevOps items made from asks stay in DevOps. Removing a chat deletes that chat's messages and asks too.
+- **Automatically:** messages that didn't become asks are deleted 14 days after they were written, once a day, by the scheduler (D492). Asks keep their text with their resolution.
+- **Everything a person has:** Settings › Data › Delete my data (all their rows, chat text included).
+- **Across people** (a client asks for its text to be removed): each person does it from their own Settings, as above; there is no admin purge yet, and the hosted database is never edited by hand (no SQL against Azure SQL outside `focustime migrate`). Ask for an admin purge as a new step if this is needed.
+
+Nothing to clean elsewhere: chat text is never in logs or Application Insights (counts and kinds only), and never in exports to other systems.

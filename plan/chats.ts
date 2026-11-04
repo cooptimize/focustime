@@ -48,6 +48,8 @@ export type DeliveryChat = {
   /** The cached members (null until first read) and when they were read. */
   members: ChatMember[] | null;
   membersFetchedAt: string | null;
+  /** AP-1: Read for asks (off unless switched on). */
+  asks?: import("./asks.ts").AsksState;
 };
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -156,6 +158,8 @@ export type DeliveryChatView = {
   fetchedAt: string | null;
   /** The last read failed (the cached members, if any, are still shown). */
   error: string | null;
+  /** AP-1: Read for asks: on or off, the last read and its problem (a plain line), if any. */
+  asks: { on: boolean; polledAt: string | null; status: string | null };
 };
 export type ChatsData = { available: boolean; reason: ChatAccess | null; homeTenant: string | null; chats: DeliveryChatView[] };
 export type ChatPickerData = { available: boolean; reason: ChatAccess | null; homeTenant: string | null; chats: ChatSummary[]; taken: Record<string, string> };

@@ -2,6 +2,8 @@
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
+import { askAction, type AskContext } from "./ask-actions.ts";
+import type { Logger } from "../log/logger.ts";
 import type { PhotoCache } from "../host/types.ts";
 import { expiringSoon } from "../plan/expiry.ts";
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
@@ -68,6 +70,8 @@ const TOUR_MARK = "tour_offer";
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
 export type ActionContext = {
+  /** AP-1: the structured logger (counts and kinds only). Absent: nothing is logged (tests, demo). */
+  log?: Logger;
   /** S1 (D452): where this runs: local, dev, prod or demo (runtime config). Absent: local. */
   env?: string;
   /** R1: what to do when the one-time move from Coopilot's keyring entries failed; shown on the sign-in screen. */
@@ -546,6 +550,33 @@ export async function chatContext(ctx: ActionContext): Promise<ChatContext> {
   };
 }
 
+/** AP-1: Asks: the chats with Read for asks on, the person's PTO, their clients' open DevOps items and write access. */
+export async function askContext(ctx: ActionContext): Promise<AskContext> {
+  const chats = await chatContext(ctx);
+  return {
+    ...(ctx.plan ? { plan: ctx.plan } : {}),
+    account: chats.account,
+    config: () => configured(ctx),
+    homeTenant: chats.homeTenant,
+    pto: async (d) => {
+      const cfg = await configured(ctx);
+      if (!cfg?.dataverse.mySystemUserId) return false;
+      return (await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).pto(d, d)).items.some((e) => e.date === d);
+    },
+    openItems: async (cfg, clientKey) => {
+      const src = ctx.makeDevOps(cfg.dataverse, userZone(cfg));
+      // What was read last (Week, Plan the week) when there is one; else this client alone.
+      const r = src.last(clientKey) ?? (await src.load([{ clientKey, clientName: cfg.clientSettings[clientKey]?.name ?? clientKey }]).catch(() => null))?.[0] ?? null;
+      if (!r || (r.status !== "ok" && !r.items.length)) return null;
+      const seen = new Set<number>();
+      return [...r.items, ...r.children].filter((i) => i.stateCategory !== "Completed" && i.stateCategory !== "Removed" && !seen.has(i.id) && !!seen.add(i.id));
+    },
+    writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
+    now: ctx.now,
+    log: ctx.log ?? (() => {}),
+  };
+}
+
 /** The pieces the account and VM actions need. */
 async function accountOf(ctx: ActionContext): Promise<MicrosoftAccount | null> {
   const cfg = await configured(ctx);
@@ -897,6 +928,15 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "chats.refresh":
     case "permissions.status":
       return chatAction(await chatContext(ctx), action, req.input);
+    case "asks.list":
+    case "asks.refresh":
+    case "asks.switch":
+    case "asks.context":
+    case "asks.resolve":
+    case "asks.reopen":
+    case "asks.search":
+    case "asks.purge":
+      return askAction(await askContext(ctx), action, req.input);
     case "people.photos":
       return photoAction({ ...(await presenceContext(ctx)), cache: ctx.photoCache ?? null }, req.input);
     case "media.status": {

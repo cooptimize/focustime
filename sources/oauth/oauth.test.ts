@@ -393,11 +393,22 @@ describe("the web registration's calendar scope (A2)", () => {
     const granted = new Set((/GRAPH_SCOPES=\(([^)]*)\)/.exec(script)?.[1] ?? "").split(/\s+/).filter(Boolean));
     const arm = new Set((/ARM_SCOPES=\(([^)]*)\)/.exec(script)?.[1] ?? "").split(/\s+/).filter(Boolean));
     const web = microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }, { calendars: "Calendars.ReadWrite" });
-    const asked = [web.scope, web.writeScope, ...Object.values(web.kinds ?? {})].join(" ").split(" ").filter(Boolean);
+    // AP-1 (D490): Chat.Read isn't on the registration: each person allows it when they switch Read for asks on.
+    const asked = [web.scope, web.writeScope, ...Object.entries(web.kinds ?? {}).filter(([k]) => k !== "messages").map(([, v]) => v)].join(" ").split(" ").filter(Boolean);
     for (const s of asked) {
       const name = s.split("/").pop()!;
       if (s.startsWith("https://management.azure.com/")) expect(arm.has(name), s).toBe(true);
       else expect(granted.has(name), s).toBe(true);
     }
+  });
+});
+
+describe("Chat.Read is asked for by each person (AP-1, D490)", () => {
+  it("is its own token kind, and the registration script doesn't grant it", async () => {
+    const { readFileSync } = await import("node:fs");
+    const script = readFileSync(new URL("../../infra/scripts/app-registration.sh", import.meta.url), "utf8");
+    const web = microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }, { calendars: "Calendars.ReadWrite" });
+    expect(web.kinds?.messages).toBe("offline_access https://graph.microsoft.com/Chat.Read");
+    expect(/GRAPH_SCOPES=\(([^)]*)\)/.exec(script)?.[1] ?? "").not.toMatch(/\bChat\.Read\b(?!Basic)/);
   });
 });

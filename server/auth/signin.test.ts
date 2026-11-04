@@ -200,3 +200,25 @@ describe("demo sessions", () => {
     expect(t.demos).toEqual([]);
   });
 });
+
+describe("AP-1: allowing Chat.Read later (incremental consent, D490)", () => {
+  it("a signed-in person is sent to Microsoft for Chat.Read alone, and comes back to Settings > Clients", async () => {
+    const t = await setup();
+    const { b } = await t.signIn();
+    const go = await b.send("/auth/microsoft/login?consent=chat_read");
+    expect(go.status).toBe(302);
+    const u = new URL(String(go.headers.location));
+    expect(u.searchParams.get("scope")).toBe("openid profile email offline_access https://graph.microsoft.com/Chat.Read");
+    const back = await b.send(t.idp.approve(String(go.headers.location)), { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" });
+    expect(back.headers.location).toBe("/?allowed=chat_read#/settings/clients");
+    expect(await t.app.accounts.sessions.resolve(b.jar.get(SESSION_COOKIE))).toMatchObject({ userId: FAKE_OID });
+  });
+
+  it("without a session it doesn't go to Microsoft; an unknown consent is a plain sign-in", async () => {
+    const t = await setup();
+    const none = await t.app.browser().send("/auth/microsoft/login?consent=chat_read");
+    expect(none.headers.location).toBe("/#/settings/clients");
+    const odd = await t.app.browser().send("/auth/microsoft/login?consent=mail_read");
+    expect(new URL(String(odd.headers.location)).searchParams.get("scope")).toContain(".default");
+  });
+});

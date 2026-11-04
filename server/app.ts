@@ -13,12 +13,12 @@ import type { AccountStore, Session } from "../store/accounts.ts";
 import { DEMO_SESSION_MS, SESSION_MAX_MS } from "../store/accounts.ts";
 import { checkRequest, REOPEN_PATH } from "./guard.ts";
 import { AUTH_COOKIE, authCookie, clearAuthCookie, clearSessionCookies, CSRF_HEADER, readCookie, SESSION_COOKIE, sessionCookies } from "./auth/cookies.ts";
-import { SignInError, type SignedIn, type SignInTokens } from "./auth/entra.ts";
+import { CONSENTS, SignInError, type Consent, type SignedIn, type SignInTokens } from "./auth/entra.ts";
 
 /** What the sign-in routes need: Microsoft (null when not set up), Google, the demo, and what to do with a sign-in. */
 export type SignInHooks = {
   microsoft: {
-    start: (o?: { loginHint?: string }) => Promise<{ url: string; pending: { state: string; nonce: string; verifier: string } }>;
+    start: (o?: { loginHint?: string; consent?: Consent }) => Promise<{ url: string; pending: { state: string; nonce: string; verifier: string } }>;
     finish: (callback: URL, pending: { state: string; nonce: string; verifier: string }) => Promise<{ user: SignedIn; tokens: SignInTokens }>;
   } | null;
   /** A validated Microsoft sign-in: records the person (and their tokens). The user id to start a session for, or why not. */
@@ -191,8 +191,13 @@ export function createApp(opts: AppOptions) {
       if (!opts.auth.microsoft) return signInFailed(res, "misconfigured");
       try {
         const hint = url.searchParams.get("hint");
-        const { url: to, pending } = await opts.auth.microsoft.start(hint && hint.length < 256 ? { loginHint: hint } : {});
-        await opts.accounts.authRequests.put("microsoft", pending);
+        // AP-1 (D490): an incremental consent (?consent=chat_read) for the person signed in now; it comes back to them.
+        const asked = url.searchParams.get("consent");
+        const consent = asked && Object.hasOwn(CONSENTS, asked) ? (asked as Consent) : null;
+        const s = consent ? await session() : null;
+        if (consent && (!s || s.demo)) return redirect(res, "/#/settings/clients");
+        const { url: to, pending } = await opts.auth.microsoft.start({ ...(hint && hint.length < 256 ? { loginHint: hint } : {}), ...(consent ? { consent } : {}) });
+        await opts.accounts.authRequests.put("microsoft", pending, s?.userId ?? null);
         return redirect(res, to, [authCookie(pending.state)]);
       } catch (e) {
         return signInFailed(res, e instanceof SignInError ? e.reason : "unavailable");
@@ -211,7 +216,8 @@ export function createApp(opts: AppOptions) {
         if ("refused" in r) return signInFailed(res, r.refused);
         // A fresh session id at sign-in (never one the browser brought).
         await opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
-        return redirect(res, "/", [...(await startSession(r.userId, false)), clearAuthCookie()]);
+        // AP-1: a consent started from Settings goes back there (it was for this person: a session started it).
+        return redirect(res, pending.userId && pending.userId === r.userId ? "/?allowed=chat_read#/settings/clients" : "/", [...(await startSession(r.userId, false)), clearAuthCookie()]);
       } catch (e) {
         return signInFailed(res, e instanceof SignInError ? e.reason : "invalid");
       }

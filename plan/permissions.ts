@@ -2,7 +2,7 @@
 // admin must. Settings > Connections lists them with their state for the signed-in person. Keep this list in step with
 // infra/scripts/app-registration.sh (GRAPH_SCOPES and the Azure Service Management scope) and sources/oauth/oauth.ts.
 /** The sign-in's token kinds (sources/oauth/oauth.ts TokenKind), repeated here so plan/ stays pure. */
-export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats";
+export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages";
 
 export type Permission = {
   scope: string;
@@ -12,6 +12,11 @@ export type Permission = {
   admin: boolean;
   /** The token FocusTime asks for it on; "sign-in" is the sign-in's own. */
   kind: TokenKind | "sign-in";
+  /**
+   * AP-1 (D490): asked for only when a person switches a feature on (an incremental consent), so it isn't on the app
+   * registration and the sign-in doesn't ask for it. Until they allow it, it shows as missing, with where to allow it.
+   */
+  later?: string;
 };
 
 export const PERMISSIONS: readonly Permission[] = [
@@ -22,11 +27,12 @@ export const PERMISSIONS: readonly Permission[] = [
   { scope: "Presence.Read.All", api: "Microsoft Graph", why: "Teammates' availability", admin: false, kind: "presence" },
   { scope: "ProfilePhoto.Read.All", api: "Microsoft Graph", why: "Profile photos", admin: true, kind: "photo" },
   { scope: "Chat.ReadBasic", api: "Microsoft Graph", why: "Delivery chats: chat names and members, never messages", admin: false, kind: "chats" },
+  { scope: "Chat.Read", api: "Microsoft Graph", why: "Asks: new messages in the delivery chats you switch Read for asks on for; read only, never posts", admin: false, kind: "messages", later: "Settings > Clients: switch Read for asks on for a chat to allow it" },
   { scope: "user_impersonation", api: "Azure Service Management", why: "Your VM, with your own Azure access", admin: false, kind: "arm" },
 ];
 
 export type ProbeResult = { kind: TokenKind; state: "granted" | "consent" | "signed_out" | "unavailable"; granted: string[] };
-export type PermissionState = "granted" | "needs_consent" | "needs_admin" | "signed_out" | "unknown";
+export type PermissionState = "granted" | "needs_consent" | "needs_admin" | "missing" | "signed_out" | "unknown";
 export type PermissionRow = Permission & { state: PermissionState };
 
 /**
@@ -39,6 +45,7 @@ export function permissionRows(probes: readonly ProbeResult[], signedIn: boolean
     if (!signedIn) return { ...p, state: "signed_out" };
     if (held(p.api).has(p.scope.toLowerCase())) return { ...p, state: "granted" };
     const own = probes.find((x) => x.kind === p.kind);
+    if (p.later && own?.state !== "unavailable") return { ...p, state: "missing" };
     const state: PermissionState = own?.state === "consent" || own?.state === "granted" ? (p.admin ? "needs_admin" : "needs_consent") : own?.state === "signed_out" ? "signed_out" : "unknown";
     return { ...p, state };
   });

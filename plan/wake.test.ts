@@ -63,3 +63,12 @@ describe("the idle rule's next wake (A3)", () => {
     }
   });
 });
+
+describe("AP-1: chats read for asks", () => {
+  it("the next chat read wakes it; an overdue one no sooner than a minute from now", () => {
+    const now = "2026-11-04T15:00:00Z";
+    expect(nextWake({ ...base(now), asksDue: Temporal.Instant.from("2026-11-04T15:04:00Z") }).toString()).toBe("2026-11-04T15:04:00Z");
+    expect(nextWake({ ...base(now), asksDue: Temporal.Instant.from("2026-11-04T14:00:00Z") }).toString()).toBe("2026-11-04T15:01:00Z");
+    expect(Temporal.Instant.compare(nextWake({ ...base(now), asksDue: null }), Temporal.Instant.from("2026-11-04T15:04:00Z"))).toBeGreaterThan(0);
+  });
+});

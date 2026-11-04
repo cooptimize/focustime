@@ -2,7 +2,7 @@
 // attachment, acknowledgements, internal authors and my own messages; plain text from Teams HTML; titles; polling.
 import { describe, expect, it } from "vitest";
 import { aChatMember, aMessage, CLIENT_TENANT, HOME_TENANT } from "../test/builders/index.ts";
-import { askTitle, backoffUntil, DEFAULT_ASK_SETTINGS, DEFAULT_REQUEST_PHRASES, hasPhrase, isAcknowledgement, matchAsk, plainText, pollDue, ruleLabel } from "./asks.ts";
+import { askTitle, nextPollAt, backoffUntil, DEFAULT_ASK_SETTINGS, DEFAULT_REQUEST_PHRASES, hasPhrase, isAcknowledgement, matchAsk, plainText, pollDue, ruleLabel } from "./asks.ts";
 
 const ME = "00000000-0000-4000-8000-0000000000aa";
 const coop = aChatMember({ userId: "00000000-0000-4000-8000-0000000000bb", displayName: "Jordan" });
@@ -114,5 +114,18 @@ describe("message text, titles and polling (AP-1)", () => {
     ["no Retry-After: doubling", null, 3, "2026-11-04T15:04:00.000Z"],
   ])("back off: %s", (_why, ra, failures, want) => {
     expect(backoffUntil("2026-11-04T15:00:00Z", ra, failures)).toBe(want);
+  });
+});
+
+describe("nextPollAt (the idle rule)", () => {
+  const NOW = "2026-11-04T15:00:00Z";
+  it.each([
+    ["none on", [{ on: false, polledAt: null, retryAt: null }], null],
+    ["never read: now", [{ on: true, polledAt: null, retryAt: null }], "2026-11-04T15:00:00.000Z"],
+    ["the interval after the last read", [{ on: true, polledAt: "2026-11-04T14:58:00Z", retryAt: null }], "2026-11-04T15:03:00.000Z"],
+    ["a throttle wait later than the interval", [{ on: true, polledAt: "2026-11-04T14:58:00Z", retryAt: "2026-11-04T15:20:00Z" }], "2026-11-04T15:20:00.000Z"],
+    ["the soonest of several", [{ on: true, polledAt: "2026-11-04T14:58:00Z", retryAt: null }, { on: true, polledAt: "2026-11-04T14:56:00Z", retryAt: null }], "2026-11-04T15:01:00.000Z"],
+  ])("%s", (_why, chats, want) => {
+    expect(nextPollAt(chats, 5, NOW)).toBe(want);
   });
 });

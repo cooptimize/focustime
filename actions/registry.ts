@@ -25,13 +25,14 @@ export type ActionTarget =
   | "write" // one entry in the write log
   | "event" // one calendar event (step 13)
   | "devops" // a DevOps change (step 14)
-  | "vm"; // my Azure VM (step 15.4)
+  | "vm" // my Azure VM (step 15.4)
+  | "ask"; // one ask in Inbox › Asks (AP-1)
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Asks";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -138,6 +139,14 @@ export const ACTIONS = [
   { name: "chats.kind", title: "Label a client chat", group: "Settings", target: "none", summary: "Mark a client chat as its Delivery team chat or a Customer collaboration chat" },
   { name: "chats.remove", title: "Remove a client chat", group: "Settings", target: "none", summary: "Forget one of a client's chats (Teams is unchanged)" },
   { name: "chats.refresh", title: "Refresh client chat members", group: "Settings", target: "none", summary: "Read the members of your client chats again from Teams" },
+  { name: "asks.list", title: "Asks", group: "Asks", target: "none", summary: "Inbox › Asks: messages from people outside Cooptimize in client chats you read for asks, by client, newest first" },
+  { name: "asks.refresh", title: "Refresh asks", group: "Asks", target: "none", summary: "Read the client chats you switched on for asks now (only new messages)" },
+  { name: "asks.switch", title: "Read a client chat for asks", group: "Settings", target: "none", summary: "Switch Read for asks on or off for one client chat (off by default; nothing is read before you switch it on)" },
+  { name: "asks.context", title: "Show an ask's context", group: "Asks", target: "ask", shortcut: "X", summary: "The 5 messages before an ask in its chat" },
+  { name: "asks.resolve", title: "Resolve an ask", group: "Asks", target: "ask", summary: "Link an ask to an existing DevOps item, mark it handled (H) or dismiss it (D)" },
+  { name: "asks.reopen", title: "Undo an ask's resolution", group: "Asks", target: "ask", summary: "Open a linked, handled or dismissed ask again" },
+  { name: "asks.search", title: "Find an item for an ask", group: "Asks", target: "ask", summary: "Search the client's open DevOps items to link an ask to" },
+  { name: "asks.purge", title: "Delete a client's stored chat messages", group: "Settings", target: "none", summary: "Deletes every message and ask FocusTime stored for one client (DevOps items made from them stay)" },
   { name: "permissions.status", title: "Microsoft permissions", group: "Settings", target: "none", summary: "Every permission FocusTime asks Microsoft for, and whether it's allowed (Settings > Connections)" },
   { name: "people.photos", title: "Profile photos", group: "Focus", target: "none", summary: "Photos of me and the Cooptimizers on screen, from Microsoft; cached 7 days, initials when there is none" },
   { name: "presence.people", title: "Teammates' presence", group: "Focus", target: "none", summary: "Available, Busy, In a meeting and so on for the Cooptimizers on screen; read-only, never kept" },

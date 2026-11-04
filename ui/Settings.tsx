@@ -7,7 +7,7 @@ import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
-import { DeliveryChatField, DeliveryChatsProvider, MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
+import { AsksConnections, DeliveryChatField, DeliveryChatsProvider, MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
 import { AutoSaveProvider, SaveMark, useAutoSave, type AutoSave } from "./settings/autosave.tsx";
 import { COLLAB_LENGTHS, TEXT_SIZES, THEME_NAMES, THEMES, type TextSize, type Theme } from "../config/schema.ts";
 import { TEXT_SIZE_NAMES } from "./textsize.ts";
@@ -249,6 +249,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
     case "clients":
       return (
         <DeliveryChatsProvider>
+        <AsksForm {...p} />
         <div className="set-clients">
           {d.dataverseProblem && (
             <p className="set-problem" role="status">
@@ -825,6 +826,40 @@ function RoadmapForm(p: FormProps) {
   );
 }
 
+/** AP-1: how Asks reads the chats switched on below, and the phrases its rules use. Commas between phrases. */
+const phrases = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
+function AsksForm(p: FormProps) {
+  const s = p.data.asks;
+  const a = useAutoSave({
+    section: "asks",
+    initial: { pollMinutes: s.pollMinutes, requestPhrases: s.requestPhrases.join(", "), ackPhrases: s.ackPhrases.join(", ") },
+    payload: (v) => ({ pollMinutes: v.pollMinutes, requestPhrases: phrases(v.requestPhrases), ackPhrases: phrases(v.ackPhrases) }),
+    onSaved: p.onSavedData,
+    label: (k) => (k === "pollMinutes" ? "Read every" : k === "requestPhrases" ? "Request phrases" : "Acknowledgements"),
+  });
+  return (
+    <details className="set-form set-asks">
+      <summary>
+        <strong>Asks</strong> <span className="muted">· read every {s.pollMinutes} minutes in working hours · Inbox › Asks</span>
+      </summary>
+      <p className="muted">
+        For each chat with Read for asks on (below), a new message from someone outside Cooptimize becomes an ask when it mentions a Cooptimizer, has a question mark, uses a request phrase, or has an attachment. One that is only an acknowledgement isn't. No AI reads them.
+      </p>
+      <div className="set-grid">
+        <AutoField a={a} k="pollMinutes" label="Read every (minutes)" hint="Only in your working hours, not on PTO days. 1 to 60.">
+          <input type="number" min={1} max={60} step={1} value={a.v.pollMinutes} onChange={(e) => a.set("pollMinutes", Math.round(Number(e.target.value)))} {...a.text("pollMinutes")} />
+        </AutoField>
+        <AutoField a={a} k="requestPhrases" label="Request phrases" hint="Commas between them. Whole words, any case.">
+          <input type="text" value={a.v.requestPhrases} onChange={(e) => a.set("requestPhrases", e.target.value)} {...a.text("requestPhrases")} />
+        </AutoField>
+        <AutoField a={a} k="ackPhrases" label="Acknowledgements" hint="A message that is only these (and emoji) is not an ask.">
+          <input type="text" value={a.v.ackPhrases} onChange={(e) => a.set("ackPhrases", e.target.value)} {...a.text("ackPhrases")} />
+        </AutoField>
+      </div>
+    </details>
+  );
+}
+
 /** Settings > Notifications (step 15.5): a switch per kind, quiet hours, held during focus, a test. */
 function NotifyForm(p: FormProps) {
   const n = p.data.notify;
@@ -1117,6 +1152,7 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
       {p.reconnected && <InlineMoment line={`${SOURCE_NAMES[p.reconnected]} is connected again.`} />}
       <OutlookWriteRow />
       <MicrosoftPermissions />
+      <AsksConnections />
       {p.devops && p.devops.length > 0 && (
         <>
           <h3>DevOps per client</h3>
