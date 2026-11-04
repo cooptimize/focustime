@@ -1,4 +1,4 @@
-// Shared polling (D508 to D512): one copy of each Teams message and one Request per message, for everyone who follows
+// Shared polling (D514 to D518): one copy of each Teams message and one Request per message, for everyone who follows
 // the client and is in the chat. App tables (no user_id; reads are gated by chat membership in actions, never by
 // store/scope.ts):
 //   client_chats         a client's registered Teams chats (registered once, by a Cooptimizer who follows the client and

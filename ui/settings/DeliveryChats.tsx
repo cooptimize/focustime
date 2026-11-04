@@ -3,7 +3,7 @@
 // members, changeable), with its members (external people flagged by tenant), the count, a warning when the members
 // don't fit the label, Open in Teams and Remove. Add a chat opens the picker (search, arrows, Enter, Esc). Saved as
 // soon as it changes. Members are read again once a day when the Clients section opens, and on Refresh.
-// Shared polling (D509): a chat is registered once for its client, for everyone on it who follows the client, and
+// Shared polling (D515): a chat is registered once for its client, for everyone on it who follows the client, and
 // read every 5 minutes for all of them. Adding one asks the person to allow Chat.Read the first time (Microsoft, there
 // and back, then the add goes ahead). Each card says how it's read: "Polling via <name>", "Needs reconnecting" with the
 // last fetch, or the last check. Delete stored messages forgets a client's chat text that didn't become requests.

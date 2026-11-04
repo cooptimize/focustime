@@ -1,4 +1,4 @@
-// Inbox › Requests on the shared store (D509, D510): each person sees the Requests of chats they are a member of and
+// Inbox › Requests on the shared store (D515, D516): each person sees the Requests of chats they are a member of and
 // whose client they follow; a resolution is shared (one person resolves, everyone sees it, with their name); Refresh
 // polls my visible chats through the job and shows the fetch time; Show context reads the shared messages; purge is
 // for someone who sees the client's chats and keeps Requests. Never another client's text, never in a log.

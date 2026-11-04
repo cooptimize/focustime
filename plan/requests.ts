@@ -1,4 +1,4 @@
-// Shared polling (D508 to D512), the pure rules. A client's Teams chats are registered once and polled by one job for
+// Shared polling (D514 to D518), the pure rules. A client's Teams chats are registered once and polled by one job for
 // everyone: every 5 minutes inside the union of its followers' working hours (each in their own zone and week, so a
 // weekend counts only when someone works it), never outside (the first poll of the day catches up: Graph is asked for
 // everything changed since the newest message seen). A follower is a FocusTime user who is a member of the chat. The
@@ -85,7 +85,7 @@ export function inUnion(now: Temporal.Instant, hours: readonly TimeModel[]): boo
   return hours.some((h) => inWorkingHours(h, now.toZonedDateTimeISO(h.timeZone)));
 }
 
-/** The interval now: every POLL_MINUTES inside the union of working hours, null (no polling) outside it (D508). */
+/** The interval now: every POLL_MINUTES inside the union of working hours, null (no polling) outside it (D514). */
 export function pollEvery(now: Temporal.Instant, hours: readonly TimeModel[]): number | null {
   return inUnion(now, hours) ? POLL_MINUTES : null;
 }
@@ -152,7 +152,7 @@ export function tokenOrder(c: Pick<ClientChat, "members" | "registeredBy">, user
 }
 
 /**
- * Who sees a chat's messages and Requests (D509): a member of the chat (by their Entra object id) who follows its
+ * Who sees a chat's messages and Requests (D515): a member of the chat (by their Entra object id) who follows its
  * client. When the followed clients can't be read (Dataverse down), membership alone: everyone it lets in can already
  * read the chat in Teams. Members not read yet: nobody.
  */

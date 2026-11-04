@@ -27,7 +27,7 @@ export type SchedulerOptions = {
   /** Work for the app as a whole on a slow pass (hard deletes, expired sessions), at most this often. */
   maintenance?: { run: () => Promise<void>; everyMs: number };
   /**
-   * App jobs (shared polling, D511): run at the start of every slow pass, before anyone's ticks (so what a job found
+   * App jobs (shared polling, D517): run at the start of every slow pass, before anyone's ticks (so what a job found
    * is there for them), each with its own next-due time for the idle rule (null: nothing due).
    */
   jobs?: readonly { name: string; run: () => Promise<void>; wake: () => Promise<Temporal.Instant | null> }[];

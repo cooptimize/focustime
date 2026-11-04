@@ -27,7 +27,7 @@ export const PERMISSIONS: readonly Permission[] = [
   { scope: "Presence.Read.All", api: "Microsoft Graph", why: "Teammates' availability", admin: false, kind: "presence" },
   { scope: "ProfilePhoto.Read.All", api: "Microsoft Graph", why: "Profile photos", admin: true, kind: "photo" },
   { scope: "Chat.ReadBasic", api: "Microsoft Graph", why: "Delivery chats: chat names and members, never messages", admin: false, kind: "chats" },
-  { scope: "Chat.Read", api: "Microsoft Graph", why: "Asks: new messages in the delivery chats you switch Read for asks on for; read only, never posts", admin: false, kind: "messages", later: "Settings > Clients: switch Read for asks on for a chat to allow it" },
+  { scope: "Chat.Read", api: "Microsoft Graph", why: "Requests: new messages in the client chats registered in FocusTime, read for everyone on them who follows the client; read only, never posts", admin: false, kind: "messages", later: "Settings > Clients: Add a chat to allow it" },
   { scope: "user_impersonation", api: "Azure Service Management", why: "Your VM, with your own Azure access", admin: false, kind: "arm" },
 ];
 

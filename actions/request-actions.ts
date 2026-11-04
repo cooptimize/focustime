@@ -1,4 +1,4 @@
-// Inbox › Requests (was Asks; shared polling, D508 to D512). The job (actions/request-poll.ts) reads every registered
+// Inbox › Requests (was Asks; shared polling, D514 to D518). The job (actions/request-poll.ts) reads every registered
 // client chat for everyone; this is the person's view of it. A chat, its messages and its Requests are shown only to a
 // member of that chat who follows its client (plan/requests.ts canSee); a Request's state is shared, so whoever
 // resolves it resolves it for everyone, by name. Refresh polls the chats this person sees through the same job, now.

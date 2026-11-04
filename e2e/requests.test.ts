@@ -1,11 +1,18 @@
-// AP-1: Asks, the main path, in a real (not demo) session on fake sources and a fake Graph (Teams) and DevOps. Register
-// a client chat in Settings > Clients, switch Read for asks on, a message from someone outside Cooptimize arrives,
-// Refresh in Inbox › Asks shows it as a card (author flagged External, the rule that matched), Show context opens the
-// message before it, Create bug previews and creates it through the write framework, and the card resolves with the
-// new item. Dismiss with Undo, and the empty state. Edge cases are unit tests (actions/ask-actions.test.ts,
-// actions/devops-write.test.ts, plan/asks.test.ts). Screenshots at 1920 and Text size Larger when FOCUSTIME_SHOTS is set.
+// Requests (was Asks) on the shared store, the main path, in a real (not demo) session on fake sources and a fake
+// Graph (Teams) and DevOps. Add a client chat in Settings > Clients (once, for everyone on it who follows the client),
+// a message from someone outside Cooptimize arrives, Refresh in Inbox › Requests polls through the shared job and shows
+// it as a card (author flagged External, the rule that matched) with the last check in the footer, Show context opens
+// the message before it, Create bug previews and creates it through the write framework, and the card resolves with
+// the new item, by you. Dismiss with Undo, and the empty state. Edge cases are unit tests (actions/request-*.test.ts,
+// actions/chat-actions.test.ts, actions/devops-write.test.ts, store/teams-store.test.ts, plan/requests.test.ts).
+// Screenshots at 1920 and Text size Larger when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IDENTITY_KEY } from "../actions/account.ts";
+import { requestContext } from "../actions/dispatch.ts";
+import { pollCycle, type PollDeps } from "../actions/request-poll.ts";
+import { openPlanDb } from "../store/plan-store.ts";
+import { sqliteConn } from "../store/sql/sqlite.ts";
+import { createTeamsStore } from "../store/teams-store.ts";
 import { basic, fakeDevOpsWrite, WRITE_PAT } from "../sources/devops/write-fakes.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
@@ -47,7 +54,7 @@ function fakeGraph() {
   };
 }
 
-describe.skipIf(!CHROMIUM)("Asks", () => {
+describe.skipIf(!CHROMIUM)("Requests", () => {
   let lb: LiveBrowser;
   beforeAll(async () => {
     lb = await liveBrowser();
@@ -56,7 +63,7 @@ describe.skipIf(!CHROMIUM)("Asks", () => {
     await lb?.close();
   }, T);
 
-  it("register a chat, switch it on, an external message arrives, create a bug, the card resolves", async () => {
+  it("add a chat for a client, an external message arrives, Refresh, create a bug, the card resolves", async () => {
     const graph = fakeGraph();
     const chats = createChatsClient({ fetch: graph.fetch, token: async () => "fake-graph-token", invalidate: () => {}, log: () => {} });
     // The fake Dataverse's DevOps identity for Adatum is me@contoso.example on org "contoso".
@@ -80,6 +87,22 @@ describe.skipIf(!CHROMIUM)("Asks", () => {
         writePats: { get: async (k) => new Pat(pats.get(k) ?? ""), set: async (k, v) => void pats.set(k, v), clear: async (k) => void pats.delete(k) },
       },
     });
+    // The shared store and the poll job (Refresh polls through it), with me as the one follower.
+    const clock = () => Temporal.Instant.from(ctx.now());
+    const teams = createTeamsStore(sqliteConn(openPlanDb({ path: ":memory:", now: () => clock().toZonedDateTimeISO("UTC") })), clock);
+    const deps: PollDeps = {
+      teams,
+      users: async () => [{ id: ME, name: "Sam Tester", deleted: false }],
+      person: async (uid) => {
+        if (uid !== ME) return null;
+        const loaded = await ctx.loadConfig();
+        return { name: "Sam Tester", config: loaded.parsed.ok ? loaded.parsed.config : null, chatMessages: chats, chats, ai: null, plan: ctx.plan ?? null, openItems: (await requestContext(ctx)).openItems };
+      },
+      homeTenant: async () => HOME,
+      now: ctx.now,
+      log: () => {},
+    };
+    ctx.requests = { teams, refresh: (chatIds) => pollCycle(deps, { force: true, chatIds }) };
     await ctx.plan!.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME, name: "Sam Tester", username: "me@contoso.example", email: "me@contoso.example", signedInAt: "2026-11-02T14:00:00Z", systemUserId: null, systemUserEmail: null });
     await ctx.plan!.setDevopsIdentity({ clientKey: "Adatum", org: "contoso", id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example", expires: null });
     const app = await lb.start(ctx);
@@ -91,7 +114,7 @@ describe.skipIf(!CHROMIUM)("Asks", () => {
       await page.goto(app.url);
       await page.locator(".topbar").waitFor();
 
-      // Settings > Clients: add the chat to Adatum, then switch Read for asks on.
+      // Settings > Clients: add the chat to Adatum (read from now on, for everyone on it who follows Adatum).
       await openSettings(page);
       await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
       const adatum = page.getByRole("group", { name: /^Delivery chats for Adatum/ });
@@ -100,12 +123,10 @@ describe.skipIf(!CHROMIUM)("Asks", () => {
       await page.keyboard.type("adatum");
       await page.keyboard.press("Enter");
       const card = adatum.getByRole("region", { name: "Adatum Customer Collaboration" });
-      const sw = card.getByRole("switch", { name: "Read for asks" });
-      await expect(sw.isChecked()).resolves.toBe(false);
-      await sw.click();
-      await adatum.getByText("Reading for asks from now on").waitFor();
-      await expect.poll(() => sw.isChecked()).toBe(true);
-      await shotBoth(page, "asks-settings", card);
+      await adatum.getByText(/^Added Adatum Customer Collaboration\. Read from now on/).waitFor();
+      await card.getByText(/^Added by Sam Tester\. Not read yet/).waitFor();
+      await expect(card.getByRole("switch").count()).resolves.toBe(0);
+      await shotBoth(page, "requests-settings", card);
 
       // Messages arrive in Teams: a colleague's, then three from the client (one with a file); one is only thanks.
       graph.say(LEE, "Morning, the import ran fine overnight.", 31);
@@ -114,49 +135,52 @@ describe.skipIf(!CHROMIUM)("Asks", () => {
       graph.say(DANA, "Please add the region field to the summary view", 34);
       graph.say(DANA, "Here is the file from finance", 35, { attachments: [{ contentType: "reference", name: "totals.xlsx" }] });
 
-      // Inbox › Asks: Refresh reads Teams now.
+      // Inbox › Requests: Refresh polls the shared job now; the footer says when.
       await page.keyboard.press("Escape");
       await page.keyboard.press("4");
-      await page.getByRole("tab", { name: /^Asks/ }).click();
-      await page.getByRole("main", { name: "Asks" }).getByText("No open asks").waitFor();
-      await page.getByRole("button", { name: "Refresh asks" }).click();
-      const asks = page.locator(".ask-card");
-      await expect.poll(() => asks.count()).toBe(3);
-      await expect(page.getByRole("tab", { name: /^Asks/ }).textContent()).resolves.toBe("Asks3");
-      const first = page.getByRole("listitem", { name: "Ask from Dana Client" }).filter({ hasText: "export fails" });
+      await page.getByRole("tab", { name: /^Requests/ }).click();
+      await page.getByRole("main", { name: "Requests" }).getByText("No open requests").waitFor();
+      await page.getByRole("button", { name: "Refresh requests" }).click();
+      const cards = page.locator(".ask-card");
+      await expect.poll(() => cards.count()).toBe(3);
+      await expect(page.getByRole("tab", { name: /^Requests/ }).textContent()).resolves.toBe("Requests3");
+      await page.locator(".requests-poll").getByText(/^Last checked .* · 1 chat, every 5 minutes in working hours$/).waitFor();
+      const first = page.getByRole("listitem", { name: "Request from Dana Client" }).filter({ hasText: "export fails" });
       await expect(first.locator(".ask-ext").textContent()).resolves.toBe("External");
       await first.getByText("Matched: asks a question").waitFor();
-      await page.getByRole("listitem", { name: "Ask from Dana Client" }).filter({ hasText: "file from finance" }).getByText("File attached").waitFor();
+      await page.getByRole("listitem", { name: "Request from Dana Client" }).filter({ hasText: "file from finance" }).getByText("File attached").waitFor();
 
       // Show context (X on the selected card, here by its button): the colleague's message before it.
       await first.getByRole("button", { name: /Show context/ }).click();
       await first.getByText("Morning, the import ran fine overnight.").waitFor();
-      await shotBoth(page, "asks-cards", page.locator(".ask-group").first());
+      await shotBoth(page, "requests-cards", page.getByRole("main", { name: "Requests" }));
 
       // Create bug: the preview, then Create in DevOps; the card resolves with the new item.
       await first.getByRole("button", { name: /^Create bug/ }).click();
       const preview = page.getByRole("dialog", { name: "Create a DevOps item" });
       await preview.getByText("New Bug: Can you check why the export fails for the March report?").waitFor();
       await preview.getByText(/From Dana Client in Teams/).waitFor();
-      await shotBoth(page, "asks-create-preview", preview);
+      await shotBoth(page, "requests-create-preview", preview);
       await preview.getByRole("button", { name: "Create in DevOps" }).click();
       await preview.waitFor({ state: "detached" });
       const bug = [...dv.items.values()].find((i) => i.fields["System.WorkItemType"] === "Bug")!;
       expect(bug.fields["System.Title"]).toBe("Can you check why the export fails for the March report?");
       await first.getByText(`#${bug.id} Can you check why the export fails for the March report?`).waitFor();
-      await expect.poll(() => page.getByRole("tab", { name: /^Asks/ }).textContent()).toBe("Asks2");
+      await first.getByText("by you").waitFor();
+      expect((await teams.requests([CHAT])).find((r) => r.status === "created")?.resolvedBy).toBe(ME);
+      await expect.poll(() => page.getByRole("tab", { name: /^Requests/ }).textContent()).toBe("Requests2");
 
-      // D dismisses the selected ask, Undo brings it back; then both go and the empty state shows, the count hidden.
+      // D dismisses the selected request, Undo brings it back; then both go and the empty state shows, the count hidden.
       await page.locator(".ask-card.selected").focus();
       await page.keyboard.press("d");
       await page.locator(".co-notice").getByText("Dismissed.").waitFor();
       await page.locator(".co-notice").getByRole("button", { name: "Undo" }).click();
-      await expect.poll(() => page.getByRole("tab", { name: /^Asks/ }).textContent()).toBe("Asks2");
+      await expect.poll(() => page.getByRole("tab", { name: /^Requests/ }).textContent()).toBe("Requests2");
       await page.locator(".ask-card:not(.resolved)").first().getByRole("button", { name: /^Dismiss/ }).click();
       await page.locator(".ask-card:not(.resolved)").first().getByRole("button", { name: /^Dismiss/ }).click();
-      await page.getByRole("main", { name: "Asks" }).getByText("No open asks").waitFor();
-      await expect.poll(() => page.getByRole("tab", { name: /^Asks/ }).textContent()).toBe("Asks");
-      await shotBoth(page, "asks-empty");
+      await page.getByRole("main", { name: "Requests" }).getByText("No open requests").waitFor();
+      await expect.poll(() => page.getByRole("tab", { name: /^Requests/ }).textContent()).toBe("Requests");
+      await shotBoth(page, "requests-empty");
       expect(errors).toEqual([]);
     } finally {
       await app.close();

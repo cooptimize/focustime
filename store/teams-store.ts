@@ -1,4 +1,4 @@
-// Shared polling (D508 to D512): the client chats, Teams messages and Requests every follower shares. App tables (no
+// Shared polling (D514 to D518): the client chats, Teams messages and Requests every follower shares. App tables (no
 // person in them), read and written on the database itself, not through a person's scoped store: whether someone may
 // see a chat is decided by actions (plan/requests.ts canSee), never here. Every write runs in a transaction. Nothing here
 // logs; the text of a message never leaves these rows except to its own client's views.
@@ -138,11 +138,17 @@ export function createTeamsStore(db: Conn, now: () => Temporal.Instant) {
         await log(by, c.clientKey, chatId, "kind");
       });
     },
-    /** Forgets a registered chat (its messages and Requests stay until they expire or are purged). */
+    /** Forgets a registered chat with its Requests and stored messages (a promise's message stays with the promise). */
     async removeChat(chatId: string, by: string): Promise<void> {
       await db.tx(async () => {
         const c = await store.chat(chatId);
         if (!c) return;
+        await db.run("DELETE FROM requests WHERE chat_id = ?", [chatId]);
+        await db.run(
+          `DELETE FROM teams_messages WHERE chat_id = ?
+             AND NOT EXISTS (SELECT 1 FROM promises p WHERE p.chat_id = teams_messages.chat_id AND (p.message_id = teams_messages.message_id OR p.answers_message_id = teams_messages.message_id))`,
+          [chatId],
+        );
         await db.run("DELETE FROM client_chats WHERE chat_id = ?", [chatId]);
         await log(by, c.clientKey, chatId, "removed");
       });

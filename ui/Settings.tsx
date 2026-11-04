@@ -831,7 +831,7 @@ function RoadmapForm(p: FormProps) {
   );
 }
 
-/** The phrases the Requests rules use (the chats are read every 5 minutes for everyone, D508). Commas between phrases. */
+/** The phrases the Requests rules use (the chats are read every 5 minutes for everyone, D514). Commas between phrases. */
 const phrases = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 function AsksForm(p: FormProps) {
   const s = p.data.asks;
@@ -873,7 +873,7 @@ function NotifyForm(p: FormProps) {
     initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent asks during focus" : "Quiet on PTO days"),
+    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : "Quiet on PTO days"),
   });
   const [test, setTest] = useState<string | null>(null);
   const group = (title: string, list: readonly NotifyKind[]) => (
@@ -897,7 +897,7 @@ function NotifyForm(p: FormProps) {
         {group("Other", ["vm", "followups", "expiry", "asks"])}
       </div>
       <SaveMark s={a.status("kinds")} retry={() => a.commit("kinds")} />
-      <AutoField a={a} k="asksThroughFocus" label="Urgent asks during focus" hint="Off: an urgent ask waits until the focus session ends, with the others.">
+      <AutoField a={a} k="asksThroughFocus" label="Urgent requests during focus" hint="Off: an urgent request waits until the focus session ends, with the others.">
         <label className="set-check">
           <input type="checkbox" checked={a.v.asksThroughFocus} onChange={(e) => a.change("asksThroughFocus", e.target.checked)} /> Let urgent asks through
         </label>

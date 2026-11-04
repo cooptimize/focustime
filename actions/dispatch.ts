@@ -80,7 +80,7 @@ export type { ActionResponse, SourceSummary, WeekLoadData };
 export type ActionContext = {
   /** AI-0: the app's AI runtime (settings, provider, the app's spend). Absent: AI isn't available here (demo). */
   ai?: AiRuntime;
-  /** Shared polling (D508): the shared Teams store and the poll job's Refresh. Absent: no client chats or Requests. */
+  /** Shared polling (D514): the shared Teams store and the poll job's Refresh. Absent: no client chats or Requests. */
   requests?: RequestsPort;
   /** AP-1: the structured logger (counts and kinds only). Absent: nothing is logged (tests, demo). */
   log?: Logger;

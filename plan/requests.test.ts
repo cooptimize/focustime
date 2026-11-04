@@ -1,5 +1,5 @@
 // Shared polling, the pure rules: the working-hours union decides the interval (5 minutes inside, no polling outside,
-// D508), when the next poll is due for the idle rule, the order tokens are tried in, and who may see a chat.
+// D514), when the next poll is due for the idle rule, the order tokens are tried in, and who may see a chat.
 import { describe, expect, it } from "vitest";
 import type { TimeModel } from "../week/hours.ts";
 import { canSee, chatDue, followersOf, inUnion, nextPollDue, nextUnionStart, pollEvery, POLL_MINUTES, tokenOrder, type ClientChat } from "./requests.ts";
@@ -31,7 +31,7 @@ describe("the interval: the union of followers' working hours", () => {
     // 20:00Z: 15:00 in New York (in), 20:00 in London (out).
     expect(pollEvery(at("2026-11-04T20:00:00Z"), [weekdays(LONDON), weekdays(NY)])).toBe(POLL_MINUTES);
   });
-  it("outside everyone's hours: no polling (D508; the first poll of the day catches up)", () => {
+  it("outside everyone's hours: no polling (D514; the first poll of the day catches up)", () => {
     expect(pollEvery(at("2026-11-05T03:00:00Z"), [weekdays(LONDON), weekdays(NY)])).toBeNull();
     expect(inUnion(at("2026-11-05T03:00:00Z"), [weekdays(NY)])).toBe(false);
   });
@@ -99,7 +99,7 @@ describe("tokens and followers", () => {
   });
 });
 
-describe("who sees a chat (D509)", () => {
+describe("who sees a chat (D515)", () => {
   it("a member who follows the client", () => {
     expect(canSee(chat(), "u-ben", new Set(["fabrikam"]))).toBe(true);
   });

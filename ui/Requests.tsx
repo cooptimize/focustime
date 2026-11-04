@@ -1,4 +1,4 @@
-// Inbox › Requests (was Asks; shared polling, D508 to D512). Messages from people outside Cooptimize in the client
+// Inbox › Requests (was Asks; shared polling, D514 to D518). Messages from people outside Cooptimize in the client
 // chats registered for the person's clients (shown to members who follow the client), by client, newest first. A
 // request's state is shared: resolved by anyone, it's resolved for everyone, with their name. Each card: the client's color, who (with "External"), when, the text (4 lines, Show more),
 // attachments, "Matched: <rule>", Show context (the 5 messages before, folded), Open in Teams, and the resolutions:

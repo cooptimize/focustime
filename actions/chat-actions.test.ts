@@ -1,4 +1,4 @@
-// T-2 and shared polling (D509): the client chat actions. chats.add checks the client and takes the chat's name and
+// T-2 and shared polling (D515): the client chat actions. chats.add checks the client and takes the chat's name and
 // link from Teams, not the request; a chat that isn't one of my group chats is refused; Chat.Read must be allowed;
 // members are read on add and on refresh; a refused permission says so with the scope's name and stops reading; a
 // chat I left keeps its cached members with a note. A chat is registered once, for everyone: it shows to members who

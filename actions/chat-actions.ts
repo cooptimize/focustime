@@ -1,4 +1,4 @@
-// T-2 and shared polling (D509): client chats (Settings > Clients) and the Microsoft permissions list (Settings >
+// T-2 and shared polling (D515): client chats (Settings > Clients) and the Microsoft permissions list (Settings >
 // Connections). Read only against Teams: chat names and members through the person's own sign-in (Chat.ReadBasic). A
 // chat is registered once for a client, for everyone (client_chats), by any Cooptimizer who follows the client and is
 // a member of the chat, who allows Chat.Read when they do (the job may read it with their sign-in); every add, label
@@ -98,7 +98,7 @@ async function refreshMembers(ctx: ChatContext, teams: TeamsStore, chats: readon
   return { errors, reason };
 }
 
-/** The registered chats this person sees: a member who follows the client (D509). */
+/** The registered chats this person sees: a member who follows the client (D515). */
 async function mine(ctx: ChatContext, teams: TeamsStore): Promise<ClientChat[]> {
   const me = await ctx.me();
   if (!me) return [];
@@ -185,7 +185,7 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
         if (!chat) return bad("That isn't one of your Teams group chats", 404);
         const me = await ctx.me();
         if (!me) return bad(ACCESS_TEXT.signed_out, 409);
-        // The registering person allows Chat.Read (D509): the job reads the chat with their sign-in first.
+        // The registering person allows Chat.Read (D515): the job reads the chat with their sign-in first.
         const probe = ctx.account?.probe ? await ctx.account.probe("messages").catch(() => null) : null;
         if (!probe || probe.state === "signed_out") return bad(ACCESS_TEXT.signed_out, 409, "signed_out");
         if (probe.state !== "granted") return bad("Allow FocusTime to read the messages in chats you register (Chat.Read). Microsoft asks you once", 409, "consent");

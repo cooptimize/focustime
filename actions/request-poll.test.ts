@@ -1,4 +1,4 @@
-// Shared polling, the job (D508 to D511): one cycle polls each registered chat once inside the union of its followers'
+// Shared polling, the job (D514 to D517): one cycle polls each registered chat once inside the union of its followers'
 // working hours, stores each message once whoever follows the chat, runs the candidate rules so Requests appear without
 // anyone opening FocusTime, and falls back to another follower's token when the registering person's fails ("polling
 // via"), or marks the chat "needs reconnecting" without stopping the others. Each cycle is logged with counts and the

@@ -1,4 +1,4 @@
-// Shared polling, the job (D508 to D511). One cycle reads each registered client chat once, inside the union of its
+// Shared polling, the job (D514 to D517). One cycle reads each registered client chat once, inside the union of its
 // followers' working hours (never outside; the first read of the day asks for everything changed since the newest
 // message seen), or on Refresh. A follower is a FocusTime user who is a member of the chat. Tokens are tried in order:
 // the registering person's, then the other followers' by name; one refused (signed out, consent missing, 401, 403,

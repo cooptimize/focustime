@@ -8,7 +8,7 @@
 // role are kept.
 // - AP-1, a chat's messages changed after a time: GET /chats/{id}/messages?$orderby=lastModifiedDateTime desc&$filter=
 //   lastModifiedDateTime gt <time>&$top=50 (Graph needs the order and the filter on the same property), at most
-//   MESSAGE_PAGES pages. From each message only the fields the shared store keeps (D508): ids, sender id, name and tenant, times, the raw
+//   MESSAGE_PAGES pages. From each message only the fields the shared store keeps (D514): ids, sender id, name and tenant, times, the raw
 //   body and its plain text, attachment flags, the reply id and the mentions (ids and names).
 // Logs carry the op, status, count and duration: never a chat id, a topic, a person or message text.
 import type { Logger } from "../../log/logger.ts";

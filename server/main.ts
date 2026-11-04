@@ -282,7 +282,7 @@ if (!opened) {
 }
 const db: Conn = opened.conn;
 
-// Shared polling (D508 to D511): one store of client chats, messages and Requests for everyone, read by one job with
+// Shared polling (D514 to D517): one store of client chats, messages and Requests for everyone, read by one job with
 // the followers' own sign-ins (each person's account, as for every Graph call: access tokens in memory per person,
 // refresh tokens sealed in their secrets; the job keeps none). People are built for a cycle on demand.
 const teams = createTeamsStore(db, instantNow);
@@ -684,7 +684,7 @@ function reopenWindow(): Promise<boolean> {
 // next-due time and makes no database call before it. Everyone's runtimes are built on the first pass (not at start,
 // so an idle start reads nothing), and the app's own upkeep (hard deletes, ended sessions) rides on the slow pass.
 let everyone = false;
-// D508, Option A: the chats are read in the background every 5 minutes inside the union of followers' working hours in
+// D514, Option A: the chats are read in the background every 5 minutes inside the union of followers' working hours in
 // prod; dev (and the developer loop) read them only on Refresh, unless FOCUSTIME_REQUESTS_POLL says otherwise.
 const pollInBackground = (process.env.FOCUSTIME_REQUESTS_POLL?.trim().toLowerCase() || (build.env === "prod" ? "on" : "off")) === "on";
 log({ source: "plan", op: "requests_poll_mode", kind: pollInBackground ? "background" : "on_demand" });

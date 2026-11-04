@@ -1,13 +1,14 @@
-// AP-1: Asks, the pure rules. A client's delivery chats with "Read for asks" on are read for new messages (no AI); a
-// message from someone outside Cooptimize becomes an ask when it @mentions a Cooptimizer, asks a question, uses request
-// phrasing or carries an attachment, and isn't only a short acknowledgement. Internal authors and my own messages
-// aren't asks here (promises are AP-2). Each ask records the rule that matched. Nothing here does I/O or logs.
+// Requests (AP-1's Asks), the pure rules. A client's registered chats are read for new messages by the shared poll
+// job (D514); a message from someone outside Cooptimize becomes a request when it @mentions a Cooptimizer, asks a
+// question, uses request phrasing or carries an attachment, and isn't only a short acknowledgement. Internal authors
+// aren't requests (promises are AP-2). Each request records the rule that matched. Nothing here does I/O or logs.
+// The Ask and Asks names inside stay from AP-1 (the stored [asks] settings and AP-1's per-user tables use them).
 import { isExternal, type ChatMember } from "./chats.ts";
 import type { AskKind, AskSort, DraftItemType, NotSorted, PromiseStatus, Urgency } from "./asks-ai.ts";
 
 /** The per-user settings ([asks] in the settings model), with these defaults. */
 export type AskSettings = {
-  /** How often a chat with Read for asks on is read, in working hours: 1 to 60 minutes. */
+  /** Kept as a setting from AP-1; shared polling reads every 5 minutes for everyone (D514), so it is not used. */
   pollMinutes: number;
   /** Request phrasing (lower case; matched as whole words, any case). */
   requestPhrases: string[];

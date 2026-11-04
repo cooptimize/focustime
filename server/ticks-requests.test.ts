@@ -1,4 +1,4 @@
-// Shared polling in the scheduler (D511): the app job runs at the start of each slow pass, before anyone's ticks, and
+// Shared polling in the scheduler (D517): the app job runs at the start of each slow pass, before anyone's ticks, and
 // its next due time is part of the idle rule's wake; each person's tick sends one notification per request the AI
 // sorted as needing someone now in a chat they see (held during focus unless let through); and once a day the AP-1
 // per-person message rows that didn't become asks are still deleted after 14 days (until that table's safe-drop).

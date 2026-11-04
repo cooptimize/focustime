@@ -308,7 +308,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       if (st.ok && (st.data as VmStatus).prompt) await send(notices.vmOff(today, (st.data as VmStatus).vm?.name ?? "Your VM", at));
     }
   };
-  // Shared polling (D511): the job reads the chats for everyone; here, one notification per request the AI sorted as
+  // Shared polling (D517): the job reads the chats for everyone; here, one notification per request the AI sorted as
   // needing someone now in a chat I see, within URGENT_NOTICE_HOURS of its sort (each key goes out once; held during
   // focus unless Settings lets it through). And once a day, the AP-1 per-person message rows that didn't become asks
   // are deleted after UNMATCHED_DAYS (that table stays until its safe-drop).

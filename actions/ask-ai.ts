@@ -1,4 +1,4 @@
-// AP-2: AI sorts requests, and Promises: the requests. Shared polling (D510): the message and its earlier messages come
+// AP-2: AI sorts requests, and Promises: the requests. Shared polling (D516): the message and its earlier messages come
 // from the shared store; a Request's sort is saved once on its shared row with whose settings sorted it (the token
 // owner's in the poll job, the person's own on Sort again); a promise runs under its author's settings. One ai/ request per new ask candidate ("asks.classify") and per
 // new promise candidate ("promises.extract"), each about that client only: the message, up to 5 earlier messages of

@@ -1,4 +1,4 @@
-// Shared polling (D508 to D512): the app tables for client chats, Teams messages and Requests, on both drivers. One row
+// Shared polling (D514 to D518): the app tables for client chats, Teams messages and Requests, on both drivers. One row
 // per message whoever reads it; an edit (a newer lastModifiedDateTime) updates the stored body; Request state is shared;
 // the migration collapses per-user rows (the latest action wins); unmatched messages expire after 14 days, Requests'
 // and promises' messages stay.
@@ -96,10 +96,15 @@ await forEachDriver("the shared Teams store", ({ open }) => {
     expect(await teams.chat(CHAT)).toMatchObject({ pollState: "reconnect", tokenUser: null, fetchedAt: NOW, seenAt: "2026-11-20T14:59:00Z", polledAt: "2026-11-20T15:05:00Z" });
   });
 
-  it("removing a chat logs who did it", async () => {
+  it("removing a chat deletes its Requests and messages and logs who did it", async () => {
     const { teams } = await store();
+    const m = msg();
+    await teams.saveMessages([m]);
+    await teams.addRequest({ chatId: CHAT, messageId: m.messageId, clientKey: "fabrikam", rule: "question", ruleDetail: null, at: m.createdAt });
     await teams.removeChat(CHAT, BEN);
     expect(await teams.chat(CHAT)).toBeNull();
+    expect(await teams.request(CHAT, m.messageId)).toBeNull();
+    expect(await teams.message(CHAT, m.messageId)).toBeNull();
     expect((await teams.changes()).map((c) => [c.change, c.byUser])).toEqual([["added", ANA], ["removed", BEN]]);
   });
 });

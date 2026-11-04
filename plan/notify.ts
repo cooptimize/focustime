@@ -22,7 +22,7 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   vm: "My VM",
   followups: "Follow-ups due",
   expiry: "Expiring secrets",
-  asks: "Urgent asks",
+  asks: "Urgent requests",
 };
 export const KIND_HINT: Record<NotifyKind, string> = {
   plan_day: "At the start of a workday when the day isn't planned yet.",
@@ -37,7 +37,7 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   vm: "VM off at work start.",
   followups: "Once a workday when follow-ups are due today or overdue.",
   expiry: "Once a workday when a PAT or secret expires within 14 days.",
-  asks: "When AI sorts an ask from a client chat as needing you now.",
+  asks: "When AI sorts a request from a client chat you are in as needing someone now.",
 };
 /** The ritual reminders, shown as one group in Settings. */
 export const RITUAL_KINDS: readonly NotifyKind[] = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction"];
