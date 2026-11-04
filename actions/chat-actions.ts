@@ -1,8 +1,8 @@
-// T-2: delivery chats (Settings > Clients) and the Microsoft permissions list (Settings > Connections). Read only
+// T-2: client chats (Settings > Clients) and the Microsoft permissions list (Settings > Connections). Read only
 // against Teams: chat names and members through the person's own sign-in (Chat.ReadBasic), never messages. A chat is
-// registered for one client of one person; the first of a client is its primary. Members are cached in the plan store
+// registered for one client of one person, as its Delivery team or its Customer collaboration chat (T-2.1, one each). Members are cached in the plan store
 // and read again when the Clients section opens or on Refresh, never on a timer. Nothing here logs a chat or a person.
-import { CHAT_ID, chatName, flagMembers, isExternal, teamsLink, type ChatAccess, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChat, type DeliveryChatView } from "../plan/chats.ts";
+import { CHAT_ID, CHAT_KINDS, chatName, flagMembers, isExternal, kindsOf, kindWarning, teamsLink, type ChatAccess, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChat, type DeliveryChatView } from "../plan/chats.ts";
 export type { ChatAccess, ChatPickerData, ChatsData, DeliveryChatView } from "../plan/chats.ts";
 import { permissionRows, type PermissionRow } from "../plan/permissions.ts";
 import { HttpError, NetworkError } from "../sources/calendar/http.ts";
@@ -13,7 +13,7 @@ import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import { mapSeq } from "./seq.ts";
 import type { ActionResponse } from "./types.ts";
 
-export type ChatAction = "chats.registered" | "chats.list" | "chats.add" | "chats.remove" | "chats.primary" | "chats.refresh" | "permissions.status";
+export type ChatAction = "chats.registered" | "chats.list" | "chats.add" | "chats.remove" | "chats.refresh" | "permissions.status";
 
 export type ChatContext = {
   plan?: PlanStore | undefined;
@@ -44,13 +44,14 @@ const ACCESS_TEXT: Record<ChatAccess, string> = {
   unavailable: "Teams couldn't be reached. Try again in a moment",
 };
 
-function view(c: DeliveryChat, home: string | null, error: string | null): DeliveryChatView {
+function view(c: DeliveryChat, kind: ChatKind, home: string | null, error: string | null): DeliveryChatView {
   const members = c.members && home ? flagMembers(c.members, home) : null;
   return {
     clientKey: c.clientKey,
     chatId: c.chatId,
     displayName: c.displayName,
-    primary: c.primary,
+    kind,
+    warning: home ? kindWarning(kind, c.members, home) : null,
     link: teamsLink(c),
     members,
     memberCount: c.members ? c.members.length : null,
@@ -94,7 +95,13 @@ async function registered(ctx: ChatContext, plan: PlanStore, refresh: false | "a
     reason = r.reason;
     chats = await plan.deliveryChats();
   }
-  return { available: reason === null, reason, homeTenant: home, chats: chats.map((c) => view(c, home, errors.get(c.chatId) ?? null)) };
+  const kinds = kindsOf(chats, home);
+  const views = chats.flatMap((c) => {
+    const kind = kinds.get(c.chatId);
+    return kind ? [view(c, kind, home, errors.get(c.chatId) ?? null)] : [];
+  });
+  views.sort((a, b) => a.clientKey.localeCompare(b.clientKey) || CHAT_KINDS.indexOf(a.kind) - CHAT_KINDS.indexOf(b.kind));
+  return { available: reason === null, reason, homeTenant: home, chats: views };
 }
 
 const only = (input: unknown, keys: readonly string[]): Record<string, unknown> | null => {
@@ -139,8 +146,9 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
         }
       }
       case "chats.add": {
-        const o = only(input, ["clientKey", "chatId"]);
-        if (!o || typeof o.clientKey !== "string" || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId)) return bad("chats.add takes { clientKey, chatId }");
+        const o = only(input, ["clientKey", "kind", "chatId"]);
+        if (!o || typeof o.clientKey !== "string" || !CHAT_KINDS.includes(o.kind as ChatKind) || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId)) return bad("chats.add takes { clientKey, kind, chatId }");
+        const kind = o.kind as ChatKind;
         const keys = await ctx.clientKeys();
         if (!keys) return bad("Dataverse couldn't be read, so FocusTime can't check the client. Try again in a moment", 503);
         if (!keys.has(o.clientKey)) return bad("That isn't one of your clients", 404);
@@ -154,16 +162,18 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
           return bad(ACCESS_TEXT[accessOf(e)], 409);
         }
         if (!chat) return bad("That isn't one of your Teams group chats", 404);
-        const saved = await plan.addDeliveryChat(o.clientKey, { chatId: chat.id, displayName: chatName(chat), webUrl: chat.webUrl });
+        // A row from before T-2.1 (no kind stored) that holds this slot, or is this very chat, makes way first.
+        const now = await plan.deliveryChats();
+        const held = kindsOf(now, await ctx.homeTenant());
+        for (const c of now) if (c.clientKey === o.clientKey && !c.kind && (held.get(c.chatId) === kind || c.chatId === chat.id)) await plan.removeDeliveryChat(c.chatId);
+        const saved = await plan.setDeliveryChat(o.clientKey, kind, { chatId: chat.id, displayName: chatName(chat), webUrl: chat.webUrl });
         await refreshMembers(ctx, plan, [saved]);
         return { ok: true, data: await registered(ctx, plan, false) };
       }
-      case "chats.remove":
-      case "chats.primary": {
+      case "chats.remove": {
         const o = only(input, ["chatId"]);
-        if (!o || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId)) return bad(`${action} takes { chatId }`);
-        if (action === "chats.remove") await plan.removeDeliveryChat(o.chatId);
-        else await plan.setPrimaryDeliveryChat(o.chatId);
+        if (!o || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId)) return bad("chats.remove takes { chatId }");
+        await plan.removeDeliveryChat(o.chatId);
         return { ok: true, data: await registered(ctx, plan, false) };
       }
     }

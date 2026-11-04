@@ -1,5 +1,6 @@
-// T-2: Teams group chats in demo mode: fictional delivery chats with Cooptimize people and client people from other
-// (fictional) tenants. No Graph calls; nothing here is real.
+// T-2 and T-2.1: Teams group chats in demo mode, as Cooptimize sets clients up: a Delivery Team chat with the internal
+// team and a Customer Collaboration chat with the client's key people from their (fictional) tenants. No Graph calls;
+// nothing here is real.
 import type { ChatMember, ChatSummary } from "../../plan/chats.ts";
 import type { ChatsClient } from "../graph/chats.ts";
 import { DEMO_PEOPLE } from "./data.ts";
@@ -18,9 +19,10 @@ const ago = (now: () => number, days: number) => new Date(now() - days * 86_400_
 
 export function demoChats(now: () => number = Date.now): ChatsClient {
   const chats = (): ChatSummary[] => [
-    { id: "19:demo-northwind-delivery@thread.v2", topic: "Northwind Delivery Team (Cooptimize)", webUrl: null, lastUpdated: ago(now, 20), lastRead: ago(now, 0), members: [me, us(0), us(1), them("Dana Whitfield", NORTHWIND_TENANT, 1), them("Marcus Bell", NORTHWIND_TENANT, 2)], moreMembers: false },
-    { id: "19:demo-harbor-delivery@thread.v2", topic: "Harbor Health Delivery Team (Cooptimize)", webUrl: null, lastUpdated: ago(now, 40), lastRead: ago(now, 1), members: [me, us(2), them("Lena Ortiz", HARBOR_TENANT, 3), them("Ravi Menon", HARBOR_TENANT, 4), { userId: null, displayName: "Guest reviewer", email: null, tenantId: null }], moreMembers: false },
-    { id: "19:demo-harbor-leads@thread.v2", topic: null, webUrl: null, lastUpdated: ago(now, 12), lastRead: ago(now, 3), members: [me, us(2), them("Lena Ortiz", HARBOR_TENANT, 3)], moreMembers: false },
+    { id: "19:demo-northwind-delivery@thread.v2", topic: "Northwind Delivery Team (Cooptimize)", webUrl: null, lastUpdated: ago(now, 20), lastRead: ago(now, 0), members: [me, us(0), us(1)], moreMembers: false },
+    { id: "19:demo-northwind-collab@thread.v2", topic: "Northwind Customer Collaboration (Cooptimize)", webUrl: null, lastUpdated: ago(now, 25), lastRead: ago(now, 0), members: [me, us(0), them("Dana Whitfield", NORTHWIND_TENANT, 1), them("Marcus Bell", NORTHWIND_TENANT, 2)], moreMembers: false },
+    { id: "19:demo-harbor-delivery@thread.v2", topic: "Harbor Health Delivery Team (Cooptimize)", webUrl: null, lastUpdated: ago(now, 40), lastRead: ago(now, 1), members: [me, us(2), them("Ravi Menon", HARBOR_TENANT, 4)], moreMembers: false },
+    { id: "19:demo-harbor-collab@thread.v2", topic: "Harbor Health Customer Collaboration (Cooptimize)", webUrl: null, lastUpdated: ago(now, 35), lastRead: ago(now, 1), members: [me, us(2), them("Lena Ortiz", HARBOR_TENANT, 3), them("Ravi Menon", HARBOR_TENANT, 4), { userId: null, displayName: "Guest reviewer", email: null, tenantId: null }], moreMembers: false },
     { id: "19:demo-atlas-delivery@thread.v2", topic: "Atlas Freight Delivery Team (Cooptimize)", webUrl: null, lastUpdated: ago(now, 60), lastRead: ago(now, 6), members: [me, us(3), us(1)], moreMembers: false },
     { id: "19:demo-lunch@thread.v2", topic: "Friday lunch crew", webUrl: null, lastUpdated: ago(now, 90), lastRead: ago(now, 2), members: [me, us(0), us(1), us(2), us(3)], moreMembers: false },
   ];

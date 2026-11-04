@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aChat, aChatMember, CLIENT_TENANT, HOME_TENANT } from "../test/builders/index.ts";
-import { chatName, filterChats, flagMembers, isExternal, memberLine, teamsLink } from "./chats.ts";
+import { chatName, filterChats, flagMembers, isExternal, kindsOf, kindWarning, memberLine, suggestKind, teamsLink, type ChatMember } from "./chats.ts";
 
 describe("external members, by tenantId only (T-2)", () => {
   it.each([
@@ -66,5 +66,53 @@ describe("Open in Teams (T-2)", () => {
     expect(teamsLink({ chatId: "19:abc@thread.v2", webUrl: null })).toBe("https://teams.microsoft.com/l/chat/19%3Aabc%40thread.v2/conversations");
     expect(teamsLink({ chatId: "19:abc@thread.v2", webUrl: "javascript:alert(1)" })).toBe("https://teams.microsoft.com/l/chat/19%3Aabc%40thread.v2/conversations");
     expect(() => teamsLink({ chatId: "not a chat", webUrl: null })).toThrow();
+  });
+});
+
+describe("T-2.1: the two kinds of client chat, by tenant", () => {
+  const ours = aChatMember();
+  const theirs = aChatMember({ external: true });
+  const noTenant = aChatMember({ tenantId: null });
+
+  it.each([
+    ["only Cooptimize people", [ours, ours], "delivery"],
+    ["one person from the client", [ours, theirs], "customer"],
+    ["a guest with no tenant", [ours, noTenant], "customer"],
+    ["nobody listed", [], "delivery"],
+  ] as const)("suggests the kind from the members: %s", (_, members, kind) => {
+    expect(suggestKind(members, HOME_TENANT)).toBe(kind);
+  });
+
+  it.each([
+    ["delivery", [ours, theirs], "1 person from outside Cooptimize is in this internal chat"],
+    ["delivery", [ours, theirs, noTenant], "2 people from outside Cooptimize are in this internal chat"],
+    ["delivery", [ours], null],
+    ["customer", [ours, theirs], null],
+    ["customer", [ours], "No one from outside Cooptimize is in this chat"],
+    ["customer", null, null],
+  ] as const)("warns when the members don't fit: %s %#", (kind, members, warning) => {
+    expect(kindWarning(kind, members, HOME_TENANT)).toBe(warning);
+  });
+
+  const stored = (chatId: string, clientKey: string, kind: "delivery" | "customer" | null, members: ChatMember[] | null) => ({ chatId, clientKey, kind, members, displayName: chatId, webUrl: null, membersFetchedAt: null });
+  it("rows from before T-2.1 take a kind: stored kinds first, then what the members suggest, then the free one, else none", () => {
+    const kinds = kindsOf(
+      [
+        stored("19:a@thread.v2", "fabrikam", null, [ours, theirs]),
+        stored("19:b@thread.v2", "fabrikam", "customer", [ours, theirs]),
+        stored("19:c@thread.v2", "fabrikam", null, [ours]),
+        stored("19:d@thread.v2", "fabrikam", null, [ours]),
+        stored("19:e@thread.v2", "contoso", null, null),
+      ],
+      HOME_TENANT,
+    );
+    expect(Object.fromEntries(kinds)).toEqual({ "19:b@thread.v2": "customer", "19:a@thread.v2": "delivery", "19:c@thread.v2": null, "19:d@thread.v2": null, "19:e@thread.v2": "delivery" });
+  });
+
+  it("the picker puts the chats that suggest the slot's kind first", () => {
+    const internal = aChat({ topic: "Team", members: [ours], lastUpdated: "2026-10-01T00:00:00Z" });
+    const withClient = aChat({ topic: "Collab", members: [ours, theirs], lastUpdated: "2026-10-30T00:00:00Z" });
+    expect(filterChats([withClient, internal], "", new Set(), { kind: "delivery", homeTenant: HOME_TENANT }).map((c) => c.topic)).toEqual(["Team", "Collab"]);
+    expect(filterChats([withClient, internal], "", new Set(), { kind: "customer", homeTenant: HOME_TENANT }).map((c) => c.topic)).toEqual(["Collab", "Team"]);
   });
 });

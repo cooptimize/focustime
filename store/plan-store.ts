@@ -1,7 +1,7 @@
 // Local plan store (D23): SQLite through Node's built-in node:sqlite, under ~/.local/share/focustime/.
 // Holds only FocusTime's own plan (day plans, picks, draft stories) and a few one-time markers.
 // Nothing here is ever written to DevOps, Outlook, Google or Dataverse.
-import { CHAT_ID, type ChatMember, type DeliveryChat } from "../plan/chats.ts";
+import { CHAT_ID, CHAT_KINDS, KIND_NAME, type ChatKind, type ChatMember, type DeliveryChat } from "../plan/chats.ts";
 import { USER_SCHEMA_VERSION } from "./user-data.ts";
 import type { StoreFiles } from "../host/types.ts";
 import { DatabaseSync } from "node:sqlite";
@@ -1430,13 +1430,13 @@ const toDevopsWrite = (r: Row): DevOpsWriteEntry => ({
 });
 export type NewDevOpsWrite = Omit<DevOpsWriteEntry, "id" | "at" | "status" | "message" | "undoneBy" | "attempts" | "updatedAt" | "pickIds"> & { pickIds?: number[] };
 
-/** T-2: a stored delivery chat. */
+/** T-2: a stored client chat (its kind from T-2.1; null on rows from before). */
 const toDeliveryChat = (r: Row): DeliveryChat => ({
   clientKey: r.client_key as string,
   chatId: r.chat_id as string,
   displayName: r.display_name as string,
   webUrl: (r.web_url as string | null) ?? null,
-  primary: Number(r.is_primary) === 1,
+  kind: CHAT_KINDS.includes(r.chat_kind as ChatKind) ? (r.chat_kind as ChatKind) : null,
   members: typeof r.members_json === "string" ? (JSON.parse(r.members_json) as ChatMember[]) : null,
   membersFetchedAt: (r.members_fetched_at as string | null) ?? null,
 });
@@ -2596,53 +2596,39 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async resetSetup(): Promise<void> {
       return tx(async () => void (await db.run("DELETE FROM setup_state")));
     },
-    /** T-2: every delivery chat I registered, by client and in order (the first of each client is its primary). */
+    /** T-2: every client chat I registered, by client and in the order they were added. */
     async deliveryChats(): Promise<DeliveryChat[]> {
       return ((await db.all("SELECT * FROM delivery_chats ORDER BY client_key, position")) as Row[]).map(toDeliveryChat);
     },
     /**
-     * T-2: registers a chat for a client. The client's first chat is its primary. A chat already registered for another
-     * client is refused (one chat, one client); the same client again changes nothing.
+     * T-2.1: sets a client's chat of one kind (its Delivery team or Customer collaboration chat), replacing the one it
+     * had. A chat belongs to one client and one kind: one registered for another client, or as this client's other
+     * kind, is refused; the same chat in the same place changes nothing.
      */
-    async addDeliveryChat(clientKey: string, c: { chatId: string; displayName: string; webUrl: string | null }): Promise<DeliveryChat> {
+    async setDeliveryChat(clientKey: string, kind: ChatKind, c: { chatId: string; displayName: string; webUrl: string | null }): Promise<DeliveryChat> {
       checkDeliveryChat(clientKey, c.chatId);
+      if (!CHAT_KINDS.includes(kind)) throw new PlanError("Not a kind of chat");
       const name = c.displayName.trim().slice(0, 400) || "Group chat";
       const webUrl = c.webUrl && /^https:\/\/teams\.microsoft\.com\//.test(c.webUrl) && c.webUrl.length <= 2000 ? c.webUrl : null;
       return tx(async () => {
         const had = (await db.get("SELECT * FROM delivery_chats WHERE chat_id = ?", c.chatId)) as Row | undefined;
-        if (had && had.client_key !== clientKey) throw new PlanError("That chat is already the delivery chat of another client");
-        if (had) return toDeliveryChat(had);
-        const last = (await db.get("SELECT MAX(position) AS p, COUNT(*) AS n FROM delivery_chats WHERE client_key = ?", clientKey)) as Row;
+        if (had && had.client_key !== clientKey) throw new PlanError("That chat is already registered for another client");
+        if (had && had.chat_kind === kind) return toDeliveryChat(had);
+        if (had) throw new PlanError(`That chat is already this client's ${KIND_NAME[had.chat_kind as ChatKind] ?? "other"} chat. Clear it there first`);
+        await db.run("DELETE FROM delivery_chats WHERE client_key = ? AND chat_kind = ?", clientKey, kind);
+        const last = (await db.get("SELECT MAX(position) AS p FROM delivery_chats WHERE client_key = ?", clientKey)) as Row;
         const at = stamp();
         await db.run(
-          "INSERT INTO delivery_chats (chat_id, client_key, display_name, web_url, is_primary, position, members_json, members_fetched_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)",
-          c.chatId, clientKey, name, webUrl, Number(last.n) === 0 ? 1 : 0, (last.p === null ? -1 : Number(last.p)) + 1, at, at,
+          "INSERT INTO delivery_chats (chat_id, client_key, display_name, web_url, chat_kind, is_primary, position, members_json, members_fetched_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, NULL, NULL, ?, ?)",
+          c.chatId, clientKey, name, webUrl, kind, (last.p === null || last.p === undefined ? -1 : Number(last.p)) + 1, at, at,
         );
         return toDeliveryChat((await db.get("SELECT * FROM delivery_chats WHERE chat_id = ?", c.chatId)) as Row);
       });
     },
-    /** T-2: forgets one delivery chat; when it was the primary, the client's next one becomes the primary. */
+    /** T-2: forgets one client chat. */
     async removeDeliveryChat(chatId: string): Promise<void> {
       if (!CHAT_ID.test(chatId)) throw new PlanError("Not a Teams chat id");
-      return tx(async () => {
-        const had = (await db.get("SELECT client_key, is_primary FROM delivery_chats WHERE chat_id = ?", chatId)) as Row | undefined;
-        if (!had) return;
-        await db.run("DELETE FROM delivery_chats WHERE chat_id = ?", chatId);
-        if (Number(had.is_primary) !== 1) return;
-        const next = (await db.get("SELECT chat_id FROM delivery_chats WHERE client_key = ? ORDER BY position LIMIT 1", had.client_key as string)) as Row | undefined;
-        if (next) await db.run("UPDATE delivery_chats SET is_primary = 1, updated_at = ? WHERE chat_id = ?", stamp(), next.chat_id as string);
-      });
-    },
-    /** T-2: makes one of a client's chats its primary. */
-    async setPrimaryDeliveryChat(chatId: string): Promise<void> {
-      if (!CHAT_ID.test(chatId)) throw new PlanError("Not a Teams chat id");
-      return tx(async () => {
-        const had = (await db.get("SELECT client_key FROM delivery_chats WHERE chat_id = ?", chatId)) as Row | undefined;
-        if (!had) throw new PlanError("That chat isn't registered");
-        const at = stamp();
-        await db.run("UPDATE delivery_chats SET is_primary = 0, updated_at = ? WHERE client_key = ? AND is_primary = 1", at, had.client_key as string);
-        await db.run("UPDATE delivery_chats SET is_primary = 1, updated_at = ? WHERE chat_id = ?", at, chatId);
-      });
+      return tx(async () => void (await db.run("DELETE FROM delivery_chats WHERE chat_id = ?", chatId)));
     },
     /** T-2: the chat's members as just read from Teams (names, addresses, tenants; never messages), and when. */
     async setDeliveryChatMembers(chatId: string, members: readonly ChatMember[], fetchedAt: string, displayName?: string): Promise<void> {

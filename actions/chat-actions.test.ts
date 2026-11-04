@@ -28,7 +28,7 @@ async function setup(chats: Partial<ChatsClient> = {}) {
     clientKeys: async () => new Set(["northwind", "harbor"]),
     now: () => "2026-11-04T15:00:00Z",
   };
-  return { ctx, plan };
+  return { ctx, plan, db };
 }
 
 const data = (r: Awaited<ReturnType<typeof chatAction>>) => {
@@ -39,18 +39,20 @@ const data = (r: Awaited<ReturnType<typeof chatAction>>) => {
 describe("delivery chat actions (T-2)", () => {
   it("adds with the name from Teams, reads members, flags the external one", async () => {
     const { ctx } = await setup();
-    const d = data(await chatAction(ctx, "chats.add", { clientKey: "northwind", chatId: "19:northwind@thread.v2" }));
+    const d = data(await chatAction(ctx, "chats.add", { clientKey: "northwind", kind: "customer", chatId: "19:northwind@thread.v2" }));
     expect(d.chats).toHaveLength(1);
     const c = d.chats[0]!;
-    expect([c.displayName, c.primary, c.link, c.memberCount, c.externalCount]).toEqual(["Northwind Delivery Team (Cooptimize)", true, "https://teams.microsoft.com/l/chat/x", 2, 1]);
+    expect([c.displayName, c.kind, c.warning, c.link, c.memberCount, c.externalCount]).toEqual(["Northwind Delivery Team (Cooptimize)", "customer", null, "https://teams.microsoft.com/l/chat/x", 2, 1]);
     expect(c.members!.find((m) => m.displayName === "Dana")!.external).toBe(true);
   });
 
   it.each([
-    [{ clientKey: "contoso", chatId: "19:northwind@thread.v2" }, 404, "That isn't one of your clients"],
-    [{ clientKey: "northwind", chatId: "19:notmine@thread.v2" }, 404, "That isn't one of your Teams group chats"],
-    [{ clientKey: "northwind", chatId: "not a chat id" }, 400, "chats.add takes"],
-    [{ clientKey: "northwind", chatId: "19:northwind@thread.v2", displayName: "spoofed" }, 400, "chats.add takes"],
+    [{ clientKey: "contoso", kind: "delivery", chatId: "19:northwind@thread.v2" }, 404, "That isn't one of your clients"],
+    [{ clientKey: "northwind", kind: "delivery", chatId: "19:notmine@thread.v2" }, 404, "That isn't one of your Teams group chats"],
+    [{ clientKey: "northwind", kind: "delivery", chatId: "not a chat id" }, 400, "chats.add takes"],
+    [{ clientKey: "northwind", chatId: "19:northwind@thread.v2" }, 400, "chats.add takes"],
+    [{ clientKey: "northwind", kind: "primary", chatId: "19:northwind@thread.v2" }, 400, "chats.add takes"],
+    [{ clientKey: "northwind", kind: "delivery", chatId: "19:northwind@thread.v2", displayName: "spoofed" }, 400, "chats.add takes"],
   ])("refuses %j", async (input, status, error) => {
     const { ctx, plan } = await setup();
     const r = await chatAction(ctx, "chats.add", input);
@@ -64,15 +66,15 @@ describe("delivery chat actions (T-2)", () => {
 
   it("a chat already on another client is refused", async () => {
     const { ctx } = await setup();
-    data(await chatAction(ctx, "chats.add", { clientKey: "northwind", chatId: "19:northwind@thread.v2" }));
-    const r = await chatAction(ctx, "chats.add", { clientKey: "harbor", chatId: "19:northwind@thread.v2" });
+    data(await chatAction(ctx, "chats.add", { clientKey: "northwind", kind: "customer", chatId: "19:northwind@thread.v2" }));
+    const r = await chatAction(ctx, "chats.add", { clientKey: "harbor", kind: "customer", chatId: "19:northwind@thread.v2" });
     expect(r.ok ? null : r.status).toBe(409);
   });
 
   it("refresh: a refused permission names Chat.ReadBasic and keeps the cached members; a chat I left says so", async () => {
     let fail: Error | null = null;
     const { ctx } = await setup({ members: async () => { if (fail) throw fail; return [aChatMember()]; } });
-    data(await chatAction(ctx, "chats.add", { clientKey: "northwind", chatId: "19:northwind@thread.v2" }));
+    data(await chatAction(ctx, "chats.add", { clientKey: "northwind", kind: "customer", chatId: "19:northwind@thread.v2" }));
     fail = new AuthFailure("consent", "x");
     const d = data(await chatAction(ctx, "chats.refresh", {}));
     expect([d.available, d.reason]).toEqual([false, "consent"]);
@@ -80,6 +82,22 @@ describe("delivery chat actions (T-2)", () => {
     expect(d.chats[0]!.memberCount).toBe(1);
     fail = new HttpError(404);
     expect(data(await chatAction(ctx, "chats.refresh", { clientKey: "northwind" })).chats[0]!.error).toMatch(/aren't in this chat/);
+  });
+
+  it("the internal chat with someone from the client says so", async () => {
+    const { ctx } = await setup();
+    const d = data(await chatAction(ctx, "chats.add", { clientKey: "northwind", kind: "delivery", chatId: "19:northwind@thread.v2" }));
+    expect([d.chats[0]!.kind, d.chats[0]!.warning]).toEqual(["delivery", "1 person from outside Cooptimize is in this internal chat"]);
+  });
+
+  it("a row from before T-2.1 takes the kind its members suggest, and makes way when that slot is set", async () => {
+    const { ctx, db } = await setup();
+    data(await chatAction(ctx, "chats.add", { clientKey: "northwind", kind: "delivery", chatId: "19:northwind@thread.v2" }));
+    await db.run("UPDATE delivery_chats SET chat_kind = NULL");
+    // One external member: it shows as the customer chat.
+    expect(data(await chatAction(ctx, "chats.registered", {})).chats.map((c) => [c.chatId, c.kind])).toEqual([["19:northwind@thread.v2", "customer"]]);
+    const after = data(await chatAction(ctx, "chats.add", { clientKey: "northwind", kind: "customer", chatId: "19:other@thread.v2" }));
+    expect(after.chats.map((c) => [c.chatId, c.kind])).toEqual([["19:other@thread.v2", "customer"]]);
   });
 
   it("signed out: the picker says so and nothing is read", async () => {

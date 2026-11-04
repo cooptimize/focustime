@@ -1020,7 +1020,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "chats.list":
     case "chats.add":
     case "chats.remove":
-    case "chats.primary":
     case "chats.refresh": return { run: () => env.openSettings("clients") };
     case "permissions.status": return { run: () => env.openSettings("connections") };
     case "people.photos": return { disabled: "Shown wherever you and Cooptimizers appear" };

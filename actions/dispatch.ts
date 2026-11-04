@@ -893,7 +893,6 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "chats.list":
     case "chats.add":
     case "chats.remove":
-    case "chats.primary":
     case "chats.refresh":
     case "permissions.status":
       return chatAction(await chatContext(ctx), action, req.input);

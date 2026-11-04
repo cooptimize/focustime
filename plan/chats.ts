@@ -1,5 +1,6 @@
-// T-2: delivery chats, the pure rules. A delivery chat is a Teams group chat a person registers for a client (Settings >
-// Clients); the first is the primary. A member is external when their Entra tenant isn't Cooptimize's, by tenantId only:
+// T-2: a client's Teams chats, the pure rules. A person registers group chats for a client (Settings > Clients), at
+// most one of each kind (T-2.1, D488): the Delivery team chat (the internal Cooptimize team) and the Customer
+// collaboration chat (the team with the client's key people). A member is external when their Entra tenant isn't Cooptimize's, by tenantId only:
 // never by name, email domain or a list of people. A member with no tenantId can't be shown to be Cooptimize's, so it
 // counts as external too. Nothing here reads or keeps message content.
 
@@ -20,13 +21,22 @@ export type ChatSummary = {
 export type ChatMember = { userId: string | null; displayName: string | null; email: string | null; tenantId: string | null };
 export type FlaggedMember = ChatMember & { external: boolean };
 
-/** A registered delivery chat, as stored per person and client. */
+/** The two kinds of client chat (T-2.1). */
+export type ChatKind = "delivery" | "customer";
+export const CHAT_KINDS: readonly ChatKind[] = ["delivery", "customer"];
+export const KIND_NAME: Record<ChatKind, string> = { delivery: "Delivery team", customer: "Customer collaboration" };
+export const KIND_HINT: Record<ChatKind, string> = {
+  delivery: "The internal Cooptimize team chat",
+  customer: "The chat with the Cooptimize team and the client's key people",
+};
+
+/** A registered client chat, as stored per person and client. `kind` is null on rows saved before T-2.1. */
 export type DeliveryChat = {
   clientKey: string;
   chatId: string;
   displayName: string;
   webUrl: string | null;
-  primary: boolean;
+  kind: ChatKind | null;
   /** The cached members (null until first read) and when they were read. */
   members: ChatMember[] | null;
   membersFetchedAt: string | null;
@@ -47,6 +57,40 @@ export function flagMembers(members: readonly ChatMember[], homeTenant: string):
   return members
     .map((m) => ({ ...m, external: isExternal(m, homeTenant) }))
     .sort((a, b) => Number(a.external) - Number(b.external) || nameOf(a).localeCompare(nameOf(b)));
+}
+
+/** The kind a chat's members suggest: anyone from outside Cooptimize makes it the customer chat. By tenant only. */
+export function suggestKind(members: readonly ChatMember[], homeTenant: string): ChatKind {
+  return members.some((m) => isExternal(m, homeTenant)) ? "customer" : "delivery";
+}
+
+/** A plain line when a chat's members don't fit its kind, or null. */
+export function kindWarning(kind: ChatKind, members: readonly ChatMember[] | null, homeTenant: string): string | null {
+  if (!members) return null;
+  const external = members.filter((m) => isExternal(m, homeTenant)).length;
+  if (kind === "delivery" && external > 0) return `${external} ${external === 1 ? "person" : "people"} from outside Cooptimize ${external === 1 ? "is" : "are"} in this internal chat`;
+  if (kind === "customer" && external === 0) return "No one from outside Cooptimize is in this chat";
+  return null;
+}
+
+/**
+ * Each chat's kind, per client: the stored kind first; a row from before T-2.1 takes the kind its members suggest, or
+ * the other one when that is taken, in the order they were added; one that fits neither is left without (null).
+ */
+export function kindsOf(chats: readonly DeliveryChat[], homeTenant: string | null): Map<string, ChatKind | null> {
+  const out = new Map<string, ChatKind | null>();
+  const taken = new Map<string, Set<ChatKind>>();
+  const takenOf = (k: string) => taken.get(k) ?? taken.set(k, new Set()).get(k)!;
+  for (const c of chats) if (c.kind && !takenOf(c.clientKey).has(c.kind)) (takenOf(c.clientKey).add(c.kind), out.set(c.chatId, c.kind));
+  for (const c of chats) {
+    if (out.has(c.chatId)) continue;
+    const t = takenOf(c.clientKey);
+    const first: ChatKind = c.members && homeTenant ? suggestKind(c.members, homeTenant) : "delivery";
+    const kind = [first, first === "delivery" ? "customer" : "delivery"].find((k) => !t.has(k as ChatKind)) as ChatKind | undefined;
+    if (kind) t.add(kind);
+    out.set(c.chatId, kind ?? null);
+  }
+  return out;
 }
 
 export const nameOf = (m: Pick<ChatMember, "displayName" | "email">) => m.displayName?.trim() || m.email || "Unknown person";
@@ -73,9 +117,11 @@ export const activityOf = (c: Pick<ChatSummary, "lastUpdated" | "lastRead">): st
 
 /**
  * The picker's list: group chats matching the search (every word, in the name or a member's name, any case), most
- * recently active first. Chats already registered for another client are left out: one chat, one client.
+ * recently active first; with `prefer`, the chats whose members suggest that kind come first. Chats already
+ * registered are left out: one chat, one client, one kind.
  */
-export function filterChats(chats: readonly ChatSummary[], query: string, takenByOthers: ReadonlySet<string> = new Set()): ChatSummary[] {
+export function filterChats(chats: readonly ChatSummary[], query: string, takenByOthers: ReadonlySet<string> = new Set(), prefer?: { kind: ChatKind; homeTenant: string }): ChatSummary[] {
+  const fits = (c: ChatSummary) => (prefer ? Number(suggestKind(c.members, prefer.homeTenant) !== prefer.kind) : 0);
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   return chats
     .filter((c) => !takenByOthers.has(c.id))
@@ -84,7 +130,7 @@ export function filterChats(chats: readonly ChatSummary[], query: string, takenB
       const hay = [chatName(c), ...c.members.map(nameOf)].join(" ").toLowerCase();
       return words.every((w) => hay.includes(w));
     })
-    .sort((a, b) => (activityOf(b) ?? "").localeCompare(activityOf(a) ?? "") || chatName(a).localeCompare(chatName(b)));
+    .sort((a, b) => fits(a) - fits(b) || (activityOf(b) ?? "").localeCompare(activityOf(a) ?? "") || chatName(a).localeCompare(chatName(b)));
 }
 
 /** "Open in Teams": the chat's own webUrl from Graph when it has one (opaque), else the documented chat deep link. */
@@ -102,7 +148,9 @@ export type DeliveryChatView = {
   clientKey: string;
   chatId: string;
   displayName: string;
-  primary: boolean;
+  kind: ChatKind;
+  /** The members don't fit the kind (an outsider in the internal chat, no one from the client in the customer chat). */
+  warning: string | null;
   link: string;
   members: FlaggedMember[] | null;
   memberCount: number | null;
