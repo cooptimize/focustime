@@ -138,3 +138,19 @@ export function aChat(o: Partial<import("../../plan/chats.ts").ChatSummary> = {}
   const n = next();
   return { id: `19:chat${n}@thread.v2`, topic: `Chat ${n}`, webUrl: null, lastUpdated: "2026-10-20T15:00:00Z", lastRead: null, members: [aChatMember(), aChatMember({ external: true })], moreMembers: false, ...o };
 }
+
+
+// ---- AI-0 ----
+
+/** An OpenAI Responses API body with a structured answer and its usage. */
+export function anOpenAiResponse(value: unknown, usage: { input?: number; cached?: number; output?: number } = {}, o: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: "resp_test",
+    object: "response",
+    status: "completed",
+    model: "test-model",
+    output: [{ type: "message", role: "assistant", content: [{ type: "output_text", annotations: [], text: JSON.stringify(value) }] }],
+    usage: { input_tokens: usage.input ?? 100, input_tokens_details: { cached_tokens: usage.cached ?? 0 }, output_tokens: usage.output ?? 20, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: (usage.input ?? 100) + (usage.output ?? 20) },
+    ...o,
+  };
+}

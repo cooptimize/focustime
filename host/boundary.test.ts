@@ -1,4 +1,4 @@
-// A1: the host boundary. Core modules (week/, plan/, actions/, sources/, store/) reach the machine only through the
+// A1: the host boundary. Core modules (week/, plan/, actions/, sources/, store/, ai/) reach the machine only through the
 // Host interface (host/types.ts), handed in at startup. This walks every import from every core module, following
 // relative imports into config/, log/, links/ and the rest, and fails on an operating system module, either host
 // implementation, the fakes, or a desktop program named in a core module's code.
@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { importsOf } from "./imports.ts";
 
 const ROOT = resolve(import.meta.dirname, "..");
-const CORE = ["week", "plan", "actions", "sources", "store"];
+const CORE = ["week", "plan", "actions", "sources", "store", "ai"];
 /** Operating system modules: files and folders, processes, the network listener, the machine. */
 const OS_MODULE = /^(node:)?(child_process|fs|fs\/promises|os|path|http|https|http2|net|dgram|tls|worker_threads|cluster|readline|tty|v8|vm|process)$/;
 /** Only server/ may construct a host. */
