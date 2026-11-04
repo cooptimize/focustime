@@ -481,3 +481,20 @@ That is about 2% of the 10 USD monthly default per person. A provider that fails
 - For everyone: remove `ft-openai-key` from the vault or set `FOCUSTIME_AI_PROVIDER=off`; Asks and Promises keep working on the rules alone.
 - Urgent asks notify only through Settings › Notifications "Urgent asks"; "Let urgent asks through" (off by default) lets them break into focus.
 
+## Draft stories (DS-1)
+
+### What a draft costs (estimate, gpt-6-luna list prices on 2026-11-04)
+
+One Run is one `stories.draft` request: the instructions and schema (about 1,200 tokens), the feature, its epic and children (a few hundred), comments up to about 2,000 tokens, up to 5 example features with their stories (about 1,500) and the house style. Typical input is 3,000 to 6,000 tokens; output is about 1,500 to 2,500 tokens for a set of 4 to 8 stories (reasoning counts as output).
+
+| | Tokens in / out | Cost |
+|---|---|---|
+| One draft (Run) | about 5,000 / 2,500 | about 0.0018 USD |
+| Regenerate one card | about 5,500 / 600 | about 0.0009 USD |
+| A busy month: 20 features, each run twice | 40 runs | about 0.08 USD |
+
+Prepare shows the estimate before Run, and Review shows what the draft cost so far. The real numbers are in Settings › AI (Last 20 requests, task `stories.draft`) and Application Insights (counts and tokens, never text). At other models, scale by their prices in `FOCUSTIME_AI_*`.
+
+### Turning it off
+
+Per client: Allow AI off in Settings › Clients (the button then says "Draft stories (AI is off for <client>)" and the Coop brief stays). Per person: Use AI off. Stories already created stay in DevOps; Undo is in Settings › Data › Audit log.
