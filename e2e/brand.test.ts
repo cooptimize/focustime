@@ -132,12 +132,6 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
     await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
     await mustDone(page);
     await page.evaluate(() => (location.hash = "#/today/closeout"));
-    // TEMPORARY (T-2 CI diagnosis): what the page shows when the Close out panel doesn't appear.
-    if (!(await page.locator(".closeout-panel .done-btn").waitFor({ timeout: 25_000 }).then(() => true, () => false))) {
-      console.log("DIAG url", page.url(), "errors", JSON.stringify(errors));
-      console.log("DIAG text", (await page.evaluate(() => document.body.innerText)).slice(0, 2500));
-      console.log("DIAG html", (await page.evaluate(() => document.querySelector("#root, main, body")!.outerHTML)).slice(0, 4000));
-    }
     await page.locator(".closeout-panel .done-btn").click();
     await page.waitForSelector('[data-close="unroll"]');
     await page.getByText("Musts done. See you tomorrow.").waitFor();
