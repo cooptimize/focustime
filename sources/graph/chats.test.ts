@@ -51,11 +51,13 @@ const gmsg = (o: Record<string, unknown> = {}) => ({
 });
 
 describe("Graph chat messages (AP-1)", () => {
-  it("keeps only the stored fields (and the mentions for the rules): no names, reactions, subjects or URLs", () => {
-    const m = messageOf(gmsg(), CHAT, "fabrikam")!;
-    expect(Object.keys(m).sort()).toEqual(["authorId", "authorTenant", "chatId", "clientKey", "createdAt", "hasFile", "hasImage", "mentionedUserIds", "messageId", "modifiedAt", "replyToId", "text"]);
+  it("keeps only the shared store's fields (D508): the sender's name and the raw body, no reactions, subjects or URLs", () => {
+    const m = messageOf(gmsg({ mentions: [{ id: 0, mentionText: "Ana", mentioned: { user: { id: "00000000-0000-4000-8000-0000000000a1", displayName: "Ana Registrar" } } }] }), CHAT, "fabrikam")!;
+    expect(Object.keys(m).sort()).toEqual(["authorId", "authorName", "authorTenant", "chatId", "clientKey", "createdAt", "hasFile", "hasImage", "html", "mentionedUserIds", "mentions", "messageId", "modifiedAt", "replyToId", "text"]);
     expect(m.text).toBe("Can you check the totals?\nThanks & regards");
-    expect(JSON.stringify(m)).not.toContain("Dana");
+    expect(m).toMatchObject({ authorName: "Dana Client", html: "<p>Can you <b>check</b> the totals?</p><p>Thanks &amp; regards</p>", mentions: [{ id: "00000000-0000-4000-8000-0000000000a1", name: "Ana Registrar" }] });
+    expect(JSON.stringify(m)).not.toContain("Someone");
+    expect(JSON.stringify(m)).not.toContain("like");
   });
 
   it.each([

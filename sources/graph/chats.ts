@@ -8,7 +8,8 @@
 // role are kept.
 // - AP-1, a chat's messages changed after a time: GET /chats/{id}/messages?$orderby=lastModifiedDateTime desc&$filter=
 //   lastModifiedDateTime gt <time>&$top=50 (Graph needs the order and the filter on the same property), at most
-//   MESSAGE_PAGES pages. From each message only the fields Asks stores are kept, plus who it mentions (for the rules).
+//   MESSAGE_PAGES pages. From each message only the fields the shared store keeps (D508): ids, sender id, name and tenant, times, the raw
+//   body and its plain text, attachment flags, the reply id and the mentions (ids and names).
 // Logs carry the op, status, count and duration: never a chat id, a topic, a person or message text.
 import type { Logger } from "../../log/logger.ts";
 import { plainText, type IncomingMessage } from "../../plan/asks.ts";
@@ -31,8 +32,13 @@ export type ChatsClient = {
 };
 /** AP-1: the newest messages of one chat (Chat.Read), oldest first, and the newest lastModifiedDateTime among them. */
 export type ChatMessagesClient = {
-  messagesSince: (chatId: string, clientKey: string, sinceIso: string) => Promise<{ messages: (IncomingMessage & { modifiedAt: string })[]; newest: string | null }>;
+  messagesSince: (chatId: string, clientKey: string, sinceIso: string) => Promise<{ messages: GraphMessage[]; newest: string | null }>;
 };
+/**
+ * A message as read: the fields the rules use, plus what the shared store keeps (the raw body, the sender's name, the
+ * mentions with names, Graph's lastModifiedDateTime). The last three are optional for the older per-person path.
+ */
+export type GraphMessage = IncomingMessage & { modifiedAt: string; html?: string | null; authorName?: string | null; mentions?: { id: string; name: string | null }[] };
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : null);
@@ -68,7 +74,7 @@ export function chatOf(v: unknown): ChatSummary | null {
  * AP-1: a message from Graph (chatMessage), or null for what isn't a person's message (system events, deleted ones).
  * Only the fields Asks stores, plus the user ids it mentions.
  */
-export function messageOf(v: unknown, chatId: string, clientKey: string): (IncomingMessage & { modifiedAt: string }) | null {
+export function messageOf(v: unknown, chatId: string, clientKey: string): GraphMessage | null {
   const m = obj(v);
   if (!m || m.messageType !== "message" || m.deletedDateTime) return null;
   const id = str(m.id, 64);
@@ -82,7 +88,11 @@ export function messageOf(v: unknown, chatId: string, clientKey: string): (Incom
   const hasImage = /<img\b/i.test(html) || attachments.some((a) => type(a).startsWith("image/"));
   // Shared files are "reference"; cards (application/vnd.microsoft.card.*) and quoted replies ("messageReference") aren't files.
   const hasFile = attachments.some((a) => type(a) === "reference" || type(a) === "file" || (type(a).startsWith("application/") && !type(a).startsWith("application/vnd.microsoft.card.")));
-  const mentioned = (Array.isArray(m.mentions) ? m.mentions : []).map((x) => str(obj(obj(obj(x)?.mentioned)?.user)?.id, 64)).filter((x): x is string => !!x);
+  const mentions = (Array.isArray(m.mentions) ? m.mentions : []).flatMap((x) => {
+    const u = obj(obj(obj(x)?.mentioned)?.user);
+    const id = str(u?.id, 64);
+    return id ? [{ id, name: str(u?.displayName, 200) ?? str(obj(x)?.mentionText, 200) }] : [];
+  });
   return {
     chatId,
     messageId: id,
@@ -95,7 +105,10 @@ export function messageOf(v: unknown, chatId: string, clientKey: string): (Incom
     hasImage,
     hasFile,
     replyToId: str(m.replyToId, 64),
-    mentionedUserIds: mentioned,
+    mentionedUserIds: mentions.map((x) => x.id),
+    html: html.slice(0, 64_000) || null,
+    authorName: str(user?.displayName, 200),
+    mentions,
   };
 }
 
@@ -137,7 +150,7 @@ export function createChatsClient(d: ChatsDeps): ChatsClient & ChatMessagesClien
     async messagesSince(chatId: string, clientKey: string, sinceIso: string) {
       if (!CHAT_ID.test(chatId)) throw new HttpError(400);
       const since = new Date(sinceIso).toISOString();
-      const out: (IncomingMessage & { modifiedAt: string })[] = [];
+      const out: GraphMessage[] = [];
       let newest: string | null = null;
       let url: string | null = `${GRAPH}/chats/${encodeURIComponent(chatId)}/messages?$top=50&$orderby=lastModifiedDateTime desc&$filter=lastModifiedDateTime gt ${since}`;
       for (let page = 0; url && page < MESSAGE_PAGES; page++) {

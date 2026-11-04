@@ -10,7 +10,7 @@ import { dueState } from "../plan/due.ts";
 import { localToday } from "../week/dates.ts";
 import { userZone } from "../week/zone.ts";
 import { call } from "./api.ts";
-import { LinkPicker } from "./Asks.tsx";
+import { LinkPicker } from "./Requests.tsx";
 import { DueBadge, Fading } from "./FollowUps.tsx";
 import { clientColor, whenText } from "./labels.ts";
 
@@ -31,7 +31,7 @@ export function Promises({ data, version, onCount, onAskCount, onChanged, openSe
     (d: PromisesData) => {
       setState(d);
       onCount(d.open);
-      onAskCount?.(d.asksOpen);
+      onAskCount?.(d.requestsOpen);
     },
     [onCount, onAskCount],
   );

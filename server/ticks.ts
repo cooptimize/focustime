@@ -8,9 +8,12 @@
 import type { ActionContext } from "../actions/dispatch.ts";
 import { presenceContext, vmContext, expiringFor } from "../actions/dispatch.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
-import { askContext } from "../actions/dispatch.ts";
-import { asksNextDue, pollAsks } from "../actions/ask-actions.ts";
+import { requestContext } from "../actions/dispatch.ts";
+import { urgentRequests } from "../actions/request-actions.ts";
 import { UNMATCHED_DAYS } from "../plan/asks.ts";
+
+/** An urgent request is notified while its sort is this fresh (a person who signs in later isn't told of old ones). */
+const URGENT_NOTICE_HOURS = 2;
 import { vmAction, type VmStatus } from "../actions/vm-actions.ts";
 import { CHECKIN_DONE_MARK } from "../actions/closeout-actions.ts";
 import { refreshTodayWarnings } from "../actions/warnings.ts";
@@ -305,15 +308,20 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       if (st.ok && (st.data as VmStatus).prompt) await send(notices.vmOff(today, (st.data as VmStatus).vm?.name ?? "Your VM", at));
     }
   };
-  // AP-1: the chats with Read for asks on, read when due (in working hours, not on PTO days; pollAsks decides), and
-  // once a day the text of messages that didn't become asks is deleted after UNMATCHED_DAYS.
+  // Shared polling (D511): the job reads the chats for everyone; here, one notification per request the AI sorted as
+  // needing someone now in a chat I see, within URGENT_NOTICE_HOURS of its sort (each key goes out once; held during
+  // focus unless Settings lets it through). And once a day, the AP-1 per-person message rows that didn't become asks
+  // are deleted after UNMATCHED_DAYS (that table stays until its safe-drop).
   const asksTick = async () => {
     const c = await configOrNull();
     if (!c) return;
-    const ac = { ...(await askContext(liveCtx)), pto: ptoOff };
-    const r = await pollAsks(ac, { force: false });
-    // AP-2: one notification per ask AI sorted as needing me now (held during focus unless Settings lets it through).
-    for (const u of r.urgent) if (notifier.allows("asks")) await send(notices.urgentAsk(u.messageId, c.clientSettings[u.clientKey]?.name ?? u.clientKey, u.title, instantNow().toString()));
+    const teams = liveCtx.requests?.teams;
+    if (teams && notifier.allows("asks")) {
+      const rc = await requestContext(liveCtx);
+      const since = instantNow().subtract({ hours: URGENT_NOTICE_HOURS }).epochMilliseconds;
+      const urgent = (await urgentRequests(teams, await rc.me(), await rc.followed().catch(() => null))).filter((a) => a.sort!.urgency === "now" && !!a.sortedAt && Date.parse(a.sortedAt) >= since);
+      for (const u of urgent) await send(notices.urgentAsk(u.messageId, c.clientSettings[u.clientKey]?.name ?? u.clientKey, u.sort!.title, instantNow().toString()));
+    }
     if (await store.markOnce("asks_cleanup", todayOf(c))) {
       const n = await store.purgeChatText({ olderThan: instantNow().subtract({ hours: 24 * UNMATCHED_DAYS }).toString() });
       log({ source: "plan", op: "asks_cleanup", count: n });
@@ -386,14 +394,8 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const running = !!timer?.runningSince && !timer.ended;
     const pending = (!timer && !!(await store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY))?.set) || (!running && (await notifier.held()).length > 0);
     const p = c?.plan;
-    // AP-1: the next chat read, only while in working hours on a day that isn't PTO (work start wakes it otherwise).
-    let asksDue: Temporal.Instant | null = null;
-    if (c && inWorkingHours(c.week.hours, zonedNow(userZone(c))) && !(await ptoOff(todayOf(c)).catch(() => false))) {
-      const due = await asksNextDue({ plan: store, config: configOrNull, now: () => instantNow().toString() }).catch(() => null);
-      asksDue = due ? Temporal.Instant.from(due) : null;
-    }
+    // Shared polling: the chats' next read is the app job's wake (server/scheduler.ts), not anyone's.
     return nextWake({
-      asksDue,
       now: instantNow(),
       zone: c ? userZone(c) : who.zone,
       hours: c?.week.hours ?? null,

@@ -58,12 +58,13 @@ export const DEFAULT_NOTIFY: NotifySettings = {
 
 /** Where clicking a notification opens FocusTime. */
 export type Route =
-  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" | "asks" }
+  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" | "asks" | "requests" }
   | { view: "planweek"; weekStart: string }
   | { view: "followup"; id: number }
   | { view: "settings"; section: string };
 
-const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead", "asks"]);
+// "asks": notifications sent before the rename to Requests still open the tab.
+const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead", "asks", "requests"]);
 const SECTION = /^[a-z]{2,20}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -227,7 +228,7 @@ export const notices = {
     };
   },
   /** AP-2: an ask AI sorted as needing me now, once per ask. */
-  urgentAsk: (messageId: string, clientName: string, title: string, at: string): Notice => ({ kind: "asks", key: `ask:${messageId}`.slice(0, 200), title: `Urgent ask from ${clientName}`, body: `${title}\nClick to open Asks.`, buttons: [open("Open Asks")], route: "asks", at }),
+  urgentAsk: (messageId: string, clientName: string, title: string, at: string): Notice => ({ kind: "asks", key: `ask:${messageId}`.slice(0, 200), title: `Urgent request from ${clientName}`, body: `${title}\nClick to open Requests.`, buttons: [open("Open Requests")], route: "requests", at }),
   expiry: (date: string, lines: { text: string; section: string }[], at: string): Notice | null =>
     lines.length
       ? { kind: "expiry", key: `expiry:${date}`, title: lines.length === 1 ? "Expiring soon" : `${lines.length} expiring soon`, body: lines.slice(0, 3).map((l) => l.text).join("\n"), buttons: [open("Open Settings")], route: `settings:${lines[0]!.section}`, at }

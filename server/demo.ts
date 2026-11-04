@@ -6,7 +6,9 @@ import type { ActionContext } from "../actions/dispatch.ts";
 import { dispatch } from "../actions/dispatch.ts";
 import { createDemoSources } from "../sources/demo/sources.ts";
 import { DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
-import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
+import { createPlanStore, openPlanDb, type PlanStore } from "../store/plan-store.ts";
+import { sqliteConn } from "../store/sql/sqlite.ts";
+import { createTeamsStore } from "../store/teams-store.ts";
 import { mondayOf } from "../week/dates.ts";
 import { createDemoAzure, DEMO_PERSON, DEMO_VM_ID } from "../sources/demo/azure.ts";
 import { createDemoFeedbackDevOps, type DemoFeedbackParent } from "../sources/demo/feedback.ts";
@@ -19,6 +21,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   let text = DEMO_CONFIG;
   const sources = createDemoSources(opts.now);
   const plan = opts.plan ?? createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ) });
+  // Shared polling: the demo's own client chats and Requests, in memory beside its plan (never the real shared store).
+  // The demo reads no messages, so Refresh has nothing to do.
+  const teams = createTeamsStore(sqliteConn(openPlanDb({ path: ":memory:", now: () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ) })), () => Temporal.Instant.from(opts.now()));
   // Step 15.4: a fictional signed-in person and VM, simulated (no Azure calls).
   const demoAzure = createDemoAzure();
   // F1: Send feedback against a pretend backlog in memory (nothing leaves FocusTime).
@@ -40,6 +45,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     saveSystemUserId: async () => {},
     now: opts.now,
     plan,
+    requests: { teams, refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
     demo: opts.demo,
     account: () => demoAzure.account,
     azure: demoAzure.azure,

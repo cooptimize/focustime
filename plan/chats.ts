@@ -158,8 +158,10 @@ export type DeliveryChatView = {
   fetchedAt: string | null;
   /** The last read failed (the cached members, if any, are still shown). */
   error: string | null;
-  /** AP-1: Read for asks: on or off, the last read and its problem (a plain line), if any. */
-  asks: { on: boolean; polledAt: string | null; status: string | null };
+  /** Who registered it (a member's name), or null when they left the chat. */
+  registeredBy: string | null;
+  /** Shared polling: the last poll, the last fetch, "Polling via <name>" or "Needs reconnecting". */
+  poll: import("./asks.ts").RequestChatStatus;
 };
 export type ChatsData = { available: boolean; reason: ChatAccess | null; homeTenant: string | null; chats: DeliveryChatView[] };
 export type ChatPickerData = { available: boolean; reason: ChatAccess | null; homeTenant: string | null; chats: ChatSummary[]; taken: Record<string, string> };

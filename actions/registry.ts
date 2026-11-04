@@ -26,14 +26,14 @@ export type ActionTarget =
   | "event" // one calendar event (step 13)
   | "devops" // a DevOps change (step 14)
   | "vm" // my Azure VM (step 15.4)
-  | "ask" // one ask in Inbox › Asks (AP-1)
+  | "request" // one request in Inbox › Requests
   | "promise"; // one promise in Inbox › Promises (AP-2)
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Asks";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -143,21 +143,20 @@ export const ACTIONS = [
   { name: "chats.kind", title: "Label a client chat", group: "Settings", target: "none", summary: "Mark a client chat as its Delivery team chat or a Customer collaboration chat" },
   { name: "chats.remove", title: "Remove a client chat", group: "Settings", target: "none", summary: "Forget one of a client's chats (Teams is unchanged)" },
   { name: "chats.refresh", title: "Refresh client chat members", group: "Settings", target: "none", summary: "Read the members of your client chats again from Teams" },
-  { name: "asks.list", title: "Asks", group: "Asks", target: "none", summary: "Inbox › Asks: messages from people outside Cooptimize in client chats you read for asks, by client, newest first" },
-  { name: "asks.refresh", title: "Refresh asks", group: "Asks", target: "none", summary: "Read the client chats you switched on for asks now (only new messages)" },
-  { name: "asks.switch", title: "Read a client chat for asks", group: "Settings", target: "none", summary: "Switch Read for asks on or off for one client chat (off by default; nothing is read before you switch it on)" },
-  { name: "asks.context", title: "Show an ask's context", group: "Asks", target: "ask", shortcut: "X", summary: "The 5 messages before an ask in its chat" },
-  { name: "asks.resolve", title: "Resolve an ask", group: "Asks", target: "ask", summary: "Link an ask to an existing DevOps item, mark it handled (H) or dismiss it (D)" },
-  { name: "asks.reopen", title: "Undo an ask's resolution", group: "Asks", target: "ask", summary: "Open a linked, handled or dismissed ask again" },
-  { name: "asks.search", title: "Find an item for an ask", group: "Asks", target: "ask", summary: "Search the client's open DevOps items to link an ask to" },
-  { name: "asks.purge", title: "Delete a client's stored chat messages", group: "Settings", target: "none", summary: "Deletes every message and ask FocusTime stored for one client (DevOps items made from them stay)" },
-  { name: "asks.sort_again", title: "Sort an ask again", group: "Asks", target: "ask", summary: "Ask AI to sort one ask again (kind, urgency, a draft item and a likely existing one), when it wasn't sorted" },
-  { name: "asks.show", title: "Show a hidden ask", group: "Asks", target: "ask", summary: "Show an ask the AI said needs no action on the Asks tab anyway (or hide it again)" },
-  { name: "promises.list", title: "Promises", group: "Asks", target: "none", summary: "Inbox › Promises: things you said you'd do in client chats you read for asks" },
-  { name: "promises.resolve", title: "Mark a promise done or dismiss it", group: "Asks", target: "promise", summary: "Done or Dismiss a promise, with Undo" },
-  { name: "promises.reopen", title: "Undo a promise's Done or Dismiss", group: "Asks", target: "promise", summary: "Open a done or dismissed promise again" },
-  { name: "promises.followup", title: "Make a promise a follow-up", group: "Asks", target: "promise", summary: "A follow-up from a promise: who, what, Teams and the due date filled in; the promise closes when it's done" },
-  { name: "promises.link", title: "Link a promise to a DevOps item", group: "Asks", target: "promise", summary: "The promise closes when the item is done in DevOps" },
+  { name: "requests.list", title: "Requests", group: "Requests", target: "none", summary: "Inbox › Requests: messages from people outside Cooptimize in your clients' registered chats, by client, newest first" },
+  { name: "requests.refresh", title: "Refresh requests", group: "Requests", target: "none", summary: "Read your clients' registered chats now (only new messages), for everyone who follows them" },
+  { name: "requests.context", title: "Show a request's context", group: "Requests", target: "request", shortcut: "X", summary: "The 5 messages before a request in its chat" },
+  { name: "requests.resolve", title: "Resolve a request", group: "Requests", target: "request", summary: "Link a request to an existing DevOps item, mark it handled (H) or dismiss it (D), for everyone on the chat" },
+  { name: "requests.reopen", title: "Undo a request's resolution", group: "Requests", target: "request", summary: "Open a linked, handled or dismissed request again" },
+  { name: "requests.search", title: "Find an item for a request", group: "Requests", target: "request", summary: "Search the client's open DevOps items to link a request to" },
+  { name: "requests.purge", title: "Delete a client's stored chat messages", group: "Settings", target: "none", summary: "Deletes every stored message of one client's chats that isn't a request, for everyone (DevOps items made from them stay)" },
+  { name: "requests.sort_again", title: "Sort a request again", group: "Requests", target: "request", summary: "Ask AI to sort one request again (kind, urgency, a draft item and a likely existing one), when it wasn't sorted" },
+  { name: "requests.show", title: "Show a hidden request", group: "Requests", target: "request", summary: "Show a request the AI said needs no action on the Requests tab anyway (or hide it again)" },
+  { name: "promises.list", title: "Promises", group: "Requests", target: "none", summary: "Inbox › Promises: things you said you'd do in your clients' registered chats" },
+  { name: "promises.resolve", title: "Mark a promise done or dismiss it", group: "Requests", target: "promise", summary: "Done or Dismiss a promise, with Undo" },
+  { name: "promises.reopen", title: "Undo a promise's Done or Dismiss", group: "Requests", target: "promise", summary: "Open a done or dismissed promise again" },
+  { name: "promises.followup", title: "Make a promise a follow-up", group: "Requests", target: "promise", summary: "A follow-up from a promise: who, what, Teams and the due date filled in; the promise closes when it's done" },
+  { name: "promises.link", title: "Link a promise to a DevOps item", group: "Requests", target: "promise", summary: "The promise closes when the item is done in DevOps" },
   { name: "ai.status", title: "AI", group: "Settings", target: "none", summary: "Settings › AI: Use AI, this month's spend against your cap, and your last 20 AI requests (never their text)" },
   { name: "ai.test", title: "Test AI", group: "Settings", target: "none", summary: "Sends one fixed harmless request (no client) and says whether it worked, how long it took and what it cost" },
   { name: "permissions.status", title: "Microsoft permissions", group: "Settings", target: "none", summary: "Every permission FocusTime asks Microsoft for, and whether it's allowed (Settings > Connections)" },

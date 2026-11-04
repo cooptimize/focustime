@@ -1,11 +1,12 @@
-// AP-1: Inbox › Asks. Messages from people outside Cooptimize in the client chats the person reads for asks, by
-// client, newest first. Each card: the client's color, who (with "External"), when, the text (4 lines, Show more),
+// Inbox › Requests (was Asks; shared polling, D508 to D512). Messages from people outside Cooptimize in the client
+// chats registered for the person's clients (shown to members who follow the client), by client, newest first. A
+// request's state is shared: resolved by anyone, it's resolved for everyone, with their name. Each card: the client's color, who (with "External"), when, the text (4 lines, Show more),
 // attachments, "Matched: <rule>", Show context (the 5 messages before, folded), Open in Teams, and the resolutions:
 // Create bug, story or feature (the write framework's preview; only with that client's DevOps write access), Link to
 // an open item, Handled (an optional note) and Dismiss, with Undo. Keys: J and K move, Enter the first action, H
 // handled, D dismiss, X context. Nothing is posted in Teams. Chat text shows only on its own client's card.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import type { AskView, AsksData, ContextMessage } from "../plan/asks.ts";
+import type { RequestChatStatus, RequestView, RequestsData, ContextMessage } from "../plan/asks.ts";
 import { KIND_WORD, URGENCY_WORD } from "../plan/asks-ai.ts";
 import type { WeekLoadData } from "../actions/types.ts";
 import { userZone } from "../week/zone.ts";
@@ -19,24 +20,24 @@ import { clientColor, whenText } from "./labels.ts";
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 const keyOf = (a: { chatId: string; messageId: string }) => `${a.chatId}|${a.messageId}`;
 
-/** The cards in screen order: clients by their newest open ask, each client's asks newest first; resolved ones last. */
-export function askGroups(asks: readonly AskView[]): { clientKey: string; clientName: string; asks: AskView[] }[] {
-  const groups = new Map<string, { clientKey: string; clientName: string; asks: AskView[] }>();
-  const sorted = [...asks].sort((a, b) => (a.status === "open") !== (b.status === "open") ? (a.status === "open" ? -1 : 1) : Date.parse(b.at) - Date.parse(a.at));
-  for (const a of sorted) (groups.get(a.clientKey) ?? groups.set(a.clientKey, { clientKey: a.clientKey, clientName: a.clientName, asks: [] }).get(a.clientKey)!).asks.push(a);
+/** The cards in screen order: clients by their newest open request, each client's newest first; resolved ones last. */
+export function requestGroups(requests: readonly RequestView[]): { clientKey: string; clientName: string; requests: RequestView[] }[] {
+  const groups = new Map<string, { clientKey: string; clientName: string; requests: RequestView[] }>();
+  const sorted = [...requests].sort((a, b) => (a.status === "open") !== (b.status === "open") ? (a.status === "open" ? -1 : 1) : Date.parse(b.at) - Date.parse(a.at));
+  for (const a of sorted) (groups.get(a.clientKey) ?? groups.set(a.clientKey, { clientKey: a.clientKey, clientName: a.clientName, requests: [] }).get(a.clientKey)!).requests.push(a);
   return [...groups.values()];
 }
 
-export type InboxTab = "inbox" | "asks" | "promises";
-/** The Inbox's tabs: "Inbox", "Asks" and (AP-2) "Promises", each with its open count (hidden at none). */
+export type InboxTab = "inbox" | "requests" | "promises";
+/** The Inbox's tabs: "Inbox", "Requests" and (AP-2) "Promises", each with its open count (hidden at none). */
 export function InboxTabs({ tab, count, promiseCount = null, onPick }: { tab: InboxTab; count: number | null; promiseCount?: number | null; onPick: (tab: InboxTab) => void }) {
   return (
     <div className="inbox-tabs" role="tablist" aria-label="Inbox">
       <button type="button" role="tab" aria-selected={tab === "inbox"} className={tab === "inbox" ? "on" : ""} onClick={() => onPick("inbox")}>
         Inbox
       </button>
-      <button type="button" role="tab" aria-selected={tab === "asks"} className={tab === "asks" ? "on" : ""} onClick={() => onPick("asks")}>
-        Asks{count ? <span className="tab-count" aria-label={`${count} open`}>{count}</span> : null}
+      <button type="button" role="tab" aria-selected={tab === "requests"} className={tab === "requests" ? "on" : ""} onClick={() => onPick("requests")}>
+        Requests{count ? <span className="tab-count" aria-label={`${count} open`}>{count}</span> : null}
       </button>
       <button type="button" role="tab" aria-selected={tab === "promises"} className={tab === "promises" ? "on" : ""} onClick={() => onPick("promises")}>
         Promises{promiseCount ? <span className="tab-count" aria-label={`${promiseCount} open`}>{promiseCount}</span> : null}
@@ -45,21 +46,21 @@ export function InboxTabs({ tab, count, promiseCount = null, onPick }: { tab: In
   );
 }
 
-/** The open asks and promises counts for the tabs, read when the Inbox opens and after changes. */
-export function useAskCount(version: number, enabled: boolean): [number | null, (n: number) => void, number | null, (n: number) => void] {
+/** The open requests and promises counts for the tabs, read when the Inbox opens and after changes. */
+export function useRequestCount(version: number, enabled: boolean): [number | null, (n: number) => void, number | null, (n: number) => void] {
   const [count, setCount] = useState<number | null>(null);
   const [promises, setPromises] = useState<number | null>(null);
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    void call<AsksData>("asks.list", {}).then((d) => live && (setCount(d.open), setPromises(d.promisesOpen ?? null)), () => undefined);
+    void call<RequestsData>("requests.list", {}).then((d) => live && (setCount(d.open), setPromises(d.promisesOpen ?? null)), () => undefined);
     return () => void (live = false);
   }, [version, enabled]);
   return [count, setCount, promises, setPromises];
 }
 
-export function Asks({ data, version, onCount, onPromiseCount, onChanged, openSettings }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onPromiseCount?: (n: number) => void; onChanged?: () => void; openSettings: (section: string) => void }) {
-  const [state, setState] = useState<AsksData | null>(null);
+export function Requests({ data, version, onCount, onPromiseCount, onChanged, openSettings }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onPromiseCount?: (n: number) => void; onChanged?: () => void; openSettings: (section: string) => void }) {
+  const [state, setState] = useState<RequestsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<ReactNode>(null);
   const [busy, setBusy] = useState(false);
@@ -71,15 +72,15 @@ export function Asks({ data, version, onCount, onPromiseCount, onChanged, openSe
   const writes = useDevOpsWrite();
   const tz = userZone(data);
   const clearNotice = useCallback(() => setNotice(null), []);
-  // A selected ask resolved elsewhere (Create in DevOps's preview) hands the selection to the next open one.
+  // A selected request resolved elsewhere (Create in DevOps's preview) hands the selection to the next open one.
   const selRef = useRef<string | null>(null);
   const show = useCallback(
-    (d: AsksData) => {
+    (d: RequestsData) => {
       setState((prev) => {
-        const was = prev?.asks.find((x) => keyOf(x) === selRef.current);
-        const now = d.asks.find((x) => keyOf(x) === selRef.current);
+        const was = prev?.requests.find((x) => keyOf(x) === selRef.current);
+        const now = d.requests.find((x) => keyOf(x) === selRef.current);
         if (was?.status === "open" && now && now.status !== "open") {
-          const next = askGroups(d.asks).flatMap((g) => g.asks).find((x) => x.status === "open");
+          const next = requestGroups(d.requests).flatMap((g) => g.requests).find((x) => x.status === "open");
           setSel(next ? keyOf(next) : null);
         }
         return d;
@@ -90,29 +91,29 @@ export function Asks({ data, version, onCount, onPromiseCount, onChanged, openSe
     [onCount, onPromiseCount],
   );
 
-  // AP-2: a change here can add or clear an urgent ask on Today (and Check-in's count): the app's data reloads quietly.
-  const changed = (d: AsksData) => (show(d), onChanged?.());
+  // AP-2: a change here can add or clear an urgent request on Today (and Check-in's count): the app's data reloads quietly.
+  const changed = (d: RequestsData) => (show(d), onChanged?.());
   const load = useCallback(async () => {
     try {
-      show(await call<AsksData>("asks.list", {}));
+      show(await call<RequestsData>("requests.list", {}));
       setError(null);
     } catch (e) {
       setError(errText(e));
     }
   }, [show]);
-  // A DevOps write (a create from an ask, or its undo) resolves or reopens the ask: read again.
+  // A DevOps write (a create from a request, or its undo) resolves or reopens it: read again.
   useEffect(() => void load(), [load, version, writes?.version]);
   useEffect(() => head.current?.focus(), []);
 
-  const groups = useMemo(() => askGroups(state?.asks ?? []), [state]);
-  const order = useMemo(() => groups.flatMap((g) => g.asks), [groups]);
+  const groups = useMemo(() => requestGroups(state?.requests ?? []), [state]);
+  const order = useMemo(() => groups.flatMap((g) => g.requests), [groups]);
   const current = order.find((a) => keyOf(a) === sel) ?? order.find((a) => a.status === "open") ?? null;
   selRef.current = current ? keyOf(current) : null;
 
   const refresh = async () => {
     setBusy(true);
     try {
-      changed(await call<AsksData>("asks.refresh", {}));
+      changed(await call<RequestsData>("requests.refresh", {}));
       setError(null);
     } catch (e) {
       setError(errText(e));
@@ -120,9 +121,9 @@ export function Asks({ data, version, onCount, onPromiseCount, onChanged, openSe
       setBusy(false);
     }
   };
-  const resolve = async (a: AskView, status: "linked" | "handled" | "dismissed", extra: { note?: string; itemId?: number } = {}) => {
+  const resolve = async (a: RequestView, status: "linked" | "handled" | "dismissed", extra: { note?: string; itemId?: number } = {}) => {
     try {
-      changed(await call<AsksData>("asks.resolve", { chatId: a.chatId, messageId: a.messageId, status, ...extra }));
+      changed(await call<RequestsData>("requests.resolve", { chatId: a.chatId, messageId: a.messageId, status, ...extra }));
       setLinking(null);
       setNoting(null);
       const what = status === "linked" ? `Linked to #${extra.itemId}` : status === "handled" ? "Marked handled" : "Dismissed";
@@ -134,46 +135,46 @@ export function Asks({ data, version, onCount, onPromiseCount, onChanged, openSe
           </button>
         </>,
       );
-      // On to the next open ask.
+      // On to the next open request.
       const next = order.slice(order.indexOf(a) + 1).find((x) => x.status === "open") ?? order.find((x) => x.status === "open" && keyOf(x) !== keyOf(a));
       setSel(next ? keyOf(next) : null);
     } catch (e) {
       setError(errText(e));
     }
   };
-  const reopen = async (a: AskView) => {
+  const reopen = async (a: RequestView) => {
     try {
-      changed(await call<AsksData>("asks.reopen", { chatId: a.chatId, messageId: a.messageId }));
+      changed(await call<RequestsData>("requests.reopen", { chatId: a.chatId, messageId: a.messageId }));
       setNotice("Open again");
       setSel(keyOf(a));
     } catch (e) {
       setError(errText(e));
     }
   };
-  const toggleContext = async (a: AskView) => {
+  const toggleContext = async (a: RequestView) => {
     const k = keyOf(a);
     if (context[k]) return setContext(({ [k]: _gone, ...rest }) => rest);
     setContext((c) => ({ ...c, [k]: "loading" }));
     try {
-      const r = await call<{ messages: ContextMessage[] }>("asks.context", { chatId: a.chatId, messageId: a.messageId });
+      const r = await call<{ messages: ContextMessage[] }>("requests.context", { chatId: a.chatId, messageId: a.messageId });
       setContext((c) => ({ ...c, [k]: r.messages }));
     } catch (e) {
       setContext((c) => ({ ...c, [k]: errText(e) }));
     }
   };
-  const canWrite = (a: AskView) => !!state?.writeClients.includes(a.clientKey) && !!writes;
-  const create = (a: AskView, level: "bug" | "story" | "feature") => {
+  const canWrite = (a: RequestView) => !!state?.writeClients.includes(a.clientKey) && !!writes;
+  const create = (a: RequestView, level: "bug" | "story" | "feature") => {
     if (!canWrite(a)) return setNotice(`Add DevOps write access for ${a.clientName} in Settings`);
-    void writes!.begin(a.clientKey, [{ kind: "ask_create", chatId: a.chatId, messageId: a.messageId, level }]);
+    void writes!.begin(a.clientKey, [{ kind: "request_create", chatId: a.chatId, messageId: a.messageId, level }]);
   };
   /** AP-2: the AI's suggested item type leads (a bug when it suggested none). */
-  const suggested = (a: AskView): "bug" | "story" | "feature" => a.sort?.itemType ?? "bug";
-  const primary = (a: AskView) => (canWrite(a) ? create(a, suggested(a)) : setLinking(keyOf(a)));
+  const suggested = (a: RequestView): "bug" | "story" | "feature" => a.sort?.itemType ?? "bug";
+  const primary = (a: RequestView) => (canWrite(a) ? create(a, suggested(a)) : setLinking(keyOf(a)));
   const [sorting, setSorting] = useState<string | null>(null);
-  const sortAgain = async (a: AskView) => {
+  const sortAgain = async (a: RequestView) => {
     setSorting(keyOf(a));
     try {
-      changed(await call<AsksData>("asks.sort_again", { chatId: a.chatId, messageId: a.messageId }));
+      changed(await call<RequestsData>("requests.sort_again", { chatId: a.chatId, messageId: a.messageId }));
       setError(null);
     } catch (e) {
       setError(errText(e));
@@ -182,10 +183,10 @@ export function Asks({ data, version, onCount, onPromiseCount, onChanged, openSe
     }
   };
   const [hiddenOpen, setHiddenOpen] = useState(false);
-  const showAnyway = async (a: AskView) => {
+  const showAnyway = async (a: RequestView) => {
     try {
-      changed(await call<AsksData>("asks.show", { chatId: a.chatId, messageId: a.messageId, shown: true }));
-      setNotice("Shown on Asks");
+      changed(await call<RequestsData>("requests.show", { chatId: a.chatId, messageId: a.messageId, shown: true }));
+      setNotice("Shown on Requests");
       setSel(keyOf(a));
     } catch (e) {
       setError(errText(e));
@@ -234,14 +235,17 @@ export function Asks({ data, version, onCount, onPromiseCount, onChanged, openSe
   }, []);
 
   const open = state?.open ?? 0;
-  const problems = (state?.chats ?? []).filter((c) => c.status);
+  const problems = (state?.chats ?? []).flatMap((c) => {
+    const line = chatProblem(c, tz);
+    return line ? [{ c, line }] : [];
+  });
   return (
-    <main className="inbox asks" aria-label="Asks">
+    <main className="inbox asks" aria-label="Requests">
       <div className="follow-ups-head">
         <h2 ref={head} tabIndex={-1}>
-          Asks {state && open > 0 && <span className="muted">{open} open</span>}
+          Requests {state && open > 0 && <span className="muted">{open} open</span>}
         </h2>
-        <button type="button" className="mini" aria-label="Refresh asks" title="Read the chats you switched on now (only new messages)" disabled={busy} onClick={() => void refresh()}>
+        <button type="button" className="mini" aria-label="Refresh requests" title="Read your clients' registered chats now (only new messages)" disabled={busy} onClick={() => void refresh()}>
           {busy ? "Reading Teams…" : "Refresh"}
         </button>
       </div>
@@ -251,37 +255,33 @@ export function Asks({ data, version, onCount, onPromiseCount, onChanged, openSe
         </p>
       )}
       <Fading text={notice} onGone={clearNotice} ms={8000} />
-      {problems.map((c) => (
+      {problems.map(({ c, line }) => (
         <p key={c.chatId} className="ask-chat-problem" role="status">
-          {c.clientName} · {c.chatName}: {c.status}
+          {c.clientName} · {c.chatName}: {line}
         </p>
       ))}
       {state && open === 0 && (
         <div className="asks-empty">
-          <p>No open asks</p>
-          {state.chats.length === 0 ? (
+          <p>No open requests</p>
+          {state.chats.length === 0 && (
             <p className="muted">
-              Switch on Read for asks for a client's chat in{" "}
+              Add a client's Teams chat in{" "}
               <button type="button" className="linkish" onClick={() => openSettings("clients")}>
                 Settings › Clients
               </button>
-              . Questions and requests from people outside Cooptimize then show up here.
-            </p>
-          ) : (
-            <p className="muted">
-              Reading {state.chats.length} {state.chats.length === 1 ? "chat" : "chats"} every {state.pollMinutes} minutes in your working hours.
+              . Questions and requests from people outside Cooptimize then show up here for everyone on the chat.
             </p>
           )}
         </div>
       )}
       {groups.map((g) => (
-        <section key={g.clientKey} className="ask-group" aria-label={`Asks from ${g.clientName}`} style={{ "--c": clientColor(g.clientKey, data.clients) } as CSSProperties}>
+        <section key={g.clientKey} className="ask-group" aria-label={`Requests from ${g.clientName}`} style={{ "--c": clientColor(g.clientKey, data.clients) } as CSSProperties}>
           <h3>
             <span className="swatch" aria-hidden="true" />
-            {g.clientName} <span className="muted">{g.asks.filter((a) => a.status === "open").length || ""}</span>
+            {g.clientName} <span className="muted">{g.requests.filter((a) => a.status === "open").length || ""}</span>
           </h3>
           <ul className="ask-list">
-            {g.asks.map((a) => (
+            {g.requests.map((a) => (
               <AskCard
                 key={keyOf(a)}
                 a={a}
@@ -333,12 +333,39 @@ export function Asks({ data, version, onCount, onPromiseCount, onChanged, openSe
           )}
         </section>
       )}
+      {state && state.chats.length > 0 && (
+        <p className="requests-poll muted" role="status">
+          {pollLine(state, tz)}
+        </p>
+      )}
     </main>
   );
 }
 
+const hm = (iso: string, tz: string) => Temporal.Instant.from(iso).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+
+/** A chat's line when something needs saying: who it's read through, needs reconnecting, or a wait. */
+export function chatProblem(c: RequestChatStatus, tz: string): string | null {
+  if (c.state === "reconnect") return `Needs reconnecting. ${c.fetchedAt ? `Last fetched ${whenText(c.fetchedAt, tz)}` : "Not fetched yet"}. Anyone on the chat who follows the client can sign in with Microsoft again`;
+  if (c.state === "retry") return `${c.note ?? "Teams didn't answer"}. Trying again${c.retryAt ? ` at ${hm(c.retryAt, tz)}` : ""}`;
+  return null;
+}
+
+/** The footer: the last poll and how the chats are read ("Polling via <name>" when someone else's sign-in reads one). */
+export function pollLine(d: Pick<RequestsData, "chats" | "lastPoll" | "lastFetch" | "pollMinutes">, tz: string): string {
+  const n = d.chats.length;
+  const via = [...new Set(d.chats.flatMap((c) => (c.state === "via" && c.via ? [c.via] : [])))];
+  const parts = [
+    d.lastPoll ? `Last checked ${whenText(d.lastPoll, tz)}` : "Not checked yet",
+    d.lastFetch && d.lastFetch !== d.lastPoll ? `last fetched ${whenText(d.lastFetch, tz)}` : null,
+    `${n} ${n === 1 ? "chat" : "chats"}, every ${d.pollMinutes} minutes in working hours`,
+    via.length ? `polling via ${via.join(", ")}` : null,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
 function AskCard(p: {
-  a: AskView; tz: string; selected: boolean; onSelect: () => void;
+  a: RequestView; tz: string; selected: boolean; onSelect: () => void;
   context: ContextMessage[] | "loading" | string | null; onContext: () => void;
   canWrite: boolean; onCreate: (level: "bug" | "story" | "feature") => void; onEnable: () => void;
   linking: boolean; onLink: (on: boolean) => void; onLinked: (id: number) => void;
@@ -357,7 +384,7 @@ function AskCard(p: {
   }, [a.text]);
   const open = a.status === "open";
   return (
-    <li className={`ask-card${p.selected ? " selected" : ""}${open ? "" : " resolved"}`} data-ask={keyOf(a)} tabIndex={p.selected ? 0 : -1} aria-label={`Ask from ${a.author}`} onFocus={p.onSelect} onClick={p.onSelect}>
+    <li className={`ask-card${p.selected ? " selected" : ""}${open ? "" : " resolved"}`} data-ask={keyOf(a)} tabIndex={p.selected ? 0 : -1} aria-label={`Request from ${a.author}`} onFocus={p.onSelect} onClick={p.onSelect}>
       <div className="ask-head">
         <strong>{a.author}</strong>
         {a.external && <span className="ask-ext">External</span>}
@@ -494,6 +521,7 @@ function AskCard(p: {
           ) : (
             <>Dismissed</>
           )}
+          {a.resolvedBy && <span className="muted"> by {a.resolvedBy}</span>}
           {a.status !== "created" && (
             <button type="button" className="mini quiet" onClick={p.onUndo}>
               Undo
@@ -537,7 +565,7 @@ export function LinkPicker({ a, onPick, onCancel }: { a: { chatId: string; messa
   useEffect(() => {
     let live = true;
     const t = setTimeout(() => {
-      void call<{ available: boolean; items: Hit[] }>("asks.search", { chatId: a.chatId, messageId: a.messageId, query: q }).then(
+      void call<{ available: boolean; items: Hit[] }>("requests.search", { chatId: a.chatId, messageId: a.messageId, query: q }).then(
         (r) => live && (setAvailable(r.available), setHits(r.items)),
         () => live && (setAvailable(false), setHits([])),
       );

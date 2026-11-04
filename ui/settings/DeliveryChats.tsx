@@ -3,15 +3,17 @@
 // members, changeable), with its members (external people flagged by tenant), the count, a warning when the members
 // don't fit the label, Open in Teams and Remove. Add a chat opens the picker (search, arrows, Enter, Esc). Saved as
 // soon as it changes. Members are read again once a day when the Clients section opens, and on Refresh.
-// AP-1: each chat's Read for asks switch (off by default). The first time, Microsoft asks the person to allow Chat.Read
-// (D490): FocusTime goes there and back, then switches it on. Delete stored messages forgets a client's chat text.
+// Shared polling (D509): a chat is registered once for its client, for everyone on it who follows the client, and
+// read every 5 minutes for all of them. Adding one asks the person to allow Chat.Read the first time (Microsoft, there
+// and back, then the add goes ahead). Each card says how it's read: "Polling via <name>", "Needs reconnecting" with the
+// last fetch, or the last check. Delete stored messages forgets a client's chat text that didn't become requests.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { activityOf, CHAT_KINDS, chatName, filterChats, KIND_HINT, KIND_NAME, memberLine, nameOf, suggestKind, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChatView } from "../../plan/chats.ts";
 import { ActionRefusal, call } from "../api.ts";
-import type { AsksData } from "../../plan/asks.ts";
+import type { RequestChatStatus, RequestsData } from "../../plan/asks.ts";
 
-/** AP-1: the chat waiting for the Chat.Read consent to come back (this tab only). */
-const CONSENT_KEY = "focustime.asksConsent";
+/** The chat add waiting for the Chat.Read consent to come back (this tab only): "<clientKey> <chatId>". */
+const CONSENT_KEY = "focustime.chatAddConsent";
 const consentUrl = "/auth/microsoft/login?consent=chat_read";
 const readPending = () => {
   try {
@@ -20,12 +22,12 @@ const readPending = () => {
     return null;
   }
 };
-const writePending = (chatId: string | null) => {
+const writePending = (pending: string | null) => {
   try {
-    if (chatId) sessionStorage.setItem(CONSENT_KEY, chatId);
+    if (pending) sessionStorage.setItem(CONSENT_KEY, pending);
     else sessionStorage.removeItem(CONSENT_KEY);
   } catch {
-    // Private windows: the switch then needs a second click after coming back.
+    // Private windows: Add a chat then needs a second try after coming back.
   }
 };
 
@@ -35,8 +37,8 @@ type Chats = {
   problem: string | null;
   run: (action: string, input: unknown) => Promise<boolean>;
   picker: () => Promise<ChatPickerData>;
-  /** AP-1: Read for asks on or off; on may go to Microsoft first. Returns a line to show. */
-  asks: (chatId: string, on: boolean) => Promise<string | null>;
+  /** Registers a chat for a client; may go to Microsoft first to allow Chat.Read. Returns a line to show. */
+  add: (clientKey: string, chatId: string, name: string) => Promise<string | null>;
 };
 const Ctx = createContext<Chats | null>(null);
 
@@ -59,17 +61,16 @@ export function DeliveryChatsProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, []);
-  const asks = useCallback(async (chatId: string, on: boolean): Promise<string | null> => {
+  const add = useCallback(async (clientKey: string, chatId: string, name: string): Promise<string | null> => {
     setLoading(true);
     try {
-      await call("asks.switch", { chatId, on });
-      setData(await call<ChatsData>("chats.registered", {}));
+      setData(await call<ChatsData>("chats.add", { clientKey, chatId }));
       setProblem(null);
-      return on ? "Reading for asks from now on" : "Not read for asks";
+      return `Added ${name}. Read from now on, for everyone on it who follows the client`;
     } catch (e) {
       if (e instanceof ActionRefusal && e.code === "consent") {
-        // Microsoft asks once; FocusTime comes back here and switches it on.
-        writePending(chatId);
+        // Microsoft asks once; FocusTime comes back here and adds it.
+        writePending(`${clientKey} ${chatId}`);
         window.location.assign(consentUrl);
         return "Opening Microsoft to allow it…";
       }
@@ -81,7 +82,7 @@ export function DeliveryChatsProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     void run("chats.registered", { refresh: true }).then(async () => {
-      // Back from the Chat.Read consent: switch on the chat that asked for it (once).
+      // Back from the Chat.Read consent: add the chat that asked for it (once).
       const pending = readPending();
       if (!pending) return;
       writePending(null);
@@ -90,11 +91,12 @@ export function DeliveryChatsProvider({ children }: { children: ReactNode }) {
         back.searchParams.delete("allowed");
         window.history.replaceState(window.history.state, "", back.toString());
       }
+      const [clientKey, chatId] = pending.split(" ");
+      if (!clientKey || !chatId) return;
       try {
-        await call("asks.switch", { chatId: pending, on: true });
-        setData(await call<ChatsData>("chats.registered", {}));
+        setData(await call<ChatsData>("chats.add", { clientKey, chatId }));
       } catch (e) {
-        setProblem(e instanceof ActionRefusal && e.code === "consent" ? "Microsoft didn't allow FocusTime to read chat messages, so Read for asks stays off." : e instanceof Error ? e.message : "Not saved");
+        setProblem(e instanceof ActionRefusal && e.code === "consent" ? "Microsoft didn't allow FocusTime to read chat messages, so the chat wasn't added." : e instanceof Error ? e.message : "Not saved");
       }
     });
   }, [run]);
@@ -105,7 +107,7 @@ export function DeliveryChatsProvider({ children }: { children: ReactNode }) {
     });
     return pickerData.current;
   }, []);
-  const value = useMemo(() => ({ data, loading, problem, run, picker, asks }), [data, loading, problem, run, picker, asks]);
+  const value = useMemo(() => ({ data, loading, problem, run, picker, add }), [data, loading, problem, run, picker, add]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
@@ -137,7 +139,7 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
     <div className="set-field dchat" role="group" aria-label={`Delivery chats for ${clientName}`}>
       <div className="dchat-head">
         <span className="set-label">Delivery chats</span>
-        <span className="muted dchat-hint">Teams group chats for {clientName}. Names and members; messages only from a chat you read for asks.</span>
+        <span className="muted dchat-hint">Teams group chats for {clientName}, shared with everyone on them who follows {clientName}. New messages are read for requests.</span>
         {mine.length > 0 && (
           <button type="button" className="mini quiet" disabled={ctx.loading} onClick={() => void act("chats.refresh", { clientKey }, "Members read again")}>
             {ctx.loading ? "Refreshing…" : "Refresh"}
@@ -153,7 +155,6 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
           busy={ctx.loading}
           onKind={(kind) => void act("chats.kind", { chatId: c.chatId, kind }, `Marked as ${KIND_NAME[kind]}`)}
           onRemove={() => void act("chats.remove", { chatId: c.chatId }, `Removed ${c.displayName}`).then(focusAdd)}
-          onAsks={(on) => void ctx.asks(c.chatId, on).then((line) => line && setSaved(line))}
         />
       ))}
       {mine.length > 0 && (
@@ -162,9 +163,9 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
           className="mini quiet dchat-purge"
           disabled={ctx.loading}
           onClick={() => {
-            if (!window.confirm(`Delete every chat message and ask FocusTime stored for ${clientName}? DevOps items made from asks stay.`)) return;
+            if (!window.confirm(`Delete every chat message FocusTime stored for ${clientName} that didn't become a request? This is for everyone on these chats. Requests and DevOps items made from them stay.`)) return;
             setSaved(null);
-            void call<{ purged: number }>("asks.purge", { clientKey }).then(
+            void call<{ purged: number }>("requests.purge", { clientKey }).then(
               (r) => setSaved(r.purged ? `Deleted ${r.purged} stored ${r.purged === 1 ? "message" : "messages"}` : "Nothing stored"),
               (e: unknown) => setSaved(e instanceof Error ? e.message : "Not deleted"),
             );
@@ -180,7 +181,9 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
           load={ctx.picker}
           onPick={async (c) => {
             setPicking(false);
-            await act("chats.add", { clientKey, chatId: c.id }, `Added ${chatName(c)}`);
+            setSaved(null);
+            const line = await ctx.add(clientKey, c.id, chatName(c));
+            if (line) setSaved(line);
             focusAdd();
           }}
           onClose={() => {
@@ -199,7 +202,16 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
   );
 }
 
-function ChatCard({ c, busy, onKind, onRemove, onAsks }: { c: DeliveryChatView; busy: boolean; onKind: (k: ChatKind) => void; onRemove: () => void; onAsks: (on: boolean) => void }) {
+/** How a registered chat is read, in one line. */
+export function pollText(p: RequestChatStatus, registeredBy: string | null): string {
+  const by = registeredBy ? `Added by ${registeredBy}. ` : "";
+  if (p.state === "reconnect") return `${by}Needs reconnecting: nobody's sign-in can read it now. ${p.fetchedAt ? `Last fetched ${timeOf(p.fetchedAt)}.` : "Not fetched yet."} Sign in with Microsoft again to fix it.`;
+  if (p.state === "retry") return `${by}${p.note ?? "Teams didn't answer"}. Trying again${p.retryAt ? ` at ${timeOf(p.retryAt)}` : ""}.`;
+  const via = p.state === "via" && p.via ? ` Polling via ${p.via}.` : "";
+  return `${by}${p.fetchedAt ? `Last fetched ${timeOf(p.fetchedAt)}.` : "Not read yet: every 5 minutes in working hours."}${via}`;
+}
+
+function ChatCard({ c, busy, onKind, onRemove }: { c: DeliveryChatView; busy: boolean; onKind: (k: ChatKind) => void; onRemove: () => void }) {
   return (
     <div className="dchat-card" role="region" aria-label={c.displayName}>
       <div className="dchat-title">
@@ -234,15 +246,9 @@ function ChatCard({ c, busy, onKind, onRemove, onAsks }: { c: DeliveryChatView; 
         <p className="muted">Members not read yet. Refresh to read them.</p>
       )}
       {c.error && <p className="field-problem">{c.error}</p>}
-      <label className="set-check dchat-asks">
-        <input type="checkbox" role="switch" checked={c.asks.on} disabled={busy} onChange={(e) => onAsks(e.target.checked)} aria-describedby={`asks-${c.chatId}`} />
-        Read for asks
-      </label>
-      <span id={`asks-${c.chatId}`} className="set-hint">
-        {c.asks.on
-          ? c.asks.status ?? (c.asks.polledAt ? `Last read ${timeOf(c.asks.polledAt)}. New messages from outside Cooptimize that ask for something show in Inbox › Asks.` : "On. Read every few minutes in your working hours, from now on.")
-          : "Off. Nothing in this chat is read. On: new messages are read every few minutes in your working hours (no history), and questions or requests from outside Cooptimize show in Inbox › Asks. Nothing is posted."}
-      </span>
+      <p className={`set-hint dchat-poll${c.poll.state === "reconnect" ? " field-problem" : ""}`} role="status">
+        {pollText(c.poll, c.registeredBy)}
+      </p>
     </div>
   );
 }
@@ -356,25 +362,27 @@ export function MicrosoftPermissions() {
   );
 }
 
-/** AP-1: Settings > Connections: one line per chat read for asks, with its last read or its problem. One failing chat never hides the others. */
+/** Settings > Connections: one line per client chat I see, with how it's read or its problem. One failing chat never hides the others. */
 export function AsksConnections() {
-  const [d, setD] = useState<AsksData | null>(null);
+  const [d, setD] = useState<RequestsData | null>(null);
   useEffect(() => {
     let live = true;
-    void call<AsksData>("asks.list", {}).then((x) => live && setD(x), () => undefined);
+    void call<RequestsData>("requests.list", {}).then((x) => live && setD(x), () => undefined);
     return () => void (live = false);
   }, []);
   if (!d || !d.chats.length) return null;
   return (
-    <section className="set-asks-conn" aria-label="Chats read for asks">
-      <h3>Chats read for asks</h3>
+    <section className="set-asks-conn" aria-label="Client chats read for requests">
+      <h3>Client chats read for requests</h3>
       <ul className="set-sources">
-        {d.chats.map((c) => (
-          <li key={c.chatId} className={c.status ? "problem" : ""}>
-            <strong>{c.clientName}</strong> · {c.chatName}{" "}
-            <span className={c.status ? "field-problem" : "muted"}>{c.status ?? (c.polledAt ? `read ${timeOf(c.polledAt)}` : "not read yet (only in your working hours)")}</span>
-          </li>
-        ))}
+        {d.chats.map((c) => {
+          const problem = c.state === "reconnect" || c.state === "retry";
+          return (
+            <li key={c.chatId} className={problem ? "problem" : ""}>
+              <strong>{c.clientName}</strong> · {c.chatName} <span className={problem ? "field-problem" : "muted"}>{pollText(c, null)}</span>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
