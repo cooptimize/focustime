@@ -336,7 +336,7 @@ function VmPreviewDialog({ p, onClose, onDone }: { p: VmPreview; onClose: () => 
  * The VM chip (step 16.3: the single place for VM status, in the header on every tab): "VM Running · off at 7:30 PM".
  * The auto-shutdown time is read from Azure and only shown (D475). Opens the VM menu: Start, Allow Azure access, Refresh.
  */
-export function VmChip() {
+export function VmChip({ dot = false }: { dot?: boolean } = {}) {
   const { status, openMenu } = useContext(VmCtx);
   if (!status?.vm) return null;
   const chip = status.chip ?? "unknown";
@@ -345,8 +345,9 @@ export function VmChip() {
   return (
     <button
       type="button"
-      className={`vm-chip vm-${TONE[chip]}`}
+      className={`vm-chip vm-${TONE[chip]}${dot ? " vm-dot-only" : ""}`}
       aria-haspopup="menu"
+      aria-label={dot ? `VM ${text}. Menu` : undefined}
       title={`${status.vm.name} (${status.vm.resourceGroup}): ${text}${extra ? `. ${extra}` : ""}`}
       onClick={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
@@ -354,7 +355,12 @@ export function VmChip() {
       }}
     >
       <span className="vm-dot" aria-hidden="true" />
-      <span className="vm-word">VM</span> <span className="vm-label">{text}</span>
+      {/* P1: on the phone the chip is the dot alone; its menu says the rest. */}
+      {!dot && (
+        <>
+          <span className="vm-word">VM</span> <span className="vm-label">{text}</span>
+        </>
+      )}
       {status.needsConsent && <span className="vm-attn" aria-hidden="true">!</span>}
     </button>
   );

@@ -2,6 +2,7 @@
 // every state change, one action endpoint per signed-in person, and the UI. The same app serves the developer loop
 // (http://localhost:<port>) and the hosted app.
 import type { BuildInfo } from "./buildinfo.ts";
+import { serviceWorkerSource, shellPaths, SW_PATH } from "./pwa.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
@@ -93,6 +94,7 @@ const TYPES: Record<string, string> = {
   ".png": "image/png",
   ".json": "application/json",
   ".woff2": "font/woff2",
+  ".webmanifest": "application/manifest+json",
 };
 
 export const CSP = "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
@@ -128,6 +130,8 @@ const same = (a: string | undefined, b: string) => {
 
 export function createApp(opts: AppOptions) {
   let lastReopen = 0;
+  /** P1: the service worker's source, made once per process (the build doesn't change while it runs). */
+  let sw: string | null = null;
   const https = opts.publicUrl.startsWith("https://");
   const json = (res: ServerResponse, status: number, body: unknown, cookies: string[] = []) => {
     res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", ...(cookies.length ? { "set-cookie": cookies } : {}) });
@@ -318,6 +322,12 @@ export function createApp(opts: AppOptions) {
         res.end();
       });
     }
+    // P1: the service worker, for this build (never in the dev UI, where Vite serves changing files).
+    if (url.pathname === SW_PATH && (method === "GET" || method === "HEAD")) {
+      sw ??= serviceWorkerSource(opts.build?.sha ?? "unknown", shellPaths(opts.distDir!));
+      res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" });
+      return res.end(method === "HEAD" ? undefined : sw);
+    }
     return serveStatic(opts.distDir!, url.pathname, res);
   };
 
@@ -347,6 +357,8 @@ async function serveStatic(root: string, pathname: string, res: ServerResponse):
   if (!isFile) file = join(root, "index.html");
   const type = TYPES[extname(file)] ?? "application/octet-stream";
   const body = await readFile(file);
-  res.writeHead(200, { "content-type": type, "cache-control": file.endsWith("index.html") ? "no-store" : "public, max-age=31536000, immutable" });
+  // Hashed build files (/assets/) never change; the page, the manifest and the icons (public/) are checked each time.
+  const hashed = rel.startsWith(`assets${sep}`) || rel.startsWith("assets/");
+  res.writeHead(200, { "content-type": type, "cache-control": file.endsWith("index.html") ? "no-store" : hashed && isFile ? "public, max-age=31536000, immutable" : "no-cache" });
   return res.end(body);
 }

@@ -1463,6 +1463,8 @@ export type CaptureRoute =
   | { as: "draft_feature"; clientKey: string; parentItemId: number | null; title: string; targetDate?: IsoDate | null }
   | { as: "dismissed" };
 export const MAX_CAPTURE = 1000;
+import { NOTICES_KEPT, type InAppNotice } from "../plan/push.ts";
+export { NOTICES_KEPT, type InAppNotice };
 
 const toUnavailable = (r: Row): Unavailable => ({ id: r.id as number, title: r.title as string, start: r.start_at as string, end: r.end_at as string, note: (r.note as string | null) ?? null });
 const toFlex = (r: Row): FlexSession => ({
@@ -2652,6 +2654,47 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (name) await db.run("UPDATE delivery_chats SET members_json = ?, members_fetched_at = ?, display_name = ?, updated_at = ? WHERE chat_id = ?", JSON.stringify(clean), fetchedAt, name, stamp(), chatId);
         else await db.run("UPDATE delivery_chats SET members_json = ?, members_fetched_at = ?, updated_at = ? WHERE chat_id = ?", JSON.stringify(clean), fetchedAt, stamp(), chatId);
       });
+    },
+    /**
+     * P1: a delivered notice joins the in-app list (⋯ › Notifications), once per key; the newest NOTICES_KEPT stay.
+     * Returns the row id (the notice's handle), or the existing row's when the key was delivered before.
+     */
+    async addNotice(n: { key: string; kind: string; title: string; body: string; route: string | null }): Promise<number> {
+      return tx(async () => {
+        const key = n.key.slice(0, 200);
+        const had = (await db.get("SELECT id FROM notices WHERE notice_key = ?", key)) as Row | undefined;
+        if (had) return Number(had.id);
+        const r = await db.run("INSERT INTO notices (notice_key, kind, title, body, route, at) VALUES (?, ?, ?, ?, ?, ?)", key, n.kind.slice(0, 32), n.title.slice(0, 300), n.body.slice(0, 2000), n.route?.slice(0, 200) ?? null, stamp());
+        const old = (await db.all("SELECT id FROM notices ORDER BY id DESC")) as Row[];
+        for (const o of old.slice(NOTICES_KEPT)) await db.run("DELETE FROM notices WHERE id = ?", Number(o.id));
+        return r.lastId!;
+      });
+    },
+    /** The in-app list, newest first; closed ones (their occasion was handled) stay, marked, until they age out. */
+    async notices(limit = NOTICES_KEPT): Promise<InAppNotice[]> {
+      return ((await db.all("SELECT * FROM notices ORDER BY id DESC LIMIT ?", limit)) as Row[]).map((r) => ({
+        id: Number(r.id),
+        key: r.notice_key as string,
+        kind: r.kind as string,
+        title: r.title as string,
+        body: r.body as string,
+        route: (r.route as string | null) ?? null,
+        at: String(r.at),
+        read: r.read_at != null,
+        closed: r.closed_at != null,
+      }));
+    },
+    /** Marks notices read: the given ids, or every one when none are given. */
+    async readNotices(ids?: readonly number[]): Promise<void> {
+      return tx(async () => {
+        if (!ids) return void (await db.run("UPDATE notices SET read_at = ? WHERE read_at IS NULL", stamp()));
+        for (const id of ids) await db.run("UPDATE notices SET read_at = ? WHERE id = ? AND read_at IS NULL", stamp(), id);
+      });
+    },
+    /** Its occasion was handled (Q91): it stays in the list, read and closed, so no toast or dot asks for it again. */
+    async closeNotice(id: number): Promise<void> {
+      const at = stamp();
+      return tx(async () => void (await db.run("UPDATE notices SET closed_at = ?, read_at = COALESCE(read_at, ?) WHERE id = ? AND closed_at IS NULL", at, at, id)));
     },
     async writeLog(limit = 100): Promise<WriteEntry[]> {
       return ((await db.all("SELECT * FROM write_log ORDER BY id DESC LIMIT ?", limit)) as Row[]).map(toWrite);

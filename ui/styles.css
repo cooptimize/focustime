@@ -3519,3 +3519,191 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .dchat-options li.on { background: color-mix(in oklab, var(--accent) 14%, var(--surface)); outline: 1px solid color-mix(in oklab, var(--accent) 40%, transparent); }
 .perms li code { font-size: var(--fs-2); }
 .perms-again { justify-self: start; align-self: flex-start; width: auto; }
+/* ---------------------------------------------------------------------------------------------------------------
+   P1: the phone (under 600 px). Checking and doing, not planning: a bottom bar (Today, Week, Capture, ⋯), a top bar
+   with only the mark, the VM dot and the avatar, one column, full-screen panels and sheets, touch targets of 44 px and
+   no control that only shows on hover. Text follows the Text size presets in rem, so the phone's own text size counts.
+   --------------------------------------------------------------------------------------------------------------- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@supports (font: -apple-system-body) {
+  @media (max-width: 599.98px) { html { font: -apple-system-body; } }
+}
+@media (max-width: 599.98px) {
+  :root { --text-base: 0.9375rem; --text-scale: 1.1538; --tap: 44px; }
+  :root[data-text-size="large"] { --text-base: 1.0625rem; --text-scale: 1.3077; }
+  :root[data-text-size="larger"] { --text-base: 1.1875rem; --text-scale: 1.4615; }
+
+  .app.phone { height: 100dvh; }
+  .app.phone > .topbar {
+    display: flex; height: auto; min-height: 52px; padding: env(safe-area-inset-top) 12px 0 16px; gap: 8px; flex-wrap: nowrap;
+  }
+  .app.phone .brand { flex: 1; min-width: 0; align-items: center; }
+  .app.phone .top-actions { order: 0; display: flex; align-items: center; gap: 4px; }
+  .app.phone .demo-tag { font-size: var(--fs-1); padding: 2px 8px; white-space: nowrap; }
+  .app.phone > .statusbar { padding: 0 16px; }
+  .app.phone > .statusbar .status-row { min-height: 32px; }
+
+  /* The bottom bar: four equal tabs, above the home indicator. */
+  .bottom-bar {
+    flex: none; display: grid; grid-template-columns: repeat(4, 1fr);
+    padding: 0 4px env(safe-area-inset-bottom); border-top: 1px solid var(--border); background: var(--surface);
+  }
+  .bb-tab {
+    position: relative; min-height: 52px; border: 0; background: none; color: var(--text-muted);
+    font: 500 var(--fs-3)/1 var(--font-ui); cursor: pointer;
+  }
+  .bb-tab[aria-current="page"] { color: var(--text); font-weight: 600; box-shadow: inset 0 2px 0 var(--accent); }
+  .bb-dot { position: absolute; top: 12px; right: calc(50% - 18px); width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+  /* The VM chip as a dot, the avatar as a 44 px target. */
+  .vm-chip.vm-dot-only { min-width: var(--tap); min-height: var(--tap); padding: 0; justify-content: center; border-color: transparent; background: none; }
+  .vm-chip.vm-dot-only .vm-dot { width: 10px; height: 10px; }
+  .app.phone .person-chip { min-width: var(--tap); min-height: var(--tap); display: inline-flex; align-items: center; justify-content: center; }
+
+  /* Touch targets: every button and field is at least 44 px tall; links in a line get the same reach. */
+  .app.phone button:not(.bb-tab):not(.chip-plain), .app.phone select, .app.phone input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .cap-dialog button, .cap-dialog input:not([type="checkbox"]), .popup-menu [role="menuitem"], .popup-menu button {
+    min-height: var(--tap);
+  }
+  .app.phone .link-btn { display: inline-flex; align-items: center; }
+  .app.phone input[type="checkbox"] { width: 22px; height: 22px; }
+  .app.phone .pick-row { min-height: var(--tap); }
+
+  /* No hover-only controls: whatever showed on hover is always there. */
+  .app.phone .pr-hover, .app.phone .pl-hover { display: inline-flex; opacity: 1; }
+  .app.phone .day-head .more-btn, .app.phone .card-head .card-more { opacity: 1; }
+  .app.phone .add-work { visibility: visible; }
+  .app.phone .hours-stepper .hs-step, .app.phone .pw-row > .pw-stepper .pw-step { opacity: 1; }
+  .app.phone kbd { display: none; }
+  .app.phone .day-step kbd { display: inline; border: 0; background: none; padding: 0; font-size: var(--fs-4); }
+  .app.phone .demo-tag { min-height: 0 !important; }
+  /* Selection is for the keyboard; a tap opens the card, so no outline on the phone. */
+  .app.phone .half.selected, .app.phone .day.overflow .half.selected { box-shadow: var(--shadow-1); }
+  /* The status bar keeps notices and problems; "all live" and Refresh go (the app refreshes on its own). */
+  .app.phone > .statusbar.quiet .status-row > :not(.status-chips) { display: none; }
+  .app.phone > .statusbar.quiet .status-row { min-height: 0; }
+  .app.phone > .statusbar.quiet:not(:has(.status-chip)) { display: none; }
+
+  /* Page heads: the title on one line, the mode switch below it, full width and scrollable sideways. */
+  .app.phone .today-head, .app.phone .page-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 12px 16px 4px; align-items: center; }
+  .app.phone .today-head .ph-title h1, .app.phone .page-head h2 { font-size: var(--fs-4); margin: 0; }
+  .app.phone .today-head .ph-title h1 .muted { display: block; font-size: var(--fs-2); font-weight: 400; }
+  .app.phone .mode-area { grid-column: 1 / -1; margin-left: 0; min-width: 0; overflow-x: auto; justify-content: flex-start; flex: 1 1 100%; }
+  .app.phone .today-head .ph-title h1 .muted { margin-left: 0; }
+  .app.phone .mode-switch { width: max-content; }
+  .app.phone .today-view { padding: 0 16px 16px; overflow-y: auto; flex: 1; }
+  .app.phone .today-view .today-head { padding: 12px 0 4px; }
+  .app.phone .today-blocks { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .app.phone .attention-line { flex-wrap: wrap; }
+  .app.phone .today-view.u2 .today-block header { flex-wrap: wrap; gap: 2px 10px; }
+  .app.phone .today-view.u2 .today-block header .status-pill { margin-left: 0; flex-basis: auto; }
+  .app.phone .today-view.u2 .today-block header h2 { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .app.phone .mode-area, .app.phone .today-view.u2 .today-head .mode-area { justify-self: start; margin-left: 0; }
+
+  /* Today › Now: the one card at the top. */
+  .phone-now {
+    margin: 4px 0 12px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border);
+    border-left: 4px solid var(--c, var(--accent)); background: var(--surface); display: grid; gap: 10px;
+  }
+  .phone-now header { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .phone-now h2 { margin: 0; font-size: var(--fs-4); }
+  .pn-tag { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+  .pn-when { color: var(--text-muted); font-size: var(--fs-2); }
+  .pn-pick { margin: 0; font-size: var(--fs-3); font-weight: 500; }
+  .pn-acts, .pn-timer { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pn-acts button, .pn-timer button { padding: 0 16px; border-radius: 8px; font-size: var(--fs-3); }
+  .pn-acts .primary { flex: 1; }
+  .pn-count { font: 600 var(--fs-4)/1 var(--font-mono); flex: 1; text-align: left; border: 0; background: none; color: var(--text); padding: 0; }
+  .phone-due { display: grid; gap: 8px; margin-top: 16px; }
+  .phone-agenda { margin: 4px 0 8px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+  .phone-due .section-label { margin: 0; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+
+  /* Week: one day at a time, half-days as cards with their meetings. */
+  .app.phone .week-head { padding: 12px 16px 4px; }
+  .app.phone .week-head .ph-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+  .app.phone .week-head .ph-title h2 { flex: 1; min-width: 0; }
+  .app.phone .week-head .ph-title > .more-btn { order: 2; }
+  .app.phone .week-head .cl-musts { order: 3; flex-basis: 100%; }
+  .app.phone .grid.narrow { overflow-y: auto; padding: 0 16px 16px; touch-action: pan-y; }
+  .app.phone .daybar { gap: 4px; }
+  .app.phone .day-tab { min-width: 0; flex: 1; padding: 0 2px; }
+  .app.phone .day-step { min-width: var(--tap); }
+  .app.phone .day-head .day-plan { display: none; }
+  .card-events { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; font-size: var(--fs-2); }
+  .card-events li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; padding-left: 8px; border-left: 2px solid var(--border-strong); }
+  .card-events li.personal { border-left-color: var(--personal, var(--border-strong)); }
+  .card-events li.unavailable { border-left-style: dashed; }
+  .card-events .ce-time { color: var(--text-muted); white-space: nowrap; }
+  .card-events .ce-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Panels and sheets full screen, with Back. */
+  .detail-panel { inset: 0; top: 0; bottom: 0; width: 100%; border-left: 0; z-index: 40; padding-bottom: env(safe-area-inset-bottom); }
+  .dp-head { align-items: center; padding: calc(8px + env(safe-area-inset-top)) 12px 8px 8px; }
+  .dp-back { border: 0; background: none; color: var(--accent); font: 500 var(--fs-3)/1 var(--font-ui); padding: 0 8px; min-height: var(--tap); cursor: pointer; flex: none; }
+  .cap-backdrop { align-items: stretch; padding: 0; }
+  .cap-dialog { width: 100%; max-width: none; height: 100dvh; max-height: none; align-content: start; margin: 0; border-radius: 0; border: 0; box-sizing: border-box; overflow-y: auto; padding: calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+  .cap-dialog-head { flex-wrap: wrap; }
+  .cap-input { grid-template-columns: minmax(0, 1fr); }
+  .cap-client { max-width: none; }
+  .popup-menu { max-width: calc(100vw - 16px); }
+
+  /* Planning screens: read-only under one line. */
+  .phone-ro { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .phone-ro-bar {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 16px;
+    border-bottom: 1px solid var(--border); background: color-mix(in oklab, var(--accent) 8%, var(--surface)); font-size: var(--fs-2);
+  }
+  .phone-ro-line { flex: 1 1 12em; color: var(--text); }
+  .phone-ro-acts { display: flex; gap: 8px; }
+  .phone-ro-body { flex: 1; min-height: 0; overflow: auto; }
+  .phone-ro-body > * { min-width: 0; }
+  .phone-ro-body .pl-frame { height: auto; overflow: visible; }
+  .phone-ro-body .pl-panes { display: flex; flex-direction: column; gap: 12px; }
+  .phone-ro-body .pl-panes > * { position: static; width: auto; max-height: none; overflow: visible; }
+  .set-body .phone-ro { display: block; }
+  .set-body .phone-ro-body { overflow: visible; }
+
+  /* Settings: the sections as a row of tabs that scrolls sideways, then one column. */
+  .app.phone .settings { display: block; overflow-y: auto; flex: 1; padding: 0 16px 16px; }
+  .app.phone .set-nav { flex-wrap: nowrap; overflow-x: auto; position: sticky; top: 0; margin: 0 -16px; padding: 8px 16px; }
+  .app.phone .set-tab { white-space: nowrap; flex: none; }
+  .app.phone .set-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---- P1 Part B: in-app notifications, install, offline, push devices ---- */
+.top-more { position: relative; }
+.top-dot { position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.notices-panel { max-height: 70vh; }
+.notice-list { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; }
+.notice-row button { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 16px; border: 0; border-radius: 0; background: none; color: var(--text); font-size: var(--fs-3); }
+.notice-row button:hover:not(:disabled) { background: var(--selected); }
+.notice-row + .notice-row button { border-top: 1px solid var(--border); }
+.nr-title { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+.notice-row:not(.unread) .nr-title { font-weight: 400; color: var(--text-muted); }
+.nr-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+.nr-body { color: var(--text-muted); }
+.nr-when { font-size: var(--fs-2); }
+.notice-empty { padding: 16px; margin: 0; font-size: var(--fs-3); }
+.notice-toasts { position: fixed; z-index: 70; right: 16px; bottom: 44px; display: grid; gap: 8px; width: min(360px, calc(100vw - 32px)); }
+.notice-toast { display: flex; align-items: flex-start; gap: 4px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow-pop); }
+.nt-main { flex: 1; display: grid; gap: 2px; text-align: left; padding: 10px 12px; border: 0; background: none; color: var(--text); font-size: var(--fs-3); }
+.nt-title { font-weight: 600; }
+.nt-body { color: var(--text-muted); }
+.nt-x { margin: 6px 6px 0 0; }
+.install-howto { max-width: 440px; }
+.howto-steps { margin: 0; padding: 14px 16px 4px 36px; display: grid; gap: 10px; font-size: var(--fs-3); }
+.howto-icon { display: inline-block; padding: 0 4px; border: 1px solid var(--border); border-radius: 4px; }
+.howto-foot { margin: 0; padding: 8px 16px 16px; font-size: var(--fs-2); }
+.offline-line { position: fixed; z-index: 90; top: 0; left: 0; right: 0; padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px; text-align: center; font-size: var(--fs-3); font-weight: 500; background: var(--watch); color: var(--bg); }
+.set-push { display: grid; gap: 8px; margin-bottom: 12px; }
+.push-devices { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.push-devices li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.pd-name { font-weight: 500; }
+.push-devices .mini { margin-left: auto; }
+
+@media (max-width: 599.98px) {
+  .notices-panel, .install-howto { width: 100%; max-width: none; max-height: none; height: 100dvh; border-radius: 0; border: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  .command-backdrop:has(.notices-panel), .command-backdrop:has(.install-howto) { padding-top: 0; }
+  .notice-row button { min-height: var(--tap); }
+  .notice-toasts { left: 16px; right: 16px; width: auto; bottom: calc(64px + env(safe-area-inset-bottom)); }
+}

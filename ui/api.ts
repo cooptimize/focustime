@@ -9,6 +9,17 @@ import type { DraftStory, PlanDayState, Pick } from "../plan/types.ts";
  * is a 401 refusal with code "consent").
  */
 export class SessionError extends Error {}
+
+/** P1: whether the last call reached FocusTime (ui/Offline.tsx shows the offline line when not). */
+let reached = true;
+const reachListeners = new Set<() => void>();
+function noteReached(ok: boolean) {
+  if (ok === reached) return;
+  reached = ok;
+  reachListeners.forEach((f) => f());
+}
+export const lastCallReached = () => reached;
+export const onReachChange = (f: () => void) => (reachListeners.add(f), () => void reachListeners.delete(f));
 export const STALE_MESSAGE = "You're signed out. Sign in to continue";
 
 /** Who shows the sign-in screen when a call finds the session ended (set by the root). */
@@ -139,6 +150,11 @@ async function send<T>(action: string, input: unknown): Promise<T> {
       headers: postHeaders(),
       body: JSON.stringify({ action, input }),
     });
+    noteReached(true);
+  } catch (e) {
+    // P1: no answer at all (no network, or FocusTime unreachable): the offline line shows until a call gets through.
+    noteReached(false);
+    throw e;
   } finally {
     done();
   }
@@ -164,8 +180,13 @@ export async function startDemo(): Promise<void> {
   if (!r.ok) throw new Error("The demo isn't available right now");
 }
 
+/** P1: what this device does before the session ends (its push removed, the shell caches cleared; ui/pwa.ts). */
+let beforeSignOut: (() => Promise<void>) | null = null;
+export const setBeforeSignOut = (f: typeof beforeSignOut) => void (beforeSignOut = f);
+
 /** Signs out of FocusTime (or leaves the demo): the session ends on the server and its cookies are cleared. */
 export async function endSession(): Promise<void> {
+  await beforeSignOut?.().catch(() => undefined);
   await fetch("/auth/logout", { method: "POST", credentials: "same-origin", headers: postHeaders(), body: "{}" }).catch(() => null);
 }
 export const disconnectSource = (source: "outlook" | "google") => call<{ status: string }>("auth.disconnect", { source });

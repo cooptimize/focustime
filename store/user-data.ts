@@ -7,8 +7,8 @@ import type { UserRow } from "./accounts.ts";
 import { scopedDb, USER_TABLES } from "./scope.ts";
 import type { Conn } from "./sql/conn.ts";
 
-/** User tables left out of the export: sealed secrets. */
-export const NOT_EXPORTED: readonly string[] = ["user_secrets"];
+/** User tables left out of the export: sealed secrets, and push subscriptions (sealed, and tied to one browser). */
+export const NOT_EXPORTED: readonly string[] = ["user_secrets", "push_devices"];
 
 /** How long a soft delete waits before everything is removed. */
 export const HARD_DELETE_AFTER_DAYS = 30;

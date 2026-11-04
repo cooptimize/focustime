@@ -137,6 +137,8 @@ export type MenuEnv = {
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
   /** Opens Settings, at a section when given (step 6b). */
   openSettings: (section?: string) => void;
+  /** P1: ⋯ › Notifications, the in-app list. */
+  openNotifications?: () => void;
   /** Step 15.4: the VM chip's menu (Start; D475: nothing else changes the VM). */
   openVm: () => void;
   exportPlan: () => void;
@@ -1000,6 +1002,11 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "setup.prefill":
     case "setup.mark":
     case "setup.reset": return { run: () => env.openSettings("setup") };
+    case "notices.list":
+    case "notices.read": return env.openNotifications ? { run: () => env.openNotifications!() } : { disabled: "Not available here" };
+    case "push.status":
+    case "push.subscribe":
+    case "push.remove": return { run: () => env.openSettings("notifications") };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };

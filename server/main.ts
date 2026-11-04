@@ -8,6 +8,9 @@ import { createChatsClient, type ChatsClient } from "../sources/graph/chats.ts";
 import type { Host, KeyProvider, SnapshotStore } from "../host/types.ts";
 import { perPerson } from "../host/per-person.ts";
 import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
+import { createPushDevices } from "../store/push-devices.ts";
+import { createPush, type VapidSource } from "./push.ts";
+import { keyVaultSecret } from "../host/azure/vapid.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { WritePats } from "../actions/devops-write-actions.ts";
 import { createLocalHost } from "../host/local/index.ts";
@@ -251,6 +254,8 @@ await cancelShutdownRestores(db, instantNow).then(
   (c) => c.length && log({ source: "azure", op: "restore_cancelled", count: c.length }),
   () => log({ source: "azure", op: "restore_cancelled", kind: "failed" }),
 );
+/** P1: the app's VAPID key (the hosted app's Key Vault); null in the developer loop, where push isn't offered. */
+let vapidSource: VapidSource | null = null;
 if (host.kind === "azure" && process.env.FOCUSTIME_KEYVAULT_URL) {
   const credential = new DefaultAzureCredential(process.env.AZURE_CLIENT_ID ? { managedIdentityClientId: process.env.AZURE_CLIENT_ID } : {});
   dataKeys = keyVaultDataKey({
@@ -259,6 +264,8 @@ if (host.kind === "azure" && process.env.FOCUSTIME_KEYVAULT_URL) {
     token: async () => (await credential.getToken("https://vault.azure.net/.default")).token,
     store: async () => appKeyStore(db, "data-key", instantNow),
   });
+  // P1: the VAPID key for Web Push, read when first needed (none: push says it isn't set up).
+  vapidSource = keyVaultSecret({ vaultUrl: process.env.FOCUSTIME_KEYVAULT_URL, secretName: process.env.FOCUSTIME_VAPID_SECRET_NAME ?? "ft-vapid-key", token: async () => (await credential.getToken("https://vault.azure.net/.default")).token });
 }
 /** A3: when a signed-in person last used FocusTime (in memory; the idle rule's "someone is active"). */
 let lastUse = 0;
@@ -289,6 +296,8 @@ const settingsFor = (userId: string): UserSettings =>
 
 /** A2: a person's encrypted secrets (refresh tokens, write PATs), sealed with the app's data key. */
 const secretsFor = (userId: string): UserSecrets => createUserSecrets({ db, userId, keys: host.keys, now: instantNow });
+/** P1: a person's Web Push: their devices and the app's VAPID key; the subject is the app's public URL. */
+const pushFor = (userId: string) => createPush({ devices: createPushDevices({ db, userId, keys: host.keys, now: instantNow }), vapid: vapidSource, subject: app.publicUrl, fetch, now: () => Date.now(), log });
 
 const people = createPeople({
   db,
@@ -431,6 +440,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
   };
   void loadConfig().catch(() => null);
   const plan = planFor(who);
+  const push = pushFor(userId);
   const liveCtx: ActionContext = {
     renameNote: renamed.note,
     demo: demoControl(false),
@@ -457,6 +467,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     devopsWriter: createDevOpsWriter({ fetch, log }),
     account: accountFor(who),
     photoCache: host.photos,
+    push,
     azure: azureFor,
     exportPlan: (json) => host.files.exportPlan(json),
     myData: {
@@ -469,7 +480,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
       remove: async () => deleteData(userId),
     },
   };
-  const ticks = personTicks({ log, now: instantNow, notifications: host.notifications, media: host.media, openRoute: (route) => void openRouteFor(userId, route).catch(() => undefined) }, plan, liveCtx, who);
+  const ticks = personTicks({ log, now: instantNow, notifications: host.notifications, media: host.media, openRoute: (route) => void openRouteFor(userId, route).catch(() => undefined), push }, plan, liveCtx, who);
   runtimes.set(userId, { ctx: liveCtx, who, ticks });
   return liveCtx;
 }
