@@ -86,6 +86,24 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
     expect(errors).toEqual([]);
   }, 90_000);
 
+  it("Pick a chat opens the picker while the saved chats are still loading", async () => {
+    const { page, errors } = await freshPage(h);
+    // Hold chats.registered (a real sign-in reads Teams for it, which can take seconds); the picker doesn't need it.
+    let release = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    await page.route("**/api/action", async (route) => {
+      if (/"chats\.registered"/.test(route.request().postData() ?? "")) await held;
+      await route.continue();
+    });
+    await openSettings(page);
+    await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
+    const team = page.getByRole("group", { name: /^Teams chats for Northwind/ }).getByRole("region", { name: /^Delivery team chat/ });
+    await team.getByRole("button", { name: "Pick a chat" }).click({ timeout: 5_000 });
+    await team.getByRole("option").first().waitFor();
+    release();
+    expect(errors).toEqual([]);
+  }, 60_000);
+
   it("Connections lists every Microsoft permission, Chat.ReadBasic among them", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
