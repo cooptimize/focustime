@@ -2,9 +2,10 @@
 // store: false, the key only in the Authorization header; the answer is the output_text parts; usage becomes cost at the
 // app's prices; 429 is a rate limit (with Retry-After) or a quota (never retried); 5xx is transient; a timeout aborts.
 import { describe, expect, it } from "vitest";
-import { anOpenAiResponse } from "../test/builders/index.ts";
+import { anAiApp, anOpenAiResponse } from "../test/builders/index.ts";
 import { costMicros } from "./cost.ts";
 import { openAiProvider, retryAfterMs, usageOf } from "./openai.ts";
+import { createAi } from "./service.ts";
 import type { ProviderCall } from "./types.ts";
 
 const KEY = `sk-test-${"k".repeat(24)}`;
@@ -122,3 +123,22 @@ describe("errors", () => {
   });
 });
 
+describe("through the service", () => {
+  it("429 then success: one retry after Retry-After, the cost from the second answer's usage", async () => {
+    const { f, seen } = fake(json({ error: { code: "rate_limit_exceeded" } }, 429, { "retry-after": "1" }), json(anOpenAiResponse({ reply: "ok" }, { input: 1000, output: 100 })));
+    const slept: number[] = [];
+    const ai = createAi({
+      provider: async () => openAiProvider({ key: async () => KEY, fetch: f }),
+      app: anAiApp({ provider: "openai" }),
+      person: async () => ({ use: true, monthlyCapUsd: 10, allowedClients: [] }),
+      guard: async () => ({ directory: [], homeDomains: [], forbidden: [] }),
+      log: { add: async () => {}, spentMicros: async () => 0, recent: async () => [] },
+      appSpend: { get: async () => 0, add: async () => {} },
+      now: () => "2026-11-04T15:00:00Z",
+      sleep: async (ms) => void slept.push(ms),
+    });
+    const r = await ai.test();
+    expect(r.ok && [r.value, r.costUsd]).toEqual([{ reply: "ok" }, 0.0012]);
+    expect([seen.length, slept]).toEqual([2, [1000]]);
+  });
+});

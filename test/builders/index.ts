@@ -139,12 +139,21 @@ export function aChat(o: Partial<import("../../plan/chats.ts").ChatSummary> = {}
   return { id: `19:chat${n}@thread.v2`, topic: `Chat ${n}`, webUrl: null, lastUpdated: "2026-10-20T15:00:00Z", lastRead: null, members: [aChatMember(), aChatMember({ external: true })], moreMembers: false, ...o };
 }
 
-
 // ---- AI-0 ----
 
 /** A client as the AI guard knows it (fictional names, contoso/fabrikam style). */
 export function aClientEntry(o: Partial<import("../../ai/guard.ts").ClientEntry> = {}): import("../../ai/guard.ts").ClientEntry {
   return { key: "fabrikam", names: ["Fabrikam Inc"], projects: ["Fabrikam Portal"], itemIds: [4101, 4102], ...o };
+}
+
+/** App-level AI settings for tests: cheap round prices so costs are easy to read ($1 per million in, $2 out). */
+export function anAiApp(o: Partial<import("../../ai/service.ts").AiAppSettings> = {}): import("../../ai/service.ts").AiAppSettings {
+  return { provider: "stub", model: "test-model", reasoningEffort: null, timeoutMs: 5_000, maxOutputTokens: { default: 500 }, prices: { inputPerMillion: 1, cachedInputPerMillion: 0.5, outputPerMillion: 2 }, appCapUsd: 100, ...o };
+}
+
+/** A person's AI settings with both switches on for one client. */
+export function anAiPerson(o: Partial<import("../../ai/types.ts").AiPersonSettings> = {}): import("../../ai/types.ts").AiPersonSettings {
+  return { use: true, monthlyCapUsd: 10, allowedClients: ["fabrikam"], ...o };
 }
 
 /** An OpenAI Responses API body with a structured answer and its usage. */

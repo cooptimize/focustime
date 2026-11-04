@@ -1035,6 +1035,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "asks.switch":
     case "asks.purge":
       return { run: () => env.openSettings("clients") };
+    case "ai.status":
+    case "ai.test":
+      return { run: () => env.openSettings("ai") };
     case "permissions.status": return { run: () => env.openSettings("connections") };
     case "people.photos": return { disabled: "Shown wherever you and Cooptimizers appear" };
     case "presence.people": return { disabled: "Shown next to Cooptimizers in Needs help from…, Who and Roadmap" };

@@ -3,6 +3,11 @@
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
 import { askAction, type AskContext } from "./ask-actions.ts";
+import { aiAction, type AiActionName, type AiRuntime } from "./ai-actions.ts";
+import { createAi, type AiService } from "../ai/service.ts";
+import type { ClientEntry } from "../ai/guard.ts";
+import { inviteDomains } from "../config/schema.ts";
+import type { ChosenVm } from "./account-types.ts";
 import type { Logger } from "../log/logger.ts";
 import type { PhotoCache } from "../host/types.ts";
 import { expiringSoon } from "../plan/expiry.ts";
@@ -55,7 +60,7 @@ import type { HostLinks } from "../host/types.ts";
 import type { ActionResponse, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
 import { DATAVERSE_UNREACHABLE, manyDataverseMatches, noDataverseMatch, type MatchResult } from "./dataverse-words.ts";
 import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
-import { vmAction, type VmContext } from "./vm-actions.ts";
+import { vmAction, vmKey, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
@@ -70,6 +75,8 @@ const TOUR_MARK = "tour_offer";
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
 export type ActionContext = {
+  /** AI-0: the app's AI runtime (settings, provider, the app's spend). Absent: AI isn't available here (demo). */
+  ai?: AiRuntime;
   /** AP-1: the structured logger (counts and kinds only). Absent: nothing is logged (tests, demo). */
   log?: Logger;
   /** S1 (D452): where this runs: local, dev, prod or demo (runtime config). Absent: local. */
@@ -551,6 +558,56 @@ export async function chatContext(ctx: ActionContext): Promise<ChatContext> {
 }
 
 /** AP-1: Asks: the chats with Read for asks on, the person's PTO, their clients' open DevOps items and write access. */
+/** DevOps project names from a work item's link (https://dev.azure.com/<org>/<project>/_workitems/...). */
+const projectOf = (url: string): string | null => {
+  const m = /^https:\/\/dev\.azure\.com\/[^/]+\/([^/_][^/]*)\//.exec(url);
+  if (!m) return null;
+  const p = decodeURIComponent(m[1]!);
+  return /^[0-9a-f-]{36}$/i.test(p) ? null : p;
+};
+
+/**
+ * AI-0: every client the guard must know (all but the internal one): its key, Dataverse and display names, and the
+ * DevOps projects and work item ids already read (Week, Plan the week). Nothing is fetched for this: a client whose
+ * DevOps wasn't read yet is known by its names only.
+ */
+async function aiDirectory(ctx: ActionContext, cfg: AppConfig): Promise<ClientEntry[]> {
+  const zone = userZone(cfg);
+  const mine = cfg.dataverse.mySystemUserId ? ((await ctx.makeDataverse(cfg.dataverse, zone).myClients().catch(() => null)) ?? []) : [];
+  const keys = new Set([...mine.map((c) => c.clientKey), ...Object.keys(cfg.clientSettings), ...cfg.week.standingBlocks.map((b) => b.clientKey)]);
+  keys.delete(INTERNAL_CLIENT);
+  const devops = ctx.makeDevOps(cfg.dataverse, zone);
+  return [...keys].map((key) => {
+    const w = devops.last(key);
+    const items = w ? [...w.items, ...w.children, ...(w.watched ?? []), ...(w.committed ?? [])] : [];
+    const names = [mine.find((c) => c.clientKey === key)?.clientName, cfg.clientSettings[key]?.name].filter((n): n is string => !!n && n !== key);
+    return { key, names: [...new Set(names)], projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set(items.map((i) => i.id))] };
+  });
+}
+
+/** AI-0: the AI service for this person and request, or null where AI isn't available (demo, no plan store). */
+export async function aiFor(ctx: ActionContext): Promise<AiService | null> {
+  const rt = ctx.ai;
+  const plan = ctx.plan;
+  if (!rt || !plan) return null;
+  return createAi({
+    provider: rt.provider,
+    app: rt.app,
+    person: async () => (await configured(ctx))?.ai ?? { use: false, monthlyCapUsd: 10, allowedClients: [] },
+    guard: async () => {
+      const cfg = await configured(ctx);
+      if (!cfg) return { directory: [], homeDomains: [], forbidden: [] };
+      const me = await storedIdentity(plan);
+      const vm = me ? await plan.accountState<ChosenVm>(vmKey(me.oid)).catch(() => null) : null;
+      return { directory: await aiDirectory(ctx, cfg), homeDomains: inviteDomains(cfg), forbidden: vm ? [vm.name, vm.id] : [] };
+    },
+    log: { add: (e) => plan.addAiRequest(e), spentMicros: (a, b) => plan.aiSpentMicros(a, b), recent: (n) => plan.aiRequests(n) },
+    appSpend: rt.appSpend,
+    now: ctx.now,
+    ...(rt.logger ? { logger: rt.logger } : ctx.log ? { logger: ctx.log } : {}),
+  });
+}
+
 export async function askContext(ctx: ActionContext): Promise<AskContext> {
   const chats = await chatContext(ctx);
   return {
@@ -937,6 +994,9 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "asks.search":
     case "asks.purge":
       return askAction(await askContext(ctx), action, req.input);
+    case "ai.status":
+    case "ai.test":
+      return aiAction(await aiFor(ctx), action as AiActionName);
     case "people.photos":
       return photoAction({ ...(await presenceContext(ctx)), cache: ctx.photoCache ?? null }, req.input);
     case "media.status": {
