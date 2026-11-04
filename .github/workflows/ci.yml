@@ -92,8 +92,38 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci --no-audit --no-fund
-      # Playwright's WebKit (Safari's engine) and its system libraries, for e2e/safari.test.ts.
-      - run: npx playwright-core install --with-deps webkit
+      # Playwright's WebKit (Safari's engine) and its system libraries, for e2e/safari.test.ts. Both are cached between
+      # runs (AP-2): the browser keyed on the Playwright version, the system packages (.deb files) on the runner image and
+      # the Playwright version. A slow Ubuntu mirror once took 8 to 17 minutes for the packages alone and cancelled a shard.
+      - name: Versions for the browser caches
+        id: pw
+        run: |
+          echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS:-ubuntu}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+      - name: Cache the Playwright browser
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-webkit-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Cache WebKit's system packages
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-webkit
+          key: apt-webkit-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}
+          restore-keys: |
+            apt-webkit-${{ steps.pw.outputs.image }}-
+            apt-webkit-
+      - name: Install WebKit's system packages
+        run: |
+          mkdir -p ~/apt-webkit
+          # Cached packages first; apt downloads only what changed since.
+          if ls ~/apt-webkit/*.deb >/dev/null 2>&1; then sudo cp ~/apt-webkit/*.deb /var/cache/apt/archives/; fi
+          npx playwright-core install-deps webkit
+          cp /var/cache/apt/archives/*.deb ~/apt-webkit/ 2>/dev/null || true
+      - name: Install WebKit
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: npx playwright-core install webkit
       # The UI is built once for the run (test/e2e-build.ts) and every demo server serves it.
       - name: Browser tests
         run: |
