@@ -1739,6 +1739,8 @@ export function App() {
           dot={notices.unread > 0}
           onTab={(t: BottomTab, e) => {
             if (t === "capture") return setCaptureOpen(true);
+            // The bar stays on screen under Capture: another tab closes it and goes there.
+            setCaptureOpen(false);
             if (t === "more") {
               const r = e.currentTarget.getBoundingClientRect();
               return setPhoneMoreAt({ x: r.right, y: r.top - 4 });

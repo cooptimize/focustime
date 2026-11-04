@@ -120,14 +120,14 @@ try {
       await page.locator(".phone-now button", { hasText: "Done" }).click().catch(() => undefined);
       await go("#/today");
       await shot("unread-dot");
-      await page.locator(".bottom-bar .bb-tab", { hasText: "⋯" }).click();
+      await page.locator(".bottom-bar .bb-tab", { hasText: "More" }).click();
       await page.getByRole("menuitem", { name: /Notifications/ }).click();
       await page.waitForSelector(".notices-panel");
       await shot("notifications");
       await page.keyboard.press("Escape");
       // Install app: on iPhone the how-to (Safari has no install button).
       if (run.device === "iPhone 15") {
-        await page.locator(".bottom-bar .bb-tab", { hasText: "⋯" }).click();
+        await page.locator(".bottom-bar .bb-tab", { hasText: "More" }).click();
         await page.getByRole("menuitem", { name: /Install app/ }).click();
         await page.waitForSelector(".install-howto");
         await shot("install-howto");

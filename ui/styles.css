@@ -3677,3 +3677,52 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .notice-row button { min-height: var(--tap); }
   .notice-toasts { left: 16px; right: 16px; width: auto; bottom: calc(64px + env(safe-area-inset-bottom)); }
 }
+
+/* ---- P1 fix: the phone in Safari (D483). The page itself scrolls (Safari's own scrolling, and its toolbar can
+   collapse), the top bar sticks, and the bottom bar stays on screen, also under Capture, Close out and the detail
+   panel. Widths that hold text are in em, so they grow with the phone's own text size. ---- */
+@media (max-width: 599.98px) {
+  :root { --bb-h: calc(58px + env(safe-area-inset-bottom)); }
+  .app.phone { height: auto; min-height: 100dvh; overflow: visible; padding-bottom: var(--bb-h); box-sizing: border-box; }
+  .app.phone > .topbar { position: sticky; top: 0; z-index: 30; background: var(--bg); }
+  .app.phone .today-view, .app.phone .grid.narrow, .app.phone .settings, .app.phone .phone-ro, .app.phone .phone-ro-body,
+  .app.phone .roadmap, .app.phone .inbox-view, .app.phone .inbox { overflow: visible; flex: none; height: auto; max-height: none; }
+
+  /* The bottom bar: fixed, four tabs with an icon over a word, the current one marked by a short bar. */
+  .bottom-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 65; height: var(--bb-h); box-sizing: border-box;
+    padding: 0 8px env(safe-area-inset-bottom); background: var(--surface); border-top: 1px solid var(--border);
+  }
+  .bb-tab {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 58px;
+    border: 0; border-radius: 0; background: none; padding: 0; box-shadow: none; -webkit-tap-highlight-color: transparent;
+    font: 500 var(--fs-1)/1.1 var(--font-ui); color: var(--text-muted);
+  }
+  .bb-tab:hover { border: 0; }
+  .bb-tab::before { content: ""; position: absolute; top: 0; left: calc(50% - 14px); width: 28px; height: 3px; border-radius: 0 0 3px 3px; background: transparent; }
+  .bb-tab[aria-current="page"] { color: var(--text); font-weight: 600; box-shadow: none; }
+  .bb-tab[aria-current="page"]::before { background: var(--accent); }
+  .bb-icon { width: 24px; height: 24px; flex: none; }
+  .bb-dot { top: 8px; right: calc(50% - 16px); }
+
+  /* Capture, Close out and the detail panel end at the bottom bar, so the tabs are always there. */
+  .cap-backdrop { bottom: var(--bb-h); }
+  .cap-dialog { height: 100%; padding-bottom: 16px; }
+  .detail-panel { bottom: var(--bb-h); padding-bottom: 0; }
+  .app.phone .closeout-panel {
+    top: 0; left: 0; right: 0; bottom: var(--bb-h); width: auto; z-index: 50; border-left: 0; box-shadow: none;
+    padding: calc(12px + env(safe-area-inset-top)) 16px 16px; overscroll-behavior: contain;
+  }
+  .app.phone .cp-head { flex-wrap: wrap; }
+  .app.phone .cp-head h2 { flex: 1 1 auto; }
+  .app.phone .cp-notes .co-note label { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .notice-toasts { bottom: calc(var(--bb-h) + 8px); }
+
+  /* Times as wide as their text: "10:00–11:00" never runs into the title at any text size. */
+  .app.phone .today-rows > li:not(.pick-row) .ev-time,
+  .app.phone .ev-list.day-cal .ev-time,
+  .app.phone .day-outside .ev-list.day-cal .ev-time { width: auto; min-width: 6.4em; }
+  /* "Before your blocks" and "After your blocks": the label over its events. */
+  .app.phone .day-outside { flex-direction: column; gap: 4px; }
+  .app.phone .day-outside > :first-child { white-space: nowrap; }
+}

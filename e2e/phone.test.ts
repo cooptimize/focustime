@@ -28,9 +28,20 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
   it("has the bottom bar and a small top bar, no hover-only controls, and planning screens read-only", async () => {
     const { page, errors } = await freshPage(h, PHONE);
     await open(page, "#/today");
-    expect(await page.locator(".bottom-bar .bb-tab").allTextContents()).toEqual(["Today", "Week", "Capture", "⋯"]);
+    expect(await page.locator(".bottom-bar .bb-tab").allTextContents()).toEqual(["Today", "Week", "Capture", "More"]);
     expect(await page.locator(".topbar .views").count()).toBe(0);
     expect(await page.locator(".topbar .capture-btn, .topbar .timer-btn, .topbar .top-more").count()).toBe(0);
+    // The page itself scrolls (Safari's own scrolling), with nothing left behind the bottom bar at the end.
+    const scroll = await page.evaluate(() => {
+      const inner = [...document.querySelectorAll(".app *")].filter((e) => /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 2 && !e.closest(".bottom-bar"));
+      scrollTo(0, 1e6);
+      const bar = document.querySelector(".bottom-bar")!.getBoundingClientRect().top;
+      const last = Math.max(...[...document.querySelectorAll(".today-view *")].map((e) => e.getBoundingClientRect().bottom));
+      scrollTo(0, 0);
+      return { inner: inner.map((e) => e.className), behind: last - bar };
+    });
+    expect(scroll.inner).toEqual([]);
+    expect(scroll.behind).toBeLessThanOrEqual(0);
 
     // Week: one day at a time; every control that showed on hover is there without one.
     await open(page, "#/week");
@@ -89,12 +100,15 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     await sheet.locator("input").first().fill("Ask Jordan about the invoice");
     await page.keyboard.press("Enter");
     await expect.poll(async () => JSON.stringify((await call(page, "capture.load", {})).data)).toContain("Ask Jordan about the invoice");
-    await page.keyboard.press("Escape").catch(() => undefined);
+    // The bottom bar stays under Capture, and another tab closes it.
+    expect(await page.locator(".bottom-bar .bb-tab[aria-current='page']").textContent()).toBe("Capture");
+    await page.locator(".bottom-bar .bb-tab", { hasText: "Today" }).click();
+    await sheet.waitFor({ state: "detached" });
 
     // Part B: this morning's notifications: ⋯ has its dot; in the list the new one keeps its mark while it's open.
     await open(page, "#/today");
     await page.locator(".bottom-bar .bb-dot").waitFor();
-    await page.locator(".bottom-bar .bb-tab", { hasText: "⋯" }).click();
+    await page.locator(".bottom-bar .bb-tab", { hasText: "More" }).click();
     await page.getByRole("menuitem", { name: /Notifications/ }).click();
     const panel = page.locator(".notices-panel");
     await panel.waitFor();
@@ -103,7 +117,7 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     await panel.getByRole("button", { name: "Close" }).click();
     // Read now: ⋯ no longer counts them (its dot stays while the Inbox has something).
     expect((await call(page, "notices.list", {})).data.unread).toBe(0);
-    await page.locator(".bottom-bar .bb-tab", { hasText: "⋯" }).click();
+    await page.locator(".bottom-bar .bb-tab", { hasText: "More" }).click();
     expect(await page.getByRole("menuitem", { name: /Notifications/ }).textContent()).not.toContain("new");
     expect(errors).toEqual([]);
   }, T);

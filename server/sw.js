@@ -49,9 +49,19 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(caches.match(req.url, { cacheName: CACHE }).then((hit) => hit || fetch(req)));
     return;
   }
-  // A page load: always the network (sign-in redirects and fresh builds), the cached shell only when it fails.
-  event.respondWith(fetch(req).catch(() => caches.match("/", { cacheName: CACHE }).then((hit) => hit || Response.error())));
+  // A page load: the network first (sign-in redirects and fresh builds). The cached shell when it fails, or when the
+  // server hasn't answered in SLOW_MS (a server waking up), so the app opens and shows it's loading instead of a white
+  // page; its data still comes from the server.
+  event.respondWith(pageLoad(req));
 });
+
+const SLOW_MS = 3000;
+function pageLoad(req) {
+  const shell = () => caches.match("/", { cacheName: CACHE });
+  const net = fetch(req);
+  const slow = new Promise((resolve) => setTimeout(resolve, SLOW_MS)).then(shell).then((hit) => hit || net);
+  return Promise.race([net, slow]).catch(() => shell().then((hit) => hit || Response.error()));
+}
 
 // Sign-out (and "Clear"): the page asks, every FocusTime cache goes.
 self.addEventListener("message", (event) => {
