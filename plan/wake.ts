@@ -40,7 +40,7 @@ export function nextWake(f: WakeFacts): Temporal.Instant {
   }
   const today = f.now.toZonedDateTimeISO(f.zone).toPlainDate();
   for (const date of [today, today.add({ days: 1 })]) {
-    // Just after midnight: a new day, and the VM's auto-shutdown is put back on the first pass after it.
+    // Just after midnight: a new day.
     out.push(date.toZonedDateTime({ timeZone: f.zone }).toInstant().add({ minutes: 1 }));
     for (const hm of f.offsets.weekNudges) out.push(at(date, hm, f.zone));
     if (!f.hours) continue;

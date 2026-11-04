@@ -780,7 +780,7 @@ function VmStartForm(p: FormProps) {
   const a = useAutoSave({ section: "vm", initial: { startWithoutAsking: p.data.vm.startWithoutAsking }, payload: (v) => v, onSaved: p.onSavedData, label: () => "Start my VM without asking" });
   return (
     <div className="set-grid set-vm-start">
-      <AutoField a={a} k="startWithoutAsking" label="Start my VM without asking" hint={"Start in the morning prompt skips the preview. Stop always previews."}>
+      <AutoField a={a} k="startWithoutAsking" label="Start my VM without asking" hint={"Start in the morning prompt skips the preview."}>
         <label className="set-check">
           <input type="checkbox" checked={a.v.startWithoutAsking} onChange={(e) => a.change("startWithoutAsking", e.target.checked)} /> Start right away
         </label>
@@ -1241,7 +1241,7 @@ function ResetPlan({ disabled, onDone }: { disabled: boolean; onDone: () => void
   const [status, setStatus] = useState<string | null>(null);
   return (
     <div className="set-field">
-      <span className="set-label">Reset local plan</span>
+      <span className="set-label">Reset my plan</span>
       {asking ? (
         <form
           className="set-inline"
@@ -1406,7 +1406,7 @@ function WriteLog() {
   return (
     <section className="write-log" aria-label="Write log">
       <h3>Write log</h3>
-      <p className="muted">Every change FocusTime made outside this computer.</p>
+      <p className="muted">Every change FocusTime made in other apps.</p>
       {error && <p className="set-problem">{error}</p>}
       {log && log.orphans.length > 0 && (
         <div className="wl-orphans">

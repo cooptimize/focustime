@@ -1,5 +1,5 @@
 // Step 15.4: the shapes the UI sees for the sign-in and my VM (types only; no I/O, safe to import in the window).
-import type { PowerState, Shutdown, ShutdownChange, ShutdownChoice, VmChip, VmOp, VmTransition } from "../plan/vm.ts";
+import type { PowerState, Shutdown, VmChip, VmOp, VmTransition } from "../plan/vm.ts";
 
 export type Person = { name: string; username: string; initials: string };
 export type AuthStatus = {
@@ -16,7 +16,8 @@ export type AuthStatus = {
 /** My VM, kept per signed-in person (their object id), in account state. */
 export type ChosenVm = { id: string; name: string; resourceGroup: string; subscriptionId: string; location: string; chosenAt: string };
 
-export type VmPreviewOp = VmOp | ShutdownChoice | "restore";
+/** D475: start is the only VM change FocusTime makes. */
+export type VmPreviewOp = VmOp;
 export type VmPreview = {
   previewId: string;
   expiresAt: string;
@@ -25,7 +26,7 @@ export type VmPreview = {
   vm: string;
   lines: { label: string; before: string; after: string }[];
   notes: string[];
-  /** Stop while focus runs, or similar: shown prominently. */
+  /** Shown prominently (none today). */
   warning: string | null;
   confirmLabel: string;
 };
@@ -41,12 +42,8 @@ export type VmStatus = {
   power: PowerState | null;
   transition: VmTransition | null;
   canStart: boolean;
-  canStop: boolean;
+  /** The auto-shutdown schedule as Azure has it, read only (D475: FocusTime never changes it). */
   schedule: { label: string; time: string; status: Shutdown["status"]; timeZoneId: string } | null;
-  /** A schedule change FocusTime will put back, with plain words for it. */
-  change: (ShutdownChange & { text: string }) | null;
-  /** Today's warning: the change is still in place after its day. */
-  stillChanged: boolean;
   /** "Your VM is off. Start it?" */
   prompt: boolean;
   /** Step 15.5 (Q87): the prompt's Start runs at once (Settings > You), else it shows the preview. */
@@ -57,7 +54,7 @@ export type VmStatus = {
   error: VmError | null;
 };
 
-/** One Azure write: a start, a deallocate, an auto-shutdown change or its restore. */
+/** One Azure write: a start. Older rows may be a deallocate, an auto-shutdown change or its restore (before D475). */
 export type AzureWriteEntry = {
   id: number;
   at: string;
