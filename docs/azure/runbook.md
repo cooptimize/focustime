@@ -371,7 +371,7 @@ SQL compute is most of it; what keeps it down is the idle rule (D431) letting th
 working hours. The actual cost after the first week goes here (Cost Management, resource group FocusTime, or
 `az consumption usage list --start-date <d> --end-date <d>`): _not measured yet_.
 
-### Watch dev and prod costs (D514)
+### Watch dev and prod costs (D523)
 
 Azure portal › Monitor › Workbooks › **FocusTime costs** (prod's copy, in FocusTime; dev's is "FocusTime costs (dev
 copy)", the same view). Pick This month, Last month or This week. It shows dev against prod, each day, by service and
