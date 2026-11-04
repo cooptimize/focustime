@@ -190,3 +190,7 @@ The scope's open questions (`docs/scope/asks-and-promises-scope-v0.1.md`), with 
 - Q-SP-7: Answered by D523: every chat is registered; reading stays on only where someone had switched it on, the rest wait for an admin.
 - Q-SP-8: A catch-up read takes the newest 250 messages per chat (5 pages of 50, as since AP-1) and moves the watermark past them, so a chat with more than that since its last poll (dev after a long scale-to-zero, a very busy night) skips the older ones. Page further for catch-up, or say so on the chat?
 - Q-SP-6: The per-person AP-1 tables (`delivery_chats`, `chat_messages`, `asks`) are no longer read. Drop them (with `safe-drop`) in the release after this one is in prod.
+
+## Costs (Nov 4)
+
+- Q-COST-1: Budget alerts per environment (for example $175 prod, $50 dev, at 80% actual and 100% forecast)? A budget needs a contact email or an action group, which the repo doesn't hold (D524). Whose address, and in Bicep (with the address as a parameter outside the repo) or set by hand in Cost Management?
