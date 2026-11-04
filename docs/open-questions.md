@@ -179,3 +179,7 @@ The scope's open questions (`docs/scope/asks-and-promises-scope-v0.1.md`), with 
 - Q-AP2-3 (new): The 50 open items the AI sees are the most recently changed; for a client with hundreds of open items, the matching one may be older. Should the list be narrowed by words from the message first (no AI), or is "Looks like" only a hint?
 - Q-AP2-4 (new): Promise phrases are English only and match anywhere in the message, so without AI "let me know" and "see you tomorrow" make promises too (with AI they are usually "not a promise"). How noisy is it with real chats, and should the default list be narrower?
 - Q-AP2-5 (new): A promise answered by a later message (the file was sent) stays open until its follow-up or item is done (D506). AP-3 proposes suggesting a close; until then, people close it by hand.
+
+## Costs (Nov 4)
+
+- Q-COST-1: Budget alerts per environment (for example $175 prod, $50 dev, at 80% actual and 100% forecast)? A budget needs a contact email or an action group, which the repo doesn't hold (D514). Whose address, and in Bicep (with the address as a parameter outside the repo) or set by hand in Cost Management?

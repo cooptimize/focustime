@@ -371,6 +371,19 @@ SQL compute is most of it; what keeps it down is the idle rule (D431) letting th
 working hours. The actual cost after the first week goes here (Cost Management, resource group FocusTime, or
 `az consumption usage list --start-date <d> --end-date <d>`): _not measured yet_.
 
+### Watch dev and prod costs (D514)
+
+Azure portal › Monitor › Workbooks › **FocusTime costs** (prod's copy, in FocusTime; dev's is "FocusTime costs (dev
+copy)", the same view). Pick This month, Last month or This week. It shows dev against prod, each day, by service and
+by resource, for everything tagged `app: focustime`. To keep it on a dashboard: open it, then Pin › Pin workbook.
+
+- It reads Cost Management as you: you need Cost Management Reader (or Reader) on the subscription.
+- Cost data is 8 to 24 hours behind. The registry is in dev and serves prod too, so its cost shows under dev.
+- "Too many requests" on a chart: Cost Management limits queries per scope; refresh in a minute.
+- A new resource needs the `app` and `env` tags (main.bicep's `tags`) to show; anything made outside the Bicep won't.
+- Prices to compare with are in the Cost table above. First actual figures (Nov 1 to 4, 2026): dev about $9.50, prod
+  about $3.40, nearly all SQL compute; Container Apps inside the free grant.
+
 ## Asks (AP-1)
 
 ### Graph permissions and consent

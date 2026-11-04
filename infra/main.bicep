@@ -115,6 +115,12 @@ module app 'modules/app.bicep' = {
   }
 }
 
+// FocusTime costs (the workbook in Monitor › Workbooks): dev and prod's actual cost, read live from Cost Management.
+module costs 'modules/costs.bicep' = {
+  name: 'costs'
+  params: { env: env, location: location, tags: tags }
+}
+
 output appName string = app.outputs.name
 output appFqdn string = app.outputs.fqdn
 output publicUrl string = app.outputs.publicUrl
