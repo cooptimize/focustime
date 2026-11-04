@@ -13,7 +13,8 @@ const ORIGIN = "https://focustime.example";
 const SHELL = ["/", "/assets/main-abc.js", "/assets/main-abc.css", "/icons/focustime-192.png", "/manifest.webmanifest"];
 
 /** The worker in a sandbox: its listeners, a fake Cache Storage (with every put recorded) and a fake network. */
-function worker(sha = "abc1234def", online = true) {
+function worker(sha = "abc1234def", online: boolean | "hang" = true) {
+  const timers: (() => void)[] = [];
   const listeners: Record<string, (e: unknown) => void> = {};
   const stores = new Map<string, Map<string, string>>([["focustime-shell-0000000", new Map()], ["someone-elses", new Map()]]);
   const puts: string[] = [];
@@ -22,6 +23,7 @@ function worker(sha = "abc1234def", online = true) {
   const fetch = async (r: { url: string } | string) => {
     const url = typeof r === "string" ? r : r.url;
     network.push(url);
+    if (online === "hang") return new Promise<never>(() => {});
     if (!online) throw new TypeError("offline");
     return respond(`network:${new URL(url, ORIGIN).pathname}`);
   };
@@ -60,7 +62,7 @@ function worker(sha = "abc1234def", online = true) {
       this.url = new URL(u, ORIGIN).toString();
     }
   }
-  runInNewContext(serviceWorkerSource(sha, SHELL), { self, caches, fetch, Request, URL, Response: { error: () => ({ body: "error", ok: false }) }, Promise, Set, JSON });
+  runInNewContext(serviceWorkerSource(sha, SHELL), { self, caches, fetch, Request, URL, Response: { error: () => ({ body: "error", ok: false }) }, Promise, Set, JSON, setTimeout: (fn: () => void) => void timers.push(fn) });
   /** Fires an event and waits for what it handed to waitUntil or respondWith. */
   const fire = async (type: string, extra: Record<string, unknown> = {}) => {
     const got: { waited?: Promise<unknown>; answer?: Promise<{ body: string }> } = {};
@@ -69,7 +71,9 @@ function worker(sha = "abc1234def", online = true) {
     return got.answer ? (await got.answer).body : null;
   };
   const get = (path: string, mode = "cors") => fire("fetch", { request: { url: new URL(path, ORIGIN).toString(), method: "GET", mode } });
-  return { fire, get, stores, puts, network, setOnline: (on: boolean) => void (online = on) };
+  /** The worker's timers (its 3 s wait for a slow page load) fire now. */
+  const elapse = () => timers.splice(0).forEach((f) => f());
+  return { fire, get, stores, puts, network, elapse, setOnline: (on: boolean | "hang") => void (online = on) };
 }
 
 describe("the service worker (P1)", () => {
@@ -103,6 +107,23 @@ describe("the service worker (P1)", () => {
     expect(await w.get("/?route=today", "navigate")).toBe("network:/");
     w.setOnline(false);
     expect(await w.get("/#/today", "navigate")).toBe("cached:/");
+  });
+
+  it("a server that hasn't answered in 3 seconds (waking up) gets the cached shell, not a white page", async () => {
+    const w = worker();
+    await w.fire("install");
+    w.setOnline("hang");
+    const answer = w.get("/", "navigate"); // the network never answers
+    w.elapse(); // 3 seconds pass
+    expect(await answer).toBe("cached:/");
+  });
+
+  it("a page that answers in time comes from the network, even after the wait", async () => {
+    const w = worker();
+    await w.fire("install");
+    const answer = w.get("/", "navigate");
+    expect(await answer).toBe("network:/");
+    w.elapse();
   });
 
   it("a new build drops the old shell cache (not other caches); sign-out clears every FocusTime cache", async () => {

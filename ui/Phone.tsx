@@ -14,10 +14,47 @@ import { userZone } from "../week/zone.ts";
 
 export type BottomTab = "today" | "week" | "capture" | "more";
 
-/** Today, Week, Capture and ⋯ at the foot of the screen; the top bar keeps the logo, the VM dot and the avatar. */
+/** The bottom bar's icons, drawn in the tab's text color: a day, the week's half-days, a plus, three dots. */
+const BB_ICONS: Record<BottomTab, ReactNode> = {
+  today: (
+    <>
+      <rect x="4" y="5" width="16" height="15" rx="2.5" />
+      <path d="M4 10h16M9 3v4M15 3v4" />
+      <circle cx="12" cy="15" r="1.6" fill="currentColor" stroke="none" />
+    </>
+  ),
+  week: (
+    <>
+      <rect x="3" y="5" width="4" height="6" rx="1" />
+      <rect x="10" y="5" width="4" height="6" rx="1" />
+      <rect x="17" y="5" width="4" height="6" rx="1" />
+      <rect x="3" y="13" width="4" height="6" rx="1" />
+      <rect x="10" y="13" width="4" height="6" rx="1" />
+      <rect x="17" y="13" width="4" height="6" rx="1" />
+    </>
+  ),
+  capture: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 8v8M8 12h8" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="6" cy="12" r="1.4" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+      <circle cx="18" cy="12" r="1.4" fill="currentColor" />
+    </>
+  ),
+};
+
+/** Today, Week, Capture and More at the foot of the screen; the top bar keeps the logo, the VM dot and the avatar. */
 export function BottomBar({ current, inboxCount, dot, onTab }: { current: BottomTab | null; inboxCount: number; dot: boolean; onTab: (t: BottomTab, e: React.MouseEvent<HTMLButtonElement>) => void }) {
   const tab = (t: BottomTab, label: string, extra?: ReactNode) => (
     <button key={t} type="button" className="bb-tab" aria-current={current === t ? "page" : undefined} onClick={(e) => onTab(t, e)} aria-haspopup={t === "more" ? "menu" : undefined}>
+      <svg className="bb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {BB_ICONS[t]}
+      </svg>
       <span className="bb-label">{label}</span>
       {extra}
     </button>
@@ -27,7 +64,7 @@ export function BottomBar({ current, inboxCount, dot, onTab }: { current: Bottom
       {tab("today", "Today")}
       {tab("week", "Week")}
       {tab("capture", "Capture")}
-      {tab("more", "⋯", (inboxCount > 0 || dot) && <span className="bb-dot" aria-label={inboxCount > 0 ? `${inboxCount} in the Inbox` : "Something new"} />)}
+      {tab("more", "More", (inboxCount > 0 || dot) && <span className="bb-dot" aria-label={inboxCount > 0 ? `${inboxCount} in the Inbox` : "Something new"} />)}
     </nav>
   );
 }
