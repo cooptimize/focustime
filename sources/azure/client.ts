@@ -1,5 +1,5 @@
 // Azure Resource Manager for my VM (step 15.4), delegated (user_impersonation): the signed-in person's own Azure
-// permissions decide what works. fix/vm-schedule (D472): every request passes a fixed allowlist (ALLOWED) before a
+// permissions decide what works. fix/vm-schedule (D475): every request passes a fixed allowlist (ALLOWED) before a
 // token is asked for or anything is sent. Reads: Resource Graph (VMs by owner tag), the VM, its instance view, its
 // auto-shutdown schedule and a start's progress. The one write: start the VM. Nothing else: no stop, and never any
 // write to an auto-shutdown schedule (PUT, PATCH, DELETE, execute, retarget); the schedule is the person's own.
@@ -82,7 +82,7 @@ const VM_PATH = `/subscriptions/${GUID}/resourceGroups/${SEG}/providers/Microsof
 const rule = (call: AzureCall, method: "GET" | "POST", path: string) => ({ call, method, path: new RegExp(`^${path}$`, "i") });
 
 /**
- * The only Azure calls FocusTime makes (D472). Anything else, any other method or path, throws before a token is
+ * The only Azure calls FocusTime makes (D475). Anything else, any other method or path, throws before a token is
  * asked for or a request is sent. There is deliberately no rule for Microsoft.DevTestLab/schedules other than GET.
  */
 export const ALLOWED = [

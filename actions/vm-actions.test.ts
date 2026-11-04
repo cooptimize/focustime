@@ -1,5 +1,5 @@
 // Step 15.4: the Microsoft sign-in as the app's user, and my VM (find, confirm, status, start, the morning prompt)
-// against a fake Azure Resource Manager. D472: no stop, and the auto-shutdown schedule is read only. Fictional only.
+// against a fake Azure Resource Manager. D475: no stop, and the auto-shutdown schedule is read only. Fictional only.
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
 import { FOUR_DAY_TOML as STARTER_TOML } from "../fixtures/four-day-week.ts";
@@ -296,7 +296,7 @@ describe("my VM: status and start through the write framework", () => {
   });
 });
 
-describe("D472: FocusTime never changes a VM's auto-shutdown and never stops it", () => {
+describe("D475: FocusTime never changes a VM's auto-shutdown and never stops it", () => {
   /** Every call that isn't a read, a start or its progress: none may ever reach Azure. */
   const writes = (s: Awaited<ReturnType<typeof signedInWithVm>>) =>
     s.arm.calls.filter((x) => x.path.includes("Microsoft.DevTestLab") ? x.method !== "GET" : x.method !== "GET" && !x.path.endsWith("/start") && !x.path.includes("ResourceGraph"));

@@ -72,7 +72,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   const todayOf = (c: AppConfig) => localToday(instantNow().toString(), userZone(c));
   const vmCtx = () => vmContext(liveCtx);
 
-  /** A button on a notification: the VM's Start (the timer's buttons go to checkTimer). D472: there is no Restore. */
+  /** A button on a notification: the VM's Start (the timer's buttons go to checkTimer). D475: there is no Restore. */
   const act = async (n: Notice, key: string) => {
     const sample = n.key.startsWith("sample:");
     if (n.kind === "vm" && key === "start") {
@@ -268,7 +268,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     if (notifier.allows("expiry") && (await store.markOnce("expiry_notice", today))) await send(notices.expiry(today, (await expiringFor(store, c, today)), at));
   };
   // My VM (step 15.4): once a workday at work start, say so when the VM is off. Never starts anything by itself, and
-  // never touches its auto-shutdown (D472: the old next-morning restore is gone).
+  // never touches its auto-shutdown (D475: the old next-morning restore is gone).
   const vmTick = async () => {
     const c = await configOrNull();
     if (!c) return;

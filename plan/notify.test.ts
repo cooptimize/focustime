@@ -137,7 +137,7 @@ describe("notifications that no longer apply (step 16.2, Q91)", () => {
       expect(noticeDone(n, yes(f)), n.key).toBe(true);
     }
   });
-  it("D472: an \"auto-shutdown still changed\" notice from before closes at once (there is nothing to restore)", () => {
+  it("D475: an \"auto-shutdown still changed\" notice from before closes at once (there is nothing to restore)", () => {
     const old: Notice = { kind: "vm", key: "vm_changed:2026-11-02", title: "Auto-shutdown is still changed", body: "x", buttons: [{ key: "restore", label: "Restore" }], route: "vm", at, ref: "2026-11-02" };
     expect(noticeDone(old, none)).toBe(true);
   });

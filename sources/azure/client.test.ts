@@ -123,7 +123,7 @@ describe("auto-shutdown schedule", () => {
   });
 });
 
-describe("the allowlist (D472): reads and start, nothing else, refused before anything is sent", () => {
+describe("the allowlist (D475): reads and start, nothing else, refused before anything is sent", () => {
   const SCHED = `${ARM}/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.DevTestLab/schedules/shutdown-computevm-vm-pat-01`;
   const v = `?api-version=${API.schedules}`;
   const c = `?api-version=${API.compute}`;

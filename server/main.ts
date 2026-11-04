@@ -239,7 +239,7 @@ if (!opened) {
   process.exit(1);
 }
 const db: Conn = opened.conn;
-// D472: next-morning auto-shutdown restores from before (they'd write the schedule) never run; mark them cancelled.
+// D475: next-morning auto-shutdown restores from before (they'd write the schedule) never run; mark them cancelled.
 await cancelShutdownRestores(db, instantNow).then(
   (c) => c.length && log({ source: "azure", op: "restore_cancelled", count: c.length }),
   () => log({ source: "azure", op: "restore_cancelled", kind: "failed" }),

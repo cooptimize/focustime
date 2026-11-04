@@ -1,4 +1,4 @@
-// fix/vm-schedule (D472): next-morning auto-shutdown restores left from before are marked cancelled once, for
+// fix/vm-schedule (D475): next-morning auto-shutdown restores left from before are marked cancelled once, for
 // everyone, and logged; they are never run (nothing in FocusTime can write a schedule any more).
 import { expect, it } from "vitest";
 import { addUsers, forEachDriver } from "../test/db.ts";
@@ -11,7 +11,7 @@ const SUB = "00000000-0000-4000-8000-0000000000aa";
 const vm = (n: string) => `/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.Compute/virtualMachines/${n}`;
 const rec = (vmId: string): LegacyShutdownChange => ({ vmId, date: "2026-11-02", original: { time: "1900", status: "Enabled" }, changed: { time: "1900", status: "Disabled" }, timeZoneId: "Eastern Standard Time", failedAt: null, message: null });
 
-await forEachDriver("cancelled auto-shutdown restores (D472)", (d) => {
+await forEachDriver("cancelled auto-shutdown restores (D475)", (d) => {
   it("marks every pending restore cancelled for every person, logs each once, and leaves other state alone", async () => {
     const db = await d.open();
     await addUsers(db.conn, "u-pat", "u-dana");

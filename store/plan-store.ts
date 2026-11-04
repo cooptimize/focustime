@@ -473,7 +473,7 @@ export const MIGRATIONS: readonly string[] = [
    ALTER TABLE draft_stories ADD COLUMN acceptance TEXT;
    ALTER TABLE draft_stories ADD COLUMN start_date TEXT;
    ALTER TABLE draft_stories ADD COLUMN target_date TEXT;`,
-  // 17: step 15.4, my VM: the Azure audit log (power actions; auto-shutdown changes before D472) and account state
+  // 17: step 15.4, my VM: the Azure audit log (power actions; auto-shutdown changes before D475) and account state
   // (who signed in, my VM, a changed schedule to put back), kept by Reset local plan.
   `CREATE TABLE azure_write_log (
      id INTEGER PRIMARY KEY,

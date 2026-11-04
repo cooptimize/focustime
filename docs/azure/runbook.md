@@ -89,7 +89,7 @@ commit, the PR number from the merge message, and the build time in UTC. The env
 Settings > Setup > Start over clears your own setup state, so the four screens show again on the next load. It is
 refused on prod (403) and hidden there.
 
-## Check a VM's auto-shutdown is on (D472)
+## Check a VM's auto-shutdown is on (D475)
 
 FocusTime only reads a VM's auto-shutdown; it never changes it. To check one (yours, or one someone asks about):
 
@@ -111,7 +111,7 @@ az monitor activity-log list --subscription <sub> --offset 90d --namespace Micro
 ```
 
   The app id says where a change came from: `c44b4083-3bb0-49c1-b47d-974e53cbdf3c` is the Azure portal, and
-  `15021957-09f5-41de-b9b2-ab28f42d6d0c` (Coopilot Desktop) is the local FocusTime before D472. The hosted FocusTime
+  `15021957-09f5-41de-b9b2-ab28f42d6d0c` (Coopilot Desktop) is the local FocusTime before D475. The hosted FocusTime
   (`0040169f-a4c9-46d9-bd81-83c31d0d6ff0`) never wrote a schedule.
 - To turn it back on, use the portal page above. Don't use FocusTime; it can't write a schedule.
 
@@ -250,6 +250,14 @@ per person. Settings shows the ones a person sees as "Set by your FocusTime admi
 5. The prod Google redirect URI `<prod url>/auth/google/callback` on the "FocusTime Web" client (by hand in the Google
    console: there is no API for it).
 6. deploy-prod with the SHA to promote.
+
+### Dev and prod parity (D473)
+
+Every prod deploy (a dry run too) first runs `infra/scripts/parity.sh`: it fails if dev has an app setting, app
+secret reference or Key Vault secret name that prod lacks, now or after the deploy. Fix a missing secret with
+`infra/scripts/copy-secrets.sh --vault ft-prod-kv-kkzllj`, a missing setting through `infra/`, or allow a name that is
+meant to be dev-only in `infra/parity-allow.txt` with a reason. Run it by hand any time: `infra/scripts/parity.sh`. If it
+says it can't read a name, ft-prod-deploy is missing its read roles: run `bootstrap.sh --env prod` again (step 7).
 
 ### First run for a new person
 

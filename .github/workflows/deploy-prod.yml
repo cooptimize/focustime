@@ -7,7 +7,8 @@
 # Roll back: the same with the previous SHA (each run's summary names it); roll forward: the same with the newer one.
 # The image is the chosen commit's; the scripts, migrations and Bicep are always main's, so a rollback changes only the
 # app (D472). Nothing older than prod's first commit (a347188) can be deployed.
-# dry_run: only the actor check and the image lookup; nothing changes.
+# dry_run: only the actor check, the image lookup and the parity check (D473); nothing changes.
+# Parity: fails before any change if dev has an app setting or secret name prod lacks (infra/scripts/parity.sh).
 #
 # Who may run it: the GitHub logins in the repository variable PROD_DEPLOYERS (comma separated); anyone else is refused
 # (the free plan has no environment approvals for a private repository). Signs in to Azure with OIDC as ft-prod-deploy:
@@ -22,7 +23,7 @@ on:
         required: true
         default: main
       dry_run:
-        description: "Only check who is running it and that the image exists"
+        description: "Only check who is running it, that the image exists and dev and prod parity"
         type: boolean
         default: false
 permissions:
@@ -104,10 +105,24 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "SQL_SERVER=$(az sql server list -g "$RG" --query '[0].name' -o tsv)" >> "$GITHUB_ENV"
           echo "SQL_FQDN=$(az sql server list -g "$RG" --query '[0].fullyQualifiedDomainName' -o tsv)" >> "$GITHUB_ENV"
+      # D473: before anything changes (a dry run too), prod must have every app setting, app secret reference and Key
+      # Vault secret name dev has, now or after this deploy (the what-if), unless infra/parity-allow.txt allows it.
+      # Names only; the what-if's JSON stays on the runner and is removed.
+      - name: Dev and prod parity
+        env:
+          FT_IMAGE_TAG: ${{ env.SHA }}
+          FT_IMAGE_DIGEST: ${{ env.DIGEST }}
+          FT_APP_READY: "true"
+        run: |
+          trap 'rm -f whatif.json' EXIT
+          az bicep install
+          az deployment group what-if -g "$RG" -n ft-prod --parameters infra/prod.bicepparam --no-pretty-print -o json > whatif.json
+          infra/scripts/parity.sh --what-if whatif.json
+          echo "- parity: prod has every name dev has" >> "$GITHUB_STEP_SUMMARY"
       - name: Dry run ends here
         if: inputs.dry_run
         run: |
-          echo "Dry run: $GITHUB_ACTOR may deploy, and the image for $SHORT exists. Nothing changed."
+          echo "Dry run: $GITHUB_ACTOR may deploy, the image for $SHORT exists and prod has every name dev has. Nothing changed."
       # The runner reaches the database through a firewall rule for its own address, added here and removed at the end
       # of the job whatever happens; the server otherwise allows Azure services only.
       - name: Open the database to this runner

@@ -137,7 +137,7 @@ export type MenuEnv = {
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
   /** Opens Settings, at a section when given (step 6b). */
   openSettings: (section?: string) => void;
-  /** Step 15.4: the VM chip's menu (Start; D472: nothing else changes the VM). */
+  /** Step 15.4: the VM chip's menu (Start; D475: nothing else changes the VM). */
   openVm: () => void;
   exportPlan: () => void;
   /** Step 15.2: the pick Focus suggests (today's next planned pick), or null. */
