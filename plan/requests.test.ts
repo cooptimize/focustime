@@ -17,7 +17,7 @@ const at = (s: string) => Temporal.Instant.from(s);
 const chat = (o: Partial<ClientChat> = {}): ClientChat => ({
   chatId: "19:fabrikam@thread.v2", clientKey: "fabrikam", kind: "customer", displayName: "Fabrikam chat", webUrl: null, position: 0,
   members: [{ userId: "u-ana", displayName: "Ana", email: null, tenantId: "home" }, { userId: "u-ben", displayName: "Ben", email: null, tenantId: "home" }, { userId: "c-dana", displayName: "Dana", email: null, tenantId: "client" }],
-  membersFetchedAt: "2026-11-04T12:00:00Z", registeredBy: "u-ana", registeredAt: "2026-11-01T12:00:00Z", readSince: "2026-11-01T12:00:00Z",
+  membersFetchedAt: "2026-11-04T12:00:00Z", readOn: true, registeredBy: "u-ana", registeredAt: "2026-11-01T12:00:00Z", readSince: "2026-11-01T12:00:00Z",
   seenAt: null, polledAt: null, fetchedAt: null, retryAt: null, failures: 0, pollState: null, pollNote: null, tokenUser: null, ...o,
 });
 

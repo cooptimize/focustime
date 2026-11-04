@@ -15,7 +15,7 @@ import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { addUsers, sqliteDb } from "../test/db.ts";
 import { aMessage, CLIENT_TENANT, HOME_TENANT } from "../test/builders/index.ts";
-import { pollCycle, type PollDeps, type PollPerson } from "./request-poll.ts";
+import { pollCycle, requestsNextDue, type PollDeps, type PollPerson } from "./request-poll.ts";
 
 const IN_HOURS = "2026-11-04T15:00:00Z"; // a Wednesday, 10:00 in New York
 const NIGHT = "2026-11-05T03:00:00Z";
@@ -112,6 +112,23 @@ describe("one poll cycle", () => {
     expect(await pollCycle(s.deps)).toMatchObject({ polled: 1, candidates: 1 });
     expect(await s.teams.chat(FAB)).toMatchObject({ tokenUser: ANA, membersFetchedAt: IN_HOURS });
     expect((await s.teams.viewer(BEN).requests()).map((r) => r.messageId)).toEqual([m.messageId]);
+  });
+
+  it("a chat with reading off isn't read and wakes nobody; turned on, it reads from that moment (D523)", async () => {
+    const s = await setup({ now: "2026-11-04T14:00:00Z" });
+    await s.register(FAB, "fabrikam");
+    await s.teams.setReading(FAB, false, ANA);
+    s.setNow(IN_HOURS);
+    s.graph.say(FAB, { createdAt: "2026-11-04T14:55:00Z" });
+    expect(await pollCycle(s.deps)).toMatchObject({ polled: 0 });
+    expect(await pollCycle(s.deps, { force: true, chatIds: [FAB] })).toMatchObject({ polled: 0 });
+    expect(s.graph.reads.get(FAB)).toBeUndefined();
+    expect(await requestsNextDue(s.deps)).toBeNull();
+    await s.teams.setReading(FAB, true, ANA);
+    s.later(1);
+    const after = s.graph.say(FAB, { createdAt: "2026-11-04T15:00:30Z" });
+    expect(await pollCycle(s.deps)).toMatchObject({ polled: 1, messages: 1 });
+    expect((await s.teams.requests([FAB])).map((r) => r.messageId)).toEqual([after.messageId]);
   });
 
   it("a message already stored isn't stored again; an edit updates its body", async () => {

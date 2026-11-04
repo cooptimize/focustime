@@ -1,14 +1,15 @@
 // Shared polling (D514 to D518): one copy of each Teams message and one Request per message, for everyone who follows
 // the client and is in the chat. App tables (no user_id; reads are gated by chat membership in actions, never by
 // store/scope.ts):
-//   client_chats         a client's registered Teams chats (registered once, by a Cooptimizer who follows the client and
-//                        is in the chat), with the poll state: the watermark (newest lastModifiedDateTime seen), the last
+//   client_chats         a client's registered Teams chats (registered once, by an admin who follows the client and
+//                        is in the chat), whether it is read (read_on, an admin's switch, D523), with the poll state: the watermark (newest lastModifiedDateTime seen), the last
 //                        poll and the last successful fetch, the token used, and "needs reconnecting".
 //   teams_messages       one row per message, whoever reads it.
 //   requests             one row per message the rules picked out, with its shared state and the AI's sort.
 //   client_chat_changes  who registered, relabelled or removed a chat, and when.
 // The per-user rows (delivery_chats, chat_messages, asks) are copied in, deduped: a chat keeps the earliest
-// registration's client and label and the newest member list anyone cached; every stored message once (a person's own
+// registration's client and label and the newest member list anyone cached, and is read only if someone had switched
+// Read for asks on (D523; the rest are registered with reading off until an admin turns it on); every stored message once (a person's own
 // messages included, so their promises keep their text); a Request takes the state of the most recent action across
 // people, and the AI sort of the most recent sort. promises stay as they are (each person's own; they point at the
 // shared message by chat and message id), and so do the AI request log and the Allow AI settings. The per-user tables stay (D468: migrations only add); they stop being written and are
@@ -37,6 +38,7 @@ export const sharedRequests: NamedMigration = {
      poll_state TEXT CHECK (poll_state IN ('ok', 'via', 'reconnect', 'retry')),
      poll_note TEXT,
      token_user TEXT,
+     read_on INTEGER NOT NULL DEFAULT 1 CHECK (read_on IN (0, 1)),
      updated_at TEXT NOT NULL
    );
    CREATE INDEX client_chats_client ON client_chats (client_key, position);
@@ -97,12 +99,12 @@ export const sharedRequests: NamedMigration = {
      by_user TEXT NOT NULL,
      client_key TEXT NOT NULL,
      chat_id TEXT NOT NULL,
-     change TEXT NOT NULL CHECK (change IN ('added', 'kind', 'removed', 'migrated'))
+     change TEXT NOT NULL CHECK (change IN ('added', 'kind', 'removed', 'migrated', 'reading_on', 'reading_off'))
    );
-   INSERT INTO client_chats (chat_id, client_key, chat_kind, display_name, web_url, position, members_json, members_fetched_at, registered_by, registered_at, read_since, seen_at, polled_at, fetched_at, failures, updated_at)
+   INSERT INTO client_chats (chat_id, client_key, chat_kind, display_name, web_url, position, members_json, members_fetched_at, registered_by, registered_at, read_since, seen_at, polled_at, fetched_at, failures, read_on, updated_at)
      SELECT chat_id, client_key, COALESCE(chat_kind, 'delivery'), display_name, web_url, position, members_json, members_fetched_at, user_id, created_at,
-       COALESCE(since, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), seen, polled, polled, 0, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     FROM (SELECT d.*, MIN(asks_since) OVER (PARTITION BY chat_id) AS since, MAX(asks_seen_at) OVER (PARTITION BY chat_id) AS seen, MAX(asks_polled_at) OVER (PARTITION BY chat_id) AS polled,
+       COALESCE(since, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), seen, polled, polled, 0, CASE WHEN anyone_on = 1 THEN 1 ELSE 0 END, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     FROM (SELECT d.*, MAX(COALESCE(asks_on, 0)) OVER (PARTITION BY chat_id) AS anyone_on, MIN(asks_since) OVER (PARTITION BY chat_id) AS since, MAX(asks_seen_at) OVER (PARTITION BY chat_id) AS seen, MAX(asks_polled_at) OVER (PARTITION BY chat_id) AS polled,
              ROW_NUMBER() OVER (PARTITION BY chat_id ORDER BY created_at, user_id) AS n FROM delivery_chats d) WHERE n = 1;
    UPDATE client_chats SET (members_json, members_fetched_at) = (
        SELECT x.members_json, x.members_fetched_at
@@ -142,6 +144,7 @@ export const sharedRequests: NamedMigration = {
   poll_state nvarchar(20) NULL CONSTRAINT client_chats_state_check CHECK (poll_state IN ('ok', 'via', 'reconnect', 'retry')),
   poll_note nvarchar(400) NULL,
   token_user nvarchar(64) NULL,
+  read_on bit NOT NULL CONSTRAINT client_chats_read_on_default DEFAULT 1,
   updated_at datetime2(7) NOT NULL
 );
 CREATE INDEX client_chats_client ON client_chats (client_key, position);
@@ -202,12 +205,12 @@ CREATE TABLE client_chat_changes (
   by_user nvarchar(64) NOT NULL,
   client_key nvarchar(100) NOT NULL,
   chat_id nvarchar(256) NOT NULL,
-  change nvarchar(20) NOT NULL CONSTRAINT client_chat_changes_check CHECK (change IN ('added', 'kind', 'removed', 'migrated'))
+  change nvarchar(20) NOT NULL CONSTRAINT client_chat_changes_check CHECK (change IN ('added', 'kind', 'removed', 'migrated', 'reading_on', 'reading_off'))
 );
-INSERT INTO client_chats (chat_id, client_key, chat_kind, display_name, web_url, position, members_json, members_fetched_at, registered_by, registered_at, read_since, seen_at, polled_at, fetched_at, failures, updated_at)
+INSERT INTO client_chats (chat_id, client_key, chat_kind, display_name, web_url, position, members_json, members_fetched_at, registered_by, registered_at, read_since, seen_at, polled_at, fetched_at, failures, read_on, updated_at)
   SELECT chat_id, client_key, COALESCE(chat_kind, 'delivery'), display_name, web_url, position, members_json, members_fetched_at, user_id, created_at,
-    COALESCE(since, SYSUTCDATETIME()), seen, polled, polled, 0, SYSUTCDATETIME()
-  FROM (SELECT d.*, MIN(asks_since) OVER (PARTITION BY chat_id) AS since, MAX(asks_seen_at) OVER (PARTITION BY chat_id) AS seen, MAX(asks_polled_at) OVER (PARTITION BY chat_id) AS polled,
+    COALESCE(since, SYSUTCDATETIME()), seen, polled, polled, 0, CASE WHEN anyone_on = 1 THEN 1 ELSE 0 END, SYSUTCDATETIME()
+  FROM (SELECT d.*, MAX(CAST(COALESCE(asks_on, 0) AS int)) OVER (PARTITION BY chat_id) AS anyone_on, MIN(asks_since) OVER (PARTITION BY chat_id) AS since, MAX(asks_seen_at) OVER (PARTITION BY chat_id) AS seen, MAX(asks_polled_at) OVER (PARTITION BY chat_id) AS polled,
           ROW_NUMBER() OVER (PARTITION BY chat_id ORDER BY created_at, user_id) AS n FROM delivery_chats d) x WHERE n = 1;
 UPDATE c SET members_json = x.members_json, members_fetched_at = x.members_fetched_at
   FROM client_chats c

@@ -160,6 +160,7 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
             ? {
                 onKind: (kind: ChatKind) => void act("chats.kind", { chatId: c.chatId, kind }, `Marked as ${KIND_NAME[kind]}`),
                 onRemove: () => void act("chats.remove", { chatId: c.chatId }, `Removed ${c.displayName}`).then(focusAdd),
+                onReading: (on: boolean) => void act("chats.reading", { chatId: c.chatId, on }, on ? `Reading ${c.displayName} from now on` : `Stopped reading ${c.displayName}`),
               }
             : {})}
         />
@@ -218,8 +219,8 @@ export function pollText(p: RequestChatStatus, registeredBy: string | null): str
   return `${by}${p.fetchedAt ? `Last fetched ${timeOf(p.fetchedAt)}.` : "Not read yet: every 5 minutes in working hours."}${via}`;
 }
 
-/** One registered chat. Without onKind and onRemove (not an admin), the kind is a plain label and there's no Remove. */
-function ChatCard({ c, busy, onKind, onRemove }: { c: DeliveryChatView; busy: boolean; onKind?: (k: ChatKind) => void; onRemove?: () => void }) {
+/** One registered chat. Without onKind, onRemove and onReading (not an admin): the kind as a label, no Remove, reading as a line. */
+function ChatCard({ c, busy, onKind, onRemove, onReading }: { c: DeliveryChatView; busy: boolean; onKind?: (k: ChatKind) => void; onRemove?: () => void; onReading?: (on: boolean) => void }) {
   return (
     <div className="dchat-card" role="region" aria-label={c.displayName}>
       <div className="dchat-title">
@@ -258,8 +259,16 @@ function ChatCard({ c, busy, onKind, onRemove }: { c: DeliveryChatView; busy: bo
         <p className="muted">Members not read yet. Refresh to read them.</p>
       )}
       {c.error && <p className="field-problem">{c.error}</p>}
-      <p className={`set-hint dchat-poll${c.poll.state === "reconnect" ? " field-problem" : ""}`} role="status">
-        {pollText(c.poll, c.registeredBy)}
+      <p className={`set-hint dchat-poll${c.readOn && c.poll.state === "reconnect" ? " field-problem" : ""}`} role="status">
+        {c.readOn ? pollText(c.poll, c.registeredBy) : `${c.registeredBy ? `Added by ${c.registeredBy}. ` : ""}Not read for requests: reading is off${onReading ? "" : " until a FocusTime admin turns it on"}.`}
+        {onReading && (
+          <>
+            {" "}
+            <button type="button" className="mini quiet" disabled={busy} onClick={() => onReading(!c.readOn)} aria-label={`${c.readOn ? "Stop reading" : "Read"} ${c.displayName} for requests`}>
+              {c.readOn ? "Stop reading" : "Read for requests"}
+            </button>
+          </>
+        )}
       </p>
     </div>
   );

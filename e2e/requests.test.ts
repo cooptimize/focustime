@@ -129,6 +129,13 @@ describe.skipIf(!CHROMIUM)("Requests", () => {
       await expect(card.getByRole("switch").count()).resolves.toBe(0);
       await shotBoth(page, "requests-settings", card);
 
+      // D523: an admin stops reading it and turns it back on (from that moment).
+      await card.getByRole("button", { name: "Stop reading Adatum Customer Collaboration for requests" }).click();
+      await card.getByText(/Not read for requests: reading is off\./).waitFor();
+      await shotBoth(page, "requests-settings-reading-off", card);
+      await card.getByRole("button", { name: "Read Adatum Customer Collaboration for requests" }).click();
+      await card.getByText(/Not read yet: every 5 minutes/).waitFor();
+
       // Not an admin (D522): the same chats, read-only.
       ctx.admins = [];
       await page.keyboard.press("Escape");

@@ -41,6 +41,7 @@ const toChat = (r: Row): ClientChat => ({
   pollState: (r.poll_state as PollState | null) ?? null,
   pollNote: (r.poll_note as string | null) ?? null,
   tokenUser: (r.token_user as string | null) ?? null,
+  readOn: r.read_on === undefined || r.read_on === null ? true : !!r.read_on,
 });
 
 const toMessage = (r: Row): TeamsMessage => ({
@@ -95,7 +96,7 @@ const toRequest = (r: Row): Request => ({
   shown: !!r.ai_shown,
 });
 
-export type ChatChange = { at: string; byUser: string; clientKey: string; chatId: string; change: "added" | "kind" | "removed" | "migrated" };
+export type ChatChange = { at: string; byUser: string; clientKey: string; chatId: string; change: "added" | "kind" | "removed" | "migrated" | "reading_on" | "reading_off" };
 export type PollRecord = { polledAt: string | null; seenAt?: string; fetchedAt?: string; retryAt: string | null; failures: number; state: PollState | null; note: string | null; tokenUser: string | null };
 
 /** A list of ids as "?, ?, ?" and its params (an empty list matches nothing). */
@@ -138,6 +139,21 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         if (c.kind === kind) return;
         await db.run("UPDATE client_chats SET chat_kind = ?, updated_at = ? WHERE chat_id = ?", [kind, stamp(), chatId]);
         await log(by, c.clientKey, chatId, "kind");
+      });
+    },
+    /**
+     * D523: an admin's switch for whether the job reads a chat. On reads from now (no backfill: what was said while it
+     * was off is never read); off stops at once and keeps what was stored. Logged with who.
+     */
+    async setReading(chatId: string, on: boolean, by: string): Promise<void> {
+      await db.tx(async () => {
+        const c = await store.chat(chatId);
+        if (!c) throw new PlanError("That chat isn't registered");
+        if (c.readOn === on) return;
+        const t = stamp();
+        if (on) await db.run("UPDATE client_chats SET read_on = 1, read_since = ?, seen_at = NULL, retry_at = NULL, failures = 0, poll_state = NULL, poll_note = NULL, updated_at = ? WHERE chat_id = ?", [t, t, chatId]);
+        else await db.run("UPDATE client_chats SET read_on = 0, updated_at = ? WHERE chat_id = ?", [t, chatId]);
+        await log(by, c.clientKey, chatId, on ? "reading_on" : "reading_off");
       });
     },
     /** Forgets a registered chat with its Requests and stored messages (a promise's message stays with the promise). */
@@ -364,6 +380,10 @@ function viewerOf(store: BaseStore, userId: string) {
     async removeChat(chatId: string): Promise<void> {
       if (!(await chat(chatId))) throw new PlanError("That chat isn't registered");
       await store.removeChat(chatId, userId);
+    },
+    async setReading(chatId: string, on: boolean): Promise<void> {
+      if (!(await chat(chatId))) throw new PlanError("That chat isn't registered");
+      await store.setReading(chatId, on, userId);
     },
     /** Delete stored messages of a client's chats I'm in (Requests and promises keep theirs). */
     async purgeClient(clientKey: string): Promise<number> {

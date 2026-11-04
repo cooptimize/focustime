@@ -88,6 +88,18 @@ describe("client chat actions (T-2, shared polling)", () => {
     expect((await teams.changes()).map((c) => c.change)).toEqual(["added"]);
   });
 
+  it("an admin turns a chat's reading off and on (logged); anyone else can't (D523)", async () => {
+    const { ctx, teams } = await setup();
+    data(await chatAction(ctx, "chats.add", { clientKey: "northwind", chatId: "19:northwind@thread.v2" }));
+    const off = data(await chatAction(ctx, "chats.reading", { chatId: "19:northwind@thread.v2", on: false }));
+    expect(off.chats[0]?.readOn).toBe(false);
+    expect((await teams.changes()).map((c) => c.change)).toEqual(["added", "reading_off"]);
+    const other = await setup({}, { admin: false });
+    await other.teams.addChat({ chatId: "19:northwind@thread.v2", clientKey: "northwind", kind: "customer", displayName: "Northwind chat", webUrl: null, members: [ana()], by: ANA });
+    const r = await chatAction(other.ctx, "chats.reading", { chatId: "19:northwind@thread.v2", on: false });
+    expect(r.ok ? null : r.status).toBe(403);
+  });
+
   it("a chat already on another client is refused", async () => {
     const { ctx } = await setup();
     data(await chatAction(ctx, "chats.add", { clientKey: "northwind", kind: "customer", chatId: "19:northwind@thread.v2" }));
