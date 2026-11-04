@@ -142,6 +142,11 @@ export function aChat(o: Partial<import("../../plan/chats.ts").ChatSummary> = {}
 
 // ---- AI-0 ----
 
+/** A client as the AI guard knows it (fictional names, contoso/fabrikam style). */
+export function aClientEntry(o: Partial<import("../../ai/guard.ts").ClientEntry> = {}): import("../../ai/guard.ts").ClientEntry {
+  return { key: "fabrikam", names: ["Fabrikam Inc"], projects: ["Fabrikam Portal"], itemIds: [4101, 4102], ...o };
+}
+
 /** An OpenAI Responses API body with a structured answer and its usage. */
 export function anOpenAiResponse(value: unknown, usage: { input?: number; cached?: number; output?: number } = {}, o: Record<string, unknown> = {}): Record<string, unknown> {
   return {
