@@ -577,11 +577,14 @@ async function aiDirectory(ctx: ActionContext, cfg: AppConfig): Promise<ClientEn
   const keys = new Set([...mine.map((c) => c.clientKey), ...Object.keys(cfg.clientSettings), ...cfg.week.standingBlocks.map((b) => b.clientKey)]);
   keys.delete(INTERNAL_CLIENT);
   const devops = ctx.makeDevOps(cfg.dataverse, zone);
+  // AP-2: item ids from the remembered map (every read, kept across restarts), plus what this process read last.
+  const remembered = (await ctx.plan?.itemClients().catch(() => null)) ?? new Map<string, number[]>();
+  for (const k of remembered.keys()) if (k !== INTERNAL_CLIENT) keys.add(k);
   return [...keys].map((key) => {
     const w = devops.last(key);
     const items = w ? [...w.items, ...w.children, ...(w.watched ?? []), ...(w.committed ?? [])] : [];
     const names = [mine.find((c) => c.clientKey === key)?.clientName, cfg.clientSettings[key]?.name].filter((n): n is string => !!n && n !== key);
-    return { key, names: [...new Set(names)], projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set(items.map((i) => i.id))] };
+    return { key, names: [...new Set(names)], projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set([...items.map((i) => i.id), ...(remembered.get(key) ?? [])])] };
   });
 }
 

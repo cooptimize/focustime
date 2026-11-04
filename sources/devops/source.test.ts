@@ -15,7 +15,7 @@ const NY = "America/New_York";
 const T0 = Temporal.Instant.from("2026-11-02T13:02:00Z");
 const ref = (k: string): ClientRef => ({ clientKey: k, clientName: k });
 
-function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | TargetsResult, opts: { ids?: number; cacheDir?: string; pickableTypes?: string[] } = {}) {
+function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | TargetsResult, opts: { ids?: number; cacheDir?: string; pickableTypes?: string[]; onItems?: (k: string, ids: number[]) => void } = {}) {
   const api = fakeDevOps(orgs, opts);
   const logs: LogRecord[] = [];
   const cacheDir = opts.cacheDir ?? mkdtempSync(join(tmpdir(), "focustime-devops-"));
@@ -29,6 +29,7 @@ function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | Targ
     timeZone: NY,
     now: () => clock,
     ...(opts.pickableTypes ? { pickableTypes: () => opts.pickableTypes! } : {}),
+    ...(opts.onItems ? { onItems: opts.onItems } : {}),
     targets: async (keys) => {
       targetCalls.push(keys);
       return Array.isArray(targets) ? { ok: true, targets: targets.filter((t) => keys.includes(t.clientKey)) } : targets;
@@ -39,6 +40,23 @@ function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | Targ
 
 const byKey = (r: ClientWork[], k: string) => r.find((c) => c.clientKey === k)!;
 const ids = (c: ClientWork) => c.items.map((i) => i.id);
+
+describe("the AI guard's item map (AP-2)", () => {
+  it("each client's ids read from DevOps are reported for that client; a cached fallback reports nothing", async () => {
+    const seen: [string, number[]][] = [];
+    const cacheDir = mkdtempSync(join(tmpdir(), "focustime-devops-"));
+    const r = await setup({ a: "agile", b: "scrum" }, [target("A", "a"), target("B", "b")], { cacheDir, onItems: (k, i) => seen.push([k, i]) }).src.load([ref("A"), ref("B")]);
+    expect(seen.map(([k]) => k).sort()).toEqual(["A", "B"]);
+    for (const [k, i] of seen) expect(i).toEqual(expect.arrayContaining(ids(byKey(r, k))));
+    const later: string[] = [];
+    await setup({ a: "offline" }, [target("A", "a")], { cacheDir, onItems: (k) => later.push(k) }).src.load([ref("A")]);
+    expect(later).toEqual([]);
+  });
+  it("a failing map never fails the read", async () => {
+    const r = await setup({ a: "agile" }, [target("A", "a")], { onItems: () => { throw new Error("store down"); } }).src.load([ref("A")]);
+    expect(byKey(r, "A").status).toBe("ok");
+  });
+});
 
 describe("items read by id for open follow-ups (step 7)", () => {
   it("reads only watched ids that aren't among my open items, completed ones kept, with the same fields", async () => {

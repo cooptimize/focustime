@@ -233,12 +233,28 @@ const writePatsOf = (who: Person): WritePats => ({
 
 // DevOps: one source per person and Dataverse config. PATs come from Dataverse per fetch (devopsTargets), not kept.
 const devopsSources = new Map<string, DevOpsSource>();
+/**
+ * AP-2: the AI guard's map of DevOps item id to client, per person (devops_item_clients). Each read's ids go to the
+ * store only when some are new since this process last saw them, so a normal read makes no database call.
+ */
+const knownItems = new Map<string, Set<string>>();
+const itemMapOf = (who: Person) => (clientKey: string, ids: number[]) => {
+  const known = knownItems.get(who.userId) ?? new Set<string>();
+  knownItems.set(who.userId, known);
+  const fresh = ids.filter((id) => !known.has(`${clientKey}#${id}`));
+  if (!fresh.length) return;
+  for (const id of fresh) known.add(`${clientKey}#${id}`);
+  planFor(who).rememberItemClient(clientKey, fresh).catch(() => {
+    for (const id of fresh) known.delete(`${clientKey}#${id}`);
+    log({ source: "plan", op: "item_map", kind: "failed" });
+  });
+};
 const devopsFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
   const key = JSON.stringify([who.userId, cfg, timeZone]);
   let s = devopsSources.get(key);
   if (!s) {
     const dv = dataverseFor(who)(cfg, timeZone);
-    s = createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), pickableTypes: () => who.pickableTypes, openStates: (k) => who.openStates[k] ?? [] });
+    s = createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), pickableTypes: () => who.pickableTypes, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who) });
     devopsSources.set(key, s);
   }
   return s;

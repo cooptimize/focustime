@@ -2748,6 +2748,36 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async aiRequests(limit = 20): Promise<AiLogEntry[]> {
       return ((await db.all("SELECT * FROM ai_requests ORDER BY id DESC LIMIT ?", Math.max(1, Math.min(limit, 200)))) as Row[]).map(toAiRequest);
     },
+    /**
+     * AP-2: the DevOps item ids just read for a client, remembered as that client's (ids only), so the AI guard knows
+     * them after a restart. Ids already known for the client are left alone. How many were new.
+     */
+    async rememberItemClient(clientKey: string, ids: readonly number[]): Promise<number> {
+      const want = [...new Set(ids.filter((i) => Number.isSafeInteger(i) && i > 0 && i <= 2_147_483_647))];
+      if (!clientKey || clientKey.length > 100 || !want.length) return 0;
+      return tx(async () => {
+        const known = new Set(((await db.all("SELECT item_id FROM devops_item_clients WHERE client_key = ?", clientKey)) as Row[]).map((r) => Number(r.item_id)));
+        const at = opts.now().toInstant().toString();
+        let added = 0;
+        for (const id of want) {
+          if (known.has(id)) continue;
+          await db.run("INSERT INTO devops_item_clients (client_key, item_id, seen_at) VALUES (?, ?, ?)", clientKey, id, at);
+          added++;
+        }
+        return added;
+      });
+    },
+    /** AP-2: every remembered DevOps item id, per client (the AI guard's map). */
+    async itemClients(): Promise<Map<string, number[]>> {
+      const out = new Map<string, number[]>();
+      for (const r of (await db.all("SELECT client_key, item_id FROM devops_item_clients")) as Row[]) {
+        const k = r.client_key as string;
+        const list = out.get(k) ?? [];
+        list.push(Number(r.item_id));
+        out.set(k, list);
+      }
+      return out;
+    },
     /** AP-1: new messages of a chat, only the listed fields; ones already stored are left as they are. How many were new. */
     async addChatMessages(ms: readonly StoredMessage[]): Promise<number> {
       return tx(async () => {
