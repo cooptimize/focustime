@@ -143,6 +143,8 @@ export type MenuEnv = {
   openNotifications?: () => void;
   /** Step 15.4: the VM chip's menu (Start; D475: nothing else changes the VM). */
   openVm: () => void;
+  /** F1: ⋯ › Send feedback. */
+  openFeedback: () => void;
   exportPlan: () => void;
   /** Step 15.2: the pick Focus suggests (today's next planned pick), or null. */
   focusNext?: Pick | null;
@@ -1182,6 +1184,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "notify.sample":
       return { run: () => env.openSettings("notifications") };
     case "vm.log": return { run: () => env.openSettings("data") };
+    // F1: Send feedback opens its dialog; the send is from its preview; the setup check is in Settings > Connections.
+    case "feedback.preview": return { run: env.openFeedback };
+    case "feedback.send": return { disabled: "Send it from the feedback preview" };
+    case "feedback.status": return { run: () => env.openSettings("connections") };
     case "capture.add": return { run: () => env.openCapture() };
     // Sorting and a client's features and epics are handled in the Inbox.
     case "capture.load":

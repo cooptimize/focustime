@@ -62,6 +62,8 @@ import { createApp } from "./app.ts";
 import { moveFromOldName } from "../host/local/rename.ts";
 import { createDemoContext, seedDemo, type DemoControl } from "./demo.ts";
 import { buildInfo } from "./buildinfo.ts";
+import { createFeedbackService } from "../actions/feedback-actions.ts";
+import { createFeedbackDevOps, DEVOPS_SCOPE } from "../sources/devops/feedback.ts";
 import { execFileSync } from "node:child_process";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
@@ -389,12 +391,14 @@ const media = host.media;
 // The demo (A2, was D272's switch): "Try the demo" starts a demo session with its own fictional person, plan store
 // in memory and data, built on first use and dropped when the session ends. Never mixed with anyone's real data.
 const demos = new Map<string, Promise<ActionContext>>();
+/** F1 checks (e2e): the demo's pretend feature can be missing or the wrong type, to show the not-set-up state. */
+const demoFeedbackParent = ((v) => (v === "missing" || v === "wrong_type" ? v : "ok"))(process.env.FOCUSTIME_DEMO_FEEDBACK_PARENT);
 const demoControl = (on: boolean): DemoControl => ({ on, set: async () => {} });
 const demoFor = (userId: string): Promise<ActionContext> => {
   let c = demos.get(userId);
   if (!c) {
     c = (async () => {
-      const ctx = { ...createDemoContext({ now: () => instantNow().toString(), demo: demoControl(true) }), env: "demo" };
+      const ctx = { ...createDemoContext({ now: () => instantNow().toString(), demo: demoControl(true), feedbackParent: demoFeedbackParent }), env: "demo" };
       await seedDemo(ctx);
       return ctx;
     })();
@@ -413,6 +417,19 @@ const build = buildInfo(process.env, () => {
     return null;
   }
 });
+
+// F1: Send feedback, one service for this FocusTime. Locally: preview only, nothing checked or sent. Hosted: the app's
+// managed identity (a bearer token for Azure DevOps; never logged or returned) creates the story under the parent
+// feature, when this environment's live switch is on; otherwise preview only. The setup check runs at start.
+const feedbackService = (() => {
+  const f = app.feedback;
+  const local = host.kind === "local";
+  if (local || !f) return createFeedbackService({ devops: null, mode: "preview_only", env: build.env, local, now: Date.now, log });
+  const credential = new DefaultAzureCredential(process.env.AZURE_CLIENT_ID ? { managedIdentityClientId: process.env.AZURE_CLIENT_ID } : {});
+  const devops = createFeedbackDevOps({ fetch, log, token: async () => (await credential.getToken(DEVOPS_SCOPE)).token, target: { org: f.org, project: f.project, parentId: f.parentId } });
+  return createFeedbackService({ devops, mode: f.live ? "live" : "preview_only", env: build.env, local: false, now: Date.now, log });
+})();
+void feedbackService.check().catch(() => undefined);
 
 const server = createApp({
   publicUrl: app.publicUrl,
@@ -514,6 +531,13 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     makeOutlook: outlookFor(who),
     makeGoogle: googleFor(who),
     makeDevOps: devopsFor(who),
+    feedback: {
+      service: feedbackService,
+      sender: async () => {
+        const u = await accounts.users.get(userId);
+        return u ? { name: u.displayName, email: u.email ?? u.upn } : null;
+      },
+    },
     saveSystemUserId: (id) => settings.saveSystemUserId(id),
     signedInAs: async () => {
       const u = await accounts.users.get(userId);

@@ -34,6 +34,7 @@ import { deviceId, disablePush, enablePush, pushSupport, type PushStatus } from 
 import { NOTICES_CHANGED } from "./Notices.tsx";
 import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
+import type { FeedbackStatus } from "../actions/feedback-types.ts";
 
 export const SETTINGS_SECTIONS = [
   ["you", "You"],
@@ -1286,6 +1287,7 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
       </ul>
       {p.reconnected && <InlineMoment line={`${SOURCE_NAMES[p.reconnected]} is connected again.`} />}
       <OutlookWriteRow />
+      <FeedbackRow />
       <MicrosoftPermissions />
       <AsksConnections />
       {p.devops && p.devops.length > 0 && (
@@ -1645,6 +1647,34 @@ function DataSection(p: Props & { data: SettingsData }) {
         <ResetPlan disabled={!p.data.data.planStore} onDone={p.onSaved} />
         <DeleteMine />
       </div>
+    </div>
+  );
+}
+
+/** F1: Send feedback's setup, read only: feature #496 there, a Feature, and FocusTime's identity may add a story under it. */
+function feedbackLine(st: FeedbackStatus): string {
+  const s = st.setup;
+  const mode = st.mode === "live" ? "" : " Preview only here: nothing is sent from this FocusTime.";
+  if (s.state === "local") return "Preview only on this machine: ⋯ › Send feedback shows the story but sends nothing.";
+  if (s.state === "ready") return `Set up: stories go under Feature #${s.parentId} (${s.parentTitle}) as ${s.storyType}.${mode}`;
+  return `Not set up: ${s.reason}.${mode}`;
+}
+
+function FeedbackRow() {
+  const [st, setSt] = useState<FeedbackStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = (fresh: boolean) => call<FeedbackStatus>("feedback.status", fresh ? { fresh: true } : {}).then((r) => (setSt(r), setError(null)), (e: unknown) => setError(e instanceof Error ? e.message : "Couldn't check"));
+  useEffect(() => void load(false), []);
+  return (
+    <div className="set-write feedback-setup">
+      <h3>Send feedback</h3>
+      <p>{error ?? (st ? feedbackLine(st) : "Checking…")}</p>
+      {st && st.setup.state !== "local" && (
+        <button type="button" className="mini" onClick={() => void load(true)}>
+          Check again
+        </button>
+      )}
+      <p className="set-hint">{st ? `${st.destination}. ${st.sentToday} of ${st.limit} sent today.` : ""}</p>
     </div>
   );
 }

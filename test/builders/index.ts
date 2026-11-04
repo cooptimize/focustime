@@ -5,6 +5,7 @@
 import { legacyHours } from "../../config/schema.ts";
 import type { MyClient } from "../../sources/dataverse/source.ts";
 import type { UserRow } from "../../store/accounts.ts";
+import type { FeedbackDraft, Sender, Where } from "../../plan/feedback.ts";
 import { buildWeek, type BuildWeekInput } from "../../week/build.ts";
 import type { PtoDay } from "../../week/pto.ts";
 import type { CalEvent, DayPart, FocusPattern, IsoDate, Week, WeekConfig, WorkItem, WorkWeekday } from "../../week/types.ts";
@@ -103,6 +104,18 @@ export function aWeek(o: Partial<Omit<BuildWeekInput, "pto">> & { pto?: PtoDay[]
   return buildWeek({ weekStart: WEEK, patterns: [], events: [], config: aWeekConfig(), ...rest, pto: Array.isArray(pto) ? ptoMap(...pto) : (pto ?? {}) });
 }
 
+/** F1: "Include where I am" as the window sends it. */
+export function aWhere(o: Partial<Where> = {}): Where {
+  return { view: "Today › Plan", version: "prod · #42 · abc1234 · built Nov 2, 2026", browser: "Chrome 141 on Windows", screen: "1920×1080, window 1920×960", ...o };
+}
+
+/** F1: what a person typed in Send feedback (an idea, with where I am, unless overridden). */
+export function aFeedbackDraft(o: Partial<FeedbackDraft> = {}): FeedbackDraft {
+  return { kind: "idea", text: "Show the week's free hours on the Week tab", where: aWhere(), ...o };
+}
+
+/** F1: who sends feedback, from an account row. */
+export const aSender = (u: UserRow = aUser()): Sender => ({ name: u.displayName, email: u.email });
 // T-2: Teams delivery chats. Fictional tenants: Cooptimize's (HOME_TENANT) and one client's (CLIENT_TENANT).
 export const HOME_TENANT = "11111111-1111-4111-8111-111111111111";
 export const CLIENT_TENANT = "22222222-2222-4222-8222-222222222222";

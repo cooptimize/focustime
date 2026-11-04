@@ -7,6 +7,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      feedback_live:
+        description: "F1: Send feedback creates real stories from dev (titles start [dev]) until the next deploy"
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -111,6 +116,7 @@ jobs:
         env:
           FT_IMAGE_TAG: ${{ github.sha }}
           FT_APP_READY: "true"
+          FT_FEEDBACK_LIVE: ${{ inputs.feedback_live && 'true' || 'false' }}
         run: |
           az deployment group what-if -g "$RG" -n ft-dev --parameters infra/dev.bicepparam --exclude-change-types NoChange Ignore
           az deployment group create -g "$RG" -n ft-dev --parameters infra/dev.bicepparam --query properties.outputs.publicUrl.value -o tsv > url.txt

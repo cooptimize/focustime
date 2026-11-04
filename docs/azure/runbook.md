@@ -207,6 +207,46 @@ The "FocusTime" app registration and the "FocusTime DB Admins" group stay (prod 
 by running `app-registration.sh` with only the URLs still in use. Delete the GitHub variables `AZURE_DEV_*` if dev is
 gone for good.
 
+## Send feedback (F1, D509 to D513)
+
+⋯ › Send feedback creates a User Story under Feature #496 in the cooptimize organization, project Cooptimize Internal,
+as the app's own managed identity. Until an identity is added below, that environment's dialog says "Feedback isn't set
+up yet" and Settings > Connections says why.
+
+### Add the app identities to Azure DevOps (once per environment)
+
+Needs a Project Collection Administrator of the cooptimize organization. No invitation email is sent.
+
+| Environment | Display name to search for | Object ID (Enterprise app) |
+|---|---|---|
+| dev | `ft-dev-app` | `66524ed9-5595-49de-8dfa-b533373d7d06` |
+| prod | `ft-prod-app` | `b3e17d23-b891-4a99-82c0-59206050e095` |
+
+For each:
+1. https://dev.azure.com/cooptimize > Organization settings > Users > Add users.
+2. In Users or Service Principals, type the display name (or paste the Object ID) and pick it.
+3. Access level: **Basic**. Stakeholder can create stories but can't set their iteration, so the create would fail.
+   Basic uses one license.
+4. Add to projects: **Cooptimize Internal**, group **Contributors**. Untick "Send email invites".
+5. Add.
+
+Then check: Settings > Connections > Send feedback, Check again. It should say "Set up: stories go under Feature #496".
+If an identity is ever removed, the dialog falls back to "isn't set up" with Copy text; nothing else breaks.
+
+### Feedback settings
+
+Set by the Bicep only (main.bicep defaults, `infra/prod.bicepparam`, `infra/dev.bicepparam`), never by hand:
+`FOCUSTIME_FEEDBACK_ORG` `cooptimize`, `FOCUSTIME_FEEDBACK_PROJECT` `Cooptimize Internal`,
+`FOCUSTIME_FEEDBACK_PARENT_ID` `496`, `FOCUSTIME_FEEDBACK_LIVE` `true` on prod and `false` on dev.
+To move feedback to another feature, change `feedbackParentId` in main.bicep and deploy.
+
+### Switch dev live for one test
+
+1. GitHub > Actions > deploy-dev > Run workflow on main, tick **feedback_live**, Run.
+2. When it's deployed, send one from dev. Its title starts "[dev]". Check it under #496 in DevOps, then close or
+   delete it there.
+3. Switch back: run deploy-dev again without the box ticked (any push to main does the same).
+
 ## Prod (A5)
 
 ### Deploy by SHA
@@ -256,6 +296,8 @@ per person. Settings shows the ones a person sees as "Set by your FocusTime admi
 | `FOCUSTIME_KEYVAULT_URL` / `FOCUSTIME_DATA_KEY_NAME` | `ft-prod-kv-kkzllj` / `ft-data-key` | app.bicep |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | `ft-prod-appi`'s | app.bicep |
 | Secrets (Key Vault references) | `FOCUSTIME_SECRET_ENTRA_CLIENT`, `_GOOGLE_CLIENT`, `_DATAVERSE_CLIENT` | app.bicep |
+| `FOCUSTIME_FEEDBACK_ORG` / `_PROJECT` / `_PARENT_ID` | `cooptimize` / `Cooptimize Internal` / `496` (dev the same) | `param feedback*` (main.bicep defaults) |
+| `FOCUSTIME_FEEDBACK_LIVE` | `true` (dev: `false` unless deploy-dev runs with feedback_live) | `param feedbackLive` |
 
 ### The first deploy of prod (done in A5, for the record)
 

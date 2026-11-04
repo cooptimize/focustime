@@ -44,6 +44,16 @@ P1: migration `20261103T2300_notices_push` adds two user tables: `notices` (the 
 
 `sources/`: dataverse (focus time, PTO, teammates, client team, team PTO dates) | graph (write.ts: marker-checked Outlook writer, scan, own-event updates, invites and cancel; schedule.ts: getSchedule, free/busy only; people.ts: attendees of my meetings in a client domain, for Who suggestions; presence.ts: my preferred presence set and clear, my presence, teammates' presence in batches; photos.ts: profile photos, 96 px) | google | devops adapters; oauth/ (PKCE through the host's redirect listener), calendar/ (shared fetch, cache, status), devops/ (per-client work items, Pat, write.ts: DevOps writer with the write PAT), azure/ (Resource Manager and Resource Graph client behind a fixed allowlist, D475: find by tag, the VM, its instance view, start, a start's progress, the auto-shutdown schedule read only; fake-arm.ts for tests and demo), oauth/idtoken.ts (who signed in), demo/ (fictional sources for demo mode, no fetch; azure.ts: demo person and VM)
 
+## Send feedback (F1)
+
+The feedback module spans four files, with no other dependencies (D509 to D513):
+- `plan/feedback.ts`, pure: the window's input (kind, text, where; nothing else), the title, the description and the tags. It has no way to reach the plan, clients or work items.
+- `sources/devops/feedback.ts`: the DevOps calls as the app's managed identity (a bearer token for Azure DevOps). It reads the parent, the process's story type, and the default team's iteration; it creates with the parent link in the same JSON Patch (validateOnly for the setup check) and reads back. Logs carry op, status and duration only.
+- `actions/feedback-actions.ts`: the service (one per process, with its cached setup check) and the feedback.status, feedback.preview and feedback.send actions. Previews are held 10 minutes; the daily count is in the person's kv. `actions/feedback-types.ts` holds the types the window shares.
+- `ui/Feedback.tsx`: the dialog (Write, Preview, Sent or the error), opened from ⋯ and Commands. Settings > Connections shows the setup read only.
+
+`server/main.ts` builds the service from the app settings: preview only and unchecked locally, live or preview only from FOCUSTIME_FEEDBACK_LIVE when hosted. The demo uses `sources/demo/feedback.ts`, a pretend backlog in memory.
+
 ## host/: the host boundary
 
 `host/`: the host boundary (A1): types.ts (Host: secrets, config, paths, snapshots, photos, files, sign-in redirect, notifications, links, media, launch, clock and zone default, process facts; HostUnavailable), local/ (the developer loop: keyring.ts through secret-tool, config-file.ts, paths.ts (XDG), snapshots.ts, photos.ts, files.ts (plan store modes, exports, demo flag), loopback.ts, notify.ts (notify-send), media.ts (playerctl, the end sound), launch.ts (Chromium window, launch file, xdg-open), open-request.ts, rename.ts and keyring-rename.ts (R1)), azure/ (the hosted host: desktop-only operations refused; secrets.ts the app secrets from Key Vault references in the environment, read once; datakey.ts the data key wrapped by Key Vault's ft-data-key, kept wrapped in app_keys), fakes.ts (an in-memory Host for tests), host.test.ts (one contract over every host), boundary.test.ts

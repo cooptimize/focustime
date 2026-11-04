@@ -35,7 +35,7 @@ import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { MustsSummary, TopTimer } from "./NowStrip.tsx";
 import { PersonChip, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
-import { afterDone, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
+import { afterDone, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch } from "./ModeSwitch.tsx";
 import { dayModeStatus, weekModeStatus } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
@@ -63,6 +63,7 @@ import { nowStrip } from "../plan/now.ts";
 import { cardHalves, slotOf, validHalf } from "./halves.ts";
 import { SetupFlow } from "./Setup.tsx";
 import { AboutDialog } from "./About.tsx";
+import { FeedbackDialog } from "./Feedback.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
@@ -135,6 +136,7 @@ export function App() {
   const [setupAt, setSetupAt] = useState<SetupStep | null>(null);
   /** S1 (D452): ⋯ › About, which build this is. */
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   // P1: ⋯ › Notifications (the in-app list), its toasts, and Install app's iPhone how-to.
   const notices = useNotices(true);
   /** The list as it was when opened (what was new keeps its dot while the panel is open). */
@@ -1227,6 +1229,7 @@ export function App() {
       borrowed: data.borrowed,
       resetPlan: () => setSettingsAt("data"),
       openVm: () => window.dispatchEvent(new Event(VM_MENU_EVENT)),
+      openFeedback: () => setFeedbackOpen(true),
       openNotifications: () => openNotices(),
       openSettings: (section) => {
         setDetailsOpen(false);
@@ -1800,6 +1803,7 @@ export function App() {
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
               { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
+              { id: "feedback", label: "Send feedback", run: () => setFeedbackOpen(true) },
               ...installItem,
               { id: "about", label: "About", run: () => setAboutOpen(true) },
             ],
@@ -1846,6 +1850,7 @@ export function App() {
       )}
       {writes.dialog}
       {devopsWrites.dialog}
+      {feedbackOpen && <FeedbackDialog view={viewName(loc)} zone={userZone(data)} onClose={() => setFeedbackOpen(false)} />}
       {aboutOpen && <AboutDialog zone={userZone(data)} onClose={() => setAboutOpen(false)} onGuide={() => openGuide()} />}
       {setupAt && (
         <SetupFlow

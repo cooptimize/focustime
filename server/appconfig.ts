@@ -20,6 +20,8 @@ export type AppSettings = {
   database: DatabaseSettings;
   /** The email domains invites may go to (lowercase). Empty: each person's own work email domain. */
   inviteDomains: string[];
+  /** F1: where ⋯ › Send feedback creates stories (a child of `parentId`), and whether this FocusTime sends (live) or only previews. Null: not set. */
+  feedback: FeedbackSettings | null;
   /**
    * AI-0: the AI provider, model, limits and prices, the same for everyone. `provider` null: the host's default
    * (hosted: openai, which needs the ft-openai-key secret; developer loop: the stub, no network).
@@ -37,6 +39,7 @@ export const DEFAULT_AI: AppSettings["ai"] = {
   prices: { inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5 },
   appCapUsd: 100,
 };
+export type FeedbackSettings = { org: string; project: string; parentId: number; live: boolean };
 
 /**
  * A3: the plan store's database. SQL Server (Azure SQL in the hosted app, a local container for development) signs in
@@ -69,6 +72,10 @@ export const APP_ENV = {
   dbAuth: "FOCUSTIME_DB_AUTH",
   dbUser: "FOCUSTIME_DB_USER",
   dbIdentity: "FOCUSTIME_DB_MANAGED_IDENTITY_CLIENT_ID",
+  feedbackOrg: "FOCUSTIME_FEEDBACK_ORG",
+  feedbackProject: "FOCUSTIME_FEEDBACK_PROJECT",
+  feedbackParentId: "FOCUSTIME_FEEDBACK_PARENT_ID",
+  feedbackLive: "FOCUSTIME_FEEDBACK_LIVE",
   aiProvider: "FOCUSTIME_AI_PROVIDER",
   aiModel: "FOCUSTIME_AI_MODEL",
   aiEffort: "FOCUSTIME_AI_REASONING_EFFORT",
@@ -132,6 +139,19 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
   const inviteDomains = [...new Set(String(domainsRaw).split(",").map((d) => d.trim().toLowerCase()).filter(Boolean))];
   if (inviteDomains.some((d) => !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(d))) errors.push("invite_domains must be domain names like example.com");
 
+  // [feedback] (F1): org, project, parent_id and live. No org: not set (the dialog says it isn't set up).
+  const f = sec("feedback");
+  const fbOrg = val(APP_ENV.feedbackOrg, f.org);
+  const fbProject = val(APP_ENV.feedbackProject, f.project);
+  const fbParentText = val(APP_ENV.feedbackParentId, typeof f.parent_id === "number" ? String(f.parent_id) : f.parent_id);
+  const fbLiveRaw = env[APP_ENV.feedbackLive] ?? (typeof f.live === "boolean" ? String(f.live) : "false");
+  const fbParent = Number(fbParentText);
+  let feedback: FeedbackSettings | null = null;
+  if (fbOrg || fbProject || fbParentText) {
+    if (!/^[a-z0-9][a-z0-9-]{0,49}$/i.test(fbOrg) || !fbProject || fbProject.length > 64 || !/^\d{1,9}$/.test(fbParentText) || fbParent < 1)
+      errors.push("[feedback] needs org (a DevOps organization name), project and parent_id (a work item number)");
+    else feedback = { org: fbOrg, project: fbProject, parentId: fbParent, live: ["1", "true", "on", "yes"].includes(fbLiveRaw.trim().toLowerCase()) };
+  }
   const ai = readAi(sec("ai"), env, errors);
 
   if (errors.length) return { ok: false, errors };
@@ -145,6 +165,7 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
       demo,
       database,
       inviteDomains,
+      feedback,
       ai,
     },
   };

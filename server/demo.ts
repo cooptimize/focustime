@@ -8,17 +8,21 @@ import { createDemoSources } from "../sources/demo/sources.ts";
 import { DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
 import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
 import { mondayOf } from "../week/dates.ts";
-import { createDemoAzure, DEMO_VM_ID } from "../sources/demo/azure.ts";
+import { createDemoAzure, DEMO_PERSON, DEMO_VM_ID } from "../sources/demo/azure.ts";
+import { createDemoFeedbackDevOps, type DemoFeedbackParent } from "../sources/demo/feedback.ts";
+import { createFeedbackService } from "../actions/feedback-actions.ts";
 import { notices } from "../plan/notify.ts";
 
 export type DemoControl = { on: boolean; set: (on: boolean) => Promise<void> };
 
-export function createDemoContext(opts: { now: () => string; demo: DemoControl; /** A2 tests: a store on a shared database. */ plan?: PlanStore }): ActionContext {
+export function createDemoContext(opts: { now: () => string; demo: DemoControl; /** A2 tests: a store on a shared database. */ plan?: PlanStore; /** F1 checks: the pretend feature's state. */ feedbackParent?: DemoFeedbackParent }): ActionContext {
   let text = DEMO_CONFIG;
   const sources = createDemoSources(opts.now);
   const plan = opts.plan ?? createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ) });
   // Step 15.4: a fictional signed-in person and VM, simulated (no Azure calls).
   const demoAzure = createDemoAzure();
+  // F1: Send feedback against a pretend backlog in memory (nothing leaves FocusTime).
+  const feedback = createFeedbackService({ devops: createDemoFeedbackDevOps({ parent: opts.feedbackParent ?? "ok" }), mode: "live", env: "demo", local: false, demo: true, now: () => Date.parse(opts.now()), log: () => {}, sleep: async () => {} });
   return {
     loadConfig: async () => ({ path: "Demo data (in memory, not your config file)", parsed: parseConfig(text) }),
     // Theme or view changes in demo mode stay in memory: the real config file is never touched.
@@ -39,6 +43,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     demo: opts.demo,
     account: () => demoAzure.account,
     azure: demoAzure.azure,
+    feedback: { service: feedback, sender: async () => ({ name: DEMO_PERSON.name, email: DEMO_PERSON.email }) },
     // P1: the demo's notifications stay in the page: a test lands in ⋯ › Notifications (no desktop, no push).
     notifications: {
       test: async () => void (await plan.addNotice({ key: `test:${opts.now()}`, kind: "test", title: "FocusTime", body: "Test notification. It shows here and as a toast.", route: "settings:notifications" })),
