@@ -17,6 +17,8 @@ import { PlanError, type DevOpsIdentityRow, type PlanStore } from "../store/plan
 import type { ActionResponse, DevOpsPreview, DevOpsResult } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 import { askDescription, askTitle, messageLink, type AskItemLevel } from "../plan/asks.ts";
+import { publishAcceptance, publishDescription } from "../plan/stories.ts";
+import { sizeChipText } from "../plan/estimate.ts";
 export type { DevOpsPreview, DevOpsResult };
 
 export const DEVOPS_WRITE_ACTIONS = ["devops.set_write_pat", "devops.clear_write_pat", "devops.write_status", "devops.states", "devops.preview", "devops.confirm", "devops.retry", "devops.log"] as const;
@@ -44,6 +46,8 @@ type Held = {
   draftId: number | null; followUpId: number | null; undoOf: number | null; commentId: number | null; pickIds: number[]; type: string | null; field: string | null;
   /** AP-1: the ask a create comes from. */
   ask: { chatId: string; messageId: string } | null;
+  /** DS-1: the Draft stories card a create comes from, tied to its write before it is sent. */
+  proposal?: { draftId: string; proposalId: string } | null;
 };
 const held = new Map<string, Held>();
 export const clearDevopsPreviews = () => held.clear();
@@ -204,8 +208,10 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const env = await envOf(clientKey);
       const previews: DevOpsPreview[] = [];
       const nothing: string[] = [];
+      // DS-1: a batch reads the same parent and process once.
+      const memo = new Map<string, Promise<unknown>>();
       for (const c of list) {
-        const h = await previewOne(env, c, tz);
+        const h = await previewOne(env, c, tz, memo);
         if (typeof h === "string") nothing.push(h);
         else previews.push(hold(h, env));
       }
@@ -227,7 +233,13 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
         }
         try {
           const env = await envOf(h.clientKey);
+          // DS-1: a card that already has a write is never sent again (Retry checks that one instead).
+          if (h.proposal && (await plan.storyDraftWrites(h.proposal.draftId)).has(h.proposal.proposalId)) {
+            results.push({ error: `"${h.title}" was already sent. Retry it; it checks first and won't make a second one`, status: 409 });
+            continue;
+          }
           const entry = (await plan.logDevopsWrite({ clientKey: h.clientKey, org: h.org, project: h.project, op: h.op, itemId: h.itemId, parentId: h.parentId, title: h.title, identity: env.me.email, before: h.before, after: h.after, ops: h.ops, revBefore: h.rev, revAfter: null, commentId: h.commentId, draftId: h.draftId, pickIds: h.pickIds, followUpId: h.followUpId, undoOf: h.undoOf, ask: h.op === "create" ? h.ask : null }));
+          if (h.proposal) await plan.linkStoryDraftWrite(h.proposal.draftId, h.proposal.proposalId, entry.id);
           results.push(await attempt(ctx, env, entry, false, tz));
         } catch (e) {
           if (e instanceof Refused) results.push({ error: e.message, status: e.status });
@@ -277,11 +289,11 @@ function hold(h: HeldIn, env: Env): DevOpsPreview {
 }
 
 const base = (env: Env) => ({ clientKey: env.clientKey, org: env.org, project: env.project, projectName: env.projectName, identity: env.me.email });
-const none = { draftId: null, followUpId: null, undoOf: null, commentId: null, pickIds: [] as number[], type: null, field: null, parentId: null, ask: null };
+const none = { draftId: null, followUpId: null, undoOf: null, commentId: null, pickIds: [] as number[], type: null, field: null, parentId: null, ask: null, proposal: null };
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
-async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level"]);
+async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
+  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -365,6 +377,40 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
       const after: Record<string, string | null> = { Type: type, Title: draft.title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}), ...(draft.level === "feature" ? { "Start date": startDate?.date ?? null, "Target date": targetDate?.date ?? null } : {}), "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area, Iteration: iteration, Parent: `#${parent.id} ${parent.title}` };
       return { ...base(env), ...none, op: "create", itemId: null, parentId: parent.id, title: draft.title, ops, rev: null, before: {}, after, draftId: draft.id, type };
     }
+    case "proposal_create": {
+      // DS-1: one kept card of a Draft stories draft, as a story under its feature: the process's story type, the
+      // feature's area and iteration, assigned to me, the card's description (with "After: <title>" for its kept
+      // dependencies) and acceptance criteria. The FocusTime size stays in FocusTime (no estimate is written).
+      const draftId = str(o.storyDraftId, "storyDraftId", 64)!;
+      const proposalId = str(o.proposalId, "proposalId", 16)!;
+      const draft = await plan.storyDraft(draftId);
+      if (!draft) throw new PlanError("No such draft");
+      if (draft.clientKey !== env.clientKey) throw new Refused("That draft belongs to another client", 409);
+      const p = draft.proposals.find((x) => x.id === proposalId);
+      if (!p || !p.keep) throw new Refused("That card isn't kept in the draft", 409);
+      if ((await plan.storyDraftWrites(draftId)).has(proposalId)) return `"${p.title}" was already sent to DevOps`;
+      // A create of the same title under the same feature that may have landed (or did): never another one.
+      const same = (await plan.devopsWriteLog(1000)).find((e) => e.op === "create" && e.parentId === draft.featureId && e.title === p.title && e.undoneBy === null && e.status !== "failed" && e.status !== "refused");
+      if (same) return same.status === "confirmed" ? `"${p.title}" is already in DevOps as #${same.itemId}` : `"${p.title}" may already be in DevOps. Retry it in Settings > Data > Audit log`;
+      const once = <T,>(k: string, f: () => Promise<T>) => (memo.get(k) ?? memo.set(k, f()).get(k)!) as Promise<T>;
+      const parent = await once(`item:${draft.featureId}`, () => writer.item(org, pat, project, draft.featureId));
+      const pc = await once("pc", () => writer.processConfig(org, pat, project));
+      if (!portfolioTiers(pc).feature.has(parent.type)) throw new Refused(`#${parent.id} is a ${parent.type}: stories are drafted under features`, 409);
+      const type = defaultType(pc, "story");
+      if (!type) throw new Refused("This project's process has no story level", 409);
+      const parentStates = await once(`states:${parent.type}`, () => writer.states(org, pat, project, parent.type));
+      if (!isOpenCategory(parentStates.find((s) => s.name === parent.state)?.category ?? "InProgress")) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
+      const typeHas = await once(`fields:${type}`, () => writer.typeFields(org, pat, project, type));
+      const acField = typeHas.has(AC_FIELD);
+      const area = String(parent.fields["System.AreaPath"] ?? "");
+      const iteration = String(parent.fields["System.IterationPath"] ?? "");
+      if (!area || !iteration) throw new Refused(`#${parent.id} has no area or iteration to copy`, 409);
+      const description = publishDescription(p, draft.proposals) || null;
+      const acceptance = publishAcceptance(p) || null;
+      const ops = createOps({ org, title: p.title, description, acceptance, acField, assignedTo: env.me.email, areaPath: area, iterationPath: iteration, parentId: parent.id, timeZone: tz });
+      const after: Record<string, string | null> = { Type: type, Title: p.title, Description: description, ...(acField ? { "Acceptance criteria": acceptance } : {}), "Assigned to": `${env.me.name} <${env.me.email}>`, Area: area, Iteration: iteration, Parent: `#${parent.id} ${parent.title}`, "Size in FocusTime": `${sizeChipText(p.size)} (not written to DevOps)` };
+      return { ...base(env), ...none, op: "create", itemId: null, parentId: parent.id, title: p.title, ops, rev: null, before: {}, after, type, proposal: { draftId, proposalId } };
+    }
     case "ask_create": {
       // AP-1: a new bug, story or feature from an ask in a client chat: no parent (the project's default area and
       // iteration), assigned to me, the message, its author, time and Teams link as the description.
@@ -443,7 +489,7 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
       return { ...u, op: "undo_create", ops: removeOps(item.rev, removed), rev: item.rev, before: { State: item.state, Comment: null }, after: { State: removed, Comment: REMOVED_COMMENT }, draftId: entry.draftId, pickIds: entry.pickIds, ask: entry.ask ?? null };
     }
     default:
-      throw new Invalid("kind must be state, comment, create, ask_create, target_date or undo");
+      throw new Invalid("kind must be state, comment, create, ask_create, proposal_create, target_date or undo");
   }
 }
 
