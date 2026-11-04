@@ -168,7 +168,7 @@ describe("me from the signed-in account", () => {
     s.c.saveSystemUserId = async (id) => void saved.push(id);
     s.c.makeDataverse = () => ({ resolveUserId: async (email: string) => ({ ok: true, id: email === "pat@example.com" ? "dddddddd-0000-4000-8000-0000000000f1" : "wrong" }), load: async () => ({ source: "dataverse", status: "ok", fetchedAt: null, fromCache: false, items: [] }), pto: async () => ({ items: [] }), devopsTargets: async () => ({ ok: true, targets: [] }), team: async () => ({ items: [] }), following: async () => null }) as never;
     s.c.makeOutlook = () => ({ load: async () => ({ source: "outlook", status: "ok", fetchedAt: null, fromCache: false, items: [] }) }) as never;
-    s.c.makeDevOps = () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined }) as never;
+    s.c.makeDevOps = () => ({ load: async () => [], lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined, featureSignals: async () => ({ ok: false as const, message: "n/a" }), exemplarPool: async () => ({ ok: true as const, value: [] }) }) as never;
     await s.run("week.load", { weekStart: "2026-11-02" });
     expect(saved).toEqual([]);
     expect((await s.plan.accountState<StoredIdentity>(IDENTITY_KEY))).toMatchObject({ systemUserId: "dddddddd-0000-4000-8000-0000000000f1", systemUserEmail: "pat@example.com" });

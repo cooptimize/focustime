@@ -28,7 +28,7 @@ function ctx(orgs: Record<string, OrgScenario> = { contoso: "agile" }, opts: { d
     makeOutlook: () => { throw new Error("n/a"); },
     makeGoogle: () => { throw new Error("n/a"); },
     makeDevOps: (cfg, tz) => {
-      if (opts.devopsThrows) return { load: async () => { throw new Error("boom"); }, lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined };
+      if (opts.devopsThrows) return { load: async () => { throw new Error("boom"); }, lookup: () => null, orgOf: () => null, last: () => null, portfolio: async () => [], description: async () => null, forget: () => undefined, featureSignals: async () => ({ ok: false as const, message: "n/a" }), exemplarPool: async () => ({ ok: true as const, value: [] }) };
       const dv = makeDataverse(cfg, tz);
       return createDevOpsSource({ fetch: ado.fetch, log: () => {}, snapshots: createSnapshotStore(cacheDir), timeZone: tz, targets: (k) => dv.devopsTargets(k) });
     },

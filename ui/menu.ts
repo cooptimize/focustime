@@ -1048,6 +1048,19 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ai.status":
     case "ai.test":
       return { run: () => env.openSettings("ai") };
+    // DS-1: Draft stories opens its sheet on a feature with no stories; the rest happens in the sheet.
+    case "stories.prepare": return { next: () => chooseItem(env, "Draft stories for which feature?", (i) => i.level === "portfolio", (k, i) => () => void openDraftStories(k, { id: i.id, title: i.title })) };
+    case "stories.status":
+    case "stories.run":
+    case "stories.regenerate":
+    case "stories.save":
+    case "stories.publish_preview":
+    case "stories.publish":
+    case "stories.retry":
+      return { disabled: "In the Draft stories sheet, from a Needs stories row" };
+    case "stories.house_style":
+    case "stories.house_style_save":
+      return { run: () => env.openSettings("clients") };
     case "permissions.status": return { run: () => env.openSettings("connections") };
     case "people.photos": return { disabled: "Shown wherever you and Cooptimizers appear" };
     case "presence.people": return { disabled: "Shown next to Cooptimizers in Needs help from…, Who and Roadmap" };
@@ -1199,6 +1212,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
 
 /** AP-1: the Asks tab's keys as commands; the tab listens for ASK_KEY_EVENT. */
 export const ASK_KEY_EVENT = "focustime:ask-key";
+
+/** DS-1: opens the Draft stories sheet (ui/DraftStoriesSheet.tsx listens) for one client's feature. */
+export const DRAFT_STORIES_EVENT = "focustime:draft-stories";
+export const openDraftStories = (clientKey: string, item: { id: number; title: string }) => window.dispatchEvent(new CustomEvent(DRAFT_STORIES_EVENT, { detail: { clientKey, item } }));
 export const ASK_KEYS = [
   { id: "ask.next", label: "Next ask", hint: "J" },
   { id: "ask.prev", label: "Previous ask", hint: "K" },
