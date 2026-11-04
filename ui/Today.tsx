@@ -79,7 +79,7 @@ type Props = {
   onPlan: (date?: string) => void;
   onPlanWeek: () => void;
   onInbox: () => void;
-  /** AP-2: Inbox › Asks (an urgent ask's chip, Check-in's "Walked in, not resolved"). */
+  /** AP-2: Inbox › Requests (an urgent request's chip, Check-in's "Walked in, not resolved"). */
   onAsks?: () => void;
   onCaptures: () => void;
   onRetry: () => void;
@@ -410,7 +410,7 @@ function Attention({ noDue = false, data, date, clockMs, onInbox, onRetry, onFix
   const due: FollowUpView[] = noDue ? [] : urgentFollowUps(data.followUps, date);
   const down = causeLines(data.sources, data.devops);
   const vm = vmNeedsToday(useContext(VmCtx).status);
-  const urgent = data.asks?.urgent ?? [];
+  const urgent = data.requests?.urgent ?? [];
   if (!due.length && !down.length && !data.expiring.length && !vm && !urgent.length) return null;
   const names = [...new Set(due.map((l) => (l.hasWho ? l.who : l.clientName ?? "")).filter(Boolean))];
   return (
@@ -442,7 +442,7 @@ function Attention({ noDue = false, data, date, clockMs, onInbox, onRetry, onFix
         ))}
         {urgent.map((u) => (
           <span key={`${u.chatId}|${u.messageId}`} className="att-chip urgent">
-            <button type="button" className="att-open" onClick={onAsks} title="Open it in Inbox › Asks">
+            <button type="button" className="att-open" onClick={onAsks} title="Open it in Inbox › Requests">
               <span className="att-tag">Walked in</span>
               <span className="att-names">{u.clientName}</span>
               <span>{u.title}</span>
@@ -747,10 +747,10 @@ function CheckinFoot({ data, date, blocks, picks, now, act, onReview, onAsks }: 
   return (
     <div className="ci-foot">
       {blocks.length > 0 && <WalkOn data={data} date={date} blocks={blocks} picks={picks} act={act} />}
-      {(data.asks?.pastUrgency ?? 0) > 0 && (
+      {(data.requests?.pastUrgency ?? 0) > 0 && (
         <p className="ci-asks">
-          <button type="button" className="link-btn" onClick={onAsks} title="Asks still open after their urgency (now: 2 hours; this week: Friday)">
-            Walked in, not resolved ({data.asks.pastUrgency})
+          <button type="button" className="link-btn" onClick={onAsks} title="Requests still open after their urgency (now: 2 hours; this week: Friday)">
+            Walked in, not resolved ({data.requests.pastUrgency})
           </button>
         </p>
       )}

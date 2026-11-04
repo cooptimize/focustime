@@ -84,7 +84,7 @@ export type WeekLoadData = {
    * AP-2: open asks AI sorted as needing me now (Today's attention line, with Start focus), and how many open asks are
    * past their urgency window (Check-in's "Walked in, not resolved").
    */
-  asks: { urgent: UrgentAsk[]; pastUrgency: number };
+  requests: { urgent: UrgentAsk[]; pastUrgency: number };
   ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
   /** Step 15 (D272): demo mode is on: every source is fictional sample data and the plan store is the demo one. */

@@ -2,7 +2,7 @@
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
-import { askAction, type AskContext } from "./ask-actions.ts";
+import { requestAction, urgentRequests, visibleChats, type RequestContext, type RequestsPort } from "./request-actions.ts";
 import { aiAction, type AiActionName, type AiRuntime } from "./ai-actions.ts";
 import { createAi, type AiService } from "../ai/service.ts";
 import type { ClientEntry } from "../ai/guard.ts";
@@ -65,6 +65,7 @@ import { vmAction, vmKey, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
+import { isAdmin } from "./admin.ts";
 import { feedbackAction, type FeedbackContext, type FeedbackService } from "./feedback-actions.ts";
 import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
@@ -80,6 +81,10 @@ export type { ActionResponse, SourceSummary, WeekLoadData };
 export type ActionContext = {
   /** AI-0: the app's AI runtime (settings, provider, the app's spend). Absent: AI isn't available here (demo). */
   ai?: AiRuntime;
+  /** Shared polling (D514): the shared Teams store and the poll job's Refresh. Absent: no client chats or Requests. */
+  requests?: RequestsPort;
+  /** D522: the app's admins (Entra object ids, from the app config), read only through `isAdmin()`. */
+  admins?: readonly string[];
   /** AP-1: the structured logger (counts and kinds only). Absent: nothing is logged (tests, demo). */
   log?: Logger;
   /** S1 (D452): where this runs: local, dev, prod or demo (runtime config). Absent: local. */
@@ -492,7 +497,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     devopsWrite: ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : [],
     // Step 14.5 (D256): write PATs and app secrets that expire within 14 days, for Today.
     expiring: (await expiringFor(ctx.plan, cfg, serverToday, (k) => names.get(k))),
-    asks: ctx.plan ? await urgentAsks(ctx.plan, now, tz, (k) => names.get(k) ?? cfg?.clientSettings[k]?.name ?? k) : { urgent: [], pastUrgency: 0 },
+    requests: await urgentFor(ctx, now, tz, (k) => names.get(k) ?? cfg?.clientSettings[k]?.name ?? k).catch(() => ({ urgent: [], pastUrgency: 0 })),
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
     demo: !!ctx.demo?.on,
@@ -500,11 +505,15 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
 }
 
 /**
- * AP-2: open asks sorted as urgent "now" (Today), and the open ones past their urgency window (Check-in). Asks that
- * weren't sorted have no urgency and count in neither.
+ * AP-2: open requests sorted as urgent "now" (Today), and the open ones past their urgency window (Check-in), in the
+ * chats this person sees. Requests that weren't sorted have no urgency and count in neither.
  */
-async function urgentAsks(plan: PlanStore, now: string, zone: string, name: (k: string) => string): Promise<WeekLoadData["asks"]> {
-  const open = (await plan.asks().catch(() => [])).filter((a) => a.status === "open" && a.sortStatus === "sorted" && a.sort && a.sort.kind !== "none");
+async function urgentFor(ctx: ActionContext, now: string, zone: string, name: (k: string) => string): Promise<WeekLoadData["requests"]> {
+  const teams = ctx.requests?.teams;
+  if (!teams) return { urgent: [], pastUrgency: 0 };
+  const c = await chatContext(ctx);
+  const me = await c.me();
+  const open = await urgentRequests(me ? teams.viewer(me) : null, await c.clientKeys().catch(() => null));
   return {
     urgent: open.filter((a) => a.sort!.urgency === "now").map((a) => ({ chatId: a.chatId, messageId: a.messageId, clientKey: a.clientKey, clientName: name(a.clientKey), title: a.sort!.title, at: a.createdAt })),
     pastUrgency: open.filter((a) => pastUrgency(a.sort!.urgency, a.createdAt, now, zone)).length,
@@ -564,6 +573,9 @@ export async function presenceContext(ctx: ActionContext): Promise<PresenceConte
 export async function chatContext(ctx: ActionContext): Promise<ChatContext> {
   return {
     ...(ctx.plan ? { plan: ctx.plan } : {}),
+    ...(ctx.requests ? { teams: ctx.requests.teams } : {}),
+    me: async () => (await storedIdentity(ctx.plan))?.oid ?? null,
+    isAdmin: async () => isAdmin((await storedIdentity(ctx.plan))?.oid ?? null, ctx.admins),
     account: await accountOf(ctx),
     homeTenant: async () => (await configured(ctx))?.outlook?.tenantId ?? (await storedIdentity(ctx.plan))?.tid ?? null,
     clientKeys: async () => {
@@ -578,7 +590,6 @@ export async function chatContext(ctx: ActionContext): Promise<ChatContext> {
   };
 }
 
-/** AP-1: Asks: the chats with Read for asks on, the person's PTO, their clients' open DevOps items and write access. */
 /** DevOps project names from a work item's link (https://dev.azure.com/<org>/<project>/_workitems/...). */
 const projectOf = (url: string): string | null => {
   const m = /^https:\/\/dev\.azure\.com\/[^/]+\/([^/_][^/]*)\//.exec(url);
@@ -632,18 +643,25 @@ export async function aiFor(ctx: ActionContext): Promise<AiService | null> {
   });
 }
 
-export async function askContext(ctx: ActionContext): Promise<AskContext> {
+/** The Requests a DevOps create comes from: the shared store, who I am, and whether I see a chat. */
+async function sharedFor(ctx: ActionContext, port: RequestsPort) {
+  const c = await chatContext(ctx);
+  const me = await c.me();
+  if (!me) return undefined;
+  const teams = port.teams.viewer(me);
+  return { teams, sees: async (chatId: string) => (await visibleChats(teams, await c.clientKeys().catch(() => null))).some((x) => x.chatId === chatId) };
+}
+
+/** Requests: the shared store and Refresh, who I am and my clients, their open DevOps items and write access. */
+export async function requestContext(ctx: ActionContext): Promise<RequestContext> {
   const chats = await chatContext(ctx);
   return {
     ...(ctx.plan ? { plan: ctx.plan } : {}),
-    account: chats.account,
+    ...(ctx.requests ? { requests: ctx.requests } : {}),
+    me: chats.me,
+    followed: chats.clientKeys,
     config: () => configured(ctx),
     homeTenant: chats.homeTenant,
-    pto: async (d) => {
-      const cfg = await configured(ctx);
-      if (!cfg?.dataverse.mySystemUserId) return false;
-      return (await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).pto(d, d)).items.some((e) => e.date === d);
-    },
     openItems: async (cfg, clientKey) => {
       const src = ctx.makeDevOps(cfg.dataverse, userZone(cfg));
       // What was read last (Week, Plan the week) when there is one; else this client alone.
@@ -766,6 +784,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       return devopsWriteAction(
         {
           plan: ctx.plan,
+          ...(ctx.requests ? { requests: await sharedFor(ctx, ctx.requests) } : {}),
           config: () => configured(ctx),
           // Never the company read PAT: this read doesn't select it.
           targets: (cfg, keys) => ctx.makeDataverse(cfg.dataverse, userZone(cfg)).devopsTargets(keys, { withPat: false }),
@@ -1023,22 +1042,21 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "chats.refresh":
     case "permissions.status":
       return chatAction(await chatContext(ctx), action, req.input);
-    case "asks.list":
-    case "asks.refresh":
-    case "asks.switch":
-    case "asks.context":
-    case "asks.resolve":
-    case "asks.reopen":
-    case "asks.search":
-    case "asks.purge":
-    case "asks.sort_again":
-    case "asks.show":
+    case "requests.list":
+    case "requests.refresh":
+    case "requests.context":
+    case "requests.resolve":
+    case "requests.reopen":
+    case "requests.search":
+    case "requests.purge":
+    case "requests.sort_again":
+    case "requests.show":
     case "promises.list":
     case "promises.resolve":
     case "promises.reopen":
     case "promises.followup":
     case "promises.link":
-      return askAction(await askContext(ctx), action, req.input);
+      return requestAction(await requestContext(ctx), action, req.input);
     case "ai.status":
     case "ai.test":
       return aiAction(await aiFor(ctx), action as AiActionName);

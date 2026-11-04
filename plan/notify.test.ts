@@ -175,7 +175,8 @@ describe("urgent asks (AP-2)", () => {
   });
   it("once per ask, opening Asks", () => {
     const n = notices.urgentAsk("1700000000001", "Fabrikam", "Portal down", "2026-11-04T15:00:00Z");
-    expect(n).toMatchObject({ kind: "asks", key: "ask:1700000000001", title: "Urgent ask from Fabrikam", route: "asks" });
-    expect(parseRoute(n.route)).toEqual({ view: "asks" });
+    expect(n).toMatchObject({ kind: "asks", key: "ask:1700000000001", title: "Urgent request from Fabrikam", route: "requests" });
+    expect(parseRoute(n.route)).toEqual({ view: "requests" });
+    expect(parseRoute("asks")).toEqual({ view: "asks" });
   });
 });

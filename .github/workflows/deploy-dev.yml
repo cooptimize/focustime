@@ -117,6 +117,7 @@ jobs:
           FT_IMAGE_TAG: ${{ github.sha }}
           FT_APP_READY: "true"
           FT_FEEDBACK_LIVE: ${{ inputs.feedback_live && 'true' || 'false' }}
+          FT_ADMINS: ${{ vars.FT_ADMINS }}
         run: |
           az deployment group what-if -g "$RG" -n ft-dev --parameters infra/dev.bicepparam --exclude-change-types NoChange Ignore
           az deployment group create -g "$RG" -n ft-dev --parameters infra/dev.bicepparam --query properties.outputs.publicUrl.value -o tsv > url.txt
