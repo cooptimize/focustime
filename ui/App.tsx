@@ -64,6 +64,7 @@ import { cardHalves, slotOf, validHalf } from "./halves.ts";
 import { SetupFlow } from "./Setup.tsx";
 import { AboutDialog } from "./About.tsx";
 import { FeedbackDialog } from "./Feedback.tsx";
+import { DraftStoriesHost } from "./DraftStoriesSheet.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
@@ -1850,6 +1851,7 @@ export function App() {
       )}
       {writes.dialog}
       {devopsWrites.dialog}
+      <DraftStoriesHost onDone={() => (setPlanWeekVersion((v) => v + 1), reloadQuiet())} />
       {feedbackOpen && <FeedbackDialog view={viewName(loc)} zone={userZone(data)} onClose={() => setFeedbackOpen(false)} />}
       {aboutOpen && <AboutDialog zone={userZone(data)} onClose={() => setAboutOpen(false)} onGuide={() => openGuide()} />}
       {setupAt && (

@@ -3888,3 +3888,54 @@ button.ask-label { cursor: pointer; }
   .ask-hidden { grid-template-columns: auto minmax(0, 1fr); }
   .ask-hidden > .mini { grid-column: 2; grid-row: auto; justify-self: start; }
 }
+
+/* DS-1: the Draft stories sheet (Prepare, Review, Publish). */
+.cap-dialog.ds-sheet { width: min(860px, 100%); max-height: 86vh; grid-template-rows: auto 1fr auto; overflow: hidden; padding: 0; gap: 0; }
+.ds-head { display: grid; gap: 4px; padding: 14px 18px 10px; border-bottom: 1px solid var(--border); }
+.ds-head h2 { margin: 0; font-size: var(--fs-4); font-weight: 600; outline: none; }
+.ds-feature { margin: 0; font-size: var(--fs-3); }
+.ds-steps { display: flex; gap: 14px; margin: 4px 0 0; padding: 0; list-style: none; font-size: var(--fs-2); color: var(--text-faint); }
+.ds-steps li.on { color: var(--text); font-weight: 600; }
+.ds-steps li.done { color: var(--text-muted); }
+.ds-body { overflow: auto; padding: 12px 18px; display: grid; gap: 12px; align-content: start; }
+.ds-actions { padding: 10px 18px; border-top: 1px solid var(--border); justify-content: flex-end; }
+.ds-section { display: grid; gap: 6px; }
+.ds-section h3 { margin: 0; font-size: var(--fs-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+.ds-fields { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 0; font-size: var(--fs-3); }
+.ds-fields > div { display: contents; }
+.ds-fields dt { color: var(--text-muted); }
+.ds-fields dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ds-hint { margin: 0; font-size: var(--fs-2); }
+.ds-children, .ds-examples, .ds-aside ul, .ds-notyet ul { margin: 0; padding-left: 18px; font-size: var(--fs-3); display: grid; gap: 3px; }
+.ds-examples { list-style: none; padding-left: 0; }
+.ds-sub { display: block; color: var(--text-muted); font-size: var(--fs-2); }
+.ds-style { margin: 0; font-size: var(--fs-3); }
+.ds-note, .ds-field { display: grid; gap: 4px; font-size: var(--fs-2); color: var(--text-muted); }
+.ds-note textarea, .ds-field textarea, .ds-title { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; resize: vertical; }
+.ds-run-line, .ds-rationale, .ds-latest { margin: 0; font-size: var(--fs-3); }
+.ds-busy { margin: 0; font-size: var(--fs-3); color: var(--text-muted); }
+.ds-cards { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.ds-card { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.ds-card.dropped { opacity: 0.55; }
+.ds-card.sent { border-color: var(--border-strong); }
+.ds-card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ds-card-id { flex: none; font-size: var(--fs-1); font-weight: 600; color: var(--text-faint); }
+.ds-title { flex: 1 1 auto; min-width: 0; font-weight: 600; }
+.ds-card-tools { flex: none; display: flex; gap: 2px; }
+.ds-after { margin: 0; font-size: var(--fs-2); color: var(--text-muted); }
+.ds-card-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.ds-sizes { display: flex; gap: 4px; flex-wrap: wrap; }
+.ds-sizes .size-chip.on { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.ds-why { font-size: var(--fs-2); }
+.ds-why p { margin: 2px 0; }
+.ds-state { margin: 0; font-size: var(--fs-2); }
+.ds-off { color: var(--text-muted); }
+@media (max-width: 600px) {
+  .cap-dialog.ds-sheet { max-height: 100vh; border-radius: 0; }
+  .ds-head, .ds-body, .ds-actions { padding-left: 16px; padding-right: 16px; }
+  .ds-fields { grid-template-columns: 1fr; }
+  .ds-card-head { flex-wrap: wrap; }
+}
+/* DS-1: Settings › Clients, the house style. */
+.set-house-style textarea { font: inherit; font-size: var(--fs-3); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 8px; resize: vertical; }
+.set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
