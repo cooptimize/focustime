@@ -1,6 +1,6 @@
 // Inbox › Requests (was Asks; shared polling, D514 to D518). The job (actions/request-poll.ts) reads every registered
 // client chat for everyone; this is the person's view of it. A chat, its messages and its Requests are shown only to a
-// member of that chat who follows its client (plan/requests.ts canSee); a Request's state is shared, so whoever
+// member of that chat (the store's viewer, D521) who follows its client; a Request's state is shared, so whoever
 // resolves it resolves it for everyone, by name. Refresh polls the chats this person sees through the same job, now.
 // Promises stay each person's own (their plan store), with the message text read from the shared store. Chat text is
 // client data: it goes only to that client's cards, never into a log or an error (ids and counts only, and not even
@@ -12,9 +12,9 @@ import { LIKELY_MIN, notSortedText, promiseClosedBy, type StoredPromise } from "
 import type { AiService } from "../ai/service.ts";
 import { classifyAsk } from "./ask-ai.ts";
 import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
-import { canSee, POLL_MINUTES, type ClientChat, type Request } from "../plan/requests.ts";
+import { POLL_MINUTES, type ClientChat, type Request } from "../plan/requests.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
-import type { TeamsStore } from "../store/teams-store.ts";
+import type { TeamsStore, TeamsView } from "../store/teams-store.ts";
 import type { WorkItem } from "../week/types.ts";
 import { localToday } from "../week/dates.ts";
 import { userZone } from "../week/zone.ts";
@@ -72,10 +72,10 @@ const newest = (xs: readonly (string | null)[]) => xs.reduce<string | null>((a, 
 /** A member's name from the chat (token owners and resolvers are always members), or null. */
 const memberName = (c: ClientChat | undefined, id: string | null) => (id ? (c?.members?.find((m) => same(m.userId, id))?.displayName ?? null) : null);
 
-/** The chats this person may see: a member who follows the client. */
-export async function visibleChats(teams: TeamsStore, me: string | null, followed: ReadonlySet<string> | null): Promise<ClientChat[]> {
-  if (!me) return [];
-  return (await teams.chats()).filter((c) => canSee(c, me, followed));
+/** The chats this person may see: the store's view gives only chats they're in now (D521); here, those of clients they follow. */
+export async function visibleChats(view: TeamsView | null, followed: ReadonlySet<string> | null): Promise<ClientChat[]> {
+  if (!view) return [];
+  return (await view.chats()).filter((c) => !followed || followed.has(c.clientKey));
 }
 
 /** A request the AI said needs no action, open and not shown again. */
@@ -123,12 +123,13 @@ async function closePromises(ctx: RequestContext, plan: PlanStore, cfg: AppConfi
   return changed;
 }
 
-type Seen = { teams: TeamsStore; me: string | null; chats: ClientChat[]; byId: Map<string, ClientChat> };
+type Seen = { teams: TeamsView; me: string; chats: ClientChat[]; byId: Map<string, ClientChat> };
 async function seen(ctx: RequestContext): Promise<Seen | null> {
-  const teams = ctx.requests?.teams;
-  if (!teams) return null;
+  const store = ctx.requests?.teams;
   const me = await ctx.me();
-  const chats = await visibleChats(teams, me, await ctx.followed().catch(() => null));
+  if (!store || !me) return null;
+  const teams = store.viewer(me);
+  const chats = await visibleChats(teams, await ctx.followed().catch(() => null));
   return { teams, me, chats, byId: new Map(chats.map((c) => [c.chatId, c])) };
 }
 
@@ -213,9 +214,10 @@ async function promiseList(ctx: RequestContext, plan: PlanStore, cfg: AppConfig)
 }
 
 /** Open Requests the AI sorted as needing someone now, in the chats this person sees (Today, notifications). */
-export async function urgentRequests(teams: TeamsStore, me: string | null, followed: ReadonlySet<string> | null): Promise<Request[]> {
-  const chats = await visibleChats(teams, me, followed);
-  return (await teams.requests(chats.map((c) => c.chatId))).filter((a) => a.status === "open" && a.sortStatus === "sorted" && !!a.sort && a.sort.kind !== "none");
+export async function urgentRequests(view: TeamsView | null, followed: ReadonlySet<string> | null): Promise<Request[]> {
+  if (!view) return [];
+  const chats = await visibleChats(view, followed);
+  return (await view.requests(chats.map((c) => c.chatId))).filter((a) => a.status === "open" && a.sortStatus === "sorted" && !!a.sort && a.sort.kind !== "none");
 }
 
 const ids = (o: Record<string, unknown>): { chatId: string; messageId: string } | null =>
@@ -268,7 +270,7 @@ export async function requestAction(ctx: RequestContext, action: RequestAction, 
         const status = o.status as "linked" | "handled" | "dismissed";
         if (o.note !== undefined && o.note !== null && (typeof o.note !== "string" || o.note.length > 1000)) return bad("note is text of at most 1000 characters");
         const hit = await mine(k);
-        if (!hit || !hit.v.me) return bad("No such request", 404);
+        if (!hit) return bad("No such request", 404);
         const req = hit.r;
         let item: { itemId: number; itemUrl: string; itemTitle: string } | null = null;
         if (status === "linked") {
@@ -282,7 +284,7 @@ export async function requestAction(ctx: RequestContext, action: RequestAction, 
         const note = typeof o.note === "string" && o.note.trim() ? o.note.trim() : null;
         // Idempotent: the same resolution again changes nothing.
         if (req.status === status && (status !== "linked" || req.itemId === item?.itemId)) return { ok: true, data: await list(ctx, plan, cfg) };
-        await hit.v.teams.resolveRequest(k.chatId, k.messageId, { status, ...(item ?? {}), note, by: hit.v.me });
+        await hit.v.teams.resolveRequest(k.chatId, k.messageId, { status, ...(item ?? {}), note });
         ctx.log({ source: "plan", op: "request_resolved", kind: status });
         return { ok: true, data: await list(ctx, plan, cfg) };
       }
@@ -291,10 +293,10 @@ export async function requestAction(ctx: RequestContext, action: RequestAction, 
         const k = o && ids(o);
         if (!k) return bad("requests.reopen takes { chatId, messageId }");
         const hit = await mine(k);
-        if (!hit || !hit.v.me) return bad("No such request", 404);
+        if (!hit) return bad("No such request", 404);
         if (hit.r.status === "created") return bad(`#${hit.r.itemId} was created in DevOps. Undo it from Settings > Data > Audit log; the request opens again`, 409, "created");
         if (hit.r.status !== "open") {
-          await hit.v.teams.resolveRequest(k.chatId, k.messageId, { status: "open", by: hit.v.me });
+          await hit.v.teams.resolveRequest(k.chatId, k.messageId, { status: "open" });
           ctx.log({ source: "plan", op: "request_reopened", kind: hit.r.status });
         }
         return { ok: true, data: await list(ctx, plan, cfg) };

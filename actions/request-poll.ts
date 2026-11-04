@@ -95,7 +95,8 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
   const home = await deps.homeTenant();
   const tokenUsers = new Map<string, number>();
 
-  await mapSeq(due, async (c) => {
+  await mapSeq(due, async (chat) => {
+    let c = chat;
     try {
       for (const uid of tokenOrder(c, users)) {
         const p = await person(uid);
@@ -110,6 +111,15 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
           out.failures++;
           return;
         }
+        // Members missing or a day old: read them first with the same sign-in, so the rules (mentions) and who sees the
+        // chat follow Teams. A failed read keeps what was cached.
+        if (p.chats && membersStale(c, now)) {
+          const members = await p.chats.members(c.chatId).catch(() => null);
+          if (members?.length) {
+            await deps.teams.setMembers(c.chatId, members, now);
+            c = { ...c, members, membersFetchedAt: now };
+          }
+        }
         // No backfill: nothing written before the chat was registered.
         const fresh = read.messages.filter((m) => later(m.createdAt, c.readSince));
         const saved = await deps.teams.saveMessages(fresh.map((m) => toShared(m, now)));
@@ -118,10 +128,6 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
         await rules(deps, c, fresh.filter((m) => saved.added.some((a) => a.messageId === m.messageId)), { p, uid, home, users, person, out });
         const seenAt = read.newest && (!c.seenAt || later(read.newest, c.seenAt)) ? read.newest : undefined;
         await deps.teams.recordPoll(c.chatId, { polledAt: now, fetchedAt: now, ...(seenAt ? { seenAt } : {}), retryAt: null, failures: 0, state: same(uid, c.registeredBy) ? "ok" : "via", note: null, tokenUser: uid });
-        if (p.chats && membersStale(c, now)) {
-          const members = await p.chats.members(c.chatId).catch(() => null);
-          if (members?.length) await deps.teams.setMembers(c.chatId, members, now);
-        }
         tokenUsers.set(p.name, (tokenUsers.get(p.name) ?? 0) + 1);
         out.polled++;
         return;

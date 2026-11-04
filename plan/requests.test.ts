@@ -89,6 +89,11 @@ describe("tokens and followers", () => {
   it("followers: FocusTime users who are members of the chat (deleted people never)", () => {
     expect(followersOf(chat({ members: [...chat().members!, { userId: "u-old", displayName: "Old", email: null, tenantId: "home" }] }), users)).toEqual(["u-ben", "u-ana"]);
   });
+  it("no member list yet: the registering person stands in as the follower, so the job can read the members (D521)", () => {
+    expect(followersOf(chat({ members: null }), users)).toEqual(["u-ana"]);
+    expect(tokenOrder(chat({ members: null }), users)).toEqual(["u-ana"]);
+    expect(followersOf(chat({ members: null, registeredBy: "u-old" }), users)).toEqual([]);
+  });
   it("the registering person's token first, then the other followers by name", () => {
     expect(tokenOrder(chat({ registeredBy: "u-ben" }), users)).toEqual(["u-ben", "u-ana"]);
     expect(tokenOrder(chat(), users)).toEqual(["u-ana", "u-ben"]);

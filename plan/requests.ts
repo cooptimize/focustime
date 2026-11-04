@@ -138,8 +138,10 @@ export function nextPollDue(chats: readonly { chat: Pick<ClientChat, "polledAt" 
 }
 
 /** The FocusTime users (not deleted) who are members of the chat, in the users' order. */
-export function followersOf(c: Pick<ClientChat, "members">, users: readonly FocusUser[]): string[] {
-  const ids = (c.members ?? []).map((m) => m.userId).filter((x): x is string => !!x);
+export function followersOf(c: Pick<ClientChat, "members" | "registeredBy">, users: readonly FocusUser[]): string[] {
+  // No member list read yet (a migrated chat, or Teams couldn't list them on add): the person who registered it was in
+  // it then, so their hours and token stand in until the job reads the members. Teams refuses them if they've left.
+  const ids = c.members ? c.members.map((m) => m.userId).filter((x): x is string => !!x) : [c.registeredBy];
   return users.filter((u) => !u.deleted && ids.some((id) => same(id, u.id))).map((u) => u.id);
 }
 
@@ -156,8 +158,11 @@ export function tokenOrder(c: Pick<ClientChat, "members" | "registeredBy">, user
  * client. When the followed clients can't be read (Dataverse down), membership alone: everyone it lets in can already
  * read the chat in Teams. Members not read yet: nobody.
  */
+/** Whether a person is in a chat now, by its cached member list (none read yet: nobody). The store's gate (D521). */
+export const isMember = (c: Pick<ClientChat, "members">, userId: string): boolean => !!c.members?.some((m) => same(m.userId, userId));
+
 export function canSee(c: Pick<ClientChat, "members" | "clientKey">, me: string, followed: ReadonlySet<string> | null): boolean {
-  if (!c.members?.some((m) => same(m.userId, me))) return false;
+  if (!isMember(c, me)) return false;
   return !followed || followed.has(c.clientKey);
 }
 

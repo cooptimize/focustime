@@ -244,9 +244,9 @@ describe("urgent requests", () => {
     s.say({ chatId: FAB.chatId, createdAt: "2026-11-04T15:02:00Z", text: "Can you add a column?" });
     s.say({ chatId: FAB.chatId, createdAt: "2026-11-04T15:03:00Z", text: "hello, can you hear me?" });
     await s.poll();
-    const now = (await urgentRequests(s.teams, ME, new Set(["fabrikam"]))).filter((a) => a.sort?.urgency === "now");
+    const now = (await urgentRequests(s.teams.viewer(ME), new Set(["fabrikam"]))).filter((a) => a.sort?.urgency === "now");
     expect(now.map((a) => [a.messageId, a.sort?.title, a.sortedBy])).toEqual([[m.messageId, "Portal down", ME]]);
-    expect(await urgentRequests(s.teams, "someone-else", null)).toEqual([]);
+    expect(await urgentRequests(s.teams.viewer("someone-else"), null)).toEqual([]);
   });
 });
 

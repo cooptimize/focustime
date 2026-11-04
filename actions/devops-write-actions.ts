@@ -17,7 +17,7 @@ import { PlanError, type DevOpsIdentityRow, type PlanStore } from "../store/plan
 import type { ActionResponse, DevOpsPreview, DevOpsResult } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 import { askDescription, askTitle, messageLink, type AskItemLevel } from "../plan/asks.ts";
-import type { TeamsStore } from "../store/teams-store.ts";
+import type { TeamsView } from "../store/teams-store.ts";
 import type { ChatMember } from "../plan/chats.ts";
 export type { DevOpsPreview, DevOpsResult };
 
@@ -29,7 +29,8 @@ export type WritePats = { get: (clientKey: string) => Promise<Pat>; set: (client
 export type DevOpsWriteContext = {
   plan: PlanStore | undefined;
   /** Shared polling: the Requests a create comes from, who I am, and whether I see a chat. Absent: no Requests here. */
-  requests?: { teams: TeamsStore; me: () => Promise<string | null>; sees: (chatId: string) => Promise<boolean> } | undefined;
+  /** My view of the shared Requests (only chats I'm in, D521) and whether I also follow the chat's client. */
+  requests?: { teams: TeamsView; sees: (chatId: string) => Promise<boolean> } | undefined;
   config: () => Promise<AppConfig | null>;
   /** Dataverse DevOps settings without the company PAT (withPat: false). */
   targets: (cfg: AppConfig, clientKeys: string[]) => Promise<TargetsResult>;
@@ -542,10 +543,9 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
       const pickIds = entry.draftId !== null && (await plan.getDraft(entry.draftId)) && !(await plan.getDraft(entry.draftId))!.devopsId ? (await plan.markDraftCreated(entry.draftId, { itemId: id, url, title: back.title, type: back.type })) : entry.pickIds;
       // The request it came from is resolved as created, for everyone (once; a second confirm finds it resolved already).
       const shared = ctx.requests;
-      const me = shared ? await shared.me() : null;
-      if (entry.ask && shared && me) {
+      if (entry.ask && shared) {
         const a = await shared.teams.request(entry.ask.chatId, entry.ask.messageId);
-        if (a?.status === "open") await shared.teams.resolveRequest(entry.ask.chatId, entry.ask.messageId, { status: "created", itemId: id, itemUrl: url, itemTitle: back.title, writeId: entry.id, by: me });
+        if (a?.status === "open") await shared.teams.resolveRequest(entry.ask.chatId, entry.ask.messageId, { status: "created", itemId: id, itemUrl: url, itemTitle: back.title, writeId: entry.id });
       }
       forget();
       return settle("confirmed", `Created #${id} in DevOps`, { itemId: id, revAfter: back.rev, pickIds }, { itemId: id, url });
@@ -583,9 +583,8 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     // Undoing a create from a request opens the request again, for everyone.
     if (entry.op === "undo_create" && entry.undoOf !== null && ctx.requests) {
       const made = await plan.devopsWrite(entry.undoOf);
-      const me = await ctx.requests.me();
       const a = made?.ask ? await ctx.requests.teams.request(made.ask.chatId, made.ask.messageId) : null;
-      if (made?.ask && me && a?.status === "created" && a.itemId === itemId) await ctx.requests.teams.resolveRequest(made.ask.chatId, made.ask.messageId, { status: "open", by: me });
+      if (made?.ask && a?.status === "created" && a.itemId === itemId) await ctx.requests.teams.resolveRequest(made.ask.chatId, made.ask.messageId, { status: "open" });
     }
     if (entry.op === "state" && entry.followUpId !== null) {
       const f = (await plan.getFollowUp(entry.followUpId));

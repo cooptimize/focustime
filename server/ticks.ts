@@ -319,7 +319,8 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     if (teams && notifier.allows("asks")) {
       const rc = await requestContext(liveCtx);
       const since = instantNow().subtract({ hours: URGENT_NOTICE_HOURS }).epochMilliseconds;
-      const urgent = (await urgentRequests(teams, await rc.me(), await rc.followed().catch(() => null))).filter((a) => a.sort!.urgency === "now" && !!a.sortedAt && Date.parse(a.sortedAt) >= since);
+      const me = await rc.me();
+      const urgent = (await urgentRequests(me ? teams.viewer(me) : null, await rc.followed().catch(() => null))).filter((a) => a.sort!.urgency === "now" && !!a.sortedAt && Date.parse(a.sortedAt) >= since);
       for (const u of urgent) await send(notices.urgentAsk(u.messageId, c.clientSettings[u.clientKey]?.name ?? u.clientKey, u.sort!.title, instantNow().toString()));
     }
     if (await store.markOnce("asks_cleanup", todayOf(c))) {

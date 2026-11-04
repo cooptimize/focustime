@@ -8,8 +8,10 @@
 //   requests             one row per message the rules picked out, with its shared state and the AI's sort.
 //   client_chat_changes  who registered, relabelled or removed a chat, and when.
 // The per-user rows (delivery_chats, chat_messages, asks) are copied in, deduped: a chat keeps the earliest
-// registration's client and label; a Request takes the state of the most recent action across people, and the AI sort
-// of the most recent sort. The per-user tables stay (D468: migrations only add); they stop being written and are
+// registration's client and label and the newest member list anyone cached; every stored message once (a person's own
+// messages included, so their promises keep their text); a Request takes the state of the most recent action across
+// people, and the AI sort of the most recent sort. promises stay as they are (each person's own; they point at the
+// shared message by chat and message id), and so do the AI request log and the Allow AI settings. The per-user tables stay (D468: migrations only add); they stop being written and are
 // dropped in a later release.
 import type { NamedMigration } from "./named.ts";
 
@@ -102,6 +104,11 @@ export const sharedRequests: NamedMigration = {
        COALESCE(since, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), seen, polled, polled, 0, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
      FROM (SELECT d.*, MIN(asks_since) OVER (PARTITION BY chat_id) AS since, MAX(asks_seen_at) OVER (PARTITION BY chat_id) AS seen, MAX(asks_polled_at) OVER (PARTITION BY chat_id) AS polled,
              ROW_NUMBER() OVER (PARTITION BY chat_id ORDER BY created_at, user_id) AS n FROM delivery_chats d) WHERE n = 1;
+   UPDATE client_chats SET (members_json, members_fetched_at) = (
+       SELECT x.members_json, x.members_fetched_at
+       FROM (SELECT d.*, ROW_NUMBER() OVER (PARTITION BY chat_id ORDER BY members_fetched_at DESC, user_id) AS n FROM delivery_chats d WHERE d.members_json IS NOT NULL) x
+       WHERE x.n = 1 AND x.chat_id = client_chats.chat_id)
+     WHERE EXISTS (SELECT 1 FROM delivery_chats d WHERE d.chat_id = client_chats.chat_id AND d.members_json IS NOT NULL);
    INSERT INTO client_chat_changes (at, by_user, client_key, chat_id, change)
      SELECT strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), registered_by, client_key, chat_id, 'migrated' FROM client_chats;
    INSERT INTO teams_messages (chat_id, message_id, client_key, sender_id, sender_tenant, created_at, modified_at, body_text, has_image, has_file, reply_to_id, fetched_at)
@@ -202,6 +209,10 @@ INSERT INTO client_chats (chat_id, client_key, chat_kind, display_name, web_url,
     COALESCE(since, SYSUTCDATETIME()), seen, polled, polled, 0, SYSUTCDATETIME()
   FROM (SELECT d.*, MIN(asks_since) OVER (PARTITION BY chat_id) AS since, MAX(asks_seen_at) OVER (PARTITION BY chat_id) AS seen, MAX(asks_polled_at) OVER (PARTITION BY chat_id) AS polled,
           ROW_NUMBER() OVER (PARTITION BY chat_id ORDER BY created_at, user_id) AS n FROM delivery_chats d) x WHERE n = 1;
+UPDATE c SET members_json = x.members_json, members_fetched_at = x.members_fetched_at
+  FROM client_chats c
+  JOIN (SELECT d.chat_id, d.members_json, d.members_fetched_at, ROW_NUMBER() OVER (PARTITION BY d.chat_id ORDER BY d.members_fetched_at DESC, d.user_id) AS n FROM delivery_chats d WHERE d.members_json IS NOT NULL) x
+    ON x.chat_id = c.chat_id AND x.n = 1;
 INSERT INTO client_chat_changes (at, by_user, client_key, chat_id, change)
   SELECT SYSUTCDATETIME(), registered_by, client_key, chat_id, 'migrated' FROM client_chats;
 INSERT INTO teams_messages (chat_id, message_id, client_key, sender_id, sender_tenant, created_at, modified_at, body_text, has_image, has_file, reply_to_id, fetched_at)

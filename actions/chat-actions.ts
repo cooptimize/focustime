@@ -7,7 +7,7 @@
 // Members are read again once a day by the poll job, when the Clients section opens, or on Refresh. Nothing here logs a
 // chat or a person.
 import { CHAT_ID, CHAT_KINDS, chatName, flagMembers, isExternal, kindWarning, membersStale, suggestKind, teamsLink, type ChatAccess, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChatView } from "../plan/chats.ts";
-import { canSee, type ClientChat } from "../plan/requests.ts";
+import type { ClientChat } from "../plan/requests.ts";
 import type { TeamsStore } from "../store/teams-store.ts";
 import { chatStatus } from "./request-actions.ts";
 export type { ChatAccess, ChatPickerData, ChatsData, DeliveryChatView } from "../plan/chats.ts";
@@ -98,12 +98,12 @@ async function refreshMembers(ctx: ChatContext, teams: TeamsStore, chats: readon
   return { errors, reason };
 }
 
-/** The registered chats this person sees: a member who follows the client (D515). */
+/** The registered chats this person sees: the store's view (chats they're in now, D521) of clients they follow (D515). */
 async function mine(ctx: ChatContext, teams: TeamsStore): Promise<ClientChat[]> {
   const me = await ctx.me();
   if (!me) return [];
   const followed = await ctx.clientKeys().catch(() => null);
-  return (await teams.chats()).filter((c) => canSee(c, me, followed));
+  return (await teams.viewer(me).chats()).filter((c) => !followed || followed.has(c.clientKey));
 }
 
 /**
@@ -157,14 +157,17 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
       case "chats.list": {
         if (!only(input, [])) return bad("chats.list takes {}");
         const home = await ctx.homeTenant();
-        // Registered by anyone, for any client: a chat belongs to one client.
-        const taken = Object.fromEntries((await teams.chats()).map((c) => [c.chatId, c.clientKey]));
         const client = ctx.account?.chats;
-        if (!client) return { ok: true, data: { available: false, reason: "signed_out", homeTenant: home, chats: [], taken } satisfies ChatPickerData };
+        if (!client) return { ok: true, data: { available: false, reason: "signed_out", homeTenant: home, chats: [], taken: {} } satisfies ChatPickerData };
         try {
-          return { ok: true, data: { available: true, reason: null, homeTenant: home, chats: await client.groupChats(), taken } satisfies ChatPickerData };
+          const chats = await client.groupChats();
+          // Which of my own chats are registered already, by anyone and for which client (a chat belongs to one client).
+          // Only chats Teams lists for me: nothing about chats I'm not in.
+          const ids = new Set(chats.map((c) => c.id));
+          const taken = Object.fromEntries((await teams.chats()).filter((c) => ids.has(c.chatId)).map((c) => [c.chatId, c.clientKey]));
+          return { ok: true, data: { available: true, reason: null, homeTenant: home, chats, taken } satisfies ChatPickerData };
         } catch (e) {
-          return { ok: true, data: { available: false, reason: accessOf(e), homeTenant: home, chats: [], taken } satisfies ChatPickerData };
+          return { ok: true, data: { available: false, reason: accessOf(e), homeTenant: home, chats: [], taken: {} } satisfies ChatPickerData };
         }
       }
       case "chats.add": {
@@ -194,7 +197,7 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
         const kind = (o.kind as ChatKind | undefined) ?? (home ? suggestKind(chat.members, home) : "delivery");
         // The whole member list (the expanded one stops at 25); the picker's when it can't be read.
         const members = await client.members(chat.id).catch(() => (chat.moreMembers ? null : chat.members));
-        await teams.addChat({ chatId: chat.id, clientKey: o.clientKey, kind, displayName: chatName(chat), webUrl: chat.webUrl, members, by: me });
+        await teams.viewer(me).addChat({ chatId: chat.id, clientKey: o.clientKey, kind, displayName: chatName(chat), webUrl: chat.webUrl, members });
         return { ok: true, data: await registered(ctx, teams, false) };
       }
       case "chats.kind": {
@@ -202,7 +205,7 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
         if (!o || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId) || !CHAT_KINDS.includes(o.kind as ChatKind)) return bad("chats.kind takes { chatId, kind }");
         const c = (await mine(ctx, teams)).find((x) => x.chatId === o.chatId);
         if (!c) return bad("That chat isn't registered for one of your clients", 404);
-        await teams.setKind(o.chatId, o.kind as ChatKind, (await ctx.me())!);
+        await teams.viewer((await ctx.me())!).setKind(o.chatId, o.kind as ChatKind);
         return { ok: true, data: await registered(ctx, teams, false) };
       }
       case "chats.remove": {
@@ -210,7 +213,7 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
         if (!o || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId)) return bad("chats.remove takes { chatId }");
         const c = (await mine(ctx, teams)).find((x) => x.chatId === o.chatId);
         if (!c) return bad("That chat isn't registered for one of your clients", 404);
-        await teams.removeChat(o.chatId, (await ctx.me())!);
+        await teams.viewer((await ctx.me())!).removeChat(o.chatId);
         return { ok: true, data: await registered(ctx, teams, false) };
       }
     }

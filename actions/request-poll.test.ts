@@ -98,6 +98,22 @@ describe("one poll cycle", () => {
     expect(await s.teams.message(FAB, m.messageId)).toMatchObject({ senderName: "Dana Client", fetchedAt: IN_HOURS });
   });
 
+  it("a chat with no member list yet (migrated): read with the registrant's token, members first, then everyone in it sees it", async () => {
+    const s = await setup({ now: "2026-11-04T14:00:00Z" });
+    await s.teams.addChat({ chatId: FAB, clientKey: "fabrikam", kind: "customer", displayName: "Fabrikam chat", webUrl: null, members: null, by: ANA });
+    expect(await s.teams.viewer(BEN).chats()).toEqual([]);
+    const person = s.deps.person;
+    s.deps.person = async (uid) => {
+      const p = await person(uid);
+      return p && { ...p, chats: { members: async () => MEMBERS } };
+    };
+    s.setNow(IN_HOURS);
+    const m = s.graph.say(FAB);
+    expect(await pollCycle(s.deps)).toMatchObject({ polled: 1, candidates: 1 });
+    expect(await s.teams.chat(FAB)).toMatchObject({ tokenUser: ANA, membersFetchedAt: IN_HOURS });
+    expect((await s.teams.viewer(BEN).requests()).map((r) => r.messageId)).toEqual([m.messageId]);
+  });
+
   it("a message already stored isn't stored again; an edit updates its body", async () => {
     const s = await setup({ now: "2026-11-04T14:00:00Z" });
     await s.register(FAB, "fabrikam");

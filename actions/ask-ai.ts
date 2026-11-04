@@ -13,13 +13,13 @@ import { CONTEXT_MESSAGES, type Ask, type StoredMessage } from "../plan/asks.ts"
 import { buildContext, CLASSIFY_INSTRUCTIONS, CLASSIFY_SCHEMA, CLASSIFY_TASK, contextText, promiseFrom, PROMISE_INSTRUCTIONS, PROMISE_SCHEMA, PROMISE_TASK, promiseWithoutAi, sortFrom, type AiMessage, type AskSort, type ClassifyAnswer, type NotSorted, type PromiseAnswer, type PromiseDraft } from "../plan/asks-ai.ts";
 import { isExternal, type ChatMember } from "../plan/chats.ts";
 import { storedOf } from "../plan/requests.ts";
-import type { TeamsStore } from "../store/teams-store.ts";
+import type { SortStore } from "../store/teams-store.ts";
 import type { WorkItem } from "../week/types.ts";
 import { localToday } from "../week/dates.ts";
 import { userZone } from "../week/zone.ts";
 
 export type AskAiDeps = {
-  teams: TeamsStore;
+  teams: SortStore;
   /** Whose settings run the request (saved as the sort's author). */
   by: string | null;
   /** The AI service for this person, or null where there is none (demo, no store). */

@@ -509,7 +509,8 @@ async function urgentFor(ctx: ActionContext, now: string, zone: string, name: (k
   const teams = ctx.requests?.teams;
   if (!teams) return { urgent: [], pastUrgency: 0 };
   const c = await chatContext(ctx);
-  const open = await urgentRequests(teams, await c.me(), await c.clientKeys().catch(() => null));
+  const me = await c.me();
+  const open = await urgentRequests(me ? teams.viewer(me) : null, await c.clientKeys().catch(() => null));
   return {
     urgent: open.filter((a) => a.sort!.urgency === "now").map((a) => ({ chatId: a.chatId, messageId: a.messageId, clientKey: a.clientKey, clientName: name(a.clientKey), title: a.sort!.title, at: a.createdAt })),
     pastUrgency: open.filter((a) => pastUrgency(a.sort!.urgency, a.createdAt, now, zone)).length,
@@ -641,11 +642,10 @@ export async function aiFor(ctx: ActionContext): Promise<AiService | null> {
 /** The Requests a DevOps create comes from: the shared store, who I am, and whether I see a chat. */
 async function sharedFor(ctx: ActionContext, port: RequestsPort) {
   const c = await chatContext(ctx);
-  return {
-    teams: port.teams,
-    me: c.me,
-    sees: async (chatId: string) => (await visibleChats(port.teams, await c.me(), await c.clientKeys().catch(() => null))).some((x) => x.chatId === chatId),
-  };
+  const me = await c.me();
+  if (!me) return undefined;
+  const teams = port.teams.viewer(me);
+  return { teams, sees: async (chatId: string) => (await visibleChats(teams, await c.clientKeys().catch(() => null))).some((x) => x.chatId === chatId) };
 }
 
 /** Requests: the shared store and Refresh, who I am and my clients, their open DevOps items and write access. */

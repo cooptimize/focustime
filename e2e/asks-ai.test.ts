@@ -1,12 +1,17 @@
-// AP-2: AI sorts asks, and Promises, the main path, in a real (not demo) session on fake sources, a fake Graph (Teams),
+// AP-2: AI sorts Requests (called asks until shared polling, D520), and Promises, the main path, in a real (not demo) session on fake sources, a fake Graph (Teams),
 // a fake DevOps and the stub AI provider (it answers like OpenAI would, from the request's own context). With Use AI and
 // Allow AI on for Adatum, an external message is sorted as a bug with a draft and "Looks like" an open item; another
 // isn't sorted (the provider failed) and offers Sort again; a thanks-like message the AI calls none is hidden and can be
 // shown. Create bug opens the preview with the AI's title and is confirmed. My own reply "I'll ..." becomes a promise
-// that answers the ask; Make it a follow-up is prefilled and the follow-up shows in the Inbox. Edge cases are unit tests
+// that answers the Request; Make it a follow-up is prefilled and the follow-up shows in the Inbox. Edge cases are unit tests
 // (plan/asks-ai.test.ts, actions/ask-ai.test.ts). Screenshots at 1920 and Text size Larger when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IDENTITY_KEY } from "../actions/account.ts";
+import { aiFor, requestContext } from "../actions/dispatch.ts";
+import { pollCycle, type PollDeps } from "../actions/request-poll.ts";
+import { openPlanDb } from "../store/plan-store.ts";
+import { sqliteConn } from "../store/sql/sqlite.ts";
+import { createTeamsStore } from "../store/teams-store.ts";
 import { stubProvider } from "../ai/stub.ts";
 import type { ProviderCall } from "../ai/types.ts";
 import { basic, fakeDevOpsWrite, WRITE_PAT } from "../sources/devops/write-fakes.ts";
@@ -64,7 +69,7 @@ function answer(c: ProviderCall): string {
   return "";
 }
 
-describe.skipIf(!CHROMIUM)("AI sorts asks, and Promises", () => {
+describe.skipIf(!CHROMIUM)("AI sorts Requests, and Promises", () => {
   let lb: LiveBrowser;
   beforeAll(async () => {
     lb = await liveBrowser();
@@ -110,9 +115,23 @@ describe.skipIf(!CHROMIUM)("AI sorts asks, and Promises", () => {
     await ctx.writeConfig!((t) => `${t}\n[ai]\nuse = true\nallowed_clients = ["Adatum"]\n`);
     await ctx.plan!.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME, name: "Sam Tester", username: "me@contoso.example", email: "me@contoso.example", signedInAt: "2026-11-02T14:00:00Z", systemUserId: null, systemUserEmail: null });
     await ctx.plan!.setDevopsIdentity({ clientKey: "Adatum", org: "contoso", id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example", expires: null });
-    await ctx.plan!.addDeliveryChat("Adatum", "customer", { chatId: CHAT, displayName: "Adatum Customer Collaboration", webUrl: "https://teams.microsoft.com/l/chat/x" });
-    await ctx.plan!.setDeliveryChatMembers(CHAT, MEMBERS.map((m) => ({ userId: m.userId, displayName: m.displayName, email: null, tenantId: m.tenantId })), "2026-11-02T14:00:00Z");
-    await ctx.plan!.setAsksOn(CHAT, true, "2026-11-02T14:00:00Z");
+    // The shared store with the chat registered for Adatum by me, and the poll job (Refresh polls through it).
+    const clock = () => Temporal.Instant.from(ctx.now());
+    const teams = createTeamsStore(sqliteConn(openPlanDb({ path: ":memory:", now: () => clock().toZonedDateTimeISO("UTC") })), clock);
+    const deps: PollDeps = {
+      teams,
+      users: async () => [{ id: ME, name: "Sam Tester", deleted: false }],
+      person: async (uid) => {
+        if (uid !== ME) return null;
+        const loaded = await ctx.loadConfig();
+        return { name: "Sam Tester", config: loaded.parsed.ok ? loaded.parsed.config : null, chatMessages: chats, chats, ai: () => aiFor(ctx), plan: ctx.plan ?? null, openItems: (await requestContext(ctx)).openItems };
+      },
+      homeTenant: async () => HOME,
+      now: ctx.now,
+      log: () => {},
+    };
+    ctx.requests = { teams, refresh: (chatIds) => pollCycle(deps, { force: true, chatIds }) };
+    await teams.addChat({ chatId: CHAT, clientKey: "Adatum", kind: "customer", displayName: "Adatum Customer Collaboration", webUrl: "https://teams.microsoft.com/l/chat/x", members: MEMBERS.map((m) => ({ userId: m.userId, displayName: m.displayName, email: null, tenantId: m.tenantId })), by: ME });
     const app = await lb.start(ctx);
     try {
       const page = await app.page();
@@ -126,23 +145,23 @@ describe.skipIf(!CHROMIUM)("AI sorts asks, and Promises", () => {
       graph.say(DANA, "Please add the region field to the summary view", 34);
       graph.say(DANA, "Sounds good, can we keep Thursday's call?", 36);
 
-      await page.goto(`${app.url}#/inbox/asks`);
-      await page.getByRole("button", { name: "Refresh asks" }).click();
-      const bugCard = page.getByRole("listitem", { name: "Ask from Dana Client" }).filter({ hasText: "export fails" });
+      await page.goto(`${app.url}#/inbox/requests`);
+      await page.getByRole("button", { name: "Refresh requests" }).click();
+      const bugCard = page.getByRole("listitem", { name: "Request from Dana Client" }).filter({ hasText: "export fails" });
       await bugCard.locator(".ask-label").getByText("Bug").waitFor();
       await bugCard.getByText("Looks like").waitFor();
       await bugCard.getByText("March report export fails after page two").waitFor();
-      const region = page.getByRole("listitem", { name: "Ask from Dana Client" }).filter({ hasText: "region field" });
+      const region = page.getByRole("listitem", { name: "Request from Dana Client" }).filter({ hasText: "region field" });
       await region.getByText(/^Not sorted:/).waitFor();
-      await shotBoth(page, "asks-sorted", page.locator(".ask-group").first());
+      await shotBoth(page, "requests-sorted", page.locator(".ask-group").first());
 
       // The AI called the third one none: hidden, and Show it anyway brings it back as a card.
       const hidden = page.getByRole("region", { name: "Hidden by AI" });
       await hidden.getByText("Hidden by AI (1)").waitFor();
       await hidden.getByText("Hidden by AI (1)").click();
-      await shotBoth(page, "asks-hidden", hidden);
+      await shotBoth(page, "requests-hidden", hidden);
       await hidden.getByRole("button", { name: "Show it anyway" }).click();
-      await page.getByRole("listitem", { name: "Ask from Dana Client" }).filter({ hasText: "Thursday's call" }).waitFor();
+      await page.getByRole("listitem", { name: "Request from Dana Client" }).filter({ hasText: "Thursday's call" }).waitFor();
 
       // Sort again on the one that failed: it sorts now (a request, urgent).
       failRegion = false;
@@ -154,8 +173,8 @@ describe.skipIf(!CHROMIUM)("AI sorts asks, and Promises", () => {
       const walkOn = page.locator(".att-chip.urgent").filter({ hasText: "Add the region field to the summary view" });
       await walkOn.getByText("Walked in").waitFor();
       await walkOn.getByRole("button", { name: "Start focus" }).waitFor();
-      await shotBoth(page, "asks-walk-on", page.locator("section.attention"));
-      await page.goto(`${app.url}#/inbox/asks`);
+      await shotBoth(page, "requests-walk-on", page.locator("section.attention"));
+      await page.goto(`${app.url}#/inbox/requests`);
 
       // Create bug: the preview carries the AI's title and description with the message; confirm.
       await bugCard.getByRole("button", { name: /^Create bug/ }).click();
@@ -168,9 +187,9 @@ describe.skipIf(!CHROMIUM)("AI sorts asks, and Promises", () => {
       expect(String(bug.fields["Microsoft.VSTS.TCM.ReproSteps"])).toContain("second page");
       await bugCard.getByText(`#${bug.id} March report export fails after page two`).waitFor();
 
-      // My reply commits to something: a promise that answers the ask.
+      // My reply commits to something: a promise that answers the Request.
       graph.say(ME, "I'll send a fix for the March export tomorrow", 40);
-      await page.getByRole("button", { name: "Refresh asks" }).click();
+      await page.getByRole("button", { name: "Refresh requests" }).click();
       await bugCard.getByText("Promised: Send the fix for the March export").waitFor();
       await page.getByRole("tab", { name: /^Promises/ }).click();
       const promise = page.getByRole("listitem", { name: "Promise: Send the fix for the March export" });

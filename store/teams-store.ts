@@ -1,11 +1,13 @@
 // Shared polling (D514 to D518): the client chats, Teams messages and Requests every follower shares. App tables (no
-// person in them), read and written on the database itself, not through a person's scoped store: whether someone may
-// see a chat is decided by actions (plan/requests.ts canSee), never here. Every write runs in a transaction. Nothing here
-// logs; the text of a message never leaves these rows except to its own client's views.
+// person in them), read and written on the database itself, not through a person's scoped store. Shared storage, not
+// shared visibility (D521): anything done for a person goes through `viewer(userId)`, which reaches only the chats whose
+// cached member list has that person now (none read yet: nobody); following the client is checked on top, in actions.
+// The unscoped methods are for the poll job and expiry only. Every write runs in a transaction. Nothing here logs; the
+// text of a message never leaves these rows except to its own client's views.
 import type { AskRule, AskStatus } from "../plan/asks.ts";
 import type { AskSort, NotSorted } from "../plan/asks-ai.ts";
 import type { ChatKind, ChatMember } from "../plan/chats.ts";
-import type { ClientChat, Mention, PollState, Request, TeamsMessage } from "../plan/requests.ts";
+import { isMember, type ClientChat, type Mention, type PollState, type Request, type TeamsMessage } from "../plan/requests.ts";
 import { PlanError } from "./plan-store.ts";
 import type { Conn, Param, Row } from "./sql/conn.ts";
 
@@ -99,7 +101,7 @@ export type PollRecord = { polledAt: string | null; seenAt?: string; fetchedAt?:
 /** A list of ids as "?, ?, ?" and its params (an empty list matches nothing). */
 const inList = (ids: readonly string[]): [string, Param[]] => (ids.length ? [ids.map(() => "?").join(", "), [...ids]] : ["NULL", []]);
 
-export function createTeamsStore(db: Conn, now: () => Temporal.Instant) {
+function baseStore(db: Conn, now: () => Temporal.Instant) {
   const stamp = () => now().toString();
   const log = (byUser: string, clientKey: string, chatId: string, change: ChatChange["change"]) =>
     db.run("INSERT INTO client_chat_changes (at, by_user, client_key, chat_id, change) VALUES (?, ?, ?, ?, ?)", [stamp(), byUser, clientKey, chatId, change]);
@@ -231,11 +233,19 @@ export function createTeamsStore(db: Conn, now: () => Temporal.Instant) {
       )).changes;
       });
     },
-    /** Delete stored messages for a client: every message that isn't a Request's, now. */
+    /** Delete stored messages for a client: every message that isn't a Request's or a promise's, now. */
     async purgeClient(clientKey: string): Promise<number> {
+      return store.purgeChats((await store.chats()).filter((c) => c.clientKey === clientKey).map((c) => c.chatId));
+    },
+    /** Delete stored messages of these chats: every message that isn't a Request's or a promise's, now. */
+    async purgeChats(chatIds: readonly string[]): Promise<number> {
+      if (!chatIds.length) return 0;
+      const [list, params] = inList(chatIds);
       return db.tx(async () => (await db.run(
-        "DELETE FROM teams_messages WHERE client_key = ? AND NOT EXISTS (SELECT 1 FROM requests r WHERE r.chat_id = teams_messages.chat_id AND r.message_id = teams_messages.message_id)",
-        [clientKey],
+        `DELETE FROM teams_messages WHERE chat_id IN (${list})
+           AND NOT EXISTS (SELECT 1 FROM requests r WHERE r.chat_id = teams_messages.chat_id AND r.message_id = teams_messages.message_id)
+           AND NOT EXISTS (SELECT 1 FROM promises p WHERE p.chat_id = teams_messages.chat_id AND (p.message_id = teams_messages.message_id OR p.answers_message_id = teams_messages.message_id))`,
+        params,
       )).changes);
     },
 
@@ -289,4 +299,81 @@ export function createTeamsStore(db: Conn, now: () => Temporal.Instant) {
   return store;
 }
 
+type BaseStore = ReturnType<typeof baseStore>;
+
+export function createTeamsStore(db: Conn, now: () => Temporal.Instant) {
+  const store = baseStore(db, now);
+  return { ...store, viewer: (userId: string) => viewerOf(store, userId) };
+}
+const noRequest = () => new PlanError("No such request");
+
+/**
+ * One person's way into the shared store (D521): only chats they are a member of now, by the cached member list.
+ * Anything else reads as missing (null, [], 0) or is refused as "No such request"; every change is made as them.
+ */
+function viewerOf(store: BaseStore, userId: string) {
+  const chat = async (chatId: string) => {
+    const c = await store.chat(chatId);
+    return c && isMember(c, userId) ? c : null;
+  };
+  const gate = async (chatId: string) => {
+    if (!(await chat(chatId))) throw noRequest();
+  };
+  const view = {
+    userId,
+    async chats(): Promise<ClientChat[]> {
+      return (await store.chats()).filter((c) => isMember(c, userId));
+    },
+    chat,
+    async message(chatId: string, messageId: string): Promise<TeamsMessage | null> {
+      return (await chat(chatId)) ? store.message(chatId, messageId) : null;
+    },
+    async messagesBefore(chatId: string, beforeIso: string, n: number): Promise<TeamsMessage[]> {
+      return (await chat(chatId)) ? store.messagesBefore(chatId, beforeIso, n) : [];
+    },
+    async request(chatId: string, messageId: string): Promise<Request | null> {
+      return (await chat(chatId)) ? store.request(chatId, messageId) : null;
+    },
+    /** The Requests of my chats (narrowed to these chats when given). */
+    async requests(chatIds?: readonly string[]): Promise<Request[]> {
+      const mine = (await view.chats()).map((c) => c.chatId).filter((id) => !chatIds || chatIds.includes(id));
+      return store.requests(mine);
+    },
+    async resolveRequest(chatId: string, messageId: string, r: Omit<Parameters<BaseStore["resolveRequest"]>[2], "by">): Promise<Request> {
+      await gate(chatId);
+      return store.resolveRequest(chatId, messageId, { ...r, by: userId });
+    },
+    /** Sort again under my settings (`by` is always me). */
+    async setSort(chatId: string, messageId: string, status: "sorted" | NotSorted, sort: AskSort | null, _by?: string | null): Promise<void> {
+      await gate(chatId);
+      await store.setSort(chatId, messageId, status, sort, userId);
+    },
+    async setShown(chatId: string, messageId: string, shown: boolean): Promise<void> {
+      await gate(chatId);
+      await store.setShown(chatId, messageId, shown);
+    },
+    /** Register a chat I'm in (with members unread, it's registered but nobody sees it until the poll reads them). */
+    async addChat(c: Omit<Parameters<BaseStore["addChat"]>[0], "by">): Promise<ClientChat> {
+      if (c.members && !isMember({ members: [...c.members] }, userId)) throw new PlanError("You aren't in that chat");
+      return store.addChat({ ...c, by: userId });
+    },
+    async setKind(chatId: string, kind: ChatKind): Promise<void> {
+      if (!(await chat(chatId))) throw new PlanError("That chat isn't registered");
+      await store.setKind(chatId, kind, userId);
+    },
+    async removeChat(chatId: string): Promise<void> {
+      if (!(await chat(chatId))) throw new PlanError("That chat isn't registered");
+      await store.removeChat(chatId, userId);
+    },
+    /** Delete stored messages of a client's chats I'm in (Requests and promises keep theirs). */
+    async purgeClient(clientKey: string): Promise<number> {
+      return store.purgeChats((await view.chats()).filter((c) => c.clientKey === clientKey).map((c) => c.chatId));
+    },
+  };
+  return view;
+}
+
 export type TeamsStore = ReturnType<typeof createTeamsStore>;
+export type TeamsView = ReturnType<TeamsStore["viewer"]>;
+/** What the AI sorting reads and writes: the whole store for the job, a person's view for Sort again. */
+export type SortStore = Pick<TeamsView, "chat" | "message" | "messagesBefore" | "setSort">;

@@ -77,6 +77,21 @@ describe("client chat actions (T-2, shared polling)", () => {
     expect(r.ok ? null : r.status).toBe(409);
   });
 
+  it("the picker says which of my chats are registered, and nothing about chats I'm not in", async () => {
+    const { ctx, teams } = await setup();
+    await teams.addChat({ chatId: "19:secret@thread.v2", clientKey: "harbor", kind: "delivery", displayName: "Not mine", webUrl: null, members: [aChatMember({ userId: BEN, displayName: "Ben" })], by: BEN });
+    data(await chatAction(ctx, "chats.add", { clientKey: "northwind", chatId: "19:northwind@thread.v2" }));
+    const r = await chatAction(ctx, "chats.list", {});
+    expect(r.ok && (r.data as { taken: Record<string, string> }).taken).toEqual({ "19:northwind@thread.v2": "northwind" });
+  });
+
+  it("Teams' member list is the gate: a chat whose members don't include me can't be added by me", async () => {
+    const { ctx, teams } = await setup({ members: async () => [aChatMember({ userId: BEN, displayName: "Ben" })] });
+    const r = await chatAction(ctx, "chats.add", { clientKey: "northwind", chatId: "19:northwind@thread.v2" });
+    expect(r.ok ? null : r.status).toBe(409);
+    expect(await teams.chats()).toEqual([]);
+  });
+
   it("refresh: a refused permission names Chat.ReadBasic and keeps the cached members; a chat I left says so", async () => {
     let fail: Error | null = null;
     const { ctx } = await setup({ members: async () => { if (fail) throw fail; return [ana()]; } });
