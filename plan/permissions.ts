@@ -1,0 +1,45 @@
+// T-2: every delegated permission FocusTime asks Microsoft for, why, and whether a person can allow it themselves or an
+// admin must. Settings > Connections lists them with their state for the signed-in person. Keep this list in step with
+// infra/scripts/app-registration.sh (GRAPH_SCOPES and the Azure Service Management scope) and sources/oauth/oauth.ts.
+/** The sign-in's token kinds (sources/oauth/oauth.ts TokenKind), repeated here so plan/ stays pure. */
+export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats";
+
+export type Permission = {
+  scope: string;
+  api: "Microsoft Graph" | "Azure Service Management";
+  why: string;
+  /** Needs an admin's consent for the tenant (a person can't allow it alone). */
+  admin: boolean;
+  /** The token FocusTime asks for it on; "sign-in" is the sign-in's own. */
+  kind: TokenKind | "sign-in";
+};
+
+export const PERMISSIONS: readonly Permission[] = [
+  { scope: "User.Read", api: "Microsoft Graph", why: "Who you are", admin: false, kind: "sign-in" },
+  { scope: "Calendars.ReadWrite", api: "Microsoft Graph", why: "Your calendar; FocusTime changes only its own events", admin: false, kind: "read" },
+  { scope: "MailboxSettings.Read", api: "Microsoft Graph", why: "Your working hours and time zone", admin: false, kind: "sign-in" },
+  { scope: "Presence.ReadWrite", api: "Microsoft Graph", why: "Your Teams status while focus runs", admin: false, kind: "presence" },
+  { scope: "Presence.Read.All", api: "Microsoft Graph", why: "Teammates' availability", admin: false, kind: "presence" },
+  { scope: "ProfilePhoto.Read.All", api: "Microsoft Graph", why: "Profile photos", admin: true, kind: "photo" },
+  { scope: "Chat.ReadBasic", api: "Microsoft Graph", why: "Delivery chats: chat names and members, never messages", admin: false, kind: "chats" },
+  { scope: "user_impersonation", api: "Azure Service Management", why: "Your VM, with your own Azure access", admin: false, kind: "arm" },
+];
+
+export type ProbeResult = { kind: TokenKind; state: "granted" | "consent" | "signed_out" | "unavailable"; granted: string[] };
+export type PermissionState = "granted" | "needs_consent" | "needs_admin" | "signed_out" | "unknown";
+export type PermissionRow = Permission & { state: PermissionState };
+
+/**
+ * Each permission's state from the token probes: granted when a token of its API holds it; otherwise what its own token
+ * request said (consent needed, by the person or an admin), signed out, or unknown when it couldn't be checked.
+ */
+export function permissionRows(probes: readonly ProbeResult[], signedIn: boolean): PermissionRow[] {
+  const held = (api: Permission["api"]) => new Set(probes.filter((p) => (api === "Azure Service Management") === (p.kind === "arm")).flatMap((p) => p.granted.map((g) => g.toLowerCase())));
+  return PERMISSIONS.map((p) => {
+    if (!signedIn) return { ...p, state: "signed_out" };
+    if (held(p.api).has(p.scope.toLowerCase())) return { ...p, state: "granted" };
+    const own = probes.find((x) => x.kind === p.kind);
+    const state: PermissionState = own?.state === "consent" || own?.state === "granted" ? (p.admin ? "needs_admin" : "needs_consent") : own?.state === "signed_out" ? "signed_out" : "unknown";
+    return { ...p, state };
+  });
+}

@@ -46,13 +46,26 @@ jobs:
             -p 127.0.0.1:14330:1433 mcr.microsoft.com/mssql/server:2025-latest
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
+      # The 2025 image sometimes dies at start on these runners ("sqlservr: This program has encountered a fatal error",
+      # PR #12 and #19): a dead container is started again, up to three starts, with its log tail each time.
       - name: Wait for SQL Server
         run: |
-          for i in $(seq 1 60); do
-            docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$FOCUSTIME_TEST_SQL_PASSWORD" -Q "SELECT 1" -b >/dev/null 2>&1 && exit 0
-            sleep 2
+          start() {
+            docker rm -f sql >/dev/null 2>&1 || true
+            MSSQL_SA_PASSWORD="$FOCUSTIME_TEST_SQL_PASSWORD" docker run -d --name sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD \
+              -e MSSQL_PID=Developer -p 127.0.0.1:14330:1433 mcr.microsoft.com/mssql/server:2025-latest >/dev/null
+          }
+          for attempt in 1 2 3; do
+            for i in $(seq 1 60); do
+              docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$FOCUSTIME_TEST_SQL_PASSWORD" -Q "SELECT 1" -b >/dev/null 2>&1 && exit 0
+              [ "$(docker inspect -f '{{.State.Running}}' sql 2>/dev/null)" = true ] || break
+              sleep 2
+            done
+            echo "SQL Server isn't answering (start $attempt of 3):"
+            docker logs sql 2>&1 | grep -v "Permission denied" | tail -15
+            [ "$attempt" -lt 3 ] && start
           done
-          docker logs sql | tail -20; exit 1
+          exit 1
       - name: Unit and store tests
         run: |
           echo "cores: $(nproc)"

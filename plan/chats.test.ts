@@ -1,0 +1,70 @@
+import { describe, expect, it } from "vitest";
+import { aChat, aChatMember, CLIENT_TENANT, HOME_TENANT } from "../test/builders/index.ts";
+import { chatName, filterChats, flagMembers, isExternal, memberLine, teamsLink } from "./chats.ts";
+
+describe("external members, by tenantId only (T-2)", () => {
+  it.each([
+    ["the home tenant", HOME_TENANT, false],
+    ["the home tenant in capitals", HOME_TENANT.toUpperCase(), false],
+    ["a client's tenant", CLIENT_TENANT, true],
+    ["no tenant (can't be shown to be ours)", null, true],
+    ["an empty tenant", "", true],
+  ] as const)("%s", (_why, tenantId, external) => {
+    expect(isExternal({ tenantId }, HOME_TENANT)).toBe(external);
+  });
+
+  it("never by name or address: a Cooptimize-looking address in another tenant is external, and the reverse", () => {
+    expect(isExternal(aChatMember({ email: "ana@cooptimize.example", tenantId: CLIENT_TENANT }), HOME_TENANT)).toBe(true);
+    expect(isExternal(aChatMember({ email: "guest@fabrikam.example", displayName: "Fabrikam Guest", tenantId: HOME_TENANT }), HOME_TENANT)).toBe(false);
+  });
+
+  it("refuses a home tenant that isn't a tenant id", () => {
+    expect(() => isExternal({ tenantId: CLIENT_TENANT }, "cooptimize.org")).toThrow();
+  });
+
+  it("flags and orders: ours first, then external, each by name", () => {
+    const ms = flagMembers([aChatMember({ displayName: "Zed", external: true }), aChatMember({ displayName: "Bo" }), aChatMember({ displayName: "Al", external: true }), aChatMember({ displayName: "Cy" })], HOME_TENANT);
+    expect(ms.map((m) => [m.displayName, m.external])).toEqual([["Bo", false], ["Cy", false], ["Al", true], ["Zed", true]]);
+  });
+
+  it("counts members and external ones in one line", () => {
+    expect(memberLine([aChatMember(), aChatMember({ external: true }), aChatMember({ tenantId: null })], HOME_TENANT)).toBe("3 members · 2 external");
+    expect(memberLine([aChatMember()], HOME_TENANT)).toBe("1 member");
+    expect(memberLine([aChatMember()], HOME_TENANT, true)).toBe("1+ members");
+  });
+});
+
+describe("the chat picker's list (T-2)", () => {
+  const fabrikam = aChat({ topic: "Fabrikam Delivery Team (Cooptimize)", lastUpdated: "2026-10-01T10:00:00Z", lastRead: "2026-11-02T09:00:00Z" });
+  const northwind = aChat({ topic: "Northwind Delivery Team (Cooptimize)", lastUpdated: "2026-10-30T10:00:00Z" });
+  const untitled = aChat({ topic: null, members: [aChatMember({ displayName: "Ana Lopez" }), aChatMember({ displayName: "Ben Ito", external: true })], lastUpdated: "2026-09-01T00:00:00Z" });
+
+  it.each([
+    ["no search: all, most recently active first", "", [fabrikam, northwind, untitled]],
+    ["a word of the topic, any case", "NORTHWIND", [northwind]],
+    ["every word must match", "delivery fabrikam", [fabrikam]],
+    ["a member's name finds an untitled chat", "ben", [untitled]],
+    ["nothing matches", "contoso", []],
+  ] as const)("%s", (_why, q, want) => {
+    expect(filterChats([untitled, northwind, fabrikam], q).map((c) => c.id)).toEqual(want.map((c) => c.id));
+  });
+
+  it("leaves out a chat another client already has", () => {
+    expect(filterChats([fabrikam, northwind], "", new Set([fabrikam.id])).map((c) => c.id)).toEqual([northwind.id]);
+  });
+
+  it("names an untitled chat by its members", () => {
+    expect(chatName(untitled)).toBe("Ana, Ben");
+    expect(chatName({ topic: null, members: [1, 2, 3, 4, 5].map((i) => aChatMember({ displayName: `P${i} X` })), moreMembers: false })).toBe("P1, P2, P3 +2");
+    expect(chatName({ topic: "  ", members: [], moreMembers: false })).toBe("Group chat");
+  });
+});
+
+describe("Open in Teams (T-2)", () => {
+  it("uses Graph's webUrl when it is a Teams link, else the documented chat deep link", () => {
+    expect(teamsLink({ chatId: "19:abc@thread.v2", webUrl: "https://teams.microsoft.com/l/chat/19%3Aabc%40thread.v2/0?tenantId=x" })).toBe("https://teams.microsoft.com/l/chat/19%3Aabc%40thread.v2/0?tenantId=x");
+    expect(teamsLink({ chatId: "19:abc@thread.v2", webUrl: null })).toBe("https://teams.microsoft.com/l/chat/19%3Aabc%40thread.v2/conversations");
+    expect(teamsLink({ chatId: "19:abc@thread.v2", webUrl: "javascript:alert(1)" })).toBe("https://teams.microsoft.com/l/chat/19%3Aabc%40thread.v2/conversations");
+    expect(() => teamsLink({ chatId: "not a chat", webUrl: null })).toThrow();
+  });
+});

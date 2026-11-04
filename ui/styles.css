@@ -3489,6 +3489,36 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
   .pl-panel { position: static; }
 }
 
+/* ---------- T-2: delivery chats (Settings > Clients) and Microsoft permissions (Settings > Connections) ---------- */
+.set-client-wrap > .dchat { margin: 0; padding: 10px 16px 12px; border: 1px solid var(--border); border-top: 1px dashed var(--border); border-left: 4px solid var(--c); border-radius: 0 0 10px 10px; background: var(--surface); gap: 8px; }
+.set-client-wrap:has(> .dchat) > .set-client { border-bottom: 0; border-radius: 10px 10px 0 0; }
+.set-client-wrap:has(> .dchat) > .devops-write { border-radius: 0; border-bottom: 0; }
+.dchat-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dchat-head .set-label { font-size: var(--fs-3); font-weight: 600; color: var(--text); }
+.dchat-none { margin: 0; font-size: var(--fs-2); }
+.dchat > .mini { align-self: flex-start; }
+.dchat-card { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); }
+.dchat-card.primary { border-color: color-mix(in oklab, var(--accent) 45%, var(--border)); }
+.dchat-card p { margin: 0; font-size: var(--fs-2); }
+.dchat-title { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
+.dchat-title strong { font-size: var(--fs-3); font-weight: 600; margin-right: auto; overflow-wrap: anywhere; }
+.dchat-badge { font-size: var(--fs-1); font-weight: 600; padding: 1px 7px; border-radius: 999px; color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, var(--surface)); }
+.dchat-members summary { cursor: pointer; font-size: var(--fs-2); }
+.dchat-members ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.dchat-members li { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; font-size: var(--fs-2); }
+.dchat-members li .muted { font-size: var(--fs-1); overflow-wrap: anywhere; }
+.dchat-ext, .dchat-ext-count { color: var(--watch); font-weight: 600; }
+.dchat-ext { font-size: var(--fs-1); padding: 0 6px; border-radius: 999px; background: color-mix(in oklab, var(--watch) 14%, var(--surface)); }
+.dchat-picker { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.dchat-picker input[type="search"] { flex: 1 1 260px; min-width: 0; }
+.dchat-picker > p { flex-basis: 100%; margin: 0; font-size: var(--fs-2); }
+.dchat-options { flex-basis: 100%; list-style: none; margin: 0; padding: 4px; max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--raised); }
+.dchat-options li { display: grid; gap: 1px; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+.dchat-options li strong { font-size: var(--fs-3); font-weight: 500; overflow-wrap: anywhere; }
+.dchat-options li .muted { font-size: var(--fs-2); }
+.dchat-options li.on { background: color-mix(in oklab, var(--accent) 14%, var(--surface)); outline: 1px solid color-mix(in oklab, var(--accent) 40%, transparent); }
+.perms li code { font-size: var(--fs-2); }
+.perms-again { justify-self: start; align-self: flex-start; width: auto; }
 /* ---------------------------------------------------------------------------------------------------------------
    P1: the phone (under 600 px). Checking and doing, not planning: a bottom bar (Today, Week, Capture, ⋯), a top bar
    with only the mark, the VM dot and the avatar, one column, full-screen panels and sheets, touch targets of 44 px and

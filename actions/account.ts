@@ -5,7 +5,8 @@
 // my_systemuserid stay as the fallback while signed out. The launch token and Host/Origin checks still apply.
 import type { ParseResult } from "../config/schema.ts";
 import { workEmail, type IdClaims } from "../sources/oauth/idtoken.ts";
-import { AuthFailure, type ConnectOptions, type ConnectResult, type WriteAccess } from "../sources/oauth/oauth.ts";
+import { AuthFailure, type ConnectOptions, type ConnectResult, type ScopeProbe, type TokenKind, type WriteAccess } from "../sources/oauth/oauth.ts";
+import type { ChatsClient } from "../sources/graph/chats.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import type { PresenceClient } from "../sources/graph/presence.ts";
 import type { PhotoClient } from "../sources/graph/photos.ts";
@@ -27,6 +28,10 @@ export type MicrosoftAccount = {
   presence?: PresenceClient;
   /** Step 16.4: profile photos (ProfilePhoto.Read.All) on their own token. Absent: not available here. */
   photos?: PhotoClient;
+  /** T-2: Teams group chats, names and members only (Chat.ReadBasic), on their own token. Absent: not available here. */
+  chats?: ChatsClient;
+  /** T-2: whether a token for one scope set can be had, for Settings > Connections. Absent: can't tell here. */
+  probe?: (kind: TokenKind) => Promise<ScopeProbe>;
   /** Forgets the refresh token and anything in memory; the calendar cache too. */
   signOut: () => Promise<void>;
 };
