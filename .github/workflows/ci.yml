@@ -16,8 +16,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  # Two runners in parallel (fix/ci-speed): the unit and store tests with SQL Server on one, the browser tests on the
-  # other. On one four-core runner they ran together with SQL Server and about 30 demo servers and browsers, which took
+  # Runners in parallel (fix/ci-speed): the unit and store tests with SQL Server on one, the browser tests on four
+  # others. On one four-core runner they ran together with SQL Server and about 30 demo servers and browsers, which took
   # 16 to 18 minutes and pushed browser pages past their timeouts. The test job below is the gate: it runs only when
   # both passed and records the tested tree for deploy-dev.
   unit:
@@ -54,13 +54,21 @@ jobs:
           done
           docker logs sql | tail -20; exit 1
       - name: Unit and store tests
-        run: npx vitest run --exclude 'e2e/**' --reporter=default
+        run: |
+          echo "cores: $(nproc)"
+          npx vitest run --exclude 'e2e/**' --reporter=default
       - name: Build the UI
         run: npx vite build
+  # Four shards: the repo's runners have two cores, where vitest runs one file at a time, so all the browser files in
+  # one job took about ten minutes in a row. Each shard takes a quarter of the files.
   browser:
-    name: Browser tests (Chromium and WebKit)
+    name: Browser tests ${{ matrix.shard }}/4 (Chromium and WebKit)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     env:
       FOCUSTIME_TEST_WEBKIT: required
       TZ: America/Chicago
@@ -75,7 +83,9 @@ jobs:
       - run: npx playwright-core install --with-deps webkit
       # The UI is built once for the run (test/e2e-build.ts) and every demo server serves it.
       - name: Browser tests
-        run: npx vitest run e2e/ --reporter=default
+        run: |
+          echo "cores: $(nproc)"
+          npx vitest run e2e/ --shard=${{ matrix.shard }}/4 --reporter=default
   test:
     needs: [unit, browser]
     runs-on: ubuntu-latest
