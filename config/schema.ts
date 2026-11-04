@@ -2,6 +2,7 @@
 import { parse, TomlError } from "smol-toml";
 import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
 import { DEFAULT_THRESHOLDS, type RoadmapThresholds } from "../plan/roadmap.ts";
+import { DEFAULT_ASK_SETTINGS, type AskSettings } from "../plan/asks.ts";
 import { DEFAULT_NOTIFY, NOTIFY_KINDS, type NotifyKind, type NotifySettings } from "../plan/notify.ts";
 import { DEFAULT_FOCUS, MAX_PLAYLISTS, playlistLink, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
@@ -48,6 +49,8 @@ export type AppConfig = {
   notify: NotifySettings;
   /** Step 17: Settings > Roadmap thresholds (whole numbers). */
   roadmap: RoadmapThresholds;
+  /** AP-1: Asks: how often delivery chats are read in working hours, and the phrase lists the rules use. */
+  asks: AskSettings;
 };
 /** `ownerValue` empty means the signed-in person's UPN (A2), then their display name. `startWithoutAsking` (step 15.5, Q87): the morning box's Start runs at once. */
 export type AzureSettings = { ownerTag: string; ownerValue: string; startWithoutAsking: boolean };
@@ -190,7 +193,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
 
   // Section and key names are unchanged by the rename (R1), so existing config files keep working.
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "asks"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -587,6 +590,26 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     }
   }
 
+  // [asks] (optional, AP-1): poll_minutes (1 to 60), request_phrases and ack_phrases (lists of up to 50 phrases)
+  const asks: AskSettings = { ...DEFAULT_ASK_SETTINGS, requestPhrases: [...DEFAULT_ASK_SETTINGS.requestPhrases], ackPhrases: [...DEFAULT_ASK_SETTINGS.ackPhrases] };
+  if (raw.asks !== undefined) {
+    const t = isTable(raw.asks) ? raw.asks : (err("asks", "Must be an [asks] table"), null);
+    if (t) {
+      for (const k of Object.keys(t)) if (!["poll_minutes", "request_phrases", "ack_phrases"].includes(k)) err(`asks.${k}`, "Unknown field");
+      const pm = t.poll_minutes;
+      if (pm !== undefined) {
+        if (typeof pm !== "number" || !Number.isInteger(pm) || pm < 1 || pm > 60) err("asks.poll_minutes", "Must be a whole number from 1 to 60");
+        else asks.pollMinutes = pm;
+      }
+      for (const [k, key] of [["request_phrases", "requestPhrases"], ["ack_phrases", "ackPhrases"]] as const) {
+        const v = t[k];
+        if (v === undefined) continue;
+        if (!Array.isArray(v) || v.length > 50 || v.some((x) => typeof x !== "string" || x.length > 60)) err(`asks.${k}`, "Must be a list of up to 50 phrases, each at most 60 characters");
+        else asks[key] = (v as string[]).map((x) => x.trim().toLowerCase()).filter(Boolean);
+      }
+    }
+  }
+
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
   if (raw.outlook !== undefined) {
@@ -637,6 +660,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       azure,
       notify,
       roadmap,
+      asks,
     },
   };
 }

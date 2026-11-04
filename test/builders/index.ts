@@ -114,6 +114,25 @@ export function aChatMember(o: Partial<import("../../plan/chats.ts").ChatMember>
   return { userId: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`, displayName: `Person ${n}`, email: `person${n}@${external ? "fabrikam" : "contoso"}.example`, tenantId: external ? CLIENT_TENANT : HOME_TENANT, ...rest };
 }
 
+/** AP-1: a chat message as the rules see it: from a client person by default, plain text, nothing attached. */
+export function aMessage(o: Partial<import("../../plan/asks.ts").IncomingMessage> = {}): import("../../plan/asks.ts").IncomingMessage {
+  const n = next();
+  return {
+    chatId: "19:fabrikam@thread.v2",
+    messageId: String(1_700_000_000_000 + n),
+    clientKey: "fabrikam",
+    authorId: `00000000-0000-4000-9000-${String(n).padStart(12, "0")}`,
+    authorTenant: CLIENT_TENANT,
+    createdAt: "2026-11-04T15:00:00Z",
+    text: "The weekly report shows last month's totals",
+    hasImage: false,
+    hasFile: false,
+    replyToId: null,
+    mentionedUserIds: [],
+    ...o,
+  };
+}
+
 /** A Teams group chat as the picker lists it. */
 export function aChat(o: Partial<import("../../plan/chats.ts").ChatSummary> = {}): import("../../plan/chats.ts").ChatSummary {
   const n = next();
