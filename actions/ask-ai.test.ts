@@ -29,7 +29,8 @@ type Msg = IncomingMessage & { modifiedAt: string };
 const about = (c: ProviderCall) => (JSON.parse(c.input) as { message: { text: string } }).message.text;
 const item = (id: number, title: string, o: Partial<WorkItem> = {}): WorkItem => ({ id, title, type: "User Story", state: "Active", stateCategory: "InProgress", level: "story", order: 1, parentId: null, changedAt: IN_HOURS, url: `https://dev.azure.com/contoso/_workitems/edit/${id}`, ...o });
 
-async function setup(o: { person?: Partial<AiPersonSettings>; answer?: (c: ProviderCall) => string | ProviderReply; spent?: number } = {}) {
+type SetupOptions = { person?: Partial<AiPersonSettings>; answer?: (c: ProviderCall) => string | ProviderReply; spent?: number };
+async function setup(o: SetupOptions = {}) {
   let now = IN_HOURS;
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(now).toZonedDateTimeISO("America/New_York") });
   const cfg = parseConfig(`${STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-4444-8444-444444444444"').replace('my_email = ""', 'my_email = "me@example.com"')}\n[clients.fabrikam]\nname = "Fabrikam"\n\n[clients.northwind]\nname = "Northwind"\n`);
@@ -149,14 +150,16 @@ describe("sorting an ask (asks.classify)", () => {
     expect(await s.plan.chatMessage(FAB.chatId, a.messageId)).toBeNull();
   });
 
+  const providerError: SetupOptions = { answer: () => ({ ok: false, kind: "provider", status: 400 }) };
+  const unusable: SetupOptions = { answer: () => "{\"kind\":\"maybe\"}" };
   it.each([
     ["Use AI off", { person: { use: false } }, "AI is off", false],
     ["Allow AI off for the client", { person: { allowedClients: [] } }, "AI isn't allowed for Fabrikam", false],
     ["over budget", { spent: 10_000_000 }, "AI budget reached for this month", false],
-    ["a provider error", { answer: (): ProviderReply => ({ ok: false, kind: "provider", status: 400 }) }, "the AI service couldn't answer", true],
-    ["an unusable answer", { answer: () => "{\"kind\":\"maybe\"}" }, "the AI's answer wasn't usable", true],
+    ["a provider error", providerError, "the AI service couldn't answer", true],
+    ["an unusable answer", unusable, "the AI's answer wasn't usable", true],
   ] as const)("%s: the AP-1 card with Not sorted, one attempt only", async (_why, o, reason, called) => {
-    const s = await setup(o as Parameters<typeof setup>[0]);
+    const s = await setup(o as SetupOptions);
     s.say({ chatId: FAB.chatId, text: "Can you add a filter?" });
     await s.poll();
     await s.poll();
@@ -188,7 +191,7 @@ describe("sorting an ask (asks.classify)", () => {
   it("the context: that client's chat and items only, at most 5 earlier messages, authors as client or Cooptimize, no email addresses", async () => {
     const s = await setup();
     s.say({ chatId: NW.chatId, createdAt: "2026-11-04T14:00:00Z", text: NW_SECRET });
-    for (let i = 0; i < 7; i++) s.say({ chatId: FAB.chatId, createdAt: `2026-11-04T15:0${i}:00Z`, text: `note ${i} from dana@fabrikam.example`, authorId: i % 2 ? s.colleague.userId : s.client.userId, authorTenant: i % 2 ? HOME_TENANT : undefined });
+    for (let i = 0; i < 7; i++) s.say({ chatId: FAB.chatId, createdAt: `2026-11-04T15:0${i}:00Z`, text: `note ${i} from dana@fabrikam.example`, authorId: i % 2 ? s.colleague.userId : s.client.userId, ...(i % 2 ? { authorTenant: HOME_TENANT } : {}) });
     await s.poll();
     s.calls.length = 0;
     s.say({ chatId: FAB.chatId, createdAt: "2026-11-04T15:20:00Z", text: "Can you check the totals?" });

@@ -107,7 +107,7 @@ describe.skipIf(!CHROMIUM)("AI sorts asks, and Promises", () => {
         ai: { app: anAiApp({ provider: "openai", model: "gpt-6-luna" }), provider: async () => provider, appSpend: { get: async () => 0, add: async () => {} } },
       },
     });
-    await ctx.writeConfig((t) => `${t}\n[ai]\nuse = true\nallowed_clients = ["Adatum"]\n`);
+    await ctx.writeConfig!((t) => `${t}\n[ai]\nuse = true\nallowed_clients = ["Adatum"]\n`);
     await ctx.plan!.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME, name: "Sam Tester", username: "me@contoso.example", email: "me@contoso.example", signedInAt: "2026-11-02T14:00:00Z", systemUserId: null, systemUserEmail: null });
     await ctx.plan!.setDevopsIdentity({ clientKey: "Adatum", org: "contoso", id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example", expires: null });
     await ctx.plan!.addDeliveryChat("Adatum", "customer", { chatId: CHAT, displayName: "Adatum Customer Collaboration", webUrl: "https://teams.microsoft.com/l/chat/x" });
