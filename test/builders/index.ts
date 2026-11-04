@@ -191,3 +191,45 @@ export function aClassifyAnswer(o: Partial<import("../../plan/asks-ai.ts").Class
 export function aPromiseAnswer(o: Partial<import("../../plan/asks-ai.ts").PromiseAnswer> = {}): import("../../plan/asks-ai.ts").PromiseAnswer {
   return { is_promise: true, what: "Send the corrected totals", due_hint: null, to_whom: null, answers_message_id: null, reason: "It commits to sending something.", ...o };
 }
+
+/** DS-1: a feature's signals: a feature with a description and acceptance, an epic, one existing story, two comments. */
+export function aFeatureSignals(o: { feature?: Partial<import("../../plan/stories.ts").FeatureFields> } & Partial<Omit<import("../../plan/stories.ts").FeatureSignals, "feature">> = {}): import("../../plan/stories.ts").FeatureSignals {
+  const { feature, ...rest } = o;
+  return {
+    feature: { id: 240, title: "Monthly export for the finance team", type: "Feature", state: "Active", priority: 2, tags: ["Reporting", "Export"], areaPath: "Contoso\\Reporting", iterationPath: "Contoso\\Sprint 9", description: "Finance needs the monthly totals as a CSV file.", acceptance: "- The file opens in Excel", parentId: 230, url: "https://dev.azure.com/contoso/Contoso/_workitems/edit/240", ...feature },
+    epic: { id: 230, title: "Finance reporting", type: "Epic", description: "Everything finance reads each month." },
+    children: [{ id: 241, title: "Pick the columns for the export", type: "User Story", state: "Closed" }],
+    comments: [{ at: "2026-11-03T10:00:00Z", text: "They also asked for a date filter." }, { at: "2026-10-28T09:00:00Z", text: "Kickoff done." }],
+    storyType: "User Story",
+    ...rest,
+  };
+}
+
+/** DS-1: a feature from the same client's project with stories, usable as an example. */
+export function anExemplarCandidate(o: Partial<import("../../plan/stories.ts").ExemplarCandidate> = {}): import("../../plan/stories.ts").ExemplarCandidate {
+  return {
+    id: 300, title: "Quarterly report for sales", description: "Sales wants the quarter's numbers. In one page.", tags: ["Reporting"], areaPath: "Contoso\\Reporting", parentId: 231, changedAt: "2026-10-01T12:00:00Z",
+    stories: [
+      { title: "Add the quarter filter", description: "Lets sales pick a quarter.", hasAcceptance: true, size: 3 },
+      { title: "Show totals per region", description: "One row per region.", hasAcceptance: true, size: 2 },
+      { title: "Export the page as PDF", description: "For the board pack.", hasAcceptance: false, size: null },
+    ],
+    ...o,
+  };
+}
+
+/** DS-1: one proposal in a Coop v1 answer. */
+export function aCoopProposal(o: Partial<import("../../plan/stories.ts").CoopProposal> = {}): import("../../plan/stories.ts").CoopProposal {
+  return { id: "P1", title: "Add the date filter to the export", description: "Finance picks the month before exporting.", acceptance_criteria: ["- A month picker shows above the export", "The file has only that month"], depends_on: [], size: "M", evidence: ["comment 2026-11-03"], open_questions: [], ...o };
+}
+
+/** DS-1: a "stories.draft" answer (Coop v1 story_proposals) for feature 240 with two proposals, the second after the first. */
+export function aProposalsAnswer(o: Partial<import("../../plan/stories.ts").CoopProposals> = {}): import("../../plan/stories.ts").CoopProposals {
+  return {
+    kind: "story_proposals", version: 1, feature_id: 240,
+    proposals: [aCoopProposal(), aCoopProposal({ id: "P2", title: "Email the export to finance", description: "Send the file on the first workday.", acceptance_criteria: ["Finance gets the file by email"], depends_on: ["P1"], size: "S" })],
+    rationale: "The columns are done; the filter and delivery are left.",
+    set_aside: [{ title: "Pick the columns", why: "already_covered", existing_item_id: 241, reason: "Story #241 did this." }],
+    ...o,
+  };
+}
