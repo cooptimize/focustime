@@ -47,6 +47,7 @@ import { settingsAction, type SettingsContext } from "./settings-actions.ts";
 import { borrowedView, closeoutAction, noteView } from "./closeout-actions.ts";
 import { applyFollowUpRules, followUpView, internalClients, nameOf, workdayOf } from "./followup-rules.ts";
 import { watchedIds } from "../plan/followups.ts";
+import { pastUrgency } from "../plan/asks-ai.ts";
 import { isActionName, type ActionName } from "./registry.ts";
 import { captureAction } from "./capture-actions.ts";
 import { followUpAction } from "./followup-actions.ts";
@@ -380,6 +381,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       planClients = picked.planClients;
       // Items an open follow-up is about are read by id too, so a completed one can close its follow-up (step 7).
       const watch = ctx.plan ? watchedIds((await ctx.plan.openFollowUps())) : {};
+      // AP-2: and the items promises are linked to, so a promise closes when its item is done.
+      if (ctx.plan)
+        for (const p of (await ctx.plan.promises().catch(() => []))) if (p.status === "linked" && p.itemId !== null) (watch[p.clientKey] ??= []).includes(p.itemId) || watch[p.clientKey]!.push(p.itemId);
       // Features on the week lists of this week, today's week and next (step 8), so Plan the day can offer their
       // stories. Every list item (features and stories) is also read by id, done ones included, so progress can count
       // what DevOps shows as Completed (step 11).
@@ -484,9 +488,22 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     devopsWrite: ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : [],
     // Step 14.5 (D256): write PATs and app secrets that expire within 14 days, for Today.
     expiring: (await expiringFor(ctx.plan, cfg, serverToday, (k) => names.get(k))),
+    asks: ctx.plan ? await urgentAsks(ctx.plan, now, tz, (k) => names.get(k) ?? cfg?.clientSettings[k]?.name ?? k) : { urgent: [], pastUrgency: 0 },
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
     demo: !!ctx.demo?.on,
+  };
+}
+
+/**
+ * AP-2: open asks sorted as urgent "now" (Today), and the open ones past their urgency window (Check-in). Asks that
+ * weren't sorted have no urgency and count in neither.
+ */
+async function urgentAsks(plan: PlanStore, now: string, zone: string, name: (k: string) => string): Promise<WeekLoadData["asks"]> {
+  const open = (await plan.asks().catch(() => [])).filter((a) => a.status === "open" && a.sortStatus === "sorted" && a.sort && a.sort.kind !== "none");
+  return {
+    urgent: open.filter((a) => a.sort!.urgency === "now").map((a) => ({ chatId: a.chatId, messageId: a.messageId, clientKey: a.clientKey, clientName: name(a.clientKey), title: a.sort!.title, at: a.createdAt })),
+    pastUrgency: open.filter((a) => pastUrgency(a.sort!.urgency, a.createdAt, now, zone)).length,
   };
 }
 
@@ -577,11 +594,14 @@ async function aiDirectory(ctx: ActionContext, cfg: AppConfig): Promise<ClientEn
   const keys = new Set([...mine.map((c) => c.clientKey), ...Object.keys(cfg.clientSettings), ...cfg.week.standingBlocks.map((b) => b.clientKey)]);
   keys.delete(INTERNAL_CLIENT);
   const devops = ctx.makeDevOps(cfg.dataverse, zone);
+  // AP-2: item ids from the remembered map (every read, kept across restarts), plus what this process read last.
+  const remembered = (await ctx.plan?.itemClients().catch(() => null)) ?? new Map<string, number[]>();
+  for (const k of remembered.keys()) if (k !== INTERNAL_CLIENT) keys.add(k);
   return [...keys].map((key) => {
     const w = devops.last(key);
     const items = w ? [...w.items, ...w.children, ...(w.watched ?? []), ...(w.committed ?? [])] : [];
     const names = [mine.find((c) => c.clientKey === key)?.clientName, cfg.clientSettings[key]?.name].filter((n): n is string => !!n && n !== key);
-    return { key, names: [...new Set(names)], projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set(items.map((i) => i.id))] };
+    return { key, names: [...new Set(names)], projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set([...items.map((i) => i.id), ...(remembered.get(key) ?? [])])] };
   });
 }
 
@@ -631,6 +651,13 @@ export async function askContext(ctx: ActionContext): Promise<AskContext> {
     writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
     now: ctx.now,
     log: ctx.log ?? (() => {}),
+    // AP-2: the AI service (its switches, guards, budget and log), and a linked item's done state from the last read.
+    ai: () => aiFor(ctx),
+    itemDone: (cfg, clientKey, itemId) => {
+      const w = ctx.makeDevOps(cfg.dataverse, userZone(cfg)).last(clientKey);
+      const hit = w ? [...w.items, ...w.children, ...(w.watched ?? [])].find((i) => i.id === itemId) : undefined;
+      return hit ? hit.stateCategory === "Completed" : null;
+    },
   };
 }
 
@@ -993,6 +1020,13 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "asks.reopen":
     case "asks.search":
     case "asks.purge":
+    case "asks.sort_again":
+    case "asks.show":
+    case "promises.list":
+    case "promises.resolve":
+    case "promises.reopen":
+    case "promises.followup":
+    case "promises.link":
       return askAction(await askContext(ctx), action, req.input);
     case "ai.status":
     case "ai.test":

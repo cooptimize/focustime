@@ -178,7 +178,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
     }
     case "notify": {
       // Step 15.5: Settings > Notifications. Written as given; parseConfig checks each value.
-      only(v, ["kinds", "quiet", "quietPto", "pushDetails"], "notify");
+      only(v, ["kinds", "quiet", "quietPto", "pushDetails", "asksThroughFocus"], "notify");
       const values: [string, TomlValue][] = [];
       if (v.kinds !== undefined) {
         const k = obj(v.kinds, "notify");
@@ -198,6 +198,10 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
         if (typeof v.pushDetails !== "boolean") throw new SettingsInputError("notify.push_details", "Must be true or false");
         values.push(["push_details", v.pushDetails]);
       }
+      if (v.asksThroughFocus !== undefined) {
+        if (typeof v.asksThroughFocus !== "boolean") throw new SettingsInputError("notify.asks_through_focus", "Must be true or false");
+        values.push(["asks_through_focus", v.asksThroughFocus]);
+      }
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "notify", k, val, i === 0 ? "Notifications (step 15.5): a switch per kind and quiet hours. During focus, all but the timer and meeting warnings wait until it ends." : undefined), text);
     }
     case "roadmap": {
@@ -210,11 +214,12 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
     }
     case "asks": {
       // AP-1: Settings > Clients > Asks. Written as given; parseConfig checks the ranges and lengths.
-      only(v, ["pollMinutes", "requestPhrases", "ackPhrases"], "asks");
+      only(v, ["pollMinutes", "requestPhrases", "ackPhrases", "promisePhrases"], "asks");
       const values: [string, number | string[]][] = [];
       if (v.pollMinutes !== undefined) values.push(["poll_minutes", int(v.pollMinutes, "asks.poll_minutes")]);
       if (v.requestPhrases !== undefined) values.push(["request_phrases", strList(v.requestPhrases, "asks.request_phrases").map((x) => x.trim()).filter(Boolean)]);
       if (v.ackPhrases !== undefined) values.push(["ack_phrases", strList(v.ackPhrases, "asks.ack_phrases").map((x) => x.trim()).filter(Boolean)]);
+      if (v.promisePhrases !== undefined) values.push(["promise_phrases", strList(v.promisePhrases, "asks.promise_phrases").map((x) => x.trim()).filter(Boolean)]);
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "asks", k, val, i === 0 ? "Asks (AP-1): delivery chats with Read for asks on are read this often in working hours; a message from outside Cooptimize with a request phrase is an ask, one that is only an acknowledgement isn't." : undefined), text);
     }
     case "ai": {

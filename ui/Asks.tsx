@@ -6,6 +6,7 @@
 // handled, D dismiss, X context. Nothing is posted in Teams. Chat text shows only on its own client's card.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { AskView, AsksData, ContextMessage } from "../plan/asks.ts";
+import { KIND_WORD, URGENCY_WORD } from "../plan/asks-ai.ts";
 import type { WeekLoadData } from "../actions/types.ts";
 import { userZone } from "../week/zone.ts";
 import { call } from "./api.ts";
@@ -26,33 +27,38 @@ export function askGroups(asks: readonly AskView[]): { clientKey: string; client
   return [...groups.values()];
 }
 
-/** The Inbox's two tabs: "Inbox" and "Asks" with the open count (hidden at none). */
-export function InboxTabs({ asks, count, onPick }: { asks: boolean; count: number | null; onPick: (asks: boolean) => void }) {
+export type InboxTab = "inbox" | "asks" | "promises";
+/** The Inbox's tabs: "Inbox", "Asks" and (AP-2) "Promises", each with its open count (hidden at none). */
+export function InboxTabs({ tab, count, promiseCount = null, onPick }: { tab: InboxTab; count: number | null; promiseCount?: number | null; onPick: (tab: InboxTab) => void }) {
   return (
     <div className="inbox-tabs" role="tablist" aria-label="Inbox">
-      <button type="button" role="tab" aria-selected={!asks} className={!asks ? "on" : ""} onClick={() => onPick(false)}>
+      <button type="button" role="tab" aria-selected={tab === "inbox"} className={tab === "inbox" ? "on" : ""} onClick={() => onPick("inbox")}>
         Inbox
       </button>
-      <button type="button" role="tab" aria-selected={asks} className={asks ? "on" : ""} onClick={() => onPick(true)}>
+      <button type="button" role="tab" aria-selected={tab === "asks"} className={tab === "asks" ? "on" : ""} onClick={() => onPick("asks")}>
         Asks{count ? <span className="tab-count" aria-label={`${count} open`}>{count}</span> : null}
+      </button>
+      <button type="button" role="tab" aria-selected={tab === "promises"} className={tab === "promises" ? "on" : ""} onClick={() => onPick("promises")}>
+        Promises{promiseCount ? <span className="tab-count" aria-label={`${promiseCount} open`}>{promiseCount}</span> : null}
       </button>
     </div>
   );
 }
 
-/** The open asks count for the tab, read when the Inbox opens and after changes. */
-export function useAskCount(version: number, enabled: boolean): [number | null, (n: number) => void] {
+/** The open asks and promises counts for the tabs, read when the Inbox opens and after changes. */
+export function useAskCount(version: number, enabled: boolean): [number | null, (n: number) => void, number | null, (n: number) => void] {
   const [count, setCount] = useState<number | null>(null);
+  const [promises, setPromises] = useState<number | null>(null);
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    void call<AsksData>("asks.list", {}).then((d) => live && setCount(d.open), () => undefined);
+    void call<AsksData>("asks.list", {}).then((d) => live && (setCount(d.open), setPromises(d.promisesOpen ?? null)), () => undefined);
     return () => void (live = false);
   }, [version, enabled]);
-  return [count, setCount];
+  return [count, setCount, promises, setPromises];
 }
 
-export function Asks({ data, version, onCount, openSettings }: { data: WeekLoadData; version: number; onCount: (n: number) => void; openSettings: (section: string) => void }) {
+export function Asks({ data, version, onCount, onPromiseCount, onChanged, openSettings }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onPromiseCount?: (n: number) => void; onChanged?: () => void; openSettings: (section: string) => void }) {
   const [state, setState] = useState<AsksData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<ReactNode>(null);
@@ -79,10 +85,13 @@ export function Asks({ data, version, onCount, openSettings }: { data: WeekLoadD
         return d;
       });
       onCount(d.open);
+      onPromiseCount?.(d.promisesOpen);
     },
-    [onCount],
+    [onCount, onPromiseCount],
   );
 
+  // AP-2: a change here can add or clear an urgent ask on Today (and Check-in's count): the app's data reloads quietly.
+  const changed = (d: AsksData) => (show(d), onChanged?.());
   const load = useCallback(async () => {
     try {
       show(await call<AsksData>("asks.list", {}));
@@ -103,7 +112,7 @@ export function Asks({ data, version, onCount, openSettings }: { data: WeekLoadD
   const refresh = async () => {
     setBusy(true);
     try {
-      show(await call<AsksData>("asks.refresh", {}));
+      changed(await call<AsksData>("asks.refresh", {}));
       setError(null);
     } catch (e) {
       setError(errText(e));
@@ -113,7 +122,7 @@ export function Asks({ data, version, onCount, openSettings }: { data: WeekLoadD
   };
   const resolve = async (a: AskView, status: "linked" | "handled" | "dismissed", extra: { note?: string; itemId?: number } = {}) => {
     try {
-      show(await call<AsksData>("asks.resolve", { chatId: a.chatId, messageId: a.messageId, status, ...extra }));
+      changed(await call<AsksData>("asks.resolve", { chatId: a.chatId, messageId: a.messageId, status, ...extra }));
       setLinking(null);
       setNoting(null);
       const what = status === "linked" ? `Linked to #${extra.itemId}` : status === "handled" ? "Marked handled" : "Dismissed";
@@ -134,7 +143,7 @@ export function Asks({ data, version, onCount, openSettings }: { data: WeekLoadD
   };
   const reopen = async (a: AskView) => {
     try {
-      show(await call<AsksData>("asks.reopen", { chatId: a.chatId, messageId: a.messageId }));
+      changed(await call<AsksData>("asks.reopen", { chatId: a.chatId, messageId: a.messageId }));
       setNotice("Open again");
       setSel(keyOf(a));
     } catch (e) {
@@ -157,7 +166,31 @@ export function Asks({ data, version, onCount, openSettings }: { data: WeekLoadD
     if (!canWrite(a)) return setNotice(`Add DevOps write access for ${a.clientName} in Settings`);
     void writes!.begin(a.clientKey, [{ kind: "ask_create", chatId: a.chatId, messageId: a.messageId, level }]);
   };
-  const primary = (a: AskView) => (canWrite(a) ? create(a, "bug") : setLinking(keyOf(a)));
+  /** AP-2: the AI's suggested item type leads (a bug when it suggested none). */
+  const suggested = (a: AskView): "bug" | "story" | "feature" => a.sort?.itemType ?? "bug";
+  const primary = (a: AskView) => (canWrite(a) ? create(a, suggested(a)) : setLinking(keyOf(a)));
+  const [sorting, setSorting] = useState<string | null>(null);
+  const sortAgain = async (a: AskView) => {
+    setSorting(keyOf(a));
+    try {
+      changed(await call<AsksData>("asks.sort_again", { chatId: a.chatId, messageId: a.messageId }));
+      setError(null);
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setSorting(null);
+    }
+  };
+  const [hiddenOpen, setHiddenOpen] = useState(false);
+  const showAnyway = async (a: AskView) => {
+    try {
+      changed(await call<AsksData>("asks.show", { chatId: a.chatId, messageId: a.messageId, shown: true }));
+      setNotice("Shown on Asks");
+      setSel(keyOf(a));
+    } catch (e) {
+      setError(errText(e));
+    }
+  };
 
   // Keys (only here, not while typing or behind a dialog): J/K move, Enter the first action, H, D, X.
   const keys = useRef({ order, current, primary, resolve, toggleContext, noting, linking });
@@ -268,11 +301,38 @@ export function Asks({ data, version, onCount, openSettings }: { data: WeekLoadD
                 onHandled={(note) => void resolve(a, "handled", note ? { note } : {})}
                 onDismiss={() => void resolve(a, "dismissed")}
                 onUndo={() => void reopen(a)}
+                suggested={suggested(a)}
+                sorting={sorting === keyOf(a)}
+                onSortAgain={() => void sortAgain(a)}
               />
             ))}
           </ul>
         </section>
       ))}
+      {(state?.hidden.length ?? 0) > 0 && (
+        <section className="asks-hidden" aria-label="Hidden by AI">
+          <button type="button" className="link-btn" aria-expanded={hiddenOpen} onClick={() => setHiddenOpen((o) => !o)}>
+            Hidden by AI ({state!.hidden.length})
+          </button>
+          {hiddenOpen && (
+            <ul className="ask-hidden-list">
+              {state!.hidden.map((a) => (
+                <li key={keyOf(a)} className="ask-hidden" style={{ "--c": clientColor(a.clientKey, data.clients) } as CSSProperties}>
+                  <span className="swatch" aria-hidden="true" />
+                  <span className="ask-hidden-who">
+                    {a.clientName} · {a.author} · <time dateTime={a.at}>{whenText(a.at, tz)}</time>
+                  </span>
+                  <span className="ask-hidden-text">{a.text || "(no text)"}</span>
+                  {a.sort?.reason && <span className="muted ask-hidden-why">{a.sort.reason}</span>}
+                  <button type="button" className="mini" onClick={() => void showAnyway(a)}>
+                    Show it anyway
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </main>
   );
 }
@@ -284,9 +344,11 @@ function AskCard(p: {
   linking: boolean; onLink: (on: boolean) => void; onLinked: (id: number) => void;
   noting: boolean; onNote: (on: boolean) => void; onHandled: (note: string) => void;
   onDismiss: () => void; onUndo: () => void;
+  suggested: "bug" | "story" | "feature"; sorting: boolean; onSortAgain: () => void;
 }) {
   const { a } = p;
   const [more, setMore] = useState(false);
+  const [why, setWhy] = useState(false);
   const [long, setLong] = useState(false);
   const text = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
@@ -302,7 +364,18 @@ function AskCard(p: {
         <span className="muted">
           · <time dateTime={a.at}>{whenText(a.at, p.tz)}</time> · {a.chatName}
         </span>
+        {a.sort && (
+          <span className="ask-labels">
+            <button type="button" className={`ask-label kind-${a.sort.kind}`} title={a.sort.reason} aria-expanded={why} onClick={(e) => (e.stopPropagation(), setWhy((w) => !w))}>
+              {KIND_WORD[a.sort.kind]}
+            </button>
+            <span className={`ask-label urgency-${a.sort.urgency}`} title={a.sort.reason}>
+              {URGENCY_WORD[a.sort.urgency]}
+            </span>
+          </span>
+        )}
       </div>
+      {why && a.sort && <p className="ask-why muted">Why: {a.sort.reason}</p>}
       <p ref={text} className={`ask-text${more ? "" : " clamp"}`}>
         {a.text || <span className="muted">(no text)</span>}
       </p>
@@ -315,10 +388,44 @@ function AskCard(p: {
         {a.hasImage && <span className="ask-attach">Image attached</span>}
         {a.hasFile && <span className="ask-attach">File attached</span>}
         <span>Matched: {a.matched}</span>
+        {a.notSorted && (
+          <span className="ask-not-sorted">
+            Not sorted: {a.notSorted}
+            {open && (
+              <button type="button" className="mini quiet" disabled={p.sorting} onClick={p.onSortAgain}>
+                {p.sorting ? "Sorting…" : "Sort again"}
+              </button>
+            )}
+          </span>
+        )}
         <a href={a.link} target="_blank" rel="noopener noreferrer">
           Open in Teams
         </a>
       </p>
+      {(a.likely || a.promised || (a.sort && a.sort.kind !== "none" && a.sort.title)) && (
+        <div className="ask-ai">
+          {a.likely && (
+            <p className="ask-likely">
+              Looks like{" "}
+              {a.likely.url ? (
+                <a href={a.likely.url} target="_blank" rel="noopener noreferrer">
+                  #{a.likely.id} {a.likely.title ?? ""}
+                </a>
+              ) : (
+                <>
+                  #{a.likely.id} {a.likely.title ?? ""}
+                </>
+              )}
+            </p>
+          )}
+          {a.sort && a.sort.kind !== "none" && a.sort.title && open && (
+            <p className="ask-draft muted">
+              Draft: <span className="ask-draft-title">{a.sort.title}</span>
+            </p>
+          )}
+          {a.promised && <p className="ask-promised">Promised: {a.promised}</p>}
+        </div>
+      )}
       <div className="ask-context">
         <button type="button" className="mini quiet" aria-expanded={!!p.context} onClick={p.onContext}>
           {p.context ? "Hide context" : "Show context"} <kbd>X</kbd>
@@ -345,11 +452,11 @@ function AskCard(p: {
         <div className="ask-actions">
           {p.canWrite ? (
             <>
-              <button type="button" className="mini primary" onClick={() => p.onCreate("bug")}>
-                Create bug {p.selected && <kbd>Enter</kbd>}
-              </button>
-              <button type="button" className="mini" onClick={() => p.onCreate("story")}>Create story</button>
-              <button type="button" className="mini" onClick={() => p.onCreate("feature")}>Create feature</button>
+              {[p.suggested, ...(["bug", "story", "feature"] as const).filter((l) => l !== p.suggested)].map((l, i) => (
+                <button key={l} type="button" className={`mini${i === 0 ? " primary" : ""}`} onClick={() => p.onCreate(l)}>
+                  Create {l} {i === 0 && p.selected && <kbd>Enter</kbd>}
+                </button>
+              ))}
             </>
           ) : (
             <button type="button" className="mini quiet" onClick={p.onEnable}>
@@ -422,8 +529,9 @@ function HandledNote({ onSave, onCancel }: { onSave: (note: string) => void; onC
 }
 
 type Hit = { id: number; title: string; type: string; state: string; url: string };
-function LinkPicker({ a, onPick, onCancel }: { a: AskView; onPick: (id: number) => void; onCancel: () => void }) {
-  const [q, setQ] = useState("");
+export function LinkPicker({ a, onPick, onCancel }: { a: { chatId: string; messageId: string; clientName: string; likely?: { id: number } | null }; onPick: (id: number) => void; onCancel: () => void }) {
+  // AP-2: the likely existing item is filled in (the person still picks it).
+  const [q, setQ] = useState(a.likely ? `#${a.likely.id}` : "");
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [available, setAvailable] = useState(true);
   useEffect(() => {

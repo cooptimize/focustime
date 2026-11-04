@@ -36,6 +36,18 @@ await forEachDriver("AI log and spend (AI-0)", ({ open }) => {
     expect(cols).toEqual(["at", "client_key", "cost_micros", "detail", "id", "input_tokens", "latency_ms", "model", "outcome", "output_tokens", "task", "user_id"]);
   });
 
+  it("AP-2, the guard's item map: ids per client, only new ones added, one person's only, kept after a restart", async () => {
+    const { db, ana, ben } = await setup();
+    expect(await ana.rememberItemClient("fabrikam", [4101, 4102, 4101])).toBe(2);
+    expect(await ana.rememberItemClient("fabrikam", [4102, 4103])).toBe(1);
+    expect(await ana.rememberItemClient("northwind", [4101, -3, 1.5])).toBe(1);
+    expect(await ana.rememberItemClient("", [1])).toBe(0);
+    const restarted = planStoreOn(db, { userId: "ana", now });
+    const map = await restarted.itemClients();
+    expect(Object.fromEntries([...map].map(([k, v]) => [k, v.sort((a, b) => a - b)]))).toEqual({ fabrikam: [4101, 4102, 4103], northwind: [4101] });
+    expect((await ben.itemClients()).size).toBe(0);
+  });
+
   it("the app's spend: one total per month across people", async () => {
     const { spend } = await setup();
     expect(await spend.get("2026-11")).toBe(0);

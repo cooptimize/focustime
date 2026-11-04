@@ -12,7 +12,7 @@ import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
 import { DueBadge, Fading, FollowUpRow, copy } from "./FollowUps.tsx";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
-import type { CloseOutState, FollowUpView, WeekLoadData } from "../actions/types.ts";
+import type { CloseOutState, FollowUpView, UrgentAsk, WeekLoadData } from "../actions/types.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import type { NowStrip } from "../plan/now.ts";
 import { aboutHours, planFit } from "../plan/fit.ts";
@@ -79,6 +79,8 @@ type Props = {
   onPlan: (date?: string) => void;
   onPlanWeek: () => void;
   onInbox: () => void;
+  /** AP-2: Inbox › Asks (an urgent ask's chip, Check-in's "Walked in, not resolved"). */
+  onAsks?: () => void;
   onCaptures: () => void;
   onRetry: () => void;
   onFix: () => void;
@@ -168,6 +170,23 @@ export function Today(props: Props) {
     [props.onChanged], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  // AP-2: Start focus on an urgent ask: a walk-on pick (the AI's title) in the block under way, then focus on it.
+  const startAsk = useCallback(
+    async (u: UrgentAsk) => {
+      if (!workday || !blocks.length) return props.onStart(null);
+      const half = props.strip?.half ?? blocks[0]!.half;
+      const had = picks.find((p) => p.clientKey === u.clientKey && p.title === u.title && p.status === "planned");
+      try {
+        const pick = had ?? (await call<{ pick: Pick }>("pick.add", { date, half, clientKey: u.clientKey, intention: u.title })).pick;
+        props.onChanged();
+        props.onStart(pick);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "That didn't work");
+      }
+    },
+    [workday, blocks, picks, date, props.strip, props.onStart, props.onChanged], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   // Each block's rows in time order, and the next pick: the first planned one in the first block that hasn't ended.
   const rowsBy = new Map(
     blocks.map((s) => {
@@ -235,7 +254,7 @@ export function Today(props: Props) {
       </h1>
     );
 
-  const attention = mode === "now" ? <Attention noDue={phone} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
+  const attention = mode === "now" ? <Attention noDue={phone} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} onAsks={props.onAsks ?? props.onInbox} onAskFocus={(u) => void startAsk(u)} /> : null;
   const panelSlot = panel ? blocks.find((s) => s.half === panel.half) ?? null : null;
 
   return (
@@ -345,7 +364,7 @@ export function Today(props: Props) {
             {mode !== "checkin" && split && !wide && <OutsideLine label="After your blocks" events={split.after} tz={tz} />}
             {mode === "now" && phone && <PhoneFollowUps data={data} date={date} onChanged={(m) => (m && setNotice(m), props.onChanged())} />}
             {mode === "now" && !phone && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} onNotice={setNotice} onError={setError} />}
-            {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} />}
+            {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} onAsks={props.onAsks ?? props.onInbox} />}
           </div>
         </div>
       )}
@@ -385,13 +404,14 @@ function checkLeft(check: readonly CheckSlot[]): string {
  * The attention line: only when something needs it. Follow-ups due collapse to one chip that opens into rows; a source
  * that failed shows with how old its data is and Retry; an expiring secret links to its setting. Nothing when healthy.
  */
-function Attention({ noDue = false, data, date, clockMs, onInbox, onRetry, onFix, onSettings }: { noDue?: boolean; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void }) {
+function Attention({ noDue = false, data, date, clockMs, onInbox, onRetry, onFix, onSettings, onAsks, onAskFocus }: { noDue?: boolean; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void; onAsks: () => void; onAskFocus: (u: UrgentAsk) => void }) {
   const [open, setOpen] = useState(false);
   // P1: the phone lists due follow-ups at the foot of Today instead.
   const due: FollowUpView[] = noDue ? [] : urgentFollowUps(data.followUps, date);
   const down = causeLines(data.sources, data.devops);
   const vm = vmNeedsToday(useContext(VmCtx).status);
-  if (!due.length && !down.length && !data.expiring.length && !vm) return null;
+  const urgent = data.asks?.urgent ?? [];
+  if (!due.length && !down.length && !data.expiring.length && !vm && !urgent.length) return null;
   const names = [...new Set(due.map((l) => (l.hasWho ? l.who : l.clientName ?? "")).filter(Boolean))];
   return (
     <section className="attention" aria-label="Needs attention">
@@ -418,6 +438,18 @@ function Attention({ noDue = false, data, date, clockMs, onInbox, onRetry, onFix
                 Reconnect
               </button>
             )}
+          </span>
+        ))}
+        {urgent.map((u) => (
+          <span key={`${u.chatId}|${u.messageId}`} className="att-chip urgent">
+            <button type="button" className="att-open" onClick={onAsks} title="Open it in Inbox › Asks">
+              <span className="att-tag">Walked in</span>
+              <span className="att-names">{u.clientName}</span>
+              <span>{u.title}</span>
+            </button>
+            <button type="button" className="mini" onClick={() => onAskFocus(u)} title="Add it to the block under way and start focus on it">
+              Start focus
+            </button>
           </span>
         ))}
         {vm && <VmToday />}
@@ -708,13 +740,20 @@ function ThisWeek({ data, blocks, picks: _today, nameOf, onNotice, onError }: { 
 }
 
 /** Check-in's foot, once: walk-on work for a block, and the week's musts in one line. */
-function CheckinFoot({ data, date, blocks, picks, now, act, onReview }: { data: WeekLoadData; date: IsoDate; blocks: Slot[]; picks: Pick[]; now: string; act: (a: string, i: Record<string, unknown>) => Promise<boolean>; onReview: () => void }) {
+function CheckinFoot({ data, date, blocks, picks, now, act, onReview, onAsks }: { data: WeekLoadData; date: IsoDate; blocks: Slot[]; picks: Pick[]; now: string; act: (a: string, i: Record<string, unknown>) => Promise<boolean>; onReview: () => void; onAsks: () => void }) {
   const { rows } = weekMusts(data, mondayOf(date), now);
   const musts = rows.filter((r) => r.musts > 0);
   const tight = musts.filter((r) => r.track?.kind === "at_risk").map((r) => r.name);
   return (
     <div className="ci-foot">
       {blocks.length > 0 && <WalkOn data={data} date={date} blocks={blocks} picks={picks} act={act} />}
+      {(data.asks?.pastUrgency ?? 0) > 0 && (
+        <p className="ci-asks">
+          <button type="button" className="link-btn" onClick={onAsks} title="Asks still open after their urgency (now: 2 hours; this week: Friday)">
+            Walked in, not resolved ({data.asks.pastUrgency})
+          </button>
+        </p>
+      )}
       {musts.length > 0 && (
         <p className="ci-musts">
           Musts this week: {musts.length} {musts.length === 1 ? "client" : "clients"}

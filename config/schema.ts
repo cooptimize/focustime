@@ -570,6 +570,9 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
         } else if (k === "push_details") {
           if (typeof t.push_details !== "boolean") err("notify.push_details", "Must be true or false");
           else notify.pushDetails = t.push_details;
+        } else if (k === "asks_through_focus") {
+          if (typeof t.asks_through_focus !== "boolean") err("notify.asks_through_focus", "Must be true or false");
+          else notify.asksThroughFocus = t.asks_through_focus;
         } else err(`notify.${k}`, "Unknown field");
       }
     }
@@ -593,18 +596,19 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     }
   }
 
-  // [asks] (optional, AP-1): poll_minutes (1 to 60), request_phrases and ack_phrases (lists of up to 50 phrases)
-  const asks: AskSettings = { ...DEFAULT_ASK_SETTINGS, requestPhrases: [...DEFAULT_ASK_SETTINGS.requestPhrases], ackPhrases: [...DEFAULT_ASK_SETTINGS.ackPhrases] };
+  // [asks] (optional, AP-1): poll_minutes (1 to 60), request_phrases and ack_phrases (lists of up to 50 phrases), and
+  // (AP-2) promise_phrases: commitment phrasing in my own messages
+  const asks: AskSettings = { ...DEFAULT_ASK_SETTINGS, requestPhrases: [...DEFAULT_ASK_SETTINGS.requestPhrases], ackPhrases: [...DEFAULT_ASK_SETTINGS.ackPhrases], promisePhrases: [...DEFAULT_ASK_SETTINGS.promisePhrases] };
   if (raw.asks !== undefined) {
     const t = isTable(raw.asks) ? raw.asks : (err("asks", "Must be an [asks] table"), null);
     if (t) {
-      for (const k of Object.keys(t)) if (!["poll_minutes", "request_phrases", "ack_phrases"].includes(k)) err(`asks.${k}`, "Unknown field");
+      for (const k of Object.keys(t)) if (!["poll_minutes", "request_phrases", "ack_phrases", "promise_phrases"].includes(k)) err(`asks.${k}`, "Unknown field");
       const pm = t.poll_minutes;
       if (pm !== undefined) {
         if (typeof pm !== "number" || !Number.isInteger(pm) || pm < 1 || pm > 60) err("asks.poll_minutes", "Must be a whole number from 1 to 60");
         else asks.pollMinutes = pm;
       }
-      for (const [k, key] of [["request_phrases", "requestPhrases"], ["ack_phrases", "ackPhrases"]] as const) {
+      for (const [k, key] of [["request_phrases", "requestPhrases"], ["ack_phrases", "ackPhrases"], ["promise_phrases", "promisePhrases"]] as const) {
         const v = t[k];
         if (v === undefined) continue;
         if (!Array.isArray(v) || v.length > 50 || v.some((x) => typeof x !== "string" || x.length > 60)) err(`asks.${k}`, "Must be a list of up to 50 phrases, each at most 60 characters");

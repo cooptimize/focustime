@@ -389,8 +389,12 @@ async function previewOne(env: Env, c: unknown, tz: string): Promise<HeldIn | st
       if (!type) throw new Refused(level === "bug" ? "This project's process doesn't track bugs on a backlog. Create a story instead" : `This project's process has no ${level} level`, 409);
       const typeHas = await writer.typeFields(org, pat, project, type);
       const descriptionField = typeHas.has(REPRO_FIELD) && type === bugType(pc) ? REPRO_FIELD : "System.Description";
-      const title = askTitle(message.text);
-      const description = askDescription({ text: message.text, author, at: message.createdAt, link: messageLink(chatId, messageId), zone: tz });
+      // AP-2: the AI's draft (when the ask was sorted) gives the title and a short description; the message itself
+      // always goes with it. The person still sees all of it in the preview and confirms.
+      const draft = ask.sortStatus === "sorted" && ask.sort && ask.sort.kind !== "none" && ask.sort.title ? ask.sort : null;
+      const title = draft ? draft.title : askTitle(message.text);
+      const body = draft?.description ? `${draft.description}\n\nThe message:\n${message.text}` : message.text;
+      const description = askDescription({ text: body, author, at: message.createdAt, link: messageLink(chatId, messageId), zone: tz });
       const ops = createOps({ org, title, description, acField: false, assignedTo: env.me.email, areaPath: null, iterationPath: null, parentId: null, descriptionField, timeZone: tz });
       const after: Record<string, string | null> = { Type: type, Title: title, [descriptionField === REPRO_FIELD ? "Repro steps" : "Description"]: description, "Assigned to": `${env.me.name} <${env.me.email}>`, Area: "The project's default", Iteration: "The project's default" };
       return { ...base(env), ...none, op: "create", itemId: null, parentId: null, title, ops, rev: null, before: {}, after, type, ask: { chatId, messageId } };

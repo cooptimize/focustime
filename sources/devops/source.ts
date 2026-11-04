@@ -39,6 +39,8 @@ export type DevOpsDeps = {
   pickableTypes?: () => readonly string[];
   /** A client's "treat as open" states (config [clients], step 6b). Read at each fetch. */
   openStates?: (clientKey: string) => readonly string[];
+  /** AP-2: the ids of a client's items just read from DevOps (never from the cache), for the AI guard's map. */
+  onItems?: (clientKey: string, ids: number[]) => void;
 };
 
 export type ClientRef = { clientKey: string; clientName: string };
@@ -85,6 +87,16 @@ export function createDevOpsSource(d: DevOpsDeps) {
   /** Each client's DevOps organization name (not secret), from its last Dataverse settings. */
   const orgs = new Map<string, string>();
   const log = (op: string, extra: { status?: number; durationMs?: number; count?: number; kind?: string } = {}) => d.log({ source: "devops", op, ...extra });
+
+  /** Tells the caller which item ids were read for a client; a failure there never fails the read. */
+  const reportItems = (clientKey: string, items: readonly { id: number }[]) => {
+    if (!d.onItems || !items.length) return;
+    try {
+      d.onItems(clientKey, items.map((i) => i.id));
+    } catch {
+      log("item_map", { kind: "failed" });
+    }
+  };
 
   type Ctx = { client: string; org: string; base: string; projectName: string; pat: Pat; /** My identity here (not secret), for changedByMe. */ me: string | null };
 
@@ -357,6 +369,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
             const pre = precheck(ref, target);
             if (pre) throw pre;
             const { items, targetFields, startFields, sizeField, acceptanceField } = await fetchPortfolio(ref, target!, w.items);
+            reportItems(ref.clientKey, [...items, ...items.flatMap((i) => i.children)]);
             const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
             await d.snapshots.write("devops", key, { fetchedAt, items, targetFields, startFields, sizeField, acceptanceField } as unknown as WorkSnapshot).catch(() => log("cache_write", { kind: "failed" }));
             return { clientKey: ref.clientKey, clientName: ref.clientName, status: "ok", fetchedAt, fromCache: false, items, targetFields, startFields, sizeField, acceptanceField };
@@ -414,6 +427,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
       const pre = precheck(ref, target);
       if (pre) throw pre;
       const { items, children, watched, committed } = await fetchClient(ref, target!, watch, features);
+      reportItems(ref.clientKey, [...items, ...children, ...(watched ?? []), ...(committed ?? [])]);
       const fetchedAt = now().toZonedDateTimeISO(d.timeZone).toString({ timeZoneName: "never", smallestUnit: "second" });
       const snap: WorkSnapshot = { fetchedAt, items, children };
       await d.snapshots.write("devops", cacheKey(ref.clientKey), snap).catch(() => log("cache_write", { kind: "failed" }));

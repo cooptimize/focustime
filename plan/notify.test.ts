@@ -164,3 +164,18 @@ describe("the Plan ahead rituals (step 17)", () => {
     expect(parseRoute("ahead")).toEqual({ view: "ahead" });
   });
 });
+
+describe("urgent asks (AP-2)", () => {
+  const base: GateFacts = { settings: DEFAULT_NOTIFY, inHours: true, pto: false, focusRunning: true };
+  it("held during focus by default; sent when urgent asks are let through; quiet hours still apply", () => {
+    expect(gate("asks", base)).toBe("hold");
+    expect(gate("asks", { ...base, settings: { ...DEFAULT_NOTIFY, asksThroughFocus: true } })).toBe("send");
+    expect(gate("asks", { ...base, inHours: false, settings: { ...DEFAULT_NOTIFY, asksThroughFocus: true } })).toBe("quiet");
+    expect(gate("asks", { ...base, settings: { ...DEFAULT_NOTIFY, kinds: { ...DEFAULT_NOTIFY.kinds, asks: false } } })).toBe("off");
+  });
+  it("once per ask, opening Asks", () => {
+    const n = notices.urgentAsk("1700000000001", "Fabrikam", "Portal down", "2026-11-04T15:00:00Z");
+    expect(n).toMatchObject({ kind: "asks", key: "ask:1700000000001", title: "Urgent ask from Fabrikam", route: "asks" });
+    expect(parseRoute(n.route)).toEqual({ view: "asks" });
+  });
+});

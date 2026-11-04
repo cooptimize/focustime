@@ -16,7 +16,9 @@ import { onFreePort } from "../test/ports.ts";
 export const CHROMIUM = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].find((p) => existsSync(p)) ?? null;
 /**
  * Playwright's WebKit (Safari's engine), for the Safari checks: installed with `npx playwright-core install --with-deps
- * webkit` (CI does). Its build needs Ubuntu's libraries; FOCUSTIME_TEST_WEBKIT=required makes a missing one a failure.
+ * webkit` (CI installs the system packages with `install-deps` and keeps the browser and those packages in its cache,
+ * keyed on the Playwright version). Its build needs Ubuntu's libraries; FOCUSTIME_TEST_WEBKIT=required makes a missing
+ * one a failure.
  */
 export const WEBKIT = existsSync(webkit.executablePath()) ? webkit.executablePath() : null;
 export const NOW = "2026-11-02T09:30:00-05:00";

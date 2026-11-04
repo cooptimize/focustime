@@ -34,6 +34,19 @@ describe("one client per request", () => {
     expect(guard(text, g("fabrikam"))).toBeNull();
   });
 
+  // AP-2: only ids known to be another client's refuse; any other number passes, however it is written.
+  it.each([
+    ["an unrelated number", "We moved 1500 rows"],
+    ["a five-digit number nobody has", "Order 20419 shipped"],
+    ["a date", "due 5150-01-02"],
+    ["an amount", "it costs $5150 a month, or 5,150 a year"],
+    ["a decimal and a version", "release 5150.2 and 1.5150"],
+    ["a percentage", "5150% of the target"],
+    ["a time", "at 10:30"],
+  ])("%s passes", (_why, text) => {
+    expect(guard(text, g("fabrikam"))).toBeNull();
+  });
+
   it('client "none": every client is another client', () => {
     expect(guard("Say ok.", g("none"))).toBeNull();
     expect(guard("Fabrikam needs this", g("none"))?.kind).toBe("refused_client");

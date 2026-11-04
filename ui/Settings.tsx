@@ -836,10 +836,10 @@ function AsksForm(p: FormProps) {
   const s = p.data.asks;
   const a = useAutoSave({
     section: "asks",
-    initial: { pollMinutes: s.pollMinutes, requestPhrases: s.requestPhrases.join(", "), ackPhrases: s.ackPhrases.join(", ") },
-    payload: (v) => ({ pollMinutes: v.pollMinutes, requestPhrases: phrases(v.requestPhrases), ackPhrases: phrases(v.ackPhrases) }),
+    initial: { pollMinutes: s.pollMinutes, requestPhrases: s.requestPhrases.join(", "), ackPhrases: s.ackPhrases.join(", "), promisePhrases: (s.promisePhrases ?? []).join(", ") },
+    payload: (v) => ({ pollMinutes: v.pollMinutes, requestPhrases: phrases(v.requestPhrases), ackPhrases: phrases(v.ackPhrases), promisePhrases: phrases(v.promisePhrases) }),
     onSaved: p.onSavedData,
-    label: (k) => (k === "pollMinutes" ? "Read every" : k === "requestPhrases" ? "Request phrases" : "Acknowledgements"),
+    label: (k) => (k === "pollMinutes" ? "Read every" : k === "requestPhrases" ? "Request phrases" : k === "promisePhrases" ? "Promise phrases" : "Acknowledgements"),
   });
   return (
     <details className="set-form set-asks">
@@ -847,7 +847,7 @@ function AsksForm(p: FormProps) {
         <strong>Asks</strong> <span className="muted">· read every {s.pollMinutes} minutes in working hours · Inbox › Asks</span>
       </summary>
       <p className="muted">
-        For each chat with Read for asks on (below), a new message from someone outside Cooptimize becomes an ask when it mentions a Cooptimizer, has a question mark, uses a request phrase, or has an attachment. One that is only an acknowledgement isn't. No AI reads them.
+        For each chat with Read for asks on (below), a new message from someone outside Cooptimize becomes an ask when it mentions a Cooptimizer, has a question mark, uses a request phrase, or has an attachment. One that is only an acknowledgement isn't. Your own messages with a promise phrase become promises. With Allow AI on for a client (and Use AI), AI sorts these; without it, the rules alone decide.
       </p>
       <div className="set-grid">
         <AutoField a={a} k="pollMinutes" label="Read every (minutes)" hint="Only in your working hours, not on PTO days. 1 to 60.">
@@ -859,6 +859,9 @@ function AsksForm(p: FormProps) {
         <AutoField a={a} k="ackPhrases" label="Acknowledgements" hint="A message that is only these (and emoji) is not an ask.">
           <input type="text" value={a.v.ackPhrases} onChange={(e) => a.set("ackPhrases", e.target.value)} {...a.text("ackPhrases")} />
         </AutoField>
+        <AutoField a={a} k="promisePhrases" label="Promise phrases" hint="In your own messages: commas between them. Inbox › Promises.">
+          <input type="text" value={a.v.promisePhrases} onChange={(e) => a.set("promisePhrases", e.target.value)} {...a.text("promisePhrases")} />
+        </AutoField>
       </div>
     </details>
   );
@@ -869,10 +872,10 @@ function NotifyForm(p: FormProps) {
   const n = p.data.notify;
   const a = useAutoSave({
     section: "notify",
-    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails },
+    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : "Quiet on PTO days"),
+    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent asks during focus" : "Quiet on PTO days"),
   });
   const [test, setTest] = useState<string | null>(null);
   const group = (title: string, list: readonly NotifyKind[]) => (
@@ -893,9 +896,14 @@ function NotifyForm(p: FormProps) {
       <div className="set-notify">
         {group("Ritual reminders", RITUAL_KINDS)}
         {group("While you focus", ["timer", "meeting"])}
-        {group("Other", ["vm", "followups", "expiry"])}
+        {group("Other", ["vm", "followups", "expiry", "asks"])}
       </div>
       <SaveMark s={a.status("kinds")} retry={() => a.commit("kinds")} />
+      <AutoField a={a} k="asksThroughFocus" label="Urgent asks during focus" hint="Off: an urgent ask waits until the focus session ends, with the others.">
+        <label className="set-check">
+          <input type="checkbox" checked={a.v.asksThroughFocus} onChange={(e) => a.change("asksThroughFocus", e.target.checked)} /> Let urgent asks through
+        </label>
+      </AutoField>
       <h3>Quiet hours</h3>
       <div className="set-grid">
         <AutoField a={a} k="quiet" label="Quiet" hint="Focus timer and meeting warnings still come.">

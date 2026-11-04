@@ -9,16 +9,23 @@ import { starterToml } from "../config/starter.ts";
 import type { HostMedia, HostNotifications } from "../host/types.ts";
 import type { IncomingMessage } from "../plan/asks.ts";
 import { createPlanStore } from "../store/plan-store.ts";
-import { aChatMember, aMessage } from "../test/builders/index.ts";
+import { aChatMember, aClassifyAnswer, aMessage, anAiApp, HOME_TENANT } from "../test/builders/index.ts";
+import { stubProvider } from "../ai/stub.ts";
+import { IDENTITY_KEY } from "../actions/account.ts";
+import type { Notice } from "../plan/notify.ts";
 import { personTicks } from "./ticks.ts";
 
 const NY = "America/New_York";
 const CHAT = { chatId: "19:fabrikam@thread.v2", displayName: "Fabrikam team", webUrl: null };
 
-async function setup() {
+async function setup(o: { urgent?: boolean; focus?: boolean; through?: boolean } = {}) {
   let at = Temporal.Instant.from("2026-11-04T15:00:00Z"); // Wednesday 10:00 in New York.
   const plan = createPlanStore({ path: ":memory:", now: () => at.toZonedDateTimeISO(NY) });
-  const config = parseConfig(setValue(starterToml(NY), "dataverse", "my_email", "ana@cooptimize.example"));
+  let toml = setValue(starterToml(NY), "dataverse", "my_email", "ana@cooptimize.example");
+  // AP-2: AI on for Fabrikam, and (when asked) urgent asks let through focus.
+  if (o.urgent) toml = setValue(setValue(toml, "ai", "use", true), "ai", "allowed_clients", ["fabrikam"]);
+  if (o.through) toml = setValue(toml, "notify", "asks_through_focus", true);
+  const config = parseConfig(toml);
   if (!config.ok) throw new Error("bad test config");
   const calls: string[] = [];
   const said: (IncomingMessage & { modifiedAt: string })[] = [];
@@ -40,14 +47,18 @@ async function setup() {
     makeDataverse: () => { throw new Error("no Dataverse here"); },
     makeOutlook: () => { throw new Error("no Outlook here"); },
     makeGoogle: () => { throw new Error("no Google here"); },
-    makeDevOps: () => { throw new Error("no DevOps here"); },
+    makeDevOps: () => (o.urgent ? { last: () => null, load: async () => [] } : (() => { throw new Error("no DevOps here"); })()),
+    ...(o.urgent ? { ai: { app: anAiApp(), provider: async () => stubProvider({ respond: () => JSON.stringify(aClassifyAnswer({ kind: "incident", urgency: "now", title: "Portal down" })) }), appSpend: { get: async () => 0, add: async () => {} } } } : {}),
   } as unknown as ActionContext;
-  const notifications = { show: async () => null, close: () => {}, line: () => {} } as unknown as HostNotifications;
+  const shown: Notice[] = [];
+  const notifications = { show: async (n: Notice) => (shown.push(n), null), close: () => {}, line: () => {} } as unknown as HostNotifications;
   const media = { status: async () => ({ players: false, spotify: false }), transition: async () => null, open: async () => {}, endSound: () => {} } as unknown as HostMedia;
   const ticks = personTicks({ log: () => {}, now: () => at, notifications, media, openRoute: () => {} }, plan, ctx, { zone: NY });
   await plan.addDeliveryChat("fabrikam", "customer", CHAT);
   await plan.setDeliveryChatMembers(CHAT.chatId, [aChatMember({ external: true })], at.toString());
-  return { plan, ticks, calls, said, at: (iso: string) => void (at = Temporal.Instant.from(iso)), now: () => at };
+  if (o.urgent) await plan.setAccountState(IDENTITY_KEY, { oid: "00000000-0000-4000-8000-0000000000aa", tid: HOME_TENANT, name: "Ana", username: "ana@cooptimize.example", email: "ana@cooptimize.example", signedInAt: at.toString(), systemUserId: null, systemUserEmail: null });
+  if (o.focus) await plan.setState("timer", { kind: "focus", pickId: null, label: "Focus", plannedMinutes: 120, elapsedMs: 0, runningSince: at.toString(), startedAt: at.toString(), ended: false, warned: [] });
+  return { plan, ticks, calls, said, shown, at: (iso: string) => void (at = Temporal.Instant.from(iso)), now: () => at };
 }
 
 describe("Asks in the scheduler (AP-1)", () => {
@@ -99,5 +110,20 @@ describe("Asks in the scheduler (AP-1)", () => {
     s.at("2026-11-05T15:00:00Z");
     await s.ticks.slow();
     expect(await s.plan.chatMessage(CHAT.chatId, later.messageId)).toBeNull();
+  });
+
+  it("AP-2: an ask AI sorts as needing me now sends one notification, held during focus unless let through", async () => {
+    for (const [focus, through, sent] of [[false, false, true], [true, false, false], [true, true, true]] as const) {
+      const s = await setup({ urgent: true, focus, through });
+      await s.plan.setAsksOn(CHAT.chatId, true, "2026-11-04T15:00:00Z");
+      const member = (await s.plan.deliveryChats())[0]!.members![0]!;
+      s.said.push({ ...aMessage({ chatId: CHAT.chatId, authorId: member.userId, createdAt: "2026-11-04T15:00:10Z", text: "The portal is down, can you look?" }), modifiedAt: "2026-11-04T15:00:10Z" });
+      s.at("2026-11-04T15:00:30Z");
+      await s.ticks.slow();
+      s.at("2026-11-04T15:06:00Z");
+      await s.ticks.slow();
+      const asks = s.shown.filter((n) => n.kind === "asks");
+      expect(asks.map((n) => n.title)).toEqual(sent ? ["Urgent ask from fabrikam"] : []);
+    }
   });
 });

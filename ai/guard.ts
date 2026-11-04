@@ -62,7 +62,9 @@ export function guard(text: string, g: GuardInput): GuardHit | null {
   const mine = g.directory.find((c) => c.key === g.client);
   const ownWords = new Set([...(mine?.names ?? []), ...(mine?.projects ?? []), g.client].map((w) => w.trim().toLowerCase()));
   const ownIds = new Set(mine?.itemIds ?? []);
-  const numbers = new Set([...text.matchAll(/(?<![\w.])#?(\d{3,})(?![\w.])/g)].map((m) => Number(m[1])));
+  // Whole numbers that could be work item ids: not part of a date, time, amount, decimal or version (2026-11-06, 10:30,
+  // $1,500, 1.5, 15%). Only ids known to be another client's refuse; any other number passes.
+  const numbers = new Set([...text.matchAll(/(?<![\w.,$€£/:-])#?(\d{3,})(?![\w%]|[.,/:-]\d)/g)].map((m) => Number(m[1])));
   for (const c of g.directory) {
     if (c.key === g.client) continue;
     for (const w of [c.key, ...c.names]) if (w.trim().length >= 3 && !ownWords.has(w.trim().toLowerCase()) && phrase(w).test(text)) return { kind: "refused_client", rule: "client_name" };

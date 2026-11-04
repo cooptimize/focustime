@@ -3831,3 +3831,41 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .set-client-wrap:has(> .set-allow-ai) > .dchat { border-radius: 0; border-bottom: 0; }
 .set-client-wrap:has(> .set-allow-ai) > .set-client { border-bottom: 0; border-radius: 10px 10px 0 0; }
 .set-client-wrap:has(> .set-allow-ai) > .devops-write { border-radius: 0; border-bottom: 0; }
+
+/* AP-2: AI sorts asks, and Promises. */
+.ask-labels { display: inline-flex; gap: 4px; margin-left: auto; }
+.ask-label { font: inherit; font-size: var(--fs-1); font-weight: 600; padding: 0 8px; border-radius: 999px; border: 0; color: var(--text-muted); background: var(--surface); line-height: 1.7; }
+button.ask-label { cursor: pointer; }
+.ask-label.kind-bug, .ask-label.kind-incident { color: var(--risk); background: color-mix(in oklab, var(--risk) 12%, var(--surface)); }
+.ask-label.kind-request { color: var(--accent); background: color-mix(in oklab, var(--accent) 12%, var(--surface)); }
+.ask-label.urgency-now { color: var(--risk); background: color-mix(in oklab, var(--risk) 12%, var(--surface)); }
+.ask-label.urgency-this_week { color: var(--watch); background: color-mix(in oklab, var(--watch) 12%, var(--surface)); }
+.ask-why { margin: 0; font-size: var(--fs-2); }
+.ask-not-sorted { display: inline-flex; align-items: baseline; gap: 6px; color: var(--text-muted); }
+.ask-not-sorted .mini { padding-top: 0; padding-bottom: 0; }
+.ask-ai { display: grid; gap: 2px; }
+.ask-ai p { margin: 0; font-size: var(--fs-2); }
+.ask-likely { font-weight: 500; }
+.ask-draft-title { color: var(--text); }
+.ask-promised { color: var(--ok, var(--text)); font-weight: 500; }
+.asks-hidden { max-width: 1100px; margin: 20px 0 0; font-size: var(--fs-2); }
+.ask-hidden-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.ask-hidden { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 8px; align-items: baseline; padding: 6px 10px; border: 1px dashed var(--border); border-radius: 8px; }
+.ask-hidden .swatch { grid-row: span 2; }
+.ask-hidden-who { color: var(--text-muted); }
+.ask-hidden-text { grid-column: 2; overflow-wrap: anywhere; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ask-hidden-why { grid-column: 2; }
+.ask-hidden > .mini { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+.att-chip.urgent { padding: 2px 4px 2px 2px; gap: 6px; white-space: normal; }
+.att-chip.urgent .att-open { display: inline-flex; align-items: baseline; gap: 8px; padding: 2px 6px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.att-chip.urgent .att-tag { color: var(--risk); background: color-mix(in oklab, var(--risk) 14%, var(--surface)); }
+.ci-asks { margin: 8px 0 0; }
+.promise-meta { margin: 0; font-size: var(--fs-2); }
+.promise-form input[type="date"] { max-width: 180px; }
+.promise-form label:has(input[type="date"]) { flex: 0 1 180px; }
+.promise-channel { font-size: var(--fs-2); align-self: center; }
+@media (max-width: 599.98px) {
+  .ask-labels { margin-left: 0; }
+  .ask-hidden { grid-template-columns: auto minmax(0, 1fr); }
+  .ask-hidden > .mini { grid-column: 2; grid-row: auto; justify-self: start; }
+}

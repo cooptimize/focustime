@@ -5,7 +5,7 @@ import { hoursOn, type TimeModel } from "../week/hours.ts";
 import { userZone } from "../week/zone.ts";
 
 /** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
-export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry"] as const;
+export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export type AnyKind = NotifyKind | "test" | "held";
 
@@ -22,6 +22,7 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   vm: "My VM",
   followups: "Follow-ups due",
   expiry: "Expiring secrets",
+  asks: "Urgent asks",
 };
 export const KIND_HINT: Record<NotifyKind, string> = {
   plan_day: "At the start of a workday when the day isn't planned yet.",
@@ -36,28 +37,33 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   vm: "VM off at work start.",
   followups: "Once a workday when follow-ups are due today or overdue.",
   expiry: "Once a workday when a PAT or secret expires within 14 days.",
+  asks: "When AI sorts an ask from a client chat as needing you now.",
 };
 /** The ritual reminders, shown as one group in Settings. */
 export const RITUAL_KINDS: readonly NotifyKind[] = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction"];
 
 export type QuietMode = "outside_hours" | "off";
-/** pushDetails (P1): push messages say what the notice says (client names, work item titles); off by default. */
-export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean };
+/**
+ * pushDetails (P1): push messages say what the notice says (client names, work item titles); off by default.
+ * asksThroughFocus (AP-2): an urgent ask is sent during focus instead of held; off by default.
+ */
+export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean; asksThroughFocus: boolean };
 export const DEFAULT_NOTIFY: NotifySettings = {
   kinds: Object.fromEntries(NOTIFY_KINDS.map((k) => [k, true])) as Record<NotifyKind, boolean>,
   quiet: "outside_hours",
   quietPto: true,
   pushDetails: false,
+  asksThroughFocus: false,
 };
 
 /** Where clicking a notification opens FocusTime. */
 export type Route =
-  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" }
+  | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" | "asks" }
   | { view: "planweek"; weekStart: string }
   | { view: "followup"; id: number }
   | { view: "settings"; section: string };
 
-const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead"]);
+const SIMPLE = new Set(["today", "planday", "checkin", "closeout", "focus", "vm", "inbox", "ahead", "asks"]);
 const SECTION = /^[a-z]{2,20}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -115,7 +121,7 @@ export type Gate = "send" | "hold" | "off" | "quiet";
  * - The timer and meeting warnings belong to a session I started: never quiet, never held.
  * - quiet: outside working hours (unless quiet hours are off) or on a PTO day. Not sent and not marked, so a reminder
  *   still due when quiet hours end goes out then.
- * - hold: during a focus session; sent when the session ends.
+ * - hold: during a focus session; sent when the session ends (an urgent ask goes through when Settings allows it).
  * The test notification always goes out.
  */
 export function gate(kind: AnyKind, f: GateFacts): Gate {
@@ -124,7 +130,8 @@ export function gate(kind: AnyKind, f: GateFacts): Gate {
   if (kind === "timer" || kind === "meeting") return "send";
   if (f.settings.quietPto && f.pto) return "quiet";
   if (f.settings.quiet === "outside_hours" && !f.inHours) return "quiet";
-  if (f.focusRunning) return "hold";
+  // AP-2: an urgent ask waits for the session to end, unless I let urgent asks through.
+  if (f.focusRunning) return kind === "asks" && f.settings.asksThroughFocus ? "send" : "hold";
   return "send";
 }
 
@@ -219,6 +226,8 @@ export const notices = {
       at,
     };
   },
+  /** AP-2: an ask AI sorted as needing me now, once per ask. */
+  urgentAsk: (messageId: string, clientName: string, title: string, at: string): Notice => ({ kind: "asks", key: `ask:${messageId}`.slice(0, 200), title: `Urgent ask from ${clientName}`, body: `${title}\nClick to open Asks.`, buttons: [open("Open Asks")], route: "asks", at }),
   expiry: (date: string, lines: { text: string; section: string }[], at: string): Notice | null =>
     lines.length
       ? { kind: "expiry", key: `expiry:${date}`, title: lines.length === 1 ? "Expiring soon" : `${lines.length} expiring soon`, body: lines.slice(0, 3).map((l) => l.text).join("\n"), buttons: [open("Open Settings")], route: `settings:${lines[0]!.section}`, at }
