@@ -20,7 +20,7 @@ export const CHAPTERS = [
   { id: "devops", name: "DevOps first" },
   { id: "keys", name: "Shortcuts" },
   { id: "phone", name: "On your phone" },
-  { id: "asks", name: "Asks" },
+  { id: "asks", name: "Asks and promises" },
   { id: "questions", name: "Questions" },
 ] as const;
 export type ChapterId = (typeof CHAPTERS)[number]["id"];
@@ -248,17 +248,23 @@ export const PHONE = {
 
 // ---------- Chapter 7 ----------
 
-/** AP-1: Asks, requests from client chats picked out by plain rules (no AI), resolved in Inbox › Asks. */
+/** AP-1, AP-2: Asks, requests from client chats picked out by plain rules and sorted by AI when allowed; Promises. */
 export const ASKS = {
   eyebrow: "Chapter 7",
-  title: "Asks from client chats",
+  title: "Asks and promises from client chats",
   sub: "When a client asks for something in Teams, it lands in Inbox › Asks so it doesn't scroll away.",
   items: [
-    { q: "What is an ask?", a: "A message from someone outside Cooptimize in a client's Teams chat that looks like a request: it mentions someone from Cooptimize, asks a question, uses a phrase like \"can you\" or \"please\", or carries a file. A short \"thanks\" or \"ok\" never counts, and neither do your own messages or your colleagues'. Each card says which rule matched. Plain rules pick them out, no AI, and you can change the phrases in Settings › Clients › Asks." },
+    { q: "What is an ask?", a: "A message from someone outside Cooptimize in a client's Teams chat that looks like a request: it mentions someone from Cooptimize, asks a question, uses a phrase like \"can you\" or \"please\", or carries a file. A short \"thanks\" or \"ok\" never counts, and neither do your own messages or your colleagues'. Each card says which rule matched. Plain rules pick them out, and you can change the phrases in Settings › Clients › Asks." },
     { q: "How do I turn it on?", a: "Settings › Clients, on a client's chat: switch Read for asks on. The first time, Microsoft asks you to let FocusTime read your chat messages. Reading starts from that moment, never from history, and every client starts off." },
     { q: "When does it read?", a: "Every 5 minutes by default, only in your working hours and not on PTO days. Refresh in Inbox › Asks reads now. FocusTime only reads; it never posts, reacts or marks anything read in Teams." },
+    { q: "Can AI sort them?", a: "Yes, when Use AI (Settings › AI) and that client's Allow AI (Settings › Clients) are both on. Each new ask, and only asks, goes to the AI with that client's own context: the message, a few messages before it (authors as client or Cooptimize, no addresses) and the client's open DevOps items. The card then shows what kind it is (bug, request, question, incident) and how urgent, with the reason on hover or a click, a draft title, and \"Looks like #1234\" when it seems to be an item you already have. Create and Link start from that draft; you still see the preview and confirm every change. Turn Allow AI off for a client to stop it." },
+    { q: "Why does a card say Not sorted?", a: "AI is off for that client, the month's AI budget is used up, FocusTime's own check stopped the request (it mentioned another client), or the AI service didn't answer. The card works the same as without AI. Sort again tries once more; FocusTime never retries on its own." },
+    { q: "Where did an ask go?", a: "When the AI says a message needs nothing (an agreement, small talk), it's hidden instead of shown. \"Hidden by AI\" at the foot of Asks lists them with the reason; Show it anyway puts one back." },
+    { q: "What's \"Walked in\" on Today?", a: "An ask the AI sorted as needing attention now. It sits on Today's attention line with Start focus, which adds it to the block under way as walk-on work and starts the timer. You also get one notification, held while you focus unless Settings › Notifications lets urgent asks through. Asks still open after their window (two hours for now, Friday for this week) show in Check-in as \"Walked in, not resolved\"." },
     { q: "What can I do with an ask?", a: "Create a bug, story or feature in DevOps from it (with a preview first, and it needs that client's DevOps write access), link it to a work item you already have, mark it Handled with an optional note, or Dismiss it. Link, Handled and Dismiss can be undone. Keys: {key:ask.next} to move, {key:ask.primary} for the first action, {key:ask.handled} handled, {key:ask.dismiss} dismiss, {key:ask.context} the messages before it." },
-    { q: "What does FocusTime keep?", a: "The messages it reads, only for you and only under that client. Messages that didn't become asks are deleted after 14 days; asks keep their text with what you did. Delete stored messages on the chat in Settings › Clients removes them all now. Chat text never goes into logs." },
+    { q: "What does FocusTime keep?", a: "The messages it reads, only for you and only under that client. Messages that didn't become asks or promises are deleted after 14 days; asks and promises keep their text with what you did. Delete stored messages on the chat in Settings › Clients removes them all now. Chat text never goes into logs, and the AI request log keeps only counts and cost." },
+    { q: "What are Promises?", a: "Your own messages in those chats that commit you to something: \"I'll send it tomorrow\", \"let me check\", \"by Friday\". They're listed in Inbox › Promises with what, to whom, when it's due, your message and the ask it answers (that ask shows \"Promised\"). With AI on for the client, the AI reads what you promised and when; without it, the first line of your message, no date. The phrases are in Settings › Clients › Asks." },
+    { q: "What do I do with a promise?", a: "Make it a follow-up (who, what and the due date filled in, channel Teams), link it to a DevOps item, or mark it Done or Dismiss it (both can be undone). A promise made a follow-up closes when the follow-up is done; a linked one when the item is done in DevOps. FocusTime never closes one because of a later message." },
   ],
 };
 

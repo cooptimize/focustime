@@ -417,3 +417,25 @@ FocusTime has no usable key for this environment: `ft-openai-key` is missing fro
 - "The AI service's account is out of credit or over its limit": OpenAI's billing or the project's hard limit.
 - "The AI service is busy": rate limited after one retry.
 - "Not sent: ...": FocusTime's own guard refused it (another client, a secret, an outside email address); nothing left FocusTime.
+
+## AI sorting of asks, and Promises (AP-2)
+
+### What it costs (estimate, gpt-6-luna list prices on 2026-11-04)
+
+Only ask candidates (messages the AP-1 rules picked out) and the person's own messages with a promise phrase are sent; every other message costs nothing. One request is about 3,000 to 4,000 input tokens (instructions, the schema, up to 50 open items and 5 earlier messages) and 300 to 500 output tokens.
+
+| A day, per person and chat | Requests | Cost |
+|---|---|---|
+| 50 external messages, 10 of them ask candidates | 10 `asks.classify` | about 0.0065 USD |
+| 3 of my own messages with a promise phrase | 3 `promises.extract` | about 0.002 USD |
+| Together | 13 | under 0.01 USD a day, about 0.20 USD a month |
+
+That is about 2% of the 10 USD monthly default per person. A provider that fails costs one request per ask: nothing retries on its own (Sort again is by hand). Settings › AI shows the real month to date; Application Insights has the counts by task (`asks.classify`, `promises.extract`), never text.
+
+### Turning sorting off
+
+- For one client: Settings › Clients, that client's Allow AI off. New asks show "Not sorted: AI isn't allowed for <client>"; already sorted ones keep their labels. Promises fall back to the rule alone (first line, no date).
+- For one person: Settings › AI, Use AI off. Same as above for every client.
+- For everyone: remove `ft-openai-key` from the vault or set `FOCUSTIME_AI_PROVIDER=off`; Asks and Promises keep working on the rules alone.
+- Urgent asks notify only through Settings › Notifications "Urgent asks"; "Let urgent asks through" (off by default) lets them break into focus.
+

@@ -1030,7 +1030,15 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "asks.resolve":
     case "asks.reopen":
     case "asks.search":
+    case "asks.sort_again":
+    case "asks.show":
       return { run: () => env.setView("asks") };
+    case "promises.list":
+    case "promises.resolve":
+    case "promises.reopen":
+    case "promises.followup":
+    case "promises.link":
+      return { run: () => env.setView("promises") };
     case "asks.refresh": return { run: () => (env.setView("asks"), void env.runPlan("asks.refresh", {})) };
     case "asks.switch":
     case "asks.purge":
