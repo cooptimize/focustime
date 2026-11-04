@@ -41,6 +41,8 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   (await plan.addInvite({ uid: `inv-${tag}`, clientKey: "cooptimize", itemId: null, pickId: null, timeboxId: null, title: tag, url: null, start: "2026-11-03T15:00:00Z", end: "2026-11-03T15:30:00Z", attendees: [], teams: false, note: null }));
   (await plan.markOnce("reminder", MON));
   (await plan.setSetupStep("day", "done"));
+  await plan.addDeliveryChat("cooptimize", { chatId: `19:${tag}@thread.v2`, displayName: `${tag} delivery`, webUrl: null });
+  await plan.setDeliveryChatMembers(`19:${tag}@thread.v2`, [{ userId: null, displayName: tag, email: `${tag}@example.com`, tenantId: null }], NOW);
   (await plan.addNotice({ key: `n-${tag}`, kind: "followups", title: tag, body: tag, route: "inbox" }));
   (await plan.setRoadmapDates("cooptimize", 7001, { start: "2026-11-02", end: "2026-11-20" }));
   (await plan.logTeamsStatus({ op: "set", status: "Busy", minutes: 25, result: "done", message: null }));

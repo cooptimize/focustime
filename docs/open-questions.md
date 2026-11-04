@@ -157,3 +157,8 @@ Raised in step 13 (not blocking):
     - (c) The person adds FocusTime's webhook to their own schedule in the portal, by their own choice. FocusTime then receives the skip and delay links and offers them as a button in the evening notice. FocusTime never writes the schedule, but it needs a public endpoint, per-person webhook secrets, and a check of how the links behave.
     - (d) Start the VM again after it shuts down (start is allowed). This doesn't stop the shutdown, so work in progress is lost.
   - **Recommendation:** (a) now, with (b)'s one line if wanted. Consider (c) only after a manual test on one VM shows the skip link affects tonight alone and needs no sign-in, and only as opt-in that the person sets up in the portal.
+
+## T-2 (Nov 3)
+
+- Q-T2-1: Chat.ReadBasic must be granted for the tenant (run `infra/scripts/app-registration.sh` after its dry run) or allowed by each person at sign-in; until then Connections says "Not allowed yet" and the picker says so. Who runs it, and when?
+- Q-T2-2: The picker lists at most 500 chats (10 pages of 50, most recently changed first). Enough for Cooptimizers, or add a search that pages further?

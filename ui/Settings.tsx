@@ -7,6 +7,7 @@ import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
+import { DeliveryChatField, DeliveryChatsProvider, MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
 import { AutoSaveProvider, SaveMark, useAutoSave, type AutoSave } from "./settings/autosave.tsx";
 import { COLLAB_LENGTHS, TEXT_SIZES, THEME_NAMES, THEMES, type TextSize, type Theme } from "../config/schema.ts";
 import { TEXT_SIZE_NAMES } from "./textsize.ts";
@@ -247,6 +248,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
       return d.risk ? <RiskForm {...p} /> : null;
     case "clients":
       return (
+        <DeliveryChatsProvider>
         <div className="set-clients">
           {d.dataverseProblem && (
             <p className="set-problem" role="status">
@@ -267,6 +269,7 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
             </details>
           )}
         </div>
+        </DeliveryChatsProvider>
       );
     case "connections":
       return <Connections {...p} />;
@@ -1028,6 +1031,7 @@ function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSa
     <div className="set-client-wrap" style={{ "--c": c.setting.color ? (c.setting.color.startsWith("#") ? c.setting.color : `var(--client-${c.setting.color})`) : "var(--client-none)" } as CSSProperties}>
       <ClientForm client={c} data={d} onSavedData={p.onSavedData} />
       {c.devops ? <WriteAccess client={c} onDone={p.reload} /> : d.dataverseReached && <p className="muted set-client-note">No DevOps set up for {c.setting.name ?? c.dataverseName ?? c.key} in Dataverse, so there is nothing to write to. Change it in Dataverse.</p>}
+      <DeliveryChatField clientKey={c.key} clientName={c.setting.name ?? c.dataverseName ?? c.key} />
     </div>
   );
 }
@@ -1112,6 +1116,7 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
       </ul>
       {p.reconnected && <InlineMoment line={`${SOURCE_NAMES[p.reconnected]} is connected again.`} />}
       <OutlookWriteRow />
+      <MicrosoftPermissions />
       {p.devops && p.devops.length > 0 && (
         <>
           <h3>DevOps per client</h3>
