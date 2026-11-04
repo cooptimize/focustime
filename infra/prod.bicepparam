@@ -21,3 +21,5 @@ param dataverseUrl = 'https://cooptimize.crm.dynamics.com'
 param dataverseTenantId = 'abf29d42-2ea9-422b-b0af-ed7cb5595b7e'
 param dataverseClientId = 'bf36f621-3e9f-43f9-ab47-89fb89fe7f4a'
 param feedbackLive = true // F1: Send feedback creates stories under Feature #496 (org, project and feature: main.bicep's defaults)
+// D522: who registers client chats, from the deploy workflow's FT_ADMINS (the GitHub variable; object ids only).
+param admins = readEnvironmentVariable('FT_ADMINS', '')
