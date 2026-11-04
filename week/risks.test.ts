@@ -166,3 +166,36 @@ describe("Outlook out of office and all-day events (Q7)", () => {
     expect(w.days.flatMap((d) => [...d.am.risks, ...d.pm.risks])).toEqual([]);
   });
 });
+
+// FocusTime's own time boxes on Outlook and my events with no other attendees aren't meetings: they count neither as
+// meeting minutes nor against the free stretch in the risk rules. Planning still sees them as taken time (freeGaps).
+describe("time boxes and events with no one else aren't meetings (D-risk)", () => {
+  const slotPM = (events: CalEvent[]) => buildWeek({ weekStart: "2026-11-02", patterns: [adatum], events, config: noStanding }).days[1]!.pm;
+  const external = meeting(T("13:00"), T("14:00"), { title: "Client sync" });
+
+  it("a 60-minute external meeting and two FocusTime time boxes (120 minutes): 60 meeting minutes, not at risk", () => {
+    const boxes = [meeting(T("14:00"), T("15:00"), { title: "Story 1", notMeeting: "timebox" }), meeting(T("15:00"), T("16:00"), { title: "Story 2", notMeeting: "timebox" })];
+    const pm = slotPM([external, ...boxes]);
+    expect(pm.busyMeetingMinutes).toBe(60);
+    expect(pm.risks.filter((r) => r.severity === "at_risk")).toEqual([]);
+    expect(summary(pm.risks)).toEqual([]);
+  });
+
+  it("the same with events I made that no one else is on", () => {
+    const solo = [meeting(T("14:00"), T("15:00"), { notMeeting: "solo" }), meeting(T("15:00"), T("16:00"), { notMeeting: "solo" })];
+    const pm = slotPM([external, ...solo]);
+    expect(pm.busyMeetingMinutes).toBe(60);
+    expect(summary(pm.risks)).toEqual([]);
+  });
+
+  it("without the flags the same events are meetings, as before", () => {
+    const pm = slotPM([external, meeting(T("14:00"), T("15:00")), meeting(T("15:00"), T("16:00"))]);
+    expect(pm.busyMeetingMinutes).toBe(180);
+    expect(summary(pm.risks)).toEqual(["meeting_load:at_risk", "no_focus_window:at_risk"]);
+  });
+
+  it("planning still sees them as taken: the free gaps are only around them", () => {
+    const pm = slotPM([external, meeting(T("14:00"), T("16:00"), { notMeeting: "timebox" })]);
+    expect(pm.freeGaps.map((g) => g.minutes)).toEqual([30, 60]);
+  });
+});
