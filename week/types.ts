@@ -80,6 +80,12 @@ export type CalEvent = {
   showAs?: ShowAs;
   isPersonal: boolean;
   responseStatus?: "none" | "organizer" | "accepted" | "tentative" | "declined" | "notResponded";
+  /**
+   * Not a meeting, though on the calendar: "timebox" for a FocusTime time box on Outlook (its marker, tb-), "solo" for an
+   * event I organize with no other attendees. The risk rules count neither as meeting minutes nor against the free
+   * stretch; planning still sees them as taken time. Unset: a meeting (unknown counts as a meeting).
+   */
+  notMeeting?: "timebox" | "solo";
   /** Set on unavailable time (source "focustime"): its plan store id and note. */
   unavailable?: { id: number; note: string | null };
 };

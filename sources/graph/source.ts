@@ -8,13 +8,18 @@ import type { AppSecretAccount, Loopback, SnapshotStore } from "../../host/types
 import { createOAuthClient, microsoftProvider, type ConnectOptions, type Keyring } from "../oauth/oauth.ts";
 import { weekRange } from "../when.ts";
 import { normalizeGraphEvents, type GraphEvent } from "./normalize.ts";
-import { createGraphWriter, type GraphWriter } from "./write.ts";
+import { createGraphWriter, MARKER_PROP, type GraphWriter } from "./write.ts";
 import { createPeopleReader, type PeopleReader } from "./people.ts";
 import { createScheduleReader, type ScheduleReader } from "./schedule.ts";
 import type { WriteAccess } from "../oauth/oauth.ts";
 
 const API = "https://graph.microsoft.com/v1.0/";
-export const GRAPH_SELECT = "subject,start,end,isAllDay,showAs,responseStatus,isCancelled";
+export const GRAPH_SELECT = "subject,start,end,isAllDay,showAs,responseStatus,isCancelled,isOrganizer,attendees";
+/**
+ * FocusTime's marker on the read, so a time box this store has no record of (an earlier FocusTime's) isn't a meeting
+ * either. Graph needs Calendars.Read or more for extended properties, so only a ReadWrite read token asks for it.
+ */
+export const READ_EXPAND_MARKER = `singleValueExtendedProperties($filter=id eq '${MARKER_PROP}')`;
 
 export type CalendarDeps<C> = {
   config: C;
@@ -52,6 +57,7 @@ export function createOutlookSource(deps: CalendarDeps<OutlookConfig>) {
     first.searchParams.set("startDateTime", range.start);
     first.searchParams.set("endDateTime", range.end);
     first.searchParams.set("$select", GRAPH_SELECT);
+    if (deps.calendarScope === "Calendars.ReadWrite") first.searchParams.set("$expand", READ_EXPAND_MARKER);
     first.searchParams.set("$top", "100");
     // Immutable ids (step 12): the same id the writer gets back, so FocusTime's own events are recognized.
     const headers = { prefer: `outlook.timezone="${deps.timeZone}", IdType="ImmutableId"` };

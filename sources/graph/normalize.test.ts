@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import page1 from "./fixtures/calendarview-page1.json" with { type: "json" };
 import page2 from "./fixtures/calendarview-page2.json" with { type: "json" };
-import { normalizeGraphEvents, type GraphEvent } from "./normalize.ts";
+import { normalizeGraphEvents, notMeetingOf, type GraphEvent } from "./normalize.ts";
+import { MARKER_PROP } from "./write.ts";
 
 const items = [...page1.value, ...page2.value] as GraphEvent[];
 const NY = "America/New_York";
@@ -60,5 +61,27 @@ describe("normalizeGraphEvents (sanitized recorded calendarView, two pages)", ()
   it("labels an event with no subject", () => {
     const r = normalizeGraphEvents([{ ...items[0]!, subject: null } as GraphEvent], NY);
     expect(r.events[0]?.title).toBe("(No title)");
+  });
+});
+
+describe("which events aren't meetings (the risk rules' notMeeting)", () => {
+  const tb = { id: MARKER_PROP, value: "tb-6f1d2c3b-4a5e-4f60-8172-93a4b5c6d7e8" };
+  it("FocusTime's time box, by its marker, whoever is on it", () => {
+    expect(notMeetingOf({ singleValueExtendedProperties: [tb], isOrganizer: true, attendees: [] })).toBe("timebox");
+    expect(notMeetingOf({ singleValueExtendedProperties: [{ ...tb, id: MARKER_PROP.toUpperCase() }] })).toBe("timebox");
+  });
+  it("my event with no attendees", () => {
+    expect(notMeetingOf({ isOrganizer: true, attendees: [] })).toBe("solo");
+  });
+  it("a meeting otherwise: others on it, someone else organizes it, a help invite, or unknown", () => {
+    expect(notMeetingOf({ isOrganizer: true, attendees: [{ emailAddress: { address: "a@contoso.example" } }] })).toBeUndefined();
+    expect(notMeetingOf({ isOrganizer: false, attendees: [] })).toBeUndefined();
+    expect(notMeetingOf({ isOrganizer: true, attendees: [{}], singleValueExtendedProperties: [{ id: MARKER_PROP, value: "inv-6f1d2c3b-4a5e-4f60-8172-93a4b5c6d7e8" }] })).toBeUndefined();
+    expect(notMeetingOf({})).toBeUndefined();
+  });
+  it("keeps only the word on the event, never attendees", () => {
+    const [e] = normalizeGraphEvents([{ ...items[0]!, isOrganizer: true, attendees: [] }], NY).events;
+    expect(e?.notMeeting).toBe("solo");
+    expect(JSON.stringify(e)).not.toMatch(/attendees|isOrganizer/);
   });
 });
