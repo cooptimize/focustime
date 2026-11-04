@@ -114,7 +114,7 @@ describe("follow-ups due", () => {
 
 describe("notifications that no longer apply (step 16.2, Q91)", () => {
   const at = "2026-11-02T15:00:00Z";
-  const none: DoneFacts = { committed: () => false, checkedIn: () => false, closedOut: () => false, weekCommitted: () => false, followUpOpen: () => true, dueCount: () => 1, timerWaiting: () => true, vmOff: () => true, vmChanged: () => true };
+  const none: DoneFacts = { committed: () => false, checkedIn: () => false, closedOut: () => false, weekCommitted: () => false, followUpOpen: () => true, dueCount: () => 1, timerWaiting: () => true, vmOff: () => true };
   const yes = (over: Partial<DoneFacts>) => ({ ...none, ...over });
   it("each kind closes on its own signal, and not before", () => {
     const cases: [Notice, Partial<DoneFacts>][] = [
@@ -126,7 +126,6 @@ describe("notifications that no longer apply (step 16.2, Q91)", () => {
       [notices.week("2026-11-09", false, at), { weekCommitted: (w) => w === "2026-11-09" }],
       [notices.timerEnd(false, "A", "2026-11-02T14:00:00Z", at), { timerWaiting: (s) => s !== "2026-11-02T14:00:00Z" }],
       [notices.vmOff("2026-11-02", "vm", at), { vmOff: () => false }],
-      [notices.vmChanged("2026-11-02", "Delayed", at), { vmChanged: () => false }],
       [notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }], at)!, { followUpOpen: (id) => id !== 7 }],
       [notices.followUps("2026-11-02", [{ id: 7, what: "A", overdue: false }, { id: 8, what: "B", overdue: true }], at)!, { dueCount: () => 0 }],
       // Step 17: closed once Plan ahead was opened for that ritual.
@@ -137,6 +136,10 @@ describe("notifications that no longer apply (step 16.2, Q91)", () => {
       expect(noticeDone(n, none), n.key).toBe(false);
       expect(noticeDone(n, yes(f)), n.key).toBe(true);
     }
+  });
+  it("D475: an \"auto-shutdown still changed\" notice from before closes at once (there is nothing to restore)", () => {
+    const old: Notice = { kind: "vm", key: "vm_changed:2026-11-02", title: "Auto-shutdown is still changed", body: "x", buttons: [{ key: "restore", label: "Restore" }], route: "vm", at, ref: "2026-11-02" };
+    expect(noticeDone(old, none)).toBe(true);
   });
   it("another day's plan doesn't close today's; an unknown VM state never closes; meetings and expiry stay", () => {
     expect(noticeDone(notices.planDay("2026-11-02", at), yes({ committed: (d) => d === "2026-11-03" }))).toBe(false);

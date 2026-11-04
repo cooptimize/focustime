@@ -649,7 +649,6 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "vm.status":
     case "vm.preview":
     case "vm.confirm":
-    case "vm.restore":
     case "vm.dismiss_prompt":
     case "vm.log":
     case "vm.start_now":

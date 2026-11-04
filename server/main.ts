@@ -33,6 +33,7 @@ import { copiesOwnerSecrets, copyOwnerSecrets, OWNER_SECRETS_MARK, writePatAccou
 import { personTicks, type PersonTicks } from "./ticks.ts";
 import { createScheduler } from "./scheduler.ts";
 import { wakeStoreOn } from "../store/wake-store.ts";
+import { cancelShutdownRestores } from "../store/vm-restores.ts";
 import { keepRoute, takeRoute } from "./open-route.ts";
 import { join, resolve } from "node:path";
 import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
@@ -241,6 +242,11 @@ if (!opened) {
   process.exit(1);
 }
 const db: Conn = opened.conn;
+// D475: next-morning auto-shutdown restores from before (they'd write the schedule) never run; mark them cancelled.
+await cancelShutdownRestores(db, instantNow).then(
+  (c) => c.length && log({ source: "azure", op: "restore_cancelled", count: c.length }),
+  () => log({ source: "azure", op: "restore_cancelled", kind: "failed" }),
+);
 /** P1: the app's VAPID key (the hosted app's Key Vault); null in the developer loop, where push isn't offered. */
 let vapidSource: VapidSource | null = null;
 if (host.kind === "azure" && process.env.FOCUSTIME_KEYVAULT_URL) {
