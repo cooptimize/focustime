@@ -1,8 +1,9 @@
-// T-2: client chats (Settings > Clients) and the Microsoft permissions list (Settings > Connections). Read only
-// against Teams: chat names and members through the person's own sign-in (Chat.ReadBasic), never messages. A chat is
-// registered for one client of one person, as its Delivery team or its Customer collaboration chat (T-2.1, one each). Members are cached in the plan store
-// and read again when the Clients section opens or on Refresh, never on a timer. Nothing here logs a chat or a person.
-import { CHAT_ID, CHAT_KINDS, chatName, flagMembers, isExternal, kindsOf, kindWarning, teamsLink, type ChatAccess, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChat, type DeliveryChatView } from "../plan/chats.ts";
+// T-2 and AP-1: client chats (Settings > Clients) and the Microsoft permissions list (Settings > Connections). Read only
+// against Teams: chat names and members through the person's own sign-in (Chat.ReadBasic), never messages. A client
+// can have several chats; a chat is registered for one client of one person, labelled Delivery team or Customer
+// collaboration (suggested from its members, changeable). Members are cached in the plan store and read again once a
+// day when the Clients section opens, or on Refresh; never on a timer. Nothing here logs a chat or a person.
+import { CHAT_ID, CHAT_KINDS, chatName, flagMembers, isExternal, kindOf, kindWarning, membersStale, suggestKind, teamsLink, type ChatAccess, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChat, type DeliveryChatView } from "../plan/chats.ts";
 export type { ChatAccess, ChatPickerData, ChatsData, DeliveryChatView } from "../plan/chats.ts";
 import { permissionRows, type PermissionRow } from "../plan/permissions.ts";
 import { HttpError, NetworkError } from "../sources/calendar/http.ts";
@@ -13,7 +14,7 @@ import { storedIdentity, type MicrosoftAccount } from "./account.ts";
 import { mapSeq } from "./seq.ts";
 import type { ActionResponse } from "./types.ts";
 
-export type ChatAction = "chats.registered" | "chats.list" | "chats.add" | "chats.remove" | "chats.refresh" | "permissions.status";
+export type ChatAction = "chats.registered" | "chats.list" | "chats.add" | "chats.remove" | "chats.kind" | "chats.refresh" | "permissions.status";
 
 export type ChatContext = {
   plan?: PlanStore | undefined;
@@ -84,24 +85,23 @@ async function refreshMembers(ctx: ChatContext, plan: PlanStore, chats: readonly
   return { errors, reason };
 }
 
-async function registered(ctx: ChatContext, plan: PlanStore, refresh: false | "all" | string): Promise<ChatsData> {
+/**
+ * The registered chats as views. `refresh`: false reads nothing; "stale" reads the members of chats not read in the
+ * last day (the Clients section opening); "all" or a client key reads them all, or that client's (Refresh).
+ */
+async function registered(ctx: ChatContext, plan: PlanStore, refresh: false | "stale" | "all" | { clientKey: string }): Promise<ChatsData> {
   const home = await ctx.homeTenant();
   let chats = await plan.deliveryChats();
   let errors = new Map<string, string>();
   let reason: ChatAccess | null = ctx.account?.chats ? null : "signed_out";
-  if (refresh && chats.length) {
-    const r = await refreshMembers(ctx, plan, refresh === "all" ? chats : chats.filter((c) => c.clientKey === refresh));
+  const due = !refresh ? [] : refresh === "all" ? chats : refresh === "stale" ? chats.filter((c) => membersStale(c, ctx.now())) : chats.filter((c) => c.clientKey === refresh.clientKey);
+  if (due.length) {
+    const r = await refreshMembers(ctx, plan, due);
     errors = r.errors;
     reason = r.reason;
     chats = await plan.deliveryChats();
   }
-  const kinds = kindsOf(chats, home);
-  const views = chats.flatMap((c) => {
-    const kind = kinds.get(c.chatId);
-    return kind ? [view(c, kind, home, errors.get(c.chatId) ?? null)] : [];
-  });
-  views.sort((a, b) => a.clientKey.localeCompare(b.clientKey) || CHAT_KINDS.indexOf(a.kind) - CHAT_KINDS.indexOf(b.kind));
-  return { available: reason === null, reason, homeTenant: home, chats: views };
+  return { available: reason === null, reason, homeTenant: home, chats: chats.map((c) => view(c, kindOf(c, home), home, errors.get(c.chatId) ?? null)) };
 }
 
 const only = (input: unknown, keys: readonly string[]): Record<string, unknown> | null => {
@@ -126,12 +126,12 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
       case "chats.registered": {
         const o = only(input, ["refresh"]);
         if (!o || (o.refresh !== undefined && typeof o.refresh !== "boolean")) return bad("chats.registered takes { refresh? }");
-        return { ok: true, data: await registered(ctx, plan, o.refresh ? "all" : false) };
+        return { ok: true, data: await registered(ctx, plan, o.refresh ? "stale" : false) };
       }
       case "chats.refresh": {
         const o = only(input, ["clientKey"]);
         if (!o || (o.clientKey !== undefined && typeof o.clientKey !== "string")) return bad("chats.refresh takes { clientKey? }");
-        return { ok: true, data: await registered(ctx, plan, (o.clientKey as string | undefined) ?? "all") };
+        return { ok: true, data: await registered(ctx, plan, typeof o.clientKey === "string" ? { clientKey: o.clientKey } : "all") };
       }
       case "chats.list": {
         if (!only(input, [])) return bad("chats.list takes {}");
@@ -147,8 +147,7 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
       }
       case "chats.add": {
         const o = only(input, ["clientKey", "kind", "chatId"]);
-        if (!o || typeof o.clientKey !== "string" || !CHAT_KINDS.includes(o.kind as ChatKind) || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId)) return bad("chats.add takes { clientKey, kind, chatId }");
-        const kind = o.kind as ChatKind;
+        if (!o || typeof o.clientKey !== "string" || (o.kind !== undefined && !CHAT_KINDS.includes(o.kind as ChatKind)) || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId)) return bad("chats.add takes { clientKey, kind?, chatId }");
         const keys = await ctx.clientKeys();
         if (!keys) return bad("Dataverse couldn't be read, so FocusTime can't check the client. Try again in a moment", 503);
         if (!keys.has(o.clientKey)) return bad("That isn't one of your clients", 404);
@@ -162,12 +161,17 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
           return bad(ACCESS_TEXT[accessOf(e)], 409);
         }
         if (!chat) return bad("That isn't one of your Teams group chats", 404);
-        // A row from before T-2.1 (no kind stored) that holds this slot, or is this very chat, makes way first.
-        const now = await plan.deliveryChats();
-        const held = kindsOf(now, await ctx.homeTenant());
-        for (const c of now) if (c.clientKey === o.clientKey && !c.kind && (held.get(c.chatId) === kind || c.chatId === chat.id)) await plan.removeDeliveryChat(c.chatId);
-        const saved = await plan.setDeliveryChat(o.clientKey, kind, { chatId: chat.id, displayName: chatName(chat), webUrl: chat.webUrl });
+        // The kind given, or the one its members suggest (anyone from outside Cooptimize: Customer collaboration).
+        const home = await ctx.homeTenant();
+        const kind = (o.kind as ChatKind | undefined) ?? (home ? suggestKind(chat.members, home) : "delivery");
+        const saved = await plan.addDeliveryChat(o.clientKey, kind, { chatId: chat.id, displayName: chatName(chat), webUrl: chat.webUrl });
         await refreshMembers(ctx, plan, [saved]);
+        return { ok: true, data: await registered(ctx, plan, false) };
+      }
+      case "chats.kind": {
+        const o = only(input, ["chatId", "kind"]);
+        if (!o || typeof o.chatId !== "string" || !CHAT_ID.test(o.chatId) || !CHAT_KINDS.includes(o.kind as ChatKind)) return bad("chats.kind takes { chatId, kind }");
+        await plan.setDeliveryChatKind(o.chatId, o.kind as ChatKind);
         return { ok: true, data: await registered(ctx, plan, false) };
       }
       case "chats.remove": {

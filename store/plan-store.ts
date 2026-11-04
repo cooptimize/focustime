@@ -1,7 +1,7 @@
 // Local plan store (D23): SQLite through Node's built-in node:sqlite, under ~/.local/share/focustime/.
 // Holds only FocusTime's own plan (day plans, picks, draft stories) and a few one-time markers.
 // Nothing here is ever written to DevOps, Outlook, Google or Dataverse.
-import { CHAT_ID, CHAT_KINDS, KIND_NAME, type ChatKind, type ChatMember, type DeliveryChat } from "../plan/chats.ts";
+import { CHAT_ID, CHAT_KINDS, type ChatKind, type ChatMember, type DeliveryChat } from "../plan/chats.ts";
 import { USER_SCHEMA_VERSION } from "./user-data.ts";
 import type { StoreFiles } from "../host/types.ts";
 import { DatabaseSync } from "node:sqlite";
@@ -2601,11 +2601,11 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       return ((await db.all("SELECT * FROM delivery_chats ORDER BY client_key, position")) as Row[]).map(toDeliveryChat);
     },
     /**
-     * T-2.1: sets a client's chat of one kind (its Delivery team or Customer collaboration chat), replacing the one it
-     * had. A chat belongs to one client and one kind: one registered for another client, or as this client's other
-     * kind, is refused; the same chat in the same place changes nothing.
+     * AP-1: registers a chat for a client, labelled with a kind (Delivery team or Customer collaboration). A client can
+     * have several chats; a chat belongs to one client only: one registered for another client is refused. The same
+     * chat for the same client keeps its place and takes the kind given.
      */
-    async setDeliveryChat(clientKey: string, kind: ChatKind, c: { chatId: string; displayName: string; webUrl: string | null }): Promise<DeliveryChat> {
+    async addDeliveryChat(clientKey: string, kind: ChatKind, c: { chatId: string; displayName: string; webUrl: string | null }): Promise<DeliveryChat> {
       checkDeliveryChat(clientKey, c.chatId);
       if (!CHAT_KINDS.includes(kind)) throw new PlanError("Not a kind of chat");
       const name = c.displayName.trim().slice(0, 400) || "Group chat";
@@ -2613,16 +2613,26 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       return tx(async () => {
         const had = (await db.get("SELECT * FROM delivery_chats WHERE chat_id = ?", c.chatId)) as Row | undefined;
         if (had && had.client_key !== clientKey) throw new PlanError("That chat is already registered for another client");
-        if (had && had.chat_kind === kind) return toDeliveryChat(had);
-        if (had) throw new PlanError(`That chat is already this client's ${KIND_NAME[had.chat_kind as ChatKind] ?? "other"} chat. Clear it there first`);
-        await db.run("DELETE FROM delivery_chats WHERE client_key = ? AND chat_kind = ?", clientKey, kind);
-        const last = (await db.get("SELECT MAX(position) AS p FROM delivery_chats WHERE client_key = ?", clientKey)) as Row;
         const at = stamp();
-        await db.run(
-          "INSERT INTO delivery_chats (chat_id, client_key, display_name, web_url, chat_kind, is_primary, position, members_json, members_fetched_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, NULL, NULL, ?, ?)",
-          c.chatId, clientKey, name, webUrl, kind, (last.p === null || last.p === undefined ? -1 : Number(last.p)) + 1, at, at,
-        );
+        if (had) {
+          if (had.chat_kind !== kind) await db.run("UPDATE delivery_chats SET chat_kind = ?, updated_at = ? WHERE chat_id = ?", kind, at, c.chatId);
+        } else {
+          const last = (await db.get("SELECT MAX(position) AS p FROM delivery_chats WHERE client_key = ?", clientKey)) as Row;
+          await db.run(
+            "INSERT INTO delivery_chats (chat_id, client_key, display_name, web_url, chat_kind, is_primary, position, members_json, members_fetched_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, NULL, NULL, ?, ?)",
+            c.chatId, clientKey, name, webUrl, kind, (last.p === null || last.p === undefined ? -1 : Number(last.p)) + 1, at, at,
+          );
+        }
         return toDeliveryChat((await db.get("SELECT * FROM delivery_chats WHERE chat_id = ?", c.chatId)) as Row);
+      });
+    },
+    /** AP-1: changes a registered chat's kind label. */
+    async setDeliveryChatKind(chatId: string, kind: ChatKind): Promise<void> {
+      if (!CHAT_ID.test(chatId)) throw new PlanError("Not a Teams chat id");
+      if (!CHAT_KINDS.includes(kind)) throw new PlanError("Not a kind of chat");
+      return tx(async () => {
+        const r = await db.run("UPDATE delivery_chats SET chat_kind = ?, updated_at = ? WHERE chat_id = ?", kind, stamp(), chatId);
+        if (!r.changes) throw new PlanError("That chat isn't registered");
       });
     },
     /** T-2: forgets one client chat. */
@@ -2634,7 +2644,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async setDeliveryChatMembers(chatId: string, members: readonly ChatMember[], fetchedAt: string, displayName?: string): Promise<void> {
       if (!CHAT_ID.test(chatId)) throw new PlanError("Not a Teams chat id");
       if (members.length > 1000) throw new PlanError("Too many members");
-      const clean = members.map((m) => ({ userId: short(m.userId, 64), displayName: short(m.displayName, 200), email: short(m.email, 320), tenantId: short(m.tenantId, 64) }));
+      const clean = members.map((m) => ({ userId: short(m.userId, 64), displayName: short(m.displayName, 200), email: short(m.email, 320), tenantId: short(m.tenantId, 64), ...(m.guest ? { guest: true } : {}) }));
       return tx(async () => {
         const name = displayName?.trim() ? displayName.trim().slice(0, 400) : null;
         if (name) await db.run("UPDATE delivery_chats SET members_json = ?, members_fetched_at = ?, display_name = ?, updated_at = ? WHERE chat_id = ?", JSON.stringify(clean), fetchedAt, name, stamp(), chatId);

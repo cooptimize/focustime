@@ -3,7 +3,8 @@
 // - My group chats: GET /me/chats?$expand=members (50 a page, at most MAX_PAGES pages), group chats kept, the rest
 //   dropped. lastMessagePreview is never asked for: it carries message text.
 // - One chat's members: GET /chats/{id}/members (the whole list; the expanded one stops at 25).
-// From answers only ids, topic, webUrl, the two times and each member's userId, displayName, email and tenantId are kept.
+// From answers only ids, topic, webUrl, the two times and each member's userId, displayName, email, tenantId and guest
+// role are kept.
 // Logs carry the op, status, count and duration: never a chat id, a topic or a person.
 import type { Logger } from "../../log/logger.ts";
 import { CHAT_ID, type ChatMember, type ChatSummary } from "../../plan/chats.ts";
@@ -25,11 +26,12 @@ type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : null);
 const str = (v: unknown, max = 400) => (typeof v === "string" && v.length > 0 && v.length <= max ? v : null);
 
-/** A member from Graph (aadUserConversationMember), only the four fields T-2 uses. */
+/** A member from Graph (aadUserConversationMember): the four fields T-2 uses, and whether its roles include guest. */
 export function memberOf(v: unknown): ChatMember | null {
   const m = obj(v);
   if (!m) return null;
-  return { userId: str(m.userId, 64), displayName: str(m.displayName, 200), email: str(m.email, 320), tenantId: str(m.tenantId, 64) };
+  const guest = Array.isArray(m.roles) && m.roles.some((r) => typeof r === "string" && r.toLowerCase() === "guest");
+  return { userId: str(m.userId, 64), displayName: str(m.displayName, 200), email: str(m.email, 320), tenantId: str(m.tenantId, 64), ...(guest ? { guest: true } : {}) };
 }
 
 /** A chat from Graph, or null when it isn't a group chat we can use. */

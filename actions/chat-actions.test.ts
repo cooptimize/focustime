@@ -36,7 +36,7 @@ const data = (r: Awaited<ReturnType<typeof chatAction>>) => {
   return r.data as ChatsData;
 };
 
-describe("delivery chat actions (T-2)", () => {
+describe("delivery chat actions (T-2, AP-1)", () => {
   it("adds with the name from Teams, reads members, flags the external one", async () => {
     const { ctx } = await setup();
     const d = data(await chatAction(ctx, "chats.add", { clientKey: "northwind", kind: "customer", chatId: "19:northwind@thread.v2" }));
@@ -50,7 +50,6 @@ describe("delivery chat actions (T-2)", () => {
     [{ clientKey: "contoso", kind: "delivery", chatId: "19:northwind@thread.v2" }, 404, "That isn't one of your clients"],
     [{ clientKey: "northwind", kind: "delivery", chatId: "19:notmine@thread.v2" }, 404, "That isn't one of your Teams group chats"],
     [{ clientKey: "northwind", kind: "delivery", chatId: "not a chat id" }, 400, "chats.add takes"],
-    [{ clientKey: "northwind", chatId: "19:northwind@thread.v2" }, 400, "chats.add takes"],
     [{ clientKey: "northwind", kind: "primary", chatId: "19:northwind@thread.v2" }, 400, "chats.add takes"],
     [{ clientKey: "northwind", kind: "delivery", chatId: "19:northwind@thread.v2", displayName: "spoofed" }, 400, "chats.add takes"],
   ])("refuses %j", async (input, status, error) => {
@@ -90,14 +89,37 @@ describe("delivery chat actions (T-2)", () => {
     expect([d.chats[0]!.kind, d.chats[0]!.warning]).toEqual(["delivery", "1 person from outside Cooptimize is in this internal chat"]);
   });
 
-  it("a row from before T-2.1 takes the kind its members suggest, and makes way when that slot is set", async () => {
-    const { ctx, db } = await setup();
-    data(await chatAction(ctx, "chats.add", { clientKey: "northwind", kind: "delivery", chatId: "19:northwind@thread.v2" }));
-    await db.run("UPDATE delivery_chats SET chat_kind = NULL");
-    // One external member: it shows as the customer chat.
-    expect(data(await chatAction(ctx, "chats.registered", {})).chats.map((c) => [c.chatId, c.kind])).toEqual([["19:northwind@thread.v2", "customer"]]);
-    const after = data(await chatAction(ctx, "chats.add", { clientKey: "northwind", kind: "customer", chatId: "19:other@thread.v2" }));
-    expect(after.chats.map((c) => [c.chatId, c.kind])).toEqual([["19:other@thread.v2", "customer"]]);
+  it("a client takes several chats; with no kind given, the members suggest it; the label can change", async () => {
+    const { ctx } = await setup({ groupChats: async () => [aChat({ id: "19:a@thread.v2", topic: "Team", members: [aChatMember()] }), aChat({ id: "19:b@thread.v2", topic: "Collab", members: [aChatMember(), aChatMember({ external: true })] })] });
+    data(await chatAction(ctx, "chats.add", { clientKey: "northwind", chatId: "19:a@thread.v2" }));
+    const d = data(await chatAction(ctx, "chats.add", { clientKey: "northwind", chatId: "19:b@thread.v2" }));
+    expect(d.chats.map((c) => [c.chatId, c.kind])).toEqual([["19:a@thread.v2", "delivery"], ["19:b@thread.v2", "customer"]]);
+    const k = data(await chatAction(ctx, "chats.kind", { chatId: "19:a@thread.v2", kind: "customer" }));
+    expect(k.chats.map((c) => c.kind)).toEqual(["customer", "customer"]);
+    expect((await chatAction(ctx, "chats.kind", { chatId: "19:a@thread.v2", kind: "primary" })).ok).toBe(false);
+  });
+
+  it("opening Clients reads members once a day; Refresh reads them now", async () => {
+    let reads = 0;
+    let nowIso = "2026-11-04T15:00:00Z";
+    const { ctx } = await setup({ members: async () => (reads++, [aChatMember()]) });
+    const c = { ...ctx, now: () => nowIso };
+    data(await chatAction(c, "chats.add", { clientKey: "northwind", chatId: "19:northwind@thread.v2" }));
+    expect(reads).toBe(1);
+    nowIso = "2026-11-05T09:00:00Z";
+    data(await chatAction(c, "chats.registered", { refresh: true }));
+    expect(reads).toBe(1);
+    data(await chatAction(c, "chats.refresh", {}));
+    expect(reads).toBe(2);
+    nowIso = "2026-11-06T09:00:01Z";
+    data(await chatAction(c, "chats.registered", { refresh: true }));
+    expect(reads).toBe(3);
+  });
+
+  it("a guest in the chat counts as external", async () => {
+    const { ctx } = await setup({ members: async () => [aChatMember(), aChatMember({ guest: true })] });
+    const d = data(await chatAction(ctx, "chats.add", { clientKey: "northwind", chatId: "19:northwind@thread.v2" }));
+    expect([d.chats[0]!.externalCount, d.chats[0]!.members!.filter((m) => m.external).length]).toEqual([1, 1]);
   });
 
   it("signed out: the picker says so and nothing is read", async () => {

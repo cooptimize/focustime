@@ -1,8 +1,8 @@
-// T-2 and T-2.1: Settings > Clients, a client's two Teams chats: its Delivery team chat (the internal Cooptimize team)
-// and its Customer collaboration chat (the team with the client's key people), one of each. Each shows its members
-// (external people flagged by tenant), the count, a warning when the members don't fit the kind, Open in Teams, Change
-// and Clear. The picker (search, arrows, Enter, Esc) puts the chats whose members suggest the kind first. Saved as soon
-// as it changes. Members are read again when the Clients section opens and on Refresh, never on a timer. No messages.
+// T-2 and AP-1: Settings > Clients, a client's Delivery chats: every Teams group chat registered for it (several are
+// fine; a chat belongs to one client), each labelled Delivery team or Customer collaboration (suggested from its
+// members, changeable), with its members (external people flagged by tenant), the count, a warning when the members
+// don't fit the label, Open in Teams and Remove. Add a chat opens the picker (search, arrows, Enter, Esc). Saved as
+// soon as it changes. Members are read again once a day when the Clients section opens, and on Refresh. No messages.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { activityOf, CHAT_KINDS, chatName, filterChats, KIND_HINT, KIND_NAME, memberLine, nameOf, suggestKind, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChatView } from "../../plan/chats.ts";
 import { call } from "../api.ts";
@@ -58,12 +58,15 @@ const ACCESS: Record<NonNullable<ChatsData["reason"]>, string> = {
 const timeOf = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : null);
 const dayOf = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null);
 
-/** A client's Teams chats: the Delivery team slot and the Customer collaboration slot. */
+/** A client's Delivery chats: every Teams chat registered for it, each labelled with its kind, and Add a chat. */
 export function DeliveryChatField({ clientKey, clientName }: { clientKey: string; clientName: string }) {
   const ctx = useContext(Ctx);
   const [saved, setSaved] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  const addRef = useRef<HTMLButtonElement>(null);
   if (!ctx) return null;
   const mine = (ctx.data?.chats ?? []).filter((c) => c.clientKey === clientKey);
+  const focusAdd = () => requestAnimationFrame(() => addRef.current?.focus());
   const act = async (action: string, input: unknown, done: string) => {
     setSaved(null);
     const ok = await ctx.run(action, input);
@@ -71,9 +74,10 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
     return ok;
   };
   return (
-    <div className="set-field dchat" role="group" aria-label={`Teams chats for ${clientName}`}>
+    <div className="set-field dchat" role="group" aria-label={`Delivery chats for ${clientName}`}>
       <div className="dchat-head">
-        <span className="set-label">Teams chats</span>
+        <span className="set-label">Delivery chats</span>
+        <span className="muted dchat-hint">Teams group chats for {clientName}. Names and members only, never messages.</span>
         {mine.length > 0 && (
           <button type="button" className="mini quiet" disabled={ctx.loading} onClick={() => void act("chats.refresh", { clientKey }, "Members read again")}>
             {ctx.loading ? "Refreshing…" : "Refresh"}
@@ -81,63 +85,54 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
         )}
         <span className="set-mark" role="status" aria-live="polite">{saved}</span>
       </div>
-      <div className="dchat-slots">
-        {CHAT_KINDS.map((kind) => (
-          <ChatSlot key={kind} kind={kind} clientKey={clientKey} clientName={clientName} chat={mine.find((c) => c.kind === kind) ?? null} act={act} />
-        ))}
-      </div>
-      {ctx.problem && <p className="field-problem" role="alert">{ctx.problem}</p>}
-    </div>
-  );
-}
-
-function ChatSlot({ kind, clientKey, clientName, chat, act }: { kind: ChatKind; clientKey: string; clientName: string; chat: DeliveryChatView | null; act: (action: string, input: unknown, done: string) => Promise<boolean> }) {
-  const ctx = useContext(Ctx)!;
-  const [picking, setPicking] = useState(false);
-  const pickRef = useRef<HTMLButtonElement>(null);
-  const name = KIND_NAME[kind];
-  const focusPick = () => requestAnimationFrame(() => pickRef.current?.focus());
-  return (
-    <section className={`dchat-slot ${kind}`} aria-label={`${name} chat for ${clientName}`}>
-      <h4>
-        {name} <span className="muted">{KIND_HINT[kind]}</span>
-      </h4>
-      {chat && !picking && <ChatCard c={chat} busy={ctx.loading} onClear={() => void act("chats.remove", { chatId: chat.chatId }, `${name} chat cleared`).then(focusPick)} />}
+      {mine.length === 0 && !picking && <p className="muted dchat-none">No chats yet.</p>}
+      {mine.map((c) => (
+        <ChatCard
+          key={c.chatId}
+          c={c}
+          busy={ctx.loading}
+          onKind={(kind) => void act("chats.kind", { chatId: c.chatId, kind }, `Marked as ${KIND_NAME[kind]}`)}
+          onRemove={() => void act("chats.remove", { chatId: c.chatId }, `Removed ${c.displayName}`).then(focusAdd)}
+        />
+      ))}
       {picking ? (
         <ChatPicker
-          kind={kind}
           clientName={clientName}
           registered={(ctx.data?.chats ?? []).map((c) => c.chatId)}
           load={ctx.picker}
           onPick={async (c) => {
             setPicking(false);
-            await act("chats.add", { clientKey, kind, chatId: c.id }, `Saved as the ${name} chat`);
-            focusPick();
+            await act("chats.add", { clientKey, chatId: c.id }, `Added ${chatName(c)}`);
+            focusAdd();
           }}
           onClose={() => {
             setPicking(false);
-            focusPick();
+            focusAdd();
           }}
         />
       ) : (
-        <>
-          {!chat && <p className="muted dchat-none">No {name} chat yet.</p>}
-          <button ref={pickRef} type="button" className="mini" disabled={ctx.loading && !ctx.data} onClick={() => setPicking(true)}>
-            {chat ? "Change" : "Pick a chat"}
-          </button>
-        </>
+        // Never disabled: the picker reads Teams on its own, so it opens while the saved chats still load.
+        <button ref={addRef} type="button" className="mini dchat-add" onClick={() => setPicking(true)}>
+          Add a chat
+        </button>
       )}
-    </section>
+      {ctx.problem && <p className="field-problem" role="alert">{ctx.problem}</p>}
+    </div>
   );
 }
 
-function ChatCard({ c, busy, onClear }: { c: DeliveryChatView; busy: boolean; onClear: () => void }) {
+function ChatCard({ c, busy, onKind, onRemove }: { c: DeliveryChatView; busy: boolean; onKind: (k: ChatKind) => void; onRemove: () => void }) {
   return (
-    <div className="dchat-card">
+    <div className="dchat-card" role="region" aria-label={c.displayName}>
       <div className="dchat-title">
         <strong>{c.displayName}</strong>
+        <select className="dchat-kind" aria-label={`Kind of chat for ${c.displayName}`} value={c.kind} disabled={busy} onChange={(e) => onKind(e.target.value as ChatKind)} title={KIND_HINT[c.kind]}>
+          {CHAT_KINDS.map((k) => (
+            <option key={k} value={k}>{KIND_NAME[k]}</option>
+          ))}
+        </select>
         <a className="mini link-btn" href={c.link} target="_blank" rel="noopener noreferrer">Open in Teams</a>
-        <button type="button" className="mini quiet" disabled={busy} onClick={onClear} aria-label={`Clear ${c.displayName}`}>Clear</button>
+        <button type="button" className="mini quiet" disabled={busy} onClick={onRemove} aria-label={`Remove ${c.displayName}`}>Remove</button>
       </div>
       {c.warning && <p className="dchat-warn" role="note">{c.warning}</p>}
       {c.members ? (
@@ -152,7 +147,7 @@ function ChatCard({ c, busy, onClear }: { c: DeliveryChatView; busy: boolean; on
               <li key={m.userId ?? `${i}`}>
                 <span>{nameOf(m)}</span>
                 {m.email && <span className="muted">{m.email}</span>}
-                {m.external && <span className="dchat-ext" title={m.tenantId ? "From another organization (tenant)" : "Tenant unknown, so not shown as Cooptimize"}>External</span>}
+                {m.external && <span className="dchat-ext" title={m.guest ? "A guest in this chat" : m.tenantId ? "From another organization (tenant)" : "Tenant unknown, so not shown as Cooptimize"}>External</span>}
               </li>
             ))}
           </ul>
@@ -165,8 +160,8 @@ function ChatCard({ c, busy, onClear }: { c: DeliveryChatView; busy: boolean; on
   );
 }
 
-/** My group chats for one slot: type to search, arrows to move, Enter to pick, Esc to close. */
-function ChatPicker({ kind, clientName, registered, load, onPick, onClose }: { kind: ChatKind; clientName: string; registered: string[]; load: () => Promise<ChatPickerData>; onPick: (c: ChatSummary) => void; onClose: () => void }) {
+/** My group chats: type to search, arrows to move, Enter to add, Esc to close. Most recently active first. */
+function ChatPicker({ clientName, registered, load, onPick, onClose }: { clientName: string; registered: string[]; load: () => Promise<ChatPickerData>; onPick: (c: ChatSummary) => void; onClose: () => void }) {
   const [data, setData] = useState<ChatPickerData | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -178,8 +173,8 @@ function ChatPicker({ kind, clientName, registered, load, onPick, onClose }: { k
     load().then(setData, (e) => setProblem(e instanceof Error ? e.message : "Couldn't read your chats"));
   }, [load]);
   const home = data?.homeTenant ?? null;
-  // A chat already registered (for any client or kind) isn't offered again; the chats that suggest this kind come first.
-  const list = useMemo(() => (data ? filterChats(data.chats, q, new Set(registered), home ? { kind, homeTenant: home } : undefined) : []), [data, q, registered, kind, home]);
+  // A chat already registered (for any client) isn't offered again.
+  const list = useMemo(() => (data ? filterChats(data.chats, q, new Set(registered)) : []), [data, q, registered]);
   useEffect(() => setAt(0), [q]);
   const pick = (i: number) => list[i] && onPick(list[i]);
   return (
@@ -188,8 +183,8 @@ function ChatPicker({ kind, clientName, registered, load, onPick, onClose }: { k
         ref={input}
         type="search"
         value={q}
-        placeholder={`Search your group chats for ${clientName}'s ${KIND_NAME[kind]} chat`}
-        aria-label={`Search your Teams group chats for the ${KIND_NAME[kind]} chat`}
+        placeholder={`Search your group chats to add to ${clientName}`}
+        aria-label="Search your Teams group chats"
         role="combobox"
         aria-expanded="true"
         aria-controls={listId}
@@ -207,21 +202,18 @@ function ChatPicker({ kind, clientName, registered, load, onPick, onClose }: { k
       {data && !data.available && <p className="field-problem">{ACCESS[data.reason ?? "unavailable"]}</p>}
       {data?.available && (
         <ul id={listId} role="listbox" className="dchat-options" aria-label="Your Teams group chats">
-          {list.length === 0 && <li className="muted">{q ? "No group chat matches." : "No group chats left to pick."}</li>}
-          {list.slice(0, 50).map((c, i) => {
-            const fits = home ? suggestKind(c.members, home) === kind : false;
-            return (
-              <li key={c.id} id={`${listId}-${i}`} role="option" aria-selected={i === at} className={i === at ? "on" : undefined} onMouseEnter={() => setAt(i)} onMouseDown={(e) => (e.preventDefault(), pick(i))}>
-                <strong>
-                  {chatName(c)} {home && <span className={`dchat-fit${fits ? " fits" : ""}`}>{suggestKind(c.members, home) === "delivery" ? "Internal" : "With the client"}</span>}
-                </strong>
-                <span className="muted">
-                  {home ? memberLine(c.members, home, c.moreMembers) : `${c.members.length} members`}
-                  {activityOf(c) && ` · active ${dayOf(activityOf(c))}`}
-                </span>
-              </li>
-            );
-          })}
+          {list.length === 0 && <li className="muted">{q ? "No group chat matches." : "No group chats left to add."}</li>}
+          {list.slice(0, 50).map((c, i) => (
+            <li key={c.id} id={`${listId}-${i}`} role="option" aria-selected={i === at} className={i === at ? "on" : undefined} onMouseEnter={() => setAt(i)} onMouseDown={(e) => (e.preventDefault(), pick(i))}>
+              <strong>
+                {chatName(c)} {home && <span className={`dchat-fit${suggestKind(c.members, home) === "customer" ? " fits" : ""}`}>{suggestKind(c.members, home) === "delivery" ? "Internal" : "With the client"}</span>}
+              </strong>
+              <span className="muted">
+                {home ? memberLine(c.members, home, c.moreMembers) : `${c.members.length} members`}
+                {activityOf(c) && ` · active ${dayOf(activityOf(c))}`}
+              </span>
+            </li>
+          ))}
         </ul>
       )}
     </div>

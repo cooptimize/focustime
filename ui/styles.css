@@ -3496,11 +3496,9 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .dchat-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dchat-head .set-label { font-size: var(--fs-3); font-weight: 600; color: var(--text); }
 .dchat-none { margin: 0; font-size: var(--fs-2); }
-.dchat-slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 10px 16px; }
-.dchat-slot { display: grid; gap: 6px; align-content: start; min-width: 0; }
-.dchat-slot h4 { margin: 0; font-size: var(--fs-2); font-weight: 600; display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
-.dchat-slot h4 .muted { font-weight: 400; }
-.dchat-slot > .mini { justify-self: start; }
+.dchat > .dchat-add { align-self: flex-start; }
+.dchat-hint { font-size: var(--fs-2); }
+.set-field .dchat-kind { width: auto; font-size: var(--fs-2); padding: 1px 4px; }
 .dchat-warn { margin: 0; font-size: var(--fs-2); color: var(--watch); font-weight: 500; }
 .dchat-fit { font-size: var(--fs-1); font-weight: 500; padding: 0 6px; border-radius: 999px; color: var(--text-muted); border: 1px solid var(--border); margin-left: 4px; }
 .dchat-fit.fits { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 45%, var(--border)); }

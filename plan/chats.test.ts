@@ -1,16 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { aChat, aChatMember, CLIENT_TENANT, HOME_TENANT } from "../test/builders/index.ts";
-import { chatName, filterChats, flagMembers, isExternal, kindsOf, kindWarning, memberLine, suggestKind, teamsLink, type ChatMember } from "./chats.ts";
+import { chatName, filterChats, flagMembers, isExternal, kindOf, kindWarning, membersStale, memberLine, suggestKind, teamsLink, type ChatMember } from "./chats.ts";
 
-describe("external members, by tenantId only (T-2)", () => {
+describe("external members, by tenantId and the guest role (T-2, AP-1)", () => {
   it.each([
-    ["the home tenant", HOME_TENANT, false],
-    ["the home tenant in capitals", HOME_TENANT.toUpperCase(), false],
-    ["a client's tenant", CLIENT_TENANT, true],
-    ["no tenant (can't be shown to be ours)", null, true],
-    ["an empty tenant", "", true],
-  ] as const)("%s", (_why, tenantId, external) => {
-    expect(isExternal({ tenantId }, HOME_TENANT)).toBe(external);
+    ["internal: the home tenant", HOME_TENANT, false, false],
+    ["internal: the home tenant in capitals", HOME_TENANT.toUpperCase(), false, false],
+    ["federated external: a client's own tenant", CLIENT_TENANT, false, true],
+    ["guest: a B2B guest account in the home tenant", HOME_TENANT, true, true],
+    ["guest: a guest from a client's tenant", CLIENT_TENANT, true, true],
+    ["no tenant (can't be shown to be ours)", null, false, true],
+    ["an empty tenant", "", false, true],
+  ] as const)("%s", (_why, tenantId, guest, external) => {
+    expect(isExternal({ tenantId, ...(guest ? { guest } : {}) }, HOME_TENANT)).toBe(external);
   });
 
   it("never by name or address: a Cooptimize-looking address in another tenant is external, and the reverse", () => {
@@ -94,19 +96,22 @@ describe("T-2.1: the two kinds of client chat, by tenant", () => {
     expect(kindWarning(kind, members, HOME_TENANT)).toBe(warning);
   });
 
-  const stored = (chatId: string, clientKey: string, kind: "delivery" | "customer" | null, members: ChatMember[] | null) => ({ chatId, clientKey, kind, members, displayName: chatId, webUrl: null, membersFetchedAt: null });
-  it("rows from before T-2.1 take a kind: stored kinds first, then what the members suggest, then the free one, else none", () => {
-    const kinds = kindsOf(
-      [
-        stored("19:a@thread.v2", "fabrikam", null, [ours, theirs]),
-        stored("19:b@thread.v2", "fabrikam", "customer", [ours, theirs]),
-        stored("19:c@thread.v2", "fabrikam", null, [ours]),
-        stored("19:d@thread.v2", "fabrikam", null, [ours]),
-        stored("19:e@thread.v2", "contoso", null, null),
-      ],
-      HOME_TENANT,
-    );
-    expect(Object.fromEntries(kinds)).toEqual({ "19:b@thread.v2": "customer", "19:a@thread.v2": "delivery", "19:c@thread.v2": null, "19:d@thread.v2": null, "19:e@thread.v2": "delivery" });
+  it.each([
+    ["the stored kind wins", "customer", [ours], "customer"],
+    ["no stored kind: an outsider suggests customer", null, [ours, theirs], "customer"],
+    ["no stored kind: only ours suggests delivery", null, [ours], "delivery"],
+    ["no stored kind and no members yet: delivery", null, null, "delivery"],
+  ] as const)("a chat's kind: %s", (_why, kind, members, want) => {
+    expect(kindOf({ kind, members: members as ChatMember[] | null }, HOME_TENANT)).toBe(want);
+  });
+
+  it.each([
+    ["never read", null, true],
+    ["read an hour ago", "2026-11-04T14:00:00Z", false],
+    ["read 23 hours ago", "2026-11-03T16:00:00Z", false],
+    ["read a day ago", "2026-11-03T15:00:00Z", true],
+  ] as const)("members are read again once a day: %s", (_why, at, stale) => {
+    expect(membersStale({ membersFetchedAt: at }, "2026-11-04T15:00:00Z")).toBe(stale);
   });
 
   it("the picker puts the chats that suggest the slot's kind first", () => {

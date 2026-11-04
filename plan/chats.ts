@@ -1,8 +1,9 @@
-// T-2: a client's Teams chats, the pure rules. A person registers group chats for a client (Settings > Clients), at
-// most one of each kind (T-2.1, D488): the Delivery team chat (the internal Cooptimize team) and the Customer
-// collaboration chat (the team with the client's key people). A member is external when their Entra tenant isn't Cooptimize's, by tenantId only:
-// never by name, email domain or a list of people. A member with no tenantId can't be shown to be Cooptimize's, so it
-// counts as external too. Nothing here reads or keeps message content.
+// T-2 and AP-1: a client's Teams chats, the pure rules. A person registers group chats for a client (Settings > Clients),
+// as many as it has (AP-1); a chat belongs to one client. Each is labelled with a kind (T-2.1): a Delivery team chat
+// (the internal Cooptimize team) or a Customer collaboration chat (the team with the client's key people), suggested
+// from its members and changeable. A member is external when their Entra tenant isn't Cooptimize's, by tenantId (or a
+// guest role in the chat): never by name, email domain or a list of people. A member with no tenantId can't be shown to
+// be Cooptimize's, so it counts as external too. Nothing here reads or keeps message content.
 
 /** A group chat as the picker lists it. `members` is Graph's expanded list (at most 25); `memberCount` its length. */
 export type ChatSummary = {
@@ -18,7 +19,14 @@ export type ChatSummary = {
   moreMembers: boolean;
 };
 
-export type ChatMember = { userId: string | null; displayName: string | null; email: string | null; tenantId: string | null };
+export type ChatMember = {
+  userId: string | null;
+  displayName: string | null;
+  email: string | null;
+  tenantId: string | null;
+  /** Graph's roles include "guest" (a B2B guest in the chat). Absent on members cached before AP-1. */
+  guest?: boolean;
+};
 export type FlaggedMember = ChatMember & { external: boolean };
 
 /** The two kinds of client chat (T-2.1). */
@@ -46,10 +54,10 @@ const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** A Teams chat id: 19:<thread>@thread.v2 (or the older @thread.skype, and @unq.gbl.spaces for one-on-one). */
 export const CHAT_ID = /^19:[A-Za-z0-9_\-.]{1,200}@(thread\.v2|thread\.skype|unq\.gbl\.spaces)$/;
 
-/** External: not in my organization's tenant (or no tenant to tell). */
-export function isExternal(m: Pick<ChatMember, "tenantId">, homeTenant: string): boolean {
+/** External: not in my organization's tenant (or no tenant to tell), or a guest in the chat whatever its tenant. */
+export function isExternal(m: Pick<ChatMember, "tenantId" | "guest">, homeTenant: string): boolean {
   if (!GUID.test(homeTenant)) throw new Error("homeTenant must be a tenant id");
-  return !m.tenantId || m.tenantId.toLowerCase() !== homeTenant.toLowerCase();
+  return !!m.guest || !m.tenantId || m.tenantId.toLowerCase() !== homeTenant.toLowerCase();
 }
 
 /** Members with the external flag, Cooptimize people first, then by name. */
@@ -73,25 +81,15 @@ export function kindWarning(kind: ChatKind, members: readonly ChatMember[] | nul
   return null;
 }
 
-/**
- * Each chat's kind, per client: the stored kind first; a row from before T-2.1 takes the kind its members suggest, or
- * the other one when that is taken, in the order they were added; one that fits neither is left without (null).
- */
-export function kindsOf(chats: readonly DeliveryChat[], homeTenant: string | null): Map<string, ChatKind | null> {
-  const out = new Map<string, ChatKind | null>();
-  const taken = new Map<string, Set<ChatKind>>();
-  const takenOf = (k: string) => taken.get(k) ?? taken.set(k, new Set()).get(k)!;
-  for (const c of chats) if (c.kind && !takenOf(c.clientKey).has(c.kind)) (takenOf(c.clientKey).add(c.kind), out.set(c.chatId, c.kind));
-  for (const c of chats) {
-    if (out.has(c.chatId)) continue;
-    const t = takenOf(c.clientKey);
-    const first: ChatKind = c.members && homeTenant ? suggestKind(c.members, homeTenant) : "delivery";
-    const kind = [first, first === "delivery" ? "customer" : "delivery"].find((k) => !t.has(k as ChatKind)) as ChatKind | undefined;
-    if (kind) t.add(kind);
-    out.set(c.chatId, kind ?? null);
-  }
-  return out;
+/** A chat's kind: the one stored, or (a row from before T-2.1) the one its members suggest. */
+export function kindOf(c: Pick<DeliveryChat, "kind" | "members">, homeTenant: string | null): ChatKind {
+  return c.kind ?? (c.members && homeTenant ? suggestKind(c.members, homeTenant) : "delivery");
 }
+
+/** Members are read again once a day (or on Refresh): the cache is stale when never read or older than this. */
+export const MEMBERS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export const membersStale = (c: Pick<DeliveryChat, "membersFetchedAt">, nowIso: string): boolean =>
+  !c.membersFetchedAt || Date.parse(nowIso) - Date.parse(c.membersFetchedAt) >= MEMBERS_MAX_AGE_MS;
 
 export const nameOf = (m: Pick<ChatMember, "displayName" | "email">) => m.displayName?.trim() || m.email || "Unknown person";
 
@@ -118,7 +116,7 @@ export const activityOf = (c: Pick<ChatSummary, "lastUpdated" | "lastRead">): st
 /**
  * The picker's list: group chats matching the search (every word, in the name or a member's name, any case), most
  * recently active first; with `prefer`, the chats whose members suggest that kind come first. Chats already
- * registered are left out: one chat, one client, one kind.
+ * registered are left out: a chat belongs to one client.
  */
 export function filterChats(chats: readonly ChatSummary[], query: string, takenByOthers: ReadonlySet<string> = new Set(), prefer?: { kind: ChatKind; homeTenant: string }): ChatSummary[] {
   const fits = (c: ChatSummary) => (prefer ? Number(suggestKind(c.members, prefer.homeTenant) !== prefer.kind) : 0);
