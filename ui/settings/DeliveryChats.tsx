@@ -122,7 +122,8 @@ function ChatSlot({ kind, clientKey, clientName, chat, act }: { kind: ChatKind; 
       ) : (
         <>
           {!chat && <p className="muted dchat-none">No {name} chat yet.</p>}
-          <button ref={pickRef} type="button" className="mini" disabled={ctx.loading && !ctx.data} onClick={() => setPicking(true)}>
+          {/* Never disabled: the picker reads Teams on its own, so it opens while the saved chats still load. */}
+          <button ref={pickRef} type="button" className="mini" onClick={() => setPicking(true)}>
             {chat ? "Change" : "Pick a chat"}
           </button>
         </>
