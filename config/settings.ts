@@ -5,7 +5,7 @@ import { WEEKDAY_KEYS, type WeekdayKey } from "../week/hours.ts";
 import { hoursBody, removeValue, replaceArrayTables, replaceSection, setValue, tomlValue, type TomlValue } from "./edit.ts";
 import { NOTIFY_KINDS } from "../plan/notify.ts";
 
-export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap"] as const;
+export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "asks"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export class SettingsInputError extends Error {
@@ -195,6 +195,15 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       if (v.stalledDays !== undefined) values.push(["stalled_days", int(v.stalledDays, "roadmap.stalled_days")]);
       if (v.watchWeeks !== undefined) values.push(["watch_weeks", int(v.watchWeeks, "roadmap.watch_weeks")]);
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "roadmap", k, val, i === 0 ? "Roadmap states (step 17): Stalled after this many days without a story change; Watch when the forecast lands within this many weeks of the target date." : undefined), text);
+    }
+    case "asks": {
+      // AP-1: Settings > Clients > Asks. Written as given; parseConfig checks the ranges and lengths.
+      only(v, ["pollMinutes", "requestPhrases", "ackPhrases"], "asks");
+      const values: [string, number | string[]][] = [];
+      if (v.pollMinutes !== undefined) values.push(["poll_minutes", int(v.pollMinutes, "asks.poll_minutes")]);
+      if (v.requestPhrases !== undefined) values.push(["request_phrases", strList(v.requestPhrases, "asks.request_phrases").map((x) => x.trim()).filter(Boolean)]);
+      if (v.ackPhrases !== undefined) values.push(["ack_phrases", strList(v.ackPhrases, "asks.ack_phrases").map((x) => x.trim()).filter(Boolean)]);
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "asks", k, val, i === 0 ? "Asks (AP-1): delivery chats with Read for asks on are read this often in working hours; a message from outside Cooptimize with a request phrase is an ask, one that is only an acknowledgement isn't." : undefined), text);
     }
     case "vm": {
       // Step 15.5 (Q87): Settings > You > "Start my VM without asking".

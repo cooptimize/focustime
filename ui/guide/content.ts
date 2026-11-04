@@ -20,6 +20,7 @@ export const CHAPTERS = [
   { id: "devops", name: "DevOps first" },
   { id: "keys", name: "Shortcuts" },
   { id: "phone", name: "On your phone" },
+  { id: "asks", name: "Asks" },
   { id: "questions", name: "Questions" },
 ] as const;
 export type ChapterId = (typeof CHAPTERS)[number]["id"];
@@ -247,8 +248,24 @@ export const PHONE = {
 
 // ---------- Chapter 7 ----------
 
-export const QUESTIONS = {
+/** AP-1: Asks, requests from client chats picked out by plain rules (no AI), resolved in Inbox › Asks. */
+export const ASKS = {
   eyebrow: "Chapter 7",
+  title: "Asks from client chats",
+  sub: "When a client asks for something in Teams, it lands in Inbox › Asks so it doesn't scroll away.",
+  items: [
+    { q: "What is an ask?", a: "A message from someone outside Cooptimize in a client's Teams chat that looks like a request: it mentions someone from Cooptimize, asks a question, uses a phrase like \"can you\" or \"please\", or carries a file. A short \"thanks\" or \"ok\" never counts, and neither do your own messages or your colleagues'. Each card says which rule matched. Plain rules pick them out, no AI, and you can change the phrases in Settings › Clients › Asks." },
+    { q: "How do I turn it on?", a: "Settings › Clients, on a client's chat: switch Read for asks on. The first time, Microsoft asks you to let FocusTime read your chat messages. Reading starts from that moment, never from history, and every client starts off." },
+    { q: "When does it read?", a: "Every 5 minutes by default, only in your working hours and not on PTO days. Refresh in Inbox › Asks reads now. FocusTime only reads; it never posts, reacts or marks anything read in Teams." },
+    { q: "What can I do with an ask?", a: "Create a bug, story or feature in DevOps from it (with a preview first, and it needs that client's DevOps write access), link it to a work item you already have, mark it Handled with an optional note, or Dismiss it. Link, Handled and Dismiss can be undone. Keys: {key:ask.next} to move, {key:ask.primary} for the first action, {key:ask.handled} handled, {key:ask.dismiss} dismiss, {key:ask.context} the messages before it." },
+    { q: "What does FocusTime keep?", a: "The messages it reads, only for you and only under that client. Messages that didn't become asks are deleted after 14 days; asks keep their text with what you did. Delete stored messages on the chat in Settings › Clients removes them all now. Chat text never goes into logs." },
+  ],
+};
+
+// ---------- Chapter 8 ----------
+
+export const QUESTIONS = {
+  eyebrow: "Chapter 8",
   title: "Questions people ask first",
   items: [
     { q: "Where do my clients and blocks come from?", a: "From Focus Time in Dataverse, the schedule Cooptimize already keeps. If a block is wrong, change it there and FocusTime picks it up on the next refresh." },
@@ -262,7 +279,7 @@ export const QUESTIONS = {
     { q: "Which version am I on?", a: "⋯ › About: one line with where it runs, the pull request, the commit and when it was built, and a Copy button for sending it to the FocusTime team." },
     { q: "How does FocusTime know I'm off?", a: "PTO in Dataverse is a whole day off. Out of office in Outlook over a whole morning or afternoon makes that half PTO. A PTO half has no free time and nothing can be planned on it; a must already pinned there stays, marked \"Pinned to PTO, move it\"." },
     { q: "Why can't I move some of my old timeboxes?", a: "Timeboxes made by an earlier FocusTime, before you signed in here, show as ordinary Outlook events. FocusTime leaves them alone; change or delete them in Outlook." },
-    { q: "How do I set a client's Teams chats?", a: "Settings > Clients, on each client: two slots, Delivery team (the internal Cooptimize team chat) and Customer collaboration (the chat with the client's key people). Pick a chat, type to search your Teams group chats, then Enter; the chats that fit the slot come first. FocusTime shows who is in each, with people from other organizations marked External, and warns when someone from outside is in the internal chat. It reads chat names and members only, never messages." },
+    { q: "How do I add a client's Teams chats?", a: "Settings > Clients, on each client: Delivery chats, then Add a chat. Type to search your Teams group chats, then Enter. A client can have several chats; a chat belongs to one client. Each is labelled Delivery team (the internal Cooptimize team) or Customer collaboration (with the client's key people): FocusTime suggests it from who is in the chat, and you can change it. People from other organizations, and guests, are marked External, and FocusTime warns when someone from outside is in a Delivery team chat. It reads chat names and members only; messages only in chats you switch Read for asks on (see Asks)." },
     { q: "Where do I add my DevOps write access?", a: "Settings > Clients, on each client: enter a personal access token with work item read and write, then Check and save. FocusTime checks it against your DevOps identity, stores it encrypted, and never shows it again." },
     { q: "Do I need to save in Settings?", a: "No. Each setting saves as you change it, and says Saved by the field; Undo puts the old value back. Only access tokens wait for Check and save." },
   ],

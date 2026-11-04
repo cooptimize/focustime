@@ -7,7 +7,7 @@ import { Lumen, WeekMark } from "../brand/Brand.tsx";
 import { reducedMotion } from "../brand/motion.ts";
 import { KEYS } from "../keys.ts";
 import type { StorySize } from "../../plan/estimate.ts";
-import { BASICS, CHAPTERS, DAYS, DEVOPS, EXAMPLE_WEEK, FOOTER, GUIDE_TITLE, HERO, PHONE, QUESTIONS, RHYTHM, SHORTCUTS, SIZING, TOUR, type ChapterId, type ExampleCell, type ExampleColor, type Mini, type Tone } from "./content.ts";
+import { ASKS, BASICS, CHAPTERS, DAYS, DEVOPS, EXAMPLE_WEEK, FOOTER, GUIDE_TITLE, HERO, PHONE, QUESTIONS, RHYTHM, SHORTCUTS, SIZING, TOUR, type ChapterId, type ExampleCell, type ExampleColor, type Mini, type Tone } from "./content.ts";
 import { caps, keysFor, richParts } from "./shortcuts.ts";
 import { sandbox } from "./sandbox.ts";
 
@@ -488,6 +488,21 @@ function Phone() {
   );
 }
 
+function AsksChapter() {
+  return (
+    <Chapter id="asks" eyebrow={ASKS.eyebrow} title={ASKS.title} sub={ASKS.sub}>
+      {ASKS.items.map((x) => (
+        <details key={x.q} className="guide-q">
+          <summary>{x.q}</summary>
+          <p>
+            <Rich text={x.a} />
+          </p>
+        </details>
+      ))}
+    </Chapter>
+  );
+}
+
 function Questions() {
   return (
     <Chapter id="questions" eyebrow={QUESTIONS.eyebrow} title={QUESTIONS.title}>
@@ -565,6 +580,7 @@ export function Guide({ chapter, onClose, closeLabel = TOUR.close, standalone = 
         <Devops />
         <Shortcuts />
         <Phone />
+        <AsksChapter />
         <Questions />
         <footer className="guide-footer">
           <Lumen pose="still" size={22} />

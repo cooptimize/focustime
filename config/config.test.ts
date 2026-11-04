@@ -312,3 +312,24 @@ describe("loading a config with the old day shape", () => {
     expect(await readdir(join(dir, "backups"))).toHaveLength(1);
   });
 });
+
+describe("[asks] (AP-1)", () => {
+  const parse = (extra: string) => parseConfig(`${valid}\n[asks]\n${extra}\n`);
+  it("defaults: every 5 minutes, the request and acknowledgement phrases", () => {
+    const r = parseConfig(valid);
+    expect(r.ok && r.config.asks.pollMinutes).toBe(5);
+    expect(r.ok && r.config.asks.requestPhrases).toContain("doesn't look right");
+    expect(r.ok && r.config.asks.ackPhrases).toContain("sounds good");
+  });
+  it.each([
+    ["poll_minutes = 10\nrequest_phrases = [\"Kindly\", \" \"]", true],
+    ["poll_minutes = 0", false],
+    ["poll_minutes = 61", false],
+    ["ack_phrases = \"thanks\"", false],
+    ["colour = 1", false],
+  ])("%s", (toml, ok) => {
+    const r = parse(toml);
+    expect(r.ok).toBe(ok);
+    if (r.ok && toml.startsWith("poll_minutes = 10")) expect([r.config.asks.pollMinutes, r.config.asks.requestPhrases]).toEqual([10, ["kindly"]]);
+  });
+});

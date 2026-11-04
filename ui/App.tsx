@@ -44,6 +44,7 @@ import type { TimerView } from "../actions/types.ts";
 import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
 import { Inbox } from "./Inbox.tsx";
+import { Asks, InboxTabs, useAskCount } from "./Asks.tsx";
 import { Roadmap } from "./Roadmap.tsx";
 import { PlanAhead } from "./PlanAhead.tsx";
 import { Today } from "./Today.tsx";
@@ -208,6 +209,8 @@ export function App() {
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
   const base: "today" | "week" = nav.tab === "week" ? "week" : "today";
   const followUpsOpen = nav.tab === "inbox";
+  // AP-1: Inbox › Asks, and the open asks count on its tab.
+  const asksOpen = nav.tab === "inbox" && !!nav.asks;
   const roadmapOpen = nav.tab === "roadmap";
   const checkInOpen = nav.tab === "today" && nav.mode === "checkin";
   /** Settings (step 6b) at a section, or closed (back to the place under it). */
@@ -237,6 +240,7 @@ export function App() {
   // Step 15.3: the draft open in the draft editor.
   const [draftEdit, setDraftEdit] = useState<DraftStory | null>(null);
   const [captureVersion, setCaptureVersion] = useState(0);
+  const [askCount, setAskCount] = useAskCount(captureVersion, followUpsOpen);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** U2: Week's ⋯ (the hours shown, and the compact timelines in the medium layout), moved from the status bar. */
   const [weekMoreAt, setWeekMoreAt] = useState<{ x: number; y: number } | null>(null);
@@ -1250,6 +1254,7 @@ export function App() {
       addWork,
       planFeature: (date: IsoDate, half: Half, itemId: number) => addWork(date, half, itemId),
       demo: data.demo,
+      asksOpen,
       setDemo: (on: boolean) => void switchDemo(on),
       exportPlan: () =>
         void call<{ path: string }>("data.export", {}).then(
@@ -1257,7 +1262,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, openGuide, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, goNav]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, openGuide, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, goNav, asksOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   openSettingsRef.current = env?.openSettings ?? null;
 
   // Step 17.5: the opening (loader, unroll, into the top bar's mark), then the welcome moment on the first launch ever.
@@ -1553,7 +1558,14 @@ export function App() {
       ) : planWeekAt !== null ? (
         <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Week"><PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} /></PhoneGate>
       ) : followUpsOpen ? (
-        <Inbox data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
+        <div className="inbox-page">
+          <InboxTabs asks={asksOpen} count={askCount} onPick={(a) => goNav(a ? navOf.asks() : navOf.inbox())} />
+          {asksOpen ? (
+            <Asks data={data} version={captureVersion} onCount={setAskCount} openSettings={(s) => openSettingsRef.current?.(s)} />
+          ) : (
+            <Inbox data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
+          )}
+        </div>
       ) : roadmapOpen ? (
         nav.tab === "roadmap" && nav.mode === "ahead" ? (
           <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Roadmap"><PlanAhead data={data} switcher={switches.roadmap} onDone={leavePlanning} onChanged={reloadQuiet} /></PhoneGate>

@@ -143,6 +143,8 @@ export type SettingsData = {
   vm: { startWithoutAsking: boolean };
   /** Settings > Roadmap (step 17): state thresholds. */
   roadmap: AppConfig["roadmap"];
+  /** AP-1: how often chats are read for asks, and the phrase lists the rules use. */
+  asks: AppConfig["asks"];
 };
 
 /** [plan] values the UI uses (step 6c). */

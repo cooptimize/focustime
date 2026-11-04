@@ -84,7 +84,9 @@ export async function withRetry<T>(f: () => Promise<T>, o: { sleep: (ms: number)
 
 /** Formats of the datetime2 columns that hold instants (every other datetime2 column holds a zoned stamp). */
 const INSTANT_COLUMNS: Readonly<Record<string, readonly string[]>> = {
-  delivery_chats: ["members_fetched_at"],
+  delivery_chats: ["members_fetched_at", "asks_since", "asks_seen_at", "asks_polled_at", "asks_retry_at"],
+  chat_messages: ["created_at"],
+  asks: ["resolved_at", "created_at", "updated_at"],
   focus_log: ["started_at", "ended_at"],
   timeboxes: ["removed_at"],
   user_settings: ["updated_at"],

@@ -162,3 +162,15 @@ Raised in step 13 (not blocking):
 
 - Q-T2-1: Chat.ReadBasic must be granted for the tenant (run `infra/scripts/app-registration.sh` after its dry run) or allowed by each person at sign-in; until then Connections says "Not allowed yet" and the picker says so. Who runs it, and when?
 - Q-T2-2: The picker lists at most 500 chats (10 pages of 50, most recently changed first). Enough for Cooptimizers, or add a search that pages further?
+
+## AP-1 (Nov 4)
+
+The scope's open questions (`docs/scope/asks-and-promises-scope-v0.1.md`), with what this step learned:
+
+- Q-AP1-1 (scope 1): One delivery chat per client, or several? AP-1 supports several per client, one client per chat, each with its own Read for asks switch (Part A). Still open: how many clients really have more than one, which decides whether AP-2's per-client AI switch should be per chat instead.
+- Q-AP1-2 (scope 2): Asks from external people who aren't the client lead? Treated the same, author shown with External. Guests count as external (by tenant, D485). Still open: should a second-tier contact (vendor, contractor from a third tenant) be shown differently?
+- Q-AP1-3 (scope 3): Keep unmatched messages 14 days? Yes (D492): Show context needs them. Each person's copy is separate, so a chat read by three people is stored three times; fine at this size, but a shared per-client store would need a different access model. Purging across people has no admin path yet (runbook).
+- Q-AP1-4 (scope 4): Polling interval, and pause during focus? Every 5 minutes in working hours, not on PTO days, and it keeps reading during focus; AP-1 sends no notification for asks at all. About 12 Graph calls per chat per hour at the default (one page of up to 50; more only for busier chats, at most 5 pages). Still open: should AP-2 notify for asks, and should "now" urgency break through focus?
+- Q-AP1-5 (new): Chat.Read is per-person incremental consent (D490). If the tenant ever turns off user consent, an admin grant is needed; nobody has tested that path yet.
+- Q-AP1-6 (new): Edited messages: a message edited after it was read comes back (the filter is on last modified) and is skipped because it was created before the last read. Should an edit that turns a message into an ask be picked up?
+- Q-AP1-7 (new): Replies in a group chat have no thread; "reply to" only exists as a quoted message reference, which AP-1 doesn't treat as an attachment and doesn't follow. Does AP-2 need it to know a request was already answered?

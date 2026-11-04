@@ -8,6 +8,9 @@
 import type { ActionContext } from "../actions/dispatch.ts";
 import { presenceContext, vmContext, expiringFor } from "../actions/dispatch.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
+import { askContext } from "../actions/dispatch.ts";
+import { asksNextDue, pollAsks } from "../actions/ask-actions.ts";
+import { UNMATCHED_DAYS } from "../plan/asks.ts";
 import { vmAction, type VmStatus } from "../actions/vm-actions.ts";
 import { CHECKIN_DONE_MARK } from "../actions/closeout-actions.ts";
 import { refreshTodayWarnings } from "../actions/warnings.ts";
@@ -302,11 +305,24 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       if (st.ok && (st.data as VmStatus).prompt) await send(notices.vmOff(today, (st.data as VmStatus).vm?.name ?? "Your VM", at));
     }
   };
+  // AP-1: the chats with Read for asks on, read when due (in working hours, not on PTO days; pollAsks decides), and
+  // once a day the text of messages that didn't become asks is deleted after UNMATCHED_DAYS.
+  const asksTick = async () => {
+    const c = await configOrNull();
+    if (!c) return;
+    const ac = { ...(await askContext(liveCtx)), pto: ptoOff };
+    await pollAsks(ac, { force: false });
+    if (await store.markOnce("asks_cleanup", todayOf(c))) {
+      const n = await store.purgeChatText({ olderThan: instantNow().subtract({ hours: 24 * UNMATCHED_DAYS }).toString() });
+      log({ source: "plan", op: "asks_cleanup", count: n });
+    }
+  };
   const tick = async () => {
     await notifier.refresh().catch(() => null);
     await dayReminders();
     await workdayNotices().catch(() => log({ source: "plan", op: "notify", kind: "failed" }));
     await vmTick().catch(() => log({ source: "azure", op: "vm_tick", kind: "failed" }));
+    await asksTick().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" }));
   };
 
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.
@@ -368,7 +384,14 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const running = !!timer?.runningSince && !timer.ended;
     const pending = (!timer && !!(await store.accountState<TeamsStatusState>(TEAMS_STATUS_KEY))?.set) || (!running && (await notifier.held()).length > 0);
     const p = c?.plan;
+    // AP-1: the next chat read, only while in working hours on a day that isn't PTO (work start wakes it otherwise).
+    let asksDue: Temporal.Instant | null = null;
+    if (c && inWorkingHours(c.week.hours, zonedNow(userZone(c))) && !(await ptoOff(todayOf(c)).catch(() => false))) {
+      const due = await asksNextDue({ plan: store, config: configOrNull, now: () => instantNow().toString() }).catch(() => null);
+      asksDue = due ? Temporal.Instant.from(due) : null;
+    }
     return nextWake({
+      asksDue,
       now: instantNow(),
       zone: c ? userZone(c) : who.zone,
       hours: c?.week.hours ?? null,

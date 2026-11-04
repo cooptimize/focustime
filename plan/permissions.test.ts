@@ -27,6 +27,14 @@ describe("Settings > Connections: each Microsoft permission's state (T-2)", () =
     expect(state(rows, "user_impersonation")).not.toBe("granted");
   });
 
+  it.each([
+    ["allowed by the person", { kind: "messages", state: "granted", granted: ["Chat.Read"] }, "granted"],
+    ["not allowed yet", { kind: "messages", state: "consent", granted: [] }, "missing"],
+    ["couldn't check", { kind: "messages", state: "unavailable", granted: [] }, "unknown"],
+  ] as const)("Chat.Read, asked for only when Asks is switched on: %s", (_why, probe, want) => {
+    expect(state(permissionRows([{ ...probe, granted: [...probe.granted] }], true), "Chat.Read")).toBe(want);
+  });
+
   it("signed out: every row says so; unchecked: unknown", () => {
     expect(new Set(permissionRows([], false).map((r) => r.state))).toEqual(new Set(["signed_out"]));
     expect(state(permissionRows([{ kind: "chats", state: "unavailable", granted: [] }], true), "Chat.ReadBasic")).toBe("unknown");
@@ -39,7 +47,8 @@ describe("the Connections list matches what the app registration asks for", () =
     const { PERMISSIONS } = await import("./permissions.ts");
     const script = readFileSync(new URL("../infra/scripts/app-registration.sh", import.meta.url), "utf8");
     const graph = script.match(/^GRAPH_SCOPES=\(([^)]*)\)/m)![1]!.split(/\s+/).filter((s) => s && !["openid", "profile", "email", "offline_access"].includes(s));
-    const listed = PERMISSIONS.filter((p) => p.api === "Microsoft Graph").map((p) => p.scope);
+    // AP-1 (D490): a scope each person allows when switching a feature on stays off the registration.
+    const listed = PERMISSIONS.filter((p) => p.api === "Microsoft Graph" && !p.later).map((p) => p.scope);
     expect([...listed].sort()).toEqual([...graph].sort());
   });
 });

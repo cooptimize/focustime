@@ -95,7 +95,11 @@ export function dateFieldsOf(ops: unknown, targetField: string | null): Record<s
 }
 export const dateValue = (date: string, timeZone: string) => Temporal.PlainDate.from(date).toZonedDateTime({ timeZone }).toInstant().toString();
 
-export type CreateSpec = { org: string; title: string; description?: string | null; acceptance?: string | null; acField: boolean; assignedTo: string; areaPath: string; iterationPath: string; parentId: number;
+export type CreateSpec = { org: string; title: string; description?: string | null; acceptance?: string | null; acField: boolean; assignedTo: string;
+  /** Area, iteration and parent: from the parent for a draft; AP-1's create from an ask has none (the project's defaults). */
+  areaPath: string | null; iterationPath: string | null; parentId: number | null;
+  /** AP-1: where the description goes (a Bug's Repro Steps where the type has them); System.Description by default. */
+  descriptionField?: string;
   /** Step 15.3: a draft feature's dates, each only when the type has the field (start) or a target field was found. */
   startDate?: { field: string; date: string } | null; targetDate?: { field: string; date: string } | null; timeZone?: string };
 export const START_FIELD = "Microsoft.VSTS.Scheduling.StartDate";
@@ -103,14 +107,14 @@ export const START_FIELD = "Microsoft.VSTS.Scheduling.StartDate";
 export function createOps(s: CreateSpec): PatchOp[] {
   const ops: PatchOp[] = [
     { op: "add", path: "/fields/System.Title", value: s.title },
-    ...(s.description ? [{ op: "add" as const, path: "/fields/System.Description", value: textToHtml(s.description) }] : []),
+    ...(s.description ? [{ op: "add" as const, path: `/fields/${s.descriptionField ?? "System.Description"}`, value: textToHtml(s.description) }] : []),
     ...(s.acceptance && s.acField ? [{ op: "add" as const, path: `/fields/${AC_FIELD}`, value: textToHtml(s.acceptance) }] : []),
     ...(s.startDate ? [{ op: "add" as const, path: `/fields/${s.startDate.field}`, value: dateValue(s.startDate.date, s.timeZone ?? NEUTRAL_ZONE) }] : []),
     ...(s.targetDate ? [{ op: "add" as const, path: `/fields/${s.targetDate.field}`, value: dateValue(s.targetDate.date, s.timeZone ?? NEUTRAL_ZONE) }] : []),
     { op: "add", path: "/fields/System.AssignedTo", value: s.assignedTo },
-    { op: "add", path: "/fields/System.AreaPath", value: s.areaPath },
-    { op: "add", path: "/fields/System.IterationPath", value: s.iterationPath },
-    { op: "add", path: "/relations/-", value: { rel: PARENT_REL, url: itemApiUrl(s.org, s.parentId) } },
+    ...(s.areaPath ? [{ op: "add" as const, path: "/fields/System.AreaPath", value: s.areaPath }] : []),
+    ...(s.iterationPath ? [{ op: "add" as const, path: "/fields/System.IterationPath", value: s.iterationPath }] : []),
+    ...(s.parentId !== null ? [{ op: "add" as const, path: "/relations/-", value: { rel: PARENT_REL, url: itemApiUrl(s.org, s.parentId) } }] : []),
   ];
   return ops;
 }
@@ -140,6 +144,8 @@ export type DevOpsWriteEntry = {
   identity: string; before: Record<string, string | null>; after: Record<string, string | null>; ops: PatchOp[] | { text: string } | null;
   revBefore: number | null; revAfter: number | null; commentId: number | null; draftId: number | null; pickIds: number[]; followUpId: number | null;
   status: DevOpsWriteStatus; message: string | null; undoOf: number | null; undoneBy: number | null; attempts: number; updatedAt: string;
+  /** AP-1: the ask a create came from (its chat and message), so a retry never makes a second item. */
+  ask?: { chatId: string; messageId: string } | null;
 };
 /** The undo each write has; null when it has none (an undo, or not confirmed). */
 export function undoKind(e: Pick<DevOpsWriteEntry, "op" | "status" | "undoneBy" | "itemId">): WriteOp | null {

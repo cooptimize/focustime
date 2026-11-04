@@ -85,6 +85,8 @@ export type View = import("./nav.ts").ViewName;
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
+  /** AP-1: Inbox › Asks is open (its keys work there). */
+  asksOpen?: boolean;
   week: Week;
   /** The day the selection is on, and its half. */
   selection: { date: IsoDate; half: Half; clientKey?: string | null };
@@ -1020,7 +1022,19 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "chats.list":
     case "chats.add":
     case "chats.remove":
+    case "chats.kind":
     case "chats.refresh": return { run: () => env.openSettings("clients") };
+    // AP-1: Asks are worked in Inbox › Asks; switching a chat on and deleting stored messages in Settings > Clients.
+    case "asks.list":
+    case "asks.context":
+    case "asks.resolve":
+    case "asks.reopen":
+    case "asks.search":
+      return { run: () => env.setView("asks") };
+    case "asks.refresh": return { run: () => (env.setView("asks"), void env.runPlan("asks.refresh", {})) };
+    case "asks.switch":
+    case "asks.purge":
+      return { run: () => env.openSettings("clients") };
     case "permissions.status": return { run: () => env.openSettings("connections") };
     case "people.photos": return { disabled: "Shown wherever you and Cooptimizers appear" };
     case "presence.people": return { disabled: "Shown next to Cooptimizers in Needs help from…, Who and Roadmap" };
@@ -1166,6 +1180,19 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
   }
 }
 
+/** AP-1: the Asks tab's keys as commands; the tab listens for ASK_KEY_EVENT. */
+export const ASK_KEY_EVENT = "focustime:ask-key";
+export const ASK_KEYS = [
+  { id: "ask.next", label: "Next ask", hint: "J" },
+  { id: "ask.prev", label: "Previous ask", hint: "K" },
+  { id: "ask.primary", label: "The ask's first action: Create bug (or Link without DevOps write access)", hint: "Enter" },
+  { id: "ask.handled", label: "Mark the ask handled (an optional note)", hint: "H" },
+  { id: "ask.dismiss", label: "Dismiss the ask", hint: "D" },
+  { id: "ask.context", label: "Show or hide the ask's context (the 5 messages before)", hint: "X" },
+] as const;
+export type AskKeyId = (typeof ASK_KEYS)[number]["id"];
+const askKey = (id: AskKeyId): void => void window.dispatchEvent(new CustomEvent(ASK_KEY_EVENT, { detail: id }));
+
 /** Window commands that aren't server actions: views, week navigation, details. */
 function uiCommands(env: MenuEnv): MenuItem[] {
   const soon = "Coming soon";
@@ -1174,6 +1201,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.week", action: "view.week", group: "Views", label: "Week", hint: "2", run: () => env.setView("week") },
     { id: "view.roadmap", action: "view.roadmap", group: "Views", label: "Roadmap", hint: "3", run: () => env.setView("roadmap") },
     { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: follow-ups and captures", hint: "4", run: () => env.setView("inbox") },
+    { id: "view.asks", action: "view.asks", group: "Views", label: "Inbox › Asks: questions and requests from client chats", run: () => env.setView("asks") },
+    ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Asks", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open Inbox › Asks first" }) })),
     { id: "view.plan", action: "view.plan", group: "Views", label: "Plan mode for this tab, or back", hint: "P", run: env.openRitual },
     { id: "view.planday", action: "view.planday", group: "Views", label: "Today › Plan (plan the day)", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
