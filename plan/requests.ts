@@ -51,6 +51,8 @@ export type ClientChat = {
   membersFetchedAt: string | null;
   registeredBy: string;
   registeredAt: string;
+  /** D523: whether the job reads it (an admin's switch, per chat). Off: registered, never polled. */
+  readOn: boolean;
   /** Nothing created before this is read (no backfill). */
   readSince: string;
   /** The newest lastModifiedDateTime stored: the next read asks for messages changed after it. */

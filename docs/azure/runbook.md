@@ -371,7 +371,7 @@ SQL compute is most of it; what keeps it down is the idle rule (D431) letting th
 working hours. The actual cost after the first week goes here (Cost Management, resource group FocusTime, or
 `az consumption usage list --start-date <d> --end-date <d>`): _not measured yet_.
 
-### Watch dev and prod costs (D523)
+### Watch dev and prod costs (D524)
 
 Azure portal › Monitor › Workbooks › **FocusTime costs** (prod's copy, in FocusTime; dev's is "FocusTime costs (dev
 copy)", the same view). Pick This month, Last month or This week. It shows dev against prod, each day, by service and
@@ -410,7 +410,9 @@ A FocusTime admin who follows the client and is a member of the chat, once for e
 2. Optional: Settings › Clients › Requests holds the phrase lists. The rules run under the settings of whoever's token read the message.
 3. Requests show in Inbox › Requests to every FocusTime user who is a member of the chat now (by the member list FocusTime keeps, read daily and on Refresh) and follows the client; nobody else sees them, and following the client alone isn't enough (D521). Someone who leaves the chat stops seeing it at the next member read. Create bug, story or feature needs that client's DevOps write access (Settings › Clients › DevOps write access).
 
-Registering, relabelling and removing are logged with who did it (`client_chat_changes`). A chat belongs to one client.
+**Reading on or off (admins, D523):** each chat's card in Settings › Clients has Read for requests or Stop reading. Off stops at once and keeps what was stored; on reads from that moment, never what was said while it was off. A newly added chat is read at once.
+
+Registering, relabelling, removing and turning reading on or off are logged with who did it (`client_chat_changes`). A chat belongs to one client.
 
 ### Polling
 
@@ -426,7 +428,7 @@ Registering, relabelling and removing are logged with who did it (`client_chat_c
 - **One client:** Settings › Clients › the client › Delivery chats › **Delete stored messages** (anyone who sees that client's chats; asks to confirm). Deletes the stored messages of every registered chat of that client for everyone, keeping the messages behind Requests and promises; DevOps items made from Requests stay in DevOps. **Remove** on a chat deletes that chat's messages and Requests (a promise keeps its message).
 - **Automatically:** messages that didn't become Requests are deleted 14 days after they were written, after a poll (D492); Requests the AI hid and nobody showed go with them. Requests keep their text with their resolution.
 - **Everything a person has:** Settings › Data › Delete my data deletes their rows (promises included).
-- **The migration** (`20261104T2100_shared_requests`): every chat anyone had added becomes a registered chat (the earliest registration's client and label, the newest member list), every stored message once, every ask one Request with the latest action and the latest AI sort; promises stay each person's and keep their messages. Chats nobody had switched Read for asks on start reading at the migration (Q-SP-7). Shared chat messages and Requests aren't a person's rows: remove the chat or purge the client for those.
+- **The migration** (`20261104T2100_shared_requests`): every chat anyone had added becomes a registered chat (the earliest registration's client and label, the newest member list), every stored message once, every ask one Request with the latest action and the latest AI sort; promises stay each person's and keep their messages. Reading stays on only for chats someone had switched Read for asks on; the rest are registered with reading off until an admin turns it on (D523). Shared chat messages and Requests aren't a person's rows: remove the chat or purge the client for those.
 - **The old per-person tables** (`chat_messages`, `asks`) are no longer written or read; the daily cleanup still deletes their expired rows until a later release drops them. The hosted database is never edited by hand (no SQL against Azure SQL outside `focustime migrate`).
 
 Nothing to clean elsewhere: chat text is never in logs or Application Insights (counts and kinds only), and never in exports to other systems.

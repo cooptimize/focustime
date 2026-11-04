@@ -178,7 +178,8 @@ async function list(ctx: RequestContext, plan: PlanStore | undefined, cfg: AppCo
     requests: visible,
     hidden: rs.filter((a) => a.hidden).map(strip),
     promisesOpen: promises.filter((p) => p.status === "open").length,
-    chats: v.chats.map((c) => chatStatus(c, name(c.clientKey))),
+    // Only chats that are read (D523): a chat with reading off has no poll to show.
+    chats: v.chats.filter((c) => c.readOn).map((c) => chatStatus(c, name(c.clientKey))),
     writeClients: await ctx.writeClients().catch(() => []),
     pollMinutes: POLL_MINUTES,
     lastPoll: newest(v.chats.map((c) => c.polledAt)),

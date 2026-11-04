@@ -84,7 +84,8 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
   const now = deps.now();
   const instant = Temporal.Instant.from(now);
   const wanted = o.chatIds ? new Set(o.chatIds) : null;
-  const chats = (await deps.teams.chats()).filter((c) => !wanted || wanted.has(c.chatId));
+  // D523: a chat with reading off is never read, not even on Refresh.
+  const chats = (await deps.teams.chats()).filter((c) => c.readOn && (!wanted || wanted.has(c.chatId)));
   if (!chats.length) return out;
   const users = await deps.users();
   const person = peopleOnce(deps);
@@ -182,7 +183,7 @@ async function rules(
 
 /** When the job next has work (the idle rule): the earliest chat due, or the start of the next union of hours. */
 export async function requestsNextDue(deps: Pick<PollDeps, "teams" | "users" | "person" | "now">): Promise<string | null> {
-  const chats = await deps.teams.chats();
+  const chats = (await deps.teams.chats()).filter((c) => c.readOn);
   if (!chats.length) return null;
   const users = await deps.users();
   const person = peopleOnce(deps as PollDeps);

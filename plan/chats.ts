@@ -160,6 +160,8 @@ export type DeliveryChatView = {
   error: string | null;
   /** Who registered it (a member's name), or null when they left the chat. */
   registeredBy: string | null;
+  /** D523: whether it is read for requests (an admin's switch per chat). */
+  readOn: boolean;
   /** Shared polling: the last poll, the last fetch, "Polling via <name>" or "Needs reconnecting". */
   poll: import("./asks.ts").RequestChatStatus;
 };

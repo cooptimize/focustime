@@ -18,6 +18,7 @@ import { createTeamsStore } from "./teams-store.ts";
 
 const NOW = "2026-11-20T15:00:00Z";
 const CHAT = "19:fabrikam@thread.v2";
+const CHAT2 = "19:fabrikam-team@thread.v2";
 const ANA = "00000000-0000-4000-8000-0000000000a1";
 const BEN = "00000000-0000-4000-8000-0000000000b2";
 const CY = "00000000-0000-4000-8000-0000000000c3";
@@ -143,6 +144,17 @@ await forEachDriver("the shared Teams store", ({ open }) => {
     expect(await teams.viewer(ANA).message(CHAT, m.messageId)).not.toBeNull();
   });
 
+  it("reading a chat on and off: logged with who; turning it on reads from then on (D523)", async () => {
+    const { teams } = await store();
+    expect((await teams.chat(CHAT))?.readOn).toBe(true);
+    await teams.setReading(CHAT, false, BEN);
+    expect((await teams.chat(CHAT))?.readOn).toBe(false);
+    await teams.recordPoll(CHAT, { polledAt: NOW, seenAt: "2026-11-20T14:00:00Z", fetchedAt: NOW, retryAt: null, failures: 0, state: "ok", note: null, tokenUser: ANA });
+    await teams.setReading(CHAT, true, ANA);
+    expect(await teams.chat(CHAT)).toMatchObject({ readOn: true, readSince: NOW, seenAt: null });
+    expect((await teams.changes()).map((c) => [c.change, c.byUser])).toEqual([["added", ANA], ["reading_off", BEN], ["reading_on", ANA]]);
+  });
+
   it("the poll state: via another person, then needs reconnecting with the last successful fetch kept", async () => {
     const { teams } = await store();
     await teams.recordPoll(CHAT, { polledAt: NOW, fetchedAt: NOW, seenAt: "2026-11-20T14:59:00Z", retryAt: null, failures: 0, state: "via", note: null, tokenUser: BEN });
@@ -169,9 +181,11 @@ const BEFORE = NAMED_MIGRATIONS.filter((m) => m.name !== "20261104T2100_shared_r
 async function seedPerUser(run: (sql: string, params: unknown[]) => Promise<unknown>) {
   for (const [who, created] of [[ANA, "2026-11-02T10:00:00Z"], [BEN, "2026-11-03T10:00:00Z"]] as const) {
     // Ana registered it first but never had its members cached; Ben's row has them.
-    await run("INSERT INTO delivery_chats (user_id, chat_id, client_key, display_name, web_url, is_primary, position, members_json, members_fetched_at, created_at, updated_at, chat_kind, asks_on, asks_since, asks_seen_at, asks_polled_at, asks_failures) VALUES (?, ?, 'fabrikam', 'Fabrikam chat', NULL, 0, 0, ?, ?, ?, ?, 'customer', 1, ?, ?, ?, 0)", [who, CHAT, who === BEN ? JSON.stringify(members) : null, who === BEN ? "2026-11-04T08:00:00Z" : null, created, created, created, who === ANA ? "2026-11-04T10:00:00Z" : "2026-11-04T11:00:00Z", "2026-11-04T11:05:00Z"]);
+    await run("INSERT INTO delivery_chats (user_id, chat_id, client_key, display_name, web_url, is_primary, position, members_json, members_fetched_at, created_at, updated_at, chat_kind, asks_on, asks_since, asks_seen_at, asks_polled_at, asks_failures) VALUES (?, ?, 'fabrikam', 'Fabrikam chat', NULL, 0, 0, ?, ?, ?, ?, 'customer', ?, ?, ?, ?, 0)", [who, CHAT, who === BEN ? JSON.stringify(members) : null, who === BEN ? "2026-11-04T08:00:00Z" : null, created, created, who === BEN ? 1 : 0, created, who === ANA ? "2026-11-04T10:00:00Z" : "2026-11-04T11:00:00Z", "2026-11-04T11:05:00Z"]);
     await run("INSERT INTO chat_messages (user_id, chat_id, message_id, client_key, author_id, author_tenant, created_at, body_text, has_image, has_file, reply_to_id) VALUES (?, ?, '1730000000001', 'fabrikam', 'c-dana', 'client', '2026-11-04T09:00:00Z', 'Can you check the export?', 0, 0, NULL)", [who, CHAT]);
   }
+  // A second chat Ana added for its names and members (T-2) but never switched on for asks.
+  await run("INSERT INTO delivery_chats (user_id, chat_id, client_key, display_name, web_url, is_primary, position, members_json, members_fetched_at, created_at, updated_at, chat_kind, asks_on, asks_failures) VALUES (?, ?, 'fabrikam', 'Fabrikam team', NULL, 0, 1, ?, '2026-11-02T10:00:00Z', '2026-11-02T10:00:00Z', '2026-11-02T10:00:00Z', 'delivery', 0, 0)", [ANA, CHAT2, JSON.stringify(members)]);
   // Ana's own reply, stored only in her rows, and her promise on it (AP-2), answering Dana's message.
   await run("INSERT INTO chat_messages (user_id, chat_id, message_id, client_key, author_id, author_tenant, created_at, body_text, has_image, has_file, reply_to_id) VALUES (?, ?, '1730000000002', 'fabrikam', ?, 'home', '2026-11-04T09:30:00Z', 'I will send the fixed export by Friday', 0, 0, NULL)", [ANA, CHAT, ANA]);
   await run("INSERT INTO promises (user_id, chat_id, message_id, client_key, phrase, what, due, to_whom, answers_message_id, ai_status, status, created_at, updated_at) VALUES (?, ?, '1730000000002', 'fabrikam', 'I will', 'Send the fixed export', '2026-11-06', 'Dana Client', '1730000000001', 'sorted', 'open', '2026-11-04 09:31:00', '2026-11-04 09:31:00')", [ANA, CHAT]);
@@ -182,7 +196,9 @@ async function seedPerUser(run: (sql: string, params: unknown[]) => Promise<unkn
 async function checkMigrated(conn: Conn) {
   const teams = createTeamsStore(conn, () => Temporal.Instant.from(NOW));
   const chats = await teams.chats();
-  expect(chats).toHaveLength(1);
+  expect(chats).toHaveLength(2);
+  // D523: reading stays on only where someone had switched it on (Ben did; Ana hadn't): the other is registered, off.
+  expect(chats.map((c) => [c.chatId, c.readOn])).toEqual([[CHAT, true], [CHAT2, false]]);
   expect(chats[0]).toMatchObject({ chatId: CHAT, clientKey: "fabrikam", kind: "customer", registeredBy: ANA, readSince: "2026-11-02T10:00:00Z", seenAt: "2026-11-04T11:00:00Z" });
   // The newest member list anyone had, so the people in the chat see it at once.
   expect(chats[0]!.members?.map((m) => m.userId)).toEqual([ANA, BEN]);
