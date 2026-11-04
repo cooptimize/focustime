@@ -758,6 +758,7 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .mini.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .mini.quiet { border-color: transparent; color: var(--text-faint); background: transparent; }
 .mini.quiet:hover { border-color: var(--border-strong); color: var(--text-muted); }
+.dchat button:disabled { opacity: 0.5; cursor: default; }
 .state.sample { color: var(--sample); background: color-mix(in oklab, var(--sample) 13%, var(--surface)); }
 .sample-note { display: inline-flex; gap: 8px; align-items: center; margin-left: 8px; }
 .refresh { padding: 3px 10px; font-size: var(--fs-2); }
