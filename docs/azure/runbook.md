@@ -361,3 +361,59 @@ Off is the same switch; it stops the reads at once and keeps what was stored (se
 - **Across people** (a client asks for its text to be removed): each person does it from their own Settings, as above; there is no admin purge yet, and the hosted database is never edited by hand (no SQL against Azure SQL outside `focustime migrate`). Ask for an admin purge as a new step if this is needed.
 
 Nothing to clean elsewhere: chat text is never in logs or Application Insights (counts and kinds only), and never in exports to other systems.
+
+## AI (AI-0)
+
+FocusTime calls OpenAI's API for AI tasks, behind `ai/` (docs/architecture.md, D495 to D499). Nothing uses AI until a person turns on Use AI in Settings › AI, and a client task also needs Allow AI on that client (both off by default).
+
+### Create the OpenAI project and key (once per environment)
+
+The API is billed separately from ChatGPT Business. In the Cooptimize OpenAI organization (platform.openai.com):
+
+1. **Projects › Create project**: `FocusTime dev`, and separately `FocusTime prod`. One key per environment, never shared.
+2. In each project, **Limits › Spend**: a monthly spend limit a little above the app cap (default 100 USD), with **Enforce a hard limit** on. Requests over it fail with `project_spend_limit_exceeded`, which FocusTime shows as "The AI service's account is out of credit or over its limit" and never retries.
+3. **Data controls**: API data isn't used for training by default; leave it so. FocusTime sends `store: false` so OpenAI keeps no application state; abuse monitoring logs are kept up to 30 days (developers.openai.com/api/docs/guides/your-data). Zero data retention, if wanted later, is an organization agreement with OpenAI and needs no code change.
+4. **API keys › Create new secret key** in that project (a service account key is best for an app). Copy it once; it's shown only then.
+
+### Put the key in Key Vault
+
+The app reads `ft-openai-key` at run time with its own identity, so it isn't in the Bicep and an environment without it still deploys: Settings › AI then says "AI isn't set up for this FocusTime yet" and everything else works.
+
+```
+az login
+infra/scripts/openai-key.sh --vault ft-dev-kv-5bthbn       # dev: paste the dev project's key
+infra/scripts/openai-key.sh --vault ft-prod-kv-kkzllj      # prod: paste the prod project's key
+```
+
+The script asks for the key without showing it and pipes it into Key Vault: never printed, never in a file, an argument, the shell history or a log. An existing key is left alone; `--force` replaces it (rotation: make a new key, `--force`, then revoke the old one in OpenAI). The app picks a new key up within a minute, no restart.
+
+Put prod's key in before the next prod deploy after dev has one: the parity check (D473) fails when dev's vault has `ft-openai-key` and prod's doesn't.
+
+Then check: sign in, Settings › AI, turn on Use AI, press **Test AI**. "OK · 1.2 s · $0.0001" means the key, the model and the network work; the request shows in Last 20 requests.
+
+In the developer loop the stub answers (no network, no cost). To try the real API locally: `infra/scripts/openai-key.sh --local`, then `[ai] provider = "openai"` in `~/.config/focustime/app.toml`, and restart.
+
+### Change the model, limits or caps
+
+App settings, the same for everyone; the defaults are in `server/appconfig.ts` (`DEFAULT_AI`): model `gpt-6-luna`, reasoning effort low, timeout 30 s, max output tokens 4000 (Test AI 1000), prices 0.10 / 0.01 cached / 0.50 USD per million tokens, app cap 100 USD a month. To change one for an environment, add its `FOCUSTIME_AI_*` setting to the container app in `infra/modules/app.bicep` in a pull request and deploy (never `az containerapp update` by hand):
+
+| Setting | Example |
+|---|---|
+| `FOCUSTIME_AI_MODEL` | `gpt-5-mini` |
+| `FOCUSTIME_AI_REASONING_EFFORT` | `minimal`, `low`, `medium`, or empty for the model's default |
+| `FOCUSTIME_AI_TIMEOUT_MS` | `45000` |
+| `FOCUSTIME_AI_MAX_OUTPUT_TOKENS` | `default=4000,test_ai=1000` |
+| `FOCUSTIME_AI_INPUT_USD_PER_MILLION`, `..._CACHED_INPUT_...`, `..._OUTPUT_...` | from the pricing page for the model |
+| `FOCUSTIME_AI_APP_CAP_USD` | `100` |
+| `FOCUSTIME_AI_PROVIDER` | `off` turns AI off for everyone (Settings › AI says it isn't set up) |
+
+Change the prices whenever the model changes: they are only used to estimate cost and enforce the caps. Each person's own cap is theirs to set in Settings › AI (0 to 1000 USD, default 10).
+
+### What "AI isn't set up" means
+
+FocusTime has no usable key for this environment: `ft-openai-key` is missing from the vault, the app can't read the vault, or `FOCUSTIME_AI_PROVIDER` is `off`. Nothing is sent and every other part of FocusTime works. Fix: put the key in (above), wait a minute, press Test AI. Other messages:
+
+- "AI budget reached for this month": the person's or the app's cap; it starts again on the 1st (UTC).
+- "The AI service's account is out of credit or over its limit": OpenAI's billing or the project's hard limit.
+- "The AI service is busy": rate limited after one retry.
+- "Not sent: ...": FocusTime's own guard refused it (another client, a secret, an outside email address); nothing left FocusTime.
