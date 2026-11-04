@@ -19,6 +19,7 @@ export const CHAPTERS = [
   { id: "sizing", name: "Sizing work" },
   { id: "devops", name: "DevOps first" },
   { id: "keys", name: "Shortcuts" },
+  { id: "phone", name: "On your phone" },
   { id: "questions", name: "Questions" },
 ] as const;
 export type ChapterId = (typeof CHAPTERS)[number]["id"];
@@ -216,7 +217,7 @@ export const SHORTCUTS = {
   cards: [
     { label: "Today, Week, Roadmap, Inbox", keys: [{ command: "view.today" }, { command: "view.week" }, { command: "roadmap.load" }, { command: "view.inbox" }] },
     { label: "Plan this view", keys: [{ command: "view.plan" }] },
-    { label: "Capture a thought", keys: [{ command: "capture.add" }] },
+    { label: "Capture a thought", keys: [{ command: "capture.add" }], all: true },
     { label: "Check-in", keys: [{ command: "view.checkin" }] },
     { label: "Close out", keys: [{ command: "closeout.load" }] },
     { label: "Plan the week", keys: [{ command: "view.planweek" }] },
@@ -229,8 +230,25 @@ export const SHORTCUTS = {
 
 // ---------- Chapter 6 ----------
 
-export const QUESTIONS = {
+/** P1: FocusTime on a phone: what works there, installing it, and notifications. */
+export const PHONE = {
   eyebrow: "Chapter 6",
+  title: "On your phone",
+  sub: "The phone is for checking and doing. Planning stays on a bigger screen.",
+  items: [
+    { q: "What works on a phone?", a: "Today with the block you're in, its next pick, Start focus, Done and Mark done; Week one day at a time (swipe sideways); Capture; the Inbox; Check-in and Close out; your follow-ups. Plan the day, Plan the week, Plan ahead and Roadmap open read-only, with Copy link to finish on a computer." },
+    { q: "How do I install it?", a: "On Android or in Chrome or Edge on a computer: ⋯ › Install app. On iPhone: tap Share in Safari, then Add to Home Screen, then Add. ⋯ › Install app shows the steps. Once installed it opens like an app, straight to Today." },
+    { q: "How do notifications work?", a: "Every notification shows in ⋯ › Notifications, with a dot on ⋯ when there's something new, and as a short note at the bottom while FocusTime is open. To get them on a phone or computer when FocusTime is closed, open Settings › Notifications on that device and tap Notify this device; the browser asks first. On iPhone this works only in FocusTime from the home screen." },
+    { q: "What do they say on my lock screen?", a: "Only what kind of thing it is, like Follow-ups due or Plan the day: no client names, no work item titles. Turn on Show details in notifications in Settings › Notifications if you want those." },
+    { q: "Does it work offline?", a: "No. FocusTime opens without a connection but says it's offline; nothing of yours is kept on the phone. Signing out clears what the browser kept and turns notifications off on that device." },
+    { q: "Quick capture from anywhere?", a: "On a phone, Capture is in the bottom bar. With a keyboard, press {key:capture.add} anywhere outside a text field." },
+  ],
+};
+
+// ---------- Chapter 7 ----------
+
+export const QUESTIONS = {
+  eyebrow: "Chapter 7",
   title: "Questions people ask first",
   items: [
     { q: "Where do my clients and blocks come from?", a: "From Focus Time in Dataverse, the schedule Cooptimize already keeps. If a block is wrong, change it there and FocusTime picks it up on the next refresh." },

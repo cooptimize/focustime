@@ -1,6 +1,7 @@
 // Quick capture (step 9): one text box, Enter saves at once to the local store (works offline). Rules (no AI)
 // suggest a follow-up, a draft story or a draft feature (step 13.5); one click confirms, or change it first. Unsorted
 // captures wait in the Inbox.
+import { usePhone } from "./viewport.ts";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import type { CaptureFeatures, WeekLoadData } from "../actions/types.ts";
 import { boxKind, parseTag, suggest, tagCompletions, takeTag, type BoxKind, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
@@ -457,6 +458,8 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
 export function CaptureDialog({ data, onClose, onChanged, onOpenView, defaultClient = null, initialKind = null }: { data: WeekLoadData; onClose: () => void; onChanged: () => void; onOpenView: () => void; defaultClient?: string | null; initialKind?: BoxKind | null }) {
   const back = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null);
   useEffect(() => () => back.current?.focus?.(), []);
+  // P1: a full-screen sheet on the phone, closed with a word (there is no Esc key there).
+  const phone = usePhone();
   return (
     <div className="cap-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
@@ -479,7 +482,7 @@ export function CaptureDialog({ data, onClose, onChanged, onOpenView, defaultCli
           <button type="button" className="mini quiet" onClick={onOpenView} title="Captures to sort and follow-ups">
             Open Inbox{data.captures > 0 ? ` (${data.captures} to sort)` : ""}
           </button>
-          <button type="button" className="mini quiet" onClick={onClose} aria-label="Close">Esc</button>
+          <button type="button" className="mini quiet" onClick={onClose} aria-label="Close">{phone ? "Close" : "Esc"}</button>
         </div>
         <CaptureBox data={data} onChanged={onChanged} autoFocus defaultClient={defaultClient} initialKind={initialKind} />
       </div>

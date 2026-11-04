@@ -57,6 +57,7 @@ import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./pre
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
+import { noticeAction, type PushPort } from "./notice-actions.ts";
 
 /** The plan store marker for the first launch (step 17.5). */
 const FIRST_LAUNCH_MARK = "first_launch";
@@ -74,6 +75,8 @@ export type ActionContext = {
   photoCache?: PhotoCache;
   /** Step 15.5: the notifier (test and sample notifications). Absent: notifications aren't available here. */
   notifications?: { test: () => Promise<void>; sample: (kind: string, live: boolean, gated: boolean) => Promise<boolean> };
+  /** P1: this person's Web Push (devices, the app's VAPID key). Absent: push isn't available (demo, tests). */
+  push?: PushPort;
   loadConfig: () => Promise<{ path: string; parsed: ParseResult; created?: boolean }>;
   makeDataverse: (cfg: DataverseConfig, timeZone: string) => DataverseSource;
   makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource & { write?: OutlookWrite; schedule?: ScheduleReader; people?: PeopleReader };
@@ -116,7 +119,7 @@ export const DEMO_REFUSED: readonly ActionName[] = [
   "link.open", "outlook.open", "playlist.open", "data.export", "secret.set",
   "auth.connect_microsoft", "auth.connect_google", "auth.connect_outlook_write", "auth.disconnect",
   "write.confirm", "write.retry", "devops.confirm", "devops.retry", "devops.set_write_pat", "devops.clear_write_pat",
-  "auth.sign_in", "auth.sign_out",
+  "auth.sign_in", "auth.sign_out", "push.subscribe",
 ];
 export const DEMO_REFUSAL = "Demo data: nothing leaves FocusTime in demo mode";
 
@@ -729,6 +732,12 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (ctx.demo?.on || !ctx.plan) return { ok: true, data: { first: false } };
       return { ok: true, data: { first: (await ctx.plan.markOnce(FIRST_LAUNCH_MARK, "once")) } };
     }
+    case "notices.list":
+    case "notices.read":
+    case "push.status":
+    case "push.subscribe":
+    case "push.remove":
+      return noticeAction({ plan: ctx.plan, push: ctx.push, demo: !!ctx.demo?.on }, action, req.input);
     case "setup.load":
     case "setup.prefill":
     case "setup.mark":

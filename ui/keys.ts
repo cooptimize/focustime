@@ -113,7 +113,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["3"], does: "Roadmap: features and epics you own, and Plan ahead", command: "roadmap.load" },
   { keys: ["4", "L"], does: "Inbox: follow-ups you owe and captures to sort", command: "view.inbox" },
   { keys: ["P"], does: "Plan mode for this tab, and back (Plan the day, Plan the week, Plan ahead; I also works)", command: "view.plan" },
-  { keys: ["N"], does: "Quick capture: one line, saved at once; then sort it into a follow-up, a draft story or a note", command: "capture.add" },
+  { keys: ["N", "C"], does: "Quick capture from anywhere: one line, saved at once; then sort it into a follow-up, a draft story or a note (in Today › Plan, C is Done)", command: "capture.add" },
   { keys: ["W"], does: "Week › Plan the week: each client's features (next week by default)", command: "view.planweek" },
   { keys: ["C"], does: "Done, in Today › Plan", command: "planday.commit" },
   { keys: ["← →"], does: "Previous or next day, in Today › Plan" },

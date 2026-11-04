@@ -81,9 +81,11 @@ function hostContract(name: string, make: () => Host) {
     it("shows a notice, hands back a handle, and closes it", async () => {
       const h = make();
       let handle: string | null = null;
-      await h.notifications.show(NOTICE, (x) => (handle = x));
-      expect(handle).toMatch(/^\d+$/);
+      // P1: a hosted notice stays shown until closed, so show() settles after close().
+      const shown = h.notifications.show(NOTICE, (x) => (handle = x));
+      await expect.poll(() => handle).toMatch(/^[\w-]+$/);
       expect(() => h.notifications.close(handle!)).not.toThrow();
+      await shown;
     });
     it("opens links, has a clock and a neutral zone, and says what it is", async () => {
       const h = make();
@@ -125,10 +127,12 @@ describe("azure host: desktop-only operations", () => {
   it("puts notices in the in-app inbox, links open in the page, nothing to reopen", async () => {
     const { host, box } = azure();
     let handle = "";
-    expect(await host.notifications.show(NOTICE, (h) => (handle = h))).toBeNull();
+    // P1: shown until FocusTime closes it (its occasion was handled); then show() settles with no click.
+    const shown = host.notifications.show(NOTICE, (h) => (handle = h));
     expect([...box.items.values()]).toEqual([NOTICE]);
     host.notifications.close(handle);
     expect(box.items.size).toBe(0);
+    expect(await shown).toBeNull();
     expect(await host.links.open("https://example.com")).toBe("client");
     expect(await host.launch.reopen()).toBe(false);
     expect(await host.media.status()).toEqual({ players: false, spotify: false });

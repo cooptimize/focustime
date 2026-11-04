@@ -9,6 +9,7 @@ import { DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
 import { createPlanStore, type PlanStore } from "../store/plan-store.ts";
 import { mondayOf } from "../week/dates.ts";
 import { createDemoAzure, DEMO_VM_ID } from "../sources/demo/azure.ts";
+import { notices } from "../plan/notify.ts";
 
 export type DemoControl = { on: boolean; set: (on: boolean) => Promise<void> };
 
@@ -38,6 +39,11 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     demo: opts.demo,
     account: () => demoAzure.account,
     azure: demoAzure.azure,
+    // P1: the demo's notifications stay in the page: a test lands in ⋯ › Notifications (no desktop, no push).
+    notifications: {
+      test: async () => void (await plan.addNotice({ key: `test:${opts.now()}`, kind: "test", title: "FocusTime", body: "Test notification. It shows here and as a toast.", route: "settings:notifications" })),
+      sample: async () => false,
+    },
   };
 }
 
@@ -88,6 +94,15 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   await run("followup.add", { clientKey: "Atlas", who: "Morgan Diaz", what: "Share the delay alert mockups", channel: "email", due: day(3) });
   await run("note.set", { clientKey: "Northwind", date: day(0), note: "CSV export works for orders. Next: the date filter." });
   await run("capture.add", { text: "Ask Harbor about single sign-on for the intake form", clientKey: "Harbor" });
+  // P1: this morning's notifications in ⋯ › Notifications: the day's plan (read) and the follow-ups due (new).
+  if (ctx.plan) {
+    const at = Temporal.Instant.from(ctx.now()).toString();
+    const planned = notices.planDay(day(0), at);
+    const due = notices.followUps(day(0), [{ id: 1, what: "Reply about the proposal timeline", overdue: true }, { id: 2, what: "Send the export spec for review", overdue: false }], at)!;
+    const first = await ctx.plan.addNotice({ key: planned.key, kind: planned.kind, title: planned.title, body: planned.body, route: planned.route });
+    await ctx.plan.readNotices([first]);
+    await ctx.plan.addNotice({ key: due.key, kind: due.kind, title: due.title, body: due.body, route: due.route });
+  }
   // Step 16 (Roadmap): three weeks of daily counts for the features I own, so the trend and signal show (today's comes
   // from the first Roadmap read).
   const history: [string, number, [number, number][]][] = [

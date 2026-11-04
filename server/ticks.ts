@@ -23,6 +23,7 @@ import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
 import type { TimerState, WarnPoint } from "../plan/timer.ts";
 import { nextWake } from "../plan/wake.ts";
 import type { PlanStore } from "../store/plan-store.ts";
+import type { PushControl } from "./push.ts";
 import { localToday, mondayOf } from "../week/dates.ts";
 import { hoursOn } from "../week/hours.ts";
 import { userZone } from "../week/zone.ts";
@@ -36,6 +37,8 @@ export type TickDeps = {
   media: HostMedia;
   /** A clicked notification asks for a view: kept for the person's window, which is brought up. */
   openRoute: (route: string) => void;
+  /** P1: this person's Web Push (their devices); absent where there is none (tests). */
+  push?: PushControl;
 };
 
 /** One person's passes; the scheduler runs them for everyone, never two of the same kind at once. */
@@ -138,7 +141,21 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   };
   const notifier = createNotifier({
     plan: store,
-    host: { show: (n, shown) => host.notifications.show(n, shown), close: (h) => host.notifications.close(h) },
+    host: {
+      // P1: what passes the gate also goes into the in-app list (⋯ › Notifications) and to the devices with push on.
+      // The handle carries both the list row and the host's own, so a handled occasion closes both.
+      // The host shows it at once (never waiting on the database); the handle names the list row once it is written.
+      show: (n, shown) => {
+        const row = store.addNotice({ key: n.key, kind: String(n.kind), title: n.title, body: n.body, route: n.route }).catch(() => null);
+        if (d.push) void configOrNull().then((c) => d.push!.send(n, c?.notify.pushDetails ?? false)).catch(() => log({ source: "server", op: "push_failed" }));
+        return host.notifications.show(n, (h) => void row.then((r) => shown?.(`${r ?? ""}|${h}`)));
+      },
+      close: (h) => {
+        const [row, own = ""] = h.split(/\|(.*)/s);
+        if (row) void store.closeNotice(Number(row)).catch(() => undefined);
+        if (own) host.notifications.close(own);
+      },
+    },
     done,
     facts: async () => {
       const c = await configOrNull();

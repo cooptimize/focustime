@@ -6,6 +6,7 @@ import { planStoreOn, type PlanStore } from "../store/plan-store.ts";
 import type { Conn } from "../store/sql/conn.ts";
 import { createUserSettings } from "../store/user-settings.ts";
 import { createUserSecrets, fakeKeyProvider } from "../store/user-secrets.ts";
+import { createPushDevices } from "../store/push-devices.ts";
 
 export const FILL_NOW = "2026-11-02T14:30:00Z";
 export const FILL_MON = "2026-11-02";
@@ -40,10 +41,12 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   (await plan.addInvite({ uid: `inv-${tag}`, clientKey: "cooptimize", itemId: null, pickId: null, timeboxId: null, title: tag, url: null, start: "2026-11-03T15:00:00Z", end: "2026-11-03T15:30:00Z", attendees: [], teams: false, note: null }));
   (await plan.markOnce("reminder", MON));
   (await plan.setSetupStep("day", "done"));
+  (await plan.addNotice({ key: `n-${tag}`, kind: "followups", title: tag, body: tag, route: "inbox" }));
   (await plan.setRoadmapDates("cooptimize", 7001, { start: "2026-11-02", end: "2026-11-20" }));
   (await plan.logTeamsStatus({ op: "set", status: "Busy", minutes: 25, result: "done", message: null }));
   await createUserSettings({ db, userId, app: { dataverse: null, entra: null, google: null }, person: () => ({ email: `${tag}@example.com`, upn: `${tag}@example.com`, timeZone: null }), setZone: () => {}, defaultZone: DEMO_TZ, now: () => Temporal.Instant.from(NOW) }).seed(starterToml(DEMO_TZ));
   await createUserSecrets({ db, userId, keys: KEYS, now: () => Temporal.Instant.from(NOW) }).set("devops-write-pat:cooptimize", `pat-${tag}`);
+  await createPushDevices({ db, userId, keys: KEYS, now: () => Temporal.Instant.from(NOW) }).save(`device-${tag}-0000000000`, "Phone", { endpoint: `https://fcm.googleapis.com/fcm/send/${tag}`, keys: { p256dh: "x", auth: "y" } });
   // Only migration 21 writes the dedupe log; a row as it would have left one.
   await db.run("INSERT INTO dedupe_log (user_id, at, table_name, removed_id, kept_id) VALUES (?, ?, 'week_features', 1, 2)", [userId, NOW]);
   // Links within a table: a pick moved to another day (carried_from), and undone writes (undo_of, undone_by).
