@@ -16,6 +16,7 @@ import type { FlexSession, Half, IsoDate, Unavailable } from "../week/types.ts";
 import type { Attendee, Fields, LocalState, OwnEvent, SyncOp, Timebox, WriteEntry, WriteKind, WriteStatus } from "../plan/timebox.ts";
 import type { DevOpsWriteEntry } from "../plan/devopswrite.ts";
 import { NAMED_MIGRATIONS } from "./migrations/index.ts";
+import type { AiLogEntry, AiOutcome } from "../ai/types.ts";
 import { validSetupStatus, validSetupStep, type SetupState, type SetupStatus, type SetupStep } from "../plan/setup.ts";
 import { NAMES_TABLE, pending, type NamedMigration } from "./migrations/named.ts";
 export type { WriteEntry, WriteStatus } from "../plan/timebox.ts";
@@ -1453,6 +1454,20 @@ const toDeliveryChat = (r: Row): DeliveryChat => ({
 });
 /** AP-1: an instant column as ISO text with Z (SQLite keeps what was written; SQL Server reads it back). */
 const instantText = (v: unknown): string | null => (typeof v === "string" && v ? Temporal.Instant.from(v).toString() : null);
+/** AI-0: a request log row (never any text but the task's fixed name and the error kind). */
+const toAiRequest = (r: Row): AiLogEntry => ({
+  at: instantText(r.at) ?? "",
+  task: r.task as string,
+  clientKey: (r.client_key as string | null) ?? null,
+  model: r.model as string,
+  inputTokens: Number(r.input_tokens),
+  outputTokens: Number(r.output_tokens),
+  costMicros: Number(r.cost_micros),
+  latencyMs: Number(r.latency_ms),
+  outcome: r.outcome as AiOutcome,
+  detail: (r.detail as string | null) ?? null,
+});
+
 const toAsk = (r: Row): Ask => ({
   chatId: r.chat_id as string,
   messageId: r.message_id as string,
@@ -2716,6 +2731,22 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (r.seenAt) await db.run("UPDATE delivery_chats SET asks_seen_at = ? WHERE chat_id = ? AND asks_on = 1", iso(r.seenAt), chatId);
         await db.run("UPDATE delivery_chats SET asks_polled_at = ?, asks_retry_at = ?, asks_failures = ?, asks_status = ? WHERE chat_id = ? AND asks_on = 1", iso(r.polledAt), r.retryAt ? iso(r.retryAt) : null, Math.max(0, Math.min(r.failures, 100)), r.status ? r.status.slice(0, 400) : null, chatId);
       });
+    },
+    /** AI-0: one AI request in the person's log: counts, cost and outcome, never the prompt or the answer. */
+    async addAiRequest(e: AiLogEntry): Promise<void> {
+      await tx(async () => {
+        await db.run("INSERT INTO ai_requests (at, task, client_key, model, input_tokens, output_tokens, cost_micros, latency_ms, outcome, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          Temporal.Instant.from(e.at).toString(), e.task.slice(0, 64), e.clientKey ? e.clientKey.slice(0, 100) : null, e.model.slice(0, 100), Math.max(0, Math.round(e.inputTokens)), Math.max(0, Math.round(e.outputTokens)), Math.max(0, Math.round(e.costMicros)), Math.max(0, Math.round(e.latencyMs)), e.outcome, e.detail ? e.detail.slice(0, 40) : null);
+      });
+    },
+    /** AI-0: the estimated cost of the person's requests in [from, to), in millionths of a dollar. */
+    async aiSpentMicros(fromIso: string, toIso: string): Promise<number> {
+      const r = (await db.get("SELECT COALESCE(SUM(cost_micros), 0) AS n FROM ai_requests WHERE at >= ? AND at < ?", Temporal.Instant.from(fromIso).toString(), Temporal.Instant.from(toIso).toString())) as Row | undefined;
+      return Number(r?.n ?? 0);
+    },
+    /** AI-0: the person's latest AI requests, newest first. */
+    async aiRequests(limit = 20): Promise<AiLogEntry[]> {
+      return ((await db.all("SELECT * FROM ai_requests ORDER BY id DESC LIMIT ?", Math.max(1, Math.min(limit, 200)))) as Row[]).map(toAiRequest);
     },
     /** AP-1: new messages of a chat, only the listed fields; ones already stored are left as they are. How many were new. */
     async addChatMessages(ms: readonly StoredMessage[]): Promise<number> {

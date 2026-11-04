@@ -4,7 +4,8 @@ import { setupState } from "./20261103T1700_setup_state.ts";
 import { noticesPush } from "./20261103T2300_notices_push.ts";
 import { deliveryChats } from "./20261104T0100_delivery_chats.ts";
 import { asks } from "./20261104T1200_asks.ts";
+import { ai } from "./20261104T1800_ai.ts";
 import { deliveryChatKind } from "./20261104T0400_delivery_chat_kind.ts";
 import type { NamedMigration } from "./named.ts";
 
-export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks];
+export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai];

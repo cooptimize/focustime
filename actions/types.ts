@@ -145,6 +145,8 @@ export type SettingsData = {
   roadmap: AppConfig["roadmap"];
   /** AP-1: how often chats are read for asks, and the phrase lists the rules use. */
   asks: AppConfig["asks"];
+  /** AI-0: Use AI, the monthly cap and the clients with Allow AI on. */
+  ai: AppConfig["ai"];
 };
 
 /** [plan] values the UI uses (step 6c). */

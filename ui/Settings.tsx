@@ -15,6 +15,7 @@ import type { ClientWork } from "../week/types.ts";
 import type { FollowState } from "../week/follow.ts";
 import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS, type ViewRange } from "../week/hours.ts";
 import { call } from "./api.ts";
+import type { AiView } from "../ai/view.ts";
 import { notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar } from "./status.ts";
 import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
@@ -44,6 +45,7 @@ export const SETTINGS_SECTIONS = [
   ["roadmap", "Roadmap"],
   ["risk", "Risk rules"],
   ["clients", "Clients"],
+  ["ai", "AI"],
   ["connections", "Connections"],
   ["display", "Display"],
   ["data", "Data"],
@@ -272,6 +274,8 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
         </div>
         </DeliveryChatsProvider>
       );
+    case "ai":
+      return <AiForm {...p} />;
     case "connections":
       return <Connections {...p} />;
     case "display":
@@ -1067,9 +1071,132 @@ function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSa
       <ClientForm client={c} data={d} onSavedData={p.onSavedData} />
       {c.devops ? <WriteAccess client={c} onDone={p.reload} /> : d.dataverseReached && <p className="muted set-client-note">No DevOps set up for {c.setting.name ?? c.dataverseName ?? c.key} in Dataverse, so there is nothing to write to. Change it in Dataverse.</p>}
       <DeliveryChatField clientKey={c.key} clientName={c.setting.name ?? c.dataverseName ?? c.key} />
+      <AllowAi c={c} d={d} onSavedData={p.onSavedData} />
     </div>
   );
 }
+
+/** AI-0: Allow AI for one client, off by default; a request about this client runs only with this and Use AI on. */
+function AllowAi({ c, d, onSavedData }: { c: SettingsClient; d: SettingsData; onSavedData: (d: SettingsData) => void }) {
+  const name = c.setting.name ?? c.dataverseName ?? c.key;
+  const a = useAutoSave({
+    section: "ai",
+    initial: { on: d.ai.allowedClients.includes(c.key) },
+    payload: (v) => ({ allow: { client: c.key, on: v.on } }),
+    onSaved: onSavedData,
+    label: () => `${name}: Allow AI`,
+  });
+  return (
+    <div className="set-form set-allow-ai">
+      <AutoField a={a} k="on" label="Allow AI" hint={d.ai.use ? "Lets AI requests about this client send its data, one client at a time. Off by default." : "Off by default. Also needs Use AI on in Settings › AI."}>
+        <label className="set-check">
+          <input type="checkbox" role="switch" checked={a.v.on} onChange={(e) => a.change("on", e.target.checked)} /> Allow AI for {name}
+        </label>
+      </AutoField>
+    </div>
+  );
+}
+
+type AiTestResult = { ok: true; latencyMs: number; cost: string; model: string } | { ok: false; kind: string; message: string };
+
+/** AI-0: Settings › AI: Use AI, the monthly limit and this month's spend, Test AI, what is sent, and the last 20 requests. */
+function AiForm(p: FormProps) {
+  const s = p.data.ai;
+  const a = useAutoSave({
+    section: "ai",
+    initial: { use: s.use, monthlyCapUsd: s.monthlyCapUsd },
+    payload: (v) => v,
+    onSaved: p.onSavedData,
+    label: (k) => (k === "use" ? "Use AI" : "Monthly limit"),
+  });
+  const [st, setSt] = useState<AiView | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [test, setTest] = useState<AiTestResult | null>(null);
+  const load = useCallback(() => call<AiView | null>("ai.status", {}).then(setSt, () => setSt(null)), []);
+  useEffect(() => void load(), [load, p.data.ai.use, p.data.ai.monthlyCapUsd]);
+  const nameOf = (k: string | null) => (k ? (p.data.clients.find((c) => c.key === k)?.setting.name ?? k) : "None");
+  const runTest = async () => {
+    setTesting(true);
+    setTest(null);
+    try {
+      setTest(await call<AiTestResult>("ai.test", {}));
+    } catch (e) {
+      setTest({ ok: false, kind: "provider", message: e instanceof Error ? e.message : "Test AI didn't run" });
+    } finally {
+      setTesting(false);
+      void load();
+    }
+  };
+  const notSetUp = st !== null && !st.setUp;
+  return (
+    <div className="set-form set-ai">
+      <AutoField a={a} k="use" label="Use AI" hint="Off by default. Each client also needs Allow AI on, in Settings › Clients.">
+        <label className="set-check">
+          <input type="checkbox" role="switch" checked={a.v.use} onChange={(e) => a.change("use", e.target.checked)} /> Use AI
+        </label>
+      </AutoField>
+      {(st === null || notSetUp) && (
+        <p className="set-problem" role="status">
+          AI isn't set up for this FocusTime yet{st?.provider === "off" ? ": it's turned off" : ""}. Everything else works without it.
+        </p>
+      )}
+      <div className="set-ai-month">
+        <span className="set-ai-label">This month</span>
+        <strong>
+          {st ? st.spentText : "$0"} of {st ? st.capText : `$${s.monthlyCapUsd}`}
+        </strong>
+        {st?.appReached && <span className="field-problem">FocusTime's AI budget for everyone is used up until next month.</span>}
+      </div>
+      <AutoField a={a} k="monthlyCapUsd" label="Monthly limit (US dollars)" hint="AI stops for you when you reach it, until next month. 0 to 1000.">
+        <input type="number" min={0} max={1000} step={1} value={a.v.monthlyCapUsd} onChange={(e) => a.set("monthlyCapUsd", Number(e.target.value))} {...a.text("monthlyCapUsd")} />
+      </AutoField>
+      <div className="set-ai-test">
+        <button type="button" className="mini" disabled={testing} onClick={() => void runTest()}>
+          {testing ? "Testing…" : "Test AI"}
+        </button>
+        {test && (test.ok ? <span className="set-ai-ok" role="status">OK · {(test.latencyMs / 1000).toFixed(1)} s · {test.cost}</span> : <span className="field-problem" role="status">{test.message}</span>)}
+        <span className="set-hint">Sends one fixed request with no client data.</span>
+      </div>
+      <details className="set-ai-sent">
+        <summary>What is sent</summary>
+        <p className="muted">
+          Only what a task needs, about one client at a time, and only for clients with Allow AI on. Before anything goes, FocusTime checks it: another client's name, project or work item, anything that looks like a key, token or password, your VM, or an email address from outside Cooptimize stops the request. The AI service is asked not to keep requests, and FocusTime's log keeps only the counts and the cost below, never the text.
+        </p>
+      </details>
+      <h3 className="set-ai-h">Last 20 requests</h3>
+      {st && st.recentText.length ? (
+        <table className="set-ai-log">
+          <thead>
+            <tr>
+              <th scope="col">When</th>
+              <th scope="col">Task</th>
+              <th scope="col">Client</th>
+              <th scope="col">Cost</th>
+              <th scope="col">Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {st.recentText.map((r, i) => (
+              <tr key={i}>
+                <td>{fmtAiTime(r.at)}</td>
+                <td>{AI_TASK_NAMES[r.task] ?? r.task}</td>
+                <td>{nameOf(r.client)}</td>
+                <td>{r.cost}</td>
+                <td className={r.outcome === "OK" ? "" : "field-problem"}>{r.outcome}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="muted">No AI requests yet.</p>
+      )}
+    </div>
+  );
+}
+
+/** Names for the task names the log keeps. */
+const AI_TASK_NAMES: Record<string, string> = { test_ai: "Test AI" };
+const fmtAiTime = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
 
 function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; data: SettingsData; onSavedData: (d: SettingsData) => void }) {
   const reached = data.dataverseReached;

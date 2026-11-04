@@ -1,0 +1,24 @@
+// AI-0: the stub provider, for the developer loop and CI when no key is configured: no network, no cost beyond the
+// estimate from its made-up token counts. It answers with the simplest value that fits the task's schema (or what a
+// test gives it), so every path through the service runs the same as with OpenAI.
+import { sampleOf } from "./schema.ts";
+import type { AiProvider, ProviderCall, ProviderReply } from "./types.ts";
+
+export type StubOptions = {
+  /** A test's answer for a call (text, or a whole reply); default: a value made from the schema. */
+  respond?: (c: ProviderCall) => string | ProviderReply | Promise<string | ProviderReply>;
+};
+
+/** About four characters a token, like OpenAI's rule of thumb. */
+const tokens = (s: string) => Math.ceil(s.length / 4);
+
+export function stubProvider(o: StubOptions = {}): AiProvider {
+  return {
+    name: "stub",
+    async call(c) {
+      const r = o.respond ? await o.respond(c) : JSON.stringify(sampleOf(c.schema));
+      if (typeof r !== "string") return r;
+      return { ok: true, text: r, model: `${c.model} (stub)`, usage: { inputTokens: tokens(c.instructions) + tokens(c.input), cachedTokens: 0, outputTokens: tokens(r) } };
+    },
+  };
+}

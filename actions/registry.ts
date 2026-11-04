@@ -147,6 +147,8 @@ export const ACTIONS = [
   { name: "asks.reopen", title: "Undo an ask's resolution", group: "Asks", target: "ask", summary: "Open a linked, handled or dismissed ask again" },
   { name: "asks.search", title: "Find an item for an ask", group: "Asks", target: "ask", summary: "Search the client's open DevOps items to link an ask to" },
   { name: "asks.purge", title: "Delete a client's stored chat messages", group: "Settings", target: "none", summary: "Deletes every message and ask FocusTime stored for one client (DevOps items made from them stay)" },
+  { name: "ai.status", title: "AI", group: "Settings", target: "none", summary: "Settings › AI: Use AI, this month's spend against your cap, and your last 20 AI requests (never their text)" },
+  { name: "ai.test", title: "Test AI", group: "Settings", target: "none", summary: "Sends one fixed harmless request (no client) and says whether it worked, how long it took and what it cost" },
   { name: "permissions.status", title: "Microsoft permissions", group: "Settings", target: "none", summary: "Every permission FocusTime asks Microsoft for, and whether it's allowed (Settings > Connections)" },
   { name: "people.photos", title: "Profile photos", group: "Focus", target: "none", summary: "Photos of me and the Cooptimizers on screen, from Microsoft; cached 7 days, initials when there is none" },
   { name: "presence.people", title: "Teammates' presence", group: "Focus", target: "none", summary: "Available, Busy, In a meeting and so on for the Cooptimizers on screen; read-only, never kept" },

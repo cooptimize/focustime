@@ -12,6 +12,8 @@ export const SECRET_ENV: Readonly<Record<AppSecretAccount, string>> = {
   "dataverse-client-secret": "FOCUSTIME_SECRET_DATAVERSE_CLIENT",
   // Only for running the image against a local SQL Server (the hosted app signs in with its identity).
   "sql-password": "FOCUSTIME_SECRET_SQL_PASSWORD",
+  // AI-0: only for running the image locally with a key; the hosted app reads ft-openai-key from Key Vault itself.
+  "openai-api-key": "FOCUSTIME_SECRET_OPENAI_KEY",
 };
 
 const isApp = (a: SecretAccount): a is AppSecretAccount => a in SECRET_ENV;

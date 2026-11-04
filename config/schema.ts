@@ -3,6 +3,7 @@ import { parse, TomlError } from "smol-toml";
 import type { MainHalf, StandingBlock, WeekConfig, WorkWeekday } from "../week/types.ts";
 import { DEFAULT_THRESHOLDS, type RoadmapThresholds } from "../plan/roadmap.ts";
 import { DEFAULT_ASK_SETTINGS, type AskSettings } from "../plan/asks.ts";
+import { DEFAULT_AI_PERSON, type AiPersonSettings } from "../ai/types.ts";
 import { DEFAULT_NOTIFY, NOTIFY_KINDS, type NotifyKind, type NotifySettings } from "../plan/notify.ts";
 import { DEFAULT_FOCUS, MAX_PLAYLISTS, playlistLink, SOUNDS, type FocusSettings, type SoundKind } from "../plan/focussound.ts";
 import { parseSpan, VIEW_RANGES, WEEKDAY_KEYS, type DayOverride, type Span, type TimeModel, type ViewRange, type WeekdayKey } from "../week/hours.ts";
@@ -51,6 +52,8 @@ export type AppConfig = {
   roadmap: RoadmapThresholds;
   /** AP-1: Asks: how often delivery chats are read in working hours, and the phrase lists the rules use. */
   asks: AskSettings;
+  /** AI-0: Use AI (off by default), the monthly cap in US dollars (10 by default), the clients with Allow AI on (none). */
+  ai: AiPersonSettings;
 };
 /** `ownerValue` empty means the signed-in person's UPN (A2), then their display name. `startWithoutAsking` (step 15.5, Q87): the morning box's Start runs at once. */
 export type AzureSettings = { ownerTag: string; ownerValue: string; startWithoutAsking: boolean };
@@ -193,7 +196,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
 
   // Section and key names are unchanged by the rename (R1), so existing config files keep working.
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "asks"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "asks", "ai"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -610,6 +613,29 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     }
   }
 
+  // [ai] (optional, AI-0): use (true or false), monthly_cap_usd (0 to 1000), allowed_clients (client keys)
+  const ai: AiPersonSettings = { ...DEFAULT_AI_PERSON, allowedClients: [] };
+  if (raw.ai !== undefined) {
+    const t = isTable(raw.ai) ? raw.ai : (err("ai", "Must be an [ai] table"), null);
+    if (t) {
+      for (const k of Object.keys(t)) if (!["use", "monthly_cap_usd", "allowed_clients"].includes(k)) err(`ai.${k}`, "Unknown field");
+      if (t.use !== undefined) {
+        if (typeof t.use !== "boolean") err("ai.use", "Must be true or false");
+        else ai.use = t.use;
+      }
+      if (t.monthly_cap_usd !== undefined) {
+        const c = t.monthly_cap_usd;
+        if (typeof c !== "number" || !Number.isFinite(c) || c < 0 || c > 1000) err("ai.monthly_cap_usd", "Must be a number of dollars from 0 to 1000");
+        else ai.monthlyCapUsd = c;
+      }
+      if (t.allowed_clients !== undefined) {
+        const v = t.allowed_clients;
+        if (!Array.isArray(v) || v.length > 200 || v.some((x) => typeof x !== "string" || !x.trim() || x.length > 100)) err("ai.allowed_clients", "Must be a list of client names");
+        else ai.allowedClients = [...new Set((v as string[]).map((x) => x.trim()))];
+      }
+    }
+  }
+
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
   if (raw.outlook !== undefined) {
@@ -661,6 +687,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       notify,
       roadmap,
       asks,
+      ai,
     },
   };
 }

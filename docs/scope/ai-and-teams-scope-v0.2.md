@@ -23,7 +23,7 @@ The core loop (plan the week, plan the day, focus, check in, close out, follow u
 |---|---|---|
 | AI-D1 | Confirmed | Provider: **OpenAI API**. Built behind a provider adapter so it can change later. |
 | AI-D2 | Confirmed | Data policy: anything Coopilot holds may be sent to the provider (calendar, DevOps text for all clients, internal Teams), one client per request. the owner: the business terms exclude training, and no client contract restricts the data Coopilot holds. |
-| AI-D3 | Open | **API access is separate from ChatGPT Business.** OpenAI's Business FAQ: a Business subscription does not include API usage; the API platform is billed separately. Need: which API organization/project and key (Cooptimize org vs personal), and confirm its data controls (training off by default for API; retention window; zero-retention option if wanted). Key lives in Key Vault only. |
+| AI-D3 | Set up in AI-0 (Nov 4) | **AI-0:** one OpenAI project and key per environment (FocusTime dev, FocusTime prod) in the Cooptimize API organization, each with a hard monthly spend limit; the key only in that environment's Key Vault as `ft-openai-key` (infra/scripts/openai-key.sh, never printed); requests sent with `store: false` (no application state kept by OpenAI; abuse monitoring logs up to 30 days; API data not used for training); zero data retention not requested yet. Caps in FocusTime too: 10 USD a person and 100 USD for the app each month (D495 to D499, runbook › AI). Original text: **API access is separate from ChatGPT Business.** OpenAI's Business FAQ: a Business subscription does not include API usage; the API platform is billed separately. Need: which API organization/project and key (Cooptimize org vs personal), and confirm its data controls (training off by default for API; retention window; zero-retention option if wanted). Key lives in Key Vault only. |
 | T-D1 | Confirmed | Each client's delivery thread is usually a **Teams group chat with internal and external people**, e.g. "Fabrikam Delivery Team (Cooptimize)". Not a channel. |
 | T-D2 | Open | Posting to chats that include external people. Proposal: allowed, never automatic; preview lists everyone who will see it with external people flagged; a client-safe filter keeps internal planning details out (see below). |
 | T-D3 | Confirmed | Post types: slip heads-up, deployment done, weekly status, loop closed, all of them. And "more intelligence than templates": Coopilot should notice when a post is worth making and draft it with AI. |
@@ -54,7 +54,7 @@ Likely Graph permissions (verify when building): Chat.ReadBasic, Chat.Read, Chat
 
 ## Open questions
 
-1. AI-D3: which OpenAI API org/project and key, and its retention settings.
+1. AI-D3: which OpenAI API org/project and key, and its retention settings. (Set up in AI-0, see AI-D3 above; the owner creates the projects and keys.)
 2. T-D2: posting to mixed internal/external chats as proposed?
 3. Does each client have exactly one delivery chat, or sometimes several?
 

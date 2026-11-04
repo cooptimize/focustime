@@ -11,6 +11,11 @@ import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
 import { createPushDevices } from "../store/push-devices.ts";
 import { createPush, type VapidSource } from "./push.ts";
 import { keyVaultSecret } from "../host/azure/vapid.ts";
+import { openAiProvider } from "../ai/openai.ts";
+import { stubProvider } from "../ai/stub.ts";
+import type { AiProvider } from "../ai/types.ts";
+import type { AiRuntime } from "../actions/ai-actions.ts";
+import { appSpendStore } from "../store/ai-spend.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { WritePats } from "../actions/devops-write-actions.ts";
 import { createLocalHost } from "../host/local/index.ts";
@@ -272,6 +277,42 @@ if (host.kind === "azure" && process.env.FOCUSTIME_KEYVAULT_URL) {
   // P1: the VAPID key for Web Push, read when first needed (none: push says it isn't set up).
   vapidSource = keyVaultSecret({ vaultUrl: process.env.FOCUSTIME_KEYVAULT_URL, secretName: process.env.FOCUSTIME_VAPID_SECRET_NAME ?? "ft-vapid-key", token: async () => (await credential.getToken("https://vault.azure.net/.default")).token });
 }
+/**
+ * AI-0: the AI key, read when needed and held in memory for 10 minutes (a missing one is asked for again after a
+ * minute, so adding it with infra/scripts/openai-key.sh takes effect without a restart). Hosted: the Key Vault secret
+ * ft-openai-key; the developer loop: the keyring entry openai-api-key. Never logged.
+ */
+let aiKeySource: () => Promise<string | null> = async () => {
+  try {
+    return await host.secrets.get("openai-api-key");
+  } catch {
+    return null;
+  }
+};
+if (host.kind === "azure" && process.env.FOCUSTIME_KEYVAULT_URL) {
+  const credential = new DefaultAzureCredential(process.env.AZURE_CLIENT_ID ? { managedIdentityClientId: process.env.AZURE_CLIENT_ID } : {});
+  aiKeySource = keyVaultSecret({ vaultUrl: process.env.FOCUSTIME_KEYVAULT_URL, secretName: process.env.FOCUSTIME_OPENAI_SECRET_NAME ?? "ft-openai-key", token: async () => (await credential.getToken("https://vault.azure.net/.default")).token });
+}
+let aiKeyHeld: { value: string | null; until: number } | null = null;
+const aiKey = async (): Promise<string | null> => {
+  if (aiKeyHeld && Date.now() < aiKeyHeld.until) return aiKeyHeld.value;
+  const value = await aiKeySource().catch(() => {
+    log({ source: "ai", op: "key", kind: "unavailable" });
+    return null;
+  });
+  aiKeyHeld = { value, until: Date.now() + (value ? 10 * 60_000 : 60_000) };
+  return value;
+};
+/** AI-0: hosted, OpenAI by default; the developer loop and CI, the stub (no network) unless [ai] provider = "openai". */
+const aiProviderKind = app.ai.provider ?? (host.kind === "azure" ? "openai" : "stub");
+const openAi = openAiProvider({ key: aiKey });
+const stubAi = stubProvider();
+const aiRuntime: AiRuntime = {
+  app: { ...app.ai, provider: aiProviderKind },
+  provider: async (): Promise<AiProvider | null> => (aiProviderKind === "stub" ? stubAi : aiProviderKind === "openai" && (await aiKey()) ? openAi : null),
+  appSpend: appSpendStore(db, instantNow),
+  logger: log,
+};
 /** A3: when a signed-in person last used FocusTime (in memory; the idle rule's "someone is active"). */
 let lastUse = 0;
 const ACTIVE_MS = 15 * 60_000;
@@ -448,6 +489,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
   const push = pushFor(userId);
   const liveCtx: ActionContext = {
     log,
+    ai: aiRuntime,
     renameNote: renamed.note,
     demo: demoControl(false),
     env: build.env,
