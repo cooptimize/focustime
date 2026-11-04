@@ -311,7 +311,9 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const c = await configOrNull();
     if (!c) return;
     const ac = { ...(await askContext(liveCtx)), pto: ptoOff };
-    await pollAsks(ac, { force: false });
+    const r = await pollAsks(ac, { force: false });
+    // AP-2: one notification per ask AI sorted as needing me now (held during focus unless Settings lets it through).
+    for (const u of r.urgent) if (notifier.allows("asks")) await send(notices.urgentAsk(u.messageId, c.clientSettings[u.clientKey]?.name ?? u.clientKey, u.title, instantNow().toString()));
     if (await store.markOnce("asks_cleanup", todayOf(c))) {
       const n = await store.purgeChatText({ olderThan: instantNow().subtract({ hours: 24 * UNMATCHED_DAYS }).toString() });
       log({ source: "plan", op: "asks_cleanup", count: n });
