@@ -60,7 +60,7 @@ identity changes: set the variable again.
 
 ### The tree check (S1, D456)
 
-`ci.yml`'s test job saves `git rev-parse HEAD^{tree}` as the artifact `tested-tree`. On a pull request, HEAD is
+`ci.yml`'s test job (the gate after the unit and browser jobs, D487) saves `git rev-parse HEAD^{tree}` as the artifact `tested-tree`. On a pull request, HEAD is
 GitHub's merge of the PR into main at that moment. `scripts/ci-tree-match.sh <owner/repo> <sha>` (deploy-dev's `reuse`
 job) finds the merged PR for the commit on main, the newest passing `pull_request` run of ci on the PR's last commit,
 downloads its `tested-tree` and compares it with the tree of the commit on main. Equal trees mean the same files were
