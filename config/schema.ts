@@ -622,7 +622,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
   if (raw.ai !== undefined) {
     const t = isTable(raw.ai) ? raw.ai : (err("ai", "Must be an [ai] table"), null);
     if (t) {
-      for (const k of Object.keys(t)) if (!["use", "monthly_cap_usd", "allowed_clients"].includes(k)) err(`ai.${k}`, "Unknown field");
+      for (const k of Object.keys(t)) if (!["use", "monthly_cap_usd", "allowed_clients", "draft_months"].includes(k)) err(`ai.${k}`, "Unknown field");
       if (t.use !== undefined) {
         if (typeof t.use !== "boolean") err("ai.use", "Must be true or false");
         else ai.use = t.use;
@@ -631,6 +631,12 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
         const c = t.monthly_cap_usd;
         if (typeof c !== "number" || !Number.isFinite(c) || c < 0 || c > 1000) err("ai.monthly_cap_usd", "Must be a number of dollars from 0 to 1000");
         else ai.monthlyCapUsd = c;
+      }
+      // DS-1: draft_months (1 to 36): how far back Draft stories looks for examples.
+      if (t.draft_months !== undefined) {
+        const m = t.draft_months;
+        if (typeof m !== "number" || !Number.isInteger(m) || m < 1 || m > 36) err("ai.draft_months", "Must be a whole number of months from 1 to 36");
+        else ai.draftMonths = m;
       }
       if (t.allowed_clients !== undefined) {
         const v = t.allowed_clients;

@@ -8,6 +8,7 @@ import { ai } from "./20261104T1800_ai.ts";
 import { itemClients } from "./20261104T1900_item_clients.ts";
 import { asksAiPromises } from "./20261104T2000_asks_ai_promises.ts";
 import { deliveryChatKind } from "./20261104T0400_delivery_chat_kind.ts";
+import { storyDrafts } from "./20261105T0100_story_drafts.ts";
 import type { NamedMigration } from "./named.ts";
 
-export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises];
+export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, storyDrafts];

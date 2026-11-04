@@ -225,7 +225,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
     case "ai": {
       // AI-0: Settings › AI (Use AI, the monthly cap) and Settings › Clients (Allow AI: one client on or off, so two
       // quick switches never undo each other). Both switches are off by default.
-      only(v, ["use", "monthlyCapUsd", "allow"], "ai");
+      only(v, ["use", "monthlyCapUsd", "allow", "draftMonths"], "ai");
       const values: [string, boolean | number | string[]][] = [];
       if (v.use !== undefined) {
         if (typeof v.use !== "boolean") throw new SettingsInputError("ai.use", "Must be true or false");
@@ -235,6 +235,11 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
         const c = v.monthlyCapUsd;
         if (typeof c !== "number" || !Number.isFinite(c) || c < 0 || c > 1000) throw new SettingsInputError("ai.monthly_cap_usd", "Must be a number of dollars from 0 to 1000");
         values.push(["monthly_cap_usd", Math.round(c * 100) / 100]);
+      }
+      if (v.draftMonths !== undefined) {
+        const m = v.draftMonths;
+        if (typeof m !== "number" || !Number.isInteger(m) || m < 1 || m > 36) throw new SettingsInputError("ai.draft_months", "Must be a whole number of months from 1 to 36");
+        values.push(["draft_months", m]);
       }
       const allow = v.allow as { client?: unknown; on?: unknown } | undefined;
       if (allow !== undefined && (typeof allow !== "object" || allow === null || typeof allow.client !== "string" || !allow.client.trim() || allow.client.length > 100 || typeof allow.on !== "boolean")) throw new SettingsInputError("ai.allowed_clients", "Must name a client and on or off");

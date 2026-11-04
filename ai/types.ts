@@ -94,7 +94,7 @@ export type ProviderCall = { model: string; instructions: string; input: string;
 export type AiProvider = { name: "openai" | "stub"; call(c: ProviderCall): Promise<ProviderReply> };
 
 /** A person's AI settings (Settings › AI and Settings › Clients): both switches off by default, a 10 dollar cap. */
-export type AiPersonSettings = { use: boolean; monthlyCapUsd: number; allowedClients: string[] };
+export type AiPersonSettings = { use: boolean; monthlyCapUsd: number; allowedClients: string[]; /** DS-1: how far back Draft stories looks for examples, in months (12 when unset). */ draftMonths?: number };
 export const DEFAULT_AI_PERSON: AiPersonSettings = { use: false, monthlyCapUsd: 10, allowedClients: [] };
 
 /** The outcomes the log keeps (D497). */
