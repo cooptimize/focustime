@@ -112,7 +112,7 @@ Run (developer loop, `system/README.md`): `focustime-open` (starts the service i
 
 ## T-2: delivery chats (Nov 3)
 
-- `plan/chats.ts`: pure rules and views: isExternal (by tenantId, D484), flagMembers, chatName, memberLine, activityOf, filterChats (the picker), teamsLink. `plan/permissions.ts`: the delegated Microsoft permissions and their states from token probes (D485).
+- `plan/chats.ts`: pure rules and views: isExternal (by tenantId, D485), flagMembers, chatName, memberLine, activityOf, filterChats (the picker), teamsLink. `plan/permissions.ts`: the delegated Microsoft permissions and their states from token probes (D486).
 - `sources/graph/chats.ts`: GET /me/chats?$expand=members (group chats, nextLink paging) and /chats/{id}/members on the `chats` token (Chat.ReadBasic, `sources/oauth/oauth.ts`, with `probe(kind)`); `sources/demo/chats.ts` for demo mode.
 - `actions/chat-actions.ts`: chats.registered, chats.list, chats.add, chats.remove, chats.primary, chats.refresh, permissions.status (context from `actions/dispatch.ts chatContext`).
 - `store/migrations/20261104T0100_delivery_chats.ts`: `delivery_chats` (user_id, chat_id) with client, name, link, primary, position and the cached members; `store/plan-store.ts` deliveryChats, addDeliveryChat, removeDeliveryChat, setPrimaryDeliveryChat, setDeliveryChatMembers.
