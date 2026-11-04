@@ -63,14 +63,19 @@ export function evaluateRisks(input: RiskInput, t: RiskThresholds): RiskResult {
   const inWork = ([a, b]: Interval): Interval[] => windows.map(([x, y]): Interval => [Math.max(a, x), Math.min(b, y)]).filter(([x, y]) => y > x);
   const workMinutes = (iv: Interval) => inWork(iv).reduce((n, [x, y]) => n + (y - x), 0) / 60000;
   const busy = input.events.filter((p) => isBusy(p.event));
-  // Unavailable time is busy (it takes free time) but it is not a meeting.
-  const meetingIvs = busy.filter((p) => !p.event.isPersonal && !p.event.unavailable).flatMap((p) => inWork([ms(p.clipStart), ms(p.clipEnd)]));
+  // Unavailable time is busy (it takes free time) but it is not a meeting. Nor are FocusTime's time boxes or my events
+  // with no one else on them (notMeeting).
+  const meetingIvs = busy.filter((p) => !p.event.isPersonal && !p.event.unavailable && !p.event.notMeeting).flatMap((p) => inWork([ms(p.clipStart), ms(p.clipEnd)]));
   const busyMeetingMinutes = minutes(union(meetingIvs).reduce((sum, [a, b]) => sum + (b - a), 0));
   const busyIvs = busy.map((p): Interval => [ms(p.clipStart), ms(p.clipEnd)]);
   const gapIvs = windows.flatMap(([a, b]) => gaps(busyIvs, a, b));
   const longestFreeMinutes = gapIvs.reduce((best, [a, b]) => Math.max(best, minutes(b - a)), 0);
   const toIso = (x: number) => iso(Temporal.Instant.fromEpochMilliseconds(x).toZonedDateTimeISO(input.timeZone));
   const freeGaps = gapIvs.map(([a, b]) => ({ start: toIso(a), end: toIso(b), minutes: minutes(b - a) }));
+  // The free stretch the risk rules judge: time boxes and events with no one else are free for focus here. The slot's
+  // freeGaps and longestFreeMinutes above stay as planning sees them (taken time, so nothing is planned over them).
+  const riskBusyIvs = busy.filter((p) => !p.event.notMeeting).map((p): Interval => [ms(p.clipStart), ms(p.clipEnd)]);
+  const riskFreeMinutes = windows.flatMap(([a, b]) => gaps(riskBusyIvs, a, b)).reduce((best, [a, b]) => Math.max(best, minutes(b - a)), 0);
 
   const primary = input.focus[0];
   if (!primary) return { risks: [], longestFreeMinutes, busyMeetingMinutes, freeGaps };
@@ -104,12 +109,12 @@ export function evaluateRisks(input: RiskInput, t: RiskThresholds): RiskResult {
   }
 
   // 3. No focus window
-  if (longestFreeMinutes < t.minFocusWindowMinutes) {
+  if (riskFreeMinutes < t.minFocusWindowMinutes) {
     risks.push({
       rule: "no_focus_window",
       severity: "at_risk",
-      reason: `Longest free stretch is ${formatDuration(longestFreeMinutes)}, under ${formatDuration(t.minFocusWindowMinutes)}, in ${block}`,
-      short: longestFreeMinutes ? `Longest gap ${formatDuration(longestFreeMinutes)}` : "No free time",
+      reason: `Longest free stretch is ${formatDuration(riskFreeMinutes)}, under ${formatDuration(t.minFocusWindowMinutes)}, in ${block}`,
+      short: riskFreeMinutes ? `Longest gap ${formatDuration(riskFreeMinutes)}` : "No free time",
     });
   }
 

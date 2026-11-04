@@ -130,9 +130,9 @@ So the slice uses a soft "day shape" in config only to place meetings and events
 
 Proposed v1 rules, thresholds in config:
 
-1. **Meeting load:** busy/tentative meeting minutes inside a focus block ≥ 90 → watch, ≥ 150 → at risk. Reason names the minutes and block.
+1. **Meeting load:** busy/tentative meeting minutes inside a focus block ≥ 90 → watch, ≥ 150 → at risk. Reason names the minutes and block. FocusTime's own time boxes on Outlook (the tb- marker, or recorded as FocusTime's) and events I organize with no other attendees aren't meetings and don't count (D508).
 2. **Personal conflict:** any personal (Google) timed event overlapping a focus block → at risk. All-day personal events → watch.
-3. **No focus window:** no contiguous free gap ≥ 90 minutes inside the block → at risk.
+3. **No focus window:** no contiguous free gap ≥ 90 minutes inside the block → at risk. Time boxes and events with no other attendees are free for this rule; planning (free gaps, Timebox my day) still treats them as taken (D508).
 4. **Double-booked block:** more than one focus block in the same half-day → at risk.
 
 Events marked free are ignored. Declined Outlook events are excluded. Rules are pure functions with table-driven tests.

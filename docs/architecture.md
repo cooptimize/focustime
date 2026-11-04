@@ -46,7 +46,7 @@ P1: migration `20261103T2300_notices_push` adds two user tables: `notices` (the 
 
 ## Send feedback (F1)
 
-The feedback module spans four files, with no other dependencies (D508 to D512):
+The feedback module spans four files, with no other dependencies (D509 to D513):
 - `plan/feedback.ts`, pure: the window's input (kind, text, where; nothing else), the title, the description and the tags. It has no way to reach the plan, clients or work items.
 - `sources/devops/feedback.ts`: the DevOps calls as the app's managed identity (a bearer token for Azure DevOps). It reads the parent, the process's story type, and the default team's iteration; it creates with the parent link in the same JSON Patch (validateOnly for the setup check) and reads back. Logs carry op, status and duration only.
 - `actions/feedback-actions.ts`: the service (one per process, with its cached setup check) and the feedback.status, feedback.preview and feedback.send actions. Previews are held 10 minutes; the daily count is in the person's kv. `actions/feedback-types.ts` holds the types the window shares.

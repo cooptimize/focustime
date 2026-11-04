@@ -16,7 +16,7 @@ const NOW = Temporal.Instant.from("2026-11-02T13:02:00Z"); // 8:02 AM New York
 
 type Kind = "outlook" | "google";
 
-function setup(kind: Kind, scenario: ApiScenario, opts: { connected?: boolean; calendars?: string[]; cacheDir?: string; locked?: boolean } = {}) {
+function setup(kind: Kind, scenario: ApiScenario, opts: { connected?: boolean; calendars?: string[]; cacheDir?: string; locked?: boolean; calendarScope?: "Calendars.ReadBasic" | "Calendars.ReadWrite" } = {}) {
   const cacheDir = opts.cacheDir ?? mkdtempSync(join(tmpdir(), "focustime-cal-"));
   const logs: LogRecord[] = [];
   const api = fakeApis(scenario);
@@ -27,7 +27,7 @@ function setup(kind: Kind, scenario: ApiScenario, opts: { connected?: boolean; c
   const common = { fetch: api.fetch, keyring, loopback: createLoopback(), openBrowser: async () => {}, snapshots: createSnapshotStore(cacheDir), log: (r: LogRecord) => logs.push(r), timeZone: NY, now: () => NOW };
   const source =
     kind === "outlook"
-      ? createOutlookSource({ ...common, config: { tenantId: TENANT, clientId: "44444444-4444-4444-8444-444444444444" } })
+      ? createOutlookSource({ ...common, config: { tenantId: TENANT, clientId: "44444444-4444-4444-8444-444444444444" }, ...(opts.calendarScope ? { calendarScope: opts.calendarScope } : {}) })
       : createGoogleSource({ ...common, config: { clientId: "123-abc.apps.googleusercontent.com", calendars: opts.calendars ?? ["primary"] } });
   return { source, cacheDir, logs, calls: api.calls, keyring };
 }
@@ -52,10 +52,27 @@ describe("Outlook source requests", () => {
     const u = new URL(first.url);
     expect(u.searchParams.get("startDateTime")).toBe("2026-11-02T00:00:00-05:00");
     expect(u.searchParams.get("endDateTime")).toBe("2026-11-09T00:00:00-05:00");
-    expect(u.searchParams.get("$select")).toBe("subject,start,end,isAllDay,showAs,responseStatus,isCancelled");
+    // isOrganizer and attendees only for the risk rules' "no one else on it" (notMeeting); addresses are never kept.
+    expect(u.searchParams.get("$select")).toBe("subject,start,end,isAllDay,showAs,responseStatus,isCancelled,isOrganizer,attendees");
+    // Calendars.ReadBasic can't read extended properties, so no marker is asked for.
+    expect(u.searchParams.get("$expand")).toBeNull();
     expect(first.headers.prefer).toBe('outlook.timezone="America/New_York", IdType="ImmutableId"');
     expect(first.headers.authorization).toBe(`Bearer ${FAKE_ACCESS}`);
-    for (const c of calls) expect(c.url).not.toMatch(/body|attendees/i);
+    for (const c of calls) expect(c.url).not.toMatch(/body/i);
+  });
+
+  it("on a Calendars.ReadWrite read token, also asks for FocusTime's marker (only that property)", async () => {
+    const { source, calls } = setup("outlook", "ok", { calendarScope: "Calendars.ReadWrite" });
+    expect((await source.load(WEEK)).status).toBe("ok");
+    const u = new URL(calls.find((c) => c.url.includes("calendarView"))!.url);
+    expect(u.searchParams.get("$expand")).toBe("singleValueExtendedProperties($filter=id eq 'String {5b0f3c1e-8a2d-4e7f-9c41-6d2a8e0b7f13} Name CoopilotId')");
+  });
+
+  it("keeps no attendee addresses in what it returns or caches", async () => {
+    const { source, cacheDir } = setup("outlook", "ok");
+    const r = await source.load(WEEK);
+    expect(JSON.stringify(r.items)).not.toMatch(/attendees|emailAddress|@/);
+    expect(readdirSync(join(cacheDir, "outlook")).map((f) => readFileSync(join(cacheDir, "outlook", f), "utf8")).join("")).not.toMatch(/attendees|emailAddress/);
   });
 
   it("follows nextLink and returns both pages without declined or cancelled events", async () => {

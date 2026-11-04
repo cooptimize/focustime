@@ -207,7 +207,7 @@ The "FocusTime" app registration and the "FocusTime DB Admins" group stay (prod 
 by running `app-registration.sh` with only the URLs still in use. Delete the GitHub variables `AZURE_DEV_*` if dev is
 gone for good.
 
-## Send feedback (F1, D508 to D512)
+## Send feedback (F1, D509 to D513)
 
 ⋯ › Send feedback creates a User Story under Feature #496 in the cooptimize organization, project Cooptimize Internal,
 as the app's own managed identity. Until an identity is added below, that environment's dialog says "Feedback isn't set

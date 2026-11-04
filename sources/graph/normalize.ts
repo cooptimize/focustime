@@ -1,5 +1,7 @@
 // Microsoft Graph calendarView events → CalEvent. Pure.
 import type { CalEvent, ShowAs } from "../../week/types.ts";
+import { TIMEBOX_MARKER } from "../../plan/caltier.ts";
+import { MARKER_PROP } from "./write.ts";
 
 export type GraphDateTime = { dateTime: string; timeZone: string };
 export type GraphEvent = {
@@ -11,7 +13,21 @@ export type GraphEvent = {
   responseStatus: { response: string; time?: string } | null;
   start: GraphDateTime;
   end: GraphDateTime;
+  /** Read for the risk rules only (notMeeting): whether I organize it and how many attendees; addresses are never kept. */
+  isOrganizer?: boolean;
+  attendees?: unknown[];
+  /** FocusTime's marker, when the read token may expand it (Calendars.Read or more). */
+  singleValueExtendedProperties?: { id?: unknown; value?: unknown }[];
 };
+
+/** "timebox" for FocusTime's time box (its tb- marker), "solo" for my event with no attendees; else a meeting. */
+export function notMeetingOf(e: Pick<GraphEvent, "isOrganizer" | "attendees" | "singleValueExtendedProperties">): CalEvent["notMeeting"] {
+  const marker = (e.singleValueExtendedProperties ?? []).find((p) => typeof p.id === "string" && p.id.toLowerCase() === MARKER_PROP.toLowerCase())?.value;
+  if (typeof marker === "string" && TIMEBOX_MARKER.test(marker)) return "timebox";
+  // The same rule as the editing tier "Mine" (plan/caltier.ts): I organize it and no one else is on it.
+  if (e.isOrganizer === true && Array.isArray(e.attendees) && e.attendees.length === 0) return "solo";
+  return undefined;
+}
 
 const SHOW_AS: Record<string, ShowAs> = {
   free: "free",
@@ -72,6 +88,8 @@ export function normalizeGraphEvents(items: readonly GraphEvent[], timeZone: str
       isPersonal: false,
     };
     if (response) ev.responseStatus = response;
+    const notMeeting = notMeetingOf(e);
+    if (notMeeting) ev.notMeeting = notMeeting;
     events.push(ev);
   }
   return { events, skipped };
