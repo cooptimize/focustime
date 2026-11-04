@@ -3,7 +3,7 @@
 // and note. Not needed closes one quietly; Snooze hides one until a day; Delete is only for ones I added. Local only:
 // nothing is posted anywhere; heads-up drafts are copied by hand.
 import { DevOpsAction } from "./DevOpsWrite.tsx";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
 import { parseItemRef } from "../plan/lookup.ts";
 import { DevOpsWork } from "./work.ts";
@@ -314,7 +314,7 @@ function LinkedItem({ l }: { l: FollowUpView }) {
 }
 
 /** A status line that fades on its own (step 13.5: no bar left behind). */
-export function Fading({ text, onGone, ms = 4000 }: { text: string | null; onGone: () => void; ms?: number }) {
+export function Fading({ text, onGone, ms = 4000 }: { text: ReactNode; onGone: () => void; ms?: number }) {
   useEffect(() => {
     if (!text) return;
     const t = setTimeout(onGone, ms);

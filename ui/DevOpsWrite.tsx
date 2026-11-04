@@ -21,7 +21,9 @@ export type DevOpsChange =
   | { kind: "comment"; itemId: number; text: string }
   | { kind: "create"; draftId: number }
   | { kind: "target_date"; itemId: number; date: string; /** Step 17: Save dates to DevOps (where the process has Start Date). */ startDate?: string }
-  | { kind: "undo"; writeId: number };
+  | { kind: "undo"; writeId: number }
+  /** AP-1: a bug, story or feature from an ask in a client chat. */
+  | { kind: "ask_create"; chatId: string; messageId: string; level: "bug" | "story" | "feature" };
 
 export type DevOpsWriteEnv = {
   /** Clients with a checked write PAT. */
