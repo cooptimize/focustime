@@ -16,14 +16,18 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  test:
+  # Runners in parallel (fix/ci-speed): the unit and store tests with SQL Server on one, the browser tests on four
+  # others. On one four-core runner they ran together with SQL Server and about 30 demo servers and browsers, which took
+  # 16 to 18 minutes and pushed browser pages past their timeouts. The test job below is the gate: it runs only when
+  # both passed and records the tested tree for deploy-dev.
+  unit:
+    name: Unit and store tests (SQLite and SQL Server)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       FOCUSTIME_TEST_SQL: required
       FOCUSTIME_TEST_SQL_SERVER: localhost
       FOCUSTIME_TEST_SQL_PORT: "14330"
-      FOCUSTIME_TEST_WEBKIT: required
       TZ: America/Chicago
     steps:
       - uses: actions/checkout@v4
@@ -41,20 +45,96 @@ jobs:
           MSSQL_SA_PASSWORD="$pw" docker run -d --name sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD -e MSSQL_PID=Developer \
             -p 127.0.0.1:14330:1433 mcr.microsoft.com/mssql/server:2025-latest
       - run: npm ci --no-audit --no-fund
-      # Playwright's WebKit (Safari's engine) and its system libraries, for e2e/safari.test.ts.
-      - run: npx playwright-core install --with-deps webkit
       - run: npm run typecheck
+      # The 2025 image sometimes dies at start on these runners ("sqlservr: This program has encountered a fatal error",
+      # PR #12 and #19): a dead container is started again, up to three starts, with its log tail each time.
       - name: Wait for SQL Server
         run: |
-          for i in $(seq 1 60); do
-            docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$FOCUSTIME_TEST_SQL_PASSWORD" -Q "SELECT 1" -b >/dev/null 2>&1 && exit 0
-            sleep 2
+          start() {
+            docker rm -f sql >/dev/null 2>&1 || true
+            MSSQL_SA_PASSWORD="$FOCUSTIME_TEST_SQL_PASSWORD" docker run -d --name sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD \
+              -e MSSQL_PID=Developer -p 127.0.0.1:14330:1433 mcr.microsoft.com/mssql/server:2025-latest >/dev/null
+          }
+          for attempt in 1 2 3; do
+            for i in $(seq 1 60); do
+              docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$FOCUSTIME_TEST_SQL_PASSWORD" -Q "SELECT 1" -b >/dev/null 2>&1 && exit 0
+              [ "$(docker inspect -f '{{.State.Running}}' sql 2>/dev/null)" = true ] || break
+              sleep 2
+            done
+            echo "SQL Server isn't answering (start $attempt of 3):"
+            docker logs sql 2>&1 | grep -v "Permission denied" | tail -15
+            [ "$attempt" -lt 3 ] && start
           done
-          docker logs sql | tail -20; exit 1
-      - name: Unit, store (SQLite and SQL Server) and browser tests
-        run: npx vitest run --reporter=dot
+          exit 1
+      - name: Unit and store tests
+        run: |
+          echo "cores: $(nproc)"
+          npx vitest run --exclude 'e2e/**' --reporter=default
       - name: Build the UI
         run: npx vite build
+  # Four shards: the repo's runners have two cores, where vitest runs one file at a time, so all the browser files in
+  # one job took about ten minutes in a row. Each shard takes a quarter of the files.
+  browser:
+    name: Browser tests ${{ matrix.shard }}/4 (Chromium and WebKit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      FOCUSTIME_TEST_WEBKIT: required
+      TZ: America/Chicago
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # Playwright's WebKit (Safari's engine) and its system libraries, for e2e/safari.test.ts. Both are cached between
+      # runs (AP-2): the browser keyed on the Playwright version, the system packages (.deb files) on the runner image and
+      # the Playwright version. A slow Ubuntu mirror once took 8 to 17 minutes for the packages alone and cancelled a shard.
+      - name: Versions for the browser caches
+        id: pw
+        run: |
+          echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS:-ubuntu}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+      - name: Cache the Playwright browser
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-webkit-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Cache WebKit's system packages
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-webkit
+          key: apt-webkit-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}
+          restore-keys: |
+            apt-webkit-${{ steps.pw.outputs.image }}-
+            apt-webkit-
+      - name: Install WebKit's system packages
+        run: |
+          mkdir -p ~/apt-webkit
+          # Cached packages first; apt downloads only what changed since.
+          if ls ~/apt-webkit/*.deb >/dev/null 2>&1; then sudo cp ~/apt-webkit/*.deb /var/cache/apt/archives/; fi
+          npx playwright-core install-deps webkit
+          cp /var/cache/apt/archives/*.deb ~/apt-webkit/ 2>/dev/null || true
+      - name: Install WebKit
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: npx playwright-core install webkit
+      # The UI is built once for the run (test/e2e-build.ts) and every demo server serves it.
+      - name: Browser tests
+        run: |
+          echo "cores: $(nproc)"
+          npx vitest run e2e/ --shard=${{ matrix.shard }}/4 --reporter=default
+  test:
+    needs: [unit, browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
       # The tree this run tested (for a PR, GitHub's merge of it into main). deploy-dev compares it with the merged
       # commit's tree to skip running all of this again (docs/azure/runbook.md, "How deploy-dev reuses the PR's CI").
       - name: Record the tested tree

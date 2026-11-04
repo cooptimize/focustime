@@ -4,9 +4,18 @@
 // FOCUSTIME_HOST=local|azure (A1) picks the host: local (the default) is the developer loop on this machine; azure is
 // the hosted app's host, a stub until A2 (its secrets, snapshots and plan store are in memory).
 // --clock (verification runs only): the server's clock starts at that instant and runs forward from there.
+import { createChatsClient, type ChatMessagesClient, type ChatsClient } from "../sources/graph/chats.ts";
 import type { Host, KeyProvider, SnapshotStore } from "../host/types.ts";
 import { perPerson } from "../host/per-person.ts";
 import { createUserSecrets, type UserSecrets } from "../store/user-secrets.ts";
+import { createPushDevices } from "../store/push-devices.ts";
+import { createPush, type VapidSource } from "./push.ts";
+import { keyVaultSecret } from "../host/azure/vapid.ts";
+import { openAiProvider } from "../ai/openai.ts";
+import { stubProvider } from "../ai/stub.ts";
+import type { AiProvider } from "../ai/types.ts";
+import type { AiRuntime } from "../actions/ai-actions.ts";
+import { appSpendStore } from "../store/ai-spend.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { WritePats } from "../actions/devops-write-actions.ts";
 import { createLocalHost } from "../host/local/index.ts";
@@ -30,6 +39,7 @@ import { copiesOwnerSecrets, copyOwnerSecrets, OWNER_SECRETS_MARK, writePatAccou
 import { personTicks, type PersonTicks } from "./ticks.ts";
 import { createScheduler } from "./scheduler.ts";
 import { wakeStoreOn } from "../store/wake-store.ts";
+import { cancelShutdownRestores } from "../store/vm-restores.ts";
 import { keepRoute, takeRoute } from "./open-route.ts";
 import { join, resolve } from "node:path";
 import type { AppConfig, DataverseConfig, GoogleConfig, OutlookConfig } from "../config/schema.ts";
@@ -176,6 +186,8 @@ const outlookFor = (who: Person) => (cfg: OutlookConfig, timeZone: string) =>
  */
 const presenceClients = new WeakMap<object, PresenceClient>();
 const photoClients = new WeakMap<object, PhotoClient>();
+const chatsClients = new WeakMap<object, ChatsClient>();
+const messageClients = new WeakMap<object, ChatMessagesClient>();
 const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null => {
   if (!cfg.outlook) return null;
   const src = outlookFor(who)(cfg.outlook, userZone(cfg));
@@ -185,9 +197,18 @@ const accountFor = (who: Person) => (cfg: AppConfig): MicrosoftAccount | null =>
   // Step 16.4: profile photos on their own token (ProfilePhoto.Read.All).
   let photos = photoClients.get(src);
   if (!photos) photoClients.set(src, (photos = createPhotoClient({ fetch, token: () => src.auth.accessToken("photo"), invalidate: () => src.auth.invalidate(), log })));
+  // T-2: Teams chat names and members on their own token (Chat.ReadBasic).
+  let chats = chatsClients.get(src);
+  if (!chats) chatsClients.set(src, (chats = createChatsClient({ fetch, token: () => src.auth.accessToken("chats"), invalidate: () => src.auth.invalidate(), log })));
+  // AP-1: a registered chat's messages on their own token (Chat.Read, which each person allows when switching Asks on).
+  let chatMessages = messageClients.get(src);
+  if (!chatMessages) messageClients.set(src, (chatMessages = createChatsClient({ fetch, token: () => src.auth.accessToken("messages"), invalidate: () => src.auth.invalidate(), log })));
   return {
     presence,
     photos,
+    chats,
+    chatMessages,
+    probe: (kind) => src.auth.probe(kind),
     signIn: (o) => src.connect(o),
     identity: () => src.auth.identity(),
     armToken: () => src.auth.accessToken("arm"),
@@ -214,12 +235,28 @@ const writePatsOf = (who: Person): WritePats => ({
 
 // DevOps: one source per person and Dataverse config. PATs come from Dataverse per fetch (devopsTargets), not kept.
 const devopsSources = new Map<string, DevOpsSource>();
+/**
+ * AP-2: the AI guard's map of DevOps item id to client, per person (devops_item_clients). Each read's ids go to the
+ * store only when some are new since this process last saw them, so a normal read makes no database call.
+ */
+const knownItems = new Map<string, Set<string>>();
+const itemMapOf = (who: Person) => (clientKey: string, ids: number[]) => {
+  const known = knownItems.get(who.userId) ?? new Set<string>();
+  knownItems.set(who.userId, known);
+  const fresh = ids.filter((id) => !known.has(`${clientKey}#${id}`));
+  if (!fresh.length) return;
+  for (const id of fresh) known.add(`${clientKey}#${id}`);
+  planFor(who).rememberItemClient(clientKey, fresh).catch(() => {
+    for (const id of fresh) known.delete(`${clientKey}#${id}`);
+    log({ source: "plan", op: "item_map", kind: "failed" });
+  });
+};
 const devopsFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
   const key = JSON.stringify([who.userId, cfg, timeZone]);
   let s = devopsSources.get(key);
   if (!s) {
     const dv = dataverseFor(who)(cfg, timeZone);
-    s = createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), pickableTypes: () => who.pickableTypes, openStates: (k) => who.openStates[k] ?? [] });
+    s = createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), pickableTypes: () => who.pickableTypes, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who) });
     devopsSources.set(key, s);
   }
   return s;
@@ -240,6 +277,13 @@ if (!opened) {
   process.exit(1);
 }
 const db: Conn = opened.conn;
+// D475: next-morning auto-shutdown restores from before (they'd write the schedule) never run; mark them cancelled.
+await cancelShutdownRestores(db, instantNow).then(
+  (c) => c.length && log({ source: "azure", op: "restore_cancelled", count: c.length }),
+  () => log({ source: "azure", op: "restore_cancelled", kind: "failed" }),
+);
+/** P1: the app's VAPID key (the hosted app's Key Vault); null in the developer loop, where push isn't offered. */
+let vapidSource: VapidSource | null = null;
 if (host.kind === "azure" && process.env.FOCUSTIME_KEYVAULT_URL) {
   const credential = new DefaultAzureCredential(process.env.AZURE_CLIENT_ID ? { managedIdentityClientId: process.env.AZURE_CLIENT_ID } : {});
   dataKeys = keyVaultDataKey({
@@ -248,7 +292,45 @@ if (host.kind === "azure" && process.env.FOCUSTIME_KEYVAULT_URL) {
     token: async () => (await credential.getToken("https://vault.azure.net/.default")).token,
     store: async () => appKeyStore(db, "data-key", instantNow),
   });
+  // P1: the VAPID key for Web Push, read when first needed (none: push says it isn't set up).
+  vapidSource = keyVaultSecret({ vaultUrl: process.env.FOCUSTIME_KEYVAULT_URL, secretName: process.env.FOCUSTIME_VAPID_SECRET_NAME ?? "ft-vapid-key", token: async () => (await credential.getToken("https://vault.azure.net/.default")).token });
 }
+/**
+ * AI-0: the AI key, read when needed and held in memory for 10 minutes (a missing one is asked for again after a
+ * minute, so adding it with infra/scripts/openai-key.sh takes effect without a restart). Hosted: the Key Vault secret
+ * ft-openai-key; the developer loop: the keyring entry openai-api-key. Never logged.
+ */
+let aiKeySource: () => Promise<string | null> = async () => {
+  try {
+    return await host.secrets.get("openai-api-key");
+  } catch {
+    return null;
+  }
+};
+if (host.kind === "azure" && process.env.FOCUSTIME_KEYVAULT_URL) {
+  const credential = new DefaultAzureCredential(process.env.AZURE_CLIENT_ID ? { managedIdentityClientId: process.env.AZURE_CLIENT_ID } : {});
+  aiKeySource = keyVaultSecret({ vaultUrl: process.env.FOCUSTIME_KEYVAULT_URL, secretName: process.env.FOCUSTIME_OPENAI_SECRET_NAME ?? "ft-openai-key", token: async () => (await credential.getToken("https://vault.azure.net/.default")).token });
+}
+let aiKeyHeld: { value: string | null; until: number } | null = null;
+const aiKey = async (): Promise<string | null> => {
+  if (aiKeyHeld && Date.now() < aiKeyHeld.until) return aiKeyHeld.value;
+  const value = await aiKeySource().catch(() => {
+    log({ source: "ai", op: "key", kind: "unavailable" });
+    return null;
+  });
+  aiKeyHeld = { value, until: Date.now() + (value ? 10 * 60_000 : 60_000) };
+  return value;
+};
+/** AI-0: hosted, OpenAI by default; the developer loop and CI, the stub (no network) unless [ai] provider = "openai". */
+const aiProviderKind = app.ai.provider ?? (host.kind === "azure" ? "openai" : "stub");
+const openAi = openAiProvider({ key: aiKey });
+const stubAi = stubProvider();
+const aiRuntime: AiRuntime = {
+  app: { ...app.ai, provider: aiProviderKind },
+  provider: async (): Promise<AiProvider | null> => (aiProviderKind === "stub" ? stubAi : aiProviderKind === "openai" && (await aiKey()) ? openAi : null),
+  appSpend: appSpendStore(db, instantNow),
+  logger: log,
+};
 /** A3: when a signed-in person last used FocusTime (in memory; the idle rule's "someone is active"). */
 let lastUse = 0;
 const ACTIVE_MS = 15 * 60_000;
@@ -278,6 +360,8 @@ const settingsFor = (userId: string): UserSettings =>
 
 /** A2: a person's encrypted secrets (refresh tokens, write PATs), sealed with the app's data key. */
 const secretsFor = (userId: string): UserSecrets => createUserSecrets({ db, userId, keys: host.keys, now: instantNow });
+/** P1: a person's Web Push: their devices and the app's VAPID key; the subject is the app's public URL. */
+const pushFor = (userId: string) => createPush({ devices: createPushDevices({ db, userId, keys: host.keys, now: instantNow }), vapid: vapidSource, subject: app.publicUrl, fetch, now: () => Date.now(), log });
 
 const people = createPeople({
   db,
@@ -435,7 +519,10 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
   };
   void loadConfig().catch(() => null);
   const plan = planFor(who);
+  const push = pushFor(userId);
   const liveCtx: ActionContext = {
+    log,
+    ai: aiRuntime,
     renameNote: renamed.note,
     demo: demoControl(false),
     env: build.env,
@@ -468,6 +555,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     devopsWriter: createDevOpsWriter({ fetch, log }),
     account: accountFor(who),
     photoCache: host.photos,
+    push,
     azure: azureFor,
     exportPlan: (json) => host.files.exportPlan(json),
     myData: {
@@ -480,7 +568,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
       remove: async () => deleteData(userId),
     },
   };
-  const ticks = personTicks({ log, now: instantNow, notifications: host.notifications, media: host.media, openRoute: (route) => void openRouteFor(userId, route).catch(() => undefined) }, plan, liveCtx, who);
+  const ticks = personTicks({ log, now: instantNow, notifications: host.notifications, media: host.media, openRoute: (route) => void openRouteFor(userId, route).catch(() => undefined), push }, plan, liveCtx, who);
   runtimes.set(userId, { ctx: liveCtx, who, ticks });
   return liveCtx;
 }

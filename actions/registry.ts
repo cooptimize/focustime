@@ -25,13 +25,15 @@ export type ActionTarget =
   | "write" // one entry in the write log
   | "event" // one calendar event (step 13)
   | "devops" // a DevOps change (step 14)
-  | "vm"; // my Azure VM (step 15.4)
+  | "vm" // my Azure VM (step 15.4)
+  | "ask" // one ask in Inbox › Asks (AP-1)
+  | "promise"; // one promise in Inbox › Promises (AP-2)
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Asks";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -44,21 +46,25 @@ export const ACTIONS = [
   { name: "auth.connect_microsoft", title: "Connect Outlook", group: "Sources", target: "none", summary: "Sign in with Microsoft in your browser (the same sign-in as the app's)" },
   { name: "auth.status", title: "Who's signed in", group: "Settings", target: "none", summary: "The Microsoft account FocusTime works for" },
   { name: "auth.sign_in", title: "Sign in with Microsoft", group: "Settings", target: "none", summary: "One sign-in for you, your calendar and your Azure VM (in your browser)" },
-  { name: "auth.sign_out", title: "Sign out", group: "Settings", target: "none", summary: "Forget the Microsoft sign-in on this computer; the local plan stays" },
   { name: "feedback.preview", title: "Send feedback", group: "Help", target: "none", summary: "An idea, a problem or a question for the FocusTime team: a preview of the story it becomes, then Send" },
   { name: "feedback.send", title: "Send the feedback shown", group: "Help", target: "none", summary: "Creates the story from the preview under the FocusTime feature in Cooptimize's DevOps, as FocusTime's own identity; at most 10 a day" },
   { name: "feedback.status", title: "Feedback setup", group: "Help", target: "none", summary: "Whether Send feedback can create stories here (read only)" },
+  { name: "auth.sign_out", title: "Sign out", group: "Settings", target: "none", summary: "Forget the Microsoft sign-in on this device; your plan stays in your FocusTime account" },
   { name: "vm.status", title: "My VM", group: "My VM", target: "none", summary: "Your VM's state and auto-shutdown time" },
   { name: "vm.find", title: "Find my VM", group: "My VM", target: "none", summary: "VMs tagged as yours (Owner tag) in every Azure subscription you can see" },
   { name: "vm.choose", title: "Choose my VM", group: "My VM", target: "vm", summary: "Confirm which VM is yours, or enter its resource ID" },
-  { name: "vm.preview", title: "Start, stop or delay shutdown", group: "My VM", target: "vm", summary: "Start or stop (deallocate) your VM, or delay or skip tonight's auto-shutdown, after a preview" },
+  { name: "vm.preview", title: "Start my VM", group: "My VM", target: "vm", summary: "Preview starting your VM (FocusTime never stops it or changes its auto-shutdown)" },
   { name: "vm.confirm", title: "Confirm a VM change", group: "My VM", target: "vm", summary: "Do the change shown in the preview, then follow it until Azure shows it" },
-  { name: "vm.restore", title: "Restore auto-shutdown", group: "My VM", target: "vm", summary: "Put back the auto-shutdown schedule FocusTime changed" },
   { name: "vm.dismiss_prompt", title: "Not today (VM prompt)", group: "My VM", target: "none", summary: "Don't ask to start the VM again today" },
   { name: "vm.start_now", title: "Start my VM now", group: "My VM", target: "vm", summary: "The morning box's Start: starts your VM at once when Settings > You allows it, logged and followed until it runs" },
   { name: "notify.test", title: "Send a test notification", group: "Settings", target: "none", summary: "A desktop notification now, to check they reach you" },
   { name: "notify.sample", title: "Send a sample notification", group: "Settings", target: "none", summary: "One of each kind on request, with its buttons, for checking them (VM buttons open the VM menu)" },
-  { name: "vm.log", title: "Show the Azure write log", group: "My VM", target: "none", summary: "Every start, stop and auto-shutdown change: when, the result and what it was before" },
+  { name: "notices.list", title: "Notifications", group: "Settings", target: "none", summary: "The notifications FocusTime sent you, newest first, with the unread count (P1)" },
+  { name: "notices.read", title: "Mark notifications read", group: "Settings", target: "none", summary: "Marks the listed notifications, or all of them, as read" },
+  { name: "push.status", title: "Push on this device", group: "Settings", target: "none", summary: "Whether push is set up for this app, its public key, and your devices with push on" },
+  { name: "push.subscribe", title: "Notify this device", group: "Settings", target: "none", summary: "Turns push on for this browser (after it asked your permission)" },
+  { name: "push.remove", title: "Remove a device", group: "Settings", target: "none", summary: "Turns push off for one of your devices and forgets its subscription" },
+  { name: "vm.log", title: "Show the Azure write log", group: "My VM", target: "none", summary: "Every start of your VM (and older stops and auto-shutdown changes): when, the result and what it was before" },
   { name: "auth.connect_google", title: "Connect Google Calendar", group: "Sources", target: "none", summary: "Sign in to Google in your browser (read-only calendar)" },
   { name: "auth.disconnect", title: "Disconnect a calendar", group: "Sources", target: "calendar", summary: "Forget a calendar sign-in and its cached events" },
   { name: "roadmap.ahead", title: "Plan ahead", group: "Work items", target: "none", summary: "The next 12 weeks on a timeline: hours per feature per week for weeks 1 to 4, and how crowded each month after looks" },
@@ -102,7 +108,7 @@ export const ACTIONS = [
   { name: "draft.add_story", title: "Add a draft story", group: "Work items", target: "portfolio", summary: "A local story under an epic or feature, or under none yet" },
   { name: "ui.set_theme", title: "Change theme", group: "Display", target: "theme", summary: "Cooptimize Dark, Cooptimize Light or Neutral; saved in config" },
   { name: "demo.set", title: "Demo mode", group: "Display", target: "none", summary: "Swap every source for fictional sample data to demo safely; nothing leaves FocusTime and your plan isn't touched" },
-  { name: "ui.first_launch", title: "First launch", group: "Display", target: "none", summary: "True only the first time FocusTime opens on this computer (for the welcome moment); kept in the plan store" },
+  { name: "ui.first_launch", title: "First launch", group: "Display", target: "none", summary: "True only the first time FocusTime opens on this device (for the welcome moment); kept in the plan store" },
   { name: "setup.load", title: "Setup status", group: "Settings", target: "none", summary: "First-run setup: which steps are done, skipped or closed, and the clients screen's list (S1)" },
   { name: "setup.prefill", title: "Setup: your day", group: "Settings", target: "none", summary: "Your time zone and working hours from Outlook, or your current settings when Outlook can't say" },
   { name: "setup.mark", title: "Setup: record a step", group: "Settings", target: "none", summary: "Records a setup step as done or skipped, or closes the flow (the rest is skipped)" },
@@ -121,7 +127,7 @@ export const ACTIONS = [
   { name: "settings.load", title: "Open Settings", group: "Settings", target: "none", shortcut: ",", summary: "Working hours, clients, connections, display and data" },
   { name: "settings.save", title: "Change a setting", group: "Settings", target: "none", summary: "Saved to the config file with a backup; applies at once" },
   { name: "secret.set", title: "Set a client secret", group: "Settings", target: "none", summary: "Masked entry straight to the keyring; never shown again" },
-  { name: "plan.reset", title: "Reset local plan", group: "Settings", target: "none", summary: "Empties picks, drafts, time entries and follow-ups after a backup; asks you to confirm" },
+  { name: "plan.reset", title: "Reset my plan", group: "Settings", target: "none", summary: "Empties picks, drafts, time entries and follow-ups after a backup; asks you to confirm" },
   { name: "timer.start", title: "Start focus timer", group: "Focus", target: "none", shortcut: "F", summary: "A plain timer, a break, or a pick from its ⋯ menu; lengths in 5-minute steps" },
   { name: "timer.pause", title: "Pause the timer", group: "Focus", target: "none", summary: "Focused time so far is kept" },
   { name: "timer.resume", title: "Resume the timer", group: "Focus", target: "none", summary: "Carry on from where it paused" },
@@ -131,6 +137,30 @@ export const ACTIONS = [
   { name: "timer.next", title: "Next pick", group: "Focus", target: "none", summary: "End the session and timebox today's next planned pick" },
   { name: "timer.deep", title: "Deep focus", group: "Focus", target: "none", summary: "Switch the running session to deep focus (Teams: Do not disturb) or back to plain focus (Busy)" },
   { name: "presence.status", title: "Teams status during focus", group: "Focus", target: "none", summary: "Whether focus sets your Teams status, what it set and until when" },
+  { name: "chats.registered", title: "Client chats", group: "Settings", target: "none", summary: "Each client's Teams chats (Delivery team or Customer collaboration), with their members, external people flagged" },
+  { name: "chats.list", title: "Pick a client chat", group: "Settings", target: "none", summary: "Your Teams group chats to add to a client: names and members, never messages" },
+  { name: "chats.add", title: "Add a client chat", group: "Settings", target: "none", summary: "Add one of your Teams group chats to a client; a client can have several, a chat belongs to one client" },
+  { name: "chats.kind", title: "Label a client chat", group: "Settings", target: "none", summary: "Mark a client chat as its Delivery team chat or a Customer collaboration chat" },
+  { name: "chats.remove", title: "Remove a client chat", group: "Settings", target: "none", summary: "Forget one of a client's chats (Teams is unchanged)" },
+  { name: "chats.refresh", title: "Refresh client chat members", group: "Settings", target: "none", summary: "Read the members of your client chats again from Teams" },
+  { name: "asks.list", title: "Asks", group: "Asks", target: "none", summary: "Inbox › Asks: messages from people outside Cooptimize in client chats you read for asks, by client, newest first" },
+  { name: "asks.refresh", title: "Refresh asks", group: "Asks", target: "none", summary: "Read the client chats you switched on for asks now (only new messages)" },
+  { name: "asks.switch", title: "Read a client chat for asks", group: "Settings", target: "none", summary: "Switch Read for asks on or off for one client chat (off by default; nothing is read before you switch it on)" },
+  { name: "asks.context", title: "Show an ask's context", group: "Asks", target: "ask", shortcut: "X", summary: "The 5 messages before an ask in its chat" },
+  { name: "asks.resolve", title: "Resolve an ask", group: "Asks", target: "ask", summary: "Link an ask to an existing DevOps item, mark it handled (H) or dismiss it (D)" },
+  { name: "asks.reopen", title: "Undo an ask's resolution", group: "Asks", target: "ask", summary: "Open a linked, handled or dismissed ask again" },
+  { name: "asks.search", title: "Find an item for an ask", group: "Asks", target: "ask", summary: "Search the client's open DevOps items to link an ask to" },
+  { name: "asks.purge", title: "Delete a client's stored chat messages", group: "Settings", target: "none", summary: "Deletes every message and ask FocusTime stored for one client (DevOps items made from them stay)" },
+  { name: "asks.sort_again", title: "Sort an ask again", group: "Asks", target: "ask", summary: "Ask AI to sort one ask again (kind, urgency, a draft item and a likely existing one), when it wasn't sorted" },
+  { name: "asks.show", title: "Show a hidden ask", group: "Asks", target: "ask", summary: "Show an ask the AI said needs no action on the Asks tab anyway (or hide it again)" },
+  { name: "promises.list", title: "Promises", group: "Asks", target: "none", summary: "Inbox › Promises: things you said you'd do in client chats you read for asks" },
+  { name: "promises.resolve", title: "Mark a promise done or dismiss it", group: "Asks", target: "promise", summary: "Done or Dismiss a promise, with Undo" },
+  { name: "promises.reopen", title: "Undo a promise's Done or Dismiss", group: "Asks", target: "promise", summary: "Open a done or dismissed promise again" },
+  { name: "promises.followup", title: "Make a promise a follow-up", group: "Asks", target: "promise", summary: "A follow-up from a promise: who, what, Teams and the due date filled in; the promise closes when it's done" },
+  { name: "promises.link", title: "Link a promise to a DevOps item", group: "Asks", target: "promise", summary: "The promise closes when the item is done in DevOps" },
+  { name: "ai.status", title: "AI", group: "Settings", target: "none", summary: "Settings › AI: Use AI, this month's spend against your cap, and your last 20 AI requests (never their text)" },
+  { name: "ai.test", title: "Test AI", group: "Settings", target: "none", summary: "Sends one fixed harmless request (no client) and says whether it worked, how long it took and what it cost" },
+  { name: "permissions.status", title: "Microsoft permissions", group: "Settings", target: "none", summary: "Every permission FocusTime asks Microsoft for, and whether it's allowed (Settings > Connections)" },
   { name: "people.photos", title: "Profile photos", group: "Focus", target: "none", summary: "Photos of me and the Cooptimizers on screen, from Microsoft; cached 7 days, initials when there is none" },
   { name: "presence.people", title: "Teammates' presence", group: "Focus", target: "none", summary: "Available, Busy, In a meeting and so on for the Cooptimizers on screen; read-only, never kept" },
   { name: "presence.log", title: "Show the Teams status log", group: "Focus", target: "none", summary: "Every time focus set or cleared your Teams status" },

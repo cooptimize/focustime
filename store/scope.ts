@@ -10,9 +10,9 @@
 
 /** The plan store's per-user tables (inventory section 3). store/isolation.test.ts fails on a table missing here. */
 export const USER_TABLES: readonly string[] = [
-  "account_state", "azure_write_log", "borrowed", "breakdown_marks", "captures", "day_plans", "dedupe_log",
-  "delivery_snapshots", "devops_identities", "devops_write_log", "draft_stories", "flex_sessions", "focus_log",
-  "follow_ups", "invites", "kv", "markers", "outlook_events", "picks", "resume_notes", "roadmap_dates", "setup_state",
+  "account_state", "ai_requests", "asks", "azure_write_log", "borrowed", "breakdown_marks", "captures", "chat_messages", "day_plans", "dedupe_log",
+  "delivery_chats", "delivery_snapshots", "devops_identities", "devops_item_clients", "devops_write_log", "draft_stories", "flex_sessions", "focus_log",
+  "follow_ups", "invites", "kv", "markers", "notices", "outlook_events", "picks", "promises", "push_devices", "resume_notes", "roadmap_dates", "setup_state",
   "teams_status_log", "timeboxes", "unavailable", "user_secrets", "user_settings", "week_drafts", "week_feature_slots", "week_features",
   "week_plans", "week_quiet", "write_log",
 ];

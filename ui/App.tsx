@@ -44,6 +44,8 @@ import type { TimerView } from "../actions/types.ts";
 import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
 import { Inbox } from "./Inbox.tsx";
+import { Asks, InboxTabs, useAskCount } from "./Asks.tsx";
+import { Promises } from "./Promises.tsx";
 import { Roadmap } from "./Roadmap.tsx";
 import { PlanAhead } from "./PlanAhead.tsx";
 import { Today } from "./Today.tsx";
@@ -65,12 +67,16 @@ import { FeedbackDialog } from "./Feedback.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
-import { useLayout } from "./viewport.ts";
+import { useLayout, usePhone } from "./viewport.ts";
+import { BottomBar, InstallHowTo, PhoneReadOnly, type BottomTab } from "./Phone.tsx";
 import { commandList, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
 import { WeekItems } from "./ItemLookup.tsx";
 import { NoHoursPrompt } from "./NoHoursPrompt.tsx";
 import { KeyLegend } from "./KeyLegend.tsx";
+import { NoticesPanel, NoticeToasts, useNotices } from "./Notices.tsx";
+import type { InAppNotice } from "../plan/push.ts";
+import { promptInstall, takeLaunchRoute, useInstall } from "./pwa.ts";
 import { Guide, TourLink } from "./guide/Guide.tsx";
 import { commandKeyAllowed, globalKeyAllowed, isTypingTarget, nextRegion, openTarget, regionOf, regionsAvailable, topOverlay, type Region } from "./keys.ts";
 import { userZone } from "../week/zone.ts";
@@ -114,6 +120,9 @@ const CAPTURE_HASH = "#/capture";
 export function App() {
   const now = useRef(nowOverride()).current;
   const { layout, compact } = useLayout();
+  // P1: under 600 px, the phone app (bottom bar, one day at a time, planning read-only).
+  const phone = usePhone();
+  const [phoneMoreAt, setPhoneMoreAt] = useState<{ x: number; y: number } | null>(null);
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<Selection>({ dayIndex: 0, half: "AM" });
@@ -128,6 +137,12 @@ export function App() {
   /** S1 (D452): ⋯ › About, which build this is. */
   const [aboutOpen, setAboutOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // P1: ⋯ › Notifications (the in-app list), its toasts, and Install app's iPhone how-to.
+  const notices = useNotices(true);
+  /** The list as it was when opened (what was new keeps its dot while the panel is open). */
+  const [noticesOpen, setNoticesOpen] = useState<InAppNotice[] | null>(null);
+  const [installHowTo, setInstallHowTo] = useState(false);
+  const install = useInstall();
   const loadSetup = useCallback(
     (openIt: boolean): Promise<SetupView | null> =>
       call<SetupView>("setup.load", {}).then(
@@ -197,6 +212,9 @@ export function App() {
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
   const base: "today" | "week" = nav.tab === "week" ? "week" : "today";
   const followUpsOpen = nav.tab === "inbox";
+  // AP-1: Inbox › Asks, and the open asks count on its tab.
+  const asksOpen = nav.tab === "inbox" && !!nav.asks;
+  const promisesOpen = nav.tab === "inbox" && !!nav.promises;
   const roadmapOpen = nav.tab === "roadmap";
   const checkInOpen = nav.tab === "today" && nav.mode === "checkin";
   /** Settings (step 6b) at a section, or closed (back to the place under it). */
@@ -211,6 +229,11 @@ export function App() {
     void call("ui.tour_offer", { done: true }).catch(() => {});
   }, [showTour]);
   const openGuide = useCallback((chapter: string | null = null) => go((l) => ({ nav: l.nav, overlay: { kind: "guide", chapter } })), [go]);
+  // P1: opening the list marks every notice read (the dot goes).
+  const readAllNotices = notices.readAll;
+  const openNotices = useCallback(() => setNoticesOpen(readAllNotices()), [readAllNotices]);
+  /** P1: Install app, where the browser can install (Chromium's prompt) or on iPhone (the how-to); gone once installed. */
+  const installItem = install === "prompt" ? [{ id: "install", label: "Install app", run: () => void promptInstall() }] : install === "ios" ? [{ id: "install", label: "Install app", run: () => setInstallHowTo(true) }] : [];
   const setFocusOpen = useCallback((on: boolean) => go((l) => ({ nav: on ? l.nav : l.nav, overlay: on ? { kind: "focus" } : null })), [go]);
   /** Bumped when something outside Plan the week (the command menu) changes its plan, so it reloads. */
   const [planWeekVersion, setPlanWeekVersion] = useState(0);
@@ -221,6 +244,7 @@ export function App() {
   // Step 15.3: the draft open in the draft editor.
   const [draftEdit, setDraftEdit] = useState<DraftStory | null>(null);
   const [captureVersion, setCaptureVersion] = useState(0);
+  const [askCount, setAskCount, promiseCount, setPromiseCount] = useAskCount(captureVersion, followUpsOpen);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** U2: Week's ⋯ (the hours shown, and the compact timelines in the medium layout), moved from the status bar. */
   const [weekMoreAt, setWeekMoreAt] = useState<{ x: number; y: number } | null>(null);
@@ -877,6 +901,9 @@ export function App() {
     }
     const check = () => void takeOpenRequest().then((v) => (v === "capture" ? setCaptureOpen(true) : v ? openRouteRef.current(v) : undefined));
     check();
+    // P1: a tapped push that opened the app asked for a view.
+    const launched = takeLaunchRoute();
+    if (launched) openRouteRef.current(launched);
     const onFocus = () => check();
     window.addEventListener("focus", onFocus);
     const id = setInterval(() => document.hasFocus() && check(), 2000);
@@ -1017,7 +1044,8 @@ export function App() {
       } else if ((k === "m" || k === "M") && free && settingsAt === null) {
         e.preventDefault();
         goNav(checkInOpen ? navOf.today() : navOf.today("checkin"));
-      } else if ((e.key === "n" || e.key === "N") && !typing && !captureOpen) {
+      } else if ((e.key === "n" || e.key === "N" || ((e.key === "c" || e.key === "C") && !pd && !e.ctrlKey && !e.metaKey && !e.altKey)) && !typing && !captureOpen) {
+        // P1: C opens Capture too, everywhere but Today › Plan, where C is still Done.
         e.preventDefault();
         setCaptureOpen(true);
       } else if ((e.key === "f" || e.key === "F") && !typing) {
@@ -1202,6 +1230,7 @@ export function App() {
       resetPlan: () => setSettingsAt("data"),
       openVm: () => window.dispatchEvent(new Event(VM_MENU_EVENT)),
       openFeedback: () => setFeedbackOpen(true),
+      openNotifications: () => openNotices(),
       openSettings: (section) => {
         setDetailsOpen(false);
         setSettingsAt(SETTINGS_SECTIONS.some(([id]) => id === section) ? (section as SettingsSectionId) : "you");
@@ -1230,6 +1259,7 @@ export function App() {
       addWork,
       planFeature: (date: IsoDate, half: Half, itemId: number) => addWork(date, half, itemId),
       demo: data.demo,
+      asksOpen,
       setDemo: (on: boolean) => void switchDemo(on),
       exportPlan: () =>
         void call<{ path: string }>("data.export", {}).then(
@@ -1237,7 +1267,7 @@ export function App() {
           (e: unknown) => setNotice(e instanceof Error ? e.message : "Export failed"),
         ),
     };
-  }, [data, target, sel, openGuide, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, goNav]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, target, sel, openGuide, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, goNav, asksOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   openSettingsRef.current = env?.openSettings ?? null;
 
   // Step 17.5: the opening (loader, unroll, into the top bar's mark), then the welcome moment on the first launch ever.
@@ -1257,7 +1287,7 @@ export function App() {
     return (
       <>
         {opening}
-        {state.kind === "failed" && <div className="center-note"><p>{state.message}. Is <code>npm start</code> still running?</p></div>}
+        {state.kind === "failed" && <div className="center-note"><p>Nothing to show without a connection. Reload when you’re back online.</p></div>}
       </>
     );
   }
@@ -1355,7 +1385,7 @@ export function App() {
     <MenuHost env={env}>
     <VmProvider onSettings={() => setSettingsAt("you")}>
     <DraftEditorCtx.Provider value={setDraftEdit}>
-    <div className={`app ${layout}${compact ? " compact" : ""}`}>
+    <div className={`app ${layout}${compact ? " compact" : ""}${phone ? " phone" : ""}`}>
       <header className="topbar">
         <div className="brand">
           <button type="button" className="brand-home" onClick={() => setView("today")} title="Today">
@@ -1368,16 +1398,17 @@ export function App() {
             </button>
           )}
         </div>
-        <nav className="views" aria-label="Tabs">
+        {!phone && <nav className="views" aria-label="Tabs">
           {TABS.map((t, n) => (
             <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} title={TAB_TITLES[t] + ` (${n + 1})`}>
               {TAB_NAMES[t]}
               {t === "inbox" && inboxCount > 0 && <span className="count" aria-label={`${inboxCount} waiting`}>{inboxCount}</span>}
             </button>
           ))}
-        </nav>
+        </nav>}
         <div className="top-actions">
-          <VmChip />
+          <VmChip dot={phone} />
+          {!phone && <>
           {/* Step 15.2: Focus is always here. Idle it opens the start menu (next pick first); running it is the countdown. */}
           {data.timer ? (
             <TopTimer
@@ -1416,7 +1447,9 @@ export function App() {
             }}
           >
             ⋯
+            {notices.unread > 0 && <span className="top-dot" aria-label={`${notices.unread} new notifications`} />}
           </button>
+          </>}
           <PersonChip
             onOpen={(at, step) => setPersonMenu({ at, step })}
             onSettings={() => setSettingsAt(settingsAt === null ? "you" : null)}
@@ -1528,18 +1561,31 @@ export function App() {
           }
         />
       ) : planWeekAt !== null ? (
-        <PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} />
+        <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Week"><PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} /></PhoneGate>
       ) : followUpsOpen ? (
-        <Inbox data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
+        <div className="inbox-page">
+          <InboxTabs tab={asksOpen ? "asks" : promisesOpen ? "promises" : "inbox"} count={askCount} promiseCount={promiseCount} onPick={(t) => goNav(t === "asks" ? navOf.asks() : t === "promises" ? navOf.promises() : navOf.inbox())} />
+          {asksOpen ? (
+            <Asks data={data} version={captureVersion} onCount={setAskCount} onPromiseCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
+          ) : promisesOpen ? (
+            <Promises data={data} version={captureVersion} onCount={setPromiseCount} onAskCount={setAskCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
+          ) : (
+            <Inbox data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
+          )}
+        </div>
       ) : roadmapOpen ? (
-        nav.tab === "roadmap" && nav.mode === "ahead" ? <PlanAhead data={data} switcher={switches.roadmap} onDone={leavePlanning} onChanged={reloadQuiet} /> : <Roadmap switcher={switches.roadmap} data={data} onChanged={reloadQuiet} />
+        nav.tab === "roadmap" && nav.mode === "ahead" ? (
+          <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Roadmap"><PlanAhead data={data} switcher={switches.roadmap} onDone={leavePlanning} onChanged={reloadQuiet} /></PhoneGate>
+        ) : (
+          <PhoneGate phone={phone}><Roadmap switcher={switches.roadmap} data={data} onChanged={reloadQuiet} /></PhoneGate>
+        )
       ) : nav.tab === "today" && nav.mode === "plan" ? (
         pd && week.days.some((d) => d.date === pd.date) ? (
           (() => {
             const dayIndex = week.days.findIndex((d) => d.date === pd.date);
             const fri = week.days[4]!.date;
             return (
-                    <PlanDay
+                    <PhoneGate phone={phone} onBack={() => goNav(navOf.today())} backLabel="Back to Today"><PlanDay
                       switcher={switches.today}
                       key={pd.date}
                       day={week.days[dayIndex]!}
@@ -1571,7 +1617,7 @@ export function App() {
                         setPlanWeekClient(clientKey);
                         openPlanWeek(week.days[0]!.date);
                       }}
-                    />
+                    /></PhoneGate>
           );
           })()
         ) : (
@@ -1602,6 +1648,7 @@ export function App() {
           onPlanWeek={() => openPlanWeek(data.today.weekStart)}
           switcher={switches.today}
           onInbox={() => setView("inbox")}
+          onAsks={() => setView("asks")}
           onCaptures={() => setView("inbox")}
           onRetry={() => auto.trigger("button")}
           onFix={() => setSettingsAt("connections")}
@@ -1705,7 +1752,46 @@ export function App() {
       {detailsOpen && base === "week" && !planWeekAt && !pd && (
         <DetailPanel data={data} day={day} slot={slot} focus={panelFocus} now={now ?? new Date(clock).toISOString()} onClose={() => (setDetailsOpen(false), setPanelFocus(null), cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true }))} onStart={startFocus} onChanged={reloadQuiet} onNotice={setNotice} />
       )}
+      {phone && (
+        <BottomBar
+          current={captureOpen ? "capture" : phoneMoreAt ? "more" : settingsAt !== null || guideAt || focusOpen ? null : nav.tab === "today" || nav.tab === "week" ? nav.tab : "more"}
+          inboxCount={inboxCount}
+          dot={notices.unread > 0}
+          onTab={(t: BottomTab, e) => {
+            if (t === "capture") return setCaptureOpen(true);
+            // The bar stays on screen under Capture: another tab closes it and goes there.
+            setCaptureOpen(false);
+            if (t === "more") {
+              const r = e.currentTarget.getBoundingClientRect();
+              return setPhoneMoreAt({ x: r.right, y: r.top - 4 });
+            }
+            openTab(t);
+          }}
+        />
+      )}
+      {phoneMoreAt && (
+        <PopupMenu
+          at={phoneMoreAt}
+          step={{
+            title: "More",
+            items: [
+              { id: "inbox", label: "Inbox", ...(inboxCount > 0 ? { hint: String(inboxCount) } : {}), run: () => openTab("inbox") },
+              { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
+              { id: "roadmap", label: "Roadmap", run: () => openTab("roadmap") },
+              ...(data.timer ? [{ id: "focus", label: "Focus screen", run: () => setView("focus") }] : [{ id: "focus", label: "Start focus", run: () => setTimerMenuAt(phoneMoreAt) }]),
+              { id: "settings", label: "Settings", run: () => setSettingsAt("you") },
+              { id: "guide", label: "Guide", run: () => openGuide() },
+              ...installItem,
+              { id: "about", label: "About", run: () => setAboutOpen(true) },
+            ],
+          }}
+          onClose={() => setPhoneMoreAt(null)}
+        />
+      )}
       {cmdOpen && <CommandMenu commands={commandList(env)} onClose={() => setCmdOpen(false)} />}
+      {noticesOpen && <NoticesPanel items={noticesOpen} onClose={() => setNoticesOpen(null)} onOpen={(r) => (setNoticesOpen(null), openRouteRef.current(r))} />}
+      <NoticeToasts toasts={notices.toasts} onDismiss={notices.dismiss} onOpen={(n) => (notices.dismiss(n.id), n.route && openRouteRef.current(n.route))} />
+      {installHowTo && <InstallHowTo onClose={() => setInstallHowTo(false)} />}
       {timerMenuAt && <PopupMenu at={timerMenuAt} step={timerStep(env)} onClose={() => setTimerMenuAt(null)} />}
       {moreAt && (
         <PopupMenu
@@ -1713,10 +1799,12 @@ export function App() {
           step={{
             title: "More",
             items: [
+              { id: "notices", label: "Notifications", ...(notices.unread > 0 ? { hint: `${notices.unread} new` } : {}), run: () => openNotices() },
               { id: "commands", label: "Commands", hint: "Ctrl K", run: () => openCommands() },
               { id: "guide", label: "Guide", hint: "?", run: () => openGuide() },
               { id: "keys", label: "Keyboard shortcuts", run: () => setKeysOpen(true) },
               { id: "feedback", label: "Send feedback", run: () => setFeedbackOpen(true) },
+              ...installItem,
               { id: "about", label: "About", run: () => setAboutOpen(true) },
             ],
           }}
@@ -1791,5 +1879,16 @@ export function App() {
     </DevOpsWork.Provider>
     </SampleSources.Provider>
     </>
+  );
+}
+
+/** P1: a planning screen on the phone is read-only under one line (PhoneReadOnly); elsewhere it is as it was. */
+function PhoneGate({ phone, onBack, backLabel, children }: { phone: boolean; onBack?: () => void; backLabel?: string; children: React.ReactNode }) {
+  return phone ? (
+    <PhoneReadOnly onBack={onBack} {...(backLabel ? { backLabel } : {})}>
+      {children}
+    </PhoneReadOnly>
+  ) : (
+    <>{children}</>
   );
 }

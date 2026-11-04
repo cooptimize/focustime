@@ -15,15 +15,15 @@ describe.skipIf(!CHROMIUM)("The capture address (browser, demo mode)", () => {
     const { page, errors } = await freshPage(h);
     await page.keyboard.press("2");
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/week");
-    await page.goto(`${h.url}/#/capture`);
+    await page.goto(`${h.url}#/capture`);
     await page.locator(box).waitFor();
     expect(await page.evaluate(() => location.hash)).toBe("#/week");
     await page.keyboard.press("Escape");
     await page.locator(box).waitFor({ state: "detached" });
     // A new window at the address (what the key binding opens), signed in already: capture over the last place.
     const win = page;
-    await win.goto(`${h.url}/healthz`);
-    await win.goto(`${h.url}/#/capture`);
+    await win.goto(new URL("/healthz", h.url).href);
+    await win.goto(`${h.url}#/capture`);
     await win.locator(box).waitFor({ timeout: 30_000 });
     await expect.poll(() => win.evaluate(() => location.hash)).toBe("#/week");
     await win.keyboard.press("Escape");

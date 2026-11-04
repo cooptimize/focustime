@@ -12,7 +12,7 @@ import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
 import { DueBadge, Fading, FollowUpRow, copy } from "./FollowUps.tsx";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
-import type { CloseOutState, FollowUpView, WeekLoadData } from "../actions/types.ts";
+import type { CloseOutState, FollowUpView, UrgentAsk, WeekLoadData } from "../actions/types.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import type { NowStrip } from "../plan/now.ts";
 import { aboutHours, planFit } from "../plan/fit.ts";
@@ -46,6 +46,8 @@ import { MenuCtx, MoreButton, PopupMenu } from "./Menus.tsx";
 import { DEFAULT_MIN_SIZES, openGaps } from "../plan/agenda.ts";
 import { timeChoices } from "../plan/picktime.ts";
 import { updatedAgo } from "./refresh.ts";
+import { usePhone } from "./viewport.ts";
+import { PhoneFollowUps, PhoneNow } from "./Phone.tsx";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
 import { DetailPanel, DraftStories, interactive } from "./DetailPanel.tsx";
 import type { PanelFocus } from "./WeekGrid.tsx";
@@ -77,6 +79,8 @@ type Props = {
   onPlan: (date?: string) => void;
   onPlanWeek: () => void;
   onInbox: () => void;
+  /** AP-2: Inbox › Asks (an urgent ask's chip, Check-in's "Walked in, not resolved"). */
+  onAsks?: () => void;
   onCaptures: () => void;
   onRetry: () => void;
   onFix: () => void;
@@ -112,6 +116,9 @@ export function Today(props: Props) {
   const { data, target, now, nowMs, mode, wide, switcher } = props;
   const date = data.planDay.date;
   const tz = userZone(data);
+  // P1: on the phone, Now leads with one card (the block under way, its next pick, Start focus or the timer).
+  const phone = usePhone();
+  const view = useContext(PlanCtx);
   const day = data.week.days.find((d) => d.date === date) ?? null;
   const plan = data.plan?.[date];
   const picks = useMemo(() => plan?.picks ?? [], [plan]);
@@ -161,6 +168,23 @@ export function Today(props: Props) {
       }
     },
     [props.onChanged], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // AP-2: Start focus on an urgent ask: a walk-on pick (the AI's title) in the block under way, then focus on it.
+  const startAsk = useCallback(
+    async (u: UrgentAsk) => {
+      if (!workday || !blocks.length) return props.onStart(null);
+      const half = props.strip?.half ?? blocks[0]!.half;
+      const had = picks.find((p) => p.clientKey === u.clientKey && p.title === u.title && p.status === "planned");
+      try {
+        const pick = had ?? (await call<{ pick: Pick }>("pick.add", { date, half, clientKey: u.clientKey, intention: u.title })).pick;
+        props.onChanged();
+        props.onStart(pick);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "That didn't work");
+      }
+    },
+    [workday, blocks, picks, date, props.strip, props.onStart, props.onChanged], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Each block's rows in time order, and the next pick: the first planned one in the first block that hasn't ended.
@@ -230,7 +254,7 @@ export function Today(props: Props) {
       </h1>
     );
 
-  const attention = mode === "now" ? <Attention data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
+  const attention = mode === "now" ? <Attention noDue={phone} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} onAsks={props.onAsks ?? props.onInbox} onAskFocus={(u) => void startAsk(u)} /> : null;
   const panelSlot = panel ? blocks.find((s) => s.half === panel.half) ?? null : null;
 
   return (
@@ -295,6 +319,20 @@ export function Today(props: Props) {
           <div className="today-main">
             {mode !== "checkin" && cal && <AllDayRow events={cal.allDay} />}
             {mode !== "checkin" && split && !wide && <OutsideLine label="Before your blocks" events={split.before} tz={tz} />}
+            {mode === "now" && phone && (
+              <PhoneNow
+                data={data}
+                block={blocks.find((s) => !ended(s)) ?? null}
+                pick={nextPick}
+                nowMs={nowMs}
+                nameOf={nameOf}
+                onStart={props.onStart}
+                onTimer={props.onTimer}
+                onFocusScreen={props.onFocusScreen}
+                onDone={committed ? (p) => view.toggle(p.id, true) : null}
+              />
+            )}
+            {mode === "now" && phone && blocks.length > 0 && <h2 className="section-label phone-agenda">Agenda</h2>}
             <section className={`today-blocks${blocks.length === 1 ? " one" : ""}`} style={{ "--blocks": blocks.length } as CSSProperties} aria-label="Today's blocks">
               {blocks.map((s) => (
                 <BlockCard
@@ -309,7 +347,8 @@ export function Today(props: Props) {
                   now={now}
                   nowMs={nowMs}
                   nameOf={nameOf}
-                  nextPick={nextPick?.id ?? null}
+                  nextPick={phone && mode === "now" ? null : (nextPick?.id ?? null)}
+                  phone={phone}
                   leftOff={leftOffOn.has(s.half)}
                   ended={ended(s)}
                   later={blocks.filter((b) => b.half !== s.half && !ended(b) && ms(b.start) > ms(s.start)).map((b) => ({ half: b.half, clientKey: b.focus[0]?.clientKey ?? null }))}
@@ -323,8 +362,9 @@ export function Today(props: Props) {
               ))}
             </section>
             {mode !== "checkin" && split && !wide && <OutsideLine label="After your blocks" events={split.after} tz={tz} />}
-            {mode === "now" && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} onNotice={setNotice} onError={setError} />}
-            {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} />}
+            {mode === "now" && phone && <PhoneFollowUps data={data} date={date} onChanged={(m) => (m && setNotice(m), props.onChanged())} />}
+            {mode === "now" && !phone && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} onNotice={setNotice} onError={setError} />}
+            {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} onAsks={props.onAsks ?? props.onInbox} />}
           </div>
         </div>
       )}
@@ -364,12 +404,14 @@ function checkLeft(check: readonly CheckSlot[]): string {
  * The attention line: only when something needs it. Follow-ups due collapse to one chip that opens into rows; a source
  * that failed shows with how old its data is and Retry; an expiring secret links to its setting. Nothing when healthy.
  */
-function Attention({ data, date, clockMs, onInbox, onRetry, onFix, onSettings }: { data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void }) {
+function Attention({ noDue = false, data, date, clockMs, onInbox, onRetry, onFix, onSettings, onAsks, onAskFocus }: { noDue?: boolean; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void; onAsks: () => void; onAskFocus: (u: UrgentAsk) => void }) {
   const [open, setOpen] = useState(false);
-  const due: FollowUpView[] = urgentFollowUps(data.followUps, date);
+  // P1: the phone lists due follow-ups at the foot of Today instead.
+  const due: FollowUpView[] = noDue ? [] : urgentFollowUps(data.followUps, date);
   const down = causeLines(data.sources, data.devops);
   const vm = vmNeedsToday(useContext(VmCtx).status);
-  if (!due.length && !down.length && !data.expiring.length && !vm) return null;
+  const urgent = data.asks?.urgent ?? [];
+  if (!due.length && !down.length && !data.expiring.length && !vm && !urgent.length) return null;
   const names = [...new Set(due.map((l) => (l.hasWho ? l.who : l.clientName ?? "")).filter(Boolean))];
   return (
     <section className="attention" aria-label="Needs attention">
@@ -396,6 +438,18 @@ function Attention({ data, date, clockMs, onInbox, onRetry, onFix, onSettings }:
                 Reconnect
               </button>
             )}
+          </span>
+        ))}
+        {urgent.map((u) => (
+          <span key={`${u.chatId}|${u.messageId}`} className="att-chip urgent">
+            <button type="button" className="att-open" onClick={onAsks} title="Open it in Inbox › Asks">
+              <span className="att-tag">Walked in</span>
+              <span className="att-names">{u.clientName}</span>
+              <span>{u.title}</span>
+            </button>
+            <button type="button" className="mini" onClick={() => onAskFocus(u)} title="Add it to the block under way and start focus on it">
+              Start focus
+            </button>
           </span>
         ))}
         {vm && <VmToday />}
@@ -438,6 +492,8 @@ type BlockProps = {
   leftOff: boolean;
   ended: boolean;
   later: { half: Half; clientKey: string | null }[];
+  /** P1: on the phone a card has no planning links. */
+  phone?: boolean;
   carryTo: IsoDate | null;
   selected: number | null;
   /** U3: opens the detail panel on this block (a click on the card body; on a pick row, focused on that pick). */
@@ -604,10 +660,15 @@ function BlockCard(b: BlockProps) {
       </ul>
       {!b.picks.some(live) && !ended && (
         <p className="tb-empty">
-          Nothing planned.{" "}
-          <button type="button" className="link-btn" onClick={() => b.props.onPlan(slot.date)}>
-            Plan it
-          </button>
+          Nothing planned.
+          {!b.phone && (
+            <>
+              {" "}
+              <button type="button" className="link-btn" onClick={() => b.props.onPlan(slot.date)}>
+                Plan it
+              </button>
+            </>
+          )}
         </p>
       )}
       {b.leftOff && note && <p className="today-resume" title={`Where you left off: ${note.note}`}>Left off: {note.note}</p>}
@@ -679,13 +740,20 @@ function ThisWeek({ data, blocks, picks: _today, nameOf, onNotice, onError }: { 
 }
 
 /** Check-in's foot, once: walk-on work for a block, and the week's musts in one line. */
-function CheckinFoot({ data, date, blocks, picks, now, act, onReview }: { data: WeekLoadData; date: IsoDate; blocks: Slot[]; picks: Pick[]; now: string; act: (a: string, i: Record<string, unknown>) => Promise<boolean>; onReview: () => void }) {
+function CheckinFoot({ data, date, blocks, picks, now, act, onReview, onAsks }: { data: WeekLoadData; date: IsoDate; blocks: Slot[]; picks: Pick[]; now: string; act: (a: string, i: Record<string, unknown>) => Promise<boolean>; onReview: () => void; onAsks: () => void }) {
   const { rows } = weekMusts(data, mondayOf(date), now);
   const musts = rows.filter((r) => r.musts > 0);
   const tight = musts.filter((r) => r.track?.kind === "at_risk").map((r) => r.name);
   return (
     <div className="ci-foot">
       {blocks.length > 0 && <WalkOn data={data} date={date} blocks={blocks} picks={picks} act={act} />}
+      {(data.asks?.pastUrgency ?? 0) > 0 && (
+        <p className="ci-asks">
+          <button type="button" className="link-btn" onClick={onAsks} title="Asks still open after their urgency (now: 2 hours; this week: Friday)">
+            Walked in, not resolved ({data.asks.pastUrgency})
+          </button>
+        </p>
+      )}
       {musts.length > 0 && (
         <p className="ci-musts">
           Musts this week: {musts.length} {musts.length === 1 ? "client" : "clients"}

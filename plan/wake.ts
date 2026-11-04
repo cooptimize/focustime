@@ -18,7 +18,12 @@ export type WakeFacts = {
   warnPoints: readonly WarnPoint[];
   /** Something waits for the next pass (a Teams status to clear, a notice held for after focus). */
   pending: boolean;
+  /** AP-1: when the next chat with Read for asks on is due, while in working hours (null: none, or outside them). */
+  asksDue?: Temporal.Instant | null;
 };
+
+/** AP-1: an overdue chat read is tried again no sooner than this (a read that can't run never spins the scheduler). */
+export const ASKS_MIN_WAIT_MS = 60_000;
 
 /** While a timer runs, today's calendars are reloaded this often (as the fast pass does). */
 export const RUNNING_RECHECK_MS = 5 * 60_000;
@@ -38,9 +43,13 @@ export function nextWake(f: WakeFacts): Temporal.Instant {
     out.push(f.now.add({ milliseconds: remainingMs(t, f.now) }), f.now.add({ milliseconds: RUNNING_RECHECK_MS }));
     for (const p of f.warnPoints) if (!t.warned.includes(p.key)) out.push(Temporal.Instant.from(p.at).subtract({ minutes: WARN_MINUTES }));
   }
+  if (f.asksDue) {
+    const soonest = f.now.add({ milliseconds: ASKS_MIN_WAIT_MS });
+    out.push(Temporal.Instant.compare(f.asksDue, soonest) < 0 ? soonest : f.asksDue);
+  }
   const today = f.now.toZonedDateTimeISO(f.zone).toPlainDate();
   for (const date of [today, today.add({ days: 1 })]) {
-    // Just after midnight: a new day, and the VM's auto-shutdown is put back on the first pass after it.
+    // Just after midnight: a new day.
     out.push(date.toZonedDateTime({ timeZone: f.zone }).toInstant().add({ minutes: 1 }));
     for (const hm of f.offsets.weekNudges) out.push(at(date, hm, f.zone));
     if (!f.hours) continue;

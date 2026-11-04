@@ -60,7 +60,7 @@ identity changes: set the variable again.
 
 ### The tree check (S1, D456)
 
-`ci.yml`'s test job saves `git rev-parse HEAD^{tree}` as the artifact `tested-tree`. On a pull request, HEAD is
+`ci.yml`'s test job (the gate after the unit and browser jobs, D487) saves `git rev-parse HEAD^{tree}` as the artifact `tested-tree`. On a pull request, HEAD is
 GitHub's merge of the PR into main at that moment. `scripts/ci-tree-match.sh <owner/repo> <sha>` (deploy-dev's `reuse`
 job) finds the merged PR for the commit on main, the newest passing `pull_request` run of ci on the PR's last commit,
 downloads its `tested-tree` and compares it with the tree of the commit on main. Equal trees mean the same files were
@@ -88,6 +88,52 @@ commit, the PR number from the merge message, and the build time in UTC. The env
 
 Settings > Setup > Start over clears your own setup state, so the four screens show again on the next load. It is
 refused on prod (403) and hidden there.
+
+## Web Push: the VAPID key per environment (P1)
+
+Push needs one VAPID key per environment, the Key Vault secret `ft-vapid-key` (a P-256 JWK). The app reads it at run time with its own identity, so it is not in the Bicep and an environment without it still deploys: Settings › Notifications then says "Push isn't set up for this app yet" and in-app notifications work as usual.
+
+```
+az login
+infra/scripts/vapid-key.sh --vault ft-dev-kv-5bthbn          # dev
+infra/scripts/vapid-key.sh --vault ft-prod-kv-kkzllj         # prod
+```
+
+The key goes from node through a pipe into Key Vault; it is never printed, written to a file or passed as an argument. An existing key is left alone. `--force` replaces it, which ends push on every device (each subscribed with the old public key): people tap Notify this device again. The app picks a new key up within 5 minutes, no restart needed.
+
+### Test push on dev
+
+1. Make the key once (above), then open dev on the phone: Android in Chrome, or iPhone in Safari, then Share › Add to Home Screen and open FocusTime from the home screen (iOS 16.4 or later).
+2. Settings › Notifications › Notify this device, and allow notifications. The device shows in the list as "iPhone · Safari" or "Android · Chrome".
+3. Send a test notification (same page). It shows in ⋯ › Notifications and, with the app closed or in the background, as a notification on the phone saying "FocusTime · Notifications reach this device". Tapping it opens Settings › Notifications.
+4. Logs (Application Insights or the replica's console) have `server push_sent kind=test count=1`; `push_gone` means the push service dropped the subscription (the device was removed), `push_failed` that it refused (look at the time on the phone and the key). Never an endpoint or a key in the logs.
+5. Show details in notifications is off by default: the lock screen says only what kind of notice it is.
+
+## Check a VM's auto-shutdown is on (D475)
+
+FocusTime only reads a VM's auto-shutdown; it never changes it. To check one (yours, or one someone asks about):
+
+- Portal: the VM > Operations > Auto-shutdown. "Enabled" should be On, with the time and time zone the owner wants.
+  Notification before auto-shutdown can stay as it is.
+- Shell (read only):
+
+```sh
+az rest --method get --url "https://management.azure.com/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.DevTestLab/schedules/shutdown-computevm-<vm>?api-version=2018-09-15" \
+  --query "{status:properties.status,time:properties.dailyRecurrence.time,tz:properties.timeZoneId,notify:properties.notificationSettings.status}"
+```
+
+  `status` should be `Enabled`. A 404 means the VM has no auto-shutdown at all.
+- Who changed it, and with which app (90 days):
+
+```sh
+az monitor activity-log list --subscription <sub> --offset 90d --namespace Microsoft.DevTestLab \
+  --query "[?operationName.value=='Microsoft.DevTestLab/schedules/write' && status.value=='Succeeded'].{at:eventTimestamp,who:caller,app:claims.appid,schedule:resourceId}" -o table
+```
+
+  The app id says where a change came from: `c44b4083-3bb0-49c1-b47d-974e53cbdf3c` is the Azure portal, and
+  `15021957-09f5-41de-b9b2-ab28f42d6d0c` (Coopilot Desktop) is the local FocusTime before D475. The hosted FocusTime
+  (`0040169f-a4c9-46d9-bd81-83c31d0d6ff0`) never wrote a schedule.
+- To turn it back on, use the portal page above. Don't use FocusTime; it can't write a schedule.
 
 ## Roll back a revision
 
@@ -161,7 +207,7 @@ The "FocusTime" app registration and the "FocusTime DB Admins" group stay (prod 
 by running `app-registration.sh` with only the URLs still in use. Delete the GitHub variables `AZURE_DEV_*` if dev is
 gone for good.
 
-## Send feedback (F1, D473 to D477)
+## Send feedback (F1, D508 to D512)
 
 ⋯ › Send feedback creates a User Story under Feature #496 in the cooptimize organization, project Cooptimize Internal,
 as the app's own managed identity. Until an identity is added below, that environment's dialog says "Feedback isn't set
@@ -267,6 +313,14 @@ per person. Settings shows the ones a person sees as "Set by your FocusTime admi
    console: there is no API for it).
 6. deploy-prod with the SHA to promote.
 
+### Dev and prod parity (D473)
+
+Every prod deploy (a dry run too) first runs `infra/scripts/parity.sh`: it fails if dev has an app setting, app
+secret reference or Key Vault secret name that prod lacks, now or after the deploy. Fix a missing secret with
+`infra/scripts/copy-secrets.sh --vault ft-prod-kv-kkzllj`, a missing setting through `infra/`, or allow a name that is
+meant to be dev-only in `infra/parity-allow.txt` with a reason. Run it by hand any time: `infra/scripts/parity.sh`. If it
+says it can't read a name, ft-prod-deploy is missing its read roles: run `bootstrap.sh --env prod` again (step 7).
+
 ### First run for a new person
 
 Nothing to set up for them in Azure: anyone in the Cooptimize tenant can sign in.
@@ -316,3 +370,114 @@ az ad app delete --id <that appId>
 SQL compute is most of it; what keeps it down is the idle rule (D431) letting the database pause outside people's
 working hours. The actual cost after the first week goes here (Cost Management, resource group FocusTime, or
 `az consumption usage list --start-date <d> --end-date <d>`): _not measured yet_.
+
+## Asks (AP-1)
+
+### Graph permissions and consent
+
+Asks uses two delegated Microsoft Graph permissions, both ones a person can allow for themselves (no admin consent):
+
+| Permission | What for | How it's granted |
+|---|---|---|
+| Chat.ReadBasic | The chat picker and members (names, tenants) | On the app registration (`infra/scripts/app-registration.sh`, GRAPH_SCOPES; granted tenant-wide on Nov 4), so the sign-in asks for it |
+| Chat.Read | Reading new messages in a chat switched on for asks | **Not** on the registration (D490). Each person allows it the first time they switch Read for asks on: FocusTime sends them to Microsoft (`/auth/microsoft/login?consent=chat_read`) and back to Settings › Clients |
+
+Nothing to run for Chat.Read. Don't add it to GRAPH_SCOPES: everyone would then be asked for it at sign-in. If a tenant admin turns off user consent, an admin can grant Chat.Read for the FocusTime registration in Entra (Enterprise applications › FocusTime › Permissions › Grant admin consent); FocusTime's code doesn't change. ChatMember.Read and any app-only (application) Teams permission are never needed and must not be added. Settings › Connections shows each person's state: Chat.Read reads "Missing" until they allow it.
+
+### Switching Asks on for a client
+
+Each person, for themselves (no admin step):
+
+1. Settings › Clients › the client › Delivery chats › Add a chat (if it isn't there yet).
+2. Switch **Read for asks** on for that chat. The first time, Microsoft asks to allow FocusTime to read chat messages; accept, and FocusTime comes back and switches it on. Reading starts from that moment (no history).
+3. Optional: Settings › Clients › Asks sets how often (default every 5 minutes, only in working hours, not on PTO days) and the phrase lists.
+4. Asks show in Inbox › Asks. Create bug, story or feature needs that client's DevOps write access (Settings › Clients › DevOps write access).
+
+Off is the same switch; it stops the reads at once and keeps what was stored (see below to delete it).
+
+### Purging a client's stored chat text
+
+- **One person, one client:** Settings › Clients › the client › Delivery chats › **Delete stored messages** (asks the person to confirm). Deletes every stored message and ask for that client in their plan; DevOps items made from asks stay in DevOps. Removing a chat deletes that chat's messages and asks too.
+- **Automatically:** messages that didn't become asks are deleted 14 days after they were written, once a day, by the scheduler (D492). Asks keep their text with their resolution.
+- **Everything a person has:** Settings › Data › Delete my data (all their rows, chat text included).
+- **Across people** (a client asks for its text to be removed): each person does it from their own Settings, as above; there is no admin purge yet, and the hosted database is never edited by hand (no SQL against Azure SQL outside `focustime migrate`). Ask for an admin purge as a new step if this is needed.
+
+Nothing to clean elsewhere: chat text is never in logs or Application Insights (counts and kinds only), and never in exports to other systems.
+
+## AI (AI-0)
+
+FocusTime calls OpenAI's API for AI tasks, behind `ai/` (docs/architecture.md, D495 to D499). Nothing uses AI until a person turns on Use AI in Settings › AI, and a client task also needs Allow AI on that client (both off by default).
+
+### Create the OpenAI project and key (once per environment)
+
+The API is billed separately from ChatGPT Business. In the Cooptimize OpenAI organization (platform.openai.com):
+
+1. **Projects › Create project**: `FocusTime dev`, and separately `FocusTime prod`. One key per environment, never shared.
+2. In each project, **Limits › Spend**: a monthly spend limit a little above the app cap (default 100 USD), with **Enforce a hard limit** on. Requests over it fail with `project_spend_limit_exceeded`, which FocusTime shows as "The AI service's account is out of credit or over its limit" and never retries.
+3. **Data controls**: API data isn't used for training by default; leave it so. FocusTime sends `store: false` so OpenAI keeps no application state; abuse monitoring logs are kept up to 30 days (developers.openai.com/api/docs/guides/your-data). Zero data retention, if wanted later, is an organization agreement with OpenAI and needs no code change.
+4. **API keys › Create new secret key** in that project (a service account key is best for an app). Copy it once; it's shown only then.
+
+### Put the key in Key Vault
+
+The app reads `ft-openai-key` at run time with its own identity, so it isn't in the Bicep and an environment without it still deploys: Settings › AI then says "AI isn't set up for this FocusTime yet" and everything else works.
+
+```
+az login
+infra/scripts/openai-key.sh --vault ft-dev-kv-5bthbn       # dev: paste the dev project's key
+infra/scripts/openai-key.sh --vault ft-prod-kv-kkzllj      # prod: paste the prod project's key
+```
+
+The script asks for the key without showing it and pipes it into Key Vault: never printed, never in a file, an argument, the shell history or a log. An existing key is left alone; `--force` replaces it (rotation: make a new key, `--force`, then revoke the old one in OpenAI). The app picks a new key up within a minute, no restart.
+
+Put prod's key in before the next prod deploy after dev has one: the parity check (D473) fails when dev's vault has `ft-openai-key` and prod's doesn't.
+
+Then check: sign in, Settings › AI, turn on Use AI, press **Test AI**. "OK · 1.2 s · $0.0001" means the key, the model and the network work; the request shows in Last 20 requests.
+
+In the developer loop the stub answers (no network, no cost). To try the real API locally: `infra/scripts/openai-key.sh --local`, then `[ai] provider = "openai"` in `~/.config/focustime/app.toml`, and restart.
+
+### Change the model, limits or caps
+
+App settings, the same for everyone; the defaults are in `server/appconfig.ts` (`DEFAULT_AI`): model `gpt-6-luna`, reasoning effort low, timeout 30 s, max output tokens 4000 (Test AI 1000), prices 0.10 / 0.01 cached / 0.50 USD per million tokens, app cap 100 USD a month. To change one for an environment, add its `FOCUSTIME_AI_*` setting to the container app in `infra/modules/app.bicep` in a pull request and deploy (never `az containerapp update` by hand):
+
+| Setting | Example |
+|---|---|
+| `FOCUSTIME_AI_MODEL` | `gpt-5-mini` |
+| `FOCUSTIME_AI_REASONING_EFFORT` | `minimal`, `low`, `medium`, or empty for the model's default |
+| `FOCUSTIME_AI_TIMEOUT_MS` | `45000` |
+| `FOCUSTIME_AI_MAX_OUTPUT_TOKENS` | `default=4000,test_ai=1000` |
+| `FOCUSTIME_AI_INPUT_USD_PER_MILLION`, `..._CACHED_INPUT_...`, `..._OUTPUT_...` | from the pricing page for the model |
+| `FOCUSTIME_AI_APP_CAP_USD` | `100` |
+| `FOCUSTIME_AI_PROVIDER` | `off` turns AI off for everyone (Settings › AI says it isn't set up) |
+
+Change the prices whenever the model changes: they are only used to estimate cost and enforce the caps. Each person's own cap is theirs to set in Settings › AI (0 to 1000 USD, default 10).
+
+### What "AI isn't set up" means
+
+FocusTime has no usable key for this environment: `ft-openai-key` is missing from the vault, the app can't read the vault, or `FOCUSTIME_AI_PROVIDER` is `off`. Nothing is sent and every other part of FocusTime works. Fix: put the key in (above), wait a minute, press Test AI. Other messages:
+
+- "AI budget reached for this month": the person's or the app's cap; it starts again on the 1st (UTC).
+- "The AI service's account is out of credit or over its limit": OpenAI's billing or the project's hard limit.
+- "The AI service is busy": rate limited after one retry.
+- "Not sent: ...": FocusTime's own guard refused it (another client, a secret, an outside email address); nothing left FocusTime.
+
+## AI sorting of asks, and Promises (AP-2)
+
+### What it costs (estimate, gpt-6-luna list prices on 2026-11-04)
+
+Only ask candidates (messages the AP-1 rules picked out) and the person's own messages with a promise phrase are sent; every other message costs nothing. One request is about 3,000 to 4,000 input tokens (instructions, the schema, up to 50 open items and 5 earlier messages) and 300 to 500 output tokens.
+
+| A day, per person and chat | Requests | Cost |
+|---|---|---|
+| 50 external messages, 10 of them ask candidates | 10 `asks.classify` | about 0.0065 USD |
+| 3 of my own messages with a promise phrase | 3 `promises.extract` | about 0.002 USD |
+| Together | 13 | under 0.01 USD a day, about 0.20 USD a month |
+
+That is about 2% of the 10 USD monthly default per person. A provider that fails costs one request per ask: nothing retries on its own (Sort again is by hand). Settings › AI shows the real month to date; Application Insights has the counts by task (`asks.classify`, `promises.extract`), never text.
+
+### Turning sorting off
+
+- For one client: Settings › Clients, that client's Allow AI off. New asks show "Not sorted: AI isn't allowed for <client>"; already sorted ones keep their labels. Promises fall back to the rule alone (first line, no date).
+- For one person: Settings › AI, Use AI off. Same as above for every client.
+- For everyone: remove `ft-openai-key` from the vault or set `FOCUSTIME_AI_PROVIDER=off`; Asks and Promises keep working on the rules alone.
+- Urgent asks notify only through Settings › Notifications "Urgent asks"; "Let urgent asks through" (off by default) lets them break into focus.
+

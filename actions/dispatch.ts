@@ -1,6 +1,14 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import { clearPhotos, photoAction } from "./photo-actions.ts";
+import { chatAction, type ChatContext } from "./chat-actions.ts";
+import { askAction, type AskContext } from "./ask-actions.ts";
+import { aiAction, type AiActionName, type AiRuntime } from "./ai-actions.ts";
+import { createAi, type AiService } from "../ai/service.ts";
+import type { ClientEntry } from "../ai/guard.ts";
+import { inviteDomains } from "../config/schema.ts";
+import type { ChosenVm } from "./account-types.ts";
+import type { Logger } from "../log/logger.ts";
 import type { PhotoCache } from "../host/types.ts";
 import { expiringSoon } from "../plan/expiry.ts";
 import { clients as defaultClients, weekConfig as defaultWeekConfig } from "../config/defaults.ts";
@@ -39,6 +47,7 @@ import { settingsAction, type SettingsContext } from "./settings-actions.ts";
 import { borrowedView, closeoutAction, noteView } from "./closeout-actions.ts";
 import { applyFollowUpRules, followUpView, internalClients, nameOf, workdayOf } from "./followup-rules.ts";
 import { watchedIds } from "../plan/followups.ts";
+import { pastUrgency } from "../plan/asks-ai.ts";
 import { isActionName, type ActionName } from "./registry.ts";
 import { captureAction } from "./capture-actions.ts";
 import { followUpAction } from "./followup-actions.ts";
@@ -50,14 +59,16 @@ import { AHEAD_SEEN_MARK, aheadRitualsDue } from "../plan/rituals.ts";
 
 import type { HostLinks } from "../host/types.ts";
 import type { ActionResponse, SourceSummary, PlanningSettings, WeekLoadData } from "./types.ts";
+import { DATAVERSE_UNREACHABLE, manyDataverseMatches, noDataverseMatch, type MatchResult } from "./dataverse-words.ts";
 import { accountAction, storedIdentity, withMe, IDENTITY_KEY, type MicrosoftAccount, type StoredIdentity } from "./account.ts";
-import { vmAction, type VmContext } from "./vm-actions.ts";
+import { vmAction, vmKey, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
 import { feedbackAction, type FeedbackContext, type FeedbackService } from "./feedback-actions.ts";
 import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
+import { noticeAction, type PushPort } from "./notice-actions.ts";
 
 /** The plan store marker for the first launch (step 17.5). */
 const FIRST_LAUNCH_MARK = "first_launch";
@@ -67,6 +78,10 @@ const TOUR_MARK = "tour_offer";
 export type { ActionResponse, SourceSummary, WeekLoadData };
 
 export type ActionContext = {
+  /** AI-0: the app's AI runtime (settings, provider, the app's spend). Absent: AI isn't available here (demo). */
+  ai?: AiRuntime;
+  /** AP-1: the structured logger (counts and kinds only). Absent: nothing is logged (tests, demo). */
+  log?: Logger;
   /** S1 (D452): where this runs: local, dev, prod or demo (runtime config). Absent: local. */
   env?: string;
   /** R1: what to do when the one-time move from Coopilot's keyring entries failed; shown on the sign-in screen. */
@@ -75,6 +90,8 @@ export type ActionContext = {
   photoCache?: PhotoCache;
   /** Step 15.5: the notifier (test and sample notifications). Absent: notifications aren't available here. */
   notifications?: { test: () => Promise<void>; sample: (kind: string, live: boolean, gated: boolean) => Promise<boolean> };
+  /** P1: this person's Web Push (devices, the app's VAPID key). Absent: push isn't available (demo, tests). */
+  push?: PushPort;
   loadConfig: () => Promise<{ path: string; parsed: ParseResult; created?: boolean }>;
   makeDataverse: (cfg: DataverseConfig, timeZone: string) => DataverseSource;
   makeOutlook: (cfg: OutlookConfig, timeZone: string) => CalendarSource & { write?: OutlookWrite; schedule?: ScheduleReader; people?: PeopleReader };
@@ -119,7 +136,7 @@ export const DEMO_REFUSED: readonly ActionName[] = [
   "link.open", "outlook.open", "playlist.open", "data.export", "secret.set",
   "auth.connect_microsoft", "auth.connect_google", "auth.connect_outlook_write", "auth.disconnect",
   "write.confirm", "write.retry", "devops.confirm", "devops.retry", "devops.set_write_pat", "devops.clear_write_pat",
-  "auth.sign_in", "auth.sign_out",
+  "auth.sign_in", "auth.sign_out", "push.subscribe",
 ];
 export const DEMO_REFUSAL = "Demo data: nothing leaves FocusTime in demo mode";
 
@@ -339,16 +356,18 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     };
   } else {
     let dv = cfg.dataverse;
-    let resolveError: string | null = null;
+    let resolveError: Extract<MatchResult, { ok: false }> | null = null;
     if (!dv.mySystemUserId) {
       const r = await matchMe(ctx, dv, tz);
       if (r.ok) {
         await ctx.saveSystemUserId(r.id);
         dv = { ...dv, mySystemUserId: r.id };
-      } else resolveError = r.message;
+      } else resolveError = r;
     }
     dataverse = resolveError
-      ? { source: "dataverse", status: "misconfigured", fetchedAt: null, fromCache: false, items: [], message: resolveError, fixAction: "open_settings" }
+      ? resolveError.reason === "failed"
+        ? { source: "dataverse", status: "unreachable", fetchedAt: null, fromCache: false, items: [], message: resolveError.message }
+        : { source: "dataverse", status: "misconfigured", fetchedAt: null, fromCache: false, items: [], message: resolveError.message, fixAction: "open_settings" }
       : await ctx.makeDataverse(dv, tz).load(weekStart, refresh);
     if (!resolveError) {
       // PTO (step 6) alongside everything else; a failure falls back to its cache inside the source.
@@ -366,6 +385,9 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
       planClients = picked.planClients;
       // Items an open follow-up is about are read by id too, so a completed one can close its follow-up (step 7).
       const watch = ctx.plan ? watchedIds((await ctx.plan.openFollowUps())) : {};
+      // AP-2: and the items promises are linked to, so a promise closes when its item is done.
+      if (ctx.plan)
+        for (const p of (await ctx.plan.promises().catch(() => []))) if (p.status === "linked" && p.itemId !== null) (watch[p.clientKey] ??= []).includes(p.itemId) || watch[p.clientKey]!.push(p.itemId);
       // Features on the week lists of this week, today's week and next (step 8), so Plan the day can offer their
       // stories. Every list item (features and stories) is also read by id, done ones included, so progress can count
       // what DevOps shows as Completed (step 11).
@@ -470,9 +492,22 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     devopsWrite: ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : [],
     // Step 14.5 (D256): write PATs and app secrets that expire within 14 days, for Today.
     expiring: (await expiringFor(ctx.plan, cfg, serverToday, (k) => names.get(k))),
+    asks: ctx.plan ? await urgentAsks(ctx.plan, now, tz, (k) => names.get(k) ?? cfg?.clientSettings[k]?.name ?? k) : { urgent: [], pastUrgency: 0 },
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
     demo: !!ctx.demo?.on,
+  };
+}
+
+/**
+ * AP-2: open asks sorted as urgent "now" (Today), and the open ones past their urgency window (Check-in). Asks that
+ * weren't sorted have no urgency and count in neither.
+ */
+async function urgentAsks(plan: PlanStore, now: string, zone: string, name: (k: string) => string): Promise<WeekLoadData["asks"]> {
+  const open = (await plan.asks().catch(() => [])).filter((a) => a.status === "open" && a.sortStatus === "sorted" && a.sort && a.sort.kind !== "none");
+  return {
+    urgent: open.filter((a) => a.sort!.urgency === "now").map((a) => ({ chatId: a.chatId, messageId: a.messageId, clientKey: a.clientKey, clientName: name(a.clientKey), title: a.sort!.title, at: a.createdAt })),
+    pastUrgency: open.filter((a) => pastUrgency(a.sort!.urgency, a.createdAt, now, zone)).length,
   };
 }
 
@@ -525,6 +560,111 @@ export async function presenceContext(ctx: ActionContext): Promise<PresenceConte
   };
 }
 
+/** T-2: delivery chats: the sign-in, Cooptimize's tenant, and the person's clients as Settings lists them. */
+export async function chatContext(ctx: ActionContext): Promise<ChatContext> {
+  return {
+    ...(ctx.plan ? { plan: ctx.plan } : {}),
+    account: await accountOf(ctx),
+    homeTenant: async () => (await configured(ctx))?.outlook?.tenantId ?? (await storedIdentity(ctx.plan))?.tid ?? null,
+    clientKeys: async () => {
+      const cfg = await configured(ctx);
+      if (!cfg) return null;
+      const mine = cfg.dataverse.mySystemUserId ? await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).myClients().catch(() => null) : null;
+      if (!mine) return null;
+      const kept = Object.entries(cfg.clientSettings).filter(([, v]) => v.follow).map(([k]) => k);
+      return new Set([INTERNAL_CLIENT, ...mine.map((c) => c.clientKey), ...kept, ...cfg.week.standingBlocks.map((b) => b.clientKey)]);
+    },
+    now: ctx.now,
+  };
+}
+
+/** AP-1: Asks: the chats with Read for asks on, the person's PTO, their clients' open DevOps items and write access. */
+/** DevOps project names from a work item's link (https://dev.azure.com/<org>/<project>/_workitems/...). */
+const projectOf = (url: string): string | null => {
+  const m = /^https:\/\/dev\.azure\.com\/[^/]+\/([^/_][^/]*)\//.exec(url);
+  if (!m) return null;
+  const p = decodeURIComponent(m[1]!);
+  return /^[0-9a-f-]{36}$/i.test(p) ? null : p;
+};
+
+/**
+ * AI-0: every client the guard must know (all but the internal one): its key, Dataverse and display names, and the
+ * DevOps projects and work item ids already read (Week, Plan the week). Nothing is fetched for this: a client whose
+ * DevOps wasn't read yet is known by its names only.
+ */
+async function aiDirectory(ctx: ActionContext, cfg: AppConfig): Promise<ClientEntry[]> {
+  const zone = userZone(cfg);
+  const mine = cfg.dataverse.mySystemUserId ? ((await ctx.makeDataverse(cfg.dataverse, zone).myClients().catch(() => null)) ?? []) : [];
+  const keys = new Set([...mine.map((c) => c.clientKey), ...Object.keys(cfg.clientSettings), ...cfg.week.standingBlocks.map((b) => b.clientKey)]);
+  keys.delete(INTERNAL_CLIENT);
+  const devops = ctx.makeDevOps(cfg.dataverse, zone);
+  // AP-2: item ids from the remembered map (every read, kept across restarts), plus what this process read last.
+  const remembered = (await ctx.plan?.itemClients().catch(() => null)) ?? new Map<string, number[]>();
+  for (const k of remembered.keys()) if (k !== INTERNAL_CLIENT) keys.add(k);
+  return [...keys].map((key) => {
+    const w = devops.last(key);
+    const items = w ? [...w.items, ...w.children, ...(w.watched ?? []), ...(w.committed ?? [])] : [];
+    const names = [mine.find((c) => c.clientKey === key)?.clientName, cfg.clientSettings[key]?.name].filter((n): n is string => !!n && n !== key);
+    return { key, names: [...new Set(names)], projects: [...new Set(items.map((i) => projectOf(i.url)).filter((p): p is string => !!p))], itemIds: [...new Set([...items.map((i) => i.id), ...(remembered.get(key) ?? [])])] };
+  });
+}
+
+/** AI-0: the AI service for this person and request, or null where AI isn't available (demo, no plan store). */
+export async function aiFor(ctx: ActionContext): Promise<AiService | null> {
+  const rt = ctx.ai;
+  const plan = ctx.plan;
+  if (!rt || !plan) return null;
+  return createAi({
+    provider: rt.provider,
+    app: rt.app,
+    person: async () => (await configured(ctx))?.ai ?? { use: false, monthlyCapUsd: 10, allowedClients: [] },
+    guard: async () => {
+      const cfg = await configured(ctx);
+      if (!cfg) return { directory: [], homeDomains: [], forbidden: [] };
+      const me = await storedIdentity(plan);
+      const vm = me ? await plan.accountState<ChosenVm>(vmKey(me.oid)).catch(() => null) : null;
+      return { directory: await aiDirectory(ctx, cfg), homeDomains: inviteDomains(cfg), forbidden: vm ? [vm.name, vm.id] : [] };
+    },
+    log: { add: (e) => plan.addAiRequest(e), spentMicros: (a, b) => plan.aiSpentMicros(a, b), recent: (n) => plan.aiRequests(n) },
+    appSpend: rt.appSpend,
+    now: ctx.now,
+    ...(rt.logger ? { logger: rt.logger } : ctx.log ? { logger: ctx.log } : {}),
+  });
+}
+
+export async function askContext(ctx: ActionContext): Promise<AskContext> {
+  const chats = await chatContext(ctx);
+  return {
+    ...(ctx.plan ? { plan: ctx.plan } : {}),
+    account: chats.account,
+    config: () => configured(ctx),
+    homeTenant: chats.homeTenant,
+    pto: async (d) => {
+      const cfg = await configured(ctx);
+      if (!cfg?.dataverse.mySystemUserId) return false;
+      return (await ctx.makeDataverse(cfg.dataverse, userZone(cfg)).pto(d, d)).items.some((e) => e.date === d);
+    },
+    openItems: async (cfg, clientKey) => {
+      const src = ctx.makeDevOps(cfg.dataverse, userZone(cfg));
+      // What was read last (Week, Plan the week) when there is one; else this client alone.
+      const r = src.last(clientKey) ?? (await src.load([{ clientKey, clientName: cfg.clientSettings[clientKey]?.name ?? clientKey }]).catch(() => null))?.[0] ?? null;
+      if (!r || (r.status !== "ok" && !r.items.length)) return null;
+      const seen = new Set<number>();
+      return [...r.items, ...r.children].filter((i) => i.stateCategory !== "Completed" && i.stateCategory !== "Removed" && !seen.has(i.id) && !!seen.add(i.id));
+    },
+    writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
+    now: ctx.now,
+    log: ctx.log ?? (() => {}),
+    // AP-2: the AI service (its switches, guards, budget and log), and a linked item's done state from the last read.
+    ai: () => aiFor(ctx),
+    itemDone: (cfg, clientKey, itemId) => {
+      const w = ctx.makeDevOps(cfg.dataverse, userZone(cfg)).last(clientKey);
+      const hit = w ? [...w.items, ...w.children, ...(w.watched ?? [])].find((i) => i.id === itemId) : undefined;
+      return hit ? hit.stateCategory === "Completed" : null;
+    },
+  };
+}
+
 /** The pieces the account and VM actions need. */
 async function accountOf(ctx: ActionContext): Promise<MicrosoftAccount | null> {
   const cfg = await configured(ctx);
@@ -549,7 +689,10 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
   // to the registry without a case, or a case for a name not in the registry, fails the type check.
   if (!isActionName(req.action)) return bad("unknown action");
   const action: ActionName = req.action;
-  // Step 15.4: "me" comes from the Microsoft sign-in (config's my_email stays the fallback); Settings shows the file as is.
+  // Step 15.4: "me" comes from the Microsoft sign-in (config's my_email stays the fallback). Settings writes the file as
+  // is (raw), but shows "me" and finds the Dataverse user the same way as every other action (settingsCtx below): it
+  // once read the raw file only, so a person whose Dataverse user was kept with their sign-in saw no clients (A5 fix).
+  const raw = ctx;
   if (action !== "settings.load" && action !== "settings.save") ctx = withSignedIn(ctx);
   if (ctx.demo?.on && DEMO_REFUSED.includes(action)) return { ok: false, status: 403, error: DEMO_REFUSAL, code: "demo" };
   switch (action) {
@@ -644,7 +787,6 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "vm.status":
     case "vm.preview":
     case "vm.confirm":
-    case "vm.restore":
     case "vm.dismiss_prompt":
     case "vm.log":
     case "vm.start_now":
@@ -735,6 +877,12 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
       if (ctx.demo?.on || !ctx.plan) return { ok: true, data: { first: false } };
       return { ok: true, data: { first: (await ctx.plan.markOnce(FIRST_LAUNCH_MARK, "once")) } };
     }
+    case "notices.list":
+    case "notices.read":
+    case "push.status":
+    case "push.subscribe":
+    case "push.remove":
+      return noticeAction({ plan: ctx.plan, push: ctx.push, demo: !!ctx.demo?.on }, action, req.input);
     case "setup.load":
     case "setup.prefill":
     case "setup.mark":
@@ -832,15 +980,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "secret.set":
     case "data.export":
       return settingsAction(
-        {
-          loadConfig: ctx.loadConfig,
-          makeDataverse: ctx.makeDataverse,
-          now: ctx.now,
-          ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}),
-          ...(ctx.plan ? { plan: ctx.plan } : {}),
-          ...(ctx.secrets ? { secrets: ctx.secrets } : {}),
-          ...(ctx.exportPlan ? { exportPlan: ctx.exportPlan } : {}),
-        },
+        settingsCtx(raw, ctx),
         action,
         req.input,
       );
@@ -875,6 +1015,33 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "presence.people":
     case "presence.log":
       return presenceAction(await presenceContext(ctx), action, req.input);
+    case "chats.registered":
+    case "chats.list":
+    case "chats.add":
+    case "chats.remove":
+    case "chats.kind":
+    case "chats.refresh":
+    case "permissions.status":
+      return chatAction(await chatContext(ctx), action, req.input);
+    case "asks.list":
+    case "asks.refresh":
+    case "asks.switch":
+    case "asks.context":
+    case "asks.resolve":
+    case "asks.reopen":
+    case "asks.search":
+    case "asks.purge":
+    case "asks.sort_again":
+    case "asks.show":
+    case "promises.list":
+    case "promises.resolve":
+    case "promises.reopen":
+    case "promises.followup":
+    case "promises.link":
+      return askAction(await askContext(ctx), action, req.input);
+    case "ai.status":
+    case "ai.test":
+      return aiAction(await aiFor(ctx), action as AiActionName);
     case "people.photos":
       return photoAction({ ...(await presenceContext(ctx)), cache: ctx.photoCache ?? null }, req.input);
     case "media.status": {
@@ -1054,15 +1221,32 @@ async function openLink(links: HostLinks, url: string): Promise<ActionResponse> 
   }
 }
 
-/** A2: the words when nobody in Dataverse has the signed-in person's email or sign-in name. */
-export const NO_DATAVERSE_MATCH = "We couldn't match you in Dataverse yet. Your work email and sign-in name aren't on a Dataverse user. Ask an admin to add you, or set your Dataverse user in Settings > You";
+/** Settings' context: writes go to the file as is; what it shows and the Dataverse user come from the sign-in. */
+function settingsCtx(raw: ActionContext, ctx: ActionContext): SettingsContext {
+  const signed = withSignedIn(raw);
+  return {
+    loadConfig: ctx.loadConfig,
+    viewConfig: signed.loadConfig,
+    findMe: async (dv, tz) => {
+      const r = await matchMe(signed, dv, tz);
+      if (r.ok) await signed.saveSystemUserId(r.id);
+      return r;
+    },
+    makeDataverse: ctx.makeDataverse,
+    now: ctx.now,
+    ...(ctx.writeConfig ? { writeConfig: ctx.writeConfig } : {}),
+    ...(ctx.plan ? { plan: ctx.plan } : {}),
+    ...(ctx.secrets ? { secrets: ctx.secrets } : {}),
+    ...(ctx.exportPlan ? { exportPlan: ctx.exportPlan } : {}),
+  };
+}
 
 /**
  * A2: who the signed-in person is in Dataverse (Account Worker, Focus Time and Time Off are read for them): the
  * first Dataverse user that has their email, else their UPN. A stored my_systemuserid (from an earlier match, or set
- * by hand in Settings) is used as is and skips this.
+ * by hand in Settings) is used as is and skips this. A failure says which case it is (dataverse-words.ts).
  */
-export async function matchMe(ctx: Pick<ActionContext, "makeDataverse" | "signedInAs">, dv: DataverseConfig, tz: string): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+export async function matchMe(ctx: Pick<ActionContext, "makeDataverse" | "signedInAs">, dv: DataverseConfig, tz: string): Promise<MatchResult> {
   const me = await ctx.signedInAs?.();
   const names = [...new Set([dv.myEmail, me?.email ?? "", me?.upn ?? ""].map((x) => x.trim().toLowerCase()).filter((x) => x.includes("@")))];
   const src = ctx.makeDataverse(dv, tz);
@@ -1070,7 +1254,8 @@ export async function matchMe(ctx: Pick<ActionContext, "makeDataverse" | "signed
     const r = await src.resolveUserId(name);
     if (r.ok) return r;
     // Not found under this name: try the next. Anything else (more than one, Dataverse down) is the answer.
-    if (r.reason !== "none") return r;
+    if (r.reason === "many") return { ok: false, reason: "many", message: manyDataverseMatches(name) };
+    if (r.reason !== "none") return { ok: false, reason: "failed", message: DATAVERSE_UNREACHABLE };
   }
-  return { ok: false, message: NO_DATAVERSE_MATCH };
+  return { ok: false, reason: "none", message: noDataverseMatch(names[0] ?? null) };
 }

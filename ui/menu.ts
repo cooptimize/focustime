@@ -85,6 +85,8 @@ export type View = import("./nav.ts").ViewName;
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
+  /** AP-1: Inbox › Asks is open (its keys work there). */
+  asksOpen?: boolean;
   week: Week;
   /** The day the selection is on, and its half. */
   selection: { date: IsoDate; half: Half; clientKey?: string | null };
@@ -137,7 +139,9 @@ export type MenuEnv = {
   runTime: (action: string, input: Record<string, unknown>) => Promise<boolean>;
   /** Opens Settings, at a section when given (step 6b). */
   openSettings: (section?: string) => void;
-  /** Step 15.4: the VM chip's menu (start, stop, delay shutdown). */
+  /** P1: ⋯ › Notifications, the in-app list. */
+  openNotifications?: () => void;
+  /** Step 15.4: the VM chip's menu (Start; D475: nothing else changes the VM). */
   openVm: () => void;
   /** F1: ⋯ › Send feedback. */
   openFeedback: () => void;
@@ -1002,6 +1006,11 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "setup.prefill":
     case "setup.mark":
     case "setup.reset": return { run: () => env.openSettings("setup") };
+    case "notices.list":
+    case "notices.read": return env.openNotifications ? { run: () => env.openNotifications!() } : { disabled: "Not available here" };
+    case "push.status":
+    case "push.subscribe":
+    case "push.remove": return { run: () => env.openSettings("notifications") };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };
@@ -1011,6 +1020,35 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // Step 16.3: deep focus switches the running session; Teams status lives in Settings > Focus; presence shows where Cooptimizers are listed.
     case "timer.deep": return env.timer?.kind === "focus" ? { run: () => env.runTimer("timer.deep", { on: !env.timer!.deep }) } : { next: () => ({ title: "Start deep focus", items: [{ id: "deep", label: "Deep focus", hint: `${env.planning.focusMinutes} min · Teams: Do not disturb`, action: "timer.start", run: () => env.runTimer("timer.start", { deep: true }) }] }) };
     case "presence.status": return { run: () => env.openSettings("focus") };
+    case "chats.registered":
+    case "chats.list":
+    case "chats.add":
+    case "chats.remove":
+    case "chats.kind":
+    case "chats.refresh": return { run: () => env.openSettings("clients") };
+    // AP-1: Asks are worked in Inbox › Asks; switching a chat on and deleting stored messages in Settings > Clients.
+    case "asks.list":
+    case "asks.context":
+    case "asks.resolve":
+    case "asks.reopen":
+    case "asks.search":
+    case "asks.sort_again":
+    case "asks.show":
+      return { run: () => env.setView("asks") };
+    case "promises.list":
+    case "promises.resolve":
+    case "promises.reopen":
+    case "promises.followup":
+    case "promises.link":
+      return { run: () => env.setView("promises") };
+    case "asks.refresh": return { run: () => (env.setView("asks"), void env.runPlan("asks.refresh", {})) };
+    case "asks.switch":
+    case "asks.purge":
+      return { run: () => env.openSettings("clients") };
+    case "ai.status":
+    case "ai.test":
+      return { run: () => env.openSettings("ai") };
+    case "permissions.status": return { run: () => env.openSettings("connections") };
     case "people.photos": return { disabled: "Shown wherever you and Cooptimizers appear" };
     case "presence.people": return { disabled: "Shown next to Cooptimizers in Needs help from…, Who and Roadmap" };
     case "presence.log": return { run: () => env.openSettings("data") };
@@ -1138,7 +1176,6 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "vm.status":
     case "vm.preview":
     case "vm.confirm":
-    case "vm.restore":
     case "vm.dismiss_prompt":
     case "vm.start_now":
       return { run: env.openVm };
@@ -1160,6 +1197,19 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
   }
 }
 
+/** AP-1: the Asks tab's keys as commands; the tab listens for ASK_KEY_EVENT. */
+export const ASK_KEY_EVENT = "focustime:ask-key";
+export const ASK_KEYS = [
+  { id: "ask.next", label: "Next ask", hint: "J" },
+  { id: "ask.prev", label: "Previous ask", hint: "K" },
+  { id: "ask.primary", label: "The ask's first action: Create bug (or Link without DevOps write access)", hint: "Enter" },
+  { id: "ask.handled", label: "Mark the ask handled (an optional note)", hint: "H" },
+  { id: "ask.dismiss", label: "Dismiss the ask", hint: "D" },
+  { id: "ask.context", label: "Show or hide the ask's context (the 5 messages before)", hint: "X" },
+] as const;
+export type AskKeyId = (typeof ASK_KEYS)[number]["id"];
+const askKey = (id: AskKeyId): void => void window.dispatchEvent(new CustomEvent(ASK_KEY_EVENT, { detail: id }));
+
 /** Window commands that aren't server actions: views, week navigation, details. */
 function uiCommands(env: MenuEnv): MenuItem[] {
   const soon = "Coming soon";
@@ -1168,6 +1218,8 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.week", action: "view.week", group: "Views", label: "Week", hint: "2", run: () => env.setView("week") },
     { id: "view.roadmap", action: "view.roadmap", group: "Views", label: "Roadmap", hint: "3", run: () => env.setView("roadmap") },
     { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: follow-ups and captures", hint: "4", run: () => env.setView("inbox") },
+    { id: "view.asks", action: "view.asks", group: "Views", label: "Inbox › Asks: questions and requests from client chats", run: () => env.setView("asks") },
+    ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Asks", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open Inbox › Asks first" }) })),
     { id: "view.plan", action: "view.plan", group: "Views", label: "Plan mode for this tab, or back", hint: "P", run: env.openRitual },
     { id: "view.planday", action: "view.planday", group: "Views", label: "Today › Plan (plan the day)", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },

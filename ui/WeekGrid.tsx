@@ -16,7 +16,7 @@ import { hourMarks, labelHere, layoutEvents, rulerSpan, showRuler } from "./layo
 import { DevOpsWork } from "./work.ts";
 import { clientColor, eventRange, SampleSources, shortDate, shortRange, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 import { cardHalves, eveOnly, slotOf } from "./halves.ts";
-import type { Layout } from "./viewport.ts";
+import { usePhone, type Layout } from "./viewport.ts";
 import { cardPlan, clientFeatures, featuresLine, PlanCtx, storiesUnder, type PlanView } from "./planview.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
 import { mondayOf } from "../week/dates.ts";
@@ -110,9 +110,21 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
   );
   if (layout === "narrow") {
     const i = selection.dayIndex;
+    const swipe = { x: 0, y: 0 };
     const go = (d: number) => onSelect({ dayIndex: Math.max(0, Math.min(week.days.length - 1, d)), half: selection.half });
     return (
-      <main className="grid narrow" role="group" aria-label="Day view. Left and right arrows change the day, up and down pick the half-day, Enter opens details.">
+      <main
+        className="grid narrow"
+        role="group"
+        aria-label="Day view. Left and right arrows change the day, up and down pick the half-day, Enter opens details."
+        // P1: on a touch screen a sideways swipe changes the day.
+        onTouchStart={(e) => (swipe.x = e.touches[0]!.clientX, swipe.y = e.touches[0]!.clientY)}
+        onTouchEnd={(e) => {
+          const dx = e.changedTouches[0]!.clientX - swipe.x;
+          const dy = e.changedTouches[0]!.clientY - swipe.y;
+          if (Math.abs(dx) >= SWIPE_PX && Math.abs(dx) > 2 * Math.abs(dy)) go(i + (dx < 0 ? 1 : -1));
+        }}
+      >
         <nav className="daybar" aria-label="Day">
           <button type="button" className="day-step" onClick={() => go(i - 1)} disabled={i === 0} aria-label="Previous day">
             <kbd>←</kbd>
@@ -155,6 +167,9 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
     </main>
   );
 }
+
+/** P1: how far a finger moves sideways, in CSS px, to change the day. */
+const SWIPE_PX = 50;
 
 /** U3: a whole day in one cell: a PTO day (hatched) or a day with no working hours (Friday's dashed catch-up). */
 type Whole = "pto" | "catchup" | null;
@@ -385,7 +400,9 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const doneHidden = isToday ? [] : ticks.filter((p) => p.status === "done");
   const shown = isToday ? ticks : ticks.filter((p) => p.status !== "done");
   const rc = useContext(RulerCtx);
-  const ruler = compact && showRuler(rc.layout, slot);
+  // P1: on the phone a card lists its meetings in words; no rail.
+  const phone = usePhone();
+  const ruler = compact && !phone && showRuler(rc.layout, slot);
   const style = { "--c": clientColor(primary?.clientKey, colors), ...(compact ? {} : { flexGrow: minutesOf(slot) }) } as CSSProperties;
   const state = eve ? "eve" : overflow ? "overflow" : slot.open ? "open" : slot.off ? "off" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
@@ -445,6 +462,16 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         </div>
       )}
       {flexList}
+      {phone && slot.events.length > 0 && (
+        <ul className="card-events" aria-label={`Meetings and events, ${dayLabel} ${slot.half}`}>
+          {slot.events.map((p) => (
+            <li key={p.event.id} className={p.event.isPersonal ? "personal" : p.event.unavailable ? "unavailable" : undefined}>
+              <span className="ce-time">{startClock(p.clipStart, tz)}–{startClock(p.clipEnd, tz)}</span>
+              <span className="ce-title">{p.event.title}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       {shown.length > 0 && (
         <ul className="checklist" aria-label={`Plan for ${dayLabel} ${slot.half}`}>
           {shown.map((p) => (
@@ -453,7 +480,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         </ul>
       )}
       {doneHidden.length > 0 && <div className="card-done">{doneHidden.length} done</div>}
-      {addWork && (
+      {addWork && !phone && (
         <button
           type="button"
           className="add-work"

@@ -129,7 +129,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.locator(".roadmap .done-btn").click();
     await expect.poll(() => hash(page)).toBe("#/roadmap");
     await page.locator(".top-more").click();
-    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Commands/), expect.stringMatching(/^Guide/), expect.stringMatching(/^Keyboard shortcuts/), "Send feedback", "About"]);
+    await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Notifications/), expect.stringMatching(/^Commands/), expect.stringMatching(/^Guide/), expect.stringMatching(/^Keyboard shortcuts/), "Send feedback", "About"]);
     await page.keyboard.press("Escape");
     await page.locator(".person-chip").click();
     await page.getByRole("menuitem", { name: /^Settings/ }).click();

@@ -116,3 +116,78 @@ export function aFeedbackDraft(o: Partial<FeedbackDraft> = {}): FeedbackDraft {
 
 /** F1: who sends feedback, from an account row. */
 export const aSender = (u: UserRow = aUser()): Sender => ({ name: u.displayName, email: u.email });
+// T-2: Teams delivery chats. Fictional tenants: Cooptimize's (HOME_TENANT) and one client's (CLIENT_TENANT).
+export const HOME_TENANT = "11111111-1111-4111-8111-111111111111";
+export const CLIENT_TENANT = "22222222-2222-4222-8222-222222222222";
+
+/** A chat member; a Cooptimizer by default (`external: true` puts them in the client's tenant). */
+export function aChatMember(o: Partial<import("../../plan/chats.ts").ChatMember> & { external?: boolean } = {}): import("../../plan/chats.ts").ChatMember {
+  const n = next();
+  const { external, ...rest } = o;
+  return { userId: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`, displayName: `Person ${n}`, email: `person${n}@${external ? "fabrikam" : "contoso"}.example`, tenantId: external ? CLIENT_TENANT : HOME_TENANT, ...rest };
+}
+
+/** AP-1: a chat message as the rules see it: from a client person by default, plain text, nothing attached. */
+export function aMessage(o: Partial<import("../../plan/asks.ts").IncomingMessage> = {}): import("../../plan/asks.ts").IncomingMessage {
+  const n = next();
+  return {
+    chatId: "19:fabrikam@thread.v2",
+    messageId: String(1_700_000_000_000 + n),
+    clientKey: "fabrikam",
+    authorId: `00000000-0000-4000-9000-${String(n).padStart(12, "0")}`,
+    authorTenant: CLIENT_TENANT,
+    createdAt: "2026-11-04T15:00:00Z",
+    text: "The weekly report shows last month's totals",
+    hasImage: false,
+    hasFile: false,
+    replyToId: null,
+    mentionedUserIds: [],
+    ...o,
+  };
+}
+
+/** A Teams group chat as the picker lists it. */
+export function aChat(o: Partial<import("../../plan/chats.ts").ChatSummary> = {}): import("../../plan/chats.ts").ChatSummary {
+  const n = next();
+  return { id: `19:chat${n}@thread.v2`, topic: `Chat ${n}`, webUrl: null, lastUpdated: "2026-10-20T15:00:00Z", lastRead: null, members: [aChatMember(), aChatMember({ external: true })], moreMembers: false, ...o };
+}
+
+// ---- AI-0 ----
+
+/** A client as the AI guard knows it (fictional names, contoso/fabrikam style). */
+export function aClientEntry(o: Partial<import("../../ai/guard.ts").ClientEntry> = {}): import("../../ai/guard.ts").ClientEntry {
+  return { key: "fabrikam", names: ["Fabrikam Inc"], projects: ["Fabrikam Portal"], itemIds: [4101, 4102], ...o };
+}
+
+/** App-level AI settings for tests: cheap round prices so costs are easy to read ($1 per million in, $2 out). */
+export function anAiApp(o: Partial<import("../../ai/service.ts").AiAppSettings> = {}): import("../../ai/service.ts").AiAppSettings {
+  return { provider: "stub", model: "test-model", reasoningEffort: null, timeoutMs: 5_000, maxOutputTokens: { default: 500 }, prices: { inputPerMillion: 1, cachedInputPerMillion: 0.5, outputPerMillion: 2 }, appCapUsd: 100, ...o };
+}
+
+/** A person's AI settings with both switches on for one client. */
+export function anAiPerson(o: Partial<import("../../ai/types.ts").AiPersonSettings> = {}): import("../../ai/types.ts").AiPersonSettings {
+  return { use: true, monthlyCapUsd: 10, allowedClients: ["fabrikam"], ...o };
+}
+
+/** An OpenAI Responses API body with a structured answer and its usage. */
+export function anOpenAiResponse(value: unknown, usage: { input?: number; cached?: number; output?: number } = {}, o: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: "resp_test",
+    object: "response",
+    status: "completed",
+    model: "test-model",
+    output: [{ type: "message", role: "assistant", content: [{ type: "output_text", annotations: [], text: JSON.stringify(value) }] }],
+    usage: { input_tokens: usage.input ?? 100, input_tokens_details: { cached_tokens: usage.cached ?? 0 }, output_tokens: usage.output ?? 20, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: (usage.input ?? 100) + (usage.output ?? 20) },
+    ...o,
+  };
+}
+
+/** AP-2: an "asks.classify" answer: a bug needing attention this week, no likely item, by default. */
+export function aClassifyAnswer(o: Partial<import("../../plan/asks-ai.ts").ClassifyAnswer> = {}): import("../../plan/asks-ai.ts").ClassifyAnswer {
+  return { kind: "bug", urgency: "this_week", item_type: "bug", title: "Totals report shows last month", description: "The client says the totals report still shows last month's numbers.", likely_existing_item: null, reason: "It describes something that is wrong in a report.", ...o };
+}
+
+/** AP-2: a "promises.extract" answer: a promise with no date, by default. */
+export function aPromiseAnswer(o: Partial<import("../../plan/asks-ai.ts").PromiseAnswer> = {}): import("../../plan/asks-ai.ts").PromiseAnswer {
+  return { is_promise: true, what: "Send the corrected totals", due_hint: null, to_whom: null, answers_message_id: null, reason: "It commits to sending something.", ...o };
+}

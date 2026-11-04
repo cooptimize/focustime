@@ -7,6 +7,7 @@ import { responseLabel } from "../plan/rsvp.ts";
 import { DevOpsWriteLog } from "./DevOpsWrite.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { SettingsClient, SettingsData, SourceSummary } from "../actions/types.ts";
+import { AsksConnections, DeliveryChatField, DeliveryChatsProvider, MicrosoftPermissions } from "./settings/DeliveryChats.tsx";
 import { AutoSaveProvider, SaveMark, useAutoSave, type AutoSave } from "./settings/autosave.tsx";
 import { COLLAB_LENGTHS, TEXT_SIZES, THEME_NAMES, THEMES, type TextSize, type Theme } from "../config/schema.ts";
 import { TEXT_SIZE_NAMES } from "./textsize.ts";
@@ -14,6 +15,7 @@ import type { ClientWork } from "../week/types.ts";
 import type { FollowState } from "../week/follow.ts";
 import { spanText, VIEW_RANGE_NAMES, VIEW_RANGES, WEEKDAY_KEYS, type ViewRange } from "../week/hours.ts";
 import { call } from "./api.ts";
+import type { AiView } from "../ai/view.ts";
 import { notConnected, SOURCE_NAMES, sourceActions, stateOf, type Calendar } from "./status.ts";
 import { shortDate } from "./labels.ts";
 import { BINAURAL, MAX_PLAYLISTS, playlistLink, SOUND_NAMES, SOUNDS, type Playlist, type SoundKind } from "../plan/focussound.ts";
@@ -26,6 +28,10 @@ import type { WriteEntry } from "../plan/timebox.ts";
 import { version as APP_VERSION } from "../package.json";
 import { InlineMoment } from "./brand/Opening.tsx";
 import { Lockup } from "./brand/Brand.tsx";
+import { usePhone } from "./viewport.ts";
+import { PhoneReadOnly } from "./Phone.tsx";
+import { deviceId, disablePush, enablePush, pushSupport, type PushStatus } from "./pwa.ts";
+import { NOTICES_CHANGED } from "./Notices.tsx";
 import { NEUTRAL_ZONE, userZone } from "../week/zone.ts";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import type { FeedbackStatus } from "../actions/feedback-types.ts";
@@ -40,6 +46,7 @@ export const SETTINGS_SECTIONS = [
   ["roadmap", "Roadmap"],
   ["risk", "Risk rules"],
   ["clients", "Clients"],
+  ["ai", "AI"],
   ["connections", "Connections"],
   ["display", "Display"],
   ["data", "Data"],
@@ -47,6 +54,9 @@ export const SETTINGS_SECTIONS = [
   ["about", "About"],
 ] as const;
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number][0];
+
+/** P1: the sections laid out for a big screen (a week of hours, the standing blocks grid, client tables, the logs) read on the phone; the rest are simple fields that work there. */
+export const PHONE_READ_ONLY: ReadonlySet<SettingsSectionId> = new Set(["hours", "standing", "clients", "data"]);
 
 type Props = {
   section: SettingsSectionId;
@@ -152,6 +162,7 @@ export function Settings(props: Props) {
   );
 
   const title = SETTINGS_SECTIONS.find(([id]) => id === props.section)![1];
+  const phone = usePhone();
   return (
     <AutoSaveProvider onNotice={props.onNotice}>
       {(leave) => (
@@ -184,7 +195,13 @@ export function Settings(props: Props) {
             </ul>
           </div>
         )}
-        {data && <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />}
+        {data && (phone && PHONE_READ_ONLY.has(props.section) ? (
+          <PhoneReadOnly>
+            <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />
+          </PhoneReadOnly>
+        ) : (
+          <SectionBody {...props} data={data} onSavedData={saved} reload={reload} />
+        ))}
       </section>
     </main>
       )}
@@ -234,6 +251,8 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
       return d.risk ? <RiskForm {...p} /> : null;
     case "clients":
       return (
+        <DeliveryChatsProvider>
+        <AsksForm {...p} />
         <div className="set-clients">
           {d.dataverseProblem && (
             <p className="set-problem" role="status">
@@ -254,7 +273,10 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
             </details>
           )}
         </div>
+        </DeliveryChatsProvider>
       );
+    case "ai":
+      return <AiForm {...p} />;
     case "connections":
       return <Connections {...p} />;
     case "display":
@@ -781,7 +803,7 @@ function VmStartForm(p: FormProps) {
   const a = useAutoSave({ section: "vm", initial: { startWithoutAsking: p.data.vm.startWithoutAsking }, payload: (v) => v, onSaved: p.onSavedData, label: () => "Start my VM without asking" });
   return (
     <div className="set-grid set-vm-start">
-      <AutoField a={a} k="startWithoutAsking" label="Start my VM without asking" hint={"Start in the morning prompt skips the preview. Stop always previews."}>
+      <AutoField a={a} k="startWithoutAsking" label="Start my VM without asking" hint={"Start in the morning prompt skips the preview."}>
         <label className="set-check">
           <input type="checkbox" checked={a.v.startWithoutAsking} onChange={(e) => a.change("startWithoutAsking", e.target.checked)} /> Start right away
         </label>
@@ -809,15 +831,52 @@ function RoadmapForm(p: FormProps) {
   );
 }
 
+/** AP-1: how Asks reads the chats switched on below, and the phrases its rules use. Commas between phrases. */
+const phrases = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
+function AsksForm(p: FormProps) {
+  const s = p.data.asks;
+  const a = useAutoSave({
+    section: "asks",
+    initial: { pollMinutes: s.pollMinutes, requestPhrases: s.requestPhrases.join(", "), ackPhrases: s.ackPhrases.join(", "), promisePhrases: (s.promisePhrases ?? []).join(", ") },
+    payload: (v) => ({ pollMinutes: v.pollMinutes, requestPhrases: phrases(v.requestPhrases), ackPhrases: phrases(v.ackPhrases), promisePhrases: phrases(v.promisePhrases) }),
+    onSaved: p.onSavedData,
+    label: (k) => (k === "pollMinutes" ? "Read every" : k === "requestPhrases" ? "Request phrases" : k === "promisePhrases" ? "Promise phrases" : "Acknowledgements"),
+  });
+  return (
+    <details className="set-form set-asks">
+      <summary>
+        <strong>Asks</strong> <span className="muted">· read every {s.pollMinutes} minutes in working hours · Inbox › Asks</span>
+      </summary>
+      <p className="muted">
+        For each chat with Read for asks on (below), a new message from someone outside Cooptimize becomes an ask when it mentions a Cooptimizer, has a question mark, uses a request phrase, or has an attachment. One that is only an acknowledgement isn't. Your own messages with a promise phrase become promises. With Allow AI on for a client (and Use AI), AI sorts these; without it, the rules alone decide.
+      </p>
+      <div className="set-grid">
+        <AutoField a={a} k="pollMinutes" label="Read every (minutes)" hint="Only in your working hours, not on PTO days. 1 to 60.">
+          <input type="number" min={1} max={60} step={1} value={a.v.pollMinutes} onChange={(e) => a.set("pollMinutes", Math.round(Number(e.target.value)))} {...a.text("pollMinutes")} />
+        </AutoField>
+        <AutoField a={a} k="requestPhrases" label="Request phrases" hint="Commas between them. Whole words, any case.">
+          <input type="text" value={a.v.requestPhrases} onChange={(e) => a.set("requestPhrases", e.target.value)} {...a.text("requestPhrases")} />
+        </AutoField>
+        <AutoField a={a} k="ackPhrases" label="Acknowledgements" hint="A message that is only these (and emoji) is not an ask.">
+          <input type="text" value={a.v.ackPhrases} onChange={(e) => a.set("ackPhrases", e.target.value)} {...a.text("ackPhrases")} />
+        </AutoField>
+        <AutoField a={a} k="promisePhrases" label="Promise phrases" hint="In your own messages: commas between them. Inbox › Promises.">
+          <input type="text" value={a.v.promisePhrases} onChange={(e) => a.set("promisePhrases", e.target.value)} {...a.text("promisePhrases")} />
+        </AutoField>
+      </div>
+    </details>
+  );
+}
+
 /** Settings > Notifications (step 15.5): a switch per kind, quiet hours, held during focus, a test. */
 function NotifyForm(p: FormProps) {
   const n = p.data.notify;
   const a = useAutoSave({
     section: "notify",
-    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto },
+    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : "Quiet on PTO days"),
+    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent asks during focus" : "Quiet on PTO days"),
   });
   const [test, setTest] = useState<string | null>(null);
   const group = (title: string, list: readonly NotifyKind[]) => (
@@ -838,9 +897,14 @@ function NotifyForm(p: FormProps) {
       <div className="set-notify">
         {group("Ritual reminders", RITUAL_KINDS)}
         {group("While you focus", ["timer", "meeting"])}
-        {group("Other", ["vm", "followups", "expiry"])}
+        {group("Other", ["vm", "followups", "expiry", "asks"])}
       </div>
       <SaveMark s={a.status("kinds")} retry={() => a.commit("kinds")} />
+      <AutoField a={a} k="asksThroughFocus" label="Urgent asks during focus" hint="Off: an urgent ask waits until the focus session ends, with the others.">
+        <label className="set-check">
+          <input type="checkbox" checked={a.v.asksThroughFocus} onChange={(e) => a.change("asksThroughFocus", e.target.checked)} /> Let urgent asks through
+        </label>
+      </AutoField>
       <h3>Quiet hours</h3>
       <div className="set-grid">
         <AutoField a={a} k="quiet" label="Quiet" hint="Focus timer and meeting warnings still come.">
@@ -863,13 +927,104 @@ function NotifyForm(p: FormProps) {
           className="mini"
           onClick={() => {
             setTest("Sending…");
-            void call("notify.test", {}).then(() => setTest("Sent. Click it to come back here."), (e: unknown) => setTest(e instanceof Error ? e.message : "Couldn't send it"));
+            void call("notify.test", {}).then(
+              () => (setTest("Sent. Click it to come back here."), window.dispatchEvent(new Event(NOTICES_CHANGED))),
+              (e: unknown) => setTest(e instanceof Error ? e.message : "Couldn't send it"),
+            );
           }}
         >
           Send a test notification
         </button>
         {test && <span className="set-hint" role="status">{test}</span>}
       </div>
+      <h3>On your devices</h3>
+      <PushDevices />
+      <AutoField a={a} k="pushDetails" label="Show details in notifications" hint="Off: a push says only what kind of thing it is (Follow-ups due). On: client names and work item titles too, on the lock screen.">
+        <label className="set-check">
+          <input type="checkbox" checked={a.v.pushDetails} onChange={(e) => a.change("pushDetails", e.target.checked)} /> Show details
+        </label>
+      </AutoField>
+    </div>
+  );
+}
+
+/**
+ * P1: push, per device. "Notify this device" asks the browser's permission only when tapped; the list shows every
+ * device with push on, with Remove. In-app notifications (⋯ › Notifications) work without any of this.
+ */
+function PushDevices() {
+  const [st, setSt] = useState<PushStatus | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => void call<PushStatus>("push.status", {}).then(setSt, () => setSt({ available: false, reason: "Push status isn't available right now.", publicKey: null, devices: [] })), []);
+  if (!st) return <p className="muted">Checking…</p>;
+  const me = deviceId();
+  const here = st.devices.some((d) => d.deviceId === me);
+  const support = pushSupport();
+  const run = async (f: () => Promise<void>) => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await f();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "That didn't work");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const when = (iso: string) => new Date(iso.replace(/\[.*\]$/, "")).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return (
+    <div className="set-push">
+      {!st.available ? (
+        <p className="muted">{st.reason}</p>
+      ) : support === "ios-install" ? (
+        <p className="muted">On iPhone, add FocusTime to your home screen first (⋯ › Install app), then open it from there to turn this on.</p>
+      ) : support === "unsupported" ? (
+        <p className="muted">This browser can't get push notifications. In-app notifications still work.</p>
+      ) : (
+        <div className="set-actions-row">
+          {here ? (
+            <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setSt((await disablePush()) ?? st))}>
+              Turn off for this device
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="mini primary"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const r = await enablePush(st.publicKey!);
+                  if (r.ok) (setSt(r.status), setMsg("This device gets notifications now. Send a test above to check."));
+                  else setMsg(r.reason);
+                })
+              }
+            >
+              Notify this device
+            </button>
+          )}
+        </div>
+      )}
+      {msg && <p className="set-hint" role="status">{msg}</p>}
+      {st.devices.length > 0 && (
+        <ul className="push-devices">
+          {st.devices.map((d) => (
+            <li key={d.deviceId}>
+              <span className="pd-name">
+                {d.label}
+                {d.deviceId === me ? " (this device)" : ""}
+              </span>
+              <span className="set-hint">
+                Added {when(d.createdAt)}
+                {d.failedAt ? " · last one didn't arrive" : d.sentAt ? ` · last ${when(d.sentAt)}` : ""}
+              </span>
+              <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setSt(d.deviceId === me ? ((await disablePush()) ?? st) : await call<PushStatus>("push.remove", { deviceId: d.deviceId })))}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -924,9 +1079,133 @@ function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSa
     <div className="set-client-wrap" style={{ "--c": c.setting.color ? (c.setting.color.startsWith("#") ? c.setting.color : `var(--client-${c.setting.color})`) : "var(--client-none)" } as CSSProperties}>
       <ClientForm client={c} data={d} onSavedData={p.onSavedData} />
       {c.devops ? <WriteAccess client={c} onDone={p.reload} /> : d.dataverseReached && <p className="muted set-client-note">No DevOps set up for {c.setting.name ?? c.dataverseName ?? c.key} in Dataverse, so there is nothing to write to. Change it in Dataverse.</p>}
+      <DeliveryChatField clientKey={c.key} clientName={c.setting.name ?? c.dataverseName ?? c.key} />
+      <AllowAi c={c} d={d} onSavedData={p.onSavedData} />
     </div>
   );
 }
+
+/** AI-0: Allow AI for one client, off by default; a request about this client runs only with this and Use AI on. */
+function AllowAi({ c, d, onSavedData }: { c: SettingsClient; d: SettingsData; onSavedData: (d: SettingsData) => void }) {
+  const name = c.setting.name ?? c.dataverseName ?? c.key;
+  const a = useAutoSave({
+    section: "ai",
+    initial: { on: d.ai.allowedClients.includes(c.key) },
+    payload: (v) => ({ allow: { client: c.key, on: v.on } }),
+    onSaved: onSavedData,
+    label: () => `${name}: Allow AI`,
+  });
+  return (
+    <div className="set-form set-allow-ai">
+      <AutoField a={a} k="on" label="Allow AI" hint={d.ai.use ? "Lets AI requests about this client send its data, one client at a time. Off by default." : "Off by default. Also needs Use AI on in Settings › AI."}>
+        <label className="set-check">
+          <input type="checkbox" role="switch" checked={a.v.on} onChange={(e) => a.change("on", e.target.checked)} /> Allow AI for {name}
+        </label>
+      </AutoField>
+    </div>
+  );
+}
+
+type AiTestResult = { ok: true; latencyMs: number; cost: string; model: string } | { ok: false; kind: string; message: string };
+
+/** AI-0: Settings › AI: Use AI, the monthly limit and this month's spend, Test AI, what is sent, and the last 20 requests. */
+function AiForm(p: FormProps) {
+  const s = p.data.ai;
+  const a = useAutoSave({
+    section: "ai",
+    initial: { use: s.use, monthlyCapUsd: s.monthlyCapUsd },
+    payload: (v) => v,
+    onSaved: p.onSavedData,
+    label: (k) => (k === "use" ? "Use AI" : "Monthly limit"),
+  });
+  const [st, setSt] = useState<AiView | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [test, setTest] = useState<AiTestResult | null>(null);
+  const load = useCallback(() => call<AiView | null>("ai.status", {}).then(setSt, () => setSt(null)), []);
+  useEffect(() => void load(), [load, p.data.ai.use, p.data.ai.monthlyCapUsd]);
+  const nameOf = (k: string | null) => (k ? (p.data.clients.find((c) => c.key === k)?.setting.name ?? k) : "None");
+  const runTest = async () => {
+    setTesting(true);
+    setTest(null);
+    try {
+      setTest(await call<AiTestResult>("ai.test", {}));
+    } catch (e) {
+      setTest({ ok: false, kind: "provider", message: e instanceof Error ? e.message : "Test AI didn't run" });
+    } finally {
+      setTesting(false);
+      void load();
+    }
+  };
+  const notSetUp = st !== null && !st.setUp;
+  return (
+    <div className="set-form set-ai">
+      <AutoField a={a} k="use" label="Use AI" hint="Off by default. Each client also needs Allow AI on, in Settings › Clients.">
+        <label className="set-check">
+          <input type="checkbox" role="switch" checked={a.v.use} onChange={(e) => a.change("use", e.target.checked)} /> Use AI
+        </label>
+      </AutoField>
+      {(st === null || notSetUp) && (
+        <p className="set-problem" role="status">
+          AI isn't set up for this FocusTime yet{st?.provider === "off" ? ": it's turned off" : ""}. Everything else works without it.
+        </p>
+      )}
+      <div className="set-ai-month">
+        <span className="set-ai-label">This month</span>
+        <strong>
+          {st ? st.spentText : "$0"} of {st ? st.capText : `$${s.monthlyCapUsd}`}
+        </strong>
+        {st?.appReached && <span className="field-problem">FocusTime's AI budget for everyone is used up until next month.</span>}
+      </div>
+      <AutoField a={a} k="monthlyCapUsd" label="Monthly limit (US dollars)" hint="AI stops for you when you reach it, until next month. 0 to 1000.">
+        <input type="number" min={0} max={1000} step={1} value={a.v.monthlyCapUsd} onChange={(e) => a.set("monthlyCapUsd", Number(e.target.value))} {...a.text("monthlyCapUsd")} />
+      </AutoField>
+      <div className="set-ai-test">
+        <button type="button" className="mini" disabled={testing} onClick={() => void runTest()}>
+          {testing ? "Testing…" : "Test AI"}
+        </button>
+        {test && (test.ok ? <span className="set-ai-ok" role="status">OK · {(test.latencyMs / 1000).toFixed(1)} s · {test.cost}</span> : <span className="field-problem" role="status">{test.message}</span>)}
+        <span className="set-hint">Sends one fixed request with no client data.</span>
+      </div>
+      <details className="set-ai-sent">
+        <summary>What is sent</summary>
+        <p className="muted">
+          Only what a task needs, about one client at a time, and only for clients with Allow AI on. Before anything goes, FocusTime checks it: another client's name, project or work item, anything that looks like a key, token or password, your VM, or an email address from outside Cooptimize stops the request. The AI service is asked not to keep requests, and FocusTime's log keeps only the counts and the cost below, never the text.
+        </p>
+      </details>
+      <h3 className="set-ai-h">Last 20 requests</h3>
+      {st && st.recentText.length ? (
+        <table className="set-ai-log">
+          <thead>
+            <tr>
+              <th scope="col">When</th>
+              <th scope="col">Task</th>
+              <th scope="col">Client</th>
+              <th scope="col">Cost</th>
+              <th scope="col">Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {st.recentText.map((r, i) => (
+              <tr key={i}>
+                <td>{fmtAiTime(r.at)}</td>
+                <td>{AI_TASK_NAMES[r.task] ?? r.task}</td>
+                <td>{nameOf(r.client)}</td>
+                <td>{r.cost}</td>
+                <td className={r.outcome === "OK" ? "" : "field-problem"}>{r.outcome}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="muted">No AI requests yet.</p>
+      )}
+    </div>
+  );
+}
+
+/** Names for the task names the log keeps. */
+const AI_TASK_NAMES: Record<string, string> = { test_ai: "Test AI" };
+const fmtAiTime = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
 
 function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; data: SettingsData; onSavedData: (d: SettingsData) => void }) {
   const reached = data.dataverseReached;
@@ -1009,6 +1288,8 @@ function Connections(p: Props & { data: SettingsData; reload: () => Promise<void
       {p.reconnected && <InlineMoment line={`${SOURCE_NAMES[p.reconnected]} is connected again.`} />}
       <OutlookWriteRow />
       <FeedbackRow />
+      <MicrosoftPermissions />
+      <AsksConnections />
       {p.devops && p.devops.length > 0 && (
         <>
           <h3>DevOps per client</h3>
@@ -1243,7 +1524,7 @@ function ResetPlan({ disabled, onDone }: { disabled: boolean; onDone: () => void
   const [status, setStatus] = useState<string | null>(null);
   return (
     <div className="set-field">
-      <span className="set-label">Reset local plan</span>
+      <span className="set-label">Reset my plan</span>
       {asking ? (
         <form
           className="set-inline"
@@ -1370,7 +1651,6 @@ function DataSection(p: Props & { data: SettingsData }) {
   );
 }
 
-/** Settings > Connections (step 12): whether FocusTime may change its own Outlook events, and how to allow it. */
 /** F1: Send feedback's setup, read only: feature #496 there, a Feature, and FocusTime's identity may add a story under it. */
 function feedbackLine(st: FeedbackStatus): string {
   const s = st.setup;
@@ -1399,6 +1679,7 @@ function FeedbackRow() {
   );
 }
 
+/** Settings > Connections (step 12): whether FocusTime may change its own Outlook events, and how to allow it. */
 function OutlookWriteRow() {
   const env = useTimeboxes();
   useEffect(() => env?.loadAccess(), []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1436,7 +1717,7 @@ function WriteLog() {
   return (
     <section className="write-log" aria-label="Write log">
       <h3>Write log</h3>
-      <p className="muted">Every change FocusTime made outside this computer.</p>
+      <p className="muted">Every change FocusTime made in other apps.</p>
       {error && <p className="set-problem">{error}</p>}
       {log && log.orphans.length > 0 && (
         <div className="wl-orphans">

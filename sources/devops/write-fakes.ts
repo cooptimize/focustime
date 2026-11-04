@@ -18,11 +18,13 @@ const STATES: Record<string, { name: string; category: string }[]> = {
   "User Story": [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Resolved", category: "Resolved" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }],
   Feature: [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }],
   Epic: [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }],
+  Bug: [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Resolved", category: "Resolved" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }],
   Issue: [{ name: "To Do", category: "Proposed" }, { name: "Done", category: "Completed" }],
 };
 const PC = {
   requirementBacklog: { name: "Stories", defaultWorkItemType: { name: "User Story" }, workItemTypes: [{ name: "User Story" }] },
   taskBacklog: { name: "Tasks", workItemTypes: [{ name: "Task" }] },
+  bugWorkItems: { name: "Bugs", defaultWorkItemType: { name: "Bug" }, workItemTypes: [{ name: "Bug" }] },
   portfolioBacklogs: [
     { name: "Epics", defaultWorkItemType: { name: "Epic" }, workItemTypes: [{ name: "Epic" }] },
     { name: "Features", defaultWorkItemType: { name: "Feature" }, workItemTypes: [{ name: "Feature" }] },
@@ -85,12 +87,14 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     let m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/states$/);
     if (m) return json({ value: STATES[m[1]!] ?? [] });
     m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/fields$/);
-    if (m) return json({ value: [{ referenceName: "System.Title" }, ...(m[1] === "Feature" || m[1] === "Epic" ? [{ referenceName: "Microsoft.VSTS.Scheduling.TargetDate" }, ...(opts.startDate !== false ? [{ referenceName: "Microsoft.VSTS.Scheduling.StartDate" }] : [])] : []), ...(m[1] === "User Story" && opts.acceptance !== false ? [{ referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria" }] : [])] });
+    if (m) return json({ value: [{ referenceName: "System.Title" }, ...(m[1] === "Feature" || m[1] === "Epic" ? [{ referenceName: "Microsoft.VSTS.Scheduling.TargetDate" }, ...(opts.startDate !== false ? [{ referenceName: "Microsoft.VSTS.Scheduling.StartDate" }] : [])] : []), ...(m[1] === "User Story" && opts.acceptance !== false ? [{ referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria" }] : []), ...(m[1] === "Bug" ? [{ referenceName: "Microsoft.VSTS.TCM.ReproSteps" }] : [])] });
     if (rest === "_apis/wit/wiql") {
       const q = String(body.query);
-      const parent = Number(q.match(/\[System\.Parent\] = (\d+)/)?.[1]);
+      const pm = q.match(/\[System\.Parent\] = (\d+)/);
+      const parent = pm ? Number(pm[1]) : undefined;
+      const type = q.match(/\[System\.WorkItemType\] = '((?:[^']|'')*)'/)?.[1]?.replace(/''/g, "'");
       const title = q.match(/\[System\.Title\] = '((?:[^']|'')*)'/)?.[1]?.replace(/''/g, "'");
-      return json({ workItems: [...items.values()].filter((i) => i.fields["System.Parent"] === parent && i.fields["System.Title"] === title && i.fields["System.CreatedBy"] === who.email).map((i) => ({ id: i.id })) });
+      return json({ workItems: [...items.values()].filter((i) => i.fields["System.Parent"] === parent && (!type || i.fields["System.WorkItemType"] === type) && i.fields["System.Title"] === title && i.fields["System.CreatedBy"] === who.email).map((i) => ({ id: i.id })) });
     }
     m = rest.match(/^_apis\/wit\/workitems\/\$(.+)$/);
     if (m && method === "POST") {

@@ -1,5 +1,5 @@
 // Demo mode (step 15.4): a fictional signed-in person and VM. The Azure side is the fake Resource Manager behind a fetch
-// that never leaves the process: start and stop take about 20 seconds, the auto-shutdown is 7:00 PM. No Azure calls.
+// that never leaves the process: a start takes about 20 seconds, the auto-shutdown is 7:00 PM (read only). No Azure calls.
 import type { MicrosoftAccount } from "../../actions/account.ts";
 import { createAzureClient } from "../azure/client.ts";
 import { fakeArm } from "../azure/fake-arm.ts";
@@ -7,6 +7,7 @@ import type { PresenceClient, RawPresence } from "../graph/presence.ts";
 import { DEMO_PEOPLE, DEMO_PRESENCE } from "./data.ts";
 import type { PhotoClient } from "../graph/photos.ts";
 import { demoAvatar } from "../../plan/photos.ts";
+import { demoChats } from "./chats.ts";
 
 /** Step 16.4: generated avatars for the fictional people (one has none, to show initials). No Graph calls. */
 export function demoPhotos(): PhotoClient {
@@ -48,6 +49,8 @@ export function createDemoAzure() {
     writeAccess: async () => ({ status: "read_only", message: "Demo data" }),
     presence: demoPresence(),
     photos: demoPhotos(),
+    chats: demoChats(),
+    probe: async (kind) => ({ kind, state: "granted", granted: kind === "arm" ? ["user_impersonation"] : ["User.Read", "Calendars.ReadWrite", "MailboxSettings.Read", "Presence.ReadWrite", "Presence.Read.All", "ProfilePhoto.Read.All", "Chat.ReadBasic"] }),
     signOut: async () => {},
   };
   return { account, azure: (token: () => Promise<string>) => createAzureClient({ fetch: arm.fetch, token, log: () => {} }), arm };

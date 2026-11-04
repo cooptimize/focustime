@@ -2,7 +2,7 @@
 
 A scripted walkthrough in demo mode, in the step 16.2 navigation: four tabs (Today · Week · Roadmap · Inbox, keys 1–4), one mode switch at the right of each page header, and planning as a mode with a green Done. Verified end to end at 1920x1080 on Nov 2, 2026 with `scripts/demo-walkthrough.mjs` (demo clock Monday Nov 2, 9:30 AM). Screenshots are in `docs/demo/`.
 
-The demo is signed in as a fictional person (Alex Rivera) with a fictional VM: the VM chip in the top bar and on Today, "Your VM is off. Start it?", Start (about 20 seconds to Running), Delay shutdown and Restore all work on a simulated Azure, with no Azure calls.
+The demo is signed in as a fictional person (Alex Rivera) with a fictional VM: the VM chip in the top bar and on Today, "Your VM is off. Start it?", and Start (about 20 seconds to Running) work on a simulated Azure, with no Azure calls. The auto-shutdown time is shown, never changed (D475).
 
 ## Before you start
 1. Turn on demo mode: my initials (top right) > Settings > Display > "Show demo data", or Ctrl+K > "Demo mode". The top bar shows **Demo data**.

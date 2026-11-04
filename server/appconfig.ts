@@ -4,6 +4,7 @@
 import { parse } from "smol-toml";
 
 import type { DatabaseSettings } from "../store/sql/sqlserver.ts";
+import type { AiAppSettings } from "../ai/service.ts";
 export type AppSettings = {
   /** Where people reach FocusTime (scheme, host and port, no path): the cookies, Host and Origin checks, redirect URIs. */
   publicUrl: string;
@@ -21,6 +22,22 @@ export type AppSettings = {
   inviteDomains: string[];
   /** F1: where ⋯ › Send feedback creates stories (a child of `parentId`), and whether this FocusTime sends (live) or only previews. Null: not set. */
   feedback: FeedbackSettings | null;
+  /**
+   * AI-0: the AI provider, model, limits and prices, the same for everyone. `provider` null: the host's default
+   * (hosted: openai, which needs the ft-openai-key secret; developer loop: the stub, no network).
+   */
+  ai: Omit<AiAppSettings, "provider"> & { provider: AiAppSettings["provider"] | null };
+};
+
+/** AI-0 defaults (D495): OpenAI's most efficient current model at Nov 4 prices (developers.openai.com/api/docs/pricing). */
+export const DEFAULT_AI: AppSettings["ai"] = {
+  provider: null,
+  model: "gpt-6-luna",
+  reasoningEffort: "low",
+  timeoutMs: 30_000,
+  maxOutputTokens: { default: 4000, test_ai: 1000, asks_classify: 2000, promises_extract: 1200 },
+  prices: { inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5 },
+  appCapUsd: 100,
 };
 export type FeedbackSettings = { org: string; project: string; parentId: number; live: boolean };
 
@@ -59,6 +76,15 @@ export const APP_ENV = {
   feedbackProject: "FOCUSTIME_FEEDBACK_PROJECT",
   feedbackParentId: "FOCUSTIME_FEEDBACK_PARENT_ID",
   feedbackLive: "FOCUSTIME_FEEDBACK_LIVE",
+  aiProvider: "FOCUSTIME_AI_PROVIDER",
+  aiModel: "FOCUSTIME_AI_MODEL",
+  aiEffort: "FOCUSTIME_AI_REASONING_EFFORT",
+  aiTimeoutMs: "FOCUSTIME_AI_TIMEOUT_MS",
+  aiMaxTokens: "FOCUSTIME_AI_MAX_OUTPUT_TOKENS",
+  aiInputPrice: "FOCUSTIME_AI_INPUT_USD_PER_MILLION",
+  aiCachedPrice: "FOCUSTIME_AI_CACHED_INPUT_USD_PER_MILLION",
+  aiOutputPrice: "FOCUSTIME_AI_OUTPUT_USD_PER_MILLION",
+  aiAppCap: "FOCUSTIME_AI_APP_CAP_USD",
 } as const;
 
 type Table = Record<string, unknown>;
@@ -126,6 +152,7 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
       errors.push("[feedback] needs org (a DevOps organization name), project and parent_id (a work item number)");
     else feedback = { org: fbOrg, project: fbProject, parentId: fbParent, live: ["1", "true", "on", "yes"].includes(fbLiveRaw.trim().toLowerCase()) };
   }
+  const ai = readAi(sec("ai"), env, errors);
 
   if (errors.length) return { ok: false, errors };
   return {
@@ -139,8 +166,65 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
       database,
       inviteDomains,
       feedback,
+      ai,
     },
   };
+}
+
+/**
+ * [ai] (and FOCUSTIME_AI_*), AI-0: provider ("openai", "stub" or "off"), model, reasoning_effort ("" for the model's
+ * default), timeout_ms, max_output_tokens (a table by task name with a default; env: "default=4000,test_ai=1000"),
+ * input_usd_per_million, cached_input_usd_per_million, output_usd_per_million, app_cap_usd.
+ */
+function readAi(t: Table, env: Record<string, string | undefined>, errors: string[]): AppSettings["ai"] {
+  const out: AppSettings["ai"] = { ...DEFAULT_AI, maxOutputTokens: { ...DEFAULT_AI.maxOutputTokens }, prices: { ...DEFAULT_AI.prices } };
+  const pick = (envName: string, from: unknown): unknown => {
+    const e = env[envName];
+    return e !== undefined && e !== "" ? e.trim() : from;
+  };
+  const num = (envName: string, from: unknown, key: string, min: number, max: number): number | undefined => {
+    const v = pick(envName, from);
+    if (v === undefined) return undefined;
+    const n = typeof v === "number" ? v : Number(v);
+    if (!Number.isFinite(n) || n < min || n > max) {
+      errors.push(`[ai] ${key} must be a number from ${min} to ${max}`);
+      return undefined;
+    }
+    return n;
+  };
+  const provider = pick(APP_ENV.aiProvider, t.provider);
+  if (provider !== undefined) {
+    if (provider === "openai" || provider === "stub" || provider === "off") out.provider = provider;
+    else errors.push('[ai] provider must be "openai", "stub" or "off"');
+  }
+  const model = pick(APP_ENV.aiModel, t.model);
+  if (model !== undefined) {
+    if (typeof model === "string" && /^[\w.:-]{1,100}$/.test(model)) out.model = model;
+    else errors.push("[ai] model must be a model name");
+  }
+  const effort = pick(APP_ENV.aiEffort, t.reasoning_effort);
+  if (effort !== undefined) {
+    if (effort === "") out.reasoningEffort = null;
+    else if (typeof effort === "string" && /^[a-z]{2,10}$/.test(effort)) out.reasoningEffort = effort;
+    else errors.push("[ai] reasoning_effort must be a word like low, or empty");
+  }
+  const timeout = num(APP_ENV.aiTimeoutMs, t.timeout_ms, "timeout_ms", 1000, 300_000);
+  if (timeout !== undefined) out.timeoutMs = Math.round(timeout);
+  const envTokens = env[APP_ENV.aiMaxTokens];
+  const tokens: Record<string, unknown> | null = envTokens
+    ? Object.fromEntries(envTokens.split(",").map((p) => p.split("=").map((x) => x.trim())).map(([k, v]) => [k ?? "", Number(v)]))
+    : isTable(t.max_output_tokens) ? (t.max_output_tokens as Table) : t.max_output_tokens === undefined ? null : (errors.push("[ai] max_output_tokens must be a table of task = tokens"), null);
+  for (const [k, v] of Object.entries(tokens ?? {})) {
+    if (!/^[a-z][a-z0-9_]{0,40}$/.test(k) || typeof v !== "number" || !Number.isInteger(v) || v < 16 || v > 128_000) errors.push(`[ai] max_output_tokens.${k} must be a whole number from 16 to 128000`);
+    else out.maxOutputTokens[k] = v;
+  }
+  for (const [key, envName, field] of [["input_usd_per_million", APP_ENV.aiInputPrice, "inputPerMillion"], ["cached_input_usd_per_million", APP_ENV.aiCachedPrice, "cachedInputPerMillion"], ["output_usd_per_million", APP_ENV.aiOutputPrice, "outputPerMillion"]] as const) {
+    const n = num(envName, t[key], key, 0, 1000);
+    if (n !== undefined) out.prices[field] = n;
+  }
+  const cap = num(APP_ENV.aiAppCap, t.app_cap_usd, "app_cap_usd", 0, 100_000);
+  if (cap !== undefined) out.appCapUsd = cap;
+  return out;
 }
 
 const HOST = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i;

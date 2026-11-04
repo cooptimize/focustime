@@ -4,8 +4,20 @@
 import { WEEKDAY_KEYS, type WeekdayKey } from "../week/hours.ts";
 import { hoursBody, removeValue, replaceArrayTables, replaceSection, setValue, tomlValue, type TomlValue } from "./edit.ts";
 import { NOTIFY_KINDS } from "../plan/notify.ts";
+import { parse as parseToml } from "smol-toml";
 
-export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap"] as const;
+/** A list value already in the settings text ([] when absent or unreadable), for edits that add or remove one entry. */
+function currentList(text: string, section: string, key: string): string[] {
+  try {
+    const sec = (parseToml(text) as Record<string, unknown>)[section] as Record<string, unknown> | undefined;
+    const v = sec?.[key];
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "asks", "ai"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export class SettingsInputError extends Error {
@@ -166,7 +178,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
     }
     case "notify": {
       // Step 15.5: Settings > Notifications. Written as given; parseConfig checks each value.
-      only(v, ["kinds", "quiet", "quietPto"], "notify");
+      only(v, ["kinds", "quiet", "quietPto", "pushDetails", "asksThroughFocus"], "notify");
       const values: [string, TomlValue][] = [];
       if (v.kinds !== undefined) {
         const k = obj(v.kinds, "notify");
@@ -182,6 +194,14 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
         if (typeof v.quietPto !== "boolean") throw new SettingsInputError("notify.quiet_pto", "Must be true or false");
         values.push(["quiet_pto", v.quietPto]);
       }
+      if (v.pushDetails !== undefined) {
+        if (typeof v.pushDetails !== "boolean") throw new SettingsInputError("notify.push_details", "Must be true or false");
+        values.push(["push_details", v.pushDetails]);
+      }
+      if (v.asksThroughFocus !== undefined) {
+        if (typeof v.asksThroughFocus !== "boolean") throw new SettingsInputError("notify.asks_through_focus", "Must be true or false");
+        values.push(["asks_through_focus", v.asksThroughFocus]);
+      }
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "notify", k, val, i === 0 ? "Notifications (step 15.5): a switch per kind and quiet hours. During focus, all but the timer and meeting warnings wait until it ends." : undefined), text);
     }
     case "roadmap": {
@@ -191,6 +211,43 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       if (v.stalledDays !== undefined) values.push(["stalled_days", int(v.stalledDays, "roadmap.stalled_days")]);
       if (v.watchWeeks !== undefined) values.push(["watch_weeks", int(v.watchWeeks, "roadmap.watch_weeks")]);
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "roadmap", k, val, i === 0 ? "Roadmap states (step 17): Stalled after this many days without a story change; Watch when the forecast lands within this many weeks of the target date." : undefined), text);
+    }
+    case "asks": {
+      // AP-1: Settings > Clients > Asks. Written as given; parseConfig checks the ranges and lengths.
+      only(v, ["pollMinutes", "requestPhrases", "ackPhrases", "promisePhrases"], "asks");
+      const values: [string, number | string[]][] = [];
+      if (v.pollMinutes !== undefined) values.push(["poll_minutes", int(v.pollMinutes, "asks.poll_minutes")]);
+      if (v.requestPhrases !== undefined) values.push(["request_phrases", strList(v.requestPhrases, "asks.request_phrases").map((x) => x.trim()).filter(Boolean)]);
+      if (v.ackPhrases !== undefined) values.push(["ack_phrases", strList(v.ackPhrases, "asks.ack_phrases").map((x) => x.trim()).filter(Boolean)]);
+      if (v.promisePhrases !== undefined) values.push(["promise_phrases", strList(v.promisePhrases, "asks.promise_phrases").map((x) => x.trim()).filter(Boolean)]);
+      return (text) => values.reduce((t, [k, val], i) => setValue(t, "asks", k, val, i === 0 ? "Asks (AP-1): delivery chats with Read for asks on are read this often in working hours; a message from outside Cooptimize with a request phrase is an ask, one that is only an acknowledgement isn't." : undefined), text);
+    }
+    case "ai": {
+      // AI-0: Settings › AI (Use AI, the monthly cap) and Settings › Clients (Allow AI: one client on or off, so two
+      // quick switches never undo each other). Both switches are off by default.
+      only(v, ["use", "monthlyCapUsd", "allow"], "ai");
+      const values: [string, boolean | number | string[]][] = [];
+      if (v.use !== undefined) {
+        if (typeof v.use !== "boolean") throw new SettingsInputError("ai.use", "Must be true or false");
+        values.push(["use", v.use]);
+      }
+      if (v.monthlyCapUsd !== undefined) {
+        const c = v.monthlyCapUsd;
+        if (typeof c !== "number" || !Number.isFinite(c) || c < 0 || c > 1000) throw new SettingsInputError("ai.monthly_cap_usd", "Must be a number of dollars from 0 to 1000");
+        values.push(["monthly_cap_usd", Math.round(c * 100) / 100]);
+      }
+      const allow = v.allow as { client?: unknown; on?: unknown } | undefined;
+      if (allow !== undefined && (typeof allow !== "object" || allow === null || typeof allow.client !== "string" || !allow.client.trim() || allow.client.length > 100 || typeof allow.on !== "boolean")) throw new SettingsInputError("ai.allowed_clients", "Must name a client and on or off");
+      return (text) => {
+        let out = values.reduce((t, [k, val], i) => setValue(t, "ai", k, val, i === 0 ? "AI (AI-0): Use AI and Allow AI per client are off by default; requests stop at the monthly cap." : undefined), text);
+        if (allow) {
+          const cur = currentList(out, "ai", "allowed_clients");
+          const key = (allow.client as string).trim();
+          const next = allow.on ? [...new Set([...cur, key])] : cur.filter((c) => c !== key);
+          out = setValue(out, "ai", "allowed_clients", next, values.length ? undefined : "AI (AI-0): Use AI and Allow AI per client are off by default; requests stop at the monthly cap.");
+        }
+        return out;
+      };
     }
     case "vm": {
       // Step 15.5 (Q87): Settings > You > "Start my VM without asking".

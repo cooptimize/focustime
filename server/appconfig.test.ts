@@ -36,3 +36,25 @@ describe("feedback settings (F1)", () => {
     expect(readAppSettings({ ...env, FOCUSTIME_FEEDBACK_PARENT_ID: "abc" }, null, URL)).toMatchObject({ ok: false });
   });
 });
+
+describe("[ai] app settings (AI-0)", () => {
+  const read = (env: Record<string, string>, text: string | null = null) => readAppSettings(env, text, "http://localhost:4319");
+  it("defaults: the host chooses the provider; the model, limits and prices from DEFAULT_AI", () => {
+    const r = read({});
+    expect(r.ok && r.settings.ai).toEqual({ provider: null, model: "gpt-6-luna", reasoningEffort: "low", timeoutMs: 30_000, maxOutputTokens: { default: 4000, test_ai: 1000, asks_classify: 2000, promises_extract: 1200 }, prices: { inputPerMillion: 0.1, cachedInputPerMillion: 0.01, outputPerMillion: 0.5 }, appCapUsd: 100 });
+  });
+  it("the app config's [ai], then the environment over it", () => {
+    const text = `[ai]\nprovider = "openai"\nmodel = "gpt-5-mini"\nreasoning_effort = ""\ntimeout_ms = 60000\napp_cap_usd = 50\ninput_usd_per_million = 0.25\noutput_usd_per_million = 2\n[ai.max_output_tokens]\ndefault = 2000\nclassify_ask = 800\n`;
+    const r = read({ FOCUSTIME_AI_APP_CAP_USD: "75", FOCUSTIME_AI_MAX_OUTPUT_TOKENS: "default=3000,test_ai=500" }, text);
+    expect(r.ok && r.settings.ai).toEqual({ provider: "openai", model: "gpt-5-mini", reasoningEffort: null, timeoutMs: 60_000, maxOutputTokens: { default: 3000, test_ai: 500, asks_classify: 2000, promises_extract: 1200 }, prices: { inputPerMillion: 0.25, cachedInputPerMillion: 0.01, outputPerMillion: 2 }, appCapUsd: 75 });
+  });
+  it.each([
+    [{ FOCUSTIME_AI_PROVIDER: "azure" }],
+    [{ FOCUSTIME_AI_MODEL: "gpt 5" }],
+    [{ FOCUSTIME_AI_TIMEOUT_MS: "10" }],
+    [{ FOCUSTIME_AI_OUTPUT_USD_PER_MILLION: "-1" }],
+    [{ FOCUSTIME_AI_MAX_OUTPUT_TOKENS: "default=lots" }],
+  ])("refuses %o", (env) => {
+    expect(read(env).ok).toBe(false);
+  });
+});

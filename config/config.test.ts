@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { settingsEdit } from "./settings.ts";
 import { migrateDayShapeText } from "./edit.ts";
 import { DEFAULT_PLAN, legacyHours, parseConfig, setSystemUserIdInText } from "./schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
@@ -310,5 +311,57 @@ describe("loading a config with the old day shape", () => {
     expect(await readFile(join(dir, "backups", backups[0]!), "utf8")).toBe(valid);
     await loadConfigFile(path);
     expect(await readdir(join(dir, "backups"))).toHaveLength(1);
+  });
+});
+
+describe("[asks] (AP-1)", () => {
+  const parse = (extra: string) => parseConfig(`${valid}\n[asks]\n${extra}\n`);
+  it("defaults: every 5 minutes, the request and acknowledgement phrases", () => {
+    const r = parseConfig(valid);
+    expect(r.ok && r.config.asks.pollMinutes).toBe(5);
+    expect(r.ok && r.config.asks.requestPhrases).toContain("doesn't look right");
+    expect(r.ok && r.config.asks.ackPhrases).toContain("sounds good");
+  });
+  it.each([
+    ["poll_minutes = 10\nrequest_phrases = [\"Kindly\", \" \"]", true],
+    ["poll_minutes = 0", false],
+    ["poll_minutes = 61", false],
+    ["ack_phrases = \"thanks\"", false],
+    ["colour = 1", false],
+  ])("%s", (toml, ok) => {
+    const r = parse(toml);
+    expect(r.ok).toBe(ok);
+    if (r.ok && toml.startsWith("poll_minutes = 10")) expect([r.config.asks.pollMinutes, r.config.asks.requestPhrases]).toEqual([10, ["kindly"]]);
+  });
+});
+
+describe("[ai] (AI-0)", () => {
+  it("defaults: Use AI off, a 10 dollar cap, no client allowed", () => {
+    const r = parseConfig(valid);
+    expect(r.ok && r.config.ai).toEqual({ use: false, monthlyCapUsd: 10, allowedClients: [] });
+  });
+  it.each([
+    ["use = true\nmonthly_cap_usd = 2.5\nallowed_clients = [\"fabrikam\", \" fabrikam \", \"contoso\"]", true],
+    ["use = \"yes\"", false],
+    ["monthly_cap_usd = -1", false],
+    ["monthly_cap_usd = 1001", false],
+    ["allowed_clients = \"fabrikam\"", false],
+    ["model = \"x\"", false],
+  ])("%s", (toml, ok) => {
+    const r = parseConfig(`${valid}\n[ai]\n${toml}\n`);
+    expect(r.ok).toBe(ok);
+    if (r.ok && toml.startsWith("use = true")) expect(r.config.ai).toEqual({ use: true, monthlyCapUsd: 2.5, allowedClients: ["fabrikam", "contoso"] });
+  });
+  it("Allow AI turns one client on or off without touching the others; Use AI and the cap save as given", () => {
+    const apply = (text: string, input: unknown) => settingsEdit("ai", input)(text);
+    let t = apply(valid, { allow: { client: "fabrikam", on: true } });
+    t = apply(t, { allow: { client: "contoso", on: true } });
+    t = apply(t, { allow: { client: "fabrikam", on: false } });
+    t = apply(t, { use: true, monthlyCapUsd: 5 });
+    const r = parseConfig(t);
+    expect(r.ok && r.config.ai).toEqual({ use: true, monthlyCapUsd: 5, allowedClients: ["contoso"] });
+    expect(() => apply(valid, { allow: { client: "", on: true } })).toThrow();
+    expect(() => apply(valid, { monthlyCapUsd: 5000 })).toThrow();
+    expect(() => apply(valid, { model: "x" })).toThrow();
   });
 });

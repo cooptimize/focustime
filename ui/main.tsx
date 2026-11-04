@@ -8,6 +8,8 @@ import "./styles.css";
 import { applyTheme, initialTheme } from "./theme.ts";
 import { applyReduceMotion } from "./brand/motion.ts";
 import { applyTextSize, storedTextSize } from "./textsize.ts";
+import { startPwa } from "./pwa.ts";
+import { OfflineLine } from "./Offline.tsx";
 
 // The style guide renders fixture data, so it exists only in development builds (no-demo-leak): Vite drops this
 // branch, and the fixtures with it, from the production bundle.
@@ -16,9 +18,11 @@ const StyleGuide = import.meta.env.DEV ? lazy(() => import("./StyleGuide.tsx").t
 applyTheme(initialTheme());
 applyReduceMotion();
 applyTextSize(storedTextSize());
+startPwa();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
+    <OfflineLine />
     <StaleBanner />
     <DbBanner />
     {StyleGuide && location.pathname === "/styleguide" ? (

@@ -19,6 +19,8 @@ export const CHAPTERS = [
   { id: "sizing", name: "Sizing work" },
   { id: "devops", name: "DevOps first" },
   { id: "keys", name: "Shortcuts" },
+  { id: "phone", name: "On your phone" },
+  { id: "asks", name: "Asks and promises" },
   { id: "questions", name: "Questions" },
 ] as const;
 export type ChapterId = (typeof CHAPTERS)[number]["id"];
@@ -216,7 +218,7 @@ export const SHORTCUTS = {
   cards: [
     { label: "Today, Week, Roadmap, Inbox", keys: [{ command: "view.today" }, { command: "view.week" }, { command: "roadmap.load" }, { command: "view.inbox" }] },
     { label: "Plan this view", keys: [{ command: "view.plan" }] },
-    { label: "Capture a thought", keys: [{ command: "capture.add" }] },
+    { label: "Capture a thought", keys: [{ command: "capture.add" }], all: true },
     { label: "Check-in", keys: [{ command: "view.checkin" }] },
     { label: "Close out", keys: [{ command: "closeout.load" }] },
     { label: "Plan the week", keys: [{ command: "view.planweek" }] },
@@ -229,8 +231,47 @@ export const SHORTCUTS = {
 
 // ---------- Chapter 6 ----------
 
-export const QUESTIONS = {
+/** P1: FocusTime on a phone: what works there, installing it, and notifications. */
+export const PHONE = {
   eyebrow: "Chapter 6",
+  title: "On your phone",
+  sub: "The phone is for checking and doing. Planning stays on a bigger screen.",
+  items: [
+    { q: "What works on a phone?", a: "Today with the block you're in, its next pick, Start focus, Done and Mark done; Week one day at a time (swipe sideways); Capture; the Inbox; Check-in and Close out; your follow-ups. Plan the day, Plan the week, Plan ahead and Roadmap open read-only, with Copy link to finish on a computer." },
+    { q: "How do I install it?", a: "On Android or in Chrome or Edge on a computer: ⋯ › Install app. On iPhone: tap Share in Safari, then Add to Home Screen, then Add. ⋯ › Install app shows the steps. Once installed it opens like an app, straight to Today." },
+    { q: "How do notifications work?", a: "Every notification shows in ⋯ › Notifications, with a dot on ⋯ when there's something new, and as a short note at the bottom while FocusTime is open. To get them on a phone or computer when FocusTime is closed, open Settings › Notifications on that device and tap Notify this device; the browser asks first. On iPhone this works only in FocusTime from the home screen." },
+    { q: "What do they say on my lock screen?", a: "Only what kind of thing it is, like Follow-ups due or Plan the day: no client names, no work item titles. Turn on Show details in notifications in Settings › Notifications if you want those." },
+    { q: "Does it work offline?", a: "No. FocusTime opens without a connection but says it's offline; nothing of yours is kept on the phone. Signing out clears what the browser kept and turns notifications off on that device." },
+    { q: "Quick capture from anywhere?", a: "On a phone, Capture is in the bottom bar. With a keyboard, press {key:capture.add} anywhere outside a text field." },
+  ],
+};
+
+// ---------- Chapter 7 ----------
+
+/** AP-1, AP-2: Asks, requests from client chats picked out by plain rules and sorted by AI when allowed; Promises. */
+export const ASKS = {
+  eyebrow: "Chapter 7",
+  title: "Asks and promises from client chats",
+  sub: "When a client asks for something in Teams, it lands in Inbox › Asks so it doesn't scroll away.",
+  items: [
+    { q: "What is an ask?", a: "A message from someone outside Cooptimize in a client's Teams chat that looks like a request: it mentions someone from Cooptimize, asks a question, uses a phrase like \"can you\" or \"please\", or carries a file. A short \"thanks\" or \"ok\" never counts, and neither do your own messages or your colleagues'. Each card says which rule matched. Plain rules pick them out, and you can change the phrases in Settings › Clients › Asks." },
+    { q: "How do I turn it on?", a: "Settings › Clients, on a client's chat: switch Read for asks on. The first time, Microsoft asks you to let FocusTime read your chat messages. Reading starts from that moment, never from history, and every client starts off." },
+    { q: "When does it read?", a: "Every 5 minutes by default, only in your working hours and not on PTO days. Refresh in Inbox › Asks reads now. FocusTime only reads; it never posts, reacts or marks anything read in Teams." },
+    { q: "Can AI sort them?", a: "Yes, when Use AI (Settings › AI) and that client's Allow AI (Settings › Clients) are both on. Each new ask, and only asks, goes to the AI with that client's own context: the message, a few messages before it (authors as client or Cooptimize, no addresses) and the client's open DevOps items. The card then shows what kind it is (bug, request, question, incident) and how urgent, with the reason on hover or a click, a draft title, and \"Looks like #1234\" when it seems to be an item you already have. Create and Link start from that draft; you still see the preview and confirm every change. Turn Allow AI off for a client to stop it." },
+    { q: "Why does a card say Not sorted?", a: "AI is off for that client, the month's AI budget is used up, FocusTime's own check stopped the request (it mentioned another client), or the AI service didn't answer. The card works the same as without AI. Sort again tries once more; FocusTime never retries on its own." },
+    { q: "Where did an ask go?", a: "When the AI says a message needs nothing (an agreement, small talk), it's hidden instead of shown. \"Hidden by AI\" at the foot of Asks lists them with the reason; Show it anyway puts one back." },
+    { q: "What's \"Walked in\" on Today?", a: "An ask the AI sorted as needing attention now. It sits on Today's attention line with Start focus, which adds it to the block under way as walk-on work and starts the timer. You also get one notification, held while you focus unless Settings › Notifications lets urgent asks through. Asks still open after their window (two hours for now, Friday for this week) show in Check-in as \"Walked in, not resolved\"." },
+    { q: "What can I do with an ask?", a: "Create a bug, story or feature in DevOps from it (with a preview first, and it needs that client's DevOps write access), link it to a work item you already have, mark it Handled with an optional note, or Dismiss it. Link, Handled and Dismiss can be undone. Keys: {key:ask.next} to move, {key:ask.primary} for the first action, {key:ask.handled} handled, {key:ask.dismiss} dismiss, {key:ask.context} the messages before it." },
+    { q: "What does FocusTime keep?", a: "The messages it reads, only for you and only under that client. Messages that didn't become asks or promises are deleted after 14 days; asks and promises keep their text with what you did. Delete stored messages on the chat in Settings › Clients removes them all now. Chat text never goes into logs, and the AI request log keeps only counts and cost." },
+    { q: "What are Promises?", a: "Your own messages in those chats that commit you to something: \"I'll send it tomorrow\", \"let me check\", \"by Friday\". They're listed in Inbox › Promises with what, to whom, when it's due, your message and the ask it answers (that ask shows \"Promised\"). With AI on for the client, the AI reads what you promised and when; without it, the first line of your message, no date. The phrases are in Settings › Clients › Asks." },
+    { q: "What do I do with a promise?", a: "Make it a follow-up (who, what and the due date filled in, channel Teams), link it to a DevOps item, or mark it Done or Dismiss it (both can be undone). A promise made a follow-up closes when the follow-up is done; a linked one when the item is done in DevOps. FocusTime never closes one because of a later message." },
+  ],
+};
+
+// ---------- Chapter 8 ----------
+
+export const QUESTIONS = {
+  eyebrow: "Chapter 8",
   title: "Questions people ask first",
   items: [
     { q: "Where do my clients and blocks come from?", a: "From Focus Time in Dataverse, the schedule Cooptimize already keeps. If a block is wrong, change it there and FocusTime picks it up on the next refresh." },
@@ -244,8 +285,10 @@ export const QUESTIONS = {
     { q: "Which version am I on?", a: "⋯ › About: one line with where it runs, the pull request, the commit and when it was built, and a Copy button for sending it to the FocusTime team." },
     { q: "How does FocusTime know I'm off?", a: "PTO in Dataverse is a whole day off. Out of office in Outlook over a whole morning or afternoon makes that half PTO. A PTO half has no free time and nothing can be planned on it; a must already pinned there stays, marked \"Pinned to PTO, move it\"." },
     { q: "Why can't I move some of my old timeboxes?", a: "Timeboxes made by an earlier FocusTime, before you signed in here, show as ordinary Outlook events. FocusTime leaves them alone; change or delete them in Outlook." },
+    { q: "How do I add a client's Teams chats?", a: "Settings > Clients, on each client: Delivery chats, then Add a chat. Type to search your Teams group chats, then Enter. A client can have several chats; a chat belongs to one client. Each is labelled Delivery team (the internal Cooptimize team) or Customer collaboration (with the client's key people): FocusTime suggests it from who is in the chat, and you can change it. People from other organizations, and guests, are marked External, and FocusTime warns when someone from outside is in a Delivery team chat. It reads chat names and members only; messages only in chats you switch Read for asks on (see Asks)." },
     { q: "Where do I add my DevOps write access?", a: "Settings > Clients, on each client: enter a personal access token with work item read and write, then Check and save. FocusTime checks it against your DevOps identity, stores it encrypted, and never shows it again." },
     { q: "How do I send an idea, a problem or a question?", a: "⋯ › Send feedback, or Send feedback in Commands. Pick Idea, Problem or Question, write it, and look at the preview: it shows exactly what goes to the FocusTime backlog in Cooptimize's DevOps. Your name and email go with it, and where you were if you leave that ticked; nothing from your plan or clients. If it can't be sent, Copy text keeps it, and you can message the FocusTime team in Teams." },
+    { q: "Does FocusTime use AI?", a: "Only if you turn it on. Use AI in Settings › AI is off until you switch it on, and each client also needs Allow AI in Settings › Clients. What's sent is only what one task needs, about one client at a time; FocusTime checks it first and won't send another client's details, keys or passwords, your VM, or email addresses from outside Cooptimize. Your AI use stops at your monthly limit (10 dollars unless you change it). Settings › AI shows this month's cost and your last 20 requests, never their text, and Test AI checks it works." },
     { q: "Do I need to save in Settings?", a: "No. Each setting saves as you change it, and says Saved by the field; Undo puts the old value back. Only access tokens wait for Check and save." },
   ],
 };

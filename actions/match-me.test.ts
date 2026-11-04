@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DataverseConfig } from "../config/schema.ts";
-import { matchMe, NO_DATAVERSE_MATCH } from "./dispatch.ts";
+import { matchMe } from "./dispatch.ts";
 
 const DV = { myEmail: "ana@cooptimize.example" } as DataverseConfig;
 const ID = "dddddddd-0000-4000-8000-0000000000a1";
@@ -37,14 +37,12 @@ describe("finding me in Dataverse (A2)", () => {
   });
 
   it("says so plainly when nobody matches", async () => {
-    expect(await matchMe(ctx({}).c, DV, "UTC")).toEqual({ ok: false, message: NO_DATAVERSE_MATCH });
-    expect(NO_DATAVERSE_MATCH).toMatch(/^We couldn't match you in Dataverse yet/);
-    expect(NO_DATAVERSE_MATCH).not.toMatch(/—/);
+    expect(await matchMe(ctx({}).c, DV, "UTC")).toEqual({ ok: false, reason: "none", message: "No Cooptimize staff record matches ana@cooptimize.example. Ask the FocusTime team." });
   });
 
   it("stops at an answer that isn't 'not found' (Dataverse down)", async () => {
     const t = ctx({}, { failing: true });
-    expect(await matchMe(t.c, DV, "UTC")).toMatchObject({ ok: false, message: "Dataverse can't be reached" });
+    expect(await matchMe(t.c, DV, "UTC")).toEqual({ ok: false, reason: "failed", message: "Couldn't reach Dataverse. Try again, or tell the FocusTime team." });
     expect(t.asked).toHaveLength(1);
   });
 });

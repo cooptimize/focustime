@@ -1,0 +1,5 @@
+# deploy-prod.yml's parity check (infra/scripts/parity.sh, D473): names dev has that prod may lack on purpose.
+# One per line, "setting <NAME>", "app-secret <name>" or "vault-secret <name>", each with a reason after #.
+# Only names are compared; values (the public URL, the SQL server, the vault, App Insights, FOCUSTIME_ENV,
+# FOCUSTIME_INVITE_DOMAINS, FOCUSTIME_FEEDBACK_LIVE) are meant to differ and aren't checked.
+# Nothing is meant to be dev-only today.

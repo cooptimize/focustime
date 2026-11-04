@@ -469,3 +469,115 @@ describe("parent first (step 14.5, D257)", () => {
     expect(s.dv.writes()).toHaveLength(0);
   });
 });
+
+describe("AP-1: a DevOps item from an ask", () => {
+  const CHAT = "19:cooptimize-client@thread.v2";
+  const TEXT = "The export button fails with an error\nIt happens on every report since Monday.";
+  async function withAsk(s: S, messageId = "1730000000001") {
+    if (!(await s.plan.deliveryChats()).length) {
+      await s.plan.addDeliveryChat(COOP, "customer", { chatId: CHAT, displayName: "Client chat", webUrl: null });
+      await s.plan.setDeliveryChatMembers(CHAT, [{ userId: "00000000-0000-4000-8000-0000000000c1", displayName: "Dana Client", email: null, tenantId: "22222222-2222-4222-8222-222222222222" }], NOW);
+    }
+    await s.plan.addChatMessages([{ chatId: CHAT, messageId, clientKey: COOP, authorId: "00000000-0000-4000-8000-0000000000c1", authorTenant: "22222222-2222-4222-8222-222222222222", createdAt: "2026-11-02T13:30:00Z", text: TEXT, hasImage: false, hasFile: false, replyToId: null }]);
+    await s.plan.addAsk({ chatId: CHAT, messageId, clientKey: COOP, rule: "phrase", ruleDetail: "error", at: "2026-11-02T13:30:00Z" });
+    return { kind: "ask_create", chatId: CHAT, messageId, level: "bug" };
+  }
+  const items = (s: S, type: string) => [...s.dv.items.values()].filter((i) => i.fields["System.WorkItemType"] === type);
+
+  it("previews a Bug with no parent: the first line as title, the message, author, time and Teams link as repro steps", async () => {
+    const s = setup();
+    await s.enable();
+    const p = await s.preview(await withAsk(s));
+    expect(p.item).toBe("New Bug: The export button fails with an error");
+    const f = Object.fromEntries(p.fields.map((x) => [x.label, x.after]));
+    expect(f.Type).toBe("Bug");
+    expect(f["Repro steps"]).toContain("From Dana Client in Teams, 2026-11-02 08:30.");
+    expect(f["Repro steps"]).toContain("https://teams.microsoft.com/l/message/");
+    expect(f.Parent).toBeUndefined();
+    expect(p.links).toEqual([]);
+    expect(p.notes.join(" ")).toMatch(/Nothing is posted in Teams/);
+    expect(s.dv.writes()).toHaveLength(0);
+  });
+
+  it("confirm creates it, reads it back and resolves the ask as created; a second create is refused", async () => {
+    const s = setup();
+    await s.enable();
+    const change = await withAsk(s);
+    const r = await s.write(change);
+    expect(r.confirmed).toBe(true);
+    const bug = items(s, "Bug")[0]!;
+    expect(bug.fields["Microsoft.VSTS.TCM.ReproSteps"]).toContain("every report since Monday");
+    expect(bug.fields["System.Parent"]).toBeUndefined();
+    expect(await s.plan.ask(CHAT, "1730000000001")).toMatchObject({ status: "created", itemId: bug.id, itemTitle: "The export button fails with an error" });
+    const again = await s.run<{ nothing?: string }>("devops.preview", { clientKey: COOP, change });
+    expect(again.nothing).toBe(`This ask is already in DevOps as #${bug.id}`);
+  });
+
+  it("AP-2: a sorted ask's draft gives the title and description; the message still goes with it", async () => {
+    const s = setup();
+    await s.enable();
+    const change = await withAsk(s);
+    await s.plan.setAskSort(CHAT, "1730000000001", "sorted", { kind: "bug", urgency: "this_week", itemType: "bug", title: "Export fails on every report", description: "Export has failed since Monday.", likely: null, reason: "Something is broken." });
+    const p = await s.preview(change);
+    expect(p.item).toBe("New Bug: Export fails on every report");
+    const f = Object.fromEntries(p.fields.map((x) => [x.label, x.after]));
+    expect(f["Repro steps"]).toContain("Export has failed since Monday.");
+    expect(f["Repro steps"]).toContain("every report since Monday");
+    expect(s.dv.writes()).toHaveLength(0);
+  });
+
+  it.each([["story", "User Story", "Description"], ["feature", "Feature", "Description"]])("a %s uses the process's %s type", async (level, type, field) => {
+    const s = setup();
+    await s.enable();
+    const p = await s.preview({ ...(await withAsk(s)), level });
+    expect(p.fields.find((x) => x.label === "Type")?.after).toBe(type);
+    expect(p.fields.some((x) => x.label === field)).toBe(true);
+  });
+
+  it("idempotent: a lost answer is unconfirmed; a new preview is refused; Retry finds the item and makes no second one", async () => {
+    const s = setup();
+    await s.enable();
+    const change = await withAsk(s);
+    s.dv.fail("POST", /\$Bug$/, "lost");
+    const r = await s.write(change);
+    expect(r.confirmed).toBe(false);
+    expect(items(s, "Bug")).toHaveLength(1);
+    expect((await s.plan.ask(CHAT, "1730000000001"))?.status).toBe("open");
+    const refused = await s.fail("devops.preview", { clientKey: COOP, change });
+    expect(refused).toMatchObject({ status: 409, code: "pending_write" });
+    const retried = await s.run<DevOpsResult>("devops.retry", { id: r.entry.id });
+    expect(retried.confirmed).toBe(true);
+    expect(items(s, "Bug")).toHaveLength(1);
+    expect((await s.plan.ask(CHAT, "1730000000001"))?.itemId).toBe(items(s, "Bug")[0]!.id);
+  });
+
+  it("without the client's write PAT: the plain message and nothing sent", async () => {
+    const s = setup();
+    const r = await s.fail("devops.preview", { clientKey: COOP, change: await withAsk(s) });
+    expect(r).toMatchObject({ status: 409, code: "no_write_pat" });
+    expect(r.error).toMatch(/DevOps writes aren't enabled for Cooptimize/);
+    expect(s.dv.seen).toHaveLength(0);
+  });
+
+  it("an ask of another client is refused", async () => {
+    const s = setup();
+    await s.enable();
+    const change = await withAsk(s);
+    await s.plan.purgeChatText({ clientKey: COOP });
+    await s.plan.addDeliveryChat(Adatum, "customer", { chatId: "19:adatum@thread.v2", displayName: "Adatum chat", webUrl: null });
+    await s.plan.addChatMessages([{ chatId: "19:adatum@thread.v2", messageId: "1730000000009", clientKey: Adatum, authorId: null, authorTenant: null, createdAt: NOW, text: "Adatum text", hasImage: false, hasFile: false, replyToId: null }]);
+    await s.plan.addAsk({ chatId: "19:adatum@thread.v2", messageId: "1730000000009", clientKey: Adatum, rule: "question", ruleDetail: null, at: NOW });
+    const r = await s.fail("devops.preview", { clientKey: COOP, change: { ...change, chatId: "19:adatum@thread.v2", messageId: "1730000000009" } });
+    expect(r.error).toMatch(/another client/);
+  });
+
+  it("Undo sets the item to Removed and opens the ask again", async () => {
+    const s = setup();
+    await s.enable();
+    const r = await s.write(await withAsk(s));
+    const u = await s.write({ kind: "undo", writeId: r.entry.id });
+    expect(u.confirmed).toBe(true);
+    expect(items(s, "Bug")[0]!.fields["System.State"]).toBe("Removed");
+    expect((await s.plan.ask(CHAT, "1730000000001"))?.status).toBe("open");
+  });
+});

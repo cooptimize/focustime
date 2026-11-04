@@ -84,13 +84,19 @@ export async function withRetry<T>(f: () => Promise<T>, o: { sleep: (ms: number)
 
 /** Formats of the datetime2 columns that hold instants (every other datetime2 column holds a zoned stamp). */
 const INSTANT_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  delivery_chats: ["members_fetched_at", "asks_since", "asks_seen_at", "asks_polled_at", "asks_retry_at"],
+  chat_messages: ["created_at"],
+  ai_requests: ["at"],
+  devops_item_clients: ["seen_at"],
+  asks: ["resolved_at", "created_at", "updated_at", "ai_at"],
+  promises: ["resolved_at", "created_at", "updated_at"],
   focus_log: ["started_at", "ended_at"],
   timeboxes: ["removed_at"],
   user_settings: ["updated_at"],
   user_secrets: ["updated_at"],
 };
 /** App tables (no person, no zone): every datetime2 is an instant. */
-const APP_TABLES = new Set(["users", "sessions", "auth_requests", "deletions", "schema_version", "scheduler_state", "app_keys"]);
+const APP_TABLES = new Set(["users", "sessions", "auth_requests", "deletions", "schema_version", "scheduler_state", "app_keys", "ai_app_spend"]);
 
 const STAMP = /^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d+)?)?(Z|[+-]\d\d:\d\d)(\[[^\]]+\])?$/;
 

@@ -27,12 +27,14 @@ export class HostUnavailable extends Error {
  * App secrets set up outside FocusTime: read-only, except Settings may replace the first two. A2: the "FocusTime" Entra
  * registration's client secret (written by infra/scripts/app-registration.sh, never by FocusTime). A3: the SQL login's
  * password for a local SQL Server container (npm run db:up writes it; the hosted app signs in with its identity).
+ * AI-0: the OpenAI API key for the developer loop, only when [ai] provider = "openai" (the hosted app reads ft-openai-key
+ * from Key Vault; docs/azure/runbook.md).
  */
-export type AppSecretAccount = "dataverse-client-secret" | "google-client-secret" | "entra-client-secret" | "sql-password";
+export type AppSecretAccount = "dataverse-client-secret" | "google-client-secret" | "entra-client-secret" | "sql-password" | "openai-api-key";
 /** Refresh tokens FocusTime writes after sign-in and clears on disconnect. */
 export type RefreshTokenAccount = "outlook-refresh-token" | "google-refresh-token";
 export type SecretAccount = AppSecretAccount | RefreshTokenAccount;
-export const SECRET_ACCOUNTS: readonly SecretAccount[] = ["dataverse-client-secret", "google-client-secret", "entra-client-secret", "sql-password", "outlook-refresh-token", "google-refresh-token"];
+export const SECRET_ACCOUNTS: readonly SecretAccount[] = ["dataverse-client-secret", "google-client-secret", "entra-client-secret", "sql-password", "openai-api-key", "outlook-refresh-token", "google-refresh-token"];
 export const WRITABLE_ACCOUNTS: readonly RefreshTokenAccount[] = ["outlook-refresh-token", "google-refresh-token"];
 
 export type SecretErrorKind = "not_found" | "unavailable" | "locked";

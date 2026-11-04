@@ -16,7 +16,9 @@ import { onFreePort } from "../test/ports.ts";
 export const CHROMIUM = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].find((p) => existsSync(p)) ?? null;
 /**
  * Playwright's WebKit (Safari's engine), for the Safari checks: installed with `npx playwright-core install --with-deps
- * webkit` (CI does). Its build needs Ubuntu's libraries; FOCUSTIME_TEST_WEBKIT=required makes a missing one a failure.
+ * webkit` (CI installs the system packages with `install-deps` and keeps the browser and those packages in its cache,
+ * keyed on the Playwright version). Its build needs Ubuntu's libraries; FOCUSTIME_TEST_WEBKIT=required makes a missing
+ * one a failure.
  */
 export const WEBKIT = existsSync(webkit.executablePath()) ? webkit.executablePath() : null;
 export const NOW = "2026-11-02T09:30:00-05:00";
@@ -57,6 +59,18 @@ async function tlsFront(dir: string, port: number, target: number): Promise<() =
   return () => server.close();
 }
 
+/**
+ * A built UI registers the service worker (ui/pwa.ts, production only); Vite's dev UI never does. Every context the
+ * tests open blocks it, so a built run behaves like the dev one and no test depends on a cached shell.
+ */
+function noServiceWorkers(b: Browser): Browser {
+  const newContext = b.newContext.bind(b);
+  const newPage = b.newPage.bind(b);
+  b.newContext = (o = {}) => newContext({ serviceWorkers: "block", ...o });
+  b.newPage = (o = {}) => newPage({ serviceWorkers: "block", ...o });
+  return b;
+}
+
 export type Harness = { url: string; browser: Browser; stop: () => Promise<void> };
 
 /**
@@ -72,7 +86,10 @@ export async function startDemo(engine: "chromium" | "webkit" = "chromium", extr
   const launch = join(dir, "run", "focustime", "launch.json");
   const startServer = async (port: number, front: number | null) => {
     const env = { ...process.env, ...(front ? { FOCUSTIME_PUBLIC_URL: `https://localhost:${front}` } : {}), FOCUSTIME_DEMO: "1", XDG_CONFIG_HOME: join(dir, "config"), XDG_DATA_HOME: join(dir, "data"), XDG_CACHE_HOME: join(dir, "cache"), XDG_RUNTIME_DIR: join(dir, "run"), ...extraEnv };
-    const child: ChildProcess = spawn(process.execPath, ["server/main.ts", "--dev", "--no-open", "--no-reopen", "--headless", "--port", String(port), "--clock", NOW], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+    // A UI built once for the whole run (test/e2e-build.ts) when there is one; Vite in the server otherwise.
+    const built = process.env.FOCUSTIME_E2E_DIST && process.env.FOCUSTIME_E2E_DIST !== "dev" ? process.env.FOCUSTIME_E2E_DIST : null;
+    if (built) Object.assign(env, { FOCUSTIME_DIST: built });
+    const child: ChildProcess = spawn(process.execPath, ["server/main.ts", ...(built ? [] : ["--dev"]), "--no-open", "--no-reopen", "--headless", "--port", String(port), "--clock", NOW], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     child.stdout?.on("data", (b) => (out += b));
     child.stderr?.on("data", (b) => (out += b));
@@ -101,7 +118,8 @@ export async function startDemo(engine: "chromium" | "webkit" = "chromium", extr
       }
     }));
   } else server = await onFreePort((port) => startServer(port, null));
-  const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu"] });
+  const launched = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu"] });
+  const browser = noServiceWorkers(launched);
   return {
     url: `${server.url}?now=${encodeURIComponent(NOW)}`,
     browser,

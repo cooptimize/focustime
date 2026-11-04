@@ -2,6 +2,7 @@
 // every state change, one action endpoint per signed-in person, and the UI. The same app serves the developer loop
 // (http://localhost:<port>) and the hosted app.
 import type { BuildInfo } from "./buildinfo.ts";
+import { serviceWorkerSource, shellPaths, SW_PATH } from "./pwa.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
@@ -12,12 +13,12 @@ import type { AccountStore, Session } from "../store/accounts.ts";
 import { DEMO_SESSION_MS, SESSION_MAX_MS } from "../store/accounts.ts";
 import { checkRequest, REOPEN_PATH } from "./guard.ts";
 import { AUTH_COOKIE, authCookie, clearAuthCookie, clearSessionCookies, CSRF_HEADER, readCookie, SESSION_COOKIE, sessionCookies } from "./auth/cookies.ts";
-import { SignInError, type SignedIn, type SignInTokens } from "./auth/entra.ts";
+import { CONSENTS, SignInError, type Consent, type SignedIn, type SignInTokens } from "./auth/entra.ts";
 
 /** What the sign-in routes need: Microsoft (null when not set up), Google, the demo, and what to do with a sign-in. */
 export type SignInHooks = {
   microsoft: {
-    start: (o?: { loginHint?: string }) => Promise<{ url: string; pending: { state: string; nonce: string; verifier: string } }>;
+    start: (o?: { loginHint?: string; consent?: Consent }) => Promise<{ url: string; pending: { state: string; nonce: string; verifier: string } }>;
     finish: (callback: URL, pending: { state: string; nonce: string; verifier: string }) => Promise<{ user: SignedIn; tokens: SignInTokens }>;
   } | null;
   /** A validated Microsoft sign-in: records the person (and their tokens). The user id to start a session for, or why not. */
@@ -93,6 +94,7 @@ const TYPES: Record<string, string> = {
   ".png": "image/png",
   ".json": "application/json",
   ".woff2": "font/woff2",
+  ".webmanifest": "application/manifest+json",
 };
 
 export const CSP = "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
@@ -128,6 +130,8 @@ const same = (a: string | undefined, b: string) => {
 
 export function createApp(opts: AppOptions) {
   let lastReopen = 0;
+  /** P1: the service worker's source, made once per process (the build doesn't change while it runs). */
+  let sw: string | null = null;
   const https = opts.publicUrl.startsWith("https://");
   const json = (res: ServerResponse, status: number, body: unknown, cookies: string[] = []) => {
     res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", ...(cookies.length ? { "set-cookie": cookies } : {}) });
@@ -187,8 +191,13 @@ export function createApp(opts: AppOptions) {
       if (!opts.auth.microsoft) return signInFailed(res, "misconfigured");
       try {
         const hint = url.searchParams.get("hint");
-        const { url: to, pending } = await opts.auth.microsoft.start(hint && hint.length < 256 ? { loginHint: hint } : {});
-        await opts.accounts.authRequests.put("microsoft", pending);
+        // AP-1 (D490): an incremental consent (?consent=chat_read) for the person signed in now; it comes back to them.
+        const asked = url.searchParams.get("consent");
+        const consent = asked && Object.hasOwn(CONSENTS, asked) ? (asked as Consent) : null;
+        const s = consent ? await session() : null;
+        if (consent && (!s || s.demo)) return redirect(res, "/#/settings/clients");
+        const { url: to, pending } = await opts.auth.microsoft.start({ ...(hint && hint.length < 256 ? { loginHint: hint } : {}), ...(consent ? { consent } : {}) });
+        await opts.accounts.authRequests.put("microsoft", pending, s?.userId ?? null);
         return redirect(res, to, [authCookie(pending.state)]);
       } catch (e) {
         return signInFailed(res, e instanceof SignInError ? e.reason : "unavailable");
@@ -207,7 +216,8 @@ export function createApp(opts: AppOptions) {
         if ("refused" in r) return signInFailed(res, r.refused);
         // A fresh session id at sign-in (never one the browser brought).
         await opts.accounts.sessions.end(readCookie(cookieHeader, SESSION_COOKIE));
-        return redirect(res, "/", [...(await startSession(r.userId, false)), clearAuthCookie()]);
+        // AP-1: a consent started from Settings goes back there (it was for this person: a session started it).
+        return redirect(res, pending.userId && pending.userId === r.userId ? "/?allowed=chat_read#/settings/clients" : "/", [...(await startSession(r.userId, false)), clearAuthCookie()]);
       } catch (e) {
         return signInFailed(res, e instanceof SignInError ? e.reason : "invalid");
       }
@@ -318,6 +328,12 @@ export function createApp(opts: AppOptions) {
         res.end();
       });
     }
+    // P1: the service worker, for this build (never in the dev UI, where Vite serves changing files).
+    if (url.pathname === SW_PATH && (method === "GET" || method === "HEAD")) {
+      sw ??= serviceWorkerSource(opts.build?.sha ?? "unknown", shellPaths(opts.distDir!));
+      res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" });
+      return res.end(method === "HEAD" ? undefined : sw);
+    }
     return serveStatic(opts.distDir!, url.pathname, res);
   };
 
@@ -347,6 +363,8 @@ async function serveStatic(root: string, pathname: string, res: ServerResponse):
   if (!isFile) file = join(root, "index.html");
   const type = TYPES[extname(file)] ?? "application/octet-stream";
   const body = await readFile(file);
-  res.writeHead(200, { "content-type": type, "cache-control": file.endsWith("index.html") ? "no-store" : "public, max-age=31536000, immutable" });
+  // Hashed build files (/assets/) never change; the page, the manifest and the icons (public/) are checked each time.
+  const hashed = rel.startsWith(`assets${sep}`) || rel.startsWith("assets/");
+  res.writeHead(200, { "content-type": type, "cache-control": file.endsWith("index.html") ? "no-store" : hashed && isFile ? "public, max-age=31536000, immutable" : "no-cache" });
   return res.end(body);
 }
