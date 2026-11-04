@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyChoice, canStart, canStop, chipOf, CHIP_LABEL, chipText, delayed, morningPrompt, powerFrom, reached, refreshMs, restoreAttemptDue, restoreDue, restorePlan, shutdownFrom, shutdownLabel, stillChanged, type ShutdownChange } from "./vm.ts";
+import { canStart, chipOf, CHIP_LABEL, chipText, morningPrompt, powerFrom, reached, refreshMs, shutdownFrom, shutdownLabel } from "./vm.ts";
 
 describe("power state", () => {
   it("reads PowerState/<x> from instanceView statuses, ignoring provisioning", () => {
@@ -27,13 +27,12 @@ describe("power state", () => {
     const t = { op: "start" as const, since: "2026-11-02T14:00:00Z" };
     expect(chipOf("deallocated", t)).toBe("starting");
     expect(chipOf("running", t)).toBe("running");
-    expect(chipOf("running", { op: "deallocate", since: t.since })).toBe("stopping");
     expect(reached("start", "running")).toBe(true);
-    expect(reached("deallocate", "stopped")).toBe(false);
+    expect(reached("start", "starting")).toBe(false);
     expect(refreshMs("starting")).toBe(10_000);
     expect(refreshMs("running")).toBe(60_000);
-    expect(canStart("billing") && canStop("billing")).toBe(true);
-    expect(canStart("running") || canStop("deallocated")).toBe(false);
+    expect(canStart("billing") && canStart("deallocated")).toBe(true);
+    expect(canStart("running") || canStart("starting")).toBe(false);
   });
 });
 
@@ -53,29 +52,6 @@ describe("auto-shutdown", () => {
     expect(shutdownLabel(null, "America/New_York", "2026-11-02")).toBeNull();
   });
 
-  it("delays 1h or 2h, skips tonight, and refuses past midnight", () => {
-    const s = shutdownFrom(body)!;
-    expect(applyChoice(s, "delay60")).toEqual({ time: "2000", status: "Enabled" });
-    expect(applyChoice(s, "delay120")).toEqual({ time: "2100", status: "Enabled" });
-    expect(applyChoice(s, "skip")).toEqual({ time: "1900", status: "Disabled" });
-    expect(applyChoice({ ...s, time: "2300" }, "delay60")).toEqual({ error: expect.stringMatching(/Skip tonight/) });
-    expect(applyChoice({ ...s, status: "Disabled" }, "delay60")).toEqual({ error: expect.stringMatching(/already off/) });
-    expect(delayed("2259", 60)).toBe("2359");
-  });
-
-  const change: ShutdownChange = { vmId: "/x", date: "2026-11-02", original: { time: "1900", status: "Enabled" }, changed: { time: "2100", status: "Enabled" }, failedAt: null, message: null };
-  it("restores from the first run after midnight", () => {
-    expect(restoreDue(change, "2026-11-02")).toBe(false);
-    expect(restoreDue(change, "2026-11-03")).toBe(true);
-    expect(stillChanged(null, "2026-11-03")).toBe(false);
-  });
-
-  it("step 16.3: Today warns only when a restore failed (not while one is simply due)", () => {
-    expect(stillChanged(change, "2026-11-03")).toBe(false);
-    expect(stillChanged({ ...change, failedAt: "2026-11-03T05:00:00Z", message: "Azure unreachable" }, "2026-11-03")).toBe(true);
-    expect(stillChanged({ ...change, failedAt: "2026-11-02T23:00:00Z" }, "2026-11-02")).toBe(false);
-  });
-
   it("step 16.3: the header chip's line: state, plus the auto-shutdown time while it runs or starts", () => {
     const s = { time: "1930", status: "Enabled" as const, timeZoneId: "Eastern Standard Time" };
     const z = "America/New_York";
@@ -86,24 +62,6 @@ describe("auto-shutdown", () => {
     expect(chipText("deallocated", s, z, "2026-11-02")).toBe(CHIP_LABEL.deallocated);
     expect(chipText("stopping", s, z, "2026-11-02")).toBe(CHIP_LABEL.stopping);
     expect(chipText("unknown", s, z, "2026-11-02")).toBe("Unknown");
-  });
-
-  it("puts back only what FocusTime changed", () => {
-    const now = (time: string, status: "Enabled" | "Disabled" = "Enabled") => ({ time, status, timeZoneId: "UTC" });
-    expect(restorePlan(change, now("2100"))).toBe("restore");
-    expect(restorePlan(change, now("1900"))).toBe("already");
-    expect(restorePlan(change, now("1800"))).toBe("changed_elsewhere");
-    expect(restorePlan(change, null)).toBe("gone");
-  });
-
-  it("after a failed restore, retries every 10 minutes and at work start", () => {
-    const failed = { ...change, failedAt: "2026-11-03T05:00:00Z" };
-    const at = (iso: string) => Date.parse(iso);
-    expect(restoreAttemptDue(change, "2026-11-03", at("2026-11-03T05:00:00Z"), false)).toBe(true);
-    expect(restoreAttemptDue(failed, "2026-11-03", at("2026-11-03T05:05:00Z"), false)).toBe(false);
-    expect(restoreAttemptDue(failed, "2026-11-03", at("2026-11-03T05:05:00Z"), true)).toBe(true);
-    expect(restoreAttemptDue(failed, "2026-11-03", at("2026-11-03T05:10:00Z"), false)).toBe(true);
-    expect(restoreAttemptDue(failed, "2026-11-02", at("2026-11-03T05:10:00Z"), true)).toBe(false);
   });
 });
 

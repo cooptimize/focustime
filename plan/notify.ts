@@ -33,7 +33,7 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   direction: "The first Thursday of each month.",
   timer: "When a focus session or break ends.",
   meeting: "5 minutes before a meeting while a focus session runs.",
-  vm: "VM off at work start, or auto-shutdown not put back.",
+  vm: "VM off at work start.",
   followups: "Once a workday when follow-ups are due today or overdue.",
   expiry: "Once a workday when a PAT or secret expires within 14 days.",
 };
@@ -202,7 +202,6 @@ export const notices = {
   }),
   meeting: (labels: string[], keys: string[], at: string): Notice => ({ kind: "meeting", key: `meeting:${keys.join("|")}`.slice(0, 300), title: "In 5 minutes", body: labels.join("\n"), buttons: [], route: "focus", at }),
   vmOff: (date: string, vmName: string, at: string): Notice => ({ kind: "vm", key: `vm_off:${date}`, title: "Your VM is off", body: `${vmName} is stopped.\nClick to start it.`, buttons: [{ key: "start", label: "Start" }], route: "vm", at, ref: date }),
-  vmChanged: (date: string, text: string, at: string): Notice => ({ kind: "vm", key: `vm_changed:${date}`, title: "Auto-shutdown is still changed", body: `${text}. FocusTime couldn't put it back.\nClick to restore it.`, buttons: [{ key: "restore", label: "Restore" }], route: "vm", at, ref: date }),
   followUps: (date: string, due: { id: number; what: string; overdue: boolean }[], at: string): Notice | null => {
     if (!due.length) return null;
     const over = due.filter((f) => f.overdue).length;
@@ -246,16 +245,14 @@ export type DoneFacts = {
   timerWaiting: (startedAt: string) => boolean;
   /** My VM: off and needing a start (null: unknown, never closes). */
   vmOff: () => boolean | null;
-  /** My VM's auto-shutdown is still changed (null: unknown). */
-  vmChanged: () => boolean | null;
   /** Step 17: Plan ahead was opened for this ritual (its key). */
   aheadSeen?: (key: string) => boolean;
 };
 
 /**
  * Whether a sent notification no longer applies and can be closed (Q91): the day got planned, checked in or closed
- * out, the week planned, the follow-up closed (or none due any more), the timer answered in the app, the VM started
- * or its auto-shutdown put back. Meeting warnings, expiring secrets and tests stay until dismissed.
+ * out, the week planned, the follow-up closed (or none due any more), the timer answered in the app, the VM started.
+ * An "auto-shutdown still changed" notice from before D475 closes at once (there is nothing to restore). Meeting warnings, expiring secrets and tests stay until dismissed.
  */
 export function noticeDone(n: Notice, f: DoneFacts): boolean {
   const ref = n.ref;
@@ -272,7 +269,7 @@ export function noticeDone(n: Notice, f: DoneFacts): boolean {
       const r = parseRoute(n.route);
       return r?.view === "followup" ? !f.followUpOpen(r.id) : f.dueCount() === 0;
     }
-    case "vm": return n.key.includes("vm_changed:") ? f.vmChanged() === false : f.vmOff() === false;
+    case "vm": return n.key.includes("vm_changed:") || f.vmOff() === false;
     default: return false;
   }
 }

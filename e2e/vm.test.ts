@@ -1,7 +1,9 @@
-// Step 15.4: the signed-in person, my VM chip, the morning prompt, auto-shutdown delay and restore, Settings > You and
-// the Inbox's kind chips, clicked in a real browser on demo data (a fictional person and VM, no Azure calls).
+// Step 15.4: the signed-in person, my VM chip, the morning prompt, the chip's menu (D475: Start only; the
+// auto-shutdown time is shown, never changed), Settings > You and the Inbox's kind chips, clicked in a real browser on
+// demo data (a fictional person and VM, no Azure calls). Screenshots when FOCUSTIME_SHOTS is set.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, startDemo, type Harness, openSettings } from "./harness.ts";
+import { shotBoth } from "./shots.ts";
 
 let h: Harness;
 const T = 90_000;
@@ -52,23 +54,35 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("Delay shutdown 2h from the chip: the preview shows 7:00 PM → 9:00 PM, then the chip says it's changed", async () => {
+  it("D475: the chip shows the auto-shutdown time read only; its menu has no Stop, Delay, Skip tonight or Restore", async () => {
     const { page, errors } = await freshPage(h);
+    const actions: string[] = [];
+    page.on("request", (r) => {
+      if (r.url().endsWith("/api/action") && r.method() === "POST") actions.push(String((JSON.parse(r.postData() ?? "{}") as { action?: string; input?: unknown }).action) + JSON.stringify((JSON.parse(r.postData() ?? "{}") as { input?: unknown }).input ?? {}));
+    });
     await today(page);
     const chip = page.locator(".topbar .vm-chip");
     await expect.poll(() => chip.textContent(), { timeout: 10_000 }).toContain("Stopped");
+    // Stopped: Start is the only change on offer.
     await chip.click();
-    await page.getByRole("menuitem", { name: /Delay shutdown 2h/ }).click();
-    const dlg = page.getByRole("dialog", { name: "Delay auto-shutdown 2 hours" });
-    await dlg.waitFor();
-    await expect(dlg.locator(".vm-change").textContent()).resolves.toMatch(/7:00 PM.*9:00 PM/);
-    await expect(dlg.textContent()).resolves.toContain("back to 7:00 PM tomorrow morning");
-    await dlg.getByRole("button", { name: "Delay" }).click();
-    await expect.poll(() => chip.getAttribute("title"), { timeout: 10_000 }).toContain("Auto-shutdown set to 9:00 PM; normally 7:00 PM");
+    const menu = page.locator('.menu-list[role="menu"]');
+    await menu.waitFor();
+    await expect(menu.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Start/), expect.stringMatching(/^Refresh/), expect.stringMatching(/^Choose another VM/)]);
+    await menu.getByRole("menuitem", { name: /^Start/ }).click();
+    const dlg = page.getByRole("dialog", { name: "Start your VM" });
+    await expect(dlg.textContent()).resolves.toContain("FocusTime never changes your VM's auto-shutdown");
+    await dlg.getByRole("button", { name: "Start" }).click();
+    // Running: the auto-shutdown time from the schedule, read only.
+    await expect.poll(() => chip.textContent(), { timeout: 45_000, interval: 1000 }).toContain("Running · off at 7:00 PM");
     await chip.click();
-    await page.getByRole("menuitem", { name: /Restore auto-shutdown/ }).click();
-    await page.getByRole("dialog", { name: "Restore auto-shutdown" }).getByRole("button", { name: "Restore" }).click();
-    await expect.poll(() => chip.getAttribute("title"), { timeout: 10_000 }).not.toContain("normally");
+    await menu.waitFor();
+    await expect(menu.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Refresh/), expect.stringMatching(/^Choose another VM/)]);
+    for (const gone of [/Stop/, /Delay/, /Skip tonight/, /Restore/, /Auto-shutdown/]) await expect(menu.getByRole("menuitem", { name: gone }).count()).resolves.toBe(0);
+    await shotBoth(page, "vm-chip-menu");
+    await page.keyboard.press("Escape");
+    // Nothing the window sent asked for anything but status, find or start.
+    const other = actions.filter((a) => a.startsWith("vm.") && !/^vm\.(status|find|choose|dismiss_prompt|log|confirm)\{/.test(a) && !/^vm\.preview\{"op":"start"[,}]/.test(a));
+    expect(other).toEqual([]);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

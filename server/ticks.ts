@@ -8,7 +8,7 @@
 import type { ActionContext } from "../actions/dispatch.ts";
 import { presenceContext, vmContext, expiringFor } from "../actions/dispatch.ts";
 import { syncTeamsStatus, TEAMS_STATUS_KEY } from "../actions/presence-actions.ts";
-import { restoreTick, vmAction, type VmStatus } from "../actions/vm-actions.ts";
+import { vmAction, type VmStatus } from "../actions/vm-actions.ts";
 import { CHECKIN_DONE_MARK } from "../actions/closeout-actions.ts";
 import { refreshTodayWarnings } from "../actions/warnings.ts";
 import { TIMER_KEY, timerAction, timerLike } from "../actions/timer-actions.ts";
@@ -72,18 +72,18 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
   const todayOf = (c: AppConfig) => localToday(instantNow().toString(), userZone(c));
   const vmCtx = () => vmContext(liveCtx);
 
-  /** A button on a notification: the VM's Start and Restore (the timer's buttons go to checkTimer). */
+  /** A button on a notification: the VM's Start (the timer's buttons go to checkTimer). D475: there is no Restore. */
   const act = async (n: Notice, key: string) => {
     const sample = n.key.startsWith("sample:");
-    if (n.kind === "vm" && (key === "start" || key === "restore")) {
+    if (n.kind === "vm" && key === "start") {
       // Samples never touch Azure unless asked for live (notify.sample { live: true }): they open the VM menu.
       if (sample && !n.key.startsWith("sample:live:")) return openRoute("vm");
-      const r = await vmAction(await vmCtx(), key === "start" ? "vm.start_now" : "vm.restore", {});
-      log({ source: "azure", op: key === "start" ? "notify_start" : "notify_restore", kind: r.ok ? "ok" : (r.code ?? "refused") });
+      const r = await vmAction(await vmCtx(), "vm.start_now", {});
+      log({ source: "azure", op: "notify_start", kind: r.ok ? "ok" : (r.code ?? "refused") });
       // Start asks first (Settings > You), or it couldn't: open the VM menu, where the preview and the reason show.
       if (!r.ok) {
         openRoute("vm");
-        if (r.code !== "ask_first") host.notifications.line("FocusTime", `Couldn't ${key === "start" ? "start your VM" : "restore auto-shutdown"}: ${r.error}.`);
+        if (r.code !== "ask_first") host.notifications.line("FocusTime", `Couldn't start your VM: ${r.error}.`);
       }
     }
   };
@@ -133,7 +133,6 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       dueCount: () => (today ? dueFollowUps(open, today).length : 1),
       timerWaiting: (startedAt) => !!timer && timer.ended && timer.startedAt === startedAt,
       vmOff: () => (vs ? vs.prompt : null),
-      vmChanged: () => (vs ? !!vs.change : null),
       aheadSeen: () => seen,
     });
   };
@@ -173,7 +172,6 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       timer: pfx(notices.timerEnd(false, "Sample: a focus session", at, at)),
       meeting: pfx(notices.meeting(["Sample: a meeting at 10:00"], ["sample"], at)),
       vm: pfx(notices.vmOff(today, live ? "Your VM" : "Your VM (sample: Start opens the VM menu)", at)),
-      vm_changed: pfx(notices.vmChanged(today, live ? "Auto-shutdown set to 9:00 PM" : "Sample: auto-shutdown set to 9:00 PM (Restore opens the VM menu)", at)),
       // With none due, a made-up one that opens the Inbox (there is no follow-up to open).
       followups: pfx(open.length ? notices.followUps(today, open, at) : { ...notices.followUps(today, [{ id: 1, what: "Sample: reply about the proposal", overdue: false }], at)!, route: "inbox" }),
       expiry: pfx(notices.expiry(today, [{ text: "Sample: a DevOps write access expires in 9 days. Update in Settings", section: "clients" }], at)),
@@ -269,8 +267,8 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     if (notifier.allows("followups") && (await store.markOnce("followups_notice", today))) await send(notices.followUps(today, dueFollowUps((await store.openFollowUps()), today), at));
     if (notifier.allows("expiry") && (await store.markOnce("expiry_notice", today))) await send(notices.expiry(today, (await expiringFor(store, c, today)), at));
   };
-  // My VM (step 15.4): put back a changed auto-shutdown the next morning (first run after midnight, retried, and at work
-  // start), and once a workday at work start say so when the VM is off. Never starts anything by itself.
+  // My VM (step 15.4): once a workday at work start, say so when the VM is off. Never starts anything by itself, and
+  // never touches its auto-shutdown (D475: the old next-morning restore is gone).
   const vmTick = async () => {
     const c = await configOrNull();
     if (!c) return;
@@ -281,14 +279,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     const afterStart = !!ws && n.toPlainTime().toString().slice(0, 5) >= ws;
     const vc = await vmCtx();
     if (!vc.account) return;
-    const atWorkStart = afterStart && (await store.markOnce("vm_restore_workstart", today));
-    const r = await restoreTick(vc, { atWorkStart });
-    if (r) log({ source: "azure", op: "shutdown_restore", kind: r });
     const at = instantNow().toString();
-    if (r === "failed" && atWorkStart) {
-      const st = await vmAction(vc, "vm.status", {});
-      await send(notices.vmChanged(today, st.ok ? ((st.data as VmStatus).change?.text ?? "Auto-shutdown is changed") : "Auto-shutdown is changed", at));
-    }
     if (afterStart && notifier.allows("vm") && (await store.markOnce("vm_prompt_notice", today))) {
       const st = await vmAction(vc, "vm.status", {});
       if (st.ok && (st.data as VmStatus).prompt) await send(notices.vmOff(today, (st.data as VmStatus).vm?.name ?? "Your VM", at));

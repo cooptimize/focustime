@@ -14,7 +14,7 @@ describe("external members, by tenantId only (T-2)", () => {
   });
 
   it("never by name or address: a Cooptimize-looking address in another tenant is external, and the reverse", () => {
-    expect(isExternal(aChatMember({ email: "ana@cooptimize.org", tenantId: CLIENT_TENANT }), HOME_TENANT)).toBe(true);
+    expect(isExternal(aChatMember({ email: "ana@cooptimize.example", tenantId: CLIENT_TENANT }), HOME_TENANT)).toBe(true);
     expect(isExternal(aChatMember({ email: "guest@fabrikam.example", displayName: "Fabrikam Guest", tenantId: HOME_TENANT }), HOME_TENANT)).toBe(false);
   });
 
@@ -35,22 +35,22 @@ describe("external members, by tenantId only (T-2)", () => {
 });
 
 describe("the chat picker's list (T-2)", () => {
-  const quiddity = aChat({ topic: "Quiddity Delivery Team (Cooptimize)", lastUpdated: "2026-10-01T10:00:00Z", lastRead: "2026-11-02T09:00:00Z" });
+  const fabrikam = aChat({ topic: "Fabrikam Delivery Team (Cooptimize)", lastUpdated: "2026-10-01T10:00:00Z", lastRead: "2026-11-02T09:00:00Z" });
   const northwind = aChat({ topic: "Northwind Delivery Team (Cooptimize)", lastUpdated: "2026-10-30T10:00:00Z" });
   const untitled = aChat({ topic: null, members: [aChatMember({ displayName: "Ana Lopez" }), aChatMember({ displayName: "Ben Ito", external: true })], lastUpdated: "2026-09-01T00:00:00Z" });
 
   it.each([
-    ["no search: all, most recently active first", "", [quiddity, northwind, untitled]],
+    ["no search: all, most recently active first", "", [fabrikam, northwind, untitled]],
     ["a word of the topic, any case", "NORTHWIND", [northwind]],
-    ["every word must match", "delivery quiddity", [quiddity]],
+    ["every word must match", "delivery fabrikam", [fabrikam]],
     ["a member's name finds an untitled chat", "ben", [untitled]],
     ["nothing matches", "contoso", []],
   ] as const)("%s", (_why, q, want) => {
-    expect(filterChats([untitled, northwind, quiddity], q).map((c) => c.id)).toEqual(want.map((c) => c.id));
+    expect(filterChats([untitled, northwind, fabrikam], q).map((c) => c.id)).toEqual(want.map((c) => c.id));
   });
 
   it("leaves out a chat another client already has", () => {
-    expect(filterChats([quiddity, northwind], "", new Set([quiddity.id])).map((c) => c.id)).toEqual([northwind.id]);
+    expect(filterChats([fabrikam, northwind], "", new Set([fabrikam.id])).map((c) => c.id)).toEqual([northwind.id]);
   });
 
   it("names an untitled chat by its members", () => {
