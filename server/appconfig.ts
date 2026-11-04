@@ -20,6 +20,11 @@ export type AppSettings = {
   database: DatabaseSettings;
   /** The email domains invites may go to (lowercase). Empty: each person's own work email domain. */
   inviteDomains: string[];
+  /**
+   * Who may register client chats (D522): Entra object ids. Read only by `isAdmin()` (actions/admin.ts), which the
+   * next step points at the "FocusTime Admins" Entra group instead. Empty: nobody.
+   */
+  admins: string[];
   /** F1: where ⋯ › Send feedback creates stories (a child of `parentId`), and whether this FocusTime sends (live) or only previews. Null: not set. */
   feedback: FeedbackSettings | null;
   /**
@@ -65,6 +70,7 @@ export const APP_ENV = {
   googleClientId: "FOCUSTIME_GOOGLE_CLIENT_ID",
   demo: "FOCUSTIME_DEMO",
   inviteDomains: "FOCUSTIME_INVITE_DOMAINS",
+  admins: "FOCUSTIME_ADMINS",
   dbDriver: "FOCUSTIME_DB_DRIVER",
   dbServer: "FOCUSTIME_DB_SERVER",
   dbPort: "FOCUSTIME_DB_PORT",
@@ -139,6 +145,11 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
   const inviteDomains = [...new Set(String(domainsRaw).split(",").map((d) => d.trim().toLowerCase()).filter(Boolean))];
   if (inviteDomains.some((d) => !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(d))) errors.push("invite_domains must be domain names like example.com");
 
+  // admins (or FOCUSTIME_ADMINS, comma separated): Entra object ids of the people who register client chats.
+  const adminsRaw = env[APP_ENV.admins] ?? (Array.isArray(raw.admins) ? raw.admins.join(",") : typeof raw.admins === "string" ? raw.admins : "");
+  const admins = [...new Set(String(adminsRaw).split(",").map((x) => x.trim().toLowerCase()).filter(Boolean))];
+  if (admins.some((x) => !GUID.test(x))) errors.push("admins must be Entra object ids (GUIDs)");
+
   // [feedback] (F1): org, project, parent_id and live. No org: not set (the dialog says it isn't set up).
   const f = sec("feedback");
   const fbOrg = val(APP_ENV.feedbackOrg, f.org);
@@ -165,6 +176,7 @@ export function readAppSettings(env: Record<string, string | undefined>, text: s
       demo,
       database,
       inviteDomains,
+      admins,
       feedback,
       ai,
     },

@@ -163,6 +163,7 @@ export type DeliveryChatView = {
   /** Shared polling: the last poll, the last fetch, "Polling via <name>" or "Needs reconnecting". */
   poll: import("./asks.ts").RequestChatStatus;
 };
-export type ChatsData = { available: boolean; reason: ChatAccess | null; homeTenant: string | null; chats: DeliveryChatView[] };
+/** `admin`: this person may add, relabel and remove chats (D522); everyone else sees the registered chats read-only. */
+export type ChatsData = { available: boolean; reason: ChatAccess | null; homeTenant: string | null; chats: DeliveryChatView[]; admin: boolean };
 export type ChatPickerData = { available: boolean; reason: ChatAccess | null; homeTenant: string | null; chats: ChatSummary[]; taken: Record<string, string> };
 

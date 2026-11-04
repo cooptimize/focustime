@@ -20,7 +20,7 @@ const ANA = "00000000-0000-4000-8000-0000000000a1";
 const BEN = "00000000-0000-4000-8000-0000000000b2";
 const ana = () => aChatMember({ userId: ANA, displayName: "Ana" });
 
-async function setup(chats: Partial<ChatsClient> = {}, o: { messages?: "granted" | "needs_consent" } = {}) {
+async function setup(chats: Partial<ChatsClient> = {}, o: { messages?: "granted" | "needs_consent"; admin?: boolean } = {}) {
   const db = sqliteDb().conn;
   await addUsers(db, ANA, BEN);
   const teams = createTeamsStore(db, () => now().toInstant());
@@ -30,6 +30,7 @@ async function setup(chats: Partial<ChatsClient> = {}, o: { messages?: "granted"
   const ctx: ChatContext = {
     teams,
     me: async () => ANA,
+    isAdmin: async () => o.admin ?? true,
     account: { chats: client, probe: async (kind: string) => ({ kind, state: o.messages ?? "granted", granted: [] }) } as unknown as MicrosoftAccount,
     homeTenant: async () => HOME_TENANT,
     clientKeys: async () => new Set(["northwind", "harbor"]),
@@ -68,6 +69,23 @@ describe("client chat actions (T-2, shared polling)", () => {
       expect(r.error).toContain(error);
     }
     expect(await teams.chats()).toEqual([]);
+  });
+
+  it("only an admin adds, relabels or removes chats (D522); anyone else sees them read-only", async () => {
+    const { ctx, teams } = await setup({}, { admin: false });
+    await teams.addChat({ chatId: "19:northwind@thread.v2", clientKey: "northwind", kind: "customer", displayName: "Northwind chat", webUrl: null, members: [ana()], by: BEN });
+    for (const [action, input] of [
+      ["chats.list", {}],
+      ["chats.add", { clientKey: "harbor", chatId: "19:other@thread.v2" }],
+      ["chats.kind", { chatId: "19:northwind@thread.v2", kind: "delivery" }],
+      ["chats.remove", { chatId: "19:northwind@thread.v2" }],
+    ] as const) {
+      const r = await chatAction(ctx, action, input);
+      expect(r.ok ? null : [r.status, r.error]).toEqual([403, "Only a FocusTime admin adds or changes client chats"]);
+    }
+    const d = data(await chatAction(ctx, "chats.registered", {}));
+    expect([d.admin, d.chats.map((c) => [c.chatId, c.kind])]).toEqual([false, [["19:northwind@thread.v2", "customer"]]]);
+    expect((await teams.changes()).map((c) => c.change)).toEqual(["added"]);
   });
 
   it("a chat already on another client is refused", async () => {

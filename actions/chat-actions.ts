@@ -28,6 +28,8 @@ export type ChatContext = {
   teams?: TeamsStore | undefined;
   /** The person's Entra object id (from their sign-in), or null. */
   me: () => Promise<string | null>;
+  /** D522: whether they may add, relabel and remove chats (actions/admin.ts). Absent: nobody may. */
+  isAdmin?: () => Promise<boolean>;
   account: MicrosoftAccount | null;
   /** Cooptimize's tenant (the app's Entra tenant): members in any other are external. */
   homeTenant: () => Promise<string | null>;
@@ -122,7 +124,7 @@ async function registered(ctx: ChatContext, teams: TeamsStore, refresh: false | 
     reason = r.reason;
     chats = await mine(ctx, teams);
   }
-  return { available: reason === null, reason, homeTenant: home, chats: chats.map((c) => view(c, names(c.clientKey), home, errors.get(c.chatId) ?? null)) };
+  return { available: reason === null, reason, homeTenant: home, chats: chats.map((c) => view(c, names(c.clientKey), home, errors.get(c.chatId) ?? null)), admin: (await ctx.isAdmin?.()) ?? false };
 }
 
 const only = (input: unknown, keys: readonly string[]): Record<string, unknown> | null => {
@@ -142,6 +144,9 @@ export async function chatAction(ctx: ChatContext, action: ChatAction, input: un
   }
   const teams = ctx.teams;
   if (!teams) return bad("Client chats aren't available here", 503);
+  // D522: registering is an admin's (one check, moving to the admin console next); reading is decided per chat.
+  const ADMIN_ONLY: readonly string[] = ["chats.list", "chats.add", "chats.kind", "chats.remove"];
+  if (ADMIN_ONLY.includes(action) && !((await ctx.isAdmin?.()) ?? false)) return bad("Only a FocusTime admin adds or changes client chats", 403, "admin");
   try {
     switch (action) {
       case "chats.registered": {

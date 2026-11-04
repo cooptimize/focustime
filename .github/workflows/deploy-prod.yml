@@ -113,6 +113,7 @@ jobs:
           FT_IMAGE_TAG: ${{ env.SHA }}
           FT_IMAGE_DIGEST: ${{ env.DIGEST }}
           FT_APP_READY: "true"
+          FT_ADMINS: ${{ vars.FT_ADMINS }}
         run: |
           trap 'rm -f whatif.json' EXIT
           az bicep install
@@ -148,6 +149,7 @@ jobs:
           FT_IMAGE_TAG: ${{ env.SHA }}
           FT_IMAGE_DIGEST: ${{ env.DIGEST }}
           FT_APP_READY: "true"
+          FT_ADMINS: ${{ vars.FT_ADMINS }}
         run: |
           az bicep install
           az deployment group what-if -g "$RG" -n ft-prod --parameters infra/prod.bicepparam --exclude-change-types NoChange Ignore

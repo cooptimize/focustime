@@ -46,6 +46,8 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     now: opts.now,
     plan,
     requests: { teams, refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
+    // D522: the demo's person is an admin, so the demo shows adding client chats.
+    admins: [DEMO_PERSON.oid],
     demo: opts.demo,
     account: () => demoAzure.account,
     azure: demoAzure.azure,

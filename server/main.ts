@@ -574,6 +574,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     now: () => instantNow().toString(),
     plan,
     requests: requestsPort,
+    admins: app.admins,
     links: host.links,
     media,
     // A2: no `secrets`: the app's client secrets (Dataverse, Google, Entra) are set up outside FocusTime

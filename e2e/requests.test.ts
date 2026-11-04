@@ -103,6 +103,7 @@ describe.skipIf(!CHROMIUM)("Requests", () => {
       log: () => {},
     };
     ctx.requests = { teams, refresh: (chatIds) => pollCycle(deps, { force: true, chatIds }) };
+    ctx.admins = [ME]; // D522: I register the chat
     await ctx.plan!.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME, name: "Sam Tester", username: "me@contoso.example", email: "me@contoso.example", signedInAt: "2026-11-02T14:00:00Z", systemUserId: null, systemUserEmail: null });
     await ctx.plan!.setDevopsIdentity({ clientKey: "Adatum", org: "contoso", id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example", expires: null });
     const app = await lb.start(ctx);
@@ -127,6 +128,18 @@ describe.skipIf(!CHROMIUM)("Requests", () => {
       await card.getByText(/^Added by Sam Tester\. Not read yet/).waitFor();
       await expect(card.getByRole("switch").count()).resolves.toBe(0);
       await shotBoth(page, "requests-settings", card);
+
+      // Not an admin (D522): the same chats, read-only.
+      ctx.admins = [];
+      await page.keyboard.press("Escape");
+      await openSettings(page);
+      await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
+      await card.getByText(/^Added by Sam Tester/).waitFor();
+      await adatum.getByRole("button", { name: "Add a chat" }).waitFor({ state: "detached" });
+      await expect(card.getByRole("button", { name: /^Remove/ }).count()).resolves.toBe(0);
+      await expect(card.getByRole("combobox").count()).resolves.toBe(0);
+      await shotBoth(page, "requests-settings-readonly", adatum);
+      ctx.admins = [ME];
 
       // Messages arrive in Teams: a colleague's, then three from the client (one with a file); one is only thanks.
       graph.say(LEE, "Morning, the import ran fine overnight.", 31);

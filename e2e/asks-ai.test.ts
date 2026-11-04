@@ -131,6 +131,7 @@ describe.skipIf(!CHROMIUM)("AI sorts Requests, and Promises", () => {
       log: () => {},
     };
     ctx.requests = { teams, refresh: (chatIds) => pollCycle(deps, { force: true, chatIds }) };
+    ctx.admins = [ME]; // D522: I register the chat
     await teams.addChat({ chatId: CHAT, clientKey: "Adatum", kind: "customer", displayName: "Adatum Customer Collaboration", webUrl: "https://teams.microsoft.com/l/chat/x", members: MEMBERS.map((m) => ({ userId: m.userId, displayName: m.displayName, email: null, tenantId: m.tenantId })), by: ME });
     const app = await lb.start(ctx);
     try {

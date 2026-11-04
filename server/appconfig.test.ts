@@ -17,6 +17,22 @@ describe("app-level invite domains (fix/settings-autosave)", () => {
   });
 });
 
+describe("admins (shared polling, D522)", () => {
+  const A = "00000000-0000-4000-8000-0000000000a1";
+  const B = "00000000-0000-4000-8000-0000000000b2";
+  it("come from FOCUSTIME_ADMINS (comma separated), else admins in the app config: Entra object ids, lowercased", () => {
+    const env = readAppSettings({ FOCUSTIME_ADMINS: `${A.toUpperCase()}, ${B},${A}` }, null, URL);
+    expect(env.ok && env.settings.admins).toEqual([A, B]);
+    const file = readAppSettings({}, `admins = ["${A}"]\n`, URL);
+    expect(file.ok && file.settings.admins).toEqual([A]);
+    const none = readAppSettings({}, null, URL);
+    expect(none.ok && none.settings.admins).toEqual([]);
+  });
+  it("refuse anything that isn't an object id (no names or emails)", () => {
+    expect(readAppSettings({ FOCUSTIME_ADMINS: "someone@example.com" }, null, URL)).toMatchObject({ ok: false });
+  });
+});
+
 describe("feedback settings (F1)", () => {
   const env = { FOCUSTIME_FEEDBACK_ORG: "contoso", FOCUSTIME_FEEDBACK_PROJECT: "Contoso Internal", FOCUSTIME_FEEDBACK_PARENT_ID: "496" };
   it("come from FOCUSTIME_FEEDBACK_*, live off unless switched on", () => {

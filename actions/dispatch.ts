@@ -65,6 +65,7 @@ import { vmAction, vmKey, type VmContext } from "./vm-actions.ts";
 import { presenceAction, syncTeamsStatusWith, type PresenceContext } from "./presence-actions.ts";
 import type { AzureClient } from "../sources/azure/client.ts";
 import { userZone } from "../week/zone.ts";
+import { isAdmin } from "./admin.ts";
 import { feedbackAction, type FeedbackContext, type FeedbackService } from "./feedback-actions.ts";
 import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
@@ -82,6 +83,8 @@ export type ActionContext = {
   ai?: AiRuntime;
   /** Shared polling (D514): the shared Teams store and the poll job's Refresh. Absent: no client chats or Requests. */
   requests?: RequestsPort;
+  /** D522: the app's admins (Entra object ids, from the app config), read only through `isAdmin()`. */
+  admins?: readonly string[];
   /** AP-1: the structured logger (counts and kinds only). Absent: nothing is logged (tests, demo). */
   log?: Logger;
   /** S1 (D452): where this runs: local, dev, prod or demo (runtime config). Absent: local. */
@@ -572,6 +575,7 @@ export async function chatContext(ctx: ActionContext): Promise<ChatContext> {
     ...(ctx.plan ? { plan: ctx.plan } : {}),
     ...(ctx.requests ? { teams: ctx.requests.teams } : {}),
     me: async () => (await storedIdentity(ctx.plan))?.oid ?? null,
+    isAdmin: async () => isAdmin((await storedIdentity(ctx.plan))?.oid ?? null, ctx.admins),
     account: await accountOf(ctx),
     homeTenant: async () => (await configured(ctx))?.outlook?.tenantId ?? (await storedIdentity(ctx.plan))?.tid ?? null,
     clientKeys: async () => {

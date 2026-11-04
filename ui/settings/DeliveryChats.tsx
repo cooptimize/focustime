@@ -128,6 +128,9 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
   const addRef = useRef<HTMLButtonElement>(null);
   if (!ctx) return null;
   const mine = (ctx.data?.chats ?? []).filter((c) => c.clientKey === clientKey);
+  // D522: adding, relabelling and removing are an admin's; everyone else sees the chats read-only. Until the list
+  // arrives (it reads Teams and can take seconds) Add stays offered; the server refuses a non-admin either way.
+  const admin = ctx.data?.admin ?? true;
   const focusAdd = () => requestAnimationFrame(() => addRef.current?.focus());
   const act = async (action: string, input: unknown, done: string) => {
     setSaved(null);
@@ -147,14 +150,18 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
         )}
         <span className="set-mark" role="status" aria-live="polite">{saved}</span>
       </div>
-      {mine.length === 0 && !picking && <p className="muted dchat-none">No chats yet.</p>}
+      {mine.length === 0 && !picking && <p className="muted dchat-none">{admin ? "No chats yet." : "No chats yet. A FocusTime admin adds them."}</p>}
       {mine.map((c) => (
         <ChatCard
           key={c.chatId}
           c={c}
           busy={ctx.loading}
-          onKind={(kind) => void act("chats.kind", { chatId: c.chatId, kind }, `Marked as ${KIND_NAME[kind]}`)}
-          onRemove={() => void act("chats.remove", { chatId: c.chatId }, `Removed ${c.displayName}`).then(focusAdd)}
+          {...(admin
+            ? {
+                onKind: (kind: ChatKind) => void act("chats.kind", { chatId: c.chatId, kind }, `Marked as ${KIND_NAME[kind]}`),
+                onRemove: () => void act("chats.remove", { chatId: c.chatId }, `Removed ${c.displayName}`).then(focusAdd),
+              }
+            : {})}
         />
       ))}
       {mine.length > 0 && (
@@ -174,7 +181,7 @@ export function DeliveryChatField({ clientKey, clientName }: { clientKey: string
           Delete stored messages
         </button>
       )}
-      {picking ? (
+      {!admin ? null : picking ? (
         <ChatPicker
           clientName={clientName}
           registered={(ctx.data?.chats ?? []).map((c) => c.chatId)}
@@ -211,18 +218,23 @@ export function pollText(p: RequestChatStatus, registeredBy: string | null): str
   return `${by}${p.fetchedAt ? `Last fetched ${timeOf(p.fetchedAt)}.` : "Not read yet: every 5 minutes in working hours."}${via}`;
 }
 
-function ChatCard({ c, busy, onKind, onRemove }: { c: DeliveryChatView; busy: boolean; onKind: (k: ChatKind) => void; onRemove: () => void }) {
+/** One registered chat. Without onKind and onRemove (not an admin), the kind is a plain label and there's no Remove. */
+function ChatCard({ c, busy, onKind, onRemove }: { c: DeliveryChatView; busy: boolean; onKind?: (k: ChatKind) => void; onRemove?: () => void }) {
   return (
     <div className="dchat-card" role="region" aria-label={c.displayName}>
       <div className="dchat-title">
         <strong>{c.displayName}</strong>
-        <select className="dchat-kind" aria-label={`Kind of chat for ${c.displayName}`} value={c.kind} disabled={busy} onChange={(e) => onKind(e.target.value as ChatKind)} title={KIND_HINT[c.kind]}>
-          {CHAT_KINDS.map((k) => (
-            <option key={k} value={k}>{KIND_NAME[k]}</option>
-          ))}
-        </select>
+        {onKind ? (
+          <select className="dchat-kind" aria-label={`Kind of chat for ${c.displayName}`} value={c.kind} disabled={busy} onChange={(e) => onKind(e.target.value as ChatKind)} title={KIND_HINT[c.kind]}>
+            {CHAT_KINDS.map((k) => (
+              <option key={k} value={k}>{KIND_NAME[k]}</option>
+            ))}
+          </select>
+        ) : (
+          <span className="muted" title={KIND_HINT[c.kind]}>{KIND_NAME[c.kind]}</span>
+        )}
         <a className="mini link-btn" href={c.link} target="_blank" rel="noopener noreferrer">Open in Teams</a>
-        <button type="button" className="mini quiet" disabled={busy} onClick={onRemove} aria-label={`Remove ${c.displayName}`}>Remove</button>
+        {onRemove && <button type="button" className="mini quiet" disabled={busy} onClick={onRemove} aria-label={`Remove ${c.displayName}`}>Remove</button>}
       </div>
       {c.warning && <p className="dchat-warn" role="note">{c.warning}</p>}
       {c.members ? (

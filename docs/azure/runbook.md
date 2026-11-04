@@ -388,7 +388,10 @@ Nothing to run for Chat.Read. Don't add it to GRAPH_SCOPES: everyone would then 
 
 ### Registering a client chat
 
-Any Cooptimizer who follows the client and is a member of the chat, once for everyone (no admin step):
+A FocusTime admin who follows the client and is a member of the chat, once for everyone (D522). Everyone else sees the registered chats read-only. Reading is decided per chat, centrally; there is no per-person switch.
+
+**Who is an admin (until the admin console):** the Entra object ids in the GitHub variable `FT_ADMINS` (comma separated, ids only), which the deploy workflows pass to Bicep as `admins` and the app reads as `FOCUSTIME_ADMINS`. To set it: find the person's object id (`az ad user show --id <their UPN> --query id -o tsv`), then `gh variable set FT_ADMINS --body "<id>[,<id>...]"`, then deploy dev (and prod with its approval). Empty: nobody can add chats; registered chats keep being read. In the developer loop, `admins = ["<id>"]` in `~/.config/focustime/app.toml`. The next step replaces this with the "FocusTime Admins" Entra group inside `isAdmin()` (`actions/admin.ts`), with no migration.
+
 
 1. Settings › Clients › the client › Delivery chats › **Add a chat**. The first time, Microsoft asks to allow FocusTime to read chat messages; accept, and FocusTime comes back and finishes adding it. Reading starts from that moment (no history).
 2. Optional: Settings › Clients › Requests holds the phrase lists. The rules run under the settings of whoever's token read the message.

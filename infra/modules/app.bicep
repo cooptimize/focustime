@@ -31,6 +31,7 @@ param appReady bool
 param imageTag string
 param imageDigest string = ''
 param inviteDomains string = ''
+param admins string = ''
 param feedbackOrg string = ''
 param feedbackProject string = ''
 param feedbackParentId string = ''
@@ -98,6 +99,8 @@ var settings = [
   { name: 'FOCUSTIME_DATA_KEY_NAME', value: 'ft-data-key' }
   { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: insights.properties.ConnectionString }
   { name: 'FOCUSTIME_INVITE_DOMAINS', value: inviteDomains }
+  // D522: who registers client chats (Entra object ids; the next step makes it the FocusTime Admins group).
+  { name: 'FOCUSTIME_ADMINS', value: admins }
   // F1: Send feedback (docs/azure/runbook.md, "Send feedback").
   { name: 'FOCUSTIME_FEEDBACK_ORG', value: feedbackOrg }
   { name: 'FOCUSTIME_FEEDBACK_PROJECT', value: feedbackProject }
