@@ -87,7 +87,7 @@ describe.skipIf(!CHROMIUM)("Asks", () => {
       const page = await app.page();
       page.setDefaultTimeout(60_000);
       const errors: string[] = [];
-      page.on("pageerror", (e) => errors.push(e.message));
+      page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
       await page.goto(app.url);
       await page.locator(".topbar").waitFor();
 

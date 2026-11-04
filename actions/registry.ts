@@ -26,7 +26,8 @@ export type ActionTarget =
   | "event" // one calendar event (step 13)
   | "devops" // a DevOps change (step 14)
   | "vm" // my Azure VM (step 15.4)
-  | "ask"; // one ask in Inbox › Asks (AP-1)
+  | "ask" // one ask in Inbox › Asks (AP-1)
+  | "promise"; // one promise in Inbox › Promises (AP-2)
 
 export type ActionSpec = {
   readonly name: string;
@@ -147,6 +148,13 @@ export const ACTIONS = [
   { name: "asks.reopen", title: "Undo an ask's resolution", group: "Asks", target: "ask", summary: "Open a linked, handled or dismissed ask again" },
   { name: "asks.search", title: "Find an item for an ask", group: "Asks", target: "ask", summary: "Search the client's open DevOps items to link an ask to" },
   { name: "asks.purge", title: "Delete a client's stored chat messages", group: "Settings", target: "none", summary: "Deletes every message and ask FocusTime stored for one client (DevOps items made from them stay)" },
+  { name: "asks.sort_again", title: "Sort an ask again", group: "Asks", target: "ask", summary: "Ask AI to sort one ask again (kind, urgency, a draft item and a likely existing one), when it wasn't sorted" },
+  { name: "asks.show", title: "Show a hidden ask", group: "Asks", target: "ask", summary: "Show an ask the AI said needs no action on the Asks tab anyway (or hide it again)" },
+  { name: "promises.list", title: "Promises", group: "Asks", target: "none", summary: "Inbox › Promises: things you said you'd do in client chats you read for asks" },
+  { name: "promises.resolve", title: "Mark a promise done or dismiss it", group: "Asks", target: "promise", summary: "Done or Dismiss a promise, with Undo" },
+  { name: "promises.reopen", title: "Undo a promise's Done or Dismiss", group: "Asks", target: "promise", summary: "Open a done or dismissed promise again" },
+  { name: "promises.followup", title: "Make a promise a follow-up", group: "Asks", target: "promise", summary: "A follow-up from a promise: who, what, Teams and the due date filled in; the promise closes when it's done" },
+  { name: "promises.link", title: "Link a promise to a DevOps item", group: "Asks", target: "promise", summary: "The promise closes when the item is done in DevOps" },
   { name: "ai.status", title: "AI", group: "Settings", target: "none", summary: "Settings › AI: Use AI, this month's spend against your cap, and your last 20 AI requests (never their text)" },
   { name: "ai.test", title: "Test AI", group: "Settings", target: "none", summary: "Sends one fixed harmless request (no client) and says whether it worked, how long it took and what it cost" },
   { name: "permissions.status", title: "Microsoft permissions", group: "Settings", target: "none", summary: "Every permission FocusTime asks Microsoft for, and whether it's allowed (Settings > Connections)" },

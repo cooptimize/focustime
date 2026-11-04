@@ -98,7 +98,7 @@ describe("reading the chats (AP-1)", () => {
   it("nothing is read until Read for asks is switched on, and the first read starts from then (no backfill)", async () => {
     const s = await setup();
     s.teams.say({ chatId: FAB.chatId, authorId: s.client.userId, createdAt: "2026-11-04T14:00:00Z", text: "Old question?" });
-    expect(await pollAsks(s.ctx, { force: false })).toEqual({ read: 0, added: 0, failed: 0 });
+    expect(await pollAsks(s.ctx, { force: false })).toMatchObject({ read: 0, added: 0, failed: 0 });
     expect(s.teams.calls).toEqual([]);
     await switchOn(s);
     s.later(1);
@@ -112,9 +112,9 @@ describe("reading the chats (AP-1)", () => {
     await switchOn(s);
     s.teams.say({ chatId: FAB.chatId, clientKey: "fabrikam", authorId: s.client.userId, createdAt: "2026-11-04T15:01:00Z", text: SECRET });
     s.later(5);
-    expect(await pollAsks(s.ctx, { force: false })).toEqual({ read: 1, added: 1, failed: 0 });
+    expect(await pollAsks(s.ctx, { force: false })).toMatchObject({ read: 1, added: 1, failed: 0 });
     s.later(5);
-    expect(await pollAsks(s.ctx, { force: false })).toEqual({ read: 1, added: 0, failed: 0 });
+    expect(await pollAsks(s.ctx, { force: false })).toMatchObject({ read: 1, added: 0, failed: 0 });
     expect(s.teams.calls.map((c) => c.since)).toEqual([IN_HOURS, "2026-11-04T15:01:00Z"]);
     expect((await s.plan.asks()).map((a) => a.rule)).toEqual(["question"]);
   });
@@ -139,7 +139,7 @@ describe("reading the chats (AP-1)", () => {
     await switchOn(s);
     s.at(when);
     s.later(10);
-    expect(await pollAsks(s.ctx, { force: false })).toEqual({ read: 0, added: 0, failed: 0 });
+    expect(await pollAsks(s.ctx, { force: false })).toMatchObject({ read: 0, added: 0, failed: 0 });
     expect(s.teams.calls).toEqual([]);
   });
 
@@ -162,7 +162,7 @@ describe("reading the chats (AP-1)", () => {
     s.teams.fail(FAB.chatId, new HttpError(429, 120));
     s.teams.say({ chatId: NW.chatId, clientKey: "northwind", authorId: s.client.userId, createdAt: "2026-11-04T15:02:00Z", text: "Please add the new field" });
     s.later(5);
-    expect(await pollAsks(s.ctx, { force: false })).toEqual({ read: 1, added: 1, failed: 1 });
+    expect(await pollAsks(s.ctx, { force: false })).toMatchObject({ read: 1, added: 1, failed: 1 });
     const fab = (await s.plan.deliveryChats()).find((c) => c.chatId === FAB.chatId)!.asks!;
     expect(fab).toMatchObject({ retryAt: "2026-11-04T15:07:00Z", failures: 1 });
     expect(fab.status).toMatch(/slow down\. Reading again at 10:07/);

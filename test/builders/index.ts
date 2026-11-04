@@ -168,3 +168,13 @@ export function anOpenAiResponse(value: unknown, usage: { input?: number; cached
     ...o,
   };
 }
+
+/** AP-2: an "asks.classify" answer: a bug needing attention this week, no likely item, by default. */
+export function aClassifyAnswer(o: Partial<import("../../plan/asks-ai.ts").ClassifyAnswer> = {}): import("../../plan/asks-ai.ts").ClassifyAnswer {
+  return { kind: "bug", urgency: "this_week", item_type: "bug", title: "Totals report shows last month", description: "The client says the totals report still shows last month's numbers.", likely_existing_item: null, reason: "It describes something that is wrong in a report.", ...o };
+}
+
+/** AP-2: a "promises.extract" answer: a promise with no date, by default. */
+export function aPromiseAnswer(o: Partial<import("../../plan/asks-ai.ts").PromiseAnswer> = {}): import("../../plan/asks-ai.ts").PromiseAnswer {
+  return { is_promise: true, what: "Send the corrected totals", due_hint: null, to_whom: null, answers_message_id: null, reason: "It commits to sending something.", ...o };
+}

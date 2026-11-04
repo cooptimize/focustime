@@ -513,6 +513,19 @@ describe("AP-1: a DevOps item from an ask", () => {
     expect(again.nothing).toBe(`This ask is already in DevOps as #${bug.id}`);
   });
 
+  it("AP-2: a sorted ask's draft gives the title and description; the message still goes with it", async () => {
+    const s = setup();
+    await s.enable();
+    const change = await withAsk(s);
+    await s.plan.setAskSort(CHAT, "1730000000001", "sorted", { kind: "bug", urgency: "this_week", itemType: "bug", title: "Export fails on every report", description: "Export has failed since Monday.", likely: null, reason: "Something is broken." });
+    const p = await s.preview(change);
+    expect(p.item).toBe("New Bug: Export fails on every report");
+    const f = Object.fromEntries(p.fields.map((x) => [x.label, x.after]));
+    expect(f["Repro steps"]).toContain("Export has failed since Monday.");
+    expect(f["Repro steps"]).toContain("every report since Monday");
+    expect(s.dv.writes()).toHaveLength(0);
+  });
+
   it.each([["story", "User Story", "Description"], ["feature", "Feature", "Description"]])("a %s uses the process's %s type", async (level, type, field) => {
     const s = setup();
     await s.enable();

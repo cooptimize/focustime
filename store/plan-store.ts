@@ -2,6 +2,7 @@
 // Holds only FocusTime's own plan (day plans, picks, draft stories) and a few one-time markers.
 // Nothing here is ever written to DevOps, Outlook, Google or Dataverse.
 import { ASK_STATUSES, type Ask, type AskRule, type AskStatus, type StoredMessage } from "../plan/asks.ts";
+import { PROMISE_STATUSES, type AskSort, type NotSorted, type PromiseDraft, type PromiseStatus, type StoredPromise } from "../plan/asks-ai.ts";
 import { CHAT_ID, CHAT_KINDS, type ChatKind, type ChatMember, type DeliveryChat } from "../plan/chats.ts";
 import { USER_SCHEMA_VERSION } from "./user-data.ts";
 import type { StoreFiles } from "../host/types.ts";
@@ -1482,6 +1483,39 @@ const toAsk = (r: Row): Ask => ({
   writeId: (r.write_id as number | null) ?? null,
   resolvedAt: instantText(r.resolved_at),
   createdAt: instantText(r.created_at)!,
+  sortStatus: (r.ai_status as Ask["sortStatus"] | null) ?? null,
+  sort:
+    r.ai_status === "sorted" && r.ai_kind
+      ? {
+          kind: r.ai_kind as AskSort["kind"],
+          urgency: r.ai_urgency as AskSort["urgency"],
+          itemType: (r.ai_item_type as AskSort["itemType"] | null) ?? null,
+          title: (r.ai_title as string | null) ?? "",
+          description: (r.ai_description as string | null) ?? "",
+          likely: r.ai_item_id !== null && r.ai_item_id !== undefined ? { id: Number(r.ai_item_id), confidence: Number(r.ai_item_confidence ?? 0) } : null,
+          reason: (r.ai_reason as string | null) ?? "",
+        }
+      : null,
+  shown: !!r.ai_shown,
+});
+const toPromise = (r: Row): StoredPromise => ({
+  chatId: r.chat_id as string,
+  messageId: r.message_id as string,
+  clientKey: r.client_key as string,
+  phrase: (r.phrase as string | null) ?? null,
+  what: r.what as string,
+  due: (r.due as string | null) ?? null,
+  toWhom: (r.to_whom as string | null) ?? null,
+  answers: (r.answers_message_id as string | null) ?? null,
+  aiStatus: (r.ai_status as StoredPromise["aiStatus"] | null) ?? null,
+  reason: (r.ai_reason as string | null) ?? null,
+  status: r.status as PromiseStatus,
+  followUpId: (r.follow_up_id as number | null) ?? null,
+  itemId: (r.item_id as number | null) ?? null,
+  itemUrl: (r.item_url as string | null) ?? null,
+  itemTitle: (r.item_title as string | null) ?? null,
+  resolvedAt: instantText(r.resolved_at),
+  createdAt: instantText(r.created_at)!,
 });
 const toMessage = (r: Row): StoredMessage => ({
   chatId: r.chat_id as string,
@@ -2697,6 +2731,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       // AP-1: its stored messages and asks go with it (the DevOps items made from them stay in DevOps).
       return tx(async () => {
         await db.run("DELETE FROM asks WHERE chat_id = ?", chatId);
+        await db.run("DELETE FROM promises WHERE chat_id = ?", chatId);
         await db.run("DELETE FROM chat_messages WHERE chat_id = ?", chatId);
         await db.run("DELETE FROM delivery_chats WHERE chat_id = ?", chatId);
       });
@@ -2836,6 +2871,67 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       });
     },
     /**
+     * AP-2: the AI's sort of an ask (what the card shows), or why it wasn't sorted (sort null). Sorting again replaces
+     * it; the resolution and "Show it anyway" are left alone.
+     */
+    async setAskSort(chatId: string, messageId: string, status: "sorted" | NotSorted, sort: AskSort | null): Promise<void> {
+      if (status === "sorted" && !sort) throw new PlanError("A sorted ask needs its sort");
+      await tx(async () => {
+        const at = opts.now().toInstant().toString({ smallestUnit: "second" });
+        const v = status === "sorted" ? sort : null;
+        await db.run("UPDATE asks SET ai_status = ?, ai_at = ?, ai_kind = ?, ai_urgency = ?, ai_item_type = ?, ai_title = ?, ai_description = ?, ai_item_id = ?, ai_item_confidence = ?, ai_reason = ?, updated_at = ? WHERE chat_id = ? AND message_id = ?",
+          status.slice(0, 20), at, v?.kind ?? null, v?.urgency ?? null, v?.itemType ?? null, v?.title.slice(0, 200) ?? null, v?.description.slice(0, 2000) ?? null, v?.likely?.id ?? null, v?.likely?.confidence ?? null, v?.reason.slice(0, 400) ?? null, at, chatId, messageId);
+      });
+    },
+    /** AP-2: "Show it anyway" for an ask the AI said needs no action (or back to hidden). */
+    async setAskShown(chatId: string, messageId: string, shown: boolean): Promise<void> {
+      await tx(async () => {
+        await db.run("UPDATE asks SET ai_shown = ?, updated_at = ? WHERE chat_id = ? AND message_id = ?", shown ? 1 : 0, opts.now().toInstant().toString({ smallestUnit: "second" }), chatId, messageId);
+      });
+    },
+    /** AP-2: one of my messages the promise rules matched becomes an open promise (once). */
+    async addPromise(p: { chatId: string; messageId: string; clientKey: string; phrase: string | null; at: string; draft: PromiseDraft; aiStatus: "sorted" | NotSorted | null }): Promise<boolean> {
+      return tx(async () => {
+        if (await db.get("SELECT 1 AS x FROM promises WHERE chat_id = ? AND message_id = ?", p.chatId, p.messageId)) return false;
+        const now = opts.now().toInstant().toString({ smallestUnit: "second" });
+        await db.run("INSERT INTO promises (chat_id, message_id, client_key, phrase, what, due, to_whom, answers_message_id, ai_status, ai_reason, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)",
+          p.chatId, p.messageId, p.clientKey, p.phrase?.slice(0, 100) ?? null, p.draft.what.slice(0, 200), p.draft.due, p.draft.toWhom?.slice(0, 200) ?? null, p.draft.answers?.slice(0, 64) ?? null, p.aiStatus, p.draft.reason?.slice(0, 400) ?? null, Temporal.Instant.from(p.at).toString(), now);
+        return true;
+      });
+    },
+    /** AP-2: every promise, newest message first. */
+    async promises(): Promise<StoredPromise[]> {
+      return ((await db.all("SELECT * FROM promises ORDER BY created_at DESC")) as Row[]).map(toPromise);
+    },
+    async promise(chatId: string, messageId: string): Promise<StoredPromise | null> {
+      const r = (await db.get("SELECT * FROM promises WHERE chat_id = ? AND message_id = ?", chatId, messageId)) as Row | undefined;
+      return r ? toPromise(r) : null;
+    },
+    /**
+     * AP-2: how a promise ends (a follow-up, a linked item, done, dismissed) or back to open (Undo). A follow-up or a
+     * link keeps it open on the tab until what it points at closes (then closePromise).
+     */
+    async resolvePromise(chatId: string, messageId: string, r: { status: PromiseStatus; followUpId?: number | null; itemId?: number | null; itemUrl?: string | null; itemTitle?: string | null }): Promise<StoredPromise> {
+      if (!PROMISE_STATUSES.includes(r.status)) throw new PlanError("Not a resolution");
+      return tx(async () => {
+        const had = await this.promise(chatId, messageId);
+        if (!had) throw new PlanError("No such promise");
+        if (r.status !== "open" && had.status !== "open") throw new PlanError("This promise is already handled. Undo that first");
+        const now = opts.now().toInstant().toString({ smallestUnit: "second" });
+        const closes = r.status === "done" || r.status === "dismissed";
+        await db.run("UPDATE promises SET status = ?, follow_up_id = ?, item_id = ?, item_url = ?, item_title = ?, resolved_at = ?, updated_at = ? WHERE chat_id = ? AND message_id = ?",
+          r.status, r.followUpId ?? null, r.itemId ?? null, r.itemUrl?.slice(0, 2000) ?? null, r.itemTitle?.slice(0, 400) ?? null, closes ? now : null, now, chatId, messageId);
+        return (await this.promise(chatId, messageId))!;
+      });
+    },
+    /** AP-2: a promise whose follow-up closed or whose item reached a done state is closed (done, or dismissed when the follow-up wasn't needed). */
+    async closePromise(chatId: string, messageId: string, as: "done" | "dismissed" = "done"): Promise<void> {
+      await tx(async () => {
+        const now = opts.now().toInstant().toString({ smallestUnit: "second" });
+        await db.run("UPDATE promises SET status = ?, resolved_at = ?, updated_at = ? WHERE chat_id = ? AND message_id = ? AND status IN ('followup', 'linked')", as, now, now, chatId, messageId);
+      });
+    },
+    /**
      * AP-1, the daily cleanup: messages older than the cutoff that didn't become asks are deleted (asks keep theirs).
      * With a client key, every stored message and ask of that client goes (the runbook's purge). How many messages went.
      */
@@ -2844,12 +2940,15 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         if (o.clientKey) {
           const n = ((await db.get("SELECT COUNT(*) AS n FROM chat_messages WHERE client_key = ?", o.clientKey)) as Row).n as number;
           await db.run("DELETE FROM asks WHERE client_key = ?", o.clientKey);
+          await db.run("DELETE FROM promises WHERE client_key = ?", o.clientKey);
           await db.run("DELETE FROM chat_messages WHERE client_key = ?", o.clientKey);
           return Number(n);
         }
         if (!o.olderThan) return 0;
         const cut = Temporal.Instant.from(o.olderThan).toString();
-        const old = (await db.all("SELECT m.chat_id, m.message_id FROM chat_messages m LEFT JOIN asks a ON a.chat_id = m.chat_id AND a.message_id = m.message_id WHERE m.created_at < ? AND a.message_id IS NULL", cut)) as Row[];
+        // AP-2: an ask the AI said needs no action, still hidden and open, goes under the same 14-day rule.
+        await db.run("DELETE FROM asks WHERE ai_kind = 'none' AND ai_status = 'sorted' AND ai_shown = 0 AND status = 'open' AND created_at < ?", cut);
+        const old = (await db.all("SELECT m.chat_id, m.message_id FROM chat_messages m LEFT JOIN asks a ON a.chat_id = m.chat_id AND a.message_id = m.message_id LEFT JOIN promises p ON p.chat_id = m.chat_id AND p.message_id = m.message_id WHERE m.created_at < ? AND a.message_id IS NULL AND p.message_id IS NULL", cut)) as Row[];
         for (const r of old) await db.run("DELETE FROM chat_messages WHERE chat_id = ? AND message_id = ?", r.chat_id as string, r.message_id as string);
         return old.length;
       });

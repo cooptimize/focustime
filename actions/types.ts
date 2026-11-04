@@ -80,11 +80,19 @@ export type WeekLoadData = {
   devopsWrite: string[];
   /** Step 14.5 (D256): write PATs and app secrets expiring within 14 days (or expired), soonest first. */
   expiring: { key: string; text: string; days: number; section: string }[];
+  /**
+   * AP-2: open asks AI sorted as needing me now (Today's attention line, with Start focus), and how many open asks are
+   * past their urgency window (Check-in's "Walked in, not resolved").
+   */
+  asks: { urgent: UrgentAsk[]; pastUrgency: number };
   ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
   /** Step 15 (D272): demo mode is on: every source is fictional sample data and the plan store is the demo one. */
   demo: boolean;
 };
+
+/** AP-2: one urgent ask on Today (the AI's title, never the message). */
+export type UrgentAsk = { chatId: string; messageId: string; clientKey: string; clientName: string; title: string; at: string };
 
 /** A value problem on one config field (Settings shows it next to the field). */
 export type FieldProblem = { field: string; message: string };

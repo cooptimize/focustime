@@ -71,7 +71,7 @@ export function createAi(d: AiDeps) {
   }
 
   async function run<T>(task: AiTaskSpec, input: string, schema: JsonSchema): Promise<AiResult<T>> {
-    if (!task.name || !/^[a-z][a-z0-9_]{0,40}$/.test(task.name) || !task.client || !task.instructions.trim() || !input.trim() || strictProblems(schema).length) return fail("bad_task");
+    if (!task.name || !/^[a-z][a-z0-9_]{0,30}(\.[a-z][a-z0-9_]{0,30})?$/.test(task.name) || !task.client || !task.instructions.trim() || !input.trim() || strictProblems(schema).length) return fail("bad_task");
     const me = await d.person();
     if (!me.use) return fail("off");
     if (task.client !== NO_CLIENT && !me.allowedClients.includes(task.client)) return fail("client_off");
@@ -96,9 +96,10 @@ export function createAi(d: AiDeps) {
       model: d.app.model,
       instructions: task.instructions,
       input,
-      schemaName: task.name,
+      // OpenAI's schema names take letters, digits, _ and - only: "asks.classify" is sent as "asks_classify".
+      schemaName: task.name.replace(/\./g, "_"),
       schema,
-      maxOutputTokens: d.app.maxOutputTokens[task.name] ?? d.app.maxOutputTokens.default,
+      maxOutputTokens: d.app.maxOutputTokens[task.name.replace(/\./g, "_")] ?? d.app.maxOutputTokens.default,
       timeoutMs: d.app.timeoutMs,
       reasoningEffort: d.app.reasoningEffort,
     };

@@ -3,6 +3,7 @@
 // phrasing or carries an attachment, and isn't only a short acknowledgement. Internal authors and my own messages
 // aren't asks here (promises are AP-2). Each ask records the rule that matched. Nothing here does I/O or logs.
 import { isExternal, type ChatMember } from "./chats.ts";
+import type { AskKind, AskSort, DraftItemType, NotSorted, PromiseStatus, Urgency } from "./asks-ai.ts";
 
 /** The per-user settings ([asks] in the settings model), with these defaults. */
 export type AskSettings = {
@@ -12,10 +13,14 @@ export type AskSettings = {
   requestPhrases: string[];
   /** Short acknowledgements: a message that is only these (and punctuation or emoji) is not an ask. */
   ackPhrases: string[];
+  /** AP-2: commitment phrasing in my own messages (a promise candidate). */
+  promisePhrases: string[];
 };
 export const DEFAULT_REQUEST_PHRASES = ["can you", "could you", "please", "add", "doesn't look right", "not working", "error", "failed", "urgent"];
 export const DEFAULT_ACK_PHRASES = ["thanks", "thank you", "sounds good", "ok", "great"];
-export const DEFAULT_ASK_SETTINGS: AskSettings = { pollMinutes: 5, requestPhrases: DEFAULT_REQUEST_PHRASES, ackPhrases: DEFAULT_ACK_PHRASES };
+/** AP-2: the default commitment phrasing (plan/asks-ai.ts matchPromise). */
+export const DEFAULT_PROMISE_PHRASES = ["i'll", "i will", "let me", "i can", "by friday", "tomorrow", "tonight", "end of day", "next week"];
+export const DEFAULT_ASK_SETTINGS: AskSettings = { pollMinutes: 5, requestPhrases: DEFAULT_REQUEST_PHRASES, ackPhrases: DEFAULT_ACK_PHRASES, promisePhrases: DEFAULT_PROMISE_PHRASES };
 
 /** Unmatched message text is kept this long (for Show context), then deleted; asks keep theirs with the resolution. */
 export const UNMATCHED_DAYS = 14;
@@ -192,6 +197,11 @@ export type Ask = {
   resolvedAt: string | null;
   /** The message's time. */
   createdAt: string;
+  /** AP-2: the AI's sort ("sorted"), or why it wasn't sorted (an error kind), or null when it wasn't tried. */
+  sortStatus: "sorted" | NotSorted | null;
+  sort: AskSort | null;
+  /** "Show it anyway": an ask the AI marked as needing no action, shown on the tab again. */
+  shown: boolean;
 };
 
 /**
@@ -216,8 +226,34 @@ export type AskView = {
   matched: string; status: AskStatus; item: { id: number; url: string | null; title: string | null } | null; note: string | null; resolvedAt: string | null;
   /** Open in Teams: the message in its chat. */
   link: string;
+  /** AP-2: the AI's sort, shown as small labels with the reason on hover, and the draft Create starts from. */
+  sort: { kind: AskKind; urgency: Urgency; reason: string; itemType: DraftItemType | null; title: string } | null;
+  /** "Looks like #1234 <title>": the likely existing item, only from confidence 0.6 (title null when DevOps isn't read). */
+  likely: { id: number; title: string | null; url: string | null } | null;
+  /** "Not sorted: <plain reason>" when AI didn't sort it (null when sorted, or never tried). */
+  notSorted: string | null;
+  /** "Promised: <what>": my promise that answers this ask. */
+  promised: string | null;
 };
 /** A chat with Read for asks on, for the Asks tab's footer and Settings > Connections: its last read and any problem. */
 export type AskChatStatus = { clientKey: string; clientName: string; chatId: string; chatName: string; polledAt: string | null; status: string | null; retryAt: string | null };
-export type AsksData = { open: number; asks: AskView[]; chats: AskChatStatus[]; writeClients: string[]; pollMinutes: number };
+export type AsksData = {
+  open: number; asks: AskView[]; chats: AskChatStatus[]; writeClients: string[]; pollMinutes: number;
+  /** AP-2: asks the AI said need no action, open and not shown: "Hidden by AI (N)". */
+  hidden: AskView[];
+  /** AP-2: open promises (for the Promises tab's count). */
+  promisesOpen: number;
+};
+/** AP-2: one promise card. */
+export type PromiseView = {
+  chatId: string; messageId: string; clientKey: string; clientName: string; chatName: string;
+  what: string; toWhom: string | null; due: string | null; at: string; text: string;
+  /** The ask it answers (its text's first line), when known. */
+  answers: { messageId: string; title: string } | null;
+  status: PromiseStatus; followUpId: number | null; item: { id: number; url: string | null; title: string | null } | null;
+  /** Why AI didn't read it ("Not read by AI: …"), or null. */
+  notSorted: string | null; reason: string | null; resolvedAt: string | null; link: string;
+};
+/** `today` is the person's date on the server's clock, for the due badges. */
+export type PromisesData = { open: number; promises: PromiseView[]; asksOpen: number; today: string };
 export type ContextMessage = { messageId: string; author: string; external: boolean; mine: boolean; at: string; text: string; hasImage: boolean; hasFile: boolean };
