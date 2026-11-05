@@ -10,6 +10,8 @@
     "dev": "node server/main.ts --dev",
     "build": "npm run typecheck && vite build",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "guards": "node scripts/guards.ts",
+    "check": "npm run typecheck && npm run guards",
     "test": "vitest run",
     "test:zones": "for z in America/New_York America/Chicago America/Denver America/Los_Angeles; do echo \"TZ=$z\"; TZ=$z vitest run --silent || exit 1; done",
     "test:watch": "vitest",

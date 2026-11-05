@@ -24,7 +24,7 @@ import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { createChatsClient } from "../sources/graph/chats.ts";
 import { anAiApp, anAiRules } from "../test/builders/index.ts";
 import { CHROMIUM, openSettings } from "./harness.ts";
-import { liveAdminOps, liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
+import { appReady, liveAdminOps, liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
 
 const HOME = "11111111-1111-4111-8111-111111111111";
@@ -173,7 +173,7 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       const errors: string[] = [];
       page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
       await page.goto(app.url);
-      await page.locator(".topbar").waitFor();
+      await appReady(page);
 
       // Admin › Clients: add both chats to Adatum (an admin, once for everyone on them who follows Adatum).
       await openSettings(page);

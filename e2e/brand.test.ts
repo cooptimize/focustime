@@ -41,6 +41,19 @@ async function slowOpen(ctx: BrowserContext, delay: number): Promise<Page> {
   return page;
 }
 
+/**
+ * HK-1: opens Close out the way NV-1 does (Today's moment card, or its address) and waits for the panel itself: the
+ * panel, then its day loaded (Done is disabled until then). Clicking Done straight after setting the hash timed out
+ * under load (runs 41723654488, 41753874436, 41762272350) with no sign of which of the two hadn't happened.
+ */
+async function openCloseOut(page: Page): Promise<void> {
+  await page.evaluate(() => (location.hash = "#/today/closeout"));
+  const panel = page.getByRole("complementary", { name: "Close out" });
+  await panel.waitFor();
+  await panel.locator(".cp-body > *").first().waitFor();
+  await page.waitForSelector(".closeout-panel .done-btn:enabled");
+}
+
 /** Today's must pick (demo: Cooptimize's "Timesheet summary query" in the Monday AM block), done. */
 async function mustDone(page: Page): Promise<void> {
   const add = await call(page, "pick.add", { date: "2026-11-02", half: "AM", clientKey: "Cooptimize", itemId: 4411, size: "S" });
@@ -60,7 +73,7 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
 
   it("Lumen is absent in Week, Today, Plan the day, Check-in and Roadmap", async () => {
     const { page, errors } = await freshPage(h);
-    for (const hash of ["#/today", "#/week", "#/week/plan", "#/today/plan", "#/today/checkin", "#/roadmap", "#/roadmap/ahead"]) {
+    for (const hash of ["#/today", "#/week", "#/week/commit", "#/week/day/2026-11-02", "#/today/checkin", "#/ahead", "#/ahead/plan"]) {
       await page.evaluate((x) => (location.hash = x), hash);
       await page.waitForTimeout(700);
       expect(await page.locator(".lumen, .lumen-loading, .unroll, .bent-mark, .lockup, .brand-stage, [data-lumen]").count(), hash).toBe(0);
@@ -94,7 +107,7 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
     expect(await seen(page)).toMatchObject({ loader: true, unroll: false, sweep: false });
     // Close out with today's musts done: no reverse, the moment shows Lumen still, then Today.
     await mustDone(page);
-    await page.evaluate(() => (location.hash = "#/today/closeout"));
+    await openCloseOut(page);
     await page.locator(".closeout-panel .done-btn").click();
     await page.getByText("Musts done. See you tomorrow.").waitFor();
     await expect(page.locator(".brand-stage [data-lumen]").getAttribute("data-lumen")).resolves.toBe("still");
@@ -131,7 +144,7 @@ describe.skipIf(!CHROMIUM)("Brand: the opening, the Close out reverse and Lumen'
     await page.reload();
     await page.waitForSelector(".brand-stage", { state: "detached", timeout: 30_000 });
     await mustDone(page);
-    await page.evaluate(() => (location.hash = "#/today/closeout"));
+    await openCloseOut(page);
     await page.locator(".closeout-panel .done-btn").click();
     await page.waitForSelector('[data-close="unroll"]');
     await page.getByText("Musts done. See you tomorrow.").waitFor();

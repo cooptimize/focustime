@@ -238,6 +238,13 @@ What DS-1 learned, and what is still open:
 - Q-DV1-5: An item read once by id (a parent outside the scope, an item on demand) stays in the store until the reconcile drops it. Should on-demand reads get their own expiry?
 
 - Q-ADM2-1: `org.retention_years` is shown in Status as "Not enforced yet". Nothing deletes old data; a delete job (which tables, per person, oldest first, a notice first or not) is a later step.
-- Q-ADM2-2: Guests are told apart from the ID token's `idp` and the UPN today. The `acct` optional claim (0 member, 1 guest) is the documented signal but must be added to the app registration's optional claims (`infra/scripts/`, an Azure change). Worth adding in the next infra step.
+- Q-ADM2-2: Guests are told apart from the ID token's `idp` and the UPN today. The `acct` optional claim (0 member, 1 guest) is the documented signal but must be added to the app registration's optional claims (`infra/scripts/`, an Azure change). Worth adding in the next infra step. Answered (HK-1, D612): `infra/scripts/app-registration.sh --claims-only` adds acct to the ID token; `guestToken` already reads it first.
 - Q-ADM2-3: The automation flag isn't prefilled for the known automation account (no migration can read Dataverse, and naming a person in code is ruled out). An admin sets it once in Admin › People after the merge.
 - Q-ADM2-4: Admin deep links (`#/settings/admin-audit`) land on Today: `ui/nav.ts`'s section pattern takes letters only. One character for NV-1, which owns the routes.
+
+## Housekeeping (HK-1, Nov 5)
+
+- Q-HK1-1: `infra/scripts/app-registration.sh`'s consent step uses `az ad app permission grant`, which deletes every grant the app has for that API (people's own incremental consents included; azure-cli issue 20974) and recreates one tenant-wide grant of GRAPH_SCOPES, which lacks Chat.Read (granted later for AP-1). A full run today would drop everyone's Chat.Read until they consent again. Until the step merges scopes into the AllPrincipals grant only (through Graph's oauth2PermissionGrants), use `--claims-only` for claim changes. Who owns the fix, and should Chat.Read join GRAPH_SCOPES?
+- Q-HK1-2: The names guard's history exceptions (`docs/decisions.md`, `docs/azure/`) mean a real name can still land there. Should the guard cover them too, with an allowlist for the old entries?
+- Q-HK1-3: Exception messages are redacted by pattern; an unquoted person's name or a client name FocusTime hasn't seen yet in this process could pass. Should errors that carry values move to typed errors with a fixed message?
+- Q-HK1-4: The DevOps checks dominate ingest (about 0.35 GB a month in prod at 1-minute checks). If prod's ingest passes 2 GB a month, sample the `devops_check` job items that changed nothing first.
