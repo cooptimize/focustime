@@ -53,7 +53,8 @@ type DndApi = {
   menuFor: (d: Dragged, title: string) => MenuStep;
   /** Long press on a touch screen. */
   touchStart: (d: Dragged, e: React.PointerEvent) => void;
-  note: (text: string) => void;
+  /** A short notice at the foot of the screen, with Undo when given. */
+  note: (text: string, undo?: (() => Promise<void>) | null) => void;
 };
 export const WeekDnd = createContext<DndApi | null>(null);
 
@@ -101,9 +102,13 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
       try {
         if (d.pickId !== undefined) {
           const from = picks.find((p) => p.id === d.pickId);
-          await planAction("pick.move", { id: d.pickId, date: b.date, half: b.half, ...(b.catchUp ? { anyway: true } : {}) });
+          const r = await planAction("pick.move", { id: d.pickId, date: b.date, half: b.half, ...(b.catchUp ? { anyway: true } : {}) });
           onChanged();
-          note(`Moved to ${b.label}`, from ? async () => (await planAction("pick.move", { id: d.pickId, date: from.date, half: from.half, anyway: true }), onChanged()) : null);
+          // UI-B: a pick from a past day (an unfinished one, maybe from an earlier week) can't be moved back into the
+          // past: Undo deletes the carried copy and plans the original again.
+          const copy = r.pick && r.pick.id !== d.pickId ? r.pick.id : null;
+          const back = copy !== null && (!from || from.date < data.planDay.date) ? async () => (await planAction("pick.uncarry", { id: copy }), onChanged()) : from ? async () => (await planAction("pick.move", { id: d.pickId, date: from.date, half: from.half, anyway: true }), onChanged()) : null;
+          note(`Moved to ${b.label}`, back);
         } else {
           const r = await planAction("pick.add", { date: b.date, half: b.half, clientKey: d.clientKey, itemId: d.itemId, ...(d.size ? { size: d.size } : {}) });
           onChanged();
@@ -114,7 +119,7 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
         note(errText(e));
       }
     },
-    [check, note, onChanged, picks],
+    [check, note, onChanged, picks, data.planDay.date],
   );
 
   const menuFor = useCallback(
@@ -192,7 +197,7 @@ export function WeekDndProvider({ data, week, now, onChanged, onRefresh, onOpenS
     refresh: onRefresh ?? onChanged,
     menuFor,
     touchStart,
-    note: (t) => note(t),
+    note: (t, u) => note(t, u ?? null),
   };
   return (
     <WeekDnd.Provider value={api}>

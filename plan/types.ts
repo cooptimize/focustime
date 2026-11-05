@@ -34,6 +34,8 @@ export type Pick = {
   carriedFrom: number | null;
   /** Date of that pick, for "carried from Tue". */
   carriedFromDate: IsoDate | null;
+  /** UI-B: read models only (the week's picks). For a moved pick, the block its carried copy is in ("→ moved to Mon AM"). */
+  carriedTo?: { date: IsoDate; half: Half } | null;
   notes: string | null;
   /** Step 13.5: the follow-up this pick is for (an intention pick). */
   followUpId: number | null;

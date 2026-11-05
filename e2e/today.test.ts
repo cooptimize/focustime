@@ -78,7 +78,8 @@ describe.skipIf(!CHROMIUM)("Today: Now, Check-in and Close out (U2)", () => {
     expect(risks.length).toBeGreaterThan(0);
     for (const r of risks) expect(r).toMatch(/^At risk · \S/);
     expect(risks.join(" ")).toContain("Dentist 12:00");
-    expect(await uiWords(page)).toBeLessThanOrEqual(80);
+    // 81: UI-B's now line adds its time ("9:30").
+    expect(await uiWords(page)).toBeLessThanOrEqual(81);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

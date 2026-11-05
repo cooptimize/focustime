@@ -16,7 +16,10 @@ import type { Half, IsoDate } from "../week/types.ts";
 import type { ActionResponse } from "./types.ts";
 import { userZone } from "../week/zone.ts";
 
-export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
+export const PLAN_ACTIONS = ["planday.start", "planday.carry", "planday.commit", "pick.add", "pick.remove", "pick.set_size", "pick.move", "pick.mark_done", "pick.uncarry", "pick.undrop", "planday.carry_hint", "draft.add_story", "draft.set_parent", "draft.remove", "draft.update"] as const;
+/** UI-B: the marker kind for the suggested-cards hint, dismissed once. */
+export const CARRY_HINT = "carry_hint";
+
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
 export const isPlanAction = (a: unknown): a is PlanAction => typeof a === "string" && (PLAN_ACTIONS as readonly string[]).includes(a);
 
@@ -238,7 +241,23 @@ export async function planAction(ctx: PlanContext, action: PlanAction, input: un
         const { cfg } = await clock(ctx);
         const carry = await carryDay(ctx, plan);
         const picks = carry.target ? await plan.carryOverFor(carry.upcoming, cfg?.plan.carryDays, await pendingSession(ctx, plan, cfg, carry.upcoming)) : [];
-        return { ok: true, data: { target: carry.target, picks } };
+        // UI-B: the one-time hint over the suggested cards, until it is dismissed (a per-person marker).
+        return { ok: true, data: { target: carry.target, picks, hint: !(await plan.marked(CARRY_HINT, "once")) } };
+      }
+      case "planday.carry_hint": {
+        fields(input, [], []);
+        await plan.markOnce(CARRY_HINT, "once");
+        return { ok: true, data: { hint: false } };
+      }
+      case "pick.uncarry": {
+        // UI-B: Undo of Keep or Move on an unfinished pick: the copy goes, the pick it came from is planned again.
+        const pick = await plan.uncarry(id(fields(input, ["id"]).id));
+        return { ok: true, data: { pick } };
+      }
+      case "pick.undrop": {
+        // UI-B: Undo of Drop on an unfinished pick.
+        const pick = await plan.undrop(id(fields(input, ["id"]).id));
+        return { ok: true, data: { pick } };
       }
       case "planday.commit": {
         const d = date(fields(input, ["date"]).date);

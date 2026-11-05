@@ -6,7 +6,7 @@ import type { DraftAi, DraftStory } from "./types.ts";
 
 /** The task name the AI log keeps (never the input or the answer). */
 export const PREPARE_TASK = "capture.prepare";
-/** Its own output limit (maxOutputTokens key, D-CP1). */
+/** Its own output limit (maxOutputTokens key, D686). */
 export const PREPARE_MAX_OUTPUT = 1200;
 /** At most this many open parents go with a request (titles only). */
 export const MAX_CANDIDATES = 60;
