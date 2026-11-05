@@ -1206,6 +1206,24 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "weekplan.add_draft":
     case "weekplan.draft_tier":
     case "weekplan.nothing":
+    // SW-1: sends, priorities and asks start from a row's ⋯ (Send to…) or Commit; the command menu opens the place.
+    case "send.people":
+    case "send.create":
+    case "priority.flag":
+    case "priority.unflag":
+    case "priority.add_to_week":
+    case "send.cancel":
+    case "send.accept":
+    case "send.pass":
+    case "send.cant":
+    case "send.withdraw":
+    case "send.today":
+    case "team.commit":
+    case "look.ask":
+      return { run: () => env.setView("commit") };
+    case "team.view":
+    case "look.reply":
+      return { run: () => env.setView("team") };
     case "weekplan.proposal":
     case "weekplan.carry_decide":
     case "weekplan.carry_accept_all":

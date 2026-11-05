@@ -17,6 +17,7 @@ import type { AiProvider } from "../ai/types.ts";
 import type { AiRuntime } from "../actions/ai-actions.ts";
 import { appSpendStore } from "../store/ai-spend.ts";
 import { takesStore } from "../store/devops-takes.ts";
+import { teamStore } from "../store/team-store.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { WritePats } from "../actions/devops-write-actions.ts";
 import { createLocalHost } from "../host/local/index.ts";
@@ -348,6 +349,8 @@ const pollDeps: PollDeps = {
 const conversations = createConversationStore(db, instantNow, teams);
 // PV-1: Take one's notices to the previous assignee (an app table).
 const takes = takesStore(db, instantNow);
+// SW-1: sends, week commitments, client priorities and Ask to look, shared by everyone (app tables).
+const team = teamStore(db, instantNow);
 pollDeps.conversations = conversations;
 // CV-1 migration (add-only, D468): AP-1's requests become conversations once; idempotent, so every start may run it.
 await backfillRequests(teams, conversations, app.entra?.tenantId ?? null).then(
@@ -744,6 +747,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     writePats: writePatsOf(who),
     devopsWriter: createDevOpsWriter({ fetch, log }),
     takes,
+    team,
     account: accountFor(who),
     photoCache: host.photos,
     push,
