@@ -3,9 +3,11 @@
 // logs are still kept up to 30 days, docs/decisions.md D495). One call per request; retries are the service's.
 // Verified Nov 4 against developers.openai.com/api/docs (guides/migrate-to-responses, structured-outputs, rate-limits,
 // error-codes, your-data, reasoning, pricing). CV-4, Nov 5: images-vision (input_image with a base64 data URL, detail
-// high; PNG, JPEG, WEBP and still GIF; image tokens counted in usage.input_tokens). The key is read per call from the host's secret path and only ever
+// high; PNG, JPEG, WEBP and still GIF; image tokens counted in usage.input_tokens). AS-1, Nov 5: function-calling (flat
+// function tools with strict, function_call items with call_id and JSON-text arguments, function_call_output, tool_choice
+// allowed_tools, reasoning items passed back). The key is read per call from the host's secret path and only ever
 // goes into the Authorization header; no header, body or answer text is logged.
-import type { AiProvider, ProviderCall, ProviderReply, Usage } from "./types.ts";
+import type { AiProvider, ProviderCall, ProviderReply, TranscribeCall, TranscribeReply, Usage } from "./types.ts";
 
 export type OpenAiOptions = {
   /** The API key, or null when none is set up (the service then says "AI isn't set up" before calling). */
@@ -50,6 +52,38 @@ export function openAiProvider(o: OpenAiOptions): AiProvider {
   const base = (o.baseUrl ?? "https://api.openai.com/v1").replace(/\/$/, "");
   return {
     name: "openai",
+    /**
+     * AS-1: POST /v1/audio/transcriptions (multipart: file, model, languages[]), gpt-transcribe by default; webm and mp4
+     * accepted, 25 MB at most (speech-to-text guide, Nov 5). OpenAI keeps no application state for this endpoint (your-data).
+     * The audio is only in this request's memory; neither it nor the text is logged.
+     */
+    async transcribe(t: TranscribeCall): Promise<TranscribeReply> {
+      const key = await o.key();
+      if (!key) return { ok: false, kind: "unavailable" };
+      const form = new FormData();
+      const ext = t.mime.startsWith("audio/mp4") ? "m4a" : "webm";
+      form.append("file", new Blob([t.audio as Uint8Array<ArrayBuffer>], { type: t.mime.split(";")[0]! }), `speech.${ext}`);
+      form.append("model", t.model);
+      if (t.model.startsWith("gpt-transcribe")) form.append("languages[]", t.language);
+      else form.append("language", t.language);
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), t.timeoutMs);
+      try {
+        const r = await f(`${base}/audio/transcriptions`, { method: "POST", headers: { authorization: `Bearer ${key}` }, body: form, signal: ac.signal });
+        const json = (await r.json().catch(() => null)) as Record<string, unknown> | null;
+        if (!r.ok) {
+          const code = String(((json?.error ?? {}) as { code?: unknown }).code ?? "");
+          if (r.status === 429) return { ok: false, kind: QUOTA_CODES.has(code) ? "quota" : "rate_limited" };
+          if (r.status === 400 || r.status === 415) return { ok: false, kind: "format" };
+          return { ok: false, kind: r.status >= 500 ? "unavailable" : "provider" };
+        }
+        return typeof json?.text === "string" ? { ok: true, text: json.text } : { ok: false, kind: "provider" };
+      } catch {
+        return { ok: false, kind: ac.signal.aborted ? "timeout" : "unavailable" };
+      } finally {
+        clearTimeout(timer);
+      }
+    },
     async call(c: ProviderCall): Promise<ProviderReply> {
       const key = await o.key();
       if (!key) return { ok: false, kind: "unavailable" };
@@ -59,7 +93,19 @@ export function openAiProvider(o: OpenAiOptions): AiProvider {
         // CV-4: with images, one user message: the input text, then each image after its label, at high detail.
         input: c.images?.length
           ? [{ role: "user", content: [{ type: "input_text", text: c.input }, ...c.images.flatMap((i) => [{ type: "input_text", text: i.label }, { type: "input_image", image_url: i.dataUrl, detail: "high" }])] }]
-          : c.input,
+          : c.rounds?.length
+            ? [{ role: "user", content: c.input }, ...c.rounds.flatMap((r) => [...r.items, ...r.outputs.map((o) => ({ type: "function_call_output", call_id: o.callId, output: o.output }))])]
+            : c.input,
+        // AS-1: function tools (strict), only the allowed ones usable now; reasoning items come back encrypted, since
+        // with store: false OpenAI keeps nothing between rounds (function-calling guide, Nov 5).
+        ...(c.tools?.length
+          ? {
+              tools: c.tools.map((t) => ({ type: "function", name: t.name, description: t.description, parameters: t.parameters, strict: true })),
+              tool_choice: c.allowedTools?.length ? { type: "allowed_tools", mode: "auto", tools: c.allowedTools.map((name) => ({ type: "function", name })) } : "none",
+              parallel_tool_calls: true,
+              include: ["reasoning.encrypted_content"],
+            }
+          : {}),
         store: false,
         max_output_tokens: c.maxOutputTokens,
         ...(c.reasoningEffort ? { reasoning: { effort: c.reasoningEffort } } : {}),
@@ -99,9 +145,14 @@ export function openAiProvider(o: OpenAiOptions): AiProvider {
       if (!json) return { ok: false, kind: "provider", status: r.status };
       const usage = usageOf(json);
       if (json.status === "incomplete") return { ok: false, kind: "incomplete", usage };
+      const model = typeof json.model === "string" ? json.model : c.model;
+      // AS-1: function calls (only for a call that offered tools): the arguments are JSON text, parsed by the service.
+      const output = Array.isArray(json.output) ? (json.output as Record<string, unknown>[]) : [];
+      const calls = c.tools?.length ? output.filter((i) => i?.type === "function_call" && typeof i.call_id === "string" && typeof i.name === "string" && typeof i.arguments === "string").map((i) => ({ callId: i.call_id as string, name: i.name as string, arguments: i.arguments as string })) : [];
+      if (calls.length) return { ok: true, text: "", usage, model, calls, items: output.filter((i) => i?.type === "function_call" || i?.type === "reasoning") };
       const out = outputOf(json);
       if ("refusal" in out) return { ok: false, kind: "refusal", usage };
-      return { ok: true, text: out.text, usage, model: typeof json.model === "string" ? json.model : c.model };
+      return { ok: true, text: out.text, usage, model };
     },
   };
 }

@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { importsOf } from "./imports.ts";
 
 const ROOT = resolve(import.meta.dirname, "..");
-const CORE = ["week", "plan", "actions", "sources", "store", "ai"];
+const CORE = ["week", "plan", "actions", "sources", "store", "ai", "assistant"];
 /** Operating system modules: files and folders, processes, the network listener, the machine. */
 const OS_MODULE = /^(node:)?(child_process|fs|fs\/promises|os|path|http|https|http2|net|dgram|tls|worker_threads|cluster|readline|tty|v8|vm|process)$/;
 /** Only server/ may construct a host. */

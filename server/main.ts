@@ -12,6 +12,7 @@ import { createPushDevices } from "../store/push-devices.ts";
 import { createPush, type VapidSource } from "./push.ts";
 import { keyVaultSecret } from "../host/azure/vapid.ts";
 import { openAiProvider } from "../ai/openai.ts";
+import { createAssistantHub } from "./assistant.ts";
 import { stubProvider } from "../ai/stub.ts";
 import type { AiProvider } from "../ai/types.ts";
 import type { AiRuntime } from "../actions/ai-actions.ts";
@@ -81,6 +82,7 @@ import type { WeekLoadData } from "../actions/types.ts";
 import { createTeamsEndpoint } from "./teams/sdk.ts";
 import { createBotCore } from "./teams/bot.ts";
 import { todayFacts } from "./teams/quick.ts";
+import { teamsAssistant } from "./teams/assistant.ts";
 import { createTeamsBotStore } from "../store/teams-bot-store.ts";
 import { createConversationStore } from "../store/conversation-store.ts";
 import { whoRepair, type WhoRepairPerson } from "./who-repair.ts";
@@ -640,10 +642,13 @@ const feedbackService: FeedbackService = {
 };
 void feedbackService.check().catch(() => undefined);
 
+/** AS-1: the assistant by person (Entra object id), for TB-1's Teams bot: their own context, absolute links. */
+export const assistants = createAssistantHub({ ctxFor: (userId) => runtimeFor(userId), publicUrl: app.publicUrl });
+
 // TB-1: the FocusTime bot in Teams, in the hosted app only (the Azure Bot reaches the public URL; its identity's token
 // exists only there). FOCUSTIME_BOT_APP_ID is the bot's Microsoft App ID, its user-assigned identity's client id
 // (infra/modules/bot.bicep); replies use that identity's token for the Bot Framework scope, held in memory by the
-// credential. The assistant service (AS-1) is wired when it merges; until then the quick commands answer.
+// credential. The assistant (AS-1) answers through the hub below, for the person the gate let in.
 const botAppId = (process.env.FOCUSTIME_BOT_APP_ID ?? "").trim();
 const teamsBot =
   host.kind === "azure" && botAppId && app.entra
@@ -666,7 +671,7 @@ const teamsBot =
                 },
                 isCooptimizer: async (oid) => (await org.levels()).people.isCooptimizer(oid),
               },
-              assistant: null,
+              assistant: teamsAssistant(assistants, app.publicUrl),
               today: async (userId) => {
                 const r = await dispatch(await runtimeFor(userId), { action: "week.load", input: {} });
                 if (!r.ok) throw new Error("week.load failed");

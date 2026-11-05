@@ -92,6 +92,8 @@ export type View = import("./nav.ts").ViewName;
 
 /** What the menus can see and do. App provides it. */
 export type MenuEnv = {
+  /** AS-1: open the assistant panel (with an optional first text). */
+  openAssistant?: (text?: string) => void;
   /** Inbox › Requests is open (its keys work there). */
   asksOpen?: boolean;
   week: Week;
@@ -1244,6 +1246,16 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "team.view":
     case "look.reply":
       return { run: () => env.setView("team") };
+    // AS-1: everything the assistant does starts in its panel.
+    case "assistant.ask":
+    case "assistant.confirm":
+    case "assistant.cancel":
+    case "assistant.history":
+    case "assistant.today":
+    case "lookup.day":
+    case "items.get":
+      return env.openAssistant ? { run: () => env.openAssistant!() } : { disabled: "The assistant isn't available here" };
+    case "assistant.clear": return { run: () => env.openSettings("data") };
     case "weekplan.proposal":
     case "weekplan.carry_decide":
     case "weekplan.carry_accept_all":

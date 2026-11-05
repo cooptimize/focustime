@@ -131,6 +131,7 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["V"], does: "Week: Timelines, the hours the rails show (business hours, 12 hours, 24 hours); H also works; also in Week's ⋯", command: "ui.set_view_range" },
   { keys: ["G"], does: "Week and Today: show or hide personal events (they still count in risk and free time); also in ⋯", command: "ui.set_show_personal" },
   { keys: ["Ctrl K"], does: "Command menu" },
+  { keys: ["Ctrl J", "/"], does: "The assistant: ask what's next or about an item, or ask for a change you then confirm (/ when no text field has focus)", command: "assistant.ask" },
   { keys: ["Ctrl +", "Ctrl −", "Ctrl 0"], does: "Text size: larger, smaller, or back to Default (not while typing)", command: "ui.set_text_size" },
   { keys: ["F"], does: "Focus timer: start one, or pause, +15, done, next pick or stop", command: "timer.start" },
   { keys: ["M"], does: "Today › Midday check-in: today's cards show what still fits, with one suggested move each; again to go back", command: "view.checkin" },
