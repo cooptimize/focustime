@@ -32,7 +32,15 @@ describe.skipIf(!CHROMIUM)("Plan today with suggested picks (HK-3)", () => {
     await list.waitFor();
     await expect(list.locator("li", { hasText: "Filter orders by date range" }).count()).resolves.toBe(0);
     await expect(list.locator("li.pd2-add").count()).resolves.toBe(3);
-    if (SHOTS) await page.screenshot({ path: `${SHOTS}/hk3-planday-suggested-1920.png` });
+    if (SHOTS) {
+      await page.screenshot({ path: `${SHOTS}/hk3-planday-suggested-1920.png` });
+      await page.locator("body").click({ position: { x: 5, y: 1070 } });
+      await page.keyboard.press("Control+Equal");
+      await page.keyboard.press("Control+Equal");
+      await expect.poll(() => page.evaluate(() => document.documentElement.dataset.textSize ?? "")).toBe("larger");
+      await page.screenshot({ path: `${SHOTS}/hk3-planday-suggested-1920-larger.png` });
+      await page.keyboard.press("Control+0");
+    }
 
     // Keep here: it becomes a pick in the block; Undo puts the card back.
     await card.locator(".sc-open").click();
