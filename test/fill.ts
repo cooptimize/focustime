@@ -56,6 +56,9 @@ export async function fill(db: Conn, userId: string): Promise<PlanStore> {
   await plan.seeConversation(1, 1);
   (await plan.addNotice({ key: `n-${tag}`, kind: "followups", title: tag, body: tag, route: "inbox" }));
   (await plan.setRoadmapDates("cooptimize", 7001, { start: "2026-11-02", end: "2026-11-20" }));
+  // AH-1: a pending change and a kept half-day.
+  await plan.stageAheadChange({ clientKey: "cooptimize", itemId: 7001, field: "target", value: "2026-11-27", half: "PM", baseRev: 3, baseValue: null });
+  await plan.setAheadHalf("cooptimize", 7001, "start", "2026-11-02", "PM");
   // PL-1: a carry decision, a Watching row with its check-in, and a pick with its own minutes.
   await plan.decideCarry(MON, "cooptimize", 7001, "carry", "kept");
   await plan.addWatch({ weekStart: MON, clientKey: "cooptimize", itemId: 7002, title: tag, itemType: "Feature", url: null, why: "owner", checkin: { date: MON, half: "AM", minutes: 30 } });

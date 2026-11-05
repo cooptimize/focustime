@@ -4,7 +4,7 @@
 // (a narrow exception to D156, the change log only), never shown and never logged.
 import { identityEmail, identityName } from "./normalize.ts";
 
-export type ChangeKind = "assignee" | "target_date" | "start_date" | "state" | "new_child" | "comments" | "removed";
+export type ChangeKind = "assignee" | "target_date" | "start_date" | "size" | "state" | "new_child" | "comments" | "removed";
 
 export type ChangeEntry = {
   itemId: number;
@@ -42,7 +42,7 @@ export function changerOf(f: Fields): { byName: string | null; byUnique: string 
  * parent only when it was created since `newSince` (an older item coming into scope isn't news). With several
  * revisions between two reads the entry is the net change, credited to the last changer.
  */
-export function diffItem(o: { id: number; before: Fields | null; after: Fields; targetField?: string | null; startField?: string | null; newSince: string }): ChangeEntry[] {
+export function diffItem(o: { id: number; before: Fields | null; after: Fields; targetField?: string | null; startField?: string | null; /** AH-1: the type's own size field (D634). */ sizeField?: string | null; newSince: string }): ChangeEntry[] {
   const { id, before, after } = o;
   const rev = revOf(after);
   if (before && revOf(before) >= rev) return [];
@@ -62,6 +62,7 @@ export function diffItem(o: { id: number; before: Fields | null; after: Fields; 
   add("assignee", identityName(before["System.AssignedTo"]), identityName(after["System.AssignedTo"]));
   if (o.targetField) add("target_date", dateOf(before[o.targetField]), dateOf(after[o.targetField]));
   if (o.startField) add("start_date", dateOf(before[o.startField]), dateOf(after[o.startField]));
+  if (o.sizeField) add("size", str(before[o.sizeField]), str(after[o.sizeField]));
   add("state", str(before["System.State"]), str(after["System.State"]));
   const pb = parentOf(before);
   const pa = parentOf(after);

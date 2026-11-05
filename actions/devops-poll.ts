@@ -238,7 +238,7 @@ export function createDevOpsPoller(d: PollerDeps) {
   }
 
   /** The fields the store keeps: the ones screens read, plus the revision, the comment count and the created date. */
-  const fieldsOf = (process: ProcessRaw, f: FieldSet) => [...new Set([...batchFields(process.orderField), "System.AssignedTo", "System.AreaPath", "System.IterationPath", ...Object.values(f.fields), ...Object.values(f.starts), ...(f.size ? [f.size] : []), REV_FIELD, COMMENTS_FIELD, CREATED_FIELD, PROJECT_FIELD])];
+  const fieldsOf = (process: ProcessRaw, f: FieldSet) => [...new Set([...batchFields(process.orderField), "System.AssignedTo", "System.AreaPath", "System.IterationPath", ...Object.values(f.fields), ...Object.values(f.starts), ...(f.size ? [f.size] : []), ...Object.values(f.sizes ?? {}), REV_FIELD, COMMENTS_FIELD, CREATED_FIELD, PROJECT_FIELD])];
 
   const stored = (v: RawValue): StoredItem => ({ id: v.id, project: typeof v.fields[PROJECT_FIELD] === "string" ? (v.fields[PROJECT_FIELD] as string) : "", rev: revOf(v.fields), changedAt: typeof v.fields["System.ChangedDate"] === "string" ? (v.fields["System.ChangedDate"] as string) : "", fields: v.fields });
   const latest = (a: string | null, b: string) => (!b ? a : !a || Date.parse(b) > Date.parse(a) ? b : a);
@@ -259,7 +259,7 @@ export function createDevOpsPoller(d: PollerDeps) {
     const projects = [target.project!];
     const typeFields = (v: RawValue) => {
       const type = typeof v.fields["System.WorkItemType"] === "string" ? (v.fields["System.WorkItemType"] as string) : "";
-      return { targetField: m.fields.fields[type] ?? null, startField: m.fields.starts[type] ?? null };
+      return { targetField: m.fields.fields[type] ?? null, startField: m.fields.starts[type] ?? null, sizeField: m.fields.sizes?.[type] ?? null };
     };
     const upsert: StoredItem[] = [];
     const remove: number[] = [];
@@ -488,6 +488,20 @@ export function createDevOpsPoller(d: PollerDeps) {
       if (!known) return { known: false, itemIds: [] };
       const ids = new Set((await d.store.changes(key, since)).filter((x) => x.kind === "state").map((x) => x.itemId));
       return { known: true, itemIds: [...ids].sort((a, b) => a - b) };
+    },
+    async stored(key, v) {
+      // AH-1 (D637): a write's read-back goes straight in, with its change log entries, so every screen shows it now.
+      const c = await stateOf(key);
+      if (!c.process || !c.fields) return;
+      const keep = new Set(fieldsOf(c.process, c.fields));
+      const before = c.items.get(v.id) ?? null;
+      const fields = Object.fromEntries(Object.entries({ ...(before?.fields ?? {}), ...v.fields }).filter(([k]) => keep.has(k)));
+      const s = stored({ id: v.id, fields });
+      if (before && before.rev >= s.rev) return;
+      const type = typeof fields["System.WorkItemType"] === "string" ? (fields["System.WorkItemType"] as string) : "";
+      const changes = diffItem({ id: v.id, before: before?.fields ?? null, after: fields, targetField: c.fields.fields[type] ?? null, startField: c.fields.starts[type] ?? null, sizeField: c.fields.sizes?.[type] ?? null, newSince: d.now().subtract({ hours: 1 }).toString() });
+      c.items.set(s.id, s);
+      await d.store.apply(key, { upsert: [s], changes, state: c.row });
     },
     afterWrite(key) {
       void stateOf(key).then((c) => {

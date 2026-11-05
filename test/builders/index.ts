@@ -2,6 +2,7 @@
 // it is about: aPto({ date: "2026-11-12" }), aFocusBlock({ client: aClient({ name: "Adatum" }), days: { Thu: "AM" } }).
 // Fictional names only (the demo set). Dates default to the week of Mon Nov 2, 2026 in New York, like the e2e clock.
 // New and edited tests use these instead of hand-written fixtures (CLAUDE.md, Working style).
+import type { AheadClient, AheadItem, AheadLoad } from "../../actions/types.ts";
 import { applyOrg } from "../../config/org-apply.ts";
 import { resolveRules } from "../../config/org.ts";
 import { legacyHours } from "../../config/schema.ts";
@@ -432,4 +433,32 @@ export function aPortfolioChild(o: Partial<import("../../week/types.ts").Portfol
 export function aPortfolioItem(o: Partial<import("../../week/types.ts").PortfolioItem> = {}): import("../../week/types.ts").PortfolioItem {
   const id = o.id ?? next();
   return { id, title: `Feature ${id}`, type: "Feature", state: "Active", stateCategory: "InProgress", tier: "feature", order: id, parentId: null, url: `https://dev.azure.com/contoso/p/_workitems/edit/${id}`, targetDate: null, assignedTo: null, mine: false, why: [], children: [], ...o };
+}
+
+// ---- AH-1: Ahead ----
+
+/** One DevOps item as Ahead reads it (a feature by default, assigned to nobody, no dates). */
+export function anAheadItem(o: Partial<AheadItem> = {}): AheadItem {
+  const id = o.id ?? 1000 + next();
+  return { id, rev: 3, title: `Item ${id}`, type: "Feature", state: "Active", stateCategory: "InProgress", level: "parent", rung: 1, parentId: null, assignee: null, start: null, target: null, size: null, url: `https://dev.azure.com/contoso/Portal/_workitems/edit/${id}`, changedAt: "2026-11-01T12:00:00Z", ...o };
+}
+/** Someone as an assignee. */
+export const anAssignee = (name: string, email = `${name.split(" ")[0]!.toLowerCase()}@cooptimize.example`) => ({ name, email });
+/** A client's items in Ahead: an Agile-like process (Epic › Feature › User Story; dates on Epic and Feature, Story Points on stories). */
+export function anAheadClient(o: Partial<AheadClient> = {}): AheadClient {
+  const sizeField = "Microsoft.VSTS.Scheduling.StoryPoints";
+  return {
+    clientKey: "Northwind", clientName: "Northwind Foods", status: "ok", fetchedAt: "2026-11-02T14:00:00Z", project: "Portal", me: "you@cooptimize.example",
+    startFields: { Epic: "Microsoft.VSTS.Scheduling.StartDate", Feature: "Microsoft.VSTS.Scheduling.StartDate" },
+    targetFields: { Epic: "Microsoft.VSTS.Scheduling.TargetDate", Feature: "Microsoft.VSTS.Scheduling.TargetDate" },
+    sizeFields: { "User Story": sizeField },
+    fieldNames: { [sizeField]: "Story Points" },
+    types: [],
+    items: [],
+    ...o,
+  };
+}
+/** ahead.load's answer for some clients (nothing pending, nothing editable unless given). */
+export function anAheadLoad(clients: (AheadClient & Partial<AheadLoad["clients"][number]>)[], o: Partial<Omit<AheadLoad, "clients">> = {}): AheadLoad {
+  return { today: "2026-11-02", clients: clients.map((c) => ({ lead: false, editable: [], note: `Only ${c.clientName}'s leads and the owner can change this.`, canWrite: true, hints: {}, ...c })), changes: [], halves: [], automation: false, ...o };
 }

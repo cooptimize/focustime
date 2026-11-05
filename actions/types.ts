@@ -479,3 +479,63 @@ export type PhotosData = { available: boolean; reason: PhotoAccess | null; me: s
 /** ADM-1, WT-1: one type of a client's process for Admin › Clients: its look, level, the two Rules, its history in words. */
 export type ProcessTypeRow = TypeLook & { breakdownSource: "default" | "override" | "level"; history: string | null; bug: boolean };
 export type ClientProcess = { ok: true; process: string | null; project: string; bugs: string | null; types: ProcessTypeRow[] } | { ok: false; message: string };
+
+// ---- AH-1: Ahead's grid, Gantt and Fix next (one model, D630) ----
+/** One DevOps item as Ahead shows it: any level the process has, from the central store. */
+export type AheadItem = {
+  id: number;
+  rev: number;
+  title: string;
+  type: string;
+  state: string;
+  stateCategory: string;
+  /** The process level and its ladder rung (0 is the top backlog level). */
+  level: import("../plan/process.ts").ProcessLevel | null;
+  rung: number | null;
+  parentId: number | null;
+  /** Display name and DevOps uniqueName (email). The email is for matching and the picker; never shown as text. */
+  assignee: { name: string; email: string | null } | null;
+  start: string | null;
+  target: string | null;
+  size: number | null;
+  url: string;
+  changedAt: string;
+};
+/** One client's items and the fields its process gives each type ("Not in <project>'s process" when absent). */
+export type AheadClient = {
+  clientKey: string;
+  clientName: string;
+  status: import("../week/types.ts").ClientWorkStatus;
+  message?: string;
+  fetchedAt: string | null;
+  project: string | null;
+  /** My DevOps identity for this client (for "mine"); null when Dataverse doesn't have it. */
+  me: string | null;
+  /** Per type: its start, target and size fields (reference names); absent: not in this process. */
+  startFields: Record<string, string>;
+  targetFields: Record<string, string>;
+  sizeFields: Record<string, string>;
+  /** Display names of those fields ("Story Points"). */
+  fieldNames: Record<string, string>;
+  types: import("../week/types.ts").TypeLook[];
+  items: AheadItem[];
+};
+/** ahead.load: every client's items, my rights on each, my change set and my kept half-days. */
+export type AheadLoad = {
+  today: string;
+  clients: (AheadClient & {
+    /** isClientLead for me (D633). */
+    lead: boolean;
+    /** Item ids I may change; the rest are read-only with `note`. */
+    editable: number[];
+    note: string;
+    /** Enable writes first: no write PAT for this client. */
+    canWrite: boolean;
+    /** FocusTime's own size of an item (a story's S/M/L, a feature's estimate), as a hint beside the DevOps field. */
+    hints: Record<number, { text: string; minutes: number }>;
+  })[];
+  changes: import("../plan/ahead-edit.ts").StagedChange[];
+  halves: { clientKey: string; itemId: number; field: "start" | "target"; day: string; half: "AM" | "PM" }[];
+  /** I'm flagged as an automation account (nothing is editable). */
+  automation: boolean;
+};

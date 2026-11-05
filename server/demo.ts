@@ -60,6 +60,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const ready = (async () => {
     await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients, dir.accounts);
     for (const c of DEMO_CLIENTS) await adminStore.setOrg({ scope: clientScope(c.key), key: "color", value: c.color, actor: FOCUSTIME, area: "clients", target: c.key, note: "demo" });
+    // AH-1: an admin took Alex off Harbor's leads, so Ahead shows a teammate's feature there that only Harbor's leads
+    // and its owner can change (the read-only note).
+    await adminStore.setOverride({ personId: DEMO_PERSON.oid, personName: DEMO_PERSON.name, kind: "lead_remove", clientKey: "Harbor", actor: FOCUSTIME });
   })();
   // DV-1: Admin › Status's DevOps rows, pretend (the demo reads no DevOps): one fine, one with a bad token, one slowed.
   const checked = new Map<string, string>();
@@ -194,6 +197,13 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   await run("followup.add", { clientKey: "Atlas", who: "Morgan Diaz", what: "Share the delay alert mockups", channel: "email", due: day(3) });
   await run("note.set", { clientKey: "Northwind", date: day(0), note: "CSV export works for orders. Next: the date filter." });
   await run("capture.add", { text: "Ask Harbor about single sign-on for the intake form", clientKey: "Harbor" });
+  // AH-1: three changes pending in Ahead (nothing is ever written in the demo): a start date, an owner, and a target
+  // date that changed in DevOps since editing began (the fictional earlier value), so the review shows a conflict.
+  if (ctx.plan) {
+    await ctx.plan.stageAheadChange({ clientKey: "Northwind", itemId: 1150, field: "start", value: "2026-11-16", half: "PM", baseRev: 1, baseValue: null });
+    await ctx.plan.stageAheadChange({ clientKey: "Northwind", itemId: 1113, field: "assignee", value: { email: DEMO_PERSON.email.toLowerCase(), name: DEMO_PERSON.name }, half: null, baseRev: 1, baseValue: { email: "priya.shah@example.com", name: "Priya Shah" } });
+    await ctx.plan.stageAheadChange({ clientKey: "Northwind", itemId: 1140, field: "target", value: "2026-12-23", half: "PM", baseRev: 1, baseValue: "2026-12-04" });
+  }
   // P1: this morning's notifications in ⋯ › Notifications: the day's plan (read) and the follow-ups due (new).
   if (ctx.plan) {
     const at = Temporal.Instant.from(ctx.now()).toString();

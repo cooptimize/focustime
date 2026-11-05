@@ -77,6 +77,24 @@ export function detectSizeField(fields: readonly FieldInfo[]): string | null {
   return SIZE_FIELDS.find((r) => have.has(r)) ?? null;
 }
 
+/**
+ * AH-1 (D634): a type's own size field, from the fields that type has, in this order: Story Points, Effort, Size,
+ * Original Estimate. Null when the type has none of them. The value is the field's own number (no conversion).
+ */
+export const TYPE_SIZE_FIELDS = [...SIZE_FIELDS.slice(0, 2), SIZE_FIELDS[2], "Microsoft.VSTS.Scheduling.OriginalEstimate"] as const;
+export function detectTypeSizeField(typeHas: ReadonlySet<string>): string | null {
+  return TYPE_SIZE_FIELDS.find((r) => typeHas.has(r)) ?? null;
+}
+/** The display names of the given fields from the project's field list ("Story Points"); the reference name when unknown. */
+export function fieldNames(fields: readonly FieldInfo[], refs: Iterable<string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const r of refs) {
+    const f = fields.find((x) => x.referenceName === r);
+    out[r] = typeof f?.name === "string" && f.name.trim() ? f.name.trim().slice(0, 80) : r;
+  }
+  return out;
+}
+
 /** A DevOps date field as a calendar date: stored at midnight UTC, that date; else the date in the local zone. */
 export function dateOnly(value: unknown, timeZone: string): string | null {
   if (typeof value !== "string") return null;

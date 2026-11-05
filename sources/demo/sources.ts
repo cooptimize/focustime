@@ -7,7 +7,7 @@ import type { DevOpsSource } from "../devops/source.ts";
 import type { CalEvent, ClientWork, SourceId, SourceResult } from "../../week/types.ts";
 import type { GraphWriter } from "../graph/write.ts";
 import { demoDirectory } from "./directory.ts";
-import { DEMO_CLIENTS, DEMO_ME, DEMO_PEOPLE, demoGoogle, demoOrganizer, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, isDemoClient } from "./data.ts";
+import { DEMO_CLIENTS, DEMO_ME, DEMO_PEOPLE, demoGoogle, demoOrganizer, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, isDemoClient, demoAheadClient } from "./data.ts";
 
 const NO = "Demo data: nothing leaves FocusTime";
 
@@ -97,6 +97,8 @@ export function createDemoSources(now: () => string, processOverrides: (clientKe
         return { clientKey: c.clientKey, states: Object.fromEntries(all.filter(([id]) => (ids[c.clientKey] ?? []).includes(id))) };
       }),
     stateChanges: async (clientKey) => ({ known: true, itemIds: clientKey === "Atlas" || !isDemoClient(clientKey) ? [] : demoPortfolio(clientKey, now()).items.flatMap((i) => i.children.filter((x) => x.open).map((x) => x.id)) }),
+    // AH-1: Ahead's items, every level, as the store would give them.
+    aheadItems: async (clients) => clients.filter((c) => isDemoClient(c.clientKey)).map((c) => demoAheadClient(c.clientKey as never, now())),
     processModels: async (keys) => Promise.all(keys.map(async (clientKey) => (isDemoClient(clientKey) ? { clientKey, ok: true as const, model: demoProcess(clientKey, await processOverrides(clientKey)) } : { clientKey, ok: false as const, message: "Not a demo client" }))),
   };
   return { dataverse, outlook, google, devops };

@@ -7,7 +7,7 @@ import type { SnapshotStore } from "../../host/types.ts";
 import type { Logger } from "../../log/logger.ts";
 import type { ClientPortfolio, ClientWork, ClientWorkStatus, FailureCause, PortfolioItem, WorkItem } from "../../week/types.ts";
 import { formatFetchedAt } from "../when.ts";
-import { batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, detectOrderField, identityEmail, detectSizeField, detectTargetField, START_DATE_FIELD, ACCEPTANCE_FIELD, htmlToText, normalizeWorkItems, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
+import { batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, detectOrderField, identityEmail, detectSizeField, detectTargetField, detectTypeSizeField, fieldNames, identityName, dateOnly, workItemUrl, START_DATE_FIELD, ACCEPTANCE_FIELD, htmlToText, normalizeWorkItems, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
 import { buildProcessModel, isClosed, isOpen, looksOf, type TypeLook, planningLevels, stateCategories, typeOf, type ProcessModel, type ProcessOverrides, type RawProcess } from "../../plan/process.ts";
 import { Pat } from "./pat.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
@@ -81,12 +81,23 @@ export type CentralReads = {
   target(clientKey: string): Promise<DevOpsTarget | null>;
   /** After a write: check the client now, so the next read shows the change. */
   afterWrite(clientKey: string): void;
+  /** AH-1: a write's read-back, into the store and its change log now (not on the next check). */
+  stored?(clientKey: string, value: RawValue): Promise<void>;
   /** PL-1: items whose state changed since an instant (the change log), and whether the log covers that span. */
   stateChanges?(clientKey: string, since: string): Promise<{ known: boolean; itemIds: number[] }>;
 };
 
 /** The fields a project has for Plan the week, cached an hour. */
-export type FieldSet = { fields: Record<string, string>; starts: Record<string, string>; size: string | null; ac: boolean };
+export type FieldSet = {
+  fields: Record<string, string>;
+  starts: Record<string, string>;
+  size: string | null;
+  ac: boolean;
+  /** AH-1: each type's own size field (Story Points, Effort, Size or Original Estimate); absent: none. Older caches lack it. */
+  sizes?: Record<string, string>;
+  /** AH-1: display names of the date and size fields ("Story Points"), by reference name. */
+  names?: Record<string, string>;
+};
 
 export type ClientRef = { clientKey: string; clientName: string };
 
@@ -426,22 +437,24 @@ export function createDevOpsSource(d: DevOpsDeps) {
 
   // ---- Plan the week (step 8): features and epics, read-only ----
   const portfolioMemory = new Map<string, { at: number; result: ClientPortfolio }>();
-  const targetFieldMemory = new Map<string, { at: number; fields: Record<string, string>; starts: Record<string, string>; size: string | null; ac: boolean }>();
+  const targetFieldMemory = new Map<string, FieldSet & { at: number }>();
 
   /**
    * The target date field per portfolio type (and, D461, per story type, for the dates in Plan the week) for a project, and (step 16) the size field on stories, cached like the
    * metadata. None found: no target dates, no sizes.
    */
-  async function targetFieldsFor(c: Ctx, project: string, types: readonly string[], storyTypes: readonly string[] = []): Promise<{ fields: Record<string, string>; starts: Record<string, string>; size: string | null; ac: boolean }> {
+  async function targetFieldsFor(c: Ctx, project: string, types: readonly string[], storyTypes: readonly string[] = []): Promise<FieldSet> {
     const key = `${c.org.toLowerCase()}/${project.toLowerCase()}`;
     const hit = targetFieldMemory.get(key);
     const t = now().epochMilliseconds;
-    if (hit && t - hit.at < metaTtl) return { fields: hit.fields, starts: hit.starts, size: hit.size, ac: hit.ac };
+    if (hit && t - hit.at < metaTtl) return { fields: hit.fields, starts: hit.starts, size: hit.size, ac: hit.ac, sizes: hit.sizes ?? {}, names: hit.names ?? {} };
     const p = encodeURIComponent(project);
     const out: Record<string, string> = {};
     const starts: Record<string, string> = {};
     let size: string | null = null;
     let ac = false;
+    const sizes: Record<string, string> = {};
+    let names: Record<string, string> = {};
     try {
       const all = await call<{ value?: FieldInfo[] }>(c, "fields", `${p}/_apis/wit/fields`);
       size = detectSizeField(all.value ?? []);
@@ -453,7 +466,11 @@ export function createDevOpsSource(d: DevOpsDeps) {
         if (found) out[type] = found;
         // Step 17: Start Date where the process has it (detected per process, per type).
         if (has.has(START_DATE_FIELD) && types.includes(type)) starts[type] = START_DATE_FIELD;
+        // AH-1 (D634): the type's own size field.
+        const sz = detectTypeSizeField(has);
+        if (sz) sizes[type] = sz;
       }
+      names = fieldNames(all.value ?? [], new Set([...Object.values(out), ...Object.values(starts), ...Object.values(sizes)]));
       // Step 15.3: whether the first story type has acceptance criteria (the draft editor shows the field only then).
       const story = storyTypes[0];
       if (story) {
@@ -466,8 +483,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
       log("target_fields", { kind: "unavailable" });
       return { fields: {}, starts: {}, size: null, ac: false };
     }
-    targetFieldMemory.set(key, { at: t, fields: out, starts, size, ac });
-    return { fields: out, starts, size, ac };
+    targetFieldMemory.set(key, { at: t, fields: out, starts, size, ac, sizes, names });
+    return { fields: out, starts, size, ac, sizes, names };
   }
 
   type PortfolioRead = { items: PortfolioItem[]; targetFields: Record<string, string>; startFields: Record<string, string>; sizeField: string | null; acceptanceField: boolean };
@@ -944,6 +961,68 @@ export function createDevOpsSource(d: DevOpsDeps) {
     );
   }
 
+  /**
+   * AH-1 (D630): every item of each client the store has that isn't closed, at any level, with its revision, assignee
+   * and the fields its type has (start, target, size), plus the parents of those items. For Ahead's grid and Gantt.
+   */
+  async function aheadItems(clients: ClientRef[], o: { refresh?: boolean } = {}): Promise<import("../../actions/types.ts").AheadClient[]> {
+    const fail = (ref: ClientRef, status: ClientWorkStatus, message: string): import("../../actions/types.ts").AheadClient => ({ clientKey: ref.clientKey, clientName: ref.clientName, status, message, fetchedAt: null, project: null, me: null, startFields: {}, targetFields: {}, sizeFields: {}, fieldNames: {}, types: [], items: [] });
+    if (!d.central) return clients.map((c) => fail(c, "error", "Ahead reads the shared DevOps store, which isn't running here"));
+    const targets = await viewerTargets(clients.map((c) => c.clientKey), !!o.refresh);
+    return Promise.all(
+      clients.map(async (ref) => {
+        if (!targets.ok) return fail(ref, targets.cause === "keyring" ? "error" : "unreachable", `DevOps settings unavailable (${targets.message})`);
+        const target = targets.targets.find((t) => t.clientKey === ref.clientKey);
+        const pre = precheck(ref, target, { pat: false });
+        if (pre) return fail(ref, pre.status, pre.message);
+        const view = await d.central!.view(ref.clientKey, { force: !!o.refresh });
+        if (!view.process || !view.loaded) return fail(ref, view.failure?.status ?? "error", view.failure?.message ?? `FocusTime is reading ${ref.clientName}'s DevOps for the first time. Try again in a minute`);
+        const { ctx } = contextOf(ref, { ...target!, pat: null });
+        const meta = metaOf(view.process, ref.clientKey);
+        const cats = stateCategories(meta.model, d.openStates?.(ref.clientKey) ?? []);
+        const f = view.fields ?? { fields: {}, starts: {}, size: null, ac: false };
+        const tz = d.timeZone;
+        const str = (v: unknown) => (typeof v === "string" ? v : "");
+        const all = view.values.map((v) => {
+          const type = str(v.fields["System.WorkItemType"]);
+          const state = str(v.fields["System.State"]);
+          const category = cats.get(type)?.get(state.toLowerCase()) ?? "Unknown";
+          const parent = v.fields["System.Parent"];
+          const sizeField = f.sizes?.[type] ?? null;
+          const sz = sizeField ? v.fields[sizeField] : null;
+          const who = v.fields["System.AssignedTo"];
+          const rung = meta.model.ladder.findIndex((r) => r.includes(type));
+          return {
+            id: v.id, rev: typeof v.fields["System.Rev"] === "number" ? (v.fields["System.Rev"] as number) : 0,
+            title: str(v.fields["System.Title"]).trim() || "(No title)", type, state, stateCategory: category,
+            level: typeOf(meta.model, type)?.level ?? null, rung: rung >= 0 ? rung : null,
+            parentId: typeof parent === "number" && Number.isInteger(parent) ? parent : null,
+            assignee: who ? { name: identityName(who) ?? identityEmail(who) ?? "Someone", email: identityEmail(who) } : null,
+            start: f.starts[type] ? dateOnly(v.fields[f.starts[type]!], tz) : null,
+            target: f.fields[type] ? dateOnly(v.fields[f.fields[type]!], tz) : null,
+            size: typeof sz === "number" && Number.isFinite(sz) ? sz : null,
+            url: workItemUrl(ctx.org, ctx.projectName, v.id), changedAt: str(v.fields["System.ChangedDate"]),
+          };
+        });
+        const known = all.filter((i) => i.level !== null && cats.has(i.type));
+        const keep = new Set(known.filter((i) => !isClosed(i.stateCategory)).map((i) => i.id));
+        const byId = new Map(known.map((i) => [i.id, i]));
+        for (const id of [...keep]) for (let p = byId.get(id)?.parentId ?? null, n = 0; p !== null && n < 10; p = byId.get(p)?.parentId ?? null, n++) if (byId.has(p)) keep.add(p);
+        const items = known.filter((i) => keep.has(i.id));
+        const typesOf = new Set(meta.model.types.map((t) => t.name));
+        const pick = (m: Record<string, string>) => Object.fromEntries(Object.entries(m).filter(([t]) => typesOf.has(t)));
+        const fetchedAt = view.okAt ? Temporal.Instant.from(view.okAt).toZonedDateTimeISO(tz).toString({ timeZoneName: "never", smallestUnit: "second" }) : null;
+        reportItems(ref.clientKey, items.map((i) => ({ id: i.id })) as never);
+        return {
+          clientKey: ref.clientKey, clientName: ref.clientName, status: view.failure ? view.failure.status : "ok", ...(view.failure ? { message: view.failure.message } : {}),
+          fetchedAt, project: ctx.projectName, me: target?.email ?? null,
+          startFields: pick(f.starts), targetFields: pick(f.fields), sizeFields: pick(f.sizes ?? {}), fieldNames: f.names ?? {},
+          types: looksOf(meta.model), items,
+        };
+      }),
+    );
+  }
+
   /** PL-1: the state category of these items (any state) as the store has them; null when DevOps can't say now. */
   async function itemStates(clients: ClientRef[], ids: Readonly<Record<string, readonly number[]>>): Promise<{ clientKey: string; states: Record<number, string> | null }[]> {
     if (!d.central) return clients.map((c) => ({ clientKey: c.clientKey, states: null }));
@@ -1049,13 +1128,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     },
   };
 
-  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, internal };
+  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, aheadItems, internal };
 }
 
 /** What screens use (the same interface whether it reads DevOps or the central store). */
 type FullSource = ReturnType<typeof createDevOpsSource>;
 /** PL-1's by-id reads are optional: a source without them (a stub, an older adapter) means "DevOps can't say". */
-type PlanReads = "featureTrees" | "itemStates" | "stateChanges";
+type PlanReads = "featureTrees" | "itemStates" | "stateChanges" | "aheadItems";
 export type DevOpsSource = Omit<FullSource, "internal" | PlanReads> & Partial<Pick<FullSource, PlanReads>>;
 /** DV-1: what the central poller uses of an app-level source. */
 export type DevOpsInternal = ReturnType<typeof createDevOpsSource>["internal"];

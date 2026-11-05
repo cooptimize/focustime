@@ -1191,6 +1191,16 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "roadmap.ahead":
     case "roadmap.set_dates":
       return { run: () => env.setView("ahead") };
+    // AH-1: Ahead's grid, its change set and filters live on Ahead itself.
+    case "ahead.load":
+    case "ahead.filters":
+    case "ahead.set_filters":
+    case "ahead.stage":
+    case "ahead.unstage":
+    case "ahead.resolve":
+      return { run: () => env.setView("roadmap") };
+    case "ahead.discard":
+      return { run: () => env.setView("roadmap") };
     case "weekplan.commit": return env.planWeekOpen ? { run: env.commitWeek } : { disabled: "Open Plan the week first" };
     // Features are chosen in Plan the week itself.
     case "weekplan.set_feature":
