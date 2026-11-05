@@ -218,7 +218,7 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       return {
         ok: true,
         data: {
-          clientKey, clientName: nameOf(clientKey), featureId, featureTitle: signals.feature.title, storyType: signals.storyType, url: signals.feature.url,
+          clientKey, clientName: nameOf(clientKey), featureId, featureTitle: signals.feature.title, featureType: signals.feature.type, storyType: signals.storyType, childTypes: signals.childTypes ?? [signals.storyType], url: signals.feature.url,
           signals: {
             fields: [
               ["Title", signals.feature.title], ["State", signals.feature.state], ["Priority", signals.feature.priority === null ? "" : String(signals.feature.priority)], ["Tags", signals.feature.tags.join(", ")],
@@ -241,14 +241,18 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       };
     }
     case "stories.run": {
-      const o = fields(input, ["clientKey", "featureId"], ["note", "exemplarIds"]);
+      const o = fields(input, ["clientKey", "featureId"], ["note", "exemplarIds", "storyType"]);
       const clientKey = text(o.clientKey, "clientKey", 100);
       const featureId = posId(o.featureId, "featureId");
       const note = text(o.note, "note", NOTE_MAX, true);
       if (o.exemplarIds !== undefined && (!Array.isArray(o.exemplarIds) || o.exemplarIds.length > EXEMPLAR_MAX || o.exemplarIds.some((x) => typeof x !== "number" || !Number.isSafeInteger(x)))) throw new Invalid(`exemplarIds is a list of at most ${EXEMPLAR_MAX} item ids`);
       // No write PAT: nothing is sent anywhere (a draft that can't be published isn't worth the request).
       if (!(await ctx.writeClients()).includes(clientKey)) throw new Refused(NO_PAT(nameOf(clientKey)), 409, "no_write_pat");
-      const signals = await signalsOf(clientKey, featureId);
+      const read = await signalsOf(clientKey, featureId);
+      // WT-1: the child type the person chose, one of the types this feature's type takes; else the most common.
+      const chosen = o.storyType === undefined ? null : text(o.storyType, "storyType", 100);
+      if (chosen && !(read.childTypes ?? [read.storyType]).includes(chosen)) throw new Invalid(`${chosen} isn't a type that goes under #${featureId} in this project`);
+      const signals = chosen ? { ...read, storyType: chosen } : read;
       const pool = (await poolOf(clientKey)) ?? [];
       // The examples the person kept (only ones from this client's own pool; anything else is ignored), else the ranking's.
       const wanted = o.exemplarIds as number[] | undefined;
@@ -265,7 +269,9 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       const note = text(o.note, "note", NOTE_MAX, true);
       if (!(await ctx.writeClients()).includes(d.clientKey)) throw new Refused(NO_PAT(nameOf(d.clientKey)), 409, "no_write_pat");
       const writes = await plan.storyDraftWrites(d.id);
-      const signals = await signalsOf(d.clientKey, d.featureId);
+      const fresh = await signalsOf(d.clientKey, d.featureId);
+      // WT-1: the draft keeps the child type it was made with.
+      const signals = (fresh.childTypes ?? [fresh.storyType]).includes(d.storyType) ? { ...fresh, storyType: d.storyType } : fresh;
       const pool = (await poolOf(d.clientKey)) ?? [];
       const exemplars = d.exemplarIds.map((id) => pool.find((c) => c.id === id)).filter((c): c is ExemplarCandidate => !!c);
       const style = styleText(await styleOf(d.clientKey));

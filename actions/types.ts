@@ -168,7 +168,7 @@ export type SettingsData = {
 };
 
 /** [plan] values the UI uses (step 6c). */
-export type PlanningSettings = Omit<AppConfig["plan"], "pickablePortfolioTypes">;
+export type PlanningSettings = Omit<AppConfig["plan"], "pickablePortfolioTypes" | "backgroundTypes">;
 
 /** The focus timer as the UI sees it (step 6c). `endsAt` is set while running, for a local countdown. */
 export type TimerView = {

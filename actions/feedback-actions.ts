@@ -45,7 +45,8 @@ export function createFeedbackService(o: { devops: FeedbackDevOps | null; mode: 
     try {
       const parent = await d.parent();
       if (!parent) return no(`Feature #${d.target.parentId} isn't there, or FocusTime can't see it`);
-      if (parent.type !== "Feature") return no(`#${d.target.parentId} is a ${parent.type || "work item"}, not a Feature`);
+      // WT-1: the parent must sit at the process's parent level (where features are), whatever the type is called.
+      if (!(await d.parentTypes()).includes(parent.type)) return no(`#${d.target.parentId} is a ${parent.type || "work item"}, not at the feature level of this process`);
       const type = await d.storyType();
       if (!type) return no("The project's process has no story type");
       // validateOnly: everything a real create checks (type, fields, area, the parent link, permission), nothing saved.

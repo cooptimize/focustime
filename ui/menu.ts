@@ -31,6 +31,8 @@ export type MenuItem = {
   label: string;
   /** Shown on the right: a key, or a short note. */
   hint?: string;
+  /** WT-1: a work item's type, drawn as its icon before the label (the type name is its tooltip). */
+  typeIcon?: { clientKey: string; type: string };
   /** Plain reason when the item can't be used now; the item shows but does nothing. */
   disabled?: string;
   /** U2: a disabled item someone would look for (Move on a done pick): kept in ⋯ menus, its reason as a tooltip. Other disabled items are hidden there. */
@@ -452,7 +454,7 @@ export function draftPrompt(env: MenuEnv, clientKey: string, item: { id: number;
 export function itemMenu(env: MenuEnv, clientKey: string, item: WorkItem): MenuStep {
   const kids = env.work.get(clientKey)?.children.some((c) => c.parentId === item.id) ?? false;
   return {
-    title: `${item.type} ${item.id}: ${item.title}`,
+    title: `#${item.id}: ${item.title}`,
     head: rowHead({ id: item.id, title: item.title, client: clientNameOf(env, clientKey) }),
     items: [
       { id: "open", label: "Open in browser", action: "link.open", run: () => env.openLink(clientKey, item.url) },
@@ -629,7 +631,7 @@ export function slotMenu(env: MenuEnv, date: IsoDate, half: Half, clientKey: str
         label: "Add a work item",
         action: "pick.add",
         ...(off ? { disabled: off } : !pickable.length ? { disabled: clientKey ? `No story-level items loaded for ${clientName}` : "Open half-day: plan it in Plan the day to choose a client" } : {}),
-        next: () => ({ title: `Add to ${dayName(date)} ${half}`, items: pickable.map((i) => ({ id: `i${i.id}`, label: i.title, hint: `${i.type} ${i.id}`, action: "pick.add", ...(clientKey ? plannedHere(env, date, half, clientKey, i.id) : {}), run: () => env.runPlan("pick.add", { date, half, clientKey, itemId: i.id }) })) }),
+        next: () => ({ title: `Add to ${dayName(date)} ${half}`, items: pickable.map((i) => ({ id: `i${i.id}`, label: i.title, hint: `#${i.id}`, ...(clientKey ? { typeIcon: { clientKey, type: i.type } } : {}), action: "pick.add", ...(clientKey ? plannedHere(env, date, half, clientKey, i.id) : {}), run: () => env.runPlan("pick.add", { date, half, clientKey, itemId: i.id }) })) }),
       },
     ],
   };
@@ -900,7 +902,7 @@ function chooseItem(env: MenuEnv, title: string, filter: (i: WorkItem) => boolea
     title,
     items: all.map(({ clientKey, item }) => {
       const t = then(clientKey, item);
-      const base = { id: `${clientKey}:${item.id}`, label: item.title, hint: `${clientKey} · ${item.type} ${item.id}` };
+      const base = { id: `${clientKey}:${item.id}`, label: item.title, hint: `${clientKey} · #${item.id}`, typeIcon: { clientKey, type: item.type } };
       return typeof t === "function" ? { ...base, run: t } : { ...base, next: () => t as MenuStep };
     }),
   };

@@ -1,6 +1,7 @@
 // DevOps writes (step 14), pure: the JSON Patch for each named change, the preview's rows, how each write is undone,
 // what changed since an item was loaded, and the identity rule. No I/O, no PATs. Requests are built from an org name
 // that has been validated, so a write can only go to that client's own organization.
+import { COMPLETED, isOpen, REMOVED, stateIn } from "./process.ts";
 import { NEUTRAL_ZONE } from "../week/zone.ts";
 
 /** Azure DevOps REST, checked Nov 1, 2026: work items GA at 7.1; comments only as 7.1-preview.4. */
@@ -124,9 +125,10 @@ export function removeOps(rev: number, removedState: string): PatchOp[] {
 }
 
 /** The completed state to preselect: the first state in the Completed category. */
-export const completedState = (states: readonly StateInfo[]) => states.find((s) => s.category === "Completed")?.name ?? null;
-export const removedState = (states: readonly StateInfo[]) => states.find((s) => s.category === "Removed")?.name ?? null;
-export const isOpenCategory = (c: string) => c !== "Completed" && c !== "Removed";
+export const completedState = (states: readonly StateInfo[]) => stateIn(states, COMPLETED);
+export const removedState = (states: readonly StateInfo[]) => stateIn(states, REMOVED);
+/** WT-1: FocusTime adds items only under open parents (Proposed or In Progress). */
+export const isOpenCategory = (c: string | null | undefined) => isOpen(c);
 
 /** Rows the preview shows: label, now, after. */
 export type Row = { label: string; before: string | null; after: string | null; changed: boolean };

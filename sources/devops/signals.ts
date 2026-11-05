@@ -2,6 +2,7 @@
 // one feature's fields, its epic, its child items and its comments; and the example pool, the same project's features
 // changed in the last months with their stories. Pure here: the queries and the parsing; the calls are in source.ts.
 // Never cached on disk, never logged (counts only).
+import { isProposed, isRemoved } from "../../plan/process.ts";
 import type { ChildItem, EpicFields, ExemplarCandidate, FeatureFields, RawComment } from "../../plan/stories.ts";
 import { ACCEPTANCE_FIELD, htmlToText, type StateCategories } from "./normalize.ts";
 
@@ -27,8 +28,8 @@ export const childrenWiql = (parentId: number) => `SELECT [System.Id] FROM WorkI
 /** The pool: the project's features (the feature tier) that are under way or done, changed since the date. */
 export function poolWiql(o: { project: string; featureTypes: readonly string[]; categories: StateCategories; since: string }): string {
   const states = new Set<string>();
-  for (const t of o.featureTypes) for (const [name, cat] of o.categories.get(t) ?? []) if (cat === "InProgress" || cat === "Resolved" || cat === "Completed") states.add(name);
-  // Names come lower-cased from categoriesFrom; WIQL compares states without case.
+  for (const t of o.featureTypes) for (const [name, cat] of o.categories.get(t) ?? []) if (!isProposed(cat) && !isRemoved(cat)) states.add(name);
+  // Names come lower-cased from the process model; WIQL compares states without case.
   const stateClause = states.size ? ` AND [System.State] IN (${[...states].map(q).join(", ")})` : "";
   return `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = ${q(o.project)} AND [System.WorkItemType] IN (${o.featureTypes.map(q).join(", ")})${stateClause} AND [System.ChangedDate] >= ${q(o.since)} ORDER BY [System.ChangedDate] DESC`;
 }

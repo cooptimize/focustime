@@ -4,6 +4,7 @@
 // Regenerate one or the set) and Publish (the exact batch from the write framework, then Create; what was created and
 // what wasn't, with Retry for the rest). Nothing reaches DevOps until Create is pressed. With AI off for the client the
 // button says so and opens Settings; the Coop brief next to it still works.
+import { TypeIcon } from "./TypeIcon.tsx";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { call } from "./api.ts";
 import { DRAFT_STORIES_EVENT, openDraftStories } from "./menu.ts";
@@ -15,7 +16,7 @@ type CardStatus = { state: "not_sent" } | { state: "created"; itemId: number; ur
 type Card = { id: string; title: string; description: string; acceptance: string[]; dependsOn: string[]; size: Size; evidence: string[]; questions: string[]; keep: boolean; status: CardStatus; after: string[]; sizeText: string };
 type Draft = { id: string; clientKey: string; featureId: number; featureTitle: string; storyType: string; note: string; cards: Card[]; rationale: string; setAside: { title: string; why: "out_of_scope" | "already_covered"; existing_item_id: number | null; reason: string }[]; cost: string; published: number; left: number };
 type Prepared = {
-  clientKey: string; clientName: string; featureId: number; featureTitle: string; storyType: string; url: string;
+  clientKey: string; clientName: string; featureId: number; featureTitle: string; featureType: string; storyType: string; /** WT-1: the child types the feature takes, the most common first. */ childTypes: string[]; url: string;
   signals: { fields: [string, string][]; epic: { id: number; title: string } | null; children: { id: number; title: string; type: string; state: string }[]; comments: { total: number; sent: number; left: number; coopBlocks: number } };
   exemplars: { id: number; title: string; summary: string; stories: number; chosen: boolean }[];
   poolRead: boolean; style: { text: string; learned: boolean; edited: boolean }; estimate: string | null; model: string | null;
@@ -98,6 +99,7 @@ export function DraftStoriesSheet({ clientKey, item, onClose }: { clientKey: str
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [chosen, setChosen] = useState<number[]>([]);
+  const [childType, setChildType] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Preview[] | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
   const changed = useRef(false);
@@ -108,6 +110,7 @@ export function DraftStoriesSheet({ clientKey, item, onClose }: { clientKey: str
     call<Prepared>("stories.prepare", { clientKey, featureId: item.id }).then(
       (p) => {
         setPrep(p);
+        setChildType(p.storyType);
         setChosen(p.exemplars.filter((e) => e.chosen).map((e) => e.id));
         setBusy(null);
       },
@@ -132,7 +135,7 @@ export function DraftStoriesSheet({ clientKey, item, onClose }: { clientKey: str
   }, []);
 
   const runDraft = async () => {
-    const d = await act("Drafting stories…", () => call<Draft>("stories.run", { clientKey, featureId: item.id, note, exemplarIds: chosen }));
+    const d = await act("Drafting stories…", () => call<Draft>("stories.run", { clientKey, featureId: item.id, note, exemplarIds: chosen, ...(childType ? { storyType: childType } : {}) }));
     if (d) {
       setDraft(d);
       setStep("review");
@@ -231,7 +234,7 @@ export function DraftStoriesSheet({ clientKey, item, onClose }: { clientKey: str
             Draft stories <span className="muted">· {prep?.clientName ?? clientKey}</span>
           </h2>
           <p className="ds-feature">
-            {prep ? <WorkLink clientKey={clientKey} url={prep.url}>#{item.id} {title}</WorkLink> : `#${item.id} ${title}`}
+            {prep && <TypeIcon clientKey={clientKey} type={prep.featureType} />} {prep ? <WorkLink clientKey={clientKey} url={prep.url}>#{item.id} {title}</WorkLink> : `#${item.id} ${title}`}
           </p>
           <ol className="ds-steps" aria-label="Steps">
             {STEPS.map(([s, label], i) => (
@@ -242,7 +245,7 @@ export function DraftStoriesSheet({ clientKey, item, onClose }: { clientKey: str
           </ol>
         </div>
         <div className="ds-body">
-          {step === "prepare" && prep && <PrepareStep prep={prep} note={note} setNote={setNote} chosen={chosen} setChosen={setChosen} onReview={prep.latest ? () => (setDraft(prep.latest), setNote(prep.latest!.note), setStep("review")) : null} />}
+          {step === "prepare" && prep && <PrepareStep prep={prep} childType={childType ?? prep.storyType} setChildType={setChildType} note={note} setNote={setNote} chosen={chosen} setChosen={setChosen} onReview={prep.latest ? () => (setDraft(prep.latest), setNote(prep.latest!.note), setStep("review")) : null} />}
           {step === "review" && draft && <ReviewStep draft={draft} busy={!!busy} onEdit={edit} onRegenerate={(id) => void regenerate(id)} />}
           {step === "publish" && draft && <PublishStep draft={draft} previews={previews ?? []} failed={failed} />}
           {busy && <p className="ds-busy" role="status">{busy}</p>}
@@ -305,7 +308,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function PrepareStep({ prep, note, setNote, chosen, setChosen, onReview }: { prep: Prepared; note: string; setNote: (s: string) => void; chosen: number[]; setChosen: (ids: number[]) => void; onReview: (() => void) | null }) {
+function PrepareStep({ prep, childType, setChildType, note, setNote, chosen, setChosen, onReview }: { prep: Prepared; childType: string; setChildType: (t: string) => void; note: string; setNote: (s: string) => void; chosen: number[]; setChosen: (ids: number[]) => void; onReview: (() => void) | null }) {
   const s = prep.signals;
   const c = s.comments;
   const toggle = (id: number) => setChosen(chosen.includes(id) ? chosen.filter((x) => x !== id) : chosen.length >= 5 ? chosen : [...chosen, id]);
@@ -345,7 +348,7 @@ function PrepareStep({ prep, note, setNote, chosen, setChosen, onReview }: { pre
           <ul className="ds-children">
             {s.children.map((k) => (
               <li key={k.id}>
-                #{k.id} {k.title} <span className="muted">· {k.type} · {k.state}</span>
+                <TypeIcon clientKey={prep.clientKey} type={k.type} /> #{k.id} {k.title} <span className="muted">· {k.state}</span>
               </li>
             ))}
           </ul>
@@ -385,7 +388,23 @@ function PrepareStep({ prep, note, setNote, chosen, setChosen, onReview }: { pre
         <textarea rows={2} maxLength={600} value={note} placeholder="split by report, skip the data model" onChange={(e) => setNote(e.target.value)} />
       </label>
       <p className="ds-run-line">
-        Creates <strong>{prep.storyType}</strong> items under #{prep.featureId}, only after you review and confirm.
+        Creates{" "}
+        {prep.childTypes.length > 1 ? (
+          <label className="ds-child-type">
+            <TypeIcon clientKey={prep.clientKey} type={childType} decorative />
+            <select aria-label="Type to create" value={childType} onChange={(e) => setChildType(e.target.value)}>
+              {prep.childTypes.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <>
+            <TypeIcon clientKey={prep.clientKey} type={childType} decorative />
+            <strong className="type-word">{childType}</strong>
+          </>
+        )}{" "}
+        items under #{prep.featureId}, only after you review and confirm.
         {prep.estimate && (
           <>
             {" "}About <strong>{prep.estimate}</strong>{prep.model ? ` at ${prep.model}` : ""}.

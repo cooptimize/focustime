@@ -17,6 +17,7 @@ export function createDemoFeedbackDevOps(o: { parent?: DemoFeedbackParent | unde
     parent: async () =>
       o.parent === "missing" ? null : { id: t.parentId, type: o.parent === "wrong_type" ? "Epic" : "Feature", title: "FocusTime (demo feature)", areaPath: t.project, project: t.project },
     storyType: async () => "User Story",
+    parentTypes: async () => ["Feature"],
     defaultIteration: async () => `${t.project}\\Iteration 1`,
     create: async (_type, p, area, iteration, validateOnly = false) => {
       if (validateOnly) return { id: null, rev: null };

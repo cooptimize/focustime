@@ -3,6 +3,8 @@
   "value": [
     {
       "name": "User Story",
+      "color": "009CCC",
+      "icon": { "id": "icon_book" },
       "referenceName": "Microsoft.VSTS.WorkItemTypes.UserStory",
       "isDisabled": false,
       "states": [
@@ -35,6 +37,8 @@
     },
     {
       "name": "Bug",
+      "color": "CC293D",
+      "icon": { "id": "icon_insect" },
       "referenceName": "Microsoft.VSTS.WorkItemTypes.Bug",
       "isDisabled": false,
       "states": [
@@ -62,6 +66,8 @@
     },
     {
       "name": "Task",
+      "color": "A4880A",
+      "icon": { "id": "icon_clipboard" },
       "referenceName": "Microsoft.VSTS.WorkItemTypes.Task",
       "isDisabled": false,
       "states": [
@@ -94,6 +100,8 @@
     },
     {
       "name": "Feature",
+      "color": "773B93",
+      "icon": { "id": "icon_trophy" },
       "states": [
         {
           "name": "New",
@@ -119,6 +127,8 @@
     },
     {
       "name": "Epic",
+      "color": "E06C00",
+      "icon": { "id": "icon_crown" },
       "states": [
         {
           "name": "New",

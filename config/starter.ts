@@ -82,10 +82,13 @@ min_focus_window_minutes = 90
 # [clients]
 # Cooptimize = "#4a7fd4"
 
-# Plan the day. Epics, features and other portfolio types can't be picked,
-# except the types listed here (matched without regard to case).
+# Planning. Every type at a feature or epic level needs breaking down by default
+# (levels come from each client's DevOps process). Types listed here don't, so
+# they can be picked directly; background_types don't count against hours.
+# Both are matched without regard to case, until Admin hosts these switches.
 [plan]
-pickable_portfolio_types = ["Recurring"]
+pickable_portfolio_types = []
+background_types = []
 
 # Display. Theme: "cooptimize-dark" (default), "cooptimize-light" or "neutral". Settings changes it too.
 [ui]

@@ -154,7 +154,13 @@ describe.skipIf(!CHROMIUM)("Draft stories", () => {
       await sheet.getByText("2 of 2, newest first; 1 Coop block as one line").waitFor();
       const examples = sheet.getByRole("region", { name: /^Examples from Adatum/ });
       await examples.getByText("Weekly sales report export").waitFor();
-      await sheet.getByText(/Creates User Story items under #240/).waitFor();
+      // WT-1: the type to create, with its icon first, from the feature's valid child types.
+      const runLine = sheet.locator(".ds-run-line");
+      await runLine.getByText(/items under #240/).waitFor();
+      // The fake has no team settings, so bugs sit with stories: a choice, the most common type first.
+      expect(await runLine.getByLabel("Type to create").inputValue()).toBe("User Story");
+      expect(await runLine.locator('.type-icon svg[aria-hidden="true"]').count()).toBe(1);
+      expect(await sheet.locator(".ds-feature .type-icon").getAttribute("title")).toBe("Feature");
       await sheet.getByText(/at gpt-6-luna/).waitFor();
       await sheet.getByLabel("Note for the AI (optional)").fill("split by report, skip the data model");
       await shotBoth(page, "draft-stories-prepare", sheet);

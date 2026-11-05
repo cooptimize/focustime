@@ -4,6 +4,7 @@
 // DevOps with its #id as the cue, "+ time" and ⋯ on hover only (always on the next pick), a badge and actions on the right.
 // U4: density "plan" is Plan the day's row: a drag handle, no checkbox (ticking is Today's job; a done pick shows a ✓
 // and is struck), the title, a due badge, the size chip always (planning is where sizes live), + time and ⋯ on hover.
+import { ResolvedMark, TypeIcon } from "./TypeIcon.tsx";
 import { useContext, type DragEvent, type ReactNode } from "react";
 import type { Pick } from "../plan/types.ts";
 import { SizeChip } from "./plan/Estimate.tsx";
@@ -17,6 +18,8 @@ import { useTimeboxes } from "./Timeboxes.tsx";
 import { useFocused } from "./planview.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import { PlanRow } from "./plan/PlanRow.tsx";
+import { DevOpsWork } from "./work.ts";
+import { isResolved } from "../plan/process.ts";
 
 export const PICK_DRAG = "application/x-focustime-pick";
 
@@ -63,6 +66,10 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
     e.dataTransfer.effectAllowed = "move";
   };
   // E2: S, M, L or a muted "Size?"; a click opens S, M, L, Clear. "M · 2h" on Plan the day's roomy row.
+  // WT-1: an item DevOps has resolved shows a small Resolved marker (no hours left, not closed).
+  const workAll = useContext(DevOpsWork).get(pick.clientKey);
+  const seen = pick.itemId !== null && workAll ? [...workAll.items, ...workAll.children, ...(workAll.watched ?? [])].find((i) => i.id === pick.itemId) : undefined;
+  const resolved = seen && isResolved(seen.stateCategory) ? seen : null;
   const sizeChip = (
     <SizeChip size={pick.size} title={pick.title} wide={planD} tabIndex={tabIndex} note={focused ? `${focused} focused` : null}
       {...(readOnly || pick.status !== "planned" || !env ? {} : { onSet: (size) => void env.runPlan("pick.set_size", { id: pick.id, size }) })} />
@@ -72,8 +79,9 @@ export function PickRow({ pick, toggle, link = false, canTick = true, timeEditab
     return (
       <PlanRow data-pick={pick.id} className={`pick-row ${pick.status}${highlight ? " trim" : ""} dens-plan ${className}`} onContextMenu={menu.onContextMenu} draggable={draggable} onDragStart={draggable ? onDrag : undefined} {...ITEM_ATTRS(pick.clientKey, pick.itemUrl)}
         handle={pick.status === "done" ? "✓" : "⋮⋮"} titleText={pick.title}
+        icon={pick.itemType ? <TypeIcon clientKey={pick.clientKey} type={pick.itemType} /> : undefined}
         title={link && pick.itemUrl ? <WorkLink clientKey={pick.clientKey} url={pick.itemUrl}>{pick.title}</WorkLink> : pick.title}
-        badges={<>{extra}{badge}</>}
+        badges={<>{resolved && <ResolvedMark state={resolved.state} />}{extra}{badge}</>}
         right={<>{timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{sizeChip}</>}
         hover={<>{!timed && <PickTime pick={pick} editable={timeEditable && !readOnly} hint={hint} />}{menu.button(`More for ${pick.title}`)}</>} />
     );

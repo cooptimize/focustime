@@ -1,6 +1,7 @@
 // Demo data (step 15, D272): a realistic, fictional week for showing FocusTime without real client data. Every date is
 // generated from the week asked for, so the demo always looks current. No real people, clients, meetings or items.
 import type { PtoEntry } from "../../week/pto.ts";
+import { buildProcessModel, looksOf, type ProcessModel } from "../../plan/process.ts";
 import type { CalEvent, ClientPortfolio, ClientWork, FocusPattern, IsoDate, PortfolioChild, PortfolioItem, WorkItem } from "../../week/types.ts";
 
 export const DEMO_TZ = "America/New_York";
@@ -224,13 +225,26 @@ function item(k: DemoClientKey, r: Raw, order: number): WorkItem {
   };
 }
 
+/** WT-1: the demo's process (fictional, shaped like Agile): what its types look like and where they sit. */
+const DEMO_STATES = [{ name: "New", category: "Proposed" }, { name: "Active", category: "InProgress" }, { name: "Resolved", category: "Resolved" }, { name: "Closed", category: "Completed" }, { name: "Removed", category: "Removed" }];
+const demoType = (name: string, icon: string, color: string) => ({ name, icon: { id: icon }, color, states: DEMO_STATES });
+export function demoProcess(k: DemoClientKey): ProcessModel {
+  const lvl = (type: "portfolio" | "requirement" | "task", rank: number, types: string[]) => ({ type, rank, workItemTypes: types.map((name) => ({ name })), defaultWorkItemType: { name: types[0] } });
+  return buildProcessModel({
+    org: client(k).org, project: client(k).project, process: "Agile", fetchedAt: "2026-10-30T15:00:00Z",
+    teamSettings: { bugsBehavior: "asTasks" }, processConfig: { bugWorkItems: { workItemTypes: [{ name: "Bug" }] } },
+    teamBacklogs: { value: [lvl("portfolio", 4, ["Epic"]), lvl("portfolio", 3, ["Feature"]), lvl("requirement", 2, ["User Story"]), lvl("task", 1, ["Task", "Bug"])] },
+    types: [demoType("Epic", "icon_crown", "E06C00"), demoType("Feature", "icon_trophy", "773B93"), demoType("User Story", "icon_book", "009CCC"), demoType("Task", "icon_clipboard", "A4880A"), demoType("Bug", "icon_insect", "CC293D")],
+  });
+}
+
 /** One client's DevOps read: my open items in board order, and the open children of my features and epics. */
 export function demoWork(k: DemoClientKey, fetchedAt: string): ClientWork {
   const all = ITEMS[k].map((r, n) => item(k, r, n + 1)).filter((i) => i.stateCategory !== "Completed");
   const mine = all.filter((i) => i.assignedToMe);
   const mineIds = new Set(mine.map((i) => i.id));
   const children = all.filter((i) => !mineIds.has(i.id) && i.parentId !== null);
-  return { clientKey: k, clientName: client(k).name, status: "ok", fetchedAt, fromCache: false, items: mine, children, watched: [], committed: [] };
+  return { clientKey: k, clientName: client(k).name, status: "ok", fetchedAt, fromCache: false, items: mine, children, watched: [], committed: [], types: looksOf(demoProcess(k)) };
 }
 
 /** One client's features and epics for Plan the week, with every child (any state). */

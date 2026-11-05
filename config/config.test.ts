@@ -173,11 +173,16 @@ calendars = ["primary", "family123@group.calendar.google.com"]
 describe("[plan] pickable portfolio types (Q20)", () => {
   it("is optional and empty by default", () => {
     const r = parseConfig(valid);
-    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], ...DEFAULT_PLAN });
+    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], backgroundTypes: [], ...DEFAULT_PLAN });
   });
   it("reads a list of type names", () => {
     const r = parseConfig(`${valid}\n[plan]\npickable_portfolio_types = ["Recurring", " Ongoing "]\n`);
     expect(r.ok && r.config.plan.pickablePortfolioTypes).toEqual(["Recurring", "Ongoing"]);
+  });
+  it("WT-1: reads background types (no hours), none by default", () => {
+    const r = parseConfig(`${valid}\n[plan]\nbackground_types = ["Ongoing"]\n`);
+    expect(r.ok && r.config.plan.backgroundTypes).toEqual(["Ongoing"]);
+    expect(fields(`${valid}\n[plan]\nbackground_types = "Ongoing"\n`)).toEqual(["plan.background_types"]);
   });
   it("names bad values and unknown fields", () => {
     expect(fields(`${valid}\n[plan]\npickable_portfolio_types = "Recurring"\n`)).toEqual(["plan.pickable_portfolio_types"]);
@@ -189,7 +194,7 @@ describe("[plan] pickable portfolio types (Q20)", () => {
 describe("[plan] planning settings (step 6c, Q36)", () => {
   it("reads carry-over days, the reminder offset and timer defaults; sizes are fixed at 1h, 2h and 4h (E2)", () => {
     const r = parseConfig(`${valid}\n[plan]\nsize_s = 45\nsize_m = 90\nsize_l = 180\ncarry_days = 0\nreminder_offset_minutes = 30\nfocus_minutes = 25\nbreak_minutes = 5\nend_sound = true\nfollow_grace_days = 30\ncloseout_reminder_minutes = 30\ncheckin_reminder_minutes = 15\nweek_nudge_thu = "15:30"\nweek_nudge_fri = ""\nweek_nudge_mon = "08:00"\n`);
-    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], sizes: { S: 60, M: 120, L: 240 }, minSizes: { S: 30, M: 60, L: 90 }, carryDays: 0, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, followGraceDays: 30, closeoutReminderMinutes: 30, checkinReminderMinutes: 15, weekNudgeThu: "15:30", weekNudgeFri: "", weekNudgeMon: "08:00" });
+    expect(r.ok && r.config.plan).toEqual({ pickablePortfolioTypes: [], backgroundTypes: [], sizes: { S: 60, M: 120, L: 240 }, minSizes: { S: 30, M: 60, L: 90 }, carryDays: 0, reminderOffsetMinutes: 30, focusMinutes: 25, breakMinutes: 5, endSound: true, followGraceDays: 30, closeoutReminderMinutes: 30, checkinReminderMinutes: 15, weekNudgeThu: "15:30", weekNudgeFri: "", weekNudgeMon: "08:00" });
     // Old configs get 14 days of grace.
     expect(parseConfig(valid).ok && (parseConfig(valid) as { config: { plan: { followGraceDays: number } } }).config.plan.followGraceDays).toBe(14);
   });

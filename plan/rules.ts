@@ -1,4 +1,5 @@
 // Plan the day rules: capacity, fit, carry-over, block client and story level. Pure, no I/O.
+import { isResolved } from "./process.ts";
 import { freeMinutes } from "../week/free.ts";
 import type { Half, IsoDate, WorkItem } from "../week/types.ts";
 import { SIZE_MINUTES, type Pick, type Size } from "./types.ts";
@@ -76,11 +77,12 @@ export function blockClient(focusClientKey: string | null, picks: readonly Pick[
   return { clientKey, mixed: clients.some((c) => c !== clientKey), clients };
 }
 
-/** Only story-level items (requirement, task and bug backlog categories) can be picked. */
-export const isPickable = (item: { level: WorkItem["level"] }) => item.level === "story";
+/** Only story-level items (child and task levels, and parent types that don't need breakdown) that aren't resolved can be picked. */
+export const isPickable = (item: { level: WorkItem["level"]; stateCategory?: string }) => item.level === "story" && !isResolved(item.stateCategory);
 
 /** Why an item can't be picked, in plain words, or null when it can. */
-export function unpickableReason(item: { level: WorkItem["level"]; type: string }): string | null {
+export function unpickableReason(item: { level: WorkItem["level"]; type: string; state?: string; stateCategory?: string }): string | null {
+  if (item.level === "story" && isResolved(item.stateCategory)) return `It's ${item.state || "resolved"} in DevOps, so there are no hours left on it`;
   if (item.level === "story") return null;
   if (item.level === "portfolio") return `${item.type} is above story level. Pick one of its child items, or add a draft story if it has none`;
   return `${item.type} is not on the story, task or bug backlog, so it can't be picked`;

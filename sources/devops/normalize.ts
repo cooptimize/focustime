@@ -1,15 +1,15 @@
 // Pure: Azure DevOps responses → WorkItem. No I/O, no PATs.
 import { isBlocked } from "../../plan/followups.ts";
+import { isClosed, levelsFromProcessConfig } from "../../plan/process.ts";
 import type { WorkItem } from "../../week/types.ts";
 import { NEUTRAL_ZONE } from "../../week/zone.ts";
 
-/** type → (lowercased state name → state category). From each project's work item type metadata. */
+/** type → (lowercased state name → state category). From each project's process model (plan/process.ts). */
 export type StateCategories = Map<string, Map<string, string>>;
-
-export const DONE_CATEGORIES = new Set(["Completed", "Removed"]);
 
 type StateColor = { name?: unknown; category?: unknown };
 
+/** The categories of each type's states (lowercased names), as read from the work item types API. */
 export function categoriesFrom(types: { name: string; states: StateColor[] }[]): StateCategories {
   const out: StateCategories = new Map();
   for (const t of types) {
@@ -29,36 +29,22 @@ export function detectOrderField(processConfig: unknown): string | null {
   return typeof ref === "string" && /^[A-Za-z][\w.]*$/.test(ref) ? ref : null;
 }
 
-/** Story-level and portfolio types from the project's backlog categories (process configuration), not type names. */
+/** Story-level and portfolio types from the project's process model, not type names. */
 export type BacklogLevels = { known: boolean; story: ReadonlySet<string>; portfolio: ReadonlySet<string> };
 
-type Category = { workItemTypes?: { name?: unknown }[] } | null | undefined;
-const typesOf = (c: Category): string[] => (Array.isArray(c?.workItemTypes) ? c.workItemTypes.map((t) => t?.name).filter((n): n is string => typeof n === "string") : []);
-
 /**
- * Pickable (story level) = the requirement category, the task category and the bug category.
- * Portfolio (epics, features and any custom portfolio level) can't be picked.
- * When the process configuration has no backlog categories at all, levels are unknown.
+ * The planning levels from process configuration alone (the fallback when team backlogs can't be read, and the write
+ * path): story level = child and task levels; portfolio = the levels above. Unknown when it lists no backlogs.
  */
 export function backlogLevels(processConfig: unknown): BacklogLevels {
-  const pc = (processConfig ?? {}) as { requirementBacklog?: Category; taskBacklog?: Category; bugWorkItems?: Category; portfolioBacklogs?: Category[] };
-  const story = new Set([...typesOf(pc.requirementBacklog), ...typesOf(pc.taskBacklog), ...typesOf(pc.bugWorkItems)]);
-  const portfolio = new Set((Array.isArray(pc.portfolioBacklogs) ? pc.portfolioBacklogs : []).flatMap(typesOf));
-  for (const t of story) portfolio.delete(t);
+  const { levels } = levelsFromProcessConfig(processConfig);
+  const story = new Set([...levels.child, ...levels.task]);
+  const portfolio = new Set([...levels.top, ...levels.parent].filter((t) => !story.has(t)));
   return { known: story.size > 0 || portfolio.size > 0, story, portfolio };
 }
 
-/**
- * Plan the week (step 8): the portfolio tiers from the backlog levels, never type names. The lowest portfolio backlog
- * (right above requirements) is what a week commits to, the "feature" tier; any level above it is the "epic" tier.
- * Process configuration lists portfolio backlogs top-down (the documented sample and real projects: Epics, then
- * Features); Basic has only Epics, so Epic is its feature tier.
- */
-export function portfolioTiers(processConfig: unknown): { feature: Set<string>; epic: Set<string> } {
-  const list = (processConfig as { portfolioBacklogs?: Category[] } | null)?.portfolioBacklogs;
-  const levels = (Array.isArray(list) ? list : []).map(typesOf).filter((t) => t.length > 0);
-  return { feature: new Set(levels.at(-1) ?? []), epic: new Set(levels.slice(0, -1).flat()) };
-}
+/** Plan the week (step 8): the feature tier is the parent level (lowest portfolio backlog), the epic tier everything above. */
+export const portfolioTiers = (processConfig: unknown): { feature: Set<string>; epic: Set<string> } => levelsFromProcessConfig(processConfig).tiers;
 
 export type FieldInfo = { referenceName?: unknown; name?: unknown; type?: unknown };
 
@@ -128,31 +114,12 @@ export function htmlToText(html: string): string {
     .slice(0, 4000);
 }
 
-/** Portfolio types listed in config (Q20) count as story level, so they can be picked; matched without case. */
-export function allowPortfolio(levels: BacklogLevels, pickable: readonly string[]): BacklogLevels {
-  if (pickable.length === 0) return levels;
-  const allow = new Set(pickable.map((t) => t.toLowerCase()));
-  const moved = [...levels.portfolio].filter((t) => allow.has(t.toLowerCase()));
-  if (moved.length === 0) return levels;
-  return { known: levels.known, story: new Set([...levels.story, ...moved]), portfolio: new Set([...levels.portfolio].filter((t) => !moved.includes(t))) };
-}
-
 /** Unknown levels (no backlog metadata) count as story level, so nothing becomes unpickable by accident. */
 export function levelOf(type: string, levels: BacklogLevels): WorkItem["level"] {
   if (!levels.known) return "story";
   if (levels.story.has(type)) return "story";
   if (levels.portfolio.has(type)) return "portfolio";
   return "other";
-}
-
-/**
- * A client's "treat as open" states (Settings, step 6b): states DevOps files as Completed or Removed that this client
- * still works in. They are given an open category, so both the query and the normalizer keep them.
- */
-export function withOpenStates(categories: StateCategories, openStates: readonly string[]): StateCategories {
-  if (!openStates.length) return categories;
-  const wanted = new Set(openStates.map((s) => s.toLowerCase()));
-  return new Map([...categories].map(([type, states]) => [type, new Map([...states].map(([name, cat]) => [name, wanted.has(name.toLowerCase()) && DONE_CATEGORIES.has(cat) ? "InProgress" : cat]))]));
 }
 
 const wiqlString = (v: string) => `'${v.replace(/'/g, "''")}'`;
@@ -164,7 +131,7 @@ const wiqlString = (v: string) => `'${v.replace(/'/g, "''")}'`;
 export function buildWiql(email: string, categories: StateCategories, orderField: string | null): string {
   const clauses: string[] = [];
   for (const [type, states] of [...categories.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    const done = [...states.entries()].filter(([, c]) => DONE_CATEGORIES.has(c)).map(([n]) => n);
+    const done = [...states.entries()].filter(([, c]) => isClosed(c)).map(([n]) => n);
     const typeClause = `[System.WorkItemType] = ${wiqlString(type)}`;
     clauses.push(done.length ? `(${typeClause} AND [System.State] NOT IN (${done.map(wiqlString).join(", ")}))` : `(${typeClause})`);
   }
@@ -261,7 +228,7 @@ export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { 
     const type = typeof f["System.WorkItemType"] === "string" ? (f["System.WorkItemType"] as string) : "";
     const state = typeof f["System.State"] === "string" ? (f["System.State"] as string) : "";
     const category = ctx.categories.get(type)?.get(state.toLowerCase()) ?? "Unknown";
-    if (DONE_CATEGORIES.has(category) && !ctx.keepDone) continue;
+    if (isClosed(category) && !ctx.keepDone) continue;
     const rawOrder = ctx.orderField ? f[ctx.orderField] : null;
     // "a; b" in DevOps; absent when the item has none.
     const tags = typeof f["System.Tags"] === "string" ? (f["System.Tags"] as string).split(";").map((t) => t.trim()).filter(Boolean).slice(0, 50) : [];
