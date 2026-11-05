@@ -7,7 +7,10 @@ import { Pat } from "../sources/devops/pat.ts";
 import type { DevOpsTarget } from "../sources/devops/types.ts";
 import { basic, COMPANY_PAT, fakeDevOpsWrite, OTHER_PAT, WRITE_PAT } from "../sources/devops/write-fakes.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
-import { createPlanStore } from "../store/plan-store.ts";
+import { createPlanStore, openPlanDb } from "../store/plan-store.ts";
+import { sqliteConn } from "../store/sql/sqlite.ts";
+import { createTeamsStore } from "../store/teams-store.ts";
+import { IDENTITY_KEY } from "./account.ts";
 import { clearDevopsPreviews, type DevOpsPreview, type DevOpsResult } from "./devops-write-actions.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
 
@@ -26,6 +29,8 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
   const logs: unknown[] = [];
   const writer = createDevOpsWriter({ fetch: dv.fetch, log: (e) => void logs.push(e) });
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
+  // The shared Teams store (its own database here) for creates from a request.
+  const teams = createTeamsStore(sqliteConn(openPlanDb({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") })), () => Temporal.Instant.from(NOW));
   const keyring = new Map<string, string>();
   const targetCalls: { keys: string[]; withPat: boolean | undefined }[] = [];
   const target = (clientKey: string, org: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org, project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: clientKey === COOP ? (opts.email === undefined ? "avery@cooptimize.example" : opts.email) : "avery@adatum.example", pat: withPat ? new Pat(COMPANY_PAT) : null });
@@ -47,6 +52,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
     now: () => NOW,
     sleep: async (ms) => void waits.push(ms),
     plan,
+    requests: { teams, refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
     devopsWriter: writer,
     writePats: { get: async (k) => { const v = keyring.get(k); if (!v) throw new Error("not found"); return new Pat(v); }, set: async (k, v) => void keyring.set(k, v), clear: async (k) => void keyring.delete(k) },
   };
@@ -64,7 +70,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
   const preview = async (change: Record<string, unknown>, clientKey = COOP) => (await run<{ preview: DevOpsPreview }>("devops.preview", { clientKey, change })).preview;
   const confirm = (p: DevOpsPreview) => run<DevOpsResult>("devops.confirm", { previewId: p.previewId });
   const write = async (change: Record<string, unknown>) => confirm(await preview(change));
-  return { dv, plan, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten, waits };
+  return { dv, plan, teams, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten, waits };
 }
 type S = ReturnType<typeof setup>;
 const patches = (s: S) => s.dv.writes().filter((w) => w.method === "PATCH");
@@ -470,17 +476,20 @@ describe("parent first (step 14.5, D257)", () => {
   });
 });
 
-describe("AP-1: a DevOps item from an ask", () => {
+describe("a DevOps item from a request (shared polling)", () => {
   const CHAT = "19:cooptimize-client@thread.v2";
   const TEXT = "The export button fails with an error\nIt happens on every report since Monday.";
+  const ME = "00000000-0000-4000-8000-0000000000a1";
+  const DANA = { userId: "00000000-0000-4000-8000-0000000000c1", displayName: "Dana Client", email: null, tenantId: "22222222-2222-4222-8222-222222222222" };
+  const message = (chatId: string, messageId: string, clientKey: string, text: string) => ({ chatId, messageId, clientKey, senderId: DANA.userId, senderName: null, senderTenant: DANA.tenantId, createdAt: "2026-11-02T13:30:00Z", modifiedAt: "2026-11-02T13:30:00Z", html: null, text, hasImage: false, hasFile: false, replyToId: null, mentions: [], fetchedAt: NOW });
   async function withAsk(s: S, messageId = "1730000000001") {
-    if (!(await s.plan.deliveryChats()).length) {
-      await s.plan.addDeliveryChat(COOP, "customer", { chatId: CHAT, displayName: "Client chat", webUrl: null });
-      await s.plan.setDeliveryChatMembers(CHAT, [{ userId: "00000000-0000-4000-8000-0000000000c1", displayName: "Dana Client", email: null, tenantId: "22222222-2222-4222-8222-222222222222" }], NOW);
+    if (!(await s.teams.chat(CHAT))) {
+      await s.plan.setAccountState(IDENTITY_KEY, { oid: ME, tid: "11111111-1111-4111-8111-111111111111", name: "Avery", username: "avery@cooptimize.example", email: "avery@cooptimize.example", signedInAt: NOW, systemUserId: null, systemUserEmail: null });
+      await s.teams.addChat({ chatId: CHAT, clientKey: COOP, kind: "customer", displayName: "Client chat", webUrl: null, members: [DANA, { userId: ME, displayName: "Avery", email: null, tenantId: "11111111-1111-4111-8111-111111111111" }], by: ME });
     }
-    await s.plan.addChatMessages([{ chatId: CHAT, messageId, clientKey: COOP, authorId: "00000000-0000-4000-8000-0000000000c1", authorTenant: "22222222-2222-4222-8222-222222222222", createdAt: "2026-11-02T13:30:00Z", text: TEXT, hasImage: false, hasFile: false, replyToId: null }]);
-    await s.plan.addAsk({ chatId: CHAT, messageId, clientKey: COOP, rule: "phrase", ruleDetail: "error", at: "2026-11-02T13:30:00Z" });
-    return { kind: "ask_create", chatId: CHAT, messageId, level: "bug" };
+    await s.teams.saveMessages([message(CHAT, messageId, COOP, TEXT)]);
+    await s.teams.addRequest({ chatId: CHAT, messageId, clientKey: COOP, rule: "phrase", ruleDetail: "error", at: "2026-11-02T13:30:00Z" });
+    return { kind: "request_create", chatId: CHAT, messageId, level: "bug" };
   }
   const items = (s: S, type: string) => [...s.dv.items.values()].filter((i) => i.fields["System.WorkItemType"] === type);
 
@@ -499,7 +508,7 @@ describe("AP-1: a DevOps item from an ask", () => {
     expect(s.dv.writes()).toHaveLength(0);
   });
 
-  it("confirm creates it, reads it back and resolves the ask as created; a second create is refused", async () => {
+  it("confirm creates it, reads it back and resolves the request as created for everyone, by me; a second create is refused", async () => {
     const s = setup();
     await s.enable();
     const change = await withAsk(s);
@@ -508,16 +517,16 @@ describe("AP-1: a DevOps item from an ask", () => {
     const bug = items(s, "Bug")[0]!;
     expect(bug.fields["Microsoft.VSTS.TCM.ReproSteps"]).toContain("every report since Monday");
     expect(bug.fields["System.Parent"]).toBeUndefined();
-    expect(await s.plan.ask(CHAT, "1730000000001")).toMatchObject({ status: "created", itemId: bug.id, itemTitle: "The export button fails with an error" });
+    expect(await s.teams.request(CHAT, "1730000000001")).toMatchObject({ status: "created", itemId: bug.id, itemTitle: "The export button fails with an error", resolvedBy: ME });
     const again = await s.run<{ nothing?: string }>("devops.preview", { clientKey: COOP, change });
-    expect(again.nothing).toBe(`This ask is already in DevOps as #${bug.id}`);
+    expect(again.nothing).toBe(`This request is already in DevOps as #${bug.id}`);
   });
 
-  it("AP-2: a sorted ask's draft gives the title and description; the message still goes with it", async () => {
+  it("AP-2: a sorted request's draft gives the title and description; the message still goes with it", async () => {
     const s = setup();
     await s.enable();
     const change = await withAsk(s);
-    await s.plan.setAskSort(CHAT, "1730000000001", "sorted", { kind: "bug", urgency: "this_week", itemType: "bug", title: "Export fails on every report", description: "Export has failed since Monday.", likely: null, reason: "Something is broken." });
+    await s.teams.setSort(CHAT, "1730000000001", "sorted", { kind: "bug", urgency: "this_week", itemType: "bug", title: "Export fails on every report", description: "Export has failed since Monday.", likely: null, reason: "Something is broken." }, ME);
     const p = await s.preview(change);
     expect(p.item).toBe("New Bug: Export fails on every report");
     const f = Object.fromEntries(p.fields.map((x) => [x.label, x.after]));
@@ -542,13 +551,13 @@ describe("AP-1: a DevOps item from an ask", () => {
     const r = await s.write(change);
     expect(r.confirmed).toBe(false);
     expect(items(s, "Bug")).toHaveLength(1);
-    expect((await s.plan.ask(CHAT, "1730000000001"))?.status).toBe("open");
+    expect((await s.teams.request(CHAT, "1730000000001"))?.status).toBe("open");
     const refused = await s.fail("devops.preview", { clientKey: COOP, change });
     expect(refused).toMatchObject({ status: 409, code: "pending_write" });
     const retried = await s.run<DevOpsResult>("devops.retry", { id: r.entry.id });
     expect(retried.confirmed).toBe(true);
     expect(items(s, "Bug")).toHaveLength(1);
-    expect((await s.plan.ask(CHAT, "1730000000001"))?.itemId).toBe(items(s, "Bug")[0]!.id);
+    expect((await s.teams.request(CHAT, "1730000000001"))?.itemId).toBe(items(s, "Bug")[0]!.id);
   });
 
   it("without the client's write PAT: the plain message and nothing sent", async () => {
@@ -559,25 +568,30 @@ describe("AP-1: a DevOps item from an ask", () => {
     expect(s.dv.seen).toHaveLength(0);
   });
 
-  it("an ask of another client is refused", async () => {
+  it("a request of another client is refused; one in a chat I'm not in is unknown", async () => {
     const s = setup();
     await s.enable();
     const change = await withAsk(s);
-    await s.plan.purgeChatText({ clientKey: COOP });
-    await s.plan.addDeliveryChat(Adatum, "customer", { chatId: "19:adatum@thread.v2", displayName: "Adatum chat", webUrl: null });
-    await s.plan.addChatMessages([{ chatId: "19:adatum@thread.v2", messageId: "1730000000009", clientKey: Adatum, authorId: null, authorTenant: null, createdAt: NOW, text: "Adatum text", hasImage: false, hasFile: false, replyToId: null }]);
-    await s.plan.addAsk({ chatId: "19:adatum@thread.v2", messageId: "1730000000009", clientKey: Adatum, rule: "question", ruleDetail: null, at: NOW });
+    const me = { userId: ME, displayName: "Avery", email: null, tenantId: "11111111-1111-4111-8111-111111111111" };
+    await s.teams.addChat({ chatId: "19:adatum@thread.v2", clientKey: Adatum, kind: "customer", displayName: "Adatum chat", webUrl: null, members: [DANA, me], by: ME });
+    await s.teams.saveMessages([message("19:adatum@thread.v2", "1730000000009", Adatum, "Adatum text")]);
+    await s.teams.addRequest({ chatId: "19:adatum@thread.v2", messageId: "1730000000009", clientKey: Adatum, rule: "question", ruleDetail: null, at: NOW });
     const r = await s.fail("devops.preview", { clientKey: COOP, change: { ...change, chatId: "19:adatum@thread.v2", messageId: "1730000000009" } });
     expect(r.error).toMatch(/another client/);
+    await s.teams.addChat({ chatId: "19:elsewhere@thread.v2", clientKey: COOP, kind: "customer", displayName: "Not mine", webUrl: null, members: [DANA], by: "someone" });
+    await s.teams.saveMessages([message("19:elsewhere@thread.v2", "1730000000010", COOP, "Not for me")]);
+    await s.teams.addRequest({ chatId: "19:elsewhere@thread.v2", messageId: "1730000000010", clientKey: COOP, rule: "question", ruleDetail: null, at: NOW });
+    const unknown = await s.fail("devops.preview", { clientKey: COOP, change: { ...change, chatId: "19:elsewhere@thread.v2", messageId: "1730000000010" } });
+    expect(unknown.error).toMatch(/No such request/);
   });
 
-  it("Undo sets the item to Removed and opens the ask again", async () => {
+  it("Undo sets the item to Removed and opens the request again", async () => {
     const s = setup();
     await s.enable();
     const r = await s.write(await withAsk(s));
     const u = await s.write({ kind: "undo", writeId: r.entry.id });
     expect(u.confirmed).toBe(true);
     expect(items(s, "Bug")[0]!.fields["System.State"]).toBe("Removed");
-    expect((await s.plan.ask(CHAT, "1730000000001"))?.status).toBe("open");
+    expect((await s.teams.request(CHAT, "1730000000001"))?.status).toBe("open");
   });
 });

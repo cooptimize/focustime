@@ -44,7 +44,7 @@ import type { TimerView } from "../actions/types.ts";
 import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
 import { Inbox } from "./Inbox.tsx";
-import { Asks, InboxTabs, useAskCount } from "./Asks.tsx";
+import { Requests, InboxTabs, useRequestCount } from "./Requests.tsx";
 import { Promises } from "./Promises.tsx";
 import { Roadmap } from "./Roadmap.tsx";
 import { PlanAhead } from "./PlanAhead.tsx";
@@ -213,8 +213,8 @@ export function App() {
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
   const base: "today" | "week" = nav.tab === "week" ? "week" : "today";
   const followUpsOpen = nav.tab === "inbox";
-  // AP-1: Inbox › Asks, and the open asks count on its tab.
-  const asksOpen = nav.tab === "inbox" && !!nav.asks;
+  // Inbox › Requests, and the open requests count on its tab.
+  const asksOpen = nav.tab === "inbox" && !!nav.requests;
   const promisesOpen = nav.tab === "inbox" && !!nav.promises;
   const roadmapOpen = nav.tab === "roadmap";
   const checkInOpen = nav.tab === "today" && nav.mode === "checkin";
@@ -245,7 +245,7 @@ export function App() {
   // Step 15.3: the draft open in the draft editor.
   const [draftEdit, setDraftEdit] = useState<DraftStory | null>(null);
   const [captureVersion, setCaptureVersion] = useState(0);
-  const [askCount, setAskCount, promiseCount, setPromiseCount] = useAskCount(captureVersion, followUpsOpen);
+  const [askCount, setAskCount, promiseCount, setPromiseCount] = useRequestCount(captureVersion, followUpsOpen);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** U2: Week's ⋯ (the hours shown, and the compact timelines in the medium layout), moved from the status bar. */
   const [weekMoreAt, setWeekMoreAt] = useState<{ x: number; y: number } | null>(null);
@@ -1565,9 +1565,9 @@ export function App() {
         <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Week"><PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} /></PhoneGate>
       ) : followUpsOpen ? (
         <div className="inbox-page">
-          <InboxTabs tab={asksOpen ? "asks" : promisesOpen ? "promises" : "inbox"} count={askCount} promiseCount={promiseCount} onPick={(t) => goNav(t === "asks" ? navOf.asks() : t === "promises" ? navOf.promises() : navOf.inbox())} />
+          <InboxTabs tab={asksOpen ? "requests" : promisesOpen ? "promises" : "inbox"} count={askCount} promiseCount={promiseCount} onPick={(t) => goNav(t === "requests" ? navOf.requests() : t === "promises" ? navOf.promises() : navOf.inbox())} />
           {asksOpen ? (
-            <Asks data={data} version={captureVersion} onCount={setAskCount} onPromiseCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
+            <Requests data={data} version={captureVersion} onCount={setAskCount} onPromiseCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
           ) : promisesOpen ? (
             <Promises data={data} version={captureVersion} onCount={setPromiseCount} onAskCount={setAskCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
           ) : (
@@ -1649,7 +1649,7 @@ export function App() {
           onPlanWeek={() => openPlanWeek(data.today.weekStart)}
           switcher={switches.today}
           onInbox={() => setView("inbox")}
-          onAsks={() => setView("asks")}
+          onAsks={() => setView("requests")}
           onCaptures={() => setView("inbox")}
           onRetry={() => auto.trigger("button")}
           onFix={() => setSettingsAt("connections")}

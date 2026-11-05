@@ -1,4 +1,6 @@
-// AP-2: AI sorts asks, and Promises: the requests. One ai/ request per new ask candidate ("asks.classify") and per
+// AP-2: AI sorts requests, and Promises: the requests. Shared polling (D516): the message and its earlier messages come
+// from the shared store; a Request's sort is saved once on its shared row with whose settings sorted it (the token
+// owner's in the poll job, the person's own on Sort again); a promise runs under its author's settings. One ai/ request per new ask candidate ("asks.classify") and per
 // new promise candidate ("promises.extract"), each about that client only: the message, up to 5 earlier messages of
 // that chat (authors as "client", "Cooptimize" or "me", no email addresses), the client's process names and up to 50
 // of its open items. ai/ applies the switches (Use AI, Allow AI for the client), the guards, the budget and the log;
@@ -9,14 +11,17 @@ import { AiError } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { CONTEXT_MESSAGES, type Ask, type StoredMessage } from "../plan/asks.ts";
 import { buildContext, CLASSIFY_INSTRUCTIONS, CLASSIFY_SCHEMA, CLASSIFY_TASK, contextText, promiseFrom, PROMISE_INSTRUCTIONS, PROMISE_SCHEMA, PROMISE_TASK, promiseWithoutAi, sortFrom, type AiMessage, type AskSort, type ClassifyAnswer, type NotSorted, type PromiseAnswer, type PromiseDraft } from "../plan/asks-ai.ts";
-import { isExternal, type DeliveryChat } from "../plan/chats.ts";
-import type { PlanStore } from "../store/plan-store.ts";
+import { isExternal, type ChatMember } from "../plan/chats.ts";
+import { storedOf } from "../plan/requests.ts";
+import type { SortStore } from "../store/teams-store.ts";
 import type { WorkItem } from "../week/types.ts";
 import { localToday } from "../week/dates.ts";
 import { userZone } from "../week/zone.ts";
 
 export type AskAiDeps = {
-  plan: PlanStore;
+  teams: SortStore;
+  /** Whose settings run the request (saved as the sort's author). */
+  by: string | null;
   /** The AI service for this person, or null where there is none (demo, no store). */
   ai: () => Promise<AiService | null>;
   homeTenant: string | null;
@@ -26,7 +31,7 @@ export type AskAiDeps = {
 };
 
 /** Who wrote a message, as the AI is told: "me", "Cooptimize" or "client" (never a name or an address). */
-export function authorOf(m: Pick<StoredMessage, "authorId" | "authorTenant">, chat: DeliveryChat | undefined, home: string | null, me: string | null): AiMessage["from"] {
+export function authorOf(m: Pick<StoredMessage, "authorId" | "authorTenant">, chat: { members: readonly ChatMember[] | null } | null | undefined, home: string | null, me: string | null): AiMessage["from"] {
   if (me && m.authorId?.toLowerCase() === me.toLowerCase()) return "me";
   const member = chat?.members?.find((x) => x.userId && m.authorId && x.userId.toLowerCase() === m.authorId.toLowerCase());
   if (!home) return "client";
@@ -37,8 +42,8 @@ const asAi = (m: StoredMessage, from: AiMessage["from"]): AiMessage => ({ id: m.
 
 /** The context for one message of a chat: that chat's earlier messages and that client's items only. */
 async function contextFor(d: AskAiDeps, cfg: AppConfig, m: StoredMessage) {
-  const chat = (await d.plan.deliveryChats()).find((c) => c.chatId === m.chatId);
-  const before = await d.plan.messagesBefore(m.chatId, m.createdAt, CONTEXT_MESSAGES);
+  const chat = await d.teams.chat(m.chatId);
+  const before = (await d.teams.messagesBefore(m.chatId, m.createdAt, CONTEXT_MESSAGES)).map(storedOf);
   const items = (await d.openItems(cfg, m.clientKey).catch(() => null)) ?? [];
   const earlier = before.map((x) => asAi(x, authorOf(x, chat, d.homeTenant, d.me)));
   const c = buildContext({ clientName: cfg.clientSettings[m.clientKey]?.name ?? m.clientKey, items, earlier, message: asAi(m, authorOf(m, chat, d.homeTenant, d.me)) });
@@ -49,21 +54,22 @@ async function contextFor(d: AskAiDeps, cfg: AppConfig, m: StoredMessage) {
 export async function classifyAsk(d: AskAiDeps, cfg: AppConfig, ask: Pick<Ask, "chatId" | "messageId" | "clientKey">): Promise<{ status: "sorted"; sort: AskSort } | { status: NotSorted } | null> {
   const ai = await d.ai();
   if (!ai) return null;
-  const m = await d.plan.chatMessage(ask.chatId, ask.messageId);
-  if (!m) return null;
+  const stored = await d.teams.message(ask.chatId, ask.messageId);
+  if (!stored) return null;
+  const m = storedOf(stored);
   const { c } = await contextFor(d, cfg, m);
   const r = await ai.run<ClassifyAnswer>({ name: CLASSIFY_TASK, client: ask.clientKey, instructions: CLASSIFY_INSTRUCTIONS }, contextText(c), CLASSIFY_SCHEMA);
   if (!r.ok) {
     const kind = r.error instanceof AiError ? r.error.kind : "provider";
-    await d.plan.setAskSort(ask.chatId, ask.messageId, kind, null);
+    await d.teams.setSort(ask.chatId, ask.messageId, kind, null, d.by);
     return { status: kind };
   }
   const sort = sortFrom(r.value, c.items.map((i) => i.id));
   if (!sort) {
-    await d.plan.setAskSort(ask.chatId, ask.messageId, "unknown_item", null);
+    await d.teams.setSort(ask.chatId, ask.messageId, "unknown_item", null, d.by);
     return { status: "unknown_item" };
   }
-  await d.plan.setAskSort(ask.chatId, ask.messageId, "sorted", sort);
+  await d.teams.setSort(ask.chatId, ask.messageId, "sorted", sort, d.by);
   return { status: "sorted", sort };
 }
 

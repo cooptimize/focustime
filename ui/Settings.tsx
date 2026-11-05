@@ -831,33 +831,30 @@ function RoadmapForm(p: FormProps) {
   );
 }
 
-/** AP-1: how Asks reads the chats switched on below, and the phrases its rules use. Commas between phrases. */
+/** The phrases the Requests rules use (the chats are read every 5 minutes for everyone, D514). Commas between phrases. */
 const phrases = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 function AsksForm(p: FormProps) {
   const s = p.data.asks;
   const a = useAutoSave({
     section: "asks",
-    initial: { pollMinutes: s.pollMinutes, requestPhrases: s.requestPhrases.join(", "), ackPhrases: s.ackPhrases.join(", "), promisePhrases: (s.promisePhrases ?? []).join(", ") },
-    payload: (v) => ({ pollMinutes: v.pollMinutes, requestPhrases: phrases(v.requestPhrases), ackPhrases: phrases(v.ackPhrases), promisePhrases: phrases(v.promisePhrases) }),
+    initial: { requestPhrases: s.requestPhrases.join(", "), ackPhrases: s.ackPhrases.join(", "), promisePhrases: (s.promisePhrases ?? []).join(", ") },
+    payload: (v) => ({ pollMinutes: s.pollMinutes, requestPhrases: phrases(v.requestPhrases), ackPhrases: phrases(v.ackPhrases), promisePhrases: phrases(v.promisePhrases) }),
     onSaved: p.onSavedData,
-    label: (k) => (k === "pollMinutes" ? "Read every" : k === "requestPhrases" ? "Request phrases" : k === "promisePhrases" ? "Promise phrases" : "Acknowledgements"),
+    label: (k) => (k === "requestPhrases" ? "Request phrases" : k === "promisePhrases" ? "Promise phrases" : "Acknowledgements"),
   });
   return (
     <details className="set-form set-asks">
       <summary>
-        <strong>Asks</strong> <span className="muted">· read every {s.pollMinutes} minutes in working hours · Inbox › Asks</span>
+        <strong>Requests</strong> <span className="muted">· the phrases · Inbox › Requests</span>
       </summary>
       <p className="muted">
-        For each chat with Read for asks on (below), a new message from someone outside Cooptimize becomes an ask when it mentions a Cooptimizer, has a question mark, uses a request phrase, or has an attachment. One that is only an acknowledgement isn't. Your own messages with a promise phrase become promises. With Allow AI on for a client (and Use AI), AI sorts these; without it, the rules alone decide.
+        Each client chat registered below is read every 5 minutes in working hours, once for everyone who follows the client. A new message from someone outside Cooptimize becomes a request when it mentions a Cooptimizer, has a question mark, uses a request phrase, or has an attachment. One that is only an acknowledgement isn't. The request phrases used are those of the person whose sign-in read the chat. Your own messages with one of your promise phrases become your promises. With Allow AI on for a client (and Use AI), AI sorts these; without it, the rules alone decide.
       </p>
       <div className="set-grid">
-        <AutoField a={a} k="pollMinutes" label="Read every (minutes)" hint="Only in your working hours, not on PTO days. 1 to 60.">
-          <input type="number" min={1} max={60} step={1} value={a.v.pollMinutes} onChange={(e) => a.set("pollMinutes", Math.round(Number(e.target.value)))} {...a.text("pollMinutes")} />
-        </AutoField>
         <AutoField a={a} k="requestPhrases" label="Request phrases" hint="Commas between them. Whole words, any case.">
           <input type="text" value={a.v.requestPhrases} onChange={(e) => a.set("requestPhrases", e.target.value)} {...a.text("requestPhrases")} />
         </AutoField>
-        <AutoField a={a} k="ackPhrases" label="Acknowledgements" hint="A message that is only these (and emoji) is not an ask.">
+        <AutoField a={a} k="ackPhrases" label="Acknowledgements" hint="A message that is only these (and emoji) is not a request.">
           <input type="text" value={a.v.ackPhrases} onChange={(e) => a.set("ackPhrases", e.target.value)} {...a.text("ackPhrases")} />
         </AutoField>
         <AutoField a={a} k="promisePhrases" label="Promise phrases" hint="In your own messages: commas between them. Inbox › Promises.">
@@ -876,7 +873,7 @@ function NotifyForm(p: FormProps) {
     initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent asks during focus" : "Quiet on PTO days"),
+    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : "Quiet on PTO days"),
   });
   const [test, setTest] = useState<string | null>(null);
   const group = (title: string, list: readonly NotifyKind[]) => (
@@ -900,7 +897,7 @@ function NotifyForm(p: FormProps) {
         {group("Other", ["vm", "followups", "expiry", "asks"])}
       </div>
       <SaveMark s={a.status("kinds")} retry={() => a.commit("kinds")} />
-      <AutoField a={a} k="asksThroughFocus" label="Urgent asks during focus" hint="Off: an urgent ask waits until the focus session ends, with the others.">
+      <AutoField a={a} k="asksThroughFocus" label="Urgent requests during focus" hint="Off: an urgent request waits until the focus session ends, with the others.">
         <label className="set-check">
           <input type="checkbox" checked={a.v.asksThroughFocus} onChange={(e) => a.change("asksThroughFocus", e.target.checked)} /> Let urgent asks through
         </label>

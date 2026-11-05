@@ -1,13 +1,14 @@
-// AP-1: Asks, the pure rules. A client's delivery chats with "Read for asks" on are read for new messages (no AI); a
-// message from someone outside Cooptimize becomes an ask when it @mentions a Cooptimizer, asks a question, uses request
-// phrasing or carries an attachment, and isn't only a short acknowledgement. Internal authors and my own messages
-// aren't asks here (promises are AP-2). Each ask records the rule that matched. Nothing here does I/O or logs.
+// Requests (AP-1's Asks), the pure rules. A client's registered chats are read for new messages by the shared poll
+// job (D514); a message from someone outside Cooptimize becomes a request when it @mentions a Cooptimizer, asks a
+// question, uses request phrasing or carries an attachment, and isn't only a short acknowledgement. Internal authors
+// aren't requests (promises are AP-2). Each request records the rule that matched. Nothing here does I/O or logs.
+// The Ask and Asks names inside stay from AP-1 (the stored [asks] settings and AP-1's per-user tables use them).
 import { isExternal, type ChatMember } from "./chats.ts";
 import type { AskKind, AskSort, DraftItemType, NotSorted, PromiseStatus, Urgency } from "./asks-ai.ts";
 
 /** The per-user settings ([asks] in the settings model), with these defaults. */
 export type AskSettings = {
-  /** How often a chat with Read for asks on is read, in working hours: 1 to 60 minutes. */
+  /** Kept as a setting from AP-1; shared polling reads every 5 minutes for everyone (D514), so it is not used. */
   pollMinutes: number;
   /** Request phrasing (lower case; matched as whole words, any case). */
   requestPhrases: string[];
@@ -141,17 +142,6 @@ export function messageLink(chatId: string, messageId: string): string {
   return `https://teams.microsoft.com/l/message/${encodeURIComponent(chatId)}/${encodeURIComponent(messageId)}?context=${encodeURIComponent(JSON.stringify({ contextType: "chat" }))}`;
 }
 
-/**
- * Whether a chat is read now: Read for asks on, inside working hours on a day that isn't PTO, the interval since the
- * last read passed, and not waiting out a throttle (retryAt).
- */
-export function pollDue(f: { now: string; lastPolledAt: string | null; retryAt: string | null; pollMinutes: number; inHours: boolean; pto: boolean }): boolean {
-  if (!f.inHours || f.pto) return false;
-  const now = Date.parse(f.now);
-  if (f.retryAt && Date.parse(f.retryAt) > now) return false;
-  return !f.lastPolledAt || now - Date.parse(f.lastPolledAt) >= f.pollMinutes * 60_000;
-}
-
 /** When a throttled chat is read again: Retry-After when Graph gives one (capped at an hour), else doubling from a minute. */
 export function backoffUntil(nowIso: string, retryAfterSeconds: number | null, failures: number): string {
   const s = retryAfterSeconds !== null && retryAfterSeconds > 0 ? Math.min(retryAfterSeconds, 3600) : Math.min(60 * 2 ** Math.max(0, failures - 1), 3600);
@@ -204,26 +194,14 @@ export type Ask = {
   shown: boolean;
 };
 
-/**
- * The idle rule (plan/wake.ts): when the next chat with Read for asks on is due to be read (its interval after the last
- * read, or the end of a throttle wait), or null with none on. Working hours are weighed by the caller.
- */
-export function nextPollAt(chats: readonly { on: boolean; polledAt: string | null; retryAt: string | null }[], pollMinutes: number, nowIso: string): string | null {
-  let best: number | null = null;
-  for (const c of chats) {
-    if (!c.on) continue;
-    const due = Math.max(c.polledAt ? Date.parse(c.polledAt) + pollMinutes * 60_000 : Date.parse(nowIso), c.retryAt ? Date.parse(c.retryAt) : 0);
-    best = best === null ? due : Math.min(best, due);
-  }
-  return best === null ? null : new Date(best).toISOString();
-}
-
-// AP-1: what the Asks tab is sent (actions/ask-actions.ts builds it).
-/** One ask card. `text` is shown only on its own client's card. */
-export type AskView = {
+// What Inbox › Requests is sent (actions/request-actions.ts builds it).
+/** One request card. `text` is shown only on its own client's card. */
+export type RequestView = {
   chatId: string; messageId: string; clientKey: string; clientName: string; chatName: string;
   author: string; external: boolean; at: string; text: string; hasImage: boolean; hasFile: boolean;
   matched: string; status: AskStatus; item: { id: number; url: string | null; title: string | null } | null; note: string | null; resolvedAt: string | null;
+  /** Who resolved it, by name (shared state: anyone who sees the chat may have), or null while open. */
+  resolvedBy: string | null;
   /** Open in Teams: the message in its chat. */
   link: string;
   /** AP-2: the AI's sort, shown as small labels with the reason on hover, and the draft Create starts from. */
@@ -232,28 +210,39 @@ export type AskView = {
   likely: { id: number; title: string | null; url: string | null } | null;
   /** "Not sorted: <plain reason>" when AI didn't sort it (null when sorted, or never tried). */
   notSorted: string | null;
-  /** "Promised: <what>": my promise that answers this ask. */
+  /** "Promised: <what>": my promise that answers this request. */
   promised: string | null;
 };
-/** A chat with Read for asks on, for the Asks tab's footer and Settings > Connections: its last read and any problem. */
-export type AskChatStatus = { clientKey: string; clientName: string; chatId: string; chatName: string; polledAt: string | null; status: string | null; retryAt: string | null };
-export type AsksData = {
-  open: number; asks: AskView[]; chats: AskChatStatus[]; writeClients: string[]; pollMinutes: number;
-  /** AP-2: asks the AI said need no action, open and not shown: "Hidden by AI (N)". */
-  hidden: AskView[];
+/**
+ * A registered chat the person sees, for the Requests tab's footer and Settings › Clients: the last poll, the last
+ * successful fetch, whose sign-in read it ("Polling via <name>" when not the registering person's), or "Needs
+ * reconnecting", or a wait.
+ */
+export type RequestChatStatus = {
+  clientKey: string; clientName: string; chatId: string; chatName: string;
+  polledAt: string | null; fetchedAt: string | null; state: "ok" | "via" | "reconnect" | "retry" | null;
+  via: string | null; note: string | null; retryAt: string | null;
+};
+export type RequestsData = {
+  open: number; requests: RequestView[]; chats: RequestChatStatus[]; writeClients: string[]; pollMinutes: number;
+  /** AP-2: requests the AI said need no action, open and not shown: "Hidden by AI (N)". */
+  hidden: RequestView[];
   /** AP-2: open promises (for the Promises tab's count). */
   promisesOpen: number;
+  /** The newest poll of the chats shown and the newest successful fetch (null before the first). */
+  lastPoll: string | null;
+  lastFetch: string | null;
 };
 /** AP-2: one promise card. */
 export type PromiseView = {
   chatId: string; messageId: string; clientKey: string; clientName: string; chatName: string;
   what: string; toWhom: string | null; due: string | null; at: string; text: string;
-  /** The ask it answers (its text's first line), when known. */
+  /** The request it answers (its text's first line), when known. */
   answers: { messageId: string; title: string } | null;
   status: PromiseStatus; followUpId: number | null; item: { id: number; url: string | null; title: string | null } | null;
   /** Why AI didn't read it ("Not read by AI: …"), or null. */
   notSorted: string | null; reason: string | null; resolvedAt: string | null; link: string;
 };
 /** `today` is the person's date on the server's clock, for the due badges. */
-export type PromisesData = { open: number; promises: PromiseView[]; asksOpen: number; today: string };
+export type PromisesData = { open: number; promises: PromiseView[]; requestsOpen: number; today: string };
 export type ContextMessage = { messageId: string; author: string; external: boolean; mine: boolean; at: string; text: string; hasImage: boolean; hasFile: boolean };

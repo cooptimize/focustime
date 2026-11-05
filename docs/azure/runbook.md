@@ -371,36 +371,65 @@ SQL compute is most of it; what keeps it down is the idle rule (D431) letting th
 working hours. The actual cost after the first week goes here (Cost Management, resource group FocusTime, or
 `az consumption usage list --start-date <d> --end-date <d>`): _not measured yet_.
 
-## Asks (AP-1)
+### Watch dev and prod costs (D524)
+
+Azure portal › Monitor › Workbooks › **FocusTime costs** (prod's copy, in FocusTime; dev's is "FocusTime costs (dev
+copy)", the same view). Pick This month, Last month or This week. It shows dev against prod, each day, by service and
+by resource, for everything tagged `app: focustime`. To keep it on a dashboard: open it, then Pin › Pin workbook.
+
+- It reads Cost Management as you: you need Cost Management Reader (or Reader) on the subscription.
+- Cost data is 8 to 24 hours behind. The registry is in dev and serves prod too, so its cost shows under dev.
+- "Too many requests" on a chart: Cost Management limits queries per scope; refresh in a minute.
+- A new resource needs the `app` and `env` tags (main.bicep's `tags`) to show; anything made outside the Bicep won't.
+- Prices to compare with are in the Cost table above. First actual figures (Nov 1 to 4, 2026): dev about $9.50, prod
+  about $3.40, nearly all SQL compute; Container Apps inside the free grant.
+
+## Requests (AP-1, shared polling)
+
+Requests were called Asks until Nov 4 (D520). One job reads each registered client chat for everyone (D514 to D520).
 
 ### Graph permissions and consent
 
-Asks uses two delegated Microsoft Graph permissions, both ones a person can allow for themselves (no admin consent):
+Requests use two delegated Microsoft Graph permissions, both ones a person can allow for themselves (no admin consent):
 
 | Permission | What for | How it's granted |
 |---|---|---|
 | Chat.ReadBasic | The chat picker and members (names, tenants) | On the app registration (`infra/scripts/app-registration.sh`, GRAPH_SCOPES; granted tenant-wide on Nov 4), so the sign-in asks for it |
-| Chat.Read | Reading new messages in a chat switched on for asks | **Not** on the registration (D490). Each person allows it the first time they switch Read for asks on: FocusTime sends them to Microsoft (`/auth/microsoft/login?consent=chat_read`) and back to Settings › Clients |
+| Chat.Read | Reading new messages in registered client chats | **Not** on the registration (D490). Each person allows it the first time they Add a chat: FocusTime sends them to Microsoft (`/auth/microsoft/login?consent=chat_read`) and back to Settings › Clients, where the add finishes |
 
 Nothing to run for Chat.Read. Don't add it to GRAPH_SCOPES: everyone would then be asked for it at sign-in. If a tenant admin turns off user consent, an admin can grant Chat.Read for the FocusTime registration in Entra (Enterprise applications › FocusTime › Permissions › Grant admin consent); FocusTime's code doesn't change. ChatMember.Read and any app-only (application) Teams permission are never needed and must not be added. Settings › Connections shows each person's state: Chat.Read reads "Missing" until they allow it.
 
-### Switching Asks on for a client
+### Registering a client chat
 
-Each person, for themselves (no admin step):
+A FocusTime admin who follows the client and is a member of the chat, once for everyone (D522). Everyone else sees the registered chats read-only. Reading is decided per chat, centrally; there is no per-person switch.
 
-1. Settings › Clients › the client › Delivery chats › Add a chat (if it isn't there yet).
-2. Switch **Read for asks** on for that chat. The first time, Microsoft asks to allow FocusTime to read chat messages; accept, and FocusTime comes back and switches it on. Reading starts from that moment (no history).
-3. Optional: Settings › Clients › Asks sets how often (default every 5 minutes, only in working hours, not on PTO days) and the phrase lists.
-4. Asks show in Inbox › Asks. Create bug, story or feature needs that client's DevOps write access (Settings › Clients › DevOps write access).
+**Who is an admin (until the admin console):** the Entra object ids in the GitHub variable `FT_ADMINS` (comma separated, ids only), which the deploy workflows pass to Bicep as `admins` and the app reads as `FOCUSTIME_ADMINS`. To set it: find the person's object id (`az ad user show --id <their UPN> --query id -o tsv`), then `gh variable set FT_ADMINS --body "<id>[,<id>...]"`, then deploy dev (and prod with its approval). Empty: nobody can add chats; registered chats keep being read. In the developer loop, `admins = ["<id>"]` in `~/.config/focustime/app.toml`. The next step replaces this with the "FocusTime Admins" Entra group inside `isAdmin()` (`actions/admin.ts`), with no migration.
 
-Off is the same switch; it stops the reads at once and keeps what was stored (see below to delete it).
+
+1. Settings › Clients › the client › Delivery chats › **Add a chat**. The first time, Microsoft asks to allow FocusTime to read chat messages; accept, and FocusTime comes back and finishes adding it. Reading starts from that moment (no history).
+2. Optional: Settings › Clients › Requests holds the phrase lists. The rules run under the settings of whoever's token read the message.
+3. Requests show in Inbox › Requests to every FocusTime user who is a member of the chat now (by the member list FocusTime keeps, read daily and on Refresh) and follows the client; nobody else sees them, and following the client alone isn't enough (D521). Someone who leaves the chat stops seeing it at the next member read. Create bug, story or feature needs that client's DevOps write access (Settings › Clients › DevOps write access).
+
+**Reading on or off (admins, D523):** each chat's card in Settings › Clients has Read for requests or Stop reading. Off stops at once and keeps what was stored; on reads from that moment, never what was said while it was off. A newly added chat is read at once.
+
+Registering, relabelling, removing and turning reading on or off are logged with who did it (`client_chat_changes`). A chat belongs to one client.
+
+### Polling
+
+- **Hosted prod:** every 5 minutes while any follower of the chat is inside their working hours, nothing outside them; the first poll of the day asks for everything changed since the last message seen. No new Azure resource: the job runs in the app's own scheduler.
+- **Dev and the developer loop:** only on Refresh (Inbox › Requests), so dev doesn't read real chats on its own. `FOCUSTIME_REQUESTS_POLL=on` or `off` overrides either default; the server logs `requests_poll_mode` at start.
+- **Replicas:** prod runs at min replicas 1, so the job keeps its 5 minutes all day. Dev stays scaling to zero (`infra/dev.bicepparam`): with nobody on dev there is no replica and no poll, even with `FOCUSTIME_REQUESTS_POLL=on`. The first poll after it wakes (Refresh, or the job if switched on) reads everything changed since the last message seen, up to the newest 250 per chat (Q-SP-8). Both stay at max replicas 1, so one job polls each chat once a cycle; a second replica would only read twice (each message and Request is stored once).
+- **Whose token:** the person who registered the chat first, then the other followers by name. Settings › Clients and the Requests tab show "polling via <name>" when it isn't the registrant, and **Needs reconnecting** with the last fetch when nobody's token works: any follower signing in again (and allowing Chat.Read) fixes it on the next poll. A throttle from Teams waits out Retry-After without trying anyone else.
+- **What's logged per cycle:** `requests_poll` (chats read), `requests_poll_messages`, `requests_poll_candidates`, `requests_poll_token` (the token owner's name and count) and `requests_poll_failures`. Never a chat id, topic, member or message text.
+- **Cost (Option A):** one Graph read per registered chat every 5 minutes in working hours, under 100 a day per chat with no new messages; the AI sorts only new candidates once, under the token owner's caps.
 
 ### Purging a client's stored chat text
 
-- **One person, one client:** Settings › Clients › the client › Delivery chats › **Delete stored messages** (asks the person to confirm). Deletes every stored message and ask for that client in their plan; DevOps items made from asks stay in DevOps. Removing a chat deletes that chat's messages and asks too.
-- **Automatically:** messages that didn't become asks are deleted 14 days after they were written, once a day, by the scheduler (D492). Asks keep their text with their resolution.
-- **Everything a person has:** Settings › Data › Delete my data (all their rows, chat text included).
-- **Across people** (a client asks for its text to be removed): each person does it from their own Settings, as above; there is no admin purge yet, and the hosted database is never edited by hand (no SQL against Azure SQL outside `focustime migrate`). Ask for an admin purge as a new step if this is needed.
+- **One client:** Settings › Clients › the client › Delivery chats › **Delete stored messages** (anyone who sees that client's chats; asks to confirm). Deletes the stored messages of every registered chat of that client for everyone, keeping the messages behind Requests and promises; DevOps items made from Requests stay in DevOps. **Remove** on a chat deletes that chat's messages and Requests (a promise keeps its message).
+- **Automatically:** messages that didn't become Requests are deleted 14 days after they were written, after a poll (D492); Requests the AI hid and nobody showed go with them. Requests keep their text with their resolution.
+- **Everything a person has:** Settings › Data › Delete my data deletes their rows (promises included).
+- **The migration** (`20261104T2100_shared_requests`): every chat anyone had added becomes a registered chat (the earliest registration's client and label, the newest member list), every stored message once, every ask one Request with the latest action and the latest AI sort; promises stay each person's and keep their messages. Reading stays on only for chats someone had switched Read for asks on; the rest are registered with reading off until an admin turns it on (D523). Shared chat messages and Requests aren't a person's rows: remove the chat or purge the client for those.
+- **The old per-person tables** (`chat_messages`, `asks`) are no longer written or read; the daily cleanup still deletes their expired rows until a later release drops them. The hosted database is never edited by hand (no SQL against Azure SQL outside `focustime migrate`).
 
 Nothing to clean elsewhere: chat text is never in logs or Application Insights (counts and kinds only), and never in exports to other systems.
 

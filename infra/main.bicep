@@ -23,6 +23,8 @@ param sqlMaxVCores int = 1
 param sqlRetentionDays int = 7
 @description('A5: the only domains help invites may go to, for everyone (comma list); empty: each person\'s work email.')
 param inviteDomains string = ''
+@description('D522: Entra object ids of the people who register client chats (comma list); empty: nobody. From the FT_ADMINS GitHub variable.')
+param admins string = ''
 @description('F1: Send feedback creates stories in this DevOps organization and project, under this feature.')
 param feedbackOrg string = 'cooptimize'
 param feedbackProject string = 'Cooptimize Internal'
@@ -99,6 +101,7 @@ module app 'modules/app.bicep' = {
     imageTag: imageTag
     imageDigest: imageDigest
     inviteDomains: inviteDomains
+    admins: admins
     feedbackOrg: feedbackOrg
     feedbackProject: feedbackProject
     feedbackParentId: feedbackParentId
@@ -113,6 +116,12 @@ module app 'modules/app.bicep' = {
     sqlServerFqdn: sql.outputs.fqdn
     sqlDatabaseName: sql.outputs.databaseName
   }
+}
+
+// FocusTime costs (the workbook in Monitor › Workbooks): dev and prod's actual cost, read live from Cost Management.
+module costs 'modules/costs.bicep' = {
+  name: 'costs'
+  params: { env: env, location: location, tags: tags }
 }
 
 output appName string = app.outputs.name

@@ -67,6 +67,10 @@ import { createFeedbackDevOps, DEVOPS_SCOPE } from "../sources/devops/feedback.t
 import { execFileSync } from "node:child_process";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
+import { createTeamsStore } from "../store/teams-store.ts";
+import { pollCycle, requestsNextDue, type PollDeps } from "../actions/request-poll.ts";
+import { requestContext, aiFor } from "../actions/dispatch.ts";
+import type { RequestsPort } from "../actions/request-actions.ts";
 
 const args = process.argv.slice(2);
 const dev = args.includes("--dev");
@@ -277,6 +281,29 @@ if (!opened) {
   process.exit(1);
 }
 const db: Conn = opened.conn;
+
+// Shared polling (D514 to D517): one store of client chats, messages and Requests for everyone, read by one job with
+// the followers' own sign-ins (each person's account, as for every Graph call: access tokens in memory per person,
+// refresh tokens sealed in their secrets; the job keeps none). People are built for a cycle on demand.
+const teams = createTeamsStore(db, instantNow);
+const pollDeps: PollDeps = {
+  teams,
+  users: async () => (await accounts.users.all()).map((u) => ({ id: u.id, name: u.displayName || u.upn, deleted: !!u.deletedAt })),
+  person: async (uid) => {
+    const user = await accounts.users.get(uid);
+    if (!user || user.deletedAt) return null;
+    const ctx = await runtimeFor(uid);
+    const loaded = await ctx.loadConfig();
+    const config = loaded.parsed.ok ? loaded.parsed.config : null;
+    const account = config && ctx.account ? ctx.account(config) : null;
+    const rc = await requestContext(ctx);
+    return { name: user.displayName || user.upn, config, chatMessages: account?.chatMessages, chats: account?.chats, ai: () => aiFor(ctx), plan: ctx.plan ?? null, openItems: rc.openItems };
+  },
+  homeTenant: async () => app.entra?.tenantId ?? null,
+  now: () => instantNow().toString(),
+  log,
+};
+const requestsPort: RequestsPort = { teams, refresh: (chatIds) => pollCycle(pollDeps, { force: true, chatIds }) };
 // D475: next-morning auto-shutdown restores from before (they'd write the schedule) never run; mark them cancelled.
 await cancelShutdownRestores(db, instantNow).then(
   (c) => c.length && log({ source: "azure", op: "restore_cancelled", count: c.length }),
@@ -546,6 +573,8 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     writeConfig: (edit) => settings.write(edit),
     now: () => instantNow().toString(),
     plan,
+    requests: requestsPort,
+    admins: app.admins,
     links: host.links,
     media,
     // A2: no `secrets`: the app's client secrets (Dataverse, Google, Entra) are set up outside FocusTime
@@ -656,7 +685,21 @@ function reopenWindow(): Promise<boolean> {
 // next-due time and makes no database call before it. Everyone's runtimes are built on the first pass (not at start,
 // so an idle start reads nothing), and the app's own upkeep (hard deletes, ended sessions) rides on the slow pass.
 let everyone = false;
+// D514, Option A: the chats are read in the background every 5 minutes inside the union of followers' working hours in
+// prod; dev (and the developer loop) read them only on Refresh, unless FOCUSTIME_REQUESTS_POLL says otherwise.
+const pollInBackground = (process.env.FOCUSTIME_REQUESTS_POLL?.trim().toLowerCase() || (build.env === "prod" ? "on" : "off")) === "on";
+log({ source: "plan", op: "requests_poll_mode", kind: pollInBackground ? "background" : "on_demand" });
 const scheduler = createScheduler({
+  jobs: pollInBackground
+    ? [{
+        name: "requests_poll",
+        run: async () => void (await pollCycle(pollDeps)),
+        wake: async () => {
+          const due = await requestsNextDue(pollDeps);
+          return due ? Temporal.Instant.from(due) : null;
+        },
+      }]
+    : [],
   people: async () => {
     if (!everyone) {
       for (const u of await accounts.users.all()) if (!u.deletedAt) await runtimeFor(u.id);

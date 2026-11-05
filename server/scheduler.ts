@@ -5,7 +5,7 @@
 //
 // A3, the idle rule: the passes run only while someone is using FocusTime (a signed-in request in the last 15
 // minutes). Otherwise the scheduler sleeps until the next moment anyone's work could be due (plan/wake.ts), kept in
-// one stored next-due time: it makes no database call until then, so a serverless database can pause. When it wakes
+// one stored next-due time (people's and the app jobs'): it makes no database call until then, so a serverless database can pause. When it wakes
 // it runs the passes once, works out the next time, stores it and sleeps again. At start it reads the stored time: if
 // it hasn't come, nothing runs (a timer that ended while the server was down was due no later than that time).
 import type { Logger } from "../log/logger.ts";
@@ -26,6 +26,11 @@ export type SchedulerOptions = {
   wakeStore?: WakeStore;
   /** Work for the app as a whole on a slow pass (hard deletes, expired sessions), at most this often. */
   maintenance?: { run: () => Promise<void>; everyMs: number };
+  /**
+   * App jobs (shared polling, D517): run at the start of every slow pass, before anyone's ticks (so what a job found
+   * is there for them), each with its own next-due time for the idle rule (null: nothing due).
+   */
+  jobs?: readonly { name: string; run: () => Promise<void>; wake: () => Promise<Temporal.Instant | null> }[];
   now?: () => Temporal.Instant;
   fastMs?: number;
   slowMs?: number;
@@ -48,6 +53,7 @@ export function createScheduler(o: SchedulerOptions) {
     if (running[kind]) return 0;
     running[kind] = true;
     try {
+      if (kind === "slow") for (const j of o.jobs ?? []) await j.run().catch(() => o.log({ source: "plan", op: "scheduler", kind: `${j.name}_failed` }));
       const people = [...(await o.people())];
       const r = await Promise.allSettled(people.map((t) => t[kind]()));
       const failed = r.filter((x) => x.status === "rejected").length;
@@ -68,6 +74,10 @@ export function createScheduler(o: SchedulerOptions) {
     let next = t.add({ milliseconds: MAX_SLEEP_MS });
     for (const p of await o.people()) {
       const w = await p.wake?.().catch(() => t.add({ minutes: 1 }));
+      if (w && Temporal.Instant.compare(w, next) < 0) next = w;
+    }
+    for (const j of o.jobs ?? []) {
+      const w = await j.wake().catch(() => t.add({ minutes: 1 }));
       if (w && Temporal.Instant.compare(w, next) < 0) next = w;
     }
     await o.wakeStore?.save(next).catch(() => o.log({ source: "plan", op: "scheduler", kind: "wake_not_stored" }));
