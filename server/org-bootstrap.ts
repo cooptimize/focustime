@@ -10,6 +10,10 @@
 //                        edit is audited as "replaced by team style" with its text, so nothing is lost silently.
 //   Phrases              the team's lists are the built-in ones; each person keeps only what they added on top; the
 //                        old poll_minutes goes.
+//   Process (WT-1)       each person's pickable_portfolio_types and background_types (lists for all their clients) go
+//                        into each of their clients' no_breakdown and background Rules, together (note "migrated");
+//                        their clients are the ones in their settings or Dataverse's, else every client known. The two
+//                        old settings go from people's own settings.
 // Use AI, the monthly cap and Allow AI stay in people's rows (never read again; D468: nothing is dropped here).
 import { clientScope, onlyMine } from "../config/org.ts";
 import { removeValue, setValue } from "../config/edit.ts";
@@ -31,10 +35,10 @@ export type BootstrapPerson = {
   write: (edit: (text: string) => string) => Promise<boolean>;
 };
 
-export type BootstrapResult = { ran: boolean; people: number; aiOn: boolean; allowed: string[]; colors: number; styles: number; replaced: number };
+export type BootstrapResult = { ran: boolean; people: number; aiOn: boolean; allowed: string[]; colors: number; styles: number; replaced: number; processClients: number };
 
 export async function orgBootstrap(d: { store: AdminStore; people: () => Promise<BootstrapPerson[]>; log?: Logger }): Promise<BootstrapResult> {
-  const none: BootstrapResult = { ran: false, people: 0, aiOn: false, allowed: [], colors: 0, styles: 0, replaced: 0 };
+  const none: BootstrapResult = { ran: false, people: 0, aiOn: false, allowed: [], colors: 0, styles: 0, replaced: 0, processClients: 0 };
   if (await d.store.orgRow(BOOTSTRAP_MARK.scope, BOOTSTRAP_MARK.key)) return none;
   const people = (await d.people()).filter((p) => p.config);
   const cfgs = people.map((p) => p.config!);
@@ -79,6 +83,25 @@ export async function orgBootstrap(d: { store: AdminStore; people: () => Promise
     }
   }
 
+  // Process overrides: each person's lists, for each of their clients, together.
+  const dirClients = await d.store.peopleClients().catch(() => []);
+  const known = [...new Set([...cfgs.flatMap((c) => Object.keys(c.clientSettings)), ...dirClients.map((c) => c.clientKey)])];
+  const proc = new Map<string, { noBreakdown: Map<string, string>; background: Map<string, string> }>();
+  for (const p of people) {
+    const c = p.config!;
+    if (!c.plan.pickablePortfolioTypes.length && !c.plan.backgroundTypes.length) continue;
+    const mine = [...new Set([...Object.keys(c.clientSettings), ...dirClients.filter((x) => x.personId === p.id.toLowerCase()).map((x) => x.clientKey)])];
+    for (const k of mine.length ? mine : known) {
+      const e = proc.get(k) ?? proc.set(k, { noBreakdown: new Map(), background: new Map() }).get(k)!;
+      for (const t of c.plan.pickablePortfolioTypes) if (!e.noBreakdown.has(t.toLowerCase())) e.noBreakdown.set(t.toLowerCase(), t);
+      for (const t of c.plan.backgroundTypes) if (!e.background.has(t.toLowerCase())) e.background.set(t.toLowerCase(), t);
+    }
+  }
+  for (const [k, e] of [...proc].sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (e.noBreakdown.size) await set(clientScope(k), "no_breakdown", [...e.noBreakdown.values()].sort(), "clients", k);
+    if (e.background.size) await set(clientScope(k), "background", [...e.background.values()].sort(), "clients", k);
+  }
+
   // Each person: phrases to their own additions, no poll_minutes, a color equal to the team's follows the team.
   const teamLists = { request_phrases: DEFAULT_REQUEST_PHRASES, ack_phrases: DEFAULT_ACK_PHRASES, promise_phrases: DEFAULT_PROMISE_PHRASES } as const;
   for (const p of people) {
@@ -87,6 +110,7 @@ export async function orgBootstrap(d: { store: AdminStore; people: () => Promise
     const same = Object.entries(c.clientSettings).filter(([k, v]) => v.color && team.get(k) === v.color);
     const edit = (text: string) => {
       let t = removeValue(text, "asks", "poll_minutes");
+      t = removeValue(removeValue(t, "plan", "pickable_portfolio_types"), "plan", "background_types");
       for (const [k, list] of Object.entries(mine) as [keyof typeof teamLists, string[] | null][]) {
         if (list === null) continue;
         const add = onlyMine(teamLists[k], list);
@@ -101,5 +125,5 @@ export async function orgBootstrap(d: { store: AdminStore; people: () => Promise
 
   await d.store.setOrg({ scope: BOOTSTRAP_MARK.scope, key: BOOTSTRAP_MARK.key, value: { at: new Date().toISOString(), people: people.length }, actor: FOCUSTIME, area: "organization", target: "Everyone", note: "team settings moved from people's own settings" });
   d.log?.({ source: "plan", op: "org_bootstrap", kind: "done", count: people.length });
-  return { ran: true, people: people.length, aiOn, allowed, colors: team.size, styles, replaced };
+  return { ran: true, people: people.length, aiOn, allowed, colors: team.size, styles, replaced, processClients: proc.size };
 }

@@ -494,7 +494,7 @@ function StandingForm(p: FormProps) {
 }
 
 const PLANNING_LABELS: Record<string, string> = {
-  minS: "Shortest useful time, S", minM: "Shortest useful time, M", minL: "Shortest useful time, L", types: "Portfolio types", carryDays: "Carry-over",
+  minS: "Shortest useful time, S", minM: "Shortest useful time, M", minL: "Shortest useful time, L", carryDays: "Carry-over",
   reminderOffsetMinutes: "Reminder", checkinReminderMinutes: "Check-in reminder", closeoutReminderMinutes: "Close out reminder", weekNudgeThu: "Thursday nudge",
   weekNudgeFri: "Friday nudge", weekNudgeMon: "Monday nudge", followGraceDays: "Keep following", focusMinutes: "Focus length", breakMinutes: "Break length", endSound: "End sound",
 };
@@ -504,12 +504,11 @@ function PlanningForm(p: FormProps) {
   const a = useAutoSave({
     section: "planning",
     initial: {
-      types: pl.pickablePortfolioTypes.join(", "), minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes,
+      minS: pl.minSizes.S, minM: pl.minSizes.M, minL: pl.minSizes.L, carryDays: pl.carryDays, reminderOffsetMinutes: pl.reminderOffsetMinutes,
       focusMinutes: pl.focusMinutes, breakMinutes: pl.breakMinutes, endSound: pl.endSound, followGraceDays: pl.followGraceDays, closeoutReminderMinutes: pl.closeoutReminderMinutes,
       checkinReminderMinutes: pl.checkinReminderMinutes, weekNudgeThu: pl.weekNudgeThu, weekNudgeFri: pl.weekNudgeFri, weekNudgeMon: pl.weekNudgeMon,
     },
     payload: (v) => ({
-      pickablePortfolioTypes: v.types.split(",").map((x) => x.trim()).filter(Boolean),
       minSizes: { S: v.minS, M: v.minM, L: v.minL },
       carryDays: v.carryDays,
       reminderOffsetMinutes: v.reminderOffsetMinutes,
@@ -539,9 +538,6 @@ function PlanningForm(p: FormProps) {
         {num("minS", "Shortest useful time, S (minutes)", "The least Timebox my day gives an S pick (S is 1h, M 2h, L 4h).")}
         {num("minM", "Shortest useful time, M (minutes)", "The same for M.")}
         {num("minL", "Shortest useful time, L (minutes)", "The same for L.")}
-        <AutoField a={a} k="types" label="Portfolio types that can be picked" hint='Types above story level you pick directly, like "Recurring".'>
-          <input value={a.v.types} onChange={(e) => a.set("types", e.target.value)} {...a.text("types")} />
-        </AutoField>
         {num("carryDays", "Carry-over (days back)", "Unfinished picks offered again. 0 turns it off.", 1, 30)}
         {num("reminderOffsetMinutes", "Reminder (minutes after the day starts)", "Only when today isn't committed.", 5, 240)}
       </div>
@@ -1194,7 +1190,7 @@ function HouseStyleField({ clientKey, name }: { clientKey: string; name: string 
 
 type AiTestResult = { ok: true; latencyMs: number; cost: string; model: string } | { ok: false; kind: string; message: string };
 
-/** AI-0: Settings › AI: Use AI, the monthly limit and this month's spend, Test AI, what is sent, and the last 20 requests. */
+/** AI-0, ADM-1: Settings › AI: the team's AI values read-only (Admin › AI sets them), this month's spend, Test AI, what is sent, and the last 20 requests. */
 function AiForm(p: FormProps) {
   const s = p.data.ai;
   const a = useAutoSave({

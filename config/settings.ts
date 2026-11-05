@@ -99,11 +99,11 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       return (text) => setValue(setValue(setValue(text, "risk", "meeting_watch_minutes", watch), "risk", "meeting_at_risk_minutes", atRisk), "risk", "min_focus_window_minutes", window);
     }
     case "planning": {
-      const keys = ["pickablePortfolioTypes", "minSizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
+      // WT-1, ADM-1: which types need breakdown or count hours are Rules per client in Admin › Clients now.
+      const keys = ["minSizes", "carryDays", "reminderOffsetMinutes", "focusMinutes", "breakMinutes", "endSound", "followGraceDays", "closeoutReminderMinutes", "checkinReminderMinutes", "weekNudgeThu", "weekNudgeFri", "weekNudgeMon"];
       only(v, keys, "plan");
-      const types = strList(v.pickablePortfolioTypes ?? [], "plan.pickable_portfolio_types").filter(Boolean);
       // Each value is written as given; parseConfig checks ranges per field (plan.min_m etc.). Sizes are fixed (E2).
-      const values: [string, TomlValue][] = [["pickable_portfolio_types", types]];
+      const values: [string, TomlValue][] = [];
       if (v.minSizes !== undefined) {
         const mz = obj(v.minSizes, "plan.min_sizes");
         only(mz, ["S", "M", "L"], "plan.min_sizes");

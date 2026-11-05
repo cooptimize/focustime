@@ -69,4 +69,30 @@ describe("orgBootstrap", () => {
     expect([r.aiOn, r.allowed]).toEqual([false, []]);
     expect(JSON.parse((await store.orgRow("org", "ai.on"))!.value)).toBe(false);
   });
+
+  it("WT-1's type lists go into each of the person's clients' Rules, together; the old settings go", async () => {
+    const store = createAdminStore(sqliteDb().conn, () => Temporal.Instant.from("2026-11-04T15:00:00Z"));
+    await store.replaceDirectory([], [], [{ personId: "b", clientKey: "fabrikam" }, { personId: "x", clientKey: "northwind" }]);
+    const lists = (pick: string[], bg: string[]) => (t: string) => setValue(setValue(t, "plan", "pickable_portfolio_types", pick), "plan", "background_types", bg);
+    const ana = person("a", "Ana", `[clients]\ncontoso = { name = "Contoso" }`);
+    await ana.write(lists(["Recurring"], ["Test Case"]));
+    const ben = person("b", "Ben", "");
+    await ben.write(lists(["recurring", "Ongoing"], []));
+    // No clients of her own anywhere: her list applies to every client known.
+    const cy = person("c", "Cy", "");
+    await cy.write(lists([], ["Issue"]));
+    const r = await orgBootstrap({ store, people: async () => [ana, ben, cy] });
+    expect(r.processClients).toBe(3);
+    const rows = new Map((await store.orgRows()).map((x) => [`${x.scope}/${x.key}`, JSON.parse(x.value)]));
+    expect(rows.get("client:contoso/no_breakdown")).toEqual(["Recurring"]);
+    expect(rows.get("client:contoso/background")).toEqual(["Issue", "Test Case"]);
+    expect(rows.get("client:fabrikam/no_breakdown")).toEqual(["Ongoing", "recurring"]);
+    expect(rows.get("client:fabrikam/background")).toEqual(["Issue"]);
+    expect(rows.get("client:northwind/background")).toEqual(["Issue"]);
+    expect(rows.has("client:northwind/no_breakdown")).toBe(false);
+    const audit = await store.auditList({ text: "no_breakdown" });
+    expect(audit.every((e) => e.note === "migrated" && e.actorName === "FocusTime")).toBe(true);
+    for (const p of [ana, ben, cy]) expect(p.text()).not.toMatch(/^(pickable_portfolio_types|background_types)\s*=/m);
+    expect(ana.config!.plan.pickablePortfolioTypes).toEqual([]);
+  });
 });

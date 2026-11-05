@@ -110,9 +110,11 @@ export const colorCss = (c: string) => ((CLIENT_SLOTS as readonly string[]).incl
 
 
 export type PlanConfig = {
-  /** Portfolio-level work item types that can still be picked (Q20), matched without regard to case. */
+  /**
+   * Retired (ADM-1): parent or top types that could be picked, and types that don't count hours. Still parsed so older
+   * text reads; only the org bootstrap reads them, to move them into each client's Rules (no_breakdown, background).
+   */
   pickablePortfolioTypes: string[];
-  /** WT-1: work item types that don't count against hours ("background" types), matched without case. None by default. */
   backgroundTypes: string[];
   /** Minutes per pick size: fixed since E2 (S 1h, M 2h, L 4h, D446); old size_s/m/l values are read and ignored. */
   sizes: { S: number; M: number; L: number };
