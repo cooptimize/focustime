@@ -115,7 +115,10 @@ jobs:
           FT_APP_READY: "true"
           FT_ADMINS: ${{ vars.FT_ADMINS }}
           FT_ADMIN_GROUP_ID: ${{ vars.FT_ADMIN_GROUP_ID }}
+          FT_BUDGET_EMAIL: ${{ vars.FT_BUDGET_EMAIL }}
         run: |
+          # HK-2: the budget alert address stays out of the log (the what-if prints it).
+          [[ -z "$FT_BUDGET_EMAIL" ]] || echo "::add-mask::$FT_BUDGET_EMAIL"
           trap 'rm -f whatif.json' EXIT
           az bicep install
           az deployment group what-if -g "$RG" -n ft-prod --parameters infra/prod.bicepparam --no-pretty-print -o json > whatif.json
@@ -152,7 +155,10 @@ jobs:
           FT_APP_READY: "true"
           FT_ADMINS: ${{ vars.FT_ADMINS }}
           FT_ADMIN_GROUP_ID: ${{ vars.FT_ADMIN_GROUP_ID }}
+          FT_BUDGET_EMAIL: ${{ vars.FT_BUDGET_EMAIL }}
         run: |
+          # HK-2: the budget alert address stays out of the log (the what-if prints it).
+          [[ -z "$FT_BUDGET_EMAIL" ]] || echo "::add-mask::$FT_BUDGET_EMAIL"
           az bicep install
           az deployment group what-if -g "$RG" -n ft-prod --parameters infra/prod.bicepparam --exclude-change-types NoChange Ignore
           az deployment group create -g "$RG" -n ft-prod --parameters infra/prod.bicepparam --query properties.outputs.publicUrl.value -o tsv > url.txt

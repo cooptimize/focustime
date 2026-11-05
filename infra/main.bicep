@@ -37,6 +37,10 @@ param feedbackLive bool = false
 @description('CV-1: shared polling of client chats in the background.')
 @allowed(['on', 'off'])
 param requestsPoll string = 'on'
+@description('HK-2: the monthly budget in USD for this resource group (dev 30, prod 60).')
+param budgetAmount int
+@description('HK-2: who gets the budget alerts, from the FT_BUDGET_EMAIL GitHub variable (never in the repo); empty: no budget.')
+param budgetEmail string = ''
 @description('dev 0 (scale to zero); prod 1 so the scheduler keeps running.')
 param minReplicas int
 param entraClientId string
@@ -130,6 +134,12 @@ module app 'modules/app.bicep' = {
 module costs 'modules/costs.bicep' = {
   name: 'costs'
   params: { env: env, location: location, tags: tags }
+}
+
+// HK-2: the monthly budget and its alerts (50%, 80%, 100% actual, 100% forecast), only once FT_BUDGET_EMAIL is set.
+module budget 'modules/budget.bicep' = if (!empty(budgetEmail)) {
+  name: 'budget'
+  params: { name: '${prefix}-budget', amount: budgetAmount, email: budgetEmail }
 }
 
 output appName string = app.outputs.name

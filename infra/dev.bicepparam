@@ -24,3 +24,6 @@ param feedbackLive = bool(readEnvironmentVariable('FT_FEEDBACK_LIVE', 'false'))
 // D522: who registers client chats, from the deploy workflow's FT_ADMINS (the GitHub variable; object ids only).
 param admins = readEnvironmentVariable('FT_ADMINS', '')
 param adminGroupId = readEnvironmentVariable('FT_ADMIN_GROUP_ID', '')
+// HK-2: the monthly budget (USD) and who its alerts go to (the FT_BUDGET_EMAIL GitHub variable; empty: no budget).
+param budgetAmount = 30
+param budgetEmail = readEnvironmentVariable('FT_BUDGET_EMAIL', '')
