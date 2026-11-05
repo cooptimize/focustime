@@ -1,10 +1,10 @@
-// AH-1: Ahead › Gantt (was Plan ahead, D630). One timeline: the last 2 weeks (planned against worked), weeks 1 to 4
+// AH-1: Ahead › Gantt (was Plan ahead, D649). One timeline: the last 2 weeks (planned against worked), weeks 1 to 4
 // (hours per feature on the shared stepper, the same rows as Plan the week; immediate, outside the change set) and
 // months to week 12 (free hours against features due, Crowded month). Bars grouped client › epic › feature from the
 // change set over DevOps: solid where both dates are set, a dashed edge where one is missing (from the estimate), and
 // a "No dates" group with Set dates. Dragging snaps to half-days with the dates shown live and goes into the change
-// set; while it runs, rows keep their order and reloads wait (the drag bug's fix, D632). Readiness marks sit on bars,
-// an amber edge where the work can't reach its target (D640), and a click opens Break down's side panel.
+// set; while it runs, rows keep their order and reloads wait (the drag bug's fix, D651). Readiness marks sit on bars,
+// an amber edge where the work can't reach its target (D659), and a click opens Break down's side panel.
 import type React from "react";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { AheadState, RoadmapRow, WeekLoadData } from "../../actions/types.ts";
@@ -48,7 +48,7 @@ export function Gantt({ data, groups: incoming, onChanged }: { data: WeekLoadDat
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const [width, setWidth] = useState(1200);
   const box = useRef<HTMLDivElement>(null);
-  // The drag fix (D632): while a bar is dragged, what arrives (a stage, a reload) waits and rows keep their order.
+  // The drag fix (D651): while a bar is dragged, what arrives (a stage, a reload) waits and rows keep their order.
   const dragging = useRef(false);
   const [held, setHeld] = useState<Held<Group[]>>({ shown: incoming, pending: null });
   const [frozen, setFrozen] = useState<Map<string, string[]> | null>(null);
@@ -152,7 +152,7 @@ type GroupProps = {
   closed: Set<string>;
   toggle: (k: string) => void;
   setHours: (k: string, id: number, w: string, hours: number) => Promise<void>;
-  /** The row order when a drag began (D632); null when nothing is dragged. */
+  /** The row order when a drag began (D651); null when nothing is dragged. */
   frozen: string[] | null;
   begin: (order: Map<string, string[]>) => void;
   end: () => void;
@@ -181,7 +181,7 @@ function ClientGroup(p: GroupProps) {
   const loads = useMemo(() => monthLoads(g.rows, bars, cap, cols), [g.rows, bars, cap, cols]);
   const crowded = useMemo(() => new Set(loads.filter((m) => m.crowded).map((m) => m.month)), [loads]);
   // Rows: epics (their features under them, collapsible), then features with no epic shown, each by start date. The
-  // order freezes while a drag runs (D632).
+  // order freezes while a drag runs (D651).
   const startOf = (r: Row) => bars.get(r.item.id)?.start.date ?? "9999";
   const byStart = (x: Row, y: Row) => startOf(x).localeCompare(startOf(y)) || x.item.title.localeCompare(y.item.title);
   const dated = g.rows.filter((r) => bars.get(r.item.id));
@@ -253,7 +253,7 @@ function ClientGroup(p: GroupProps) {
   );
 }
 
-/** Items with neither date: a list under the client with Set dates (D630). */
+/** Items with neither date: a list under the client with Set dates (D649). */
 function NoDates({ rows }: { rows: Row[] }) {
   const a = useAhead();
   const [open, setOpen] = useState<{ key: string; field: "start" | "target" } | null>(null);
@@ -313,7 +313,7 @@ function BarRow({ l, gp, rows, crowded, first, freeze, lane }: { l: Line; gp: Gr
     plannedWeeks: isFeature ? ahead.cells.filter((x) => x.clientKey === c.clientKey && x.itemId === r.item.id && x.minutes > 0).map((x) => x.weekStart) : [],
     crowdedMonths: crowded, cols: gp.cols, needsStories: isFeature && ahead.cells.some((x) => x.clientKey === c.clientKey && x.itemId === r.item.id && x.minutes > 0 && !x.derived),
   });
-  // D640: can the open stories under a feature reach its target in the blocks FocusTime knows (mine only)?
+  // D659: can the open stories under a feature reach its target in the blocks FocusTime knows (mine only)?
   const can: Reach = isFeature
     ? reach({ target: r.eff.target, today: ahead.today, me: c.me, stories: rows.filter((x) => x.item.parentId === r.item.id && x.tier === "story").map((x) => ({ assigneeEmail: x.eff.assignee?.email ?? null, assigneeName: x.eff.assignee?.name ?? null, minutes: c.hints[x.item.id]?.minutes ?? null })), weeks: cap?.weeks ?? [], months: cap?.months.map((m) => { const col = gp.cols.find((k) => k.kind === "month" && k.month === m.month); return { from: col?.from ?? ahead.today, to: col?.to ?? ahead.today, available: m.available }; }) ?? [] })
     : { kind: "none" };
@@ -342,7 +342,7 @@ function BarRow({ l, gp, rows, crowded, first, freeze, lane }: { l: Line; gp: Gr
     });
   };
 
-  /** Drag in half-days (D636): the bar, or one edge; dates show live; on drop the changes are staged. A click opens Break down. */
+  /** Drag in half-days (D655): the bar, or one edge; dates show live; on drop the changes are staged. A click opens Break down. */
   const startDrag = (mode: DragMode) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();

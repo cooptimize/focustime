@@ -466,7 +466,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
         if (found) out[type] = found;
         // Step 17: Start Date where the process has it (detected per process, per type).
         if (has.has(START_DATE_FIELD) && types.includes(type)) starts[type] = START_DATE_FIELD;
-        // AH-1 (D634): the type's own size field.
+        // AH-1 (D653): the type's own size field.
         const sz = detectTypeSizeField(has);
         if (sz) sizes[type] = sz;
       }
@@ -962,7 +962,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
   }
 
   /**
-   * AH-1 (D630): every item of each client the store has that isn't closed, at any level, with its revision, assignee
+   * AH-1 (D649): every item of each client the store has that isn't closed, at any level, with its revision, assignee
    * and the fields its type has (start, target, size), plus the parents of those items. For Ahead's grid and Gantt.
    */
   async function aheadItems(clients: ClientRef[], o: { refresh?: boolean } = {}): Promise<import("../../actions/types.ts").AheadClient[]> {

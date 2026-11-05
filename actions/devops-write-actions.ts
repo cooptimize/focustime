@@ -57,9 +57,9 @@ export type DevOpsWriteContext = {
   conversations?: ConversationsPort | undefined;
   /** PV-1: Take one's notices to the previous assignee (an app table). Absent: no notice is sent. */
   takes?: TakesStore | undefined;
-  /** AH-1: Ahead's change set and who I am to it (D633, D634). Absent: no fields writes, and the target date gate is mine only. */
+  /** AH-1: Ahead's change set and who I am to it (D652, D653). Absent: no fields writes, and the target date gate is mine only. */
   ahead?: AheadPort | undefined;
-  /** AH-1 (D641): notices to a new assignee and to owners whose dates moved (an app table). */
+  /** AH-1 (D660): notices to a new assignee and to owners whose dates moved (an app table). */
   notes?: NotesStore | undefined;
 };
 
@@ -391,7 +391,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
     }
     case "target_date": {
       const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
-      // AH-1 (D633): the shared rule (a lead, the owner, or the owner one level up), not "assigned to me" alone.
+      // AH-1 (D652): the shared rule (a lead, the owner, or the owner one level up), not "assigned to me" alone.
       const right = await rightsOn(env, item, memo);
       if (!right.ok) throw new Refused(right.note, 409);
       const tiers = portfolioTiers(await writer.processConfig(org, pat, project));
@@ -416,9 +416,9 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       return { ...base(env), ...none, op: "target_date", itemId: item.id, title: item.title, ops: targetDateOps(item.rev, field, date, tz, had(field)), rev: item.rev, before: { "Target date": cur }, after: { "Target date": date }, type: item.type, field };
     }
     case "fields": {
-      // AH-1 (D637): my pending changes for one item, one patch behind a test on the rev it has now. A field DevOps
+      // AH-1 (D656): my pending changes for one item, one patch behind a test on the rev it has now. A field DevOps
       // changed since I started editing it is a conflict (nothing is written for the item); other changes to the item
-      // don't count, so my values go on the new rev quietly (D635).
+      // don't count, so my values go on the new rev quietly (D654).
       const port = env.ahead;
       if (!port) throw new Refused("Ahead's change set isn't available here", 503);
       const itemId = posId(o.itemId, "itemId");
@@ -832,7 +832,7 @@ function valueNow(item: ItemSnapshot, f: ChangeField, ref: string | null, tz: st
 }
 
 /**
- * AH-1 (D633): may I change this item? A lead of the client, its owner, or the owner one level up (its parent, read
+ * AH-1 (D652): may I change this item? A lead of the client, its owner, or the owner one level up (its parent, read
  * here), with the levels from process configuration. Without Ahead's port (older callers), only my own items.
  */
 async function rightsOn(env: Env, item: ItemSnapshot, memo: Map<string, Promise<unknown>>): Promise<EditRight> {
@@ -940,7 +940,7 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
     }
     const back = await again(() => writer.item(org, pat, project, itemId));
     if (!applied(entry, current(entry, back, tz))) return settle("unconfirmed", "DevOps didn't show the change yet. Retry checks first and won't write twice", { revAfter: back.rev });
-    // AH-1 (D637): the read-back goes straight into the central store and its change log, so every screen shows it.
+    // AH-1 (D656): the read-back goes straight into the central store and its change log, so every screen shows it.
     await ctx.ahead?.stored?.(env.clientKey, { id: back.id, fields: { ...back.fields, "System.Rev": back.rev } }).catch(() => {});
     if (entry.op === "fields" || entry.op === "undo_fields") await aheadLanded(ctx, env, entry, back, tz).catch(() => {});
     if (entry.op === "undo_state" && entry.commentId !== null) {
@@ -994,8 +994,8 @@ async function attempt(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntr
 
 /**
  * AH-1: a fields write landed (or its undo). Its changes leave my change set and a date's half stays in FocusTime
- * (D636). A new assignee who isn't me gets one notice; the owner of an item whose dates moved gets one per commit,
- * grouped when sent (D641). An undo of an assignment takes its notice back.
+ * (D655). A new assignee who isn't me gets one notice; the owner of an item whose dates moved gets one per commit,
+ * grouped when sent (D660). An undo of an assignment takes its notice back.
  */
 async function aheadLanded(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWriteEntry, back: ItemSnapshot, tz: string): Promise<void> {
   const port = ctx.ahead;

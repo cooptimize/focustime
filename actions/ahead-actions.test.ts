@@ -1,4 +1,4 @@
-// AH-1: Ahead's change set on the server (D633 to D636): who may stage what, values checked against the process,
+// AH-1: Ahead's change set on the server (D652 to D655): who may stage what, values checked against the process,
 // assignees limited to the client's Cooptimizers, pending changes surviving a reload, reconciling against DevOps
 // (landed changes leave, a field changed in DevOps is a conflict, other changes don't count), Keep mine and Take
 // theirs, Discard all with a confirm, the old local drags moved in once, and filters remembered per person.
@@ -52,7 +52,7 @@ function setup(o: { lead?: boolean; automation?: boolean } = {}) {
 type S = ReturnType<typeof setup>;
 const load = (s: S) => s.run<AheadLoad>("ahead.load");
 
-describe("ahead.stage and who may change what (D633)", () => {
+describe("ahead.stage and who may change what (D652)", () => {
   let s: S;
   beforeEach(() => void (s = setup()));
   it("the owner one level up may change it; two levels up or someone else's may not", async () => {
@@ -80,7 +80,7 @@ describe("ahead.stage and who may change what (D633)", () => {
   });
 });
 
-describe("the change set (D634, D635)", () => {
+describe("the change set (D653, D654)", () => {
   let s: S;
   beforeEach(() => void (s = setup()));
   it("survives a reload; the base is kept from when editing started; back to DevOps's value is no change", async () => {

@@ -1,4 +1,4 @@
-// AH-1: Fix next (D639), pure. Readiness gaps as actions, one at a time: Break down (a feature or epic with no open
+// AH-1: Fix next (D658), pure. Readiness gaps as actions, one at a time: Break down (a feature or epic with no open
 // items under it), Set dates, Assign, Size. Only items the person may change. Ordered by the item's target date (soonest
 // first; none last), then the gap (Break down, Set dates, Assign, Size), then id. A gap a pending change already fills
 // leaves the queue; Skip puts one aside for the session.

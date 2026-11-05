@@ -108,7 +108,7 @@ describe("Take one's quiet note (PV-1)", () => {
   });
 });
 
-describe("Ahead's notices to teammates (AH-1, D641)", () => {
+describe("Ahead's notices to teammates (AH-1, D660)", () => {
   it("a new assignee hears once; date moves by one person in one commit are one notice; in the app only, ids not titles", async () => {
     const p = person({ takes: true });
     await p.notes.add({ kind: "assigned", clientKey: "adatum", org: "contoso", itemIds: [610], toEmail: "Ana@cooptimize.example", byName: "Sam Tester" });

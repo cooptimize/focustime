@@ -78,7 +78,7 @@ export function detectSizeField(fields: readonly FieldInfo[]): string | null {
 }
 
 /**
- * AH-1 (D634): a type's own size field, from the fields that type has, in this order: Story Points, Effort, Size,
+ * AH-1 (D653): a type's own size field, from the fields that type has, in this order: Story Points, Effort, Size,
  * Original Estimate. Null when the type has none of them. The value is the field's own number (no conversion).
  */
 export const TYPE_SIZE_FIELDS = [...SIZE_FIELDS.slice(0, 2), SIZE_FIELDS[2], "Microsoft.VSTS.Scheduling.OriginalEstimate"] as const;

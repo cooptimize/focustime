@@ -145,9 +145,9 @@ export type ActionContext = {
   devopsWriter?: DevOpsWriter;
   /** PV-1: Take one's notices (an app table shared by everyone); absent in the demo and tests that don't need it. */
   takes?: import("../store/devops-takes.ts").TakesStore;
-  /** AH-1 (D641): notices to a new assignee and to owners whose dates moved (an app table). Absent: none sent. */
+  /** AH-1 (D660): notices to a new assignee and to owners whose dates moved (an app table). Absent: none sent. */
   devopsNotes?: import("../store/devops-notes.ts").NotesStore;
-  /** AH-1 (D637): a write's read-back into the central DevOps store and its change log. Absent: the next check has it. */
+  /** AH-1 (D656): a write's read-back into the central DevOps store and its change log. Absent: the next check has it. */
   devopsStored?: (clientKey: string, value: { id: number; fields: Record<string, unknown> }) => Promise<void>;
   /** SW-1: sends, week commitments, client priorities and Ask to look (app tables). Absent: none of it here. */
   team?: import("../store/team-store.ts").TeamStore;

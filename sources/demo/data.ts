@@ -277,7 +277,7 @@ export const isDemoClient = (k: string): k is DemoClientKey => DEMO_CLIENTS.some
 
 /**
  * AH-1: one client's items for Ahead, every level, as the central store would give them (fictional). Revisions are
- * fixed per item. Harbor's process sizes stories in Effort; the others in Story Points (two processes, D634).
+ * fixed per item. Harbor's process sizes stories in Effort; the others in Story Points (two processes, D653).
  */
 export function demoAheadClient(k: DemoClientKey, fetchedAt: string): import("../../actions/types.ts").AheadClient {
   const model = demoProcess(k);

@@ -4,7 +4,7 @@ import { freeBefore, reach } from "./reach.ts";
 const base = { today: "2026-11-02", me: "me@example.com", weeks: [{ weekStart: "2026-11-02", freeMinutes: 420 }, { weekStart: "2026-11-09", freeMinutes: 420 }], months: [] };
 const mine = (minutes: number | null) => ({ assigneeEmail: "me@example.com", assigneeName: "Me", minutes });
 
-describe("can't reach target (D640)", () => {
+describe("can't reach target (D659)", () => {
   it("prorates the week the target falls in, by weekdays", () => {
     expect(freeBefore(base, "2026-11-08")).toBe(420);
     expect(freeBefore(base, "2026-11-12")).toBe(420 + 336);

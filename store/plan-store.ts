@@ -2744,7 +2744,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         (await db.run("INSERT INTO roadmap_dates (client_key, item_id, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id) DO UPDATE SET start_date = excluded.start_date, end_date = excluded.end_date, updated_at = excluded.updated_at", clientKey, itemId, dates.start, dates.end, stamp()));
       });
     },
-    /** AH-1 (D634): my pending DevOps edits in Ahead, oldest first. */
+    /** AH-1 (D653): my pending DevOps edits in Ahead, oldest first. */
     async aheadChanges(): Promise<StagedChange[]> {
       const rows = (await db.all("SELECT * FROM ahead_changes ORDER BY created_at, client_key, item_id, field")) as Row[];
       const parse = (v: unknown) => (typeof v === "string" ? (JSON.parse(v) as ChangeValue) : null);
@@ -2778,7 +2778,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return (await db.run("DELETE FROM ahead_changes WHERE client_key = ? AND item_id = ? AND field = ?", clientKey, itemId, field)).changes;
       });
     },
-    /** AH-1 (D636): the half-day I chose for a date that landed in DevOps (DevOps keeps the day). */
+    /** AH-1 (D655): the half-day I chose for a date that landed in DevOps (DevOps keeps the day). */
     async aheadHalves(): Promise<{ clientKey: string; itemId: number; field: "start" | "target"; day: IsoDate; half: DayHalf }[]> {
       return ((await db.all("SELECT client_key, item_id, field, day, half FROM ahead_halves")) as Row[]).map((r) => ({ clientKey: r.client_key as string, itemId: r.item_id as number, field: r.field as "start" | "target", day: String(r.day).slice(0, 10), half: r.half as DayHalf }));
     },

@@ -200,7 +200,7 @@ export function descriptionOps(rev: number, field: string, html: string): PatchO
   return [test(rev), { op: "replace", path: `/fields/${field}`, value: html }];
 }
 
-// ---- AH-1 (D637): one patch per item for Ahead's change set: start, target, size and assignee behind one rev test ----
+// ---- AH-1 (D656): one patch per item for Ahead's change set: start, target, size and assignee behind one rev test ----
 
 /** The labels a fields write shows and logs (the size label is the field's own name, "Story Points"). */
 export const FIELD_LABEL = { start: "Start date", target: "Target date", assignee: "Assigned to" } as const;

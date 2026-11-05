@@ -1,4 +1,4 @@
-// AH-1 (D641): notices for other people from a committed change set. An app table (no person in it), read and written
+// AH-1 (D660): notices for other people from a committed change set. An app table (no person in it), read and written
 // on the database itself like devops_takes: the committer's write records a note; the recipient's own scheduler pass
 // reads the notes for their DevOps email and sends one notice each. Never a title, never a token.
 import type { Conn } from "./sql/conn.ts";

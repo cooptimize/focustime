@@ -1,12 +1,12 @@
 // AH-1: Ahead's change set. Only adds (D468).
-//   ahead_changes  my pending DevOps edits (D634): one row per item and field (start, target, size, assignee), the
+//   ahead_changes  my pending DevOps edits (D653): one row per item and field (start, target, size, assignee), the
 //                  value as JSON, the half-day for a date (display only), the item's revision and the field's value
 //                  when I started editing it, and DevOps's value when it changed since (a conflict). A user table; a
 //                  row goes when its change lands in DevOps, when I remove it, or with Discard all.
 //   ahead_halves   the half-day (AM or PM) I chose for a start or target date after it landed in DevOps (DevOps stores
-//                  the day, D636). Shown only while DevOps still has that day.
+//                  the day, D655). Shown only while DevOps still has that day.
 //   devops_notes   an app table (no person in it), like devops_takes: one row per notice another person should get
-//                  from a commit (D641): "assigned" (an item assigned to them) or "dates" (dates moved on their items,
+//                  from a commit (D660): "assigned" (an item assigned to them) or "dates" (dates moved on their items,
 //                  one row per commit per owner, with the item ids). Their DevOps email (lowercased, only to match
 //                  them), who did it (display name), the client, org and item ids; never a title. Kept 14 days.
 import type { NamedMigration } from "./named.ts";

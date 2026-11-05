@@ -14,7 +14,7 @@ export type TodayFlow = (typeof TODAY_FLOWS)[number];
 export const FLOW_NAMES: Record<TodayFlow, string> = { checkin: "Midday check-in", closeout: "Close out" };
 /** NV-1: Week's Board (stories onto blocks; a day focused is Plan the day) and Commit (Plan the week). */
 export type WeekMode = "board" | "commit" | "team";
-/** AH-1 (D630): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
+/** AH-1 (D649): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
 export type AheadMode = "grid" | "gantt" | "fix";
 
 export const MODE_NAMES = { board: "Board", commit: "Commit", team: "Team", grid: "Grid", gantt: "Gantt", fix: "Fix next" } as const;
