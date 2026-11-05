@@ -6,7 +6,7 @@
 //   week (a reason; a Must stays as a conflict for both until it's sorted).
 //   Sender: Waiting (Cancel), Accepted, Scheduled, Passed to <name>, Can't: <reason>, Done, Not answered.
 // A Must counts on the recipient's week only once accepted: until then it isn't on their list at all (D633).
-import type { Send, SendState } from "../store/team-store.ts";
+import type { Send, SendState } from "./team-types.ts";
 
 export type SendRole = { onClient: boolean; lead: boolean; cooptimizer: boolean };
 
@@ -25,16 +25,8 @@ export function sendRefusal(kind: Send["kind"], sender: SendRole, recipient: Sen
 /** States a send can still change from (the rest are settled). */
 export const OPEN_STATES: ReadonlySet<SendState> = new Set<SendState>(["waiting", "accepted", "scheduled", "cant"]);
 
-export type Shown =
-  | "waiting"
-  | "passed"
-  | "accepted"
-  | "scheduled"
-  | "cant"
-  | "done"
-  | "not_answered"
-  | "cancelled"
-  | "withdrawn";
+export type { Shown } from "./team-types.ts";
+import type { Shown } from "./team-types.ts";
 
 /** What a send is now: Done once DevOps resolved the item, Not answered once its week ended while still Waiting. */
 export function shownState(s: Pick<Send, "state" | "by" | "weekStart">, o: { resolved: boolean; thisWeek: string }): Shown {

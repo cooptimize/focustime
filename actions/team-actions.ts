@@ -14,14 +14,17 @@
 // assign_to_me pre-ticked; that write runs from the UI through the write framework (preview, read back, undo).
 import type { AppConfig } from "../config/schema.ts";
 import { isOpen } from "../plan/process.ts";
-import { isConflict, OPEN_STATES, sendRefusal, sendWeeks, shownState, stateWords, todayLine, toldOf, type Shown } from "../plan/sends.ts";
+import { isConflict, OPEN_STATES, sendRefusal, sendWeeks, shownState, stateWords, todayLine, toldOf } from "../plan/sends.ts";
 import type { Levels } from "../plan/levels.ts";
 import type { ClientRef, DevOpsSource } from "../sources/devops/source.ts";
 import type { PersonClient } from "../store/admin-store.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import type { LookAsk, Person, Priority, Send, TeamStore } from "../store/team-store.ts";
+import type { CommitClient, CommitData, PickerPersonView, SendView, TeamClient, TeamData, TeamPerson } from "../plan/team-types.ts";
+
+export type { CommitClient, CommitData, LookView, PickerPersonView, PriorityView, SendView, TeamClient, TeamData, TeamPerson } from "../plan/team-types.ts";
 import { mondayOf } from "../week/dates.ts";
-import type { Half, IsoDate, Week } from "../week/types.ts";
+import type { IsoDate, Week } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
 import type { OrgRuntime } from "./org.ts";
 import type { ActionResponse } from "./types.ts";
@@ -153,17 +156,6 @@ async function rosterOf(ctx: TeamContext): Promise<Roster> {
   };
 }
 
-/** The view of a send for the person looking (sender, passer or recipient). */
-export type SendView = Omit<Send, "state"> & { state: Send["state"]; shown: Shown; words: string; conflict: boolean; role: "sender" | "recipient" | "passer" | "teammate"; canCancel: boolean; canWithdraw: boolean; canAnswer: boolean };
-export type PriorityView = Priority & { onMyWeek: boolean; canUnflag: boolean };
-export type LookView = LookAsk & { role: "asker" | "lead" };
-export type CommitClient = { clientKey: string; clientName: string; isLead: boolean; leads: Person[]; incoming: SendView[]; sent: SendView[]; priorities: PriorityView[]; looks: LookView[] };
-export type CommitData = { weekStart: IsoDate; clients: CommitClient[] };
-export type TeamPerson = { id: string; name: string; email: string | null; lead: boolean; you: boolean; state: "committed" | "draft" | "not_on_focustime"; features: { itemId: number; title: string; itemType: string | null; url: string | null; tier: "must" | "nice" }[]; watching: { itemId: number; title: string; itemType: string | null; url: string | null; moved: boolean | null }[] };
-export type TeamClient = { clientKey: string; clientName: string; people: TeamPerson[]; sends: SendView[]; priorities: PriorityView[]; looks: LookView[] };
-export type TeamData = { weekStart: IsoDate; thisWeek: IsoDate; clients: TeamClient[] };
-export type PickerPersonView = { id: string; name: string; email: string | null; lead: boolean; onFocusTime: boolean };
-
 const ref = (k: string, cfg: AppConfig): ClientRef => ({ clientKey: k, clientName: cfg.clientSettings[k]?.name ?? k });
 const keyOf = (k: string, id: number) => `${k}\u0000${id}`;
 
@@ -236,10 +228,10 @@ export async function markScheduled(ctx: Pick<TeamContext, "team" | "me" | "org"
 }
 
 /** The first block of a client on or after today in a week, for Accept and schedule. */
-function firstBlock(week: Week, clientKey: string, today: IsoDate): { date: IsoDate; half: Half } | null {
+function firstBlock(week: Week, clientKey: string, today: IsoDate): { date: IsoDate; half: "AM" | "PM" } | null {
   for (const d of week.days) {
     if (d.date < today) continue;
-    for (const slot of [d.am, d.pm]) if (!slot.pto && slot.focus[0]?.clientKey === clientKey) return { date: d.date, half: slot.half };
+    for (const [slot, half] of [[d.am, "AM"], [d.pm, "PM"]] as const) if (!slot.pto && slot.focus[0]?.clientKey === clientKey) return { date: d.date, half };
   }
   return null;
 }

@@ -5,41 +5,9 @@
 // runs in a transaction. Nothing here logs.
 import type { Conn, Row } from "./sql/conn.ts";
 
-export type SendKind = "suggested" | "must";
-export type SendState = "waiting" | "accepted" | "scheduled" | "cant" | "cancelled" | "withdrawn" | "done";
-export type Person = { id: string; name: string };
+import type { Commitment, LookAsk, NewCommitment, NewSend, Priority, Send, SendState } from "../plan/team-types.ts";
 
-export type Send = {
-  id: number;
-  clientKey: string;
-  itemId: number;
-  level: "feature" | "story";
-  title: string;
-  itemType: string | null;
-  url: string | null;
-  parentId: number | null;
-  weekStart: string;
-  kind: SendKind;
-  note: string | null;
-  /** The sender asked them to take it in DevOps: the recipient's Accept offers "Also assign to me" pre-ticked. */
-  askTake: boolean;
-  /** The original sender (kept through Pass to). */
-  from: Person;
-  /** Who passed it last, or null. */
-  by: Person | null;
-  to: Person;
-  state: SendState;
-  reason: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-export type NewSend = Omit<Send, "id" | "by" | "state" | "reason" | "createdAt" | "updatedAt">;
-
-export type Commitment = { personId: string; weekStart: string; clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; tier: "must" | "nice"; watching: boolean; committedAt: string };
-export type NewCommitment = Omit<Commitment, "personId" | "weekStart" | "committedAt">;
-
-export type Priority = { clientKey: string; itemId: number; title: string; itemType: string | null; url: string | null; note: string | null; flaggedBy: Person; flaggedAt: string };
-export type LookAsk = { id: number; clientKey: string; weekStart: string; from: Person; to: Person; note: string | null; reply: string | null; repliedAt: string | null; createdAt: string };
+export type { Commitment, LookAsk, NewCommitment, NewSend, Person, Priority, Send, SendKind, SendState } from "../plan/team-types.ts";
 
 export type TeamStore = {
   addSend(s: NewSend): Promise<Send>;
