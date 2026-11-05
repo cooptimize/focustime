@@ -27,6 +27,7 @@ import { overlapHint, RSVP_RESPONSES, RSVP_VERB, type RsvpResponse } from "../pl
 import type { CalEvent } from "../week/types.ts";
 import { PRESETS, suggestMinutes } from "../plan/timer.ts";
 import { userZone } from "../week/zone.ts";
+import { openSend, sendLevel } from "./send-event.ts";
 
 export type MenuItem = {
   id: string;
@@ -488,6 +489,10 @@ export function itemMenu(env: MenuEnv, clientKey: string, item: WorkItem): MenuS
       },
       { id: "timebox", label: "Timebox…", hint: "start and length on the planned day", action: "timebox.add", run: () => env.openTimebox({ clientKey, itemId: item.id, title: item.title, url: item.url, date: env.planState?.date ?? env.today }) },
       { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", run: () => env.openHelp({ clientKey, title: `#${item.id} ${item.title}`, url: item.url, itemId: item.id, pinned: env.planState?.date ?? null }) },
+      (() => {
+        const level = sendLevel(item);
+        return { id: "send", label: "Send to…", hint: "a teammate's week", action: "send.create", ...(level ? {} : { disabled: "Send its features instead" }), run: () => level && openSend({ clientKey, clientName: clientNameOf(env, clientKey), itemId: item.id, level, title: item.title, itemType: item.type, url: item.url, parentId: item.parentId }) } as MenuItem;
+      })(),
       ...(item.level === "portfolio" && !kids ? [{ id: "draft", label: "Add a draft story", action: "draft.add_story", next: () => draftPrompt(env, clientKey, item) } as MenuItem] : []),
     ],
   };
@@ -1427,6 +1432,8 @@ export type WeekItemOps = {
   size?: (s: "S" | "M" | "L" | null) => void;
   done: (on: boolean) => void;
   help: () => void;
+  /** SW-1: Send to… a teammate's week. */
+  send?: () => void;
   targetDate: () => void;
   brief: () => void;
   createDrafts: () => void;
@@ -1484,6 +1491,7 @@ export function weekItemMenu(f: WeekItemFacts, ops: WeekItemOps): MenuStep {
       },
       { id: "done", label: f.done ? "Mark not done" : "Mark done", action: "weekplan.mark_done", ...(f.past ? closed : f.done === "other" ? { disabled: "Done in DevOps or by a done pick" } : {}), run: () => ops.done(!f.done) },
       { id: "help", label: "Ask to collaborate", hint: "who is free", action: "collab.candidates", ...(f.past || f.done ? { disabled: f.past ? "A past week is a review" : "Already done" } : {}), run: ops.help },
+      ...(ops.send ? [{ id: "send", label: "Send to…", hint: "a teammate's week", action: "send.create", ...(f.done ? { disabled: "Already done" } : {}), run: ops.send } as MenuItem] : []),
       ...(f.level === "feature"
         ? ([
             { id: "target", label: f.targetDate ? "Change target date" : "Set target date", ...writes("target"), action: "devops.preview", ...closed, run: f.canWrite ? ops.targetDate : ops.enableWrites },

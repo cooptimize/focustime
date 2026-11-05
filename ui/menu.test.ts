@@ -149,8 +149,11 @@ describe("⋯ menus", () => {
   });
   it("a work item: open, add to the plan (stories only), draft story for an empty feature", () => {
     const story = itemMenu(env().e, "internal", item(1));
-    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Open in browser", ""], ["Add to the plan", ""], ["Timebox…", ""], ["Ask to collaborate", ""]]);
+    expect(items(story).map((i) => [i.label, i.disabled ?? ""])).toEqual([["Open in browser", ""], ["Add to the plan", ""], ["Timebox…", ""], ["Ask to collaborate", ""], ["Send to…", ""]]);
     const feature = itemMenu(env().e, "internal", item(2, "portfolio"));
+    // SW-1: a feature can be sent; an epic is sent through its features.
+    expect(find(feature, "Send to…").disabled).toBeUndefined();
+    expect(find(itemMenu(env().e, "internal", { ...item(3, "portfolio"), tier: "epic" }), "Send to…").disabled).toBe("Send its features instead");
     expect(find(feature, "Add to the plan").disabled).toMatch(/above story level/);
     expect(find(feature, "Add a draft story")).toBeTruthy();
   });
