@@ -1065,7 +1065,7 @@ type NewPerson = { weekdays: Record<string, string[]>; lunch: string; risk: { wa
 type OrgData = {
   inviteDomains: string[];
   neverSuggest: string[];
-  feedback: { org: string; project: string; parentId: number; live: boolean } | null;
+  feedback: { org: string; project: string; parentId: number } | null;
   retentionYears: number;
   idleMinutes: number;
   /** AH-3: Fix next looks at the top N of each backlog. */
@@ -1084,7 +1084,7 @@ function AdminOrganization() {
   if (error) return <p className="field-problem">{error}</p>;
   if (!data) return <p className="muted">Loading…</p>;
   const o = "org";
-  const fb = data.feedback ?? { org: "", project: "", parentId: 0, live: false };
+  const fb = data.feedback ?? { org: "", project: "", parentId: 0 };
   const saveFb = (next: Partial<typeof fb>) => {
     const v = { ...fb, ...next };
     void saver.save(o, "org.feedback", v.org || v.project || v.parentId ? v : null, "Send feedback goes to");
@@ -1111,7 +1111,7 @@ function AdminOrganization() {
         </AField>
       </div>
       <h3>Send feedback</h3>
-      <p className="muted">{data.feedbackFromBootstrap ? "From the app's settings until an admin sets it here." : "Set here; the app's settings no longer apply."} Stories are created under the parent feature, by FocusTime's own identity, only while sending is on.</p>
+      <p className="muted">{data.feedbackFromBootstrap ? "From the app's settings until an admin sets it here." : "Set here; the app's settings no longer apply."} Stories are created under the parent feature by the person sending them, with their own DevOps write PAT for that project's client.</p>
       <div className="set-grid">
         <AField label="DevOps organization" kind="Rule" s={saver.status(o, "org.feedback")} retry={() => saveFb({})}>
           <TextInput label="Feedback DevOps organization" value={fb.org} onSave={(v) => saveFb({ org: v })} />
@@ -1121,11 +1121,6 @@ function AdminOrganization() {
         </AField>
         <AField label="Parent feature" kind="Rule" s={null} retry={() => saveFb({})}>
           <NumInput label="Feedback parent feature" value={fb.parentId} min={1} max={99999999} onSave={(v) => saveFb({ parentId: v })} />
-        </AField>
-        <AField label="Sending" kind="Rule" s={null} retry={() => saveFb({})} hint="Off: Send feedback previews only.">
-          <label className="set-check">
-            <input type="checkbox" role="switch" checked={fb.live} onChange={(e) => saveFb({ live: e.target.checked })} /> Send to DevOps
-          </label>
         </AField>
       </div>
       <h3>New people</h3>
@@ -1245,7 +1240,7 @@ function AdminStatus() {
           <span className="set-value">{ok(data.ai.keyConfigured, `Configured (${data.ai.provider})`, "Not configured")}</span>
         </div>
         <div className="set-field">
-          <span className="set-label">Send feedback identity</span>
+          <span className="set-label">Send feedback</span>
           <span className="set-value">{ok(data.feedback.ok, data.feedback.message, data.feedback.message)}</span>
         </div>
         <div className="set-field">

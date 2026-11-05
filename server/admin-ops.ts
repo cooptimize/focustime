@@ -4,7 +4,6 @@
 import type { StatusRegistry } from "../actions/status-rows.ts";
 import type { AdminCheck } from "../actions/admin.ts";
 import type { AdminOps, PersonHealth } from "../actions/admin-actions.ts";
-import type { FeedbackSetup } from "../actions/feedback-types.ts";
 import type { OrgRuntime } from "../actions/org.ts";
 import { SETUP_STEPS, type SetupState } from "../plan/setup.ts";
 import type { ClientChat } from "../plan/requests.ts";
@@ -33,7 +32,8 @@ export type AdminOpsDeps = {
   conversationCounts?: ((day: string) => Promise<ConversationCounts>) | null;
   ai: () => Promise<{ provider: string; keyConfigured: boolean }>;
   appSpentMicros: () => Promise<number>;
-  feedback: () => Promise<FeedbackSetup | null>;
+  /** FB-1: where Send feedback goes (each person sends with their own DevOps write PAT); null when nothing is set. */
+  feedback: () => Promise<{ org: string; project: string; parentId: number } | null>;
   build: BuildInfo;
   /** Dataverse's people and leads, read with the app's reader; null when Dataverse isn't set up here. */
   directory: (() => Promise<{ ok: true; read: DirectoryRead } | { ok: false; message: string }>) | null;
@@ -99,8 +99,8 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
         version: { env: d.build.env, sha: d.build.sha, pr: d.build.pr, builtAt: d.build.builtAt },
         ai,
         feedback: setup
-          ? { ok: setup.state === "ready" || setup.state === "local", message: setup.state === "ready" ? `Ready: stories go under #${setup.parentId}` : setup.state === "local" ? "Preview only in the developer loop" : setup.reason }
-          : { ok: false, message: "Couldn't check" },
+          ? { ok: true, message: `Stories go under #${setup.parentId} in ${setup.project}, created by each person with their own DevOps write PAT` }
+          : { ok: false, message: "No feedback destination is set (Admin › Organization)" },
         dataverse: { refreshedAt, ...lastDirectory },
         chats: health,
         lastPoll: polled.at(-1) ?? null,

@@ -70,8 +70,6 @@ import { createApp } from "./app.ts";
 import { moveFromOldName } from "../host/local/rename.ts";
 import { createDemoContext, seedDemo, type DemoControl } from "./demo.ts";
 import { buildInfo } from "./buildinfo.ts";
-import { createFeedbackService } from "../actions/feedback-actions.ts";
-import { createFeedbackDevOps, DEVOPS_SCOPE } from "../sources/devops/feedback.ts";
 import { execFileSync } from "node:child_process";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
@@ -107,7 +105,6 @@ import type { TimeModel } from "../week/hours.ts";
 import { createAdminStore, FOCUSTIME } from "../store/admin-store.ts";
 import { inGroup } from "../sources/graph/groups.ts";
 import { orgBootstrap, type BootstrapPerson } from "./org-bootstrap.ts";
-import type { FeedbackService } from "../actions/feedback-actions.ts";
 
 const args = process.argv.slice(2);
 const dev = args.includes("--dev");
@@ -584,7 +581,7 @@ const media = host.media;
 // in memory and data, built on first use and dropped when the session ends. Never mixed with anyone's real data.
 const demos = new Map<string, Promise<ActionContext>>();
 /** F1 checks (e2e): the demo's pretend feature can be missing or the wrong type, to show the not-set-up state. */
-const demoFeedbackParent = ((v) => (v === "missing" || v === "wrong_type" ? v : "ok"))(process.env.FOCUSTIME_DEMO_FEEDBACK_PARENT);
+const demoFeedbackParent = ((v) => (v === "missing" || v === "wrong_type" || v === "no_pat" || v === "no_access" || v === "fail" ? v : "ok"))(process.env.FOCUSTIME_DEMO_FEEDBACK_PARENT);
 const demoControl = (on: boolean): DemoControl => ({ on, set: async () => {} });
 const demoFor = (userId: string): Promise<ActionContext> => {
   let c = demos.get(userId);
@@ -610,38 +607,13 @@ const build = buildInfo(process.env, () => {
   }
 });
 
-// F1: Send feedback, one service for this FocusTime. Locally: preview only, nothing checked or sent. Hosted: the app's
-// managed identity (a bearer token for Azure DevOps; never logged or returned) creates the story under the parent
-// feature, when this environment's live switch is on; otherwise preview only. The setup check runs at start.
-// ADM-1: the destination and live switch are a Rule (Admin › Organization; the app config's values bootstrap it), so
-// the service is rebuilt when an admin changes them.
-type FeedbackTarget = { org: string; project: string; parentId: number; live: boolean } | null;
-const feedbackCredential = host.kind === "local" ? null : new DefaultAzureCredential(process.env.AZURE_CLIENT_ID ? { managedIdentityClientId: process.env.AZURE_CLIENT_ID } : {});
-const makeFeedback = (f: FeedbackTarget): FeedbackService => {
-  const local = host.kind === "local";
-  if (local || !f || !feedbackCredential) return createFeedbackService({ devops: null, mode: "preview_only", env: build.env, local, now: Date.now, log });
-  const credential = feedbackCredential;
-  const devops = createFeedbackDevOps({ fetch, log, token: async () => (await credential.getToken(DEVOPS_SCOPE)).token, target: { org: f.org, project: f.project, parentId: f.parentId } });
-  return createFeedbackService({ devops, mode: f.live ? "live" : "preview_only", env: build.env, local: false, now: Date.now, log });
-};
-let feedbackHeld: { key: string; service: FeedbackService } = { key: JSON.stringify(app.feedback ?? null), service: makeFeedback(app.feedback ?? null) };
-const currentFeedback = async (): Promise<FeedbackService> => {
+// F1, FB-1: Send feedback goes to the org.feedback Rule (Admin › Organization; the app config's [feedback] bootstraps
+// it). Each person's story is created through the write framework with their own DevOps write PAT (actions/dispatch.ts);
+// there is no app identity for DevOps.
+const feedbackTarget = async () => {
   const f = (await org.rules().catch(() => null))?.organization.feedback ?? app.feedback ?? null;
-  const key = JSON.stringify(f);
-  if (key !== feedbackHeld.key) feedbackHeld = { key, service: makeFeedback(f) };
-  return feedbackHeld.service;
+  return f ? { org: f.org, project: f.project, parentId: f.parentId } : null;
 };
-const feedbackService: FeedbackService = {
-  get mode() {
-    return feedbackHeld.service.mode;
-  },
-  env: build.env,
-  demo: false,
-  check: async (force) => (await currentFeedback()).check(force),
-  target: async () => (await currentFeedback()).target(),
-  send: async (p) => (await currentFeedback()).send(p),
-};
-void feedbackService.check().catch(() => undefined);
 
 /** AS-1: the assistant by person (Entra object id), for TB-1's Teams bot: their own context, absolute links. */
 export const assistants = createAssistantHub({ ctxFor: (userId) => runtimeFor(userId), publicUrl: app.publicUrl });
@@ -803,7 +775,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     makeGoogle: googleFor(who),
     makeDevOps: devopsFor(who),
     feedback: {
-      service: feedbackService,
+      target: feedbackTarget,
       sender: async () => {
         const u = await accounts.users.get(userId);
         return u ? { name: u.displayName, email: u.email ?? u.upn } : null;
@@ -948,7 +920,7 @@ const adminOps = createAdminOps({
   conversationCounts: (day) => conversations.counts(day),
   ai: async () => ({ provider: aiProviderKind, keyConfigured: aiProviderKind === "stub" ? true : !!(await aiKey()) }),
   appSpentMicros: () => aiRuntime.appSpend.get(new Date().toISOString().slice(0, 7)),
-  feedback: () => feedbackService.check(),
+  feedback: feedbackTarget,
   build,
   directory: directorySource ? () => directorySource.directory() : null,
   removePerson: async (id) => {

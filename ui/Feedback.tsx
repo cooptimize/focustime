@@ -1,7 +1,9 @@
 // F1: ⋯ › Send feedback (and "Send feedback" in the command menu). Write: Idea, Problem or Question, one text box,
 // "Include where I am" (the view's name, ⋯ › About's version line, the browser and the screen size; nothing else).
-// Preview: the exact title and description, and where it goes; Send or Back. Then "Sent. Thanks." with a link to the
-// new item, or a plain error with Copy text, so nothing typed is lost and nothing is retried on its own.
+// Preview: the exact title and description, where it goes, who it is created as and who can see it; Send or Back.
+// Then "Sent. Thanks." with a link to the new item, or a plain error with Copy text, so nothing typed is lost and
+// nothing is retried on its own. FB-1: it is sent with the person's own DevOps write PAT; without one the dialog says
+// how to turn writes on and offers Copy text only.
 // Keys: Enter in the text box goes to the preview (Shift+Enter is a new line); Ctrl+Enter sends from the preview.
 // UI-8: UI-3's header on every screen: ‹ Back at the top left on the preview and the error (back to the text), the ×
 // at the top right always, Esc closes. The header never scrolls away; only the body scrolls.
@@ -9,8 +11,8 @@ import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef, useState } from "react";
 import { aboutLine, type Build } from "./About.tsx";
 import { ActionRefusal, call } from "./api.ts";
-import { FEEDBACK_KINDS, KIND_LABEL, NOT_SET_UP, type FeedbackKind, type Where } from "../plan/feedback.ts";
-import type { FeedbackPreview, FeedbackSent, FeedbackStatus } from "../actions/feedback-types.ts";
+import { FEEDBACK_KINDS, KIND_LABEL, type FeedbackKind, type Where } from "../plan/feedback.ts";
+import { WRITES_HREF, type FeedbackPreview, type FeedbackSent, type FeedbackSetup, type FeedbackStatus } from "../actions/feedback-types.ts";
 
 /** "Chrome 141 on Windows": the browser and system from the user agent, nothing more. */
 export function browserName(ua: string): string {
@@ -48,7 +50,7 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
     else box.current?.focus();
   }, [step.kind]);
 
-  const notSetUp = status?.setup.state === "not_set_up";
+  const notSetUp = !!status && status.setup.state !== "ready";
   const where = (): Where => ({ view, version, browser: browserName(navigator.userAgent), screen: `${window.screen.width}×${window.screen.height}, window ${window.innerWidth}×${window.innerHeight}` });
   const copy = () => void navigator.clipboard?.writeText(text).then(() => setCopied(true), () => setCopied(false));
 
@@ -114,11 +116,7 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
 
         {step.kind === "write" && (
           <div className="feedback-body">
-            {notSetUp && (
-              <p className="feedback-note" role="status">
-                {status?.notSetUp ?? NOT_SET_UP}
-              </p>
-            )}
+            {notSetUp && status && <SetupNote setup={status.setup} line={status.line} onClose={onClose} />}
             <div className="feedback-kinds" role="radiogroup" aria-label="Kind">
               {FEEDBACK_KINDS.map((k) => (
                 <label key={k} className={kind === k ? "on" : ""}>
@@ -174,15 +172,22 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
               <dd>{step.p.tags.join(", ")}</dd>
             </dl>
             <p className="feedback-dest">{step.p.destination}.</p>
-            {step.p.message && <p className="feedback-note" role="status">{step.p.message}</p>}
+            {step.p.write && (
+              <div className="feedback-write">
+                <p>
+                  Created as <strong>{step.p.write.identity}</strong> in {step.p.write.org} › {step.p.write.project}.
+                </p>
+                <p className="muted">{step.p.write.visibility}</p>
+                {[...step.p.write.links, ...step.p.write.notes].map((l) => (
+                  <p key={l} className="muted">{l}</p>
+                ))}
+              </div>
+            )}
+            {step.p.message && (step.p.setup.state === "no_pat" ? <SetupNote setup={step.p.setup} line={step.p.message} onClose={onClose} /> : <p className="feedback-note" role="status">{step.p.message}</p>)}
             <div className="feedback-actions">
-              {step.p.mode === "live" && step.p.setUp ? (
+              {step.p.setUp ? (
                 <button ref={primary} type="button" className="commit" disabled={busy || step.p.remaining <= 0} onClick={() => void send(step.p)}>
                   {busy ? "Sending…" : "Send"} <kbd>Ctrl Enter</kbd>
-                </button>
-              ) : step.p.setUp ? (
-                <button ref={primary} type="button" className="commit" disabled={busy} onClick={() => void send(step.p)}>
-                  {busy ? "Working…" : "Done"} <kbd>Ctrl Enter</kbd>
                 </button>
               ) : (
                 copyButton
@@ -193,18 +198,14 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
 
         {step.kind === "sent" && (
           <div className="feedback-body">
-            {step.r.sent ? (
-              <p className="feedback-done" role="status">
-                {step.r.message}{" "}
-                {step.r.url ? (
-                  <a href={step.r.url} target="_blank" rel="noreferrer">#{step.r.id}</a>
-                ) : (
-                  <>#{step.r.id}</>
-                )}
-              </p>
-            ) : (
-              <p className="feedback-note" role="status">{step.r.message}</p>
-            )}
+            <p className="feedback-done" role="status">
+              {step.r.message}{" "}
+              {step.r.url ? (
+                <a href={step.r.url} target="_blank" rel="noreferrer">#{step.r.id}</a>
+              ) : (
+                <>#{step.r.id}</>
+              )}
+            </p>
             <div className="feedback-actions">
               <button ref={primary} type="button" className="commit" onClick={onClose}>Done</button>
             </div>
@@ -221,5 +222,22 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
         )}
       </div>
     </div>
+  );
+}
+
+/** FB-1: why Send isn't offered, and for a missing write PAT the way to Settings › Clients. */
+function SetupNote({ setup, line, onClose }: { setup: FeedbackSetup; line: string; onClose: () => void }) {
+  return (
+    <p className="feedback-note" role="status">
+      {line}
+      {setup.state === "no_pat" && (
+        <>
+          {" "}
+          <a href={WRITES_HREF} onClick={onClose}>
+            Open Settings › Clients
+          </a>
+        </>
+      )}
+    </p>
   );
 }
