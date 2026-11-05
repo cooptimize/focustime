@@ -197,8 +197,10 @@ export const ORG_SPECS = {
   "conv.request_phrases": { kind: "default", area: "conversations", label: "Request phrases", builtin: [...DEFAULT_REQUEST_PHRASES], parse: list(50, 60, true) },
   "conv.ack_phrases": { kind: "default", area: "conversations", label: "Thanks and short replies", builtin: [...DEFAULT_ACK_PHRASES], parse: list(50, 60, true) },
   "conv.promise_phrases": { kind: "default", area: "conversations", label: "Commitment phrases", builtin: [...DEFAULT_PROMISE_PHRASES], parse: list(50, 60, true) },
-  "conv.poll_minutes": { kind: "rule", area: "conversations", label: "Read client chats every (minutes)", builtin: 5, parse: intIn(1, 60, "minutes") },
+  // ADM-2 (D582): read live by the poller each tick; 1 to 30 (a stored value outside it falls back to 5 with a Status line).
+  "conv.poll_minutes": { kind: "rule", area: "conversations", label: "Read client chats every (minutes)", builtin: 5, parse: intIn(1, 30, "minutes") },
   "conv.retention_days": { kind: "rule", area: "conversations", label: "Keep messages that aren't requests (days)", builtin: 14, parse: intIn(1, 90, "days") },
+  "conv.closed_shown_days": { kind: "rule", area: "conversations", label: "Closed conversations stay shown (days)", builtin: 14, parse: intIn(1, 90, "days") },
   "conv.chat_ai_daily_cap": { kind: "rule", area: "conversations", label: "AI requests per chat per day", builtin: 200, parse: intIn(0, 5000, "requests") },
   // ADM-2 (D578): also who is a Cooptimizer (sign-in and People); help invites go only to these too.
   "org.invite_domains": { kind: "rule", area: "organization", label: "Cooptimize email domains (sign-in and people)", builtin: [] as string[], parse: domains },
@@ -275,12 +277,14 @@ export type OrgBootstrap = { model: string; appCapUsd: number; inviteDomains: re
 /** Every org value resolved: stored, else bootstrap, else built-in. */
 export type OrgRules = {
   ai: { on: boolean; model: string; personCapUsd: number; appCapUsd: number; allowedClients: string[] };
-  conversations: { pollMinutes: number; retentionDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[] };
+  conversations: { pollMinutes: number; retentionDays: number; closedShownDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[] };
   organization: { inviteDomains: string[]; neverSuggest: string[]; feedback: FeedbackRule | null; retentionYears: number; newPerson: NewPersonDefaults };
   clients: Record<string, ClientRules>;
   levels: Record<Level, Guidance>;
   /** ADM-2: ids an admin flagged as automation accounts. */
   automation: string[];
+  /** ADM-2 (D582): team values stored that no longer validate, each read as its built-in value (Status shows them). */
+  problems: { key: string; label: string; fallback: unknown }[];
 };
 export type ClientRules = { color: string | null; allowAi: boolean; attachmentsAi: boolean; openStates: string[]; /** Parent or top types that don't need breakdown. */ noBreakdown: string[]; /** Types that don't count against hours. */ background: string[]; houseStyle: string | null; treatAsClient: boolean; hidden: boolean };
 export const NO_CLIENT_RULES: ClientRules = { color: null, allowAi: false, attachmentsAi: false, openStates: [], noBreakdown: [], background: [], houseStyle: null, treatAsClient: false, hidden: false };
@@ -305,7 +309,19 @@ function valueOf<T>(rows: Map<string, OrgRow>, scope: string, key: string, spec:
 
 export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRules {
   const m = new Map(rows.map((r) => [`${r.scope}\u0000${r.key}`, r]));
-  const o = <K extends OrgKey>(k: K, fallback?: (typeof ORG_SPECS)[K]["builtin"]) => valueOf(m, "org", k, ORG_SPECS[k] as Spec, fallback ?? ORG_SPECS[k].builtin) as (typeof ORG_SPECS)[K]["builtin"];
+  const problems: OrgRules["problems"] = [];
+  const o = <K extends OrgKey>(k: K, fallback?: (typeof ORG_SPECS)[K]["builtin"]) => {
+    const fb = fallback ?? ORG_SPECS[k].builtin;
+    const r = m.get(`org\u0000${k}`);
+    if (r && !problems.some((p) => p.key === k)) {
+      try {
+        (ORG_SPECS[k] as Spec).parse(parsed(r));
+      } catch {
+        problems.push({ key: k, label: ORG_SPECS[k].label, fallback: fb });
+      }
+    }
+    return valueOf(m, "org", k, ORG_SPECS[k] as Spec, fb) as (typeof ORG_SPECS)[K]["builtin"];
+  };
   const clientKeys = [...new Set(rows.filter((r) => r.scope.startsWith("client:")).map((r) => r.scope.slice(7)))];
   const clients: Record<string, ClientRules> = {};
   for (const k of clientKeys) {
@@ -331,7 +347,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
       appCapUsd: o("ai.app_cap_usd", boot.appCapUsd),
       allowedClients: Object.entries(clients).filter(([, c]) => c.allowAi).map(([k]) => k).sort(),
     },
-    conversations: { pollMinutes: o("conv.poll_minutes"), retentionDays: o("conv.retention_days"), chatAiDailyCap: o("conv.chat_ai_daily_cap"), requestPhrases: o("conv.request_phrases"), ackPhrases: o("conv.ack_phrases"), promisePhrases: o("conv.promise_phrases") },
+    conversations: { pollMinutes: o("conv.poll_minutes"), retentionDays: o("conv.retention_days"), closedShownDays: o("conv.closed_shown_days"), chatAiDailyCap: o("conv.chat_ai_daily_cap"), requestPhrases: o("conv.request_phrases"), ackPhrases: o("conv.ack_phrases"), promisePhrases: o("conv.promise_phrases") },
     organization: {
       // Kept as the bootstrap when nothing is stored (the env values, D512).
       inviteDomains: m.has("org\u0000org.invite_domains") ? o("org.invite_domains") : [...boot.inviteDomains],
@@ -343,6 +359,7 @@ export function resolveRules(rows: readonly OrgRow[], boot: OrgBootstrap): OrgRu
     clients,
     levels,
     automation: rows.filter((r) => r.scope.startsWith("person:") && r.key === "automation" && parsed(r) === true).map((r) => r.scope.slice(7)).sort(),
+    problems,
   };
 }
 

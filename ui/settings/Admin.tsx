@@ -524,7 +524,7 @@ function AdminAi() {
 
 // ---------- Conversations ----------
 
-type ConvData = { pollMinutes: number; retentionDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[]; more: string[] };
+type ConvData = { pollMinutes: number; retentionDays: number; closedShownDays: number; chatAiDailyCap: number; requestPhrases: string[]; ackPhrases: string[]; promisePhrases: string[]; more: string[] };
 
 function AdminConversations() {
   const { data, error, load } = useSection<ConvData>("conversations");
@@ -552,8 +552,9 @@ function AdminConversations() {
       </div>
       <h3>Reading client chats</h3>
       <div className="set-grid">
-        {num("conv.poll_minutes", "Read client chats every (minutes)", data.pollMinutes, 1, 60, "In followers' working hours only.")}
-        {num("conv.retention_days", "Keep messages that aren't requests (days)", data.retentionDays, 1, 90, "Then they're deleted.")}
+        {num("conv.poll_minutes", "Read client chats every (minutes)", data.pollMinutes, 1, 30, "1 to 30, in followers' working hours only. Applies from the next poll.")}
+        {num("conv.retention_days", "Keep messages that aren't requests (days)", data.retentionDays, 1, 90, "Then they're deleted, after each poll.")}
+        {num("conv.closed_shown_days", "Closed conversations stay shown (days)", data.closedShownDays, 1, 90, "In Inbox › Conversations › Closed, then they're no longer listed.")}
         {num("conv.chat_ai_daily_cap", "AI requests per chat per day", data.chatAiDailyCap, 0, 5000, "At most, for each chat.")}
       </div>
     </div>
@@ -1057,6 +1058,29 @@ function AdminStatus() {
           <span className="set-value">Per person, in Settings › Connections (Microsoft permissions and DevOps write access).</span>
         </div>
       </div>
+      {data.jobs && data.jobs.length > 0 && (
+        <>
+          <h3>Jobs</h3>
+          <table className="adm-table">
+            <thead>
+              <tr>
+                <th scope="col">Job</th>
+                <th scope="col">When</th>
+                <th scope="col">Last run</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.jobs.map((j) => (
+                <tr key={j.name}>
+                  <th scope="row">{j.name}</th>
+                  <td>{j.every}</td>
+                  <td>{j.note ? <span className="muted">{j.note}</span> : when(j.lastRun)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
       <h3>Client chats</h3>
       <p className="muted">Last poll: {when(data.lastPoll)}.</p>
       {data.chats.length === 0 ? (

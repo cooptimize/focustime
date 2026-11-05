@@ -35,6 +35,8 @@ export type AdminOpsDeps = {
   /** Dataverse's people and leads, read with the app's reader; null when Dataverse isn't set up here. */
   directory: (() => Promise<{ ok: true; read: DirectoryRead } | { ok: false; message: string }>) | null;
   removePerson: (userId: string) => Promise<void>;
+  /** ADM-2: when the scheduler last ran each job (by name), for Admin › Status; absent: unknown. */
+  lastRuns?: () => Record<string, string>;
   log: Logger;
 };
 
@@ -93,6 +95,7 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
         chats: health,
         lastPoll: polled.at(-1) ?? null,
         conversations,
+        lastRuns: d.lastRuns?.() ?? {},
       };
     },
     async refreshPeople() {

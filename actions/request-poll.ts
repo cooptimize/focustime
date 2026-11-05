@@ -14,7 +14,7 @@ import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { backoffUntil, matchAsk } from "../plan/asks.ts";
 import { matchPromise } from "../plan/asks-ai.ts";
-import { chatDue, followersOf, inUnion, membersStale, nextPollDue, tokenOrder, type ClientChat, type FocusUser, type TeamsMessage } from "../plan/requests.ts";
+import { chatDue, followersOf, inUnion, membersStale, nextPollDue, POLL_MINUTES, tokenOrder, type ClientChat, type FocusUser, type TeamsMessage } from "../plan/requests.ts";
 import { HttpError, NetworkError } from "../sources/calendar/http.ts";
 import type { ChatMessagesClient, ChatsClient, GraphMessage } from "../sources/graph/chats.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
@@ -27,8 +27,13 @@ import { CHAT_DAILY_AI_CALLS, runPipeline } from "./conversations-pipeline.ts";
 import type { ConversationStore } from "../store/conversation-store.ts";
 import { userZone } from "../week/zone.ts";
 
-/** Unmatched messages are kept this long. */
+/** Unmatched messages are kept this long by default; the live value is the Rule conv.retention_days (D582). */
 export const EXPIRE_DAYS = 14;
+
+/** The Rules the job reads at the start of each cycle (ADM-2, D582), so a change applies on the next tick. */
+export type PollRules = { pollMinutes: number; retentionDays: number };
+const BUILTIN_RULES: PollRules = { pollMinutes: POLL_MINUTES, retentionDays: EXPIRE_DAYS };
+const rulesOf = async (deps: Pick<PollDeps, "rules">): Promise<PollRules> => (deps.rules ? await deps.rules().catch(() => BUILTIN_RULES) : BUILTIN_RULES);
 
 /** What the job needs of one FocusTime user, built on demand for a cycle and dropped after it. */
 export type PollPerson = {
@@ -56,6 +61,8 @@ export type PollDeps = {
   homeTenant: () => Promise<string | null>;
   now: () => string;
   log: (r: LogRecord) => void;
+  /** The team's Rules (Admin › Conversations); absent: the built-in values. */
+  rules?: () => Promise<PollRules>;
 };
 
 export type CycleResult = { polled: number; messages: number; updated: number; candidates: number; promises: number; failures: number; conversations?: number; unsorted?: number; aiCalls?: number };
@@ -93,6 +100,7 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
   const now = deps.now();
   const instant = Temporal.Instant.from(now);
   const wanted = o.chatIds ? new Set(o.chatIds) : null;
+  const live = await rulesOf(deps);
   // D523: a chat with reading off is never read, not even on Refresh.
   const chats = (await deps.teams.chats()).filter((c) => c.readOn && (!wanted || wanted.has(c.chatId)));
   if (!chats.length) return out;
@@ -100,7 +108,7 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
   const person = peopleOnce(deps);
   const hoursOf = async (c: ClientChat) => (await Promise.all(followersOf(c, users).map(person))).flatMap((p) => (p?.config ? [p.config.week.hours] : []));
   const due: ClientChat[] = [];
-  for (const c of chats) if (chatDue(c, now, inUnion(instant, await hoursOf(c)), !!o.force)) due.push(c);
+  for (const c of chats) if (chatDue(c, now, inUnion(instant, await hoursOf(c)), !!o.force, live.pollMinutes)) due.push(c);
   if (!due.length) return out;
   const home = await deps.homeTenant();
   const tokenUsers = new Map<string, number>();
@@ -153,7 +161,7 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
     }
   });
 
-  if (out.polled) await deps.teams.expire(instant.subtract({ hours: EXPIRE_DAYS * 24 }).toString()).catch(() => 0);
+  if (out.polled) await deps.teams.expire(instant.subtract({ hours: live.retentionDays * 24 }).toString()).catch(() => 0);
   if (deps.upkeep) await deps.upkeep(now).catch(() => deps.log({ source: "plan", op: "conversations_upkeep", kind: "failed" }));
   deps.log({ source: "plan", op: "requests_poll", kind: o.force ? "refresh" : "cycle", count: out.polled });
   deps.log({ source: "plan", op: "requests_poll_messages", count: out.messages });
@@ -228,11 +236,11 @@ async function rules(
 }
 
 /** When the job next has work (the idle rule): the earliest chat due, or the start of the next union of hours. */
-export async function requestsNextDue(deps: Pick<PollDeps, "teams" | "users" | "person" | "now">): Promise<string | null> {
+export async function requestsNextDue(deps: Pick<PollDeps, "teams" | "users" | "person" | "now" | "rules">): Promise<string | null> {
   const chats = (await deps.teams.chats()).filter((c) => c.readOn);
   if (!chats.length) return null;
   const users = await deps.users();
   const person = peopleOnce(deps as PollDeps);
   const withHours = await Promise.all(chats.map(async (chat) => ({ chat, hours: (await Promise.all(followersOf(chat, users).map(person))).flatMap((p) => (p?.config ? [p.config.week.hours] : [])) })));
-  return nextPollDue(withHours, Temporal.Instant.from(deps.now()))?.toString() ?? null;
+  return nextPollDue(withHours, Temporal.Instant.from(deps.now()), (await rulesOf(deps)).pollMinutes)?.toString() ?? null;
 }

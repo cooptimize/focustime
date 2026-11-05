@@ -316,6 +316,11 @@ const pollDeps: PollDeps = {
   homeTenant: async () => app.entra?.tenantId ?? null,
   now: () => instantNow().toString(),
   log,
+  // ADM-2 (D582): the team's Rules, read each cycle (the org runtime holds them 30 seconds).
+  rules: async () => {
+    const r = (await org.rules()).conversations;
+    return { pollMinutes: r.pollMinutes, retentionDays: r.retentionDays };
+  },
 };
 // CV-1: conversations, commitments and suggestions, shared like the chats (D521's viewer gates every read).
 const conversations = createConversationStore(db, instantNow, teams);
@@ -839,6 +844,8 @@ const adminOps = createAdminOps({
     await deleteData(id);
     await hardDeleteUser(db, id, instantNow());
   },
+  // The scheduler starts below; Status asks only once a person opens it.
+  lastRuns: () => scheduler.lastRuns(),
   log,
 });
 const refreshPeople = () => adminOps.refreshPeople();

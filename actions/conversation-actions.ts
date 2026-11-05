@@ -55,8 +55,8 @@ export type ConversationContext = RequestContext & {
   processModel?: (cfg: AppConfig, clientKey: string) => Promise<ProcessModel | null>;
 };
 
-/** Closed and done ones stay visible this long. */
-const CLOSED_SHOWN_MS = 14 * 24 * 3600_000;
+/** Closed ones stay visible this long by default; the live value is the Rule conv.closed_shown_days (D582). */
+const CLOSED_SHOWN_DAYS = 14;
 const DONE_SHOWN_MS = 24 * 3600_000;
 
 const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
@@ -164,7 +164,8 @@ async function list(ctx: ConversationContext, cfg: AppConfig): Promise<Conversat
   const v = await seen(ctx);
   if (!v) return empty;
   const now = Date.parse(ctx.now());
-  const all = (await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => !c.closedAt || now - Date.parse(c.closedAt) < CLOSED_SHOWN_MS);
+  const shownMs = (cfg.org?.rules.closedShownDays ?? CLOSED_SHOWN_DAYS) * 24 * 3600_000;
+  const all = (await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => !c.closedAt || now - Date.parse(c.closedAt) < shownMs);
   const built = await cards(ctx, v, cfg, all);
   const out: ConversationsData = { ...empty, writeClients: await ctx.writeClients().catch((): string[] => []) };
   for (const card of built) {
@@ -198,6 +199,7 @@ async function list(ctx: ConversationContext, cfg: AppConfig): Promise<Conversat
   }
   out.chatter = [...byClient.values()];
   out.myPromisesOpen = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => k.state === "open").length;
+  out.pollMinutes = cfg.org?.rules.pollMinutes ?? 5;
   out.lastPoll = v.chats.map((c) => c.polledAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
   return out;
 }

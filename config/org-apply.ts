@@ -28,6 +28,7 @@ export type OrgView = {
     neverSuggest: string[];
     pollMinutes: number;
     retentionDays: number;
+    closedShownDays: number;
     chatAiDailyCap: number;
     retentionYears: number;
   };
@@ -67,6 +68,7 @@ export function applyOrg(cfg: AppConfig, rules: OrgRules, who: PersonOrg): AppCo
       neverSuggest: rules.organization.neverSuggest,
       pollMinutes: conv.pollMinutes,
       retentionDays: conv.retentionDays,
+      closedShownDays: conv.closedShownDays,
       chatAiDailyCap: conv.chatAiDailyCap,
       retentionYears: rules.organization.retentionYears,
     },

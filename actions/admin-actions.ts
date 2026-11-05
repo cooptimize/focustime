@@ -48,7 +48,35 @@ export type AdminStatus = {
   conversations: ConversationCounts | null;
   /** ADM-2: things to look at (clients filtered out with settings, Rules out of range, people). */
   warnings?: StatusWarning[];
+  /** ADM-2: when the scheduler last ran each job, by name ("requests_poll", "people_refresh", "maintenance"). */
+  lastRuns?: Record<string, string>;
+  /** ADM-2 (D582): the background jobs with their interval or period and last run. */
+  jobs?: StatusJob[];
 };
+
+export type StatusJob = { name: string; every: string; lastRun: string | null; note: string | null };
+
+/** ADM-2 (D582): Rules stored out of range (read as their built-in value) and the empty domains Rule. */
+export function ruleWarnings(rules: OrgRules): StatusWarning[] {
+  const out: StatusWarning[] = rules.problems.map((p) => ({ area: "rules" as const, text: `${p.label}: the stored value isn't allowed any more, so FocusTime uses ${JSON.stringify(p.fallback)}. Set it again in Admin.` }));
+  if (!rules.organization.inviteDomains.length) out.push({ area: "people", text: "Set Cooptimize email domains in Admin › Organization. Until then only guest accounts are left out of People and sign-in." });
+  return out;
+}
+
+/** The jobs Status lists, from the Rules they read (D582). */
+export function statusJobs(rules: OrgRules, st: Pick<AdminStatus, "lastPoll" | "dataverse" | "lastRuns">): StatusJob[] {
+  const c = rules.conversations;
+  const runs = st.lastRuns ?? {};
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  return [
+    { name: "Read client chats", every: `Every ${plural(c.pollMinutes, "minute")} in followers' working hours`, lastRun: st.lastPoll, note: null },
+    { name: "Delete messages that aren't requests", every: `After each poll, those older than ${plural(c.retentionDays, "day")}`, lastRun: st.lastPoll, note: null },
+    { name: "Closed conversations", every: `Shown for ${plural(c.closedShownDays, "day")} after closing`, lastRun: null, note: "Read when Inbox opens; no job" },
+    { name: "People, levels and leads from Dataverse", every: "Once a day", lastRun: st.dataverse.refreshedAt, note: null },
+    { name: "Sign-in sweep and removals", every: "Every hour", lastRun: runs.maintenance ?? null, note: null },
+    { name: "Delete people's data", every: `After ${plural(rules.organization.retentionYears, "year")}`, lastRun: null, note: "Not enforced yet" },
+  ];
+}
 
 /** What the server gives the admin console (server/main.ts; the demo's in server/demo.ts, over the demo's store only). */
 export type AdminOps = {
@@ -293,8 +321,8 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
     case "people":
       return peopleSection(ops, meId);
     case "status": {
-      const [st, warnings] = await Promise.all([ops.status(today ? await today() : new Date().toISOString().slice(0, 10)), clientWarnings(ops)]);
-      return { ...st, warnings: [...(st.warnings ?? []), ...warnings] };
+      const [st, warnings, rules] = await Promise.all([ops.status(today ? await today() : new Date().toISOString().slice(0, 10)), clientWarnings(ops), ops.org.rules()]);
+      return { ...st, warnings: [...(st.warnings ?? []), ...ruleWarnings(rules), ...warnings], jobs: statusJobs(rules, st) };
     }
     case "audit": {
       const area = typeof input.area === "string" && input.area ? input.area : null;

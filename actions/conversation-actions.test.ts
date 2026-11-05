@@ -16,6 +16,8 @@ import { addUsers } from "../test/db.ts";
 import type { WorkItem } from "../week/types.ts";
 import { conversationAction, dayPromises, type ConversationAction, type ConversationContext } from "./conversation-actions.ts";
 import { upkeep } from "./conversation-upkeep.ts";
+import { applyOrg } from "../config/org-apply.ts";
+import { resolveRules } from "../config/org.ts";
 import type { CycleResult } from "./request-poll.ts";
 
 const OUTSIDER = aChatMember({ displayName: "Kim Outside" });
@@ -26,7 +28,7 @@ const cfg = parsed.config;
 
 type W = ReturnType<typeof world>;
 const added = new WeakSet<object>();
-async function people(w: W, o: { leads?: string[]; followed?: string[]; items?: WorkItem[] } = {}) {
+async function people(w: W, o: { leads?: string[]; followed?: string[]; items?: WorkItem[]; config?: typeof cfg } = {}) {
   if (!added.has(w.conn)) await addUsers(w.conn, SAM.userId!, EVAN.userId!, LENA.userId!, OUTSIDER.userId!);
   added.add(w.conn);
   const items = o.items ?? [aWorkItem({ id: 4101, title: "Movement dashboard refresh" }), aWorkItem({ id: 4102, title: "BOM bridging", tier: "feature", level: "portfolio" })];
@@ -36,7 +38,7 @@ async function people(w: W, o: { leads?: string[]; followed?: string[]; items?: 
     conversations: w.convs,
     me: async () => who.userId!,
     followed: async () => new Set(o.followed ?? ["contoso", "wingtip"]),
-    config: async () => cfg,
+    config: async () => o.config ?? cfg,
     homeTenant: async () => HOME_TENANT,
     openItems: async () => items,
     writeClients: async () => ["contoso"],
@@ -300,5 +302,25 @@ describe("my promises (the Wingtip-shaped example)", () => {
     expect(d.open).toBe(0);
     // Not mine: refused.
     expect((await conversationAction(p.as(EVAN).ctx, "my_promises.done", { id: k!.id })).ok).toBe(false);
+  });
+});
+
+describe("the Rules (ADM-2, D582)", () => {
+  it("Closed conversations stay shown for the Rule's days; the poll line reads the interval Rule", async () => {
+    const w = world({ respond: allianceAnswer });
+    const c = await alliance(w);
+    const rows = [
+      { scope: "org", key: "conv.closed_shown_days", value: "3", updatedAt: w.now(), updatedBy: null },
+      { scope: "org", key: "conv.poll_minutes", value: "7", updatedAt: w.now(), updatedBy: null },
+    ];
+    const config = applyOrg(cfg, resolveRules(rows, { model: "m", appCapUsd: 100, inviteDomains: [], feedback: null }), { level: null, levelSource: null });
+    const p = await people(w, { config });
+    await p.as(EVAN).run("conversations.resolve", { id: c.id });
+    w.setNow(Temporal.Instant.from(w.now()).add({ hours: 48 }).toString());
+    const two = await p.as(EVAN).run("conversations.list");
+    expect(two.closed.map((x) => x.id)).toEqual([c.id]);
+    expect(two.pollMinutes).toBe(7);
+    w.setNow(Temporal.Instant.from(w.now()).add({ hours: 25 }).toString());
+    expect((await p.as(EVAN).run("conversations.list")).closed).toEqual([]);
   });
 });

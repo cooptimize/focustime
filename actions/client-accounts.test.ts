@@ -134,6 +134,23 @@ describe("clientAccounts() in Admin", () => {
   });
 });
 
+describe("Status: Rules and jobs (D582)", () => {
+  it("a poll interval stored over 30 reads as 5 with a warning; the jobs list each interval, and data retention isn't enforced yet", async () => {
+    const t = await team();
+    // A value from before the bound (ADM-1 allowed 60).
+    await t.store.setOrg({ scope: "org", key: "conv.poll_minutes", value: 45, actor: { id: ADMIN, name: "Ada Admin" }, area: "conversations", target: "Everyone" });
+    expect((await t.set("org", "conv.poll_minutes", 45)).ok).toBe(false);
+    const st = await t.load<Status & { jobs: { name: string; every: string; note: string | null }[] }>("status");
+    expect(st.warnings.map((w) => w.text)).toContain("Read client chats every (minutes): the stored value isn't allowed any more, so FocusTime uses 5. Set it again in Admin.");
+    expect(st.jobs.find((j) => j.name === "Read client chats")?.every).toBe("Every 5 minutes in followers' working hours");
+    expect(st.jobs.find((j) => j.name === "Delete people's data")).toMatchObject({ every: "After 2 years", note: "Not enforced yet" });
+    expect((await t.set("org", "conv.poll_minutes", 12)).ok).toBe(true);
+    const after = await t.load<Status & { jobs: { name: string; every: string }[] }>("status");
+    expect(after.warnings.some((w) => w.text.startsWith("Read client chats"))).toBe(false);
+    expect(after.jobs[0]?.every).toBe("Every 12 minutes in followers' working hours");
+  });
+});
+
 describe("clientAccounts() on every personal list", () => {
   const customer = aClient({ name: "Adatum", clientKey: "Adatum" });
   const prospect = aClient({ name: "Prospect Co", clientKey: "Prospect Co" });
