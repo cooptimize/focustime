@@ -1933,7 +1933,7 @@ export function App() {
         onDisconnect={(src) => void disconnect(src)}
       />
 
-      {detailsOpen && base === "week" && !planWeekAt && !pd && (
+      {detailsOpen && base === "week" && !planWeekAt && !pd && !(nav.tab === "week" && nav.mode === "team") && (
         <DetailPanel variant="week" data={data} day={day} slot={slot} focus={panelFocus} now={now ?? new Date(clock).toISOString()} onClose={() => (setDetailsOpen(false), setPanelFocus(null), cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true }))} onStart={startFocus} onChanged={reloadQuiet} onNotice={setNotice} />
       )}
       {phone && (

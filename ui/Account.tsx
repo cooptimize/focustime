@@ -218,6 +218,8 @@ type VmApi = { status: VmStatus | null; refresh: (fresh?: boolean) => Promise<vo
 export const VmCtx = createContext<VmApi>({ status: null, refresh: async () => {}, act: () => {}, openMenu: () => {} });
 
 export const VM_MENU_EVENT = "focustime:vm-menu";
+/** WK-1: the chip's one word under 1280 px. */
+const SHORT: Record<string, string> = { running: "Running", deallocated: "Stopped", billing: "Billing", starting: "Starting", stopping: "Stopping", unknown: "Unknown" };
 const TONE: Record<string, string> = { running: "ok", deallocated: "off", billing: "warn", starting: "busy", stopping: "busy", unknown: "off" };
 
 /** Holds my VM's status for the window: refreshed every 60 s while visible, every 10 s while it starts or stops. */
@@ -378,6 +380,8 @@ export function VmChip({ dot = false }: { dot?: boolean } = {}) {
       {!dot && (
         <>
           <span className="vm-word">VM</span> <span className="vm-label">{text}</span>
+          {/* WK-1: under 1280 px the chip is the dot and one word; the full text is in its title and menu. */}
+          <span className="vm-short">{SHORT[chip] ?? "Unknown"}</span>
         </>
       )}
       {status.needsConsent && <span className="vm-attn" aria-hidden="true">!</span>}

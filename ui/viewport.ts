@@ -1,8 +1,7 @@
 // Which week layout fits the window. Breakpoints come from what the content needs, not device names:
 // - wide: each Mon–Thu column holds the 330 px rail plus an hour timeline wide enough to read
 //   an event's time and title (300 px, of which 58 px are hour labels).
-// - medium: each Mon–Thu column holds a compact card (client, free time, badge, short lists) at 210 px
-//   or more, and Friday's card fits its time range (190 px).
+// - medium: the whole week as compact cards, from 1024 px (WK-1); the cards' tier comes from ui/weekfit.ts.
 // - narrow: below that, one day at a time: rail plus timeline while they fit side by side, else the compact card.
 import { useSyncExternalStore } from "react";
 
@@ -11,8 +10,6 @@ export type Layout = "wide" | "medium" | "narrow";
 export const SIZES = {
   railPx: 330,
   minTimelinePx: 300,
-  minCardPx: 210,
-  minFridayCardPx: 190,
   /** Side padding of the single-day view (2 × 16 px). */
   dayChromePx: 32,
   /** Grid gaps (4 of 14 px) plus side padding (2 × 24 px). */
@@ -24,7 +21,8 @@ export const SIZES = {
 /** The narrowest window, in CSS px, at which each layout still fits. */
 export const MIN_WIDTH = {
   wide: Math.ceil((SIZES.railPx + SIZES.minTimelinePx) * SIZES.shares + SIZES.chromePx),
-  medium: 4 * SIZES.minCardPx + SIZES.minFridayCardPx + SIZES.chromePx,
+  /** WK-1: the whole week from 1024 px; the Board picks its tier (and folds days) from the grid's real width (weekfit.ts). */
+  medium: 1024,
   /** One day with the rail beside its timeline. */
   dayTimeline: SIZES.railPx + SIZES.minTimelinePx + SIZES.dayChromePx,
 } as const;

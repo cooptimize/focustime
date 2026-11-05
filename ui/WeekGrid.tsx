@@ -1,4 +1,4 @@
-import { createContext, Fragment, useContext, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { TimeboxBands } from "./Timeboxes.tsx";
 import { formatDuration } from "../week/format.ts";
 import { worstSeverity } from "../week/risks.ts";
@@ -15,7 +15,8 @@ import { EyeIcon } from "./Watching.tsx";
 import type { IsoDate } from "../week/types.ts";
 import { PickRow } from "./PickRow.tsx";
 import { DueBadge } from "./FollowUps.tsx";
-import { hourMarks, labelHere, layoutEvents, rulerSpan, showRuler } from "./layout.ts";
+import { hourMarks, labelHere, layoutEvents, railFor, rulerSpan } from "./layout.ts";
+import { dayShare, weekFit, type Tier } from "./weekfit.ts";
 import { DevOpsWork } from "./work.ts";
 import { clientColor, eventRange, SampleSources, shortDate, shortRange, showAsLabel, slotRange, sourceName, startClock } from "./labels.ts";
 import { cardHalves, eveOnly, slotOf } from "./halves.ts";
@@ -33,7 +34,7 @@ import { TypeIcon } from "./TypeIcon.tsx";
 import { pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
 import { OriginPick, SuggestedCards, useIsOrigin } from "./Carry.tsx";
 import { nowClock, nowSpot, type NowSpot } from "../plan/nowline.ts";
-import { NowEdge, NowLine, NowPast } from "./NowLine.tsx";
+import { NowEdge, NowLine, NowPast, NowTick } from "./NowLine.tsx";
 
 /** UI-B: the now line for one rail: where it is (null when not on it), how much of the rail has passed, the time. */
 type RailNow = { at: number | null; past: number; label: string; onClick: () => void };
@@ -43,6 +44,9 @@ export type Selection = { dayIndex: number; half: Half };
 export type PanelFocus = { kind: "features" } | { kind: "followup"; id: number } | { kind: "pick"; id: number };
 
 /** Step 15.1 (D276): the layout, for the time rail on each compact card (U3: always on, the one home for meetings). */
+/** WK-1: the Board's tier (weekfit.ts), null outside the medium layout (the wide timeline, the one-day view). */
+const TierCtx = createContext<Tier | null>(null);
+
 const RulerCtx = createContext<{ layout: Layout; promises: readonly DayPromise[]; onPromise?: (() => void) | undefined; today: string; now: string; home: RailSpan | null }>({ layout: "wide", promises: [], today: "", now: "", home: null });
 
 type Props = {
@@ -91,6 +95,8 @@ export function WeekGrid(props: Props) {
 
 function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact, planDay, onPlanDay, onAddWork, onAddHours, panelOpen }: Props) {
   const pv = useContext(PlanCtx);
+  const ref = useRef<HTMLElement>(null);
+  const box = useGridBox(ref, layout === "medium");
   // U3: due badges, each follow-up once in the week (on its day, an overdue one on today).
   const badges = weekDueBadges(
     week.days.map((d) => ({
@@ -176,21 +182,60 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
       </main>
     );
   }
-  // Work days are full width, Friday and weekend days lighter. While planning, the planned day's track widens and
-  // the other days stay visible behind a dim.
-  const light = layout === "medium" ? (planDay ? "minmax(150px, 0.6fr)" : "minmax(190px, 0.6fr)") : "minmax(0, 0.6fr)";
-  const tracks = week.days.map((d, i) => (planDay?.dayIndex === i ? "minmax(0, 2.6fr)" : d.kind === "work" ? "minmax(0, 1fr)" : light)).join(" ");
+  // Work days are full width; Friday, weekend days and PTO days lighter (WK-1: never wider than a working day). While
+  // planning, the planned day's track widens and the other days stay visible behind a dim. WK-1: in the medium layout
+  // the tier and any folding come from the grid's real width (weekfit.ts).
   const hasEve = week.days.some((d) => d.eve);
+  const shares = week.days.map((d, i) => dayShare(d, planDay?.dayIndex === i));
+  const fit = box && layout === "medium" ? weekFit({ contentPx: box.content, gapPx: box.gap, scale: box.scale, shares, selected: planDay?.dayIndex ?? selection.dayIndex }) : null;
+  const tracks = fit?.tracks ?? shares.map((s) => `minmax(0, ${s}fr)`).join(" ");
+  const firstOpen = fit ? fit.open.indexOf(true) : 0;
   return (
-    <main
-      className={`grid ${layout} ${planDay ? "planning" : ""} ${hasEve ? "has-eve" : ""}${panelOpen ? " with-panel" : ""}`}
-      style={{ gridTemplateColumns: tracks }}
-      role="group"
-      aria-label="Week grid. Arrow keys move between half-days, Enter opens details."
-    >
-      {week.days.map(column)}
-    </main>
+    <TierCtx.Provider value={layout === "medium" ? fit?.tier ?? "rail" : null}>
+      <main
+        ref={ref}
+        className={`grid ${layout} ${planDay ? "planning" : ""} ${hasEve ? "has-eve" : ""}${panelOpen ? " with-panel" : ""}${layout === "medium" ? ` tier-${fit?.tier ?? "rail"}` : ""}${fit && fit.open.some((o) => !o) ? " folded" : ""}`}
+        style={{ gridTemplateColumns: tracks }}
+        role="group"
+        aria-label="Week grid. Arrow keys move between half-days, Enter opens details."
+      >
+        {week.days.map((d, i) =>
+          !fit || fit.open[i] ? (
+            column(d, i)
+          ) : (
+            <FoldedDay key={d.date} day={d} dayIndex={i} tz={userZone(week)} hasEve={hasEve} colors={colors} isToday={d.date === today} now={now} side={i < firstOpen ? "before" : "after"} onSelect={onSelect} />
+          ),
+        )}
+      </main>
+    </TierCtx.Provider>
   );
+}
+
+/**
+ * WK-1: the grid's content width, its column gap and the text scale, measured again when the grid changes size (the
+ * window, the detail panel's space) or the Text size changes.
+ */
+function useGridBox(ref: RefObject<HTMLElement | null>, active: boolean): { content: number; gap: number; scale: number } | null {
+  const [box, setBox] = useState<{ content: number; gap: number; scale: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!active || !el) return;
+    const read = () => {
+      const cs = getComputedStyle(el);
+      const content = el.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+      const gap = parseFloat(cs.columnGap) || 0;
+      const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--text-scale")) || 1;
+      setBox((b) => (b && Math.abs(b.content - content) < 0.5 && b.gap === gap && b.scale === scale ? b : { content, gap, scale }));
+    };
+    read();
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(read);
+    ro?.observe(el);
+    const mo = new MutationObserver(read);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-text-size", "style", "class"] });
+    window.addEventListener("resize", read);
+    return () => (ro?.disconnect(), mo.disconnect(), window.removeEventListener("resize", read));
+  }, [ref, active]);
+  return box;
 }
 
 /** P1: how far a finger moves sideways, in CSS px, to change the day. */
@@ -444,10 +489,12 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   // UI-B: on a day that has passed, a pick kept or moved on from here stays as a dimmed "→ moved to Mon AM" line.
   const movedOn = slot.date < (plan.today ?? "") ? (plan.week?.[slot.date]?.picks ?? []).filter((p) => p.half === slot.half && p.status === "moved" && p.carriedTo) : [];
   const shown = [...(isToday ? ticks : ticks.filter((p) => p.status !== "done")), ...movedOn];
-  const rc = useContext(RulerCtx);
   // P1: on the phone a card lists its meetings in words; no rail.
   const phone = usePhone();
-  const ruler = compact && !phone && showRuler(rc.layout, slot);
+  // WK-1: exactly the tier's element: the rail with titles, a slim ruler, or the day strip (strip and mini).
+  const tier = useContext(TierCtx);
+  const rail = compact ? railFor(tier, slot, phone) : null;
+  const ruler = rail === "rail" || rail === "slim";
   const style = { "--c": clientColor(primary?.clientKey, colors), ...(compact ? {} : { flexGrow: minutesOf(slot) }) } as CSSProperties;
   const state = eve ? "eve" : overflow ? "overflow" : slot.open ? "open" : slot.off ? "off" : "focus";
   const reasonsId = `reasons-${slot.date}-${slot.half}`;
@@ -457,7 +504,8 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const label = `${dayLabel} ${eve ? "evening" : slot.half}, ${name}${sev ? `, ${sev === "at_risk" ? "at risk" : "watch"}` : ""}`;
   const menu = useMenu((env) => slotMenu(env, slot.date, slot.half, primary?.clientKey ?? null, primary?.clientName ?? null));
   const status = blockStatus(cp.fit, slot.risks);
-  const pill = status.kind === "at_risk" ? `At risk${status.short ? ` · ${status.short}` : ""}` : status.label;
+  // WK-1: the reason is its own span, so mini cards can show "At risk" alone (the reason stays in the title and the panel).
+  const pill = status.kind === "at_risk" ? <>At risk{status.short ? <span className="pill-reason"> · {status.short}</span> : null}</> : status.label;
   // PV-1: a drop target for stories dragged from the panel or another block (not the evening).
   const drop = useDropTarget(eve ? null : { date: slot.date, half: slot.half });
 
@@ -481,13 +529,14 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const body = (
     <div className="card-body">
       {/* UI-B: with no rail (the phone, a card too narrow for one), the now line sits at the top of the block under way. */}
-      {compact && !ruler && railNow?.at != null && <NowEdge label={railNow.label} onClick={railNow.onClick} />}
+      {compact && !rail && railNow?.at != null && <NowEdge label={railNow.label} onClick={railNow.onClick} />}
       <div className="card-head">
         <span className="swatch" aria-hidden="true" />
         <span className={`card-client${primary ? "" : " open-label"}`} title={name}>{name}</span>
         <span className="card-when">{shortRange(slot, tz)}</span>
         <span className="card-more">{menu.button(`Actions for ${dayLabel} ${slot.half}`)}</span>
       </div>
+      {rail === "strip" && <DayStrip slot={slot} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} now={railNow} />}
       {drop.tip}
       {status.kind !== "none" && (
         <div className="card-status">
@@ -554,7 +603,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
     <div
       ref={refFn}
       {...drop.props}
-      className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""}${ruler ? " has-ruler" : ""}${drop.cls}`}
+      className={`half ${state}${ptoHalf ? " pto-half" : ""} ${span ? "span-all" : ""} ${sev ?? ""} ${selected ? "selected" : ""} ${compact ? "card" : ""}${ruler ? " has-ruler" : ""}${rail === "slim" ? " slim" : ""}${drop.cls}`}
       style={style}
       tabIndex={selected ? 0 : -1}
       role="button"
@@ -575,7 +624,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         {compact ? (
           <>
             {body}
-            {ruler && <Ruler slot={slot} half={eve ? "EVE" : slot.half} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} now={railNow} />}
+            {ruler && <Ruler slot={slot} half={eve ? "EVE" : slot.half} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} now={railNow} slim={rail === "slim"} />}
           </>
         ) : (
           <>
@@ -584,6 +633,103 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
           </>
         )}
       </HalfScope.Provider>
+    </div>
+  );
+}
+
+/**
+ * WK-1: the strip and mini tiers' timeline: one thin bar under the card header across the block's hours (the Timelines
+ * range), with the time outside working windows shaded, free stretches in the client's colour, meetings, personal
+ * events and unavailable time as segments (their titles on hover; the panel lists them), and today's now tick.
+ */
+function DayStrip({ slot, tz, label, now }: { slot: Slot; tz: string; label: string; now: RailNow | null }) {
+  const samples = useContext(SampleSources);
+  const a = ms(slot.view.start);
+  const span = Math.max(1, ms(slot.view.end) - a);
+  const x = (n: number) => Math.min(1, Math.max(0, (n - a) / span));
+  const seg = (s: number, e: number): CSSProperties => ({ left: pct(x(s)), width: pct(Math.max(0, x(e) - x(s))) });
+  const events = slot.events.filter((p) => !p.event.allDay);
+  const free = slot.freeGaps.reduce((m, g) => m + g.minutes, 0);
+  const words = `${slotRange(slot, tz)}, ${events.length ? `${events.length} ${events.length === 1 ? "event" : "events"}` : "no events"}${free ? `, ${formatDuration(free)} free` : ""}`;
+  return (
+    <div className={`day-strip${now?.at != null ? " has-now" : ""}`} role="group" aria-label={`Timeline for ${label}: ${words}`}>
+      <div className="ds-bar">
+        {offHours(slot).map((o) => (
+          <span key={`off-${o.start}`} className="ds-off" style={seg(o.start, o.end)} aria-hidden="true" />
+        ))}
+        {slot.freeGaps.map((g) => (
+          <span key={`f-${g.start}`} className="ds-free" style={seg(ms(g.start), ms(g.end))} title={`Free · ${formatDuration(g.minutes)}`} aria-hidden="true" />
+        ))}
+        {events.map((p) => {
+          const e = p.event;
+          return <span key={e.id} className={`ds-ev ${e.unavailable ? "unavailable" : e.isPersonal ? "personal" : "meeting"} show-${e.showAs ?? "busy"}`} style={seg(ms(p.clipStart), ms(p.clipEnd))} title={`${e.title}\n${eventRange(e, tz)} · ${e.unavailable ? "Unavailable" : sourceName(e, samples)} · ${showAsLabel(e)}`} />;
+        })}
+        {now && now.past > 0 && <span className="ds-past" style={{ width: pct(Math.min(1, now.past)) }} aria-hidden="true" />}
+      </div>
+      {now?.at != null && <NowTick at={now.at} label={now.label} onClick={now.onClick} />}
+    </div>
+  );
+}
+
+/**
+ * WK-1: a folded day (the week didn't fit with every day open): a narrow strip with the weekday and date, its AM and PM
+ * halves in the client's colour (each a drop target with the usual fit tip, highlighted while a story is over it), the
+ * at-risk dot, PTO hatched or Catch-up dashed, and today's now line. A click (or the arrow keys) selects it, which
+ * opens it and moves the window.
+ */
+function FoldedDay({ day, dayIndex, tz, hasEve, colors, isToday, now, side, onSelect }: { day: Day; dayIndex: number; tz: string; hasEve: boolean; colors: Record<string, string>; isToday: boolean; now: string; side: "before" | "after"; onSelect: (s: Selection) => void }) {
+  const whole = wholeDay(day);
+  const halves = cardHalves(day);
+  const dayLabel = `${day.weekday} ${shortDate(day.date)}`;
+  const spot: NowSpot | null = isToday ? nowSpot(day, now, tz, !!whole) : null;
+  const nowLabel = spot ? nowClock(now, tz) : "";
+  const last = day.eve ? "EVE" : "PM";
+  const at = (half: Half): number | null =>
+    !spot ? null : spot.kind === "rail" ? (spot.half === half ? spot.at : null) : spot.kind === "before" ? (half === "AM" ? 0 : null) : spot.kind === "after" ? (half === last ? 1 : null) : null;
+  const open = (half: Half) => onSelect({ dayIndex, half });
+  const rows: (Half | null)[] = hasEve && !eveOnly(day) && !day.eve ? [...halves, null] : halves;
+  return (
+    <section className={`day folded fold-${side}${isToday ? " today" : ""}${day.pto ? " pto-full" : ""}`} aria-label={`${dayLabel}, folded${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}>
+      <header className="day-head fold-head">
+        <button type="button" className="fold-open" onClick={() => open("AM")} title={`Open ${dayLabel}`} aria-label={`Open ${dayLabel}`}>
+          <span className="dow">{day.weekday.slice(0, 3)}</span>
+          <span className="date">{Temporal.PlainDate.from(day.date).day}</span>
+        </button>
+      </header>
+      <div className="day-allday empty" />
+      <div className="day-out early empty" />
+      {whole ? (
+        <FoldHalf day={day} half="AM" whole={whole} dayIndex={dayIndex} dayLabel={dayLabel} colors={colors} now={spot?.kind === "whole" ? spot.at : null} nowLabel={nowLabel} onOpen={open} />
+      ) : (
+        rows.map((h, k) => (h === null ? <div key={`gap-${k}`} className="half-gap" aria-hidden="true" /> : <FoldHalf key={h} day={day} half={h} whole={null} dayIndex={dayIndex} dayLabel={dayLabel} colors={colors} now={at(h)} nowLabel={nowLabel} onOpen={open} />))
+      )}
+      <div className="day-out late empty" />
+    </section>
+  );
+}
+
+function FoldHalf({ day, half, whole, dayLabel, colors, now, nowLabel, onOpen }: { day: Day; half: Half; whole: Whole; dayIndex: number; dayLabel: string; colors: Record<string, string>; now: number | null; nowLabel: string; onOpen: (h: Half) => void }) {
+  const slot = slotOf(day, half)!;
+  const primary = whole ? undefined : slot.focus[0];
+  const sev = whole ? null : worstSeverity(slot.risks);
+  const drop = useDropTarget(half === "EVE" || whole === "pto" ? (whole === "pto" ? { date: day.date, half: "AM" } : null) : { date: day.date, half });
+  const name = whole === "pto" ? "PTO" : whole === "catchup" ? "Catch-up" : slot.pto ? "PTO" : primary ? primary.clientName : slot.off ? "No working hours" : slot.open ? "Open" : half === "EVE" ? "Evening" : "Catch-up";
+  const words = `${dayLabel}${whole ? "" : ` ${half === "EVE" ? "evening" : half}`}, ${name}${sev === "at_risk" ? ", at risk" : sev === "watch" ? ", watch" : ""}`;
+  const state = whole ? `whole ${whole}` : slot.pto ? "pto-half" : primary ? "focus" : slot.open ? "open" : "off";
+  return (
+    <div
+      {...drop.props}
+      className={`half fold-half ${state}${sev ? ` ${sev}` : ""}${drop.cls}`}
+      style={{ "--c": clientColor(primary?.clientKey, colors) } as CSSProperties}
+      role="button"
+      tabIndex={-1}
+      aria-label={`${words}. Open ${day.weekday}`}
+      title={words}
+      onClick={() => onOpen(half)}
+    >
+      {sev && <span className={`fold-risk ${sev}`} aria-hidden="true" />}
+      {now != null && <NowLine at={now} label={nowLabel} thin onClick={() => onOpen(half)} />}
+      {drop.tip}
     </div>
   );
 }
@@ -721,7 +867,7 @@ function Timeline({ slot, tz, showGaps, minFocusWindow, earlier, now }: { slot: 
  * free stretches, meetings, personal events and unavailable time, and timed picks as bands in client color. A pick
  * band opens the time editor; an event opens its menu. The list on the left is unchanged.
  */
-function Ruler({ slot, half, tz, label, now }: { slot: Slot; half: string; tz: string; label: string; now: RailNow | null }) {
+function Ruler({ slot, half, tz, label, now, slim = false }: { slot: Slot; half: string; tz: string; label: string; now: RailNow | null; slim?: boolean }) {
   // U5.1 (D407): the rail covers the Timelines range (slot.view: business hours, 12 hours or 24 hours), with the time
   // outside working windows shaded, as the wide timeline does.
   const bounds = { start: slot.view.start, end: slot.view.end };
@@ -731,7 +877,7 @@ function Ruler({ slot, half, tz, label, now }: { slot: Slot; half: string; tz: s
   const marks = hourMarks(bounds.start, bounds.end, tz);
   const laid = layoutEvents(slot.events.filter((p) => !p.event.allDay), bounds.start, bounds.end);
   return (
-    <div className="ruler" aria-label={`Timeline for ${label}, ${slotRange(slot, tz)}`} onDoubleClick={(e) => e.stopPropagation()}>
+    <div className={`ruler${slim ? " slim" : ""}`} aria-label={`Timeline for ${label}, ${slotRange(slot, tz)}`} onDoubleClick={(e) => e.stopPropagation()}>
       {offHours(slot).map((o) => (
         <div key={`off-${o.start}`} className="r-off" style={{ top: pct(posMs(o.start)), height: pct(posMs(o.end) - posMs(o.start)) }} aria-hidden="true" />
       ))}
