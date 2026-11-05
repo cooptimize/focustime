@@ -79,8 +79,10 @@ export function createAdminStore(db: Conn, now: () => Temporal.Instant) {
       const params: string[] = [];
       if (f.area) (where.push("area = ?"), params.push(f.area));
       if (f.text?.trim()) {
-        const q = `%${f.text.trim().toLowerCase().replace(/[%_[]/g, "")}%`;
-        where.push("(LOWER(setting) LIKE ? OR LOWER(target) LIKE ? OR LOWER(actor_name) LIKE ? OR LOWER(COALESCE(note, '')) LIKE ?)");
+        // The text is matched literally: %, _ and [ are escaped (both SQLite and SQL Server take ESCAPE '!').
+        const q = `%${f.text.trim().toLowerCase().replace(/[!%_[]/g, (c) => `!${c}`)}%`;
+        const like = (col: string) => `${col} LIKE ? ESCAPE '!'`;
+        where.push(`(${[like("LOWER(setting)"), like("LOWER(target)"), like("LOWER(actor_name)"), like("LOWER(COALESCE(note, ''))")].join(" OR ")})`);
         params.push(q, q, q, q);
       }
       const rows = (await db.all(`SELECT id, at, actor_id, actor_name, area, target, setting, old_value, new_value, note FROM admin_audit${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY id DESC LIMIT ${AUDIT_SHOWN}`, params)) as Row[];

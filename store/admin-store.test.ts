@@ -40,6 +40,12 @@ await forEachDriver("the admin store (ADM-1)", ({ open }) => {
     expect(all[0]!.target).toBe(`t${AUDIT_SHOWN + 4}`);
     expect((await s.auditList({ area: "ai" })).every((e) => e.area === "ai")).toBe(true);
     expect((await s.auditList({ text: "t204" })).map((e) => e.target)).toEqual(["t204"]);
+    // The text is literal: _ % [ and ! match only themselves.
+    await s.audit(ADA, { area: "ai", target: "Fabrikam", setting: "client:fabrikam/allow_ai", oldValue: null, newValue: "true", note: null });
+    await s.audit(ADA, { area: "ai", target: "Fabrikam", setting: "client:fabrikam/allowxai", oldValue: null, newValue: "true", note: "50% [beta]!" });
+    expect((await s.auditList({ text: "allow_ai" })).map((e) => e.setting)).toEqual(["client:fabrikam/allow_ai"]);
+    expect((await s.auditList({ text: "50% [beta]!" })).map((e) => e.setting)).toEqual(["client:fabrikam/allowxai"]);
+    expect(await s.auditList({ text: "[b" })).toHaveLength(1);
   });
 
   it("the directory is replaced whole each refresh; overrides stay, are logged and marked", async () => {
