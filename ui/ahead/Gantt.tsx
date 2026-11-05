@@ -10,7 +10,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSS
 import type { AheadState, RoadmapRow, WeekLoadData } from "../../actions/types.ts";
 import { aboutText, budgetWords, DEFAULT_FEATURE_MINUTES, hoursText, stepHours } from "../../plan/estimate.ts";
 import { barDates, CROWDED_MINUTES_PER_FEATURE, monthLoad, NEXT_WORDS, pastWords, readiness, timelineScale, type AheadColumn, type MonthLoad, type NextStep, type ReadinessFlag, type Scale } from "../../plan/ahead.ts";
-import { dayOf, dragHalves, ganttBar, halfRight, halfX, halvesMoved, receive, release, shownOrder, type DragMode, type GanttBar, type Held, type HalfBar } from "../../plan/gantt.ts";
+import { dayOf, dragHalves, edgeLabel, ganttBar, halfRight, halfX, halvesMoved, receive, release, shownOrder, type DragMode, type GanttBar, type Held, type HalfBar } from "../../plan/gantt.ts";
 import { GAP_WORDS } from "../../plan/fixnext.ts";
 import { reach, type Reach } from "../../plan/reach.ts";
 import type { DraftStory } from "../../plan/types.ts";
@@ -417,7 +417,7 @@ function BarRow({ l, gp, rows, crowded, first, freeze, lane }: { l: Line; gp: Gr
       <div className="pa-track" role="presentation">
         {gp.cols.map((col, i) => <span key={col.from} className={`pa-gridline ${col.kind}`} style={{ left: scale.colX(i) }} aria-hidden="true" />)}
         {endedBefore ? (
-          <span className="pa-before" title={label}>← ended {monthDay(shown.end.date)}</span>
+          <span className="pa-before" title={label}>{edgeLabel("before", shown.end.date, { estimated: b.dashedEnd, today: ahead.today })}</span>
         ) : (
           <div
             className={`pa-bar ah-bar${!b.dashedStart && !b.dashedEnd && !live ? " solid" : " est"}${b.dashedStart ? " dash-start" : ""}${b.dashedEnd ? " dash-end" : ""}${pending || live ? " changed" : ""}${startsEarly ? " early" : ""}${endsLate ? " late" : ""}${can.kind === "short" ? " short" : ""}${canDrag ? "" : " fixed"}`}
@@ -441,7 +441,7 @@ function BarRow({ l, gp, rows, crowded, first, freeze, lane }: { l: Line; gp: Gr
         )}
         {b.ghostEnd && b.target && <span className="pa-ghost" style={{ left: scale.x(addDays(b.target, 1)), width: Math.max(4, scale.x(addDays(b.ghostEnd, 1)) - scale.x(addDays(b.target, 1))) }} title={`At the pace stories close, about ${monthDay(b.ghostEnd)}: after the target date`} aria-hidden="true" />}
         {b.target && b.target >= scale.from && b.target < scale.to && <span className="pa-diamond" style={{ left: scale.x(b.target) + (scale.x(addDays(b.target, 1)) - scale.x(b.target)) / 2 }} title={`Target ${monthDay(b.target)}`} aria-hidden="true" />}
-        {endsLate && <span className="pa-beyond" title={`Ends ${monthDay(shown.end.date)}, after these 12 weeks`}>→ {monthDay(shown.end.date)}</span>}
+        {endsLate && <span className="pa-beyond" title={`Ends ${b.dashedEnd ? "about " : ""}${monthDay(shown.end.date)}, after these 12 weeks`}>{edgeLabel("after", shown.end.date, { estimated: b.dashedEnd, today: ahead.today })}</span>}
         {ahead.past.map((p, j) => {
           const ids = new Set([r.item.id, ...rows.filter((x) => x.item.parentId === r.item.id || (!isFeature && kids.includes(x.item.parentId ?? -1))).map((x) => x.item.id)]);
           const planned = p.planned.filter((x) => x.clientKey === c.clientKey && (x.itemId === r.item.id || (!isFeature && kids.includes(x.itemId)))).reduce((n, x) => n + x.minutes, 0);
