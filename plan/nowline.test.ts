@@ -39,11 +39,13 @@ describe("now line (UI-B)", () => {
     expect(nowClock(now, NY)).toBe("8:30");
   });
 
-  it("goes into the agenda before the first row that starts later", () => {
+  it("goes into the agenda before the first row that starts at or after now", () => {
     const rows = [at("2026-11-03T09:00"), Temporal.Instant.from(at("2026-11-03T11:00")).epochMilliseconds];
     expect(agendaNowIndex(rows, at("2026-11-03T10:00"), "2026-11-03", NY)).toBe(1);
     expect(agendaNowIndex(rows, at("2026-11-03T12:00"), "2026-11-03", NY)).toBe(2);
     expect(agendaNowIndex(rows, at("2026-11-03T08:00"), "2026-11-03", NY)).toBe(0);
+    // A free gap from now on starts at now: the line goes before it.
+    expect(agendaNowIndex(rows, at("2026-11-03T11:00"), "2026-11-03", NY)).toBe(1);
     expect(agendaNowIndex(rows, at("2026-11-03T10:00"), "2026-11-04", NY)).toBeNull();
   });
 

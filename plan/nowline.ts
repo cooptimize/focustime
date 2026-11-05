@@ -48,12 +48,12 @@ export function nowSpot(day: DayLike, now: string, tz: string, whole: boolean): 
   return t < first ? { kind: "before" } : { kind: "after" };
 }
 
-/** Where the now row goes in a time-ordered agenda (row starts as ISO times or ms): before the first row that starts after
- * now; null when the agenda isn't today's. */
+/** Where the now row goes in a time-ordered agenda (row starts as ISO times or ms): before the first row that starts at
+ * or after now (a free gap from now on starts at now); null when the agenda isn't today's. */
 export function agendaNowIndex(starts: readonly (string | number)[], now: string, date: IsoDate, tz: string): number | null {
   if (date !== dateIn(now, tz)) return null;
   const t = ms(now);
-  const i = starts.findIndex((s) => (typeof s === "number" ? s : ms(s)) > t);
+  const i = starts.findIndex((s) => (typeof s === "number" ? s : ms(s)) >= t);
   return i < 0 ? starts.length : i;
 }
 

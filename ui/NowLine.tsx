@@ -16,7 +16,7 @@ function toToday(e: ReactMouseEvent, then?: () => void) {
 function Time({ label, onClick }: { label: string; onClick?: (() => void) | undefined }) {
   return (
     <button type="button" className="nl-time" onClick={(e) => toToday(e, onClick)} title={`Now, ${label}`} aria-label={`Now, ${label}. Show today`}>
-      {label}
+      <span className="nl-pill">{label}</span>
     </button>
   );
 }
@@ -51,7 +51,7 @@ export function NowRow({ label }: { label: string }) {
   return (
     <li className="now-line now-row" aria-label={`Now, ${label}`}>
       <span className="nl-dot" aria-hidden="true" />
-      <span className="nl-time">{label}</span>
+      <span className="nl-pill">{label}</span>
     </li>
   );
 }

@@ -239,9 +239,12 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
     if (!spot) return null;
     const s = slotOf(day, half);
     if (!s) return null;
-    const on = spot.kind === "rail" && spot.half === half ? spot.at : null;
+    // Before the day the line sits on the top edge of the first rail, after it on the bottom edge of the last, so the
+    // column's layout never changes.
+    const last = day.eve ? "EVE" : "PM";
+    const on = spot.kind === "rail" && spot.half === half ? spot.at : spot.kind === "before" && half === "AM" ? 0 : spot.kind === "after" && half === last ? 1 : null;
     const ended = Temporal.Instant.compare(Temporal.Instant.from(props.now), Temporal.Instant.from(s.view.end)) >= 0;
-    return { at: on, past: on ?? (ended ? 1 : 0), label: nowLabel, onClick: toNow };
+    return { at: on, past: ended ? 1 : spot.kind === "rail" && spot.half === half ? spot.at : 0, label: nowLabel, onClick: toNow };
   };
 
   return (
@@ -271,7 +274,6 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
 
       {/* U5.1 (D406): one chip per day an all-day event covers, PTO and Catch-up days too; the chip is its one home. */}
       <AllDay events={day.allDay} />
-      {spot?.kind === "before" && <NowEdge label={nowLabel} onClick={toNow} />}
       <OutLine kind="early" items={whole ? [] : day.early.map((p) => p.event)} tz={tz} />
 
       {whole ? (
@@ -317,7 +319,6 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
       )}
 
       <OutLine kind="late" items={whole ? [] : day.evening.map((p) => p.event)} tz={tz} />
-      {spot?.kind === "after" && <NowEdge label={nowLabel} onClick={toNow} />}
     </section>
   );
 }
