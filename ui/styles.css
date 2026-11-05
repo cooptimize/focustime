@@ -4021,3 +4021,61 @@ button.ask-label { cursor: pointer; }
 .ev-list .promise-row .ev-title, .today-rows > li.promise-row .ev-title { flex: 0 1 auto; }
 .promise-row .promise-open .muted { white-space: nowrap; }
 .conv-summary > span { display: block; }
+
+/* PV-1: Week's block panel: my stories grouped under their features; drag and drop onto the week's blocks. */
+.ps-group { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.ps-group:first-of-type { border-top: 0; padding-top: 0; }
+.ps-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ps-feat { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--text); text-decoration: none; }
+a.ps-feat:hover { text-decoration: underline; }
+.ps-feat.muted { color: var(--text-muted); font-weight: 500; }
+.ps-tag { flex: none; font-size: var(--fs-1); font-weight: 600; color: var(--accent); border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--border)); border-radius: 999px; padding: 0 6px; }
+.ps-line { flex: none; margin-left: auto; font-size: var(--fs-2); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.ps-rows { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.ps-row { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; padding: 3px 4px 3px 2px; border-radius: 6px; font-size: var(--fs-3); }
+.ps-row:hover, .ps-row:focus-within { background: var(--raised); }
+.ps-row[draggable="true"] { cursor: grab; }
+.ps-row.here { background: color-mix(in oklab, var(--accent) 8%, transparent); }
+.ps-id { flex: none; font-size: var(--fs-2); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.ps-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); text-decoration: none; }
+a.ps-title:hover { text-decoration: underline; }
+.ps-state { flex: none; font-size: var(--fs-2); color: var(--text-faint); white-space: nowrap; }
+.ps-here { flex: none; font-size: var(--fs-1); font-weight: 600; color: var(--accent); white-space: nowrap; }
+.ps-planned { flex: none; font-size: var(--fs-2); white-space: nowrap; }
+.ps-add, .ps-take { flex: none; }
+.ps-row .ps-add { position: absolute; right: 30px; opacity: 0; pointer-events: none; background: var(--raised); box-shadow: -12px 0 8px var(--raised); }
+.ps-row:hover .ps-add, .ps-row:focus-within .ps-add { opacity: 1; pointer-events: auto; }
+.ps-more { flex: none; }
+.drag-handle { flex: none; border: 0; background: none; padding: 0 2px; color: var(--text-faint); cursor: grab; font-size: var(--fs-2); line-height: 1; }
+.drag-handle:hover, .drag-handle:focus-visible { color: var(--text); }
+.ps-empty { margin: 4px 0 0 22px; display: flex; flex-direction: column; gap: 6px; }
+.ps-none { margin: 0; font-size: var(--fs-2); color: var(--text-muted); }
+.ps-nopat { margin: 0; font-size: var(--fs-2); }
+.ps-addme { display: flex; align-items: center; gap: 6px; }
+.ps-addme-box { flex: 1 1 auto; min-width: 0; font: inherit; font-size: var(--fs-3); padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--sunken); color: var(--text); }
+.ps-addme-box:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.ps-sizes { flex: none; display: inline-flex; gap: 2px; }
+.ps-actions { display: flex; gap: 12px; font-size: var(--fs-2); }
+.ps-others { display: flex; flex-direction: column; gap: 2px; }
+.ps-others-head { display: flex; align-items: center; gap: 6px; font-size: var(--fs-2); color: var(--text-muted); }
+.ps-faces { display: inline-flex; }
+.ps-faces > * + * { margin-left: -4px; }
+.ps-row.other .ps-title { color: var(--text-muted); }
+.ps-moveto { font-size: var(--fs-2); margin-left: 4px; }
+
+/* Drop targets while a story drags: the ones that take it, the one under the pointer with its fit, and the refusals. */
+.half.drop-ok { outline: 2px dashed color-mix(in oklab, var(--accent) 55%, transparent); outline-offset: -2px; }
+.half.drop-over { outline: 2px solid var(--accent); outline-offset: -2px; background: color-mix(in oklab, var(--accent) 10%, var(--surface)); }
+.half.drop-no { opacity: 0.55; cursor: not-allowed; }
+.drop-tip { position: absolute; z-index: 5; top: 4px; right: 6px; font-size: var(--fs-2); font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--raised); color: var(--text); border: 1px solid var(--accent); pointer-events: none; white-space: nowrap; }
+.drop-tip.over { color: var(--watch); border-color: var(--watch); background: color-mix(in oklab, var(--watch) 14%, var(--surface)); }
+.drop-tip.no { color: var(--text-muted); border-color: var(--border-strong); }
+.touch-ghost { position: fixed; z-index: 60; transform: translate(-50%, -140%); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2); padding: 4px 10px; border-radius: 8px; background: var(--raised); color: var(--text); border: 1px solid var(--accent); box-shadow: var(--shadow-pop); pointer-events: none; }
+body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select: none; }
+.undo-toast { position: fixed; z-index: 55; left: 50%; bottom: 40px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); padding: 8px 10px 8px 14px; border-radius: 10px; background: var(--raised); color: var(--text); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); font-size: var(--fs-3); }
+
+/* Week cards: picks under small feature headers. */
+.checklist .card-feat { display: flex; align-items: center; gap: 4px; min-width: 0; margin-top: 4px; font-size: var(--fs-1); font-weight: 600; color: var(--text-faint); list-style: none; }
+.checklist .card-feat:first-child { margin-top: 0; }
+.card-feat .cf-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-row.dens-week[draggable="true"] { cursor: grab; }

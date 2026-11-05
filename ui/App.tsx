@@ -72,6 +72,7 @@ import { useLayout, usePhone } from "./viewport.ts";
 import { BottomBar, InstallHowTo, PhoneReadOnly, type BottomTab } from "./Phone.tsx";
 import { commandList, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
+import { WeekDndProvider } from "./WeekStories.tsx";
 import { WeekItems } from "./ItemLookup.tsx";
 import { NoHoursPrompt } from "./NoHoursPrompt.tsx";
 import { KeyLegend } from "./KeyLegend.tsx";
@@ -1386,6 +1387,21 @@ export function App() {
     <MenuHost env={env}>
     <VmProvider onSettings={() => setSettingsAt("you")}>
     <DraftEditorCtx.Provider value={setDraftEdit}>
+    <WeekDndProvider
+      data={data}
+      week={week}
+      now={now ?? new Date(clock).toISOString()}
+      onChanged={reloadQuiet}
+      onRefresh={() => void load({ ...(weekRef.current ? { weekStart: weekRef.current } : {}), refresh: true }, { quiet: true })}
+      onOpenSlot={(date, half) => {
+        // PV-1: "Planned · Thu AM" opens that block's panel.
+        const dayIndex = week.days.findIndex((d) => d.date === date);
+        if (dayIndex < 0) return;
+        setSel({ dayIndex, half });
+        setPanelFocus(null);
+        setDetailsOpen(true);
+      }}
+    >
     <div className={`app ${layout}${compact ? " compact" : ""}${phone ? " phone" : ""}`}>
       <header className="topbar">
         <div className="brand">
@@ -1754,7 +1770,7 @@ export function App() {
       />
 
       {detailsOpen && base === "week" && !planWeekAt && !pd && (
-        <DetailPanel data={data} day={day} slot={slot} focus={panelFocus} now={now ?? new Date(clock).toISOString()} onClose={() => (setDetailsOpen(false), setPanelFocus(null), cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true }))} onStart={startFocus} onChanged={reloadQuiet} onNotice={setNotice} />
+        <DetailPanel variant="week" data={data} day={day} slot={slot} focus={panelFocus} now={now ?? new Date(clock).toISOString()} onClose={() => (setDetailsOpen(false), setPanelFocus(null), cellRefs.current.get(`${sel.dayIndex}${sel.half}`)?.focus({ preventScroll: true }))} onStart={startFocus} onChanged={reloadQuiet} onNotice={setNotice} />
       )}
       {phone && (
         <BottomBar
@@ -1874,6 +1890,7 @@ export function App() {
       {captureOpen && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {draftEdit && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
     </div>
+    </WeekDndProvider>
     </DraftEditorCtx.Provider>
     </VmProvider>
     </MenuHost>
