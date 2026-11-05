@@ -1,7 +1,7 @@
 // CV-3 follow-ups, the main path, in a real (not demo) session on a fake Graph, with AI off for the client (Allow AI
 // off, so no AI request runs). Admin › AI shows the client's "Group messages without AI" switch, on. The chat's messages
 // group by rules: Blake's request mentioning Evan starts a conversation, Evan (mentioned) and my reply to Blake join it,
-// titled by its first message with no summary. A loose promise in the Delivery chat: Link existing… lists likely items
+// titled by its first message with no summary. A loose promise in the Delivery chat: Link to item… lists likely items
 // with reasons. Today: a promise due within 2 hours and one overdue in the urgent strip, one later only in the agenda.
 // Week's Board rail: the overdue one amber "was due …" at now. Capture: Who through the PersonPicker with the link offer.
 // Edge cases are unit tests (actions/conversations-rules-only, plan/promise-items, plan/urgent, plan/rail-promises,
@@ -239,7 +239,8 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       const myp = page.getByRole("main", { name: "Promises" });
       const loose = myp.getByRole("listitem", { name: /^Promise: .*unassigned feature/i });
       await loose.waitFor();
-      await loose.getByRole("button", { name: "Link existing…" }).click();
+      await loose.getByRole("button", { name: /^More for: / }).click();
+      await loose.getByRole("menuitem", { name: "Link to item…" }).click();
       const likely = loose.getByRole("list", { name: "Likely items" });
       await likely.getByText(/My story under an unassigned feature/).waitFor();
       await likely.getByText("Assigned to you · matches unassigned, feature").waitFor();

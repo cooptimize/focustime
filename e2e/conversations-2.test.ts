@@ -3,7 +3,7 @@
 // Show messages shows them like Teams, the thumbnails come only from FocusTime's /media/chat-images/<id> (stripped,
 // never a Graph URL), the viewer opens with Next and Esc. A teammate's topic is merged into mine and undone. My
 // promises: Make it a follow-up with Who prefilled through the PersonPicker; an overdue loose promise ("I'll log a
-// ticket") is amber "Was due" with Create the DevOps item?, and Create opens the draft. Today's urgent strip: an
+// ticket") is amber "Was due" with Create DevOps item, which opens the draft. Today's urgent strip: an
 // urgent line opens its conversation (#/inbox/conversation/<id>). Edge cases are unit tests (actions/chat-images,
 // actions/promise-fixes, actions/people-picker, actions/conversation-merge, ui/PersonPicker). Fictional names. Screenshots
 // at 1920, Text size Larger and the phone (390 wide, a 17px root font as on iPhone) when FOCUSTIME_SHOTS is set.
@@ -318,14 +318,14 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       await page.keyboard.press("Escape");
       await sendTotals.getByRole("button", { name: "Cancel" }).click();
 
-      // The overdue loose promise: amber "Was due Fri, Oct 30", Create the DevOps item?, Create opens the draft.
+      // The overdue loose promise: amber "Was due Fri, Oct 30", Create DevOps item opens the draft.
       const loose = myp.getByRole("listitem", { name: "Promise: Log a ticket for the filter bug" });
       await loose.getByText("Was due Fri, Oct 30").waitFor();
       expect(await loose.locator(".conv-due.overdue").evaluate((e) => getComputedStyle(e).color)).not.toMatch(/rgb\((2[0-5]\d|1[5-9]\d), (\d|[1-5]\d), (\d|[1-5]\d)\)/);
-      await loose.getByText("Create the DevOps item?").waitFor();
+      await loose.getByRole("button", { name: "Create DevOps item", exact: true }).waitFor();
       await shotAll(page, "cv2-my-promises-overdue", myp);
-      await loose.getByRole("button", { name: "Create", exact: true }).click();
-      await loose.getByRole("form", { name: "Create the DevOps item" }).getByRole("textbox", { name: /^Title/ }).waitFor();
+      await loose.getByRole("button", { name: "Create DevOps item", exact: true }).click();
+      await loose.getByRole("form", { name: "Create DevOps item" }).getByRole("textbox", { name: /^Title/ }).waitFor();
       expect((await convs.commitmentsInChat(DELIVERY))[0]!.conversationId).not.toBeNull();
       await loose.getByRole("button", { name: "Cancel" }).first().click();
 

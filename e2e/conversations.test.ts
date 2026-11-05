@@ -2,7 +2,7 @@
 // and a fake DevOps, with a fake AI provider behind the real ai/ service (the app's cap). A FocusTime admin adds two
 // chats for Adatum in Settings > Clients; messages arrive; Refresh in Inbox › Conversations reads them through the
 // shared job: the Alliance-shaped conversation (a client question, two teammates, my commitment that implies an item) sits
-// in Needs you, a teammate's one under Handled by teammates. Show messages, then Create item: the draft with only the
+// in Needs you, a teammate's one under Handled by teammates. Show messages, then Create DevOps item: the draft with only the
 // valid types under its feature, the preview, Create in DevOps, Tracked #id. A comment suggestion with Post comment or
 // Skip. My promises shows the Wingtip-shaped promise, due today 7:30 PM, and Today shows it under After your blocks.
 // Edge cases are unit tests (actions/conversation*.test.ts, actions/devops-write.test.ts, plan/conversations.test.ts).
@@ -209,7 +209,7 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       const alliance = needs.getByRole("listitem", { name: "Movement Dashboard quantity gap on 4417001" });
       await alliance.waitFor();
       await alliance.getByText(/Sam will add the fix to the development queue/).waitFor();
-      await alliance.getByRole("button", { name: /^Create item/ }).waitFor();
+      await alliance.getByRole("button", { name: /^Create DevOps item/ }).waitFor();
       const mates = main.getByRole("region", { name: "Handled by teammates" });
       await mates.getByRole("button", { name: /Handled by teammates \(1\)/ }).waitFor();
       await shotBoth(page, "conversations-needs-you", main);
@@ -224,10 +224,13 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       await shotBoth(page, "conversations-card-messages", alliance);
       await alliance.getByRole("button", { name: /^Hide messages/ }).click();
 
-      // Create item: the draft, then the preview through the write framework, then Tracked.
-      await alliance.getByRole("button", { name: /^Create item/ }).click();
-      const draft = alliance.getByRole("form", { name: "Create the DevOps item" });
+      // Create DevOps item: the draft, then the preview through the write framework, then Tracked.
+      await alliance.getByRole("button", { name: /^Create DevOps item/ }).click();
+      const draft = alliance.getByRole("form", { name: "Create DevOps item" });
       await draft.getByRole("textbox", { name: /^Title/ }).waitFor();
+      // CV-5: without AI for my draft the form is empty; I type the title.
+      const title = draft.getByRole("textbox", { name: /^Title/ });
+      if (!(await title.inputValue())) await title.fill("Overnight refresh fails");
       await shotBoth(page, "conversations-devops-draft", draft);
       await draft.getByRole("button", { name: "Preview in DevOps" }).click();
       const preview = page.getByRole("dialog", { name: "Create a DevOps item" });
