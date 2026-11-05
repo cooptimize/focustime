@@ -8,7 +8,7 @@ import type { LogRecord } from "../../log/logger.ts";
 import { createTeamsBotStore } from "../../store/teams-bot-store.ts";
 import type { NowStrip } from "../../plan/now.ts";
 import type { AssistantService, ConfirmResult, HandleResult, Proposal } from "./assistant.ts";
-import { createBotCore, NOT_READY, ON_IT, type InActivity, type OutActivity, type Sender } from "./bot.ts";
+import { createBotCore, NOT_READY, ON_IT, type BotDeps, type InActivity, type OutActivity, type Sender } from "./bot.ts";
 import { ONLY_PERSONAL, REFUSED } from "./gate.ts";
 import type { TodayFacts } from "./quick.ts";
 
@@ -34,7 +34,7 @@ const facts = (): TodayFacts => ({ date: "2026-11-05", strip: strip(), committed
 const proposal = (id: string, o: Partial<Proposal> = {}): Proposal => ({ id, title: "Move #4211 to Thursday", whoSees: "Everyone on Northwind's DevOps project", changes: [{ field: "Target date", before: "Nov 5", after: "Nov 6" }], expiresAt: "2026-11-05T15:15:00Z", ...o });
 const handled = (o: Partial<HandleResult> = {}): HandleResult => ({ turnId: "t1", status: "ok", reply: "", cards: [], proposals: [], links: [], ...o });
 
-async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/conn.ts").Conn }> }, o: { assistant?: Partial<AssistantService> | null; confirmWaitMs?: number; ackAfterMs?: number } = {}) {
+async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/conn.ts").Conn }> }, o: { assistant?: Partial<AssistantService> | null; confirmWaitMs?: number; ackAfterMs?: number; rhythm?: BotDeps["rhythm"] } = {}) {
   const db = await d.open();
   await addUsers(db.conn, ANA, GUEST, BOT);
   let now = Temporal.Instant.from("2026-11-05T15:00:00Z");
@@ -55,6 +55,7 @@ async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/co
           handle: async (i) => (calls.handle.push(i.text), handled()),
           confirm: async (i): Promise<ConfirmResult> => (calls.confirm.push(i.proposalId), { status: "ok", message: "Target date is Nov 6 now." }),
           cancel: async (i) => void calls.cancel.push(i.proposalId),
+          propose: async () => ({ ok: false, message: "Not in this test" }),
           ...o.assistant,
         };
   const users = new Map([
@@ -74,6 +75,7 @@ async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/co
     ackAfterMs: o.ackAfterMs ?? 1000,
     confirmWaitMs: o.confirmWaitMs ?? 1000,
     background: (p) => void pending.push(p),
+    rhythm: o.rhythm ?? null,
   });
   let id = 0;
   const msg = (text: string, o2: Partial<InActivity> = {}): InActivity => ({
@@ -157,6 +159,27 @@ await forEachDriver("the Teams bot (TB-1)", (d) => {
     await t.core.activity(t.msg("fast one"));
     await t.settle();
     expect(t.texts().filter((x) => x?.startsWith("about "))).toEqual(["about slow one", "about fast one"]);
+  });
+
+  it("TB-2: capture: goes to Captures with no AI, a reply to an open Close out card goes there, other text to the assistant", async () => {
+    const got: string[] = [];
+    let closeoutOpen = true;
+    const rhythm: NonNullable<BotDeps["rhythm"]> = {
+      tapOf: () => null,
+      tap: async () => ({ statusCode: 200, type: "application/vnd.microsoft.card.adaptive", value: {} }) as never,
+      capture: async (_u, text) => (got.push(`capture:${text}`), { card: { type: "AdaptiveCard", body: [{ type: "TextBlock", text: "Captured to sort later" }] } as never }),
+      closeoutReply: async (_u, text) => (closeoutOpen ? (got.push(`closeout:${text}`), (closeoutOpen = false), "Updated the Close out card above. Check it and Confirm.") : null),
+    };
+    const t = await setup(d, { rhythm });
+    await t.core.activity(t.msg("capture: call Dana about the export"));
+    await t.core.activity(t.msg("C: ship it"));
+    await t.core.activity(t.msg("the login fix and the notes"));
+    await t.core.activity(t.msg("what's on my plate tomorrow"));
+    await t.settle();
+    expect(got).toEqual(["capture:call Dana about the export", "capture:ship it", "closeout:the login fix and the notes"]);
+    expect(t.calls.handle).toEqual(["what's on my plate tomorrow"]);
+    expect(t.texts().join(" ")).toContain("Captured to sort later");
+    expect(JSON.stringify(t.logs)).not.toContain("Dana");
   });
 
   it("answers the quick commands without the assistant", async () => {

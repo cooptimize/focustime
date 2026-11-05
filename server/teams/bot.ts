@@ -16,6 +16,8 @@ import { PROPOSAL_MINUTES, type AssistantService, type HandleResult, type Propos
 import { attach, cancelledCard, CARD_TYPE, doneCard, expiredCard, failedCard, helpCard, ownLinks, proposalCard, resultCard, tapOf, workingCard, type Card } from "./cards.ts";
 import { gate, refusalText, type GateDeps } from "./gate.ts";
 import { nextCard, quickOf, todayCard, type TodayFacts } from "./quick.ts";
+import { captureText } from "../../plan/teams-rhythm.ts";
+import type { Rhythm } from "./rhythm.ts";
 
 /** The parts of an incoming activity the bot reads. */
 export type InActivity = {
@@ -67,6 +69,10 @@ export type BotDeps = {
   serviceHost?: RegExp;
   /** HK-3: a Cooptimizer messaged or tapped (real use, like a page in front of someone). */
   onUse?: () => void;
+  /** TB-2: the rhythm's taps, "capture: …" and the close out reply; absent: the bot only answers, as in TB-1. */
+  rhythm?: Pick<Rhythm, "tapOf" | "tap" | "capture" | "closeoutReply"> | null;
+  /** TB-2: the person messaged the bot again (their chat is reachable: a block FocusTime saw before is over). */
+  onChat?: (userId: string) => Promise<void>;
 };
 
 export const ON_IT = "On it…";
@@ -135,6 +141,13 @@ export function createBotCore(d: BotDeps) {
     const started = d.now().epochMilliseconds;
     await d.sender.send(to, { type: "typing" }).catch(() => undefined);
     const text = (a.text ?? "").slice(0, 4000);
+    // TB-2: "capture: …" (or "c: …") is saved as typed, like the Capture box; no AI reads it.
+    const captured = d.rhythm ? captureText(text) : null;
+    if (captured !== null && d.rhythm) {
+      const r = await d.rhythm.capture(userId, captured);
+      await cards(to, [r.card]);
+      return d.log({ op: "turn", kind: "capture" });
+    }
     const q = quickOf(text);
     if (q === "help") return void (await cards(to, [helpCard(d.publicUrl)]), d.log({ op: "turn", kind: "help" }));
     if (q === "open") return void (await cards(to, [resultCard({ title: "FocusTime", lines: ["Your week, your focus blocks and everything you planned."], links: [{ label: "Open FocusTime", url: d.publicUrl }] }, d.publicUrl)]), d.log({ op: "turn", kind: "open" }));
@@ -149,6 +162,9 @@ export function createBotCore(d: BotDeps) {
       await cards(to, [resultCard(q === "next" ? nextCard(facts, d.publicUrl) : todayCard(facts, d.publicUrl), d.publicUrl)]);
       return d.log({ op: "turn", kind: q, durationMs: d.now().epochMilliseconds - started });
     }
+    // TB-2: while today's Close out card waits, a plain message is the close out in my words (drawn into that card).
+    const closeout = d.rhythm ? await d.rhythm.closeoutReply(userId, text).catch(() => null) : null;
+    if (closeout) return void (await say(to, closeout), d.log({ op: "turn", kind: "closeout_reply" }));
     if (!d.assistant) return void (await say(to, NOT_READY), d.log({ op: "turn", kind: "not_ready" }));
 
     let acked = false;
@@ -188,6 +204,9 @@ export function createBotCore(d: BotDeps) {
   /** A tap on Confirm or Cancel: the card's new content. */
   async function tap(a: InActivity, userId: string, to: Address | null): Promise<InvokeBody> {
     const answer = (c: Card): InvokeBody => ({ statusCode: 200, type: CARD_TYPE, value: c });
+    // TB-2: a rhythm card's tap (Done, Not yet, Move…, Confirm inside the card) or a capture's Undo.
+    const rt = d.rhythm?.tapOf(a.value);
+    if (rt && d.rhythm) return d.rhythm.tap(userId, rt);
     const t = tapOf(a.value);
     if (!t) return { statusCode: 400, type: "application/vnd.microsoft.error", value: { code: "BadRequest", message: "Not a FocusTime card" } };
     const store = d.store(userId);
@@ -282,7 +301,10 @@ export function createBotCore(d: BotDeps) {
       const store = d.store(g.userId);
       if (a.type === "installationUpdate") {
         if (a.action === "remove") await store.chatRemoved();
-        else await store.saveChat({ conversationId: to.conversationId, serviceUrl: to.serviceUrl, tenantId: (a.conversation?.tenantId ?? a.channelData?.tenant?.id ?? "").toLowerCase(), botId: a.recipient?.id || "bot" }).catch(() => undefined);
+        else {
+          await store.saveChat({ conversationId: to.conversationId, serviceUrl: to.serviceUrl, tenantId: (a.conversation?.tenantId ?? a.channelData?.tenant?.id ?? "").toLowerCase(), botId: a.recipient?.id || "bot" }).catch(() => undefined);
+          await d.onChat?.(g.userId).catch(() => undefined);
+        }
         return d.log({ op: "install", kind: a.action === "remove" ? "removed" : "added" }), null;
       }
       background(
@@ -291,6 +313,7 @@ export function createBotCore(d: BotDeps) {
           // here, after Teams has its 200, so the answer never waits on the database.
           if (a.id && !(await store.firstSeen(a.id).catch(() => (d.log({ op: "seen_save", kind: "failed" }), true)))) return void d.log({ op: "activity", kind: "duplicate" });
           await store.saveChat({ conversationId: to.conversationId, serviceUrl: to.serviceUrl, tenantId: (a.conversation?.tenantId ?? a.channelData?.tenant?.id ?? "").toLowerCase(), botId: a.recipient?.id || "bot" }).catch(() => d.log({ op: "chat_save", kind: "failed" }));
+          await d.onChat?.(g.userId).catch(() => undefined);
           await turn(a, to, g.userId).catch(async () => {
             d.log({ op: "turn", kind: "error" });
             await say(to, WENT_WRONG).catch(() => undefined);

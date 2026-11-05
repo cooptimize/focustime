@@ -1,5 +1,6 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import { TEAMS_KINDS, type TeamsKind } from "../plan/teams-rhythm.ts";
 import { checkinGhosts } from "../plan/carry.ts";
 import { isClosed, isCompleted } from "../plan/process.ts";
 import { clearPhotos, photoAction } from "./photo-actions.ts";
@@ -129,6 +130,8 @@ export type ActionContext = {
   photoCache?: PhotoCache;
   /** Step 15.5: the notifier (test and sample notifications). Absent: notifications aren't available here. */
   notifications?: { test: () => Promise<void>; sample: (kind: string, live: boolean, gated: boolean) => Promise<boolean> };
+  /** TB-2: the bot's rhythm for this person (Settings › Notifications › In Teams); absent without the Teams bot. */
+  teams?: { status: () => Promise<{ chat: boolean; blocked: boolean }>; test: (kind: TeamsKind) => Promise<{ ok: true } | { ok: false; message: string }> };
   /** P1: this person's Web Push (devices, the app's VAPID key). Absent: push isn't available (demo, tests). */
   push?: PushPort;
   loadConfig: () => Promise<{ path: string; parsed: ParseResult; created?: boolean }>;
@@ -1295,6 +1298,19 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       if (!ctx.notifications) return { ok: false, status: 503, error: "Notifications aren't available here" };
       await ctx.notifications.test();
       return { ok: true, data: { sent: true } };
+    }
+    case "teams.status": {
+      // TB-2: Settings › Notifications › In Teams: is the bot here, has it a chat with me, did Teams refuse it.
+      if (!noInput(req.input)) return bad("teams.status takes no input");
+      if (!ctx.teams) return { ok: true, data: { available: false, chat: false, blocked: false } };
+      return { ok: true, data: { available: true, ...(await ctx.teams.status()) } };
+    }
+    case "teams.test": {
+      const i = req.input as { kind?: unknown } | null;
+      if (!i || typeof i !== "object" || Object.keys(i).some((k) => k !== "kind") || !(TEAMS_KINDS as readonly unknown[]).includes(i.kind)) return bad("teams.test takes { kind: brief, checkin, closeout or nudges }");
+      if (!ctx.teams) return { ok: false, status: 503, error: "FocusTime in Teams isn't set up here" };
+      const r = await ctx.teams.test(i.kind as TeamsKind);
+      return r.ok ? { ok: true, data: { sent: i.kind } } : { ok: false, status: 409, error: r.message };
     }
     case "notify.sample": {
       const i = req.input as { kind?: unknown; live?: unknown; gated?: unknown } | null;

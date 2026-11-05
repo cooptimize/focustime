@@ -64,6 +64,8 @@ export const ACTIONS = [
   { name: "vm.start_now", title: "Start my VM now", group: "My VM", target: "vm", summary: "The morning box's Start: starts your VM at once when Settings > You allows it, logged and followed until it runs" },
   { name: "notify.test", title: "Send a test notification", group: "Settings", target: "none", summary: "A desktop notification now, to check they reach you" },
   { name: "notify.sample", title: "Send a sample notification", group: "Settings", target: "none", summary: "One of each kind on request, with its buttons, for checking them (VM buttons open the VM menu)" },
+  { name: "teams.status", title: "FocusTime in Teams", group: "Settings", target: "none", summary: "Whether the FocusTime bot can message you in Teams (TB-2)" },
+  { name: "teams.test", title: "Send me a test in Teams", group: "Settings", target: "none", summary: "One morning brief, check-in, close out or nudge card in your Teams chat now, to try it (TB-2)" },
   { name: "notices.list", title: "Notifications", group: "Settings", target: "none", summary: "The notifications FocusTime sent you, newest first, with the unread count (P1)" },
   { name: "notices.read", title: "Mark notifications read", group: "Settings", target: "none", summary: "Marks the listed notifications, or all of them, as read" },
   { name: "push.status", title: "Push on this device", group: "Settings", target: "none", summary: "Whether push is set up for this app, its public key, and your devices with push on" },

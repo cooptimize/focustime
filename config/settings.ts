@@ -178,7 +178,7 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
     }
     case "notify": {
       // Step 15.5: Settings > Notifications. Written as given; parseConfig checks each value.
-      only(v, ["kinds", "quiet", "quietPto", "pushDetails", "asksThroughFocus", "teamsMessages"], "notify");
+      only(v, ["kinds", "quiet", "quietPto", "pushDetails", "asksThroughFocus", "teamsMessages", "teams"], "notify");
       const values: [string, TomlValue][] = [];
       if (v.kinds !== undefined) {
         const k = obj(v.kinds, "notify");
@@ -205,6 +205,19 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
       if (v.asksThroughFocus !== undefined) {
         if (typeof v.asksThroughFocus !== "boolean") throw new SettingsInputError("notify.asks_through_focus", "Must be true or false");
         values.push(["asks_through_focus", v.asksThroughFocus]);
+      }
+      if (v.teams !== undefined) {
+        // TB-2: Settings › Notifications › In Teams. parseConfig checks the times and the minutes.
+        const t = obj(v.teams, "notify.teams");
+        only(t, ["brief", "checkin", "closeout", "nudges", "friday", "briefAt", "checkinAt", "closeoutMinutes"], "notify.teams");
+        for (const k of ["brief", "checkin", "closeout", "nudges", "friday"] as const) {
+          if (t[k] === undefined) continue;
+          if (typeof t[k] !== "boolean") throw new SettingsInputError(`notify.teams_${k}`, "Must be true or false");
+          values.push([`teams_${k}`, t[k] as boolean]);
+        }
+        if (t.briefAt !== undefined) values.push(["teams_brief_at", t.briefAt === null ? "start" : str(t.briefAt, "notify.teams_brief_at", 5)]);
+        if (t.checkinAt !== undefined) values.push(["teams_checkin_at", str(t.checkinAt, "notify.teams_checkin_at", 5)]);
+        if (t.closeoutMinutes !== undefined) values.push(["teams_closeout_minutes", int(t.closeoutMinutes, "notify.teams_closeout_minutes")]);
       }
       return (text) => values.reduce((t, [k, val], i) => setValue(t, "notify", k, val, i === 0 ? "Notifications (step 15.5): a switch per kind and quiet hours. During focus, all but the timer and meeting warnings wait until it ends." : undefined), text);
     }
