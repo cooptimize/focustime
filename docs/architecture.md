@@ -312,3 +312,12 @@ One job reads each registered client chat for everyone; Asks are now Requests. D
 - **Store.** `ahead_changes` and `ahead_halves` (user tables, in Export) in `store/migrations/20261107T0900_ahead_changes.ts`; `devops_notes` (an app table) in `store/devops-notes.ts`; `server/ticks.ts` `notesTick` turns notes into notices.
 - **UI.** `ui/ahead/`: Ahead.tsx (the context, filters, the pending bar, Review with Keep mine, Take theirs, Commit in batches of 10 and the Committed list; the side panel's action list with Send to…), Grid.tsx (one table per client, roving focus, the cell editors), Gantt.tsx (bars, half-day drag with the order frozen and reloads held, the hours lane, no-dates lists, reach), FixNext.tsx (the mode and the slim pane), Assignee.tsx (PersonPicker people on that client, Me, Nobody), model.ts (rows, filters, groups). Break down's panel takes an `actions` list (`BreakDownTarget.actions`, `ui/menu.ts`). Roadmap.tsx and PlanAhead.tsx are no longer mounted.
 - **Tests.** `actions/ahead-actions.test.ts`, the AH-1 parts of `actions/devops-write.test.ts` and `server/notices.test.ts`, `plan/*` tests above, `ui/ahead/model.test.ts`; e2e `e2e/ahead.test.ts`. Builders: `anAheadItem`, `anAssignee`, `anAheadClient`, `anAheadLoad`.
+
+## AH-2: Cooptimize's scope, calmer Ahead, the Review panel (Nov 5)
+
+- **Pure.** `plan/devops-scope.ts`: `scopeOf` (automatic, whole, teams, areas; mine always; the root safeguard), `scopeCounts` (Admin's per-path and per-team counts), `parseScope`, `scopeWords`. `plan/gantt.ts` `edgeLabel`.
+- **Config.** `devops_scope` in CLIENT_SPECS (`config/org.ts`), a client Rule; `actions/scope-deps.ts` `scopeDepsOf(org)` gives the rule and who is a Cooptimizer.
+- **Sources.** `actions/devops-poll.ts` reads each project's areas and teams once a day (soft); `sources/devops/source.ts` applies the scope on read (`scopeFor`, `keepOf`) for Ahead (`aheadItems`, marking `inScope` and returning `AheadClient.scope`) and Week's lists; `internal.scopeCounts` for Admin. The demo mirrors it (`sources/demo/data.ts`: Northwind's Portal\Finance area of the client's own work).
+- **UI.** `ui/settings/AdminScope.tsx` (the picker in Admin › Clients), `ui/ahead/Chips.tsx` (Readiness chips), the "—" and state dots in Grid.tsx, the scope note and Show the whole project in Ahead.tsx, Review on the shared panel shell.
+- **Tests.** `plan/devops-scope.test.ts`, the AH-2 parts of `actions/devops-poll.test.ts`, `actions/ahead-actions.test.ts` and `plan/gantt.test.ts`; e2e `e2e/ahead.test.ts` (scope, chips, Review alignment).
+
