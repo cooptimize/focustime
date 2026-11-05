@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PortfolioItem, WorkItem } from "../week/types.ts";
-import { addPaneRows, storyWord } from "./weekadd.ts";
+import { addPaneRows } from "./weekadd.ts";
 
 const url = (id: number) => `https://dev.azure.com/o/p/_workitems/edit/${id}`;
 const pItem = (over: Partial<PortfolioItem>): PortfolioItem => ({
@@ -43,21 +43,17 @@ describe("Plan the week's Add to <client> rows (D437)", () => {
     expect(rows.find((r) => r.id === 220)!.flag).toBe("no stories");
   });
 
-  it("gives every row its type word, from the glossary's tier names, never User Story", () => {
-    for (const r of rows) expect(r.typeWord).toMatch(/\S/);
-    expect(rows.map((r) => r.typeWord)).toEqual(["Feature", "Feature", "Story", "Story", "Bug"]);
-    expect(rows.flatMap((r) => r.nested.map((c) => c.typeWord))).toEqual(["Story", "Story"]);
-    expect(JSON.stringify(rows)).not.toContain("User Story");
+  it("gives every row its DevOps type, drawn as an icon (WT-1), never a type word", () => {
+    expect(rows.map((r) => r.type)).toEqual(["Feature", "Feature", "User Story", "User Story", "Bug"]);
+    expect(rows.flatMap((r) => r.nested.map((c) => c.type))).toEqual(["User Story", "User Story"]);
     expect(rows.find((r) => r.id === 210)!.targetDate).toBe("2026-11-20");
+    const scrum = addPaneRows({ portfolio: [pItem({ id: 400, children: [child(401, true, "Product Backlog Item")] })], work: [story(402, null, "Product Backlog Item")], listed: new Set() });
+    expect(scrum[0]!.nested[0]!.type).toBe("Product Backlog Item");
   });
 
-  it("names the story tier by the client's process when it isn't User Story", () => {
-    expect(storyWord("User Story")).toBe("Story");
-    expect(storyWord("Product Backlog Item")).toBe("Product Backlog Item");
-    expect(storyWord("Issue")).toBe("Issue");
-    const scrum = addPaneRows({ portfolio: [pItem({ id: 400, children: [child(401, true, "Product Backlog Item")] })], work: [story(402, null, "Product Backlog Item")], listed: new Set() });
-    expect(scrum.map((r) => r.typeWord)).toEqual(["Feature", "Product Backlog Item"]);
-    expect(scrum[0]!.nested[0]!.typeWord).toBe("Product Backlog Item");
+  it("a type that doesn't need breakdown never says no stories; a resolved story isn't offered", () => {
+    const r = addPaneRows({ portfolio: [pItem({ id: 500, needsBreakdown: false, children: [] })], work: [{ ...story(501, null), stateCategory: "Resolved" }], listed: new Set() });
+    expect(r.map((x) => [x.id, x.flag])).toEqual([[500, null]]);
   });
 
   it("leaves out what is on the list: a listed feature, a listed story, and a listed story nested under a feature", () => {

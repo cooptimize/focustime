@@ -61,7 +61,7 @@ describe("Send feedback (F1)", () => {
 
   it.each([
     ["missing", "isn't there"],
-    ["wrong_type", "not a Feature"],
+    ["wrong_type", "not at the feature level of this process"],
   ] as const)("says it isn't set up when the feature is %s, and sends nothing", async (parent, reason) => {
     const p = await person({ parent, seed: false });
     const st = await p.run<FeedbackStatus>("feedback.status");
