@@ -6,6 +6,7 @@
 // one commitment per group of their consecutive messages (merged), "to" fixed to the person they answered or
 // mentioned (never themselves), and a follow-up made from one gets that Who. The old promise rows are marked moved.
 import { askTitle } from "../plan/asks.ts";
+import { impliesItemByRule } from "./conversations-pipeline.ts";
 import type { StoredPromise } from "../plan/asks-ai.ts";
 import { isExternal } from "../plan/chats.ts";
 import { messageGroups, NEAR_MINUTES, oneLine, type CommitmentState, type ConversationStatus, type Participant } from "../plan/conversations.ts";
@@ -107,7 +108,7 @@ export async function backfillPromises(o: { plan: PlanStore; teams: TeamsStore; 
         const placed = await o.convs.placeOf(chat.chatId, xs[0]!.p.messageId);
         k = await o.convs.addCommitment({
           conversationId: placed?.conversationId ?? null, chatId: chat.chatId, clientKey: chat.clientKey, whoId: o.me, whoName: o.meName, toId: to?.id ?? null, toName: to?.name ?? null,
-          what: oneLine(best.what, 200) || "A promise", dueAt: null, dueDate: best.due, impliesItem: false, messageIds: xs.map((x) => x.p.messageId), reason: best.reason, state: PROMISE_STATE[best.status], fromPromise: firstKey, createdAt: xs[0]!.p.createdAt,
+          what: oneLine(best.what, 200) || "A promise", dueAt: null, dueDate: best.due, impliesItem: impliesItemByRule([best.what, ...xs.map((x) => x.m?.text ?? "")].join("\n")), messageIds: xs.map((x) => x.p.messageId), reason: best.reason, state: PROMISE_STATE[best.status], fromPromise: firstKey, createdAt: xs[0]!.p.createdAt,
         });
         if (best.followUpId !== null || best.itemId !== null) k = await o.convs.updateCommitment(k.id, { ...(best.followUpId !== null ? { followUpId: best.followUpId } : {}), ...(best.itemId !== null ? { itemId: best.itemId, itemUrl: best.itemUrl, itemTitle: best.itemTitle } : {}) });
       }

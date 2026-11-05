@@ -33,8 +33,11 @@ export type DevOpsChange =
   /** AP-1: a bug, story or feature from an ask in a client chat. */
   | { kind: "request_create"; chatId: string; messageId: string; level: "bug" | "story" | "feature" }
   /** CV-1: from a conversation: an item (the path of action, the original messages appended by the server), a suggested comment, a description change. */
-  | { kind: "conversation_create"; conversationId: number; commitmentId?: number; title: string; description: string; level: "bug" | "story" | "feature"; type?: string; parentId?: number; includeInternal?: boolean; /** CV-4: the ticked images (all, when absent). */ images?: number[] }
+  | { kind: "conversation_create"; conversationId: number; commitmentId?: number; title: string; description: string; level: "bug" | "story" | "feature"; type?: string; parentId?: number; includeInternal?: boolean; /** CV-4: the ticked images (all, when absent). */ images?: number[]; /** CV-5 */ acceptance?: string; assign?: "me" | "none" }
   | { kind: "conversation_comment"; suggestionId: number; includeInternal?: boolean; text?: string }
+  /** CV-5: "Also add a comment on the item" after Link to item (a conversation, or my promise by commitmentId). */
+  | { kind: "conversation_comment"; conversationId: number; itemId: number; text?: string }
+  | { kind: "conversation_comment"; commitmentId: number; itemId: number; text?: string }
   | { kind: "description_update"; suggestionId: number; after?: string };
 
 export type DevOpsWriteEnv = {
@@ -288,7 +291,11 @@ function AttachPicker({ list, disabled, onChange }: { list: NonNullable<DevOpsPr
   return (
     <fieldset className="dw-attach">
       <legend>
-        Attach images from the chat <span className="muted">· {ticked.length} of {list.length}</span>
+        {/* CV-5: one switch for all of them, ticked as CV-4 does; each image can still be left out. */}
+        <label className="dw-attach-all">
+          <input type="checkbox" checked={ticked.length > 0} ref={(el) => void (el && (el.indeterminate = ticked.length > 0 && ticked.length < list.length))} disabled={disabled} onChange={(e) => onChange(e.target.checked ? list.map((a) => a.id) : [])} /> Attach {list.length === 1 ? "1 image" : `${list.length} images`}
+        </label>{" "}
+        <span className="muted">· {ticked.length} of {list.length}</span>
       </legend>
       <ul>
         {list.map((a, n) => (

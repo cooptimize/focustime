@@ -38,7 +38,7 @@ export async function upkeep(d: UpkeepDeps): Promise<UpkeepResult> {
   const out: UpkeepResult = { escalated: 0, suggestions: 0 };
   // Escalation: open commitments that imply an item, not created or linked yet.
   for (const k of await d.convs.openItemCommitments()) {
-    if (k.escalatedAt) continue;
+    if (k.escalatedAt || k.itemId) continue;
     const h = (k.whoId ? await d.hoursOf(k.whoId).catch(() => null) : null) ?? { hours: d.defaultHours, ptoDays: new Set<string>() };
     const at = escalateAt(k.takenAt ?? k.createdAt, h.hours, h.ptoDays);
     if (Date.parse(at) > Date.parse(d.now)) continue;

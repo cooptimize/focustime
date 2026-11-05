@@ -2,7 +2,7 @@
 // real ai/ service and a fake DevOps. An admin turns on "Send attachments to AI" for the client in Admin › AI; the
 // client pastes three images (one Teams can no longer give); Refresh reads the chat and sends the two readable images
 // with the batch, labelled with their message; their descriptions show on the card ("3 images: ...") and under the
-// thumbnails, read from Teams on view; the third shows "Image in Teams" with Open in Teams. Create item: the preview
+// thumbnails, read from Teams on view; the third shows "Image in Teams" with Open in Teams. Create DevOps item: the preview
 // lists the images with checkboxes, all ticked; one unticked; confirm uploads the rest with my token and links them to
 // the new item. Nothing is stored. Edge cases are unit tests (actions/chat-images, actions/conversation-images,
 // actions/devops-write). Fictional names. Screenshots at 1920, Larger and the phone when FOCUSTIME_SHOTS is set.
@@ -230,13 +230,16 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
       await shotAll(page, "cv4-images-described", card);
       await card.getByRole("button", { name: /^Hide messages/ }).click();
 
-      // Create item: the preview lists the images (all ticked); untick the second; confirm attaches the rest.
-      await card.getByRole("button", { name: /^Create item/ }).click();
-      const draft = card.getByRole("form", { name: "Create the DevOps item" });
+      // Create DevOps item: the preview lists the images (all ticked); untick the second; confirm attaches the rest.
+      await card.getByRole("button", { name: /^Create DevOps item/ }).click();
+      const draft = card.getByRole("form", { name: "Create DevOps item" });
       await draft.getByRole("textbox", { name: /^Title/ }).waitFor();
+      // CV-5: without AI for my draft the form is empty; I type the title.
+      const title = draft.getByRole("textbox", { name: /^Title/ });
+      if (!(await title.inputValue())) await title.fill("Overnight refresh fails");
       await draft.getByRole("button", { name: "Preview in DevOps" }).click();
       const preview = page.getByRole("dialog", { name: "Create a DevOps item" });
-      const pick = preview.getByRole("group", { name: /Attach images from the chat/ });
+      const pick = preview.getByRole("group", { name: /^Attach 3 images/ });
       await pick.getByText("· 3 of 3").waitFor();
       await shotAll(page, "cv4-create-preview-images", pick);
       await pick.getByRole("checkbox", { name: /^Attach image 2 from Blake Novak/ }).click();

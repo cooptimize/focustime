@@ -17,7 +17,8 @@ import { AiError } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { askTitle, messageLink } from "../plan/asks.ts";
 import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
-import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_TASK, draftFrom, draftInput, draftWithoutAi, type DraftAnswer } from "../plan/conversation-draft.ts";
+import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_TASK, draftFrom, draftInput, emptyDraft, type DraftAnswer } from "../plan/conversation-draft.ts";
+import { isClosed } from "../plan/process.ts";
 import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard } from "../plan/conversation-views.ts";
 import { daysWaiting, oneLine, statusLine, unsortedText, type Commitment, type Conversation, type ItemDraft } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser } from "../plan/requests.ts";
@@ -46,6 +47,8 @@ export const CONVERSATION_ACTIONS = [
   "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.followup", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
   "suggestions.skip", "conversations.merge", "conversations.unmerge", "my_promises.start_draft",
   "my_promises.search",
+  // CV-5: Link to item over the client's items in scope, and its undo.
+  "conversations.search_items", "conversations.unlink", "my_promises.unlink",
 ] as const;
 export type ConversationAction = (typeof CONVERSATION_ACTIONS)[number];
 
@@ -61,6 +64,13 @@ export type ConversationContext = RequestContext & {
   devopsEmail?: (clientKey: string) => Promise<string | null>;
   /** WT-1: the client's process model (levels, valid children, the most common child), or null when it can't be read. */
   processModel?: (cfg: AppConfig, clientKey: string) => Promise<ProcessModel | null>;
+  /**
+   * CV-5: the client's open items in Cooptimize's scope from the central store (AH-2; mine always), by #id or title
+   * words ("" for all of them), or null when the store can't say now. Without it, the open items Week reads.
+   */
+  searchItems?: (cfg: AppConfig, clientKey: string, query: string) => Promise<WorkItem[] | null>;
+  /** CV-5: linked items as the store has them now, in any state (state, assignee, last change); null when it can't say. */
+  linkedItems?: (cfg: AppConfig, clientKey: string, ids: readonly number[]) => Promise<WorkItem[] | null>;
 };
 
 /** Closed ones stay visible this long by default; the live value is the Rule conv.closed_shown_days (D604). */
@@ -128,10 +138,77 @@ export async function conversationPeople(ctx: ConversationContext, q: { conversa
   return out.filter((p) => !same(p.id, v.me));
 }
 
+/** CV-5: what Link to item, "Looks like" and the draft's parents choose from: the client's open items in scope. */
+async function linkable(ctx: ConversationContext, cfg: AppConfig, k: string): Promise<WorkItem[] | null> {
+  // Without the central store (the developer loop), the open items Week reads.
+  const scoped = ctx.searchItems ? await ctx.searchItems(cfg, k, "").catch(() => null) : null;
+  return scoped ?? (await ctx.openItems(cfg, k).catch(() => null));
+}
+
+/** CV-5: the search Link to item runs: an exact #id, else every title word. */
+function matching(items: readonly WorkItem[], query: string, max = 20): WorkItem[] {
+  const q = query.trim().toLowerCase().replace(/^#/, "");
+  const words = q.split(/\s+/).filter(Boolean);
+  return items.filter((i) => !q || String(i.id) === q || words.every((w) => i.title.toLowerCase().includes(w))).slice(0, max);
+}
+
 /** A client's open items once per list (for Link and "Looks like"); null when DevOps couldn't be read. */
 function itemsOnce(ctx: ConversationContext, cfg: AppConfig) {
   const memo = new Map<string, Promise<WorkItem[] | null>>();
-  return (k: string) => memo.get(k) ?? memo.set(k, ctx.openItems(cfg, k).catch(() => null)).get(k)!;
+  return (k: string) => memo.get(k) ?? memo.set(k, linkable(ctx, cfg, k)).get(k)!;
+}
+
+/** CV-5: the linked items of these rows, once per client, as the store has them now (any state). */
+async function liveItems(ctx: ConversationContext, cfg: AppConfig, rows: readonly { clientKey: string; itemId: number | null }[]): Promise<Map<string, WorkItem>> {
+  const out = new Map<string, WorkItem>();
+  if (!ctx.linkedItems) return out;
+  const by = new Map<string, number[]>();
+  for (const r of rows) if (r.itemId) by.set(r.clientKey, [...(by.get(r.clientKey) ?? []), r.itemId]);
+  for (const [k, ids] of by) for (const i of (await ctx.linkedItems(cfg, k, ids).catch(() => null)) ?? []) out.set(`${k}:${i.id}`, i);
+  return out;
+}
+
+/** CV-5: a link as the card shows it, with its live state when the store has the item. */
+function withLive(item: CardItem | null, hit: WorkItem | undefined): CardItem | null {
+  if (!item || !hit) return item;
+  return { ...item, title: item.title ?? hit.title, url: item.url ?? hit.url, state: hit.state, assignee: hit.assignedTo ?? null, changedAt: hit.changedAt, closed: isClosed(hit.stateCategory) };
+}
+
+/**
+ * CV-5: whether FocusTime created this item from this conversation or promise (a confirmed create, not undone): its
+ * undo is the audit log's (it sets the item to Removed), never Unlink.
+ */
+async function createdHere(ctx: ConversationContext, itemId: number, o: { conversationId: number | null; commitmentId: number | null }): Promise<boolean> {
+  if (!ctx.plan) return false;
+  const log = await ctx.plan.devopsWriteLog(1000).catch(() => []);
+  return log.some((e) => e.op === "create" && e.status === "confirmed" && e.undoneBy === null && e.itemId === itemId && !!e.conv && ((o.conversationId !== null && e.conv.conversationId === o.conversationId) || (o.commitmentId !== null && e.conv.commitmentId === o.commitmentId)));
+}
+
+/**
+ * CV-5's one-time move (D540/D548 superseded): my promises "Kept by #id" whose item is still open become open with that
+ * item linked; the ones whose item closed (or that the store doesn't have) stay kept. Done once per person, when DevOps
+ * could answer for every client involved.
+ */
+const KEPT_MOVED = "cv5_kept_reopened";
+async function reopenKept(ctx: ConversationContext, cfg: AppConfig, v: Seen): Promise<void> {
+  if (!ctx.plan || !ctx.linkedItems || (await ctx.plan.accountState<boolean>(KEPT_MOVED))) return;
+  const kept = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => (k.state === "linked" || k.state === "created") && k.itemId && same(k.whoId, v.me));
+  const by = new Map<string, Commitment[]>();
+  for (const k of kept) by.set(k.clientKey, [...(by.get(k.clientKey) ?? []), k]);
+  let reopened = 0;
+  for (const [clientKey, ks] of by) {
+    const items = await ctx.linkedItems(cfg, clientKey, ks.map((k) => k.itemId!)).catch(() => null);
+    if (!items) return; // DevOps can't say now: try again next time, nothing changed for this client yet
+    for (const k of ks) {
+      const hit = items.find((i) => i.id === k.itemId);
+      if (hit && !isClosed(hit.stateCategory)) {
+        await v.convs.updateCommitment(k.id, { state: "open" });
+        reopened++;
+      }
+    }
+  }
+  await ctx.plan.setAccountState(KEPT_MOVED, true);
+  ctx.log({ source: "plan", op: "promises_kept_reopened", count: reopened });
 }
 const cardItem = (id: number | null, items: readonly WorkItem[] | null, url?: string | null, title?: string | null): CardItem | null => {
   if (!id) return null;
@@ -140,7 +217,7 @@ const cardItem = (id: number | null, items: readonly WorkItem[] | null, url?: st
 };
 
 /** The commitment that makes a conversation wait: open, implies an item, past its escalation time. */
-const waitingOf = (cs: readonly Commitment[]) => cs.find((k) => k.state === "open" && k.impliesItem && !!k.escalatedAt) ?? null;
+const waitingOf = (cs: readonly Commitment[]) => cs.find((k) => k.state === "open" && k.impliesItem && !k.itemId && !!k.escalatedAt) ?? null;
 
 async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: readonly Conversation[]): Promise<ConversationCard[]> {
   const home = await ctx.homeTenant();
@@ -148,6 +225,7 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
   const ids = list.map((c) => c.id);
   const [commitments, suggestions, places] = await Promise.all([v.convs.commitmentsIn(ids), v.convs.suggestionsIn(ids), v.convs.placesIn(ids.filter((id) => !list.find((c) => c.id === id)?.closedAt))]);
   const items = itemsOnce(ctx, cfg);
+  const live = await liveItems(ctx, cfg, list);
   const writeClients = await ctx.writeClients().catch((): string[] => []);
   const name = (k: string) => cfg.clientSettings[k]?.name ?? k;
   const now = ctx.now();
@@ -177,12 +255,16 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
     const closed = c.closedAt && (c.status === "resolved" || c.status === "closed")
       ? { kind: c.status === "resolved" ? ("resolved" as const) : ("not_request" as const), by: same(c.closedBy, v.me) ? "you" : (chat?.members?.find((m) => same(m.userId, c.closedBy))?.displayName ?? "someone at Cooptimize"), at: c.closedAt, reason: c.closeReason }
       : null;
+    // CV-5: Create DevOps item is offered on every conversation without an item (under ⋯ when it isn't the primary),
+    // with or without my write access (the form says how to turn writes on). A linked item that closed asks Mark done.
+    const item = withLive(cardItem(c.itemId, its, c.itemUrl, c.itemTitle), c.itemId ? live.get(`${c.clientKey}:${c.itemId}`) : undefined);
     let primary: Primary | null;
     if (closed) primary = "reopen";
+    else if (item?.closed) primary = "mark_done";
     else if (wait && !same(wait.whoId, v.me)) primary = "take_over";
     else if (openMine?.impliesItem && !c.itemId) primary = "create";
     else if (!c.itemId && c.likelyItem) primary = "link";
-    else if (!c.itemId && canCreate && c.status !== "discussion" && !c.windDown) primary = "create";
+    else if (!c.itemId && !c.windDown) primary = "create";
     else primary = "resolve";
     const fromInternal = chat?.kind === "delivery";
     return {
@@ -192,7 +274,7 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
       // Changed since I last looked (never looked: new to me), not for closed ones I haven't opened.
       updated: (!view && !c.closedAt) || (view && view.seenVersion < c.version) ? (c.changeNote ?? "Updated") : null,
       windDown: c.windDown && !closed,
-      item: cardItem(c.itemId, its, c.itemUrl, c.itemTitle),
+      item,
       likely: c.itemId ? null : cardItem(c.likelyItem, its),
       waiting, unclaimed: !!wait && !wait.takenBy, owner: c.ownerId ? (c.participants.find((p) => same(p.id, c.ownerId))?.name ?? null) : null, mentionsMe,
       commitments: cs.map((k): CardCommitment => ({ id: k.id, whoName: k.whoName, mine: same(k.whoId, v.me), what: k.what, dueAt: k.dueAt, dueDate: k.dueDate, state: k.state, impliesItem: k.impliesItem, item: cardItem(k.itemId, null, k.itemUrl, k.itemTitle) })),
@@ -205,15 +287,17 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
 }
 
 /** Which view a card belongs to for me. */
-async function viewOf(ctx: ConversationContext, me: string, card: ConversationCard, c: Conversation): Promise<"needs" | "teammates" | "closed"> {
+async function viewOf(ctx: ConversationContext, me: string, card: ConversationCard, c: Conversation): Promise<"needs" | "progress" | "teammates" | "closed"> {
   if (card.closed) return "closed";
+  // CV-5: a linked item moves it to In progress (a suggestion for me still needs me).
+  if (card.item && !card.suggestions.some((s) => s.mine)) return "progress";
   if (card.status === "new" || card.mentionsMe || same(c.ownerId, me) || card.commitments.some((k) => k.mine && k.state === "open") || card.suggestions.some((s) => s.mine)) return "needs";
   if (card.unclaimed && (await ctx.isLead(c.clientKey).catch(() => false))) return "needs";
   return "teammates";
 }
 
 async function list(ctx: ConversationContext, cfg: AppConfig, select: number | null = null): Promise<ConversationsData> {
-  const empty: ConversationsData = { needsYou: [], teammates: [], closed: [], hiddenCount: 0, unsorted: { count: 0, reasons: [] }, chatter: [], myPromisesOpen: 0, lastPoll: null, writeClients: [] };
+  const empty: ConversationsData = { needsYou: [], inProgress: [], teammates: [], closed: [], hiddenCount: 0, unsorted: { count: 0, reasons: [] }, chatter: [], myPromisesOpen: 0, lastPoll: null, writeClients: [] };
   const v = await seen(ctx);
   if (!v) return empty;
   const now = Date.parse(ctx.now());
@@ -227,11 +311,13 @@ async function list(ctx: ConversationContext, cfg: AppConfig, select: number | n
       continue;
     }
     const where = await viewOf(ctx, v.me, card, all.find((c) => c.id === card.id)!);
-    (where === "needs" ? out.needsYou : where === "teammates" ? out.teammates : out.closed).push(card);
+    (where === "needs" ? out.needsYou : where === "progress" ? out.inProgress : where === "teammates" ? out.teammates : out.closed).push(card);
   }
   // Needs you: waiting and unclaimed first, then mine, then newest.
   const rank = (c: ConversationCard) => (c.unclaimed ? 0 : c.commitments.some((k) => k.mine && k.state === "open") ? 1 : c.mentionsMe ? 2 : 3);
   out.needsYou.sort((a, b) => rank(a) - rank(b) || Date.parse(b.lastAt) - Date.parse(a.lastAt));
+  // In progress: a closed item (Mark done) first, then the latest.
+  out.inProgress.sort((a, b) => Number(!!b.item?.closed) - Number(!!a.item?.closed) || Date.parse(b.lastAt) - Date.parse(a.lastAt));
   const unsorted = await v.convs.placesByRole(v.chats.map((c) => c.chatId), "unsorted");
   const reasons = new Map<string, number>();
   for (const p of unsorted) {
@@ -257,8 +343,8 @@ async function list(ctx: ConversationContext, cfg: AppConfig, select: number | n
   if (select !== null) {
     let c = await v.convs.conversation(select);
     for (let hops = 0; c?.mergedInto && hops < 5; hops++) c = await v.convs.conversation(c.mergedInto);
-    const listed = c && v.byId.has(c.chatId) ? [...out.needsYou, ...out.teammates, ...out.closed].find((x) => x.id === c!.id) : undefined;
-    out.selected = listed ? { id: listed.id, found: true, where: out.needsYou.includes(listed) ? "needs" : out.teammates.includes(listed) ? "teammates" : "closed" } : { id: select, found: false, where: null };
+    const listed = c && v.byId.has(c.chatId) ? [...out.needsYou, ...out.inProgress, ...out.teammates, ...out.closed].find((x) => x.id === c!.id) : undefined;
+    out.selected = listed ? { id: listed.id, found: true, where: out.needsYou.includes(listed) ? "needs" : out.inProgress.includes(listed) ? "progress" : out.teammates.includes(listed) ? "teammates" : "closed" } : { id: select, found: false, where: null };
   }
   out.lastPoll = v.chats.map((c) => c.polledAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
   return out;
@@ -299,6 +385,7 @@ async function promiseCards(ctx: ConversationContext, v: Seen, cfg: AppConfig): 
   const convs = new Map((await v.convs.conversations(v.chats.map((c) => c.chatId))).filter((c) => convIds.includes(c.id)).map((c) => [c.id, c]));
   const suggestions = (await v.convs.suggestionsIn(convIds)).filter((s) => s.state === "open" && same(s.forUser, v.me));
   const items = itemsOnce(ctx, cfg);
+  const live = await liveItems(ctx, cfg, mine);
   return mapSeq(mine, async (k): Promise<PromiseCard> => {
     const chat = v.byId.get(k.chatId);
     const c = k.conversationId !== null ? convs.get(k.conversationId) : undefined;
@@ -307,7 +394,7 @@ async function promiseCards(ctx: ConversationContext, v: Seen, cfg: AppConfig): 
       const m = await v.teams.message(k.chatId, id);
       if (m && same(m.senderId, v.me)) msgs.push({ at: m.createdAt, text: m.text });
     }
-    const needsItem = k.impliesItem && k.state === "open";
+    const needsItem = k.impliesItem && k.state === "open" && !k.itemId;
     let likely: CardItem | null = null;
     if (needsItem) {
       const its = await items(k.clientKey);
@@ -320,9 +407,9 @@ async function promiseCards(ctx: ConversationContext, v: Seen, cfg: AppConfig): 
     return {
       id: k.id, conversationId: k.conversationId, toRef, conversationTitle: c?.title ?? null, clientKey: k.clientKey, clientName: cfg.clientSettings[k.clientKey]?.name ?? k.clientKey, chatName: chat?.displayName ?? "A chat no longer registered",
       what: k.what, toName: k.toName, dueAt: k.dueAt, dueDate: k.dueDate, overdue: k.state === "open" && (k.dueAt ? Date.parse(k.dueAt) < Date.parse(now) : !!due && due < today), state: k.state, onToday: k.onToday, followUpId: k.followUpId,
-      item: k.itemId ? { id: k.itemId, title: k.itemTitle, url: k.itemUrl } : null, needsItem, draft: k.draft, likely,
+      item: withLive(k.itemId ? { id: k.itemId, title: k.itemTitle, url: k.itemUrl } : null, k.itemId ? live.get(`${k.clientKey}:${k.itemId}`) : undefined), needsItem, draft: k.draft, likely,
       suggestions: suggestions.filter((s) => s.conversationId === k.conversationId).map((s) => ({ id: s.id, kind: s.kind, itemId: s.itemId, body: s.body, internal: s.internal, fromInternalChat: chat?.kind === "delivery", mine: true })),
-      waitingDays: k.state === "open" && k.impliesItem && k.escalatedAt ? daysWaiting(k.escalatedAt, now) : null, reason: k.reason, messages: msgs,
+      waitingDays: k.state === "open" && k.impliesItem && !k.itemId && k.escalatedAt ? daysWaiting(k.escalatedAt, now) : null, reason: k.reason, messages: msgs,
       link: k.messageIds[0] ? messageLink(k.chatId, k.messageIds[0]) : chat ? teamsLink(chat) : "", createdAt: k.createdAt,
     };
   });
@@ -370,7 +457,7 @@ export async function dayPromises(ctx: ConversationContext, cfg: AppConfig): Pro
 
 async function draftFor(ctx: ConversationContext, v: Seen, cfg: AppConfig, c: Conversation, regenerate: boolean, commitment: Commitment | null): Promise<{ draft: ItemDraft; notSorted: string | null }> {
   if (commitment?.draft && !regenerate) return { draft: commitment.draft, notSorted: null };
-  const items = (await ctx.openItems(cfg, c.clientKey).catch(() => null)) ?? [];
+  const items = (await linkable(ctx, cfg, c.clientKey)) ?? [];
   const features = items.filter((i) => i.tier === "feature");
   const chat = v.byId.get(c.chatId);
   const home = await ctx.homeTenant();
@@ -394,8 +481,10 @@ async function draftFor(ctx: ConversationContext, v: Seen, cfg: AppConfig, c: Co
     else notSorted = unsortedText(r.error instanceof AiError ? r.error.kind : "provider", cfg.clientSettings[c.clientKey]?.name ?? c.clientKey);
     if (r.ok && !draft) notSorted = unsortedText("unknown_ref", "");
   } else notSorted = "AI isn't available here";
-  const final = draft ?? draftWithoutAi(c, commitment?.impliesItem && /bug|fix|wrong|gap|error|fail/i.test(`${c.title} ${c.summary}`) ? "bug" : "story");
-  if (commitment) await v.convs.updateCommitment(commitment.id, { draft: final });
+  // CV-5: without AI (off, the client's Allow AI off, or the answer unusable) the form is empty for me to fill in, and
+  // nothing is kept, so the next open drafts again once AI can.
+  const final = draft ?? emptyDraft();
+  if (commitment && draft) await v.convs.updateCommitment(commitment.id, { draft: final });
   return { draft: final, notSorted };
 }
 
@@ -482,6 +571,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
   if (v && ctx.plan && ctx.requests && (action === "conversations.list" || action === "my_promises.list" || action === "my_promises.today")) {
     const meName = v.chats.flatMap((c) => c.members ?? []).find((m) => same(m.userId, v.me))?.displayName ?? "You";
     await backfillPromises({ plan: ctx.plan, teams: ctx.requests.teams, convs: v.store, me: v.me, meName, chats: v.chats }).catch(() => ctx.log({ source: "plan", op: "promises_moved", kind: "failed" }));
+    await reopenKept(ctx, cfg, v).catch(() => ctx.log({ source: "plan", op: "promises_kept_reopened", kind: "failed" }));
   }
   try {
     switch (action) {
@@ -625,25 +715,51 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         await refreshStatus(deps, to);
         if (from !== null && from !== to) await refreshStatus(deps, from);
         ctx.log({ source: "plan", op: "conversation_moved", kind: action === "conversations.this_is_work" ? "work" : o.to === "new" ? "split" : "move" });
-        return respond();
+        // CV-5: the conversation it went to, so chatter's ⋯ › Create DevOps item can open the draft on it.
+        return { ok: true as const, data: { ...(await list(ctx, cfg)), conversationId: to } };
       }
       case "conversations.link": {
         const o = only(input, ["id", "itemId"], ["commitmentId"]);
         const c = o && (await conv(o.id));
         const itemId = o && posInt(o.itemId);
         if (!o || !c || !itemId || !v) return bad("conversations.link takes { id, itemId, commitmentId? }");
-        const items = await ctx.openItems(cfg, c.clientKey);
+        if (c.itemId) return bad(`This conversation is already tracked as #${c.itemId}. Unlink it first`, 409);
+        const items = await linkable(ctx, cfg, c.clientKey);
         if (!items) return bad(`DevOps couldn't be read for ${cfg.clientSettings[c.clientKey]?.name ?? c.clientKey}. Try again in a moment`, 503);
         const hit = items.find((i) => i.id === itemId);
-        if (!hit) return bad("That isn't one of this client's open items", 404);
+        if (!hit) return bad("That isn't one of this client's open items in scope", 404);
         await v.convs.updateConversation(c.id, { item: { id: hit.id, url: hit.url, title: hit.title }, changeNote: `Linked to #${hit.id}` }, { bump: true });
-        // The commitment it fulfils: the one given, else my open one that implies an item.
+        // The commitment it fulfils: the one given, else my open one that implies an item. CV-5: it stays open with the item.
         const ks = await v.convs.commitmentsIn([c.id]);
         const k = ks.find((x) => x.id === posInt(o.commitmentId)) ?? ks.find((x) => x.state === "open" && x.impliesItem && same(x.whoId, v.me)) ?? ks.find((x) => x.state === "open" && x.impliesItem);
-        if (k) await v.convs.updateCommitment(k.id, { state: "linked", itemId: hit.id, itemUrl: hit.url, itemTitle: hit.title });
+        if (k && !k.itemId) await v.convs.updateCommitment(k.id, { itemId: hit.id, itemUrl: hit.url, itemTitle: hit.title });
         await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
         ctx.log({ source: "plan", op: "conversation_linked" });
         return respond();
+      }
+      case "conversations.unlink": {
+        // CV-5: Undo of Link to item (FocusTime only; nothing in DevOps changes). A create's undo is the audit log's.
+        const o = only(input, ["id"]);
+        const c = o && (await conv(o.id));
+        if (!o || !c || !v) return bad("No such conversation", 404);
+        if (!c.itemId) return respond();
+        const id = c.itemId;
+        if (await createdHere(ctx, id, { conversationId: c.id, commitmentId: null })) return bad(`#${id} was created in DevOps from this conversation. Undo it from Settings > Data > Audit log`, 409, "created");
+        await v.convs.updateConversation(c.id, { item: null, changeNote: `Unlinked from #${id}` }, { bump: true });
+        for (const k of await v.convs.commitmentsIn([c.id])) if (k.itemId === id && (k.state === "open" || k.state === "linked")) await v.convs.updateCommitment(k.id, { state: "open", itemId: null, itemUrl: null, itemTitle: null });
+        await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
+        ctx.log({ source: "plan", op: "conversation_unlinked" });
+        return respond();
+      }
+      case "conversations.search_items": {
+        // CV-5: Link to item's search, for a conversation (anyone on its chat) or my promise: that client's open items in scope.
+        const o = only(input, [], ["id", "promiseId", "query"]);
+        if (!o || (o.query !== undefined && (typeof o.query !== "string" || o.query.length > 200)) || (o.id === undefined) === (o.promiseId === undefined)) return bad("conversations.search_items takes { id or promiseId, query? }");
+        const clientKey = o.id !== undefined ? (await conv(o.id))?.clientKey : (await mine(o.promiseId))?.clientKey;
+        if (!clientKey) return bad("No such conversation", 404);
+        const items = await linkable(ctx, cfg, clientKey);
+        if (!items) return { ok: true, data: { available: false, items: [] } };
+        return { ok: true, data: { available: true, items: matching(items, String(o.query ?? "")).map((i) => ({ id: i.id, title: i.title, type: i.type, state: i.state, url: i.url, tier: i.tier ?? null })) } };
       }
       case "conversations.take_over": {
         const o = only(input, ["commitmentId"]);
@@ -682,11 +798,9 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const o = only(input, ["id"], ["query"]);
         const c = o && (await conv(o.id));
         if (!o || !c || (o.query !== undefined && (typeof o.query !== "string" || o.query.length > 200))) return bad("conversations.search takes { id, query? }");
-        const items = await ctx.openItems(cfg, c.clientKey);
+        const items = await linkable(ctx, cfg, c.clientKey);
         if (!items) return { ok: true, data: { available: false, items: [] } };
-        const q = String(o.query ?? "").trim().toLowerCase().replace(/^#/, "");
-        const words = q.split(/\s+/).filter(Boolean);
-        const hits = items.filter((i) => !q || String(i.id) === q || words.every((w) => i.title.toLowerCase().includes(w))).slice(0, 20);
+        const hits = matching(items, String(o.query ?? ""));
         return { ok: true, data: { available: true, items: hits.map((i) => ({ id: i.id, title: i.title, type: i.type, state: i.state, url: i.url, tier: i.tier ?? null })) } };
       }
       case "conversations.draft": {
@@ -697,8 +811,9 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const k = o.commitmentId !== undefined ? await mine(o.commitmentId) : null;
         if (o.commitmentId !== undefined && !k) return bad("No such commitment", 404);
         const r = await draftFor(ctx, v, cfg, c, o.regenerate === true, k);
-        const items = (await ctx.openItems(cfg, c.clientKey).catch(() => null)) ?? [];
-        const feats = items.filter((i) => i.tier === "feature");
+        const items = (await linkable(ctx, cfg, c.clientKey)) ?? [];
+        // CV-5: parents are the client's open features and epics in scope (WT-1 says which types go under each).
+        const feats = items.filter((i) => i.tier === "feature" || i.tier === "epic");
         const features = feats.map((i) => ({ id: i.id, title: i.title, type: i.type }));
         // WT-1: only the valid child types under each parent, the most common first (and with no parent, the level's).
         const model = ctx.processModel ? await ctx.processModel(cfg, c.clientKey).catch(() => null) : null;
@@ -795,7 +910,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const o = only(input, ["id"], ["query"]);
         const k = o && (await mine(o.id));
         if (!o || !k || (o.query !== undefined && (typeof o.query !== "string" || o.query.length > 200))) return bad("my_promises.search takes { id, query? }");
-        const items = await ctx.openItems(cfg, k.clientKey);
+        const items = await linkable(ctx, cfg, k.clientKey);
         if (!items) return { ok: true, data: { available: false, items: [] } };
         const own = (await mapSeq(k.messageIds, (id) => v.teams.message(k.chatId, id))).filter((m): m is NonNullable<typeof m> => !!m).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
         const c = k.conversationId !== null ? await v.convs.conversation(k.conversationId) : null;
@@ -820,16 +935,37 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const k = o && (await mine(o.id));
         const itemId = o && posInt(o.itemId);
         if (!o || !k || !itemId) return bad("my_promises.link takes { id, itemId }");
-        const items = await ctx.openItems(cfg, k.clientKey);
+        if (k.state !== "open") return bad("This promise is already handled", 409);
+        if (k.itemId) return bad(`This promise is already linked to #${k.itemId}. Unlink it first`, 409);
+        const items = await linkable(ctx, cfg, k.clientKey);
         if (!items) return bad(`DevOps couldn't be read for ${cfg.clientSettings[k.clientKey]?.name ?? k.clientKey}. Try again in a moment`, 503);
         const hit = items.find((i) => i.id === itemId);
-        if (!hit) return bad("That isn't one of this client's open items", 404);
-        await v.convs.updateCommitment(k.id, { state: "linked", itemId: hit.id, itemUrl: hit.url, itemTitle: hit.title });
-        if (k.conversationId !== null) {
-          await v.convs.updateConversation(k.conversationId, { item: { id: hit.id, url: hit.url, title: hit.title }, changeNote: `Linked to #${hit.id}` }, { bump: true });
-          await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, k.conversationId);
+        if (!hit) return bad("That isn't one of this client's open items in scope", 404);
+        // CV-5: linking keeps the promise open and actionable (due, who, follow-up, done); it only records the item.
+        await v.convs.updateCommitment(k.id, { itemId: hit.id, itemUrl: hit.url, itemTitle: hit.title });
+        const c = k.conversationId !== null ? await v.convs.conversation(k.conversationId) : null;
+        if (c && !c.itemId) {
+          await v.convs.updateConversation(c.id, { item: { id: hit.id, url: hit.url, title: hit.title }, changeNote: `Linked to #${hit.id}` }, { bump: true });
+          await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
         }
-        ctx.log({ source: "plan", op: "promise_resolved", kind: "linked" });
+        ctx.log({ source: "plan", op: "promise_linked" });
+        return promisesNow();
+      }
+      case "my_promises.unlink": {
+        // CV-5: Undo of Link to item on my promise (FocusTime only), and of its conversation's link when it came with it.
+        const o = only(input, ["id"]);
+        const k = o && (await mine(o.id));
+        if (!o || !k) return bad("my_promises.unlink takes { id }");
+        if (!k.itemId) return promisesNow();
+        const id = k.itemId;
+        if (k.state === "created" || (await createdHere(ctx, id, { conversationId: null, commitmentId: k.id }))) return bad(`#${id} was created in DevOps from this promise. Undo it from Settings > Data > Audit log`, 409, "created");
+        await v.convs.updateCommitment(k.id, { state: k.state === "linked" ? "open" : k.state, itemId: null, itemUrl: null, itemTitle: null });
+        const c = k.conversationId !== null ? await v.convs.conversation(k.conversationId) : null;
+        if (c?.itemId === id && !(await createdHere(ctx, id, { conversationId: c.id, commitmentId: null }))) {
+          await v.convs.updateConversation(c.id, { item: null, changeNote: `Unlinked from #${id}` }, { bump: true });
+          await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, c.id);
+        }
+        ctx.log({ source: "plan", op: "promise_unlinked" });
         return promisesNow();
       }
       case "my_promises.done":

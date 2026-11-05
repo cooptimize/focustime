@@ -4166,6 +4166,11 @@ button.ask-label { cursor: pointer; }
 .conv-avatar.external { border-color: var(--watch); }
 .conv-summary { margin: 0; font-size: var(--fs-3); overflow-wrap: anywhere; display: grid; gap: 1px; }
 .conv-item, .conv-wind { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--fs-2); }
+/* CV-5: a linked item's live state; when it closed in DevOps, "Item closed" in the muted amber (never red). */
+.conv-item { gap: 2px 6px; }
+.conv-item a { overflow-wrap: anywhere; }
+.conv-item-closed { color: color-mix(in oklab, var(--watch) 82%, var(--text-muted)); font-weight: 600; }
+.conv-turn-on { margin: 0; padding: 6px 8px; border-radius: 6px; border: 1px dashed var(--border); font-size: var(--fs-2); }
 .conv-wind { color: var(--text-muted); }
 .conv-suggest { display: grid; gap: 6px; padding: 8px 10px; border: 1px dashed var(--border-strong); border-radius: 8px; background: var(--surface); }
 .conv-suggest-head { margin: 0; font-size: var(--fs-3); font-weight: 600; }
@@ -4764,6 +4769,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 /* CV-4: images from the chat to attach to a new DevOps item: thumbnails with a checkbox each. */
 .dw-attach { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 8px 0; min-inline-size: 0; }
 .dw-attach legend { padding: 0 4px; font-weight: 500; }
+.dw-attach-all { display: inline-flex; align-items: center; gap: 6px; }
 .dw-attach ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .dw-attach li { inline-size: 132px; }
 .dw-attach label { display: grid; grid-template-columns: auto 1fr; gap: 4px 6px; align-items: start; cursor: pointer; }

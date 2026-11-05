@@ -96,7 +96,7 @@ export function dateFieldsOf(ops: unknown, targetField: string | null): Record<s
 }
 export const dateValue = (date: string, timeZone: string) => Temporal.PlainDate.from(date).toZonedDateTime({ timeZone }).toInstant().toString();
 
-export type CreateSpec = { org: string; title: string; description?: string | null; acceptance?: string | null; acField: boolean; assignedTo: string;
+export type CreateSpec = { org: string; title: string; description?: string | null; acceptance?: string | null; acField: boolean; /** CV-5: null leaves it unassigned (a create from a conversation may). */ assignedTo: string | null;
   /** Area, iteration and parent: from the parent for a draft; AP-1's create from an ask has none (the project's defaults). */
   areaPath: string | null; iterationPath: string | null; parentId: number | null;
   /** AP-1: where the description goes (a Bug's Repro Steps where the type has them); System.Description by default. */
@@ -114,7 +114,7 @@ export function createOps(s: CreateSpec): PatchOp[] {
     ...(s.acceptance && s.acField ? [{ op: "add" as const, path: `/fields/${AC_FIELD}`, value: textToHtml(s.acceptance) }] : []),
     ...(s.startDate ? [{ op: "add" as const, path: `/fields/${s.startDate.field}`, value: dateValue(s.startDate.date, s.timeZone ?? NEUTRAL_ZONE) }] : []),
     ...(s.targetDate ? [{ op: "add" as const, path: `/fields/${s.targetDate.field}`, value: dateValue(s.targetDate.date, s.timeZone ?? NEUTRAL_ZONE) }] : []),
-    { op: "add", path: "/fields/System.AssignedTo", value: s.assignedTo },
+    ...(s.assignedTo ? [{ op: "add" as const, path: "/fields/System.AssignedTo", value: s.assignedTo }] : []),
     ...(s.areaPath ? [{ op: "add" as const, path: "/fields/System.AreaPath", value: s.areaPath }] : []),
     ...(s.iterationPath ? [{ op: "add" as const, path: "/fields/System.IterationPath", value: s.iterationPath }] : []),
     ...(s.parentId !== null ? [{ op: "add" as const, path: "/relations/-", value: { rel: PARENT_REL, url: itemApiUrl(s.org, s.parentId) } }] : []),

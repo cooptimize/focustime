@@ -16,6 +16,7 @@ export const DRAFT_INSTRUCTIONS = [
   "title: at most 80 characters, a DevOps title. asked: one or two sentences, what is being asked. check_first: up to 4 short steps to check first. likely_change: one or two sentences, the change that probably fixes it. open_questions: up to 4 short questions still open.",
   "level: bug (something is wrong), story (a change or new work), or feature (a larger piece with several stories).",
   "parent_feature: the open feature this belongs under, when one clearly fits; else null. likely_item: an open item that is clearly already this work, else null.",
+  "acceptance_criteria: up to 5 short, testable statements of done for a story or a feature, from what was asked; an empty list when the conversation doesn't say.",
 ].join("\n");
 
 export const DRAFT_SCHEMA: JsonSchema = {
@@ -29,11 +30,12 @@ export const DRAFT_SCHEMA: JsonSchema = {
     level: { type: "string", enum: ["bug", "story", "feature"] },
     parent_feature: { type: ["integer", "null"] },
     likely_item: { type: ["integer", "null"] },
+    acceptance_criteria: { type: "array", items: { type: "string" } },
   },
-  required: ["title", "asked", "check_first", "likely_change", "open_questions", "level", "parent_feature", "likely_item"],
+  required: ["title", "asked", "check_first", "likely_change", "open_questions", "level", "parent_feature", "likely_item", "acceptance_criteria"],
   additionalProperties: false,
 };
-export type DraftAnswer = { title: string; asked: string; check_first: string[]; likely_change: string; open_questions: string[]; level: "bug" | "story" | "feature"; parent_feature: number | null; likely_item: number | null };
+export type DraftAnswer = { title: string; asked: string; check_first: string[]; likely_change: string; open_questions: string[]; level: "bug" | "story" | "feature"; parent_feature: number | null; likely_item: number | null; acceptance_criteria: string[] };
 
 export type DraftMessage = { ref: string; from: string; side: "client" | "Cooptimize"; at: string; text: string };
 
@@ -54,13 +56,17 @@ export function draftFrom(a: DraftAnswer, o: { featureIds: readonly number[]; it
   const title = oneLine(a.title, 80);
   if (!title) return null;
   const list = (xs: readonly string[]) => xs.map((x) => oneLine(x, 200)).filter(Boolean).slice(0, 4);
-  return { title, asked: oneLine(a.asked, 400), checkFirst: list(a.check_first), likelyChange: oneLine(a.likely_change, 400), openQuestions: list(a.open_questions), level: a.level, parentId: a.parent_feature, likelyItem: a.likely_item, byAi: true };
+  const acceptance = (a.acceptance_criteria ?? []).map((x) => oneLine(x, 200)).filter(Boolean).slice(0, 5);
+  return { title, asked: oneLine(a.asked, 400), checkFirst: list(a.check_first), likelyChange: oneLine(a.likely_change, 400), openQuestions: list(a.open_questions), level: a.level, parentId: a.parent_feature, likelyItem: a.likely_item, acceptance, byAi: true };
 }
 
-/** Without AI: the conversation's title and summary as the draft. */
-export function draftWithoutAi(c: { title: string; summary: string }, level: ItemDraft["level"] = "story"): ItemDraft {
-  return { title: oneLine(c.title, 80) || "From a Teams conversation", asked: c.summary.split("\n")[0] ?? "", checkFirst: [], likelyChange: "", openQuestions: [], level, parentId: null, likelyItem: null, byAi: false };
+/** CV-5: without AI (off, the client's Allow AI off, or no usable answer): an empty form for me to fill in. */
+export function emptyDraft(level: ItemDraft["level"] = "story"): ItemDraft {
+  return { title: "", asked: "", checkFirst: [], likelyChange: "", openQuestions: [], level, parentId: null, likelyItem: null, acceptance: [], byAi: false };
 }
+
+/** CV-5: the acceptance criteria as the form edits them, one per line. */
+export const acceptanceText = (d: Pick<ItemDraft, "acceptance">) => (d.acceptance ?? []).map((x) => `- ${x}`).join("\n");
 
 /** The path of action as plain text (what the person edits in the preview). */
 export function pathOfAction(d: ItemDraft): string {

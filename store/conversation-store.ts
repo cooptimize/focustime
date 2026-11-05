@@ -357,9 +357,9 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
       const [list, params] = inList(chatIds);
       return (await db.all(`SELECT * FROM commitments WHERE LOWER(who_id) = ? AND chat_id IN (${list}) ORDER BY created_at DESC, id DESC`, [whoId.toLowerCase(), ...params])).map(toCommitment);
     },
-    /** Open commitments that imply an item (the escalation job). */
+    /** Open commitments that imply an item and have none linked yet (the escalation job; CV-5: a linked one stays open). */
     async openItemCommitments(): Promise<Commitment[]> {
-      return (await db.all("SELECT * FROM commitments WHERE state = 'open' AND implies_item = 1 ORDER BY created_at, id")).map(toCommitment);
+      return (await db.all("SELECT * FROM commitments WHERE state = 'open' AND implies_item = 1 AND item_id IS NULL ORDER BY created_at, id")).map(toCommitment);
     },
     async fromPromise(key: string): Promise<Commitment | null> {
       const r = await db.get("SELECT * FROM commitments WHERE from_promise = ?", [key]);
