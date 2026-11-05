@@ -12,7 +12,7 @@ import { createUserSecrets } from "./user-secrets.ts";
 import { DEMO_TZ } from "../sources/demo/data.ts";
 
 /** Tables that are the app's, not one person's (each keyed by its own id or holding user_id itself). */
-const APP_TABLES = ["schema_migrations", "schema_version", "schema_migration_names", "scheduler_state", "app_keys", "ai_app_spend", "users", "sessions", "auth_requests", "deletions", "client_chats", "teams_messages", "requests", "client_chat_changes", "conversations", "conversation_messages", "commitments", "conversation_suggestions", "chat_ai_days", "app_ai_requests", "devops_takes"];
+const APP_TABLES = ["schema_migrations", "schema_version", "schema_migration_names", "scheduler_state", "app_keys", "ai_app_spend", "users", "sessions", "auth_requests", "deletions", "client_chats", "teams_messages", "requests", "client_chat_changes", "conversations", "conversation_messages", "commitments", "conversation_suggestions", "chat_ai_days", "app_ai_requests", "org_settings", "admin_audit", "people_directory", "client_leads", "people_clients", "people_overrides", "admin_seen", "devops_takes"];
 
 const NOW = "2026-11-02T14:30:00Z";
 const zoned = () => Temporal.Instant.from(NOW).toZonedDateTimeISO(DEMO_TZ);

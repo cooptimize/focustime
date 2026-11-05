@@ -166,13 +166,18 @@ export const overText = (plannedMinutes: number, freeMinutes: number) => {
  * A client's week in words (Plan the week's line and header, Plan ahead): "7h free" and "9h planned", with the amber
  * "about 2h over" when its musts need more than its free time. Never red.
  */
-export function budgetWords(freeMin: number, plannedMin: number): { kind: "none" | "all" | "free" | "over"; free: string; planned: string | null; over: string | null; text: string } {
+export function budgetWords(freeMin: number, plannedMin: number, planShare = 100): { kind: "none" | "all" | "free" | "over"; free: string; planned: string | null; over: string | null; text: string } {
+  // ADM-1: "Plan up to N% of free time" (a person's guidance) moves only where the amber over line falls; it never
+  // blocks. Named plan share so a later per-client "Keep open" share can join it (free × share × (1 − keep open)).
+  const share = Math.min(100, Math.max(50, Math.round(planShare)));
+  const line = share < 100 ? Math.round((freeMin * share) / 100) : freeMin;
   const free = freeMin > 0 ? `${hoursText(freeMin)} free` : "No focus time this week";
+  const upTo = share < 100 && freeMin > 0 ? `plan up to ${hoursText(line)}` : null;
   const planned = plannedMin > 0 ? `${hoursText(plannedMin)} planned` : null;
-  const text = [free, planned].filter(Boolean).join(" · ");
-  if (isOver(plannedMin, freeMin)) return { kind: "over", free, planned, over: overText(plannedMin, freeMin), text };
+  const text = [free, upTo, planned].filter(Boolean).join(" · ");
+  if (isOver(plannedMin, line)) return { kind: "over", free, planned, over: overText(plannedMin, line), text };
   if (!plannedMin) return { kind: "none", free, planned, over: null, text };
-  return { kind: freeMin - plannedMin < 30 ? "all" : "free", free, planned, over: null, text };
+  return { kind: line - plannedMin < 30 ? "all" : "free", free, planned, over: null, text };
 }
 
 /**

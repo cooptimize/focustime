@@ -32,7 +32,7 @@ import { readAppSettings, redirectUris } from "./appconfig.ts";
 import { createEntraSignIn, type SignedIn } from "./auth/entra.ts";
 import { createAccountStore } from "../store/accounts.ts";
 import { createUserSettings, type AppKeys, type UserSettings } from "../store/user-settings.ts";
-import { exportUser, hardDeleteDue, HARD_DELETE_AFTER_DAYS, recordSoftDelete } from "../store/user-data.ts";
+import { exportUser, hardDeleteDue, hardDeleteUser, HARD_DELETE_AFTER_DAYS, recordSoftDelete } from "../store/user-data.ts";
 import { starterToml } from "../config/starter.ts";
 import { mailboxZone } from "./auth/mailbox.ts";
 import { createPeople } from "./people.ts";
@@ -54,6 +54,7 @@ import type { CalendarSource } from "../sources/calendar/source.ts";
 import { createDataverseSource, type DataverseSource } from "../sources/dataverse/source.ts";
 import { createGoogleSource } from "../sources/google/source.ts";
 import { createOutlookSource } from "../sources/graph/source.ts";
+import type { ProcessOverrides } from "../plan/process.ts";
 import { createDevOpsSource, type DevOpsSource } from "../sources/devops/source.ts";
 import type { Keyring } from "../sources/oauth/oauth.ts";
 import { planStoreOn, type PlanStore } from "../store/plan-store.ts";
@@ -76,6 +77,13 @@ import { upkeep as upkeepConversations } from "../actions/conversation-upkeep.ts
 import { backfillRequests } from "../actions/conversation-backfill.ts";
 import { weekConfig } from "../config/defaults.ts";
 import type { RequestsPort } from "../actions/request-actions.ts";
+import { createAdminCheck } from "../actions/admin.ts";
+import { createOrgRuntime } from "../actions/org.ts";
+import { createAdminOps } from "./admin-ops.ts";
+import { createAdminStore } from "../store/admin-store.ts";
+import { inGroup } from "../sources/graph/groups.ts";
+import { orgBootstrap, type BootstrapPerson } from "./org-bootstrap.ts";
+import type { FeedbackService } from "../actions/feedback-actions.ts";
 
 const args = process.argv.slice(2);
 const dev = args.includes("--dev");
@@ -134,7 +142,7 @@ const cfgPath = host.facts().configPath ?? "in memory";
  * A2: what the server keeps in memory for a signed-in person: their settings and what it uses from them (zone, DevOps
  * choices), their encrypted secrets and their own snapshot cache.
  */
-type Person = { userId: string; upn: string | null; zone: string; pickableTypes: string[]; backgroundTypes: string[]; openStates: Record<string, string[]>; settings: UserSettings; secrets: UserSecrets; snapshots: SnapshotStore };
+type Person = { userId: string; upn: string | null; zone: string; /** ADM-1: each client's process Rules (WT-1's overrides). */ process: Record<string, ProcessOverrides>; openStates: Record<string, string[]>; settings: UserSettings; secrets: UserSecrets; snapshots: SnapshotStore };
 
 // One Dataverse source per person and config, so the in-memory token and results survive between requests.
 const sources = new Map<string, DataverseSource>();
@@ -265,7 +273,7 @@ const devopsFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
   let s = devopsSources.get(key);
   if (!s) {
     const dv = dataverseFor(who)(cfg, timeZone);
-    s = createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), processOverrides: () => ({ noBreakdown: who.pickableTypes, background: who.backgroundTypes }), openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who) });
+    s = createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), processOverrides: (k) => who.process[k] ?? {}, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who) });
     devopsSources.set(key, s);
   }
   return s;
@@ -434,7 +442,23 @@ const secretsFor = (userId: string): UserSecrets => createUserSecrets({ db, user
 /** P1: a person's Web Push: their devices and the app's VAPID key; the subject is the app's public URL. */
 const pushFor = (userId: string) => createPush({ devices: createPushDevices({ db, userId, keys: host.keys, now: instantNow }), vapid: vapidSource, subject: app.publicUrl, fetch, now: () => Date.now(), log });
 
+// ADM-1: the team's settings, people's levels and client leads, and admin audit (app tables), and who is an admin.
+const adminStore = createAdminStore(db, instantNow);
+const org = createOrgRuntime({ store: adminStore, bootstrap: { model: app.ai.model, appCapUsd: app.ai.appCapUsd, inviteDomains: app.inviteDomains, feedback: app.feedback } });
+/** Graph's answer for an admin check, with the person's own token (User.Read; never kept, never logged). */
+const groupAnswer = async (userId: string): Promise<boolean | null> => {
+  if (!app.adminGroupId) return false;
+  const ctx = await runtimeFor(userId);
+  const loaded = await ctx.loadConfig();
+  const rt = runtimes.get(userId);
+  if (!loaded.parsed.ok || !loaded.parsed.config.outlook || !rt) return null;
+  const src = outlookFor(rt.who)(loaded.parsed.config.outlook, userZone(loaded.parsed.config));
+  return inGroup({ fetch, token: () => src.auth.accessToken("read"), log }, app.adminGroupId);
+};
+const adminCheck = createAdminCheck({ groupId: app.adminGroupId, breakGlass: app.admins, graph: groupAnswer, now: Date.now, seen: (id, admin, via) => adminStore.seen(id, admin, via) });
+
 const people = createPeople({
+  newPerson: async () => (await org.rules()).organization.newPerson,
   db,
   accounts,
   settingsFor,
@@ -492,14 +516,33 @@ const build = buildInfo(process.env, () => {
 // F1: Send feedback, one service for this FocusTime. Locally: preview only, nothing checked or sent. Hosted: the app's
 // managed identity (a bearer token for Azure DevOps; never logged or returned) creates the story under the parent
 // feature, when this environment's live switch is on; otherwise preview only. The setup check runs at start.
-const feedbackService = (() => {
-  const f = app.feedback;
+// ADM-1: the destination and live switch are a Rule (Admin › Organization; the app config's values bootstrap it), so
+// the service is rebuilt when an admin changes them.
+type FeedbackTarget = { org: string; project: string; parentId: number; live: boolean } | null;
+const feedbackCredential = host.kind === "local" ? null : new DefaultAzureCredential(process.env.AZURE_CLIENT_ID ? { managedIdentityClientId: process.env.AZURE_CLIENT_ID } : {});
+const makeFeedback = (f: FeedbackTarget): FeedbackService => {
   const local = host.kind === "local";
-  if (local || !f) return createFeedbackService({ devops: null, mode: "preview_only", env: build.env, local, now: Date.now, log });
-  const credential = new DefaultAzureCredential(process.env.AZURE_CLIENT_ID ? { managedIdentityClientId: process.env.AZURE_CLIENT_ID } : {});
+  if (local || !f || !feedbackCredential) return createFeedbackService({ devops: null, mode: "preview_only", env: build.env, local, now: Date.now, log });
+  const credential = feedbackCredential;
   const devops = createFeedbackDevOps({ fetch, log, token: async () => (await credential.getToken(DEVOPS_SCOPE)).token, target: { org: f.org, project: f.project, parentId: f.parentId } });
   return createFeedbackService({ devops, mode: f.live ? "live" : "preview_only", env: build.env, local: false, now: Date.now, log });
-})();
+};
+let feedbackHeld: { key: string; service: FeedbackService } = { key: JSON.stringify(app.feedback ?? null), service: makeFeedback(app.feedback ?? null) };
+const currentFeedback = async (): Promise<FeedbackService> => {
+  const f = (await org.rules().catch(() => null))?.organization.feedback ?? app.feedback ?? null;
+  const key = JSON.stringify(f);
+  if (key !== feedbackHeld.key) feedbackHeld = { key, service: makeFeedback(f) };
+  return feedbackHeld.service;
+};
+const feedbackService: FeedbackService = {
+  get mode() {
+    return feedbackHeld.service.mode;
+  },
+  env: build.env,
+  demo: false,
+  check: async (force) => (await currentFeedback()).check(force),
+  send: async (p) => (await currentFeedback()).send(p),
+};
 void feedbackService.check().catch(() => undefined);
 
 const server = createApp({
@@ -512,6 +555,7 @@ const server = createApp({
     signedIn: async (u, tokens) => {
       const r = await people.signedIn(u, tokens);
       if ("refused" in r) return r;
+      await adminCheck.signedIn(r.userId, u.groups ?? { kind: "none" }).catch(() => undefined);
       await keepSignIn(r.userId, u, tokens.refreshToken, r.owner);
       return r;
     },
@@ -576,15 +620,19 @@ function runtimeFor(userId: string): Promise<ActionContext> {
 async function buildRuntime(userId: string): Promise<ActionContext> {
   const settings = settingsFor(userId);
   const user = await accounts.users.get(userId);
-  if (!(await settings.has())) await settings.seed(starterToml(user?.timeZone ?? host.clock.zone()));
-  const who: Person = { userId, upn: user?.upn ?? null, zone: user?.timeZone ?? host.clock.zone(), pickableTypes: [], backgroundTypes: [], openStates: {}, settings, secrets: secretsFor(userId), snapshots: host.snapshotsFor(userId) };
+  if (!(await settings.has())) await settings.seed(starterToml(user?.timeZone ?? host.clock.zone(), (await org.rules().catch(() => null))?.organization.newPerson));
+  const who: Person = { userId, upn: user?.upn ?? null, zone: user?.timeZone ?? host.clock.zone(), process: {}, openStates: {}, settings, secrets: secretsFor(userId), snapshots: host.snapshotsFor(userId) };
   /** Their settings, with what the server keeps from them refreshed. */
   const loadConfig = async () => {
     const r = await settings.load();
+    // ADM-1: the team's Rules, Defaults and Defaults by level over the person's own settings.
+    if (r.parsed.ok) {
+      const applied = await org.apply(r.parsed.config, userId).catch(() => null);
+      if (applied) r.parsed = { ...r.parsed, config: applied };
+    }
     if (r.parsed.ok) {
       who.zone = userZone(r.parsed.config);
-      who.pickableTypes = r.parsed.config.plan.pickablePortfolioTypes;
-      who.backgroundTypes = r.parsed.config.plan.backgroundTypes;
+      who.process = Object.fromEntries(Object.entries(r.parsed.config.org?.clients ?? {}).map(([k, c]) => [k, { noBreakdown: c.noBreakdown, background: c.background }]));
       who.openStates = Object.fromEntries(Object.entries(r.parsed.config.clientSettings).map(([k, v]) => [k, v.openStates]));
     }
     return r;
@@ -619,7 +667,8 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     now: () => instantNow().toString(),
     plan,
     requests: requestsPort,
-    admins: app.admins,
+    org,
+    adminOps,
     links: host.links,
     media,
     // A2: no `secrets`: the app's client secrets (Dataverse, Google, Entra) are set up outside FocusTime
@@ -725,6 +774,63 @@ function reopenWindow(): Promise<boolean> {
 
 
 
+// ADM-1: the admin console's view of this FocusTime (server/admin-ops.ts): names, dates, counts and yes or no only.
+/** A person's store for a short admin or bootstrap read (not their runtime's; that one follows their settings' zone). */
+const storeOf = (userId: string, zone: string | null): PlanStore => plans.get(userId) ?? planStoreOn(db, { userId, now: () => zonedNow(zone ?? host.clock.zone()) });
+const directorySource = app.dataverse
+  ? createDataverseSource({ config: { ...app.dataverse, myEmail: "", mySystemUserId: null }, timeZone: host.clock.zone(), getSecret: () => host.secrets.get("dataverse-client-secret"), fetch, snapshots: host.snapshotsFor("focustime-app"), log })
+  : null;
+const adminOps = createAdminOps({
+  check: adminCheck,
+  org,
+  groupId: app.adminGroupId,
+  breakGlass: app.admins,
+  tenantId: app.entra?.tenantId ?? null,
+  users: () => accounts.users.all(),
+  personStore: storeOf,
+  hasSecret: (id, account) => secretsFor(id).has(account),
+  dataverseMatched: async (id) => {
+    const p = (await settingsFor(id).load()).parsed;
+    return p.ok && !!p.config.dataverse?.mySystemUserId;
+  },
+  chats: () => teams.chats(),
+  conversationCounts: (day) => conversations.counts(day),
+  ai: async () => ({ provider: aiProviderKind, keyConfigured: aiProviderKind === "stub" ? true : !!(await aiKey()) }),
+  appSpentMicros: () => aiRuntime.appSpend.get(new Date().toISOString().slice(0, 7)),
+  feedback: () => feedbackService.check(),
+  build,
+  directory: directorySource ? () => directorySource.directory() : null,
+  removePerson: async (id) => {
+    await deleteData(id);
+    await hardDeleteUser(db, id, instantNow());
+  },
+  log,
+});
+const refreshPeople = () => adminOps.refreshPeople();
+
+// ADM-1: the one-time move of team settings out of people's own settings, at the first start of this build.
+void orgBootstrap({
+  store: adminStore,
+  log,
+  people: async () => {
+    const out: BootstrapPerson[] = [];
+    for (const u of await accounts.users.all()) {
+      if (u.deletedAt) continue;
+      const settings = settingsFor(u.id);
+      const loaded = await settings.load().catch(() => null);
+      const plan = storeOf(u.id, u.timeZone);
+      out.push({
+        id: u.id,
+        name: u.displayName || u.upn,
+        config: loaded?.parsed.ok ? loaded.parsed.config : null,
+        houseStyles: await plan.houseStyles().catch(() => []),
+        write: async (edit) => !!(await settings.write(edit).then(() => true, () => false)),
+      });
+    }
+    return out;
+  },
+}).then((r) => r.ran && org.invalidate(), () => log({ source: "plan", op: "org_bootstrap", kind: "failed" }));
+
 // Everyone who has signed in before gets their background work back (a timer that was running ends on time), all of it
 // run by one scheduler (server/scheduler.ts) that reads what is due from each person's rows. A3, the idle rule: the
 // passes run while someone has used FocusTime in the last 15 minutes; otherwise the scheduler sleeps until the stored
@@ -735,17 +841,39 @@ let everyone = false;
 // prod; dev (and the developer loop) read them only on Refresh, unless FOCUSTIME_REQUESTS_POLL says otherwise.
 const pollInBackground = (process.env.FOCUSTIME_REQUESTS_POLL?.trim().toLowerCase() || (build.env === "prod" ? "on" : "off")) === "on";
 log({ source: "plan", op: "requests_poll_mode", kind: pollInBackground ? "background" : "on_demand" });
+// ADM-1: people's levels and client leads from Dataverse, once a day (the stored refresh time says when it's due).
+const PEOPLE_EVERY_MS = 24 * 3600_000;
+/** After a failed or impossible read, the next try is an hour on (in memory), so the scheduler can still sleep. */
+let peopleRetryAt: Temporal.Instant | null = null;
+const peopleDue = async (): Promise<Temporal.Instant> => {
+  const at = await adminStore.directoryRefreshedAt();
+  const due = at ? Temporal.Instant.from(at).add({ milliseconds: PEOPLE_EVERY_MS }) : instantNow();
+  return peopleRetryAt && Temporal.Instant.compare(peopleRetryAt, due) > 0 ? peopleRetryAt : due;
+};
+const peopleJob = {
+  name: "people_refresh",
+  run: async () => {
+    if (Temporal.Instant.compare(await peopleDue(), instantNow()) > 0) return;
+    const r = await refreshPeople();
+    peopleRetryAt = r.ok ? null : instantNow().add({ hours: 1 });
+    log({ source: "dataverse", op: "people_refresh", kind: r.ok ? "done" : "failed", count: r.people });
+  },
+  wake: peopleDue,
+};
 const scheduler = createScheduler({
-  jobs: pollInBackground
-    ? [{
-        name: "requests_poll",
-        run: async () => void (await pollCycle(pollDeps)),
-        wake: async () => {
-          const due = await requestsNextDue(pollDeps);
-          return due ? Temporal.Instant.from(due) : null;
-        },
-      }]
-    : [],
+  jobs: [
+    peopleJob,
+    ...(pollInBackground
+      ? [{
+          name: "requests_poll",
+          run: async () => void (await pollCycle(pollDeps)),
+          wake: async () => {
+            const due = await requestsNextDue(pollDeps);
+            return due ? Temporal.Instant.from(due) : null;
+          },
+        }]
+      : []),
+  ],
   people: async () => {
     if (!everyone) {
       for (const u of await accounts.users.all()) if (!u.deletedAt) await runtimeFor(u.id);

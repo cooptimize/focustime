@@ -1,14 +1,14 @@
 // AI-0: the AI service, one per person per request: run(task, input, schema) gives a validated value or a typed error.
-// In order: the switches (Use AI, and Allow AI for the task's client), a provider with a key, the guards (ai/guard.ts),
+// In order: the admins' switches (AI for FocusTime, and Allow AI for the task's client; ADM-1: no per-person switch), a provider with a key, the guards (ai/guard.ts),
 // the month's budget (the person's and the app's), then one provider call, one retry on a transient error (Retry-After
 // on 429), and the schema check (no retry). Every attempt that got past the switches is logged without its text
 // (ai_requests: task, client, model, tokens, cost, latency, outcome), and its cost is added to the app's month.
-export { DEFAULT_AI_PERSON, type AiPersonSettings } from "./types.ts";
+export { DEFAULT_AI_PERSON, DEFAULT_AI_RULES, type AiPersonSettings, type AiRules } from "./types.ts";
 import type { Logger } from "../log/logger.ts";
 import { costMicros, micros, monthBounds, monthOf, type Prices } from "./cost.ts";
 import { guard, type GuardInput } from "./guard.ts";
 import { strictProblems, validate } from "./schema.ts";
-import { AI_MESSAGES, AiError, NO_CLIENT, type AiPersonSettings, type AiStatus, type AiErrorKind, type AiLogEntry, type AiOutcome, type AiProvider, type AiResult, type JsonSchema, type ProviderReply, type Usage } from "./types.ts";
+import { AI_MESSAGES, AiError, NO_CLIENT, type AiRules, type AiStatus, type AiErrorKind, type AiLogEntry, type AiOutcome, type AiProvider, type AiResult, type JsonSchema, type ProviderReply, type Usage } from "./types.ts";
 
 /** App-level settings (server/appconfig.ts [ai], FOCUSTIME_AI_*): the same for everyone, never per person. */
 export type AiAppSettings = {
@@ -34,7 +34,8 @@ export type AiDeps = {
   /** The provider, or null when it has no key (or AI is off for the app): "AI isn't set up". */
   provider: () => Promise<AiProvider | null>;
   app: AiAppSettings;
-  person: () => Promise<AiPersonSettings>;
+  /** ADM-1: the admins' AI rules (global on, the clients allowed, the caps, the model). No per-person switch. */
+  rules: () => Promise<AiRules>;
   /** What the guard needs besides the task's client: every client's names, projects and items, home domains, the VM. */
   guard: () => Promise<Omit<GuardInput, "client">>;
   log: AiLogStore;
@@ -79,36 +80,38 @@ export function createAi(d: AiDeps) {
 
   async function run<T>(task: AiTaskSpec, input: string, schema: JsonSchema): Promise<AiResult<T>> {
     if (!task.name || !/^[a-z][a-z0-9_]{0,30}(\.[a-z][a-z0-9_]{0,30})?$/.test(task.name) || !task.client || !task.instructions.trim() || !input.trim() || strictProblems(schema).length) return fail("bad_task");
-    const me = await d.person();
-    if (!me.use) return fail("off");
+    const me = await d.rules();
+    if (!me.on) return fail("off");
     if (task.client !== NO_CLIENT && !me.allowedClients.includes(task.client)) return fail("client_off");
+    const model = me.model || d.app.model;
+    const appCap = me.appCapUsd ?? d.app.appCapUsd;
     const provider = d.app.provider === "off" ? null : await d.provider();
     if (!provider) return fail("not_set_up");
 
     const g = await d.guard();
     const hit = guard(`${task.instructions}\n${input}`, { ...g, client: task.client });
     if (hit) {
-      await record(task, "refused", hit.kind, ZERO, 0, d.app.model);
+      await record(task, "refused", hit.kind, ZERO, 0, model);
       return fail(hit.kind);
     }
 
     const { from, to } = monthBounds(monthOf(d.now()));
     // CV-1: the app's pipeline counts only against the app's cap; a person's own request against theirs and the app's.
-    // A cap of $0 says so ("AI budget is set to $0"), not that it was reached.
-    const personCap = scope === "app" ? null : micros(me.monthlyCapUsd);
-    const appCap = micros(d.app.appCapUsd);
-    if (appCap <= 0 || personCap === 0) {
-      await record(task, "over_budget", "zero_budget", ZERO, 0, d.app.model);
+    // ADM-1: both caps are the team's (Admin › AI). A cap of $0 says so ("AI budget is set to $0"), not that it was reached.
+    const personCap = scope === "app" ? null : micros(me.personCapUsd);
+    const appMicros = micros(appCap);
+    if (appMicros <= 0 || personCap === 0) {
+      await record(task, "over_budget", "zero_budget", ZERO, 0, model);
       return fail("zero_budget");
     }
     const [mine, app] = await Promise.all([personCap === null ? 0 : d.log.spentMicros(from, to), d.appSpend.get(monthOf(d.now()))]);
-    if ((personCap !== null && mine >= personCap) || app >= appCap) {
-      await record(task, "over_budget", "over_budget", ZERO, 0, d.app.model);
+    if ((personCap !== null && mine >= personCap) || app >= appMicros) {
+      await record(task, "over_budget", "over_budget", ZERO, 0, model);
       return fail("over_budget");
     }
 
     const call = {
-      model: d.app.model,
+      model,
       instructions: task.instructions,
       input,
       // OpenAI's schema names take letters, digits, _ and - only: "asks.classify" is sent as "asks_classify".
@@ -132,7 +135,7 @@ export function createAi(d: AiDeps) {
     const latency = Date.now() - started;
     if (!reply.ok) {
       const kind: AiErrorKind = reply.kind === "unavailable" ? "provider" : reply.kind === "refusal" || reply.kind === "incomplete" ? "invalid_output" : reply.kind;
-      await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, spent, latency, d.app.model);
+      await record(task, kind === "invalid_output" ? "invalid" : "provider_error", kind, spent, latency, model);
       return fail(kind);
     }
     let value: unknown;
@@ -155,12 +158,13 @@ export function createAi(d: AiDeps) {
   }
 
   async function status(): Promise<AiStatus> {
-    const me = await d.person();
+    const me = await d.rules();
+    const appCap = me.appCapUsd ?? d.app.appCapUsd;
     const month = monthOf(d.now());
     const { from, to } = monthBounds(month);
     const provider = d.app.provider === "off" ? null : await d.provider();
     const [spent, app, recent] = await Promise.all([d.log.spentMicros(from, to), d.appSpend.get(month), d.log.recent(20)]);
-    return { setUp: !!provider, provider: d.app.provider, model: d.app.model, use: me.use, allowedClients: me.allowedClients, capMicros: micros(me.monthlyCapUsd), spentMicros: spent, appReached: app >= micros(d.app.appCapUsd), recent };
+    return { setUp: !!provider, provider: d.app.provider, model: me.model || d.app.model, on: me.on, allowedClients: [...me.allowedClients], capMicros: micros(me.personCapUsd), appCapMicros: micros(appCap), spentMicros: spent, appReached: micros(appCap) > 0 && app >= micros(appCap), recent };
   }
 
   return { run, test, status };

@@ -1,3 +1,4 @@
+import type { ProcessOverrides } from "../../plan/process.ts";
 import { createSnapshotStore } from "../../host/local/snapshots.ts";
 import { mkdtempSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,7 +16,7 @@ const NY = "America/New_York";
 const T0 = Temporal.Instant.from("2026-11-02T13:02:00Z");
 const ref = (k: string): ClientRef => ({ clientKey: k, clientName: k });
 
-function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | TargetsResult, opts: { ids?: number; cacheDir?: string; pickableTypes?: string[]; onItems?: (k: string, ids: number[]) => void } = {}) {
+function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | TargetsResult, opts: { ids?: number; cacheDir?: string; pickableTypes?: string[]; overrides?: (clientKey: string) => ProcessOverrides; onItems?: (k: string, ids: number[]) => void } = {}) {
   const api = fakeDevOps(orgs, opts);
   const logs: LogRecord[] = [];
   const cacheDir = opts.cacheDir ?? mkdtempSync(join(tmpdir(), "focustime-devops-"));
@@ -29,6 +30,7 @@ function setup(orgs: Record<string, OrgScenario>, targets: DevOpsTarget[] | Targ
     timeZone: NY,
     now: () => clock,
     ...(opts.pickableTypes ? { processOverrides: () => ({ noBreakdown: opts.pickableTypes! }) } : {}),
+    ...(opts.overrides ? { processOverrides: opts.overrides } : {}),
     ...(opts.onItems ? { onItems: opts.onItems } : {}),
     targets: async (keys) => {
       targetCalls.push(keys);
@@ -424,6 +426,15 @@ describe("the process model (WT-1)", () => {
     const before = s.calls.length;
     await s.src.processModels(["Adatum"]);
     expect(s.calls.length - before).toBeLessThanOrEqual(1);
+  });
+  it("applies each client's own Rules (ADM-1), even on one shared project", async () => {
+    const s = setup({ contoso: "bugs_off" }, [target("Adatum", "contoso"), target("Northwind", "contoso")], { overrides: (k) => (k === "Adatum" ? { noBreakdown: ["feature"], background: ["Task"] } : {}) });
+    const [a, n] = await s.src.processModels(["Adatum", "Northwind"]);
+    if (!a!.ok || !n!.ok) throw new Error("not read");
+    expect(a!.model.types.find((t) => t.name === "Feature")).toMatchObject({ needsBreakdown: false, breakdownSource: "override" });
+    expect(a!.model.types.find((t) => t.name === "Task")!.countsHours).toBe(false);
+    expect(n!.model.types.find((t) => t.name === "Feature")).toMatchObject({ needsBreakdown: true, breakdownSource: "default" });
+    expect(n!.model.types.find((t) => t.name === "Task")!.countsHours).toBe(true);
   });
 });
 

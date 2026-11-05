@@ -6,7 +6,7 @@
 import type { NamedMigration } from "./named.ts";
 
 export const devopsTakes: NamedMigration = {
-  name: "20261105T0430_devops_takes",
+  name: "20261105T1300_devops_takes",
   sqlite: `CREATE TABLE devops_takes (
      id INTEGER PRIMARY KEY AUTOINCREMENT,
      client_key TEXT NOT NULL,

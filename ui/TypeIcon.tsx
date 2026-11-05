@@ -1,9 +1,11 @@
 // WT-1: one icon per work item type, in place of type words. FocusTime's own drawings keyed by the DevOps icon id
 // (icon_crown, icon_book, ...), filled with the type's color from the client's project, 14 to 16 px (it follows the
-// text size inside that range), the type name as tooltip and accessible name. Never an image from a DevOps URL.
+// text size inside that range; a color too dark or too light for the theme is shown at 3:1, ui/contrast.ts), the type
+// name as tooltip and accessible name. Never an image from a DevOps URL.
 // Tracked replies and anything posted to Teams stay text only; this is only for FocusTime's own screens.
 import { useContext } from "react";
 import type { TypeLook } from "../week/types.ts";
+import { readableOn, usePageBackgrounds } from "./contrast.ts";
 import { DevOpsWork } from "./work.ts";
 
 /** 16 × 16 drawings. Each is one or more filled paths (fill-rule evenodd), simple enough to read at 14 px. */
@@ -83,7 +85,9 @@ export function TypeIcon({ clientKey, type, look, decorative = false, className 
   const found = useTypeLook(clientKey, type);
   const l = look ?? found;
   const { paths, known } = iconPaths(l?.icon);
-  const color = l?.color && HEX.test(l.color) ? `#${l.color}` : undefined;
+  // The project's color, moved just enough to read on this theme (3:1); the stored color stays the project's.
+  const bgs = usePageBackgrounds();
+  const color = l?.color && HEX.test(l.color) ? readableOn(`#${l.color}`, bgs) : undefined;
   const name = type || "Work item";
   return (
     <span className={`type-icon${known ? "" : " type-icon-fallback"}${className ? ` ${className}` : ""}`} title={decorative ? undefined : name} data-type={name}>

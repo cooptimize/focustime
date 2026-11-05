@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { createAi } from "../ai/service.ts";
 import { stubProvider } from "../ai/stub.ts";
-import type { AiPersonSettings, ProviderCall, ProviderReply } from "../ai/types.ts";
+import type { AiRules, ProviderCall, ProviderReply } from "../ai/types.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import type { LogRecord } from "../log/logger.ts";
@@ -17,7 +17,7 @@ import type { IncomingMessage, PromisesData, RequestsData } from "../plan/asks.t
 import { planStoreOn } from "../store/plan-store.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { addUsers, sqliteDb } from "../test/db.ts";
-import { aChatMember, aClassifyAnswer, aClientEntry, aMessage, anAiApp, anAiPerson, aPromiseAnswer, HOME_TENANT } from "../test/builders/index.ts";
+import { aChatMember, aClassifyAnswer, aClientEntry, aMessage, anAiApp, anAiRules, aPromiseAnswer, HOME_TENANT } from "../test/builders/index.ts";
 import type { WorkItem } from "../week/types.ts";
 import { IDENTITY_KEY } from "./account.ts";
 import { requestAction, urgentRequests, type RequestAction, type RequestContext } from "./request-actions.ts";
@@ -34,7 +34,7 @@ type Msg = IncomingMessage & { modifiedAt: string };
 const about = (c: ProviderCall) => (JSON.parse(c.input) as { message: { text: string } }).message.text;
 const item = (id: number, title: string, o: Partial<WorkItem> = {}): WorkItem => ({ id, title, type: "User Story", state: "Active", stateCategory: "InProgress", level: "story", order: 1, parentId: null, changedAt: IN_HOURS, url: `https://dev.azure.com/contoso/_workitems/edit/${id}`, ...o });
 
-type SetupOptions = { person?: Partial<AiPersonSettings>; answer?: (c: ProviderCall) => string | ProviderReply; spent?: number };
+type SetupOptions = { person?: Partial<AiRules>; answer?: (c: ProviderCall) => string | ProviderReply; spent?: number };
 async function setup(o: SetupOptions = {}) {
   let now = "2026-11-04T14:00:00Z";
   const zoned = () => Temporal.Instant.from(now).toZonedDateTimeISO("America/New_York");
@@ -64,11 +64,11 @@ async function setup(o: SetupOptions = {}) {
   const calls: ProviderCall[] = [];
   const answer = o.answer ?? (() => JSON.stringify(aClassifyAnswer()));
   const logs: LogRecord[] = [];
-  const person: AiPersonSettings = anAiPerson(o.person);
+  const person: AiRules = anAiRules(o.person);
   const ai = createAi({
     provider: async () => stubProvider({ respond: (c) => (calls.push(c), answer(c)) }),
     app: anAiApp(),
-    person: async () => person,
+    rules: async () => person,
     guard: async () => ({ directory: [aClientEntry({ key: "fabrikam", names: ["Fabrikam"], projects: [], itemIds: [501, 502] }), aClientEntry({ key: "northwind", names: ["Northwind"], projects: [], itemIds: [777] })], homeDomains: ["cooptimize.example"], forbidden: [] }),
     log: { add: (e) => plan.addAiRequest(e), spentMicros: async (a, b) => (await plan.aiSpentMicros(a, b)) + (o.spent ?? 0), recent: (n) => plan.aiRequests(n) },
     appSpend: { get: async () => 0, add: async () => {} },
@@ -173,7 +173,7 @@ describe("sorting a request (asks.classify)", () => {
   const providerError: SetupOptions = { answer: () => ({ ok: false, kind: "provider", status: 400 }) };
   const unusable: SetupOptions = { answer: () => "{\"kind\":\"maybe\"}" };
   it.each([
-    ["Use AI off", { person: { use: false } }, "AI is off", false],
+    ["AI off for FocusTime", { person: { on: false } }, "AI is off", false],
     ["Allow AI off for the client", { person: { allowedClients: [] } }, "AI isn't allowed for Fabrikam", false],
     ["over budget", { spent: 10_000_000 }, "AI budget reached for this month", false],
     ["a provider error", providerError, "the AI service couldn't answer", true],

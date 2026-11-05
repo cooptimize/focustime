@@ -5,6 +5,7 @@
 // Nothing here logs or returns tokens, codes, secrets or provider error descriptions.
 import * as oidc from "openid-client";
 import type { Logger } from "../../log/logger.ts";
+import { groupsOf, type SignInGroups } from "../../actions/admin.ts";
 
 /** Graph with every permission the tenant consented to (one token), plus who signed in and a refresh token. */
 export const SIGN_IN_SCOPE = "openid profile email offline_access https://graph.microsoft.com/.default";
@@ -32,7 +33,8 @@ export type EntraOptions = {
 export type PendingSignIn = { state: string; nonce: string; verifier: string };
 
 /** Who signed in, from the validated ID token. */
-export type SignedIn = { oid: string; tid: string; upn: string; name: string; email: string | null };
+/** ADM-1: `groups` is what the groups claim said (admin membership); used once at sign-in, never stored. */
+export type SignedIn = { oid: string; tid: string; upn: string; name: string; email: string | null; groups?: SignInGroups };
 
 export type SignInTokens = { refreshToken: string; accessToken: string; expiresIn: number; scope: string };
 
@@ -137,7 +139,7 @@ export function createEntraSignIn(o: EntraOptions) {
     const email = str(claims.email) || (upn.includes("@") ? upn : "") || null;
     o.log({ source: "auth", op: "sign_in", kind: "signed_in" });
     return {
-      user: { oid, tid, upn, name: str(claims.name) || upn, email: email ? email.toLowerCase() : null },
+      user: { oid, tid, upn, name: str(claims.name) || upn, email: email ? email.toLowerCase() : null, groups: groupsOf(claims as Record<string, unknown>) },
       tokens: { refreshToken: t.refresh_token, accessToken: t.access_token, expiresIn: typeof t.expires_in === "number" ? t.expires_in : 3599, scope: typeof t.scope === "string" ? t.scope : "" },
     };
   }

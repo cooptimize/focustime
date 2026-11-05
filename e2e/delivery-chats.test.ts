@@ -1,4 +1,4 @@
-// T-2 and AP-1: Settings > Clients > Delivery chats (browser, demo mode). Keyboard only: Add a chat opens the picker,
+// T-2 and AP-1: Admin › Clients › Delivery chats (ADM-1; was Settings › Clients) (browser, demo mode). Keyboard only: Add a chat opens the picker,
 // search, Enter adds it, labelled with the kind its members suggest; members show with external people flagged by
 // tenant; a client takes a second chat; the label can change, and an outsider in a chat marked Delivery team is warned
 // about; a chat added for one client isn't offered to another; Remove forgets one and leaves the rest; Add a chat works
@@ -22,7 +22,8 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
   it("adds two chats by keyboard, flags external members, relabels one with a warning, removes one", async () => {
     const { page, errors } = await freshPage(h);
     await openSettings(page);
-    await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
+    // ADM-1: registering chats is in Admin › Clients (the demo's person is the demo's admin).
+    await page.locator(".set-admin-nav").getByRole("button", { name: "Clients" }).click();
     const northwind = page.getByRole("group", { name: /^Delivery chats for Northwind/ });
     await northwind.waitFor();
 
@@ -94,7 +95,7 @@ describe.skipIf(!CHROMIUM)("Delivery chats", () => {
       await route.continue();
     });
     await openSettings(page);
-    await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
+    await page.locator(".set-admin-nav").getByRole("button", { name: "Clients" }).click();
     const northwind = page.getByRole("group", { name: /^Delivery chats for Northwind/ });
     await northwind.getByRole("button", { name: "Add a chat" }).click({ timeout: 5_000 });
     await picks(northwind).getByRole("option").first().waitFor();
