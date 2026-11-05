@@ -383,7 +383,7 @@ export function createApp(opts: AppOptions) {
         res.writeHead(r.status, { "cache-control": "no-store" });
         return res.end();
       }
-      res.writeHead(200, { "content-type": r.contentType, "content-length": r.bytes.length, "content-disposition": "inline", "cache-control": "private, max-age=3600", vary: "Cookie" });
+      res.writeHead(200, { "content-type": r.contentType, "content-length": r.bytes.length, "content-disposition": "inline", "cache-control": "no-store", vary: "Cookie" });
       return res.end(method === "HEAD" ? undefined : Buffer.from(r.bytes.buffer, r.bytes.byteOffset, r.bytes.byteLength));
     }
 

@@ -42,6 +42,8 @@ export type ConversationCard = {
   link: string;
   /** CV-2: images pasted into its messages ("2 images" on the card). */
   images?: number;
+  /** CV-4: the first image's AI description, for members of the chat ("1 image: refresh failed error"). */
+  imageNote?: string;
 };
 
 export type FilteredMessage = { chatId: string; messageId: string; author: string; at: string; text: string };
@@ -84,7 +86,11 @@ export type ConversationMessage = {
   /** CV-2: its pasted images, in body order: FocusTime's own address for each (never Graph's), or why it isn't shown. */
   images?: MessageImageView[];
 };
-export type MessageImageView = { id: number; src: string | null; note: string | null };
+/**
+ * CV-2: `src` is FocusTime's own address (read from Teams on view, CV-4), `note` why it isn't shown. CV-4: `link`
+ * opens the message in Teams (shown when the image can't be read now), `description` is the AI's, when there is one.
+ */
+export type MessageImageView = { id: number; src: string | null; note: string | null; link?: string; description?: string };
 /** CV-2: an image's address in FocusTime (the only one the page ever sees). */
 export const chatImageSrc = (id: number) => `/media/chat-images/${id}`;
 /** A page of Show messages: the latest first; `earlier` is the message id to ask "Show earlier" from (null: none). */

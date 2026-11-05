@@ -40,7 +40,7 @@ describe("/media/chat-images", () => {
     expect(Number(r.headers["content-length"])).toBe(jpeg.bytes.length);
     expect(r.headers["x-content-type-options"]).toBe("nosniff");
     expect(r.headers["content-security-policy"]).toBe("default-src 'none'; sandbox");
-    expect(r.headers["cache-control"]).toBe("private, max-age=3600");
+    expect(r.headers["cache-control"]).toBe("no-store");
     expect(r.headers["cross-origin-resource-policy"]).toBe("same-origin");
     expect(asked.at(-1)).toEqual({ userId: "member", id: 7 });
   });

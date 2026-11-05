@@ -3,7 +3,9 @@
 // message as a quote block (its author and first line); the body is the server's sanitized HTML (tables, links, bold,
 // lists, code, mentions as chips); reactions sit small under the message, as counts. "Show earlier" loads the page
 // before. Pasted images (CV-2) sit under their message as thumbnails from FocusTime's own address, never Graph's; one
-// that isn't shown says why. Pure rendering: the caller loads the messages and photos and opens the viewer.
+// that isn't shown says why. CV-4: read from Teams when shown, never kept; one that can't be read now shows "Image in
+// Teams" with Open in Teams, and the AI's short description sits under it when there is one. Rendering only: the caller loads the messages and photos and opens the viewer.
+import { useState } from "react";
 import type { ConversationMessage } from "../plan/conversation-views.ts";
 import { Avatar } from "./Presence.tsx";
 import { whenText } from "./labels.ts";
@@ -36,6 +38,8 @@ export function MessageThread({ messages, tz, photoFor, earlier, loadingEarlier 
   /** CV-2: a thumbnail was clicked: open the viewer on it. */
   onImage?: (id: number) => void;
 }) {
+  // CV-4: images Teams couldn't give us just now (the server answered 404).
+  const [failed, setFailed] = useState<ReadonlySet<number>>(new Set());
   return (
     <div className="tm-thread">
       {earlier && (
@@ -75,13 +79,24 @@ export function MessageThread({ messages, tz, photoFor, earlier, loadingEarlier 
                     <ul className="tm-images" aria-label={m.images.length === 1 ? "1 image" : `${m.images.length} images`}>
                       {m.images.map((i, n) => (
                         <li key={i.id}>
-                          {i.src ? (
-                            <button type="button" className="tm-thumb" aria-label={`Open image ${n + 1} of ${m.images!.length}`} onClick={() => onImage?.(i.id)}>
-                              <img src={i.src} alt="" loading="lazy" decoding="async" />
+                          {i.src && !failed.has(i.id) ? (
+                            <button type="button" className="tm-thumb" aria-label={i.description ? `Open image ${n + 1} of ${m.images!.length}: ${i.description}` : `Open image ${n + 1} of ${m.images!.length}`} onClick={() => onImage?.(i.id)}>
+                              <img src={i.src} alt={i.description ?? ""} loading="lazy" decoding="async" onError={() => setFailed((f) => new Set(f).add(i.id))} />
                             </button>
+                          ) : i.src ? (
+                            // CV-4: read from Teams when shown; when it can't be (a sign-in ran out, the message is gone), Teams has it.
+                            <span className="tm-image-gone">
+                              <span className="muted">Image in Teams</span>
+                              {i.link && (
+                                <a href={i.link} target="_blank" rel="noreferrer noopener">
+                                  Open in Teams
+                                </a>
+                              )}
+                            </span>
                           ) : (
                             <span className="tm-image-note muted">{i.note}</span>
                           )}
+                          {i.description && <span className="tm-image-desc muted">{i.description}</span>}
                         </li>
                       ))}
                     </ul>

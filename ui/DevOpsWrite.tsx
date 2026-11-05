@@ -33,7 +33,7 @@ export type DevOpsChange =
   /** AP-1: a bug, story or feature from an ask in a client chat. */
   | { kind: "request_create"; chatId: string; messageId: string; level: "bug" | "story" | "feature" }
   /** CV-1: from a conversation: an item (the path of action, the original messages appended by the server), a suggested comment, a description change. */
-  | { kind: "conversation_create"; conversationId: number; commitmentId?: number; title: string; description: string; level: "bug" | "story" | "feature"; type?: string; parentId?: number; includeInternal?: boolean }
+  | { kind: "conversation_create"; conversationId: number; commitmentId?: number; title: string; description: string; level: "bug" | "story" | "feature"; type?: string; parentId?: number; includeInternal?: boolean; /** CV-4: the ticked images (all, when absent). */ images?: number[] }
   | { kind: "conversation_comment"; suggestionId: number; includeInternal?: boolean; text?: string }
   | { kind: "description_update"; suggestionId: number; after?: string };
 
@@ -140,7 +140,7 @@ export function useDevOpsWriteFlow(o: { allowed: readonly string[]; onDone: () =
     },
   };
   const dialog = flow ? (
-    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReload={() => void begin(flow.clientKey, flow.changes, flow.settled)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result) }))} />
+    <PreviewDialog flow={flow} client={o.client} onConfirm={() => void confirm(flow)} onReload={() => void begin(flow.clientKey, flow.changes, flow.settled)} onImages={(ids) => void begin(flow.clientKey, flow.changes.map((c) => (c.kind === "conversation_create" ? { ...c, images: ids } : c)), flow.settled)} onClose={() => (setFlow(null), flow.settled?.({ confirmed: false, sent: flow.rows.some((r) => r.result && "entry" in r.result) }))} />
   ) : ask ? (
     <AskDialog ask={ask} onClose={() => setAsk(null)} onPreview={(changes) => (setAsk(null), void begin(ask.clientKey, changes))} />
   ) : null;
@@ -179,7 +179,7 @@ function Modal({ label, busy, onClose, children, wide }: { label: string; busy?:
   );
 }
 
-function PreviewDialog({ flow, client, onConfirm, onReload, onClose }: { flow: Flow; client?: ClientLook | undefined; onConfirm: () => void; onReload: () => void; onClose: () => void }) {
+function PreviewDialog({ flow, client, onConfirm, onReload, onImages, onClose }: { flow: Flow; client?: ClientLook | undefined; onConfirm: () => void; onReload: () => void; /** CV-4: ticked images changed: preview again with these. */ onImages: (ids: number[]) => void; onClose: () => void }) {
   const first = useModalFocus<HTMLButtonElement>();
   const { rows, busy, error } = flow;
   const p0 = rows[0]!.preview;
@@ -234,6 +234,7 @@ function PreviewDialog({ flow, client, onConfirm, onReload, onClose }: { flow: F
                 ))}
               </tbody>
             </table>
+            {r.preview.attachments && r.preview.attachments.length > 0 && <AttachPicker list={r.preview.attachments} disabled={busy || tried} onChange={onImages} />}
             {[...r.preview.links, ...r.preview.notes].map((n) => (
               <p key={n} className="muted dw-note">
                 {n}
@@ -275,6 +276,32 @@ function PreviewDialog({ flow, client, onConfirm, onReload, onClose }: { flow: F
         <span className="muted">Logged in Settings &gt; Data, with Undo.</span>
       </div>
     </Modal>
+  );
+}
+/**
+ * CV-4: a create's images from the conversation, as thumbnails with a checkbox each (all ticked to begin with). They
+ * are read from Teams only when shown, and again with my sign-in when I confirm; FocusTime keeps no copy.
+ */
+function AttachPicker({ list, disabled, onChange }: { list: NonNullable<DevOpsPreview["attachments"]>; disabled: boolean; onChange: (ids: number[]) => void }) {
+  const ticked = list.filter((a) => a.ticked).map((a) => a.id);
+  const [gone, setGone] = useState<ReadonlySet<number>>(new Set());
+  return (
+    <fieldset className="dw-attach">
+      <legend>
+        Attach images from the chat <span className="muted">· {ticked.length} of {list.length}</span>
+      </legend>
+      <ul>
+        {list.map((a, n) => (
+          <li key={a.id}>
+            <label>
+              <input type="checkbox" checked={a.ticked} disabled={disabled} aria-label={`Attach image ${n + 1} from ${a.sender}${a.description ? `: ${a.description}` : ""}`} onChange={(e) => onChange(e.target.checked ? [...ticked, a.id] : ticked.filter((x) => x !== a.id))} />
+              {gone.has(a.id) ? <span className="dw-attach-gone muted">Image in Teams</span> : <img src={a.src} alt={a.description ?? ""} loading="lazy" decoding="async" onError={() => setGone((g) => new Set(g).add(a.id))} />}
+              <span className="dw-attach-who muted">{a.description ?? a.sender}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </fieldset>
   );
 }
 const confirmLabel = (p: DevOpsPreview) =>

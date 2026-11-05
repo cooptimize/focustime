@@ -742,6 +742,8 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
     ...(ctx.takes ? { takes: ctx.takes } : {}),
     ...(ctx.devopsNotes ? { notes: ctx.devopsNotes } : {}),
     ...(ctx.plan ? { ahead: aheadPort(ctx, ctx.plan) } : {}),
+    // CV-4: a conversation's images, read from Teams with my own token when I create the item (never stored).
+    ...(ctx.requests ? { chatImages: async () => (await accountOf(ctx))?.chatMessages ?? null } : {}),
   };
 }
 

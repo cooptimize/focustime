@@ -1,5 +1,6 @@
 // Step 14: DevOps writes through the write framework, against a fake dev.azure.com. Client orgs are fakes only.
 import { beforeEach, describe, expect, it } from "vitest";
+import { jpegWithMetadata } from "../test/images.ts";
 import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import { BATCH_LIMIT, createOps, identityFrom, identityMatches, onOrg, stateOps, targetDateOps, undoTops, type DevOpsWriteEntry } from "../plan/devopswrite.ts";
@@ -22,7 +23,7 @@ const base = STARTER_TOML.replace('client_id = ""', 'client_id = "44444444-4444-
 const COOP = "Cooptimize";
 const Adatum = "Adatum";
 
-function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: boolean; sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null } = {}) {
+function setup(opts: { /** CV-4: my Chat.Read reader, for a conversation's images. */ chat?: import("../sources/graph/chats.ts").ChatMessagesClient; email?: string | null; acceptance?: boolean; startDate?: boolean; sizeField?: "Microsoft.VSTS.Scheduling.StoryPoints" | "Microsoft.VSTS.Scheduling.Effort" | null } = {}) {
   clearDevopsPreviews();
   const dv = fakeDevOpsWrite({ now: () => NOW, ...(opts.acceptance === false ? { acceptance: false } : {}), ...(opts.startDate === false ? { startDate: false } : {}), ...(opts.sizeField !== undefined ? { sizeField: opts.sizeField } : {}) });
   dv.add(437, { "System.WorkItemType": "Feature", "System.Title": "Need Features Here", "System.State": "Active", "System.AssignedTo": { uniqueName: "avery@cooptimize.example" } });
@@ -65,6 +66,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
     takes,
     devopsNotes: notes,
     devopsStored: async (clientKey, v) => void stored.push({ clientKey, ...v }),
+    ...(opts.chat ? { account: () => ({ chatMessages: opts.chat }) as never } : {}),
     writePats: { get: async (k) => { const v = keyring.get(k); if (!v) throw new Error("not found"); return new Pat(v); }, set: async (k, v) => void keyring.set(k, v), clear: async (k) => void keyring.delete(k) },
   };
   const run = async <T = unknown>(action: string, input: unknown): Promise<T> => {
@@ -921,5 +923,118 @@ describe("CP-1: create from a captured draft's preview", () => {
     expect((await s.preview({ kind: "create", draftId: id, type: "Feature" })).item).toBe("New Feature: reporting");
     // A type the epic doesn't take is ignored: the process default, as before.
     expect((await s.preview({ kind: "create", draftId: id, type: "User Story" })).item).toBe("New Feature: reporting");
+  });
+});
+
+describe("CV-4: a conversation's images attached to the item it creates", () => {
+  const CHAT = "19:cooptimize-images@thread.v2";
+  const ME = "00000000-0000-4000-8000-0000000000a1";
+  const HOME = "11111111-1111-4111-8111-111111111111";
+  const BLAKE = { userId: "00000000-0000-4000-8000-0000000000c2", displayName: "Blake Novak", email: null, tenantId: "22222222-2222-4222-8222-222222222222" };
+  const img = (h: string) => `<img src="https://graph.microsoft.com/v1.0/chats/${CHAT}/messages/1/hostedContents/${h}/$value" itemtype="http://schema.skype.com/AMSImage">`;
+  function graph(gone: string[] = []) {
+    const calls: string[] = [];
+    const client = {
+      messagesSince: async () => ({ messages: [], newest: null }),
+      hostedContent: async (_c: string, _m: string, h: string) => {
+        calls.push(h);
+        if (gone.includes(h)) throw new (await import("../sources/calendar/http.ts")).HttpError(404);
+        return { bytes: jpegWithMetadata() };
+      },
+    };
+    return { client, calls };
+  }
+  async function world(s: S, kind: "customer" | "delivery" = "customer") {
+    await s.plan.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME, name: "Avery", username: "avery@cooptimize.example", email: "avery@cooptimize.example", signedInAt: NOW, systemUserId: null, systemUserEmail: null });
+    await s.teams.addChat({ chatId: CHAT, clientKey: COOP, kind, displayName: "Images chat", webUrl: null, members: [BLAKE, { userId: ME, displayName: "Avery", email: null, tenantId: HOME }], by: ME });
+    await s.teams.saveMessages([{ chatId: CHAT, messageId: "1730000000201", clientKey: COOP, senderId: BLAKE.userId, senderName: "Blake Novak", senderTenant: BLAKE.tenantId, createdAt: "2026-11-02T13:00:00Z", modifiedAt: "2026-11-02T13:00:00Z", html: `<p>The refresh failed</p>${img("aaa")}${img("bbb")}${img("ccc")}`, text: "The refresh failed", hasImage: true, hasFile: false, replyToId: null, mentions: [], fetchedAt: NOW }]);
+    const c = await s.convs.addConversation({ chatId: CHAT, clientKey: COOP, title: "Refresh failed", summary: "The refresh failed.", participants: [], firstAt: "2026-11-02T13:00:00Z", lastAt: "2026-11-02T13:00:00Z", lastWorkAt: "2026-11-02T13:00:00Z" });
+    await s.convs.place([{ chatId: CHAT, messageId: "1730000000201", conversationId: c.id, role: "work", reason: null, placedBy: "ai", at: "2026-11-02T13:00:00Z" }]);
+    const ids = (await s.teams.images(CHAT, ["1730000000201"])).map((i) => i.id);
+    return { c, ids };
+  }
+  const change = (c: { id: number }, more: Record<string, unknown> = {}) => ({ kind: "conversation_create", conversationId: c.id, title: "Refresh failed on the sales model", description: "What's being asked\nThe refresh fails.", level: "bug", ...more });
+
+  it("the preview offers each image ticked; unticking one leaves it out; confirm reads them with my token, uploads them and links them in the create patch, read back", async () => {
+    const g = graph();
+    const s = setup({ chat: g.client });
+    await s.enable();
+    const { c, ids } = await world(s);
+    const all = await s.preview(change(c));
+    expect(all.attachments!.map((a) => [a.id, a.ticked, a.sender, a.src])).toEqual(ids.map((id) => [id, true, "Blake Novak", `/media/chat-images/${id}`]));
+    expect(all.notes.join(" ")).toMatch(/read from Teams with your sign-in when you confirm/);
+    expect(g.calls).toEqual([]);
+    const p = await s.preview(change(c, { images: [ids[0], ids[2]] }));
+    expect(p.attachments!.map((a) => a.ticked)).toEqual([true, false, true]);
+    expect(p.fields.find((f) => f.label === "Repro steps")!.after).toMatch(/Attached: 2 images from the chat\./);
+    const r = await s.confirm(p);
+    expect(r).toMatchObject({ confirmed: true });
+    expect(r.message).toBe(`Created #${r.itemId} in DevOps with 2 images`);
+    expect(g.calls).toEqual(["aaa", "ccc"]);
+    // Uploaded as raw bytes (octet-stream, stripped), with my write PAT; linked in the same create patch.
+    const uploads = s.dv.seen.filter((x) => x.url.includes("/_apis/wit/attachments"));
+    expect(uploads.map((u) => [u.method, u.contentType, u.authorization])).toEqual([["POST", "application/octet-stream", basic(WRITE_PAT)], ["POST", "application/octet-stream", basic(WRITE_PAT)]]);
+    expect([...s.dv.attachments.values()].map((a) => a.fileName)).toEqual(["teams-image-202611020800-1.jpg", "teams-image-202611020800-2.jpg"]);
+    const bug = s.dv.items.get(r.itemId!)!;
+    const files = bug.relations.filter((x) => x.rel === "AttachedFile");
+    expect(files).toHaveLength(2);
+    expect(files[0]!.attributes).toEqual({ comment: "From Teams, Blake Novak, 2026-11-02 08:00" });
+    expect(String(bug.fields["Microsoft.VSTS.TCM.ReproSteps"])).toContain("<div>Attached: 2 images from the chat</div>");
+    const creates = s.dv.writes().filter((w) => w.method === "POST" && w.url.includes("workitems/$"));
+    expect(creates).toHaveLength(1);
+    // The audit log: ids, names, sizes, attachment ids and URLs; never bytes.
+    const entry = (await s.plan.devopsWrite(r.entry.id))!;
+    expect(entry.after.Attachments).toMatch(new RegExp(`^Image ${ids[0]}: teams-image-202611020800-1\\.jpg, \\d+ KB, attachment aaaaaaaa-`));
+    expect(JSON.stringify(entry)).not.toMatch(/base64|\/9j\//);
+    // Nothing kept in FocusTime.
+    expect(await (s.teams as unknown as { image: (id: number) => Promise<unknown> }).image(ids[0]!)).not.toHaveProperty("bytes");
+  });
+
+  it("an image that can't be read is reported and left out; the item is still created", async () => {
+    const g = graph(["bbb"]);
+    const s = setup({ chat: g.client });
+    await s.enable();
+    const { c } = await world(s);
+    const r = await s.confirm(await s.preview(change(c)));
+    expect(r.confirmed).toBe(true);
+    expect(r.message).toBe(`Created #${r.itemId} in DevOps with 2 images. 1 image couldn't be read from Teams or uploaded, so it was left out`);
+    expect(s.dv.items.get(r.itemId!)!.relations.filter((x) => x.rel === "AttachedFile")).toHaveLength(2);
+  });
+
+  it("an internal chat's images only with include internal", async () => {
+    const s = setup({ chat: graph().client });
+    await s.enable();
+    const { c } = await world(s, "delivery");
+    const p = await s.preview(change(c, { level: "story" }));
+    expect(p.attachments).toBeUndefined();
+    expect(p.notes.join(" ")).toMatch(/images are left out with its messages/);
+    expect((await s.preview(change(c, { level: "story", includeInternal: true }))).attachments).toHaveLength(3);
+  });
+
+  it("refuses images that aren't this conversation's, or more than 10", async () => {
+    const s = setup({ chat: graph().client });
+    await s.enable();
+    const { c } = await world(s);
+    const r = await s.fail("devops.preview", { clientKey: COOP, change: change(c, { images: [99999] }) });
+    expect(r).toMatchObject({ status: 400, error: "images must be ids of this conversation's images" });
+  });
+
+  it("undo sets it to Removed and unlinks the images in the same patch (test /rev); the files stay in DevOps, and it says so", async () => {
+    const s = setup({ chat: graph().client });
+    await s.enable();
+    const { c } = await world(s);
+    const r = await s.confirm(await s.preview(change(c)));
+    const id = r.itemId!;
+    const u = await s.preview({ kind: "undo", writeId: r.entry.id });
+    expect(u.notes.join(" ")).toMatch(/Unlinks the 3 images\. The files stay in DevOps, unlinked: DevOps has no way to delete an attachment\./);
+    const done = await s.confirm(u);
+    expect(done).toMatchObject({ confirmed: true, message: "Undone in DevOps. The 3 images stay in DevOps as files, unlinked: DevOps has no way to delete an attachment" });
+    const last = patches(s).at(-1)!.body as { op: string; path: string }[];
+    expect(last[0]).toMatchObject({ op: "test", path: "/rev" });
+    expect(last.filter((o) => o.op === "remove").map((o) => o.path)).toEqual(["/relations/2", "/relations/1", "/relations/0"]);
+    expect(s.dv.items.get(id)!.relations.filter((x) => x.rel === "AttachedFile")).toEqual([]);
+    expect(s.dv.items.get(id)!.fields["System.State"]).toBe("Removed");
+    expect(s.dv.attachments.size).toBe(3);
+    expect(s.dv.writes().filter((w) => w.method === "DELETE")).toEqual([]);
   });
 });

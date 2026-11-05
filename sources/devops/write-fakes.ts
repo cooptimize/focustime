@@ -46,6 +46,9 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
   const identities = opts.identities ?? { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "avery@cooptimize.example" }, [basic(OTHER_PAT)]: { id: "22222222-2222-4222-8222-222222222222", name: "Dana Ruiz", email: "dana@cooptimize.example" } };
   const items = new Map<number, FakeItem>();
   const comments = new Map<number, FakeComment[]>();
+  /** CV-4: uploaded attachment files (DevOps has no delete for them). */
+  const attachments = new Map<string, { fileName: string; size: number; contentType: string | null }>();
+  let nextAttachment = 1;
   const seen: Seen[] = [];
   let nextId = 900;
   let nextComment = 5000;
@@ -72,7 +75,8 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     const headers = new Headers(init?.headers);
     const auth = headers.get("authorization");
     const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
-    seen.push({ method, url: url.toString(), authorization: auth, contentType: headers.get("content-type"), body });
+    const raw = init?.body instanceof Uint8Array ? init.body : null;
+    seen.push({ method, url: url.toString(), authorization: auth, contentType: headers.get("content-type"), body: raw ? { bytes: raw.length } : body });
     const path = url.pathname;
     const f = failures.findIndex((x) => x.method === method && x.path.test(path));
     const failure = f >= 0 ? failures.splice(f, 1)[0] : undefined;
@@ -88,6 +92,14 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
     const rest = path.split("/").slice(3).map(decodeURIComponent).join("/");
     if (rest === "_apis/work/processconfiguration") return json(opts.recurring ? { ...PC, portfolioBacklogs: [PC.portfolioBacklogs[0], { ...PC.portfolioBacklogs[1]!, workItemTypes: [{ name: "Feature" }, { name: "Recurring" }] }] } : PC);
     if (rest === "_apis/wit/fields") return json({ value: FIELDS });
+    // CV-4: an attachment upload (raw bytes, application/octet-stream), at the org level as the docs' samples are.
+    if (path === `/${org}/_apis/wit/attachments` && method === "POST") {
+      if (!raw || headers.get("content-type") !== "application/octet-stream") return json({ message: "bad upload" }, 400);
+      const id = `aaaaaaaa-0000-4000-8000-${String(nextAttachment++).padStart(12, "0")}`;
+      const fileName = url.searchParams.get("fileName") ?? "file";
+      attachments.set(id, { fileName, size: raw.length, contentType: headers.get("content-type") });
+      return answer(json({ id, url: `https://dev.azure.com/${org}/_apis/wit/attachments/${id}?fileName=${encodeURIComponent(fileName)}` }, 201));
+    }
     let m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/states$/);
     if (m) return json({ value: STATES[m[1]!] ?? [] });
     m = rest.match(/^_apis\/wit\/workitemtypes\/(.+)\/fields$/);
@@ -107,6 +119,11 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
         if (op.path.startsWith("/fields/")) {
           const k = op.path.slice(8);
           it.fields[k] = k === "System.AssignedTo" ? { displayName: who.name, uniqueName: op.value } : op.value;
+        } else if (op.path === "/relations/-" && (op.value as { rel: string }).rel === "AttachedFile") {
+          const r = op.value as { rel: string; url: string; attributes?: unknown };
+          const aid = r.url.match(/attachments\/([0-9a-f-]+)/)?.[1];
+          if (!aid || !attachments.has(aid)) return json({ message: "TF401349: attachment not found" }, 400);
+          it.relations.push(r);
         } else if (op.path === "/relations/-") {
           const r = op.value as { rel: string; url: string };
           it.relations.push(r);
@@ -132,6 +149,13 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
         for (const op of body as { op: string; path: string; value: unknown }[]) if (op.op === "test" && op.path === "/rev" && op.value !== it.rev) return json({ message: "TF26071: This work item has been changed by someone else since you opened it." }, 412);
         for (const op of body as { op: string; path: string; value: unknown }[]) {
           if (op.op === "test") continue;
+          // CV-4: a relation removed by its index (the documented "remove" on /relations/<index>).
+          const ri = op.op === "remove" ? op.path.match(/^\/relations\/(\d+)$/) : null;
+          if (ri) {
+            if (Number(ri[1]) >= it.relations.length) return json({ message: "TF401349: relation index out of range" }, 400);
+            it.relations.splice(Number(ri[1]), 1);
+            continue;
+          }
           const k = op.path.replace(/^\/fields\//, "");
           if (k === "System.History") {
             commentId = nextComment++;
@@ -169,7 +193,7 @@ export function fakeDevOpsWrite(opts: { org?: string; identities?: Record<string
   }) as typeof fetch;
 
   return {
-    fetch: fn, seen, items, comments, add,
+    fetch: fn, seen, items, comments, add, attachments,
     /** The next matching request fails at the network (nothing done), or is done and its answer lost. */
     fail: (method: string, path: RegExp, mode: "network" | "lost") => void failures.push({ method, path, mode }),
     /** Someone else edits an item (its rev moves on). */

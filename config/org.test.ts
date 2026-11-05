@@ -77,8 +77,11 @@ describe("Rules: the team's value replaces the person's", () => {
     const r = resolveRules([row("client:contoso", "open_states", ["Resolved"])], BOOT);
     expect(applyOrg(c, r, { level: null, levelSource: null }).clientSettings.contoso?.openStates).toEqual(["Resolved"]);
   });
-  it("Send attachments to AI can't be turned on yet", () => {
-    expect(() => specFor("client:contoso", "attachments_ai")!.parse(true)).toThrow();
+  it("CV-4: Send attachments to AI is a per-client Rule, off by default", () => {
+    expect(specFor("client:contoso", "attachments_ai")!.parse(true)).toBe(true);
+    const c = cfgOf(`${starter()}\n[clients.contoso]\n`);
+    expect(applyOrg(c, resolveRules([], BOOT), { level: null, levelSource: null }).org?.clients.contoso?.attachmentsAi ?? false).toBe(false);
+    expect(applyOrg(c, resolveRules([row("client:contoso", "attachments_ai", true)], BOOT), { level: null, levelSource: null }).org?.clients.contoso?.attachmentsAi).toBe(true);
   });
 });
 
