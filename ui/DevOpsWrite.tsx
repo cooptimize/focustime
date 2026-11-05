@@ -567,7 +567,7 @@ function DraftMenu({ d, writing, onChanged }: { d: DraftStory; writing: boolean;
   );
 }
 
-const OP_WORD: Record<string, string> = { state: "State changed", comment: "Comment added", create: "Created", target_date: "Target date set", undo_state: "Undo: state put back", undo_comment: "Undo: comment deleted", undo_create: "Undo: set to Removed", undo_target_date: "Undo: target date put back", description: "Description changed", undo_description: "Undo: description put back", fields: "Dates, size or owner changed", undo_fields: "Undo: dates, size and owner put back" };
+const OP_WORD: Record<string, string> = { state: "State changed", comment: "Comment added", create: "Created", target_date: "Target date set", undo_state: "Undo: state put back", undo_comment: "Undo: comment deleted", undo_create: "Undo: set to Removed", undo_target_date: "Undo: target date put back", description: "Description changed", undo_description: "Undo: description put back", fields: "Dates, size or owner changed", undo_fields: "Undo: dates, size and owner put back", feedback: "Feedback sent" };
 const DW_STATUS: Record<string, string> = { pending: "Not finished", confirmed: "Confirmed", unconfirmed: "Not confirmed", failed: "Failed", refused: "Refused" };
 const fmt = (v: Record<string, string | null>) => Object.entries(v).map(([k, x]) => `${k}: ${x ?? "(empty)"}`).join(", ");
 
@@ -583,7 +583,7 @@ export function DevOpsWriteLog(): ReactNode {
   return (
     <section className="write-log dw-log" aria-label="DevOps write log">
       <h3>DevOps write log</h3>
-      <p className="muted">Every change FocusTime made in DevOps, with your write PAT. Nothing is ever deleted: undoing a new item sets it to Removed.</p>
+      <p className="muted">Every change FocusTime made in DevOps, with your write PAT, and the feedback you sent (made by FocusTime's own identity, with no undo). Nothing is ever deleted: undoing a new item sets it to Removed.</p>
       {error && <p className="set-problem">{error}</p>}
       {log && !log.entries.length && <p className="muted">Nothing written to DevOps yet.</p>}
       {log && log.entries.length > 0 && (

@@ -167,6 +167,7 @@ const SUMMARY: Record<WriteOp, string> = {
   description: "Change a DevOps item's description", undo_description: "Undo: put the description back",
   assign: "Assign a DevOps story or feature to you", undo_assign: "Undo: give it back to who had it",
   fields: "Change dates, size or owner in DevOps", undo_fields: "Undo: put the dates, size and owner back",
+  feedback: "Send feedback to the FocusTime backlog",
 };
 
 export async function devopsWriteAction(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
@@ -278,7 +279,8 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       fields(input ?? {}, [], ["limit"]);
       const log = (await plan.devopsWriteLog(200));
       const tops = undoTops(log);
-      return { ok: true, data: { entries: log.map((e) => ({ ...e, undoable: !!e.itemId && tops.get(`${e.org.toLowerCase()}#${e.itemId}`) === e.id && !e.op.startsWith("undo_"), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending" })) } };
+      // UI-8: Send feedback's creates are listed with neither Undo nor Retry (F1 never deletes and never resends on its own).
+      return { ok: true, data: { entries: log.map((e) => (e.op === "feedback" ? { ...e, undoable: false, retryable: false } : { ...e, undoable: !!e.itemId && tops.get(`${e.org.toLowerCase()}#${e.itemId}`) === e.id && !e.op.startsWith("undo_"), retryable: e.status === "unconfirmed" || e.status === "failed" || e.status === "pending" })) } };
     }
     case "devops.preview": {
       const o = fields(input, ["clientKey"], ["change", "changes"]);
@@ -355,6 +357,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
       const o = fields(input, ["id"]);
       const entry = (await plan.devopsWrite(posId(o.id, "id")));
       if (!entry) throw new PlanError("No such write");
+      if (entry.op === "feedback") throw new Refused("Feedback isn't sent again from here. Send it again from ⋯ › Send feedback", 409);
       if (entry.status === "confirmed" || entry.status === "refused") return { ok: true, data: { entry, confirmed: entry.status === "confirmed", message: entry.status === "confirmed" ? "Already confirmed" : entry.message ?? "Refused" } satisfies DevOpsResult };
       const env = await envOf(entry.clientKey);
       if (env.org.toLowerCase() !== entry.org.toLowerCase()) throw new Refused("This write was for another organization", 409);
@@ -848,6 +851,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
     case "undo": {
       const entry = (await plan.devopsWrite(posId(o.writeId, "writeId")));
       if (!entry) throw new PlanError("No such write");
+      if (entry.op === "feedback") throw new Refused("Feedback can't be undone from FocusTime", 409);
       if (entry.clientKey !== env.clientKey || entry.org.toLowerCase() !== org.toLowerCase()) throw new Refused("That write belongs to another client", 409);
       if (entry.status !== "confirmed" || entry.itemId === null) throw new Refused("Only a confirmed change can be undone", 409);
       if (entry.op.startsWith("undo_")) throw new Refused("An undo isn't undone again: make the change again instead", 409);

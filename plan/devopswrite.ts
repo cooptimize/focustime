@@ -37,7 +37,9 @@ export const itemApiUrl = (org: string, id: number) => `${orgBase(org)}/_apis/wi
 
 export type PatchOp = { op: "add" | "replace" | "remove" | "test"; path: string; value?: unknown };
 export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign" | "fields";
-export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields";
+export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields" | "feedback";
+/** UI-8: the audit log's client key for Send feedback's creates (F1): never a client, so no client's undo or retry reaches it. */
+export const FEEDBACK_LOG_KEY = "FocusTime feedback";
 
 /** One identity as connectionData reports it. */
 export type DevOpsIdentity = { id: string; name: string; email: string };
@@ -164,7 +166,7 @@ export function undoTops(log: readonly DevOpsWriteEntry[]): Map<string, number> 
   for (const e of log) {
     if (e.itemId === null) continue;
     const k = `${e.org.toLowerCase()}#${e.itemId}`;
-    if (out.has(k) || e.op.startsWith("undo_") || e.status !== "confirmed") continue;
+    if (out.has(k) || e.op.startsWith("undo_") || e.op === "feedback" || e.status !== "confirmed") continue;
     if (e.undoneBy === null) out.set(k, e.id);
   }
   return out;
