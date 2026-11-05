@@ -248,3 +248,12 @@ What DS-1 learned, and what is still open:
 - Q-HK1-2: The names guard's history exceptions (`docs/decisions.md`, `docs/azure/`) mean a real name can still land there. Should the guard cover them too, with an allowlist for the old entries?
 - Q-HK1-3: Exception messages are redacted by pattern; an unquoted person's name or a client name FocusTime hasn't seen yet in this process could pass. Should errors that carry values move to typed errors with a fixed message?
 - Q-HK1-4: The DevOps checks dominate ingest (about 0.35 GB a month in prod at 1-minute checks). If prod's ingest passes 2 GB a month, sample the `devops_check` job items that changed nothing first.
+## Rolling into a new week (PL-1, Nov 5)
+
+- Q-PL1-1 (for PL-2): When does a planning moment happen? The proposal shows whenever there are rows; should Monday morning prompt for it (a moment card on Today, a notification), and should Commit's Done wait for it?
+- Q-PL1-2 (for PL-2): Churn: a feature carried over week after week. Should the row say "3rd week", and should a feature carried more than N times suggest Watching or a talk with the lead?
+- Q-PL1-3: The amber rule starts on Wednesday. Is that right, or should it depend on the person's working days?
+- Q-PL1-4: A removed feature gives no row. Should it say "Removed in DevOps" once, so a must doesn't vanish silently?
+- Q-PL1-5: A check-in with nowhere to go this week (the client's blocks have ended, the rest is PTO or catch-up) waits for Add a check-in. Should it offer next week instead?
+- Q-PL1-6: Commit's Add pane shows a target date that runs wider than a phone (`.pw-meta`); not PL-1's, seen in its screenshots.
+

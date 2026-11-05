@@ -23,10 +23,10 @@ export type TimeChoice = { kind: "keep" | "gap"; start: string; end: string; min
  * size from Settings. From `now` on today. Step 16 (D285): a gap shorter than the pick's shortest useful time (the same
  * rule as Timebox my day, D273) isn't offered, and a pick is never trimmed below it. Custom time stays free.
  */
-export function timeChoices(slot: Slot, timeboxes: readonly Box[], pick: { id: number; size: Size | null }, sizes: Readonly<Record<Size, number>>, now?: string, minSizes: Readonly<Record<Size, number>> = DEFAULT_MIN_SIZES): TimeChoice[] {
+export function timeChoices(slot: Slot, timeboxes: readonly Box[], pick: { id: number; size: Size | null; minutes?: number | null }, sizes: Readonly<Record<Size, number>>, now?: string, minSizes: Readonly<Record<Size, number>> = DEFAULT_MIN_SIZES): TimeChoice[] {
   const own = timeboxes.find((t) => t.pickId === pick.id && !t.removedAt) ?? null;
   const others = timeboxes.filter((t) => t !== own);
-  const want = own ? minutesOf(own) : sizes[pick.size ?? "M"];
+  const want = own ? minutesOf(own) : (pick.minutes ?? sizes[pick.size ?? "M"]);
   const out: TimeChoice[] = own ? [{ kind: "keep", start: own.start, end: own.end, minutes: want, trimmed: false, gapStart: own.start, gapEnd: own.end, gapMinutes: want }] : [];
   const ms = (s: string) => Temporal.Instant.from(s).epochMilliseconds;
   const seen = new Set<number>(own ? [ms(own.start)] : []);

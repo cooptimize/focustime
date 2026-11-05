@@ -2,6 +2,7 @@
 // locally; optionally put on Outlook as a Busy event FocusTime owns. Pure: validation, the event's fields, planned time
 // with timeboxes, whether Outlook needs a change, which Outlook events are FocusTime's own, and how a write is undone.
 import type { CalEvent, IsoDate } from "../week/types.ts";
+import { pickNeed } from "./types.ts";
 
 /** The three answers to a meeting (step 16), as Graph's responseStatus names them. */
 export const RSVP_RESPONSES = ["accepted", "tentativelyAccepted", "declined"] as const;
@@ -136,7 +137,7 @@ export function clippedMinutes(tb: { start: string; end: string }, w: { start: s
   return b > a ? Math.round((b - a) / 60_000) : 0;
 }
 
-type PickLike = { id: number; status: string; size: string | null };
+type PickLike = { id: number; status: string; size: string | null; minutes?: number | null; resolved?: boolean };
 /**
  * Planned minutes of a half-day with timeboxes: a planned pick with a timebox counts its timeboxed time instead of its
  * size; every live timebox in the half-day counts its minutes inside it (clipped), whether tied to a pick or not, unless
@@ -145,8 +146,9 @@ type PickLike = { id: number; status: string; size: string | null };
 export function plannedWithTimeboxes(picks: readonly PickLike[], sizes: Readonly<Record<string, number>>, timeboxes: readonly Pick<Timebox, "pickId" | "start" | "end" | "removedAt">[], slot: { start: string; end: string }, allPicks: readonly PickLike[] = picks): number {
   const live = timeboxes.filter((t) => !t.removedAt);
   const boxed = new Set(live.map((t) => t.pickId).filter((x): x is number => x !== null));
-  const status = new Map(allPicks.map((p) => [p.id, p.status]));
-  const fromSizes = picks.filter((p) => p.status === "planned" && !boxed.has(p.id)).reduce((s, p) => s + (sizes[p.size ?? "M"] ?? 0), 0);
+  // PL-1: a pick whose item is resolved counts zero, timed or not (it shows as done).
+  const status = new Map(allPicks.map((p) => [p.id, p.resolved ? "done" : p.status]));
+  const fromSizes = picks.filter((p) => p.status === "planned" && !boxed.has(p.id)).reduce((s, p) => s + pickNeed(p, sizes), 0);
   const fromBoxes = live.filter((t) => t.pickId === null || (status.get(t.pickId) ?? "planned") === "planned").reduce((s, t) => s + clippedMinutes(t, slot), 0);
   return fromSizes + fromBoxes;
 }

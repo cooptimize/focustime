@@ -1,6 +1,7 @@
 // Menus for everything (step 6, D102): the command menu (Ctrl+K), the "⋯" and right-click menus on block cards,
 // picks and work items. One model: a menu step is a titled list of items, or a text prompt; an item either runs
 // or opens the next step. The command menu is built from the action registry, so every action appears.
+import type { CheckinGhost } from "../plan/carry.ts";
 import { alreadyPlanned } from "../plan/dup.ts";
 import { aboutText, hoursText, parseHours, sizeChipText, storyMinutes, MAX_ESTIMATE_HOURS, MIN_ESTIMATE_HOURS } from "../plan/estimate.ts";
 import { addTargets, type AddTarget, type TargetBlock, type TargetGroup } from "../plan/addtargets.ts";
@@ -276,6 +277,23 @@ function halfDays(env: MenuEnv, skip?: { date: IsoDate; half: Half }): { date: I
       .filter((s) => (!s.off || d.kind === "overflow") && !(skip && skip.date === d.date && skip.half === s.half))
       .map(({ half }) => ({ date: d.date, half, label: `${dayName(d.date)} ${halfLabel(half)}${d.kind === "overflow" ? " (Friday catch-up)" : ""}`, ...(closedReason(env, d.date) ? { disabled: closedReason(env, d.date)! } : {}) })),
   );
+}
+
+// ---------- PL-1: a Watching row's check-in ----------
+
+/** A check-in's menu: move it to another half-day of its week, or remove it (the Watching row stays). */
+export function checkinMenu(env: MenuEnv, c: CheckinGhost): MenuStep {
+  const key = { weekStart: c.weekStart, clientKey: c.clientKey, itemId: c.itemId };
+  const days = halfDays(env, { date: c.date, half: c.half })
+    .filter((h) => h.half !== "EVE" && h.date >= c.weekStart && !isPast(env, h.date))
+    .map<MenuItem>((h) => ({ id: `to-${h.date}-${h.half}`, label: `To ${h.label}`, action: "weekplan.watch_checkin", run: () => env.runPlan("weekplan.watch_checkin", { ...key, to: { date: h.date, half: h.half } }) }));
+  return {
+    title: `Check-in: ${c.title}`,
+    items: [
+      { id: "move", label: "Move", hint: "another half-day this week", action: "weekplan.watch_checkin", next: () => ({ title: `Move the check-in on "${c.title}"`, items: days }) },
+      { id: "remove", label: "Remove check-in", hint: "keeps watching it", danger: true, action: "weekplan.watch_checkin", run: () => env.runPlan("weekplan.watch_checkin", { ...key, to: null }) },
+    ],
+  };
 }
 
 // ---------- picks ----------
@@ -1184,6 +1202,11 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "weekplan.add_draft":
     case "weekplan.draft_tier":
     case "weekplan.nothing":
+    case "weekplan.proposal":
+    case "weekplan.carry_decide":
+    case "weekplan.carry_accept_all":
+    case "weekplan.watch_checkin":
+    case "weekplan.watch_remove":
     case "feature.brief":
     case "feature.mark_breakdown":
     case "followup.ask_priorities":

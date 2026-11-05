@@ -81,6 +81,8 @@ export type CentralReads = {
   target(clientKey: string): Promise<DevOpsTarget | null>;
   /** After a write: check the client now, so the next read shows the change. */
   afterWrite(clientKey: string): void;
+  /** PL-1: items whose state changed since an instant (the change log), and whether the log covers that span. */
+  stateChanges?(clientKey: string, since: string): Promise<{ known: boolean; itemIds: number[] }>;
 };
 
 /** The fields a project has for Plan the week, cached an hour. */
@@ -478,7 +480,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
   }
 
   /** Features and epics for my items (step 8), from the given reads and fields (DevOps or the store). */
-  async function readPortfolio(ctx: Ctx, raw: Metadata, mine: readonly WorkItem[], r: (meta: Metadata) => Reads, fieldsOf: () => Promise<FieldSet>): Promise<PortfolioRead> {
+  /** `only` (PL-1): exactly these features and epics by id, in any state (closed ones too), without the ones above. */
+  async function readPortfolio(ctx: Ctx, raw: Metadata, mine: readonly WorkItem[], r: (meta: Metadata) => Reads, fieldsOf: () => Promise<FieldSet>, only?: readonly number[]): Promise<PortfolioRead> {
     const project = ctx.projectName;
     needStoryLevel(raw, ctx, project);
     const categories = stateCategories(raw.model, d.openStates?.(ctx.clientKey) ?? []);
@@ -486,17 +489,17 @@ export function createDevOpsSource(d: DevOpsDeps) {
     // Assigned to me, or the parent of a story-level item assigned to me (raw backlog levels, not the pickable list).
     const assigned = new Set(mine.filter((i) => portfolioTypes.has(i.type)).map((i) => i.id));
     const parents = new Set(mine.filter((i) => raw.levels.story.has(i.type) && i.parentId !== null).map((i) => i.parentId!));
-    const ids = [...new Set([...assigned, ...parents])].slice(0, MAX_PARENTS);
+    const ids = [...new Set(only ?? [...assigned, ...parents])].filter((id) => Number.isInteger(id) && id > 0).slice(0, MAX_PARENTS);
     if (!ids.length) return { items: [], targetFields: {}, startFields: {}, sizeField: null, acceptanceField: false };
     const { fields: targetFields, starts: startFields, size: sizeField, ac: acceptanceField } = await fieldsOf();
     const reads = r({ ...raw, categories });
     const readByIds = async (ids: readonly number[], f: string[], n: Omit<NormalizeContext, "org" | "projectName">) => normalizeWorkItems(await reads.byIds(ids, f), { org: ctx.org, projectName: ctx.projectName, ...n }).items;
     const fields = [...batchFields(raw.orderField), "System.AssignedTo", "System.AreaPath", "System.IterationPath", ...new Set([...Object.values(targetFields), ...Object.values(startFields)]), ...(sizeField ? [sizeField] : [])];
     const n = { orderField: raw.orderField, categories, levels: raw.levels, keepDone: true, me: ctx.me, people: true, targetFields, startFields, timeZone: d.timeZone, sizeField, paths: true };
-    const found = (await readByIds(ids, fields, n)).filter((i) => portfolioTypes.has(i.type) && !isClosed(i.stateCategory));
+    const found = (await readByIds(ids, fields, n)).filter((i) => portfolioTypes.has(i.type) && (!!only || !isClosed(i.stateCategory)));
     // Q49: follow parent links up to the top portfolio level, so the epics above my features are read too.
     const above = new Set<number>();
-    for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth++) {
+    for (let depth = 0; !only && depth < MAX_ANCESTOR_DEPTH; depth++) {
       const have = new Set(found.map((i) => i.id));
       const up = [...new Set(found.map((i) => i.parentId).filter((id): id is number => id !== null && !have.has(id)))].slice(0, MAX_PARENTS);
       if (!up.length) break;
@@ -907,6 +910,73 @@ export function createDevOpsSource(d: DevOpsDeps) {
     }
   }
 
+  /** PL-1: what a by-id read of one client's store needs (no read of my items), or null when DevOps can't say now. */
+  async function centralCtx(ref: ClientRef, targets: TargetsResult): Promise<{ ctx: Ctx; meta: Metadata; view: CentralView } | null> {
+    if (!targets.ok || !d.central) return null;
+    const target = targets.targets.find((t) => t.clientKey === ref.clientKey);
+    if (precheck(ref, target, { pat: false })) return null;
+    const view = await d.central.view(ref.clientKey, { force: false });
+    if (!view.process || !view.loaded) return null;
+    const { ctx } = contextOf(ref, { ...target!, pat: null });
+    return { ctx, meta: metaOf(view.process, ref.clientKey), view };
+  }
+
+  /**
+   * PL-1: these features as the store has them now, in any state, each with every child (assignee and state); null
+   * for a client DevOps can't say anything about right now (not loaded, failing, or not this person's to see).
+   */
+  async function featureTrees(clients: ClientRef[], ids: Readonly<Record<string, readonly number[]>>): Promise<{ clientKey: string; items: PortfolioItem[] | null }[]> {
+    if (!d.central) return clients.map((c) => ({ clientKey: c.clientKey, items: null }));
+    const targets = await viewerTargets(clients.map((c) => c.clientKey), false);
+    return Promise.all(
+      clients.map(async (ref) => {
+        const want = ids[ref.clientKey] ?? [];
+        if (!want.length) return { clientKey: ref.clientKey, items: [] };
+        const c = await centralCtx(ref, targets);
+        if (!c) return { clientKey: ref.clientKey, items: null };
+        try {
+          const p = await readPortfolio(c.ctx, c.meta, [], (m) => storeReads(ref.clientKey, c.view.values, m), async () => c.view.fields ?? { fields: {}, starts: {}, size: null, ac: false }, want);
+          return { clientKey: ref.clientKey, items: p.items };
+        } catch {
+          return { clientKey: ref.clientKey, items: null };
+        }
+      }),
+    );
+  }
+
+  /** PL-1: the state category of these items (any state) as the store has them; null when DevOps can't say now. */
+  async function itemStates(clients: ClientRef[], ids: Readonly<Record<string, readonly number[]>>): Promise<{ clientKey: string; states: Record<number, string> | null }[]> {
+    if (!d.central) return clients.map((c) => ({ clientKey: c.clientKey, states: null }));
+    const targets = await viewerTargets(clients.map((c) => c.clientKey), false);
+    return Promise.all(
+      clients.map(async (ref) => {
+        const want = [...new Set(ids[ref.clientKey] ?? [])].filter((id) => Number.isInteger(id) && id > 0).slice(0, BATCH_MAX);
+        if (!want.length) return { clientKey: ref.clientKey, states: {} };
+        const c = await centralCtx(ref, targets);
+        if (!c) return { clientKey: ref.clientKey, states: null };
+        try {
+          const meta = { ...c.meta, categories: stateCategories(c.meta.model, d.openStates?.(ref.clientKey) ?? []) };
+          const values = await storeReads(ref.clientKey, c.view.values, meta).byIds(want, batchFields(meta.orderField));
+          const items = normalized(c.ctx, meta, values, { keepDone: true, tiers: false });
+          return { clientKey: ref.clientKey, states: Object.fromEntries(items.map((i) => [i.id, i.stateCategory])) };
+        } catch {
+          return { clientKey: ref.clientKey, states: null };
+        }
+      }),
+    );
+  }
+
+  /**
+   * PL-1: the items whose state changed since an instant, per the change log; `known` false while the store's change
+   * log doesn't cover the whole span yet (the first load came after it, just after DV-1) or DevOps can't say.
+   */
+  async function stateChanges(clientKey: string, since: string): Promise<{ known: boolean; itemIds: number[] }> {
+    if (!d.central?.stateChanges) return { known: false, itemIds: [] };
+    const targets = await viewerTargets([clientKey], false);
+    if (!targets.ok || precheck({ clientKey, clientName: clientKey }, targets.targets.find((t) => t.clientKey === clientKey), { pat: false })) return { known: false, itemIds: [] };
+    return d.central.stateChanges(clientKey, since).catch(() => ({ known: false, itemIds: [] }));
+  }
+
   async function centralLoad(clients: ClientRef[], opts: { refresh?: boolean; watch?: Readonly<Record<string, readonly number[]>>; features?: Readonly<Record<string, readonly number[]>> }): Promise<CentralRead[]> {
     const force = !!opts.refresh;
     const targets = await viewerTargets(clients.map((c) => c.clientKey), force);
@@ -979,10 +1049,13 @@ export function createDevOpsSource(d: DevOpsDeps) {
     },
   };
 
-  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, internal };
+  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool, processModels, featureTrees, itemStates, stateChanges, internal };
 }
 
 /** What screens use (the same interface whether it reads DevOps or the central store). */
-export type DevOpsSource = Omit<ReturnType<typeof createDevOpsSource>, "internal">;
+type FullSource = ReturnType<typeof createDevOpsSource>;
+/** PL-1's by-id reads are optional: a source without them (a stub, an older adapter) means "DevOps can't say". */
+type PlanReads = "featureTrees" | "itemStates" | "stateChanges";
+export type DevOpsSource = Omit<FullSource, "internal" | PlanReads> & Partial<Pick<FullSource, PlanReads>>;
 /** DV-1: what the central poller uses of an app-level source. */
 export type DevOpsInternal = ReturnType<typeof createDevOpsSource>["internal"];

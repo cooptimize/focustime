@@ -1,11 +1,12 @@
 // Fit while planning (step 15, D266): picks against a block's whole free time, in calm words. Pure.
 // Check-in alone compares against the time left (capacityMinutes with now); everything else uses this.
+import { pickNeed } from "./types.ts";
 import { freeMinutes } from "../week/free.ts";
 import type { FreeGap, IsoDate } from "../week/types.ts";
 import { fitOf, type Fit } from "./rules.ts";
 import { slotPlanned } from "./timebox.ts";
 
-type PickLike = { id: number; status: string; size: string | null };
+type PickLike = { id: number; status: string; size: string | null; minutes?: number | null; resolved?: boolean };
 type BoxLike = { date: IsoDate; pickId: number | null; start: string; end: string; removedAt: string | null };
 type SlotLike = { date: IsoDate; start: string; end: string; pto: boolean; freeGaps: FreeGap[]; longestFreeMinutes: number };
 
@@ -67,13 +68,13 @@ export function trimCandidates<P extends PickLike>(picks: readonly P[], overBy: 
   const order = picks
     .map((p, i) => ({ p, i }))
     .filter(({ p }) => p.status === "planned")
-    .sort((a, b) => Number(musts.has(a.p.id)) - Number(musts.has(b.p.id)) || (sizes[b.p.size ?? "M"] ?? 0) - (sizes[a.p.size ?? "M"] ?? 0) || Number(timed.has(a.p.id)) - Number(timed.has(b.p.id)) || b.i - a.i);
+    .sort((a, b) => Number(musts.has(a.p.id)) - Number(musts.has(b.p.id)) || pickNeed(b.p, sizes) - pickNeed(a.p, sizes) || Number(timed.has(a.p.id)) - Number(timed.has(b.p.id)) || b.i - a.i);
   const out: number[] = [];
   let covered = 0;
   for (const { p } of order) {
     if (covered >= overBy) break;
     out.push(p.id);
-    covered += sizes[p.size ?? "M"] ?? 0;
+    covered += pickNeed(p, sizes);
   }
   return out;
 }

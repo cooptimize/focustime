@@ -17,7 +17,7 @@ export function currentList(text: string, section: string, key: string): string[
   }
 }
 
-export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "asks", "ai", "guidance"] as const;
+export const SETTINGS_SECTIONS = ["hours", "standing", "risk", "planning", "client", "display", "focus", "timebox", "collab", "notify", "vm", "roadmap", "asks", "ai", "guidance", "keep_open"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export class SettingsInputError extends Error {
@@ -232,6 +232,17 @@ export function settingsEdit(section: SettingsSection, input: unknown): (text: s
         values.push(["draft_months", m]);
       }
       return (text) => values.reduce((t, [k, val]) => setValue(t, "ai", k, val), text);
+    }
+    case "keep_open": {
+      // PL-1: one client's Keep open share (Commit mode's client card); null goes back to the level's default.
+      only(v, ["key", "percent"], "keep_open");
+      const key = clientKey(v.key);
+      if (v.percent !== null) {
+        const n = int(v.percent, `keep_open.${key}`);
+        if (n < 0 || n > 80) throw new SettingsInputError(`keep_open.${key}`, "Must be from 0 to 80 percent");
+      }
+      const pct = v.percent as number | null;
+      return (text) => (pct === null ? removeValue(text, "keep_open", key) : setValue(text, "keep_open", key, pct, "Keep open (PL-1): % of a client's block hours left unplanned for walk-ins."));
     }
     case "guidance": {
       // ADM-1: the person's own choices over their level's defaults; null goes back to the team default.

@@ -291,6 +291,22 @@ describe("Refresh", () => {
   });
 });
 
+describe("state changes for Watching (PL-1)", () => {
+  it("are known only for a span the first full load came before, and list state changes only", async () => {
+    const h = harness({ contoso: project([aFakeItem({ id: 5, type: "Feature", assignee: ME }), aFakeItem({ id: 6, assignee: ME }), aFakeItem({ id: 7, assignee: ME })]) });
+    // Before anything was loaded, and for a span starting before the first load: not known.
+    expect(await h.poller.reads.stateChanges!("contoso", START)).toEqual({ known: false, itemIds: [] });
+    await h.tick();
+    expect(await h.poller.reads.stateChanges!("contoso", "2026-11-02T05:00:00Z")).toEqual({ known: false, itemIds: [] });
+    const since = h.now().toString();
+    h.advance(61_000);
+    h.fake.change("contoso", 6, { state: "Resolved", changedBy: ME });
+    h.fake.change("contoso", 7, { assignee: DANA, changedBy: DANA });
+    await h.tick();
+    expect(await h.poller.reads.stateChanges!("contoso", since)).toEqual({ known: true, itemIds: [6] });
+  });
+});
+
 describe("the change log", () => {
   it("records assignee and target date changes old to new, with who changed it per DevOps", async () => {
     const h = harness({ contoso: project([aFakeItem({ id: 5, type: "Feature", assignee: ME, target: "2026-11-20T00:00:00Z" }), aFakeItem({ id: 6, assignee: ME, comments: 1 })]) });

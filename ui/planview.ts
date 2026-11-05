@@ -31,6 +31,8 @@ export type PlanView = {
   /** Open follow-ups (step 13.5), for the week's cards, and today's date for their due badges. */
   followUps?: readonly FollowUpView[];
   today?: IsoDate;
+  /** PL-1: Watching check-ins not yet picks, shown as ghost chips on their half-day. */
+  checkins?: readonly import("../plan/carry.ts").CheckinGhost[];
 };
 type TimeboxLike = { date: IsoDate; pickId: number | null; start: string; end: string; removedAt: string | null };
 export type ResumeNote = { clientKey: string; date: IsoDate; note: string };

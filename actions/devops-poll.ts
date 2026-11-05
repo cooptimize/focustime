@@ -481,6 +481,14 @@ export function createDevOpsPoller(d: PollerDeps) {
         return null;
       }
     },
+    async stateChanges(key, since) {
+      const c = await stateOf(key);
+      // The log covers the span only when the first full load came before it (nothing before that is news).
+      const known = !!c.row.loadedAt && Temporal.Instant.compare(Temporal.Instant.from(c.row.loadedAt), Temporal.Instant.from(since)) <= 0;
+      if (!known) return { known: false, itemIds: [] };
+      const ids = new Set((await d.store.changes(key, since)).filter((x) => x.kind === "state").map((x) => x.itemId));
+      return { known: true, itemIds: [...ids].sort((a, b) => a - b) };
+    },
     afterWrite(key) {
       void stateOf(key).then((c) => {
         c.writePending = true;
