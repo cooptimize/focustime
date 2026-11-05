@@ -4985,4 +4985,6 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .grid.medium .day-head { min-width: 0; overflow: hidden; container-type: inline-size; }
 @container (max-width: 17em) { .day-head .date { display: none; } }
 @container (max-width: 12em) { .day-head .today-pill { display: none; } }
+/* On a narrow PTO column the hatched cell already says PTO. */
+@container (max-width: 9em) { .day-head .pto-pill { display: none; } }
 .grid.tier-mini .suggested-card .sc-open { flex-wrap: wrap; }

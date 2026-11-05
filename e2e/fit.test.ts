@@ -123,7 +123,7 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
     await page.close();
   }, T);
 
-  it("a Week card header at 1920 shows a 12-character client name untruncated, and the time range goes first", async () => {
+  it("a Week card header at 1920 shows a 12-character client name untruncated, and the time range takes its own line first", async () => {
     const { page, errors } = await freshPage(h);
     await go(page, `#/week/${MON}`);
     await page.locator(".half.card .card-client").first().waitFor();
@@ -138,14 +138,17 @@ describe.skipIf(!CHROMIUM)("Today and Week fit (U5.1)", () => {
       expect(x.cut).toBe(false);
       expect(x.body).toBeGreaterThanOrEqual(200);
     }
-    // A name too long for the line: the time range leaves the line (wraps out of view) before the name shortens.
+    // A name too long for the line: the time range moves to its own line before the name shortens, and stays in view
+    // (WK-1 amends U5.1, where it wrapped out of view under a fixed-height header).
     const long = await page.locator(".half.card .card-head").first().evaluate((head) => {
-      head.querySelector(".card-client")!.textContent = "Contoso Corporation Holdings";
+      const name = head.querySelector<HTMLElement>(".card-client")!;
+      name.textContent = "Contoso Corporation Holdings";
       const h = head.getBoundingClientRect();
+      const n = name.getBoundingClientRect();
       const when = head.querySelector(".card-when")!.getBoundingClientRect();
-      return { whenHidden: when.top >= h.bottom - 1 };
+      return { ownLine: when.top >= n.top + 4, inView: when.bottom <= h.bottom + 1 && when.height > 0, nameCut: name.scrollHeight > name.clientHeight + 0.5 };
     });
-    expect(long.whenHidden).toBe(true);
+    expect(long).toEqual({ ownLine: true, inView: true, nameCut: false });
     expect(errors).toEqual([]);
     await page.close();
   }, T);
