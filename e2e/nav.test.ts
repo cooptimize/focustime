@@ -1,4 +1,4 @@
-// Step 16.2, NV-1: four tabs (1–4: Today · Week · Ahead · Inbox), Week's Board · Commit and Ahead's Roadmap · Plan ahead,
+// Step 16.2, NV-1: four tabs (1–4: Today · Week · Ahead · Inbox), Week's Board · Commit and Ahead's Grid · Gantt · Fix next (AH-1),
 // Plan today as the Board focused on a day, addresses (back and reload), P, entry points from the Week and notification routes. Demo mode (fictional data), clock pinned to Mon Nov 2, 9:30 AM.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
@@ -116,14 +116,14 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     await page.close();
   }, T);
 
-  it("Ahead: Roadmap · Plan ahead; the ⋯ menu has Commands, the Guide, the keys, Send feedback and About; the initials menu has Settings", async () => {
+  it("Ahead: Grid · Gantt · Fix next; the ⋯ menu has Commands, the Guide, the keys, Send feedback and About; the initials menu has Settings", async () => {
     const { page } = await freshPage(h);
     await page.keyboard.press("3");
-    await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual(["Roadmap", "Plan ahead"]);
+    await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual(["Grid", "Gantt", "Fix next"]);
     await page.keyboard.press("p");
-    await expect.poll(() => hash(page)).toBe("#/ahead/plan");
-    await page.locator(".plan-ahead .pa-grid").waitFor();
-    await page.locator(".roadmap .done-btn").click();
+    await expect.poll(() => hash(page)).toBe("#/ahead/gantt");
+    await page.locator(".ahead .pa-grid").waitFor();
+    await page.keyboard.press("p");
     await expect.poll(() => hash(page)).toBe("#/ahead");
     await page.locator(".top-more").click();
     await expect(page.getByRole("menuitem").allTextContents()).resolves.toEqual([expect.stringMatching(/^Notifications/), expect.stringMatching(/^Commands/), expect.stringMatching(/^Guide/), expect.stringMatching(/^Keyboard shortcuts/), "Send feedback", "Admin", "About"]);
@@ -142,7 +142,8 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
       ["checkin", "#/today/checkin"],
       ["closeout", "#/today/closeout"],
       ["planday", "#/week/day"],
-      ["ahead", "#/ahead/plan"],
+      ["ahead", "#/ahead/gantt"],
+      ["aheaditem:1113", "#/ahead/item/1113"],
       ["planweek:2026-11-09", "#/week/commit/2026-11-09"],
       ["inbox", "#/inbox"],
       ["followup:1", "#/inbox/1"],

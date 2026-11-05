@@ -11,7 +11,7 @@ import { openSend } from "./send-event.ts";
 import { useCallback, useContext, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { breakdownLabel, moveCard, reviewTotal } from "../plan/breakdown.ts";
 import { call } from "./api.ts";
-import { BREAK_DOWN_EVENT, COOP_BRIEF_EVENT, DRAFT_STORIES_EVENT, openBreakDown, PV_BREAKDOWN_EVENT, type BreakDownTarget } from "./menu.ts";
+import { BREAK_DOWN_EVENT, COOP_BRIEF_EVENT, DRAFT_STORIES_EVENT, openBreakDown, PV_BREAKDOWN_EVENT, type BreakDownTarget, type PanelAction } from "./menu.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { DevOpsWork } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
@@ -298,7 +298,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
           </button>
         </header>
 
-        <ItemPane clientKey={clientKey} id={item.id} title={title} type={type} prep={prep} />
+        <ItemPane clientKey={clientKey} id={item.id} title={title} type={type} prep={prep} actions={item.actions ?? []} />
 
         <section className="bd-main" aria-label={STEPS.find(([s]) => s === step)![1]}>
           <div className="bd-body">
@@ -395,7 +395,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
 
 // ---------- the parent item (left) ----------
 
-function ItemPane({ clientKey, id, title, type, prep }: { clientKey: string; id: number; title: string; type: string | null; prep: Prepared | null }) {
+function ItemPane({ clientKey, id, title, type, prep, actions }: { clientKey: string; id: number; title: string; type: string | null; prep: Prepared | null; actions: PanelAction[] }) {
   const [more, setMore] = useState(false);
   const [clamped, setClamped] = useState(false);
   const desc = useRef<HTMLParagraphElement>(null);
@@ -412,6 +412,18 @@ function ItemPane({ clientKey, id, title, type, prep }: { clientKey: string; id:
           #{id} {title}
         </WorkLink>
       </p>
+      {actions.length > 0 && (
+        <ul className="bd-item-acts" aria-label="Actions">
+          {actions.map((a) => (
+            <li key={a.id}>
+              <button type="button" className="link-btn" data-act={a.id} onClick={a.run}>
+                {a.label}
+              </button>
+              {a.hint && <span className="muted"> {a.hint}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
       {prep && (
         <ul className="bd-chips" aria-label="About the item">
           {prep.item.state && <li className="bd-chip">{prep.item.state}</li>}

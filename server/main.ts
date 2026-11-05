@@ -17,6 +17,7 @@ import type { AiProvider } from "../ai/types.ts";
 import type { AiRuntime } from "../actions/ai-actions.ts";
 import { appSpendStore } from "../store/ai-spend.ts";
 import { takesStore } from "../store/devops-takes.ts";
+import { notesStore } from "../store/devops-notes.ts";
 import { teamStore } from "../store/team-store.ts";
 import { Pat } from "../sources/devops/pat.ts";
 import type { WritePats } from "../actions/devops-write-actions.ts";
@@ -349,6 +350,7 @@ const pollDeps: PollDeps = {
 const conversations = createConversationStore(db, instantNow, teams);
 // PV-1: Take one's notices to the previous assignee (an app table).
 const takes = takesStore(db, instantNow);
+const devopsNotes = notesStore(db, instantNow);
 // SW-1: sends, week commitments, client priorities and Ask to look, shared by everyone (app tables).
 const team = teamStore(db, instantNow);
 pollDeps.conversations = conversations;
@@ -747,6 +749,8 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     writePats: writePatsOf(who),
     devopsWriter: createDevOpsWriter({ fetch, log }),
     takes,
+    devopsNotes,
+    devopsStored: async (k, v) => devopsPoller?.reads.stored?.(k, v),
     team,
     account: accountFor(who),
     photoCache: host.photos,

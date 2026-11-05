@@ -1,6 +1,7 @@
 // Local plan store (D23): SQLite through Node's built-in node:sqlite, under ~/.local/share/focustime/.
 // Holds only FocusTime's own plan (day plans, picks, draft stories) and a few one-time markers.
 // Nothing here is ever written to DevOps, Outlook, Google or Dataverse.
+import type { ChangeField, ChangeValue, DayHalf, StagedChange } from "../plan/ahead-edit.ts";
 import { ASK_STATUSES, type Ask, type AskRule, type AskStatus, type StoredMessage } from "../plan/asks.ts";
 import { PROMISE_STATUSES, type AskSort, type NotSorted, type PromiseDraft, type PromiseStatus, type StoredPromise } from "../plan/asks-ai.ts";
 import { CHAT_ID, CHAT_KINDS, type ChatKind, type ChatMember, type DeliveryChat } from "../plan/chats.ts";
@@ -2741,6 +2742,53 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         }
         if (dates.end < dates.start) throw new PlanError("The end date is before the start date");
         (await db.run("INSERT INTO roadmap_dates (client_key, item_id, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id) DO UPDATE SET start_date = excluded.start_date, end_date = excluded.end_date, updated_at = excluded.updated_at", clientKey, itemId, dates.start, dates.end, stamp()));
+      });
+    },
+    /** AH-1 (D657): my pending DevOps edits in Ahead, oldest first. */
+    async aheadChanges(): Promise<StagedChange[]> {
+      const rows = (await db.all("SELECT * FROM ahead_changes ORDER BY created_at, client_key, item_id, field")) as Row[];
+      const parse = (v: unknown) => (typeof v === "string" ? (JSON.parse(v) as ChangeValue) : null);
+      return rows.map((r) => ({
+        clientKey: r.client_key as string, itemId: r.item_id as number, field: r.field as ChangeField, value: parse(r.value_json), half: (r.half as DayHalf | null) ?? null,
+        baseRev: r.base_rev as number, baseValue: parse(r.base_json), ...(r.theirs_json !== null && r.theirs_json !== undefined ? { theirs: parse(r.theirs_json) } : {}),
+        createdAt: String(r.created_at), updatedAt: String(r.updated_at),
+      }));
+    },
+    /** Stage one change. A second edit of the same field keeps the revision and value editing started from. */
+    async stageAheadChange(c: { clientKey: string; itemId: number; field: ChangeField; value: ChangeValue; half: DayHalf | null; baseRev: number; baseValue: ChangeValue }): Promise<void> {
+      return tx(async () => {
+        const at = stamp();
+        (await db.run("INSERT INTO ahead_changes (client_key, item_id, field, value_json, half, base_rev, base_json, theirs_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?) ON CONFLICT (client_key, item_id, field) DO UPDATE SET value_json = excluded.value_json, half = excluded.half, updated_at = excluded.updated_at", c.clientKey, c.itemId, c.field, JSON.stringify(c.value), c.half, c.baseRev, JSON.stringify(c.baseValue), at, at));
+      });
+    },
+    /** DevOps changed this field since editing began: keep its value now beside mine (a conflict). */
+    async markAheadConflict(clientKey: string, itemId: number, field: ChangeField, theirs: ChangeValue): Promise<void> {
+      return tx(async () => void (await db.run("UPDATE ahead_changes SET theirs_json = ?, updated_at = ? WHERE client_key = ? AND item_id = ? AND field = ?", JSON.stringify(theirs), stamp(), clientKey, itemId, field)));
+    },
+    /** Keep mine: edit on from what DevOps has now (its revision and value); the conflict goes. */
+    async rebaseAheadChange(clientKey: string, itemId: number, field: ChangeField, baseRev: number, baseValue: ChangeValue): Promise<void> {
+      return tx(async () => void (await db.run("UPDATE ahead_changes SET base_rev = ?, base_json = ?, theirs_json = NULL, updated_at = ? WHERE client_key = ? AND item_id = ? AND field = ?", baseRev, JSON.stringify(baseValue), stamp(), clientKey, itemId, field)));
+    },
+    /** Remove pending changes: one field, an item's (no field), or all (no item). */
+    async removeAheadChanges(clientKey: string | null, itemId: number | null = null, field: ChangeField | null = null): Promise<number> {
+      return tx(async () => {
+        if (clientKey === null) return (await db.run("DELETE FROM ahead_changes")).changes;
+        if (itemId === null) return (await db.run("DELETE FROM ahead_changes WHERE client_key = ?", clientKey)).changes;
+        if (field === null) return (await db.run("DELETE FROM ahead_changes WHERE client_key = ? AND item_id = ?", clientKey, itemId)).changes;
+        return (await db.run("DELETE FROM ahead_changes WHERE client_key = ? AND item_id = ? AND field = ?", clientKey, itemId, field)).changes;
+      });
+    },
+    /** AH-1 (D659): the half-day I chose for a date that landed in DevOps (DevOps keeps the day). */
+    async aheadHalves(): Promise<{ clientKey: string; itemId: number; field: "start" | "target"; day: IsoDate; half: DayHalf }[]> {
+      return ((await db.all("SELECT client_key, item_id, field, day, half FROM ahead_halves")) as Row[]).map((r) => ({ clientKey: r.client_key as string, itemId: r.item_id as number, field: r.field as "start" | "target", day: String(r.day).slice(0, 10), half: r.half as DayHalf }));
+    },
+    async setAheadHalf(clientKey: string, itemId: number, field: "start" | "target", day: IsoDate | null, half: DayHalf | null): Promise<void> {
+      return tx(async () => {
+        if (!day || !half) {
+          (await db.run("DELETE FROM ahead_halves WHERE client_key = ? AND item_id = ? AND field = ?", clientKey, itemId, field));
+          return;
+        }
+        (await db.run("INSERT INTO ahead_halves (client_key, item_id, field, day, half, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (client_key, item_id, field) DO UPDATE SET day = excluded.day, half = excluded.half, updated_at = excluded.updated_at", clientKey, itemId, field, day, half, stamp()));
       });
     },
     /** S1 (D451): first-run setup, each step done, skipped or dismissed. Empty: never started. */

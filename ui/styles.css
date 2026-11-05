@@ -4477,3 +4477,88 @@ body.touch-dragging { touch-action: none; user-select: none; -webkit-user-select
   /* SW-1's line wrapped whole on a phone; in the strip it still does. */
   .us-sends .us-what { white-space: normal; flex-basis: 100%; }
 }
+/* AH-1: Ahead (Grid · Gantt · Fix next), the change set and the review. */
+.ah-pending { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--selected); border-radius: 8px; background: color-mix(in oklab, var(--selected) 10%, var(--surface)); max-width: 1400px; }
+.ah-ro-note { margin: 0 0 10px; }
+.ah-body.with-pane { display: grid; grid-template-columns: minmax(0, 1fr) calc(260px * var(--text-scale)); gap: 16px; align-items: start; }
+.ah-main { min-width: 0; }
+.ah-pane { position: sticky; top: 8px; display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.ah-pane h3 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.ah-client { margin: 0 0 18px; }
+.ah-client-head { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: var(--fs-3); font-weight: 600; }
+.ah-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--fs-3); }
+.ah-grid .w-item { width: auto; } .ah-grid .w-state { width: 9em; } .ah-grid .w-date { width: 10em; } .ah-grid .w-who { width: 11em; } .ah-grid .w-size { width: 13em; } .ah-grid .w-ready { width: 15em; }
+.ah-grid th { text-align: left; font-size: var(--fs-1); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px 8px; border-bottom: 1px solid var(--border-strong); }
+.ah-cell { position: relative; padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; overflow: hidden; text-overflow: ellipsis; }
+.ah-cell:focus { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ah-cell.ah-col-item { white-space: normal; }
+.ah-cell.ah-col-state, .ah-cell.ah-col-start, .ah-cell.ah-col-target, .ah-cell.ah-col-assignee { white-space: nowrap; }
+.ah-cell.ah-gapcell { background: color-mix(in oklab, var(--watch) 14%, transparent); }
+.ah-cell.ah-pend { background: color-mix(in oklab, var(--selected) 12%, transparent); }
+.ah-cell.ah-conf { box-shadow: inset 0 0 0 2px var(--watch); }
+.ah-cell.ah-abs { color: var(--text-faint); }
+.ah-dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--selected); }
+.ah-cell.ah-conf .ah-dot { background: var(--watch); }
+.ah-item { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.ah-row.tier-epic .ah-item a, .ah-row.tier-epic .ah-item { font-weight: 600; }
+.ah-row.context { opacity: 0.6; }
+.ah-row.highlighted td { background: color-mix(in oklab, var(--selected) 16%, transparent); }
+.ah-type { font-size: var(--fs-2); }
+.ah-id { font-size: var(--fs-2); }
+.ah-ro { font-size: var(--fs-1); color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; }
+.ah-missing { color: var(--watch); }
+.ah-absent { font-size: var(--fs-2); }
+.ah-size { display: inline-grid; gap: 1px; }
+.ah-hint { font-size: var(--fs-2); }
+.ah-ready { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ah-gap { display: inline-block; font-size: var(--fs-2); padding: 0 6px; border-radius: 999px; border: 1px solid color-mix(in oklab, var(--watch) 60%, var(--border)); color: var(--text); background: color-mix(in oklab, var(--watch) 12%, var(--surface)); }
+button.ah-gap { cursor: pointer; }
+.ah-editor { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ah-editor input[type="number"] { width: 6em; }
+.ah-assignee { position: relative; }
+.ah-fix { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 8px; background: var(--surface); max-width: 720px; }
+.ah-fix.compact { padding: 8px 10px; }
+.ah-fix-what { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; font-size: var(--fs-2); }
+.ah-fix-title { margin: 0; font-size: var(--fs-4); font-weight: 600; }
+.ah-fix.compact .ah-fix-title { font-size: var(--fs-3); }
+.ah-fix-actions, .ah-fix-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ah-fix-mode { display: grid; gap: 16px; }
+.ah-fix-next ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: var(--fs-3); }
+.ah-fix-next h3 { margin: 0 0 6px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.ah-bar.dash-start { border-left-style: dashed; border-left-width: 2px; }
+.ah-bar.dash-end { border-right-style: dashed; border-right-width: 2px; }
+.ah-bar.short { box-shadow: 0 0 0 2px var(--watch); }
+.ah-bar.fixed { cursor: pointer; }
+.ah-marks { position: absolute; left: 4px; top: 50%; transform: translateY(-50%); font-size: var(--fs-1); line-height: 1; color: var(--text); pointer-events: none; }
+.ah-short { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: var(--fs-1); line-height: 1; color: var(--text); white-space: nowrap; pointer-events: none; }
+.ah-live { position: absolute; z-index: 4; transform: translateY(-2px); font-size: var(--fs-2); padding: 1px 6px; border-radius: 4px; background: var(--raised); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); white-space: nowrap; pointer-events: none; }
+.ah-reach-unknown { font-size: var(--fs-1); white-space: nowrap; }
+.ah-nodates { display: block; padding: 6px 4px 8px; border-top: 1px dashed var(--border); }
+.ah-nodates h4 { margin: 0 0 4px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.ah-nodates ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: var(--fs-3); }
+.ah-nodates li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ah-review { display: flex; flex-direction: column; gap: 10px; }
+.ah-review-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ah-review-head h2 { margin: 0; }
+.ah-review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; overflow: auto; }
+.ah-review-item { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.ah-review-item.conflict { border-color: var(--watch); }
+.ah-review-item h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: var(--fs-3); font-weight: 600; }
+.ah-review-item tr.conflict th { color: var(--text); }
+.ah-theirs { display: block; font-size: var(--fs-2); color: var(--text-muted); }
+.ah-conflict { margin: 6px 0 0; }
+.ah-landed ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--fs-3); }
+.ah-landed li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ah-review-foot { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+@media (max-width: 1100px) {
+  .ah-body.with-pane { grid-template-columns: minmax(0, 1fr); }
+  .ah-pane { position: static; }
+}
+@media (max-width: 700px) {
+  .ah-grid-box { overflow-x: auto; }
+  .ah-grid { min-width: 900px; }
+}
+.bd-item-acts { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-3); }
+.bd-item-acts .muted { font-size: var(--fs-2); }
+/* AH-1 (D665): Send to… opens over Break down's side panel (both were z-index 60 and the panel came later). */
+.cap-backdrop:has(> .send-dialog) { z-index: 61; }

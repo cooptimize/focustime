@@ -36,8 +36,8 @@ export function onOrg(url: string, org: string): boolean {
 export const itemApiUrl = (org: string, id: number) => `${orgBase(org)}/_apis/wit/workItems/${id}`;
 
 export type PatchOp = { op: "add" | "replace" | "remove" | "test"; path: string; value?: unknown };
-export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign";
-export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign";
+export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description" | "assign" | "fields";
+export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description" | "undo_assign" | "undo_fields";
 
 /** One identity as connectionData reports it. */
 export type DevOpsIdentity = { id: string; name: string; email: string };
@@ -199,3 +199,26 @@ export const assigneeEmail = (text: string | null | undefined): string | null =>
 export function descriptionOps(rev: number, field: string, html: string): PatchOp[] {
   return [test(rev), { op: "replace", path: `/fields/${field}`, value: html }];
 }
+
+// ---- AH-1 (D660): one patch per item for Ahead's change set: start, target, size and assignee behind one rev test ----
+
+/** The labels a fields write shows and logs (the size label is the field's own name, "Story Points"). */
+export const FIELD_LABEL = { start: "Start date", target: "Target date", assignee: "Assigned to" } as const;
+export type FieldSpec =
+  | { kind: "date"; field: string; value: string | null; had: boolean }
+  | { kind: "number"; field: string; value: number | null; had: boolean }
+  /** An assignee by uniqueName (email); null is Nobody, written as add with an empty value (the Update docs' "reset an identity field"). */
+  | { kind: "identity"; field: string; value: string | null; had: boolean };
+export function fieldsOps(rev: number, specs: readonly FieldSpec[], timeZone: string): PatchOp[] {
+  const ops: PatchOp[] = [test(rev)];
+  for (const f of specs) {
+    const path = `/fields/${f.field}`;
+    if (f.kind === "identity") ops.push({ op: "add", path, value: f.value ?? "" });
+    else if (f.value === null) {
+      if (f.had) ops.push({ op: "remove", path });
+    } else ops.push({ op: f.had ? "replace" : "add", path, value: f.kind === "date" ? dateValue(f.value, timeZone) : f.value });
+  }
+  return ops;
+}
+/** The fields a fields write touches (reference names), from its ops. */
+export const fieldRefsOf = (ops: unknown): string[] => (Array.isArray(ops) ? (ops as PatchOp[]).filter((p) => p.op !== "test" && p.path.startsWith("/fields/")).map((p) => p.path.slice(8)) : []);

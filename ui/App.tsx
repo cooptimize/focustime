@@ -48,8 +48,7 @@ import { Inbox } from "./Inbox.tsx";
 import { Conversations, InboxTabs } from "./Conversations.tsx";
 import { inboxBadge, useConversationCount } from "./inboxcount.ts";
 import { MyPromises } from "./MyPromises.tsx";
-import { Roadmap } from "./Roadmap.tsx";
-import { PlanAhead } from "./PlanAhead.tsx";
+import { Ahead } from "./ahead/Ahead.tsx";
 import { Today } from "./Today.tsx";
 import type { DraftStory, Pick } from "../plan/types.ts";
 import { PlanWeek } from "./PlanWeek.tsx";
@@ -114,7 +113,7 @@ function storedLoc(): Loc | null {
 const TAB_TITLES: Record<Tab, string> = {
   today: "Today: what's next, what's urgent and the day's blocks",
   week: "The week: the Board (Plan today) and Commit (each client's features)",
-  ahead: "Features and epics ahead: Roadmap and Plan ahead",
+  ahead: "Features, epics and stories ahead: Grid, Gantt and Fix next",
   inbox: "Conversations, promises, follow-ups and captures",
 };
 
@@ -1375,7 +1374,7 @@ export function App() {
         onMode={(m: ModeName) => goNav(m === "board" ? navOf.week("board") : m === "team" ? navOf.week("team") : navOf.week("commit"))}
       />
     ),
-    ahead: <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "roadmap"} status={{ ahead: data.aheadDue.length ? "due" : null }} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />,
+    ahead: <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "grid"} status={{ gantt: data.aheadDue.length ? "due" : null }} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />,
     inbox: null,
   };
   const leavePlanning = () => goNav(afterDone(nav));
@@ -1537,7 +1536,7 @@ export function App() {
       {offerAhead && nav.tab === "week" && nav.mode === "board" && !planDayFocus && data.aheadDue.includes("plan_ahead") && (
         <div className="ahead-offer" role="status">
           <span>Next week is planned. Look ahead 4 weeks: blocks per week and dates.</span>
-          <button type="button" className="primary" onClick={() => (setOfferAhead(false), goNav(navOf.ahead("ahead")))}>
+          <button type="button" className="primary" onClick={() => (setOfferAhead(false), goNav(navOf.ahead("gantt")))}>
             Look ahead 4 weeks
           </button>
           <button type="button" className="quiet" onClick={() => setOfferAhead(false)}>
@@ -1640,11 +1639,9 @@ export function App() {
           )}
         </div>
       ) : roadmapOpen ? (
-        nav.tab === "ahead" && nav.mode === "ahead" ? (
-          <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Ahead"><PlanAhead data={data} switcher={switches.ahead} onDone={leavePlanning} onChanged={reloadQuiet} /></PhoneGate>
-        ) : (
-          <PhoneGate phone={phone}><Roadmap switcher={switches.ahead} data={data} onChanged={reloadQuiet} /></PhoneGate>
-        )
+        nav.tab === "ahead" ? (
+          <PhoneGate phone={phone}><Ahead data={data} mode={nav.mode} item={nav.item ?? null} switcher={switches.ahead} onChanged={reloadQuiet} readOnly={phone} /></PhoneGate>
+        ) : null
       ) : planDayFocus ? (
         pd && week.days.some((d) => d.date === pd.date) ? (
           (() => {

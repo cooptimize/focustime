@@ -168,7 +168,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await page.close();
   }, T);
 
-  it("no decimals or fractions anywhere: Plan the week, Week, Today, Plan the day, Check-in, Close out, Roadmap, Plan ahead", async () => {
+  it("no decimals or fractions anywhere: Plan the week, Week, Today, Plan the day, Check-in, Close out, Ahead's Grid and Gantt", async () => {
     for (const bad of ["Room for about 1.5 blocks more", "0.8 blocks", "¼ block", "¾ blocks", "1.5 h", "½ block", "2½ planned"]) expect(bad).toMatch(FRACTION);
     for (const ok of ["9:30 AM", "Nov 2, 2026", "8h free · 10h planned", "about 6h", "1:30 PM to 5:00 PM"]) expect(ok).not.toMatch(FRACTION);
     const { page } = await freshPage(h);
@@ -179,8 +179,8 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
       ["#/today/plan", ".pd2-status"],
       ["#/today/checkin", "main"],
       ["#/today/closeout", "main"],
-      ["#/roadmap", ".dl-row"],
-      ["#/roadmap/ahead", ".pa-cap"],
+      ["#/ahead", ".ah-row"],
+      ["#/ahead/gantt", ".pa-cap"],
     ];
     for (const [hash, ready] of views) {
       await page.evaluate((x) => (location.hash = x), hash);
@@ -215,7 +215,7 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await openPlanDay(page);
     await page.waitForTimeout(600);
     await scan("Plan the day");
-    await page.evaluate(() => (location.hash = "#/roadmap/ahead"));
+    await page.evaluate(() => (location.hash = "#/ahead/gantt"));
     await page.locator(".pa-cap").first().waitFor({ timeout: 20_000 });
     await page.waitForTimeout(600);
     await scan("Plan ahead");

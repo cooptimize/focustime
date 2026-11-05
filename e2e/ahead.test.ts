@@ -1,0 +1,235 @@
+// AH-1: Ahead (Grid · Gantt · Fix next) in demo mode: the shared model, my change set (three pending from the demo,
+// one a conflict), inline edits that survive a reload, the review, the Gantt's half-day drag with the drag bug's fix
+// under a slow reload, Fix next, the notice link, and the phone's read-only view. Nothing is written to DevOps in the
+// demo (it has no write PAT): Commit says how to enable writes.
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Page } from "playwright-core";
+import { CHROMIUM, freshPage, sameSession, startDemo, type Harness } from "./harness.ts";
+import { shotBoth, SHOTS } from "./shots.ts";
+
+let h: Harness;
+const T = 90_000;
+
+describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
+  beforeAll(async () => {
+    h = await startDemo();
+  }, 120_000);
+  afterAll(async () => h?.stop());
+
+  const open = async (hash: string, viewport?: { width: number; height: number }) => {
+    const { page, errors } = await freshPage(h, viewport);
+    await page.evaluate((x) => (location.hash = x), hash);
+    await page.locator(".ahead").waitFor({ timeout: 30_000 });
+    await page.locator(".ah-pending").waitFor({ timeout: 30_000 });
+    return { page, errors };
+  };
+  const row = (page: Page, title: string) => page.locator(".ah-row", { has: page.getByRole("link", { name: title, exact: true }) });
+  const bar = (page: Page, title: string) => page.locator(".pa-item", { has: page.getByRole("link", { name: title, exact: true }) });
+
+  it("Grid: every level grouped by client, gaps highlighted, missing fields named, my changes pending; items I can't change say who can", async () => {
+    const { page, errors } = await open("#/ahead");
+    await expect(page.locator(".ah-pending").textContent()).resolves.toContain("3 changes pending");
+    await expect(page.locator(".ah-client-head").allTextContents()).resolves.toEqual(expect.arrayContaining([expect.stringContaining("Northwind Foods"), expect.stringContaining("Harbor Health")]));
+    // Pending values show in place: Store locator starts Mon, Nov 16 PM.
+    await expect(row(page, "Store locator").locator(".ah-col-start").textContent()).resolves.toContain("Mon, Nov 16 PM");
+    await expect(row(page, "Store locator").locator(".ah-col-start").getAttribute("class")).resolves.toContain("ah-pend");
+    await expect(row(page, "Loyalty points").locator(".ah-col-target").getAttribute("class")).resolves.toContain("ah-conf");
+    // A story's size in its process's own field, FocusTime's size beside it; a feature has none in this process.
+    await expect(row(page, "Export orders to CSV").locator(".ah-col-size").textContent()).resolves.toMatch(/3\s*Story Points\s*FocusTime: L, about 4h/);
+    await expect(row(page, "Order history export").locator(".ah-col-size").textContent()).resolves.toBe("Not in Portal's process");
+    // Gaps: a feature with no stories, an unsized story.
+    await expect(row(page, "Supplier onboarding").locator(".ah-col-ready").textContent()).resolves.toContain("Needs stories");
+    await expect(row(page, "Supplier onboarding").locator(".ah-col-start").getAttribute("class")).resolves.toContain("ah-gapcell");
+    // Harbor: I'm not a lead there; All shows a teammate's story, read only with the note.
+    await page.getByRole("button", { name: "Harbor Health", exact: true }).click();
+    await page.getByRole("group", { name: "Owner" }).getByRole("button", { name: "All" }).click();
+    const theirs = page.locator(".ah-row.ro:not(.context)").first();
+    await theirs.waitFor();
+    await expect(theirs.getAttribute("title")).resolves.toBe("Only Harbor Health's leads and the owner can change this.");
+    await theirs.locator(".ah-col-target").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".ah-editor").count()).resolves.toBe(0);
+    await shotBoth(page, "ahead-readonly", theirs);
+    // Filters are remembered for me: reopening keeps them.
+    const ctx2 = await sameSession(h, page);
+    const again = await ctx2.newPage();
+    await again.goto(`${h.url}/#/ahead`);
+    await again.locator(".ah-client-head").first().waitFor({ timeout: 30_000 });
+    await expect(again.locator(".ah-client-head").allTextContents()).resolves.toEqual([expect.stringContaining("Harbor Health")]);
+    await again.getByRole("button", { name: "Clear filters" }).click();
+    await ctx2.close();
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("inline edits: Enter edits, Enter keeps, Esc cancels, arrows move; the change is pending and survives a reload", async () => {
+    const { page } = await open("#/ahead");
+    await page.getByRole("button", { name: "Northwind Foods", exact: true }).click();
+    const size = row(page, "Export button on the order page").locator(".ah-col-size");
+    await size.focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("spinbutton", { name: "Story Points" }).fill("5");
+    await page.keyboard.press("Escape");
+    await expect(size.getAttribute("class")).resolves.not.toContain("ah-pend");
+    await size.focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("spinbutton", { name: "Story Points" }).fill("5");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes pending");
+    await expect(size.textContent()).resolves.toContain("5");
+    await shotBoth(page, "ahead-grid", page.locator(".ah-client").first());
+    // Arrows: left from Size is Assigned to.
+    await size.focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.evaluate(() => document.activeElement?.className ?? "")).resolves.toContain("ah-col-assignee");
+    await page.reload();
+    await page.locator(".ah-pending").waitFor({ timeout: 30_000 });
+    await expect(page.locator(".ah-pending").textContent()).resolves.toContain("4 changes pending");
+    // Back to what DevOps has: no change.
+    await row(page, "Export button on the order page").locator(".ah-col-size").focus();
+    await page.keyboard.press("Delete");
+    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("3 changes pending");
+    await page.close();
+  }, T);
+
+  it("the review: grouped by item, before → after, a conflict with Keep mine or Take theirs, Remove, Discard all with a confirm; Commit needs writes on", async () => {
+    const { page, errors } = await sameSessionFresh();
+    await page.getByRole("button", { name: "Review" }).click();
+    const panel = page.getByRole("dialog", { name: "Review changes" });
+    await panel.waitFor();
+    await expect(panel.locator(".ah-review-item").count()).resolves.toBe(3);
+    const conflict = panel.locator(".ah-review-item.conflict");
+    await expect(conflict.textContent()).resolves.toMatch(/Loyalty points.*Target.*Fri, Dec 4.*Wed, Dec 23 PM.*DevOps has Fri, Dec 11 now/);
+    await expect(panel.getByText("Northwind Foods: DevOps writes aren't on for you.").count()).resolves.toBe(1);
+    await expect(panel.getByRole("button", { name: "Enable DevOps writes" }).count()).resolves.toBe(1);
+    await shotBoth(page, "ahead-review-conflict", panel);
+    // Take theirs drops my conflicting change.
+    await conflict.getByRole("button", { name: "Take theirs" }).click();
+    await expect.poll(() => panel.locator(".ah-review-item").count()).toBe(2);
+    await panel.getByRole("button", { name: /Remove the start change on #1150/ }).click();
+    await expect.poll(() => panel.locator(".ah-review-item").count()).toBe(1);
+    await panel.getByRole("button", { name: "Discard all" }).click();
+    await panel.getByRole("button", { name: "Keep them" }).click();
+    await expect(panel.locator(".ah-review-item").count()).resolves.toBe(1);
+    await panel.getByRole("button", { name: "Discard all" }).click();
+    await panel.getByRole("button", { name: "Discard all" }).click();
+    await expect.poll(() => page.locator(".ah-pending").count()).toBe(0);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  /** A new person each time (the demo seeds three pending changes per session). */
+  const sameSessionFresh = () => open("#/ahead");
+
+  it("Gantt: bars grouped client › epic › feature, a dashed edge where a date is missing, No dates with Set dates, marks on bars", async () => {
+    const { page, errors } = await open("#/ahead/gantt");
+    await bar(page, "Store locator").waitFor({ timeout: 30_000 });
+    // Store locator: a pending start (solid), its target from DevOps.
+    await expect(bar(page, "Store locator").locator(".pa-bar").getAttribute("class")).resolves.toContain(" changed");
+    // Loyalty points has a target and no start: a dashed start edge.
+    await expect(bar(page, "Loyalty points").locator(".pa-bar").getAttribute("class")).resolves.toContain("dash-start");
+    await expect(bar(page, "Loyalty points").locator(".pa-diamond").count()).resolves.toBe(1);
+    await expect(page.locator(".ah-nodates").first().textContent()).resolves.toContain("No dates");
+    await expect(page.locator(".ah-nodates").first().getByRole("button", { name: "Set dates" }).count()).resolves.toBeGreaterThan(0);
+    await expect(bar(page, "Supplier onboarding").count()).resolves.toBe(0);
+    await expect(page.locator(".ah-marks").count()).resolves.toBeGreaterThan(0);
+    // Stories show in the Grid only.
+    await expect(page.getByRole("link", { name: "Export orders to CSV", exact: true }).count()).resolves.toBe(0);
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("the drag bug: with a slow reload, a second drag right after a drop keeps its row under the pointer; drops snap to half-days", async () => {
+    const { page } = await open("#/ahead/gantt");
+    const target = bar(page, "Knowledge base search");
+    await target.waitFor({ timeout: 30_000 });
+    // Every reload and stage answers 1.2 s late, as on a slow link.
+    await page.route("**/api/**", async (route) => {
+      const body = route.request().postData() ?? "";
+      if (/ahead\.(stage|load)|roadmap\.(load|ahead)/.test(body)) await new Promise((ok) => setTimeout(ok, 1200));
+      await route.continue();
+    });
+    const drag = async (dx: number, check?: () => Promise<void>) => {
+      const b = (await target.locator(".pa-bar").boundingBox())!;
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(b.x + b.width / 2 + dx / 2, b.y + b.height / 2, { steps: 4 });
+      await check?.();
+      await page.mouse.move(b.x + b.width / 2 + dx, b.y + b.height / 2, { steps: 4 });
+      await page.mouse.up();
+    };
+    await drag(90, async () => {
+      // The dates show live while dragging, in half-days.
+      await expect(page.locator(".ah-live").textContent()).resolves.toMatch(/^\w{3}, \w{3} \d+ (AM|PM) → \w{3}, \w{3} \d+ (AM|PM)$/);
+      await shotBoth(page, "ahead-gantt-drag", target);
+    });
+    // Right away a second drag: the reload of the first lands mid-drag and must not move the row.
+    const y0 = (await target.boundingBox())!.y;
+    const b = (await target.locator(".pa-bar").boundingBox())!;
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) {
+      await page.mouse.move(b.x + b.width / 2 + i * 6, b.y + b.height / 2);
+      await page.waitForTimeout(200);
+      expect(Math.abs((await target.boundingBox())!.y - y0)).toBeLessThan(2);
+    }
+    await page.mouse.up();
+    await expect.poll(() => page.locator(".ah-pending").textContent(), { timeout: 15_000 }).toMatch(/[45] changes pending/);
+    await page.unroute("**/api/**");
+    await page.close();
+  }, T);
+
+  it("a click on a bar opens Break down's side panel, whose action list has Send to… (SW-1's dialog)", async () => {
+    const { page } = await open("#/ahead/gantt");
+    const b = bar(page, "Supplier onboarding").or(bar(page, "Order history export")).first();
+    await b.waitFor({ timeout: 30_000 });
+    await b.locator(".pa-bar").click();
+    const panel = page.locator(".bd-panel");
+    await panel.waitFor({ timeout: 10_000 });
+    await shotBoth(page, "ahead-panel-send", panel);
+    await panel.locator(".bd-item-acts button", { hasText: "Send to…" }).click();
+    const dlg = page.getByRole("dialog", { name: /^Send to… / });
+    await dlg.waitFor({ timeout: 10_000 });
+    await page.mouse.click(4, 4);
+    await dlg.waitFor({ state: "hidden" });
+    await page.close();
+  }, T);
+
+  it("Fix next: one gap at a time on items I can change, soonest target first; Skip moves on; Assign goes into the change set", async () => {
+    const { page, errors } = await open("#/ahead/fix");
+    const card = page.locator(".ah-fix-mode > .ah-fix");
+    await card.waitFor();
+    const first = await card.textContent();
+    await shotBoth(page, "ahead-fix-next", card);
+    await card.getByRole("button", { name: "Skip" }).click();
+    await expect.poll(() => card.textContent()).not.toBe(first);
+    // Walk to an Assign and give it to me.
+    for (let i = 0; i < 20 && !(await card.getByRole("button", { name: "Assign" }).count()); i++) await card.getByRole("button", { name: "Skip" }).click();
+    await card.getByRole("button", { name: "Assign" }).click();
+    await page.getByRole("option", { name: /^Me$|\(me\)$/ }).first().click();
+    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes pending");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
+  it("a notice's link opens the item in the Grid, focused", async () => {
+    const { page } = await open("#/ahead/item/1113");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.closest("tr")?.className ?? "")).toContain("highlighted");
+    await page.close();
+  }, T);
+
+  it("phone and 1366: read only on a phone (D476); the pane folds under at 1366", async () => {
+    const { page, errors } = await open("#/ahead", { width: 390, height: 844 });
+    await expect(page.locator(".ah-ro-note").textContent()).resolves.toContain("Read only on a phone");
+    await expect(page.getByRole("button", { name: "Review" }).isDisabled()).resolves.toBe(true);
+    await expect(page.locator(".ah-pane").count()).resolves.toBe(0);
+    await expect(page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).resolves.toBe(true);
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/ahead-phone.png`, fullPage: false });
+    await page.close();
+    const wide = await open("#/ahead/gantt", { width: 1366, height: 768 });
+    await wide.page.locator(".pa-item").first().waitFor({ timeout: 30_000 });
+    if (SHOTS) await wide.page.screenshot({ path: `${SHOTS}/ahead-gantt-1366.png` });
+    await wide.page.close();
+    expect(errors).toEqual([]);
+  }, T);
+});

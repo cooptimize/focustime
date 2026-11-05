@@ -128,12 +128,5 @@ describe.skipIf(!CHROMIUM)("row menu headers (D459)", () => {
     await page.close();
   }, T);
 
-  it("Roadmap: rows, A then B", async () => {
-    const { page, errors } = await freshPage(h);
-    await page.evaluate(() => (location.hash = "#/roadmap"));
-    await page.locator(".rm-row").first().waitFor({ timeout: 30_000 });
-    await aThenB(page, page.locator(".rm-row"), "button.more", "a");
-    expect(errors).toEqual([]);
-    await page.close();
-  }, T);
+  // AH-1 (D653): Roadmap's rows and their ⋯ are gone; Ahead's Grid edits in place and has no row menu.
 });

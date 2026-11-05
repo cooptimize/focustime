@@ -1197,6 +1197,16 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "roadmap.ahead":
     case "roadmap.set_dates":
       return { run: () => env.setView("ahead") };
+    // AH-1: Ahead's grid, its change set and filters live on Ahead itself.
+    case "ahead.load":
+    case "ahead.filters":
+    case "ahead.set_filters":
+    case "ahead.stage":
+    case "ahead.unstage":
+    case "ahead.resolve":
+      return { run: () => env.setView("roadmap") };
+    case "ahead.discard":
+      return { run: () => env.setView("roadmap") };
     case "weekplan.commit": return env.planWeekOpen ? { run: env.commitWeek } : { disabled: "Open Plan the week first" };
     // Features are chosen in Plan the week itself.
     case "weekplan.set_feature":
@@ -1314,7 +1324,9 @@ export const BREAK_DOWN_EVENT = "focustime:break-down";
 export const PV_BREAKDOWN_EVENT = "focustime:breakdown";
 /** DS-1's event name, still heard so anything that sends it opens Break down. */
 export const DRAFT_STORIES_EVENT = "focustime:draft-stories";
-export type BreakDownTarget = { id: number; title: string; type?: string };
+/** AH-1 (D665): `actions` is the panel's action list for the item, given by the caller (Ahead adds Send to…); more go here. */
+export type PanelAction = { id: string; label: string; hint?: string; run: () => void };
+export type BreakDownTarget = { id: number; title: string; type?: string; actions?: PanelAction[] };
 export const openBreakDown = (clientKey: string, item: BreakDownTarget) => window.dispatchEvent(new CustomEvent(BREAK_DOWN_EVENT, { detail: { clientKey, item } }));
 /** NV-1: the Coop brief opens Break down's side panel, from every entry point; it copies at once. `weekStart` is the week whose plan the feature is on (default next week, as before). */
 export const COOP_BRIEF_EVENT = "focustime:coop-brief";

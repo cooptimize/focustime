@@ -274,3 +274,33 @@ export function demoPortfolio(k: DemoClientKey, fetchedAt: string): ClientPortfo
 }
 
 export const isDemoClient = (k: string): k is DemoClientKey => DEMO_CLIENTS.some((c) => c.key === k);
+
+/**
+ * AH-1: one client's items for Ahead, every level, as the central store would give them (fictional). Revisions are
+ * fixed per item. Harbor's process sizes stories in Effort; the others in Story Points (two processes, D657).
+ */
+export function demoAheadClient(k: DemoClientKey, fetchedAt: string): import("../../actions/types.ts").AheadClient {
+  const model = demoProcess(k);
+  const all = ITEMS[k].map((r, n) => item(k, r, n + 1)).filter((i) => i.stateCategory !== "Completed" || ITEMS[k].some((r) => r[3] === i.id));
+  const sizeRef = k === "Harbor" ? "Microsoft.VSTS.Scheduling.Effort" : "Microsoft.VSTS.Scheduling.StoryPoints";
+  const portfolioTypes = [...model.levels.top, ...model.levels.parent];
+  const storyTypes = model.levels.child;
+  const map = (types: readonly string[], ref: string) => Object.fromEntries(types.map((t) => [t, ref]));
+  return {
+    clientKey: k, clientName: client(k).name, status: "ok", fetchedAt, project: client(k).project, me: "you@example.com",
+    startFields: map(portfolioTypes, "Microsoft.VSTS.Scheduling.StartDate"),
+    targetFields: map([...portfolioTypes, ...storyTypes], "Microsoft.VSTS.Scheduling.TargetDate"),
+    sizeFields: map(storyTypes, sizeRef),
+    fieldNames: { "Microsoft.VSTS.Scheduling.StartDate": "Start Date", "Microsoft.VSTS.Scheduling.TargetDate": "Target Date", [sizeRef]: k === "Harbor" ? "Effort" : "Story Points" },
+    types: looksOf(model),
+    items: all.map((i) => ({
+      id: i.id, rev: 3 + (i.id % 7), title: i.title, type: i.type, state: i.state, stateCategory: i.stateCategory,
+      level: model.types.find((t) => t.name === i.type)?.level ?? null, rung: model.ladder.findIndex((r) => r.includes(i.type)),
+      parentId: i.parentId,
+      assignee: i.assignedToMe ? { name: "Alex Rivera", email: "you@example.com" } : i.assignedTo ? { name: i.assignedTo, email: i.assignedToEmail ?? null } : null,
+      start: START[i.id] ?? null, target: i.targetDate ?? null,
+      size: i.level === "portfolio" || UNSIZED.has(i.id) || i.stateCategory === "Completed" ? null : 3,
+      url: i.url, changedAt: QUIET.has(i.id) ? "2026-10-09T15:00:00Z" : i.changedAt,
+    })),
+  };
+}

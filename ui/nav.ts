@@ -1,5 +1,5 @@
 // Step 16.2, NV-1: where the window is. Four tabs (Today · Week · Ahead · Inbox), a mode switch on Week (Board ·
-// Commit) and Ahead (Roadmap · Plan ahead), Today's two flows, and the full-window overlays (the focus screen, Settings, the Guide). Every place has an address (#/…) so browser back
+// Commit) and Ahead (Grid · Gantt · Fix next), Today's two flows, and the full-window overlays (the focus screen, Settings, the Guide). Every place has an address (#/…) so browser back
 // and reopening land in the same place. Pure: no DOM, no React; App applies it.
 import type { Half, IsoDate } from "../week/types.ts";
 import type { Route } from "../plan/notify.ts";
@@ -14,13 +14,13 @@ export type TodayFlow = (typeof TODAY_FLOWS)[number];
 export const FLOW_NAMES: Record<TodayFlow, string> = { checkin: "Midday check-in", closeout: "Close out" };
 /** NV-1: Week's Board (stories onto blocks; a day focused is Plan the day) and Commit (Plan the week). */
 export type WeekMode = "board" | "commit" | "team";
-/** NV-1: Ahead (was Roadmap) keeps Roadmap's two views. */
-export type AheadMode = "roadmap" | "ahead";
+/** AH-1 (D653): Ahead is one model in three modes: Grid (was Roadmap), Gantt (was Plan ahead) and Fix next. */
+export type AheadMode = "grid" | "gantt" | "fix";
 
-export const MODE_NAMES = { board: "Board", commit: "Commit", team: "Team", roadmap: "Roadmap", ahead: "Plan ahead" } as const;
+export const MODE_NAMES = { board: "Board", commit: "Commit", team: "Team", grid: "Grid", gantt: "Gantt", fix: "Fix next" } as const;
 export type ModeName = keyof typeof MODE_NAMES;
 /** Each tab's modes, in switch order (Today and the Inbox have none, so no switch). */
-export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team"], ahead: ["roadmap", "ahead"], inbox: [] };
+export const MODES: Record<Tab, readonly ModeName[]> = { today: [], week: ["board", "commit", "team"], ahead: ["grid", "gantt", "fix"], inbox: [] };
 
 /** NV-1: the Board focused on one day (Plan the day): `date` null is the default day (today or the next workday); `half` is the block "+ Add work" asked for. */
 export type DayFocus = { date: IsoDate | null; half: Half | null };
@@ -33,7 +33,7 @@ export type DayFocus = { date: IsoDate | null; half: Half | null };
 export type Nav =
   | { tab: "today"; flow: TodayFlow | null; date: IsoDate | null }
   | { tab: "week"; mode: WeekMode; week: IsoDate | null; focus: DayFocus | null }
-  | { tab: "ahead"; mode: AheadMode }
+  | { tab: "ahead"; mode: AheadMode; item?: number }
   | { tab: "inbox"; followUp: number | null; conversations?: boolean; myPromises?: boolean; select?: number };
 
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
@@ -45,7 +45,9 @@ export const navOf = {
   week: (mode: WeekMode = "board", week: IsoDate | null = null): Nav => ({ tab: "week", mode, week, focus: null }),
   /** NV-1: Plan the day is the Board focused on that day (null: today or the next workday). */
   planDay: (date: IsoDate | null = null, half: Half | null = null): Nav => ({ tab: "week", mode: "board", week: null, focus: { date, half: date ? half : null } }),
-  ahead: (mode: AheadMode = "roadmap"): Nav => ({ tab: "ahead", mode }),
+  ahead: (mode: AheadMode = "grid"): Nav => ({ tab: "ahead", mode }),
+  /** AH-1: one item, selected in the Grid (#/ahead/item/<id>), from a notice. */
+  aheadItem: (id: number): Nav => ({ tab: "ahead", mode: "grid", item: id }),
   inbox: (followUp: number | null = null): Nav => ({ tab: "inbox", followUp }),
   /** CV-1: Inbox › Conversations (was Requests, and Asks before that). */
   conversations: (): Nav => ({ tab: "inbox", followUp: null, conversations: true }),
@@ -65,20 +67,20 @@ export const modeOf = (n: Nav): ModeName | null => (n.tab === "week" || n.tab ==
 export const focusOf = (n: Nav): DayFocus | null => (n.tab === "week" && n.mode === "board" ? n.focus : null);
 
 /** Planning places get a Done (or Commit today); the views don't. Today's flows are planning places too (Esc goes back). */
-export const isPlanning = (n: Nav): boolean => (n.tab === "today" ? n.flow !== null : n.tab === "week" ? n.mode === "commit" || n.focus !== null : n.tab === "ahead" ? n.mode === "ahead" : false);
+export const isPlanning = (n: Nav): boolean => (n.tab === "today" ? n.flow !== null : n.tab === "week" ? n.mode === "commit" || n.focus !== null : false);
 
 /**
- * P: on Week, Board and Commit (a focused day counts as the Board); on Ahead, Roadmap and Plan ahead; on Today, Plan
+ * P: on Week, Board and Commit (a focused day counts as the Board); on Ahead, Grid and Gantt; on Today, Plan
  * today (the Board focused on today), or back to Today from a flow. The Inbox has none.
  */
 export function toggleP(n: Nav): Nav {
   if (n.tab === "today") return n.flow ? navOf.today() : navOf.planDay();
   if (n.tab === "week") return n.mode === "board" ? navOf.week("commit") : navOf.week("board", n.week);
-  if (n.tab === "ahead") return navOf.ahead(n.mode === "roadmap" ? "ahead" : "roadmap");
+  if (n.tab === "ahead") return navOf.ahead(n.mode === "gantt" ? "grid" : "gantt");
   return n;
 }
 
-/** Done in a planning place: Today's flows back to Today, a focused day back to the whole week it is in, Commit back to the Board, Plan ahead back to Roadmap. */
+/** Done in a planning place: Today's flows back to Today, a focused day back to the whole week it is in, Commit back to the Board, Ahead back to the Grid. */
 export function afterDone(n: Nav): Nav {
   if (n.tab === "today") return navOf.today();
   if (n.tab === "week") return n.mode === "board" && n.focus?.date ? navOf.week("board", mondayOf(n.focus.date)) : n.mode === "board" ? navOf.week("board", n.week) : navOf.week();
@@ -138,7 +140,7 @@ export function hashOf(l: Loc): string {
     if (n.focus) return ["#/week/day", n.focus.date, n.focus.date ? n.focus.half : null].filter(Boolean).join("/");
     return ["#/week", n.week].filter(Boolean).join("/");
   }
-  if (n.tab === "ahead") return n.mode === "ahead" ? "#/ahead/plan" : "#/ahead";
+  if (n.tab === "ahead") return n.mode === "gantt" ? "#/ahead/gantt" : n.mode === "fix" ? "#/ahead/fix" : n.item ? `#/ahead/item/${n.item}` : "#/ahead";
   if (n.conversations) return n.select ? `#/inbox/conversation/${n.select}` : "#/inbox/conversations";
   if (n.myPromises) return n.select ? `#/inbox/promise/${n.select}` : "#/inbox/my-promises";
   return n.followUp ? `#/inbox/${n.followUp}` : "#/inbox";
@@ -190,10 +192,12 @@ export function parseHash(hash: string): Loc | null {
       return b === undefined && validDate(a) ? plain(navOf.week("board", a)) : null;
     }
     case "ahead":
-      return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "plan" ? plain(navOf.ahead("ahead")) : null;
+      if (a === "item") return c === undefined && b !== undefined && ID.test(b) ? plain(navOf.aheadItem(Number(b))) : null;
+      // AH-1: #/ahead/plan (Plan ahead before AH-1) lands on the Gantt.
+      return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "gantt" || a === "plan" ? plain(navOf.ahead("gantt")) : a === "fix" ? plain(navOf.ahead("fix")) : null;
     // Before NV-1: Roadmap and Roadmap › Plan ahead.
     case "roadmap":
-      return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "ahead" ? plain(navOf.ahead("ahead")) : null;
+      return b !== undefined ? null : a === undefined ? plain(navOf.ahead()) : a === "ahead" ? plain(navOf.ahead("gantt")) : null;
     case "conversations":
     case "requests":
     case "asks":
@@ -235,8 +239,9 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "conversations": return plain(navOf.conversations());
     case "my_promises": return plain(navOf.myPromises());
     case "week": return plain(navOf.week());
+    case "ahead": return plain(navOf.ahead("gantt"));
+    case "aheaditem": return plain(navOf.aheadItem(r.id));
     case "team": return plain(navOf.week("team"));
-    case "ahead": return plain(navOf.ahead("ahead"));
     case "planweek": return plain(navOf.week("commit", r.weekStart));
     case "followup": return plain(navOf.inbox(r.id));
     case "settings": return { loc: { nav: navOf.today(), overlay: { kind: "settings", section: r.section } }, vmMenu: false };
@@ -258,7 +263,7 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "promises":
     case "my_promises": return { nav: navOf.myPromises(), overlay: null };
     case "roadmap": return { nav: navOf.ahead(), overlay: null };
-    case "ahead": return { nav: navOf.ahead("ahead"), overlay: null };
+    case "ahead": return { nav: navOf.ahead("gantt"), overlay: null };
     case "planday": return { nav: navOf.planDay(), overlay: null };
     case "planweek":
     case "commit": return { nav: navOf.week("commit"), overlay: null };
@@ -303,7 +308,7 @@ export function viewName(loc: Loc): string {
   const place =
     n.tab === "today" ? (n.flow ? `${TAB_NAMES.today} › ${FLOW_NAMES[n.flow]}` : TAB_NAMES.today)
     : n.tab === "week" ? (n.mode === "commit" ? `${TAB_NAMES.week} › Commit` : n.mode === "team" ? `${TAB_NAMES.week} › Team` : n.focus ? `${TAB_NAMES.week} › Plan ${n.focus.date ?? "today"}` : TAB_NAMES.week)
-    : n.tab === "ahead" ? (n.mode === "ahead" ? `${TAB_NAMES.ahead} › Plan ahead` : TAB_NAMES.ahead)
+    : n.tab === "ahead" ? `${TAB_NAMES.ahead} › ${MODE_NAMES[n.mode]}`
     : n.conversations ? `${TAB_NAMES.inbox} › Conversations` : n.myPromises ? `${TAB_NAMES.inbox} › My promises` : TAB_NAMES.inbox;
   const o = loc.overlay;
   return !o ? place : o.kind === "focus" ? `${place} (focus screen)` : o.kind === "settings" ? `Settings: ${o.section}` : `Guide${o.chapter ? `: ${o.chapter}` : ""}`;

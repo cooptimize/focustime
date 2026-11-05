@@ -5,7 +5,7 @@ import { hoursOn, type TimeModel } from "../week/hours.ts";
 import { userZone } from "../week/zone.ts";
 
 /** Every kind of notification FocusTime sends. Each has its own switch in Settings > Notifications, except the test. */
-export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply"] as const;
+export const NOTIFY_KINDS = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction", "timer", "meeting", "vm", "followups", "expiry", "asks", "commitment_item", "taken_over", "story_taken", "sent_to_you", "send_answered", "send_cant_lead", "look_ask", "look_reply", "assigned", "dates_moved"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 export type AnyKind = NotifyKind | "test" | "held";
 
@@ -31,6 +31,8 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   send_cant_lead: "A Must someone can't take",
   look_ask: "Asked to look at a week",
   look_reply: "A lead's reply about your week",
+  assigned: "Someone assigned you an item",
+  dates_moved: "Someone moved your dates",
 };
 export const KIND_HINT: Record<NotifyKind, string> = {
   plan_day: "At the start of a workday when the day isn't planned yet.",
@@ -54,9 +56,11 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   send_cant_lead: "On a client you lead, when someone can't take a Must another lead sent.",
   look_ask: "When a teammate asks you, as a client lead, to look at their committed week.",
   look_reply: "When a lead you asked replies about your week.",
+  assigned: "When a teammate assigns you a DevOps item from Ahead in FocusTime.",
+  dates_moved: "When a teammate moves the dates of a DevOps item you own from Ahead in FocusTime, once per commit.",
 };
 /** PV-1: quiet kinds go to the in-app list only, never to push. */
-export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken", "send_cant_lead"]);
+export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken", "send_cant_lead", "assigned", "dates_moved"]);
 /** The ritual reminders, shown as one group in Settings. */
 export const RITUAL_KINDS: readonly NotifyKind[] = ["plan_day", "checkin", "closeout", "plan_week", "look_ahead", "plan_ahead", "direction"];
 
@@ -79,6 +83,7 @@ export type Route =
   | { view: "today" | "planday" | "checkin" | "closeout" | "focus" | "vm" | "inbox" | "ahead" | "asks" | "requests" | "conversations" | "my_promises" | "week" | "team" }
   | { view: "planweek"; weekStart: string }
   | { view: "followup"; id: number }
+  | { view: "aheaditem"; id: number }
   | { view: "settings"; section: string };
 
 // "asks": notifications sent before the rename to Requests still open the tab.
@@ -90,6 +95,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export function routeText(r: Route): string {
   if (r.view === "planweek") return `planweek:${r.weekStart}`;
   if (r.view === "followup") return `followup:${r.id}`;
+  if (r.view === "aheaditem") return `aheaditem:${r.id}`;
   if (r.view === "settings") return `settings:${r.section}`;
   return r.view;
 }
@@ -102,6 +108,7 @@ export function parseRoute(s: unknown): Route | null {
   if (rest.length) return null;
   if (view === "planweek" && DATE.test(arg)) return { view, weekStart: arg };
   if (view === "followup" && /^[1-9]\d{0,9}$/.test(arg)) return { view, id: Number(arg) };
+  if (view === "aheaditem" && /^[1-9]\d{0,9}$/.test(arg)) return { view, id: Number(arg) };
   if (view === "settings" && SECTION.test(arg)) return { view, section: arg };
   return null;
 }
@@ -262,6 +269,9 @@ export const notices = {
   lookAsk: (id: number, fromName: string, clientName: string, at: string): Notice => ({ kind: "look_ask", key: `look_ask:${id}`, title: `${fromName} asked you to look at their week`, body: `${clientName}\nClick to open Team.`, buttons: [open("Open Team")], route: "team", at }),
   /** SW-1: the lead replied to my Ask to look. */
   lookReply: (id: number, leadName: string, clientName: string, weekStart: string, at: string): Notice => ({ kind: "look_reply", key: `look_reply:${id}`, title: `${leadName} replied about your week`, body: `${clientName}\nClick to open Commit.`, buttons: [open("Open Commit")], route: `planweek:${weekStart}`, at }),
+  // AH-1 (D664): quiet, in-app only; ids and a first name, never a title.
+  assigned: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "assigned", key, title: itemIds.length === 1 ? `${byName} assigned you #${itemIds[0]}` : `${byName} assigned you ${itemIds.length} items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to open it in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
+  datesMoved: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "dates_moved", key, title: itemIds.length === 1 ? `${byName} moved the dates of #${itemIds[0]}` : `${byName} moved the dates of ${itemIds.length} of your items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to see them in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
   takenOver: (id: number, byName: string, what: string, at: string): Notice => ({ kind: "taken_over", key: `taken_over:${id}`, title: `${byName} took it over`, body: `${what}\nNothing more for you to do.`, buttons: [open("Open Conversations")], route: "conversations", at }),
   expiry: (date: string, lines: { text: string; section: string }[], at: string): Notice | null =>
     lines.length

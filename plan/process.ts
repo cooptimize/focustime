@@ -248,6 +248,9 @@ export function levelsFromProcessConfig(pc: unknown): { levels: Record<ProcessLe
   return { levels: m.levels, tiers: { feature: new Set(m.levels.parent), epic: new Set(m.levels.top) }, childrenOf };
 }
 
+/** AH-1: the backlog ladder (top-down) from process configuration alone (the write path), for one-level-down rights. */
+export const ladderFromProcessConfig = (pc: unknown): string[][] => buildProcessModel({ org: "", project: "", fetchedAt: "", processConfig: pc, types: [] }).ladder;
+
 /**
  * BD-1: the child types Break down may create under a parent type, from process configuration alone (the write path):
  * the next level's types when the parent sits at parent or top level and no override turns breakdown off; else none.
