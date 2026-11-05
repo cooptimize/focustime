@@ -937,10 +937,10 @@ function NotifyForm(p: FormProps) {
   const n = p.data.notify;
   const a = useAutoSave({
     section: "notify",
-    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false },
+    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false, teamsMessages: n.teamsMessages ?? false },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : "Quiet on PTO days"),
+    label: (k) => (k === "kinds" ? "Notification" : k === "quiet" ? "Quiet hours" : k === "pushDetails" ? "Show details" : k === "asksThroughFocus" ? "Urgent requests during focus" : k === "teamsMessages" ? "Messages in Teams" : "Quiet on PTO days"),
   });
   const [test, setTest] = useState<string | null>(null);
   const group = (title: string, list: readonly NotifyKind[]) => (
@@ -1007,6 +1007,12 @@ function NotifyForm(p: FormProps) {
       <AutoField a={a} k="pushDetails" label="Show details in notifications" hint="Off: a push says only what kind of thing it is (Follow-ups due). On: client names and work item titles too, on the lock screen.">
         <label className="set-check">
           <input type="checkbox" checked={a.v.pushDetails} onChange={(e) => a.change("pushDetails", e.target.checked)} /> Show details
+        </label>
+      </AutoField>
+      <h3>In Teams</h3>
+      <AutoField a={a} k="teamsMessages" label="Messages in Teams" hint="Off: FocusTime only answers when you message it in Teams. FocusTime doesn't send anything on its own yet.">
+        <label className="set-check">
+          <input type="checkbox" checked={a.v.teamsMessages} onChange={(e) => a.change("teamsMessages", e.target.checked)} /> Let FocusTime message me in Teams
         </label>
       </AutoField>
     </div>

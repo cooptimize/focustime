@@ -68,14 +68,17 @@ export type QuietMode = "outside_hours" | "off";
 /**
  * pushDetails (P1): push messages say what the notice says (client names, work item titles); off by default.
  * asksThroughFocus (AP-2): an urgent ask is sent during focus instead of held; off by default.
+ * teamsMessages (TB-1): FocusTime may message me in Teams on its own (later steps, through this gate); off by default.
+ * In TB-1 the bot only answers; nothing reads this switch to send.
  */
-export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean; asksThroughFocus: boolean };
+export type NotifySettings = { kinds: Record<NotifyKind, boolean>; quiet: QuietMode; quietPto: boolean; pushDetails: boolean; asksThroughFocus: boolean; teamsMessages: boolean };
 export const DEFAULT_NOTIFY: NotifySettings = {
   kinds: Object.fromEntries(NOTIFY_KINDS.map((k) => [k, true])) as Record<NotifyKind, boolean>,
   quiet: "outside_hours",
   quietPto: true,
   pushDetails: false,
   asksThroughFocus: false,
+  teamsMessages: false,
 };
 
 /** Where clicking a notification opens FocusTime. */
