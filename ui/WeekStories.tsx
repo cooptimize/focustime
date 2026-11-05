@@ -16,7 +16,7 @@ import { ActionRefusal, call, planAction } from "./api.ts";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { MenuCtx } from "./Menus.tsx";
 import type { MenuItem, MenuStep } from "./menu.ts";
-import { PV_BREAKDOWN_EVENT } from "./menu.ts";
+import { PV_BREAKDOWN_EVENT, rowHead } from "./menu.ts";
 import { SizeChip } from "./plan/Estimate.tsx";
 import { Avatar, usePhotos } from "./Presence.tsx";
 import { TypeIcon } from "./TypeIcon.tsx";
@@ -333,7 +333,7 @@ function StoryGroupView({ g, work, clientName, slot, onChanged, photoFor }: { g:
       {g.stories.length > 0 && (
         <ul className="ps-rows">
           {g.stories.map((r) => (
-            <StoryRowView key={r.item.id} r={r} work={work} slot={slot} />
+            <StoryRowView key={r.item.id} r={r} work={work} slot={slot} clientName={clientName} />
           ))}
         </ul>
       )}
@@ -342,7 +342,7 @@ function StoryGroupView({ g, work, clientName, slot, onChanged, photoFor }: { g:
   );
 }
 
-function StoryRowView({ r, work, slot }: { r: StoryRow; work: ClientWork; slot: Slot }) {
+function StoryRowView({ r, work, slot, clientName }: { r: StoryRow; work: ClientWork; slot: Slot; clientName: string }) {
   const dnd = useContext(WeekDnd);
   const { open, env: menuEnv } = useContext(MenuCtx);
   const { item } = r;
@@ -358,7 +358,7 @@ function StoryRowView({ r, work, slot }: { r: StoryRow; work: ClientWork; slot: 
       ...(dnd ? [{ id: "add", label: "Add to…", action: "pick.add", next: () => dnd.menuFor(d, `#${item.id}`) } as MenuItem] : []),
       ...(dnd && moving ? [{ id: "move", label: `Move from ${blockLabel(moving)} to…`, action: "pick.move", next: () => dnd.menuFor({ ...d, pickId: moving.pickId }, `#${item.id}`) } as MenuItem] : []),
     ];
-    openAt(e, open, { title: `#${item.id}: ${item.title}`, items });
+    openAt(e, open, { title: `#${item.id}: ${item.title}`, items, head: rowHead({ id: item.id, title: item.title, client: clientName }) });
   };
   return (
     <li className={`ps-row${r.here ? " here" : ""}`} data-story={item.id} {...drag}>

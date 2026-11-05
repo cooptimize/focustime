@@ -132,7 +132,8 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     await page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-feats").click();
     await panel.waitFor();
     await expect(panel.locator("[data-panel-focus=features].dp-focused").count()).resolves.toBe(1);
-    await expect(panel.locator(".dp-feats").textContent()).resolves.toContain("Needs stories");
+    // PV-1: on Week the panel lists my stories grouped by feature (the features section is Today's).
+    await panel.getByRole("region", { name: "Your stories for Northwind" }).waitFor();
     await page.keyboard.press("Escape");
     await expect.poll(() => panel.count()).toBe(0);
     // A due badge opens the panel on that follow-up.
