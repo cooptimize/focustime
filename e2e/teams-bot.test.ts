@@ -1,10 +1,11 @@
 // TB-1: the app's side of the Teams bot, on a throwaway demo server: Settings › Notifications › In Teams, "Let
 // FocusTime message me in Teams", is off by default, turns on, and is still on after a reload. Screenshots at 1920 and
 // Text size Larger when FOCUSTIME_SHOTS names a folder (demo data only). The bot itself is tested with fake Teams
-// activities (server/teams/*.test.ts); its cards are previewed by scripts/teams-card-previews.ts.
+// activities (server/teams/*.test.ts); its cards are previewed by scripts/teams-card-previews.ts. TB-1b: the privacy
+// and terms page the Teams app links to opens without signing in, with nothing the CSP blocks, on a desktop and a phone.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, openSettings, startDemo, type Harness } from "./harness.ts";
-import { shotBoth } from "./shots.ts";
+import { SHOTS, shotBoth } from "./shots.ts";
 
 const T = 300_000;
 
@@ -35,5 +36,26 @@ describe.skipIf(!CHROMIUM)("TB-1: Let FocusTime message me in Teams", () => {
     await shotBoth(page, "tb1-settings-teams-on", again);
     expect(errors).toEqual([]);
     await page.close();
+  }, T);
+
+  it("serves the privacy and terms page without signing in (TB-1b)", async () => {
+    for (const [name, viewport] of [["1920", { width: 1920, height: 1080 }], ["phone", { width: 390, height: 844 }]] as const) {
+      const ctx = await h.browser.newContext({ viewport });
+      const page = await ctx.newPage();
+      const problems: string[] = [];
+      page.on("console", (m) => m.type() === "error" && problems.push(m.text()));
+      page.on("pageerror", (e) => problems.push(e.message));
+      const r = await page.goto(`${new URL(h.url).origin}/legal.html#terms`);
+      expect(r?.status()).toBe(200);
+      await expect(page.getByRole("heading", { level: 1 }).textContent()).resolves.toBe("Privacy and terms");
+      await expect(page.locator("#privacy h2").textContent()).resolves.toBe("Privacy");
+      await expect(page.locator("#terms h2").textContent()).resolves.toBe("Terms of use");
+      // Its stylesheet applied (the CSP allows only same-origin sheets): the column is narrow.
+      expect(await page.locator("main").evaluate((m) => m.getBoundingClientRect().width)).toBeLessThanOrEqual(680);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/tb1b-legal-${name}.png`, fullPage: true });
+      expect(problems).toEqual([]);
+      await ctx.close();
+    }
   }, T);
 });
