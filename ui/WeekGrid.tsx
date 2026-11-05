@@ -195,7 +195,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
       <main
         ref={ref}
         className={`grid ${layout} ${planDay ? "planning" : ""} ${hasEve ? "has-eve" : ""}${panelOpen ? " with-panel" : ""}${layout === "medium" ? ` tier-${fit?.tier ?? "rail"}` : ""}${fit && fit.open.some((o) => !o) ? " folded" : ""}`}
-        style={{ gridTemplateColumns: tracks }}
+        style={{ gridTemplateColumns: tracks, ...(fit ? { "--rail-w": `${fit.railPx}px` } : {}) } as CSSProperties}
         role="group"
         aria-label="Week grid. Arrow keys move between half-days, Enter opens details."
       >

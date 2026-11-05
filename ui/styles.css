@@ -2836,8 +2836,9 @@ button.att-chip { cursor: pointer; }
 .half .flex-list { font-size: var(--fs-2); }
 
 /* The time rail (U3, D383): the one home for meetings, personal events and timeboxes on a compact card. */
-/* WK-1: the rail tier's rail: 186 px, down to 140 on a narrower card (the text column keeps about 200 px, scaled). */
-.half.card.has-ruler { --ruler-w: clamp(140px, 100cqw - 200px * var(--text-scale), 186px); }
+/* WK-1: the rail tier's rail: 186 px, down to 140 on a narrower card (the text column keeps about 200 px, scaled),
+   set from the measured column on the grid (ui/weekfit.ts railPx). */
+.half.card.has-ruler { --ruler-w: var(--rail-w, 186px); }
 .ruler { top: 8px; bottom: 8px; }
 .ruler .r-hour span { left: 3px; top: 1px; font-size: var(--fs-1); }
 .ruler .r-lanes { position: absolute; top: 0; bottom: 0; left: 22px; right: 2px; }
@@ -3138,9 +3139,9 @@ button.pw-kids:hover, button.pw-kids:focus-visible { text-decoration: underline;
 .statusbar.quiet .status-chips { margin-right: auto; margin-left: 4px; }
 .status-chip { display: inline-block; min-width: 0; max-width: 60vw; padding: 1px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--raised); color: var(--text-muted); font-size: var(--fs-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* U5.1: a 12-character client name never truncates at 1920. The card's text column keeps at least 200 px and the rail
-   takes the rest (about 150 px on a 400 px card); the time range wraps onto a hidden second line before the name
-   shortens, and the hover ⋯ sits over the head's right end. At 3840 the hour timeline keeps the U3 widths. */
-.half.card.has-ruler { --ruler-w: clamp(96px, calc(100cqw - 250px), 186px); }
+   takes the rest; the hover ⋯ sits over the head's right end. At 3840 the hour timeline keeps the U3 widths. WK-1: the
+   rail's width comes from the measured column (--rail-w, ui/weekfit.ts; this rule's 100cqw read no container), and the
+   time range takes its own visible line. */
 .card-head { flex-wrap: wrap; align-content: flex-start; overflow: hidden; position: relative; padding-right: 22px; }
 .card-head > .swatch { align-self: center; }
 .card-head .card-client { flex: 0 1 auto; line-height: calc(20px * var(--text-scale)); }

@@ -1,8 +1,8 @@
 // WK-1: how Week's Board fits the space it has. One tier for the whole grid, chosen from the real width of a Mon–Thu
 // column (the grid's content box, after the detail panel's space and the gaps) divided by the text scale, so Larger
 // text reaches the smaller tiers sooner. Each card renders exactly its tier's element:
-// - rail   (≥ 330): the time rail with titles (186 px, 140 on a narrower card)
-// - ruler  (250 to 330): a slim ruler, hour ticks and event bars, no titles
+// - rail   (≥ 320): the time rail with titles (186 px, 140 on a narrower card)
+// - ruler  (250 to 320): a slim ruler, hour ticks and event bars, no titles
 // - strip  (170 to 250): no rail; a thin day strip under the card header (busy, free, the now tick)
 // - mini   (130 to 170): the strip, the header stacked, the status pill without its reason
 // When even mini doesn't fit with all five days open, the week folds: the selected day and its neighbours stay open
@@ -11,7 +11,7 @@
 export type Tier = "rail" | "ruler" | "strip" | "mini";
 
 /** The narrowest Mon–Thu column, in CSS px at Default text, for each tier. */
-export const TIER_MIN: Readonly<Record<Tier, number>> = { rail: 330, ruler: 250, strip: 170, mini: 130 };
+export const TIER_MIN: Readonly<Record<Tier, number>> = { rail: 320, ruler: 250, strip: 170, mini: 130 };
 
 /** A folded day's strip, in CSS px at Default text. */
 export const FOLD_PX = 44;
@@ -37,7 +37,11 @@ export type Fit = {
   col: number;
   /** grid-template-columns. */
   tracks: string;
+  /** The rail tier's rail width: what the column leaves after about 200 px of text (scaled), 140 to 186 px. */
+  railPx: number;
 };
+
+const railWidth = (col: number, scale: number) => Math.round(Math.min(186, Math.max(140, col - 200 * scale)));
 
 /**
  * @param contentPx the grid's content width (no padding)
@@ -52,7 +56,7 @@ export function weekFit({ contentPx, gapPx, scale = 1, shares, selected }: { con
   const all = free / Math.max(0.0001, sum(shares));
   const t = tierFor(all, scale);
   const track = (s: number) => `minmax(0, ${s}fr)`;
-  if (t !== "fold" || n <= 1) return { tier: t === "fold" ? "mini" : t, open: shares.map(() => true), col: all, tracks: shares.map(track).join(" ") };
+  if (t !== "fold" || n <= 1) return { tier: t === "fold" ? "mini" : t, open: shares.map(() => true), col: all, tracks: shares.map(track).join(" "), railPx: railWidth(all, scale) };
 
   // Fold: a window of FOLD_OPEN days around the selected one (kept inside the week), shrunk only while the open
   // columns are still under mini.
@@ -69,7 +73,7 @@ export function weekFit({ contentPx, gapPx, scale = 1, shares, selected }: { con
     if (tierFor(col, scale) !== "fold" || size === 1) break;
   }
   const tier = tierFor(col, scale);
-  return { tier: tier === "fold" ? "mini" : tier, open, col, tracks: shares.map((s, i) => (open[i] ? track(s) : `${Math.round(strip)}px`)).join(" ") };
+  return { tier: tier === "fold" ? "mini" : tier, open, col, tracks: shares.map((s, i) => (open[i] ? track(s) : `${Math.round(strip)}px`)).join(" "), railPx: railWidth(col, scale) };
 }
 
 /** A day's share of the week: working days 1, Friday, weekend days and PTO days 0.6, the day being planned 2.6. */

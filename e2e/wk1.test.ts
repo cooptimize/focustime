@@ -124,7 +124,8 @@ describe.skipIf(!CHROMIUM)("WK-1: Week fits every width from 1024", () => {
   // Each tier, how to reach it on the demo week (Thursday is PTO, so Thursday and Friday take the light share).
   const TIERS: { tier: string; width: number; height: number; panel: boolean; big: boolean; fold?: boolean }[] = [
     { tier: "rail", width: 1920, height: 1080, panel: false, big: false },
-    { tier: "ruler", width: 1440, height: 900, panel: false, big: false },
+    { tier: "rail", width: 1440, height: 900, panel: false, big: false },
+    { tier: "ruler", width: 1366, height: 768, panel: false, big: false },
     { tier: "strip", width: 1024, height: 768, panel: false, big: false },
     { tier: "mini", width: 1280, height: 800, panel: true, big: true },
     { tier: "mini", width: 1024, height: 768, panel: true, big: true, fold: true },
@@ -159,6 +160,8 @@ describe.skipIf(!CHROMIUM)("WK-1: Week fits every width from 1024", () => {
         const am = mon.locator(MON_AM);
         const expectRail = t.tier === "rail" ? ".ruler:not(.slim)" : t.tier === "ruler" ? ".ruler.slim" : ".day-strip";
         await expect(am.locator(expectRail).count()).resolves.toBe(1);
+        // The rail tier's rail is 140 to 186 px wide (its titles have room), minus its 12 px of inset.
+        if (t.tier === "rail") await expect(am.locator(".ruler").evaluate((r) => r.getBoundingClientRect().width)).resolves.toBeGreaterThanOrEqual(127);
         if (t.tier === "strip" || t.tier === "mini") await expect(am.locator(".day-strip .now-tick").count()).resolves.toBe(1);
         if (t.tier === "mini") await expect(am.locator(".pill-reason").isVisible()).resolves.toBe(false);
         // The block's time is always visible.

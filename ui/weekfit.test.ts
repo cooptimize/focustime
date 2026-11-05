@@ -24,8 +24,8 @@ describe("tierFor", () => {
     expect(tierFor(TIER_MIN.mini - 1)).toBe("fold");
   });
   it("scales the thresholds with the text size", () => {
-    expect(tierFor(330, LARGER)).toBe("ruler");
-    expect(tierFor(330 * LARGER, LARGER)).toBe("rail");
+    expect(tierFor(400, LARGER)).toBe("ruler");
+    expect(tierFor(320 * LARGER, LARGER)).toBe("rail");
   });
 });
 
@@ -39,7 +39,9 @@ describe("weekFit", () => {
   });
   it("gives each width its tier", () => {
     expect(fit(1920, false).tier).toBe("rail");
-    expect(fit(1440, false).tier).toBe("ruler");
+    // 1440 with no panel keeps the rail with titles (a 324 px column).
+    expect(fit(1440, false, PTO_THU).tier).toBe("rail");
+    expect(fit(1366, false).tier).toBe("ruler");
     expect(fit(1024, false).tier).toBe("strip");
     expect(fit(1366, true).tier).toBe("strip");
     expect(fit(1280, true, PLAIN, LARGER).tier).toBe("mini");
@@ -60,6 +62,10 @@ describe("weekFit", () => {
     expect(f.open.filter(Boolean).length).toBeLessThan(3);
     expect(f.open[1]).toBe(true);
     expect(f.col / LARGER).toBeGreaterThanOrEqual(TIER_MIN.mini);
+  });
+  it("gives the rail what the column leaves after the text, 140 to 186 px", () => {
+    expect(fit(1920, false).railPx).toBe(186);
+    expect(fit(1440, false, PTO_THU).railPx).toBe(140);
   });
   it("never makes Friday wider than a working day", () => {
     for (const w of [1920, 1366, 1024]) {
