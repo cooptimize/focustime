@@ -18,8 +18,9 @@ param imageDigest string = ''
 param sharedRegistry object = {}
 @description('A5: the user-assigned identity (in this resource group) that pulls from the shared registry; made by bootstrap.sh.')
 param pullIdentityName string = ''
-@description('A5: the SQL database\'s vCores (serverless max) and days of point-in-time restore.')
-param sqlMaxVCores int = 1
+@description('HK-2: the SQL database\'s DTU Standard tier (dev S0, prod S1) and A5\'s days of point-in-time restore.')
+@allowed([ 'S0', 'S1', 'S2', 'S3' ])
+param sqlSku string = 'S0'
 param sqlRetentionDays int = 7
 @description('A5: the only domains help invites may go to, for everyone (comma list); empty: each person\'s work email.')
 param inviteDomains string = ''
@@ -83,7 +84,7 @@ module sql 'modules/sql.bicep' = {
     adminGroupName: adminGroupName
     adminGroupObjectId: adminGroupObjectId
     workspaceId: monitoring.outputs.workspaceId
-    maxVCores: sqlMaxVCores
+    sku: sqlSku
     retentionDays: sqlRetentionDays
   }
 }
