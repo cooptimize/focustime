@@ -120,7 +120,7 @@ describe("Requests in each person's tick", () => {
       await s.ticks.slow();
       await s.ticks.slow();
       const asks = s.shown.filter((n) => n.kind === "asks");
-      expect(asks.map((n) => [n.title, n.route])).toEqual(sent ? [["Urgent request from fabrikam", "requests"]] : []);
+      expect(asks.map((n) => [n.title, n.route])).toEqual(sent ? [["Urgent request from fabrikam", "conversations"]] : []);
     }
   });
 

@@ -37,6 +37,9 @@ param feedbackOrg string = ''
 param feedbackProject string = ''
 param feedbackParentId string = ''
 param feedbackLive bool = false
+@description('CV-1: shared polling of client chats in the background: on or off (prod: on; dev on for the watch period).')
+@allowed(['on', 'off'])
+param requestsPoll string = 'off'
 param minReplicas int
 param tenantId string
 param entraClientId string
@@ -109,6 +112,8 @@ var settings = [
   { name: 'FOCUSTIME_FEEDBACK_PROJECT', value: feedbackProject }
   { name: 'FOCUSTIME_FEEDBACK_PARENT_ID', value: feedbackParentId }
   { name: 'FOCUSTIME_FEEDBACK_LIVE', value: feedbackLive ? 'true' : 'false' }
+  // CV-1: shared polling of registered client chats (docs/azure/runbook.md, "Conversations").
+  { name: 'FOCUSTIME_REQUESTS_POLL', value: requestsPoll }
 ]
 var image = empty(imageDigest) ? '${registryLoginServer}/focustime:${imageTag}' : '${registryLoginServer}/focustime@${imageDigest}'
 

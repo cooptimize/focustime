@@ -69,8 +69,12 @@ import { execFileSync } from "node:child_process";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { userZone } from "../week/zone.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
-import { pollCycle, requestsNextDue, type PollDeps } from "../actions/request-poll.ts";
-import { requestContext, aiFor } from "../actions/dispatch.ts";
+import { pollCycle, requestsNextDue, type PollDeps, type PollPerson } from "../actions/request-poll.ts";
+import { requestContext, aiFor, escalationHours } from "../actions/dispatch.ts";
+import { createConversationStore } from "../store/conversation-store.ts";
+import { upkeep as upkeepConversations } from "../actions/conversation-upkeep.ts";
+import { backfillRequests } from "../actions/conversation-backfill.ts";
+import { weekConfig } from "../config/defaults.ts";
 import type { RequestsPort } from "../actions/request-actions.ts";
 import { createAdminCheck } from "../actions/admin.ts";
 import { createOrgRuntime } from "../actions/org.ts";
@@ -305,13 +309,50 @@ const pollDeps: PollDeps = {
     const config = loaded.parsed.ok ? loaded.parsed.config : null;
     const account = config && ctx.account ? ctx.account(config) : null;
     const rc = await requestContext(ctx);
-    return { name: user.displayName || user.upn, config, chatMessages: account?.chatMessages, chats: account?.chats, ai: () => aiFor(ctx), plan: ctx.plan ?? null, openItems: rc.openItems };
+    return { name: user.displayName || user.upn, config, chatMessages: account?.chatMessages, chats: account?.chats, ai: () => aiFor(ctx), pipelineAi: () => aiFor(ctx, { cap: "app" }), plan: ctx.plan ?? null, openItems: rc.openItems };
   },
   homeTenant: async () => app.entra?.tenantId ?? null,
   now: () => instantNow().toString(),
   log,
 };
-const requestsPort: RequestsPort = { teams, refresh: (chatIds) => pollCycle(pollDeps, { force: true, chatIds }) };
+// CV-1: conversations, commitments and suggestions, shared like the chats (D521's viewer gates every read).
+const conversations = createConversationStore(db, instantNow, teams);
+pollDeps.conversations = conversations;
+// CV-1 migration (add-only, D468): AP-1's requests become conversations once; idempotent, so every start may run it.
+await backfillRequests(teams, conversations, app.entra?.tenantId ?? null).then(
+  (n) => n && log({ source: "plan", op: "requests_moved", count: n }),
+  () => log({ source: "plan", op: "requests_moved", kind: "failed" }),
+);
+pollDeps.upkeep = async (now) => {
+  // The person whose sign-in reads for a client (its first chat's registrant): DevOps reads and AI, once per run.
+  const memo = new Map<string, Promise<PollPerson | null>>();
+  const readerFor = (clientKey: string) =>
+    memo.get(clientKey) ??
+    memo.set(clientKey, (async () => {
+      const chat = (await teams.chats()).find((c) => c.clientKey === clientKey);
+      const p = chat ? await pollDeps.person(chat.registeredBy).catch(() => null) : null;
+      return p?.config ? p : null;
+    })()).get(clientKey)!;
+  await upkeepConversations({
+    teams,
+    convs: conversations,
+    now,
+    hoursOf: async (uid) => ((await accounts.users.get(uid))?.deletedAt === null ? escalationHours(await runtimeFor(uid)) : null),
+    defaultHours: weekConfig.hours,
+    items: async (clientKey) => {
+      const p = await readerFor(clientKey);
+      return p?.config ? p.openItems(p.config, clientKey) : null;
+    },
+    userByEmail: async (email) => (await accounts.users.all()).find((u) => !u.deletedAt && (u.email ?? "").toLowerCase() === email.toLowerCase())?.id ?? null,
+    ai: async (clientKey) => {
+      const p = await readerFor(clientKey);
+      return p?.pipelineAi ? p.pipelineAi() : null;
+    },
+    clientName: async (k) => (await readerFor(k))?.config?.clientSettings[k]?.name ?? k,
+    log,
+  });
+};
+const requestsPort: RequestsPort = { teams, refresh: (chatIds) => pollCycle(pollDeps, { force: true, chatIds }), conversations, users: pollDeps.users };
 // D475: next-morning auto-shutdown restores from before (they'd write the schedule) never run; mark them cancelled.
 await cancelShutdownRestores(db, instantNow).then(
   (c) => c.length && log({ source: "azure", op: "restore_cancelled", count: c.length }),

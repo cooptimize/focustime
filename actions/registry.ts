@@ -27,13 +27,15 @@ export type ActionTarget =
   | "devops" // a DevOps change (step 14)
   | "vm" // my Azure VM (step 15.4)
   | "request" // one request in Inbox › Requests
-  | "promise"; // one promise in Inbox › Promises (AP-2)
+  | "promise" // one promise in Inbox › Promises (AP-2)
+  | "conversation" // one conversation in Inbox › Conversations (CV-1)
+  | "commitment"; // one of my promises in Inbox › My promises (CV-1)
 
 export type ActionSpec = {
   readonly name: string;
   /** Plain words for the command menu. */
   readonly title: string;
-  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Admin";
+  readonly group: "Week" | "Plan the week" | "Plan the day" | "Close out" | "Picks" | "Work items" | "Sources" | "Display" | "Time" | "Settings" | "Focus" | "Follow-ups" | "Capture" | "Timebox" | "Calendar" | "Help" | "DevOps" | "My VM" | "Requests" | "Conversations" | "Admin";
   readonly target: ActionTarget;
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
@@ -168,6 +170,29 @@ export const ACTIONS = [
   { name: "stories.retry", title: "Retry the stories that didn't publish", group: "DevOps", target: "devops", summary: "Retries each story whose create didn't confirm (it checks first and never makes a second one)" },
   { name: "stories.house_style", title: "A client's house style", group: "Settings", target: "none", summary: "How this client writes stories, learned from its own features each week; used by Draft stories" },
   { name: "stories.house_style_save", title: "Edit a client's house style", group: "Settings", target: "none", summary: "Your own words for a client's house style, or back to the learned one" },
+  { name: "conversations.list", title: "Conversations", group: "Conversations", target: "none", summary: "Inbox › Conversations: what your clients' registered chats are talking about, one card per topic, in Needs you, Handled by teammates and Closed" },
+  { name: "conversations.refresh", title: "Refresh conversations", group: "Conversations", target: "none", summary: "Read your clients' registered chats now (only new messages), for everyone who follows them" },
+  { name: "conversations.messages", title: "Show a conversation's messages", group: "Conversations", target: "conversation", shortcut: "X", summary: "The messages a conversation is made of, as Teams showed them" },
+  { name: "conversations.seen", title: "Mark a conversation seen", group: "Conversations", target: "conversation", summary: "Clears its Updated marker for you" },
+  { name: "conversations.resolve", title: "Resolve a conversation", group: "Conversations", target: "conversation", shortcut: "R", summary: "Resolved for everyone on the chat, with your name; a new work message opens it again" },
+  { name: "conversations.not_request", title: "Not a request", group: "Conversations", target: "conversation", summary: "Closed for everyone on the chat, with your name and an optional reason; you can open it again" },
+  { name: "conversations.reopen", title: "Open a conversation again", group: "Conversations", target: "conversation", summary: "Opens a resolved or closed conversation again" },
+  { name: "conversations.hide", title: "Hide a conversation for me", group: "Conversations", target: "conversation", summary: "Hides it from your Conversations only; nobody else's changes" },
+  { name: "conversations.move", title: "Move or split a message", group: "Conversations", target: "conversation", summary: "Moves one message to another conversation of the same chat, or into a new one" },
+  { name: "conversations.this_is_work", title: "This is work", group: "Conversations", target: "conversation", summary: "A message filtered as chatter starts a conversation of its own" },
+  { name: "conversations.link", title: "Link a conversation to a DevOps item", group: "Conversations", target: "conversation", summary: "Tracked as that item for everyone on the chat" },
+  { name: "conversations.take_over", title: "Take it over", group: "Conversations", target: "commitment", summary: "Makes a waiting commitment yours; whoever had it is told quietly" },
+  { name: "conversations.sort_unsorted", title: "Sort unsorted messages", group: "Conversations", target: "none", summary: "Sorts the messages that waited for AI (budget, AI off or a failure), when AI is available again" },
+  { name: "conversations.search", title: "Find an item for a conversation", group: "Conversations", target: "conversation", summary: "Search the client's open DevOps items to link a conversation to" },
+  { name: "conversations.draft", title: "Draft the DevOps item", group: "Conversations", target: "conversation", summary: "A draft bug, story or feature from the whole conversation, to check and create" },
+  { name: "my_promises.list", title: "My promises", group: "Conversations", target: "none", summary: "Inbox › My promises: what you said you'd do in your clients' registered chats" },
+  { name: "my_promises.today", title: "Add a promise to Today", group: "Conversations", target: "commitment", summary: "Shows the promise on Today until it's done" },
+  { name: "my_promises.followup", title: "Make a promise a follow-up", group: "Conversations", target: "commitment", summary: "A follow-up with who, what and the due filled in; the promise closes when it's done" },
+  { name: "my_promises.link", title: "Link a promise to a DevOps item", group: "Conversations", target: "commitment", summary: "The promise is kept by that item" },
+  { name: "my_promises.done", title: "Mark a promise done", group: "Conversations", target: "commitment", summary: "Done, with Undo" },
+  { name: "my_promises.not_needed", title: "A promise isn't needed", group: "Conversations", target: "commitment", summary: "Closes it quietly, with Undo" },
+  { name: "my_promises.reopen", title: "Open a promise again", group: "Conversations", target: "commitment", summary: "Undoes Done, Not needed or a link" },
+  { name: "suggestions.skip", title: "Skip a suggested update", group: "Conversations", target: "conversation", summary: "Skips a suggested DevOps comment or description change" },
   { name: "ai.status", title: "AI", group: "Settings", target: "none", summary: "Settings › AI: whether AI is on for FocusTime (an admin's switch), this month's spend against your cap, and your last 20 AI requests (never their text)" },
   { name: "admin.status", title: "Am I an admin", group: "Admin", target: "none", summary: "Whether you are a FocusTime admin (the FocusTime Admins group in Entra, or the break-glass list)" },
   { name: "admin.load", title: "Open Admin", group: "Admin", target: "none", summary: "Admins: one section of the admin console (Clients, AI, Conversations, People, Organization, Status, Audit)" },

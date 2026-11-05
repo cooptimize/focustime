@@ -44,8 +44,8 @@ import type { TimerView } from "../actions/types.ts";
 import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
 import { Inbox } from "./Inbox.tsx";
-import { Requests, InboxTabs, useRequestCount } from "./Requests.tsx";
-import { Promises } from "./Promises.tsx";
+import { Conversations, InboxTabs, useConversationCount } from "./Conversations.tsx";
+import { MyPromises } from "./MyPromises.tsx";
 import { Roadmap } from "./Roadmap.tsx";
 import { PlanAhead } from "./PlanAhead.tsx";
 import { Today } from "./Today.tsx";
@@ -216,9 +216,9 @@ export function App() {
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
   const base: "today" | "week" = nav.tab === "week" ? "week" : "today";
   const followUpsOpen = nav.tab === "inbox";
-  // Inbox › Requests, and the open requests count on its tab.
-  const asksOpen = nav.tab === "inbox" && !!nav.requests;
-  const promisesOpen = nav.tab === "inbox" && !!nav.promises;
+  // CV-1: Inbox › Conversations and My promises, with their counts on the tabs.
+  const asksOpen = nav.tab === "inbox" && !!nav.conversations;
+  const promisesOpen = nav.tab === "inbox" && !!nav.myPromises;
   const roadmapOpen = nav.tab === "roadmap";
   const checkInOpen = nav.tab === "today" && nav.mode === "checkin";
   /** Settings (step 6b) at a section, or closed (back to the place under it). */
@@ -248,7 +248,7 @@ export function App() {
   // Step 15.3: the draft open in the draft editor.
   const [draftEdit, setDraftEdit] = useState<DraftStory | null>(null);
   const [captureVersion, setCaptureVersion] = useState(0);
-  const [askCount, setAskCount, promiseCount, setPromiseCount] = useRequestCount(captureVersion, followUpsOpen);
+  const [askCount, setAskCount, promiseCount, setPromiseCount] = useConversationCount(captureVersion, followUpsOpen);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** U2: Week's ⋯ (the hours shown, and the compact timelines in the medium layout), moved from the status bar. */
   const [weekMoreAt, setWeekMoreAt] = useState<{ x: number; y: number } | null>(null);
@@ -1569,11 +1569,11 @@ export function App() {
         <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Week"><PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} /></PhoneGate>
       ) : followUpsOpen ? (
         <div className="inbox-page">
-          <InboxTabs tab={asksOpen ? "requests" : promisesOpen ? "promises" : "inbox"} count={askCount} promiseCount={promiseCount} onPick={(t) => goNav(t === "requests" ? navOf.requests() : t === "promises" ? navOf.promises() : navOf.inbox())} />
+          <InboxTabs tab={asksOpen ? "conversations" : promisesOpen ? "my_promises" : "inbox"} count={askCount} promiseCount={promiseCount} onPick={(t) => goNav(t === "conversations" ? navOf.conversations() : t === "my_promises" ? navOf.myPromises() : navOf.inbox())} />
           {asksOpen ? (
-            <Requests data={data} version={captureVersion} onCount={setAskCount} onPromiseCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
+            <Conversations data={data} version={captureVersion} onCount={setAskCount} onPromiseCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
           ) : promisesOpen ? (
-            <Promises data={data} version={captureVersion} onCount={setPromiseCount} onAskCount={setAskCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
+            <MyPromises data={data} version={captureVersion} onCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
           ) : (
             <Inbox data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
           )}
@@ -1653,7 +1653,8 @@ export function App() {
           onPlanWeek={() => openPlanWeek(data.today.weekStart)}
           switcher={switches.today}
           onInbox={() => setView("inbox")}
-          onAsks={() => setView("requests")}
+          onAsks={() => setView("conversations")}
+          onPromises={() => setView("my_promises")}
           onCaptures={() => setView("inbox")}
           onRetry={() => auto.trigger("button")}
           onFix={() => setSettingsAt("connections")}
@@ -1715,6 +1716,8 @@ export function App() {
         layout={layout}
         compact={compact}
         onPlanDay={(d) => goNav(planDayNav(d))}
+        promises={data.promises}
+        onPromise={() => setView("my_promises")}
         onAddWork={addWork}
         onAddHours={() => {
           setDetailsOpen(false);

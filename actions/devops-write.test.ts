@@ -10,6 +10,7 @@ import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { createPlanStore, openPlanDb } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
+import { createConversationStore } from "../store/conversation-store.ts";
 import { IDENTITY_KEY } from "./account.ts";
 import { clearDevopsPreviews, type DevOpsPreview, type DevOpsResult } from "./devops-write-actions.ts";
 import { dispatch, type ActionContext } from "./dispatch.ts";
@@ -30,7 +31,9 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
   const writer = createDevOpsWriter({ fetch: dv.fetch, log: (e) => void logs.push(e) });
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") });
   // The shared Teams store (its own database here) for creates from a request.
-  const teams = createTeamsStore(sqliteConn(openPlanDb({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") })), () => Temporal.Instant.from(NOW));
+  const teamsConn = sqliteConn(openPlanDb({ path: ":memory:", now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("America/New_York") }));
+  const teams = createTeamsStore(teamsConn, () => Temporal.Instant.from(NOW));
+  const convs = createConversationStore(teamsConn, () => Temporal.Instant.from(NOW), teams);
   const keyring = new Map<string, string>();
   const targetCalls: { keys: string[]; withPat: boolean | undefined }[] = [];
   const target = (clientKey: string, org: string, withPat: boolean): DevOpsTarget => ({ accountId: "a", clientKey, clientName: clientKey, org, project: `${clientKey} Project`, projectName: `${clientKey} Project`, email: clientKey === COOP ? (opts.email === undefined ? "avery@cooptimize.example" : opts.email) : "avery@adatum.example", pat: withPat ? new Pat(COMPANY_PAT) : null });
@@ -52,7 +55,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
     now: () => NOW,
     sleep: async (ms) => void waits.push(ms),
     plan,
-    requests: { teams, refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }) },
+    requests: { teams, refresh: async () => ({ polled: 0, messages: 0, updated: 0, candidates: 0, promises: 0, failures: 0 }), conversations: convs },
     devopsWriter: writer,
     writePats: { get: async (k) => { const v = keyring.get(k); if (!v) throw new Error("not found"); return new Pat(v); }, set: async (k, v) => void keyring.set(k, v), clear: async (k) => void keyring.delete(k) },
   };
@@ -70,7 +73,7 @@ function setup(opts: { email?: string | null; acceptance?: boolean; startDate?: 
   const preview = async (change: Record<string, unknown>, clientKey = COOP) => (await run<{ preview: DevOpsPreview }>("devops.preview", { clientKey, change })).preview;
   const confirm = (p: DevOpsPreview) => run<DevOpsResult>("devops.confirm", { previewId: p.previewId });
   const write = async (change: Record<string, unknown>) => confirm(await preview(change));
-  return { dv, plan, teams, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten, waits };
+  return { dv, plan, teams, convs, run, fail, enable, preview, confirm, write, keyring, logs, targetCalls, forgotten, waits };
 }
 type S = ReturnType<typeof setup>;
 const patches = (s: S) => s.dv.writes().filter((w) => w.method === "PATCH");
@@ -593,5 +596,100 @@ describe("a DevOps item from a request (shared polling)", () => {
     expect(u.confirmed).toBe(true);
     expect(items(s, "Bug")[0]!.fields["System.State"]).toBe("Removed");
     expect((await s.teams.request(CHAT, "1730000000001"))?.status).toBe("open");
+  });
+});
+
+describe("CV-1: a DevOps item, a comment and a description change from a conversation", () => {
+  const CHAT = "19:cooptimize-alliance@thread.v2";
+  const ME = "00000000-0000-4000-8000-0000000000a1";
+  const HOME = "11111111-1111-4111-8111-111111111111";
+  const BLAKE = { userId: "00000000-0000-4000-8000-0000000000c2", displayName: "Blake Novak", email: null, tenantId: "22222222-2222-4222-8222-222222222222" };
+  async function world(s: S, kind: "customer" | "delivery" = "customer") {
+    await s.plan.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME, name: "Avery", username: "avery@cooptimize.example", email: "avery@cooptimize.example", signedInAt: NOW, systemUserId: null, systemUserEmail: null });
+    await s.teams.addChat({ chatId: CHAT, clientKey: COOP, kind, displayName: "Alliance chat", webUrl: null, members: [BLAKE, { userId: ME, displayName: "Avery", email: null, tenantId: HOME }], by: ME });
+    const html = '<p><at id="0">Avery</at> the totals are off by 7.7k lb</p><table><tr><td>MD</td><td>12,400</td></tr></table><script>alert(1)</script>';
+    await s.teams.saveMessages([{ chatId: CHAT, messageId: "1730000000101", clientKey: COOP, senderId: BLAKE.userId, senderName: "Blake Novak", senderTenant: BLAKE.tenantId, createdAt: "2026-11-02T13:00:00Z", modifiedAt: "2026-11-02T13:00:00Z", html, text: "Avery the totals are off by 7.7k lb", hasImage: false, hasFile: false, replyToId: null, mentions: [{ id: ME, name: "Avery", at: 0 }], fetchedAt: NOW }]);
+    const c = await s.convs.addConversation({ chatId: CHAT, clientKey: COOP, title: "Totals gap", summary: "Totals off by 7.7k lb.", participants: [], firstAt: "2026-11-02T13:00:00Z", lastAt: "2026-11-02T13:00:00Z", lastWorkAt: "2026-11-02T13:00:00Z" });
+    await s.convs.place([{ chatId: CHAT, messageId: "1730000000101", conversationId: c.id, role: "work", reason: null, placedBy: "ai", at: "2026-11-02T13:00:00Z" }]);
+    const k = await s.convs.addCommitment({ conversationId: c.id, chatId: CHAT, clientKey: COOP, whoId: ME, whoName: "Avery", toId: BLAKE.userId, toName: "Blake Novak", what: "Fix the totals", dueAt: null, dueDate: null, impliesItem: true, messageIds: ["1730000000101"], reason: null });
+    return { c, k };
+  }
+
+  it("creates a Bug under a feature with the path of action, then the original message (sanitized) and the Teams link; Tracked after read back", async () => {
+    const s = setup();
+    await s.enable();
+    const { c, k } = await world(s);
+    const change = { kind: "conversation_create", conversationId: c.id, commitmentId: k.id, title: "Totals gap on the dashboard", description: "What's being asked\nTotals are off.\n\nCheck first\n- BOM bridging", level: "bug", parentId: 437 };
+    const p = await s.preview(change);
+    expect(p.item).toBe("New Bug: Totals gap on the dashboard");
+    expect(p.notes.join(" ")).toMatch(/Tracks the conversation/);
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    const bug = [...s.dv.items.values()].find((i) => i.fields["System.WorkItemType"] === "Bug")!;
+    const body = String(bug.fields["Microsoft.VSTS.TCM.ReproSteps"]);
+    expect(body).toContain("<strong>What's being asked</strong>");
+    expect(body).toContain('<span class="mention">Avery</span>');
+    expect(body).toContain("<td>12,400</td>");
+    expect(body).not.toContain("script");
+    expect(body).toContain("Blake Novak");
+    expect(body).toContain("https://teams.microsoft.com/");
+    expect(bug.fields["System.Parent"]).toBe(437);
+    expect(await s.convs.commitment(k.id)).toMatchObject({ state: "created", itemId: bug.id });
+    expect(await s.convs.conversation(c.id)).toMatchObject({ itemId: bug.id, status: "tracked" });
+    expect((await s.plan.devopsWrite(r.entry.id))!.conv).toEqual({ conversationId: c.id, commitmentId: k.id, suggestionId: null });
+    expect((await s.run<{ nothing?: string }>("devops.preview", { clientKey: COOP, change })).nothing).toBe(`This conversation is already tracked as #${bug.id}`);
+    // Undo sets it to Removed and opens the conversation and the promise again.
+    await s.write({ kind: "undo", writeId: r.entry.id });
+    expect(await s.convs.commitment(k.id)).toMatchObject({ state: "open", itemId: null });
+    expect((await s.convs.conversation(c.id))!.itemId).toBeNull();
+  });
+
+  it("from an internal chat the messages are left out unless included", async () => {
+    const s = setup();
+    await s.enable();
+    const { c } = await world(s, "delivery");
+    const p = await s.preview({ kind: "conversation_create", conversationId: c.id, title: "T", description: "d", level: "story" });
+    expect(p.fields.find((f) => f.label === "Description")!.after).toMatch(/left out: it's an internal chat/);
+    const q = await s.preview({ kind: "conversation_create", conversationId: c.id, title: "T", description: "d", level: "story", includeInternal: true });
+    expect(q.fields.find((f) => f.label === "Description")!.after).toMatch(/original message/);
+  });
+
+  it("posts a suggested comment for its owner (internal lines only when included) and settles it", async () => {
+    const s = setup();
+    await s.enable();
+    const { c } = await world(s);
+    await s.convs.updateConversation(c.id, { item: { id: 500, url: null, title: "Import mapping" } });
+    const sg = await s.convs.addSuggestion({ conversationId: c.id, itemId: 500, kind: "comment", forUser: ME, body: "Root cause is BOM bridging.", before: null, after: null, internal: ["Internal: we owe them a fix"], day: "2026-11-02" });
+    const p = await s.preview({ kind: "conversation_comment", suggestionId: sg.id });
+    const text = p.fields.find((f) => f.label === "Comment")!.after!;
+    expect(text).toContain("Root cause is BOM bridging.");
+    expect(text).not.toContain("Internal");
+    expect(text).toMatch(/From the Teams conversation: https:\/\/teams\.microsoft\.com\//);
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    expect(await s.convs.suggestion(sg.id)).toMatchObject({ state: "posted", writeId: r.entry.id });
+    const other = await s.convs.addSuggestion({ conversationId: c.id, itemId: 500, kind: "comment", forUser: "someone-else", body: "x", before: null, after: null, internal: [], day: "2026-11-02" });
+    expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "conversation_comment", suggestionId: other.id } })).status).toBe(409);
+  });
+
+  it("description_update shows before and after, appends (never rewrites), reads back, keeps the old text and undoes", async () => {
+    const s = setup();
+    await s.enable();
+    const { c } = await world(s);
+    s.dv.items.get(500)!.fields["System.Description"] = "<div>Map the import columns.</div>";
+    const sg = await s.convs.addSuggestion({ conversationId: c.id, itemId: 500, kind: "description", forUser: ME, body: "Also cover the weekly view", before: null, after: null, internal: [], day: "2026-11-02" });
+    const p = await s.preview({ kind: "description_update", suggestionId: sg.id });
+    expect(p.op).toBe("description");
+    const row = p.fields.find((f) => f.label === "Description")!;
+    expect(row.before).toBe("Map the import columns.");
+    expect(row.after).toBe("Map the import columns.\n\nScope change from Teams, 2026-11-02: Also cover the weekly view");
+    expect(p.notes.join(" ")).toMatch(/old text is kept/);
+    const r = await s.confirm(p);
+    expect(r.confirmed).toBe(true);
+    expect(String(s.dv.items.get(500)!.fields["System.Description"])).toMatch(/^<div>Map the import columns\.<\/div>.*weekly view/);
+    expect((await s.plan.devopsWrite(r.entry.id))!.before.Description).toBe("<div>Map the import columns.</div>");
+    expect(patches(s).at(-1)!.body).toEqual(expect.arrayContaining([{ op: "test", path: "/rev", value: expect.any(Number) }]));
+    await s.write({ kind: "undo", writeId: r.entry.id });
+    expect(s.dv.items.get(500)!.fields["System.Description"]).toBe("<div>Map the import columns.</div>");
   });
 });

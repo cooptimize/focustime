@@ -13,6 +13,7 @@
 // Logs carry the op, status, count and duration: never a chat id, a topic, a person or message text.
 import type { Logger } from "../../log/logger.ts";
 import { plainText, type IncomingMessage } from "../../plan/asks.ts";
+import { bodyKind } from "../../plan/sanitize.ts";
 import { CHAT_ID, type ChatMember, type ChatSummary } from "../../plan/chats.ts";
 import { HttpError, NetworkError } from "../calendar/http.ts";
 
@@ -38,7 +39,7 @@ export type ChatMessagesClient = {
  * A message as read: the fields the rules use, plus what the shared store keeps (the raw body, the sender's name, the
  * mentions with names, Graph's lastModifiedDateTime). The last three are optional for the older per-person path.
  */
-export type GraphMessage = IncomingMessage & { modifiedAt: string; html?: string | null; authorName?: string | null; mentions?: { id: string; name: string | null }[] };
+export type GraphMessage = IncomingMessage & { modifiedAt: string; html?: string | null; authorName?: string | null; mentions?: { id: string; name: string | null; at?: number }[] };
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : null);
@@ -85,14 +86,32 @@ export function messageOf(v: unknown, chatId: string, clientKey: string): GraphM
   const html = typeof body?.content === "string" ? body.content : "";
   const attachments = Array.isArray(m.attachments) ? m.attachments.map(obj).filter((a): a is Obj => !!a) : [];
   const type = (a: Obj) => (typeof a.contentType === "string" ? a.contentType.toLowerCase() : "");
-  const hasImage = /<img\b/i.test(html) || attachments.some((a) => type(a).startsWith("image/"));
+  // An emoji, a GIF or a sticker isn't an image someone attached (CV-1's chatter rules look at those).
+  const kind = bodyKind(html);
+  const hasImage = kind.hostedImages + kind.otherImages > 0 || attachments.some((a) => type(a).startsWith("image/"));
   // Shared files are "reference"; cards (application/vnd.microsoft.card.*) and quoted replies ("messageReference") aren't files.
   const hasFile = attachments.some((a) => type(a) === "reference" || type(a) === "file" || (type(a).startsWith("application/") && !type(a).startsWith("application/vnd.microsoft.card.")));
-  const mentions = (Array.isArray(m.mentions) ? m.mentions : []).flatMap((x) => {
+  const mentions = (Array.isArray(m.mentions) ? m.mentions : []).flatMap((x, i) => {
     const u = obj(obj(obj(x)?.mentioned)?.user);
     const id = str(u?.id, 64);
-    return id ? [{ id, name: str(u?.displayName, 200) ?? str(obj(x)?.mentionText, 200) }] : [];
+    const at = typeof obj(x)?.id === "number" ? (obj(x)!.id as number) : i;
+    return id ? [{ id, name: str(u?.displayName, 200) ?? str(obj(x)?.mentionText, 200), at }] : [];
   });
+  // CV-1: a reply or quote in a group chat. Graph's replyToId is for channels only; in a chat the quoted message comes as
+  // an attachment of type messageReference whose id (and content's messageId) is the quoted message's id. Not in the
+  // chatMessageAttachment docs (they list forwardedMessageReference); read defensively, and a forward isn't a reply.
+  const quoted = attachments.flatMap((a) => {
+    if (type(a) !== "messagereference") return [];
+    let ref: string | null = null;
+    try {
+      ref = str(obj(JSON.parse(typeof a.content === "string" ? a.content : "null"))?.messageId, 64);
+    } catch {
+      ref = null;
+    }
+    return [ref ?? str(a.id, 64)].filter((x): x is string => !!x && /^[0-9A-Za-z_\-.:]{1,64}$/.test(x));
+  });
+  const isHtml = typeof body?.contentType !== "string" || body.contentType.toLowerCase() === "html";
+  const escText = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").split(/\r?\n/).join("<br>");
   return {
     chatId,
     messageId: id,
@@ -104,9 +123,9 @@ export function messageOf(v: unknown, chatId: string, clientKey: string): GraphM
     text: plainText(html, typeof body?.contentType === "string" ? body.contentType : null).slice(0, 28_000),
     hasImage,
     hasFile,
-    replyToId: str(m.replyToId, 64),
+    replyToId: str(m.replyToId, 64) ?? quoted[0] ?? null,
     mentionedUserIds: mentions.map((x) => x.id),
-    html: html.slice(0, 64_000) || null,
+    html: (isHtml ? html : escText(html)).slice(0, 64_000) || null,
     authorName: str(user?.displayName, 200),
     mentions,
   };

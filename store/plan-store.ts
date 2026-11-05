@@ -1425,14 +1425,17 @@ const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.clie
 export type DevOpsIdentityRow = { clientKey: string; org: string; id: string; name: string; email: string; validatedAt: string; expires: string | null };
 const toIdentity = (r: Row): DevOpsIdentityRow => ({ clientKey: r.client_key as string, org: r.org as string, id: r.identity_id as string, name: r.name as string, email: r.email as string, validatedAt: r.validated_at as string, expires: (r.expires as string | null) ?? null });
 const toDevopsWrite = (r: Row): DevOpsWriteEntry => ({
-  id: r.id as number, at: r.at as string, clientKey: r.client_key as string, org: r.org as string, project: r.project as string, op: r.op as DevOpsWriteEntry["op"],
+  id: r.id as number, at: r.at as string, clientKey: r.client_key as string, org: r.org as string, project: r.project as string, op: ((r.write_kind as string | null) ?? r.op) as DevOpsWriteEntry["op"],
   itemId: (r.item_id as number | null) ?? null, parentId: (r.parent_id as number | null) ?? null, title: r.title as string, identity: r.identity as string,
   before: json<Record<string, string | null>>(r.before) ?? {}, after: json<Record<string, string | null>>(r.after) ?? {}, ops: json<DevOpsWriteEntry["ops"]>(r.ops),
   revBefore: (r.rev_before as number | null) ?? null, revAfter: (r.rev_after as number | null) ?? null, commentId: (r.comment_id as number | null) ?? null, draftId: (r.draft_id as number | null) ?? null,
   pickIds: json<number[]>(r.pick_ids) ?? [], followUpId: (r.follow_up_id as number | null) ?? null, status: r.status as DevOpsWriteEntry["status"], message: (r.message as string | null) ?? null,
   undoOf: (r.undo_of as number | null) ?? null, undoneBy: (r.undone_by as number | null) ?? null, attempts: r.attempts as number, updatedAt: r.updated_at as string,
   ask: typeof r.ask_chat_id === "string" && typeof r.ask_message_id === "string" ? { chatId: r.ask_chat_id, messageId: r.ask_message_id } : null,
+  conv: typeof r.conversation_id === "number" ? { conversationId: r.conversation_id, commitmentId: (r.commitment_id as number | null) ?? null, suggestionId: (r.suggestion_id as number | null) ?? null } : null,
 });
+/** The write log's op CHECK (fixed before CV-1; newer ops go in write_kind). */
+const OLD_WRITE_OPS = ["state", "comment", "create", "target_date", "undo_state", "undo_comment", "undo_create", "undo_target_date"] as const;
 export type NewDevOpsWrite = Omit<DevOpsWriteEntry, "id" | "at" | "status" | "message" | "undoneBy" | "attempts" | "updatedAt" | "pickIds"> & { pickIds?: number[] };
 
 /** T-2: a stored client chat (its kind from T-2.1; null on rows from before). */
@@ -1468,6 +1471,7 @@ const toAiRequest = (r: Row): AiLogEntry => ({
   latencyMs: Number(r.latency_ms),
   outcome: r.outcome as AiOutcome,
   detail: (r.detail as string | null) ?? null,
+  cap: r.cap === "app" ? "app" : "person",
 });
 
 const toAsk = (r: Row): Ask => ({
@@ -1893,8 +1897,11 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async logDevopsWrite(w: NewDevOpsWrite): Promise<DevOpsWriteEntry> {
       return tx(async () => {
         const at = stamp();
-        const r = (await db.run(`INSERT INTO devops_write_log (at, client_key, org, project, op, item_id, parent_id, title, identity, before, after, ops, rev_before, rev_after, comment_id, draft_id, pick_ids, follow_up_id, status, message, undo_of, undone_by, attempts, updated_at, ask_chat_id, ask_message_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, NULL, 1, ?, ?, ?)`, at, w.clientKey, w.org, w.project, w.op, w.itemId, w.parentId, w.title, w.identity, JSON.stringify(w.before), JSON.stringify(w.after), w.ops ? JSON.stringify(w.ops) : null, w.revBefore, w.revAfter, w.commentId, w.draftId, JSON.stringify(w.pickIds ?? []), w.followUpId, w.undoOf, at, w.ask?.chatId ?? null, w.ask?.messageId ?? null));
+        // CV-1 (D-CV): ops newer than the column's CHECK (description, undo_description) are kept in write_kind, with
+        // "comment" in op: an older build reading the log refuses to undo a comment without a comment id (add-only).
+        const legacy = (OLD_WRITE_OPS as readonly string[]).includes(w.op);
+        const r = (await db.run(`INSERT INTO devops_write_log (at, client_key, org, project, op, item_id, parent_id, title, identity, before, after, ops, rev_before, rev_after, comment_id, draft_id, pick_ids, follow_up_id, status, message, undo_of, undone_by, attempts, updated_at, ask_chat_id, ask_message_id, conversation_id, commitment_id, suggestion_id, write_kind)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, NULL, 1, ?, ?, ?, ?, ?, ?, ?)`, at, w.clientKey, w.org, w.project, legacy ? w.op : "comment", w.itemId, w.parentId, w.title, w.identity, JSON.stringify(w.before), JSON.stringify(w.after), w.ops ? JSON.stringify(w.ops) : null, w.revBefore, w.revAfter, w.commentId, w.draftId, JSON.stringify(w.pickIds ?? []), w.followUpId, w.undoOf, at, w.ask?.chatId ?? null, w.ask?.messageId ?? null, w.conv?.conversationId ?? null, w.conv?.commitmentId ?? null, w.conv?.suggestionId ?? null, legacy ? null : w.op));
         return (await this.devopsWrite(r.lastId!))!;
       });
     },
@@ -2771,13 +2778,14 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     /** AI-0: one AI request in the person's log: counts, cost and outcome, never the prompt or the answer. */
     async addAiRequest(e: AiLogEntry): Promise<void> {
       await tx(async () => {
-        await db.run("INSERT INTO ai_requests (at, task, client_key, model, input_tokens, output_tokens, cost_micros, latency_ms, outcome, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          Temporal.Instant.from(e.at).toString(), e.task.slice(0, 64), e.clientKey ? e.clientKey.slice(0, 100) : null, e.model.slice(0, 100), Math.max(0, Math.round(e.inputTokens)), Math.max(0, Math.round(e.outputTokens)), Math.max(0, Math.round(e.costMicros)), Math.max(0, Math.round(e.latencyMs)), e.outcome, e.detail ? e.detail.slice(0, 40) : null);
+        await db.run("INSERT INTO ai_requests (at, task, client_key, model, input_tokens, output_tokens, cost_micros, latency_ms, outcome, detail, cap) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          Temporal.Instant.from(e.at).toString(), e.task.slice(0, 64), e.clientKey ? e.clientKey.slice(0, 100) : null, e.model.slice(0, 100), Math.max(0, Math.round(e.inputTokens)), Math.max(0, Math.round(e.outputTokens)), Math.max(0, Math.round(e.costMicros)), Math.max(0, Math.round(e.latencyMs)), e.outcome, e.detail ? e.detail.slice(0, 40) : null, e.cap === "app" ? "app" : "person");
       });
     },
     /** AI-0: the estimated cost of the person's requests in [from, to), in millionths of a dollar. */
     async aiSpentMicros(fromIso: string, toIso: string): Promise<number> {
-      const r = (await db.get("SELECT COALESCE(SUM(cost_micros), 0) AS n FROM ai_requests WHERE at >= ? AND at < ?", Temporal.Instant.from(fromIso).toString(), Temporal.Instant.from(toIso).toString())) as Row | undefined;
+      // CV-1: only what counted against the person's own cap (never the app's pipeline).
+      const r = (await db.get("SELECT COALESCE(SUM(cost_micros), 0) AS n FROM ai_requests WHERE at >= ? AND at < ? AND cap = 'person'", Temporal.Instant.from(fromIso).toString(), Temporal.Instant.from(toIso).toString())) as Row | undefined;
       return Number(r?.n ?? 0);
     },
     /** AI-0: the person's latest AI requests, newest first. */
@@ -2788,6 +2796,33 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
      * AP-2: the DevOps item ids just read for a client, remembered as that client's (ids only), so the AI guard knows
      * them after a restart. Ids already known for the client are left alone. How many were new.
      */
+    // ---- CV-1: my view of shared conversations (what I last saw, Hide for me) ----
+    async conversationViews(): Promise<Map<number, { seenVersion: number; seenAt: string | null; hidden: boolean }>> {
+      const rows = (await db.all("SELECT conversation_id, seen_version, seen_at, hidden FROM conversation_views")) as Row[];
+      return new Map(rows.map((r) => [Number(r.conversation_id), { seenVersion: Number(r.seen_version ?? 0), seenAt: instantText(r.seen_at), hidden: !!r.hidden }]));
+    },
+    /** Marks a conversation seen at its current version (the "Updated" marker goes). */
+    async seeConversation(id: number, version: number): Promise<void> {
+      await tx(async () => {
+        const now = opts.now().toInstant().toString();
+        const had = (await db.get("SELECT seen_version FROM conversation_views WHERE conversation_id = ?", id)) as Row | undefined;
+        if (had) await db.run("UPDATE conversation_views SET seen_version = ?, seen_at = ? WHERE conversation_id = ? AND seen_version < ?", version, now, id, version);
+        else await db.run("INSERT INTO conversation_views (conversation_id, seen_version, seen_at, hidden) VALUES (?, ?, ?, 0)", id, version, now);
+      });
+    },
+    /** Hide for me (or show again): personal, never anyone else's view. */
+    async hideConversation(id: number, hidden: boolean): Promise<void> {
+      await tx(async () => {
+        const now = opts.now().toInstant().toString();
+        const had = (await db.get("SELECT 1 AS x FROM conversation_views WHERE conversation_id = ?", id)) as Row | undefined;
+        if (had) await db.run("UPDATE conversation_views SET hidden = ?, hidden_at = ? WHERE conversation_id = ?", hidden ? 1 : 0, hidden ? now : null, id);
+        else await db.run("INSERT INTO conversation_views (conversation_id, seen_version, hidden, hidden_at) VALUES (?, 0, ?, ?)", id, hidden ? 1 : 0, hidden ? now : null);
+      });
+    },
+    /** CV-1's migration: a promise moved into the shared commitments (it stops showing here). */
+    async markPromiseMoved(chatId: string, messageId: string, commitmentId: number): Promise<void> {
+      await tx(async () => void (await db.run("UPDATE promises SET moved_to = ? WHERE chat_id = ? AND message_id = ?", commitmentId, chatId, messageId)));
+    },
     async rememberItemClient(clientKey: string, ids: readonly number[]): Promise<number> {
       const want = [...new Set(ids.filter((i) => Number.isSafeInteger(i) && i > 0 && i <= 2_147_483_647))];
       if (!clientKey || clientKey.length > 100 || !want.length) return 0;
@@ -2902,7 +2937,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     },
     /** AP-2: every promise, newest message first. */
     async promises(): Promise<StoredPromise[]> {
-      return ((await db.all("SELECT * FROM promises ORDER BY created_at DESC")) as Row[]).map(toPromise);
+      return ((await db.all("SELECT * FROM promises WHERE moved_to IS NULL ORDER BY created_at DESC")) as Row[]).map(toPromise);
     },
     async promise(chatId: string, messageId: string): Promise<StoredPromise | null> {
       const r = (await db.get("SELECT * FROM promises WHERE chat_id = ? AND message_id = ?", chatId, messageId)) as Row | undefined;

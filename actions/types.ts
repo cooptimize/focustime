@@ -87,6 +87,8 @@ export type WeekLoadData = {
    * past their urgency window (Check-in's "Walked in, not resolved").
    */
   requests: { urgent: UrgentAsk[]; pastUrgency: number };
+  /** CV-1: my open promises with a due (or put on Today), for Today's Now, agenda and follow-ups row and Week's rail. */
+  promises?: import("../plan/conversation-views.ts").DayPromise[];
   ui: UiConfig;
   config: { ok: boolean; path: string; created: boolean; errors: FieldError[] };
   /** Step 15 (D272): demo mode is on: every source is fictional sample data and the plan store is the demo one. */

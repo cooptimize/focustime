@@ -14,6 +14,6 @@ export function aiView(s: AiStatus): AiView {
     zeroBudget: s.capMicros === 0 || s.appCapMicros === 0,
     capText: fmtUsd(s.capMicros),
     spentText: fmtUsd(s.spentMicros),
-    recentText: s.recent.map((r) => ({ at: r.at, task: r.task, client: r.clientKey, cost: fmtUsd(r.costMicros), outcome: r.detail === "budget_zero" ? "Budget set to $0" : (OUTCOME_WORDS[r.outcome] ?? r.outcome), detail: r.detail })),
+    recentText: s.recent.map((r) => ({ at: r.at, task: r.task, client: r.clientKey, cost: fmtUsd(r.costMicros), outcome: r.detail === "zero_budget" ? "Budget set to $0" : (OUTCOME_WORDS[r.outcome] ?? r.outcome), detail: r.detail })),
   };
 }

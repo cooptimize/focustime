@@ -417,11 +417,36 @@ Registering, relabelling, removing and turning reading on or off are logged with
 ### Polling
 
 - **Hosted prod:** every 5 minutes while any follower of the chat is inside their working hours, nothing outside them; the first poll of the day asks for everything changed since the last message seen. No new Azure resource: the job runs in the app's own scheduler.
-- **Dev and the developer loop:** only on Refresh (Inbox › Requests), so dev doesn't read real chats on its own. `FOCUSTIME_REQUESTS_POLL=on` or `off` overrides either default; the server logs `requests_poll_mode` at start.
-- **Replicas:** prod runs at min replicas 1, so the job keeps its 5 minutes all day. Dev stays scaling to zero (`infra/dev.bicepparam`): with nobody on dev there is no replica and no poll, even with `FOCUSTIME_REQUESTS_POLL=on`. The first poll after it wakes (Refresh, or the job if switched on) reads everything changed since the last message seen, up to the newest 250 per chat (Q-SP-8). Both stay at max replicas 1, so one job polls each chat once a cycle; a second replica would only read twice (each message and Request is stored once).
+- **Dev:** in the background too during the CV-1 watch period (`requestsPoll = 'on'` and min replicas 1 in `infra/dev.bicepparam`, D549). **The developer loop:** only on Refresh (Inbox › Conversations). `FOCUSTIME_REQUESTS_POLL=on` or `off` (the Bicep parameter `requestsPoll`) sets it; the server logs `requests_poll_mode` at start.
+- **Replicas:** prod runs at min replicas 1, so the job keeps its 5 minutes all day. Dev runs at min replicas 1 for the CV-1 watch period (see Conversations below for going back to 0); at 0, with nobody on dev there is no replica and no poll, even with `FOCUSTIME_REQUESTS_POLL=on`. The first poll after it wakes (Refresh, or the job if switched on) reads everything changed since the last message seen, up to the newest 250 per chat (Q-SP-8). Both stay at max replicas 1, so one job polls each chat once a cycle; a second replica would only read twice (each message and Request is stored once).
 - **Whose token:** the person who registered the chat first, then the other followers by name. Settings › Clients and the Requests tab show "polling via <name>" when it isn't the registrant, and **Needs reconnecting** with the last fetch when nobody's token works: any follower signing in again (and allowing Chat.Read) fixes it on the next poll. A throttle from Teams waits out Retry-After without trying anyone else.
 - **What's logged per cycle:** `requests_poll` (chats read), `requests_poll_messages`, `requests_poll_candidates`, `requests_poll_token` (the token owner's name and count) and `requests_poll_failures`. Never a chat id, topic, member or message text.
 - **Cost (Option A):** one Graph read per registered chat every 5 minutes in working hours, under 100 a day per chat with no new messages; the AI sorts only new candidates once, under the token owner's caps.
+
+### Conversations (CV-1)
+
+The poller sorts every message that passes the rules into conversations with one AI call per chat batch (`conversations.update`, one client per call, that chat's open conversation summaries, display names but never email addresses). Inbox › Conversations and Inbox › My promises show the result; nothing posts to Teams.
+
+**Caps and throttles (D539):**
+
+- The shared pipeline counts against the **app-wide** cap (`FOCUSTIME_AI_APP_CAP_USD`, 100 USD a month by default), logged in `app_ai_requests` with `cap = app`, never against the person whose token read the chat.
+- One call per chat per poll cycle, and at most **200 calls per chat per day** (`CHAT_DAILY_AI_CALLS` in `actions/conversations-pipeline.ts`, counted in `chat_ai_days`; an app setting for ADM-1 to host).
+- A person's own tasks (opening or regenerating a DevOps draft, the text of a suggested comment) count against **their** cap (Settings › AI).
+- The pipeline runs only when the token owner has Use AI on and the client has Allow AI on.
+
+**Without AI** (off, no key, a 0 USD cap, a cap reached, a provider failure) the rules still run: messages wait as **unsorted** with the reason (for example "AI budget is set to $0") and Inbox › Conversations shows **Sort unsorted (N)**. It sorts them the same way (app cap) once AI is back. Nothing retries on its own beyond the next poll.
+
+**What it costs (estimate, gpt-6-luna list prices on 2026-11-04):** one call is about 2,000 to 5,000 input tokens (instructions, schema, the batch, open conversation summaries, up to 50 open items) and 300 to 800 output tokens, so about 0.0005 to 0.0009 USD.
+
+| Day | Calls | Cost |
+|---|---|---|
+| Dev on Nov 3 to 4: 176 messages in 7 chats | about 50 (one per chat per cycle with new messages) | about 0.05 USD a day, 1.10 a month |
+| A busy day: 7 chats with new messages every cycle for 10 hours | about 120 | about 0.11 USD |
+| Ceiling: 200 calls a day in each of 7 chats | 1,400 | about 0.90 USD |
+
+Admin › Status will show the counts (ADM-1): `convs.counts(day)` returns conversations by status, messages by role (work, chatter, ack, unsorted), commitments by state and AI calls per chat today.
+
+**Dev replicas after the watch period:** dev runs at min replicas 1 (0.5 vCPU, 1 GiB: about 0.40 USD a day at the idle rate, at most 1.30 at the active rate). To go back to scale to zero, change `param minReplicas = 1` to `0` in `infra/dev.bicepparam` in a pull request and run **deploy-dev** (never `az containerapp update` by hand). Leave `requestsPoll = 'on'` or set it to `'off'` in the same change: at 0 replicas the job runs only while someone keeps dev awake.
 
 ### Purging a client's stored chat text
 
@@ -550,4 +575,4 @@ Admin › People: a person's level select overrides Dataverse's (marked Override
 
 ### What admins see
 
-Team settings, health and the audit; never anyone's plan, picks, follow-ups, captures, focus sessions, PATs, AI request text or chat messages they aren't a member of (D545).
+Team settings, health and the audit; never anyone's plan, picks, follow-ups, captures, focus sessions, PATs, AI request text or chat messages they aren't a member of (D558).

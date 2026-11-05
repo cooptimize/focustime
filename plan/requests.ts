@@ -14,7 +14,8 @@ export const POLL_MINUTES = 5;
 /** Members are read again after a day (they decide who sees a chat and whose token can be used). */
 export const MEMBERS_STALE_MS = 24 * 3600_000;
 
-export type Mention = { id: string; name: string | null };
+/** A person a message @mentions: their Entra id, name, and the at tag's id in the body (CV-1; absent on older rows). */
+export type Mention = { id: string; name: string | null; at?: number };
 
 /** One Teams message as stored once for everyone (teams_messages). `html` is the raw body, `text` the plain text. */
 export type TeamsMessage = {

@@ -27,7 +27,7 @@ export type Nav =
   | { tab: "today"; mode: TodayMode; date: IsoDate | null; half: Half | null }
   | { tab: "week"; mode: WeekMode; week: IsoDate | null }
   | { tab: "roadmap"; mode: RoadmapMode }
-  | { tab: "inbox"; followUp: number | null; requests?: boolean; promises?: boolean };
+  | { tab: "inbox"; followUp: number | null; conversations?: boolean; myPromises?: boolean };
 
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 export type Overlay = { kind: "focus" } | { kind: "settings"; section: string } | { kind: "guide"; chapter: string | null } | null;
@@ -38,10 +38,10 @@ export const navOf = {
   week: (mode: WeekMode = "week", week: IsoDate | null = null): Nav => ({ tab: "week", mode, week }),
   roadmap: (mode: RoadmapMode = "roadmap"): Nav => ({ tab: "roadmap", mode }),
   inbox: (followUp: number | null = null): Nav => ({ tab: "inbox", followUp }),
-  /** Inbox › Requests (was Asks). */
-  requests: (): Nav => ({ tab: "inbox", followUp: null, requests: true }),
-  /** AP-2: Inbox › Promises. */
-  promises: (): Nav => ({ tab: "inbox", followUp: null, promises: true }),
+  /** CV-1: Inbox › Conversations (was Requests, and Asks before that). */
+  conversations: (): Nav => ({ tab: "inbox", followUp: null, conversations: true }),
+  /** CV-1: Inbox › My promises (was Promises). */
+  myPromises: (): Nav => ({ tab: "inbox", followUp: null, myPromises: true }),
 };
 export const HOME: Loc = { nav: navOf.today(), overlay: null };
 
@@ -101,8 +101,8 @@ export function hashOf(l: Loc): string {
   if (n.tab === "today") return ["#/today", n.mode === "now" ? null : n.mode, n.mode === "plan" || n.mode === "closeout" ? n.date : null, n.mode === "plan" && n.date ? n.half : null].filter(Boolean).join("/");
   if (n.tab === "week") return ["#/week", n.mode === "planweek" ? "plan" : null, n.week].filter(Boolean).join("/");
   if (n.tab === "roadmap") return n.mode === "ahead" ? "#/roadmap/ahead" : "#/roadmap";
-  if (n.requests) return "#/inbox/requests";
-  if (n.promises) return "#/inbox/promises";
+  if (n.conversations) return "#/inbox/conversations";
+  if (n.myPromises) return "#/inbox/my-promises";
   return n.followUp ? `#/inbox/${n.followUp}` : "#/inbox";
 }
 
@@ -140,7 +140,7 @@ export function parseHash(hash: string): Loc | null {
     case "roadmap":
       return b !== undefined ? null : a === undefined ? plain(navOf.roadmap()) : a === "ahead" ? plain(navOf.roadmap("ahead")) : null;
     case "inbox":
-      return b !== undefined ? null : a === undefined ? plain(navOf.inbox()) : a === "requests" || a === "asks" ? plain(navOf.requests()) : a === "promises" ? plain(navOf.promises()) : /^[1-9]\d{0,9}$/.test(a) ? plain(navOf.inbox(Number(a))) : null;
+      return b !== undefined ? null : a === undefined ? plain(navOf.inbox()) : a === "conversations" || a === "requests" || a === "asks" ? plain(navOf.conversations()) : a === "my-promises" || a === "promises" ? plain(navOf.myPromises()) : /^[1-9]\d{0,9}$/.test(a) ? plain(navOf.inbox(Number(a))) : null;
     default:
       return null;
   }
@@ -167,7 +167,9 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
     case "vm": return { loc: { nav: navOf.today(), overlay: null }, vmMenu: true };
     case "inbox": return plain(navOf.inbox());
     case "asks":
-    case "requests": return plain(navOf.requests());
+    case "requests":
+    case "conversations": return plain(navOf.conversations());
+    case "my_promises": return plain(navOf.myPromises());
     case "ahead": return plain(navOf.roadmap("ahead"));
     case "planweek": return plain(navOf.week("planweek", r.weekStart));
     case "followup": return plain(navOf.inbox(r.id));
@@ -176,7 +178,7 @@ export function routeLoc(r: Route): { loc: Loc; vmMenu: boolean } {
 }
 
 /** The command menu's views (and older names kept for commands and tests) as places. */
-export type ViewName = "today" | "week" | "inbox" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "focus" | "capture" | "planday" | "planweek" | "settings" | "follow_ups" | "checkin" | "closeout";
+export type ViewName = "today" | "week" | "inbox" | "conversations" | "my_promises" | "requests" | "asks" | "promises" | "roadmap" | "ahead" | "focus" | "capture" | "planday" | "planweek" | "settings" | "follow_ups" | "checkin" | "closeout";
 export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
   switch (v) {
     case "today": return { nav: navOf.today(), overlay: null };
@@ -185,8 +187,10 @@ export function viewNav(v: ViewName): { nav: Nav | null; overlay: Overlay } {
     case "follow_ups":
     case "capture": return { nav: navOf.inbox(), overlay: null };
     case "asks":
-    case "requests": return { nav: navOf.requests(), overlay: null };
-    case "promises": return { nav: navOf.promises(), overlay: null };
+    case "requests":
+    case "conversations": return { nav: navOf.conversations(), overlay: null };
+    case "promises":
+    case "my_promises": return { nav: navOf.myPromises(), overlay: null };
     case "roadmap": return { nav: navOf.roadmap(), overlay: null };
     case "ahead": return { nav: navOf.roadmap("ahead"), overlay: null };
     case "planday": return { nav: navOf.today("plan"), overlay: null };

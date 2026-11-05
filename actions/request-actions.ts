@@ -5,6 +5,7 @@
 // Promises stay each person's own (their plan store), with the message text read from the shared store. Chat text is
 // client data: it goes only to that client's cards, never into a log or an error (ids and counts only, and not even
 // ids in logs).
+import type { ConversationStore } from "../store/conversation-store.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { askTitle, CONTEXT_MESSAGES, type ContextMessage, messageLink, ruleLabel, type PromiseView, type PromisesData, type RequestChatStatus, type RequestsData, type RequestView } from "../plan/asks.ts";
@@ -12,7 +13,7 @@ import { LIKELY_MIN, notSortedText, promiseClosedBy, type StoredPromise } from "
 import type { AiService } from "../ai/service.ts";
 import { classifyAsk } from "./ask-ai.ts";
 import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
-import { POLL_MINUTES, type ClientChat, type Request } from "../plan/requests.ts";
+import { POLL_MINUTES, type ClientChat, type FocusUser, type Request } from "../plan/requests.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import type { TeamsStore, TeamsView } from "../store/teams-store.ts";
 import type { WorkItem } from "../week/types.ts";
@@ -30,7 +31,13 @@ export const REQUEST_ACTIONS = [
 export type RequestAction = (typeof REQUEST_ACTIONS)[number];
 
 /** The shared store and the job's Refresh, as the server hands them in (absent: no shared store, e.g. tests). */
-export type RequestsPort = { teams: TeamsStore; refresh: (chatIds: readonly string[]) => Promise<CycleResult> };
+export type RequestsPort = {
+  teams: TeamsStore;
+  refresh: (chatIds: readonly string[]) => Promise<CycleResult>;
+  /** CV-1: the shared conversations, commitments and suggestions, and the FocusTime users (for Sort unsorted). */
+  conversations?: ConversationStore;
+  users?: () => Promise<FocusUser[]>;
+};
 
 export type RequestContext = {
   plan?: PlanStore | undefined;
