@@ -68,7 +68,7 @@ import type { Conn } from "../store/sql/conn.ts";
 import { openStore, StoreConfigError, type OpenedStore } from "../store/open.ts";
 import { createApp } from "./app.ts";
 import { moveFromOldName } from "../host/local/rename.ts";
-import { createDemoContext, seedDemo, type DemoControl } from "./demo.ts";
+import { createDemoContext, seedDemo, type DemoControl, type DemoRealAi } from "./demo.ts";
 import { buildInfo } from "./buildinfo.ts";
 import { createFeedbackService } from "../actions/feedback-actions.ts";
 import { createFeedbackDevOps, DEVOPS_SCOPE } from "../sources/devops/feedback.ts";
@@ -586,14 +586,34 @@ const demos = new Map<string, Promise<ActionContext>>();
 /** F1 checks (e2e): the demo's pretend feature can be missing or the wrong type, to show the not-set-up state. */
 const demoFeedbackParent = ((v) => (v === "missing" || v === "wrong_type" ? v : "ok"))(process.env.FOCUSTIME_DEMO_FEEDBACK_PARENT);
 const demoControl = (on: boolean): DemoControl => ({ on, set: async () => {} });
+/** DM-1: the app's real AI, lent to the demo for its fictional data: only while the team's switch is on and under the app's cap. */
+const demoRealAi: DemoRealAi = {
+  runtime: aiRuntime,
+  allowed: async () => {
+    const r = (await org.rules().catch(() => null))?.ai;
+    if (!r?.on) return false;
+    return (await aiRuntime.appSpend.get(new Date().toISOString().slice(0, 7))) < Math.round((r.appCapUsd ?? app.ai.appCapUsd) * 1_000_000);
+  },
+};
+/** A demo session's context, seeded. Reset demo (DM-1) builds a new one the same way and puts it in place. */
+const buildDemo = async (userId: string): Promise<ActionContext> => {
+  const ctx = createDemoContext({ now: () => instantNow().toString(), demo: { on: true, set: async () => {}, reset: () => resetDemo(userId) }, feedbackParent: demoFeedbackParent, realAi: demoRealAi });
+  ctx.env = "demo";
+  await seedDemo(ctx);
+  return ctx;
+};
+const resetDemo = async (userId: string): Promise<void> => {
+  const next = buildDemo(userId);
+  await next;
+  const old = demos.get(userId);
+  demos.set(userId, next);
+  // The old one's store closes once the request that asked for the reset has answered.
+  setTimeout(() => void old?.then((c) => c.plan?.close()).catch(() => {}), 10_000).unref();
+};
 const demoFor = (userId: string): Promise<ActionContext> => {
   let c = demos.get(userId);
   if (!c) {
-    c = (async () => {
-      const ctx = { ...createDemoContext({ now: () => instantNow().toString(), demo: demoControl(true), feedbackParent: demoFeedbackParent }), env: "demo" };
-      await seedDemo(ctx);
-      return ctx;
-    })();
+    c = buildDemo(userId);
     demos.set(userId, c);
     c.catch(() => demos.delete(userId));
   }

@@ -107,8 +107,6 @@ export type { ActionResponse, SourceSummary, WeekLoadData };
 export type ActionContext = {
   /** AI-0: the app's AI runtime (settings, provider, the app's spend). Absent: AI isn't available here (demo). */
   ai?: AiRuntime;
-  /** AS-1: the demo's assistant only (a scripted provider and its own rules, server/demo.ts); never set outside the demo. */
-  assistantAi?: { runtime: AiRuntime; rules: AiRules };
   /** Shared polling (D514): the shared Teams store and the poll job's Refresh. Absent: no client chats or Requests. */
   requests?: RequestsPort;
   /** D522: a plain list of admins (Entra object ids), for tests and contexts without `adminOps`. */
@@ -167,7 +165,7 @@ export type ActionContext = {
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
-  demo?: { on: boolean; set: (on: boolean) => Promise<void> };
+  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void> };
   /**
    * Step 15.4: the Microsoft sign-in for a config (null without an [outlook] app registration), and an Azure Resource
    * Manager client on a token. Absent: no sign-in here (tests that don't need it), and the config's "me" is used.
@@ -178,11 +176,16 @@ export type ActionContext = {
   feedback?: { service: FeedbackService; sender: () => Promise<Sender | null> };
 };
 
-/** Actions that reach outside FocusTime or change secrets: refused while demo mode is on (D272). */
+/**
+ * Actions that reach outside FocusTime or change secrets: refused while demo mode is on (D272). DM-1: the demo's
+ * Outlook and DevOps writes (write.confirm, devops.confirm and their retries) run against the session's in-memory
+ * DevOps and calendar (server/demo.ts), so they are no longer refused; secrets, connecting accounts, sign-in, export and
+ * opening links still are.
+ */
 export const DEMO_REFUSED: readonly ActionName[] = [
   "link.open", "outlook.open", "playlist.open", "data.export", "secret.set",
   "auth.connect_microsoft", "auth.connect_google", "auth.connect_outlook_write", "auth.disconnect",
-  "write.confirm", "write.retry", "devops.confirm", "devops.retry", "devops.set_write_pat", "devops.clear_write_pat",
+  "devops.set_write_pat", "devops.clear_write_pat",
   "auth.sign_in", "auth.sign_out", "push.subscribe",
 ];
 export const DEMO_REFUSAL = "Demo data: nothing leaves FocusTime in demo mode";
@@ -740,8 +743,8 @@ export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app"; rul
  * AS-1: the assistant for this person (the panel's, or TB-1's Teams bot's): their own dispatch, limited to the actions
  * the allowlist names (assistant/allowlist.ts RUNS), their AI service, the guard's directory and their clients only.
  */
-/** AS-1: the assistant's AI: the app's, or in the demo its scripted provider with its own rules. */
-const assistantAiFor = (ctx: ActionContext) => (ctx.assistantAi ? aiFor({ ...ctx, ai: ctx.assistantAi.runtime }, { rules: ctx.assistantAi.rules }) : aiFor(ctx));
+/** AS-1: the assistant's AI (DM-1: in the demo, the demo's own runtime, like every other AI feature there). */
+const assistantAiFor = (ctx: ActionContext) => aiFor(ctx);
 
 export async function assistantFor(ctx: ActionContext, channel: Channel, publicUrl: string | null = null): Promise<{ service: AssistantService; reads: ReadDeps } | null> {
   const plan = ctx.plan;
@@ -779,7 +782,7 @@ export async function assistantGate(ctx: ActionContext, c: AssistantContext): Pr
   const ai = cfg ? await assistantAiFor(ctx) : null;
   if (!cfg || !ai) return { assistant: "not_set_up", voice: { on: false, message: "Voice isn't set up here" } };
   const a = await ai.availability("none");
-  const voiceSetUp = !!(await (ctx.assistantAi?.runtime ?? ctx.ai)?.provider())?.transcribe;
+  const voiceSetUp = !!(await ctx.ai?.provider())?.transcribe;
   if (a !== "ok") return { assistant: a === "client_off" ? "ok" : a, voice: { on: false, message: a === "off" ? "Voice is off: AI is off for FocusTime" : "Voice isn't set up here" } };
   if (!voiceSetUp) return { assistant: "ok", voice: { on: false, message: "Voice isn't set up here" } };
   const { focus, name } = focusOf(await aiDirectory(ctx, cfg), c);
@@ -1154,6 +1157,14 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
   if (action !== "settings.load" && action !== "settings.save") ctx = withSignedIn(ctx);
   if (ctx.demo?.on && DEMO_REFUSED.includes(action)) return { ok: false, status: 403, error: DEMO_REFUSAL, code: "demo" };
   switch (action) {
+    case "demo.reset": {
+      // DM-1: Reset demo, only in a demo session (the host rebuilds its in-memory data from the seeds).
+      if (!noInput(req.input)) return bad("demo.reset takes no input");
+      if (!ctx.demo?.on || !ctx.demo.reset) return { ok: false, status: 403, error: "Reset demo is only in the demo" };
+      const started = Date.now();
+      await ctx.demo.reset();
+      return { ok: true, data: { reset: true, ms: Date.now() - started } };
+    }
     case "demo.set": {
       const i = req.input as Record<string, unknown> | null;
       if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "on") || typeof i.on !== "boolean") return bad("demo.set takes { on: true | false }");

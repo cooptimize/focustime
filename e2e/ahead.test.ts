@@ -113,7 +113,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("the review: grouped by item, before → after, a conflict with Keep mine or Take theirs, Remove, Discard all with a confirm; Commit needs writes on", async () => {
+  it("the review: grouped by item, before → after, a conflict with Keep mine or Take theirs, Remove, Discard all with a confirm", async () => {
     const { page, errors } = await sameSessionFresh();
     // A second change on one item (its size, beside the conflicting target), so a card holds two rows.
     const loyal = row(page, "Loyalty points").locator(".ah-col-start");
@@ -137,10 +137,10 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     expect(new Set(arrows).size).toBe(1);
     const afters = await panel.locator(".ah-rv-after").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
     expect(new Set(afters).size).toBe(1);
-    await expect(panel.getByRole("button", { name: /^Save (3 items )?to DevOps$/ }).count()).resolves.toBe(1);
+    await expect(panel.getByRole("button", { name: /^Save (\d items? )?to DevOps$/ }).count()).resolves.toBe(1);
     await expect(panel.getByText("Nothing is written until you save.").count()).resolves.toBe(1);
-    await expect(panel.getByText("Northwind Foods: DevOps writes aren't on for you.").count()).resolves.toBe(1);
-    await expect(panel.getByRole("button", { name: "Enable DevOps writes" }).count()).resolves.toBe(1);
+    // DM-1: the demo's DevOps writes are on (simulated in memory), so there is nothing to enable.
+    await expect(panel.getByText("Northwind Foods: DevOps writes aren't on for you.").count()).resolves.toBe(0);
     await shotBoth(page, "ahead-review-conflict", panel);
     // Take theirs drops my conflicting change.
     await conflict.getByRole("button", { name: "Take theirs" }).click();

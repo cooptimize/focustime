@@ -1,7 +1,9 @@
 // AS-1: the demo's assistant: a scripted provider (no network, no key, nothing leaves FocusTime) that turns a few
 // plain requests into the same tool calls a model would make, so the demo shows the panel's lookups, proposals and
-// previews through the real service, its allowlist and its confirm checks. Only the assistant uses it; the demo's other
-// AI features stay off. Its transcript is a fixed sentence: no audio goes anywhere.
+// previews through the real service, its allowlist and its confirm checks. DM-1: it is the stored sample for the
+// assistant's two tasks (sources/demo/ai.ts uses it when the real provider isn't there or is slow), and it knows the
+// demo script's steps: a lookup (what's next), a move ("Move Northwind's date filter to Wednesday afternoon": it reads
+// today's picks, then proposes moving the one the words name) and a dictated comment on an item.
 import type { AiProvider, ProviderCall, ProviderReply, ToolCall } from "../../ai/types.ts";
 
 const usage = (c: ProviderCall, out: string) => ({ inputTokens: Math.ceil((c.instructions.length + c.input.length) / 4), cachedTokens: 0, outputTokens: Math.ceil(out.length / 4) });
@@ -27,6 +29,7 @@ function callsFor(said: string, today: string | null): { name: string; arguments
   const s = said.toLowerCase();
   const id = Number(/#(\d+)/.exec(said)?.[1] ?? 0);
   const quoted = /"([^"]+)"|“([^”]+)”/.exec(said);
+  if (/\bmove\b/.test(s) && today) return [{ name: "today", arguments: { when: "today" } }];
   if (id && /\bcomment\b/.test(s)) {
     const words = quoted?.[1] ?? quoted?.[2] ?? said.replace(/^.*?\b(saying|that|:)\s*/i, "");
     return [{ name: "comment", arguments: { itemId: id, text: words.trim() } }];
@@ -44,6 +47,32 @@ function callsFor(said: string, today: string | null): { name: string; arguments
   return [];
 }
 
+/** DM-1: the day a move names ("Wednesday", "tomorrow"), this week or the next, and its half (afternoon is PM). */
+function moveTarget(said: string, today: string): { date: string; half: "AM" | "PM" } {
+  const s = said.toLowerCase();
+  const half = /\b(afternoon|pm)\b/.test(s) ? "PM" : /\b(morning|am)\b/.test(s) ? "AM" : "PM";
+  const t = new Date(`${today}T12:00:00Z`);
+  const names = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const named = names.findIndex((n) => s.includes(n));
+  const add = /\btomorrow\b/.test(s) ? 1 : named >= 0 ? (named - t.getUTCDay() + 7) % 7 || 7 : 0;
+  t.setUTCDate(t.getUTCDate() + add);
+  return { date: t.toISOString().slice(0, 10), half };
+}
+
+/** DM-1: the pick a move names, from the read's facts (the one whose title shares the most words with the request). */
+function pickFrom(outputs: string[], said: string): number | null {
+  const ws = new Set(said.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3));
+  let best: { id: number; score: number } | null = null;
+  for (const o of outputs) {
+    const data = (JSON.parse(o) as { data?: { picks?: { pickId: number; title: string }[]; next?: { pickId: number; title: string } | null } }).data;
+    for (const p of [...(data?.picks ?? []), ...(data?.next ? [data.next] : [])]) {
+      const score = p.title.toLowerCase().split(/[^a-z0-9]+/).filter((w) => ws.has(w)).length;
+      if (score > 0 && (!best || score > best.score)) best = { id: p.pickId, score };
+    }
+  }
+  return best?.id ?? null;
+}
+
 const REPLY: Record<string, string> = {
   comment: "Here's the comment. Check it, then Confirm to add it in DevOps.",
   confirm_day: "Here's today's plan to confirm.",
@@ -54,6 +83,7 @@ const REPLY: Record<string, string> = {
   sends: "Here's what you sent and what was sent to you.",
   commitments: "Here's what people committed to.",
   today: "Here's what's on.",
+  move_pick: "Here's the move. Confirm to move it.",
 };
 
 export function demoAssistantProvider(): AiProvider {
@@ -66,6 +96,7 @@ export function demoAssistantProvider(): AiProvider {
         // The intent round: only the proposals the words ask for (reads are always allowed), or close_loop.
         const s = said.toLowerCase();
         if (/\bclose\b.*\b(loop|follow-?up)\b/.test(s)) return text(c, { tools: ["close_loop"] });
+        if (/\bmove\b/.test(s)) return text(c, { tools: ["move_pick"] });
         const named = calls.map((x) => x.name);
         return text(c, { tools: named.length ? named : [] });
       }
@@ -73,11 +104,22 @@ export function demoAssistantProvider(): AiProvider {
         const made: ToolCall[] = calls.map((x, i) => ({ callId: `demo_${i}`, name: x.name, arguments: JSON.stringify(x.arguments) }));
         return { ok: true, text: "", model: "demo assistant", usage: usage(c, ""), calls: made, items: made.map((m) => ({ type: "function_call", call_id: m.callId, name: m.name, arguments: m.arguments })) };
       }
+      // DM-1: a move reads today's picks first, then proposes moving the one the words name (once).
+      if (c.rounds?.length && /\bmove\b/i.test(said) && today && !c.rounds.some((r) => r.items.some((i) => (i as { name?: string }).name === "move_pick"))) {
+        const pickId = pickFrom(c.rounds.flatMap((r) => r.outputs.map((o) => o.output)), said);
+        if (pickId) {
+          const m: ToolCall = { callId: "demo_move", name: "move_pick", arguments: JSON.stringify({ pickId, ...moveTarget(said, today) }) };
+          return { ok: true, text: "", model: "demo assistant", usage: usage(c, ""), calls: [m], items: [{ type: "function_call", call_id: m.callId, name: m.name, arguments: m.arguments }] };
+        }
+        return text(c, { reply: "I couldn't find that pick on today's plan. Name the pick as it reads, and its client." });
+      }
+      const moved = c.rounds?.some((r) => r.items.some((i) => (i as { name?: string }).name === "move_pick"));
       const cannot = c.rounds?.flatMap((r) => r.outputs).map((o) => (JSON.parse(o.output) as { cannot?: string }).cannot).find(Boolean);
-      return text(c, { reply: cannot ? `I couldn't: ${cannot}.` : (REPLY[calls[0]?.name ?? ""] ?? "In the demo I can show what's next, an item (#id), gaps, sends, a comment on an item, confirming today and a capture.") });
+      return text(c, { reply: cannot ? `I couldn't: ${cannot}.` : (REPLY[moved ? "move_pick" : (calls[0]?.name ?? "")] ?? "In the demo I can show what's next, an item (#id), gaps, sends, moving a pick, a comment on an item, confirming today and a capture.") });
     },
+    // DM-1: the script's dictated comment (sources/demo/ai.ts answers transcriptions; this is kept for its tests).
     async transcribe() {
-      return { ok: true, text: "What's next today?" };
+      return { ok: true, text: "Comment on #1112 saying the date filter works for orders and the export screen is next" };
     },
   };
 }

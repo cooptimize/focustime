@@ -143,6 +143,7 @@ export const ACTIONS = [
   { name: "draft.update", title: "Edit a draft", group: "Work items", target: "portfolio", summary: "Title, description, acceptance criteria, client, parent, size or dates of a local draft; saved locally" },
   { name: "draft.add_story", title: "Add a draft story", group: "Work items", target: "portfolio", summary: "A local story under an epic or feature, or under none yet" },
   { name: "ui.set_theme", title: "Change theme", group: "Display", target: "theme", summary: "Cooptimize Dark, Cooptimize Light or Neutral; saved in config" },
+  { name: "demo.reset", title: "Reset demo", group: "Display", target: "none", summary: "In the demo: puts every demo change back as it started (writes, picks, captures, sends), so each run starts the same" },
   { name: "demo.set", title: "Demo mode", group: "Display", target: "none", summary: "Swap every source for fictional sample data to demo safely; nothing leaves FocusTime and your plan isn't touched" },
   { name: "ui.first_launch", title: "First launch", group: "Display", target: "none", summary: "True only the first time FocusTime opens on this device (for the welcome moment); kept in the plan store" },
   { name: "setup.load", title: "Setup status", group: "Settings", target: "none", summary: "First-run setup: which steps are done, skipped or closed, and the clients screen's list (S1)" },

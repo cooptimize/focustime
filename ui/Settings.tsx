@@ -37,6 +37,7 @@ import type { SetupStep, SetupView } from "../plan/setup.ts";
 import type { FeedbackStatus } from "../actions/feedback-types.ts";
 import { ADMIN_UI_SECTIONS, AdminSection, isAdminSection, useAdmin } from "./settings/Admin.tsx";
 import { SideMenu, useNarrow } from "./settings/SideMenu.tsx";
+import { DemoSection } from "./settings/Demo.tsx";
 
 export const SETTINGS_SECTIONS = [
   ["you", "You"],
@@ -54,6 +55,8 @@ export const SETTINGS_SECTIONS = [
   ["data", "Data"],
   ["setup", "Setup"],
   ["about", "About"],
+  // DM-1: only in a demo session (Reset demo).
+  ["demo", "Demo"],
   // ADM-1: Admin, shown only to FocusTime admins (the server checks every admin action again).
   ...ADMIN_UI_SECTIONS,
 ] as const;
@@ -177,7 +180,7 @@ export function Settings(props: Props) {
       {(leave) => (
     <main className={`settings${narrow ? " narrow" : ""}`} aria-label="Settings">
       <SideMenu
-        settings={SETTINGS_SECTIONS.filter(([id]) => !isAdminSection(id))}
+        settings={SETTINGS_SECTIONS.filter(([id]) => !isAdminSection(id) && (id !== "demo" || props.demo))}
         admin={admin ? ADMIN_UI_SECTIONS : null}
         current={props.section}
         narrow={narrow}
@@ -189,7 +192,7 @@ export function Settings(props: Props) {
           {title}
         </h2>
         {inAdmin && <p className="muted set-path">Team settings for everyone in FocusTime. Changes save as you make them and are logged in Admin › Audit.</p>}
-        {data && !inAdmin && props.section !== "about" && props.section !== "setup" && <p className="muted set-path">Changes save as you make them, to {data.configPath}</p>}
+        {data && !inAdmin && props.section !== "about" && props.section !== "setup" && props.section !== "demo" && <p className="muted set-path">Changes save as you make them, to {data.configPath}</p>}
         {error && <p className="field-problem">{error}</p>}
         {data && !inAdmin && data.problems.length > 0 && props.section !== "connections" && props.section !== "data" && (
           <div className="config-banner" role="alert">
@@ -291,6 +294,8 @@ function SectionBody(p: Props & { data: SettingsData; onSavedData: (d: SettingsD
       );
     case "ai":
       return <AiForm {...p} />;
+    case "demo":
+      return p.demo ? <DemoSection /> : <p className="muted">This is only in the demo.</p>;
     case "connections":
       return <Connections {...p} />;
     case "display":

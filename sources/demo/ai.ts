@@ -1,0 +1,189 @@
+// DM-1: AI in the demo. The demo's data is fictional, so the app's real provider may answer it, under the normal caps
+// (the team's AI for FocusTime switch, the app's monthly cap; the demo session's own cap of about a dollar). When the
+// provider isn't there, is off, is slow (about 6 seconds) or answers with something that doesn't fit the schema, a
+// stored sample answer for the same task is used instead, so the demo never stalls. The guard runs before this
+// provider is ever called (ai/service.ts), so a refused request is refused and never gets a sample.
+import type { AiProvider, ProviderCall, ProviderReply, TranscribeReply } from "../../ai/types.ts";
+import { costMicros, micros, type Prices } from "../../ai/cost.ts";
+import { sampleOf, validate } from "../../ai/schema.ts";
+import { demoAssistantProvider } from "./assistant.ts";
+
+export type RealAi = {
+  /** The app's real provider, or null (not set up, or the stub). */
+  provider: () => Promise<AiProvider | null>;
+  /** Whether a real call may be made now: the team's AI for FocusTime is on and the app's monthly cap isn't reached. */
+  allowed: () => Promise<boolean>;
+  prices: Prices;
+};
+
+export const DEMO_AI_TIMEOUT_MS = 6_000;
+/** The demo session's cap on real calls; a little under the cap the demo's rules show, so samples take over first. */
+export const DEMO_SESSION_CAP_USD = 0.9;
+/** What the sample transcript says (push-to-talk with no real transcription): the script's dictated comment. */
+export const DEMO_TRANSCRIPT = "Comment on #1112 saying the date filter works for orders and the export screen is next";
+
+const ZERO = { inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
+const reply = (value: unknown): ProviderReply => ({ ok: true, text: JSON.stringify(value), model: "demo samples", usage: ZERO });
+const within = <T>(p: Promise<T>, ms: number): Promise<T | "late"> => Promise.race([p, new Promise<"late">((r) => setTimeout(() => r("late"), ms).unref?.())]);
+
+/** How each answer came: for the preflight and the tests (never the text). */
+export type DemoAiLog = { real: number; samples: number; lastReason: string | null };
+
+export function demoAi(o: { real?: RealAi | null; timeoutMs?: number; sessionCapUsd?: number }) {
+  const script = demoAssistantProvider();
+  const timeoutMs = o.timeoutMs ?? DEMO_AI_TIMEOUT_MS;
+  let spent = 0;
+  /** While seeding: samples only (never a real call), so every run starts the same. */
+  let held = false;
+  const log: DemoAiLog = { real: 0, samples: 0, lastReason: null };
+  const sample = (c: ProviderCall, why: string): Promise<ProviderReply> => {
+    log.samples++;
+    log.lastReason = why;
+    return samples(c, script);
+  };
+  /** The real provider when a real call may be made now, else why not. */
+  const realNow = async (): Promise<AiProvider | string> => {
+    if (held) return "seeding";
+    if (!o.real) return "no real provider in this demo";
+    if (spent >= micros(o.sessionCapUsd ?? DEMO_SESSION_CAP_USD)) return "the demo session's cap";
+    if (!(await o.real.allowed().catch(() => false))) return "AI is off or the app's cap is reached";
+    return (await o.real.provider().catch(() => null)) ?? "AI isn't set up";
+  };
+  const provider: AiProvider = {
+    name: "stub",
+    async call(c) {
+      const p = await realNow();
+      if (typeof p === "string") return sample(c, p);
+      const r = await within(p.call(c).catch((): ProviderReply => ({ ok: false, kind: "provider", status: 0 }) as ProviderReply), timeoutMs);
+      if (r === "late") return sample(c, "slow");
+      if (r.usage) spent += costMicros(r.usage, o.real!.prices);
+      if (!r.ok) return sample(c, "provider error");
+      // A tool call goes back as it is; an answer must fit its schema, or the sample stands in.
+      if (!r.calls?.length) {
+        let fits = false;
+        try {
+          fits = validate(JSON.parse(r.text), c.schema).length === 0;
+        } catch {
+          fits = false;
+        }
+        if (!fits) return sample(c, "answer didn't fit");
+      }
+      log.real++;
+      return r;
+    },
+    async transcribe(t): Promise<TranscribeReply> {
+      const p = await realNow();
+      if (typeof p !== "string" && p.transcribe) {
+        const r = await within(p.transcribe(t).catch((): TranscribeReply => ({ ok: false, kind: "provider" })), timeoutMs);
+        if (r !== "late" && r.ok) {
+          log.real++;
+          return r;
+        }
+      }
+      log.samples++;
+      return { ok: true, text: DEMO_TRANSCRIPT };
+    },
+  };
+  return { provider, log, hold: (on: boolean) => void (held = on), real: () => !!o.real };
+}
+
+// ---------- the samples, one per task (the schema's name), shaped like a good answer for the demo's data ----------
+
+const words = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3));
+const overlap = (a: string, b: string) => [...words(a)].filter((w) => words(b).has(w)).length;
+const sentence = (s: string) => {
+  const t = s.trim().replace(/\s+/g, " ").replace(/[.!?]+$/, "");
+  return t ? `${t[0]!.toUpperCase()}${t.slice(1)}` : t;
+};
+const enumOf = (s: unknown): unknown[] => {
+  const x = s as { enum?: unknown[]; anyOf?: { enum?: unknown[] }[] } | undefined;
+  return x?.enum ?? x?.anyOf?.flatMap((a) => a.enum ?? []) ?? [];
+};
+
+async function samples(c: ProviderCall, script: AiProvider): Promise<ProviderReply> {
+  switch (c.schemaName) {
+    case "assistant_intent":
+    case "assistant_answer":
+      return script.call(c);
+    case "capture_prepare":
+      return reply(capturePrepare(c));
+    case "stories_draft":
+      return reply(breakDown(c));
+    case "conversations_draft_item":
+      return reply(conversationDraft(c));
+    case "conversations_comment":
+      return reply({ lines: conversationComment(c) });
+    case "conversations_merge_summary": {
+      const i = JSON.parse(c.input) as { into?: { title?: string; summary?: string } };
+      return reply({ title: i.into?.title ?? "Merged conversation", summary: i.into?.summary ?? "Two threads about the same question, now one." });
+    }
+    default: {
+      const v = sampleOf(c.schema);
+      return reply(v);
+    }
+  }
+}
+
+/** CP-1: a captured draft's DevOps-ready version: a clear title, a short description, three acceptance lines. */
+function capturePrepare(c: ProviderCall) {
+  const i = JSON.parse(c.input) as { kind: "story" | "feature"; note: string; my_title: string; offered_types: string[]; offered_parents: { id: number; title: string }[] };
+  const props = (c.schema as { properties: Record<string, unknown> }).properties;
+  const types = enumOf(props.type) as string[];
+  const ids = enumOf(props.parent_id) as number[];
+  const best = [...i.offered_parents].filter((p) => ids.includes(p.id)).sort((a, b) => overlap(b.title, i.note) - overlap(a.title, i.note))[0] ?? null;
+  const title = sentence(i.my_title || i.note).slice(0, 80);
+  return {
+    title,
+    description: `${sentence(i.note)}.\n\nWhy: so the team can see and plan this in DevOps instead of in a chat.`,
+    acceptance_criteria: i.kind === "feature" ? "" : [`${title} works for a signed-in customer`, "The change is covered by a test", "The client has reviewed it in staging"].join("\n"),
+    type: types[0] ?? null,
+    parent_id: best?.id ?? null,
+    parent_reason: best ? `It is part of "${best.title}"` : "No open feature fits it yet",
+  };
+}
+
+/** BD-1: proposals for the feature asked about (Supplier onboarding has its own; others get a general split). */
+function breakDown(c: ProviderCall) {
+  const i = JSON.parse(c.input) as { feature: { id: number; title: string }; regenerate_only?: { id: string; previous_title: string } };
+  const card = (id: string, title: string, description: string, acceptance: string[], size: "S" | "M" | "L" | null, depends: string[] = []) => ({ id, title, description, acceptance_criteria: acceptance, depends_on: depends, size, evidence: ["From the feature's description"], open_questions: [] as string[] });
+  const supplier = /supplier/i.test(i.feature.title);
+  const all = supplier
+    ? [
+        card("p1", "Supplier sign-up form", "A supplier enters company details and a contact, and can save a draft to finish later.", ["A draft can be saved and reopened", "Required fields are checked before submit"], "M"),
+        card("p2", "Upload supplier certificates", "PDF or image certificates, up to 10 MB each, attached to the supplier's application.", ["PDF, PNG and JPG up to 10 MB", "Each file shows its name and size after upload"], "M", ["p1"]),
+        card("p3", "Choose payment terms", "The supplier picks payment terms from the ones purchasing offers.", ["Only the terms purchasing set up are offered"], "S", ["p1"]),
+        card("p4", "Purchasing review and approval", "Purchasing sees new applications, approves or sends one back with a note.", ["Approve and Send back are logged with who and when", "Sent back applications reopen for the supplier"], "L", ["p1", "p2"]),
+        card("p5", "Notify purchasing of a new supplier", "One notification per submitted application.", ["Exactly one notification per application"], "S", ["p4"]),
+      ]
+    : [
+        card("p1", `${i.feature.title}: first usable version`, "The smallest version a user can try end to end.", ["A user can complete the main path"], "M"),
+        card("p2", `${i.feature.title}: edge cases and errors`, "What happens when input is missing or wrong.", ["Errors say what to do next"], "S", ["p1"]),
+        card("p3", `${i.feature.title}: review with the client`, "A walkthrough in staging and the changes it asks for.", ["The client has signed off in staging"], "S", ["p1"]),
+      ];
+  const proposals = i.regenerate_only ? [{ ...all[1]!, id: i.regenerate_only.id, title: `${all[1]!.title} (another take)` }] : all;
+  return { kind: "story_proposals", version: 1, feature_id: i.feature.id, proposals, rationale: supplier ? "One story per step a supplier and purchasing go through, so each can ship and be tested on its own." : "A first usable slice, then the edges, then the client's review.", set_aside: [] };
+}
+
+/** CV-5: a DevOps item drafted from a conversation (the delivery fee one has its own; others get a general one). */
+function conversationDraft(c: ProviderCall) {
+  const i = JSON.parse(c.input) as { conversation: { title: string; summary: string }; open_features: { id: number; title: string }[]; open_items: { id: number; title: string }[] };
+  const t = i.conversation.title;
+  const parent = [...i.open_features].sort((a, b) => overlap(b.title, `${t} ${i.conversation.summary}`) - overlap(a.title, `${t} ${i.conversation.summary}`))[0];
+  const fee = /delivery fee/i.test(t);
+  return {
+    title: fee ? "Add the delivery fee as its own column in the order export" : sentence(t),
+    asked: fee ? "Finance wants the delivery fee as a separate column in the order history export, before the month-end close." : sentence(i.conversation.summary.split("\n")[0] ?? t),
+    check_first: fee ? ["Where the fee is stored on an order today", "Whether refunds change the fee"] : ["What the client expects to see"],
+    likely_change: fee ? "Add a Delivery fee column to the CSV export and keep the order total as it is." : "A small change to the feature the conversation is about.",
+    open_questions: fee ? ["Should orders without a fee show 0 or stay empty?"] : [],
+    level: "story",
+    parent_feature: parent && overlap(parent.title, `${t} ${i.conversation.summary}`) > 0 ? parent.id : (i.open_features[0]?.id ?? null),
+    likely_item: null,
+    acceptance_criteria: fee ? ["The export has a Delivery fee column", "Order totals are unchanged", "Orders with no fee show 0"] : ["The client has confirmed the change"],
+  };
+}
+
+function conversationComment(c: ProviderCall): string[] {
+  const i = JSON.parse(c.input) as { conversation?: { title?: string; summary?: string } };
+  return (i.conversation?.summary ?? "Discussed with the client in Teams.").split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 3);
+}
