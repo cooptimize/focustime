@@ -206,6 +206,23 @@ export async function seedDemo(ctx: ActionContext): Promise<void> {
   await run("followup.add", { clientKey: "Atlas", who: "Morgan Diaz", what: "Share the delay alert mockups", channel: "email", due: day(3) });
   await run("note.set", { clientKey: "Northwind", date: day(0), note: "CSV export works for orders. Next: the date filter." });
   await run("capture.add", { text: "Ask Harbor about single sign-on for the intake form", clientKey: "Harbor" });
+  // UI-B: unfinished picks on this week's earlier days (none on a Monday), so the Board shows them suggested in each
+  // client's next block, and Cooptimize's (no block left this week) in Unfinished from earlier days.
+  if (ctx.plan) {
+    const left: [number, "AM" | "PM", string, number, string, "S" | "M" | "L" | null][] = [
+      [0, "AM", "Cooptimize", 4411, "Timesheet summary query", "S"],
+      [0, "PM", "Northwind", 1112, "Filter orders by date range", "M"],
+      [1, "AM", "Harbor", 2212, "Validate date of birth", "S"],
+      [1, "PM", "Atlas", 3311, "Map of active shipments", null],
+    ];
+    for (const [n, half, clientKey, itemId, title, size] of left) {
+      const date = Temporal.PlainDate.from(weekStart).add({ days: n }).toString();
+      if (date >= today.toString()) continue;
+      await ctx.plan.start(date);
+      await ctx.plan.addPick({ date, half, clientKey, kind: "item", itemId, title, itemType: "User Story", size });
+      await ctx.plan.commit(date);
+    }
+  }
   // AH-1: three changes pending in Ahead (nothing is ever written in the demo): a start date, an owner, and a target
   // date that changed in DevOps since editing began (the fictional earlier value), so the review shows a conflict.
   if (ctx.plan) {

@@ -4563,3 +4563,51 @@ button.ah-gap { cursor: pointer; }
 .bd-item-acts .muted { font-size: var(--fs-2); }
 /* AH-1 (D665): Send to… opens over Break down's side panel (both were z-index 60 and the panel came later). */
 .cap-backdrop:has(> .send-dialog) { z-index: 61; }
+
+/* UI-B: unfinished picks as suggested cards on Week's Board. */
+.suggested-cards { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.suggested-card { min-width: 0; }
+.suggested-card[draggable="true"] { cursor: grab; }
+.suggested-card .sc-open { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 3px 6px; border: 1px dashed var(--c, var(--border-strong)); border-radius: 6px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
+.suggested-card .sc-open:hover, .suggested-card .sc-open:focus-visible { color: var(--text); border-style: solid; }
+.suggested-card .sc-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggested-card .sc-from { flex: none; color: var(--text-faint); }
+.checklist .pick-origin { display: flex; align-items: center; gap: 6px; min-width: 0; opacity: 0.55; font-size: var(--fs-2); padding-left: 21px; }
+.pick-origin .po-title { flex: 1 1 auto; min-width: 4em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-origin .po-note { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); white-space: nowrap; }
+.carry-summary { margin: 0 24px 10px; padding: 6px 12px; border: 1px dashed var(--border-strong); border-radius: 10px; display: grid; gap: 6px; font-size: var(--fs-3); }
+.carry-summary .cs-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.carry-summary .cs-sep { color: var(--text-faint); }
+.carry-summary .cs-hint { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: var(--fs-2); }
+.cs-groups { display: grid; gap: 8px; }
+.cs-client h3 { margin: 0 0 2px; display: flex; align-items: center; gap: 6px; font-size: var(--fs-2); font-weight: 600; }
+.cs-client .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--c); flex: none; }
+.cs-groups .flw-list { flex-direction: column; flex-wrap: nowrap; gap: 2px; }
+.cs-groups .card-feat { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: var(--fs-2); }
+.flw-row .link-btn { font-size: var(--fs-2); }
+.flw-row .link-btn.danger { color: var(--text-muted); }
+@media (max-width: 700px) {
+  .carry-summary { margin: 0 16px 10px; }
+  .carry-summary .cs-line { column-gap: 14px; }
+  .carry-summary .cs-text { flex-basis: 100%; }
+  .carry-summary .cs-sep { display: none; }
+}
+
+/* UI-B: the now line on today (Board rails, PTO and catch-up cells, the day's edges, agendas). */
+.now-line { --nl: var(--accent); pointer-events: none; z-index: 4; }
+.timeline > .now-line, .ruler > .now-line, .half.whole > .now-line { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--nl); transition: top 0.6s ease; }
+.half.whole { position: relative; }
+.half.whole > .now-line.thin, .now-line.thin { border-top-width: 1px; }
+.now-line .nl-dot { position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--nl); }
+.now-line.thin .nl-dot { width: 6px; height: 6px; left: -3px; top: -3.5px; }
+.now-line .nl-time { position: absolute; left: 6px; top: 0; transform: translateY(-50%); display: inline-flex; align-items: center; pointer-events: auto; border: 0; padding: 0; background: none; font: inherit; cursor: pointer; }
+.now-line .nl-pill { padding: 0 4px; border-radius: 4px; background: var(--nl); color: var(--surface); font-size: var(--fs-1); font-weight: 600; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.now-past { position: absolute; top: 0; left: 0; right: 0; background: color-mix(in oklab, var(--surface) 38%, transparent); pointer-events: none; z-index: 3; transition: height 0.6s ease; }
+.now-edge, .now-row { position: relative; display: flex; align-items: center; gap: 6px; margin: 4px 0; min-height: 14px; }
+.now-edge::after, .now-row::after { content: ""; flex: 1; border-top: 2px solid var(--nl); }
+.now-edge.thin::after { border-top-width: 1px; }
+.now-edge .nl-dot, .now-row .nl-dot { position: static; flex: none; }
+.now-edge .nl-time, .now-row .nl-time { position: static; transform: none; }
+.now-row { list-style: none; }
+:root[data-reduce-motion] .now-line, :root[data-reduce-motion] .now-past { transition: none; }
+@media (prefers-reduced-motion: reduce) { .now-line, .now-past { transition: none; } }

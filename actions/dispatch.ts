@@ -1547,6 +1547,9 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "pick.set_size":
     case "pick.move":
     case "pick.mark_done":
+    case "pick.uncarry":
+    case "pick.undrop":
+    case "planday.carry_hint":
     case "draft.add_story":
     case "draft.set_parent":
     case "draft.remove":

@@ -31,6 +31,12 @@ import type { DayPromise } from "../plan/conversation-views.ts";
 import { cardGroups } from "../plan/blockstories.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
+import { OriginPick, SuggestedCards, useIsOrigin } from "./Carry.tsx";
+import { nowClock, nowSpot, type NowSpot } from "../plan/nowline.ts";
+import { NowEdge, NowLine, NowPast } from "./NowLine.tsx";
+
+/** UI-B: the now line for one rail: where it is (null when not on it), how much of the rail has passed, the time. */
+type RailNow = { at: number | null; past: number; label: string; onClick: () => void };
 
 export type Selection = { dayIndex: number; half: Half };
 /** U3: where the detail panel opens: the features list, one follow-up or one pick. */
@@ -225,6 +231,21 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
     else props.cellRefs.delete(k);
   };
   const dayLabel = `${day.weekday} ${shortDate(day.date)}`;
+  // UI-B: today's now line (null on any other day, so on other weeks too), in the person's zone.
+  const spot: NowSpot | null = isToday ? nowSpot(day, props.now, tz, !!whole) : null;
+  const nowLabel = spot ? nowClock(props.now, tz) : "";
+  const toNow = () => props.onSelect({ dayIndex, half: spot?.kind === "rail" ? spot.half : "AM" });
+  const railNow = (half: Half): RailNow | null => {
+    if (!spot) return null;
+    const s = slotOf(day, half);
+    if (!s) return null;
+    // Before the day the line sits on the top edge of the first rail, after it on the bottom edge of the last, so the
+    // column's layout never changes.
+    const last = day.eve ? "EVE" : "PM";
+    const on = spot.kind === "rail" && spot.half === half ? spot.at : spot.kind === "before" && half === "AM" ? 0 : spot.kind === "after" && half === last ? 1 : null;
+    const ended = Temporal.Instant.compare(Temporal.Instant.from(props.now), Temporal.Instant.from(s.view.end)) >= 0;
+    return { at: on, past: ended ? 1 : spot.kind === "rail" && spot.half === half ? spot.at : 0, label: nowLabel, onClick: toNow };
+  };
 
   return (
     <section className={`day ${overflow ? "overflow" : day.kind === "weekend" ? "weekend overflow" : "work"} ${isToday ? "today" : ""} ${day.pto ? "pto-full" : ""}${daySelected ? " sel-day" : ""}`} aria-label={`${dayLabel}${day.pto ? `, ${ptoLabel(day.pto)}` : ""}`}>
@@ -265,6 +286,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
           refPm={refFor("PM")}
           onOpen={(focus) => props.onOpen({ dayIndex, half: "AM" }, focus)}
           dayLabel={dayLabel}
+          now={spot?.kind === "whole" ? { at: spot.at, label: nowLabel, onClick: toNow } : null}
         />
       ) : (
         rows.map((half, k) =>
@@ -289,6 +311,7 @@ function DayColumn(props: { day: Day; dayIndex: number; tz: string; isToday: boo
               isToday={isToday}
               dueBadges={props.badges.get(`${day.date}:${half}`) ?? []}
               earlier={new Set(half === "PM" ? day.am.events.map((p) => p.event.id) : half === "EVE" ? day.pm.events.map((p) => p.event.id) : [])}
+              railNow={railNow(half)}
               addWork={props.onAddWork && canAddWork({ date: day.date, today: pv.today ?? "", pto: !!day.pto, off: slotOf(day, half)!.off }) ? () => props.onAddWork!(day.date, half) : undefined}
             />
           ),
@@ -333,7 +356,7 @@ function OutLine({ kind, items, tz }: { kind: "early" | "late"; items: readonly 
  * U3 (D387): a PTO day is one hatched cell labeled PTO, with its timed calendar items as plain lines (all-day ones are chips, D406); a day with no working
  * hours (Friday) is one dashed "Catch-up" column with the work moved there and its calendar items.
  */
-function WholeDay({ day, kind, tz, selected, refAm, refPm, onOpen, dayLabel }: { day: Day; kind: "pto" | "catchup"; tz: string; selected: boolean; refAm: (el: HTMLDivElement | null) => void; refPm: (el: HTMLDivElement | null) => void; onOpen: (focus?: PanelFocus) => void; dayLabel: string }) {
+function WholeDay({ day, kind, tz, selected, refAm, refPm, onOpen, dayLabel, now }: { day: Day; kind: "pto" | "catchup"; tz: string; selected: boolean; refAm: (el: HTMLDivElement | null) => void; refPm: (el: HTMLDivElement | null) => void; onOpen: (focus?: PanelFocus) => void; dayLabel: string; now: { at: number; label: string; onClick: () => void } | null }) {
   const plan = useContext(PlanCtx);
   const samples = useContext(SampleSources);
   // All-day events are chips under the day header (D406); the cell lists only timed events.
@@ -355,6 +378,7 @@ function WholeDay({ day, kind, tz, selected, refAm, refPm, onOpen, dayLabel }: {
       aria-pressed={selected}
       onClick={(e) => !interactive(e) && onOpen()}
     >
+      {now && <NowLine at={now.at} label={now.label} thin onClick={now.onClick} />}
       <div className="whole-label" title={kind === "pto" && day.pto ? ptoLabel(day.pto) : undefined}>
         {label}
       </div>
@@ -398,10 +422,12 @@ type HalfProps = {
   dueBadges: readonly FollowUpView[];
   /** "+ Add work" (step 13.6): opens Plan the day on this block's picker. Absent where work can't be added. */
   addWork?: (() => void) | undefined;
+  /** UI-B: today's now line on this block's rail; null on other days. */
+  railNow: RailNow | null;
 };
 
 
-function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, isToday, dueBadges, addWork }: HalfProps) {
+function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, selected, dayLabel, refFn, onSelect, onOpen, compact, now, isToday, dueBadges, addWork, railNow }: HalfProps) {
   const primary = slot.focus[0];
   const sev = worstSeverity(slot.risks);
   const allWork = useContext(DevOpsWork);
@@ -413,7 +439,9 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const ticks = overflow && !eve && !cp.picks.length ? catchUp(plan.week, slot) : cp.picks;
   // U3: on days other than today, done picks collapse to "N done".
   const doneHidden = isToday ? [] : ticks.filter((p) => p.status === "done");
-  const shown = isToday ? ticks : ticks.filter((p) => p.status !== "done");
+  // UI-B: on a day that has passed, a pick kept or moved on from here stays as a dimmed "→ moved to Mon AM" line.
+  const movedOn = slot.date < (plan.today ?? "") ? (plan.week?.[slot.date]?.picks ?? []).filter((p) => p.half === slot.half && p.status === "moved" && p.carriedTo) : [];
+  const shown = [...(isToday ? ticks : ticks.filter((p) => p.status !== "done")), ...movedOn];
   const rc = useContext(RulerCtx);
   // P1: on the phone a card lists its meetings in words; no rail.
   const phone = usePhone();
@@ -450,6 +478,8 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
 
   const body = (
     <div className="card-body">
+      {/* UI-B: with no rail (the phone, a card too narrow for one), the now line sits at the top of the block under way. */}
+      {compact && !ruler && railNow?.at != null && <NowEdge label={railNow.label} onClick={railNow.onClick} />}
       <div className="card-head">
         <span className="swatch" aria-hidden="true" />
         <span className={`card-client${primary ? "" : " open-label"}`} title={name}>{name}</span>
@@ -491,6 +521,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         </ul>
       )}
       {shown.length > 0 && <CardPicks picks={shown} label={`Plan for ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} />}
+      {!eve && <SuggestedCards date={slot.date} half={slot.half} tabIndex={selected ? 0 : -1} />}
       {!eve && <CheckinChips date={slot.date} half={slot.half as "AM" | "PM"} tabIndex={selected ? 0 : -1} />}
       {doneHidden.length > 0 && <div className="card-done">{doneHidden.length} done</div>}
       {addWork && !phone && (
@@ -542,12 +573,12 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         {compact ? (
           <>
             {body}
-            {ruler && <Ruler slot={slot} half={eve ? "EVE" : slot.half} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} />}
+            {ruler && <Ruler slot={slot} half={eve ? "EVE" : slot.half} tz={tz} label={`${dayLabel} ${eve ? "evening" : slot.half}`} now={railNow} />}
           </>
         ) : (
           <>
             <aside className="card-main">{body}</aside>
-            <Timeline slot={slot} tz={tz} earlier={earlier} showGaps={(!overflow || eve) && !slot.open} minFocusWindow={minFocusWindow} />
+            <Timeline slot={slot} tz={tz} earlier={earlier} showGaps={(!overflow || eve) && !slot.open} minFocusWindow={minFocusWindow} now={railNow} />
           </>
         )}
       </HalfScope.Provider>
@@ -562,6 +593,8 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
  */
 function CardPicks({ picks, label, tabIndex }: { picks: readonly Pick[]; label: string; tabIndex: number }) {
   const allWork = useContext(DevOpsWork);
+  // UI-B: a pick suggested in a later block (or in the unfinished list) is a dimmed line here, never a second checkbox.
+  const isOrigin = useIsOrigin();
   const groups = cardGroups(picks, allWork.get(picks[0]!.clientKey));
   const headed = groups.some((g) => g.feature);
   return (
@@ -574,9 +607,7 @@ function CardPicks({ picks, label, tabIndex }: { picks: readonly Pick[]; label: 
               <span className="cf-title">{g.feature?.title ?? "No feature"}</span>
             </li>
           )}
-          {g.picks.map((p) => (
-            <CardPick key={p.id} pick={p} tabIndex={tabIndex} />
-          ))}
+          {g.picks.map((p) => (isOrigin(p) || p.status === "moved" ? <OriginPick key={p.id} pick={p} /> : <CardPick key={p.id} pick={p} tabIndex={tabIndex} />))}
         </Fragment>
       ))}
     </ul>
@@ -641,7 +672,7 @@ function offHours(slot: Slot): { start: number; end: number }[] {
   return out;
 }
 
-function Timeline({ slot, tz, showGaps, minFocusWindow, earlier }: { slot: Slot; tz: string; showGaps: boolean; minFocusWindow: number; earlier: ReadonlySet<string> }) {
+function Timeline({ slot, tz, showGaps, minFocusWindow, earlier, now }: { slot: Slot; tz: string; showGaps: boolean; minFocusWindow: number; earlier: ReadonlySet<string>; now: RailNow | null }) {
   const { start, end } = slot.view;
   const marks = hourMarks(start, end, tz);
   const laid = layoutEvents(slot.events, start, end);
@@ -672,11 +703,13 @@ function Timeline({ slot, tz, showGaps, minFocusWindow, earlier }: { slot: Slot;
             </div>
           ))}
       <TimeboxBands slot={slot} pos={pos} />
+      {now && <NowPast at={now.past} />}
       <div className="lanes">
         {laid.map(({ placed, top, height, lane, lanes }) => (
           <EventCard key={placed.event.id} placed={placed} tz={tz} label={labelHere(placed, earlier)} style={{ top: pct(top), height: pct(height), left: `calc(${pct(lane / lanes)} + 4px)`, width: `calc(${pct(1 / lanes)} - 8px)` }} />
         ))}
       </div>
+      {now?.at != null && <NowLine at={now.at} label={now.label} onClick={now.onClick} />}
     </div>
   );
 }
@@ -686,7 +719,7 @@ function Timeline({ slot, tz, showGaps, minFocusWindow, earlier }: { slot: Slot;
  * free stretches, meetings, personal events and unavailable time, and timed picks as bands in client color. A pick
  * band opens the time editor; an event opens its menu. The list on the left is unchanged.
  */
-function Ruler({ slot, half, tz, label }: { slot: Slot; half: string; tz: string; label: string }) {
+function Ruler({ slot, half, tz, label, now }: { slot: Slot; half: string; tz: string; label: string; now: RailNow | null }) {
   // U5.1 (D407): the rail covers the Timelines range (slot.view: business hours, 12 hours or 24 hours), with the time
   // outside working windows shaded, as the wide timeline does.
   const bounds = { start: slot.view.start, end: slot.view.end };
@@ -721,6 +754,8 @@ function Ruler({ slot, half, tz, label }: { slot: Slot; half: string; tz: string
       <TimeboxBands slot={slot} pos={pos} bounds={bounds} />
       <RulerPromises rail={{ key: `${slot.date}|${half}`, ...bounds }} tz={tz} />
       </div>
+      {now && <NowPast at={now.past} />}
+      {now?.at != null && <NowLine at={now.at} label={now.label} onClick={now.onClick} />}
     </div>
   );
 }

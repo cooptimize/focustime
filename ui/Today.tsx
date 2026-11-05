@@ -49,6 +49,8 @@ import { dayName, FlexOfferBar, type FlexOffer, type MakeUpResult } from "./Pick
 import { spanText } from "./menu.ts";
 import { MenuCtx, MoreButton, PopupMenu } from "./Menus.tsx";
 import { DEFAULT_MIN_SIZES, openGaps } from "../plan/agenda.ts";
+import { agendaNowIndex, nowClock, ownsNow } from "../plan/nowline.ts";
+import { NowRow } from "./NowLine.tsx";
 import { timeChoices } from "../plan/picktime.ts";
 import { updatedAgo } from "./refresh.ts";
 import { usePhone } from "./viewport.ts";
@@ -733,20 +735,9 @@ function BlockCard(b: BlockProps) {
 
   // Now.
   const note = client ? data.resumeNotes[client] : undefined;
-  const pill = status.kind === "at_risk" ? `At risk${status.short ? ` · ${status.short}` : ""}` : status.label;
-  return (
-    <article className={cls} style={style} aria-label={title} onClick={onCardClick}>
-      <header>
-        <h2>{title}</h2>
-        <span className="tb-when">{slotRange(slot, tz)}</span>
-        {status.kind !== "none" && (
-          <span className={`status-pill ${status.kind}`} title={status.detail ?? undefined}>
-            {pill}
-          </span>
-        )}
-      </header>
-      <ul className="today-picks today-rows">
-        {b.rows.map((r) =>
+  // UI-B: the now row in the block under way (or the morning before the day), by the rows' times.
+  const nowAt = ownsNow(slot.view, slot.half, b.now) ? agendaNowIndex(b.rows.map((r) => r.at), b.now, slot.date, tz) : null;
+  const rowFor = (r: (typeof b.rows)[number]) =>
           r.kind === "event" ? (
             <DayEventRow key={`e${r.event.event.id}${r.event.start}`} e={r.event} tz={tz} />
           ) : r.pick.id === b.nextPick ? (
@@ -773,8 +764,23 @@ function BlockCard(b: BlockProps) {
             })
           ) : (
             row(r.pick)
-          ),
+          );
+  const pill = status.kind === "at_risk" ? `At risk${status.short ? ` · ${status.short}` : ""}` : status.label;
+  return (
+    <article className={cls} style={style} aria-label={title} onClick={onCardClick}>
+      <header>
+        <h2>{title}</h2>
+        <span className="tb-when">{slotRange(slot, tz)}</span>
+        {status.kind !== "none" && (
+          <span className={`status-pill ${status.kind}`} title={status.detail ?? undefined}>
+            {pill}
+          </span>
         )}
+      </header>
+      <ul className="today-picks today-rows">
+        {nowAt === 0 && <NowRow label={nowClock(b.now, tz)} />}
+        {b.rows.flatMap((r, i) => (i > 0 && i === nowAt ? [<NowRow key="now" label={nowClock(b.now, tz)} />, rowFor(r)] : [rowFor(r)]))}
+        {nowAt !== null && nowAt > 0 && nowAt === b.rows.length && <NowRow label={nowClock(b.now, tz)} />}
         {(b.promises ?? []).map((p) => (
           <PromiseRow key={`p${p.id}`} p={p} tz={tz} onOpen={b.props.onPromises ?? b.props.onInbox} />
         ))}

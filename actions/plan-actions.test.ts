@@ -562,3 +562,44 @@ describe("duplicate picks (step 15.1, D277)", () => {
     expect((await t.run<{ pick: Pick }>("pick.move", { id: other.id, date: D, half: "PM" })).pick.half).toBe("PM");
   });
 });
+
+describe("UI-B: unfinished picks suggested in the next block", () => {
+  it("Keep moves the pick, the original reads → moved to, and Undo puts it back", async () => {
+    const t = setup();
+    await t.run("planday.start", { date: D });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", intention: "Write the release notes" });
+    t.at("2026-11-04T14:00:00Z"); // Wed 9:00: Tuesday's pick is unfinished
+    const carry = await t.run<{ picks: Pick[]; hint: boolean }>("planday.carry", {});
+    expect(carry.picks.map((p) => p.id)).toEqual([pick.id]);
+    expect(carry.hint).toBe(true);
+
+    const kept = await t.run<{ pick: Pick }>("pick.move", { id: pick.id, date: "2026-11-04", half: "PM" });
+    const week = await t.run<WeekLoadData>("week.load", { weekStart: "2026-11-02" });
+    expect(week.plan![D]!.picks.find((p) => p.id === pick.id)).toMatchObject({ status: "moved", carriedTo: { date: "2026-11-04", half: "PM" } });
+    expect((await t.run<{ picks: Pick[] }>("planday.carry", {})).picks).toEqual([]);
+
+    const back = await t.run<{ pick: Pick }>("pick.uncarry", { id: kept.pick.id });
+    expect(back.pick).toMatchObject({ id: pick.id, status: "planned" });
+    expect((await t.run<{ picks: Pick[] }>("planday.carry", {})).picks.map((p) => p.id)).toEqual([pick.id]);
+    // Only a carried copy can be put back.
+    expect((await t.fail("pick.uncarry", { id: pick.id })).status).toBe(409);
+  });
+
+  it("Drop settles it and Undo plans it again", async () => {
+    const t = setup();
+    await t.run("planday.start", { date: D });
+    const { pick } = await t.run<{ pick: Pick }>("pick.add", { date: D, half: "AM", clientKey: "Adatum", intention: "Write the release notes" });
+    t.at("2026-11-04T14:00:00Z");
+    await t.run("pick.remove", { id: pick.id });
+    expect((await t.run<{ picks: Pick[] }>("planday.carry", {})).picks).toEqual([]);
+    expect((await t.run<{ pick: Pick }>("pick.undrop", { id: pick.id })).pick.status).toBe("planned");
+    expect((await t.run<{ picks: Pick[] }>("planday.carry", {})).picks.map((p) => p.id)).toEqual([pick.id]);
+  });
+
+  it("the hint shows until it is dismissed once", async () => {
+    const t = setup();
+    expect((await t.run<{ hint: boolean }>("planday.carry", {})).hint).toBe(true);
+    await t.run("planday.carry_hint", {});
+    expect((await t.run<{ hint: boolean }>("planday.carry", {})).hint).toBe(false);
+  });
+});

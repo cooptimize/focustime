@@ -47,6 +47,8 @@ import { UnitCard, PlanLabel } from "./plan/UnitCard.tsx";
 import { AddPane, AddSection, BoxHint } from "./plan/AddPane.tsx";
 import { moreLabel, moreOpenByDefault, NOTHING_PLANNED, rememberFold, sessionFold } from "./plan/more.ts";
 import { FoldLine } from "./plan/FoldLine.tsx";
+import { agendaNowIndex, nowClock, ownsNow } from "../plan/nowline.ts";
+import { NowRow } from "./NowLine.tsx";
 
 import type { FollowUpView } from "../actions/types.ts";
 
@@ -832,9 +834,13 @@ function StoryBox({ clientKey, clientName, half, date, parent, parentTitle, act 
 
 /** Unfinished from earlier days: one "+" brings a pick into the selected block; ⋯ has the rest. */
 function CarryOver({ picks, date, to, act }: { picks: Pick[]; date: string; to: Half; act: PlanDayAct }) {
+  // UI-B: "From last week" only when every pick is from an earlier week.
+  const d = Temporal.PlainDate.from(date);
+  const monday = d.subtract({ days: d.dayOfWeek - 1 }).toString();
+  const label = picks.every((p) => p.date < monday) ? "From last week" : "Unfinished from earlier days";
   return (
-    <section className="pd2-carry" aria-label="From last week">
-      <PlanLabel>From last week</PlanLabel>
+    <section className="pd2-carry" aria-label={label}>
+      <PlanLabel>{label}</PlanLabel>
       <ul className="pd2-list">
         {picks.map((p) => (
           <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`More for ${p.title}`} item={{ clientKey: p.clientKey, url: p.itemUrl }} className="pd2-add">
@@ -891,49 +897,53 @@ export function Agenda({ slot, now, tz, clientName, pickRow, whens }: { whens?: 
   const rows = agendaOf(slot, env.settings.enabled ? env.timeboxes : [], isTodayIn(slot.date, now, tz) ? now : undefined);
   if (!rows.length) return null;
   const sel = open !== null ? env.timeboxes.find((t) => t.id === open && !t.removedAt) ?? null : null;
+  const row = (r: (typeof rows)[number]): ReactNode => {
+    const tb = r.kind === "timebox" ? env.timeboxes.find((t) => t.id === r.timeboxId) : undefined;
+    const when = spanText(r.start, r.end, tz);
+    if (r.kind === "free")
+      return (
+        <li key={`f${r.start}`} className="ag-free">
+          <span className="ag-time">{when}</span>
+          <span className="ag-title">Free · {formatDuration(r.minutes)}</span>
+        </li>
+      );
+    // Step 14.5 (D259): a pick's timebox is the pick's own row, at its time.
+    const asPick = tb && tb.pickId !== null ? pickRow(tb.pickId) : null;
+    if (asPick) return asPick;
+    if (tb)
+      return (
+        <li key={`t${tb.id}`} className={`ag-timebox${tb.outlookNote ? " noted" : ""}${tb.conflict ? " conflict" : ""}`} style={{ "--c": clientColor(tb.clientKey, env.colors) } as CSSProperties}>
+          <button type="button" className="ag-open" aria-expanded={open === tb.id} onClick={() => setOpen(open === tb.id ? null : tb.id)} title="Timebox details: show as, Put on Outlook, remove">
+            <span className="ag-time">{when}</span>
+            <span className="ag-title">
+              {tb.conflict ? "⚠ " : ""}
+              {tb.title}
+            </span>
+            {tb.onOutlook && <span className="tb-ol" title="On Outlook">O</span>}
+            {tb.outlookNote && <span className="tb-note">{tb.outlookNote}</span>}
+          </button>
+        </li>
+      );
+    const w = r.eventId ? whens?.get(r.eventId) : undefined;
+    return (
+      <li key={`e${r.eventId}${r.start}`} className={`ag-${r.kind} show-${r.showAs ?? "busy"}${r.free ? " shown-free" : ""}${w ? ` when-${w}` : ""}`}>
+        <span className="ag-time">{when}</span>
+        <span className="ag-title" title={r.title}>
+          {r.title}
+        </span>
+        {w === "now" && <span className="cal-tag now">Now</span>}
+        {w === "next" && <span className="cal-tag next">Next</span>}
+        {r.free && <span className="muted">shown as free</span>}
+      </li>
+    );
+  };
+  // UI-B: the now row, in the block under way (or the morning before the day starts), in the person's zone.
+  const nowAt = ownsNow(slot.view, slot.half, now) ? agendaNowIndex(rows.map((r) => r.start), now, slot.date, tz) : null;
   return (
     <div className="pd-agenda">
       <ol aria-label={`${halfTag(slot.half)} agenda`}>
-        {rows.map((r) => {
-          const tb = r.kind === "timebox" ? env.timeboxes.find((t) => t.id === r.timeboxId) : undefined;
-          const when = spanText(r.start, r.end, tz);
-          if (r.kind === "free")
-            return (
-              <li key={`f${r.start}`} className="ag-free">
-                <span className="ag-time">{when}</span>
-                <span className="ag-title">Free · {formatDuration(r.minutes)}</span>
-              </li>
-            );
-          // Step 14.5 (D259): a pick's timebox is the pick's own row, at its time.
-          const asPick = tb && tb.pickId !== null ? pickRow(tb.pickId) : null;
-          if (asPick) return asPick;
-          if (tb)
-            return (
-              <li key={`t${tb.id}`} className={`ag-timebox${tb.outlookNote ? " noted" : ""}${tb.conflict ? " conflict" : ""}`} style={{ "--c": clientColor(tb.clientKey, env.colors) } as CSSProperties}>
-                <button type="button" className="ag-open" aria-expanded={open === tb.id} onClick={() => setOpen(open === tb.id ? null : tb.id)} title="Timebox details: show as, Put on Outlook, remove">
-                  <span className="ag-time">{when}</span>
-                  <span className="ag-title">
-                    {tb.conflict ? "⚠ " : ""}
-                    {tb.title}
-                  </span>
-                  {tb.onOutlook && <span className="tb-ol" title="On Outlook">O</span>}
-                  {tb.outlookNote && <span className="tb-note">{tb.outlookNote}</span>}
-                </button>
-              </li>
-            );
-          const w = r.eventId ? whens?.get(r.eventId) : undefined;
-          return (
-            <li key={`e${r.eventId}${r.start}`} className={`ag-${r.kind} show-${r.showAs ?? "busy"}${r.free ? " shown-free" : ""}${w ? ` when-${w}` : ""}`}>
-              <span className="ag-time">{when}</span>
-              <span className="ag-title" title={r.title}>
-                {r.title}
-              </span>
-              {w === "now" && <span className="cal-tag now">Now</span>}
-              {w === "next" && <span className="cal-tag next">Next</span>}
-              {r.free && <span className="muted">shown as free</span>}
-            </li>
-          );
-        })}
+        {rows.flatMap((r, i) => (i === nowAt ? [<NowRow key="now" label={nowClock(now, tz)} />, row(r)] : [row(r)]))}
+        {nowAt === rows.length && <NowRow key="now" label={nowClock(now, tz)} />}
       </ol>
       {sel && <TimeboxDetails tb={sel} env={env} clientName={clientName(sel.clientKey)} today={isTodayIn(sel.date, now, tz)} onRemoved={() => setOpen(null)} />}
     </div>

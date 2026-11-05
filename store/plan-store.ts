@@ -1768,6 +1768,36 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         return { result: "dropped", pick: (await mustPick(id)) };
       });
     },
+    /**
+     * UI-B: Undo of Keep or Move on an unfinished pick: the carried copy is deleted and the pick it came from is planned
+     * again. Refused once the copy has been worked on (focus time, a timebox, borrowed time, carried on again).
+     */
+    async uncarry(id: number): Promise<Pick> {
+      return tx(async () => {
+        const p = await mustPick(id);
+        if (p.status !== "planned" || p.carriedFrom === null) throw new PlanError("Only a planned pick that was carried can be put back");
+        const origin = await mustPick(p.carriedFrom);
+        if (origin.status !== "moved") throw new PlanError("The pick it came from has changed since");
+        const used =
+          (await db.get("SELECT 1 FROM picks WHERE carried_from = ?", id)) ||
+          (await db.get("SELECT 1 FROM focus_log WHERE pick_id = ?", id)) ||
+          (await db.get("SELECT 1 FROM timeboxes WHERE pick_id = ? AND removed_at IS NULL", id)) ||
+          (await db.get("SELECT 1 FROM borrowed WHERE pick_id = ? OR from_pick_id = ?", id, id));
+        if (used) throw new PlanError("It has been worked on since; move or drop it instead");
+        await db.run("DELETE FROM picks WHERE id = ?", id);
+        await db.run("UPDATE picks SET status = 'planned', updated_at = ? WHERE id = ?", stamp(), origin.id);
+        return mustPick(origin.id);
+      });
+    },
+    /** UI-B: Undo of Drop: a dropped pick is planned again where it was. */
+    async undrop(id: number): Promise<Pick> {
+      return tx(async () => {
+        const p = await mustPick(id);
+        if (p.status !== "dropped") throw new PlanError("Only a dropped pick can be put back");
+        await db.run("UPDATE picks SET status = 'planned', updated_at = ? WHERE id = ?", stamp(), id);
+        return mustPick(id);
+      });
+    },
     /** Settles a planned pick as dropped and keeps it, whatever the day's commit state (past days). */
     async drop(id: number): Promise<Pick> {
       return tx(async () => {
@@ -2598,7 +2628,14 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       const out: PlanWeek = {};
       for (const d of dates) {
         const plan = (await getPlan(d));
-        if (plan) out[d] = { committedAt: plan.committedAt, closedOutAt: plan.closedOutAt, picks: (await picksBetween(d, d)) };
+        if (!plan) continue;
+        const picks = await picksBetween(d, d);
+        // UI-B: where each moved pick's carried copy is now ("→ moved to Mon AM"), read only.
+        if (picks.some((p) => p.status === "moved")) {
+          const to = new Map(((await db.all("SELECT n.carried_from AS origin, n.date AS date, n.half AS half FROM picks n JOIN picks o ON o.id = n.carried_from WHERE o.date = ? AND o.status = 'moved'", d)) as Row[]).map((r) => [r.origin as number, { date: r.date as IsoDate, half: r.half as Half }] as const));
+          for (const p of picks) if (p.status === "moved") p.carriedTo = to.get(p.id) ?? null;
+        }
+        out[d] = { committedAt: plan.committedAt, closedOutAt: plan.closedOutAt, picks };
       }
       return out;
     },
