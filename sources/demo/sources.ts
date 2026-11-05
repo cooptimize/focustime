@@ -1,3 +1,4 @@
+import type { ProcessOverrides } from "../../plan/process.ts";
 // Demo sources (step 15, D272): the same shapes as the real Dataverse, Outlook, Google and DevOps sources, served from
 // sources/demo/data.ts. They are given no fetch, keyring or cache directory, so they can't reach anything outside.
 import type { CalendarSource } from "../calendar/source.ts";
@@ -10,7 +11,8 @@ import { DEMO_CLIENTS, DEMO_ME, DEMO_PEOPLE, demoGoogle, demoOrganizer, demoOutl
 
 const NO = "Demo data: nothing leaves FocusTime";
 
-export function createDemoSources(now: () => string) {
+/** `processOverrides`: the demo team's process Rules (ADM-1), applied to the demo's process models. */
+export function createDemoSources(now: () => string, processOverrides: (clientKey: string) => Promise<ProcessOverrides> = async () => ({})) {
   const ok = <T>(source: SourceId, items: T[]): SourceResult<T> => ({ source, status: "ok", fetchedAt: now(), fromCache: false, items });
   const dataverse: DataverseSource = {
     load: async () => ok("dataverse", demoPatterns()),
@@ -84,7 +86,7 @@ export function createDemoSources(now: () => string) {
     // DS-1: the demo has no AI, so Draft stories never reads; these say so if anything asks.
     featureSignals: async () => ({ ok: false, message: "Draft stories isn't available in the demo" }),
     exemplarPool: async () => ({ ok: true, value: [] }),
-    processModels: async (keys) => keys.map((clientKey) => (isDemoClient(clientKey) ? { clientKey, ok: true as const, model: demoProcess(clientKey) } : { clientKey, ok: false as const, message: "Not a demo client" })),
+    processModels: async (keys) => Promise.all(keys.map(async (clientKey) => (isDemoClient(clientKey) ? { clientKey, ok: true as const, model: demoProcess(clientKey, await processOverrides(clientKey)) } : { clientKey, ok: false as const, message: "Not a demo client" }))),
   };
   return { dataverse, outlook, google, devops };
 }

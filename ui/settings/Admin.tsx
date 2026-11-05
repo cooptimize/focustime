@@ -8,6 +8,8 @@ import { call } from "../api.ts";
 import { SaveMark, plain, useSaveContext, type FieldStatus } from "./autosave.tsx";
 import { DeliveryChatField, DeliveryChatsProvider } from "./DeliveryChats.tsx";
 import { shortDate } from "../labels.ts";
+import { TypeIcon } from "../TypeIcon.tsx";
+import type { ClientProcess } from "../../actions/types.ts";
 
 export const ADMIN_UI_SECTIONS = [
   ["admin-clients", "Clients"],
@@ -98,7 +100,19 @@ function useSection<T>(section: string, extra: Record<string, unknown> = {}) {
     }
   }, [section, key]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => void load(), [load]);
-  return { data, error, load };
+  /** Once with more input (Admin › Clients' Refresh reads DevOps again). */
+  const loadWith = useCallback(
+    async (more: Record<string, unknown>) => {
+      try {
+        setData(await call<T>("admin.load", { section, ...extra, ...more }));
+        setError(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't load this");
+      }
+    },
+    [section, key], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  return { data, error, load, loadWith };
 }
 
 function Kind({ kind }: { kind: "Rule" | "Default" | "Default by level" }) {
@@ -159,12 +173,18 @@ const colorVar = (c: string | null) => (c ? (c.startsWith("#") ? c : `var(--clie
 
 // ---------- Clients ----------
 
-type ClientRow = { key: string; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; needsBreakdown: string[]; notCounted: string[]; houseStyle: string | null; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
-type ClientsData = { palette: string[]; suggested: string[]; clients: ClientRow[]; process: { available: boolean; note: string } };
+type ClientRow = { key: string; color: string | null; colorFrom: "suggested" | "admin"; allowAi: boolean; openStates: string[]; noBreakdown: string[]; background: string[]; houseStyle: string | null; process: ClientProcess; leads: { personId: string; name: string; primary: boolean; why: string[] }[] };
+type ClientsData = { palette: string[]; suggested: string[]; clients: ClientRow[] };
 
 function AdminClients() {
-  const { data, error, load } = useSection<ClientsData>("clients");
+  const { data, error, load, loadWith } = useSection<ClientsData>("clients");
   const saver = useAdminSave(load);
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadWith({ refresh: true });
+    setRefreshing(false);
+  };
   if (error) return <p className="field-problem">{error}</p>;
   if (!data) return <p className="muted">Loading…</p>;
   return (
@@ -173,14 +193,14 @@ function AdminClients() {
       {data.clients.length === 0 && <p className="muted">No clients yet. They come from Dataverse once people are read (Admin › People › Refresh from Dataverse).</p>}
       <div className="set-clients">
         {data.clients.map((c) => (
-          <AdminClientCard key={c.key} c={c} palette={data.palette} process={data.process} saver={saver} />
+          <AdminClientCard key={c.key} c={c} palette={data.palette} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
         ))}
       </div>
     </DeliveryChatsProvider>
   );
 }
 
-function AdminClientCard({ c, palette, process, saver }: { c: ClientRow; palette: string[]; process: ClientsData["process"]; saver: Saver }) {
+function AdminClientCard({ c, palette, saver, onRefresh, refreshing }: { c: ClientRow; palette: string[]; saver: Saver; onRefresh: () => Promise<void>; refreshing: boolean }) {
   const scope = `client:${c.key}`;
   const [style, setStyle] = useState(c.houseStyle ?? "");
   useEffect(() => setStyle(c.houseStyle ?? ""), [c.houseStyle]);
@@ -218,21 +238,7 @@ function AdminClientCard({ c, palette, process, saver }: { c: ClientRow; palette
         </div>
       </div>
       <DeliveryChatField clientKey={c.key} clientName={c.key} />
-      <div className="set-form adm-process">
-        <h4>DevOps process</h4>
-        <p className="muted">{process.note}</p>
-        <div className="set-grid">
-          <AField label="States treated as open" kind="Rule" s={saver.status(scope, "open_states")} retry={() => void saver.save(scope, "open_states", c.openStates, `${c.key}: open states`)} hint="Done states this client still works in, like Resolved. Commas between them.">
-            <ListInput label={`${c.key}: states treated as open`} value={c.openStates} onSave={(v) => void saver.save(scope, "open_states", v, `${c.key}: open states`)} />
-          </AField>
-          <AField label="Needs breakdown for" kind="Rule" s={saver.status(scope, "needs_breakdown")} retry={() => void saver.save(scope, "needs_breakdown", c.needsBreakdown, `${c.key}: needs breakdown`)} hint="Parent types that should have child items before they're planned, like Feature.">
-            <ListInput label={`${c.key}: needs breakdown for`} value={c.needsBreakdown} onSave={(v) => void saver.save(scope, "needs_breakdown", v, `${c.key}: needs breakdown`)} />
-          </AField>
-          <AField label="Child types that don't count against hours" kind="Rule" s={saver.status(scope, "not_counted")} retry={() => void saver.save(scope, "not_counted", c.notCounted, `${c.key}: not counted`)} hint="Like Test Case or Issue.">
-            <ListInput label={`${c.key}: child types not counted`} value={c.notCounted} onSave={(v) => void saver.save(scope, "not_counted", v, `${c.key}: not counted`)} />
-          </AField>
-        </div>
-      </div>
+      <ProcessView c={c} saver={saver} onRefresh={onRefresh} refreshing={refreshing} />
       <div className="set-form set-house-style">
         <AField label="House style for Draft stories" kind="Rule" s={saver.status(scope, "house_style")} retry={() => void saver.save(scope, "house_style", c.houseStyle, `${c.key}: house style`)} hint="Sent with every Draft stories request for this client. Empty goes back to the style learned from its own features.">
           <textarea
@@ -245,6 +251,101 @@ function AdminClientCard({ c, palette, process, saver }: { c: ClientRow; palette
           />
         </AField>
       </div>
+    </div>
+  );
+}
+
+const hasName = (list: readonly string[], name: string) => list.some((x) => x.toLowerCase() === name.toLowerCase());
+const toggled = (list: readonly string[], name: string, on: boolean) => (on ? (hasName(list, name) ? [...list] : [...list, name]) : list.filter((x) => x.toLowerCase() !== name.toLowerCase()));
+const LEVEL_WORDS = { top: "Top", parent: "Parent", child: "Child", task: "Task" } as const;
+
+/**
+ * WT-1 in Admin › Clients: the client's DevOps process (read with the company read PAT), one row per type with its icon,
+ * level and history, and two Rules as switches: Needs breakdown (parent and top types) and Background (no hours).
+ */
+function ProcessView({ c, saver, onRefresh, refreshing }: { c: ClientRow; saver: Saver; onRefresh: () => Promise<void>; refreshing: boolean }) {
+  const scope = `client:${c.key}`;
+  const noBreakdown = saver.shown(scope, "no_breakdown", c.noBreakdown);
+  const background = saver.shown(scope, "background", c.background);
+  const saveNb = (v: string[]) => void saver.save(scope, "no_breakdown", v, `${c.key}: needs breakdown`);
+  const saveBg = (v: string[]) => void saver.save(scope, "background", v, `${c.key}: background types`);
+  const p = c.process;
+  return (
+    <div className="set-form adm-process">
+      <h4>
+        DevOps process{" "}
+        <button type="button" className="mini quiet" disabled={refreshing} onClick={() => void onRefresh()}>
+          {refreshing ? "Reading…" : "Refresh"}
+        </button>
+      </h4>
+      <div className="set-grid">
+        <AField label="States treated as open" kind="Rule" s={saver.status(scope, "open_states")} retry={() => void saver.save(scope, "open_states", c.openStates, `${c.key}: open states`)} hint="Done states this client still works in, like Resolved. Commas between them.">
+          <ListInput label={`${c.key}: states treated as open`} value={c.openStates} onSave={(v) => void saver.save(scope, "open_states", v, `${c.key}: open states`)} />
+        </AField>
+      </div>
+      {p.ok ? (
+        <>
+          <p className="muted">
+            {[p.process ? `${p.process} process` : null, p.project, p.bugs].filter(Boolean).join(" · ")}. Needs breakdown and Background are Rules: they apply to everyone's plans for {c.key}.
+          </p>
+          <div className="adm-scroll">
+            <table className="adm-table adm-types">
+              <thead>
+                <tr>
+                  <th scope="col">Type</th>
+                  <th scope="col">Level</th>
+                  <th scope="col">Needs breakdown <Kind kind="Rule" /></th>
+                  <th scope="col">Background <Kind kind="Rule" /></th>
+                  <th scope="col">Last 12 months</th>
+                </tr>
+              </thead>
+              <tbody>
+                {p.types.map((t) => {
+                  const portfolio = t.level === "top" || t.level === "parent";
+                  const needs = portfolio && !hasName(noBreakdown, t.name);
+                  const bg = hasName(background, t.name);
+                  return (
+                    <tr key={t.name}>
+                      <th scope="row">
+                        <TypeIcon type={t.name} look={t} decorative /> {t.name}
+                      </th>
+                      <td>{t.level ? LEVEL_WORDS[t.level] : "Not on a backlog"}</td>
+                      <td>
+                        {portfolio ? (
+                          <label className="adm-switch">
+                            <input type="checkbox" role="switch" checked={needs} aria-label={`${c.key}: ${t.name} needs breakdown`} onChange={(e) => saveNb(toggled(noBreakdown, t.name, !e.target.checked))} /> {needs ? "Yes" : "No: can be picked"}
+                          </label>
+                        ) : (
+                          <span className="muted">Picked directly</span>
+                        )}
+                      </td>
+                      <td>
+                        <label className="adm-switch">
+                          <input type="checkbox" role="switch" checked={bg} aria-label={`${c.key}: ${t.name} is background`} onChange={(e) => saveBg(toggled(background, t.name, e.target.checked))} /> {bg ? "No hours" : "Counts hours"}
+                        </label>
+                      </td>
+                      <td className="muted">{t.history ? t.history.replace(`${t.name}: `, "") : ""}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <SaveMark s={saver.status(scope, "no_breakdown") ?? saver.status(scope, "background")} retry={() => (saver.status(scope, "no_breakdown") ? saveNb(noBreakdown) : saveBg(background))} />
+        </>
+      ) : (
+        <>
+          <p className="muted">The process couldn't be read: {p.message}. The Rules can still be set by type name.</p>
+          <div className="set-grid">
+            <AField label="Types that don't need breakdown" kind="Rule" s={saver.status(scope, "no_breakdown")} retry={() => saveNb(noBreakdown)} hint="Parent or top types that can be picked directly. Commas between them.">
+              <ListInput label={`${c.key}: types that don't need breakdown`} value={noBreakdown} onSave={saveNb} />
+            </AField>
+            <AField label="Background types" kind="Rule" s={saver.status(scope, "background")} retry={() => saveBg(background)} hint="Types that don't count against hours. Commas between them.">
+              <ListInput label={`${c.key}: background types`} value={background} onSave={saveBg} />
+            </AField>
+          </div>
+        </>
+      )}
     </div>
   );
 }

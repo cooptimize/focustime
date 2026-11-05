@@ -39,10 +39,10 @@ export type DevOpsDeps = {
   /** Work item types, states and the order field change rarely. */
   metadataTtlMs?: number;
   /**
-   * WT-1: the process overrides until ADM-1 hosts them, read at each fetch: parent or top types that don't need
-   * breakdown (the old pickable_portfolio_types, so they can be picked) and background types (no hours).
+   * WT-1, ADM-1: a client's process overrides, its Rules from Admin › Clients, read at each fetch: parent or top types
+   * that don't need breakdown (so they can be picked) and background types (no hours).
    */
-  processOverrides?: () => ProcessOverrides;
+  processOverrides?: (clientKey: string) => ProcessOverrides;
   /** A client's "treat as open" states (config [clients], step 6b). Read at each fetch. */
   openStates?: (clientKey: string) => readonly string[];
   /** AP-2: the ids of a client's items just read from DevOps (never from the cache), for the AI guard's map. */
@@ -119,7 +119,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     }
   };
 
-  type Ctx = { client: string; org: string; base: string; projectName: string; pat: Pat; /** My identity here (not secret), for changedByMe. */ me: string | null };
+  type Ctx = { client: string; /** The client key (process overrides are per client). */ clientKey: string; org: string; base: string; projectName: string; pat: Pat; /** My identity here (not secret), for changedByMe. */ me: string | null };
 
   /** One request. Errors are mapped to plain messages; response bodies of failures are never read. */
   async function call<T>(c: Ctx, op: string, path: string, body?: unknown): Promise<T> {
@@ -204,16 +204,16 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return raw;
   }
 
-  /** The model with the person's overrides, and the planning shapes the rest of the source uses. */
-  function metaOf(r: ProcessRaw, history?: RawProcess["history"]): Metadata {
-    const model = buildProcessModel(history ? { ...r.raw, history } : r.raw, d.processOverrides?.() ?? {});
+  /** The model with the client's overrides (ADM-1: its Rules), and the planning shapes the rest of the source uses. */
+  function metaOf(r: ProcessRaw, clientKey: string, history?: RawProcess["history"]): Metadata {
+    const model = buildProcessModel(history ? { ...r.raw, history } : r.raw, d.processOverrides?.(clientKey) ?? {});
     const pl = planningLevels(model);
     const parentDefault = model.levels.parent.map((t) => typeOf(model, t)?.defaultChild).find(Boolean) ?? model.levels.child[0] ?? null;
     return { orderField: r.orderField, model, categories: stateCategories(model), levels: { known: pl.known, story: pl.story, portfolio: pl.portfolio }, tiers: pl.tiers, storyType: parentDefault, requirementTypes: model.levels.child };
   }
 
   async function loadMetadata(c: Ctx, project: string): Promise<Metadata> {
-    return metaOf(await loadProcess(c, project));
+    return metaOf(await loadProcess(c, project), c.clientKey);
   }
 
   /**
@@ -281,7 +281,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
 
   function contextOf(ref: ClientRef, target: DevOpsTarget): { ctx: Ctx; project: string } {
     const org = target.org!;
-    return { ctx: { client: ref.clientName, org, base: `https://dev.azure.com/${encodeURIComponent(org)}`, projectName: target.projectName ?? target.project!, pat: target.pat!, me: target.email }, project: target.project! };
+    return { ctx: { client: ref.clientName, clientKey: ref.clientKey, org, base: `https://dev.azure.com/${encodeURIComponent(org)}`, projectName: target.projectName ?? target.project!, pat: target.pat!, me: target.email }, project: target.project! };
   }
 
   /** The batch call for given ids and fields, in chunks of 200, normalized with the given context. */
@@ -528,7 +528,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
       // WT-1: the child types this feature's type takes, the most common in this project's history first.
       const ft = typeOf(meta.model, feature.type);
       const valid = ft?.validChildren ?? [];
-      const def = valid.length > 1 ? typeOf(metaOf(await loadProcess(ctx, project), await loadHistory(ctx, project, meta.model)).model, feature.type)?.defaultChild : valid[0];
+      const def = valid.length > 1 ? typeOf(metaOf(await loadProcess(ctx, project), ctx.clientKey, await loadHistory(ctx, project, meta.model)).model, feature.type)?.defaultChild : valid[0];
       const childTypes = def ? [def, ...valid.filter((t) => t !== def)] : valid;
       if (!childTypes.length) return { ok: false, message: `The process for ${ctx.projectName} has no level under ${feature.type}, so there is no type to create` };
       const [epicRaw, kidIds, commentsBody] = await Promise.all([
@@ -605,8 +605,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
         try {
           const { ctx, project } = contextOf(ref, target!);
           const raw = await loadProcess(ctx, project, opts.refresh);
-          const history = await loadHistory(ctx, project, metaOf(raw).model, opts.refresh);
-          return { clientKey, ok: true, model: metaOf(raw, history).model };
+          const history = await loadHistory(ctx, project, metaOf(raw, clientKey).model, opts.refresh);
+          return { clientKey, ok: true, model: metaOf(raw, clientKey, history).model };
         } catch (e) {
           return { clientKey, ok: false, message: plainFailure(e, "Reading the process") };
         }

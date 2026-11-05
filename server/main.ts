@@ -53,6 +53,7 @@ import type { CalendarSource } from "../sources/calendar/source.ts";
 import { createDataverseSource, type DataverseSource } from "../sources/dataverse/source.ts";
 import { createGoogleSource } from "../sources/google/source.ts";
 import { createOutlookSource } from "../sources/graph/source.ts";
+import type { ProcessOverrides } from "../plan/process.ts";
 import { createDevOpsSource, type DevOpsSource } from "../sources/devops/source.ts";
 import type { Keyring } from "../sources/oauth/oauth.ts";
 import { planStoreOn, type PlanStore } from "../store/plan-store.ts";
@@ -136,7 +137,7 @@ const cfgPath = host.facts().configPath ?? "in memory";
  * A2: what the server keeps in memory for a signed-in person: their settings and what it uses from them (zone, DevOps
  * choices), their encrypted secrets and their own snapshot cache.
  */
-type Person = { userId: string; upn: string | null; zone: string; pickableTypes: string[]; backgroundTypes: string[]; openStates: Record<string, string[]>; settings: UserSettings; secrets: UserSecrets; snapshots: SnapshotStore };
+type Person = { userId: string; upn: string | null; zone: string; /** ADM-1: each client's process Rules (WT-1's overrides). */ process: Record<string, ProcessOverrides>; openStates: Record<string, string[]>; settings: UserSettings; secrets: UserSecrets; snapshots: SnapshotStore };
 
 // One Dataverse source per person and config, so the in-memory token and results survive between requests.
 const sources = new Map<string, DataverseSource>();
@@ -267,7 +268,7 @@ const devopsFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
   let s = devopsSources.get(key);
   if (!s) {
     const dv = dataverseFor(who)(cfg, timeZone);
-    s = createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), processOverrides: () => ({ noBreakdown: who.pickableTypes, background: who.backgroundTypes }), openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who) });
+    s = createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), processOverrides: (k) => who.process[k] ?? {}, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who) });
     devopsSources.set(key, s);
   }
   return s;
@@ -576,7 +577,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
   const settings = settingsFor(userId);
   const user = await accounts.users.get(userId);
   if (!(await settings.has())) await settings.seed(starterToml(user?.timeZone ?? host.clock.zone(), (await org.rules().catch(() => null))?.organization.newPerson));
-  const who: Person = { userId, upn: user?.upn ?? null, zone: user?.timeZone ?? host.clock.zone(), pickableTypes: [], backgroundTypes: [], openStates: {}, settings, secrets: secretsFor(userId), snapshots: host.snapshotsFor(userId) };
+  const who: Person = { userId, upn: user?.upn ?? null, zone: user?.timeZone ?? host.clock.zone(), process: {}, openStates: {}, settings, secrets: secretsFor(userId), snapshots: host.snapshotsFor(userId) };
   /** Their settings, with what the server keeps from them refreshed. */
   const loadConfig = async () => {
     const r = await settings.load();
@@ -587,8 +588,7 @@ async function buildRuntime(userId: string): Promise<ActionContext> {
     }
     if (r.parsed.ok) {
       who.zone = userZone(r.parsed.config);
-      who.pickableTypes = r.parsed.config.plan.pickablePortfolioTypes;
-      who.backgroundTypes = r.parsed.config.plan.backgroundTypes;
+      who.process = Object.fromEntries(Object.entries(r.parsed.config.org?.clients ?? {}).map(([k, c]) => [k, { noBreakdown: c.noBreakdown, background: c.background }]));
       who.openStates = Object.fromEntries(Object.entries(r.parsed.config.clientSettings).map(([k, v]) => [k, v.openStates]));
     }
     return r;

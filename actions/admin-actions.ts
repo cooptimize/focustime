@@ -10,7 +10,9 @@ import { LEAD_WHY_NAMES, type LeadWhy } from "../plan/levels.ts";
 import type { Actor, AuditEntry, OverrideKind } from "../store/admin-store.ts";
 import type { AdminCheck, AdminVia } from "./admin.ts";
 import type { OrgRuntime } from "./org.ts";
-import type { ActionResponse } from "./types.ts";
+import { breakdownText, looksOf } from "../plan/process.ts";
+import type { ProcessModelResult } from "../sources/devops/source.ts";
+import type { ActionResponse, ClientProcess } from "./types.ts";
 
 export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit"] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
@@ -65,7 +67,23 @@ export type AdminContext = {
   ops: AdminOps | null;
   /** The signed-in person (Entra object id and name). */
   me: () => Promise<Actor & { id: string } | null>;
+  /** WT-1: the clients' DevOps process models (with their Rules applied); null when DevOps can't be read here. */
+  process?: (clientKeys: string[], refresh: boolean) => Promise<ProcessModelResult[] | null>;
 };
+
+
+const LEVEL_ORDER = { top: 0, parent: 1, child: 2, task: 3 } as const;
+export function processView(r: ProcessModelResult): ClientProcess {
+  if (!r.ok) return { ok: false, message: r.message };
+  const m = r.model;
+  const looks = new Map(looksOf(m).map((l) => [l.name, l]));
+  const types = m.types
+    .filter((t) => t.level !== null)
+    .sort((a, b) => LEVEL_ORDER[a.level!] - LEVEL_ORDER[b.level!] || a.name.localeCompare(b.name))
+    .map((t) => ({ ...looks.get(t.name)!, breakdownSource: t.breakdownSource, history: breakdownText(t), bug: t.bug }));
+  const bugs = m.bugsBehavior === "asRequirements" ? "Bugs are planned with stories" : m.bugsBehavior === "asTasks" ? "Bugs are planned with tasks" : m.bugsBehavior === "off" ? "Bugs aren't on the backlogs" : null;
+  return { ok: true, process: m.process ?? null, project: m.project, bugs, types };
+}
 
 const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
 export const NOT_ADMIN = "Only a FocusTime admin can do this";
@@ -84,7 +102,7 @@ const json = (v: string | null): unknown => {
 /** The Entra page where the group's members are managed (FocusTime never adds anyone itself). */
 export const groupLink = (groupId: string | null) => (groupId ? `https://entra.microsoft.com/#view/Microsoft_AAD_IAM/GroupDetailsMenuBlade/~/Members/groupId/${groupId}` : null);
 
-async function clientsSection(ops: AdminOps, rules: OrgRules) {
+async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminContext["process"], refresh: boolean) {
   const [rows, chatKeys, dirClients, lv, users, dir] = await Promise.all([ops.org.store.orgRows(), ops.chatClients(), ops.org.store.peopleClients(), ops.org.levels(), ops.people(), ops.org.store.directory()]);
   const leadKeys = (await ops.org.store.leads()).map((l) => l.clientKey);
   const keys = [...new Set([...Object.keys(rules.clients), ...chatKeys, ...dirClients.map((c) => c.clientKey), ...leadKeys])].sort((a, b) => a.localeCompare(b));
@@ -94,6 +112,11 @@ async function clientsSection(ops: AdminOps, rules: OrgRules) {
     rules = await ops.org.rules();
   }
   const by = new Map(rows.filter((r) => r.key === "color").map((r) => [r.scope.slice(7), r.updatedBy]));
+  const models = process && keys.length ? await process(keys, refresh).catch(() => null) : null;
+  const processOf = (k: string): ClientProcess => {
+    const r = models?.find((x) => x.clientKey === k);
+    return r ? processView(r) : { ok: false, message: models ? "Not read" : "DevOps can't be read from here" };
+  };
   const nameOf = (id: string) => users.find((u) => u.id === id)?.name ?? dir.find((d) => d.personId === id)?.name ?? "Someone not in FocusTime";
   return {
     palette: CLIENT_SLOTS,
@@ -107,14 +130,13 @@ async function clientsSection(ops: AdminOps, rules: OrgRules) {
         allowAi: c?.allowAi ?? false,
         attachmentsAi: false,
         openStates: c?.openStates ?? [],
-        needsBreakdown: c?.needsBreakdown ?? [],
-        notCounted: c?.notCounted ?? [],
+        noBreakdown: c?.noBreakdown ?? [],
+        background: c?.background ?? [],
         houseStyle: c?.houseStyle ?? null,
+        process: processOf(k),
         leads: lv.clientLeads(k).map((l) => ({ personId: l.personId, name: nameOf(l.personId), primary: l.primary, why: l.why.map((w) => LEAD_WHY_NAMES[w]) })),
       };
     }),
-    // WT-1 adds the DevOps process model (types, levels, state categories); until it merges, this says so.
-    process: { available: false, note: "The DevOps process view (types, levels, state categories) shows here once work item types are in FocusTime." },
   };
 }
 
@@ -157,13 +179,13 @@ async function peopleSection(ops: AdminOps, meId: string) {
 
 const specList = (specs: Record<string, { kind: keyof typeof KIND_NAMES; label: string; area: AdminArea }>) => Object.entries(specs).map(([key, s]) => ({ key, label: s.label, kind: s.kind, kindName: KIND_NAMES[s.kind], area: s.area }));
 
-async function section(ops: AdminOps, s: AdminSection, meId: string, input: Record<string, unknown>): Promise<unknown> {
+async function section(ops: AdminOps, s: AdminSection, meId: string, input: Record<string, unknown>, process?: AdminContext["process"]): Promise<unknown> {
   const rules = await ops.org.rules();
   switch (s) {
     case "clients":
-      return clientsSection(ops, rules);
+      return clientsSection(ops, rules, process, input.refresh === true);
     case "ai": {
-      const [setup, spent, clients] = await Promise.all([ops.aiSetUp(), ops.appSpentMicros(), clientsSection(ops, rules)]);
+      const [setup, spent, clients] = await Promise.all([ops.aiSetUp(), ops.appSpentMicros(), clientsSection(ops, rules, undefined, false)]);
       return { ...rules.ai, ...setup, appSpentMicros: spent, zero: { person: rules.ai.personCapUsd === 0, app: rules.ai.appCapUsd === 0 }, clients: clients.clients.map((c) => ({ key: c.key, allowAi: c.allowAi, attachmentsAi: c.attachmentsAi })), keys: specList({ "ai.on": ORG_SPECS["ai.on"], "ai.model": ORG_SPECS["ai.model"], "ai.person_cap_usd": ORG_SPECS["ai.person_cap_usd"], "ai.app_cap_usd": ORG_SPECS["ai.app_cap_usd"] }) };
     }
     case "conversations":
@@ -212,10 +234,10 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
 
   switch (action) {
     case "admin.load": {
-      const extra = only(i, ["section", "area", "text"]);
+      const extra = only(i, ["section", "area", "text", "refresh"]);
       if (extra) return bad(`unknown input field ${extra}`);
       if (typeof i.section !== "string" || !(ADMIN_SECTIONS as readonly string[]).includes(i.section)) return bad(`section must be one of ${ADMIN_SECTIONS.join(", ")}`);
-      return { ok: true, data: await section(ops, i.section as AdminSection, me.id, i) };
+      return { ok: true, data: await section(ops, i.section as AdminSection, me.id, i, ctx.process) };
     }
     case "admin.audit": {
       const extra = only(i, ["area", "text"]);

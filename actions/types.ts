@@ -4,7 +4,7 @@ import type { AppConfig, ClientSetting, FieldError, UiConfig } from "../config/s
 import type { FocusSettings } from "../plan/focussound.ts";
 import type { TodayTarget } from "../week/dates.ts";
 import type { PlanWeek } from "../plan/types.ts";
-import type { ClientPortfolio, ClientWork, IsoDate, RiskThresholds, SourceResult, StandingBlock, Week } from "../week/types.ts";
+import type { ClientPortfolio, ClientWork, IsoDate, RiskThresholds, SourceResult, StandingBlock, TypeLook, Week } from "../week/types.ts";
 import type { Capture, DraftStory, WeekFeature } from "../plan/types.ts";
 import type { TimeModel } from "../week/hours.ts";
 
@@ -466,3 +466,7 @@ export type PresencePeopleData = { available: boolean; reason: TeamsAccess | nul
 export type PhotoAccess = "consent" | "signed_out" | "unavailable";
 /** Step 16.4: photos as data URLs (null: initials) for me and the Cooptimizers asked for, by email. */
 export type PhotosData = { available: boolean; reason: PhotoAccess | null; me: string | null; people: { email: string; photo: string | null }[] };
+
+/** ADM-1, WT-1: one type of a client's process for Admin › Clients: its look, level, the two Rules, its history in words. */
+export type ProcessTypeRow = TypeLook & { breakdownSource: "default" | "override" | "level"; history: string | null; bug: boolean };
+export type ClientProcess = { ok: true; process: string | null; project: string; bugs: string | null; types: ProcessTypeRow[] } | { ok: false; message: string };

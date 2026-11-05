@@ -114,6 +114,12 @@ describe.skipIf(!CHROMIUM)("Admin", () => {
       await adatum.getByLabel("Adatum: states treated as open").fill("Resolved");
       await adatum.getByLabel("Adatum: states treated as open").press("Enter");
       await expect.poll(async () => (await team.org.rules()).clients.Adatum?.openStates).toEqual(["Resolved"]);
+      // WT-1's process, one row per type: Feature no longer needs breakdown, Bug is background (both Rules).
+      await adatum.getByRole("switch", { name: "Adatum: Feature needs breakdown" }).uncheck();
+      await expect.poll(async () => (await team.org.rules()).clients.Adatum?.noBreakdown).toEqual(["Feature"]);
+      await adatum.getByRole("switch", { name: "Adatum: Bug is background" }).check();
+      await expect.poll(async () => (await team.org.rules()).clients.Adatum?.background).toEqual(["Bug"]);
+      await adatum.getByRole("row", { name: /Bug/ }).getByText("No hours").waitFor();
       await shotBoth(page, "admin-clients", adatum);
 
       // Admin › AI: on for FocusTime, allowed for Adatum.

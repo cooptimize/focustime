@@ -12,6 +12,7 @@ import { createAdminOps } from "../server/admin-ops.ts";
 import { createAdminCheck } from "./admin.ts";
 import { ADMIN_ACTIONS, ADMIN_SECTIONS, adminAction, type AdminContext } from "./admin-actions.ts";
 import { createOrgRuntime } from "./org.ts";
+import { buildProcessModel, type ProcessOverrides } from "../plan/process.ts";
 
 const NOW = "2026-11-04T15:00:00Z";
 const ADMIN = "00000000-0000-4000-8000-0000000000a1";
@@ -152,5 +153,40 @@ describe("admin actions", () => {
     // What People does show: names and yes or no for sign-ins.
     expect(all).toContain("Ben Person");
     expect(all).toContain('"microsoft":true');
+  });
+
+  it("Admin › Clients shows each client's process with its Rules applied, and Refresh reads again", async () => {
+    const s = await setup();
+    await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "no_breakdown", value: ["Feature"] });
+    await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "background", value: ["Bug"] });
+    const lvl = (type: string, rank: number, types: string[]) => ({ type, rank, workItemTypes: types.map((name) => ({ name })), defaultWorkItemType: { name: types[0] } });
+    const states = [{ name: "New", category: "Proposed", color: "b2b2b2" }];
+    const model = (o: ProcessOverrides) =>
+      buildProcessModel(
+        {
+          org: "fabrikam", project: "Fabrikam Data", process: "Agile", fetchedAt: NOW, teamSettings: { bugsBehavior: "asTasks" }, processConfig: { bugWorkItems: { workItemTypes: [{ name: "Bug" }] } },
+          teamBacklogs: { value: [lvl("portfolio", 4, ["Epic"]), lvl("portfolio", 3, ["Feature"]), lvl("requirement", 2, ["User Story"]), lvl("task", 1, ["Task", "Bug"])] },
+          types: ["Epic", "Feature", "User Story", "Task", "Bug"].map((name) => ({ name, icon: { id: "icon_book" }, color: "009CCC", states })),
+        },
+        o,
+      );
+    const asked: [string[], boolean][] = [];
+    const rules = async () => (await s.org.rules()).clients.fabrikam!;
+    const who = { ...s.admin, process: async (keys: string[], refresh: boolean) => (asked.push([keys, refresh]), Promise.all(keys.map(async (clientKey) => (clientKey === "fabrikam" ? { clientKey, ok: true as const, model: model({ noBreakdown: (await rules()).noBreakdown, background: (await rules()).background }) } : { clientKey, ok: false as const, message: "No Account Worker" })))) };
+    const r = (await s.run(who, "admin.load", { section: "clients", refresh: true })) as { ok: true; data: { clients: { key: string; noBreakdown: string[]; process: { ok: boolean; types?: { name: string; level: string; needsBreakdown: boolean; countsHours: boolean; breakdownSource: string }[]; bugs?: string } }[] } };
+    expect(asked.at(-1)![1]).toBe(true);
+    const fab = r.data.clients.find((c) => c.key === "fabrikam")!;
+    expect(fab.noBreakdown).toEqual(["Feature"]);
+    expect(fab.process).toMatchObject({ ok: true, bugs: "Bugs are planned with tasks" });
+    expect(fab.process.types!.map((t) => [t.name, t.level, t.needsBreakdown, t.countsHours, t.breakdownSource])).toEqual([
+      ["Epic", "top", true, true, "default"],
+      ["Feature", "parent", false, true, "override"],
+      ["User Story", "child", false, true, "level"],
+      ["Bug", "task", false, false, "level"],
+      ["Task", "task", false, true, "level"],
+    ]);
+    // Without a process reader (or for a client DevOps can't read), it says so and the Rules still show.
+    const plain = (await s.run(s.admin, "admin.load", { section: "clients" })) as typeof r;
+    expect(plain.data.clients.find((c) => c.key === "fabrikam")!.process).toEqual({ ok: false, message: "DevOps can't be read from here" });
   });
 });

@@ -1123,6 +1123,11 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
             const me = await storedIdentity(ctx.plan);
             return me ? { id: me.oid, name: me.name || me.username || "An admin" } : null;
           },
+          // WT-1: each client's process model, read with the company read PAT through this admin's DevOps source.
+          process: async (keys, refresh) => {
+            const cfg = await configured(ctx);
+            return cfg ? ctx.makeDevOps(cfg.dataverse, userZone(cfg)).processModels(keys, { refresh }) : null;
+          },
         },
         action as AdminAction,
         req.input,

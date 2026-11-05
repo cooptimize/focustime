@@ -4,6 +4,7 @@
 import { parseConfig } from "../config/schema.ts";
 import type { ActionContext } from "../actions/dispatch.ts";
 import { dispatch } from "../actions/dispatch.ts";
+import type { ProcessOverrides } from "../plan/process.ts";
 import { createDemoSources } from "../sources/demo/sources.ts";
 import { DEMO_CLIENTS, DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
 import { createPlanStore, openPlanDb, type PlanStore } from "../store/plan-store.ts";
@@ -34,7 +35,9 @@ export type DemoControl = { on: boolean; set: (on: boolean) => Promise<void> };
 
 export function createDemoContext(opts: { now: () => string; demo: DemoControl; /** A2 tests: a store on a shared database. */ plan?: PlanStore; /** F1 checks: the pretend feature's state. */ feedbackParent?: DemoFeedbackParent }): ActionContext {
   let text = followTeamColors(DEMO_CONFIG);
-  const sources = createDemoSources(opts.now);
+  // The demo team's process Rules (Admin › Clients in the demo) apply to the demo's process models.
+  let rulesOf: (k: string) => Promise<ProcessOverrides> = async () => ({});
+  const sources = createDemoSources(opts.now, (k) => rulesOf(k));
   const plan = opts.plan ?? createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(opts.now()).toZonedDateTimeISO(DEMO_TZ) });
   // Shared polling: the demo's own client chats and Requests, in memory beside its plan (never the real shared store).
   // The demo reads no messages, so Refresh has nothing to do.
@@ -45,6 +48,10 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   // demo's person is an admin inside their own demo and nowhere else.
   const adminStore = createAdminStore(shared, instant);
   const org = createOrgRuntime({ store: adminStore, bootstrap: { model: "stub", appCapUsd: 100, inviteDomains: ["example.com"], feedback: null }, now: () => Date.parse(opts.now()) });
+  rulesOf = async (k) => {
+    const c = (await org.rules()).clients[k];
+    return c ? { noBreakdown: c.noBreakdown, background: c.background } : {};
+  };
   const dir = demoDirectory();
   // The demo's clients start on team colors (the ones the demo always had), so a person's own color shows as theirs.
   const ready = (async () => {
