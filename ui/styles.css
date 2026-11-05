@@ -1934,6 +1934,9 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .devops-write .set-hint, .devops-write .muted { font-size: var(--fs-2); }
 .write-dialog.devops { max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; }
+/* DM-1: the tall dialogs (up to the window less 48 px) start near the top; at 12vh down, a long preview ran past the
+   window's bottom with its Confirm out of reach. */
+.cap-backdrop:has(> .write-dialog.devops, > .write-dialog.batch, > .myday) { padding-top: 24px; }
 .dw-rows { display: grid; gap: 10px; }
 .dw-row { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; display: grid; gap: 6px; }
 .dw-row.done { border-color: color-mix(in oklab, var(--ok) 50%, var(--border)); }
