@@ -21,5 +21,5 @@
     "checkJs": true,
     "noEmit": true
   },
-  "include": ["server", "test", "host", "sources", "config", "actions", "ai", "fixtures", "log", "week", "plan", "store", "links", "scripts", "e2e", "vite.config.ts"]
+  "include": ["server", "test", "host", "sources", "config", "actions", "ai", "assistant", "fixtures", "log", "week", "plan", "store", "links", "scripts", "e2e", "vite.config.ts"]
 }

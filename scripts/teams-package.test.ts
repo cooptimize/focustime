@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { TEAMS_APP_IDS, teamsManifest, teamsPackage } from "./teams-package.ts";
+import { LEGAL_PATH, TEAMS_APP_IDS, teamsManifest, teamsPackage } from "./teams-package.ts";
 
 const BOT = "0a1b2c3d-1111-2222-3333-444455556666";
 const URL_ = "https://ft-dev-app.example.centralus.azurecontainerapps.io";
@@ -43,4 +43,15 @@ it("zips the manifest and both icons so unzip reads them back", () => {
   execFileSync("unzip", ["-q", "-o", file, "-d", dir]);
   expect(JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")).bots[0].botId).toBe(BOT);
   expect(readFileSync(join(dir, "color.png")).equals(readFileSync(join(root, "assets/teams/color.png")))).toBe(true);
+});
+
+it("links privacy and terms to the app's own page, which has both sections and nothing the app's CSP would block (TB-1b)", () => {
+  const m = teamsManifest({ env: "prod", botId: BOT, url: URL_, version: "1.0.0" });
+  expect(m.developer.privacyUrl).toBe(`${URL_}${LEGAL_PATH}#privacy`);
+  expect(m.developer.termsOfUseUrl).toBe(`${URL_}${LEGAL_PATH}#terms`);
+  const html = readFileSync(join(import.meta.dirname, "..", "public", LEGAL_PATH.slice(1)), "utf8");
+  expect(html).toContain('id="privacy"');
+  expect(html).toContain('id="terms"');
+  expect(html).not.toMatch(/<script|style=|<style/i);
+  expect(html).not.toMatch(/—/);
 });

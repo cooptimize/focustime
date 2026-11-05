@@ -54,6 +54,8 @@ import type { DraftStory, Pick } from "../plan/types.ts";
 import { PlanWeek } from "./PlanWeek.tsx";
 import { weekMusts } from "./WeekMusts.tsx";
 import { CaptureDialog, captureClients } from "./Capture.tsx";
+import { AssistantMark, AssistantPanel, COMMANDS_HREF } from "./Assistant.tsx";
+import type { AssistantContext } from "../assistant/types.ts";
 import { CreateDraftCtx, CreateDraftDialog } from "./CreateDraft.tsx";
 import { DraftEditor, DraftEditorCtx } from "./DraftEditor.tsx";
 import type { BoxKind } from "../plan/capture.ts";
@@ -279,6 +281,8 @@ export function App() {
   const [planWeekVersion, setPlanWeekVersion] = useState(0);
   /** Quick capture (step 9): the box over any view, and the Capture view (inbox and notes) in the week's place. */
   const [captureOpen, setCaptureOpen] = useState(false);
+  // AS-1: the assistant panel (Ctrl+J, /, the top bar's Ask), with any text it opens with.
+  const [assistantAt, setAssistantAt] = useState<{ text: string } | null>(null);
   // Step 15.3: the kind chip to start on (Follow-up from "Add a follow-up"), or the rules' suggestion.
   const [captureKind, setCaptureKind] = useState<BoxKind | null>(null);
   // Step 15.3: the draft open in the draft editor.
@@ -1058,6 +1062,29 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [cmdOpen, openCommands]);
 
+  // AS-1: Ctrl+J (or Cmd+J) toggles the assistant from anywhere but behind a dialog; / opens it when no text field has
+  // focus and nothing else took it (in Plan today and Week › Plan, / is their Search: those handlers run first).
+  useEffect(() => {
+    const onChord = (e: KeyboardEvent) => {
+      if (!((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "j" || e.key === "J"))) return;
+      if (topOverlay(document) === "modal") return;
+      e.preventDefault();
+      setAssistantAt((a) => (a ? null : { text: "" }));
+    };
+    const onSlash = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target as HTMLElement | null)) return;
+      if (topOverlay(document) === "modal" || assistantAt || isPlanning(nav)) return;
+      e.preventDefault();
+      setAssistantAt({ text: "" });
+    };
+    window.addEventListener("keydown", onChord, true);
+    window.addEventListener("keydown", onSlash);
+    return () => {
+      window.removeEventListener("keydown", onChord, true);
+      window.removeEventListener("keydown", onSlash);
+    };
+  }, [assistantAt, nav]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (cmdOpen || keysOpen) return;
@@ -1244,6 +1271,7 @@ export function App() {
       openPlanWeek: (w) => (w ? openPlanWeek(w) : setView("planweek")),
       planWeekOpen: planWeekAt,
       openCapture: (kind) => (setCaptureKind(kind ?? null), setCaptureOpen(true)),
+      openAssistant: (text) => setAssistantAt({ text: text ?? "" }),
       openCaptures: () => setView("capture"),
       openRitual: togglePlanning,
       commitWeek: () => {
@@ -1325,6 +1353,18 @@ export function App() {
         ),
     };
   }, [data, target, sel, openGuide, pd, pdHalf, work, runPlan, openPlanDay, commit, closePlanDay, changeWeek, goToday, auto, connect, disconnect, setView, moveRegion, cmdOpen, theme, setTheme, setViewRange, runTime, runTimer, closeOutAt, reloadQuiet, planWeekAt, openPlanWeek, togglePlanning, connectWrite, addWork, goNav, asksOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // AS-1: what the assistant hears about the screen: its address, the client and item in focus, the selected block and
+  // today. Nothing else on screen is sent; the server reads what a question needs.
+  const assistantContext = useMemo<AssistantContext>(() => {
+    const c: AssistantContext = { screen: hashOf(loc) };
+    const clientKey = env?.selection.clientKey;
+    if (clientKey) c.clientKey = clientKey;
+    if (loc.nav.tab === "ahead" && loc.nav.item) c.itemId = loc.nav.item;
+    if (env) c.block = { date: env.selection.date, half: env.selection.half === "PM" ? "PM" : "AM" };
+    if (data?.planDay.date) c.date = data.planDay.date;
+    return c;
+  }, [loc, env, data?.planDay.date]);
   openSettingsRef.current = env?.openSettings ?? null;
 
   // Step 17.5: the opening (loader, unroll, into the top bar's mark), then the welcome moment on the first launch ever.
@@ -1506,6 +1546,9 @@ export function App() {
           <button type="button" className="top-btn phone-capture" onClick={() => setCaptureOpen(true)} aria-label="Capture" title="Quick capture: one line, saved at once">
             +
           </button>
+          <button type="button" className="top-btn phone-assistant" onClick={() => setAssistantAt((a) => (a ? null : { text: "" }))} aria-label="Assistant" aria-expanded={!!assistantAt} title="Ask the assistant">
+            <AssistantMark />
+          </button>
           <button
             type="button"
             className="top-btn top-more"
@@ -1546,6 +1589,9 @@ export function App() {
           )}
           <button type="button" className="top-btn capture-btn" onClick={() => setCaptureOpen(true)} title="Quick capture: one line, saved at once (N)">
             Capture <kbd>N</kbd>
+          </button>
+          <button type="button" className="top-btn assistant-btn" onClick={() => setAssistantAt((a) => (a ? null : { text: "" }))} aria-expanded={!!assistantAt} title="Ask the assistant: look things up, or ask for a change you confirm (Ctrl J or /)">
+            Ask <kbd>Ctrl J</kbd>
           </button>
           <button
             type="button"
@@ -1917,6 +1963,20 @@ export function App() {
             ],
           }}
           onClose={() => setPhoneMoreAt(null)}
+        />
+      )}
+      {assistantAt && (
+        <AssistantPanel
+          phone={phone}
+          skewMs={skew}
+          initialText={assistantAt.text}
+          context={assistantContext}
+          onClose={() => setAssistantAt(null)}
+          onOpen={(href) => {
+            if (href === COMMANDS_HREF) return openCommands();
+            const to = parseHash(href);
+            if (to) go(to);
+          }}
         />
       )}
       {cmdOpen && <CommandMenu commands={commandList(env)} onClose={() => setCmdOpen(false)} />}

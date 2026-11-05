@@ -6,6 +6,8 @@ import type { ActionContext } from "../actions/dispatch.ts";
 import { dispatch } from "../actions/dispatch.ts";
 import type { ProcessOverrides } from "../plan/process.ts";
 import { createDemoSources } from "../sources/demo/sources.ts";
+import { demoAssistantProvider } from "../sources/demo/assistant.ts";
+import { DEFAULT_AI } from "./appconfig.ts";
 import { DEMO_CLIENTS, DEMO_CONFIG, DEMO_TZ } from "../sources/demo/data.ts";
 import { createPlanStore, openPlanDb, type PlanStore } from "../store/plan-store.ts";
 import { sqliteConn } from "../store/sql/sqlite.ts";
@@ -138,6 +140,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   };
   // Step 15.4: a fictional signed-in person and VM, simulated (no Azure calls).
   const demoAzure = createDemoAzure();
+  const assistant = demoAssistantProvider();
   // F1: Send feedback against a pretend backlog in memory (nothing leaves FocusTime).
   const feedback = createFeedbackService({ devops: createDemoFeedbackDevOps({ parent: opts.feedbackParent ?? "ok" }), mode: "live", env: "demo", local: false, demo: true, now: () => Date.parse(opts.now()), log: () => {}, sleep: async () => {} });
   return {
@@ -165,6 +168,9 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     org,
     adminOps,
     demo: opts.demo,
+    // AS-1: the demo's assistant (a scripted provider, nothing leaves FocusTime), on for the demo's clients; the
+    // demo's other AI features stay off.
+    assistantAi: { runtime: { app: { ...DEFAULT_AI, provider: "stub", model: "demo" }, provider: async () => assistant, appSpend: { get: async () => 0, add: async () => {} } }, rules: { on: true, allowedClients: DEMO_CLIENTS.map((c) => c.key), personCapUsd: 10 } },
     account: () => demoAzure.account,
     azure: demoAzure.azure,
     feedback: { service: feedback, sender: async () => ({ name: DEMO_PERSON.name, email: DEMO_PERSON.email }) },

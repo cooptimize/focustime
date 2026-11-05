@@ -1,7 +1,9 @@
 // TB-1: the bot's two user tables (store/migrations/20261109T1000_teams_bot.ts), scoped to one person by
 // store/scope.ts like every plan row. The chat row is where the person's 1:1 chat with the bot is (kept for later
 // steps; TB-1 sends nothing from it on its own). The card rows make Confirm safe to tap twice: `claim` moves a card
-// from open to running in one UPDATE, so only one tap runs it. Nothing here logs, and no message text is kept.
+// from open to running in one UPDATE, so only one tap runs it. The seen rows (TB-1b) make a message Teams delivers
+// twice, to one replica or two, answered once. Nothing here logs, and no message text is kept.
+import { createHash } from "node:crypto";
 import { scopedDb } from "./scope.ts";
 import type { Conn, Row } from "./sql/conn.ts";
 
@@ -12,6 +14,8 @@ export const SETTLED: ReadonlySet<CardState> = new Set(["done", "failed", "expir
 export type BotCard = { proposalId: string; activityId: string | null; title: string; state: CardState; card: unknown | null; expiresAt: string; updatedAt: string };
 
 const MAX_ID = 100;
+/** The bot's user tables: Teams addresses, card state and handled activity ids; no content. */
+export const BOT_TABLES = ["teams_bot_chats", "teams_bot_cards", "teams_bot_seen"] as const;
 const short = (v: string, n: number) => {
   if (!v || v.length > n) throw new Error("Not an id");
   return v;
@@ -78,6 +82,25 @@ export function createTeamsBotStore(o: { db: Conn; userId: string; now: () => Te
     async settle(proposalId: string, state: CardState, card: unknown): Promise<void> {
       await db.tx(async () => {
         await db.run("UPDATE teams_bot_cards SET state = ?, card_json = ?, updated_at = ? WHERE proposal_id = ?", state, JSON.stringify(card), stamp(), short(proposalId, MAX_ID));
+      });
+    },
+    /**
+     * TB-1b: true the first time this Teams activity id is recorded for the person (a unique insert, so of two
+     * replicas handling one delivery only one gets true). Only a hash of the id is kept, for a day.
+     */
+    async firstSeen(activityId: string): Promise<boolean> {
+      const at = o.now();
+      const hash = createHash("sha256").update(activityId).digest("hex");
+      return db.tx(async () => {
+        const r = await db.run("INSERT INTO teams_bot_seen (activity_hash, seen_at) VALUES (?, ?) ON CONFLICT (activity_hash) DO NOTHING", hash, at.toString());
+        await db.run("DELETE FROM teams_bot_seen WHERE seen_at < ?", at.subtract({ hours: 24 }).toString());
+        return r.changes === 1;
+      });
+    },
+    /** TB-1b: everything the bot keeps for the person (Delete my data removes it at once). */
+    async forget(): Promise<void> {
+      await db.tx(async () => {
+        for (const t of BOT_TABLES) await db.run(`DELETE FROM ${t}`);
       });
     },
     /** Settled cards older than a week go (the card in Teams keeps showing its result). */

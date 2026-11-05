@@ -1,0 +1,36 @@
+/* TB-1b: the privacy and terms page (public/legal.html), the Teams app's privacy and terms links. A plain document:
+   no script, its own small sheet (the app's CSP allows no inline styles). */
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f8;
+  --fg: #1b2228;
+  --muted: #5b6670;
+  --rule: #dde1e5;
+  --accent: #2f7d4f;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1318;
+    --fg: #e8ecef;
+    --muted: #9aa6b0;
+    --rule: #26313a;
+    --accent: #8fd16a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
+}
+main { max-width: 680px; margin: 0 auto; padding: 40px 16px 64px; }
+.lockup { margin: 0 0 24px; font-size: 15px; }
+.lockup span { color: var(--muted); }
+h1 { font-size: 26px; line-height: 1.25; margin: 0 0 8px; font-weight: 600; }
+h2 { font-size: 19px; margin: 40px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); font-weight: 600; }
+h3 { font-size: 15px; margin: 20px 0 4px; font-weight: 600; }
+p { margin: 0 0 12px; }
+.lede { color: var(--muted); }
+nav { margin: 16px 0 0; color: var(--muted); }
+a { color: var(--accent); }

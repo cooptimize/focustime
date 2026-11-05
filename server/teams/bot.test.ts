@@ -127,6 +127,28 @@ await forEachDriver("the Teams bot (TB-1)", (d) => {
     expect((await t.store.chat())?.removedAt).not.toBeNull();
   });
 
+  it("answers a message once when another replica already took it, and forgets the ids after a day (TB-1b)", async () => {
+    const t = await setup(d);
+    const a = t.msg("hello from Teams");
+    // Another replica handled this delivery first: its unique insert won.
+    expect(await t.store.firstSeen(a.id!)).toBe(true);
+    await t.core.activity(a);
+    await t.settle();
+    expect(t.calls.handle).toEqual([]);
+    expect(t.logs.some((l) => l.op === "activity" && l.kind === "duplicate")).toBe(true);
+    const b = t.msg("and this one");
+    await t.core.activity(b);
+    await t.settle();
+    expect(t.calls.handle).toEqual(["and this one"]);
+    expect(await t.store.firstSeen(b.id!)).toBe(false);
+    const rows = Number((await t.db.conn.get("SELECT COUNT(*) AS n FROM teams_bot_seen"))!.n);
+    expect(rows).toBe(2);
+    t.advance(25 * 60);
+    expect(await t.store.firstSeen("in-new")).toBe(true);
+    expect(Number((await t.db.conn.get("SELECT COUNT(*) AS n FROM teams_bot_seen"))!.n)).toBe(1);
+    expect(JSON.stringify(await t.db.conn.all("SELECT * FROM teams_bot_seen"))).not.toContain("in-new");
+  });
+
   it("answers one person's messages in the order they were sent, even when the first takes longer", async () => {
     const t = await setup(d, {
       assistant: { handle: async (i) => (t.calls.handle.push(i.text), await new Promise((r) => setTimeout(r, i.text === "slow one" ? 150 : 0)), { ...handled(), reply: `about ${i.text}` }) },
@@ -247,7 +269,9 @@ await forEachDriver("the Teams bot (TB-1)", (d) => {
     expect(await t.core.activity(a)).toBeNull();
     expect(Date.now() - started).toBeLessThan(200);
     expect(await t.core.activity(a)).toBeNull();
-    await wait(40);
+    // The turn runs after the 200 (the chat and seen writes, then typing, then On it after ackAfterMs): wait for it,
+    // up to 2 s on a loaded SQL Server, while the assistant still hasn't answered.
+    for (let i = 0; i < 200 && !t.texts().length; i++) await wait(10);
     expect(t.sent[0]!.a.type).toBe("typing");
     expect(t.texts()).toEqual([ON_IT]);
     gate.resolve(handled({ reply: "Moved your dentist block to 3:00." }));

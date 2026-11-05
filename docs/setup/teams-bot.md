@@ -49,7 +49,9 @@ node scripts/teams-package.ts --env dev --bot-id <botAppId> --url https://<dev f
 ```
 
 The package has the manifest (schema 1.30, the bot in the personal scope only, no tabs, files or sign-in), the
-192 px color icon and the 32 px outline. Each environment has its own fixed Teams app id, so a new upload replaces
+192 px color icon and the 32 px outline. Its privacy and terms links go to the app's own page,
+`https://<app>/legal.html#privacy` and `#terms` (`public/legal.html`, open without signing in); read it once before the
+prod upload, since it speaks for Cooptimize. Each environment has its own fixed Teams app id, so a new upload replaces
 the app rather than adding a second one.
 
 ## 4. Dev: testers only

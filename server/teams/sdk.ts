@@ -2,7 +2,9 @@
 // FocusTime's own HTTP server: `app.initialize()` registers the messaging route on our adapter; `app.start()` is
 // never called and no second port is opened. The SDK checks each incoming activity's token (Bot Framework's signed
 // JWT: issuer, audience = the bot's app id, signature, expiry, the serviceUrl claim) and answers 401 when it fails;
-// only then does the bot core (server/teams/bot.ts) see the activity, and the gate pins the tenant on top.
+// only then does the bot core (server/teams/bot.ts) see the activity, and the gate pins the tenant on top. Before the
+// SDK, FocusTime checks that the token's signing key endorses "msteams" (server/teams/endorsements.ts, TB-1b), which the
+// SDK doesn't.
 //
 // The SDK's logger is replaced by one that drops every argument it is given (activity bodies, tokens, headers): only a
 // fixed kind for its errors and warnings reaches FocusTime's log. Replies go through the SDK's connector client with
@@ -14,6 +16,7 @@ import type { ILogger } from "@microsoft/teams.common";
 import type { Logger } from "../../log/logger.ts";
 import { TEAMS_BOT_PATH } from "../guard.ts";
 import type { BotCore, OutActivity, Sender } from "./bot.ts";
+import { createEndorsementCheck, keysUriOf, type EndorsementCheck } from "./endorsements.ts";
 
 /** The bot's messaging endpoint on the app (the Azure Bot's endpoint is <public URL> + this). */
 export const BOT_PATH = TEAMS_BOT_PATH;
@@ -68,10 +71,14 @@ export type TeamsEndpointOptions = {
   core: (sender: Sender) => BotCore;
   /** Tests: Bot Framework's OpenID metadata and issuer at a local address. */
   cloud?: Partial<CloudEnvironment>;
+  /** Tests: the endorsement check (by default against the cloud's keys). */
+  endorsed?: EndorsementCheck;
 };
 
 export async function createTeamsEndpoint(o: TeamsEndpointOptions) {
   const adapter = new FocusTimeAdapter();
+  const cloud = o.cloud ? withOverrides(PUBLIC, o.cloud) : PUBLIC;
+  const endorsed = o.endorsed ?? createEndorsementCheck({ keysUri: keysUriOf(cloud.openIdMetadataUrl), issuer: cloud.tokenIssuer });
   const app = new App({
     clientId: o.appId,
     tenantId: o.tenantId,
@@ -83,7 +90,7 @@ export async function createTeamsEndpoint(o: TeamsEndpointOptions) {
     logger: quietLogger(o.log),
     httpServerAdapter: adapter,
     messagingEndpoint: BOT_PATH,
-    cloud: o.cloud ? withOverrides(PUBLIC, o.cloud) : PUBLIC,
+    cloud,
   });
   const to = (serviceUrl: string, conversationId: string) => app.api.clone({ serviceUrl }).conversations.activities(conversationId);
   const sender: Sender = {
@@ -124,6 +131,12 @@ export async function createTeamsEndpoint(o: TeamsEndpointOptions) {
     }
     const headers: Record<string, string | string[]> = {};
     for (const [k, v] of Object.entries(req.headers)) if (v !== undefined) headers[k.toLowerCase()] = v;
+    const auth = typeof headers.authorization === "string" ? headers.authorization : undefined;
+    if (!(await endorsed(auth, (body as { channelId?: unknown }).channelId))) {
+      o.log({ source: "auth", op: "teams_token", kind: "not_endorsed", status: 401 });
+      res.writeHead(401, { "cache-control": "no-store" });
+      return void res.end();
+    }
     const r = await handler({ body, headers });
     if (r.status === 401) o.log({ source: "auth", op: "teams_token", kind: "rejected", status: 401 });
     res.writeHead(r.status, { "content-type": "application/json", "cache-control": "no-store" });

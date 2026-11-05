@@ -703,6 +703,21 @@ az containerapp logs show -g FocusTime-dev -n ft-dev-app --tail 200 | grep teams
 Dev scales to zero and takes about 30 seconds to wake (measured Nov 5); the Bot Service waits 10 to 15. The first
 message after dev sleeps may be late or lost: send it again. Prod runs one replica and doesn't sleep.
 
+### Replicas and the bot (TB-1b)
+
+Prod's max replicas is 1 (`maxReplicas: 1` in `infra/modules/app.bicep`; live on Nov 5: min 1, max 1, Single revision
+mode); dev's is 1 too. A message Teams delivers twice is answered once on any number of replicas (`teams_bot_seen`, a
+unique insert, kept a day). The order of one person's replies is kept in memory, so it assumes one replica: during a
+deploy the new revision starts before the old one stops, and two messages sent in those seconds could be answered by
+both, possibly out of order. Raising max replicas would need that order moved to the store first.
+
+### Signing keys (TB-1b)
+
+Before the SDK's check, FocusTime fetches Bot Framework's keys (`https://login.botframework.com/v1/.well-known/keys`,
+kept a day) and refuses a token whose key doesn't list `msteams` in its endorsements, or that isn't Bot Framework's
+issuer: `auth teams_token not_endorsed` (401). Many of these at once while Teams messages fail means the keys couldn't be
+fetched (outbound to login.botframework.com) or Bot Framework changed them; one now and then is someone probing.
+
 ## Admins (ADM-1)
 
 ### Create the group (once, both environments share it)

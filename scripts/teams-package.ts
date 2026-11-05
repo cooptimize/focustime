@@ -13,6 +13,8 @@ import { crc32 } from "node:zlib";
 /** Each environment's Teams app id: fixed, so an upload replaces the app instead of adding another. */
 export const TEAMS_APP_IDS = { dev: "6f84bb2c-364d-4d76-8a62-153904d0551a", prod: "6e436eed-8f64-43ec-805a-6e68b7e70a5c" } as const;
 export type Env = keyof typeof TEAMS_APP_IDS;
+/** TB-1b: the privacy and terms page the app serves (public/legal.html), without signing in. */
+export const LEGAL_PATH = "/legal.html";
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const VERSION = /^\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 
@@ -29,7 +31,7 @@ export function teamsManifest(o: { env: Env; botId: string; url: string; version
     manifestVersion: "1.30",
     version: o.version,
     id: TEAMS_APP_IDS[o.env],
-    developer: { name: "Cooptimize", websiteUrl: origin, privacyUrl: `${origin}/#/settings/about`, termsOfUseUrl: `${origin}/#/settings/about` },
+    developer: { name: "Cooptimize", websiteUrl: origin, privacyUrl: `${origin}${LEGAL_PATH}#privacy`, termsOfUseUrl: `${origin}${LEGAL_PATH}#terms` },
     name: { short: name, full: dev ? "FocusTime by Cooptimize (dev)" : "FocusTime by Cooptimize" },
     description: {
       short: "Your week and your focus blocks, in a 1:1 chat.",
