@@ -1,7 +1,9 @@
-// Today (step 10, U2): the default tab. One page in three states, never three pages:
-//   Now: an attention line only when something needs it, one card per block with the day's meetings and picks in time
-//        order (the next pick carries the one Start focus), and the week's features for today's clients at the bottom.
-//   Check-in: the same cards, changed: ended blocks dim, done picks are a count, each pick that won't fit gets one
+// Today (step 10, U2, NV-1): the default tab. One page, no modes. Now, from the top: what's next with the one Start
+//        focus, the urgent strip (mine only, hidden when empty), the attention line (sources, VM, secrets, follow-ups
+//        due), the card for the moment of the day (Plan today, Midday check-in or Close out), one card per block with
+//        the day's meetings and picks in time order, After your blocks, and the week's features at the bottom.
+//   The moment cards open two flows over the same page:
+//   Midday check-in: the same cards, changed: ended blocks dim, done picks are a count, each pick that won't fit gets one
 //        suggested move, one amber line per block, walk-on work and the musts line once at the bottom.
 //   Close out: a side panel over the dimmed cards (numbers, where you left off, DevOps updates owed, follow-ups due).
 // At 3840 wide a day timeline sits on the left (drop a pick onto a free gap to timebox it) and a detail panel under
@@ -10,7 +12,7 @@ import type { SetupStep } from "../plan/setup.ts";
 import { useTextScale } from "./textsize.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
 import type React from "react";
-import { DueBadge, Fading, FollowUpRow, copy } from "./FollowUps.tsx";
+import { DueBadge, Fading, FollowUpRow } from "./FollowUps.tsx";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import type { CloseOutState, FollowUpView, UrgentAsk, WeekLoadData } from "../actions/types.ts";
 import { blockStatus } from "../plan/blockstatus.ts";
@@ -53,6 +55,10 @@ import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
 import { DetailPanel, BreakDown, interactive } from "./DetailPanel.tsx";
 import type { PanelFocus } from "./WeekGrid.tsx";
 import { userZone } from "../week/zone.ts";
+import type { Moment } from "../plan/modes.ts";
+import { urgentLines } from "../plan/urgent.ts";
+import { TypeIcon } from "./TypeIcon.tsx";
+import { openCoopBrief } from "./menu.ts";
 
 export type TodayMode = "now" | "checkin" | "closeout";
 
@@ -95,8 +101,13 @@ type Props = {
   onCloseOutDate: (d: IsoDate) => void;
   /** Step 17.5: after Close out's Done commits (the reverse unroll and the musts moment). */
   onClosedOut: (st: CloseOutState) => void;
-  /** Step 16.2: Today's mode switch (Now · Plan · Check-in · Close out), at the right of the header. */
+  /** NV-1: Today has no mode switch; kept for callers that pass none. */
   switcher?: React.ReactNode;
+  /** NV-1: the card for the moment of the day (Plan today, Midday check-in or Close out), or none. */
+  moment?: Moment | null;
+  /** NV-1: the Midday check-in and Close out cards open their flows. */
+  onCheckIn?: () => void;
+  onCloseOut?: () => void;
   /** S1 (D451): "2 setup steps left", opening setup at the first step not done; null when nothing is left. */
   setupLine?: { text: string; step: SetupStep } | null;
   onSetup?: (step: SetupStep) => void;
@@ -252,7 +263,7 @@ export function Today(props: Props) {
   const headTitle =
     mode === "checkin" ? (
       <h1>
-        Check-in <span className="muted">{clock(now, tz)} · {checkLeft(check)}</span>
+        Midday check-in <span className="muted">{clock(now, tz)} · {checkLeft(check)}</span>
       </h1>
     ) : (
       <h1>
@@ -260,7 +271,7 @@ export function Today(props: Props) {
       </h1>
     );
 
-  const attention = mode === "now" ? <Attention noDue={phone} promises={spots.untimed} soon={promisesSoon(data.promises ?? [], blocks, now)} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} onAsks={props.onAsks ?? props.onInbox} onAskFocus={(u) => void startAsk(u)} /> : null;
+  const attention = mode === "now" ? <Attention noDue={phone}  onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} /> : null;
   const panelSlot = panel ? blocks.find((s) => s.half === panel.half) ?? null : null;
 
   return (
@@ -279,7 +290,7 @@ export function Today(props: Props) {
           done={
             mode === "checkin"
               ? {
-                  title: data.checkIn.done ? "Back to Now (Esc)" : "Check-in done: back to Now",
+                  title: data.checkIn.done ? "Back to Today (Esc)" : "Midday check-in done: back to Today",
                   onClick: async () => {
                     // Done marks today checked in (the ✓ on the switch), then back to Now.
                     if (!data.checkIn.done && !(await act("checkin.done", { date }))) return;
@@ -299,7 +310,22 @@ export function Today(props: Props) {
           onClose={() => setMoreAt(null)}
         />
       )}
+      {mode === "now" && (
+        <PhoneNow
+          data={data}
+          block={blocks.find((s) => !ended(s)) ?? null}
+          pick={nextPick}
+          nowMs={nowMs}
+          nameOf={nameOf}
+          onStart={props.onStart}
+          onTimer={props.onTimer}
+          onFocusScreen={props.onFocusScreen}
+          onDone={committed ? (p) => view.toggle(p.id, true) : null}
+        />
+      )}
+      {mode === "now" && <UrgentStrip urgent={data.requests?.urgent ?? []} promises={target.isToday ? (data.promises ?? []) : []} today={date} tz={tz} onAsks={props.onAsks ?? props.onInbox} onPromises={onPromise} onAskFocus={(u) => void startAsk(u)} />}
       {!wide && attention}
+      {mode === "now" && props.moment && <MomentCard m={props.moment} onPlan={() => props.onPlan(date)} onCheckIn={props.onCheckIn} onCloseOut={props.onCloseOut} />}
       {mode === "now" && props.setupLine && props.onSetup && (
         <p className="setup-line">
           <button type="button" className="link-btn" onClick={() => props.onSetup!(props.setupLine!.step)} title="Finish setting up FocusTime">
@@ -325,19 +351,6 @@ export function Today(props: Props) {
           <div className="today-main">
             {mode !== "checkin" && cal && <AllDayRow events={cal.allDay} />}
             {mode !== "checkin" && split && <OutsideLine label="Before your blocks" events={wide ? [] : split.before} tz={tz} promises={spots.before} onPromise={onPromise} />}
-            {mode === "now" && phone && (
-              <PhoneNow
-                data={data}
-                block={blocks.find((s) => !ended(s)) ?? null}
-                pick={nextPick}
-                nowMs={nowMs}
-                nameOf={nameOf}
-                onStart={props.onStart}
-                onTimer={props.onTimer}
-                onFocusScreen={props.onFocusScreen}
-                onDone={committed ? (p) => view.toggle(p.id, true) : null}
-              />
-            )}
             {mode === "now" && phone && blocks.length > 0 && <h2 className="section-label phone-agenda">Agenda</h2>}
             <section className={`today-blocks${blocks.length === 1 ? " one" : ""}`} style={{ "--blocks": blocks.length } as CSSProperties} aria-label="Today's blocks">
               {blocks.map((s) => (
@@ -354,7 +367,8 @@ export function Today(props: Props) {
                   now={now}
                   nowMs={nowMs}
                   nameOf={nameOf}
-                  nextPick={phone && mode === "now" ? null : (nextPick?.id ?? null)}
+                  nextPick={nextPick?.id ?? null}
+                  startOnCard={mode !== "now"}
                   phone={phone}
                   leftOff={leftOffOn.has(s.half)}
                   ended={ended(s)}
@@ -370,7 +384,7 @@ export function Today(props: Props) {
             </section>
             {mode !== "checkin" && split && <OutsideLine label="After your blocks" events={wide ? [] : split.after} tz={tz} promises={spots.after} onPromise={onPromise} />}
             {mode === "now" && phone && <PhoneFollowUps data={data} date={date} onChanged={(m) => (m && setNotice(m), props.onChanged())} />}
-            {mode === "now" && !phone && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} onNotice={setNotice} onError={setError} />}
+            {mode === "now" && !phone && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} />}
             {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} onAsks={props.onAsks ?? props.onInbox} />}
           </div>
         </div>
@@ -411,21 +425,14 @@ function checkLeft(check: readonly CheckSlot[]): string {
  * The attention line: only when something needs it. Follow-ups due collapse to one chip that opens into rows; a source
  * that failed shows with how old its data is and Retry; an expiring secret links to its setting. Nothing when healthy.
  */
-/** CV-1: timed promises for Now: overdue, or due before the half-day under way ends. */
-function promisesSoon(ps: readonly DayPromise[], blocks: readonly { start: string; end: string }[], now: string): DayPromise[] {
-  const t = Date.parse(now);
-  const under = blocks.find((b) => Date.parse(b.start) <= t && t < Date.parse(b.end));
-  return ps.filter((p) => p.dueAt && (Date.parse(p.dueAt) < t || (under && Date.parse(p.dueAt) <= Date.parse(under.end))));
-}
-
-function Attention({ noDue = false, promises = [], soon = [], onPromises, data, date, clockMs, onInbox, onRetry, onFix, onSettings, onAsks, onAskFocus }: { noDue?: boolean; promises?: DayPromise[]; soon?: DayPromise[]; onPromises?: () => void; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void; onAsks: () => void; onAskFocus: (u: UrgentAsk) => void }) {
+function Attention({ noDue = false, promises = [], soon = [], onPromises, data, date, clockMs, onInbox, onRetry, onFix, onSettings }: { noDue?: boolean; promises?: DayPromise[]; soon?: DayPromise[]; onPromises?: () => void; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void}) {
   const [open, setOpen] = useState(false);
   // P1: the phone lists due follow-ups at the foot of Today instead.
   const due: FollowUpView[] = noDue ? [] : urgentFollowUps(data.followUps, date);
   const down = causeLines(data.sources, data.devops);
   const vm = vmNeedsToday(useContext(VmCtx).status);
-  const urgent = data.requests?.urgent ?? [];
-  if (!due.length && !promises.length && !soon.length && !down.length && !data.expiring.length && !vm && !urgent.length) return null;
+  // NV-1: urgent requests and my promises due are in the urgent strip above this line.
+  if (!due.length && !promises.length && !soon.length && !down.length && !data.expiring.length && !vm) return null;
   const dueCount = due.length + promises.length;
   const names = [...new Set(due.map((l) => (l.hasWho ? l.who : l.clientName ?? "")).filter(Boolean))];
   return (
@@ -462,18 +469,6 @@ function Attention({ noDue = false, promises = [], soon = [], onPromises, data, 
             )}
           </span>
         ))}
-        {urgent.map((u) => (
-          <span key={`${u.chatId}|${u.messageId}`} className="att-chip urgent">
-            <button type="button" className="att-open" onClick={onAsks} title="Open it in Inbox › Requests">
-              <span className="att-tag">Walked in</span>
-              <span className="att-names">{u.clientName}</span>
-              <span>{u.title}</span>
-            </button>
-            <button type="button" className="mini" onClick={() => onAskFocus(u)} title="Add it to the block under way and start focus on it">
-              Start focus
-            </button>
-          </span>
-        ))}
         {vm && <VmToday />}
         {data.expiring.map((x) => (
           <button key={x.key} type="button" className={`att-chip expiry${x.days < 0 ? " expired" : ""}`} onClick={() => onSettings(x.section)}>
@@ -508,6 +503,73 @@ function Attention({ noDue = false, promises = [], soon = [], onPromises, data, 
   );
 }
 
+/**
+ * NV-1: the urgent strip, under what's next: what needs me now, mine only. Urgent requests from client chats (AI
+ * urgency "now") and my promises due today or overdue, one short line each, linking to Inbox › Conversations or
+ * My promises. An urgent request keeps its Start focus. Hidden when there is nothing.
+ */
+export function UrgentStrip({ urgent, promises, today, tz, onAsks, onPromises, onAskFocus }: { urgent: readonly UrgentAsk[]; promises: readonly DayPromise[]; today: IsoDate; tz: string; onAsks: () => void; onPromises: () => void; onAskFocus: (u: UrgentAsk) => void }) {
+  const lines = urgentLines(urgent, promises, today);
+  if (!lines.length) return null;
+  return (
+    <section className="urgent-strip" aria-label="Urgent">
+      <ul>
+        {lines.map((l) => (
+          <li key={l.key} className={`us-item us-${l.kind}${l.kind === "promise" && l.overdue ? " overdue" : ""}`}>
+            <button type="button" className="us-line" onClick={l.kind === "conversation" ? onAsks : onPromises} title={l.kind === "conversation" ? "Open it in Inbox › Conversations" : "Open it in Inbox › My promises"}>
+              <span className="us-tag">{l.kind === "conversation" ? "Needs you now" : l.overdue ? "Promise overdue" : l.dueAt ? `Promise · ${clock(l.dueAt, tz)}` : "Promise due today"}</span>
+              <span className="us-who">{l.who}</span>
+              <span className="us-what">{l.what}</span>
+              <span className="us-go" aria-hidden="true">›</span>
+            </button>
+            {l.kind === "conversation" && (
+              <button type="button" className="mini" onClick={() => onAskFocus(l.ask)} title="Add it to the block under way and start focus on it">
+                Start focus
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+const MOMENTS = {
+  plan: { title: "Plan today", body: "Today isn't planned yet. Put this week's stories into today's blocks.", button: "Plan today" },
+  checkin: { title: "Midday check-in", body: "What still fits this afternoon, with one suggested move each.", button: "Check in" },
+  closeout: { title: "Close out", body: "What got done, where you left off, DevOps updates and follow-ups.", button: "Close out" },
+} as const;
+
+/** NV-1: the card for the moment of the day. Plan today opens Week's Board on today; the others open their flow here. Done is one small line, reopenable. */
+export function MomentCard({ m, onPlan, onCheckIn, onCloseOut }: { m: Moment; onPlan: () => void; onCheckIn?: (() => void) | undefined; onCloseOut?: (() => void) | undefined }) {
+  const open = m.kind === "plan" ? onPlan : m.kind === "checkin" ? onCheckIn : onCloseOut;
+  const t = MOMENTS[m.kind];
+  if (m.done)
+    return (
+      <p className="moment-done" role="status">
+        {m.kind === "checkin" ? "Midday check-in done" : "Closed out"} <span aria-hidden="true">✓</span>{" "}
+        {open && (
+          <button type="button" className="link-btn" onClick={open}>
+            Reopen
+          </button>
+        )}
+      </p>
+    );
+  return (
+    <section className={`moment-card moment-${m.kind}`} aria-label={t.title}>
+      <div className="mc-text">
+        <h2>{t.title}</h2>
+        <p>{t.body}</p>
+      </div>
+      {open && (
+        <button type="button" className="primary" onClick={open}>
+          {t.button}
+        </button>
+      )}
+    </section>
+  );
+}
+
 type BlockProps = {
   slot: Slot;
   mode: TodayMode;
@@ -520,6 +582,8 @@ type BlockProps = {
   nowMs: number;
   nameOf: (k: string) => string;
   nextPick: number | null;
+  /** NV-1: in Now, Start focus and the timer sit at the top; the card only highlights the next pick. */
+  startOnCard?: boolean;
   leftOff: boolean;
   ended: boolean;
   later: { half: Half; clientKey: string | null }[];
@@ -667,7 +731,7 @@ function BlockCard(b: BlockProps) {
           ) : r.pick.id === b.nextPick ? (
             row(r.pick, {
               next: true,
-              actions:
+              actions: !b.startOnCard ? undefined :
                 t && t.pickId === r.pick.id ? (
                   <span className="next-timer">
                     <button type="button" className="next-count" onClick={b.props.onFocusScreen} title="Back to the focus screen">
@@ -716,10 +780,9 @@ function BlockCard(b: BlockProps) {
  * "This week": one chip per feature for the clients with a block today. Stories planned out of the feature's open
  * stories, or "Needs stories" with Draft stories and Coop brief. Features never show above stories.
  */
-function ThisWeek({ data, blocks, picks: _today, nameOf, onNotice, onError }: { data: WeekLoadData; blocks: Slot[]; picks: Pick[]; nameOf: (k: string) => string; onNotice: (m: string) => void; onError: (m: string) => void }) {
+function ThisWeek({ data, blocks, picks: _today, nameOf }: { data: WeekLoadData; blocks: Slot[]; picks: Pick[]; nameOf: (k: string) => string }) {
   const work = useContext(DevOpsWork);
   const weekStart = mondayOf(data.planDay.date);
-  const area = useRef<HTMLTextAreaElement>(null);
   const seen = new Set<string>();
   const feats = blocks.flatMap((s) => (s.half === "EVE" ? [] : featuresOn(data.weekFeatures.filter((f) => f.weekStart === weekStart && f.level === "feature"), s.date, s.half as Half, s.focus[0]?.clientKey ?? null))).filter((f) => {
     const k = `${f.clientKey}:${f.itemId}`;
@@ -729,15 +792,6 @@ function ThisWeek({ data, blocks, picks: _today, nameOf, onNotice, onError }: { 
   });
   if (!feats.length) return null;
   const weekPicks = Object.values(data.plan ?? {}).flatMap((d) => d.picks).filter(live);
-  const brief = async (clientKey: string, itemId: number) => {
-    try {
-      const r = await call<{ markdown: string; descriptionRead: boolean }>("feature.brief", { weekStart, clientKey, itemId });
-      const ok = await copy(r.markdown, area.current);
-      onNotice(ok ? `Coop brief for #${itemId} copied` : "Copy didn't work. Open Plan the week to copy it");
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Could not build the brief");
-    }
-  };
   return (
     <section className="this-week" aria-label="This week">
       <span className="tw-label">This week</span>
@@ -750,6 +804,7 @@ function ThisWeek({ data, blocks, picks: _today, nameOf, onNotice, onError }: { 
           return (
             <li key={`${f.clientKey}:${f.itemId}`} className={`tw-chip${stories.length ? "" : " needs"}`} style={{ "--c": clientColor(f.clientKey, data.clients) } as CSSProperties} title={`${nameOf(f.clientKey)} · ${f.title}`}>
               <span className="swatch" aria-hidden="true" />
+              {item?.type && <TypeIcon clientKey={f.clientKey} type={item.type} decorative />}
               <WorkLink clientKey={f.clientKey} url={f.url} className="feat-link">
                 {f.title}
               </WorkLink>
@@ -761,7 +816,7 @@ function ThisWeek({ data, blocks, picks: _today, nameOf, onNotice, onError }: { 
                 <>
                   <span className="tw-needs">Needs stories</span>
                   {item && <BreakDown clientKey={f.clientKey} item={item} />}
-                  <button type="button" className="link-btn tw-brief" onClick={() => void brief(f.clientKey, f.itemId)}>
+                  <button type="button" className="link-btn tw-brief" onClick={() => openCoopBrief(f.clientKey, { id: f.itemId, title: f.title, ...(item?.type ? { type: item.type } : {}) }, weekStart)}>
                     Coop brief
                   </button>
                 </>
@@ -770,7 +825,6 @@ function ThisWeek({ data, blocks, picks: _today, nameOf, onNotice, onError }: { 
           );
         })}
       </ul>
-      <textarea ref={area} className="sr-only" aria-hidden="true" tabIndex={-1} readOnly />
     </section>
   );
 }
@@ -1035,7 +1089,7 @@ function CloseOutPanel({ date, st, data, nameOf, reload, onChanged, onError, onD
           <button type="button" className="mini quiet" onClick={() => onDate(prev)} aria-label="Previous day" title="Previous day">‹</button>
           <button type="button" className="mini quiet" onClick={() => onDate(next)} disabled={!st || next > st.today} aria-label="Next day" title="Next day">›</button>
         </span>
-        <button type="button" className="done-btn" disabled={!st} onClick={() => void done()} title={st?.closedOutAt ? "Back to Now (Esc)" : "Close out this day, then back to Now"}>
+        <button type="button" className="done-btn" disabled={!st} onClick={() => void done()} title={st?.closedOutAt ? "Back to Today (Esc)" : "Close out this day, then back to Today"}>
           Done
         </button>
       </div>
