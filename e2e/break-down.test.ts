@@ -21,7 +21,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CHROMIUM } from "./harness.ts";
-import { liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
+import { appReady, liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
 import { shotBoth, SHOTS } from "./shots.ts";
 import type { Page } from "playwright-core";
 
@@ -142,7 +142,7 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       const errors: string[] = [];
       page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
       await page.goto(app.url);
-      await page.locator(".topbar").waitFor();
+      await appReady(page);
       const added = await dispatch(ctx, { action: "weekplan.add", input: { weekStart: WEEK, clientKey: "Adatum", itemId: FEATURE, tier: "must" } });
       expect(added.ok, JSON.stringify(added)).toBe(true);
 
@@ -172,7 +172,7 @@ describe.skipIf(!CHROMIUM)("Break down", () => {
       await team.set("org", "ai.on", true);
       await team.set("client:Adatum", "allow_ai", true);
       await page.reload();
-      await page.locator(".topbar").waitFor();
+      await appReady(page);
       await openAdatum();
 
       // The old event name and PV-1's event ({ clientKey, itemId }) open the same panel.

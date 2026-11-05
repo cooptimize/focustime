@@ -9,7 +9,7 @@ import { stubProvider } from "../ai/stub.ts";
 import type { AiProvider } from "../ai/types.ts";
 import { anAiApp } from "../test/builders/index.ts";
 import { CHROMIUM, openSettings } from "./harness.ts";
-import { liveBrowser, liveContext, liveTeam, T, type LiveBrowser } from "./live.ts";
+import { appReady, liveBrowser, liveContext, liveTeam, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
 
 describe.skipIf(!CHROMIUM)("AI settings", () => {
@@ -42,7 +42,7 @@ describe.skipIf(!CHROMIUM)("AI settings", () => {
       const errors: string[] = [];
       page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
       await page.goto(app.url);
-      await page.locator(".topbar").waitFor();
+      await appReady(page);
 
       // Settings › AI: no switch of my own; AI for FocusTime is off, set by an admin; no key yet.
       await openSettings(page);
