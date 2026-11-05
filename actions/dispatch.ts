@@ -1198,6 +1198,10 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
             const cfg = await configured(ctx);
             return cfg ? ctx.makeDevOps(cfg.dataverse, userZone(cfg)).processModels(keys, { refresh }) : null;
           },
+          today: async () => {
+            const cfg = await configured(ctx);
+            return localToday(ctx.now(), cfg ? userZone(cfg) : "UTC");
+          },
         },
         action as AdminAction,
         req.input,

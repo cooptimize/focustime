@@ -12,6 +12,7 @@ import type { AdminCheck, AdminVia } from "./admin.ts";
 import type { OrgRuntime } from "./org.ts";
 import { breakdownText, looksOf } from "../plan/process.ts";
 import type { ProcessModelResult } from "../sources/devops/source.ts";
+import type { ConversationCounts } from "../store/conversation-store.ts";
 import type { ActionResponse, ClientProcess } from "./types.ts";
 
 export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit"] as const;
@@ -41,6 +42,8 @@ export type AdminStatus = {
   dataverse: { refreshedAt: string | null; ok: boolean; message: string | null };
   chats: ChatHealth[];
   lastPoll: string | null;
+  /** CV-1's counts: conversations by status, messages by role, commitments by state, AI calls per chat today. Never text or ids. */
+  conversations: ConversationCounts | null;
 };
 
 /** What the server gives the admin console (server/main.ts; the demo's in server/demo.ts, over the demo's store only). */
@@ -57,7 +60,8 @@ export type AdminOps = {
   aiSetUp(): Promise<{ provider: string; keyConfigured: boolean }>;
   /** The app's AI spend this month, in millionths of a dollar. */
   appSpentMicros(): Promise<number>;
-  status(): Promise<AdminStatus>;
+  /** `day`: the admin's today, for the per-chat AI calls. */
+  status(day: string): Promise<AdminStatus>;
   refreshPeople(): Promise<{ ok: boolean; message: string | null; people: number }>;
   /** Deletes a person's FocusTime data and personal secrets now, and ends their sessions. */
   removePerson(id: string): Promise<void>;
@@ -69,6 +73,8 @@ export type AdminContext = {
   me: () => Promise<Actor & { id: string } | null>;
   /** WT-1: the clients' DevOps process models (with their Rules applied); null when DevOps can't be read here. */
   process?: (clientKeys: string[], refresh: boolean) => Promise<ProcessModelResult[] | null>;
+  /** The admin's own today (their time zone), for Status's AI calls per chat today. */
+  today?: () => Promise<string>;
 };
 
 
@@ -179,7 +185,7 @@ async function peopleSection(ops: AdminOps, meId: string) {
 
 const specList = (specs: Record<string, { kind: keyof typeof KIND_NAMES; label: string; area: AdminArea }>) => Object.entries(specs).map(([key, s]) => ({ key, label: s.label, kind: s.kind, kindName: KIND_NAMES[s.kind], area: s.area }));
 
-async function section(ops: AdminOps, s: AdminSection, meId: string, input: Record<string, unknown>, process?: AdminContext["process"]): Promise<unknown> {
+async function section(ops: AdminOps, s: AdminSection, meId: string, input: Record<string, unknown>, process?: AdminContext["process"], today?: AdminContext["today"]): Promise<unknown> {
   const rules = await ops.org.rules();
   switch (s) {
     case "clients":
@@ -206,7 +212,7 @@ async function section(ops: AdminOps, s: AdminSection, meId: string, input: Reco
     case "people":
       return peopleSection(ops, meId);
     case "status":
-      return ops.status();
+      return ops.status(today ? await today() : new Date().toISOString().slice(0, 10));
     case "audit": {
       const area = typeof input.area === "string" && input.area ? input.area : null;
       const text = typeof input.text === "string" ? input.text.slice(0, 100) : null;
@@ -237,7 +243,7 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       const extra = only(i, ["section", "area", "text", "refresh"]);
       if (extra) return bad(`unknown input field ${extra}`);
       if (typeof i.section !== "string" || !(ADMIN_SECTIONS as readonly string[]).includes(i.section)) return bad(`section must be one of ${ADMIN_SECTIONS.join(", ")}`);
-      return { ok: true, data: await section(ops, i.section as AdminSection, me.id, i, ctx.process) };
+      return { ok: true, data: await section(ops, i.section as AdminSection, me.id, i, ctx.process, ctx.today) };
     }
     case "admin.audit": {
       const extra = only(i, ["area", "text"]);

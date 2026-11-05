@@ -25,7 +25,7 @@ import type { TeamsView } from "../store/teams-store.ts";
 import { localToday } from "../week/dates.ts";
 import type { WorkItem } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
-import { batchOf, refreshStatus, runPipeline } from "./conversations-pipeline.ts";
+import { batchOf, CHAT_DAILY_AI_CALLS, refreshStatus, runPipeline } from "./conversations-pipeline.ts";
 import { backfillPromises } from "./conversation-backfill.ts";
 import { visibleChats, type RequestContext } from "./request-actions.ts";
 import { mapSeq } from "./seq.ts";
@@ -476,7 +476,7 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
           if (!waiting.length) continue;
           const ms = (await mapSeq(waiting, (p) => v.teams.message(p.chatId, p.messageId))).filter((m): m is NonNullable<typeof m> => !!m);
           const r = await runPipeline({
-            teams: ctx.requests.teams, convs: v.store, users, homeTenant: await ctx.homeTenant(), now: stamp, clientName: cfg.clientSettings[chat.clientKey]?.name ?? chat.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases,
+            teams: ctx.requests.teams, convs: v.store, users, homeTenant: await ctx.homeTenant(), now: stamp, clientName: cfg.clientSettings[chat.clientKey]?.name ?? chat.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS,
             items: await ctx.openItems(cfg, chat.clientKey).catch(() => null), author: async (uid) => (same(uid, v.me) ? { zone: userZone(cfg), promisePhrases: cfg.asks.promisePhrases } : null),
           }, chat, ms);
           sorted += r.work + r.chatter;

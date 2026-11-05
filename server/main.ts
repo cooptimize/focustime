@@ -790,6 +790,7 @@ const adminOps = createAdminOps({
     return p.ok && !!p.config.dataverse?.mySystemUserId;
   },
   chats: () => teams.chats(),
+  conversationCounts: (day) => conversations.counts(day),
   ai: async () => ({ provider: aiProviderKind, keyConfigured: aiProviderKind === "stub" ? true : !!(await aiKey()) }),
   appSpentMicros: () => aiRuntime.appSpend.get(new Date().toISOString().slice(0, 7)),
   feedback: () => feedbackService.check(),

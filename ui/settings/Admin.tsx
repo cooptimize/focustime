@@ -9,6 +9,7 @@ import { SaveMark, plain, useSaveContext, type FieldStatus } from "./autosave.ts
 import { DeliveryChatField, DeliveryChatsProvider } from "./DeliveryChats.tsx";
 import { shortDate } from "../labels.ts";
 import { TypeIcon } from "../TypeIcon.tsx";
+import { STATUS_WORD, type ConversationStatus } from "../../plan/conversations.ts";
 import type { ClientProcess } from "../../actions/types.ts";
 
 export const ADMIN_UI_SECTIONS = [
@@ -834,7 +835,11 @@ type StatusData = {
   dataverse: { refreshedAt: string | null; ok: boolean; message: string | null };
   chats: { chatId: string; clientKey: string; name: string; reading: boolean; polledAt: string | null; state: string | null; note: string | null; via: string | null }[];
   lastPoll: string | null;
+  conversations: { conversationsByStatus: Record<string, number>; messagesByRole: Record<string, number>; commitmentsByState: Record<string, number>; aiCallsToday: { chatName: string; clientKey: string; calls: number }[] } | null;
 };
+const ROLE_WORDS: Record<string, string> = { work: "work", chatter: "chatter", ack: "short replies", unsorted: "unsorted" };
+const COMMIT_WORDS: Record<string, string> = { open: "open", followup: "follow-ups", linked: "linked", created: "item created", done: "done", not_needed: "not needed" };
+const countLine = (m: Record<string, number>, words: Record<string, string>) => Object.entries(m).map(([k, n]) => `${n} ${words[k] ?? k}`).join(" · ");
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "never");
 const POLL_WORDS: Record<string, string> = { ok: "OK", via: "Read with another follower's sign-in", reconnect: "Needs reconnecting", retry: "Retrying" };
 
@@ -886,6 +891,7 @@ function AdminStatus() {
               <th scope="col">Reading</th>
               <th scope="col">Last poll</th>
               <th scope="col">State</th>
+              <th scope="col">AI calls today</th>
             </tr>
           </thead>
           <tbody>
@@ -900,10 +906,31 @@ function AdminStatus() {
                   {c.via ? ` · via ${c.via}` : ""}
                   {c.note ? ` · ${c.note}` : ""}
                 </td>
+                <td>{data.conversations ? (data.conversations.aiCallsToday.find((x) => x.chatName === c.name && x.clientKey === c.clientKey)?.calls ?? 0) : "–"}</td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+      <h3>Conversations</h3>
+      {data.conversations ? (
+        <div className="set-grid">
+          <div className="set-field">
+            <span className="set-label">Conversations</span>
+            <span className="set-value">{countLine(Object.fromEntries(Object.entries(data.conversations.conversationsByStatus).map(([k, n]) => [STATUS_WORD[k as ConversationStatus] ?? k, n])), {})}</span>
+          </div>
+          <div className="set-field">
+            <span className="set-label">Messages</span>
+            <span className="set-value">{countLine(data.conversations.messagesByRole, ROLE_WORDS)}</span>
+          </div>
+          <div className="set-field">
+            <span className="set-label">Commitments</span>
+            <span className="set-value">{countLine(data.conversations.commitmentsByState, COMMIT_WORDS)}</span>
+            <span className="set-hint">Counts only, for every registered chat; never what was said.</span>
+          </div>
+        </div>
+      ) : (
+        <p className="muted">Not available here.</p>
       )}
     </div>
   );

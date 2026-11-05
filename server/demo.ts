@@ -76,6 +76,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
       dataverse: { refreshedAt: await adminStore.directoryRefreshedAt(), ok: true, message: null },
       chats: (await teams.chats()).map((c) => ({ chatId: c.chatId, clientKey: c.clientKey, name: c.displayName, reading: c.readOn, polledAt: c.polledAt, state: c.pollState, note: c.pollNote, via: null })),
       lastPoll: null,
+      conversations: null,
     }),
     refreshPeople: async () => {
       await adminStore.replaceDirectory(dir.people, dir.leads, dir.clients);

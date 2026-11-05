@@ -217,6 +217,6 @@ What DS-1 learned, and what is still open:
 ## Admin (ADM-1, Nov 4)
 
 - Q-ADM1-1: Plan data retention is shown as a 2-year Rule, but nothing purges yet. A purge job (per person, oldest first, logged as counts) is a later step; which tables it covers and whether people get a notice first is open.
-- Q-ADM1-2: The poll interval, unmatched-message retention and per-chat AI cap in Admin › Conversations are stored and audited but the Teams pipeline still uses its own constants. CV-1 should read them from the org runtime.
+- Q-ADM1-2: The poll interval and unmatched-message retention in Admin › Conversations are stored and audited, but the poll job and the 14-day purge still use their own constants (the per-chat AI cap is wired). A later step should read them from the org runtime.
 - Q-ADM1-3: Levels come from Dataverse position names (Consultant, Senior Consultant, Lead Consultant). A new position name reads as no level until it is mapped in `levelFromPosition`; should Admin › People offer the mapping?
 - Q-ADM1-4: In the demo, Admin › Clients' process switches change the demo's process view but not the demo week's picks; worth wiring if the demo is used to show them.

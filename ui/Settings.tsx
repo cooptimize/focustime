@@ -974,6 +974,7 @@ function NotifyForm(p: FormProps) {
         {group("Ritual reminders", RITUAL_KINDS)}
         {group("While you focus", ["timer", "meeting"])}
         {group("Other", ["vm", "followups", "expiry", "asks"])}
+        {group("Client chats", ["commitment_item", "taken_over"])}
       </div>
       <SaveMark s={a.status("kinds")} retry={() => a.commit("kinds")} />
       <AutoField a={a} k="asksThroughFocus" label="Urgent requests during focus" hint="Off: an urgent request waits until the focus session ends, with the others.">

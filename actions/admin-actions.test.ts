@@ -7,6 +7,7 @@ import { createAccountStore } from "../store/accounts.ts";
 import { createAdminStore } from "../store/admin-store.ts";
 import { planStoreOn } from "../store/plan-store.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
+import { createConversationStore } from "../store/conversation-store.ts";
 import { hardDeleteUser } from "../store/user-data.ts";
 import { createAdminOps } from "../server/admin-ops.ts";
 import { createAdminCheck } from "./admin.ts";
@@ -57,6 +58,7 @@ async function setup() {
     hasSecret: async (id, account) => secrets.has(`${id}|${account}`),
     dataverseMatched: async () => true,
     chats: () => teams.chats(),
+    conversationCounts: (day) => createConversationStore(db, now, teams).counts(day),
     ai: async () => ({ provider: "stub", keyConfigured: true }),
     appSpentMicros: async () => 0,
     feedback: async () => ({ state: "local" }),
@@ -150,6 +152,10 @@ describe("admin actions", () => {
     seen.push(JSON.stringify(await s.run(s.admin, "admin.audit", {})));
     const all = seen.join("\n");
     for (const p of PRIVATE) expect(all).not.toContain(p);
+    // Status carries CV-1's counts: numbers per status, role and state, and AI calls per chat by its name.
+    const st = (await s.run(s.admin, "admin.load", { section: "status" })) as { ok: true; data: { conversations: { conversationsByStatus: Record<string, number>; aiCallsToday: unknown[] } } };
+    expect(st.data.conversations.conversationsByStatus).toMatchObject({ new: 0, resolved: 0 });
+    expect(st.data.conversations.aiCallsToday).toEqual([{ chatName: "Fabrikam team", clientKey: "fabrikam", calls: 0 }]);
     // What People does show: names and yes or no for sign-ins.
     expect(all).toContain("Ben Person");
     expect(all).toContain('"microsoft":true');

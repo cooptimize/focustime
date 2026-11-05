@@ -7,6 +7,7 @@ import type { FeedbackSetup } from "../actions/feedback-types.ts";
 import type { OrgRuntime } from "../actions/org.ts";
 import { SETUP_STEPS, type SetupState } from "../plan/setup.ts";
 import type { ClientChat } from "../plan/requests.ts";
+import type { ConversationCounts } from "../store/conversation-store.ts";
 import type { DirectoryRead } from "../sources/dataverse/directory.ts";
 import type { UserRow } from "../store/accounts.ts";
 import type { UserSecretAccount } from "../store/user-secrets.ts";
@@ -27,6 +28,8 @@ export type AdminOpsDeps = {
   /** Whether the person's settings are matched to a Dataverse user. */
   dataverseMatched: (userId: string) => Promise<boolean>;
   chats: () => Promise<ClientChat[]>;
+  /** CV-1's counts for a day (never text or ids); null where there is no conversation store. */
+  conversationCounts?: ((day: string) => Promise<ConversationCounts>) | null;
   ai: () => Promise<{ provider: string; keyConfigured: boolean }>;
   appSpentMicros: () => Promise<number>;
   feedback: () => Promise<FeedbackSetup | null>;
@@ -76,8 +79,8 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
     chatClients: async () => [...new Set([...(await d.chats()).map((c) => c.clientKey), ...(await d.org.store.peopleClients()).map((c) => c.clientKey)])].sort(),
     aiSetUp: d.ai,
     appSpentMicros: d.appSpentMicros,
-    async status() {
-      const [chats, setup, refreshedAt, ai, users] = await Promise.all([d.chats(), d.feedback().catch(() => null), d.org.store.directoryRefreshedAt(), d.ai(), d.users()]);
+    async status(day) {
+      const [chats, setup, refreshedAt, ai, users, conversations] = await Promise.all([d.chats(), d.feedback().catch(() => null), d.org.store.directoryRefreshedAt(), d.ai(), d.users(), d.conversationCounts ? d.conversationCounts(day).catch(() => null) : Promise.resolve(null)]);
       const names = new Map(users.map((u) => [u.id.toLowerCase(), u.displayName || u.upn]));
       // A chat's name, client, switch and poll state; whose sign-in read it last (a name). Never its messages or members.
       const health = chats.map((c) => ({ chatId: c.chatId, clientKey: c.clientKey, name: c.displayName, reading: c.readOn, polledAt: c.polledAt, state: c.pollState, note: c.pollNote, via: c.tokenUser ? (names.get(c.tokenUser.toLowerCase()) ?? null) : null }));
@@ -92,6 +95,7 @@ export function createAdminOps(d: AdminOpsDeps): AdminOps {
         dataverse: { refreshedAt, ...lastDirectory },
         chats: health,
         lastPoll: polled.at(-1) ?? null,
+        conversations,
       };
     },
     async refreshPeople() {

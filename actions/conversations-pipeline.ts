@@ -30,6 +30,7 @@ import type { WorkItem } from "../week/types.ts";
 import { localToday } from "../week/dates.ts";
 
 /** A chat's AI calls a day, at most (a setting for ADM-1 to host: conversations.chat_daily_ai_calls). */
+/** The built-in per-chat daily AI cap; the team's Rule (Admin › Conversations, ADM-1) replaces it. */
 export const CHAT_DAILY_AI_CALLS = 200;
 /** Closed conversations stay in the AI's list this long, so a new work message can reopen them. */
 const REOPEN_DAYS = 7;

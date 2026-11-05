@@ -23,7 +23,7 @@ import type { TeamsStore } from "../store/teams-store.ts";
 import type { WorkItem } from "../week/types.ts";
 import { classifyAsk, extractPromise, type AskAiDeps } from "./ask-ai.ts";
 import { mapSeq } from "./seq.ts";
-import { runPipeline } from "./conversations-pipeline.ts";
+import { CHAT_DAILY_AI_CALLS, runPipeline } from "./conversations-pipeline.ts";
 import type { ConversationStore } from "../store/conversation-store.ts";
 import { userZone } from "../week/zone.ts";
 
@@ -182,7 +182,7 @@ async function conversationsStep(
   const ai = x.p.pipelineAi ? await x.p.pipelineAi().catch(() => null) : null;
   const r = await runPipeline(
     {
-      teams: deps.teams, convs, users: x.users, homeTenant: x.home, now: x.now, clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, items,
+      teams: deps.teams, convs, users: x.users, homeTenant: x.home, now: x.now, clientName: cfg.clientSettings[c.clientKey]?.name ?? c.clientKey, ai, zone: userZone(cfg), ackPhrases: cfg.asks.ackPhrases, chatCap: cfg.org?.rules.chatAiDailyCap ?? CHAT_DAILY_AI_CALLS, items,
       author: async (uid) => {
         const a = await x.person(uid);
         return a?.config ? { zone: userZone(a.config), promisePhrases: a.config.asks.promisePhrases } : null;
