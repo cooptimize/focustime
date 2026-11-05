@@ -1468,6 +1468,7 @@ const toAiRequest = (r: Row): AiLogEntry => ({
   latencyMs: Number(r.latency_ms),
   outcome: r.outcome as AiOutcome,
   detail: (r.detail as string | null) ?? null,
+  cap: r.cap === "app" ? "app" : "person",
 });
 
 const toAsk = (r: Row): Ask => ({
@@ -2771,13 +2772,14 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     /** AI-0: one AI request in the person's log: counts, cost and outcome, never the prompt or the answer. */
     async addAiRequest(e: AiLogEntry): Promise<void> {
       await tx(async () => {
-        await db.run("INSERT INTO ai_requests (at, task, client_key, model, input_tokens, output_tokens, cost_micros, latency_ms, outcome, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          Temporal.Instant.from(e.at).toString(), e.task.slice(0, 64), e.clientKey ? e.clientKey.slice(0, 100) : null, e.model.slice(0, 100), Math.max(0, Math.round(e.inputTokens)), Math.max(0, Math.round(e.outputTokens)), Math.max(0, Math.round(e.costMicros)), Math.max(0, Math.round(e.latencyMs)), e.outcome, e.detail ? e.detail.slice(0, 40) : null);
+        await db.run("INSERT INTO ai_requests (at, task, client_key, model, input_tokens, output_tokens, cost_micros, latency_ms, outcome, detail, cap) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          Temporal.Instant.from(e.at).toString(), e.task.slice(0, 64), e.clientKey ? e.clientKey.slice(0, 100) : null, e.model.slice(0, 100), Math.max(0, Math.round(e.inputTokens)), Math.max(0, Math.round(e.outputTokens)), Math.max(0, Math.round(e.costMicros)), Math.max(0, Math.round(e.latencyMs)), e.outcome, e.detail ? e.detail.slice(0, 40) : null, e.cap === "app" ? "app" : "person");
       });
     },
     /** AI-0: the estimated cost of the person's requests in [from, to), in millionths of a dollar. */
     async aiSpentMicros(fromIso: string, toIso: string): Promise<number> {
-      const r = (await db.get("SELECT COALESCE(SUM(cost_micros), 0) AS n FROM ai_requests WHERE at >= ? AND at < ?", Temporal.Instant.from(fromIso).toString(), Temporal.Instant.from(toIso).toString())) as Row | undefined;
+      // CV-1: only what counted against the person's own cap (never the app's pipeline).
+      const r = (await db.get("SELECT COALESCE(SUM(cost_micros), 0) AS n FROM ai_requests WHERE at >= ? AND at < ? AND cap = 'person'", Temporal.Instant.from(fromIso).toString(), Temporal.Instant.from(toIso).toString())) as Row | undefined;
       return Number(r?.n ?? 0);
     },
     /** AI-0: the person's latest AI requests, newest first. */
@@ -2788,6 +2790,33 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
      * AP-2: the DevOps item ids just read for a client, remembered as that client's (ids only), so the AI guard knows
      * them after a restart. Ids already known for the client are left alone. How many were new.
      */
+    // ---- CV-1: my view of shared conversations (what I last saw, Hide for me) ----
+    async conversationViews(): Promise<Map<number, { seenVersion: number; seenAt: string | null; hidden: boolean }>> {
+      const rows = (await db.all("SELECT conversation_id, seen_version, seen_at, hidden FROM conversation_views")) as Row[];
+      return new Map(rows.map((r) => [Number(r.conversation_id), { seenVersion: Number(r.seen_version ?? 0), seenAt: instantText(r.seen_at), hidden: !!r.hidden }]));
+    },
+    /** Marks a conversation seen at its current version (the "Updated" marker goes). */
+    async seeConversation(id: number, version: number): Promise<void> {
+      await tx(async () => {
+        const now = opts.now().toInstant().toString();
+        const had = (await db.get("SELECT seen_version FROM conversation_views WHERE conversation_id = ?", id)) as Row | undefined;
+        if (had) await db.run("UPDATE conversation_views SET seen_version = ?, seen_at = ? WHERE conversation_id = ? AND seen_version < ?", version, now, id, version);
+        else await db.run("INSERT INTO conversation_views (conversation_id, seen_version, seen_at, hidden) VALUES (?, ?, ?, 0)", id, version, now);
+      });
+    },
+    /** Hide for me (or show again): personal, never anyone else's view. */
+    async hideConversation(id: number, hidden: boolean): Promise<void> {
+      await tx(async () => {
+        const now = opts.now().toInstant().toString();
+        const had = (await db.get("SELECT 1 AS x FROM conversation_views WHERE conversation_id = ?", id)) as Row | undefined;
+        if (had) await db.run("UPDATE conversation_views SET hidden = ?, hidden_at = ? WHERE conversation_id = ?", hidden ? 1 : 0, hidden ? now : null, id);
+        else await db.run("INSERT INTO conversation_views (conversation_id, seen_version, hidden, hidden_at) VALUES (?, 0, ?, ?)", id, hidden ? 1 : 0, hidden ? now : null);
+      });
+    },
+    /** CV-1's migration: a promise moved into the shared commitments (it stops showing here). */
+    async markPromiseMoved(chatId: string, messageId: string, commitmentId: number): Promise<void> {
+      await tx(async () => void (await db.run("UPDATE promises SET moved_to = ? WHERE chat_id = ? AND message_id = ?", commitmentId, chatId, messageId)));
+    },
     async rememberItemClient(clientKey: string, ids: readonly number[]): Promise<number> {
       const want = [...new Set(ids.filter((i) => Number.isSafeInteger(i) && i > 0 && i <= 2_147_483_647))];
       if (!clientKey || clientKey.length > 100 || !want.length) return 0;
@@ -2902,7 +2931,7 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     },
     /** AP-2: every promise, newest message first. */
     async promises(): Promise<StoredPromise[]> {
-      return ((await db.all("SELECT * FROM promises ORDER BY created_at DESC")) as Row[]).map(toPromise);
+      return ((await db.all("SELECT * FROM promises WHERE moved_to IS NULL ORDER BY created_at DESC")) as Row[]).map(toPromise);
     },
     async promise(chatId: string, messageId: string): Promise<StoredPromise | null> {
       const r = (await db.get("SELECT * FROM promises WHERE chat_id = ? AND message_id = ?", chatId, messageId)) as Row | undefined;

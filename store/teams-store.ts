@@ -162,9 +162,15 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         const c = await store.chat(chatId);
         if (!c) return;
         await db.run("DELETE FROM requests WHERE chat_id = ?", [chatId]);
+        // CV-1: its conversations go with it (their messages, commitments and suggestions).
+        await db.run("DELETE FROM conversation_suggestions WHERE conversation_id IN (SELECT id FROM conversations WHERE chat_id = ?)", [chatId]);
+        await db.run("DELETE FROM commitments WHERE chat_id = ?", [chatId]);
+        await db.run("DELETE FROM conversation_messages WHERE chat_id = ?", [chatId]);
+        await db.run("DELETE FROM conversations WHERE chat_id = ?", [chatId]);
         await db.run(
           `DELETE FROM teams_messages WHERE chat_id = ?
-             AND NOT EXISTS (SELECT 1 FROM promises p WHERE p.chat_id = teams_messages.chat_id AND (p.message_id = teams_messages.message_id OR p.answers_message_id = teams_messages.message_id))`,
+             AND NOT EXISTS (SELECT 1 FROM promises p WHERE p.chat_id = teams_messages.chat_id AND (p.message_id = teams_messages.message_id OR p.answers_message_id = teams_messages.message_id))
+           AND NOT EXISTS (SELECT 1 FROM conversation_messages cm WHERE cm.chat_id = teams_messages.chat_id AND cm.message_id = teams_messages.message_id AND cm.role = 'work')`,
           [chatId],
         );
         await db.run("DELETE FROM client_chats WHERE chat_id = ?", [chatId]);
@@ -241,12 +247,16 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     async expire(olderThan: string): Promise<number> {
       return db.tx(async () => {
         await db.run("DELETE FROM requests WHERE created_at < ? AND status = 'open' AND ai_status = 'sorted' AND ai_kind = 'none' AND ai_shown = 0", [olderThan]);
-        return (await db.run(
+        const gone = (await db.run(
         `DELETE FROM teams_messages WHERE created_at < ?
            AND NOT EXISTS (SELECT 1 FROM requests r WHERE r.chat_id = teams_messages.chat_id AND r.message_id = teams_messages.message_id)
-           AND NOT EXISTS (SELECT 1 FROM promises p WHERE p.chat_id = teams_messages.chat_id AND (p.message_id = teams_messages.message_id OR p.answers_message_id = teams_messages.message_id))`,
+           AND NOT EXISTS (SELECT 1 FROM promises p WHERE p.chat_id = teams_messages.chat_id AND (p.message_id = teams_messages.message_id OR p.answers_message_id = teams_messages.message_id))
+           AND NOT EXISTS (SELECT 1 FROM conversation_messages cm WHERE cm.chat_id = teams_messages.chat_id AND cm.message_id = teams_messages.message_id AND cm.role = 'work')`,
         [olderThan],
       )).changes;
+        // CV-1: the places of messages that went (chatter, acks, unsorted ones past 14 days) go with them.
+        await db.run("DELETE FROM conversation_messages WHERE NOT EXISTS (SELECT 1 FROM teams_messages m WHERE m.chat_id = conversation_messages.chat_id AND m.message_id = conversation_messages.message_id)");
+        return gone;
       });
     },
     /** Delete stored messages for a client: every message that isn't a Request's or a promise's, now. */
@@ -260,7 +270,8 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
       return db.tx(async () => (await db.run(
         `DELETE FROM teams_messages WHERE chat_id IN (${list})
            AND NOT EXISTS (SELECT 1 FROM requests r WHERE r.chat_id = teams_messages.chat_id AND r.message_id = teams_messages.message_id)
-           AND NOT EXISTS (SELECT 1 FROM promises p WHERE p.chat_id = teams_messages.chat_id AND (p.message_id = teams_messages.message_id OR p.answers_message_id = teams_messages.message_id))`,
+           AND NOT EXISTS (SELECT 1 FROM promises p WHERE p.chat_id = teams_messages.chat_id AND (p.message_id = teams_messages.message_id OR p.answers_message_id = teams_messages.message_id))
+           AND NOT EXISTS (SELECT 1 FROM conversation_messages cm WHERE cm.chat_id = teams_messages.chat_id AND cm.message_id = teams_messages.message_id AND cm.role = 'work')`,
         params,
       )).changes);
     },

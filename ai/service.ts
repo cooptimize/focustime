@@ -43,6 +43,12 @@ export type AiDeps = {
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
   logger?: Logger;
+  /**
+   * CV-1: whose cap a request counts against. "person" (the default): the person's monthly cap and the app's. "app":
+   * the shared pipeline (conversations.update, anything the poller runs on its own): only the app's cap, logged in the
+   * app's request log; the switches are still a person's (Use AI and the client's Allow AI).
+   */
+  cap?: "person" | "app";
 };
 
 export type AiTaskSpec = { name: string; client: string; instructions: string };
@@ -59,14 +65,15 @@ export function createAi(d: AiDeps) {
   const sleep = d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const random = d.random ?? Math.random;
   const logger = d.logger ?? (() => {});
+  const scope = d.cap ?? "person";
 
   async function record(task: AiTaskSpec, outcome: AiOutcome, detail: AiErrorKind | null, usage: Usage, latencyMs: number, model: string): Promise<number> {
     const cost = costMicros(usage, d.app.prices);
     const at = d.now();
-    await d.log.add({ at, task: task.name, clientKey: task.client === NO_CLIENT ? null : task.client, model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costMicros: cost, latencyMs: Math.round(latencyMs), outcome, detail });
+    await d.log.add({ at, task: task.name, clientKey: task.client === NO_CLIENT ? null : task.client, model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, costMicros: cost, latencyMs: Math.round(latencyMs), outcome, detail, cap: scope });
     if (cost > 0) await d.appSpend.add(monthOf(at), cost);
-    // App Insights: counts and outcomes only.
-    logger({ source: "ai", op: "request", kind: `${task.name}:${outcome}`, ...(detail ? { status: detail } : {}), durationMs: latencyMs, count: usage.inputTokens + usage.outputTokens });
+    // App Insights: counts and outcomes only, and whose cap it counted against.
+    logger({ source: "ai", op: "request", kind: scope === "app" ? `${task.name}:${outcome}:app` : `${task.name}:${outcome}`, ...(detail ? { status: detail } : {}), durationMs: latencyMs, count: usage.inputTokens + usage.outputTokens });
     return cost;
   }
 
@@ -86,8 +93,16 @@ export function createAi(d: AiDeps) {
     }
 
     const { from, to } = monthBounds(monthOf(d.now()));
-    const [mine, app] = await Promise.all([d.log.spentMicros(from, to), d.appSpend.get(monthOf(d.now()))]);
-    if (mine >= micros(me.monthlyCapUsd) || app >= micros(d.app.appCapUsd)) {
+    // CV-1: the app's pipeline counts only against the app's cap; a person's own request against theirs and the app's.
+    // A cap of $0 says so ("AI budget is set to $0"), not that it was reached.
+    const personCap = scope === "app" ? null : micros(me.monthlyCapUsd);
+    const appCap = micros(d.app.appCapUsd);
+    if (appCap <= 0 || personCap === 0) {
+      await record(task, "over_budget", "zero_budget", ZERO, 0, d.app.model);
+      return fail("zero_budget");
+    }
+    const [mine, app] = await Promise.all([personCap === null ? 0 : d.log.spentMicros(from, to), d.appSpend.get(monthOf(d.now()))]);
+    if ((personCap !== null && mine >= personCap) || app >= appCap) {
       await record(task, "over_budget", "over_budget", ZERO, 0, d.app.model);
       return fail("over_budget");
     }
