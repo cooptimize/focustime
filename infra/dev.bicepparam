@@ -8,9 +8,10 @@ param adminGroupObjectId = 'b6320a08-7f2f-4902-b2b5-7a99e11c29fc' // FocusTime D
 // Set by the deploy workflow: false only for the very first deploy, before an image and the secrets exist.
 param appReady = bool(readEnvironmentVariable('FT_APP_READY', 'true'))
 param imageTag = readEnvironmentVariable('FT_IMAGE_TAG', 'latest')
-// CV-1 watch period: one replica so shared polling runs every 5 minutes in working hours (0.5 vCPU, 1 GiB: about
-// 0.40 USD a day at the idle rate, at most 1.30 at the active rate, more than scale to zero). Afterwards set it back to 0 through the workflow (docs/azure/runbook.md, "Conversations").
-param minReplicas = 1
+// HK-1: dev scales to zero again (the CV-1 watch period is over). A request wakes it (the default HTTP scale rule);
+// it goes back to zero 300 s after the last one. While it sleeps nothing polls: the Teams poll and the DevOps checks
+// catch up from their stored watermarks on the next start. Prod stays at 1 (prod.bicepparam).
+param minReplicas = 0
 param requestsPoll = 'on'
 param entraClientId = '0040169f-a4c9-46d9-bd81-83c31d0d6ff0' // the "FocusTime" registration
 param googleClientId = '1059654433254-tdph7ca8a4psvt1sve51mhp6sr5j1re3.apps.googleusercontent.com' // the "FocusTime Web" client

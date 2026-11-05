@@ -446,7 +446,7 @@ The poller sorts every message that passes the rules into conversations with one
 
 Admin › Status will show the counts (ADM-1): `convs.counts(day)` returns conversations by status, messages by role (work, chatter, ack, unsorted), commitments by state and AI calls per chat today.
 
-**Dev replicas after the watch period:** dev runs at min replicas 1 (0.5 vCPU, 1 GiB: about 0.40 USD a day at the idle rate, at most 1.30 at the active rate). To go back to scale to zero, change `param minReplicas = 1` to `0` in `infra/dev.bicepparam` in a pull request and run **deploy-dev** (never `az containerapp update` by hand). Leave `requestsPoll = 'on'` or set it to `'off'` in the same change: at 0 replicas the job runs only while someone keeps dev awake.
+**Dev replicas:** the CV-1 watch period is over and dev scales to zero again (HK-1, `param minReplicas = 0` in `infra/dev.bicepparam`). The first request wakes it (a cold start of a few seconds), and it goes back to zero 300 s after the last request. `requestsPoll` stays `'on'`: dev polls the chats every 5 minutes in working hours while it is awake, and the first poll after a start catches up from each chat's stored watermark; the DevOps checks do the same. To keep dev awake for a watch period again, set `minReplicas = 1` in a pull request and run **deploy-dev** (never `az containerapp update` by hand).
 
 ### Purging a client's stored chat text
 
