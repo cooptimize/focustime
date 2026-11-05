@@ -1,5 +1,5 @@
 // F1: Send feedback (⋯ › Send feedback). Pure: what a feedback item is, and the exact title, description and tags
-// that become a User Story under the FocusTime feature in Cooptimize's DevOps. The payload is built only from what the
+// that become a story under the FocusTime feature in Cooptimize's DevOps (FB-1: created by the sender, with their own write PAT). The payload is built only from what the
 // person typed, their name and email, the optional "where I am" lines and the environment: the builder has no way to
 // reach the plan, clients or work items, so none of it can end up in DevOps. No I/O.
 

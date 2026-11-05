@@ -14,8 +14,7 @@ import { sqliteConn } from "../store/sql/sqlite.ts";
 import { createTeamsStore } from "../store/teams-store.ts";
 import { mondayOf } from "../week/dates.ts";
 import { createDemoAzure, DEMO_PERSON, DEMO_VM_ID } from "../sources/demo/azure.ts";
-import { createDemoFeedbackDevOps, type DemoFeedbackParent } from "../sources/demo/feedback.ts";
-import { createFeedbackService } from "../actions/feedback-actions.ts";
+import { createDemoFeedbackDevOps, demoFeedbackBackend, type DemoFeedbackParent } from "../sources/demo/feedback.ts";
 import { notices } from "../plan/notify.ts";
 import { createAdminStore, FOCUSTIME } from "../store/admin-store.ts";
 import { clientScope } from "../config/org.ts";
@@ -142,7 +141,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
   const demoAzure = createDemoAzure();
   const assistant = demoAssistantProvider();
   // F1: Send feedback against a pretend backlog in memory (nothing leaves FocusTime).
-  const feedback = createFeedbackService({ devops: createDemoFeedbackDevOps({ parent: opts.feedbackParent ?? "ok" }), mode: "live", env: "demo", local: false, demo: true, now: () => Date.parse(opts.now()), log: () => {}, sleep: async () => {} });
+  const feedback = demoFeedbackBackend(createDemoFeedbackDevOps({ parent: opts.feedbackParent ?? "ok" }));
   return {
     loadConfig: async () => ({ path: "Demo data (in memory, not your config file)", parsed: await applied(text) }),
     // Theme or view changes in demo mode stay in memory: the real config file is never touched.
@@ -173,7 +172,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     assistantAi: { runtime: { app: { ...DEFAULT_AI, provider: "stub", model: "demo" }, provider: async () => assistant, appSpend: { get: async () => 0, add: async () => {} } }, rules: { on: true, allowedClients: DEMO_CLIENTS.map((c) => c.key), personCapUsd: 10 } },
     account: () => demoAzure.account,
     azure: demoAzure.azure,
-    feedback: { service: feedback, sender: async () => ({ name: DEMO_PERSON.name, email: DEMO_PERSON.email }) },
+    feedback: { demo: feedback, sender: async () => ({ name: DEMO_PERSON.name, email: DEMO_PERSON.email }) },
     // P1: the demo's notifications stay in the page: a test lands in ⋯ › Notifications (no desktop, no push).
     notifications: {
       test: async () => void (await plan.addNotice({ key: `test:${opts.now()}`, kind: "test", title: "FocusTime", body: "Test notification. It shows here and as a toast.", route: "settings:notifications" })),

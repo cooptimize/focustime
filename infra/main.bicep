@@ -28,12 +28,10 @@ param inviteDomains string = ''
 param admins string = ''
 @description('ADM-1: the "FocusTime Admins" Entra security group\'s object id; its members are admins. From the FT_ADMIN_GROUP_ID GitHub variable (infra/scripts/admin-group.sh prints it).')
 param adminGroupId string = ''
-@description('F1: Send feedback creates stories in this DevOps organization and project, under this feature.')
+@description('F1, FB-1: Send feedback creates stories in this DevOps organization and project, under this feature, with each person\'s own write PAT.')
 param feedbackOrg string = 'cooptimize'
 param feedbackProject string = 'Cooptimize Internal'
 param feedbackParentId string = '496'
-@description('F1: true sends feedback (prod); false shows the preview only (dev, unless switched on for a test).')
-param feedbackLive bool = false
 @description('CV-1: shared polling of client chats in the background.')
 @allowed(['on', 'off'])
 param requestsPoll string = 'on'
@@ -125,7 +123,6 @@ module app 'modules/app.bicep' = {
     feedbackOrg: feedbackOrg
     feedbackProject: feedbackProject
     feedbackParentId: feedbackParentId
-    feedbackLive: feedbackLive
     requestsPoll: requestsPoll
     minReplicas: minReplicas
     tenantId: tenantId

@@ -92,7 +92,9 @@ import { aheadIdentities } from "./identities.ts";
 import { clientRules, teamColors } from "../config/org.ts";
 import { GAP_KINDS, TOP_N } from "../plan/fixnext.ts";
 import { DEFAULT_AI_RULES, type AiRules } from "../ai/types.ts";
-import { feedbackAction, type FeedbackContext, type FeedbackService } from "./feedback-actions.ts";
+import { feedbackAction, type FeedbackBackend, type FeedbackContext } from "./feedback-actions.ts";
+import { devopsFeedbackBackend } from "./feedback-devops.ts";
+import type { FeedbackWriteTarget } from "./devops-write-actions.ts";
 import type { Sender } from "../plan/feedback.ts";
 import { setupAction, type SetupClient } from "./setup-actions.ts";
 import { noticeAction, type PushPort } from "./notice-actions.ts";
@@ -174,8 +176,11 @@ export type ActionContext = {
    */
   account?: (cfg: AppConfig) => MicrosoftAccount | null;
   azure?: (token: () => Promise<string>) => AzureClient;
-  /** F1: Send feedback (the app's feedback service and who is sending). Absent: feedback isn't available here. */
-  feedback?: { service: FeedbackService; sender: () => Promise<Sender | null> };
+  /**
+   * F1, FB-1: Send feedback: who is sending and where it goes (the org.feedback Rule); it is created through the write
+   * framework with their own write PAT. The demo hands in its pretend backlog instead. Absent: feedback isn't available here.
+   */
+  feedback?: { sender: () => Promise<Sender | null>; target?: () => Promise<FeedbackWriteTarget | null>; demo?: FeedbackBackend };
 };
 
 /** Actions that reach outside FocusTime or change secrets: refused while demo mode is on (D272). */
@@ -1250,7 +1255,19 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "feedback.preview":
     case "feedback.send": {
       if (!ctx.feedback) return { ok: false, status: 503, error: "Feedback isn't available here" };
-      const f: FeedbackContext = { ...ctx.feedback, plan: ctx.plan, today: async () => localToday(ctx.now(), userZone(await configured(ctx))) };
+      const fb = ctx.feedback;
+      const backend =
+        fb.demo ??
+        devopsFeedbackBackend({
+          write: await devopsWriteContext(ctx),
+          target: fb.target ?? (async () => null),
+          clients: async () => {
+            const ca = await clientsOf(ctx.org);
+            return { keys: ca?.keys ?? [], internal: ca?.rows.find((r) => r.why === "internal")?.clientKey ?? INTERNAL_CLIENT };
+          },
+          env: ctx.env ?? "local",
+        });
+      const f: FeedbackContext = { backend, sender: fb.sender, plan: ctx.plan, today: async () => localToday(ctx.now(), userZone(await configured(ctx))) };
       return feedbackAction(f, action, req.input, () => Date.parse(ctx.now()));
     }
     case "notify.test": {

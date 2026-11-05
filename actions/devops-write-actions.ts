@@ -193,6 +193,28 @@ class Refused extends Error {
 
 type Env = { cfg: AppConfig; clientKey: string; org: string; project: string; projectName: string; pat: Pat; me: DevOpsIdentityRow; writer: DevOpsWriter; plan: PlanStore; requests: DevOpsWriteContext["requests"]; conversations: DevOpsWriteContext["conversations"]; ahead: AheadPort | undefined; clientName: string };
 
+/** The client's org and project (never its company PAT) and my write PAT, checked to belong together. */
+async function envFor(ctx: DevOpsWriteContext, plan: PlanStore, cfg: AppConfig, clientKey: string): Promise<Env> {
+  const clientName = (k: string) => cfg.clientSettings[k]?.name ?? k;
+  if (!ctx.writer || !ctx.pats) throw new Refused("DevOps writes aren't available here", 503);
+  const me = (await plan.devopsIdentity(clientKey));
+  if (!me) throw new Refused(NO_PAT(clientName(clientKey)), 409, "no_write_pat");
+  const t = await ctx.targets(cfg, [clientKey]).catch(() => null);
+  if (!t?.ok) throw new Refused(`DevOps settings for ${clientName(clientKey)} can't be read from Dataverse now. Try again`, 503);
+  const target = t.targets.find((x) => x.clientKey === clientKey);
+  if (!target || target.problem || !validOrg(target.org) || !target.project) throw new Refused(`DevOps isn't set up for ${clientName(clientKey)}`, 409);
+  // The PAT was checked on one org; a client whose org changed since must be checked again.
+  if (target.org.toLowerCase() !== me.org.toLowerCase()) throw new Refused(`${clientName(clientKey)}'s DevOps organization changed. Enter the write PAT again in Settings > Clients`, 409, "no_write_pat");
+  if (!target.email || target.email.toLowerCase() !== me.email.toLowerCase()) throw new Refused(`Your DevOps identity for ${clientName(clientKey)} in Dataverse no longer matches the write PAT (${me.email}). Enter it again in Settings > Clients`, 409, "no_write_pat");
+  let pat: Pat;
+  try {
+    pat = await ctx.pats.get(clientKey);
+  } catch {
+    throw new Refused(NO_PAT(clientName(clientKey)), 409, "no_write_pat");
+  }
+  return { cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations, ahead: ctx.ahead, clientName: clientName(clientKey) };
+}
+
 async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: unknown): Promise<ActionResponse> {
   const plan = ctx.plan;
   if (!plan) return bad("The local plan store isn't available", 503);
@@ -201,26 +223,7 @@ async function run(ctx: DevOpsWriteContext, action: DevOpsWriteAction, input: un
   const tz = userZone(cfg);
   const clientName = (k: string) => cfg.clientSettings[k]?.name ?? k;
 
-  /** The client's org and project (never its company PAT) and my write PAT, checked to belong together. */
-  const envOf = async (clientKey: string): Promise<Env> => {
-    if (!ctx.writer || !ctx.pats) throw new Refused("DevOps writes aren't available here", 503);
-    const me = (await plan.devopsIdentity(clientKey));
-    if (!me) throw new Refused(NO_PAT(clientName(clientKey)), 409, "no_write_pat");
-    const t = await ctx.targets(cfg, [clientKey]).catch(() => null);
-    if (!t?.ok) throw new Refused(`DevOps settings for ${clientName(clientKey)} can't be read from Dataverse now. Try again`, 503);
-    const target = t.targets.find((x) => x.clientKey === clientKey);
-    if (!target || target.problem || !validOrg(target.org) || !target.project) throw new Refused(`DevOps isn't set up for ${clientName(clientKey)}`, 409);
-    // The PAT was checked on one org; a client whose org changed since must be checked again.
-    if (target.org.toLowerCase() !== me.org.toLowerCase()) throw new Refused(`${clientName(clientKey)}'s DevOps organization changed. Enter the write PAT again in Settings > Clients`, 409, "no_write_pat");
-    if (!target.email || target.email.toLowerCase() !== me.email.toLowerCase()) throw new Refused(`Your DevOps identity for ${clientName(clientKey)} in Dataverse no longer matches the write PAT (${me.email}). Enter it again in Settings > Clients`, 409, "no_write_pat");
-    let pat: Pat;
-    try {
-      pat = await ctx.pats.get(clientKey);
-    } catch {
-      throw new Refused(NO_PAT(clientName(clientKey)), 409, "no_write_pat");
-    }
-    return { cfg, clientKey, org: target.org, project: target.project, projectName: target.projectName ?? target.project, pat, me, writer: ctx.writer, plan, requests: ctx.requests, conversations: ctx.conversations, ahead: ctx.ahead, clientName: clientName(clientKey) };
-  };
+  const envOf = (clientKey: string) => envFor(ctx, plan, cfg, clientKey);
 
   switch (action) {
     case "devops.set_write_pat": {
@@ -1252,3 +1255,98 @@ async function aheadLanded(ctx: DevOpsWriteContext, env: Env, entry: DevOpsWrite
 
 const sameText = (html: string, text: string) => html.trim() === text.trim() || htmlToText(html).trim() === text.trim();
 export type { StateInfo };
+
+/** FB-1: where Send feedback creates stories (the org.feedback Rule, bootstrapped from the app config). */
+export type FeedbackWriteTarget = { org: string; project: string; parentId: number };
+/** FB-1: Send feedback's setup, for one person. */
+export type FeedbackCheck =
+  | { state: "ready"; clientKey: string; clientName: string; parentId: number; parentTitle: string; storyType: string }
+  | { state: "no_pat"; clientKey: string; clientName: string }
+  | { state: "no_access"; clientName: string; project: string }
+  | { state: "problem"; reason: string };
+/** What a feedback story is: its title, plain-text description and tags. */
+export type FeedbackStory = { title: string; description: string; tags: string[] };
+
+const sameName = (a: string | null | undefined, b: string) => !!a && a.toLowerCase() === b.toLowerCase();
+
+/**
+ * FB-1: Send feedback through the write framework. The story is a create under the configured parent, as the person
+ * sending it, with their own write PAT for the client whose DevOps the target is (found by the target's org and
+ * project among their clients' DevOps settings, else Cooptimize Internal: clientAccounts()'s why "internal"). Preview,
+ * confirm (devops.confirm, which checks the PAT again), read back, audit log and undo, like every create; GD-1's scan
+ * applies. Nothing here changes any other create.
+ */
+export function feedbackWrites(ctx: DevOpsWriteContext, clients: () => Promise<{ keys: string[]; internal: string | null }>) {
+  type Ready = { env: Env; clientName: string; parent: ItemSnapshot; storyType: string; tz: string };
+
+  async function resolve(cfg: AppConfig, t: FeedbackWriteTarget): Promise<string | null> {
+    const c = await clients();
+    const keys = [...new Set([...c.keys, ...(c.internal ? [c.internal] : [])])];
+    const r = await ctx.targets(cfg, keys).catch(() => null);
+    const hits = r?.ok ? r.targets.filter((x) => !x.problem && sameName(x.org, t.org) && (sameName(x.project, t.project) || sameName(x.projectName, t.project))).map((x) => x.clientKey) : [];
+    if (c.internal && hits.includes(c.internal)) return c.internal;
+    return hits.sort((a, b) => a.localeCompare(b))[0] ?? c.internal;
+  }
+
+  async function prepare(t: FeedbackWriteTarget | null): Promise<Ready | Exclude<FeedbackCheck, { state: "ready" }>> {
+    const plan = ctx.plan;
+    if (!t) return { state: "problem", reason: "No DevOps organization, project and feature are set for feedback" };
+    if (!plan || !ctx.writer || !ctx.pats) return { state: "problem", reason: "DevOps writes aren't available here" };
+    const cfg = await ctx.config();
+    if (!cfg) return { state: "problem", reason: "Fix the config first" };
+    const clientKey = await resolve(cfg, t);
+    if (!clientKey) return { state: "problem", reason: `None of your clients' DevOps is ${t.project}` };
+    // Cooptimize Internal is "Internal" in the app's words, like the assistant's.
+    const clientName = clientKey === (await clients()).internal ? "Internal" : (cfg.clientSettings[clientKey]?.name ?? clientKey);
+    let env: Env;
+    try {
+      env = await envFor(ctx, plan, cfg, clientKey);
+    } catch (e) {
+      if (e instanceof Refused && e.code === "no_write_pat") return { state: "no_pat", clientKey, clientName };
+      return { state: "problem", reason: e instanceof Error ? e.message : "The check failed" };
+    }
+    if (!sameName(env.org, t.org) || !(sameName(env.project, t.project) || sameName(env.projectName, t.project))) return { state: "no_access", clientName, project: t.project };
+    try {
+      const parent = await env.writer.item(env.org, env.pat, env.project, t.parentId);
+      const pc = await env.writer.processConfig(env.org, env.pat, env.project);
+      // WT-1: the parent sits at the feature tier of the process, whatever the type is called, and is open.
+      if (!portfolioTiers(pc).feature.has(parent.type)) return { state: "problem", reason: `#${parent.id} is a ${parent.type || "work item"}, not at the feature level of this process` };
+      const states = await env.writer.states(env.org, env.pat, env.project, parent.type);
+      if (!isOpenCategory(states.find((s) => s.name === parent.state)?.category)) return { state: "problem", reason: `#${parent.id} is ${parent.state}; FocusTime adds items only under open parents` };
+      const storyType = levelsFromProcessConfig(pc).childrenOf(parent.type)[0] ?? defaultType(pc, "story");
+      if (!storyType) return { state: "problem", reason: "The project's process has no story type" };
+      return { env, clientName, parent, storyType, tz: userZone(cfg) };
+    } catch (e) {
+      if (e instanceof WriteFailure && (e.kind === "auth" || e.kind === "forbidden")) return { state: "no_access", clientName, project: t.project };
+      if (e instanceof WriteFailure && e.kind === "not_found") return { state: "problem", reason: `Feature #${t.parentId} isn't there, or your DevOps account can't see it` };
+      if (e instanceof WriteFailure && e.kind === "network") return { state: "problem", reason: "DevOps didn't answer" };
+      return { state: "problem", reason: e instanceof WriteFailure ? e.message : "The check failed" };
+    }
+  }
+
+  return {
+    async check(t: FeedbackWriteTarget | null): Promise<FeedbackCheck> {
+      const r = await prepare(t);
+      return "env" in r ? { state: "ready", clientKey: r.env.clientKey, clientName: r.clientName, parentId: r.parent.id, parentTitle: r.parent.title, storyType: r.storyType } : r;
+    },
+    /** The held create's preview (the write framework's own), or why there is none. */
+    async preview(t: FeedbackWriteTarget | null, story: FeedbackStory): Promise<{ check: FeedbackCheck; preview: DevOpsPreview | null; refused: string | null }> {
+      const r = await prepare(t);
+      if (!("env" in r)) return { check: r, preview: null, refused: null };
+      const { env, parent, storyType, tz } = r;
+      const check: FeedbackCheck = { state: "ready", clientKey: env.clientKey, clientName: r.clientName, parentId: parent.id, parentTitle: parent.title, storyType };
+      const area = String(parent.fields["System.AreaPath"] ?? "") || null;
+      const iteration = String(parent.fields["System.IterationPath"] ?? "") || null;
+      const ops: PatchOp[] = [...createOps({ org: env.org, title: story.title, description: story.description, acField: false, assignedTo: null, areaPath: area, iterationPath: iteration, parentId: parent.id, timeZone: tz }), { op: "add", path: "/fields/System.Tags", value: story.tags.join("; ") }];
+      const after: Record<string, string | null> = { Type: storyType, Title: story.title, Description: story.description, Tags: story.tags.join(", "), Area: area ?? "The project's default", Iteration: iteration ?? "The project's default", Parent: `#${parent.id} ${parent.title}` };
+      const h: HeldIn = { ...base(env), ...none, op: "create", itemId: null, parentId: parent.id, title: story.title, ops, rev: null, before: {}, after, type: storyType, notes: [`Created as you: DevOps shows ${env.me.name} as who made it.`] };
+      try {
+        await checkBoundary(ctx, env, h);
+      } catch (e) {
+        if (e instanceof Refused) return { check, preview: null, refused: e.message };
+        throw e;
+      }
+      return { check, preview: hold(h, env), refused: null };
+    },
+  };
+}
