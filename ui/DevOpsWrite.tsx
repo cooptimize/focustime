@@ -23,7 +23,11 @@ export type DevOpsChange =
   | { kind: "target_date"; itemId: number; date: string; /** Step 17: Save dates to DevOps (where the process has Start Date). */ startDate?: string }
   | { kind: "undo"; writeId: number }
   /** AP-1: a bug, story or feature from an ask in a client chat. */
-  | { kind: "request_create"; chatId: string; messageId: string; level: "bug" | "story" | "feature" };
+  | { kind: "request_create"; chatId: string; messageId: string; level: "bug" | "story" | "feature" }
+  /** CV-1: from a conversation: an item (the path of action, the original messages appended by the server), a suggested comment, a description change. */
+  | { kind: "conversation_create"; conversationId: number; commitmentId?: number; title: string; description: string; level: "bug" | "story" | "feature"; parentId?: number; includeInternal?: boolean }
+  | { kind: "conversation_comment"; suggestionId: number; includeInternal?: boolean; text?: string }
+  | { kind: "description_update"; suggestionId: number; after?: string };
 
 export type DevOpsWriteEnv = {
   /** Clients with a checked write PAT. */

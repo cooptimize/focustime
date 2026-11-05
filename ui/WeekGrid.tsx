@@ -24,13 +24,14 @@ import { mondayOf } from "../week/dates.ts";
 import { HalfScope } from "./scope.ts";
 import { interactive } from "./DetailPanel.tsx";
 import { userZone } from "../week/zone.ts";
+import type { DayPromise } from "../plan/conversation-views.ts";
 
 export type Selection = { dayIndex: number; half: Half };
 /** U3: where the detail panel opens: the features list, one follow-up or one pick. */
 export type PanelFocus = { kind: "features" } | { kind: "followup"; id: number } | { kind: "pick"; id: number };
 
 /** Step 15.1 (D276): the layout, for the time rail on each compact card (U3: always on, the one home for meetings). */
-const RulerCtx = createContext<{ layout: Layout }>({ layout: "wide" });
+const RulerCtx = createContext<{ layout: Layout; promises: readonly DayPromise[]; onPromise?: (() => void) | undefined }>({ layout: "wide", promises: [] });
 
 type Props = {
   week: Week;
@@ -54,11 +55,14 @@ type Props = {
   onPlanDay?: ((date: string) => void) | undefined;
   onAddWork?: ((date: string, half: Half) => void) | undefined;
   onAddHours?: ((date: string) => void) | undefined;
+  /** CV-1: my promises with a time, marked on the rail (overdue in amber). */
+  promises?: readonly DayPromise[] | undefined;
+  onPromise?: (() => void) | undefined;
 };
 
 export function WeekGrid(props: Props) {
   return (
-    <RulerCtx.Provider value={{ layout: props.layout }}>
+    <RulerCtx.Provider value={{ layout: props.layout, promises: props.promises ?? [], onPromise: props.onPromise }}>
       <Grid {...props} />
     </RulerCtx.Provider>
   );
@@ -649,9 +653,33 @@ function Ruler({ slot, tz, label }: { slot: Slot; tz: string; label: string }) {
         return at && <RulerEvent key={placed.event.id} e={placed.event} tz={tz} style={{ top: pct(at.top), height: `max(${pct(at.height)}, 6px)`, left: `calc(${pct(lane / lanes)} + 2px)`, width: `calc(${pct(1 / lanes)} - 4px)` }} />;
       })}
       <TimeboxBands slot={slot} pos={pos} bounds={bounds} />
+      <RulerPromises bounds={bounds} tz={tz} />
       </div>
     </div>
   );
+}
+
+/** CV-1: a promise due inside the rail's range, as a thin mark at its time; overdue in amber, never red. */
+function RulerPromises({ bounds, tz }: { bounds: { start: string; end: string }; tz: string }) {
+  const { promises, onPromise } = useContext(RulerCtx);
+  const span = Math.max(1, ms(bounds.end) - ms(bounds.start));
+  const here = promises.filter((p) => p.dueAt && ms(p.dueAt) >= ms(bounds.start) && ms(p.dueAt) < ms(bounds.end));
+  return here.map((p) => {
+    const time = Temporal.Instant.from(p.dueAt!).toZonedDateTimeISO(tz).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+    return (
+      <button
+        key={`promise-${p.id}`}
+        type="button"
+        className={`r-promise${p.overdue ? " overdue" : ""}`}
+        style={{ top: pct((ms(p.dueAt!) - ms(bounds.start)) / span) }}
+        title={`Promise · ${time} · ${p.what}${p.toName ? ` · to ${p.toName}` : ""}`}
+        aria-label={`Promise at ${time}: ${p.what}`}
+        onClick={(e) => (e.stopPropagation(), onPromise?.())}
+      >
+        <span>{p.what}</span>
+      </button>
+    );
+  });
 }
 
 function RulerEvent({ e, tz, style }: { e: CalEvent; tz: string; style: CSSProperties }) {

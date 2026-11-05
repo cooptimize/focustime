@@ -3,7 +3,7 @@
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
 import { storyAction, type StoryContext } from "./story-actions.ts";
-import { conversationAction, type ConversationContext } from "./conversation-actions.ts";
+import { conversationAction, dayPromises, type ConversationContext } from "./conversation-actions.ts";
 import { refreshStatus } from "./conversations-pipeline.ts";
 import type { ConversationsPort } from "./devops-write-actions.ts";
 import { isClientLead } from "./client-lead.ts";
@@ -503,6 +503,7 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
     // Step 14.5 (D256): write PATs and app secrets that expire within 14 days, for Today.
     expiring: (await expiringFor(ctx.plan, cfg, serverToday, (k) => names.get(k))),
     requests: await urgentFor(ctx, now, tz, (k) => names.get(k) ?? cfg?.clientSettings[k]?.name ?? k).catch(() => ({ urgent: [], pastUrgency: 0 })),
+    promises: cfg && ctx.requests?.conversations ? await conversationContext(ctx).then((c) => dayPromises(c, cfg)).catch(() => []) : [],
     ui: cfg?.ui ?? DEFAULT_UI,
     config: { ok: parsed.ok, path: loaded.path, created: !!loaded.created, errors: parsed.ok ? [] : parsed.errors },
     demo: !!ctx.demo?.on,

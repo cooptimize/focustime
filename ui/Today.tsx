@@ -27,8 +27,9 @@ import { causeLines } from "./status.ts";
 import { NOTICE_EVENT, WorkLink } from "./WorkLink.tsx";
 import { weekMusts } from "./WeekMusts.tsx";
 import { mondayOf } from "../week/dates.ts";
-import { dayCalendar, splitByBlocks, type DayEvent } from "../plan/todaycal.ts";
-import { AllDayRow, DayEventRow, OutsideLine } from "./DayCalendar.tsx";
+import { dayCalendar, placePromises, splitByBlocks, type DayEvent } from "../plan/todaycal.ts";
+import type { DayPromise } from "../plan/conversation-views.ts";
+import { AllDayRow, DayEventRow, OutsideLine, PromiseRow } from "./DayCalendar.tsx";
 import { blockRows } from "../plan/todayorder.ts";
 import { checkIn, type CheckSlot } from "../plan/checkin.ts";
 import { suggestedMove } from "../plan/checkinmove.ts";
@@ -81,6 +82,8 @@ type Props = {
   onInbox: () => void;
   /** AP-2: Inbox › Requests (an urgent request's chip, Check-in's "Walked in, not resolved"). */
   onAsks?: () => void;
+  /** CV-1: opens Inbox › My promises. */
+  onPromises?: () => void;
   onCaptures: () => void;
   onRetry: () => void;
   onFix: () => void;
@@ -128,6 +131,9 @@ export function Today(props: Props) {
   const blocks = workday && day ? slotsOf(day) : [];
   const cal = day ? dayCalendar(day, now) : null;
   const split = cal ? splitByBlocks(cal.timed, blocks.map((s) => ({ key: s.half, start: s.start, end: s.end }))) : null;
+  // CV-1: my promises at their time (before, in a block, after), the rest in the follow-ups row; today only.
+  const spots = placePromises(target.isToday ? (data.promises ?? []) : [], blocks.map((s) => ({ key: s.half, start: s.start, end: s.end })), date);
+  const onPromise = props.onPromises ?? props.onInbox;
   const focused = useFocused();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -254,7 +260,7 @@ export function Today(props: Props) {
       </h1>
     );
 
-  const attention = mode === "now" ? <Attention noDue={phone} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} onAsks={props.onAsks ?? props.onInbox} onAskFocus={(u) => void startAsk(u)} /> : null;
+  const attention = mode === "now" ? <Attention noDue={phone} promises={spots.untimed} soon={promisesSoon(data.promises ?? [], blocks, now)} onPromises={onPromise} data={data} date={date} clockMs={nowMs} onInbox={props.onInbox} onRetry={props.onRetry} onFix={props.onFix} onSettings={props.onSettings} onAsks={props.onAsks ?? props.onInbox} onAskFocus={(u) => void startAsk(u)} /> : null;
   const panelSlot = panel ? blocks.find((s) => s.half === panel.half) ?? null : null;
 
   return (
@@ -318,7 +324,7 @@ export function Today(props: Props) {
           {wide && day && mode !== "closeout" && <DayTimeline day={day} blocks={blocks} data={data} picks={picks} now={now} nowMs={nowMs} events={cal?.timed ?? []} onNotice={setNotice} />}
           <div className="today-main">
             {mode !== "checkin" && cal && <AllDayRow events={cal.allDay} />}
-            {mode !== "checkin" && split && !wide && <OutsideLine label="Before your blocks" events={split.before} tz={tz} />}
+            {mode !== "checkin" && split && <OutsideLine label="Before your blocks" events={wide ? [] : split.before} tz={tz} promises={spots.before} onPromise={onPromise} />}
             {mode === "now" && phone && (
               <PhoneNow
                 data={data}
@@ -342,6 +348,7 @@ export function Today(props: Props) {
                   data={data}
                   rows={rowsBy.get(s.half) ?? []}
                   picks={picks.filter((p) => p.half === s.half)}
+                  promises={spots.within.get(s.half) ?? []}
                   check={check.find((c) => c.half === s.half) ?? null}
                   committed={committed}
                   now={now}
@@ -361,7 +368,7 @@ export function Today(props: Props) {
                 />
               ))}
             </section>
-            {mode !== "checkin" && split && !wide && <OutsideLine label="After your blocks" events={split.after} tz={tz} />}
+            {mode !== "checkin" && split && <OutsideLine label="After your blocks" events={wide ? [] : split.after} tz={tz} promises={spots.after} onPromise={onPromise} />}
             {mode === "now" && phone && <PhoneFollowUps data={data} date={date} onChanged={(m) => (m && setNotice(m), props.onChanged())} />}
             {mode === "now" && !phone && <ThisWeek data={data} blocks={blocks} picks={picks} nameOf={nameOf} onNotice={setNotice} onError={setError} />}
             {mode === "checkin" && <CheckinFoot data={data} date={date} blocks={blocks.filter((s) => !ended(s))} picks={picks} now={now} act={act} onReview={props.onPlanWeek} onAsks={props.onAsks ?? props.onInbox} />}
@@ -404,27 +411,42 @@ function checkLeft(check: readonly CheckSlot[]): string {
  * The attention line: only when something needs it. Follow-ups due collapse to one chip that opens into rows; a source
  * that failed shows with how old its data is and Retry; an expiring secret links to its setting. Nothing when healthy.
  */
-function Attention({ noDue = false, data, date, clockMs, onInbox, onRetry, onFix, onSettings, onAsks, onAskFocus }: { noDue?: boolean; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void; onAsks: () => void; onAskFocus: (u: UrgentAsk) => void }) {
+/** CV-1: timed promises for Now: overdue, or due before the half-day under way ends. */
+function promisesSoon(ps: readonly DayPromise[], blocks: readonly { start: string; end: string }[], now: string): DayPromise[] {
+  const t = Date.parse(now);
+  const under = blocks.find((b) => Date.parse(b.start) <= t && t < Date.parse(b.end));
+  return ps.filter((p) => p.dueAt && (Date.parse(p.dueAt) < t || (under && Date.parse(p.dueAt) <= Date.parse(under.end))));
+}
+
+function Attention({ noDue = false, promises = [], soon = [], onPromises, data, date, clockMs, onInbox, onRetry, onFix, onSettings, onAsks, onAskFocus }: { noDue?: boolean; promises?: DayPromise[]; soon?: DayPromise[]; onPromises?: () => void; data: WeekLoadData; date: IsoDate; clockMs: number; onInbox: () => void; onRetry: () => void; onFix: () => void; onSettings: (s: string) => void; onAsks: () => void; onAskFocus: (u: UrgentAsk) => void }) {
   const [open, setOpen] = useState(false);
   // P1: the phone lists due follow-ups at the foot of Today instead.
   const due: FollowUpView[] = noDue ? [] : urgentFollowUps(data.followUps, date);
   const down = causeLines(data.sources, data.devops);
   const vm = vmNeedsToday(useContext(VmCtx).status);
   const urgent = data.requests?.urgent ?? [];
-  if (!due.length && !down.length && !data.expiring.length && !vm && !urgent.length) return null;
+  if (!due.length && !promises.length && !soon.length && !down.length && !data.expiring.length && !vm && !urgent.length) return null;
+  const dueCount = due.length + promises.length;
   const names = [...new Set(due.map((l) => (l.hasWho ? l.who : l.clientName ?? "")).filter(Boolean))];
   return (
     <section className="attention" aria-label="Needs attention">
       <div className="attention-line">
-        {due.length > 0 && (
+        {dueCount > 0 && (
           <button type="button" className="att-chip due" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
             <span className="att-tag">
-              {due.length} follow-up{due.length === 1 ? "" : "s"} due
+              {[due.length ? `${due.length} follow-up${due.length === 1 ? "" : "s"}` : "", promises.length ? `${promises.length} promise${promises.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ")} due
             </span>
             {names.length > 0 && <span className="att-names">{names.join(" · ")}</span>}
             <span aria-hidden="true">{open ? "⌃" : "›"}</span>
           </button>
         )}
+        {soon.map((p) => (
+          <button key={`promise-${p.id}`} type="button" className={`att-chip promise${p.overdue ? " overdue" : ""}`} onClick={onPromises} title="Open it in Inbox › My promises">
+            <span className="att-tag">{p.overdue ? "Overdue promise" : "Promise"}</span>
+            <span className="att-names">{Temporal.Instant.from(p.dueAt!).toZonedDateTimeISO(userZone(data)).toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
+            <span>{p.what}</span>
+          </button>
+        ))}
         {down.map((c) => (
           <span key={c.key} className="att-chip source" title={c.step ?? ""}>
             <span className="att-tag">{c.affected.join(", ")}</span>
@@ -471,6 +493,15 @@ function Attention({ noDue = false, data, date, clockMs, onInbox, onRetry, onFix
               </button>
             </li>
           ))}
+          {promises.map((p) => (
+            <li key={`promise-${p.id}`}>
+              <button type="button" className="att-row" onClick={onPromises ?? onInbox}>
+                <span className={`due-badge${p.overdue ? " overdue-amber" : ""}`}>{p.overdue ? "Promise · overdue" : "Promise"}</span>
+                <span className="att-who">{p.toName ?? p.clientName}</span>
+                <span className="what">{p.what}</span>
+              </button>
+            </li>
+          ))}
         </ul>
       )}
     </section>
@@ -501,6 +532,8 @@ type BlockProps = {
   act: (a: string, i: Record<string, unknown>) => Promise<boolean>;
   makeUp: (p: Pick, i: { when: "tonight" | "friday" | "day"; date?: IsoDate; half?: Half }) => Promise<boolean>;
   props: Props;
+  /** CV-1: my promises due during this block. */
+  promises?: DayPromise[];
 };
 
 /** One block card (density "today"): header with client, time and the one status, then rows, then "Left off". */
@@ -657,6 +690,9 @@ function BlockCard(b: BlockProps) {
             row(r.pick)
           ),
         )}
+        {(b.promises ?? []).map((p) => (
+          <PromiseRow key={`p${p.id}`} p={p} tz={tz} onOpen={b.props.onPromises ?? b.props.onInbox} />
+        ))}
       </ul>
       {!b.picks.some(live) && !ended && (
         <p className="tb-empty">
