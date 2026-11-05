@@ -4557,19 +4557,45 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .ah-nodates h4 { margin: 0 0 4px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .ah-nodates ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: var(--fs-3); }
 .ah-nodates li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.ah-review { display: flex; flex-direction: column; gap: 10px; }
-.ah-review-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.ah-review-head h2 { margin: 0; }
-.ah-review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; overflow: auto; }
-.ah-review-item { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
-.ah-review-item.conflict { border-color: var(--watch); }
-.ah-review-item h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: var(--fs-3); font-weight: 600; }
-.ah-review-item tr.conflict th { color: var(--text); }
+/* AH-2: Review changes on the shared side panel shell (bd-head, bd-body, bd-foot: inset, nothing at the edge), one
+   column of cards whose change rows share one grid (Field | Before | → | After | Remove), the footer sticky. */
+.bd-panel.ah-review { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
+.ah-review .bd-head h2 { flex: 1 1 auto; }
+.ah-review-body { gap: 14px; }
+.ah-review-sum { margin: 0; max-width: 72ch; }
+.ah-rv-grid { display: grid; grid-template-columns: max-content minmax(7em, 1fr) auto minmax(7em, 1.4fr) auto; column-gap: 16px; row-gap: 10px; align-items: baseline; }
+.ah-rv-cols { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; padding: 0 14px; font-size: var(--fs-1); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.ah-rv-card { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; row-gap: 6px; padding: 10px 14px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.ah-rv-card.conflict { border-color: color-mix(in oklab, var(--ah-attention) 70%, var(--border)); }
+.ah-rv-title { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.ah-rv-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ah-rv-client { flex: none; margin-left: auto; font-weight: 400; }
+.ah-rv-conflict { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; padding: 6px 10px; border-radius: 6px; background: var(--raised); }
+.ah-rv-conflict::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ah-attention); }
+.ah-rv-row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; padding-top: 6px; border-top: 1px solid var(--border); }
+.ah-rv-field { font-weight: 500; color: var(--text-muted); }
+.ah-rv-before { color: var(--text-muted); overflow-wrap: anywhere; }
+.ah-rv-arrow { color: var(--text-faint); }
+.ah-rv-after { overflow-wrap: anywhere; }
+.ah-rv-remove { justify-self: end; }
 .ah-theirs { display: block; font-size: var(--fs-2); color: var(--text-muted); }
-.ah-conflict { margin: 6px 0 0; }
 .ah-landed ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--fs-3); }
 .ah-landed li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.ah-review-foot { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+.ah-review-foot { position: sticky; bottom: 0; background: var(--surface); }
+.ah-review-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ah-review-note { margin: 0; font-size: var(--fs-2); }
+@media (max-width: 699.98px) {
+  /* One column: Field above Before → After, Remove beside the field. */
+  .ah-rv-grid { grid-template-columns: minmax(0, 1fr); }
+  .ah-rv-cols { display: none; }
+  .ah-rv-card, .ah-rv-row { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+  .ah-rv-row { grid-template-areas: "field field field remove" "before arrow after after"; column-gap: 8px; }
+  .ah-rv-field { grid-area: field; }
+  .ah-rv-before { grid-area: before; }
+  .ah-rv-arrow { grid-area: arrow; }
+  .ah-rv-after { grid-area: after; }
+  .ah-rv-remove { grid-area: remove; }
+}
 @media (max-width: 1100px) {
   .ah-body.with-pane { grid-template-columns: minmax(0, 1fr); }
   .ah-pane { position: static; }

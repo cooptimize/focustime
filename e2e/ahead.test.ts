@@ -112,17 +112,37 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
 
   it("the review: grouped by item, before → after, a conflict with Keep mine or Take theirs, Remove, Discard all with a confirm; Commit needs writes on", async () => {
     const { page, errors } = await sameSessionFresh();
+    // A second change on one item (its size, beside the conflicting target), so a card holds two rows.
+    const loyal = row(page, "Loyalty points").locator(".ah-col-start");
+    await loyal.waitFor({ timeout: 30_000 });
+    await loyal.focus();
+    await page.keyboard.press("Enter");
+    await page.locator(".ah-editor").getByLabel("Start date").fill("2026-11-30");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes pending");
     await page.getByRole("button", { name: "Review" }).click();
     const panel = page.getByRole("dialog", { name: "Review changes" });
     await panel.waitFor();
     await expect(panel.locator(".ah-review-item").count()).resolves.toBe(3);
     const conflict = panel.locator(".ah-review-item.conflict");
     await expect(conflict.textContent()).resolves.toMatch(/Loyalty points.*Target.*Fri, Dec 4.*Wed, Dec 23 PM.*DevOps has Fri, Dec 11 now/);
+    // AH-2: one summary, the conflict at the top of its card, and one grid across the cards: every arrow at the same x.
+    await expect(panel.locator(".ah-review-sum").textContent()).resolves.toMatch(/^4 changes on 3 items\. Each item is written to DevOps as one change, only if nobody changed those fields since you started editing\.$/);
+    await expect(conflict.locator(":scope > *").nth(1).getAttribute("class")).resolves.toContain("ah-rv-conflict");
+    const arrows = await panel.locator(".ah-rv-arrow").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
+    expect(arrows.length).toBe(4);
+    expect(new Set(arrows).size).toBe(1);
+    const afters = await panel.locator(".ah-rv-after").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
+    expect(new Set(afters).size).toBe(1);
+    await expect(panel.getByRole("button", { name: /^Commit (3 items )?to DevOps$/ }).count()).resolves.toBe(1);
+    await expect(panel.getByText("Nothing is written until you commit.").count()).resolves.toBe(1);
     await expect(panel.getByText("Northwind Foods: DevOps writes aren't on for you.").count()).resolves.toBe(1);
     await expect(panel.getByRole("button", { name: "Enable DevOps writes" }).count()).resolves.toBe(1);
     await shotBoth(page, "ahead-review-conflict", panel);
     // Take theirs drops my conflicting change.
     await conflict.getByRole("button", { name: "Take theirs" }).click();
+    await expect.poll(() => panel.locator(".ah-review-item.conflict").count()).toBe(0);
+    await panel.getByRole("button", { name: /Remove the start change on #1140/ }).click();
     await expect.poll(() => panel.locator(".ah-review-item").count()).toBe(2);
     await panel.getByRole("button", { name: /Remove the start change on #1150/ }).click();
     await expect.poll(() => panel.locator(".ah-review-item").count()).toBe(1);
