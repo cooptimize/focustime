@@ -282,3 +282,65 @@ export function aCommitmentAnswer(o: Partial<UpdateAnswer["conversations"][numbe
 export function anUpdateAnswer(o: Partial<UpdateAnswer> = {}): UpdateAnswer {
   return { messages: [{ ref: "m1", kind: "work", conversation: "n1", confident_new_topic: false }], conversations: [aConversationUpdate()], ...o };
 }
+
+// ---- WT-1: DevOps process responses (fictional projects; shapes as the REST API returns them) ----
+type RawProcess = import("../../plan/process.ts").RawProcess;
+const st = (spec: string) => spec.split("|").map((s) => {
+  const [name, category] = s.split("=");
+  return { name: name!, category: category!, color: "b2b2b2" };
+});
+const aType = (name: string, icon: string, color: string, states: string) => ({ name, icon: { id: icon, url: "https://example.invalid/icon" }, color, isDisabled: false, states: st(states) });
+const backlog = (type: "portfolio" | "requirement" | "task", rank: number, types: string[], def = types[0]) => ({ name: `${types[0]}s`, type, rank, isHidden: false, workItemTypes: types.map((name) => ({ name })), defaultWorkItemType: def ? { name: def } : undefined });
+
+/** A client process: Epic, Feature, User Story, Task, Bug with custom states like "01-New", "09-Active", "05-In UAT". */
+export function aClientProcess(o: Partial<RawProcess> = {}): RawProcess {
+  return {
+    org: "contoso",
+    project: "Contoso ERP",
+    process: "Contoso Agile",
+    fetchedAt: "2026-11-02T09:00:00Z",
+    teamSettings: { bugsBehavior: "asTasks" },
+    processConfig: { bugWorkItems: { workItemTypes: [{ name: "Bug" }] } },
+    teamBacklogs: { value: [backlog("portfolio", 4, ["Epic"]), backlog("portfolio", 3, ["Feature"]), backlog("requirement", 2, ["User Story"]), backlog("task", 1, ["Task", "Bug"], "Task")] },
+    types: [
+      aType("Epic", "icon_crown", "FF7B00", "01-New=Proposed|02-Active=InProgress|90-On Hold=InProgress|Closed=Completed|Removed=Removed"),
+      aType("Feature", "icon_trophy", "773B93", "01-Proposed=Proposed|09-Active=InProgress|10-Completed=Resolved|Closed=Completed|99-Not Applicable=Removed"),
+      aType("User Story", "icon_book", "009CCC", "01-New=Proposed|02-In Progress=InProgress|05-In UAT=InProgress|Approved - Waiting for PO=InProgress|03-Resolved=Resolved|Approved - Ready for CRP=Completed|07-Blocked=Removed|Removed=Removed"),
+      aType("Task", "icon_clipboard", "F2CB1D", "New=Proposed|Active=InProgress|Released=Completed|10-Blocked=Removed|Removed=Removed"),
+      aType("Bug", "icon_insect", "CC293D", "01-Not Started=Proposed|02-In Progress=InProgress|Resolved=Resolved|Ready for Go-live=Completed"),
+      { ...aType("Test Case", "icon_test_case", "004B50", "Design=Proposed|Ready=InProgress|Closed=Completed"), isDisabled: true },
+    ],
+    history: { Epic: { items: 11, withChildren: 11, childTypes: { Feature: 134, Issue: 9 } }, Feature: { items: 70, withChildren: 41, childTypes: { "User Story": 143 } } },
+    ...o,
+  };
+}
+
+/** Cooptimize's own process: Domain and Epic at top; Feature, Recurring and Ongoing at parent; User Story; Task. */
+export function anInternalProcess(o: Partial<RawProcess> = {}): RawProcess {
+  return {
+    org: "fabrikam",
+    project: "Fabrikam Internal",
+    process: "Sociocracy",
+    fetchedAt: "2026-11-02T09:00:00Z",
+    teamSettings: { bugsBehavior: "asTasks" },
+    processConfig: { bugWorkItems: { workItemTypes: [{ name: "Bug" }] } },
+    teamBacklogs: { value: [backlog("portfolio", 4, ["Domain", "Epic"], "Epic"), backlog("portfolio", 3, ["Feature", "Ongoing", "Recurring"], "Feature"), backlog("requirement", 2, ["User Story"]), backlog("task", 1, ["Task", "Bug"], "Task")] },
+    types: [
+      aType("Domain", "icon_crown", "e87025", "Proposed=Proposed|Assigned=InProgress|At Risk=InProgress|Disbanded=Completed"),
+      aType("Epic", "icon_crown", "E06C00", "New=Proposed|Active=InProgress|Resolved=InProgress|Closed=Completed|Removed=Removed"),
+      aType("Feature", "icon_trophy", "773B93", "New=Proposed|Active=InProgress|Resolved=InProgress|Closed=Completed|Removed=Removed"),
+      aType("Recurring", "icon_asterisk", "5c197b", "New=Proposed|Recurring=InProgress|Closed=Completed"),
+      aType("Ongoing", "icon_flame", "5c197b", "New=Proposed|Active=InProgress|Closed=Completed"),
+      aType("User Story", "icon_book", "0098C7", "New=Proposed|Active=InProgress|Resolved=InProgress|Closed=Completed|Removed=Removed"),
+      aType("Task", "icon_clipboard", "A4880A", "New=Proposed|Active=InProgress|Closed=Completed|Removed=Removed"),
+      aType("Bug", "icon_insect", "CC293D", "New=Proposed|Active=InProgress|Resolved=Resolved|Closed=Completed"),
+    ],
+    history: {
+      Domain: { items: 7, withChildren: 7, childTypes: { Feature: 31, Recurring: 21, Ongoing: 1 } },
+      Feature: { items: 20, withChildren: 9, childTypes: { "User Story": 24 } },
+      Recurring: { items: 12, withChildren: 9, childTypes: { "User Story": 18 } },
+      Ongoing: { items: 1, withChildren: 0, childTypes: {} },
+    },
+    ...o,
+  };
+}

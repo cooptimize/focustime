@@ -1,5 +1,6 @@
 // The command menu (Ctrl+K) and the "⋯" / right-click popup menus (step 6). Both render menu steps from
 // ui/menu.ts: arrow keys move, Enter chooses, Backspace on an empty search or Left goes back, Esc closes.
+import { TypeIcon } from "./TypeIcon.tsx";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { filterCommands, type FormField, type MenuEnv, type MenuHead, type MenuItem, type MenuStep } from "./menu.ts";
 import { ItemLookup, NO_ITEM, type ItemValue } from "./ItemLookup.tsx";
@@ -197,6 +198,7 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList, pop
             >
               <span className="menu-label">
                 {it.checked && <span aria-hidden="true">✓ </span>}
+                {it.typeIcon && <><TypeIcon clientKey={it.typeIcon.clientKey} type={it.typeIcon.type} />{" "}</>}
                 {it.label}
                 {it.disabled && !popup && <span className="menu-why"> · {it.disabled}</span>}
               </span>

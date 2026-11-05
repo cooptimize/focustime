@@ -1,8 +1,9 @@
 // Plan the day's two panes (step 15, D263 to D265, D268). Pure: which block is selected, what the right pane offers
 // for it and in what order, what Done does, and the musts summary on the context line.
+import { typeNeedsBreakdown } from "./process.ts";
 import type { DraftStory } from "./types.ts";
 import type { Progress } from "./weeklist.ts";
-import type { Half, IsoDate, WorkItem } from "../week/types.ts";
+import type { Half, IsoDate, TypeLook, WorkItem } from "../week/types.ts";
 import { isPickable, weekFirst } from "./rules.ts";
 import type { FitWords } from "./fit.ts";
 
@@ -53,7 +54,7 @@ export type AddInput<R extends Ref, F extends FollowLike> = {
   clientKey: string;
   date: IsoDate;
   half: Half;
-  work: { items: readonly WorkItem[]; children: readonly WorkItem[]; committed?: readonly WorkItem[] } | undefined;
+  work: { items: readonly WorkItem[]; children: readonly WorkItem[]; committed?: readonly WorkItem[]; types?: readonly TypeLook[] } | undefined;
   /** The client's week list in list order, done ones marked. */
   week: readonly R[];
   followUps: readonly F[];
@@ -91,7 +92,8 @@ export function addSections<R extends Ref, F extends FollowLike>(i: AddInput<R, 
     const allDrafts = draftsUnder(e.feature.itemId);
     const stories = e.kids.filter(free);
     const drafts = allDrafts.filter((d) => shown(`d${d.id}`));
-    const breakDown = !!i.work && e.kids.length === 0 && allDrafts.length === 0;
+    // WT-1: only a type that needs breakdown in the project's process asks for stories.
+    const breakDown = !!i.work && e.kids.length === 0 && allDrafts.length === 0 && (!e.item || typeNeedsBreakdown(i.work.types, e.item.type));
     const left = stories.filter((x) => open(`i${i.clientKey}:${x.id}`)).length + drafts.filter((d) => open(`d${d.id}`)).length;
     const total = e.kids.length + allDrafts.length;
     const planned = e.kids.filter((x) => i.picked.has(`i${i.clientKey}:${x.id}`)).length + allDrafts.filter((d) => i.picked.has(`d${d.id}`)).length;

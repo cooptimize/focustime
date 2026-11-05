@@ -13,7 +13,10 @@ import type { ConversationView } from "../store/conversation-store.ts";
 import { readBack, type Sleep } from "./readback.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { AC_FIELD, BATCH_LIMIT, REMOVED_COMMENT, START_FIELD, completedState, createOps, descriptionOps, textToHtml, datesOps, identityMatches, isOpenCategory, removedState, removeOps, row, stateOps, targetDateOps, undoTops, validOrg, VISIBILITY, type DevOpsWriteEntry, type ItemSnapshot, type PatchOp, type StateInfo, type WriteOp } from "../plan/devopswrite.ts";
-import { dateOnly, detectTargetField, htmlToText, identityEmail, portfolioTiers, workItemUrl } from "../sources/devops/normalize.ts";
+import { dateOnly, detectTargetField, htmlToText, identityEmail, workItemUrl } from "../sources/devops/normalize.ts";
+import { levelsFromProcessConfig } from "../plan/process.ts";
+/** WT-1: the portfolio tiers from the process model (process configuration on the write path), never type names. */
+const portfolioTiers = (pc: unknown) => levelsFromProcessConfig(pc).tiers;
 import { Pat } from "../sources/devops/pat.ts";
 import type { DevOpsSource } from "../sources/devops/source.ts";
 import type { TargetsResult } from "../sources/devops/types.ts";
@@ -326,7 +329,7 @@ const none = { draftId: null, followUpId: null, undoOf: null, commentId: null, p
 
 /** One change → what to hold, or a reason there is nothing to do. Reads the item now (fresh rev). */
 async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Promise<unknown>> = new Map()): Promise<HeldIn | string> {
-  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after"]);
+  const o = fields(c, ["kind"], ["itemId", "state", "comment", "text", "draftId", "description", "acceptance", "date", "startDate", "writeId", "followUpId", "chatId", "messageId", "level", "storyDraftId", "proposalId", "conversationId", "commitmentId", "suggestionId", "title", "parentId", "includeInternal", "after", "type"]);
   const { writer, org, pat, project, plan } = env;
   switch (o.kind) {
     case "state": {
@@ -383,8 +386,8 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const wantParent = draft.level === "feature" ? tiers.epic : tiers.feature;
       if (!wantParent.has(parent.type)) throw new Refused(`#${parent.id} is a ${parent.type}: a ${draft.level === "feature" ? "feature goes under an epic" : "story goes under a feature"}`, 409);
       const parentStates = await writer.states(org, pat, project, parent.type);
-      const pcat = parentStates.find((s) => s.name === parent.state)?.category ?? "InProgress";
-      if (!isOpenCategory(pcat)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
+      // An unknown state counts as open (plan/process.ts).
+      if (!isOpenCategory(parentStates.find((s) => s.name === parent.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
       const typeHas = await writer.typeFields(org, pat, project, type);
       const acField = draft.level === "story" && typeHas.has(AC_FIELD);
       // Step 15.3: the draft editor's values; an explicit input (older callers) still wins.
@@ -429,10 +432,12 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const parent = await once(`item:${draft.featureId}`, () => writer.item(org, pat, project, draft.featureId));
       const pc = await once("pc", () => writer.processConfig(org, pat, project));
       if (!portfolioTiers(pc).feature.has(parent.type)) throw new Refused(`#${parent.id} is a ${parent.type}: stories are drafted under features`, 409);
-      const type = defaultType(pc, "story");
+      // WT-1: the draft's child type when the parent's type takes it (the next level down), else the default.
+      const valid = levelsFromProcessConfig(pc).childrenOf(parent.type);
+      const type = draft.storyType && valid.includes(draft.storyType) ? draft.storyType : defaultType(pc, "story");
       if (!type) throw new Refused("This project's process has no story level", 409);
       const parentStates = await once(`states:${parent.type}`, () => writer.states(org, pat, project, parent.type));
-      if (!isOpenCategory(parentStates.find((s) => s.name === parent.state)?.category ?? "InProgress")) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
+      if (!isOpenCategory(parentStates.find((s) => s.name === parent.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
       const typeHas = await once(`fields:${type}`, () => writer.typeFields(org, pat, project, type));
       const acField = typeHas.has(AC_FIELD);
       const area = String(parent.fields["System.AreaPath"] ?? "");
@@ -505,17 +510,18 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const title = str(o.title, "title", 255)!;
       const path = str(o.description, "description", 8000, true) ?? "";
       const pc = await writer.processConfig(org, pat, project);
-      const t = typeInfo(pc, level);
-      if (!t) throw new Refused(level === "bug" ? "This project's process doesn't track bugs on a backlog. Create a story instead" : `This project's process has no ${level} level`, 409);
+      const chosen = str(o.type, "type", 128, true) ?? null;
       let parent: ItemSnapshot | null = null;
       if (o.parentId !== undefined && o.parentId !== null) {
         parent = await writer.item(org, pat, project, posId(o.parentId, "parentId"));
         const tiers = portfolioTiers(pc);
-        const want = level === "feature" ? tiers.epic : tiers.feature;
-        if (!want.has(parent.type)) throw new Refused(`#${parent.id} is a ${parent.type}: a ${level === "feature" ? "feature goes under an epic" : `${level} goes under a feature`}`, 409);
-        const pcat = (await writer.states(org, pat, project, parent.type)).find((x) => x.name === parent!.state)?.category ?? "InProgress";
-        if (!isOpenCategory(pcat)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
+        if (!tiers.feature.has(parent.type) && !tiers.epic.has(parent.type)) throw new Refused(`#${parent.id} is a ${parent.type}: items go under a feature or an epic`, 409);
+        // An unknown state counts as open (plan/process.ts).
+        if (!isOpenCategory((await writer.states(org, pat, project, parent.type)).find((x) => x.name === parent!.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);
       }
+      // WT-1: the type goes where the process says (under the parent: one of its valid child types).
+      const t = typeInfo(pc, level, { type: chosen, parentType: parent?.type ?? null });
+      if (!t) throw new Refused(parent ? `${chosen ?? `A ${level}`} isn't a type that goes under #${parent.id} in this project` : level === "bug" ? "This project's process doesn't track bugs on a backlog. Create a story instead" : `This project's process has no ${level} level`, 409);
       const chat = await shared.teams.chat(c.chatId);
       const internal = chat?.kind === "delivery";
       const include = o.includeInternal === true;
@@ -533,7 +539,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       const chatName = chat?.displayName ?? "a client chat";
       const description = descriptionHtml(path, originals, { zone: tz, chatName, chatLink: chat ? teamsLink(chat) : messageLink(c.chatId, "0") });
       const typeHas = await writer.typeFields(org, pat, project, t.type);
-      const descriptionField = level === "bug" && typeHas.has(REPRO_FIELD) ? REPRO_FIELD : "System.Description";
+      const descriptionField = t.level === "bug" && typeHas.has(REPRO_FIELD) ? REPRO_FIELD : "System.Description";
       const area = parent ? String(parent.fields["System.AreaPath"] ?? "") || null : null;
       const iteration = parent ? String(parent.fields["System.IterationPath"] ?? "") || null : null;
       const ops = createOps({ org, title, description, descriptionIsHtml: true, acField: false, assignedTo: env.me.email, areaPath: area, iterationPath: iteration, parentId: parent?.id ?? null, descriptionField, timeZone: tz });

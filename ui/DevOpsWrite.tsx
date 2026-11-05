@@ -3,6 +3,7 @@ import { whenText } from "./labels.ts";
 // and after, link changes, the identity it writes as and who can see it. Confirm writes (with the rev test), reads
 // back, and only then says so; a refusal because the item changed offers Reload (a fresh preview), anything not
 // confirmed offers Retry. Clients without a write PAT get "Enable DevOps writes" (Settings > Clients) instead.
+import { categoryWord } from "../plan/process.ts";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { DevOpsLogView, DevOpsPreview, DevOpsResult } from "../actions/types.ts";
 import type { StateInfo } from "../plan/devopswrite.ts";
@@ -25,7 +26,7 @@ export type DevOpsChange =
   /** AP-1: a bug, story or feature from an ask in a client chat. */
   | { kind: "request_create"; chatId: string; messageId: string; level: "bug" | "story" | "feature" }
   /** CV-1: from a conversation: an item (the path of action, the original messages appended by the server), a suggested comment, a description change. */
-  | { kind: "conversation_create"; conversationId: number; commitmentId?: number; title: string; description: string; level: "bug" | "story" | "feature"; parentId?: number; includeInternal?: boolean }
+  | { kind: "conversation_create"; conversationId: number; commitmentId?: number; title: string; description: string; level: "bug" | "story" | "feature"; type?: string; parentId?: number; includeInternal?: boolean }
   | { kind: "conversation_comment"; suggestionId: number; includeInternal?: boolean; text?: string }
   | { kind: "description_update"; suggestionId: number; after?: string };
 
@@ -294,7 +295,7 @@ function AskDialog({ ask, onClose, onPreview }: { ask: Ask; onClose: () => void;
               <select ref={first} value={state} onChange={(e) => setState(e.target.value)}>
                 {states.map((s) => (
                   <option key={s.name} value={s.name}>
-                    {s.name} ({s.category === "InProgress" ? "in progress" : s.category.toLowerCase()})
+                    {s.name} ({categoryWord(s.category)})
                   </option>
                 ))}
               </select>

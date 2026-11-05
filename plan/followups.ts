@@ -1,6 +1,7 @@
 // Follow-up rules (step 7, stage A of D93): deterministic, no AI. Each rule opens a follow-up once and, where a DevOps signal
 // can prove it, closes it again. Pure: plan picks, DevOps results already loaded and the follow-ups so far in; what to
 // open, update and close out. The server applies it to the plan store. Nothing is ever posted anywhere.
+import { isClosed, isOpen } from "./process.ts";
 import { mondayOf } from "../week/dates.ts";
 import type { Half, IsoDate, WorkItem } from "../week/types.ts";
 import type { Pick } from "./types.ts";
@@ -84,8 +85,6 @@ export type Detected = {
   close: { id: number; note: string }[];
 };
 
-const OPEN_CATEGORIES = new Set(["Proposed", "InProgress"]);
-const DONE_CATEGORIES = new Set(["Completed", "Removed"]);
 const BLOCKED = /\bblocked\b/i;
 
 /** Blocked by its state ("Blocked", "10-Blocked") or a tag ("Blocked", "Blocked by vendor"). */
@@ -206,7 +205,7 @@ export function detectFollowUps(i: DetectInput): Detected {
     if (open.some((l) => l.kind === "devops_update" && l.clientKey === p.clientKey && l.itemId === p.itemId)) continue;
     const item = find(work.get(p.clientKey), p.itemId);
     // Unknown (DevOps not loaded, item not seen): nothing to say yet.
-    if (!item || !OPEN_CATEGORIES.has(item.stateCategory)) continue;
+    if (!item || !isOpen(item.stateCategory)) continue;
     // I already updated it after ticking it done: nothing owed. Someone else's change isn't my update (Q42).
     if (item.changedByMe && after(item.changedAt, p.updatedAt)) continue;
     out.open.push({ kind: "devops_update", ruleKey: key, clientKey: p.clientKey, who: i.clientName(p.clientKey), what: `Update DevOps #${p.itemId}: ${p.title}`, itemId: p.itemId, refAt: p.updatedAt });
@@ -221,7 +220,7 @@ export function detectFollowUps(i: DetectInput): Detected {
     const w = freshWork(l.clientKey);
     const item = l.itemId !== null ? find(w, l.itemId) : null;
     if (!item) continue;
-    if (DONE_CATEGORIES.has(item.stateCategory)) out.close.push({ id: l.id, note: `DevOps #${item.id} is ${item.state}` });
+    if (isClosed(item.stateCategory)) out.close.push({ id: l.id, note: `DevOps #${item.id} is ${item.state}` });
     // Q42: only my own change after the follow-up opened proves the update.
     else if (item.changedByMe && after(item.changedAt, l.openedAt)) out.close.push({ id: l.id, note: `DevOps #${item.id} was updated` });
   }
@@ -288,7 +287,7 @@ export function detectFollowUps(i: DetectInput): Detected {
   for (const l of open.filter((x) => x.kind === "blocked")) {
     const item = l.itemId !== null ? find(freshWork(l.clientKey), l.itemId) : null;
     if (!item) continue;
-    if (DONE_CATEGORIES.has(item.stateCategory)) out.close.push({ id: l.id, note: `DevOps #${item.id} is ${item.state}` });
+    if (isClosed(item.stateCategory)) out.close.push({ id: l.id, note: `DevOps #${item.id} is ${item.state}` });
     else if (!item.blocked) out.close.push({ id: l.id, note: `DevOps #${item.id} is no longer blocked` });
   }
 

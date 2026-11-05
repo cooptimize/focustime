@@ -5,7 +5,7 @@ import type { DataverseSource } from "../dataverse/source.ts";
 import type { DevOpsSource } from "../devops/source.ts";
 import type { CalEvent, ClientWork, SourceId, SourceResult } from "../../week/types.ts";
 import type { GraphWriter } from "../graph/write.ts";
-import { DEMO_CLIENTS, DEMO_ME, DEMO_PEOPLE, demoGoogle, demoOrganizer, demoOutlook, demoPatterns, demoPortfolio, demoPto, demoWork, isDemoClient } from "./data.ts";
+import { DEMO_CLIENTS, DEMO_ME, DEMO_PEOPLE, demoGoogle, demoOrganizer, demoOutlook, demoPatterns, demoPortfolio, demoProcess, demoPto, demoWork, isDemoClient } from "./data.ts";
 
 const NO = "Demo data: nothing leaves FocusTime";
 
@@ -81,6 +81,7 @@ export function createDemoSources(now: () => string) {
     // DS-1: the demo has no AI, so Draft stories never reads; these say so if anything asks.
     featureSignals: async () => ({ ok: false, message: "Draft stories isn't available in the demo" }),
     exemplarPool: async () => ({ ok: true, value: [] }),
+    processModels: async (keys) => keys.map((clientKey) => (isDemoClient(clientKey) ? { clientKey, ok: true as const, model: demoProcess(clientKey) } : { clientKey, ok: false as const, message: "Not a demo client" })),
   };
   return { dataverse, outlook, google, devops };
 }

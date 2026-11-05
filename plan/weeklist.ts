@@ -2,6 +2,7 @@
 // into Must and Nice to have, in DevOps stack rank order unless reordered locally (never written back). Pins to a day
 // or half-day are optional. Pure: ordering, done (DevOps state, a local mark, a done pick), progress per client, the
 // midweek on-track question and when a dropped must offers a heads-up. No I/O.
+import { isCompleted, isRemoved, isResolved } from "./process.ts";
 import type { ClientWork, IsoDate } from "../week/types.ts";
 import { estimate, hoursText, storyMinutes, validEstimateHours } from "./estimate.ts";
 import type { StorySize } from "./estimate.ts";
@@ -90,7 +91,7 @@ export function devopsStateFrom(work: readonly ClientWork[] | null): (clientKey:
     if (!w || w.status !== "ok" || w.fromCache) return null;
     const seen = [...w.items, ...w.children, ...(w.committed ?? []), ...(w.watched ?? [])].find((i) => i.id === itemId);
     if (!seen) return null;
-    return seen.stateCategory === "Completed" ? "done" : seen.stateCategory === "Resolved" ? "resolved" : seen.stateCategory === "Removed" ? "removed" : "open";
+    return isCompleted(seen.stateCategory) ? "done" : isResolved(seen.stateCategory) ? "resolved" : isRemoved(seen.stateCategory) ? "removed" : "open";
   };
 }
 

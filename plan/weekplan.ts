@@ -20,6 +20,8 @@ export type FeatureLike = {
   size?: StorySize | null;
   parentId?: number | null;
   done?: unknown;
+  /** WT-1: the DevOps type, so a background type (no hours) can be left out of the budget. */
+  itemType?: string | null;
 };
 const isMust = (f: FeatureLike) => (f.tier ?? "must") === "must";
 const isFeature = (f: FeatureLike) => (f.level ?? "feature") === "feature";
@@ -105,7 +107,8 @@ export function withCurrentTitles<T extends { clientKey: string; itemId: number;
  * shown or hidden, unavailable time; none on a day off), less unpaid borrowed time. Planned: minutes of its musts,
  * features as envelopes (plan/estimate.ts).
  */
-export function weekBudget(week: Week, items: readonly FeatureLike[], o: { borrowedMinutes: Readonly<Record<string, number>> }): ClientBudget[] {
+export function weekBudget(week: Week, all: readonly FeatureLike[], o: { borrowedMinutes: Readonly<Record<string, number>>; /** WT-1: false for a background type (no hours). */ counts?: (clientKey: string, itemType: string | null | undefined) => boolean }): ClientBudget[] {
+  const items = o.counts ? all.filter((i) => o.counts!(i.clientKey, i.itemType)) : all;
   const names = new Map<string, string>();
   for (const d of week.days) for (const s of [d.am, d.pm]) if (s.focus[0] && !names.has(s.focus[0].clientKey)) names.set(s.focus[0].clientKey, s.focus[0].clientName);
   for (const f of items) if (!names.has(f.clientKey)) names.set(f.clientKey, f.clientKey);
@@ -195,8 +198,11 @@ export const prioritiesKey = (weekStart: IsoDate, clientKey: string) => `priorit
  * stories, anyone's ("Needs breakdown"); an epic with no open features ("Needs features"); a committed feature with
  * no target date ("No target date", soft). Anything DevOps can't say right now (not loaded, failed, cached) isn't flagged.
  */
-/** A feature with no open story-level child needs breaking down (D164); shared with Roadmap (step 16). */
-export const needsBreakdown = (item: Pick<PortfolioItem, "children">) => !item.children.some((c) => c.open && c.level === "story");
+/**
+ * A feature with no open story-level child needs breaking down (D164); shared with Roadmap (step 16). WT-1: only when its
+ * type needs breakdown in the project's process (every parent type by default; off for a type an admin turned off).
+ */
+export const needsBreakdown = (item: Pick<PortfolioItem, "children" | "needsBreakdown">) => item.needsBreakdown !== false && !item.children.some((c) => c.open && c.level === "story");
 /** An epic with no open feature needs features (step 13.5); shared with Roadmap (step 16). */
 export const needsFeatures = (item: Pick<PortfolioItem, "children">) => !item.children.some((c) => c.open && c.level === "portfolio");
 

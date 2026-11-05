@@ -3,6 +3,7 @@
 // client and chat. One primary action: Add to Today (no due yet) or Make it a follow-up; Link, Done and Not needed
 // under ⋯; Why behind the info icon. A promise that implies a DevOps item asks "Create the DevOps item?" (Create,
 // Link existing, Not needed) of me only, and waits amber after one of my working days. Nothing is posted in Teams.
+import { TypeIcon } from "./TypeIcon.tsx";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { MyPromisesData, PromiseCard } from "../plan/conversation-views.ts";
@@ -230,7 +231,7 @@ function Promise(x: {
       )}
       {x.form === "followup" && <FollowUpForm p={p} onSave={(v) => void x.onRun("my_promises.followup", { id: p.id, ...v }, "Follow-up added. The promise closes when it's done")} onCancel={() => x.onForm(null)} />}
       {x.form === "link" && <PromiseLink p={p} onPick={(id) => void x.onRun("my_promises.link", { id: p.id, itemId: id }, `Linked to #${id}`)} onCancel={() => x.onForm(null)} />}
-      {x.form === "draft" && p.conversationId !== null && <DraftItem c={{ id: p.conversationId, clientName: p.clientName }} commitmentId={p.id} onCreate={x.onCreate} onCancel={() => x.onForm(null)} />}
+      {x.form === "draft" && p.conversationId !== null && <DraftItem c={{ id: p.conversationId, clientName: p.clientName, clientKey: p.clientKey }} commitmentId={p.id} onCreate={x.onCreate} onCancel={() => x.onForm(null)} />}
     </li>
   );
 }
@@ -284,7 +285,7 @@ function PromiseLink({ p, onPick, onCancel }: { p: PromiseCard; onPick: (id: num
           {hits.map((h) => (
             <li key={h.id}>
               <button type="button" className="mini quiet" onClick={() => onPick(h.id)}>
-                #{h.id} {h.title} <span className="muted">· {h.type} · {h.state}</span>
+                <TypeIcon clientKey={p.clientKey} type={h.type} /> #{h.id} {h.title} <span className="muted">· {h.state}</span>
               </button>
             </li>
           ))}

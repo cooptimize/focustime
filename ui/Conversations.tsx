@@ -7,6 +7,7 @@
 // messages as Teams showed them (sanitized on the server; mentions as chips, images as "Image attached"), collapsed by
 // height without cutting a table row. Keys: J and K move, Enter the primary action, X messages, R resolve. Nothing is
 // posted in Teams. Chat text shows only on its own client's card.
+import { TypeIcon } from "./TypeIcon.tsx";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { ConversationCard, ConversationMessage, ConversationsData } from "../plan/conversation-views.ts";
@@ -464,7 +465,7 @@ function ConvLink({ c, onPick, onCancel }: { c: ConversationCard; onPick: (id: n
           {hits.map((h) => (
             <li key={h.id}>
               <button type="button" className="mini quiet" onClick={() => onPick(h.id)}>
-                #{h.id} {h.title} <span className="muted">· {h.type} · {h.state}</span>
+                <TypeIcon clientKey={c.clientKey} type={h.type} /> #{h.id} {h.title} <span className="muted">· {h.state}</span>
               </button>
             </li>
           ))}
@@ -475,13 +476,15 @@ function ConvLink({ c, onPick, onCancel }: { c: ConversationCard; onPick: (id: n
   );
 }
 
-type DraftData = { draft: ItemDraft; notSorted: string | null; features: { id: number; title: string }[]; internalChat: boolean; canCreate: boolean };
+type TypeChoices = { choices: { type: string; bug: boolean }[]; type: string | null };
+type DraftData = { draft: ItemDraft; notSorted: string | null; features: { id: number; title: string; type: string }[]; types?: Record<string, TypeChoices>; internalChat: boolean; canCreate: boolean };
 /** "Create the DevOps item?": the draft from the whole conversation (title, type, parent feature, path of action). */
-export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<ConversationCard, "id" | "clientName">; commitmentId: number | null; onCreate: (change: import("./DevOpsWrite.tsx").DevOpsChange) => void; onCancel: () => void }) {
+export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<ConversationCard, "id" | "clientName" | "clientKey">; commitmentId: number | null; onCreate: (change: import("./DevOpsWrite.tsx").DevOpsChange) => void; onCancel: () => void }) {
   const [d, setD] = useState<DraftData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [level, setLevel] = useState<ItemDraft["level"]>("story");
+  const [type, setType] = useState<string>("");
   const [parent, setParent] = useState<string>("");
   const [path, setPath] = useState("");
   const [include, setInclude] = useState(false);
@@ -493,7 +496,9 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
       setD(r);
       setTitle(r.draft.title);
       setLevel(r.draft.level);
-      setParent(r.draft.parentId ? String(r.draft.parentId) : "");
+      const p = r.draft.parentId ? String(r.draft.parentId) : "";
+      setParent(p);
+      setType(r.types?.[p || "none"]?.type ?? "");
       setPath(pathOfAction(r.draft));
       setError(null);
     } catch (e) {
@@ -503,6 +508,14 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
     }
   }, [c.id, commitmentId]);
   useEffect(() => void fill(false), [fill]);
+  // WT-1: only the valid child types under the chosen parent, the most common first.
+  const options = d?.types?.[parent || "none"];
+  const chosen = options?.choices.find((x) => x.type === type) ?? null;
+  const pickParent = (p: string) => {
+    setParent(p);
+    const next = d?.types?.[p || "none"];
+    if (next && !next.choices.some((x) => x.type === type)) setType(next.type ?? "");
+  };
   return (
     <form
       className="ask-form conv-draft"
@@ -512,7 +525,7 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
       onSubmit={(e) => {
         e.preventDefault();
         if (!title.trim()) return;
-        onCreate({ kind: "conversation_create", conversationId: c.id, ...(commitmentId ? { commitmentId } : {}), title: title.trim(), description: path, level, ...(parent ? { parentId: Number(parent) } : {}), ...(include ? { includeInternal: true } : {}) });
+        onCreate({ kind: "conversation_create", conversationId: c.id, ...(commitmentId ? { commitmentId } : {}), title: title.trim(), description: path, level: chosen?.bug ? "bug" : level === "bug" ? "story" : level, ...(type ? { type } : {}), ...(parent ? { parentId: Number(parent) } : {}), ...(include ? { includeInternal: true } : {}) });
       }}
     >
       <p className="conv-suggest-head">Create the DevOps item?</p>
@@ -525,24 +538,36 @@ export function DraftItem({ c, commitmentId, onCreate, onCancel }: { c: Pick<Con
             Title
             <input autoFocus maxLength={255} value={title} onChange={(e) => setTitle(e.target.value)} />
           </label>
-          <label>
-            Type
-            <select value={level} onChange={(e) => setLevel(e.target.value as ItemDraft["level"])}>
-              <option value="bug">Bug</option>
-              <option value="story">Story</option>
-              <option value="feature">Feature</option>
-            </select>
-          </label>
           {level !== "feature" && (
             <label>
               Under feature
-              <select value={parent} onChange={(e) => setParent(e.target.value)}>
+              <select value={parent} onChange={(e) => pickParent(e.target.value)}>
                 <option value="">None (the project's default area and iteration)</option>
                 {d.features.map((f) => (
                   <option key={f.id} value={f.id}>
                     #{f.id} {f.title}
                   </option>
                 ))}
+              </select>
+            </label>
+          )}
+          {options && options.choices.length > 0 ? (
+            <fieldset className="conv-types">
+              <legend>Type</legend>
+              {options.choices.map((x) => (
+                <label key={x.type} className={`conv-type${x.type === type ? " on" : ""}`}>
+                  <input type="radio" name={`conv-type-${c.id}`} value={x.type} checked={x.type === type} onChange={() => setType(x.type)} />
+                  <TypeIcon clientKey={c.clientKey} type={x.type} decorative /> {x.type}
+                </label>
+              ))}
+            </fieldset>
+          ) : (
+            <label>
+              Type
+              <select value={level} onChange={(e) => (setLevel(e.target.value as ItemDraft["level"]), setType(""))}>
+                <option value="bug">Bug</option>
+                <option value="story">Story</option>
+                <option value="feature">Feature</option>
               </select>
             </label>
           )}

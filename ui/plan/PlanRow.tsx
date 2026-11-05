@@ -9,6 +9,8 @@ type Props = Omit<HTMLAttributes<HTMLLIElement>, "title"> & {
   handle?: ReactNode | undefined;
   handleTitle?: string | undefined;
   title: ReactNode;
+  /** WT-1: the work item type's icon before the title (TypeIcon), when the row is a DevOps item. */
+  icon?: ReactNode | undefined;
   /** Hover text for the title (the full title). */
   titleText?: string | undefined;
   /** Badges after the title (Needs stories, a due badge, "not in DevOps"). */
@@ -22,7 +24,7 @@ type Props = Omit<HTMLAttributes<HTMLLIElement>, "title"> & {
   "data-pick"?: number | undefined;
 };
 
-export function PlanRow({ className = "", handle = "⋮⋮", handleTitle, title, titleText, badges, right, hover, children, ...li }: Props) {
+export function PlanRow({ className = "", handle = "⋮⋮", handleTitle, icon, title, titleText, badges, right, hover, children, ...li }: Props) {
   return (
     <li {...li} className={`pl-row ${className}`} data-plan="row">
       {handle !== null && (
@@ -30,6 +32,7 @@ export function PlanRow({ className = "", handle = "⋮⋮", handleTitle, title,
           {handle}
         </span>
       )}
+      {icon}
       <span className="pl-title pr-title" title={titleText}>
         {title}
       </span>

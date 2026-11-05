@@ -7,6 +7,8 @@
 // after thanks only suggests "Looks wrapped up. Resolve?". The DevOps draft for a commitment is made when its
 // committer opens it (their own cap); creating and commenting go through the write framework. Chat text goes only to
 // that client's cards, never a log or an error (ids and counts only, and not even ids in logs).
+import { typeChoices } from "./work-item-types.ts";
+import type { ProcessModel } from "../plan/process.ts";
 import type { AiService } from "../ai/service.ts";
 import { AiError } from "../ai/types.ts";
 import type { AppConfig } from "../config/schema.ts";
@@ -49,6 +51,8 @@ export type ConversationContext = RequestContext & {
   pipelineAi?: () => Promise<AiService | null>;
   /** The email my DevOps identity uses for a client (to spot an item I changed since I committed). */
   devopsEmail?: (clientKey: string) => Promise<string | null>;
+  /** WT-1: the client's process model (levels, valid children, the most common child), or null when it can't be read. */
+  processModel?: (cfg: AppConfig, clientKey: string) => Promise<ProcessModel | null>;
 };
 
 /** Closed and done ones stay visible this long. */
@@ -500,8 +504,13 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         if (o.commitmentId !== undefined && !k) return bad("No such commitment", 404);
         const r = await draftFor(ctx, v, cfg, c, o.regenerate === true, k);
         const items = (await ctx.openItems(cfg, c.clientKey).catch(() => null)) ?? [];
-        const features = items.filter((i) => i.tier === "feature").map((i) => ({ id: i.id, title: i.title }));
-        return { ok: true, data: { draft: r.draft, notSorted: r.notSorted, features, internalChat: v.byId.get(c.chatId)?.kind === "delivery", canCreate: (await ctx.writeClients().catch((): string[] => [])).includes(c.clientKey) } };
+        const feats = items.filter((i) => i.tier === "feature");
+        const features = feats.map((i) => ({ id: i.id, title: i.title, type: i.type }));
+        // WT-1: only the valid child types under each parent, the most common first (and with no parent, the level's).
+        const model = ctx.processModel ? await ctx.processModel(cfg, c.clientKey).catch(() => null) : null;
+        const types: Record<string, ReturnType<typeof typeChoices>> = { none: typeChoices(model, { parentType: null, level: r.draft.level }) };
+        for (const f of feats) types[String(f.id)] = typeChoices(model, { parentType: f.type, level: r.draft.level });
+        return { ok: true, data: { draft: r.draft, notSorted: r.notSorted, features, types, internalChat: v.byId.get(c.chatId)?.kind === "delivery", canCreate: (await ctx.writeClients().catch((): string[] => [])).includes(c.clientKey) } };
       }
       case "suggestions.skip": {
         const o = only(input, ["id"]);
