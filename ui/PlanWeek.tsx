@@ -8,7 +8,6 @@
 // + Must and Nice, everything else folded, and the type box (Enter a draft feature as a must, Shift+Enter a nice to
 // have). DevOps health, a feature and a client's budget open in the shared detail panel. DevOps is read-only; the
 // week plan lives only in the local plan store. A past week is a review.
-import { countsFor } from "../plan/process.ts";
 import { ResolvedMark, TypeIcon } from "./TypeIcon.tsx";
 import { ModeArea } from "./ModeSwitch.tsx";
 import { planWeekParts } from "./nav.ts";
@@ -22,7 +21,10 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSS
 import type { WeekLoadData, WeekPlanState } from "../actions/types.ts";
 import type { DraftStory, WeekFeature } from "../plan/types.ts";
 import { addPaneRows, type AddRowInfo } from "../plan/weekadd.ts";
-import { borrowedForWeek, needsBreakdown, PINNED_TO_PTO, pinnedToPto, readiness, weekBudget, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
+import { needsBreakdown, PINNED_TO_PTO, pinnedToPto, readiness, type ClientBudget, type ReadinessFlag } from "../plan/weekplan.ts";
+import { resolvedOf } from "../plan/carry.ts";
+import { commitFits } from "./WeekMusts.tsx";
+import { checkinDays, ProposalSection, useProposal, WatchingList } from "./Watching.tsx";
 import { aboutText, DEFAULT_FEATURE_MINUTES, estimate, hoursText, loadText, overLine, progressWords, sourceWords, type Envelope } from "../plan/estimate.ts";
 import { moveWithin, otherStoriesLine, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
 import type { ClientWork, IsoDate, PortfolioItem, Slot, WorkItem } from "../week/types.ts";
@@ -136,6 +138,12 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   useEffect(() => {
     void load();
   }, [load, version]);
+  // PL-1: this week's From last week proposal and Watching rows; a decision reloads the list and the week.
+  const proposalChanged = useCallback(() => {
+    void load();
+    onChanged();
+  }, [load, onChanged]);
+  const proposal = useProposal(weekStart, version, proposalChanged);
   useEffect(() => {
     setPanel(null);
     setOffer(null);
@@ -163,7 +171,8 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   const raw: WeekFeature[] = st?.plan.features ?? [];
   const work = weekReady ? data.devops : null;
   const portfolios = st?.portfolios ?? [];
-  const list = useMemo(() => weekList(raw, work, portfolios, pickDoneFrom(data.plan)), [raw, work, portfolios, data.plan]);
+  const bits = weekReady ? (data.planBits ?? null) : null;
+  const list = useMemo(() => weekList(raw, work, portfolios, pickDoneFrom(data.plan), resolvedOf(bits)), [raw, work, portfolios, data.plan, bits]);
   const items = list.items;
   const drafts = st?.drafts ?? [];
   // U6: draft features on the list (typed in the right pane), with their tier.
@@ -172,10 +181,10 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     return d ? [{ draft: d, tier: w.tier }] : [];
   }), [st?.weekDrafts, drafts]);
   // Q48: only borrowed time paid back in this week counts against its fit.
-  const borrowedMinutes = useMemo(() => borrowedForWeek(data.borrowed, weekStart), [data.borrowed, weekStart]);
+  // PL-1: the same budget as the Board (planBudget): Keep open, resolved musts at zero, the Watching check-ins.
   const fits = useMemo(
-    () => (weekReady ? weekBudget(data.week, [...raw, ...weekDrafts.map((w) => draftAsItem(weekStart, w.draft, w.tier))], { borrowedMinutes, counts: countsFor(work), planShare: data.guidance?.planShare ?? 100 }) : []),
-    [weekReady, data.week, raw, weekDrafts, weekStart, borrowedMinutes, data.guidance?.planShare],
+    () => (weekReady ? commitFits(data, raw, weekDrafts.map((w) => draftAsItem(weekStart, w.draft, w.tier))) : []),
+    [weekReady, data, raw, weekDrafts, weekStart],
   );
   const intentions = useMemo(
     () => Object.entries(data.plan ?? {}).flatMap(([date, d]) => d.picks.filter((p) => p.kind === "intention").map((p) => ({ id: p.id, clientKey: p.clientKey, title: p.title, date, size: p.size ?? "M", status: p.status }))),
@@ -271,6 +280,7 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     draftTier: (d, tier) => void act("weekplan.draft_tier", { weekStart, draftId: d.id, tier }, tier === "off" ? `Took the draft ${d.title} off the week` : undefined),
     typed: (k, title, tier) => act("weekplan.add_draft", { weekStart, clientKey: k, title, tier }, `Draft feature saved as ${tier === "must" ? "a must" : "a nice to have"}: ${title}. Add it in DevOps when you can`).then((r) => r !== null),
     quiet: (k, on) => void act("weekplan.nothing", { weekStart, clientKey: k, on }),
+    keepOpen: (k, pct) => void act("settings.save", { section: "keep_open", values: { key: k, percent: pct } }, pct ? `Keeping ${pct}% of ${nameOf(k)}'s hours open for walk-ins` : `Planning all of ${nameOf(k)}'s hours`),
   };
   // NV-1: the Coop brief opens Break down's side panel (it copies there).
   const copyBrief = (k: string, id: number) => openCoopBrief(k, { id, title: "" }, weekStart);
@@ -354,7 +364,16 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
     </>
   );
 
-  const left =
+  // PL-1: "From last week" at the top of Commit (rows to accept, Watching with check-ins), the same as the Board's.
+  const carryTop = !past && proposal.data && (
+    <div className="pw-carry">
+      <ProposalSection data={proposal.data} act={proposal.act} onRefresh={onChanged} colors={data.clients}>
+        {proposal.error && <p className="error-line" role="alert">{proposal.error}</p>}
+        <WatchingList watching={proposal.data.watching} act={proposal.act} colors={data.clients} nameOf={nameOf} days={checkinDays(data.week, data.planDay.date)} />
+      </ProposalSection>
+    </div>
+  );
+  const left0 =
     past && !items.length ? (
       <p className="muted pw-empty">Nothing was planned for this week.</p>
     ) : !lines.length ? (
@@ -374,6 +393,12 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
         )}
       </ul>
     );
+  const left = (
+    <>
+      {carryTop}
+      {left0}
+    </>
+  );
 
   const right =
     !past && open ? (
@@ -666,6 +691,28 @@ function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, clie
   );
 }
 
+/** PL-1: Keep open on a client's card: "Keeping 30% open for walk-ins", or a quiet way to set it. */
+const KEEP_STEPS = [0, 10, 20, 30, 40, 50] as const;
+function KeepOpen({ k, name, pct, onSet }: { k: string; name: string; pct: number; onSet: (v: number | null) => void }) {
+  const id = `keep-${k.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+  return (
+    <p className={`pw-keep${pct ? " on" : ""}`}>
+      {pct > 0 && <span className="pw-keep-text">Keeping {pct}% open for walk-ins</span>}
+      <label className="pw-keep-set" htmlFor={id} title={`The share of ${name}'s block hours left unplanned, for work that walks in. Fit and the over line use what's left`}>
+        {pct > 0 ? "Change" : "Keep open"}
+      </label>
+      <select id={id} className="pw-keep-select" value={KEEP_STEPS.includes(pct as (typeof KEEP_STEPS)[number]) ? pct : ""} aria-label={`Keep open for walk-ins, ${name}`} onChange={(e) => onSet(Number(e.target.value))}>
+        {!KEEP_STEPS.includes(pct as (typeof KEEP_STEPS)[number]) && <option value="">{pct}%</option>}
+        {KEEP_STEPS.map((v) => (
+          <option key={v} value={v}>
+            {v ? `${v}%` : "None"}
+          </option>
+        ))}
+      </select>
+    </p>
+  );
+}
+
 /** A client's fit: "7h free · 9h planned", with the amber "about 2h over" when over. */
 const fitWords = (fit: ClientBudget) => (
   <>
@@ -767,6 +814,8 @@ type Ops = {
   typed: (k: string, title: string, tier: Tier) => Promise<boolean>;
   /** U6: Nothing this week for a client. */
   quiet: (k: string, on: boolean) => void;
+  /** PL-1: this client's Keep open share (null: back to the level's default). */
+  keepOpen: (k: string, pct: number | null) => void;
 };
 
 type CardProps = {
@@ -816,7 +865,8 @@ function ClientCard(p: CardProps) {
   const places = placesFor(p.days, k);
   const listed = new Set(mineAll.map((i) => i.itemId));
   const niceOpen = p.folds.has(`nice:${k}`);
-  const over = fit ? overLine(p.nameOf(k), fit.freeMinutes, fit.plannedMinutes, p.friday) : null;
+  // PL-1: over against what it plans up to (Keep open and the plan share taken off), not the whole free time.
+  const over = fit ? overLine(p.nameOf(k), fit.planUpTo ?? fit.freeMinutes, fit.plannedMinutes, p.friday) : null;
   const row = (i: Item, n: number, group: Item[]) => (
     <ItemRow key={i.id} i={i} ptoPinned={!p.past && i.tier === "must" && pinnedToPto({ days: p.days }, i.slots).length > 0} first={n === 0} last={n === group.length - 1} past={p.past} info={p.info(k, i.itemId)} drafts={p.st.drafts.filter((d) => d.clientKey === k && d.parentItemId === i.itemId)}
       places={places} ops={p.ops} env={envOf.get(i.id) ?? null} parentListed={i.parentId != null && listedFeatures.has(i.parentId)} infoOf={(id) => p.info(k, id)} listed={listed} />
@@ -868,6 +918,7 @@ function ClientCard(p: CardProps) {
           </ul>
         )}
         {over && !p.past && <p className="pw-over" role="status">{over}</p>}
+        {fit && !p.past && <KeepOpen k={k} name={p.nameOf(k)} pct={fit.keepOpen ?? 0} onSet={(v) => p.ops.keepOpen(k, v)} />}
       </div>
       {nice.length + draftNice.length > 0 && (
         <div className="pw-tier pw-nice">

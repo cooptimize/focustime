@@ -59,6 +59,8 @@ export type AppConfig = {
   aiRules: AiRules;
   /** ADM-1: the person's own choices over their level's defaults ([guidance]); unset keys follow the level. */
   guidance: Partial<Guidance>;
+  /** PL-1: the person's own Keep open share per client ([keep_open], client key = percent 0 to 80); unset: the level's. */
+  keepOpen: Record<string, number>;
   /** ADM-1: what the person's own rows say, before built-in defaults fill in: their phrases and excludes (null: none set). */
   mine: { requestPhrases: string[] | null; ackPhrases: string[] | null; promisePhrases: string[] | null; exclude: string[] | null };
   /** ADM-1: the team's settings as they apply to this person (null until applied, config/org-apply.ts). */
@@ -209,7 +211,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
 
   // Section and key names are unchanged by the rename (R1), so existing config files keep working.
   for (const k of Object.keys(raw)) {
-    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "asks", "ai", "guidance"].includes(k)) err(k, "Unknown section");
+    if (!["dataverse", "day_shape", "risk", "standing_blocks", "clients", "outlook", "google", "plan", "edge", "ui", "hours", "chromium", "secrets", "focus", "timebox", "collab", "azure", "notify", "roadmap", "asks", "ai", "guidance", "keep_open"].includes(k)) err(k, "Unknown section");
   }
 
   // [dataverse]
@@ -688,6 +690,17 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
     }
   }
 
+  // [keep_open] (optional, PL-1): "<client key>" = percent of that client's block hours left open for walk-ins, 0 to 80.
+  const keepOpen: Record<string, number> = {};
+  if (raw.keep_open !== undefined) {
+    const t = isTable(raw.keep_open) ? raw.keep_open : (err("keep_open", "Must be a [keep_open] table"), null);
+    if (t)
+      for (const [k, v] of Object.entries(t)) {
+        if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 80) err(`keep_open.${k}`, "Must be a whole number of percent from 0 to 80");
+        else keepOpen[k] = v;
+      }
+  }
+
   // [outlook] and [google] (optional; empty client_id means not set up yet)
   let outlook: OutlookConfig | null = null;
   if (raw.outlook !== undefined) {
@@ -742,6 +755,7 @@ export function parseConfig(text: string, opts: ParseOptions = {}): ParseResult 
       ai,
       aiRules: { ...DEFAULT_AI_RULES, allowedClients: [] },
       guidance,
+      keepOpen,
       mine,
       org: null,
     },
