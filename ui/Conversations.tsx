@@ -11,6 +11,7 @@ import { TypeIcon } from "./TypeIcon.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { WeekLoadData } from "../actions/types.ts";
 import type { ConversationCard, ConversationMessage, ConversationMessages, ConversationsData } from "../plan/conversation-views.ts";
+import { ImageViewer } from "./ImageViewer.tsx";
 import { MessageThread } from "./MessageThread.tsx";
 import { usePhotos } from "./Presence.tsx";
 import type { ItemDraft } from "../plan/conversations.ts";
@@ -402,6 +403,7 @@ function ConvCard(p: {
       </div>
       <p className="conv-sub muted">
         {c.clientName} · {c.chatName} · <time dateTime={c.lastAt}>{whenText(c.lastAt, p.tz)}</time>
+        {c.images ? <span className="conv-images"> · {c.images === 1 ? "1 image" : `${c.images} images`}</span> : null}
         {c.internalChat && <span className="conv-internal">Internal chat</span>}
       </p>
       <p className="conv-people" aria-label="People in it">
@@ -730,6 +732,9 @@ function Messages({ c, tz }: { c: ConversationCard; tz: string }) {
   }, [c.id]);
   const emails = useMemo(() => (Array.isArray(ms) ? [...new Set(ms.map((m) => m.email).filter((e): e is string => !!e))] : []), [ms]);
   const photos = usePhotos({ emails });
+  // CV-2: every image loaded so far, in thread order, for the viewer's Previous and Next.
+  const viewable = useMemo(() => (Array.isArray(ms) ? ms.flatMap((m) => (m.images ?? []).flatMap((i) => (i.src ? [{ id: i.id, src: i.src }] : []))) : []), [ms]);
+  const [viewing, setViewing] = useState<number | null>(null);
   if (ms === null) return <p className="muted">Loading…</p>;
   if (typeof ms === "string") return <p className="set-problem">{ms}</p>;
   const more = async () => {
@@ -747,7 +752,8 @@ function Messages({ c, tz }: { c: ConversationCard; tz: string }) {
   };
   return (
     <div className="conv-messages" onClick={(e) => e.stopPropagation()}>
-      <MessageThread messages={ms} tz={tz} photoFor={(e) => photos.photoFor(e)} earlier={!!earlier} loadingEarlier={loading} onEarlier={() => void more()} />
+      <MessageThread messages={ms} tz={tz} photoFor={(e) => photos.photoFor(e)} earlier={!!earlier} loadingEarlier={loading} onEarlier={() => void more()} onImage={(id) => setViewing(Math.max(0, viewable.findIndex((i) => i.id === id)))} />
+      {viewing !== null && viewable.length > 0 && <ImageViewer images={viewable} at={viewing} onAt={setViewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }

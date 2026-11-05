@@ -2,8 +2,8 @@
 // apart) has their avatar, name and time once; mine sit on the other side with no avatar; a reply shows the quoted
 // message as a quote block (its author and first line); the body is the server's sanitized HTML (tables, links, bold,
 // lists, code, mentions as chips); reactions sit small under the message, as counts. "Show earlier" loads the page
-// before. Pure rendering: the caller loads the messages and photos.
-import type { ReactNode } from "react";
+// before. Pasted images (CV-2) sit under their message as thumbnails from FocusTime's own address, never Graph's; one
+// that isn't shown says why. Pure rendering: the caller loads the messages and photos and opens the viewer.
 import type { ConversationMessage } from "../plan/conversation-views.ts";
 import { Avatar } from "./Presence.tsx";
 import { whenText } from "./labels.ts";
@@ -25,7 +25,7 @@ export function groupMessages(ms: readonly ConversationMessage[]): MessageGroup[
   return out;
 }
 
-export function MessageThread({ messages, tz, photoFor, earlier, loadingEarlier = false, onEarlier, extra }: {
+export function MessageThread({ messages, tz, photoFor, earlier, loadingEarlier = false, onEarlier, onImage }: {
   messages: readonly ConversationMessage[];
   tz: string;
   photoFor: (email: string | null) => string | null;
@@ -33,8 +33,8 @@ export function MessageThread({ messages, tz, photoFor, earlier, loadingEarlier 
   earlier: boolean;
   loadingEarlier?: boolean;
   onEarlier: () => void;
-  /** Anything a message carries below its body (CV-2's images). */
-  extra?: (m: ConversationMessage) => ReactNode;
+  /** CV-2: a thumbnail was clicked: open the viewer on it. */
+  onImage?: (id: number) => void;
 }) {
   return (
     <div className="tm-thread">
@@ -71,7 +71,21 @@ export function MessageThread({ messages, tz, photoFor, earlier, loadingEarlier 
                   )}
                   {/* Sanitized on the server (plan/sanitize.ts): allowlisted tags, links only, mentions as chips. */}
                   <div className="conv-msg-body" dangerouslySetInnerHTML={{ __html: m.html }} />
-                  {extra?.(m)}
+                  {m.images && m.images.length > 0 && (
+                    <ul className="tm-images" aria-label={m.images.length === 1 ? "1 image" : `${m.images.length} images`}>
+                      {m.images.map((i, n) => (
+                        <li key={i.id}>
+                          {i.src ? (
+                            <button type="button" className="tm-thumb" aria-label={`Open image ${n + 1} of ${m.images!.length}`} onClick={() => onImage?.(i.id)}>
+                              <img src={i.src} alt="" loading="lazy" decoding="async" />
+                            </button>
+                          ) : (
+                            <span className="tm-image-note muted">{i.note}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   {m.reactions.length > 0 && (
                     <p className="tm-reactions" aria-label={m.reactions.map((r) => `${r.emoji} ${r.count}`).join(", ")}>
                       {m.reactions.map((r) => (

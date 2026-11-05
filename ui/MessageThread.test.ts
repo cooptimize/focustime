@@ -57,6 +57,14 @@ describe("Show messages like Teams", () => {
     expect(html).toContain('<span class="tm-reaction">👍<span class="tm-reaction-n">2</span></span><span class="tm-reaction">😂</span>');
   });
 
+  it("shows a message's images as thumbnails from FocusTime's own address, and says why one isn't shown", () => {
+    const html = render({ messages: [msg({ messageId: "9", at: "2026-11-04T23:00:00Z", images: [{ id: 41, src: "/media/chat-images/41", note: null }, { id: 42, src: null, note: "Image not shown: over 10 MB" }] })] });
+    expect(html).toContain('<ul class="tm-images" aria-label="2 images">');
+    expect(html).toMatch(/<button type="button" class="tm-thumb" aria-label="Open image 1 of 2"><img src="\/media\/chat-images\/41"/);
+    expect(html).toContain("Image not shown: over 10 MB");
+    expect(html).not.toContain("graph.microsoft.com");
+  });
+
   it("offers Show earlier only when there is more", () => {
     expect(render()).not.toContain("Show earlier");
     expect(render({ earlier: true })).toContain("Show earlier");

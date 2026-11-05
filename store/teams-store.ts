@@ -8,6 +8,7 @@ import type { AskRule, AskStatus } from "../plan/asks.ts";
 import type { AskSort, NotSorted } from "../plan/asks-ai.ts";
 import type { ChatKind, ChatMember } from "../plan/chats.ts";
 import { isMember, type ClientChat, type Mention, type PollState, type Reaction, type Request, type TeamsMessage } from "../plan/requests.ts";
+import { hostedImageIds } from "../plan/sanitize.ts";
 import { PlanError } from "./plan-store.ts";
 import type { Conn, Param, Row } from "./sql/conn.ts";
 
@@ -104,6 +105,19 @@ const toRequest = (r: Row): Request => ({
 });
 
 export type ChatChange = { at: string; byUser: string; clientKey: string; chatId: string; change: "added" | "kind" | "removed" | "migrated" | "reading_on" | "reading_off" };
+/** CV-2: one image of a stored message, without its bytes. */
+export type MessageImage = { id: number; chatId: string; messageId: string; position: number; state: ImageState; reason: string | null; contentType: string | null; byteSize: number | null; attempts: number };
+export type ImageState = "pending" | "ok" | "skipped" | "failed";
+/** A failed fetch is tried again on later cycles, this many times in all. */
+export const IMAGE_ATTEMPTS = 3;
+const IMAGE_COLS = "id, chat_id, message_id, position, state, reason, content_type, byte_size, attempts";
+const toImage = (r: Row): MessageImage => ({
+  id: Number(r.id), chatId: r.chat_id as string, messageId: r.message_id as string, position: Number(r.position), state: r.state as ImageState,
+  reason: (r.reason as string | null) ?? null, contentType: (r.content_type as string | null) ?? null, byteSize: r.byte_size == null ? null : Number(r.byte_size), attempts: Number(r.attempts),
+});
+/** Images whose message is gone go with it (expiry, purge, a removed chat). */
+const ORPHAN_IMAGES = "DELETE FROM teams_message_images WHERE NOT EXISTS (SELECT 1 FROM teams_messages m WHERE m.chat_id = teams_message_images.chat_id AND m.message_id = teams_message_images.message_id)";
+
 export type PollRecord = { polledAt: string | null; seenAt?: string; fetchedAt?: string; retryAt: string | null; failures: number; state: PollState | null; note: string | null; tokenUser: string | null };
 
 /** A list of ids as "?, ?, ?" and its params (an empty list matches nothing). */
@@ -113,6 +127,16 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
   const stamp = () => now().toString();
   const log = (byUser: string, clientKey: string, chatId: string, change: ChatChange["change"]) =>
     db.run("INSERT INTO client_chat_changes (at, by_user, client_key, chat_id, change) VALUES (?, ?, ?, ?, ?)", [stamp(), byUser, clientKey, chatId, change]);
+
+  /** CV-2: a message's image rows follow its body: one pending row per hosted image, the ones no longer there dropped. */
+  const syncImages = async (chatId: string, messageId: string, html: string | null) => {
+    const ids = hostedImageIds(html).slice(0, 20);
+    const rows = await db.all("SELECT id, position, hosted_id FROM teams_message_images WHERE chat_id = ? AND message_id = ?", [chatId, messageId]);
+    for (const r of rows) if (ids[Number(r.position)] !== r.hosted_id) await db.run("DELETE FROM teams_message_images WHERE id = ?", [r.id as number]);
+    const kept = new Set(rows.filter((r) => ids[Number(r.position)] === r.hosted_id).map((r) => Number(r.position)));
+    for (const [position, hostedId] of ids.entries())
+      if (!kept.has(position)) await db.run("INSERT INTO teams_message_images (chat_id, message_id, position, hosted_id, state, attempts, created_at) VALUES (?, ?, ?, ?, 'pending', 0, ?)", [chatId, messageId, position, hostedId, stamp()]);
+  };
 
   const store = {
     // ---- client chats ----
@@ -180,6 +204,7 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
            AND NOT EXISTS (SELECT 1 FROM conversation_messages cm WHERE cm.chat_id = teams_messages.chat_id AND cm.message_id = teams_messages.message_id AND cm.role = 'work')`,
           [chatId],
         );
+        await db.run(ORPHAN_IMAGES);
         await db.run("DELETE FROM client_chats WHERE chat_id = ?", [chatId]);
         await log(by, c.clientKey, chatId, "removed");
       });
@@ -215,18 +240,21 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         const added: TeamsMessage[] = [];
         let updated = 0;
         for (const m of ms) {
-          const r = await db.get("SELECT modified_at FROM teams_messages WHERE chat_id = ? AND message_id = ?", [m.chatId, m.messageId]);
+          const r = await db.get("SELECT modified_at, body_html FROM teams_messages WHERE chat_id = ? AND message_id = ?", [m.chatId, m.messageId]);
           if (!r) {
             await db.run(
               "INSERT INTO teams_messages (chat_id, message_id, client_key, sender_id, sender_name, sender_tenant, created_at, modified_at, body_html, body_text, has_image, has_file, reply_to_id, mentions_json, reactions_json, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
               [m.chatId, m.messageId, m.clientKey, m.senderId, m.senderName?.slice(0, 200) ?? null, m.senderTenant, m.createdAt, m.modifiedAt, m.html, m.text, m.hasImage ? 1 : 0, m.hasFile ? 1 : 0, m.replyToId, m.mentions.length ? JSON.stringify(m.mentions) : null, reactionsJson(m.reactions), m.fetchedAt],
             );
+            await syncImages(m.chatId, m.messageId, m.html);
             added.push(m);
           } else if (Date.parse(m.modifiedAt) > Date.parse(instant(r.modified_at)!)) {
             await db.run(
               "UPDATE teams_messages SET modified_at = ?, body_html = ?, body_text = ?, has_image = ?, has_file = ?, mentions_json = ?, reactions_json = ?, fetched_at = ? WHERE chat_id = ? AND message_id = ?",
               [m.modifiedAt, m.html, m.text, m.hasImage ? 1 : 0, m.hasFile ? 1 : 0, m.mentions.length ? JSON.stringify(m.mentions) : null, reactionsJson(m.reactions), m.fetchedAt, m.chatId, m.messageId],
             );
+            // CV-2: a new reaction changes lastModifiedDateTime too; images change only with the body.
+            if ((r.body_html ?? null) !== (m.html ?? null)) await syncImages(m.chatId, m.messageId, m.html);
             updated++;
           }
         }
@@ -263,6 +291,7 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
       )).changes;
         // CV-1: the places of messages that went (chatter, acks, unsorted ones past 14 days) go with them.
         await db.run("DELETE FROM conversation_messages WHERE NOT EXISTS (SELECT 1 FROM teams_messages m WHERE m.chat_id = conversation_messages.chat_id AND m.message_id = conversation_messages.message_id)");
+        await db.run(ORPHAN_IMAGES);
         return gone;
       });
     },
@@ -274,13 +303,65 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     async purgeChats(chatIds: readonly string[]): Promise<number> {
       if (!chatIds.length) return 0;
       const [list, params] = inList(chatIds);
-      return db.tx(async () => (await db.run(
-        `DELETE FROM teams_messages WHERE chat_id IN (${list})
+      return db.tx(async () => {
+        const gone = (await db.run(
+          `DELETE FROM teams_messages WHERE chat_id IN (${list})
            AND NOT EXISTS (SELECT 1 FROM requests r WHERE r.chat_id = teams_messages.chat_id AND r.message_id = teams_messages.message_id)
            AND NOT EXISTS (SELECT 1 FROM promises p WHERE p.chat_id = teams_messages.chat_id AND (p.message_id = teams_messages.message_id OR p.answers_message_id = teams_messages.message_id))
            AND NOT EXISTS (SELECT 1 FROM conversation_messages cm WHERE cm.chat_id = teams_messages.chat_id AND cm.message_id = teams_messages.message_id AND cm.role = 'work')`,
-        params,
-      )).changes);
+          params,
+        )).changes;
+        await db.run(ORPHAN_IMAGES);
+        return gone;
+      });
+    },
+
+    // ---- images (CV-2) ----
+    /**
+     * The image rows of these messages, made first for any stored before CV-2 (from the body they kept), in message
+     * and body order. Never the bytes.
+     */
+    async images(chatId: string, messageIds: readonly string[]): Promise<MessageImage[]> {
+      if (!messageIds.length) return [];
+      const [list, params] = inList(messageIds);
+      return db.tx(async () => {
+        const have = new Set((await db.all(`SELECT DISTINCT message_id FROM teams_message_images WHERE chat_id = ? AND message_id IN (${list})`, [chatId, ...params])).map((r) => r.message_id as string));
+        for (const r of await db.all(`SELECT message_id, body_html FROM teams_messages WHERE chat_id = ? AND has_image = 1 AND message_id IN (${list})`, [chatId, ...params]))
+          if (!have.has(r.message_id as string)) await syncImages(chatId, r.message_id as string, (r.body_html as string | null) ?? null);
+        return (await db.all(`SELECT ${IMAGE_COLS} FROM teams_message_images WHERE chat_id = ? AND message_id IN (${list}) ORDER BY message_id, position`, [chatId, ...params])).map(toImage);
+      });
+    },
+    async image(id: number): Promise<MessageImage | null> {
+      const r = await db.get(`SELECT ${IMAGE_COLS} FROM teams_message_images WHERE id = ?`, [id]);
+      return r ? toImage(r) : null;
+    },
+    /** What the server needs to fetch one: its hosted content id (never sent anywhere but Graph). */
+    async imageSource(id: number): Promise<{ chatId: string; messageId: string; hostedId: string } | null> {
+      const r = await db.get("SELECT chat_id, message_id, hosted_id FROM teams_message_images WHERE id = ?", [id]);
+      return r ? { chatId: r.chat_id as string, messageId: r.message_id as string, hostedId: r.hosted_id as string } : null;
+    },
+    /** The stripped bytes of a fetched image, with the type read from them. */
+    async imageBytes(id: number): Promise<{ contentType: string; bytes: Uint8Array } | null> {
+      const r = await db.get("SELECT content_type, bytes FROM teams_message_images WHERE id = ? AND state = 'ok'", [id]);
+      return r && r.bytes ? { contentType: r.content_type as string, bytes: r.bytes as Uint8Array } : null;
+    },
+    /** Images of a chat still to fetch: pending, or failed fewer than IMAGE_ATTEMPTS times; oldest first. */
+    async imagesToFetch(chatId: string, n: number): Promise<MessageImage[]> {
+      const top = Math.max(0, Math.floor(n));
+      return (await db.all(
+        db.dialect === "sqlserver"
+          ? `SELECT TOP (${top}) ${IMAGE_COLS} FROM teams_message_images WHERE chat_id = ? AND (state = 'pending' OR (state = 'failed' AND attempts < ${IMAGE_ATTEMPTS})) ORDER BY id`
+          : `SELECT ${IMAGE_COLS} FROM teams_message_images WHERE chat_id = ? AND (state = 'pending' OR (state = 'failed' AND attempts < ${IMAGE_ATTEMPTS})) ORDER BY id LIMIT ${top}`,
+        [chatId],
+      )).map(toImage);
+    },
+    /** A fetch's outcome: the bytes (already stripped) when ok, else why not. */
+    async setImage(id: number, r: { state: "ok"; contentType: string; bytes: Uint8Array } | { state: "skipped" | "failed"; reason: string }): Promise<void> {
+      await db.tx(() =>
+        r.state === "ok"
+          ? db.run("UPDATE teams_message_images SET state = 'ok', reason = NULL, content_type = ?, byte_size = ?, bytes = ?, attempts = attempts + 1, fetched_at = ? WHERE id = ?", [r.contentType, r.bytes.length, r.bytes, stamp(), id])
+          : db.run("UPDATE teams_message_images SET state = ?, reason = ?, content_type = NULL, byte_size = NULL, bytes = NULL, attempts = attempts + 1, fetched_at = ? WHERE id = ?", [r.state, r.reason.slice(0, 40), stamp(), id]),
+      );
     },
 
     // ---- requests ----
@@ -402,6 +483,15 @@ function viewerOf(store: BaseStore, userId: string) {
     async setReading(chatId: string, on: boolean): Promise<void> {
       if (!(await chat(chatId))) throw new PlanError("That chat isn't registered");
       await store.setReading(chatId, on, userId);
+    },
+    /** CV-2: the images of messages in a chat I'm in. */
+    async images(chatId: string, messageIds: readonly string[]): Promise<MessageImage[]> {
+      return (await chat(chatId)) ? store.images(chatId, messageIds) : [];
+    },
+    /** One image, only when I'm in its chat now (else as missing). */
+    async image(id: number): Promise<MessageImage | null> {
+      const i = await store.image(id);
+      return i && (await chat(i.chatId)) ? i : null;
     },
     /** Delete stored messages of a client's chats I'm in (Requests and promises keep theirs). */
     async purgeClient(clientKey: string): Promise<number> {

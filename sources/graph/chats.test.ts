@@ -118,3 +118,34 @@ describe("Graph chat messages (AP-1)", () => {
     for (const x of ["totals", "fabrikam-secret", "Dana", "1730000000001", "00000000-0000-4000-8000-000000000001"]) expect(JSON.stringify(logs)).not.toContain(x);
   });
 });
+
+describe("Graph hosted content (CV-2)", () => {
+  const client = (res: () => Response, urls: string[] = [], logs: LogRecord[] = []) =>
+    createChatsClient({ fetch: (async (u: string) => (urls.push(String(u)), res())) as typeof fetch, token: async () => "t", invalidate: () => {}, log: (r) => logs.push(r) });
+
+  it("reads one image's raw bytes from its $value, logging the op, status and count only", async () => {
+    const urls: string[] = [];
+    const logs: LogRecord[] = [];
+    const r = await client(() => new Response(Uint8Array.of(0xff, 0xd8, 0xff, 0xd9), { status: 200, headers: { "content-type": "image/jpeg" } }), urls, logs).hostedContent!(CHAT, "1730000000001", "aWQ9eF8w+/=");
+    expect(r).toEqual({ bytes: Uint8Array.of(0xff, 0xd8, 0xff, 0xd9) });
+    expect(urls).toEqual([`https://graph.microsoft.com/v1.0/chats/${encodeURIComponent(CHAT)}/messages/1730000000001/hostedContents/${encodeURIComponent("aWQ9eF8w+/=")}/$value`]);
+    expect(logs).toEqual([expect.objectContaining({ op: "chat_image", status: 200, count: 1 })]);
+    expect(JSON.stringify(logs)).not.toMatch(/aWQ9|1730000000001|19:/);
+  });
+
+  it("stops past 10 MB, by the declared length or while reading", async () => {
+    const big = new Uint8Array(10 * 1024 * 1024 + 1);
+    expect(await client(() => new Response(big, { status: 200, headers: { "content-length": String(big.length) } })).hostedContent!(CHAT, "1", "a")).toEqual({ tooBig: true });
+    const stream = new ReadableStream({ start: (c) => (c.enqueue(big.subarray(0, 6_000_000)), c.enqueue(big.subarray(6_000_000)), c.close()) });
+    expect(await client(() => new Response(stream, { status: 200 })).hostedContent!(CHAT, "1", "a")).toEqual({ tooBig: true });
+  });
+
+  it("refuses ids that aren't Graph's before sending anything, and passes Graph's refusals on", async () => {
+    const urls: string[] = [];
+    const c = client(() => new Response("", { status: 403 }), urls);
+    for (const [chat, message, hosted] of [["x", "1", "a"], [CHAT, "1/../2", "a"], [CHAT, "1", "a/../../me"], [CHAT, "1", "a?b"]] as const)
+      await expect(c.hostedContent!(chat, message, hosted)).rejects.toMatchObject({ status: 400 });
+    expect(urls).toEqual([]);
+    await expect(c.hostedContent!(CHAT, "1", "a")).rejects.toMatchObject({ status: 403 });
+  });
+});

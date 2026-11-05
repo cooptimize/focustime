@@ -146,8 +146,9 @@ function decode(rs: M.IRecordSet<Row> | undefined, table: string | null, zone: s
 /** The parameter's SQL type and value, from the column it goes to. */
 function bind(req: M.Request, name: string, v: Param, colType: string | undefined): void {
   if (v === null) {
-    req.input(name, colType === "datetime2" ? mssql.DateTime2(7) : colType === "int" ? mssql.Int : colType === "bit" ? mssql.Bit : mssql.NVarChar(4000), null);
-  } else if (typeof v === "boolean") req.input(name, mssql.Bit, v);
+    req.input(name, colType === "datetime2" ? mssql.DateTime2(7) : colType === "int" ? mssql.Int : colType === "bit" ? mssql.Bit : colType === "varbinary" ? mssql.VarBinary(mssql.MAX) : mssql.NVarChar(4000), null);
+  } else if (v instanceof Uint8Array) req.input(name, mssql.VarBinary(mssql.MAX), Buffer.from(v.buffer, v.byteOffset, v.byteLength));
+  else if (typeof v === "boolean") req.input(name, mssql.Bit, v);
   else if (typeof v === "number") req.input(name, Number.isInteger(v) ? (Math.abs(v) <= 2_147_483_647 ? mssql.Int : mssql.BigInt) : mssql.Float, v);
   // A stamp goes to a datetime2 as UTC; so does one whose column the statement doesn't name (COALESCE(x, ?), ...):
   // SQL Server can't read a zone name. A stamp for a text column (a timebox's start) stays the text it is.

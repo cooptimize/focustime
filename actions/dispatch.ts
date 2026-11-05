@@ -4,6 +4,7 @@ import { isClosed, isCompleted } from "../plan/process.ts";
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
 import { storyAction, type StoryContext } from "./story-actions.ts";
+import { serveChatImage, type ServedImage } from "./chat-images.ts";
 import { conversationAction, dayPromises, type ConversationContext } from "./conversation-actions.ts";
 import { refreshStatus } from "./conversations-pipeline.ts";
 import type { ConversationsPort } from "./devops-write-actions.ts";
@@ -801,7 +802,13 @@ export async function requestContext(ctx: ActionContext): Promise<RequestContext
       const hit = w ? [...w.items, ...w.children, ...(w.watched ?? [])].find((i) => i.id === itemId) : undefined;
       return hit ? isCompleted(hit.stateCategory) : null;
     },
+    chatMessages: async () => (await accountOf(ctx))?.chatMessages ?? null,
   };
+}
+
+/** CV-2: one chat image for FocusTime's own endpoint (server/app.ts), with the member and client checks. */
+export async function chatImage(ctx: ActionContext, id: number): Promise<ServedImage> {
+  return serveChatImage(await requestContext(ctx), id);
 }
 
 /** CV-1: Conversations and My promises: the Requests pieces, the conversation store, client leads, the pipeline's AI. */

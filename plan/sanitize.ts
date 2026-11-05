@@ -39,10 +39,26 @@ export const isHostedImage = (src: string | null) => !!src && /\/hostedContents\
 export type SanitizeMention = { name: string | null };
 
 /**
+ * CV-2: the hosted images of a message body, in the order they appear: the hostedContents id from each pasted image's
+ * src. Only ids are kept; the URL itself is never stored apart from
+ * the body, sent to the page or fetched by the browser.
+ */
+export function hostedImageIds(html: string | null): string[] {
+  if (!html) return [];
+  const out: string[] = [];
+  for (const m of html.matchAll(/<img\b((?:"[^"]*"|'[^']*'|[^'">])*)>/gi)) {
+    const src = attr(m[1] ?? "", "src") ?? "";
+    const id = /\/hostedContents\/([^/?#"']{1,1500})\/\$value/i.exec(src)?.[1];
+    if (id) out.push(id);
+  }
+  return out;
+}
+
+/**
  * The safe HTML of one message body. `mentions` are the message's mentions in Graph's order (the at tag's id is the
  * position). Plain-text bodies are escaped with their line breaks kept.
  */
-export function sanitizeMessageHtml(content: string | null, o: { contentType?: string | null; mentions?: readonly SanitizeMention[] } = {}): string {
+export function sanitizeMessageHtml(content: string | null, o: { contentType?: string | null; mentions?: readonly SanitizeMention[]; /** CV-2: hosted images show apart, as thumbnails, so the body leaves them out. */ hostedImages?: "drop" } = {}): string {
   if (!content) return "";
   if (o.contentType && o.contentType.toLowerCase() !== "html") return content.split(/\r?\n/).map((l) => esc(l)).join("<br>");
   const mentions = o.mentions ?? [];
@@ -93,6 +109,7 @@ export function sanitizeMessageHtml(content: string | null, o: { contentType?: s
       const type = (attr(attrs, "itemtype") ?? "").toLowerCase();
       const alt = attr(attrs, "alt");
       if (/emoji/.test(type) && alt) out.push(esc(alt));
+      else if (o.hostedImages === "drop" && isHostedImage(attr(attrs, "src"))) continue;
       else out.push(`<span class="attached">Image attached</span>`);
       continue;
     }

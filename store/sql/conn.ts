@@ -7,7 +7,8 @@
 // The store writes its SQL once, in the common subset of the two dialects. The few SQLite forms the store relies on
 // (ON CONFLICT upserts, LIMIT, `$uid`) are rewritten for SQL Server by store/sql/tsql.ts.
 
-export type Param = null | number | string | boolean;
+/** CV-2: bytes (an image) go as a Uint8Array: BLOB in SQLite, varbinary in SQL Server. */
+export type Param = null | number | string | boolean | Uint8Array;
 export type Row = Record<string, unknown>;
 export type RunResult = { changes: number; lastId: number | null };
 export type Dialect = "sqlite" | "sqlserver";

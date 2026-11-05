@@ -15,10 +15,11 @@ import type { AppConfig } from "../config/schema.ts";
 import { askTitle, messageLink } from "../plan/asks.ts";
 import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
 import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_TASK, draftFrom, draftInput, draftWithoutAi, type DraftAnswer } from "../plan/conversation-draft.ts";
-import type { CardCommitment, CardItem, CardSuggestion, ConversationCard, ConversationMessage, ConversationsData, DayPromise, MyPromisesData, Primary, PromiseCard } from "../plan/conversation-views.ts";
+import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard } from "../plan/conversation-views.ts";
 import { daysWaiting, oneLine, statusLine, unsortedText, type Commitment, type Conversation, type ItemDraft } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser } from "../plan/requests.ts";
-import { sanitizeMessageHtml } from "../plan/sanitize.ts";
+import { hostedImageIds, sanitizeMessageHtml } from "../plan/sanitize.ts";
+import { IMAGE_ATTEMPTS, type MessageImage } from "../store/teams-store.ts";
 import { joinedSummary, MERGE_INSTRUCTIONS, MERGE_SCHEMA, MERGE_TASK, mergeFrom, mergeInput, type MergeAnswer } from "../plan/conversation-merge.ts";
 import type { ConversationStore, ConversationView } from "../store/conversation-store.ts";
 import { PlanError } from "../store/plan-store.ts";
@@ -116,9 +117,11 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
     const view = views.get(c.id);
     // Mentions of me in its work messages.
     let mentionsMe = false;
+    let images = 0;
     for (const p of places.filter((x) => x.conversationId === c.id && x.role === "work")) {
       const m = await v.teams.message(p.chatId, p.messageId);
       if (m?.mentions.some((x) => same(x.id, v.me))) mentionsMe = true;
+      images += hostedImageIds(m?.html ?? null).length;
     }
     const wait = waitingOf(cs);
     const waiting = wait ? { name: first(wait.whoName), days: daysWaiting(wait.escalatedAt!, now) } : null;
@@ -150,6 +153,7 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
       commitments: cs.map((k): CardCommitment => ({ id: k.id, whoName: k.whoName, mine: same(k.whoId, v.me), what: k.what, dueAt: k.dueAt, dueDate: k.dueDate, state: k.state, impliesItem: k.impliesItem, item: cardItem(k.itemId, null, k.itemUrl, k.itemTitle) })),
       suggestions: suggestions.filter((s) => s.conversationId === c.id && s.state === "open").map((s): CardSuggestion => ({ id: s.id, kind: s.kind, itemId: s.itemId, body: s.body, internal: s.internal, fromInternalChat: fromInternal, mine: same(s.forUser, v.me) })),
       closed, hidden: !!view?.hidden, primary, canCreate, link: chat ? teamsLink(chat) : messageLink(c.chatId, places.find((p) => p.conversationId === c.id)?.messageId ?? "0"),
+      ...(images ? { images } : {}),
     };
   });
 }
@@ -347,7 +351,14 @@ export const MESSAGE_PAGE = 20;
  * for a Cooptimizer's photo), mine on the other side, the sanitized body, the quoted message (its author and first
  * line, from the store by replyToId whatever its age, else "Quoted an earlier message"), and the reactions as counts.
  */
-async function messageView(m: import("../plan/requests.ts").TeamsMessage, x: { chat: ClientChat; home: string | null; me: string; teams: TeamsView; aliases: Map<string, string> }): Promise<ConversationMessage> {
+/** CV-2: an image as the page gets it: our own address while it is (or may still be) there, else a plain why. */
+function imageView(i: MessageImage): MessageImageView {
+  if (i.state === "skipped") return { id: i.id, src: null, note: i.reason === "too big" ? "Image not shown: over 10 MB" : "Image not shown: not a PNG, JPEG or GIF" };
+  if (i.state === "failed" && i.attempts >= IMAGE_ATTEMPTS) return { id: i.id, src: null, note: "Image couldn't be loaded from Teams" };
+  return { id: i.id, src: chatImageSrc(i.id), note: null };
+}
+
+async function messageView(m: import("../plan/requests.ts").TeamsMessage, x: { chat: ClientChat; home: string | null; me: string; teams: TeamsView; aliases: Map<string, string>; images?: readonly MessageImage[] }): Promise<ConversationMessage> {
   const b = batchOf(m, x.chat, x.home);
   const mine = same(m.senderId, x.me);
   const key = (m.senderId ?? "?").toLowerCase();
@@ -355,6 +366,7 @@ async function messageView(m: import("../plan/requests.ts").TeamsMessage, x: { c
   const member = x.chat.members?.find((y) => same(y.userId, m.senderId));
   const byAt: { name: string | null }[] = [];
   m.mentions.forEach((y, i) => (byAt[y.at ?? i] = { name: y.name }));
+  const images = (x.images ?? []).filter((i) => i.messageId === m.messageId).sort((a, b) => a.position - b.position);
   let quote: ConversationMessage["quote"] = null;
   if (m.replyToId) {
     const q = await x.teams.message(m.chatId, m.replyToId);
@@ -366,7 +378,8 @@ async function messageView(m: import("../plan/requests.ts").TeamsMessage, x: { c
   return {
     messageId: m.messageId, author: mine ? "You" : (b.senderName ?? (b.external ? "Someone outside Cooptimize" : "Someone at Cooptimize")), authorKey: x.aliases.get(key)!, name: b.senderName ?? "Someone",
     email: !b.external && member?.email ? member.email.toLowerCase() : null, external: x.home ? b.external : false, mine, at: m.createdAt,
-    html: sanitizeMessageHtml(m.html ?? m.text, { contentType: m.html ? "html" : "text", mentions: byAt }), text: m.text, quote, reactions: m.reactions ?? [],
+    html: sanitizeMessageHtml(m.html ?? m.text, { contentType: m.html ? "html" : "text", mentions: byAt, ...(images.length ? { hostedImages: "drop" as const } : {}) }), text: m.text, quote, reactions: m.reactions ?? [],
+    ...(images.length ? { images: images.map(imageView) } : {}),
   };
 }
 
@@ -480,10 +493,12 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const page = places.slice(Math.max(0, (end < 0 ? places.length : end) - MESSAGE_PAGE), end < 0 ? places.length : end);
         const out: ConversationMessage[] = [];
         const aliases = new Map<string, string>();
+        // CV-2: the page's images (rows made now for messages stored before CV-2); bytes only through /media.
+        const images = await v.teams.images(chat.chatId, page.map((p) => p.messageId));
         for (const p of page) {
           const m = await v.teams.message(p.chatId, p.messageId);
           if (!m) continue;
-          out.push(await messageView(m, { chat, home, me: v.me, teams: v.teams, aliases }));
+          out.push(await messageView(m, { chat, home, me: v.me, teams: v.teams, aliases, images }));
         }
         if (ctx.plan && o.before === undefined) await ctx.plan.seeConversation(c.id, c.version);
         return { ok: true, data: { messages: out, chatLink: teamsLink(chat), earlier: page.length ? (places.indexOf(page[0]!) > 0 ? page[0]!.messageId : null) : null, total: places.length } };

@@ -23,6 +23,7 @@ import type { TeamsStore } from "../store/teams-store.ts";
 import type { WorkItem } from "../week/types.ts";
 import { classifyAsk, extractPromise, type AskAiDeps } from "./ask-ai.ts";
 import { mapSeq } from "./seq.ts";
+import { fetchChatImages } from "./chat-images.ts";
 import { CHAT_DAILY_AI_CALLS, runPipeline } from "./conversations-pipeline.ts";
 import type { ConversationStore } from "../store/conversation-store.ts";
 import { userZone } from "../week/zone.ts";
@@ -65,7 +66,7 @@ export type PollDeps = {
   rules?: () => Promise<PollRules>;
 };
 
-export type CycleResult = { polled: number; messages: number; updated: number; candidates: number; promises: number; failures: number; conversations?: number; unsorted?: number; aiCalls?: number };
+export type CycleResult = { polled: number; messages: number; updated: number; candidates: number; promises: number; failures: number; conversations?: number; unsorted?: number; aiCalls?: number; images?: number; imagesSkipped?: number; imagesFailed?: number };
 
 const later = (a: string, b: string) => Date.parse(a) > Date.parse(b);
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
@@ -146,6 +147,9 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
         const added = fresh.filter((m) => saved.added.some((a) => a.messageId === m.messageId));
         if (deps.conversations) await conversationsStep(deps, deps.conversations, c, saved.added, { p, home, users, person, out, now });
         else await rules(deps, c, added, { p, uid, home, users, person, out });
+        // CV-2: the images pasted into its messages, with the same token; a failure here never fails the read.
+        const img = await fetchChatImages(deps.teams, p.chatMessages, c.chatId).catch(() => null);
+        if (img) ((out.images = (out.images ?? 0) + img.ok), (out.imagesSkipped = (out.imagesSkipped ?? 0) + img.skipped), (out.imagesFailed = (out.imagesFailed ?? 0) + img.failed));
         const seenAt = read.newest && (!c.seenAt || later(read.newest, c.seenAt)) ? read.newest : undefined;
         await deps.teams.recordPoll(c.chatId, { polledAt: now, fetchedAt: now, ...(seenAt ? { seenAt } : {}), retryAt: null, failures: 0, state: same(uid, c.registeredBy) ? "ok" : "via", note: null, tokenUser: uid });
         tokenUsers.set(p.name, (tokenUsers.get(p.name) ?? 0) + 1);
@@ -168,6 +172,11 @@ export async function pollCycle(deps: PollDeps, o: { force?: boolean; chatIds?: 
   deps.log({ source: "plan", op: "requests_poll_candidates", count: out.candidates });
   for (const [name, count] of tokenUsers) deps.log({ source: "plan", op: "requests_poll_token", kind: name, count });
   if (out.failures) deps.log({ source: "plan", op: "requests_poll_failures", count: out.failures });
+  if (out.images || out.imagesSkipped || out.imagesFailed) {
+    deps.log({ source: "plan", op: "chat_images", kind: "ok", count: out.images ?? 0 });
+    deps.log({ source: "plan", op: "chat_images", kind: "skipped", count: out.imagesSkipped ?? 0 });
+    deps.log({ source: "plan", op: "chat_images", kind: "failed", count: out.imagesFailed ?? 0 });
+  }
   if (deps.conversations) {
     deps.log({ source: "plan", op: "conversations_new", count: out.conversations ?? 0 });
     deps.log({ source: "plan", op: "conversations_unsorted", count: out.unsorted ?? 0 });

@@ -17,6 +17,7 @@ import { clientAccounts } from "./20261105T1400_client_accounts.ts";
 import { devopsPoll } from "./20261105T2000_devops_poll.ts";
 import { conversationMerges } from "./20261105T2100_conversation_merges.ts";
 import { messageReactions } from "./20261105T2110_message_reactions.ts";
+import { messageImages } from "./20261105T2120_message_images.ts";
 import type { NamedMigration } from "./named.ts";
 
-export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, conversationMerges, messageReactions];
+export const NAMED_MIGRATIONS: readonly NamedMigration[] = [setupState, noticesPush, deliveryChats, deliveryChatKind, asks, ai, itemClients, asksAiPromises, sharedRequests, storyDrafts, admin, conversations, devopsTakes, devopsPoll, clientAccounts, conversationMerges, messageReactions, messageImages];

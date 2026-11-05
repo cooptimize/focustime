@@ -39,6 +39,12 @@ export function checkRequest(req: RequestFacts, opts: { publicUrl: string }): Gu
     if (site !== undefined && site !== "same-origin") return { action: "deny", status: 403, reason: "Cross-site request" };
     return { action: "allow" };
   }
+  // CV-2: chat images load only into FocusTime's own pages (never embedded or opened from another site).
+  if (req.path.startsWith("/media/")) {
+    if (!isGet) return { action: "deny", status: 403, reason: "Method not allowed here" };
+    if (site !== undefined && site !== "same-origin") return { action: "deny", status: 403, reason: "Cross-site request" };
+    return { action: "allow" };
+  }
   // Page loads: a person may arrive from anywhere (a bookmark, a link in Teams, Microsoft's sign-in redirect), but
   // only as a top-level navigation; a cross-site subresource or fetch is refused.
   if (site !== undefined && site !== "same-origin" && site !== "none") {

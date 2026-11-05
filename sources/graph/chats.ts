@@ -10,9 +10,12 @@
 //   lastModifiedDateTime gt <time>&$top=50 (Graph needs the order and the filter on the same property), at most
 //   MESSAGE_PAGES pages. From each message only the fields the shared store keeps (D514): ids, sender id, name and tenant, times, the raw
 //   body and its plain text, attachment flags, the reply id and the mentions (ids and names).
+// - CV-2, one pasted image: GET /chats/{id}/messages/{id}/hostedContents/{id}/$value (raw bytes, Chat.Read), read up
+//   to 10 MB; the bytes go only to the stripper and the shared store, never to a log.
 // Logs carry the op, status, count and duration: never a chat id, a topic, a person or message text.
 import type { Logger } from "../../log/logger.ts";
 import { plainText, type IncomingMessage } from "../../plan/asks.ts";
+import { MAX_IMAGE_BYTES } from "../../plan/image-strip.ts";
 import { bodyKind } from "../../plan/sanitize.ts";
 import { CHAT_ID, type ChatMember, type ChatSummary } from "../../plan/chats.ts";
 import { HttpError, NetworkError } from "../calendar/http.ts";
@@ -34,7 +37,12 @@ export type ChatsClient = {
 /** AP-1: the newest messages of one chat (Chat.Read), oldest first, and the newest lastModifiedDateTime among them. */
 export type ChatMessagesClient = {
   messagesSince: (chatId: string, clientKey: string, sinceIso: string) => Promise<{ messages: GraphMessage[]; newest: string | null }>;
+  /** CV-2: one image pasted into a message, its raw bytes (at most MAX_IMAGE_BYTES; "too big" past that). */
+  hostedContent?: (chatId: string, messageId: string, hostedId: string) => Promise<{ bytes: Uint8Array } | { tooBig: true }>;
 };
+/** CV-2: a message id and a hosted content id as Graph writes them (digits; base64 with its URL-safe letters). */
+const MESSAGE_ID = /^\d{1,20}$/;
+const HOSTED_ID = /^[A-Za-z0-9+/=_-]{1,1500}$/;
 /**
  * A message as read: the fields the rules use, plus what the shared store keeps (the raw body, the sender's name, the
  * mentions with names, Graph's lastModifiedDateTime). The last three are optional for the older per-person path.
@@ -184,7 +192,59 @@ export function createChatsClient(d: ChatsDeps): ChatsClient & ChatMessagesClien
     return json;
   }
 
+  /** CV-2: raw bytes, read only up to the cap; the body is never logged, only the op, status and size. */
+  async function bytes(op: string, url: string, retried = false): Promise<{ bytes: Uint8Array } | { tooBig: true }> {
+    const token = await d.token();
+    const started = performance.now();
+    let res: Response;
+    try {
+      res = await d.fetch(url, { headers: { accept: "image/*", authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(d.timeoutMs ?? 30_000) });
+    } catch {
+      d.log({ source: "outlook", op, kind: "network" });
+      throw new NetworkError("network");
+    }
+    if (res.status === 401 && !retried) {
+      await res.body?.cancel();
+      d.invalidate();
+      return bytes(op, url, true);
+    }
+    if (!res.ok) {
+      await res.body?.cancel();
+      d.log({ source: "outlook", op, status: res.status, durationMs: performance.now() - started });
+      throw new HttpError(res.status, res.status === 429 || res.status === 503 ? retryAfterOf(res.headers.get("retry-after")) : null);
+    }
+    const declared = Number(res.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) {
+      await res.body?.cancel();
+      d.log({ source: "outlook", op, status: res.status, durationMs: performance.now() - started, count: 0 });
+      return { tooBig: true };
+    }
+    const parts: Uint8Array[] = [];
+    let size = 0;
+    const reader = res.body?.getReader();
+    for (;;) {
+      const chunk = reader ? await reader.read() : { done: true as const, value: undefined };
+      if (chunk.done) break;
+      size += chunk.value.length;
+      if (size > MAX_IMAGE_BYTES) {
+        await reader!.cancel();
+        d.log({ source: "outlook", op, status: res.status, durationMs: performance.now() - started, count: 0 });
+        return { tooBig: true };
+      }
+      parts.push(chunk.value);
+    }
+    const out = new Uint8Array(size);
+    let at = 0;
+    for (const p of parts) (out.set(p, at), (at += p.length));
+    d.log({ source: "outlook", op, status: res.status, durationMs: performance.now() - started, count: 1 });
+    return { bytes: out };
+  }
+
   return {
+    async hostedContent(chatId: string, messageId: string, hostedId: string) {
+      if (!CHAT_ID.test(chatId) || !MESSAGE_ID.test(messageId) || !HOSTED_ID.test(hostedId)) throw new HttpError(400);
+      return bytes("chat_image", `${GRAPH}/chats/${encodeURIComponent(chatId)}/messages/${messageId}/hostedContents/${encodeURIComponent(hostedId)}/$value`);
+    },
     async messagesSince(chatId: string, clientKey: string, sinceIso: string) {
       if (!CHAT_ID.test(chatId)) throw new HttpError(400);
       const since = new Date(sinceIso).toISOString();

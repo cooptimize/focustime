@@ -66,6 +66,34 @@ await forEachDriver("the shared Teams store", ({ open }) => {
     expect(await teams.saveMessages([m])).toEqual({ added: [], updated: 0 });
   });
 
+  it("CV-2: an image's stripped bytes round-trip, its rows follow the body, and only a member of the chat reaches it", async () => {
+    const { teams } = await store();
+    const img = (h: string) => `<img src="https://graph.microsoft.com/v1.0/chats/${CHAT}/messages/1/hostedContents/${h}/$value">`;
+    const m = msg({ html: `<p>Look</p>${img("aWQ9MQ==")}${img("aWQ9Mg==")}`, hasImage: true });
+    await teams.saveMessages([m]);
+    const [a, b] = await teams.images(CHAT, [m.messageId]);
+    expect([a!.state, b!.state, a!.position, b!.position]).toEqual(["pending", "pending", 0, 1]);
+    expect(await teams.imageSource(a!.id)).toEqual({ chatId: CHAT, messageId: m.messageId, hostedId: "aWQ9MQ==" });
+    const bytes = Uint8Array.from({ length: 70_000 }, (_, i) => (i * 31) % 256);
+    await teams.setImage(a!.id, { state: "ok", contentType: "image/png", bytes });
+    await teams.setImage(b!.id, { state: "skipped", reason: "not a PNG, JPEG or GIF" });
+    const got = await teams.imageBytes(a!.id);
+    expect(got!.contentType).toBe("image/png");
+    expect(Buffer.from(got!.bytes).equals(Buffer.from(bytes))).toBe(true);
+    expect(await teams.imageBytes(b!.id)).toBeNull();
+    expect(await teams.imagesToFetch(CHAT, 10)).toEqual([]);
+    // Only a member of the chat sees it through their view.
+    expect(await teams.viewer(ANA).image(a!.id)).toMatchObject({ id: a!.id, byteSize: 70_000 });
+    expect(await teams.viewer(CY).image(a!.id)).toBeNull();
+    expect(await teams.viewer(CY).images(CHAT, [m.messageId])).toEqual([]);
+    // The second image edited out: its row goes, the first keeps its bytes; the message expiring takes the rest.
+    await teams.saveMessages([{ ...m, modifiedAt: "2026-11-20T15:00:00Z", html: `<p>Look</p>${img("aWQ9MQ==")}` }]);
+    expect((await teams.images(CHAT, [m.messageId])).map((x) => x.id)).toEqual([a!.id]);
+    expect(await teams.imageBytes(a!.id)).not.toBeNull();
+    await teams.expire("2026-12-31T00:00:00Z");
+    expect(await teams.image(a!.id)).toBeNull();
+  });
+
   it("a Request's state is shared: one person resolves it, everyone sees it", async () => {
     const { teams } = await store();
     const m = msg();

@@ -4200,6 +4200,18 @@ button.ask-label { cursor: pointer; }
 .tm-reactions { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; }
 .tm-reaction { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--border); background: var(--raised); font-size: var(--fs-1); line-height: 1.6; }
 .tm-reaction-n { color: var(--text-muted); }
+/* CV-2: pasted images as thumbnails under their message, and the larger viewer. */
+.tm-images { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.tm-thumb { display: block; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); overflow: hidden; cursor: zoom-in; }
+.tm-thumb img { display: block; max-inline-size: 160px; max-block-size: 120px; inline-size: auto; block-size: auto; object-fit: cover; }
+.tm-thumb:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tm-image-note { font-size: var(--fs-1); }
+.conv-images { white-space: nowrap; }
+.image-viewer-backdrop { align-items: center; padding: 16px; }
+.image-viewer { display: grid; gap: 8px; max-inline-size: min(1200px, 100%); max-block-size: calc(100dvh - 32px); padding: 10px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: var(--shadow-command); }
+.image-viewer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--fs-2); }
+.image-viewer-img { display: block; max-inline-size: 100%; max-block-size: calc(100dvh - 140px); margin: 0 auto; object-fit: contain; border-radius: 6px; background: var(--raised); }
+.image-viewer-nav { display: flex; justify-content: center; gap: 8px; }
 .conv-unsorted, .conv-hidden { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-size: var(--fs-2); color: var(--text-muted); }
 .conv-chatter { margin: 12px 0 0; font-size: var(--fs-2); }
 .conv-chatter ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
