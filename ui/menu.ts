@@ -1049,6 +1049,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "push.remove": return { run: () => env.openSettings("notifications") };
     case "ui.set_reduce_motion": return { next: () => ({ title: "Reduce motion", items: [true, false].map((on) => ({ id: on ? "on" : "off", label: on ? "On" : "Off", checked: env.reduceMotion === on, action: "ui.set_reduce_motion", run: () => env.saveReduceMotion(on) })) }) };
     case "demo.reset": return env.demo ? { run: () => env.openSettings("demo") } : { disabled: "Reset demo is only in the demo" };
+    case "demo.status": return env.demo ? { run: () => env.openSettings("demo") } : { disabled: "Only in the demo" };
     case "demo.set": return env.setDemo ? { run: () => env.setDemo!(!env.demo) } : { disabled: "Demo mode isn't available here" };
     case "settings.load": return { run: () => env.openSettings() };
     case "settings.save": return { run: () => env.openSettings() };

@@ -216,7 +216,7 @@ export function createDemoContext(opts: { now: () => string; demo: DemoControl; 
     // D522, ADM-1: the demo's person is an admin of the demo only (its own store), so the demo shows the admin console.
     org,
     adminOps,
-    demo: opts.demo,
+    demo: { ...opts.demo, status: () => ({ ai: { realProvider: ai.real(), real: ai.log.real, samples: ai.log.samples, lastReason: ai.log.lastReason } }) },
     // DM-1: every AI feature runs in the demo: the app's real provider on this fictional data, else the stored samples.
     ai: aiRuntime,
     account: () => demoAzure.account,

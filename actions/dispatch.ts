@@ -165,7 +165,7 @@ export type ActionContext = {
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
-  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void> };
+  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus };
   /**
    * Step 15.4: the Microsoft sign-in for a config (null without an [outlook] app registration), and an Azure Resource
    * Manager client on a token. Absent: no sign-in here (tests that don't need it), and the config's "me" is used.
@@ -188,6 +188,8 @@ export const DEMO_REFUSED: readonly ActionName[] = [
   "devops.set_write_pat", "devops.clear_write_pat",
   "auth.sign_in", "auth.sign_out", "push.subscribe",
 ];
+/** DM-1: what the preflight reads about a demo session (counts only). */
+export type DemoStatus = { ai: { realProvider: boolean; real: number; samples: number; lastReason: string | null } };
 export const DEMO_REFUSAL = "Demo data: nothing leaves FocusTime in demo mode";
 
 export type ActionRequest = { action: unknown; input: unknown };
@@ -1164,6 +1166,11 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       const started = Date.now();
       await ctx.demo.reset();
       return { ok: true, data: { reset: true, ms: Date.now() - started } };
+    }
+    case "demo.status": {
+      if (!noInput(req.input)) return bad("demo.status takes no input");
+      if (!ctx.demo?.on || !ctx.demo.status) return { ok: false, status: 403, error: "Only in the demo" };
+      return { ok: true, data: ctx.demo.status() };
     }
     case "demo.set": {
       const i = req.input as Record<string, unknown> | null;
