@@ -2060,6 +2060,9 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
       });
     },
     openFollowUps: async (): Promise<FollowUp[]> => ((await db.all("SELECT * FROM follow_ups WHERE closed_at IS NULL ORDER BY opened_at, id")) as Row[]).map(toFollowUp),
+    /** IB-1: follow-ups (Promises) closed at or after an instant, for the Inbox's Done view. */
+    recentlyClosedFollowUps: async (since: string): Promise<FollowUp[]> =>
+      ((await db.all("SELECT * FROM follow_ups WHERE closed_at IS NOT NULL ORDER BY id")) as Row[]).map(toFollowUp).filter((f) => !!f.closedAt && Temporal.Instant.compare(Temporal.Instant.from(f.closedAt.replace(/\[.*\]$/, "")), Temporal.Instant.from(since)) >= 0),
     /** Every follow-up, open first (step 6c follow-ups list). */
     allFollowUps: async (): Promise<FollowUp[]> => ((await db.all("SELECT * FROM follow_ups ORDER BY CASE WHEN closed_at IS NULL THEN 0 ELSE 1 END, opened_at, id")) as Row[]).map(toFollowUp),
     /**
@@ -3118,6 +3121,37 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
         const had = (await db.get("SELECT 1 AS x FROM conversation_views WHERE conversation_id = ?", id)) as Row | undefined;
         if (had) await db.run("UPDATE conversation_views SET hidden = ?, hidden_at = ? WHERE conversation_id = ?", hidden ? 1 : 0, hidden ? now : null, id);
         else await db.run("INSERT INTO conversation_views (conversation_id, seen_version, hidden, hidden_at) VALUES (?, 0, ?, ?)", id, hidden ? 1 : 0, hidden ? now : null);
+      });
+    },
+    // ---- IB-1: my marks on Inbox items (seen, snoozed until, hidden), by item key (plan/inbox-items.ts) ----
+    async inboxMarks(): Promise<Map<string, { seenAt: string | null; snoozedUntil: string | null; hiddenAt: string | null }>> {
+      const rows = (await db.all("SELECT item_key, seen_at, snoozed_until, hidden_at FROM inbox_marks")) as Row[];
+      return new Map(rows.map((r) => [String(r.item_key), { seenAt: (r.seen_at as string | null) ?? null, snoozedUntil: (r.snoozed_until as string | null) ?? null, hiddenAt: (r.hidden_at as string | null) ?? null }]));
+    },
+    /** Sets some of an item's marks (the others kept); null clears one. Seen is only ever set once. How many were newly seen. */
+    async markInbox(keys: readonly string[], p: { seen?: true; snoozedUntil?: string | null; hidden?: boolean }): Promise<number> {
+      if (!keys.length) return 0;
+      return tx(async () => {
+        const now = opts.now().toInstant().toString();
+        let newlySeen = 0;
+        for (const key of keys) {
+          const had = (await db.get("SELECT seen_at FROM inbox_marks WHERE item_key = ?", key)) as Row | undefined;
+          if (!had) {
+            await db.run(
+              "INSERT INTO inbox_marks (item_key, seen_at, snoozed_until, hidden_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+              key, p.seen ? now : null, p.snoozedUntil ?? null, p.hidden ? now : null, now,
+            );
+            if (p.seen) newlySeen++;
+            continue;
+          }
+          if (p.seen && !had.seen_at) {
+            await db.run("UPDATE inbox_marks SET seen_at = ?, updated_at = ? WHERE item_key = ?", now, now, key);
+            newlySeen++;
+          }
+          if (p.snoozedUntil !== undefined) await db.run("UPDATE inbox_marks SET snoozed_until = ?, updated_at = ? WHERE item_key = ?", p.snoozedUntil, now, key);
+          if (p.hidden !== undefined) await db.run("UPDATE inbox_marks SET hidden_at = ?, updated_at = ? WHERE item_key = ?", p.hidden ? now : null, now, key);
+        }
+        return newlySeen;
       });
     },
     /** CV-1's migration: a promise moved into the shared commitments (it stops showing here). */

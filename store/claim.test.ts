@@ -38,6 +38,8 @@ function v23Store(identity: boolean) {
   // Tables added after schema 23 start empty.
   const has = (t: string) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t);
   const counts = Object.fromEntries(USER_TABLES.map((t) => [t, has(t) ? (db.prepare(`SELECT count(*) AS n FROM ${t}`).get() as { n: number }).n : 0]));
+  // IB-1: except inbox_marks, whose data step marks each open follow-up seen (here the one above).
+  counts.inbox_marks = 1;
   db.close();
   return { dir, path, counts };
 }

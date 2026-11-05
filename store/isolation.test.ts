@@ -55,6 +55,7 @@ async function view(p: PlanStore): Promise<unknown> {
     ahead: await p.aheadChanges(),
     halves: await p.aheadHalves(),
     assistant: await p.assistantTurns(50),
+    inboxMarks: [...(await p.inboxMarks()).entries()],
   };
 }
 

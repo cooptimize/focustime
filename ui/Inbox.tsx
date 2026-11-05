@@ -12,6 +12,7 @@ import type { CaptureClient } from "../plan/capture.ts";
 import type { IsoDate } from "../week/types.ts";
 import { Fading, FollowUpRow } from "./FollowUps.tsx";
 import { EmptyState } from "./brand/Opening.tsx";
+import { markSeen } from "./inboxcount.ts";
 import { userZone } from "../week/zone.ts";
 
 type Entry = { kind: "follow_up"; at: string; followUp: FollowUpView } | { kind: "capture"; at: string; capture: Capture };
@@ -67,6 +68,12 @@ export function Inbox({ data, version, onChanged, defaultClient = null, highligh
   }, [showClosed]);
   useEffect(() => void load(), [load, version]);
   useEffect(() => head.current?.focus(), []);
+  // IB-1: the promises (former follow-ups) listed here are seen; a new one stops counting in Needs you.
+  const changedRef = useRef(onChanged);
+  changedRef.current = onChanged;
+  useEffect(() => {
+    if (followUps) void markSeen(followUps.map((f) => `f${f.id}`), () => changedRef.current());
+  }, [followUps]);
   const changed = useCallback(() => {
     void load();
     onChanged();
