@@ -108,7 +108,8 @@ describe.skipIf(!CHROMIUM)("Week and the detail panel (U3)", () => {
     await expect(day(0).locator(".pick-row.done").count()).resolves.toBe(1);
     // A client with a feature that has no stories says so.
     await expect(page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-feats").textContent()).resolves.toMatch(/\d+ features? · 1 needs stories/);
-    expect(await uiWords(page)).toBeLessThan(120);
+    // 121: SW-1 adds Team to the mode switch (Board · Commit · Team).
+    expect(await uiWords(page)).toBeLessThan(121);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

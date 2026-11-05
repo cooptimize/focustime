@@ -8,6 +8,7 @@
 //   Close out: a side panel over the dimmed cards (numbers, where you left off, DevOps updates owed, follow-ups due).
 // At 3840 wide a day timeline sits on the left (drop a pick onto a free gap to timebox it) and a detail panel under
 // the cards. Lumen never appears here.
+import { SentToYouLine } from "./Team.tsx";
 import type { SetupStep } from "../plan/setup.ts";
 import { useTextScale } from "./textsize.ts";
 import { ModeArea } from "./ModeSwitch.tsx";
@@ -86,6 +87,10 @@ type Props = {
   onTimer: (action: "timer.done" | "timer.extend") => void;
   onPlan: (date?: string) => void;
   onPlanWeek: () => void;
+  /** SW-1: Today's line for work sent to me opens Commit on its week. */
+  onSent?: (weekStart: string) => void;
+  /** SW-1: reloads Today's sent line when the plan changes. */
+  sentVersion?: unknown;
   onInbox: () => void;
   /** AP-2: Inbox › Requests (an urgent request's chip, Check-in's "Walked in, not resolved"). */
   onAsks?: (conversationId?: number) => void;
@@ -325,6 +330,7 @@ export function Today(props: Props) {
         />
       )}
       {mode === "now" && <UrgentStrip urgent={data.requests?.urgent ?? []} promises={target.isToday ? (data.promises ?? []) : []} today={date} tz={tz} onAsks={props.onAsks ?? props.onInbox} onPromises={onPromise} onAskFocus={(u) => void startAsk(u)} />}
+      {mode === "now" && props.onSent && <SentToYouLine version={props.sentVersion} onOpen={props.onSent} />}
       {!wide && attention}
       {mode === "now" && props.moment && <MomentCard m={props.moment} onPlan={() => props.onPlan(date)} onCheckIn={props.onCheckIn} onCloseOut={props.onCloseOut} />}
       {mode === "now" && props.setupLine && props.onSetup && (

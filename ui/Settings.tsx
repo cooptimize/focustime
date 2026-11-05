@@ -663,7 +663,7 @@ function TimeboxForm(p: FormProps) {
   );
 }
 
-/** Settings > Planning > Help sessions (step 13): length, Teams, how many workdays "Needs help from…" searches. */
+/** Settings > Planning > Help sessions (step 13): length, Teams, how many workdays "Ask to collaborate" searches. */
 function CollabForm(p: FormProps) {
   const c = p.data.collab;
   const a = useAutoSave({
@@ -683,7 +683,7 @@ function CollabForm(p: FormProps) {
     <div className="set-form">
       <h3>Help sessions</h3>
       <div className="set-grid">
-        <AutoField a={a} k="meetingMinutes" label="Default length" hint="Where Needs help from… starts.">
+        <AutoField a={a} k="meetingMinutes" label="Default length" hint="Where Ask to collaborate starts.">
           <select value={a.v.meetingMinutes} onChange={(e) => a.change("meetingMinutes", Number(e.target.value))}>
             {COLLAB_LENGTHS.map((m) => (
               <option key={m} value={m}>{m} minutes</option>

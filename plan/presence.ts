@@ -56,7 +56,7 @@ export const PRESENCE_CLASS: Record<PresenceWord, string> = {
   Offline: "offline",
 };
 
-/** Sort order inside a tier of Needs help from…: available now first, the rest as they were. */
+/** Sort order inside a tier of Ask to collaborate: available now first, the rest as they were. */
 export function availableFirst<T>(list: readonly T[], wordOf: (x: T) => PresenceWord | null): T[] {
   return list.map((x, i) => ({ x, i, a: wordOf(x) === "Available" ? 0 : 1 })).sort((p, q) => p.a - q.a || p.i - q.i).map((p) => p.x);
 }

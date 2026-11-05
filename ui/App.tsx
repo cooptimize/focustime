@@ -18,6 +18,7 @@ import { NOTICE_EVENT, openChecked, openWorkItem, type Opened } from "./WorkLink
 import { DevOpsWriteCtx, useDevOpsWriteFlow } from "./DevOpsWrite.tsx";
 import { TimeboxCtx, TimeboxDialog, timeboxChange as tbChange, useWriteFlow, type TimeboxEnv } from "./Timeboxes.tsx";
 import { HelpFinder } from "./HelpFinder.tsx";
+import { SendHost, TeamView } from "./Team.tsx";
 import type { HelpTarget } from "./menu.ts";
 import type { TimeboxTarget } from "./menu.ts";
 import type { WriteState } from "../actions/types.ts";
@@ -1074,7 +1075,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (base !== "week" || focusOpen || guideAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
+      if (base !== "week" || (nav.tab === "week" && nav.mode === "team") || focusOpen || guideAt || settingsAt !== null || followUpsOpen || closeOutAt !== null || checkInOpen || planWeekAt !== null || captureOpen || pd || cmdOpen || keysOpen || e.ctrlKey || e.metaKey || e.altKey || !data) return;
       if (!globalKeyAllowed(e, e.target as HTMLElement | null, topOverlay(document)) || isTypingTarget(e.target as HTMLElement | null)) return;
       if (e.target instanceof HTMLButtonElement && (e.key === "Enter" || e.key === " ")) return;
       const days = data.week.days;
@@ -1124,7 +1125,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, guideAt, base, captureOpen, layout]);
+  }, [sel, detailsOpen, data, goToday, changeWeek, auto, pd, cmdOpen, keysOpen, openPlanDay, addWork, setViewRange, settingsAt, followUpsOpen, closeOutAt, checkInOpen, planWeekAt, focusOpen, guideAt, base, captureOpen, layout, nav]);
 
   const work = useMemo(() => workByClient(data?.devops ?? null), [data?.devops]);
   const weekItems = useMemo(() => (data?.weekFeatures ?? []).filter((f) => f.weekStart === data?.weekStart).map((f) => ({ clientKey: f.clientKey, itemId: f.itemId })), [data?.weekFeatures, data?.weekStart]);
@@ -1369,7 +1370,7 @@ export function App() {
         tab="week"
         current={nav.tab === "week" ? nav.mode : "board"}
         status={{ board: dayStatus.plan === "due" ? "due" : null, commit: weekModeStatus(!!data.weekCommitted[weekToPlan], data.weekNudge.badge, weekToPlan) }}
-        onMode={(m: ModeName) => goNav(m === "board" ? navOf.week("board") : navOf.week("commit"))}
+        onMode={(m: ModeName) => goNav(m === "board" ? navOf.week("board") : m === "team" ? navOf.week("team") : navOf.week("commit"))}
       />
     ),
     ahead: <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "roadmap"} status={{ ahead: data.aheadDue.length ? "due" : null }} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />,
@@ -1620,7 +1621,10 @@ export function App() {
           }
         />
       ) : planWeekAt !== null ? (
-        <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Week"><PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} /></PhoneGate>
+        <PhoneGate phone={phone} onBack={leavePlanning} backLabel="Back to Week"><PlanWeek openClient={planWeekClient} onOpenClientSeen={clearPlanWeekClient} switcher={switches.week} weekStart={planWeekAt} data={data} version={planWeekVersion} now={now ?? new Date(clock).toISOString()} onWeek={openPlanWeek} onClose={() => (setOfferAhead(true), leavePlanning())} onChanged={reloadQuiet} onCaptures={() => setView("capture")} onOpenDay={(d, h) => goNav(navOf.planDay(d, h))} /></PhoneGate>
+      ) : nav.tab === "week" && nav.mode === "team" ? (
+        // SW-1: Week › Team, read-only on the phone (allowed there, no gate).
+        <TeamView switcher={switches.week} weekStart={nav.week ?? data.today.weekStart} thisWeek={data.today.weekStart} colors={data.clients} readOnly={phone} onWeek={(w) => goNav(navOf.week("team", w))} version={planWeekVersion} onChanged={reloadQuiet} />
       ) : followUpsOpen ? (
         <div className="inbox-page">
           <InboxTabs tab={asksOpen ? "conversations" : promisesOpen ? "my_promises" : "inbox"} inboxCount={data.openFollowUps + data.captures} count={askCount} promiseCount={promiseCount} onPick={(t) => goNav(t === "conversations" ? navOf.conversations() : t === "my_promises" ? navOf.myPromises() : navOf.inbox())} />
@@ -1709,6 +1713,8 @@ export function App() {
           onTimer={(a) => void runTimer(a)}
           onPlan={(d) => openPlanDay(d)}
           onPlanWeek={() => openPlanWeek(data.today.weekStart)}
+          onSent={(w) => goNav(navOf.week("commit", w))}
+          sentVersion={`${planWeekVersion}:${captureVersion}`}
           switcher={switches.today}
           onInbox={() => setView("inbox")}
           onAsks={(id) => (id ? goNav(navOf.conversation(id)) : setView("conversations"))}
@@ -1919,6 +1925,7 @@ export function App() {
       )}
       {writes.dialog}
       {devopsWrites.dialog}
+      <SendHost thisWeek={data.today.weekStart} onSent={() => setPlanWeekVersion((v) => v + 1)} />
       <BreakDownHost onDone={() => (setPlanWeekVersion((v) => v + 1), reloadQuiet())} />
       <CoopBriefHost />
       {feedbackOpen && <FeedbackDialog view={viewName(loc)} zone={userZone(data)} onClose={() => setFeedbackOpen(false)} />}

@@ -77,8 +77,8 @@ describe.skipIf(!CHROMIUM)("row menu headers (D459)", () => {
       await expect(page.locator(".popup-menu .menu-item.active").count()).resolves.toBe(1);
       await expect(head(page).evaluate((e) => e.contains(document.activeElement) || e.matches(".active"))).resolves.toBe(false);
     }
-    // The hint on Needs help from… stays short and inside its row.
-    const help = page.locator(".popup-menu .menu-item", { hasText: "Needs help from" });
+    // The hint on Ask to collaborate stays short and inside its row.
+    const help = page.locator(".popup-menu .menu-item", { hasText: "Ask to collaborate" });
     await expect(help.locator(".menu-hint").textContent()).resolves.toBe("who is free");
     await expect(help.evaluate((b) => { const r = b.getBoundingClientRect(); return [...b.children].every((c) => c.getBoundingClientRect().right <= r.right + 1); })).resolves.toBe(true);
     await page.keyboard.press("Escape");
@@ -88,7 +88,7 @@ describe.skipIf(!CHROMIUM)("row menu headers (D459)", () => {
     const feature = harbor.locator(".pw-row").first();
     const story = feature.locator(".pw-nested > li").first();
     await story.locator(":scope > .pl-title").hover();
-    await expect(feature.locator(":scope > .pl-hover").evaluate((e) => getComputedStyle(e).opacity)).resolves.toBe("0");
+    await expect.poll(() => feature.locator(":scope > .pl-hover").evaluate((e) => getComputedStyle(e).opacity)).toBe("0");
     await expect.poll(() => story.locator(":scope > .pl-hover").evaluate((e) => getComputedStyle(e).opacity)).toBe("1");
     const s = await headerOf(page, story, ":scope > .pl-hover button.more", ":scope > .pl-title");
     expect(s.got).toContain(s.want.slice(0, 24));

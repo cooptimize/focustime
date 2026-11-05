@@ -8,13 +8,21 @@ import { afterDone, focusOf, hashOf, HOME, isPlanning, MODES, modeNav, navOf, pa
 const loc = (nav: Nav): Loc => ({ nav, overlay: null });
 
 describe("tabs and modes", () => {
-  it("four tabs in order, Roadmap now named Ahead; Week has Board and Commit, Ahead Roadmap and Plan ahead, Today and the Inbox none", () => {
+  it("four tabs in order, Roadmap now named Ahead; Week has Board, Commit and Team, Ahead Roadmap and Plan ahead, Today and the Inbox none", () => {
     expect(TABS).toEqual(["today", "week", "ahead", "inbox"]);
     expect(TABS.map((t) => TAB_NAMES[t])).toEqual(["Today", "Week", "Ahead", "Inbox"]);
     expect(MODES.today).toEqual([]);
-    expect(MODES.week).toEqual(["board", "commit"]);
+    expect(MODES.week).toEqual(["board", "commit", "team"]);
     expect(MODES.ahead).toEqual(["roadmap", "ahead"]);
     expect(MODES.inbox).toEqual([]);
+  });
+
+  it("SW-1: Week › Team has its own address, with or without a week, and a notification opens it", () => {
+    expect(hashOf({ nav: navOf.week("team"), overlay: null })).toBe("#/week/team");
+    expect(hashOf({ nav: navOf.week("team", "2026-11-09"), overlay: null })).toBe("#/week/team/2026-11-09");
+    expect(parseHash("#/week/team/2026-11-09")?.nav).toEqual(navOf.week("team", "2026-11-09"));
+    expect(parseHash("#/week/team")?.nav).toEqual(navOf.week("team"));
+    expect(routeLoc({ view: "team" }).loc.nav).toEqual(navOf.week("team"));
   });
 
   it("keys 1–4 pick the tabs in order (T is Today); other keys none", () => {

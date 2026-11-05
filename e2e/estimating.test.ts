@@ -158,8 +158,8 @@ describe.skipIf(!CHROMIUM)("estimating in hours and photos (browser, demo mode)"
     await expect.poll(() => page.locator(".topbar .person-chip .avatar img").count(), { timeout: 10_000 }).toBe(1);
     await page.locator(".pw-row").first().hover();
     await page.locator(".pw-row button.more").first().click();
-    await page.getByRole("menuitem", { name: /Needs help from/ }).click();
-    const dlg = page.getByRole("dialog", { name: /Needs help from/ });
+    await page.getByRole("menuitem", { name: /Ask to collaborate/ }).click();
+    const dlg = page.getByRole("dialog", { name: /Ask to collaborate/ });
     await expect.poll(() => dlg.locator(".help-people .avatar img").count(), { timeout: 10_000 }).toBe(3);
     await expect(dlg.locator(".help-people .avatar-initials").allTextContents()).resolves.toEqual(["AK"]);
     // Presence comes from its own call (presence.people), after the photos: wait for it as for them.

@@ -25,6 +25,8 @@ import { needsBreakdown, PINNED_TO_PTO, pinnedToPto, readiness, type ClientBudge
 import { resolvedOf } from "../plan/carry.ts";
 import { commitFits } from "./WeekMusts.tsx";
 import { checkinDays, ProposalSection, useProposal, WatchingList } from "./Watching.tsx";
+import { FromYourTeam } from "./Team.tsx";
+import { openSend } from "./send-event.ts";
 import { aboutText, DEFAULT_FEATURE_MINUTES, estimate, hoursText, loadText, overLine, progressWords, sourceWords, type Envelope } from "../plan/estimate.ts";
 import { moveWithin, otherStoriesLine, pickDoneFrom, pinLabel, progressLabel, weekList, type DoneBy, type Listed, type Progress, type Tier } from "../plan/weeklist.ts";
 import type { ClientWork, IsoDate, PortfolioItem, Slot, WorkItem } from "../week/types.ts";
@@ -50,7 +52,7 @@ import { createContext } from "react";
 /** D461: what rows need for their dates: the week being planned and today. */
 const WeekDates = createContext<{ weekStart: IsoDate; today: IsoDate }>({ weekStart: "", today: "" });
 
-type Props = { /** Step 16.2: the Week tab's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void; /** fix/planday-pane: the client to open first (from Plan the day's "plan the week"), once. */ openClient?: string | null; onOpenClientSeen?: () => void };
+type Props = { /** Step 16.2: the Week tab's mode switch, at the right of this view's header. */ switcher?: React.ReactNode; weekStart: IsoDate; data: WeekLoadData; version: number; now: string; onWeek: (w: IsoDate) => void; onClose: () => void; onChanged: () => void; onCaptures: () => void; /** fix/planday-pane: the client to open first (from Plan the day's "plan the week"), once. */ openClient?: string | null; onOpenClientSeen?: () => void; /** SW-1: Accept and schedule opens the Board on that block. */ onOpenDay?: (date: IsoDate, half: Half) => void };
 type Half = "AM" | "PM";
 type Place = { date: IsoDate; half: Half; label: string };
 type Item = Listed<WeekFeature>;
@@ -102,7 +104,7 @@ const draftAsItem = (weekStart: IsoDate, d: DraftStory, tier: Tier): WeekFeature
   id: -d.id, weekStart, clientKey: d.clientKey, itemId: -d.id, title: d.title, itemType: null, url: null, level: "feature", tier, estimate: null, size: null, parentId: null, slots: [], doneAt: null, position: null, createdAt: d.createdAt, updatedAt: d.createdAt,
 });
 
-export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, onChanged, onCaptures, openClient = null, onOpenClientSeen }: Props) {
+export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, onChanged, onCaptures, openClient = null, onOpenClientSeen, onOpenDay }: Props) {
   const [st, setSt] = useState<WeekPlanState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -365,13 +367,20 @@ export function PlanWeek({ switcher, weekStart, data, version, onWeek, onClose, 
   );
 
   // PL-1: "From last week" at the top of Commit (rows to accept, Watching with check-ins), the same as the Board's.
-  const carryTop = !past && proposal.data && (
+  // SW-1: "From your team" beside it (sent to me, client priorities, what I sent, Ask <lead> to look).
+  const carryTop0 = !past && proposal.data && (
     <div className="pw-carry">
       <ProposalSection data={proposal.data} act={proposal.act} onRefresh={onChanged} colors={data.clients}>
         {proposal.error && <p className="error-line" role="alert">{proposal.error}</p>}
         <WatchingList watching={proposal.data.watching} act={proposal.act} colors={data.clients} nameOf={nameOf} days={checkinDays(data.week, data.planDay.date)} />
       </ProposalSection>
     </div>
+  );
+  const carryTop = (
+    <>
+      <FromYourTeam weekStart={weekStart} thisWeek={mondayOf(data.planDay.date)} version={version} colors={data.clients} onChanged={() => (void load(), onChanged())} {...(onOpenDay ? { onSchedule: onOpenDay } : {})} />
+      {carryTop0}
+    </>
   );
   const left0 =
     past && !items.length ? (
@@ -1129,6 +1138,7 @@ function ItemRow({ i, ptoPinned = false, first, last, past, info, drafts, places
     size: (z) => ops.size(i, z),
     done: (on) => ops.done(i, on),
     help: () => env?.openHelp({ clientKey: k, title: `#${i.itemId} ${i.title}`, url: i.url, itemId: i.itemId, pinned: i.slots[0]?.date ?? null }),
+    ...(i.itemId > 0 ? { send: () => openSend({ clientKey: k, clientName: ops.nameOf(k), itemId: i.itemId, level: i.level === "story" ? "story" : "feature", title: i.title, itemType: i.itemType, url: i.url, parentId: i.parentId }) } : {}),
     targetDate: () => dw?.targetDate({ clientKey: k, itemId: i.itemId, title: i.title, current: feature?.targetDate ?? null }),
     brief: () => ops.brief(k, i.itemId),
     createDrafts: () => dw?.create(k, drafts.slice(0, 10)),
