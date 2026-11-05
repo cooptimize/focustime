@@ -24,7 +24,7 @@ import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { createChatsClient } from "../sources/graph/chats.ts";
 import { anAiApp, anAiRules } from "../test/builders/index.ts";
 import { CHROMIUM, openSettings } from "./harness.ts";
-import { liveBrowser, liveContext, ME, T, type LiveBrowser } from "./live.ts";
+import { liveAdminOps, liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
 
 const HOME = "11111111-1111-4111-8111-111111111111";
@@ -110,7 +110,12 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
     const chats = createChatsClient({ fetch: graph.fetch, token: async () => "fake-graph-token", invalidate: () => {}, log: () => {} });
     const dv = fakeDevOpsWrite({ org: "contoso", identities: { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example" } } });
     const pats = new Map([["Adatum", WRITE_PAT]]);
+    // ADM-1: AI and Allow AI are the team's; chats are registered in Admin › Clients.
+    const team = liveTeam();
+    await team.set("org", "ai.on", true);
+    await team.set("client:Adatum", "allow_ai", true);
     const ctx = await liveContext({
+      team,
       extra: {
         account: () =>
           ({
@@ -158,6 +163,7 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
     };
     ctx.requests = { teams, conversations: convs, users: async () => [{ id: ME, name: "Sam Tester", deleted: false }], refresh: (chatIds) => pollCycle(deps, { force: true, chatIds }) };
     ctx.admins = [ME];
+    ctx.adminOps = await liveAdminOps(team, { admins: [ME], clients: ["Adatum"], chats: () => teams.chats() });
     await ctx.plan!.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME, name: "Sam Tester", username: "me@contoso.example", email: "me@contoso.example", signedInAt: "2026-11-02T14:00:00Z", systemUserId: null, systemUserEmail: null });
     await ctx.plan!.setDevopsIdentity({ clientKey: "Adatum", org: "contoso", id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example", expires: null });
     const app = await lb.start(ctx);
@@ -169,9 +175,9 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       await page.goto(app.url);
       await page.locator(".topbar").waitFor();
 
-      // Settings > Clients: add both chats to Adatum (an admin, once for everyone on them who follows Adatum).
+      // Admin › Clients: add both chats to Adatum (an admin, once for everyone on them who follows Adatum).
       await openSettings(page);
-      await page.locator(".set-nav").getByRole("button", { name: "Clients" }).click();
+      await page.locator(".set-admin-nav").getByRole("button", { name: "Clients" }).click();
       const adatum = page.getByRole("group", { name: /^Delivery chats for Adatum/ });
       for (const word of ["alliance", "delivery"]) {
         await adatum.getByRole("button", { name: "Add a chat" }).click();
