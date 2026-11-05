@@ -10,7 +10,7 @@ import { localStoreFiles } from "../../host/local/files.ts";
 import { MIGRATIONS, openPlanDb } from "../plan-store.ts";
 import { migrateSqlServer, SQLSERVER_MIGRATIONS, SQLSERVER_VERSION, sqlServerVersion } from "../sql/migrate.ts";
 import { NAMED_MIGRATIONS } from "./index.ts";
-import { inOrder, namedProblems, newerThanBuild, pending, prefixOf, type NamedMigration } from "./named.ts";
+import { BRANCH_BUILT, inOrder, namedProblems, newerThanBuild, pending, prefixOf, renamedByBranch, type NamedMigration } from "./named.ts";
 
 const now = () => Temporal.ZonedDateTime.from("2026-11-03T12:00:00-05:00[America/New_York]");
 const table = (name: string, t: string): NamedMigration => ({ name, sqlite: `CREATE TABLE ${t} (id INTEGER);`, sqlserver: `CREATE TABLE ${t} (id int);` });
@@ -117,5 +117,16 @@ await onSqlServer("SQL Server timestamped migrations (S1)", () => {
     } finally {
       await db.drop();
     }
+  });
+});
+
+describe("a database a branch build migrated (HK-3)", () => {
+  it("names the recorded copy of a build migration under another timestamp", () => {
+    const list = [{ name: "20261105T1300_devops_takes" }, { name: "20261106T0900_week_carry" }];
+    expect(renamedByBranch(list, new Set(["20261104T2200_devops_takes", "20261106T0900_week_carry"]))).toEqual([{ recorded: "20261104T2200_devops_takes", build: "20261105T1300_devops_takes" }]);
+    // Both recorded (the build's own already applied too), or only the build's: nothing to say.
+    expect(renamedByBranch(list, new Set(["20261104T2200_devops_takes", "20261105T1300_devops_takes"]))).toEqual([]);
+    expect(renamedByBranch(list, new Set(["20261105T1300_devops_takes"]))).toEqual([]);
+    expect(BRANCH_BUILT).toBe("This database was migrated by a branch build: run npm run db:reset");
   });
 });
