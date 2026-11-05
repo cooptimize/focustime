@@ -15,6 +15,7 @@ import { openPlanDb } from "../store/plan-store.ts";
 import type { PushControl } from "./push.ts";
 import { personTicks } from "./ticks.ts";
 import { takesStore } from "../store/devops-takes.ts";
+import { notesStore } from "../store/devops-notes.ts";
 
 const NY = "America/New_York";
 const MEDIA = { status: async () => ({ players: false, spotify: false }), transition: async () => null, open: async () => {}, endSound: () => {} } as unknown as HostMedia;
@@ -29,8 +30,10 @@ function person(o: { toml?: (t: string) => string; takes?: boolean } = {}) {
   const pushed: { n: Notice; details: boolean }[] = [];
   const push = { send: async (n: Notice, details: boolean) => void pushed.push({ n, details }) } as unknown as PushControl;
   // PV-1: Take one's app table, on its own database here.
-  const takes = takesStore(sqliteConn(openPlanDb({ path: ":memory:", now: () => at.toZonedDateTimeISO(NY) })), () => at);
-  const ctx = { plan, loadConfig: async () => ({ path: "x", parsed }), now: () => at.toString(), ...(o.takes ? { takes, signedInAs: async () => ({ email: "ana@cooptimize.example", upn: "ana@cooptimize.example" }) } : {}) } as unknown as ActionContext;
+  const appDb = sqliteConn(openPlanDb({ path: ":memory:", now: () => at.toZonedDateTimeISO(NY) }));
+  const takes = takesStore(appDb, () => at);
+  const notes = notesStore(appDb, () => at);
+  const ctx = { plan, loadConfig: async () => ({ path: "x", parsed }), now: () => at.toString(), ...(o.takes ? { takes, devopsNotes: notes, signedInAs: async () => ({ email: "ana@cooptimize.example", upn: "ana@cooptimize.example" }) } : {}) } as unknown as ActionContext;
   const ticks = personTicks({ log: () => {}, now: () => at, notifications, media: MEDIA, openRoute: () => {}, push }, plan, ctx, { zone: NY });
   const until = async (iso: string) => {
     const end = Temporal.Instant.from(iso);
@@ -44,7 +47,7 @@ function person(o: { toml?: (t: string) => string; takes?: boolean } = {}) {
   // Monday 9:00 also brings "Plan the week"; these tests follow the day's reminder.
   const day = async () => (await plan.notices()).filter((n) => n.kind === "plan_day");
   const dayPushed = () => pushed.filter((x) => x.n.kind === "plan_day");
-  return { plan, pushed, day, dayPushed, until, config: parsed.config, now: () => at, takes };
+  return { plan, pushed, day, dayPushed, until, config: parsed.config, now: () => at, takes, notes };
 }
 
 describe("the in-app list and push follow the notifier's gate (P1)", () => {
@@ -102,5 +105,21 @@ describe("Take one's quiet note (PV-1)", () => {
     expect(p.pushed.some((x) => x.n.kind === "story_taken")).toBe(false);
     await p.until("2026-11-02T14:30:00Z");
     expect((await p.plan.notices()).filter((n) => n.kind === "story_taken")).toHaveLength(1);
+  });
+});
+
+describe("Ahead's notices to teammates (AH-1, D641)", () => {
+  it("a new assignee hears once; date moves by one person in one commit are one notice; in the app only, ids not titles", async () => {
+    const p = person({ takes: true });
+    await p.notes.add({ kind: "assigned", clientKey: "adatum", org: "contoso", itemIds: [610], toEmail: "Ana@cooptimize.example", byName: "Sam Tester" });
+    await p.notes.add({ kind: "dates", clientKey: "adatum", org: "contoso", itemIds: [620], toEmail: "ana@cooptimize.example", byName: "Sam Tester" });
+    await p.notes.add({ kind: "dates", clientKey: "adatum", org: "contoso", itemIds: [621], toEmail: "ana@cooptimize.example", byName: "Sam Tester" });
+    await p.notes.add({ kind: "dates", clientKey: "adatum", org: "contoso", itemIds: [630], toEmail: "lee@cooptimize.example", byName: "Sam Tester" });
+    await p.until("2026-11-02T14:10:00Z");
+    const list = (await p.plan.notices()).filter((n) => n.kind === "assigned" || n.kind === "dates_moved");
+    expect(list.map((n) => [n.kind, n.title, n.route]).sort()).toEqual([["assigned", "Sam assigned you #610", "aheaditem:610"], ["dates_moved", "Sam moved the dates of 2 of your items", "aheaditem:620"]]);
+    expect(p.pushed.some((x) => x.n.kind === "assigned" || x.n.kind === "dates_moved")).toBe(false);
+    await p.until("2026-11-02T14:30:00Z");
+    expect((await p.plan.notices()).filter((n) => n.kind === "assigned" || n.kind === "dates_moved")).toHaveLength(2);
   });
 });

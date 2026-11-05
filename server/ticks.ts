@@ -387,6 +387,35 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
       if (await store.markOnce(`story_taken_notice:${t.id}`, t.takenAt)) await send(notices.storyTaken(t.id, t.byName.split(/\s+/)[0] || "A teammate", t.itemId, at.toString()));
     }
   };
+  // AH-1 (D641): notes from teammates' commits in Ahead: one notice per assignment, and dates moves by the same person
+  // within 10 minutes as one (one commit runs in batches). The last 3 days only, once each.
+  const notesTick = async () => {
+    const notes = liveCtx.devopsNotes;
+    if (!notes) return;
+    const me = await liveCtx.signedInAs?.().catch(() => undefined);
+    const emails = [me?.email, me?.upn, ...((await store.devopsIdentities()).map((i) => i.email))].filter((e): e is string => !!e);
+    const at = instantNow();
+    const first = (n: string) => n.split(/\s+/)[0] || "A teammate";
+    const got = await notes.to(emails, at.subtract({ hours: 72 }).toString());
+    if (notifier.allows("assigned"))
+      for (const n of got.filter((x) => x.kind === "assigned"))
+        if (await store.markOnce(`assigned_notice:${n.id}`, n.at)) await send(notices.assigned(`assigned:${n.id}`, first(n.byName), n.itemIds, at.toString()));
+    if (!notifier.allows("dates_moved")) return;
+    const groups: (typeof got)[] = [];
+    for (const n of got.filter((x) => x.kind === "dates")) {
+      const g = groups.find((x) => x[0]!.byName === n.byName && x[0]!.org === n.org && Date.parse(n.at) - Date.parse(x.at(-1)!.at) <= 10 * 60_000);
+      if (g) g.push(n);
+      else groups.push([n]);
+    }
+    // A group still filling (its last note under 2 minutes old) waits for the next pass.
+    for (const g of groups) {
+      if (at.epochMilliseconds - Date.parse(g.at(-1)!.at) < 2 * 60_000) continue;
+      const ids = [...new Set(g.flatMap((n) => n.itemIds))];
+      let fresh = false;
+      for (const n of g) if (await store.markOnce(`dates_notice:${n.id}`, n.at)) fresh = true;
+      if (fresh) await send(notices.datesMoved(`dates_moved:${g[0]!.id}`, first(g[0]!.byName), ids, at.toString()));
+    }
+  };
   const tick = async () => {
     await notifier.refresh().catch(() => null);
     await dayReminders();
@@ -395,6 +424,7 @@ export function personTicks(d: TickDeps, store: PlanStore, liveCtx: ActionContex
     await asksTick().catch(() => log({ source: "plan", op: "asks_tick", kind: "failed" }));
     await conversationsTick().catch(() => log({ source: "plan", op: "conversations_tick", kind: "failed" }));
     await takesTick().catch(() => log({ source: "plan", op: "takes_tick", kind: "failed" }));
+    await notesTick().catch(() => log({ source: "plan", op: "notes_tick", kind: "failed" }));
   };
 
   // The focus timer (step 6c): ends sessions on time and warns 5 minutes ahead, window open or not.
