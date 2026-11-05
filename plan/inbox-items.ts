@@ -53,7 +53,28 @@ export type InboxFacts = {
   sendState?: "waiting" | "accepted" | "done";
   /** Waiting on someone else (IB-1 slice 3: commitments to me, my sends, my Ask to look). */
   waitingOn?: boolean;
+  /** Slice 2: what a row shows. The title; the person (to whom a promise is, who sent it, who's asking); where it came from. */
+  title?: string;
+  who?: string | null;
+  where?: string | null;
+  /** A promise's due instant when a time was stated (else `due` is the day). */
+  dueAt?: string | null;
+  /** The linked or created DevOps item. */
+  itemId?: number | null;
+  /** Conversation: it names me; a work request with no item yet. Send: a Must. */
+  mentionsMe?: boolean;
+  workRequest?: boolean;
+  must?: boolean;
+  /** Send: the week it's for. */
+  weekStart?: IsoDate;
 };
+
+/** Late: a promise past its due (the instant when one was stated, else the day before today). */
+export function isLate(f: Pick<InboxFacts, "kind" | "done" | "due" | "dueAt">, today: IsoDate, now: string): boolean {
+  if (f.kind !== "promise" || f.done) return false;
+  if (f.dueAt) return Date.parse(f.dueAt) < Date.parse(now);
+  return !!f.due && f.due < today;
+}
 
 /** Seen, or already acted on (a due, a link, on my week): not New any more. */
 const triaged = (f: InboxFacts, m: Mark | undefined) => !!m?.seenAt || !!f.byMe || !!f.linked || !!f.onWeek;
@@ -129,3 +150,28 @@ export function viewCounts(items: readonly { facts: InboxFacts; mark?: Mark | un
 export function needsYouCount(items: readonly { facts: InboxFacts; mark?: Mark | undefined }[], today: IsoDate, now: string): number {
   return items.filter((i) => needsYou(i.facts, i.mark, today, now)).length;
 }
+
+/** One row of the Inbox: what the list shows, the views it's in, and whether it's late. Never message text. */
+export type InboxItemView = {
+  key: string;
+  kind: InboxFacts["kind"];
+  clientKey: string | null;
+  at: string;
+  views: InboxView[];
+  title: string;
+  who: string | null;
+  where: string | null;
+  due: IsoDate | null;
+  dueAt: string | null;
+  itemId: number | null;
+  late: boolean;
+  done: boolean;
+  sendState?: InboxFacts["sendState"];
+  conversationView?: InboxFacts["conversationView"];
+  mentionsMe?: boolean;
+  workRequest?: boolean;
+  must?: boolean;
+  weekStart?: IsoDate;
+  snoozedUntil: string | null;
+};
+export type InboxListData = { today: IsoDate; items: InboxItemView[]; counts: Record<InboxView, number>; needsYou: number };

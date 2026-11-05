@@ -117,7 +117,7 @@ export function NoticesPanel({ items, onOpen, onClose }: { items: InAppNotice[];
             ))}
           </ul>
         ) : (
-          <p className="notice-empty muted">Nothing yet. Reminders, the timer and follow-ups due show here, and on this device if you turn on push in Settings › Notifications.</p>
+          <p className="notice-empty muted">Nothing yet. Reminders, the timer and promises due show here, and on this device if you turn on push in Settings › Notifications.</p>
         )}
       </div>
     </div>

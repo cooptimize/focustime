@@ -46,11 +46,11 @@ describe.skipIf(!CHROMIUM)("Plan the day: adding work (browser, demo mode)", () 
     await page.close();
   }, T);
 
-  it("+ in Follow-ups", async () => {
+  it("+ in Promises", async () => {
     const { page } = await freshPage(h);
     await openPlanDay(page);
     await selectBlock(page, "Northwind");
-    const row = section(page, "Follow-ups").locator("li.pd2-add").first();
+    const row = section(page, "Promises").locator("li.pd2-add").first();
     const what = (await row.locator(".pr-title").textContent())!.replace(/^[^:]+: /, "");
     await row.locator("button.pd2-plus").click();
     await expect.poll(async () => (await blockPicks(page, "Northwind")).some((t) => t.includes(what))).toBe(true);

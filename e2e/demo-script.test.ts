@@ -3,7 +3,7 @@
 // DEMO_SHOTS naming a folder, each step's screenshot at 1920 in dark (the default theme) and light.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
-import { CHROMIUM, FAKE_MIC, freshPage, NOW, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, FAKE_MIC, freshPage, NOW, openInboxItem, openInboxView, startDemo, type Harness } from "./harness.ts";
 
 const T = 600_000;
 const SHOTS = process.env.DEMO_SHOTS ?? null;
@@ -90,13 +90,12 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await shot(page, "break-down-created", panel);
     await panel.getByRole("button", { name: "Done" }).click();
 
-    // 6. Inbox › Conversations: the delivery fee question needs me; Create DevOps item from it.
-    await go(page, "#/inbox/conversations");
-    const main = page.getByRole("main", { name: "Conversations" });
-    const card = main.getByRole("region", { name: "Needs you" }).getByRole("listitem", { name: "Delivery fee missing from the order export" });
-    await card.waitFor({ timeout: 30_000 });
-    await shot(page, "inbox-needs-you", card);
-    await card.getByRole("button", { name: /^Create DevOps item/ }).click();
+    // 6. Inbox › Needs you: the delivery fee question needs me; Create DevOps item from it.
+    await go(page, "#/inbox/needs-you");
+    const main = page.getByRole("main", { name: "Inbox" });
+    const card = await openInboxItem(page, "Delivery fee missing from the order export");
+    await shot(page, "inbox-needs-you", main);
+    await card.getByRole("button", { name: /^Create DevOps item/ }).first().click();
     const draft = card.getByRole("form", { name: "Create DevOps item" });
     await expect.poll(() => draft.getByRole("textbox", { name: /^Title/ }).inputValue(), { timeout: 30_000 }).toContain("delivery fee");
     await shot(page, "inbox-create-form", draft);
@@ -108,14 +107,14 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await shot(page, "inbox-create-preview", preview);
     await preview.getByRole("button", { name: "Create in DevOps" }).click();
     await preview.waitFor({ state: "detached" });
-    await main.getByRole("region", { name: "In progress" }).getByRole("listitem", { name: "Delivery fee missing from the order export" }).waitFor({ timeout: 30_000 });
+    await openInboxView(page, "in-progress");
+    await main.locator(".ib-row", { hasText: "Delivery fee missing from the order export" }).waitFor({ timeout: 30_000 });
     await shot(page, "inbox-tracked");
 
     // 7. Inbox › Promises: the late one and the one due Friday.
-    await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Promises/ }).click();
-    const myp = page.getByRole("main", { name: "Promises" });
-    await myp.getByRole("listitem", { name: "Promise: Send Marcus the updated export spec" }).waitFor({ timeout: 30_000 });
-    await myp.getByRole("listitem", { name: "Promise: Confirm the intake form go-live date" }).waitFor();
+    const myp = await openInboxView(page, "promises");
+    await myp.locator(".ib-row", { hasText: "Send Marcus the updated export spec" }).waitFor({ timeout: 30_000 });
+    await myp.locator(".ib-row", { hasText: "Confirm the intake form go-live date" }).first().waitFor();
     await shot(page, "inbox-promises");
 
     // 8. Capture: N on Today, a line for Northwind, Enter. Then Captures: the seeded draft story's AI-prepared version.
@@ -131,9 +130,8 @@ describe.skipIf(!CHROMIUM)("the demo script (DM-1)", () => {
     await page.getByText(/Saved/).first().waitFor({ timeout: 10_000 });
     if (await qc.count()) await qc.getByRole("button", { name: "Close" }).click();
     await go(page, "#/inbox/captures");
-    const draftRow = page.locator("li, .cap-row, .draft-row", { hasText: "Reorder from a past order" }).last();
-    await draftRow.waitFor({ timeout: 30_000 });
-    await draftRow.getByRole("button", { name: "Create in DevOps" }).click();
+    const draftPane = await openInboxItem(page, "Reorder from a past order");
+    await draftPane.getByRole("button", { name: "Create in DevOps" }).click();
     await page.getByText(/AI|prepared/i).first().waitFor({ timeout: 15_000 });
     await shot(page, "capture-ai-version");
     await page.getByRole("button", { name: "Not now" }).click();

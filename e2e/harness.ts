@@ -10,7 +10,7 @@ import { createServer as createHttps } from "node:https";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium, webkit, type Browser, type Page } from "playwright-core";
+import { chromium, webkit, type Browser, type Locator, type Page } from "playwright-core";
 import { onFreePort } from "../test/ports.ts";
 
 export const CHROMIUM = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"].find((p) => existsSync(p)) ?? null;
@@ -220,7 +220,26 @@ export async function weekRow(page: Page, text: string) {
 
 /** UI-7: Inbox › Captures (the capture box, follow-ups and drafts): 4, then its segment in the Inbox's mode switch. */
 export async function openCaptures(page: Page): Promise<void> {
+  // IB-1: one Inbox with views; Captures and drafts holds the capture box, promises I added and drafts.
   await page.keyboard.press("4");
-  await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Captures/ }).click();
-  await page.getByRole("main", { name: "Captures" }).waitFor();
+  await page.evaluate(() => (location.hash = "#/inbox/captures"));
+  await page.locator(".ib-capture").waitFor();
+}
+
+/** IB-1: the Inbox on one view (needs-you, promises, waiting, in-progress, captures, teammates, done, chatter). */
+export async function openInboxView(page: Page, slug: string): Promise<Locator> {
+  await page.evaluate((s) => (location.hash = `#/inbox/${s}`), slug);
+  const main = page.getByRole("main", { name: "Inbox" });
+  await main.waitFor();
+  return main;
+}
+
+/** IB-1: opens the row whose title matches in the Inbox list; returns the detail pane. */
+export async function openInboxItem(page: Page, title: string | RegExp): Promise<Locator> {
+  const row = page.locator(".ib-row", { has: page.locator(".ib-row-title", { hasText: title }) }).first();
+  await row.waitFor();
+  await row.click();
+  const pane = page.locator(".ib-pane");
+  await pane.locator(".ib-detail-title", { hasText: title }).first().waitFor();
+  return pane;
 }

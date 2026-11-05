@@ -543,7 +543,7 @@ export async function sendFacts(ctx: TeamContext): Promise<import("../plan/inbox
     if (s.to.id !== me || !r.isClient(s.clientKey)) continue;
     const sendState = s.state === "waiting" ? "waiting" : s.state === "accepted" || s.state === "scheduled" ? "accepted" : "done";
     if (sendState === "done" && now - Date.parse(s.updatedAt) >= 24 * 3600_000) continue;
-    out.push({ key: `s${s.id}`, kind: "send", clientKey: s.clientKey, at: s.updatedAt, done: sendState === "done", sendState });
+    out.push({ key: `s${s.id}`, kind: "send", clientKey: s.clientKey, at: s.updatedAt, done: sendState === "done", sendState, title: `#${s.itemId} ${s.title}`, who: s.from.name, where: s.weekStart > today ? "next week" : "this week", itemId: s.itemId, must: s.kind === "must", weekStart: s.weekStart });
   }
   return out;
 }

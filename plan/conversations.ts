@@ -112,6 +112,9 @@ export type Commitment = {
   reason: string | null;
   /** The DevOps item drafted for the committer (when they opened it), until it is created or linked. */
   draft: ItemDraft | null;
+  /** IB-1: Close the loop on a chat promise: how I told them (optional) and a note, kept when it's done that way. */
+  closeHow?: "teams" | "email" | "devops" | "call" | null;
+  closeNote?: string | null;
   createdAt: string;
   updatedAt: string;
 };

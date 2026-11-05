@@ -15,8 +15,8 @@ import { clientColor } from "./labels.ts";
 import { keyAction, onLastLine, savedText, TOAST_MS } from "./capturebox.ts";
 import { CreateDraftCtx } from "./createdraft-ctx.ts";
 
-const KIND_NAME: Record<CaptureKind, string> = { follow_up: "Follow-up", draft: "Draft story", draft_feature: "Draft feature" };
-const SAVE_AS: Record<CaptureKind, string> = { follow_up: "Save as follow-up", draft: "Save as draft story", draft_feature: "Save as draft feature" };
+const KIND_NAME: Record<CaptureKind, string> = { follow_up: "Promise", draft: "Draft story", draft_feature: "Draft feature" };
+const SAVE_AS: Record<CaptureKind, string> = { follow_up: "Save as promise", draft: "Save as draft story", draft_feature: "Save as draft feature" };
 const plainDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 const when = (z: string, tz: string) => {
   const t = Temporal.ZonedDateTime.from(z).withTimeZone(tz);
@@ -83,7 +83,7 @@ export function SortCapture({ capture, clients, today, onDone, onCancel }: { cap
         as === "draft_feature" ? { clientKey: client, title, ...(parent.itemId ? { parentItemId: parent.itemId } : {}), ...(target ? { targetDate: target } : {}) } : {};
       await call("capture.route", { id: capture.id, as, ...input });
       const cname = clients.find((c) => c.clientKey === client)?.clientName ?? client;
-      onDone(as === "dismissed" ? "Dismissed" : as === "follow_up" ? `Follow-up saved${who.who.trim() ? `: owed to ${who.who.trim()}` : ""}${due ? `, due ${plainDay(due)}` : ""}` : as === "draft" ? `Draft story saved for ${cname}` : `Draft feature saved for ${cname}`);
+      onDone(as === "dismissed" ? "Dismissed" : as === "follow_up" ? `Promise saved${who.who.trim() ? `: owed to ${who.who.trim()}` : ""}${due ? `, due ${plainDay(due)}` : ""}` : as === "draft" ? `Draft story saved for ${cname}` : `Draft feature saved for ${cname}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
     } finally {
@@ -542,7 +542,7 @@ export function CaptureDialog({ data, onClose, onChanged, onOpenView, defaultCli
         <div className="cap-dialog-head">
           <h2>Quick capture</h2>
           <span className="muted">Saved at once, even offline. Sort it now with a kind, or later in Captures.</span>
-          <button type="button" className="mini quiet" onClick={onOpenView} title="Captures to sort and follow-ups">
+          <button type="button" className="mini quiet" onClick={onOpenView} title="Captures to sort and drafts">
             Open Captures{data.captures > 0 ? ` (${data.captures} to sort)` : ""}
           </button>
           <CloseButton onClose={onClose} />

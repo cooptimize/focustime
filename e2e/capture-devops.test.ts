@@ -22,7 +22,7 @@ const api = <R = unknown>(page: Page, action: string, input: unknown) =>
     ([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()),
     [action, input] as const,
   ) as Promise<{ ok: boolean; data: R; error?: string }>;
-const box = (page: Page) => page.locator(".inbox .cap-box textarea[aria-label='Quick capture']");
+const box = (page: Page) => page.locator(".ib-capture .cap-box textarea[aria-label='Quick capture']");
 type Draft = { id: number; title: string; clientKey: string; parentItemId: number | null; ai?: { state: string; title: string | null; parentId: number | null } | null; devopsId?: number };
 const drafts = async (page: Page) => (await api<{ drafts: Draft[] }>(page, "capture.load", {})).data.drafts;
 
@@ -77,9 +77,9 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       await box(page).waitFor();
 
       // The chip is the client: choose Adatum.
-      await page.locator(".inbox .cap-box .cap-client").click();
+      await page.locator(".ib-capture .cap-box .cap-client").click();
       await page.locator(".cap-choose .chip-btn", { hasText: "Adatum" }).click();
-      const chip = page.locator(".inbox .cap-box .cap-client");
+      const chip = page.locator(".ib-capture .cap-box .cap-client");
       await expect(chip.textContent()).resolves.toContain("Adatum");
 
       // Shift+Enter is a new line; Enter saves; the toast names the client, with Undo.
@@ -87,9 +87,9 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       await box(page).press("Shift+Enter");
       await box(page).pressSequentially("as csv");
       await expect(box(page).inputValue()).resolves.toBe("story: invoice export for finance\nas csv");
-      await page.locator(".inbox .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
+      await page.locator(".ib-capture .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
       await box(page).press("Enter");
-      const toast = page.locator(".inbox .cap-toast");
+      const toast = page.locator(".ib-capture .cap-toast");
       await expect.poll(() => toast.textContent()).toMatch(/^Saved to Adatum as a draft story·Undo$/);
       await expect.poll(async () => (await drafts(page)).length).toBe(1);
       // Undo: the draft goes and my text comes back.
@@ -97,8 +97,8 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       await expect.poll(async () => (await drafts(page)).length).toBe(0);
       await expect(box(page).inputValue()).resolves.toBe("story: invoice export for finance\nas csv");
       // Saved again with the ↵ button; the chip stays Adatum after the save.
-      await page.locator(".inbox .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
-      await page.locator(".inbox .cap-box .cap-send").click();
+      await page.locator(".ib-capture .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
+      await page.locator(".ib-capture .cap-box .cap-send").click();
       await expect.poll(() => toast.textContent()).toContain("Saved to Adatum");
       await expect(chip.textContent()).resolves.toContain("Adatum");
       await expect(box(page).inputValue()).resolves.toBe("");
@@ -107,23 +107,26 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       await expect.poll(async () => (await drafts(page))[0]?.ai?.state, { timeout: 30_000 }).toBe("ready");
       const d = (await drafts(page))[0]!;
       expect(d).toMatchObject({ clientKey: "Adatum", title: "Invoice export for finance as csv" });
-      const row = page.locator(".dw-drafts-section .cap-item").first();
-      await expect.poll(() => row.locator(".dw-draft-state").textContent()).toBe("Ready to create");
-      await expect(row.locator(".draft-title").textContent()).resolves.toContain("Invoice export for finance");
-      await shotBoth(page, "cp1-capture-toast-drafts", page.locator(".inbox .cap-box"));
+      // IB-1: the draft is a row in Captures and drafts; its pane says what it needs.
+      const row = page.locator(".ib-row", { hasText: "Invoice export for finance" }).first();
+      await row.click();
+      await expect.poll(() => page.locator(".ib-pane .dw-draft-state").textContent()).toBe("Ready to create");
+      await expect(row.locator(".ib-row-title").textContent()).resolves.toContain("Invoice export for finance");
+      await shotBoth(page, "cp1-capture-toast-drafts", page.locator(".ib-capture .cap-box"));
 
-      // UI-7: the row's ⋯ has Prepare again (one more request) and Delete.
+      // UI-7, IB-1: the pane's ⋯ has Prepare again (one more request) and Delete.
       const before = prepares;
-      await row.getByRole("button", { name: /^More for:/ }).click();
-      await expect(row.getByRole("menuitem", { name: "Delete" }).count()).resolves.toBe(1);
-      await row.getByRole("menuitem", { name: "Prepare again" }).click();
+      const pane = page.locator(".ib-pane");
+      await pane.getByRole("button", { name: /^More for/ }).click();
+      await expect(pane.getByRole("menuitem", { name: "Delete draft" }).count()).resolves.toBe(1);
+      await pane.getByRole("menuitem", { name: "Prepare again" }).click();
       await expect.poll(() => prepares).toBe(before + 1);
-      await expect.poll(() => row.locator(".dw-draft-state").textContent(), { timeout: 30_000 }).toBe("Ready to create");
+      await expect.poll(() => pane.locator(".dw-draft-state").textContent(), { timeout: 30_000 }).toBe("Ready to create");
 
       // A leftover @word that names no client never moves a capture: the chip decides.
-      await page.locator(".inbox .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
+      await page.locator(".ib-capture .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
       await box(page).fill("story: tidy @nobody headers");
-      await page.locator(".inbox .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
+      await page.locator(".ib-capture .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
       await box(page).press("Enter");
       await expect.poll(async () => (await drafts(page)).find((x) => x.title.includes("@nobody"))?.clientKey).toBe("Adatum");
 
@@ -131,7 +134,8 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       dv.add(d.ai!.parentId!, { "System.WorkItemType": "Feature", "System.Title": "Feature I own", "System.State": "Active", "System.AssignedTo": { uniqueName: "me@contoso.example" } });
 
       // Create in DevOps: the client at the top, mine and the AI version side by side.
-      await row.getByRole("button", { name: "Create in DevOps" }).click();
+      await row.click();
+      await page.locator(".ib-pane").getByRole("button", { name: "Create in DevOps" }).click();
       const dialog = page.getByRole("dialog", { name: "Creating in Adatum's DevOps" });
       await dialog.waitFor();
       const ai = dialog.getByRole("region", { name: "AI version" });
@@ -167,9 +171,9 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       await expect.poll(async () => (await drafts(page)).some((x) => x.id === d.id)).toBe(false);
 
       // Ctrl+Enter: saves and opens the preview at once (AI still writing, or ready).
-      await page.locator(".inbox .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
+      await page.locator(".ib-capture .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
       await box(page).fill("story: retry failed syncs");
-      await page.locator(".inbox .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
+      await page.locator(".ib-capture .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
       await box(page).press("Control+Enter");
       const fast = page.getByRole("dialog", { name: "Creating in Adatum's DevOps" });
       await fast.waitFor();

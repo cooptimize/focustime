@@ -96,7 +96,7 @@ export function FollowUpRow({ l, timeZone, today, clients, onChanged, compact = 
     : null;
   // U5: the row says who, what and when it's due; how and when it was opened is on hover. One action shows: Mark
   // done in DevOps for a DevOps update with an item, else Close the loop; the rest are in ⋯.
-  const meta = [l.clientName && l.who !== l.clientName ? l.clientName : null, KIND_LABEL[l.kind] ?? "Follow-up", l.session ? `Flex session ${span(l.session, timeZone)}` : null, `opened ${when(l.openedAt, timeZone)}`, l.channel && !l.closedAt ? `on ${HOW_LABEL[l.channel as CloseHow] ?? l.channel}` : null].filter(Boolean).join(" · ");
+  const meta = [l.clientName && l.who !== l.clientName ? l.clientName : null, KIND_LABEL[l.kind] ?? "Promise", l.session ? `Flex session ${span(l.session, timeZone)}` : null, `opened ${when(l.openedAt, timeZone)}`, l.channel && !l.closedAt ? `on ${HOW_LABEL[l.channel as CloseHow] ?? l.channel}` : null].filter(Boolean).join(" · ");
   const devopsFirst = !l.closedAt && l.kind === "devops_update" && l.itemId !== null && !!l.clientKey;
   const state = [l.snoozedUntil && !l.closedAt ? `snoozed until ${plainDay(l.snoozedUntil)}` : null, closedText].filter(Boolean).join(" · ");
   return (

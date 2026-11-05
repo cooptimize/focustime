@@ -18,7 +18,7 @@ import { basic, fakeDevOpsWrite, WRITE_PAT } from "../sources/devops/write-fakes
 import { Pat } from "../sources/devops/pat.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
 import type { WorkItem } from "../week/types.ts";
-import { CHROMIUM } from "./harness.ts";
+import { CHROMIUM, openInboxItem, openInboxView } from "./harness.ts";
 import { liveBrowser, liveContext, ME, T, type LiveBrowser } from "./live.ts";
 import { SHOTS } from "./shots.ts";
 
@@ -119,17 +119,18 @@ describe.skipIf(!CHROMIUM)("Create DevOps item and Link to item, CV-5", () => {
       page.setDefaultTimeout(60_000);
       const errors: string[] = [];
       page.on("pageerror", (e) => !/WebSocket/.test(e.message) && errors.push(e.message));
+      // The old address still opens the Inbox (IB-1: Needs you).
       await page.goto(`${app.url}#/inbox/conversations`);
       await page.locator(".topbar").waitFor();
-      const main = page.getByRole("main", { name: "Conversations" });
+      await page.getByRole("main", { name: "Inbox" }).waitFor();
 
       // Before: In discussion, Create DevOps item is the main button (it was Resolve, with Create under ⋯).
-      const card = main.getByRole("region", { name: "Needs you" }).getByRole("listitem", { name: "Reprofile the sales view" });
-      await card.getByRole("button", { name: /^Create DevOps item/ }).waitFor();
+      const card = await openInboxItem(page, "Reprofile the sales view");
+      await card.locator(".ib-act.primary", { hasText: /^Create DevOps item/ }).waitFor();
       await shots(page, "cv5-conversation-before", card);
 
       // The form, empty without AI; I fill it in; the preview says who will see it; confirm creates it once.
-      await card.getByRole("button", { name: /^Create DevOps item/ }).click();
+      await card.getByRole("button", { name: /^Create DevOps item/ }).first().click();
       const draft = card.getByRole("form", { name: "Create DevOps item" });
       await draft.getByText(/Not drafted by AI/).waitFor();
       expect(await draft.getByRole("textbox", { name: /^Title/ }).inputValue()).toBe("");
@@ -147,22 +148,22 @@ describe.skipIf(!CHROMIUM)("Create DevOps item and Link to item, CV-5", () => {
       expect(dv.writes().filter((w) => w.method === "POST" && w.url.includes("workitems/$"))).toHaveLength(1);
 
       // After: In progress, with the item's live state.
-      const progress = main.getByRole("region", { name: "In progress" }).getByRole("listitem", { name: "Reprofile the sales view" });
+      await openInboxView(page, "in-progress");
+      const progress = await openInboxItem(page, "Reprofile the sales view");
       await progress.getByText(new RegExp(`#${made.id} Reprofile the sales view to load under 5 seconds`)).waitFor();
       await progress.getByText(/· Sam Tester · changed/).waitFor();
       await shots(page, "cv5-conversation-after", progress);
 
       // A promise that implied no item: Create DevOps item leads (it had no Create before).
-      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Promises/ }).click();
-      const myp = page.getByRole("main", { name: "Promises" });
-      const promise = myp.getByRole("listitem", { name: "Promise: Sort out the date formats this week" });
-      await promise.getByRole("button", { name: "Create DevOps item", exact: true }).waitFor();
-      await promise.getByRole("button", { name: "Add to Today", exact: true }).waitFor();
+      await openInboxView(page, "promises");
+      const promise = await openInboxItem(page, "Sort out the date formats this week");
+      await promise.locator(".ib-act.primary", { hasText: /^Create DevOps item/ }).waitFor();
+      await promise.getByRole("button", { name: /^Add to Today/ }).waitFor();
       await shots(page, "cv5-promise-before", promise);
 
       // Link to item, with "Also add a comment": the link is FocusTime's; the comment has its own preview.
-      await promise.getByRole("button", { name: /^More for: / }).click();
-      await promise.getByRole("menuitem", { name: "Link to item…" }).click();
+      await promise.getByRole("button", { name: /^More for / }).click();
+      await promise.getByRole("menuitem", { name: "Link to item" }).click();
       await promise.getByRole("textbox", { name: /^Link to one of/ }).fill("date");
       await promise.getByRole("checkbox", { name: /Also add a comment on the item/ }).check();
       await promise.getByRole("button", { name: /#438 Date format cleanup/ }).click();
@@ -174,15 +175,16 @@ describe.skipIf(!CHROMIUM)("Create DevOps item and Link to item, CV-5", () => {
       expect((await convs.commitment(k.id))!).toMatchObject({ state: "open", itemId: 438 });
       await promise.getByText(/Linked to/).waitFor();
       await promise.getByText(/· Active · Sam Tester/).waitFor();
-      await promise.getByRole("button", { name: "Add to Today", exact: true }).waitFor();
+      await promise.getByRole("button", { name: /^Add to Today/ }).waitFor();
       await shots(page, "cv5-promise-after", promise);
 
       // The item closes in DevOps: Item closed, Mark done; the promise stays open until I say so.
       dv.items.get(438)!.fields["System.State"] = "Closed";
       await page.reload();
-      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Promises/ }).click();
-      await promise.getByText("Item closed").waitFor();
-      await promise.getByRole("button", { name: "Mark done", exact: true }).waitFor();
+      await page.locator(".topbar").waitFor();
+      await promise.locator(".ib-detail-title", { hasText: "Sort out the date formats this week" }).waitFor();
+      await promise.getByText("Item closed").first().waitFor();
+      await promise.locator(".ib-act.primary", { hasText: /^Mark done/ }).waitFor();
       expect((await convs.commitment(k.id))!.state).toBe("open");
       await shots(page, "cv5-promise-item-closed", promise);
       expect(errors).toEqual([]);

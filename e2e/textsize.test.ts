@@ -79,8 +79,8 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await go(page, "#/ahead/fix");
       await page.locator(".ah-fx-row").first().waitFor({ timeout: 30_000 });
       await check("Ahead › Fix next");
-      await go(page, "#/inbox/captures");
-      await page.locator(".inbox-list li").first().waitFor();
+      await go(page, "#/inbox/promises");
+      await page.locator(".ib-row").first().waitFor();
       await check("Inbox");
       for (const s of SECTIONS) {
         await go(page, `#/settings/${s}`);
@@ -109,7 +109,8 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await check("Timebox…");
       await page.locator("[role=dialog]").getByRole("button", { name: "Cancel" }).click();
       await go(page, "#/inbox/captures");
-      await page.locator(".draft-title", { hasText: "Filter presets" }).click();
+      await page.locator(".ib-row", { hasText: "Filter presets" }).first().click();
+      await page.locator(".ib-pane").getByRole("button", { name: "Edit draft" }).click();
       await page.locator(".draft-editor").waitFor();
       await check("draft editor");
       expect(errors).toEqual([]);
@@ -133,7 +134,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     const before = await fontOf(page, ".settings .set-hint");
     await page.getByRole("radio", { name: "Larger" }).check();
     await expect.poll(() => fontOf(page, ".settings .set-hint")).toBe(before + 4);
-    for (const [hash, sel] of [["#/today", ".today-block"], ["#/week/2026-11-02", ".half.card .card-client"], ["#/week/plan/2026-11-09", ".pw-card-head"], ["#/ahead", ".ah-col-item"], ["#/inbox/captures", ".follow-up-what"]] as const) {
+    for (const [hash, sel] of [["#/today", ".today-block"], ["#/week/2026-11-02", ".half.card .card-client"], ["#/week/plan/2026-11-09", ".pw-card-head"], ["#/ahead", ".ah-col-item"], ["#/inbox/promises", ".ib-row-title"]] as const) {
       await go(page, hash);
       await page.locator(sel).first().waitFor({ timeout: 30_000 });
       expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--text-base").trim()), hash).toBe("17px");
@@ -169,7 +170,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     await expect.poll(attr).toBe(null);
     // In a text field the keys are left alone.
     await go(page, "#/inbox/captures");
-    await page.locator(".inbox-capture input, .inbox-capture textarea").first().focus();
+    await page.locator(".ib-capture textarea").first().focus();
     await page.keyboard.press("Control+=");
     await page.waitForTimeout(400);
     expect(await attr()).toBe(null);
@@ -178,22 +179,22 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     await page.close();
   }, T);
 
-  it("Inbox: each row has one primary action; no New today or Added by me", async () => {
+  it("Inbox (IB-1): one primary action for the open item; rows carry one tag; a capture's Sort shows the kind chips", async () => {
     const { page, errors } = await freshPage(h);
-    await go(page, "#/inbox/captures");
-    await page.locator(".inbox-list > li").first().waitFor();
-    const primaries = await page.locator(".inbox-list > li").evaluateAll((rows) => rows.map((r) => r.querySelectorAll("button.primary").length));
-    expect(primaries.length).toBeGreaterThan(1);
-    for (const n of primaries) expect(n).toBeLessThanOrEqual(1);
-    expect(primaries.filter((n) => n === 1).length).toBeGreaterThan(0);
-    const text = (await page.locator(".inbox").textContent()) ?? "";
+    await go(page, "#/inbox/promises");
+    await page.locator(".ib-row").first().waitFor();
+    const rows = await page.locator(".ib-row").evaluateAll((rs) => rs.map((r) => r.querySelectorAll(".ib-tag").length));
+    expect(rows.length).toBeGreaterThan(1);
+    for (const n of rows) expect(n).toBeLessThanOrEqual(1);
+    await page.locator(".ib-row").first().click();
+    await expect(page.locator(".ib-pane .ib-acts .ib-act.primary").count()).resolves.toBe(1);
+    const text = (await page.locator("main.ib").textContent()) ?? "";
     expect(text).not.toMatch(/new today|added by me/i);
-    // The meta moved to hover: the row's title says how and when it was opened.
-    await expect(page.locator(".inbox-list > li.follow-up").first().getAttribute("title")).resolves.toMatch(/opened/);
-    // A capture: Sort opens the kind chips; Dismiss is in its ⋯.
-    const cap = page.locator(".inbox-list > li.cap-item").first();
-    await cap.getByRole("button", { name: "Sort" }).click();
-    await expect(cap.locator(".cap-sort [role=radio]").count()).resolves.toBe(4);
+    // A capture: Sort opens the kind chips.
+    await go(page, "#/inbox/captures");
+    await page.locator(".ib-row", { has: page.locator(".ib-tag", { hasText: "To sort" }) }).first().click();
+    await page.locator(".ib-pane").getByRole("button", { name: "Sort" }).click();
+    await expect(page.locator(".ib-pane .cap-sort [role=radio]").count()).resolves.toBe(4);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

@@ -122,7 +122,7 @@ describe.skipIf(!CHROMIUM)("P1: FocusTime on a phone", () => {
     const panel = page.locator(".notices-panel");
     await panel.waitFor();
     expect(await panel.locator(".notice-row").count()).toBeGreaterThanOrEqual(2);
-    expect(await panel.locator(".notice-row.unread .nr-title").first().textContent()).toContain("Follow-ups due");
+    expect(await panel.locator(".notice-row.unread .nr-title").first().textContent()).toContain("Promises due");
     await panel.getByRole("button", { name: "Close" }).click();
     // Read now: ⋯ no longer counts them.
     expect((await call(page, "notices.list", {})).data.unread).toBe(0);

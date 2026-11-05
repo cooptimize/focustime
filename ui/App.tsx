@@ -36,7 +36,7 @@ import { causeLines, SOURCE_NAMES, sourceActions, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { MustsSummary, TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
-import { afterDone, defaultNav, focusOf, hashOf, HOME, inboxModeOf, inboxNav, isPlanning, MODES, modeNav, navOf, nextInboxMode, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type InboxMode, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
+import { afterDone, defaultNav, focusOf, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, planDayNav, planWeekOf, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch } from "./ModeSwitch.tsx";
 import { dayModeStatus, momentCard, weekModeStatus } from "../plan/modes.ts";
 import { FocusScreen, SoundControl } from "./FocusScreen.tsx";
@@ -44,10 +44,8 @@ import { sound } from "./sound.ts";
 import type { TimerView } from "../actions/types.ts";
 import { soundStep, type SoundKind } from "../plan/focussound.ts";
 import { focusPick } from "../plan/today.ts";
-import { Inbox } from "./Inbox.tsx";
-import { Conversations } from "./Conversations.tsx";
-import { useConversationCount, useInboxCount } from "./inboxcount.ts";
-import { MyPromises } from "./MyPromises.tsx";
+import { InboxPage } from "./inbox/InboxPage.tsx";
+import { useInboxCount } from "./inboxcount.ts";
 import { Ahead } from "./ahead/Ahead.tsx";
 import { Today } from "./Today.tsx";
 import type { DraftStory, Pick } from "../plan/types.ts";
@@ -114,22 +112,11 @@ function storedLoc(): Loc | null {
   }
 }
 
-/** UI-7: the Inbox mode last used in this browser, so the bare Inbox (4, the tab) opens there. A convenience only. */
-const INBOX_MODE_KEY = "focustime.inboxMode";
-function storedInboxMode(): InboxMode | null {
-  try {
-    const m = localStorage.getItem(INBOX_MODE_KEY);
-    return (MODES.inbox as readonly string[]).includes(m ?? "") ? (m as InboxMode) : null;
-  } catch {
-    return null;
-  }
-}
-
 const TAB_TITLES: Record<Tab, string> = {
   today: "Today: what's next, what's urgent and the day's blocks",
   week: "The week: the Board (Plan today) and Plan (each client's features)",
   ahead: "Features, epics and stories ahead: Grid, Gantt and Fix next",
-  inbox: "Conversations, promises, follow-ups and captures",
+  inbox: "What needs you: promises, conversations, sends, captures and drafts",
 };
 
 const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -236,23 +223,8 @@ export function App() {
   const guideAt = loc.overlay?.kind === "guide" ? loc.overlay : null;
   const base: "today" | "week" = nav.tab === "week" ? "week" : "today";
   const followUpsOpen = nav.tab === "inbox";
-  // UI-7: the Inbox's mode (Conversations · Promises · Captures): from the address, else the one last used.
-  const [inboxRemembered, setInboxRemembered] = useState<InboxMode | null>(storedInboxMode);
-  const inboxMode = nav.tab === "inbox" ? inboxModeOf(nav, inboxRemembered) : null;
-  const inboxModeRef = useRef(inboxMode ?? inboxRemembered ?? "conversations");
-  useEffect(() => {
-    if (!inboxMode) return;
-    inboxModeRef.current = inboxMode;
-    if (inboxMode === inboxRemembered) return;
-    setInboxRemembered(inboxMode);
-    try {
-      localStorage.setItem(INBOX_MODE_KEY, inboxMode);
-    } catch {
-      /* a convenience only */
-    }
-  }, [inboxMode, inboxRemembered]);
-  const asksOpen = inboxMode === "conversations";
-  const promisesOpen = inboxMode === "promises";
+  /** IB-1: the Inbox's item open in the detail pane (the command menu's Inbox keys run only there). */
+  const asksOpen = nav.tab === "inbox";
   const roadmapOpen = nav.tab === "ahead";
   const checkInOpen = nav.tab === "today" && nav.flow === "checkin";
   /** NV-1: the Board focused on a day (Plan the day lives here now). */
@@ -289,7 +261,6 @@ export function App() {
   const [draftEdit, setDraftEdit] = useState<DraftStory | null>(null);
   const [createDraft, setCreateDraft] = useState<number | null>(null);
   const [captureVersion, setCaptureVersion] = useState(0);
-  const [askCount, setAskCount, promiseCount, setPromiseCount] = useConversationCount(captureVersion);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
   /** U2: Week's ⋯ (the hours shown, and the compact timelines in the medium layout), moved from the status bar. */
   const [weekMoreAt, setWeekMoreAt] = useState<{ x: number; y: number } | null>(null);
@@ -877,8 +848,7 @@ export function App() {
   /** P: the current tab's planning mode, or back to its view mode. */
   const togglePlanning = useCallback(() => {
     setDetailsOpen(false);
-    // UI-7: on the Inbox, P steps through its three modes.
-    go((l) => ({ nav: l.nav.tab === "inbox" && !l.overlay ? inboxNav(nextInboxMode(inboxModeRef.current)) : toggleP(l.nav), overlay: null }));
+    go((l) => ({ nav: toggleP(l.nav), overlay: null }));
   }, [go]);
   /** A tab (top bar, 1–4): its default mode. */
   const openTab = useCallback(
@@ -929,7 +899,6 @@ export function App() {
   }, [timerEndsAt, skew]);
 
   // Step 15.5: a clicked notification opens its view (the server hands the route over like the capture request).
-  const [highlightFollowUp, setHighlightFollowUp] = useState<number | null>(null);
   const openRouteRef = useRef<(route: string) => void>(() => {});
   openRouteRef.current = (text: string) => {
     const r = parseRoute(text);
@@ -938,7 +907,6 @@ export function App() {
     setDetailsOpen(false);
     // Step 16.2: each route is a tab and mode (or an overlay); the VM opens Today with the VM menu.
     const { loc: to, vmMenu } = routeLoc(r);
-    if (r.view === "followup") setHighlightFollowUp(r.id);
     go(to);
     // The chip's menu, once Today is on screen.
     if (vmMenu) setTimeout(() => window.dispatchEvent(new Event(VM_MENU_EVENT)), 300);
@@ -1457,14 +1425,7 @@ export function App() {
       />
     ),
     ahead: <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "grid"} status={{ gantt: data.aheadDue.length ? "due" : null }} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />,
-    inbox: (
-      <ModeSwitch
-        tab="inbox"
-        current={inboxMode ?? "conversations"}
-        badges={{ conversations: askCount, promises: promiseCount, captures: data.openFollowUps + data.captures }}
-        onMode={(m: ModeName) => goNav(inboxNav(m as InboxMode))}
-      />
-    ),
+    inbox: null,
   };
   // AH-3: Ahead's switch with Fix next's count, given by Ahead once it knows it.
   const aheadSwitch = (counts: Partial<Record<ModeName, number>>) => <ModeSwitch tab="ahead" current={nav.tab === "ahead" ? nav.mode : "grid"} status={{ gantt: data.aheadDue.length ? "due" : null }} counts={counts} onMode={(m: ModeName) => goNav(modeNav("ahead", m))} />;
@@ -1727,13 +1688,7 @@ export function App() {
         <TeamView switcher={switches.week} weekStart={nav.week ?? data.today.weekStart} thisWeek={data.today.weekStart} colors={data.clients} readOnly={phone} onWeek={(w) => goNav(navOf.week("team", w))} version={planWeekVersion} onChanged={reloadQuiet} />
       ) : followUpsOpen ? (
         <div className="inbox-page">
-          {asksOpen ? (
-            <Conversations switcher={switches.inbox} select={nav.tab === "inbox" ? (nav.select ?? null) : null} data={data} version={captureVersion} onCount={setAskCount} onPromiseCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
-          ) : promisesOpen ? (
-            <MyPromises switcher={switches.inbox} select={nav.tab === "inbox" ? (nav.select ?? null) : null} data={data} version={captureVersion} onCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
-          ) : (
-            <Inbox switcher={switches.inbox} data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
-          )}
+          {nav.tab === "inbox" && <InboxPage nav={nav} data={data} version={captureVersion} onNav={goNav} onChanged={reloadQuiet} />}
         </div>
       ) : roadmapOpen ? (
         nav.tab === "ahead" ? (

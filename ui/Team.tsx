@@ -221,7 +221,7 @@ function teamName(people: readonly { id: string; name: string; you: boolean }[],
 const fromWords = (s: SendView) => `from ${first(s.from.name)}${s.by && s.by.id !== s.from.id ? `, passed on by ${first(s.by.name)}` : ""}`;
 
 /** One thing sent to me: Accept (with Also assign to me in DevOps), Accept and schedule, Pass to…, Can't this week. */
-function IncomingRow({ s, clientName, past, act, onSchedule }: { s: SendView; clientName: string; past: boolean; act: (a: string, i: Record<string, unknown>) => Promise<unknown>; onSchedule?: ((date: IsoDate, half: Half) => void) | undefined }) {
+export function IncomingRow({ s, clientName, past, act, onSchedule }: { s: SendView; clientName: string; past: boolean; act: (a: string, i: Record<string, unknown>) => Promise<unknown>; onSchedule?: ((date: IsoDate, half: Half) => void) | undefined }) {
   const env = useDevOpsWrite();
   const [assign, setAssign] = useState(s.askTake);
   const [form, setForm] = useState<null | "pass" | "cant">(null);

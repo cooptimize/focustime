@@ -119,9 +119,10 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await page.getByRole("navigation", { name: "Ahead modes" }).waitFor();
     await shotAll(page, "nv1-ahead");
 
-    // The Inbox, as it was.
+    // The Inbox (IB-1): one list with views, no mode switch.
     await page.keyboard.press("4");
-    await page.getByRole("navigation", { name: "Inbox modes" }).waitFor();
+    await page.getByRole("navigation", { name: "Inbox views and clients" }).waitFor();
+    expect(await page.getByRole("navigation", { name: "Inbox modes" }).count()).toBe(0);
     await shotAll(page, "nv1-inbox");
 
     // Every older address lands on its new home with its date, block or week.
@@ -132,8 +133,13 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
       ["#/roadmap", "#/ahead"],
       ["#/roadmap/ahead", "#/ahead/gantt"],
       ["#/ahead/plan", "#/ahead/gantt"],
-      ["#/conversations", "#/inbox/conversations"],
-      ["#/my-promises", "#/inbox/my-promises"],
+      ["#/conversations", "#/inbox/needs-you"],
+      ["#/my-promises", "#/inbox/promises"],
+      ["#/inbox/conversations", "#/inbox/needs-you"],
+      ["#/inbox/my-promises", "#/inbox/promises"],
+      ["#/inbox/conversation/7", "#/inbox/item/v7"],
+      ["#/inbox/promise/7", "#/inbox/item/c7"],
+      ["#/inbox/7", "#/inbox/item/f7"],
     ] as const) {
       await page.evaluate((x) => (location.hash = x), old);
       await expect.poll(() => hash(page), { message: old }).toBe(now);

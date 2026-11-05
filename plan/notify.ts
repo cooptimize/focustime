@@ -20,7 +20,7 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   timer: "Focus timer",
   meeting: "Meeting warnings",
   vm: "My VM",
-  followups: "Follow-ups due",
+  followups: "Promises due",
   expiry: "Expiring secrets",
   asks: "Urgent requests",
   commitment_item: "DevOps item not created yet",
@@ -45,7 +45,7 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   timer: "When a focus session or break ends.",
   meeting: "5 minutes before a meeting while a focus session runs.",
   vm: "VM off at work start.",
-  followups: "Once a workday when follow-ups are due today or overdue.",
+  followups: "Once a workday when promises are due today or overdue.",
   expiry: "Once a workday when a PAT or secret expires within 14 days.",
   asks: "When AI sorts a request from a client chat you are in as needing someone now.",
   commitment_item: "Once, when a promise in a client chat needs a DevOps item and a working day has passed without one.",
@@ -213,7 +213,7 @@ const shortDay = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US
 export const notices = {
   planDay: (date: string, at: string): Notice => ({ kind: "plan_day", key: `plan_day:${date}`, title: "Plan the day", body: "Today isn't planned yet.\nClick to plan the day.", buttons: [open("Plan the day")], route: "planday", at, ref: date }),
   checkin: (date: string, at: string): Notice => ({ kind: "checkin", key: `checkin:${date}`, title: "Check-in", body: "Midday check-in: what still fits this afternoon.\nClick to check in.", buttons: [open("Check in")], route: "checkin", at, ref: date }),
-  closeout: (date: string, at: string): Notice => ({ kind: "closeout", key: `closeout:${date}`, title: "Close out", body: "Time to close out the day: picks, resume notes and follow-ups.\nClick to close out.", buttons: [open("Close out")], route: "closeout", at, ref: date }),
+  closeout: (date: string, at: string): Notice => ({ kind: "closeout", key: `closeout:${date}`, title: "Close out", body: "Time to close out the day: picks, resume notes and promises.\nClick to close out.", buttons: [open("Close out")], route: "closeout", at, ref: date }),
   /** Monday for this week (Plan the week), Thursday and Friday for next week (Look ahead). */
   week: (weekStart: string, thisWeek: boolean, at: string): Notice => ({
     kind: thisWeek ? "plan_week" : "look_ahead",
@@ -248,7 +248,7 @@ export const notices = {
     return {
       kind: "followups",
       key: `followups:${date}`,
-      title: due.length === 1 ? "Follow-up due" : "Follow-ups due",
+      title: due.length === 1 ? "Promise due" : "Promises due",
       body: `${due.length === 1 ? `${due[0]!.what} (${counts})` : `${counts}: ${due[0]!.what} and ${due.length - 1} more`}\nClick to open ${due.length === 1 ? "it" : "the Inbox"}.`,
       buttons: [open(due.length === 1 ? "Open it" : "Open Inbox")],
       route: due.length === 1 ? `followup:${due[0]!.id}` : "inbox",

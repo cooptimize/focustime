@@ -23,7 +23,7 @@ import { Pat } from "../sources/devops/pat.ts";
 import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { createChatsClient } from "../sources/graph/chats.ts";
 import { anAiApp, anAiRules } from "../test/builders/index.ts";
-import { CHROMIUM, openSettings } from "./harness.ts";
+import { CHROMIUM, openInboxItem, openInboxView, openSettings } from "./harness.ts";
 import { appReady, liveAdminOps, liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
 import { shotBoth } from "./shots.ts";
 
@@ -200,33 +200,30 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       graph.say(DELIVERY, ME, "Absolutely. I'll get this done tonight.", 21);
       graph.say(DELIVERY, ME, "I'll be back online around 7:30 PM.", 22);
 
-      // Inbox › Conversations: Refresh reads the chats now.
+      // The Inbox (IB-1): Refresh reads the chats now; the conversation is a row in Needs you.
       await page.keyboard.press("4");
-      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Conversations/ }).click();
-      const main = page.getByRole("main", { name: "Conversations" });
+      const main = await openInboxView(page, "needs-you");
       await main.getByRole("button", { name: "Refresh conversations" }).click();
-      const needs = main.getByRole("region", { name: "Needs you" });
-      const alliance = needs.getByRole("listitem", { name: "Movement Dashboard quantity gap on 4417001" });
-      await alliance.waitFor();
-      await alliance.getByText(/Sam will add the fix to the development queue/).waitFor();
-      await alliance.getByRole("button", { name: /^Create DevOps item/ }).waitFor();
-      const mates = main.getByRole("region", { name: "Handled by teammates" });
-      await mates.getByRole("button", { name: /Handled by teammates \(1\)/ }).waitFor();
+      const TITLE = "Movement Dashboard quantity gap on 4417001";
+      const alliance = await openInboxItem(page, TITLE);
+      await alliance.getByText(/Sam will add the fix to the development queue/).first().waitFor();
+      await alliance.getByRole("button", { name: /^Create DevOps item/ }).first().waitFor();
+      const rail = main.getByRole("navigation", { name: "Inbox views and clients" });
+      await rail.getByRole("button", { name: /^Handled by teammates\s*1/ }).waitFor();
       await shotBoth(page, "conversations-needs-you", main);
-      await mates.getByRole("button", { name: /Handled by teammates/ }).click();
-      await mates.getByText("Dashboard refresh schedule").waitFor();
-      await shotBoth(page, "conversations-teammates", mates);
+      await rail.getByRole("button", { name: /^Handled by teammates/ }).click();
+      await main.locator(".ib-row", { hasText: "Dashboard refresh schedule" }).waitFor();
+      await shotBoth(page, "conversations-teammates", main);
 
-      // A card collapsed, then its messages.
-      await shotBoth(page, "conversations-card", alliance);
-      await alliance.getByRole("button", { name: /^Show messages/ }).click();
-      await alliance.getByRole("list", { name: "The messages" }).getByText(/skips bridged BOM lines/).waitFor();
-      await shotBoth(page, "conversations-card-messages", alliance);
-      await alliance.getByRole("button", { name: /^Hide messages/ }).click();
+      // The pane: its summary and, below, the messages as Teams shows them.
+      await openInboxView(page, "needs-you");
+      const pane = await openInboxItem(page, TITLE);
+      await pane.getByRole("list", { name: "The messages" }).getByText(/skips bridged BOM lines/).waitFor();
+      await shotBoth(page, "conversations-card-messages", pane);
 
       // Create DevOps item: the draft, then the preview through the write framework, then Tracked.
-      await alliance.getByRole("button", { name: /^Create DevOps item/ }).click();
-      const draft = alliance.getByRole("form", { name: "Create DevOps item" });
+      await pane.getByRole("button", { name: /^Create DevOps item/ }).first().click();
+      const draft = pane.getByRole("form", { name: "Create DevOps item" });
       await draft.getByRole("textbox", { name: /^Title/ }).waitFor();
       // CV-5: without AI for my draft the form is empty; I type the title.
       const title = draft.getByRole("textbox", { name: /^Title/ });
@@ -240,23 +237,24 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       const made = [...dv.items.values()].at(-1)!;
       expect(String(made.fields["System.Description"] ?? made.fields["Microsoft.VSTS.TCM.ReproSteps"])).toContain("Blake Novak");
       await expect.poll(async () => (await convs.conversations([ALLIANCE])).find((c) => c.title.startsWith("Movement"))?.status).toBe("tracked");
-      await main.getByRole("listitem", { name: "Movement Dashboard quantity gap on 4417001" }).getByText(new RegExp(`#${made.id}`)).first().waitFor();
+      await pane.getByText(new RegExp(`#${made.id}`)).first().waitFor();
 
       // A comment suggestion for the item's owner (made by the shared job after a change and a pause).
       const conv = (await convs.conversations([ALLIANCE])).find((c) => c.title.startsWith("Movement"))!;
       await convs.addSuggestion({ conversationId: conv.id, itemId: made.id, kind: "comment", forUser: ME, body: "Blake confirmed the gap is about 7.7k lb on 4417001.\nThe fix is in the development queue.", before: null, after: null, internal: [], day: "2026-11-02" });
       await main.getByRole("button", { name: "Refresh conversations" }).click();
-      const tracked = main.getByRole("listitem", { name: "Movement Dashboard quantity gap on 4417001" });
+      // Its own address opens it in the pane, whichever view it's in (the old #/inbox/conversation/<id> too).
+      await page.evaluate((id) => (location.hash = `#/inbox/conversation/${id}`), conv.id);
+      const tracked = page.locator(".ib-pane");
+      await tracked.locator(".ib-detail-title", { hasText: TITLE }).waitFor();
       await tracked.getByRole("button", { name: /^Post comment/ }).waitFor();
       await shotBoth(page, "conversations-comment-suggestion", tracked);
 
-      // My promises: the Wingtip promise, one, to Evan, due today 7:30 PM.
-      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Promises/ }).click();
-      const mine = page.getByRole("main", { name: "Promises" });
-      const promise = mine.getByRole("listitem", { name: "Promise: Rerun the Salesforce data from CRM_Silver" });
-      await promise.waitFor();
+      // Promises: the Wingtip promise, one, to Evan, due today 7:30 PM.
+      const mine = await openInboxView(page, "promises");
+      const promise = await openInboxItem(page, "Rerun the Salesforce data from CRM_Silver");
       await promise.getByText(/7:30 PM/).first().waitFor();
-      await expect(mine.getByRole("listitem", { name: /^Promise: / }).count()).resolves.toBe(2);
+      await expect(mine.locator(".ib-row").count()).resolves.toBe(2);
       await shotBoth(page, "my-promises", mine);
 
       // Today: the promise under After your blocks.
@@ -266,18 +264,12 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       await after.getByText(/7:30\sPM/).waitFor();
       await shotBoth(page, "today-promise-after-blocks", page.getByRole("main", { name: "Today" }));
 
-      // CV-3b: made a follow-up, its Who is the person it was promised to (Evan), never me.
+      // IB-1: no Make it a follow-up; the promise's Who is the person it was promised to (Evan), never me.
       await page.keyboard.press("4");
-      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Promises/ }).click();
-      const card = page.getByRole("main", { name: "Promises" }).getByRole("listitem", { name: "Promise: Rerun the Salesforce data from CRM_Silver" });
-      await card.getByRole("button", { name: "Make it a follow-up" }).click();
-      await card.getByRole("button", { name: "Add follow-up" }).click();
-      await card.getByText("A follow-up now", { exact: false }).waitFor();
-      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Captures/ }).click();
-      const row = page.locator("li.follow-up").filter({ hasText: "Rerun the Salesforce data from CRM_Silver" }).first();
-      await row.waitFor();
-      expect(await row.locator(".follow-up-who").textContent()).toMatch(/^Evan/);
-      await shotBoth(page, "followup-who-row", row);
+      await openInboxView(page, "promises");
+      const card = await openInboxItem(page, "Rerun the Salesforce data from CRM_Silver");
+      await expect(card.getByRole("button", { name: "Make it a follow-up" }).count()).resolves.toBe(0);
+      await expect(page.locator(".ib-row", { hasText: "Rerun the Salesforce data from CRM_Silver" }).first().textContent()).resolves.toMatch(/For Evan/);
       expect(errors).toEqual([]);
     } finally {
       await app.close();

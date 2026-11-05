@@ -24,7 +24,7 @@ import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { createChatsClient } from "../sources/graph/chats.ts";
 import { aDirectoryPerson, anAiApp, anAiRules } from "../test/builders/index.ts";
 import { chartPng } from "../test/images.ts";
-import { CHROMIUM, openSettings } from "./harness.ts";
+import { CHROMIUM, openInboxItem, openInboxView, openSettings } from "./harness.ts";
 import { liveAdminOps, liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
 import { SHOTS, shotBoth } from "./shots.ts";
 
@@ -223,24 +223,20 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       graph.say(DELIVERY, ME, "<p>I'll log a ticket for the unassigned feature.</p>", 13);
 
       await page.keyboard.press("4");
-      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Conversations/ }).click();
-      const main = page.getByRole("main", { name: "Conversations" });
+      const main = await openInboxView(page, "needs-you");
       await main.getByRole("button", { name: "Refresh conversations" }).click();
-      const conv = main.getByRole("listitem", { name: /^Evan Ford the October totals on the Movement Dashboard look 4% low/ });
-      await conv.waitFor();
-      await conv.getByText("Grouped without AI, so there's no summary. Show messages to read it.").waitFor();
+      const conv = await openInboxItem(page, /^Evan Ford the October totals on the Movement Dashboard look 4% low/);
+      await conv.getByText("Grouped without AI, so there's no summary. The messages are below.").waitFor();
       const [c] = (await convs.conversations([ALLIANCE]));
       expect((await convs.placesIn([c!.id])).filter((p) => p.role === "work")).toHaveLength(3);
       expect(aiCalls).toBe(0);
       await shotAll(page, "cv3-rules-only-conversation", conv);
 
-      // My promises: the loose one (no conversation) suggests likely items with reasons.
-      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Promises/ }).click();
-      const myp = page.getByRole("main", { name: "Promises" });
-      const loose = myp.getByRole("listitem", { name: /^Promise: .*unassigned feature/i });
-      await loose.waitFor();
-      await loose.getByRole("button", { name: /^More for: / }).click();
-      await loose.getByRole("menuitem", { name: "Link to item…" }).click();
+      // Promises: the loose one (no conversation) suggests likely items with reasons.
+      await openInboxView(page, "promises");
+      const loose = await openInboxItem(page, /unassigned feature/i);
+      await loose.getByRole("button", { name: /^More for / }).click();
+      await loose.getByRole("menuitem", { name: "Link to item" }).click();
       const likely = loose.getByRole("list", { name: "Likely items" });
       await likely.getByText(/My story under an unassigned feature/).waitFor();
       await likely.getByText("Assigned to you · matches unassigned, feature").waitFor();
@@ -275,15 +271,15 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       await page.keyboard.press("n");
       const box = page.locator(".cap-box textarea[aria-label='Quick capture']");
       await box.fill("Told Evan Ford I'd send the October export");
-      await page.getByRole("radiogroup", { name: "Save as" }).getByRole("radio", { name: /Follow-up/ }).click();
-      const fields = page.getByRole("group", { name: "Follow-up details" });
+      await page.getByRole("radiogroup", { name: "Save as" }).getByRole("radio", { name: /Promise/ }).click();
+      const fields = page.getByRole("group", { name: "Promise details" });
       await expect.poll(() => fields.getByRole("combobox", { name: "Who" }).inputValue()).toBe("Evan Ford");
       await fields.getByRole("button", { name: "Link to Evan Ford" }).waitFor();
       await shotAll(page, "cv3-capture-person-picker", fields);
       await fields.getByRole("button", { name: "Link to Evan Ford" }).click();
       await box.focus();
       await page.keyboard.press("Enter");
-      await page.getByText(/as a follow-up, owed to Evan Ford/).waitFor();
+      await page.getByText(/as a promise, owed to Evan Ford/).waitFor();
       const saved = (await ctx.plan!.openFollowUps()).find((f) => /October export/.test(f.what));
       expect(saved?.whoRef).toMatchObject({ kind: "cooptimizer", name: "Evan Ford" });
       expect(errors).toEqual([]);

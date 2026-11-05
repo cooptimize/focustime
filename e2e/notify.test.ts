@@ -18,7 +18,7 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Notifications" }).click();
     const form = page.locator(".set-form", { hasText: "Ritual reminders" });
     await form.waitFor();
-    for (const name of ["Plan the day", "Check-in", "Close out", "Plan the week", "Look ahead", "Focus timer", "Meeting warnings", "My VM", "Follow-ups due", "Expiring secrets"])
+    for (const name of ["Plan the day", "Check-in", "Close out", "Plan the week", "Look ahead", "Focus timer", "Meeting warnings", "My VM", "Promises due", "Expiring secrets"])
       await expect(form.locator(".set-notify-row", { hasText: name }).count()).resolves.toBeGreaterThan(0);
     await form.locator(".set-notify-row", { hasText: "Check-in" }).locator("input").uncheck();
     await form.locator("select").selectOption("off");
@@ -65,12 +65,12 @@ describe.skipIf(!CHROMIUM)("Notifications and the VM start setting (browser, dem
     await expectView("planday", ".pd2-left");
     await expectView("planweek:2026-11-09", 'main[aria-label="Plan the week"]');
     await expectView("focus", ".focus-screen");
-    await expectView("inbox", 'main[aria-label="Captures"]');
+    await expectView("inbox", 'main[aria-label="Inbox"]');
     await expectView("settings:notifications", ".set-notify");
     await expectView("today", ".today-view");
-    // A follow-up opens the Inbox with that follow-up outlined.
+    // A promise I added (a follow-up before IB-1) opens the Inbox with it open in the detail pane.
     const id = await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "followups.list", input: {} }) }).then((r) => r.json()).then((j) => j.data.followUps[0].id as number));
-    await expectView(`followup:${id}`, `[data-follow-up="${id}"].followup-highlight`);
+    await expectView(`followup:${id}`, `.ib-row.open[data-key="f${id}"]`);
     // My VM: Today with the VM chip's menu open.
     await expectView("vm", '.menu-list[role="menu"]');
     await expect(page.locator(".menu-list").textContent()).resolves.toContain("Choose another VM");

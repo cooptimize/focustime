@@ -398,7 +398,7 @@ export function borrowStep(env: MenuEnv, list: readonly BorrowedView[]): MenuSte
 /** "Add a follow-up" (step 7, step 13.5): what, optional who and due date, for the selected block's client. */
 export function followUpForm(env: MenuEnv): MenuStep {
   return {
-    title: "Add a follow-up",
+    title: "Add a promise",
     button: "Add",
     fields: [
       { key: "what", label: "What I owe", type: "text", placeholder: "e.g. Send the mapping notes" },
@@ -1035,6 +1035,9 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "ui.set_theme": return { next: () => themeStep(env) };
     case "ui.set_view_range": return { next: () => viewRangeStep(env) };
     case "ui.set_text_size": return { next: () => ({ title: "Text size", items: TEXT_SIZES.map((s) => ({ id: s, label: TEXT_SIZE_NAMES[s], checked: env.textSize === s, action: "ui.set_text_size", run: () => env.saveTextSize(s) })) }) };
+    case "ui.set_inbox":
+    case "inbox.hide":
+      return { run: () => env.setView("inbox") };
     case "ui.set_show_personal": return { run: () => env.saveShowPersonal(!env.showPersonal) };
     case "ui.first_launch": return { disabled: "Runs on its own the first time FocusTime opens" };
     case "ui.tour_offer": return { run: () => env.showGuide() };
@@ -1097,20 +1100,24 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
       return { run: () => env.setView("conversations") };
     case "conversations.refresh": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.refresh", {})) };
     case "conversations.sort_unsorted": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.sort_unsorted", {})) };
+    case "my_promises.followup":
+    case "promises.followup":
+      return { disabled: "A promise does this itself now" };
     case "my_promises.list":
     case "my_promises.today":
-    case "my_promises.followup":
     case "my_promises.start_draft":
     case "my_promises.link":
     case "my_promises.search":
     case "my_promises.done":
     case "my_promises.not_needed":
     case "my_promises.reopen":
+    case "my_promises.due":
+    case "my_promises.who":
+    case "my_promises.close":
       return { run: () => env.setView("my_promises") };
     case "promises.list":
     case "promises.resolve":
     case "promises.reopen":
-    case "promises.followup":
     case "promises.link":
       return { run: () => env.setView("my_promises") };
     case "requests.refresh": return { run: () => (env.setView("requests"), void env.runPlan("requests.refresh", {})) };
@@ -1341,7 +1348,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
   }
 }
 
-/** The Requests tab's keys as commands; the tab listens for ASK_KEY_EVENT. */
+/** The Inbox's keys as commands; the Inbox listens for ASK_KEY_EVENT (detail: the act). */
 export const ASK_KEY_EVENT = "focustime:ask-key";
 
 /** BD-1: opens the Break down panel (ui/BreakDownPanel.tsx listens) for one client's item. */
@@ -1357,16 +1364,21 @@ export const openBreakDown = (clientKey: string, item: BreakDownTarget) => windo
 /** NV-1: the Coop brief opens Break down's side panel, from every entry point; it copies at once. `weekStart` is the week whose plan the feature is on (default next week, as before). */
 export const COOP_BRIEF_EVENT = "focustime:coop-brief";
 export const openCoopBrief = (clientKey: string, item: BreakDownTarget, weekStart?: string | null) => window.dispatchEvent(new CustomEvent(COOP_BRIEF_EVENT, { detail: { clientKey, item, weekStart: weekStart ?? null } }));
+/** IB-1: the Inbox's keys as commands (the same list as ui/inbox/ItemActions.tsx's ITEM_KEYS; a test keeps them equal). */
 export const ASK_KEYS = [
-  { id: "ask.next", label: "Next request", hint: "J" },
-  { id: "ask.prev", label: "Previous request", hint: "K" },
-  { id: "ask.primary", label: "The request's first action: Create bug (or Link without DevOps write access)", hint: "Enter" },
-  { id: "ask.handled", label: "Mark the request handled (an optional note)", hint: "H" },
-  { id: "ask.dismiss", label: "Dismiss the request", hint: "D" },
-  { id: "ask.context", label: "Show or hide the request's context (the 5 messages before)", hint: "X" },
+  { id: "inbox.key.next", act: "next", label: "Inbox: next item", hint: "J" },
+  { id: "inbox.key.prev", act: "prev", label: "Inbox: previous item", hint: "K" },
+  { id: "inbox.key.open", act: "open", label: "Inbox: open the item", hint: "Enter" },
+  { id: "inbox.key.create", act: "create", label: "Inbox: create DevOps item", hint: "C" },
+  { id: "inbox.key.close", act: "close", label: "Inbox: close the loop", hint: "L" },
+  { id: "inbox.key.due", act: "due", label: "Inbox: change the due day", hint: "F" },
+  { id: "inbox.key.week", act: "week", label: "Inbox: put it on my week", hint: "W" },
+  { id: "inbox.key.hide", act: "hide", label: "Inbox: hide it for me", hint: "H" },
+  { id: "inbox.key.not_needed", act: "not_needed", label: "Inbox: not needed", hint: "N" },
+  { id: "inbox.key.done", act: "done", label: "Inbox: done", hint: "E" },
 ] as const;
 export type AskKeyId = (typeof ASK_KEYS)[number]["id"];
-const askKey = (id: AskKeyId): void => void window.dispatchEvent(new CustomEvent(ASK_KEY_EVENT, { detail: id }));
+const askKey = (id: AskKeyId): void => void window.dispatchEvent(new CustomEvent(ASK_KEY_EVENT, { detail: ASK_KEYS.find((k) => k.id === id)!.act }));
 
 /** Window commands that aren't server actions: views, week navigation, details. */
 function uiCommands(env: MenuEnv): MenuItem[] {
@@ -1375,10 +1387,10 @@ function uiCommands(env: MenuEnv): MenuItem[] {
     { id: "view.today", action: "view.today", group: "Views", label: "Today", hint: "1", run: () => env.setView("today") },
     { id: "view.week", action: "view.week", group: "Views", label: "Week › Board", hint: "2", run: () => env.setView("week") },
     { id: "view.roadmap", action: "view.roadmap", group: "Views", label: "Ahead: features and epics ahead (Roadmap)", hint: "3", run: () => env.setView("roadmap") },
-    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: conversations, promises, follow-ups and captures", hint: "4", run: () => env.setView("inbox") },
-    { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › Conversations: what your clients' chats need from you", run: () => env.setView("requests") },
-    ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Requests", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open Inbox › Conversations first" }) })),
-    { id: "view.plan", action: "view.plan", aka: ["commit"], group: "Views", label: "Week: Board or Plan; Ahead: Roadmap or Plan ahead; Inbox: the next mode; Today: Plan today", hint: "P", run: env.openRitual },
+    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: what needs you, promises, waiting on, captures and drafts", hint: "4", run: () => env.setView("inbox") },
+    { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › Needs you: what your clients' chats and your promises need from you", run: () => env.setView("requests") },
+    ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Inbox", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open the Inbox first" }) })),
+    { id: "view.plan", action: "view.plan", aka: ["commit"], group: "Views", label: "Week: Board or Plan; Ahead: Roadmap or Plan ahead; Today: Plan today", hint: "P", run: env.openRitual },
     { id: "view.planday", action: "view.planday", group: "Views", label: "Week › Plan today (the Board on today)", run: () => env.openPlanDay() },
     { id: "view.planday_date", action: "view.planday_date", group: "Views", label: "Plan a day…", next: () => planDateStep(env) },
     { id: "view.planweek", action: "view.planweek", aka: ["commit"], group: "Views", label: "Week › Plan: plan the week (each client's features)", hint: "W", run: () => env.openPlanWeek() },
@@ -1409,7 +1421,9 @@ function uiCommands(env: MenuEnv): MenuItem[] {
 
 /** Every command: window commands, then one per registered action (built from the registry). */
 export function commandList(env: MenuEnv): MenuItem[] {
-  const fromRegistry = (ACTIONS as readonly ActionSpec[]).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
+  // IB-1: Make it a follow-up is gone from the UI (a promise does everything a follow-up did); the old actions stay for now.
+  const NOT_IN_MENU = new Set(["my_promises.followup", "promises.followup"]);
+  const fromRegistry = (ACTIONS as readonly ActionSpec[]).filter((a) => !NOT_IN_MENU.has(a.name)).map<MenuItem>((a) => ({ id: a.name, action: a.name, group: a.group, label: a.title, ...(a.aka ? { aka: a.aka } : {}), ...(a.shortcut ? { hint: a.shortcut } : {}), ...runnerFor(env, a.name as ActionName) }));
   return [...uiCommands(env), ...fromRegistry];
 }
 

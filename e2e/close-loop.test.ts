@@ -1,6 +1,6 @@
 // IB-1: Close the loop is one component wherever a promise shows, and it never makes its container scroll sideways.
 // Before, the Week block panel put Teams · Email · DevOps · Call and the note on one row wider than the panel. Demo
-// mode, clock pinned to Mon Nov 2, 9:30 AM: in each place (Inbox › Captures, Week's block panel, Close out, Today on the
+// mode, clock pinned to Mon Nov 2, 9:30 AM: in each place (the Inbox's detail pane, Week's block panel, Close out, Today on the
 // phone) open it, and the container's scrollWidth equals its clientWidth (and so does the page's) at 1920, 1366, Text
 // size Larger and phone width (390 px, with an iPhone-like 17 px root font). Then close one loop for real.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -39,6 +39,23 @@ async function openAndCheck(page: Page, scope: string, text: string, container: 
   await form.getByRole("button", { name: "Cancel" }).click();
 }
 
+/** IB-1: the same check in the Inbox: the row opens the item, Close the loop is its pane's main button. */
+async function inboxCheck(page: Page, text: string) {
+  await go(page, "#/inbox/promises");
+  const row = page.locator(".ib-row", { hasText: text }).first();
+  await row.waitFor({ timeout: 20_000 });
+  await row.click();
+  const pane = page.locator(".ib-pane");
+  await pane.getByRole("button", { name: /^Close the loop/ }).first().click();
+  const form = pane.locator("form.close-loop");
+  await form.waitFor();
+  for (const name of ["Teams", "Email", "DevOps", "Call"]) expect(await form.getByRole("button", { name, exact: true }).isVisible()).toBe(true);
+  expect(await form.locator("textarea").isVisible()).toBe(true);
+  expect(await overflow(page, ".ib-pane")).toEqual({ found: true, container: 0, page: 0 });
+  expect(await overflow(page, "main.ib")).toEqual({ found: true, container: 0, page: 0 });
+  return { pane, form };
+}
+
 const SIZES = [
   { name: "1920", viewport: { width: 1920, height: 1080 }, larger: false },
   { name: "1366", viewport: { width: 1366, height: 768 }, larger: false },
@@ -55,12 +72,12 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
   }, T);
 
   for (const s of SIZES) {
-    it(`Captures, Week's block panel and Close out at ${s.name}`, async () => {
+    it(`the Inbox, Week's block panel and Close out at ${s.name}`, async () => {
       const { page, errors } = await freshPage(h, s.viewport);
       if (s.larger) expect((await call(page, "ui.set_text_size", { size: "larger" })).ok).toBe(true);
       if (s.larger) await page.reload(), await page.waitForSelector(".topbar");
-      await go(page, "#/inbox/captures");
-      await openAndCheck(page, ".inbox-list", "Send the export spec", "main.inbox");
+      const { form } = await inboxCheck(page, "Send the export spec");
+      await form.getByRole("button", { name: "Cancel" }).click();
       await go(page, "#/week");
       await page.locator(".half.card", { hasText: "Northwind" }).first().locator(".card-when").click();
       await openAndCheck(page, ".detail-panel", "Send the export spec", ".detail-panel");
@@ -107,10 +124,8 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
       await shotBoth(page, `ib1-close-loop-panel-${tag}`, panelRow);
       await page.keyboard.press("Escape");
       await page.keyboard.press("Escape");
-      await go(page, "#/inbox/captures");
-      const row = page.locator(".inbox-list .follow-up", { hasText: "Send the export spec" }).first();
-      await row.getByRole("button", { name: "Close the loop", exact: true }).click();
-      await shotBoth(page, `ib1-close-loop-captures-${tag}`, row);
+      const { pane } = await inboxCheck(page, "Send the export spec");
+      await shotBoth(page, `ib1-close-loop-inbox-${tag}`, pane);
       await go(page, "#/today/closeout");
       const co = page.locator(".closeout-panel .follow-up", { hasText: "Reply about the proposal timeline" }).first();
       await co.getByRole("button", { name: "Close the loop", exact: true }).click();
@@ -121,16 +136,18 @@ describe.skipIf(!CHROMIUM)("IB-1: Close the loop never overflows", () => {
 
   it("closes one loop for real, with how and a note", async () => {
     const { page, errors } = await freshPage(h);
-    await go(page, "#/inbox/captures");
-    const row = page.locator(".inbox-list .follow-up", { hasText: "Confirm the intake form" }).first();
-    await row.getByRole("button", { name: "Close the loop", exact: true }).click();
+    // The promise I added (a follow-up before IB-1); demo has a chat promise with the same words, so by its Who.
+    const { form } = await inboxCheck(page, "For Chris Park");
     // Its channel (Teams) is chosen already; choosing it again would clear it.
-    expect(await row.getByRole("button", { name: "Teams", exact: true }).getAttribute("aria-pressed")).toBe("true");
-    await row.locator("textarea").fill("Told them in the project chat");
-    await row.locator("textarea").press("Enter");
-    await expect.poll(() => page.locator(".inbox-list .follow-up", { hasText: "Confirm the intake form" }).count(), { timeout: 10_000 }).toBe(0);
+    expect(await form.getByRole("button", { name: "Teams", exact: true }).getAttribute("aria-pressed")).toBe("true");
+    await form.locator("textarea").fill("Told them in the project chat");
+    await form.locator("textarea").press("Enter");
+    // The open item stays in view (it says Loop closed) until I move on; it's in Done, not Promises, after that.
+    await expect.poll(() => page.locator(".ib-pane").textContent(), { timeout: 10_000 }).toContain("Loop closed");
     const list = (await call(page, "followups.list", { includeClosed: true })).data as { followUps: { what: string; closeHow: string | null; closeNote: string | null }[] };
     expect(list.followUps.find((f) => f.what.startsWith("Confirm the intake form"))).toMatchObject({ closeHow: "teams", closeNote: "Told them in the project chat" });
+    await go(page, "#/inbox/promises");
+    await expect.poll(() => page.locator(".ib-row", { hasText: "For Chris Park" }).count(), { timeout: 10_000 }).toBe(0);
     expect(errors).toEqual([]);
     await page.close();
   }, T);

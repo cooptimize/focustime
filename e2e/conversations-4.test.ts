@@ -25,7 +25,7 @@ import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { createChatsClient } from "../sources/graph/chats.ts";
 import { anAiApp, anAiRules } from "../test/builders/index.ts";
 import { chartPng } from "../test/images.ts";
-import { CHROMIUM, openSettings } from "./harness.ts";
+import { CHROMIUM, openInboxItem, openInboxView, openSettings } from "./harness.ts";
 import { liveAdminOps, liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
 import { SHOTS, shotBoth } from "./shots.ts";
 
@@ -201,21 +201,21 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
       graph.say(ME, "<p>Thanks Blake, I'll log a bug for the overnight refresh.</p>", 3);
 
       // Refresh: one AI request with the two readable images after their message's label.
+      // The Inbox opens a view's first item at once, so Refresh runs from Captures and drafts (no conversation open).
       await page.keyboard.press("4");
-      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Conversations/ }).click();
-      const main = page.getByRole("main", { name: "Conversations" });
-      await main.getByRole("button", { name: "Refresh conversations" }).click();
-      const card = main.getByRole("region", { name: "Needs you" }).getByRole("listitem", { name: "Dashboard refresh fails overnight" });
-      await card.waitFor();
-      await card.getByText("· 3\u00a0images: Bar chart: October totals about 4% under the finance report").waitFor();
+      const caps = await openInboxView(page, "captures");
+      await caps.getByRole("button", { name: "Refresh conversations" }).click();
+      await page.getByText("Chats read").first().waitFor();
       const withImages = calls.filter((c) => c.images?.length);
       expect(withImages).toHaveLength(1);
       expect(withImages[0]!.images!.map((i) => i.label)).toEqual(["Image i1, in message m1:", "Image i2, in message m1:"]);
       expect(await conn.all("SELECT id FROM teams_message_images WHERE bytes IS NOT NULL")).toEqual([]);
 
-      // Show messages: read from Teams now with my token; descriptions under the thumbnails; the third: Open in Teams.
+      // Opened, the messages show: read from Teams now with my token; descriptions under the thumbnails; the third: Open in Teams.
       graph.hostedCalls.length = 0;
-      await card.getByRole("button", { name: /^Show messages/ }).click();
+      await openInboxView(page, "needs-you");
+      const card = await openInboxItem(page, "Dashboard refresh fails overnight");
+      await card.getByText("3\u00a0images: Bar chart: October totals about 4% under the finance report").waitFor();
       const thread = card.getByRole("list", { name: "The messages" });
       const thumbs = thread.locator(".tm-thumb img");
       await expect.poll(() => thumbs.evaluateAll((xs) => xs.map((x) => (x as HTMLImageElement).naturalWidth))).toEqual([480, 420]);
@@ -228,10 +228,9 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
       const headers = await page.evaluate(async (u) => Object.fromEntries((await fetch(u!)).headers), src);
       expect(headers["cache-control"]).toBe("no-store");
       await shotAll(page, "cv4-images-described", card);
-      await card.getByRole("button", { name: /^Hide messages/ }).click();
 
       // Create DevOps item: the preview lists the images (all ticked); untick the second; confirm attaches the rest.
-      await card.getByRole("button", { name: /^Create DevOps item/ }).click();
+      await card.getByRole("button", { name: /^Create DevOps item/ }).first().click();
       const draft = card.getByRole("form", { name: "Create DevOps item" });
       await draft.getByRole("textbox", { name: /^Title/ }).waitFor();
       // CV-5: without AI for my draft the form is empty; I type the title.

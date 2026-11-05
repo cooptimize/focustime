@@ -505,7 +505,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
       {dueBadges.length > 0 && (
         <div className="card-due">
           {dueBadges.map((f) => (
-            <button key={f.id} type="button" className="due-open" tabIndex={selected ? 0 : -1} onClick={(e) => (e.stopPropagation(), onOpen({ kind: "followup", id: f.id }))} title={`Follow-up${f.hasWho ? ` to ${f.who}` : ""}: ${f.what}`}>
+            <button key={f.id} type="button" className="due-open" tabIndex={selected ? 0 : -1} onClick={(e) => (e.stopPropagation(), onOpen({ kind: "followup", id: f.id }))} title={`Promise${f.hasWho ? ` to ${f.who}` : ""}: ${f.what}`}>
               <DueBadge l={f} />
             </button>
           ))}

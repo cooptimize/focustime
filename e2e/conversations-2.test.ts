@@ -25,7 +25,7 @@ import { createDevOpsWriter } from "../sources/devops/write.ts";
 import { createChatsClient } from "../sources/graph/chats.ts";
 import { aDirectoryPerson, anAiApp, anAiRules } from "../test/builders/index.ts";
 import { chartPng, SECRET } from "../test/images.ts";
-import { CHROMIUM, openSettings } from "./harness.ts";
+import { CHROMIUM, openInboxItem, openInboxView, openSettings } from "./harness.ts";
 import { liveAdminOps, liveBrowser, liveContext, liveTeam, ME, T, type LiveBrowser } from "./live.ts";
 import { SHOTS, shotBoth } from "./shots.ts";
 
@@ -233,19 +233,18 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       graph.say(DELIVERY, EVAN, "<p>The filter bug needs to be tracked somewhere.</p>", 12);
       const ticket = graph.say(DELIVERY, ME, "<p>I'll log a ticket for the filter.</p>", 13);
 
-      // Inbox › Conversations: Refresh reads the chats.
+      // The Inbox (IB-1): Refresh reads the chats; the conversation opens in the detail pane.
+      // CV-4: the poll never reads images; they are read from Teams when shown, with the viewer's token. The Inbox opens a
+      // view's first item at once, so Refresh runs from Captures and drafts, where no conversation is open.
       await page.keyboard.press("4");
-      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Conversations/ }).click();
-      const main = page.getByRole("main", { name: "Conversations" });
-      await main.getByRole("button", { name: "Refresh conversations" }).click();
-      const totals = main.getByRole("region", { name: "Needs you" }).getByRole("listitem", { name: "October totals on the Movement Dashboard" });
-      await totals.waitFor();
-      await totals.getByText(/· 2\simages/).waitFor();
-      // CV-4: the poll no longer reads images; they are read from Teams when shown, with the viewer's token.
+      const caps = await openInboxView(page, "captures");
+      await caps.getByRole("button", { name: "Refresh conversations" }).click();
+      await page.getByText("Chats read").first().waitFor();
       expect(graph.hostedCalls).toEqual([]);
+      const main = await openInboxView(page, "needs-you");
+      const totals = await openInboxItem(page, "October totals on the Movement Dashboard");
 
-      // Show messages: grouped like Teams, the quote, the reactions, and the two thumbnails from FocusTime's own address.
-      await totals.getByRole("button", { name: /^Show messages/ }).click();
+      // The messages, in the pane: grouped like Teams, the quote, the reactions, and the two thumbnails from FocusTime's own address.
       const thread = totals.getByRole("list", { name: "The messages" });
       await thread.getByText(/date filter stops at the 30th/).waitFor();
       await thread.getByLabel("👍 2, 👀 1").waitFor();
@@ -271,15 +270,11 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       await shotAll(page, "cv2-image-viewer");
       await page.keyboard.press("Escape");
       await page.getByRole("dialog", { name: /^Image \d of 2/ }).waitFor({ state: "detached" });
-      await totals.getByRole("button", { name: /^Hide messages/ }).click();
 
       // Merge: Lena's topic (Handled by teammates) into mine, then Undo.
-      const mates = main.getByRole("region", { name: "Handled by teammates" });
-      await mates.getByRole("button", { name: /Handled by teammates \(1\)/ }).click();
-      // A teammate's one is a line until it's selected, then its card.
-      await mates.locator(".conv-line", { hasText: "Dashboard refresh time" }).click();
-      const refresh = mates.getByRole("listitem", { name: "Dashboard refresh time" });
-      await refresh.getByRole("button", { name: "More for: Dashboard refresh time" }).click();
+      await main.getByRole("navigation", { name: "Inbox views and clients" }).getByRole("button", { name: /^Handled by teammates\s*1/ }).click();
+      const refresh = await openInboxItem(page, "Dashboard refresh time");
+      await refresh.getByRole("button", { name: "More for Dashboard refresh time" }).click();
       await refresh.getByRole("menuitem", { name: "Merge into…" }).click();
       const mergeForm = refresh.getByRole("group", { name: "Merge Dashboard refresh time into another conversation" });
       await mergeForm.getByRole("button", { name: /October totals on the Movement Dashboard/ }).waitFor();
@@ -288,7 +283,7 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       await main.getByText(/Merged into "October totals on the Movement Dashboard" for everyone on the chat/).waitFor();
       await expect.poll(async () => (await convs.conversations([ALLIANCE])).filter((c) => !c.mergedInto).length).toBe(1);
       await main.getByRole("button", { name: "Undo" }).click();
-      await main.getByText("Merge undone").waitFor();
+      await main.getByText("Merge undone").first().waitFor();
       await expect.poll(async () => (await convs.conversations([ALLIANCE])).filter((c) => !c.mergedInto).length).toBe(2);
 
       // A loose promise from the Delivery chat (rules found it there; nothing grouped it), due last Friday: overdue.
@@ -299,13 +294,11 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       const dirPerson = (personId: string, name: string, n: number) => aDirectoryPerson({ personId, systemUserId: `d3300000-0000-4000-8000-${String(900 + n).padStart(12, "0")}`, name, email: `${name.split(" ")[0]!.toLowerCase()}@contoso.example` });
       await team.store.replaceDirectory([dirPerson(ME, "Sam Tester", 1), dirPerson(EVAN, "Evan Ford", 2), dirPerson(LENA, "Lena Hart", 3), dirPerson(ARI, "Ari Quinn", 4), dirPerson("00000000-0000-4000-8000-0000000000c5", "Nova Lane", 5), dirPerson("00000000-0000-4000-8000-0000000000c6", "Theo Marsh", 6)], [], [{ personId: ARI, clientKey: "Adatum", worker: true }, { personId: LENA, clientKey: "Adatum", worker: true }]);
       team.org.invalidate();
-      // My promises: Make it a follow-up on mine to Blake, Who prefilled through the PersonPicker.
-      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Promises/ }).click();
-      const myp = page.getByRole("main", { name: "Promises" });
-      const sendTotals = myp.getByRole("listitem", { name: "Promise: Send Blake the corrected October totals" });
-      await sendTotals.waitFor();
-      await sendTotals.getByText("To Blake Novak", { exact: false }).waitFor();
-      await sendTotals.getByRole("button", { name: "Make it a follow-up" }).click();
+      // Promises (IB-1: no Make it a follow-up): Who on mine to Blake, prefilled through the PersonPicker.
+      const myp = await openInboxView(page, "promises");
+      const sendTotals = await openInboxItem(page, "Send Blake the corrected October totals");
+      await expect(page.locator(".ib-row", { hasText: "Send Blake the corrected October totals" }).first().textContent()).resolves.toContain("For Blake Novak");
+      await sendTotals.getByRole("button", { name: "Who", exact: true }).click();
       const who = sendTotals.getByRole("combobox", { name: "Who" });
       await expect.poll(() => who.inputValue()).toBe("Blake Novak");
       await sendTotals.getByText("External").first().waitFor();
@@ -318,13 +311,15 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       await page.keyboard.press("Escape");
       await sendTotals.getByRole("button", { name: "Cancel" }).click();
 
-      // The overdue loose promise: amber "Was due Fri, Oct 30", Create DevOps item opens the draft.
-      const loose = myp.getByRole("listitem", { name: "Promise: Log a ticket for the filter bug" });
-      await loose.getByText("Was due Fri, Oct 30").waitFor();
-      expect(await loose.locator(".conv-due.overdue").evaluate((e) => getComputedStyle(e).color)).not.toMatch(/rgb\((2[0-5]\d|1[5-9]\d), (\d|[1-5]\d), (\d|[1-5]\d)\)/);
-      await loose.getByRole("button", { name: "Create DevOps item", exact: true }).waitFor();
+      // The overdue loose promise: amber "3 days late", Close the loop leads (it's late), Create DevOps item opens the draft.
+      // It was added behind the page's back: Refresh reads the Inbox again.
+      await myp.getByRole("button", { name: "Refresh conversations" }).click();
+      const loose = await openInboxItem(page, "Log a ticket for the filter bug");
+      await loose.locator(".ib-pill.late", { hasText: /days? late/ }).waitFor();
+      expect(await loose.locator(".ib-pill.late").evaluate((e) => getComputedStyle(e).color)).not.toMatch(/rgb\((2[0-5]\d|1[5-9]\d), (\d|[1-5]\d), (\d|[1-5]\d)\)/);
+      await loose.getByRole("button", { name: /^Create DevOps item/ }).waitFor();
       await shotAll(page, "cv2-my-promises-overdue", myp);
-      await loose.getByRole("button", { name: "Create DevOps item", exact: true }).click();
+      await loose.getByRole("button", { name: /^Create DevOps item/ }).click();
       await loose.getByRole("form", { name: "Create DevOps item" }).getByRole("textbox", { name: /^Title/ }).waitFor();
       expect((await convs.commitmentsInChat(DELIVERY))[0]!.conversationId).not.toBeNull();
       await loose.getByRole("button", { name: "Cancel" }).first().click();
@@ -341,9 +336,10 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       await shotAll(page, "cv2-urgent-strip", strip);
       await strip.getByRole("button", { name: /October totals look 4% low/ }).click();
       const conv = (await convs.conversations([ALLIANCE])).find((c) => c.title.startsWith("October"))!;
-      await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/inbox/conversation/${conv.id}`);
-      const opened = page.getByRole("main", { name: "Conversations" }).getByRole("listitem", { name: "October totals on the Movement Dashboard" });
-      await expect.poll(() => opened.evaluate((e) => e.classList.contains("selected"))).toBe(true);
+      await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/inbox/item/v${conv.id}`);
+      const opened = page.locator(".ib-pane");
+      await opened.locator(".ib-detail-title", { hasText: "October totals on the Movement Dashboard" }).waitFor();
+      await expect(page.locator(`.ib-row[data-key="v${conv.id}"]`).getAttribute("aria-current")).resolves.toBe("true");
       await shotAll(page, "cv2-urgent-opens-conversation", opened);
 
       expect(graphRequests).toEqual([]);

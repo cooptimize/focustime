@@ -106,12 +106,13 @@ describe.skipIf(!CHROMIUM)("My VM and the sign-in (browser, demo mode)", () => {
   it("Inbox sorting uses the capture box's kind chips", async () => {
     const { page, errors } = await freshPage(h);
     await openCaptures(page);
-    await page.locator(".cap-item").first().getByRole("button", { name: "Sort" }).click();
+    await page.locator(".ib-row", { has: page.locator(".ib-tag", { hasText: "To sort" }) }).first().click();
+    await page.locator(".ib-pane").getByRole("button", { name: "Sort" }).click();
     const sort = page.locator(".cap-sort").first();
     await sort.waitFor();
-    await expect(sort.getByRole("radio").allTextContents()).resolves.toEqual(["Sort later", "Follow-up", "Draft story", "Draft feature"]);
-    await sort.getByRole("radio", { name: "Follow-up" }).click();
-    await expect(sort.getByRole("group", { name: "Follow-up details" }).count()).resolves.toBe(1);
+    await expect(sort.getByRole("radio").allTextContents()).resolves.toEqual(["Sort later", "Promise", "Draft story", "Draft feature"]);
+    await sort.getByRole("radio", { name: "Promise" }).click();
+    await expect(sort.getByRole("group", { name: "Promise details" }).count()).resolves.toBe(1);
     // "Ask Harbor about single sign-on…" has no name to owe it to: Who stays empty (Q84).
     await expect(sort.getByLabel("Who").inputValue()).resolves.toBe("");
     expect(errors).toEqual([]);
