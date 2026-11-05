@@ -4,7 +4,6 @@
 // client in focus must have Allow AI ("Voice is off while <client> is in focus"); 60 seconds at most.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { assistantTranscribe, type ActionContext } from "../actions/dispatch.ts";
-import { createAi } from "../ai/service.ts";
 import { stubProvider } from "../ai/stub.ts";
 import type { TranscribeCall } from "../ai/types.ts";
 import { parseConfig } from "../config/schema.ts";
