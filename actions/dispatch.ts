@@ -165,12 +165,20 @@ export type ActionRequest = { action: unknown; input: unknown };
 
 const bad = (error: string): ActionResponse => ({ ok: false, status: 400, error });
 
-type WeekLoadInput = { weekStart?: string; now?: string; refresh?: boolean; /** Step 15 (D271): this session's view range, not saved. */ viewRange?: ViewRange };
+type WeekLoadInput = {
+  weekStart?: string;
+  now?: string;
+  refresh?: boolean;
+  /** DV-1: a background reload (window focus, the 5-minute timer): calendars as `refresh` says, DevOps from the store. */
+  quiet?: boolean;
+  /** Step 15 (D271): this session's view range, not saved. */
+  viewRange?: ViewRange;
+};
 
 function validateWeekLoad(input: unknown): WeekLoadInput | string {
   if (typeof input !== "object" || input === null || Array.isArray(input)) return "input must be an object";
   const o = input as Record<string, unknown>;
-  for (const k of Object.keys(o)) if (!["weekStart", "now", "refresh", "viewRange"].includes(k)) return `unknown input field ${k}`;
+  for (const k of Object.keys(o)) if (!["weekStart", "now", "refresh", "quiet", "viewRange"].includes(k)) return `unknown input field ${k}`;
   const out: WeekLoadInput = {};
   if (o.weekStart !== undefined) {
     if (typeof o.weekStart !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(o.weekStart)) return "weekStart must be YYYY-MM-DD";
@@ -193,6 +201,10 @@ function validateWeekLoad(input: unknown): WeekLoadInput | string {
   if (o.refresh !== undefined) {
     if (typeof o.refresh !== "boolean") return "refresh must be true or false";
     out.refresh = o.refresh;
+  }
+  if (o.quiet !== undefined) {
+    if (typeof o.quiet !== "boolean") return "quiet must be true or false";
+    out.quiet = o.quiet;
   }
   if (o.viewRange !== undefined) {
     if (typeof o.viewRange !== "string" || !(VIEW_RANGES as readonly string[]).includes(o.viewRange)) return `viewRange must be one of ${VIEW_RANGES.join(", ")}`;
@@ -418,7 +430,8 @@ async function weekLoad(ctx: ActionContext, input: WeekLoadInput): Promise<WeekL
           if (f.level === "feature") (features[f.clientKey] ??= []).includes(f.itemId) || features[f.clientKey]!.push(f.itemId);
           (watch[f.clientKey] ??= []).includes(f.itemId) || watch[f.clientKey]!.push(f.itemId);
         }
-      devopsP = ctx.makeDevOps(dv, tz).load(picked.fetch, { ...refresh, watch, features }).catch(() => null);
+      // DV-1: only R and the Refresh button make DevOps check now (once per 30 s per client); a quiet reload reads the store.
+      devopsP = ctx.makeDevOps(dv, tz).load(picked.fetch, { ...(input.refresh && !input.quiet ? { refresh: true } : {}), watch, features }).catch(() => null);
     }
   }
 
@@ -1189,6 +1202,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "admin.refresh_people":
     case "admin.remove_person":
     case "admin.audit":
+    case "admin.status_action":
       return adminAction(
         {
           ops: ctx.adminOps ?? null,

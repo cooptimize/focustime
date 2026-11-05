@@ -80,6 +80,12 @@ import type { RequestsPort } from "../actions/request-actions.ts";
 import { createAdminCheck } from "../actions/admin.ts";
 import { createOrgRuntime } from "../actions/org.ts";
 import { createAdminOps } from "./admin-ops.ts";
+import { createDevOpsPoller, createLimiter, devopsStatusSource, NO_SNAPSHOTS, pollAccounts, type DevOpsPoller } from "../actions/devops-poll.ts";
+import { createStatusRegistry } from "../actions/status-rows.ts";
+import { createDevOpsStore } from "../store/devops-store.ts";
+import { DEFAULT_MINUTES } from "../plan/devops-pace.ts";
+import type { OrgRules } from "../config/org.ts";
+import type { TimeModel } from "../week/hours.ts";
 import { createAdminStore } from "../store/admin-store.ts";
 import { inGroup } from "../sources/graph/groups.ts";
 import { orgBootstrap, type BootstrapPerson } from "./org-bootstrap.ts";
@@ -250,8 +256,14 @@ const writePatsOf = (who: Person): WritePats => ({
   clear: (clientKey) => who.secrets.delete(writePatAccount(clientKey)),
 });
 
-// DevOps: one source per person and Dataverse config. PATs come from Dataverse per fetch (devopsTargets), not kept.
+// DevOps: one source per person and Dataverse config. DV-1: they read the central poller's store (set up below, once
+// the plan store is open); without it, PATs come from Dataverse per fetch (devopsTargets), not kept.
 const devopsSources = new Map<string, DevOpsSource>();
+/** DV-1: each client's limits, shared by the poller and everyone's reads on demand. */
+const devopsLimiter = createLimiter(() => Temporal.Now.instant());
+let devopsPoller: DevOpsPoller | null = null;
+/** DV-1: Admin › Status's rows registry (actions/status-rows.ts). */
+const statusRows = createStatusRegistry();
 /**
  * AP-2: the AI guard's map of DevOps item id to client, per person (devops_item_clients). Each read's ids go to the
  * store only when some are new since this process last saw them, so a normal read makes no database call.
@@ -273,7 +285,11 @@ const devopsFor = (who: Person) => (cfg: DataverseConfig, timeZone: string) => {
   let s = devopsSources.get(key);
   if (!s) {
     const dv = dataverseFor(who)(cfg, timeZone);
-    s = createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), processOverrides: (k) => who.process[k] ?? {}, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who) });
+    // DV-1: with the central poller, screens read its store: Dataverse here says only which clients this person may
+    // see (active Account Worker) and their DevOps identity, never the PAT. Without it (no app Dataverse), as before.
+    s = devopsPoller
+      ? createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys, { withPat: false }), processOverrides: (k) => who.process[k] ?? {}, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who), central: devopsPoller.reads, limiter: devopsLimiter })
+      : createDevOpsSource({ fetch, log, snapshots: who.snapshots, timeZone, targets: (keys) => dv.devopsTargets(keys), processOverrides: (k) => who.process[k] ?? {}, openStates: (k) => who.openStates[k] ?? [], onItems: itemMapOf(who) });
     devopsSources.set(key, s);
   }
   return s;
@@ -781,6 +797,7 @@ const directorySource = app.dataverse
   ? createDataverseSource({ config: { ...app.dataverse, myEmail: "", mySystemUserId: null }, timeZone: host.clock.zone(), getSecret: () => host.secrets.get("dataverse-client-secret"), fetch, snapshots: host.snapshotsFor("focustime-app"), log })
   : null;
 const adminOps = createAdminOps({
+  statusRows,
   check: adminCheck,
   org,
   groupId: app.adminGroupId,
@@ -807,6 +824,56 @@ const adminOps = createAdminOps({
   log,
 });
 const refreshPeople = () => adminOps.refreshPeople();
+
+// DV-1: central DevOps polling (actions/devops-poll.ts): one job reads each client account's DevOps once for everyone
+// into the store (devops_items, devops_changes, devops_poll); screens read the store. The read PAT comes from Dataverse
+// with the app's own access and stays in the poller's memory (10 minutes). Built only where the app has Dataverse.
+let orgRulesNow: OrgRules | null = null;
+const refreshRules = async () => (orgRulesNow = await org.rules().catch(() => orgRulesNow));
+const devopsApp = directorySource
+  ? createDevOpsSource({
+      fetch,
+      log,
+      snapshots: NO_SNAPSHOTS,
+      timeZone: host.clock.zone(),
+      targets: (keys) => directorySource.accountTargets(keys),
+      processOverrides: (k) => ({ noBreakdown: orgRulesNow?.clients[k]?.noBreakdown ?? [], background: orgRulesNow?.clients[k]?.background ?? [] }),
+      openStates: (k) => orgRulesNow?.clients[k]?.openStates ?? [],
+      limiter: devopsLimiter,
+    })
+  : null;
+/** The union of a client's followers' own working hours (people who use FocusTime and work on the client). */
+const followerHours = async (clientKey: string) => {
+  const users = new Map((await accounts.users.all()).filter((u) => !u.deletedAt).map((u) => [u.id.toLowerCase(), u.id]));
+  const ids = [...new Set((await adminStore.peopleClients()).filter((p) => p.clientKey === clientKey).map((p) => users.get(p.personId.toLowerCase())).filter((x): x is string => !!x))];
+  const hours: TimeModel[] = [];
+  for (const id of ids) {
+    const loaded = await (await runtimeFor(id)).loadConfig().catch(() => null);
+    if (loaded?.parsed.ok) hours.push(loaded.parsed.config.week.hours);
+  }
+  return hours;
+};
+devopsPoller = devopsApp && directorySource
+  ? createDevOpsPoller({
+      store: createDevOpsStore(db, instantNow),
+      source: () => devopsApp.internal,
+      limiter: devopsLimiter,
+      accounts: (asked) =>
+        pollAccounts({
+          peopleClients: () => adminStore.peopleClients(),
+          users: async () => (await accounts.users.all()).map((u) => ({ id: u.id, deleted: !!u.deletedAt })),
+          targets: (keys) => directorySource.accountTargets(keys, { withPat: false }),
+          asked,
+        }),
+      targets: (keys) => directorySource.accountTargets(keys),
+      hours: followerHours,
+      ruleMinutes: async () => (await refreshRules())?.devops.pollMinutes ?? DEFAULT_MINUTES,
+      active: () => Date.now() - lastUse < ACTIVE_MS,
+      now: instantNow,
+      log,
+    })
+  : null;
+if (devopsPoller) statusRows.register(devopsStatusSource(devopsPoller));
 
 // ADM-1: the one-time move of team settings out of people's own settings, at the first start of this build.
 void orgBootstrap({
@@ -863,6 +930,7 @@ const peopleJob = {
 const scheduler = createScheduler({
   jobs: [
     peopleJob,
+    ...(devopsPoller ? [{ name: "devops_poll", run: async () => void (await devopsPoller!.tick()), wake: () => devopsPoller!.wake() }] : []),
     ...(pollInBackground
       ? [{
           name: "requests_poll",
