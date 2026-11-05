@@ -204,6 +204,15 @@ export const DEVOPS = {
     { level: "Story", text: "Goes on a day, gets a size, gets done." },
     { level: "Done", text: "Tick it, then {b:Mark done in DevOps} from Close out." },
   ] as { level: string; text: string; flag?: boolean }[],
+  /** DS-1: Draft stories with AI, in three steps. */
+  draft: [
+    { q: "What does Draft stories do?", a: "On a feature that {b:Needs stories}, {b:Draft stories} asks the AI to propose the stories it's missing. It works in three steps: Prepare (see what will be sent), Review (edit the cards) and Publish (preview, then create in DevOps). Nothing is written to DevOps until you confirm the preview." },
+    { q: "What is sent to the AI?", a: "Text from DevOps only: the feature's title, description, acceptance criteria, tags, area, iteration, state and priority; its epic's title and description; the titles and states of stories it already has; and its newest comments, up to a limit, with Coop briefs shortened to one line. Also up to 5 of that client's own past features with their stories as examples, the client's house style, and your note. Never attachments, linked documents, email addresses or another client's work. Prepare shows all of it, and you can remove or swap an example before you press Run." },
+    { q: "What is the house style?", a: "A few lines about how a client's features are usually split: how many stories, how titles start, whether they use acceptance criteria. FocusTime learns it each week from the client's own features. You can read it in Prepare and change it in Settings › Clients; your version wins until you choose Use the learned style." },
+    { q: "How do I review the cards?", a: "Each card is one story: edit its title, description and acceptance criteria, give it a size (S 1h, M 2h, L 4h), move it up or down, or Drop it. \"after <title>\" means it depends on another card. Regenerate redoes one card, Regenerate all the whole set, with your note. Why and open questions shows what the AI based it on. Set aside lists what it left out because it's out of scope or already covered by a story you have." },
+    { q: "What happens when I publish?", a: "You see the exact stories that will be created: type, title, description, acceptance criteria, area, iteration and the parent link. Create makes them one by one under the feature, assigned to you, in dependency order, and reads each one back. If some fail, the sheet lists what was created and what wasn't, with Retry; nothing is created twice. Sizes stay in FocusTime. The Audit log in Settings › Data has every create with Undo." },
+    { q: "Why can't I draft for a client?", a: "The button says so: \"AI is off for <client>\" means Use AI (Settings › AI) or that client's Allow AI (Settings › Clients) is off. Without that client's DevOps write access, the sheet asks you to add it in Settings first and sends nothing. The Coop brief is always there." },
+  ],
 };
 
 // ---------- Chapter 5 ----------

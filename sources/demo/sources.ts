@@ -78,6 +78,9 @@ export function createDemoSources(now: () => string) {
     portfolio: async (clients) => clients.filter((c) => isDemoClient(c.clientKey)).map((c) => demoPortfolio(c.clientKey as never, now())),
     description: async () => "A fictional work item for the FocusTime demo.",
     forget: (clientKey) => void last.delete(clientKey),
+    // DS-1: the demo has no AI, so Draft stories never reads; these say so if anything asks.
+    featureSignals: async () => ({ ok: false, message: "Draft stories isn't available in the demo" }),
+    exemplarPool: async () => ({ ok: true, value: [] }),
   };
   return { dataverse, outlook, google, devops };
 }

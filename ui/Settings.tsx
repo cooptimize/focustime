@@ -1078,6 +1078,7 @@ function ClientCard({ c, d, p }: { c: SettingsClient; d: SettingsData; p: { onSa
       {c.devops ? <WriteAccess client={c} onDone={p.reload} /> : d.dataverseReached && <p className="muted set-client-note">No DevOps set up for {c.setting.name ?? c.dataverseName ?? c.key} in Dataverse, so there is nothing to write to. Change it in Dataverse.</p>}
       <DeliveryChatField clientKey={c.key} clientName={c.setting.name ?? c.dataverseName ?? c.key} />
       <AllowAi c={c} d={d} onSavedData={p.onSavedData} />
+      {c.devops && <HouseStyleField clientKey={c.key} name={c.setting.name ?? c.dataverseName ?? c.key} />}
     </div>
   );
 }
@@ -1103,6 +1104,49 @@ function AllowAi({ c, d, onSavedData }: { c: SettingsClient; d: SettingsData; on
   );
 }
 
+type HouseStyleData = { clientKey: string; text: string; computed: string | null; computedAt: string | null; learned: boolean; edited: string | null; read?: boolean | null };
+
+/** DS-1: the client's house style for Draft stories: learned from its own features each week, or your own words. */
+function HouseStyleField({ clientKey, name }: { clientKey: string; name: string }) {
+  const [h, setH] = useState<HouseStyleData | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => void call<HouseStyleData>("stories.house_style", { clientKey }).then(setH, () => setH(null)), [clientKey]);
+  const run = async (input: Record<string, unknown>, action = "stories.house_style_save", done = "Saved") => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await call<HouseStyleData>(action, { clientKey, ...input });
+      setH(r);
+      setDraft(null);
+      setMsg(action === "stories.house_style" && r.read === false ? "DevOps couldn't be read now; the style is unchanged" : done);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Not saved");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!h) return null;
+  const value = draft ?? h.text;
+  return (
+    <div className="set-form set-house-style">
+      <label className="set-field">
+        <span className="set-label">House style for Draft stories</span>
+        <textarea aria-label={`${name}: house style`} rows={3} maxLength={1200} value={value} onChange={(e) => setDraft(e.target.value)} onBlur={() => draft !== null && draft.trim() !== h.text && !busy && void run({ text: draft })} />
+        <span className="set-hint">
+          {h.edited ? "Your words, saved when you leave the box and used until you go back to the learned style." : h.learned ? `Learned from ${name}'s own features${h.computedAt ? `, ${new Date(h.computedAt).toLocaleDateString([], { month: "short", day: "numeric" })}` : ""}; learned again each week.` : "The default: too few features with stories to learn from yet."} Sent with every Draft stories request for {name}.
+        </span>
+      </label>
+      <div className="set-row-actions">
+        {h.edited && <button type="button" className="mini" disabled={busy} onClick={() => void run({ text: null }, undefined, "Back to the learned style")}>Use the learned style</button>}
+        <button type="button" className="mini" disabled={busy} onClick={() => void run({ recompute: true }, "stories.house_style", "Learned again")}>Learn again now</button>
+        {msg && <span className="set-hint" role="status">{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
 type AiTestResult = { ok: true; latencyMs: number; cost: string; model: string } | { ok: false; kind: string; message: string };
 
 /** AI-0: Settings › AI: Use AI, the monthly limit and this month's spend, Test AI, what is sent, and the last 20 requests. */
@@ -1110,10 +1154,10 @@ function AiForm(p: FormProps) {
   const s = p.data.ai;
   const a = useAutoSave({
     section: "ai",
-    initial: { use: s.use, monthlyCapUsd: s.monthlyCapUsd },
+    initial: { use: s.use, monthlyCapUsd: s.monthlyCapUsd, draftMonths: s.draftMonths ?? 12 },
     payload: (v) => v,
     onSaved: p.onSavedData,
-    label: (k) => (k === "use" ? "Use AI" : "Monthly limit"),
+    label: (k) => (k === "use" ? "Use AI" : k === "draftMonths" ? "Draft stories looks back" : "Monthly limit"),
   });
   const [st, setSt] = useState<AiView | null>(null);
   const [testing, setTesting] = useState(false);
@@ -1155,6 +1199,9 @@ function AiForm(p: FormProps) {
       </div>
       <AutoField a={a} k="monthlyCapUsd" label="Monthly limit (US dollars)" hint="AI stops for you when you reach it, until next month. 0 to 1000.">
         <input type="number" min={0} max={1000} step={1} value={a.v.monthlyCapUsd} onChange={(e) => a.set("monthlyCapUsd", Number(e.target.value))} {...a.text("monthlyCapUsd")} />
+      </AutoField>
+      <AutoField a={a} k="draftMonths" label="Draft stories looks back (months)" hint="Examples come from the same client's features changed in this many months, 1 to 36.">
+        <input type="number" min={1} max={36} step={1} value={a.v.draftMonths} onChange={(e) => a.set("draftMonths", Number(e.target.value))} {...a.text("draftMonths")} />
       </AutoField>
       <div className="set-ai-test">
         <button type="button" className="mini" disabled={testing} onClick={() => void runTest()}>
@@ -1201,7 +1248,7 @@ function AiForm(p: FormProps) {
 }
 
 /** Names for the task names the log keeps. */
-const AI_TASK_NAMES: Record<string, string> = { test_ai: "Test AI" };
+const AI_TASK_NAMES: Record<string, string> = { test_ai: "Test AI", "asks.classify": "Sort an ask", "promises.extract": "Read a promise", "stories.draft": "Draft stories" };
 const fmtAiTime = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
 
 function ClientForm({ client: c, data, onSavedData }: { client: SettingsClient; data: SettingsData; onSavedData: (d: SettingsData) => void }) {

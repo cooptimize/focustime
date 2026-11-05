@@ -8,6 +8,7 @@ import { USER_SCHEMA_VERSION } from "./user-data.ts";
 import type { StoreFiles } from "../host/types.ts";
 import { DatabaseSync } from "node:sqlite";
 import type { Conn } from "./sql/conn.ts";
+import { storyDraftMethods } from "./story-drafts.ts";
 import { sqliteConn } from "./sql/sqlite.ts";
 import { carryOver } from "../plan/rules.ts";
 import { type ItemLevel, type Tier } from "../plan/weeklist.ts";
@@ -2997,6 +2998,8 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async writeLog(limit = 100): Promise<WriteEntry[]> {
       return ((await db.all("SELECT * FROM write_log ORDER BY id DESC LIMIT ?", limit)) as Row[]).map(toWrite);
     },
+    // DS-1: Draft stories (drafts, the proposal → write map, house styles).
+    ...storyDraftMethods(db, () => opts.now().toInstant().toString()),
     schemaVersion: () => schemaVersion(conn),
     async exportJson() {
       const weeks = ((await db.all("SELECT DISTINCT week_start FROM week_features ORDER BY week_start")) as Row[]).map((r) => r.week_start as string);

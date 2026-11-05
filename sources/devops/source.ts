@@ -10,6 +10,8 @@ import { formatFetchedAt } from "../when.ts";
 import { withOpenStates, allowPortfolio, backlogLevels, batchFields, buildAllChildrenWiql, buildChildrenWiql, buildWiql, categoriesFrom, detectOrderField, detectSizeField, detectTargetField, DONE_CATEGORIES, START_DATE_FIELD, ACCEPTANCE_FIELD, htmlToText, normalizeWorkItems, portfolioTiers, type BacklogLevels, type FieldInfo, type NormalizeContext, type StateCategories } from "./normalize.ts";
 import type { Pat } from "./pat.ts";
 import type { DevOpsTarget, TargetsResult } from "./types.ts";
+import type { ExemplarCandidate, FeatureSignals } from "../../plan/stories.ts";
+import { CHILD_FIELDS, childrenWiql, COMMENTS_API, COMMENTS_TOP, EPIC_FIELDS, FEATURE_FIELDS, parseChild, parseComments, parseEpic, parseFeature, POOL_FEATURE_FIELDS, POOL_FEATURES, poolCandidates, poolStoriesWiql, poolStoryFields, poolWiql } from "./signals.ts";
 
 export const API_VERSION = "7.1";
 const BATCH_MAX = 200; // documented maximum ids per workitemsbatch call
@@ -57,7 +59,7 @@ class DevOpsFailure extends Error {
   }
 }
 
-type Metadata = { orderField: string | null; categories: StateCategories; levels: BacklogLevels; /** Plan the week (step 8): portfolio tiers from the backlog levels. */ tiers: { feature: Set<string>; epic: Set<string> } };
+type Metadata = { orderField: string | null; categories: StateCategories; levels: BacklogLevels; /** Plan the week (step 8): portfolio tiers from the backlog levels. */ tiers: { feature: Set<string>; epic: Set<string> }; /** DS-1: the requirement backlog's default type, the type Draft stories creates. */ storyType: string | null; requirementTypes: string[] };
 
 /** What the cache file holds for Plan the week per client: normalized portfolio items only (no descriptions). */
 type PortfolioSnapshot = { fetchedAt: string; items: PortfolioItem[]; targetFields: Record<string, string>; startFields?: Record<string, string>; sizeField?: string | null; acceptanceField?: boolean };
@@ -74,6 +76,17 @@ export function cacheKey(clientKey: string): string {
   const slug = clientKey.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "client";
   return `${slug}-${createHash("sha256").update(clientKey).digest("hex").slice(0, 8)}`;
 }
+
+/** DS-1: the requirement backlog's default type and all its types (the story types Draft stories reads and creates). */
+function requirementOf(pc: unknown): { storyType: string | null; requirementTypes: string[] } {
+  const r = (pc as { requirementBacklog?: { defaultWorkItemType?: { name?: unknown }; workItemTypes?: { name?: unknown }[] } } | null)?.requirementBacklog;
+  const types = (r?.workItemTypes ?? []).map((t) => t?.name).filter((n): n is string => typeof n === "string");
+  const def = r?.defaultWorkItemType?.name;
+  return { storyType: typeof def === "string" ? def : (types[0] ?? null), requirementTypes: types };
+}
+
+/** DS-1: a plain reason Draft stories can't read what it needs (never a body, a header or a PAT). */
+export type SignalsResult<T> = { ok: true; value: T } | { ok: false; message: string };
 
 export function createDevOpsSource(d: DevOpsDeps) {
   const now = d.now ?? (() => Temporal.Now.instant());
@@ -102,7 +115,8 @@ export function createDevOpsSource(d: DevOpsDeps) {
 
   /** One request. Errors are mapped to plain messages; response bodies of failures are never read. */
   async function call<T>(c: Ctx, op: string, path: string, body?: unknown): Promise<T> {
-    const url = `${c.base}/${path}${path.includes("?") ? "&" : "?"}api-version=${API_VERSION}`;
+    // DS-1: a path may name its own api-version (the comments API is a preview version).
+    const url = path.includes("api-version=") ? `${c.base}/${path}` : `${c.base}/${path}${path.includes("?") ? "&" : "?"}api-version=${API_VERSION}`;
     const started = performance.now();
     let res: Response | null = null;
     // Every call is a read, so one retry after a network blip is safe (step 6c live run: one failed request
@@ -153,7 +167,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
         return { name: x.name, states: s.value ?? [] };
       }),
     );
-    const meta = { orderField: detectOrderField(pc), categories: categoriesFrom(withStates), levels: backlogLevels(pc), tiers: portfolioTiers(pc) };
+    const meta = { orderField: detectOrderField(pc), categories: categoriesFrom(withStates), levels: backlogLevels(pc), tiers: portfolioTiers(pc), ...requirementOf(pc) };
     metadata.set(key, { at: t, meta });
     return meta;
   }
@@ -398,6 +412,89 @@ export function createDevOpsSource(d: DevOpsDeps) {
     return typeof html === "string" ? htmlToText(html) : "";
   }
 
+  /** DS-1: the client's target and context for a read on demand (Draft stories), or a plain reason. */
+  async function onDemand(clientKey: string): Promise<{ ctx: Ctx; project: string; meta: Metadata } | string> {
+    const targets = await d.targets([clientKey]).catch(() => null);
+    if (!targets?.ok) return `DevOps settings can't be read from Dataverse now${targets && !targets.ok ? ` (${targets.message})` : ""}`;
+    const target = targets.targets.find((x) => x.clientKey === clientKey);
+    const ref = { clientKey, clientName: target?.clientName ?? clientKey };
+    const pre = precheck(ref, target);
+    if (pre) return pre.message;
+    const { ctx, project } = contextOf(ref, target!);
+    return { ctx, project, meta: await loadMetadata(ctx, project) };
+  }
+  const plainFailure = (e: unknown, what: string) => (e instanceof DevOpsFailure ? e.message : `${what} failed`);
+
+  /**
+   * DS-1: what Draft stories reads about one feature, read only: its fields, its epic, every child item and its
+   * comments (newest first, one page). Read when asked, never cached or logged (counts only).
+   */
+  async function featureSignals(clientKey: string, id: number): Promise<SignalsResult<FeatureSignals>> {
+    if (!Number.isSafeInteger(id) || id <= 0) return { ok: false, message: "Not a work item id" };
+    try {
+      const on = await onDemand(clientKey);
+      if (typeof on === "string") return { ok: false, message: on };
+      const { ctx, project, meta } = on;
+      const p = encodeURIComponent(project);
+      const batch = async (ids: number[], fields: string[]) => (ids.length ? ((await call<{ value?: { id?: unknown; fields?: Record<string, unknown> }[] }>(ctx, "workitemsbatch", `${p}/_apis/wit/workitemsbatch`, { ids, fields, errorPolicy: "omit" })).value ?? []) : []);
+      const raw = (await batch([id], FEATURE_FIELDS)).find((v) => v.id === id);
+      const url = `https://dev.azure.com/${encodeURIComponent(ctx.org)}/${encodeURIComponent(ctx.projectName)}/_workitems/edit/${id}`;
+      const feature = raw ? parseFeature(raw, url) : null;
+      if (!feature) return { ok: false, message: `#${id} isn't in ${ctx.projectName}, or you can't see it` };
+      if (!meta.tiers.feature.has(feature.type)) return { ok: false, message: `#${id} is a ${feature.type}: Draft stories works on features` };
+      if (!meta.storyType) return { ok: false, message: `The process for ${ctx.projectName} has no story level, so there is no story type to create` };
+      const [epicRaw, kidIds, commentsBody] = await Promise.all([
+        feature.parentId ? batch([feature.parentId], EPIC_FIELDS) : Promise.resolve([]),
+        call<{ workItems?: { id?: unknown }[] }>(ctx, "wiql", `${p}/_apis/wit/wiql?$top=200`, { query: childrenWiql(id) }).then((w) => (w.workItems ?? []).map((x) => x.id).filter((n): n is number => typeof n === "number")),
+        call<unknown>(ctx, "comments", `${p}/_apis/wit/workItems/${id}/comments?$top=${COMMENTS_TOP}&order=desc&api-version=${COMMENTS_API}`),
+      ]);
+      const children = (await batch(kidIds.slice(0, 200), CHILD_FIELDS)).map(parseChild).filter((c): c is NonNullable<typeof c> => !!c);
+      const epic = epicRaw.map(parseEpic).find((e) => e && e.id === feature.parentId) ?? null;
+      const comments = parseComments(commentsBody);
+      log("story_signals", { count: children.length + comments.length });
+      return { ok: true, value: { feature, epic, children, comments, storyType: meta.storyType } };
+    } catch (e) {
+      return { ok: false, message: plainFailure(e, "Reading the feature") };
+    }
+  }
+
+  /** DS-1: the example pool, a client's own project only, kept in memory for an hour per client and look-back. */
+  const poolMemory = new Map<string, { at: number; pool: ExemplarCandidate[] }>();
+  async function exemplarPool(clientKey: string, o: { months: number }): Promise<SignalsResult<ExemplarCandidate[]>> {
+    const t = now().epochMilliseconds;
+    const key = `${clientKey}|${o.months}`;
+    const hit = poolMemory.get(key);
+    if (hit && t - hit.at < metaTtl) return { ok: true, value: hit.pool };
+    try {
+      const on = await onDemand(clientKey);
+      if (typeof on === "string") return { ok: false, message: on };
+      const { ctx, project, meta } = on;
+      const p = encodeURIComponent(project);
+      const featureTypes = [...meta.tiers.feature];
+      if (!featureTypes.length || !meta.requirementTypes.length) return { ok: true, value: [] };
+      const since = now().toZonedDateTimeISO("UTC").toPlainDate().subtract({ months: Math.max(1, Math.min(36, Math.round(o.months))) }).toString();
+      const wiql = await call<{ workItems?: { id?: unknown }[] }>(ctx, "wiql", `${p}/_apis/wit/wiql?$top=${POOL_FEATURES}`, { query: poolWiql({ project: ctx.projectName || project, featureTypes, categories: meta.categories, since }) });
+      const fids = (wiql.workItems ?? []).map((w) => w.id).filter((n): n is number => typeof n === "number").slice(0, POOL_FEATURES);
+      if (!fids.length) return { ok: true, value: [] };
+      const read = async (ids: number[], fields: string[]) => {
+        const out: { id?: unknown; fields?: Record<string, unknown> }[] = [];
+        for (let i = 0; i < ids.length; i += BATCH_MAX) out.push(...((await call<{ value?: { id?: unknown; fields?: Record<string, unknown> }[] }>(ctx, "workitemsbatch", `${p}/_apis/wit/workitemsbatch`, { ids: ids.slice(i, i + BATCH_MAX), fields, errorPolicy: "omit" })).value ?? []));
+        return out;
+      };
+      const features = await read(fids, POOL_FEATURE_FIELDS);
+      const sw = await call<{ workItems?: { id?: unknown }[] }>(ctx, "wiql", `${p}/_apis/wit/wiql?$top=${WIQL_TOP}`, { query: poolStoriesWiql(fids, meta.requirementTypes) });
+      const sids = (sw.workItems ?? []).map((w) => w.id).filter((n): n is number => typeof n === "number");
+      const { size } = await targetFieldsFor(ctx, project, [...meta.tiers.feature, ...meta.tiers.epic], [...meta.levels.story]);
+      const stories = await read(sids, poolStoryFields(size));
+      const pool = poolCandidates(features, stories, size);
+      log("story_pool", { count: pool.length });
+      poolMemory.set(key, { at: t, pool });
+      return { ok: true, value: pool };
+    } catch (e) {
+      return { ok: false, message: plainFailure(e, "Reading the examples") };
+    }
+  }
+
   /** Check the target is usable. Identity is never guessed. */
   function precheck(ref: ClientRef, target: DevOpsTarget | undefined): DevOpsFailure | null {
     if (!target) return new DevOpsFailure("not_set_up", `No Account Worker for ${ref.clientName} in Dataverse`);
@@ -493,7 +590,7 @@ export function createDevOpsSource(d: DevOpsDeps) {
     portfolioMemory.delete(clientKey);
   }
 
-  return { load, lookup, orgOf, last, portfolio, description, forget };
+  return { load, lookup, orgOf, last, portfolio, description, forget, featureSignals, exemplarPool };
 }
 
 export type DevOpsSource = ReturnType<typeof createDevOpsSource>;

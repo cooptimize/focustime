@@ -2,6 +2,7 @@
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
+import { storyAction, type StoryContext } from "./story-actions.ts";
 import { requestAction, urgentRequests, visibleChats, type RequestContext, type RequestsPort } from "./request-actions.ts";
 import { aiAction, type AiActionName, type AiRuntime } from "./ai-actions.ts";
 import { createAi, type AiService } from "../ai/service.ts";
@@ -27,7 +28,7 @@ import { ptoByDate, type PtoDay, type PtoEntry } from "../week/pto.ts";
 import type { CalEvent, ClientWork, FocusPattern, IsoDate, SourceResult, Week } from "../week/types.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { timeboxAction, timeboxesFor, timeboxView } from "./timebox-actions.ts";
-import { devopsWriteAction, type WritePats } from "./devops-write-actions.ts";
+import { devopsWriteAction, type DevOpsWriteContext, type WritePats } from "./devops-write-actions.ts";
 import type { DevOpsWriter } from "../sources/devops/write.ts";
 import { ownEventIds, withoutOwn } from "../plan/timebox.ts";
 import type { OutlookWrite, PeopleReader, ScheduleReader } from "../sources/graph/source.ts";
@@ -643,6 +644,36 @@ export async function aiFor(ctx: ActionContext): Promise<AiService | null> {
   });
 }
 
+/** The write framework's pieces (step 14): the person's write PAT, never the company read PAT. */
+async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContext> {
+  return {
+    plan: ctx.plan,
+    ...(ctx.requests ? { requests: await sharedFor(ctx, ctx.requests) } : {}),
+    config: () => configured(ctx),
+    // Never the company read PAT: this read doesn't select it.
+    targets: (cfg, keys) => ctx.makeDataverse(cfg.dataverse, userZone(cfg)).devopsTargets(keys, { withPat: false }),
+    writer: ctx.devopsWriter ?? null,
+    pats: ctx.writePats ?? null,
+    devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
+    now: ctx.now,
+    ...(ctx.sleep ? { sleep: ctx.sleep } : {}),
+  };
+}
+
+/** DS-1: Draft stories: reads through the DevOps source (read PAT), AI through ai/, writes through the write framework. */
+export function storyContext(ctx: ActionContext): StoryContext {
+  return {
+    plan: ctx.plan,
+    config: () => configured(ctx),
+    devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
+    ai: () => aiFor(ctx),
+    aiApp: ctx.ai?.app ?? null,
+    writeClients: async () => (ctx.plan && ctx.devopsWriter && ctx.writePats ? (await ctx.plan.devopsIdentities()).map((i) => i.clientKey) : []),
+    devopsWrite: async (action, input) => devopsWriteAction(await devopsWriteContext(ctx), action, input),
+    now: ctx.now,
+  };
+}
+
 /** The Requests a DevOps create comes from: the shared store, who I am, and whether I see a chat. */
 async function sharedFor(ctx: ActionContext, port: RequestsPort) {
   const c = await chatContext(ctx);
@@ -781,22 +812,18 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "devops.confirm":
     case "devops.retry":
     case "devops.log":
-      return devopsWriteAction(
-        {
-          plan: ctx.plan,
-          ...(ctx.requests ? { requests: await sharedFor(ctx, ctx.requests) } : {}),
-          config: () => configured(ctx),
-          // Never the company read PAT: this read doesn't select it.
-          targets: (cfg, keys) => ctx.makeDataverse(cfg.dataverse, userZone(cfg)).devopsTargets(keys, { withPat: false }),
-          writer: ctx.devopsWriter ?? null,
-          pats: ctx.writePats ?? null,
-          devops: (cfg) => ctx.makeDevOps(cfg.dataverse, userZone(cfg)),
-          now: ctx.now,
-          ...(ctx.sleep ? { sleep: ctx.sleep } : {}),
-        },
-        action,
-        req.input,
-      );
+      return devopsWriteAction(await devopsWriteContext(ctx), action, req.input);
+    case "stories.status":
+    case "stories.prepare":
+    case "stories.run":
+    case "stories.regenerate":
+    case "stories.save":
+    case "stories.publish_preview":
+    case "stories.publish":
+    case "stories.retry":
+    case "stories.house_style":
+    case "stories.house_style_save":
+      return storyAction(storyContext(ctx), action, req.input);
     case "auth.status":
     case "auth.sign_in":
     case "auth.sign_out":

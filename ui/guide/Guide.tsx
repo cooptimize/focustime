@@ -441,6 +441,14 @@ function Devops() {
           ))}
         </div>
       </div>
+      {DEVOPS.draft.map((x) => (
+        <details key={x.q} className="guide-q">
+          <summary>{x.q}</summary>
+          <p>
+            <Rich text={x.a} />
+          </p>
+        </details>
+      ))}
     </Chapter>
   );
 }
