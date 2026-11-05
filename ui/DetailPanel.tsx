@@ -28,6 +28,7 @@ import { topOverlay } from "./keys.ts";
 import type { PanelFocus } from "./WeekGrid.tsx";
 import { userZone } from "../week/zone.ts";
 import { usePhone } from "./viewport.ts";
+import { MoveTo, pickDragged, useDragSource, YourStories } from "./WeekStories.tsx";
 
 const live = (p: Pick) => p.status === "planned" || p.status === "done";
 
@@ -42,6 +43,11 @@ type Props = {
   onStart?: ((p: Pick) => void) | undefined;
   onChanged: () => void;
   onNotice?: ((m: string) => void) | undefined;
+  /**
+   * PV-1: "week" is Week's panel: the block's stories (only mine, grouped by feature, ranked) replace This week and
+   * "Assigned to you, not planned", and stories drag onto the week's blocks. Today's panel keeps its sections.
+   */
+  variant?: "week" | undefined;
 };
 
 /** A click on a control inside a card (a button, link, checkbox, event or timebox) isn't a click on the card body. */
@@ -52,7 +58,8 @@ export function interactive(e: ReactMouseEvent): boolean {
   return !!hit && hit !== card && card.contains(hit);
 }
 
-export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onChanged, onNotice }: Props) {
+export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onChanged, onNotice, variant }: Props) {
+  const weekPanel = variant === "week";
   const ref = useRef<HTMLElement>(null);
   const phone = usePhone();
   const plan = useContext(PlanCtx);
@@ -153,8 +160,9 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
             <h3>Plan</h3>
             <ul className="dp-picks">
               {picks.map((p) => (
-                  <PickRow
+                  <PanelPick
                     key={p.id}
+                    week={weekPanel}
                     className={focus?.kind === "pick" && focus.id === p.id ? "dp-focused" : ""}
                     pick={p}
                     toggle={plan.toggle}
@@ -178,7 +186,14 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
           </p>
         )}
 
-        {feats.length > 0 && (
+        {weekPanel && work && !day.pto && (
+          <>
+            {work.status !== "ok" && <p className="dp-empty">DevOps {workStatusLabel(work)}{work.message ? `: ${work.message}` : ""}</p>}
+            <YourStories data={data} work={work} clientName={title} slot={slot} onChanged={onChanged} />
+          </>
+        )}
+
+        {!weekPanel && feats.length > 0 && (
           <section className="dp-section" aria-label="This week's features" data-panel-focus="features">
             <h3>This week</h3>
             <ul className="dp-feats">
@@ -229,7 +244,7 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
           </section>
         )}
 
-        {work && !day.pto && (
+        {!weekPanel && work && !day.pto && (
           <section className="dp-section" aria-label="Assigned to you in DevOps">
             <h3>
               Assigned to you, not planned{work.status !== "ok" && <span className="dp-src"> · {workStatusLabel(work)}</span>}
@@ -259,6 +274,13 @@ export function DetailPanel({ data, day, slot, focus, now, onClose, onStart, onC
 }
 
 /** Esc closes a panel (not while a menu or dialog sits above it, and not while typing in it). */
+/** A pick in the panel's Plan list; on Week (PV-1) with its type icon, draggable to another block, and Move to…. */
+function PanelPick({ week, ...p }: Parameters<typeof PickRow>[0] & { week: boolean }) {
+  const drag = useDragSource(week ? pickDragged(p.pick) : null);
+  if (!week) return <PickRow {...p} />;
+  return <PickRow {...p} typeIcon dragProps={drag} extra={<>{p.extra}<MoveTo pick={p.pick} /></>} />;
+}
+
 function usePanelEsc(ref: RefObject<HTMLElement | null>, onClose: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
