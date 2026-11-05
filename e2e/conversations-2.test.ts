@@ -235,7 +235,7 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
 
       // Inbox › Conversations: Refresh reads the chats.
       await page.keyboard.press("4");
-      await page.getByRole("tab", { name: /^Conversations/ }).click();
+      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Conversations/ }).click();
       const main = page.getByRole("main", { name: "Conversations" });
       await main.getByRole("button", { name: "Refresh conversations" }).click();
       const totals = main.getByRole("region", { name: "Needs you" }).getByRole("listitem", { name: "October totals on the Movement Dashboard" });
@@ -300,8 +300,8 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       await team.store.replaceDirectory([dirPerson(ME, "Sam Tester", 1), dirPerson(EVAN, "Evan Ford", 2), dirPerson(LENA, "Lena Hart", 3), dirPerson(ARI, "Ari Quinn", 4), dirPerson("00000000-0000-4000-8000-0000000000c5", "Nova Lane", 5), dirPerson("00000000-0000-4000-8000-0000000000c6", "Theo Marsh", 6)], [], [{ personId: ARI, clientKey: "Adatum", worker: true }, { personId: LENA, clientKey: "Adatum", worker: true }]);
       team.org.invalidate();
       // My promises: Make it a follow-up on mine to Blake, Who prefilled through the PersonPicker.
-      await page.getByRole("tab", { name: /^My promises/ }).click();
-      const myp = page.getByRole("main", { name: "My promises" });
+      await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Promises/ }).click();
+      const myp = page.getByRole("main", { name: "Promises" });
       const sendTotals = myp.getByRole("listitem", { name: "Promise: Send Blake the corrected October totals" });
       await sendTotals.waitFor();
       await sendTotals.getByText("To Blake Novak", { exact: false }).waitFor();

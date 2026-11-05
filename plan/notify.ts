@@ -54,10 +54,10 @@ export const KIND_HINT: Record<NotifyKind, string> = {
   sent_to_you: "When a teammate sends a feature or story to your week.",
   send_answered: "When someone accepts, passes on or can't take work you sent.",
   send_cant_lead: "On a client you lead, when someone can't take a Must another lead sent.",
-  look_ask: "When a teammate asks you, as a client lead, to look at their committed week.",
+  look_ask: "When a teammate asks you, as a client lead, to look at their planned week.",
   look_reply: "When a lead you asked replies about your week.",
   assigned: "When a teammate assigns you a DevOps item from Ahead in FocusTime.",
-  dates_moved: "When a teammate moves the dates of a DevOps item you own from Ahead in FocusTime, once per commit.",
+  dates_moved: "When a teammate moves the dates of a DevOps item you own from Ahead in FocusTime, once per save.",
 };
 /** PV-1: quiet kinds go to the in-app list only, never to push. */
 export const QUIET_KINDS: ReadonlySet<AnyKind> = new Set<AnyKind>(["story_taken", "send_cant_lead", "assigned", "dates_moved"]);
@@ -255,20 +255,20 @@ export const notices = {
   /** AP-2: an ask AI sorted as needing me now, once per ask. */
   urgentAsk: (messageId: string, clientName: string, title: string, at: string): Notice => ({ kind: "asks", key: `ask:${messageId}`.slice(0, 200), title: `Urgent request from ${clientName}`, body: `${title}\nClick to open Conversations.`, buttons: [open("Open Conversations")], route: "conversations", at }),
   /** CV-1: one reminder to the committer, a working day after a promise that needs a DevOps item. */
-  commitmentItem: (id: number, clientName: string, what: string, at: string): Notice => ({ kind: "commitment_item", key: `commitment_item:${id}`, title: `DevOps item not created yet · ${clientName}`, body: `${what}\nClick to open My promises.`, buttons: [open("Open My promises")], route: "my_promises", at }),
+  commitmentItem: (id: number, clientName: string, what: string, at: string): Notice => ({ kind: "commitment_item", key: `commitment_item:${id}`, title: `DevOps item not created yet · ${clientName}`, body: `${what}\nClick to open Promises.`, buttons: [open("Open My promises")], route: "my_promises", at }),
   /** CV-1: told quietly, once, that a teammate took a promise over. */
   /** PV-1: told quietly, once, that a teammate took one of my stories (Take one). Never the item's title. */
   storyTaken: (id: number, byName: string, itemId: number, at: string): Notice => ({ kind: "story_taken", key: `story_taken:${id}`, title: `${byName} took #${itemId}`, body: "It's assigned to them in DevOps now. Nothing more for you to do.", buttons: [open("Open Week")], route: "week", at }),
   /** SW-1: work sent to my week, once per send and recipient. */
-  sentToYou: (id: number, to: string, fromName: string, title: string, must: boolean, weekStart: string, at: string): Notice => ({ kind: "sent_to_you", key: `sent_to_you:${id}:${to}`.slice(0, 200), title: `${fromName} sent you ${must ? "a Must" : "a suggestion"}`, body: `${title}\nClick to open Week › Commit.`, buttons: [open("Open Commit")], route: `planweek:${weekStart}`, at }),
+  sentToYou: (id: number, to: string, fromName: string, title: string, must: boolean, weekStart: string, at: string): Notice => ({ kind: "sent_to_you", key: `sent_to_you:${id}:${to}`.slice(0, 200), title: `${fromName} sent you ${must ? "a Must" : "a suggestion"}`, body: `${title}\nClick to open Week › Plan.`, buttons: [open("Open Plan")], route: `planweek:${weekStart}`, at }),
   /** SW-1: an answer on work I sent (accepted, scheduled, passed, can't), once per answer. */
-  sendAnswered: (id: number, stamp: string, words: string, title: string, weekStart: string, at: string): Notice => ({ kind: "send_answered", key: `send_answered:${id}:${stamp}`.slice(0, 200), title: words, body: `${title}\nClick to see what you sent.`, buttons: [open("Open Commit")], route: `planweek:${weekStart}`, at }),
+  sendAnswered: (id: number, stamp: string, words: string, title: string, weekStart: string, at: string): Notice => ({ kind: "send_answered", key: `send_answered:${id}:${stamp}`.slice(0, 200), title: words, body: `${title}\nClick to see what you sent.`, buttons: [open("Open Plan")], route: `planweek:${weekStart}`, at }),
   /** SW-1 (D632): quietly, to the other leads of the client, when a Must can't be taken. */
   sendCantLead: (id: number, stamp: string, who: string, title: string, reason: string, at: string): Notice => ({ kind: "send_cant_lead", key: `send_cant_lead:${id}:${stamp}`.slice(0, 200), title: `${who} can't take a Must this week`, body: `${title}\n${reason}`, buttons: [open("Open Team")], route: "team", at }),
-  /** SW-1: a teammate asks me (a client lead) to look at their committed week. */
+  /** SW-1: a teammate asks me (a client lead) to look at their planned week. */
   lookAsk: (id: number, fromName: string, clientName: string, at: string): Notice => ({ kind: "look_ask", key: `look_ask:${id}`, title: `${fromName} asked you to look at their week`, body: `${clientName}\nClick to open Team.`, buttons: [open("Open Team")], route: "team", at }),
   /** SW-1: the lead replied to my Ask to look. */
-  lookReply: (id: number, leadName: string, clientName: string, weekStart: string, at: string): Notice => ({ kind: "look_reply", key: `look_reply:${id}`, title: `${leadName} replied about your week`, body: `${clientName}\nClick to open Commit.`, buttons: [open("Open Commit")], route: `planweek:${weekStart}`, at }),
+  lookReply: (id: number, leadName: string, clientName: string, weekStart: string, at: string): Notice => ({ kind: "look_reply", key: `look_reply:${id}`, title: `${leadName} replied about your week`, body: `${clientName}\nClick to open Plan.`, buttons: [open("Open Plan")], route: `planweek:${weekStart}`, at }),
   // AH-1 (D664): quiet, in-app only; ids and a first name, never a title.
   assigned: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "assigned", key, title: itemIds.length === 1 ? `${byName} assigned you #${itemIds[0]}` : `${byName} assigned you ${itemIds.length} items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to open it in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),
   datesMoved: (key: string, byName: string, itemIds: readonly number[], at: string): Notice => ({ kind: "dates_moved", key, title: itemIds.length === 1 ? `${byName} moved the dates of #${itemIds[0]}` : `${byName} moved the dates of ${itemIds.length} of your items`, body: `${itemIds.slice(0, 6).map((i) => `#${i}`).join(", ")}${itemIds.length > 6 ? " and more" : ""} in DevOps.\nClick to see them in Ahead.`, buttons: [open("Open Ahead")], route: `aheaditem:${itemIds[0]}`, at }),

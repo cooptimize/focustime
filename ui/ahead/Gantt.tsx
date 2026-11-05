@@ -454,7 +454,7 @@ function BarRow({ l, gp, rows, crowded, first, freeze, lane }: { l: Line; gp: Gr
           const words = pastWords(planned, minutes);
           if (!words) return null;
           return (
-            <span key={p.weekStart} className="pa-past" style={{ left: scale.colX(j) + 2, width: scale.colW(j) - 4 }} title={`Week of ${monthDay(p.weekStart)}${p.committed ? "" : " (not committed)"}: ${words}`}>
+            <span key={p.weekStart} className="pa-past" style={{ left: scale.colX(j) + 2, width: scale.colW(j) - 4 }} title={`Week of ${monthDay(p.weekStart)}${p.committed ? "" : " (not confirmed)"}: ${words}`}>
               <PastWords words={words} />
             </span>
           );

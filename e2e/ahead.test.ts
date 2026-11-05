@@ -26,9 +26,9 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
   const row = (page: Page, title: string) => page.locator(".ah-row", { has: page.getByRole("link", { name: title, exact: true }) });
   const bar = (page: Page, title: string) => page.locator(".pa-item", { has: page.getByRole("link", { name: title, exact: true }) });
 
-  it("Grid: every level grouped by client, gaps only as quiet chips, missing fields a dash that says what's missing, my changes pending; items I can't change say who can", async () => {
+  it("Grid: every level grouped by client, gaps only as quiet chips, missing fields a dash that says what's missing, my changes to save; items I can't change say who can", async () => {
     const { page, errors } = await open("#/ahead");
-    await expect(page.locator(".ah-pending").textContent()).resolves.toContain("3 changes pending");
+    await expect(page.locator(".ah-pending").textContent()).resolves.toContain("3 changes to save");
     await expect(page.locator(".ah-client-head").allTextContents()).resolves.toEqual(expect.arrayContaining([expect.stringContaining("Northwind Foods"), expect.stringContaining("Harbor Health")]));
     // Pending values show in place: Store locator starts Nov 16 PM (AH-3: the weekday in the tooltip).
     await expect(row(page, "Store locator").locator(".ah-col-start").textContent()).resolves.toContain("Nov 16 PM");
@@ -96,7 +96,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.keyboard.press("Enter");
     await page.getByRole("spinbutton", { name: "Story Points" }).fill("5");
     await page.keyboard.press("Enter");
-    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes pending");
+    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes to save");
     await expect(size.textContent()).resolves.toContain("5");
     await shotBoth(page, "ahead-grid", page.locator(".ah-client").first());
     // Arrows: left from Size is Assigned to.
@@ -105,11 +105,11 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await expect(page.evaluate(() => document.activeElement?.className ?? "")).resolves.toContain("ah-col-assignee");
     await page.reload();
     await page.locator(".ah-pending").waitFor({ timeout: 30_000 });
-    await expect(page.locator(".ah-pending").textContent()).resolves.toContain("4 changes pending");
+    await expect(page.locator(".ah-pending").textContent()).resolves.toContain("4 changes to save");
     // Back to what DevOps has: no change.
     await row(page, "Export button on the order page").locator(".ah-col-size").focus();
     await page.keyboard.press("Delete");
-    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("3 changes pending");
+    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("3 changes to save");
     await page.close();
   }, T);
 
@@ -122,7 +122,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.keyboard.press("Enter");
     await page.locator(".ah-editor").getByLabel("Start date").fill("2026-11-30");
     await page.keyboard.press("Enter");
-    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes pending");
+    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes to save");
     await page.getByRole("button", { name: "Review" }).click();
     const panel = page.getByRole("dialog", { name: "Review changes" });
     await panel.waitFor();
@@ -137,8 +137,8 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     expect(new Set(arrows).size).toBe(1);
     const afters = await panel.locator(".ah-rv-after").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
     expect(new Set(afters).size).toBe(1);
-    await expect(panel.getByRole("button", { name: /^Commit (3 items )?to DevOps$/ }).count()).resolves.toBe(1);
-    await expect(panel.getByText("Nothing is written until you commit.").count()).resolves.toBe(1);
+    await expect(panel.getByRole("button", { name: /^Save (3 items )?to DevOps$/ }).count()).resolves.toBe(1);
+    await expect(panel.getByText("Nothing is written until you save.").count()).resolves.toBe(1);
     await expect(panel.getByText("Northwind Foods: DevOps writes aren't on for you.").count()).resolves.toBe(1);
     await expect(panel.getByRole("button", { name: "Enable DevOps writes" }).count()).resolves.toBe(1);
     await shotBoth(page, "ahead-review-conflict", panel);
@@ -264,7 +264,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
       expect(Math.abs((await target.boundingBox())!.y - y0)).toBeLessThan(2);
     }
     await page.mouse.up();
-    await expect.poll(() => page.locator(".ah-pending").textContent(), { timeout: 15_000 }).toMatch(/[45] changes pending/);
+    await expect.poll(() => page.locator(".ah-pending").textContent(), { timeout: 15_000 }).toMatch(/[45] changes to save/);
     await page.unroute("**/api/**");
     await page.close();
   }, T);
@@ -314,7 +314,7 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await sizeRow.getByRole("button", { name: "Size", exact: true }).click();
     await sizeRow.getByRole("spinbutton").fill("2");
     await sizeRow.getByRole("button", { name: "Keep" }).click();
-    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes pending");
+    await expect.poll(() => page.locator(".ah-pending").textContent()).toContain("4 changes to save");
     await expect.poll(() => page.locator(".ah-fx-row:not(.ctx)", { hasText: title ?? "" }).count()).toBe(0);
     // Skip puts one aside for the session.
     const before = await page.locator(".ah-fx-row:not(.ctx)").count();

@@ -215,7 +215,7 @@ export function PlanDay({ day, state, which, now, tz, colors, clients, error, ac
         ) : null
       }
       // NV-1: on Week's Board; Commit today (C) saves the plan, then back to the whole week.
-      mode={<ModeArea done={{ onClick: done, label: past || committed ? "Back to the week" : `Commit ${day.date === today ? "today" : weekdayOf(day.date)}`, title: past ? "Back to the week (Esc)" : committed ? "Back to the week (C)" : "Save this plan for the day, then back to the week (C)" }}>{switcher}</ModeArea>}
+      mode={<ModeArea done={{ onClick: done, label: past || committed ? "Back to the week" : `Confirm ${day.date === today ? "today" : weekdayOf(day.date)}`, title: past ? "Back to the week (Esc)" : committed ? "Back to the week (C)" : "Save this plan for the day, then back to the week (C)" }}>{switcher}</ModeArea>}
     />
   );
   const notices = (

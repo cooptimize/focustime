@@ -15,7 +15,7 @@ const KIND_WORDS: Record<BoxKind, string> = { later: "", follow_up: " as a follo
 
 /** The toast after a save: it always names the client the capture went to ("Saved to Northwind as a draft story"). */
 export function savedText(kind: BoxKind, clientName: string | null, extra = ""): string {
-  const where = clientName ? `Saved to ${clientName}` : "Saved to the Inbox";
+  const where = clientName ? `Saved to ${clientName}` : "Saved to Captures";
   return `${where}${KIND_WORDS[kind]}${extra}`;
 }
 

@@ -59,7 +59,7 @@ const base: Strip = { kind: "slot", half: "AM", title: "Proseware focus", until:
 const strips: [string, Strip][] = [
   ["In a block, over by", base],
   ["Before work", { ...base, kind: "before", title: "Work starts", until: "09:00", untilMinutes: 30, overBy: null, event: null }],
-  ["Not committed yet", { ...base, draft: true, overBy: null, picks: { done: 0, total: 3 } }],
+  ["Not confirmed yet", { ...base, draft: true, overBy: null, picks: { done: 0, total: 3 } }],
   ["In a meeting", { ...base, event: { title: "Standup", at: "10:30", minutes: 20, now: true }, overBy: null }],
   ["Flex session", { ...base, half: "EVE", title: "Flex session: Adatum", until: "21:00", flex: true, event: null, overBy: null, nextPick: "Finish the import mapping" }],
   ["PTO", { ...base, kind: "pto", half: null, title: "PTO today", until: null, event: null, picks: null, overBy: null, nextPick: null, next: "2026-11-09" }],
@@ -333,7 +333,7 @@ export function StyleGuide() {
 
       <section className="sg-section">
         <h2>Week</h2>
-        <p className="muted">Sample week at Mon 10:10 AM: a committed plan over its free time, a split day with an evening, unavailable time, a flex session, a PTO day.</p>
+        <p className="muted">Sample week at Mon 10:10 AM: a confirmed plan over its free time, a split day with an evening, unavailable time, a flex session, a PTO day.</p>
         <div className="sg-week">
           <PlanCtx.Provider value={{ week: plan, toggle: noop, sizes: SIZE_MINUTES, focused: SAMPLE_FOCUSED, timer: null, nowMs: Date.parse(NOW) }}>
             <WeekGrid week={week} colors={colors} minFocusWindow={90} today={SAMPLE_WEEK} now={NOW} selection={{ dayIndex: 0, half: "AM" }} cellRefs={cellRefs} onSelect={noop} onOpen={noop} layout={layout} compact={compact} />

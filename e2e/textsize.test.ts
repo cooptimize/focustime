@@ -79,7 +79,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await go(page, "#/ahead/fix");
       await page.locator(".ah-fx-row").first().waitFor({ timeout: 30_000 });
       await check("Ahead › Fix next");
-      await go(page, "#/inbox");
+      await go(page, "#/inbox/captures");
       await page.locator(".inbox-list li").first().waitFor();
       await check("Inbox");
       for (const s of SECTIONS) {
@@ -108,7 +108,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
       await page.locator("[role=dialog]").waitFor();
       await check("Timebox…");
       await page.locator("[role=dialog]").getByRole("button", { name: "Cancel" }).click();
-      await go(page, "#/inbox");
+      await go(page, "#/inbox/captures");
       await page.locator(".draft-title", { hasText: "Filter presets" }).click();
       await page.locator(".draft-editor").waitFor();
       await check("draft editor");
@@ -133,7 +133,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     const before = await fontOf(page, ".settings .set-hint");
     await page.getByRole("radio", { name: "Larger" }).check();
     await expect.poll(() => fontOf(page, ".settings .set-hint")).toBe(before + 4);
-    for (const [hash, sel] of [["#/today", ".today-block"], ["#/week/2026-11-02", ".half.card .card-client"], ["#/week/plan/2026-11-09", ".pw-card-head"], ["#/ahead", ".ah-col-item"], ["#/inbox", ".follow-up-what"]] as const) {
+    for (const [hash, sel] of [["#/today", ".today-block"], ["#/week/2026-11-02", ".half.card .card-client"], ["#/week/plan/2026-11-09", ".pw-card-head"], ["#/ahead", ".ah-col-item"], ["#/inbox/captures", ".follow-up-what"]] as const) {
       await go(page, hash);
       await page.locator(sel).first().waitFor({ timeout: 30_000 });
       expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--text-base").trim()), hash).toBe("17px");
@@ -168,7 +168,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
     await page.keyboard.press("Control+0");
     await expect.poll(attr).toBe(null);
     // In a text field the keys are left alone.
-    await go(page, "#/inbox");
+    await go(page, "#/inbox/captures");
     await page.locator(".inbox-capture input, .inbox-capture textarea").first().focus();
     await page.keyboard.press("Control+=");
     await page.waitForTimeout(400);
@@ -180,7 +180,7 @@ describe.skipIf(!CHROMIUM)("app-wide type scale and text size (U5)", () => {
 
   it("Inbox: each row has one primary action; no New today or Added by me", async () => {
     const { page, errors } = await freshPage(h);
-    await go(page, "#/inbox");
+    await go(page, "#/inbox/captures");
     await page.locator(".inbox-list > li").first().waitFor();
     const primaries = await page.locator(".inbox-list > li").evaluateAll((rows) => rows.map((r) => r.querySelectorAll("button.primary").length));
     expect(primaries.length).toBeGreaterThan(1);

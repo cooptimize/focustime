@@ -89,7 +89,7 @@ describe.skipIf(!CHROMIUM)("Plan the week one client at a time (U6)", () => {
     await expect.poll(() => openName(page)).toBe("Atlas");
     await expect(page.locator(".pw-client").count()).resolves.toBe(1);
     // Next client steps on; the last client has Done instead.
-    await expect(page.locator(".pw-client .pw-next").textContent()).resolves.toBe("Done");
+    await expect(page.locator(".pw-client .pw-next").textContent()).resolves.toBe("Confirm week");
     await page.locator('.pw-line[aria-label="Cooptimize"] .pl-line-name').click();
     await page.locator(".pw-client .pw-next").click();
     await expect.poll(() => openName(page)).toBe("Northwind");
