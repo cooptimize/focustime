@@ -33,9 +33,33 @@ export type AheadContext = {
   /** Whom I may assign on this client: its Account Workers who are Cooptimizers, and me (by email). */
   assignable: (clientKey: string, email: string) => Promise<boolean>;
   now: () => string;
+  /**
+   * AH-3: client DevOps identities: every address that is me on a client, and who a DevOps email is (their FocusTime
+   * name), with the address to write when I assign a person there (their client login when they have one). Missing:
+   * only my own address counts and names show as DevOps has them.
+   */
+  identities?: () => Promise<AheadIdentities>;
   /** AH-3: Fix next's Rules: the top N of each backlog and each client's counted gaps. Missing: the built-ins. */
   fixRules?: () => Promise<{ topN: number; gaps: (clientKey: string) => GapKind[] }>;
 };
+
+export type AheadIdentities = {
+  mine(clientKey: string): string[];
+  personOf(clientKey: string, email: string): { id: string; name: string } | null;
+  /** The address to write for this person on this client: a linked client login, else the one given. */
+  writeAs(clientKey: string, email: string): string;
+};
+
+/** Ahead's items with assignees shown by their FocusTime name, and every address that is me on the client. */
+export function withIdentities<C extends AheadClient>(c: C, ix: AheadIdentities | null): C & { mine: string[] } {
+  const mine = [...new Set([c.me, ...(ix?.mine(c.clientKey) ?? [])].filter((e): e is string => !!e).map((e) => e.toLowerCase()))];
+  if (!ix) return { ...c, mine };
+  const items = c.items.map((i) => {
+    const p = i.assignee?.email ? ix.personOf(c.clientKey, i.assignee.email) : null;
+    return p && i.assignee ? { ...i, assignee: { ...i.assignee, name: p.name } } : i;
+  });
+  return { ...c, items, mine };
+}
 
 const bad = (error: string, status = 400): ActionResponse => ({ ok: false, status, error });
 type Obj = Record<string, unknown>;
@@ -60,10 +84,10 @@ export const hasField = (c: Pick<AheadClient, "startFields" | "targetFields" | "
   field === "assignee" ? true : !!(field === "start" ? c.startFields : field === "target" ? c.targetFields : c.sizeFields)[type];
 
 /** My rights on every item of a client. */
-export function rightsOf(c: AheadClient, me: { lead: boolean; automation: boolean }): Map<number, EditRight> {
+export function rightsOf(c: AheadClient & { mine?: readonly string[] }, me: { lead: boolean; automation: boolean }): Map<number, EditRight> {
   const byId = new Map(c.items.map((i) => [i.id, i]));
   const at = (i: AheadItem | undefined) => (i ? { assigneeEmail: i.assignee?.email ?? null, rung: i.rung } : null);
-  return new Map(c.items.map((i) => [i.id, canEdit({ email: c.me, lead: me.lead, automation: me.automation }, at(i)!, at(i.parentId !== null ? byId.get(i.parentId) : undefined), c.clientName)]));
+  return new Map(c.items.map((i) => [i.id, canEdit({ email: c.me, emails: c.mine ?? [], lead: me.lead, automation: me.automation }, at(i)!, at(i.parentId !== null ? byId.get(i.parentId) : undefined), c.clientName)]));
 }
 
 export async function aheadAction(ctx: AheadContext, action: AheadAction, input: unknown): Promise<ActionResponse> {
@@ -85,13 +109,15 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
   const today = localToday(ctx.now(), userZone(cfg));
   const automation = await ctx.automation().catch(() => false);
 
+  let held: Promise<AheadIdentities | null> | null = null;
+  const idx = () => (held ??= ctx.identities ? ctx.identities().catch(() => null) : Promise.resolve(null));
   /** One client's items (the store read is cheap). */
   const oneClient = async (clientKey: string): Promise<AheadClient | null> => {
     const ref = (await ctx.clients(cfg, mondayOf(today), false)).find((c) => c.clientKey === clientKey);
     if (!ref) return null;
     // AH-2: any item of the project (an item shown with "Show the whole project" can be changed too; rights still decide).
     const [c] = await ctx.devops(cfg).aheadItems!([ref], { whole: true });
-    return c ?? null;
+    return c ? withIdentities(c, await idx()) : null;
   };
 
   if (action === "ahead.load") {
@@ -105,7 +131,9 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     const hints = await hintsOf(plan, today);
     const out: AheadLoad["clients"] = [];
     const fr = (await ctx.fixRules?.().catch(() => null)) ?? { topN: TOP_N, gaps: () => [...GAP_KINDS] };
-    for (const c of clients) {
+    const ix = await idx();
+    for (const raw of clients) {
+      const c = withIdentities(raw, ix);
       const lead = await ctx.isLead(c.clientKey).catch(() => false);
       const rights = rightsOf(c, { lead, automation });
       out.push({ ...c, lead, editable: [...rights].filter(([, r]) => r.ok).map(([id]) => id), note: automation ? "Automation accounts don't change DevOps from FocusTime." : `Only ${c.clientName}'s leads and the owner can change this.`, canWrite: await ctx.canWrite(c.clientKey).catch(() => false), hints: hints.get(c.clientKey) ?? {}, fixGaps: fr.gaps(c.clientKey) });
@@ -135,6 +163,11 @@ export async function aheadAction(ctx: AheadContext, action: AheadAction, input:
     if (!right.ok) return bad(right.note, 403);
     if (!hasField(c, item.type, o.field)) return bad(`${o.field === "size" ? "A size" : o.field === "start" ? "A start date" : "A target date"} isn't in ${c.project ?? c.clientName}'s process for ${item.type}`, 409);
     if (o.field === "assignee" && value && typeof value === "object" && !(await ctx.assignable(c.clientKey, value.email).catch(() => false))) return bad(`Only Cooptimizers on ${c.clientName} can be assigned here`, 403);
+    // AH-3: a person who signs in to this client's DevOps with a client login is assigned as that login.
+    if (o.field === "assignee" && value && typeof value === "object") {
+      const ix = await idx();
+      if (ix) value = { email: ix.writeAs(c.clientKey, value.email).toLowerCase(), name: ix.personOf(c.clientKey, value.email)?.name ?? value.name };
+    }
     const half: DayHalf | null = o.field === "start" || o.field === "target" ? (value === null ? null : ((o.half as DayHalf | undefined) ?? (o.field === "start" ? "AM" : "PM"))) : null;
     const existing = (await plan.aheadChanges()).find((x) => x.clientKey === c.clientKey && x.itemId === item.id && x.field === o.field);
     const baseValue = existing ? existing.baseValue : currentValue(item, o.field);

@@ -546,6 +546,8 @@ export type AheadLoad = {
     canWrite: boolean;
     /** FocusTime's own size of an item (a story's S/M/L, a feature's estimate), as a hint beside the DevOps field. */
     hints: Record<number, { text: string; minutes: number }>;
+    /** AH-3: every address that is me on this client (my own, my DevOps emails, linked client logins), lowercase. */
+    mine?: string[];
     /** AH-3: the gaps this client counts (the Rule fix_gaps). */
     fixGaps: import("../plan/fixnext.ts").GapKind[];
   })[];

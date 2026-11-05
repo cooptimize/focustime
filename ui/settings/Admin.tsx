@@ -622,7 +622,9 @@ type Person = {
   sources: { microsoft: boolean; google: boolean; devopsWrites: number } | null;
 };
 type Position = { name: string; people: number; mapped: boolean; level: string | null };
-type PeopleData = { people: Person[]; others: Person[]; positions: Position[]; unmappedPositions: number; noDomains: boolean; leadsShown: number; admins: { id: string; name: string | null; via: string | null; checkedAt: string | null }[]; groupLink: string | null; groupSet: boolean; refreshedAt: string | null; levels: { id: string; name: string }[] };
+type IdentityRowView = import("../../plan/identities.ts").IdentityRowView;
+type ClientIdentitiesView = import("../../plan/identities.ts").ClientIdentitiesView;
+type PeopleData = { identities?: ClientIdentitiesView[]; people: Person[]; others: Person[]; positions: Position[]; unmappedPositions: number; noDomains: boolean; leadsShown: number; admins: { id: string; name: string | null; via: string | null; checkedAt: string | null }[]; groupLink: string | null; groupSet: boolean; refreshedAt: string | null; levels: { id: string; name: string }[] };
 
 const SETUP_WORDS = { done: "Done", skipped: "Skipped", started: "Started", not_started: "Not started" } as const;
 
@@ -709,9 +711,94 @@ function AdminPeople() {
           )}
         </div>
       )}
+      <ClientIdentities clients={data.identities ?? []} people={data.people} reload={load} />
       <PositionMap positions={data.positions} unmapped={data.unmappedPositions} levels={data.levels} saver={saver} />
       {removing && <RemovePerson p={removing} onClose={() => setRemoving(null)} onDone={async (m) => (setRemoving(null), setMsg(m), await load())} />}
     </div>
+  );
+}
+
+/**
+ * AH-3: client DevOps identities. A Cooptimizer often signs in to a client's DevOps with a client login ("Ext-…"). Linked
+ * ones (from their Account Worker row in Dataverse, or confirmed here) count as them everywhere; a suggestion (the same
+ * name once a prefix or suffix is off) waits for Confirm; unmatched ones show as DevOps has them, with Link to a person.
+ * Emails never reach this page: rows carry a display name and an opaque ref. Every change is in Admin › Audit.
+ */
+function ClientIdentities({ clients, people, reload }: { clients: ClientIdentitiesView[]; people: Person[]; reload: () => Promise<void> }) {
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const act = async (r: IdentityRowView, op: "link" | "remove", personId: string, what: string) => {
+    setBusy(r.ref);
+    setMsg(null);
+    try {
+      await call("admin.identity", { clientKey: r.clientKey, ref: r.ref, personId, op });
+      await reload();
+      setMsg(`${what}. Logged in Admin › Audit.`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Not saved");
+    } finally {
+      setBusy(null);
+    }
+  };
+  const coops = people.filter((p) => p.cooptimizer);
+  return (
+    <section className="adm-identities" aria-label="Client DevOps identities">
+      <h3>Client DevOps identities</h3>
+      <p className="muted">When someone signs in to a client's DevOps with a client login, FocusTime counts that login as them: their items, the names shown, leads, Team and notes. Suggestions are only applied when you confirm them.</p>
+      {msg && (
+        <p className="set-hint" role="status">
+          {msg}
+        </p>
+      )}
+      {clients.length === 0 && <p className="muted">No client logins seen in the clients' DevOps.</p>}
+      {clients.map((c) => (
+        <div key={c.clientKey} className="adm-id-client">
+          <h4>{c.clientKey}</h4>
+          <p className="muted adm-id-line">{c.line}</p>
+          <ul className="set-list adm-id-list" aria-label={`${c.clientKey} identities`}>
+            {c.rows.map((r) => (
+              <li key={r.ref} className={`adm-id-row ${r.state}`}>
+                <span className="adm-id-name">{r.name}</span>
+                {r.state === "linked" && (
+                  <>
+                    <span className="muted">
+                      {r.personName ?? "Someone"} · {r.source === "dataverse" ? "from Dataverse" : "confirmed"}
+                    </span>
+                    <button type="button" className="mini quiet" disabled={busy === r.ref} onClick={() => void act(r, "remove", r.personId!, `${r.name} is no longer ${r.personName ?? "linked"}`)} aria-label={`Remove ${r.name} from ${r.personName ?? "this person"}`}>
+                      Remove
+                    </button>
+                  </>
+                )}
+                {r.state === "suggested" && (
+                  <>
+                    <span className="muted">Looks like {r.personName}</span>
+                    <button type="button" className="mini" disabled={busy === r.ref} onClick={() => void act(r, "link", r.personId!, `${r.name} is ${r.personName} on ${r.clientKey}`)} aria-label={`Confirm ${r.name} is ${r.personName}`}>
+                      Confirm
+                    </button>
+                    <button type="button" className="mini quiet" disabled={busy === r.ref} onClick={() => void act(r, "remove", r.personId!, `${r.name} won't be suggested for ${r.personName} again`)} aria-label={`${r.name} isn't ${r.personName}`}>
+                      Not them
+                    </button>
+                  </>
+                )}
+                {r.state === "unmatched" && (
+                  <label className="adm-id-link">
+                    <span className="muted">Not linked</span>
+                    <select aria-label={`Link ${r.name} to a person`} value="" disabled={busy === r.ref} onChange={(e) => { const p = coops.find((x) => x.id === e.target.value); if (p) void act(r, "link", p.id, `${r.name} is ${p.name} on ${r.clientKey}`); }}>
+                      <option value="">Link to a person…</option>
+                      {coops.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
   );
 }
 

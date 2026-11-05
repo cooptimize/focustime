@@ -227,6 +227,10 @@ export type NormalizeContext = {
   keepDone?: boolean;
   /** My DevOps identity (email) for this client, to tell my own changes (Q42). */
   me?: string | null;
+  /** AH-3: my other addresses on this client (linked client logins): assigned to or changed by them is me too. */
+  alsoMe?: readonly string[];
+  /** AH-3: a Cooptimizer's FocusTime name for a DevOps email on this client (a client login shows as the person). */
+  nameOf?: (email: string) => string | null;
   /** Keep the assignee's display name and whether it's me (Plan the week). Emails are never kept. */
   people?: boolean;
   /** The target date field per type (Plan the week), and the zone its dates are read in. */
@@ -260,6 +264,12 @@ export function workItemUrl(org: string, projectName: string, id: number): strin
 }
 
 export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { items: WorkItem[]; skipped: number } {
+  const meSet = new Set([ctx.me, ...(ctx.alsoMe ?? [])].filter((e): e is string => !!e).map((e) => e.toLowerCase()));
+  const isMe = (e: string | null) => !!e && meSet.has(e.toLowerCase());
+  const nameOf = (v: unknown) => {
+    const e = identityEmail(v);
+    return (e && ctx.nameOf ? ctx.nameOf(e) : null) ?? identityName(v);
+  };
   const items: WorkItem[] = [];
   let skipped = 0;
   for (const v of values) {
@@ -292,8 +302,8 @@ export function normalizeWorkItems(values: unknown[], ctx: NormalizeContext): { 
       url: workItemUrl(ctx.org, ctx.projectName, id),
       tags,
       blocked: isBlocked(state, tags),
-      changedByMe: !!ctx.me && identityEmail(f["System.ChangedBy"]) === ctx.me.toLowerCase(),
-      ...(ctx.people ? { assignedTo: identityName(f["System.AssignedTo"]), assignedToEmail: identityEmail(f["System.AssignedTo"]), assignedToMe: !!ctx.me && identityEmail(f["System.AssignedTo"]) === ctx.me.toLowerCase() } : {}),
+      changedByMe: isMe(identityEmail(f["System.ChangedBy"])),
+      ...(ctx.people ? { assignedTo: nameOf(f["System.AssignedTo"]), assignedToEmail: identityEmail(f["System.AssignedTo"]), assignedToMe: isMe(identityEmail(f["System.AssignedTo"])) } : {}),
       ...(ctx.targetFields?.[type] ? { targetDate: dateOnly(f[ctx.targetFields[type]!], ctx.timeZone ?? NEUTRAL_ZONE) } : {}),
       ...(ctx.startFields?.[type] ? { startDate: dateOnly(f[ctx.startFields[type]!], ctx.timeZone ?? NEUTRAL_ZONE) } : {}),
       ...(ctx.paths ? { areaPath: typeof f["System.AreaPath"] === "string" ? (f["System.AreaPath"] as string) : null, iterationPath: typeof f["System.IterationPath"] === "string" ? (f["System.IterationPath"] as string) : null } : {}),

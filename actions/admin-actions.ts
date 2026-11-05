@@ -5,6 +5,8 @@
 // names, dates and yes or no (AdminOps.people), and the store has no read for anything else. Every change is audited
 // (store/admin-store.ts) with who, when, what, old and new value; secrets are never settings.
 import { GAP_KINDS } from "../plan/fixnext.ts";
+import { emailOfRef, identitiesView } from "./identities.ts";
+import type { Assignee } from "../plan/identities.ts";
 import type { StatusGroup, StatusRegistry } from "./status-rows.ts";
 import { clientScope, CLIENT_SPECS, KIND_NAMES, LEVEL_NAMES, LEVEL_SPECS, LEVELS, ORG_SPECS, OrgInputError, specFor, SUGGESTED_SLOTS, type AdminArea, type Guidance, type Level, type OrgRules } from "../config/org.ts";
 import { CLIENT_SLOTS } from "../config/schema.ts";
@@ -22,7 +24,7 @@ import type { ActionResponse, ClientProcess } from "./types.ts";
 import { scopeWords, type ClientScopeFacts } from "../plan/devops-scope.ts";
 export type { ClientScopeFacts };
 
-export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action"] as const;
+export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action", "admin.identity"] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 export const ADMIN_SECTIONS = ["clients", "ai", "conversations", "people", "organization", "status", "audit"] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
@@ -107,6 +109,8 @@ export type AdminOps = {
   removePerson(id: string): Promise<void>;
   /** AH-2: each client's project areas and teams with counts from the central store (absent: DevOps isn't polled here). */
   scope?(clientKeys: string[]): Promise<Record<string, ClientScopeFacts>>;
+  /** AH-3: each client's DevOps assignees (email and display name) from the central store; emails stay on the server. */
+  assignees?(clientKeys: string[]): Promise<Record<string, Assignee[]>>;
 };
 
 export type AdminContext = {
@@ -311,7 +315,12 @@ async function peopleSection(ops: AdminOps, meId: string) {
   const positions = [...held.entries()]
     .map(([k, h]) => ({ name: h.name, people: h.people, mapped: mapKey.has(k), level: mapKey.has(k) ? (map[mapKey.get(k)!] ?? null) : null }))
     .sort((x, y) => Number(x.mapped) - Number(y.mapped) || x.name.localeCompare(y.name));
+  // AH-3: client DevOps identities per client: linked ones, suggestions to confirm, and unmatched client logins.
+  const clientKeys = [...new Set(clients.map((c) => c.clientKey).filter((k) => ca.isClient(k)))];
+  const [ix, assignees] = await Promise.all([ops.org.identities().catch(() => null), ops.assignees ? ops.assignees(clientKeys).catch(() => ({})) : Promise.resolve({})]);
+  const identities = ix ? identitiesView(ix, clientKeys, assignees) : [];
   return {
+    identities,
     people: rows.filter((r) => r.cooptimizer),
     others: rows.filter((r) => !r.cooptimizer),
     positions,
@@ -465,6 +474,32 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       if (typeof i.source !== "string" || typeof i.row !== "string" || typeof i.action !== "string") return bad("admin.status_action takes { source, row, action }");
       const done = ops.statusRows ? await ops.statusRows.act(i.source, i.row, i.action) : false;
       return done ? { ok: true, data: { groups: await ops.statusRows!.groups() } } : bad("No such status action", 404);
+    }
+    case "admin.identity": {
+      // AH-3: link a client's DevOps identity to a person (confirm a suggestion, or Link to a person), or remove one.
+      const extra = only(i, ["clientKey", "ref", "personId", "op"]);
+      if (extra) return bad(`unknown input field ${extra}`);
+      if (typeof i.clientKey !== "string" || !i.clientKey.trim() || i.clientKey.length > 100 || typeof i.ref !== "string" || !/^[0-9a-f]{20}$/.test(i.ref) || (i.op !== "link" && i.op !== "remove")) return bad("admin.identity takes { clientKey, ref, op: link | remove, personId }");
+      if (typeof i.personId !== "string" || !/^(dv:)?[0-9a-f-]{36}$/i.test(i.personId)) return bad("personId must be an Entra object id (or a Dataverse user's dv: id)");
+      const k = i.clientKey.trim();
+      const [ix, lv] = await Promise.all([ops.org.identities(), ops.org.levels()]);
+      const assignees = ops.assignees ? ((await ops.assignees([k]).catch(() => ({}) as Record<string, Assignee[]>))[k] ?? []) : [];
+      const found = emailOfRef(ix, k, i.ref, assignees);
+      if (!found) return bad(`That identity isn't one FocusTime sees on ${k} now`, 404);
+      const entry = lv.people.entry(i.personId);
+      const person = entry ? ix.people.find((p) => p.id === entry.id) : undefined;
+      if (!entry || !person) return bad("Only a Cooptimizer can be linked to a DevOps identity", 422, "invalid");
+      const current = ix.personOf(k, found.email);
+      if (i.op === "link") {
+        if (current && current.id !== person.id && ix.linked.some((l) => l.clientKey === k && l.email === found.email)) return bad(`That identity is linked to ${current.name}. Remove it there first.`, 409, "linked");
+        if (current && current.id === person.id) return { ok: true, data: { linked: true } };
+        await ops.org.store.linkIdentity({ clientKey: k, email: found.email, devopsName: found.name, personId: person.id, personName: person.name, actor, note: "linked by an admin" });
+      } else {
+        if (!current || current.id !== person.id) return bad(`That identity isn't linked to ${person.name}`, 409);
+        await ops.org.store.unlinkIdentity({ clientKey: k, email: found.email, devopsName: found.name, personId: person.id, personName: person.name, actor });
+      }
+      ops.org.invalidate();
+      return { ok: true, data: { linked: i.op === "link" } };
     }
     case "admin.refresh_people": {
       if (Object.keys(i).length) return bad("admin.refresh_people takes {}");

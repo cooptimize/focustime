@@ -82,6 +82,7 @@ import { userZone } from "../week/zone.ts";
 import { inList } from "./admin.ts";
 import { adminAction, type AdminAction, type AdminOps } from "./admin-actions.ts";
 import type { OrgRuntime } from "./org.ts";
+import { aheadIdentities } from "./identities.ts";
 import { clientRules, teamColors } from "../config/org.ts";
 import { GAP_KINDS, TOP_N } from "../plan/fixnext.ts";
 import { DEFAULT_AI_RULES } from "../ai/types.ts";
@@ -791,7 +792,17 @@ async function aheadContext(ctx: ActionContext): Promise<AheadContext> {
       const mine = (await ctx.plan?.devopsIdentities().catch(() => []))?.find((i) => i.clientKey === clientKey)?.email ?? null;
       if (mine && mine.toLowerCase() === email.toLowerCase()) return true;
       const p = await people().catch(() => null);
-      return !!p && p.picker.workers(clientKey).some((w) => w.email?.toLowerCase() === email.toLowerCase());
+      if (!p) return false;
+      if (p.picker.workers(clientKey).some((w) => w.email?.toLowerCase() === email.toLowerCase())) return true;
+      // AH-3: a worker's linked client login on this client is them too.
+      const ix = ctx.org ? await ctx.org.identities().catch(() => null) : null;
+      const who = ix?.personOf(clientKey, email);
+      return !!who && p.picker.workers(clientKey).some((w) => !!w.email && ix!.personOf(clientKey, w.email)?.id === who.id);
+    },
+    identities: async () => {
+      if (!ctx.org) throw new Error("no org runtime");
+      const [ix, meId, writes] = await Promise.all([ctx.org.identities(), cc.me(), ctx.plan?.devopsIdentities().catch(() => []) ?? Promise.resolve([])]);
+      return aheadIdentities(ix, meId, (k) => writes.filter((w) => w.clientKey === k).map((w) => w.email));
     },
     now: ctx.now,
     fixRules: async () => {
@@ -1374,6 +1385,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "admin.remove_person":
     case "admin.audit":
     case "admin.status_action":
+    case "admin.identity":
       return adminAction(
         {
           ops: ctx.adminOps ?? null,

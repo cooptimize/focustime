@@ -1117,6 +1117,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "admin.load":
     case "admin.set": return env.admin ? { run: () => env.openSettings("admin-clients") } : { disabled: "Only for FocusTime admins" };
     case "admin.override":
+    case "admin.identity":
     case "admin.refresh_people":
     case "admin.remove_person": return env.admin ? { run: () => env.openSettings("admin-people") } : { disabled: "Only for FocusTime admins" };
     case "admin.audit": return env.admin ? { run: () => env.openSettings("admin-audit") } : { disabled: "Only for FocusTime admins" };

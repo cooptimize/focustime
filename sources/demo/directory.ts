@@ -4,7 +4,7 @@
 // from a partner and an automation account, so Admin shows Customers and All accounts and the Not Cooptimizers fold.
 import type { DirectoryRead } from "../dataverse/directory.ts";
 import { DEMO_PERSON } from "./azure.ts";
-import { DEMO_ME, DEMO_PEOPLE } from "./data.ts";
+import { DEMO_LOGINS, DEMO_ME, DEMO_PEOPLE } from "./data.ts";
 
 /** ADM-2: the demo's guest and automation account (fictional). */
 export const DEMO_GUEST = { personId: "a4d00000-0000-4000-8000-000000000021", systemUserId: "d3300000-0000-4000-8000-000000000021", name: "Rowan Vale", email: "rowan.vale@partner.example" };
@@ -52,5 +52,8 @@ export function demoDirectory(): DirectoryRead {
       { accountId: acct(5), clientKey: "Northwind", name: "Northwind Foods", type: "customer", workers: 3, focus: 2 },
       { accountId: acct(6), clientKey: "Registered Agent Co", name: "Registered Agent Co", type: "vendor", workers: 0, focus: 0 },
     ],
+    // AH-3: Priya's Account Worker row on Harbor has her Harbor login, so it's her everywhere. Sam's Harbor login isn't
+    // in Dataverse, so Admin › People suggests it for him (sources/demo/data.ts, DEMO_LOGINS).
+    identities: [{ personId: priya!.aadId, clientKey: "Harbor", email: DEMO_LOGINS["Ext-Priya Shah"]! }],
   };
 }

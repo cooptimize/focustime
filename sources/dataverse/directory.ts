@@ -9,13 +9,15 @@
 // current Focus Time counts, for clientAccounts() (plan/client-accounts.ts); people without an Entra object id are kept
 // (as "dv:<systemuserid>", matched to a sign-in by email, plan/people.ts), and a guest (#EXT# in domainname) is marked.
 // Leads are read for every account; plan/levels.ts keeps only those on clients.
+// AH-3: each Account Worker's DevOps email too (coop_devopsemail, the same field Settings › Clients shows a person for
+// themselves), so a client login maps to its Cooptimizer for everyone. Matching only; never shown or logged.
 import { levelFromPosition, type Level } from "../../config/org.ts";
 import { clientKeyOf } from "./normalize.ts";
 
 export type DvPosition = { positionid?: unknown; name?: unknown };
 export type DvUser = { systemuserid?: unknown; fullname?: unknown; internalemailaddress?: unknown; domainname?: unknown; azureactivedirectoryobjectid?: unknown; _positionid_value?: unknown };
 export type DvAccount = { accountid?: unknown; name?: unknown; coop_reportingnickname?: unknown; _ownerid_value?: unknown; customertypecode?: unknown };
-export type DvWorker = { _coop_user_value?: unknown; _coop_account_value?: unknown };
+export type DvWorker = { _coop_user_value?: unknown; _coop_account_value?: unknown; /** AH-3: their DevOps sign-in on that client (for matching only). */ coop_devopsemail?: unknown };
 export type DvFocus = { _coop_systemuser_value?: unknown; _coop_account_value?: unknown; coop_AccountWorker?: DvWorker | null };
 
 export type DirectoryRead = {
@@ -25,6 +27,8 @@ export type DirectoryRead = {
   /** `worker`: an Account Worker on it (else only Focus Time). Lead Consultants among the workers are leads (plan/levels.ts, by the mapped level). */
   clients: { personId: string; clientKey: string; worker: boolean }[];
   accounts: { accountId: string; clientKey: string; name: string; type: AccountType | null; workers: number; focus: number }[];
+  /** AH-3: each Account Worker's DevOps email on that client (often a client login), for matching only: never shown or logged. */
+  identities: { personId: string; clientKey: string; email: string }[];
 };
 
 /** Dataverse's relationship type (account.customertypecode, the standard option values), as a word. */
@@ -66,11 +70,14 @@ export function buildDirectory(r: { positions: DvPosition[]; users: DvUser[]; ac
     if (key && owner) leads.push({ clientKey: key, personId: owner.personId, source: "owner" });
   }
   const clients: DirectoryRead["clients"] = [];
+  const identities: DirectoryRead["identities"] = [];
   for (const w of r.workers) {
     const key = clientOf.get(id(w._coop_account_value) ?? "");
     const p = bySystemUser.get(id(w._coop_user_value) ?? "");
     if (!key || !p) continue;
     clients.push({ personId: p.personId, clientKey: key, worker: true });
+    const de = str(w.coop_devopsemail)?.toLowerCase();
+    if (de && de.includes("@") && de.length <= 320) identities.push({ personId: p.personId, clientKey: key, email: de });
     if (p.level === "lead") leads.push({ clientKey: key, personId: p.personId, source: "lead_worker" });
   }
   for (const f of r.focus) {
@@ -102,5 +109,6 @@ export function buildDirectory(r: { positions: DvPosition[]; users: DvUser[]; ac
     // A worker link wins over a Focus Time one for the same person and client.
     clients: uniq([...clients].sort((a, b) => Number(a.worker) - Number(b.worker)), (c) => `${c.personId}|${c.clientKey}`),
     accounts: accounts.sort((a, b) => a.clientKey.localeCompare(b.clientKey)),
+    identities: uniq(identities, (i) => `${i.clientKey}|${i.email}`),
   };
 }

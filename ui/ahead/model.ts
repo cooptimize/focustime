@@ -71,7 +71,8 @@ export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
     (kids.get(p) ?? kids.set(p, []).get(p)!).push(i);
   }
   const editable = new Set(c.editable);
-  const me = lc(c.me);
+  // AH-3: every address that is me on this client (my own, my DevOps emails, linked client logins).
+  const me = new Set([lc(c.me), ...(c.mine ?? []).map(lc)].filter(Boolean));
   const changes = load.changes.filter((x) => x.clientKey === c.clientKey);
   const halves = load.halves.filter((h) => h.clientKey === c.clientKey);
   const out: Row[] = [];
@@ -101,7 +102,7 @@ export function buildRows(load: AheadLoad, c: LoadClient): Row[] {
       sizeLabel: sizeRef ? (c.fieldNames[sizeRef] ?? sizeRef.split(".").at(-1) ?? null) : null,
       hint: c.hints[i.id]?.text ?? null,
       gaps: gapsOf(gi, changes, c.fixGaps ?? GAP_KINDS),
-      mine: !!me && lc(eff.assignee?.email) === me,
+      mine: me.has(lc(eff.assignee?.email)),
       context: false,
       openChildren: open,
     });

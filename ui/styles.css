@@ -4754,3 +4754,12 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .adm-scope .set-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 /* AH-2: in Ahead the pace's ghost past a target is the one muted amber, not red. */
 .ahead .pa-ghost { border: 1.5px dashed var(--ah-attention); border-left: 0; background: none; }
+
+/* AH-3: Admin › People's client DevOps identities. */
+.adm-identities .adm-id-client { margin-top: var(--sp-3, 12px); }
+.adm-identities h4 { margin: 0; font-size: var(--fs-3); font-weight: 600; }
+.adm-identities .adm-id-line { margin: 2px 0 6px; }
+.adm-id-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 28px; }
+.adm-id-row .adm-id-name { font-weight: 500; overflow-wrap: anywhere; }
+.adm-id-link { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.adm-id-link select { max-width: 100%; }
