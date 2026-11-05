@@ -35,8 +35,8 @@ export function onOrg(url: string, org: string): boolean {
 export const itemApiUrl = (org: string, id: number) => `${orgBase(org)}/_apis/wit/workItems/${id}`;
 
 export type PatchOp = { op: "add" | "replace" | "remove" | "test"; path: string; value?: unknown };
-export type ChangeKind = "state" | "comment" | "create" | "target_date";
-export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date";
+export type ChangeKind = "state" | "comment" | "create" | "target_date" | "description";
+export type WriteOp = ChangeKind | "undo_state" | "undo_comment" | "undo_create" | "undo_target_date" | "undo_description";
 
 /** One identity as connectionData reports it. */
 export type DevOpsIdentity = { id: string; name: string; email: string };
@@ -100,6 +100,8 @@ export type CreateSpec = { org: string; title: string; description?: string | nu
   areaPath: string | null; iterationPath: string | null; parentId: number | null;
   /** AP-1: where the description goes (a Bug's Repro Steps where the type has them); System.Description by default. */
   descriptionField?: string;
+  /** CV-1: the description is HTML already (the path of action and the original messages, built by code). */
+  descriptionIsHtml?: boolean;
   /** Step 15.3: a draft feature's dates, each only when the type has the field (start) or a target field was found. */
   startDate?: { field: string; date: string } | null; targetDate?: { field: string; date: string } | null; timeZone?: string };
 export const START_FIELD = "Microsoft.VSTS.Scheduling.StartDate";
@@ -107,7 +109,7 @@ export const START_FIELD = "Microsoft.VSTS.Scheduling.StartDate";
 export function createOps(s: CreateSpec): PatchOp[] {
   const ops: PatchOp[] = [
     { op: "add", path: "/fields/System.Title", value: s.title },
-    ...(s.description ? [{ op: "add" as const, path: `/fields/${s.descriptionField ?? "System.Description"}`, value: textToHtml(s.description) }] : []),
+    ...(s.description ? [{ op: "add" as const, path: `/fields/${s.descriptionField ?? "System.Description"}`, value: s.descriptionIsHtml ? s.description : textToHtml(s.description) }] : []),
     ...(s.acceptance && s.acField ? [{ op: "add" as const, path: `/fields/${AC_FIELD}`, value: textToHtml(s.acceptance) }] : []),
     ...(s.startDate ? [{ op: "add" as const, path: `/fields/${s.startDate.field}`, value: dateValue(s.startDate.date, s.timeZone ?? NEUTRAL_ZONE) }] : []),
     ...(s.targetDate ? [{ op: "add" as const, path: `/fields/${s.targetDate.field}`, value: dateValue(s.targetDate.date, s.timeZone ?? NEUTRAL_ZONE) }] : []),
@@ -146,11 +148,13 @@ export type DevOpsWriteEntry = {
   status: DevOpsWriteStatus; message: string | null; undoOf: number | null; undoneBy: number | null; attempts: number; updatedAt: string;
   /** AP-1: the ask a create came from (its chat and message), so a retry never makes a second item. */
   ask?: { chatId: string; messageId: string } | null;
+  /** CV-1: the conversation, commitment and suggestion a create, comment or description change came from. */
+  conv?: { conversationId: number; commitmentId: number | null; suggestionId: number | null } | null;
 };
 /** The undo each write has; null when it has none (an undo, or not confirmed). */
 export function undoKind(e: Pick<DevOpsWriteEntry, "op" | "status" | "undoneBy" | "itemId">): WriteOp | null {
   if (e.status !== "confirmed" || e.undoneBy !== null || e.itemId === null) return null;
-  return e.op === "state" ? "undo_state" : e.op === "comment" ? "undo_comment" : e.op === "create" ? "undo_create" : e.op === "target_date" ? "undo_target_date" : null;
+  return e.op === "state" ? "undo_state" : e.op === "comment" ? "undo_comment" : e.op === "create" ? "undo_create" : e.op === "target_date" ? "undo_target_date" : e.op === "description" ? "undo_description" : null;
 }
 /** Undo is a stack per item: the newest confirmed write that isn't an undo and isn't undone. `log` newest first. */
 export function undoTops(log: readonly DevOpsWriteEntry[]): Map<string, number> {
@@ -174,4 +178,9 @@ export function parentChoices<T extends { id: number; level: string; tier?: "fea
   return items
     .filter((i) => i.level === "portfolio" && (i.tier ?? "feature") === want && isOpenCategory(i.stateCategory))
     .sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || a.id - b.id);
+}
+
+/** CV-1: a description change (description_update): the whole field replaced, written only at the revision read. */
+export function descriptionOps(rev: number, field: string, html: string): PatchOp[] {
+  return [test(rev), { op: "replace", path: `/fields/${field}`, value: html }];
 }
