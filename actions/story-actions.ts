@@ -12,7 +12,7 @@ import { validate } from "../ai/schema.ts";
 import type { AppConfig } from "../config/schema.ts";
 import { sizeChipText, validStorySize } from "../plan/estimate.ts";
 import {
-  COOP_PROPOSALS_V1, draftInput, publishOrder, DRAFT_INSTRUCTIONS, editProblem, estimateMicros, exemplarView, houseStyle, houseStyleStale, HOUSE_STYLE_MAX, MAX_PROPOSALS, NOTE_MAX, proposalProblems, rankExemplars, styleText, toProposal, trimComments,
+  COOP_PROPOSALS_V1, draftInput, publishOrder, sentSummary, DRAFT_INSTRUCTIONS, editProblem, exemplarView, houseStyle, houseStyleStale, HOUSE_STYLE_MAX, MAX_PROPOSALS, NOTE_MAX, proposalProblems, rankExemplars, styleText, toProposal,
   EXEMPLAR_MAX, type CoopProposals, type ExemplarCandidate, type FeatureSignals, type HouseStyle, type Proposal, type StoryDraft,
 } from "../plan/stories.ts";
 import type { DevOpsWriteEntry } from "../plan/devopswrite.ts";
@@ -162,7 +162,7 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
   };
   const owned = async (draftId: unknown): Promise<StoryDraft> => {
     const d = await plan.storyDraft(text(draftId, "draftId", 64));
-    if (!d) throw new Refused("That draft isn't there any more. Run Draft stories again", 404);
+    if (!d) throw new Refused("That draft isn't there any more. Run Break down again", 404);
     return d;
   };
 
@@ -199,30 +199,20 @@ async function run(ctx: StoryContext, action: StoryAction, input: unknown): Prom
       const write = (await ctx.writeClients()).includes(clientKey);
       const signals = await signalsOf(clientKey, featureId);
       const pool = await poolOf(clientKey);
-      const ranked = pool ? rankExemplars(signals.feature, pool, EXEMPLAR_MAX * 2) : [];
+      const ranked = pool ? rankExemplars(signals.feature, pool) : [];
       const style = await styleFor(clientKey, pool);
-      const c = trimComments(signals.comments);
-      const payload = draftInput({ signals, exemplars: ranked.slice(0, EXEMPLAR_MAX).map(exemplarView), style: styleText(style), note: "" });
       const latest = await plan.latestStoryDraft(clientKey, featureId);
+      const f = signals.feature;
+      // BD-1: the panel shows the item, its description and its children; the inputs are listed in plain words.
+      // Cost and model live in the AI log; the examples and house style still go, only not shown.
       return {
         ok: true,
         data: {
-          clientKey, clientName: nameOf(clientKey), featureId, featureTitle: signals.feature.title, featureType: signals.feature.type, storyType: signals.storyType, childTypes: signals.childTypes ?? [signals.storyType], url: signals.feature.url,
-          signals: {
-            fields: [
-              ["Title", signals.feature.title], ["State", signals.feature.state], ["Priority", signals.feature.priority === null ? "" : String(signals.feature.priority)], ["Tags", signals.feature.tags.join(", ")],
-              ["Area", signals.feature.areaPath], ["Iteration", signals.feature.iterationPath], ["Description", signals.feature.description ? `${signals.feature.description.length} characters` : ""], ["Acceptance criteria", signals.feature.acceptance ? `${signals.feature.acceptance.length} characters` : ""],
-            ].filter(([, v]) => v),
-            epic: signals.epic ? { id: signals.epic.id, title: signals.epic.title } : null,
-            children: signals.children,
-            comments: { total: signals.comments.length, sent: c.kept.length, left: c.left, coopBlocks: c.coopBlocks },
-          },
-          // The first five go; the next five can swap in. All from this client's project.
-          exemplars: ranked.map((e, i) => ({ id: e.id, title: e.title, summary: exemplarView(e).summary, stories: e.stories.length, chosen: i < EXEMPLAR_MAX })),
-          poolRead: pool !== null,
-          style: { text: styleText(style), learned: !!style?.learned, edited: !!style?.edited },
-          estimate: ctx.aiApp ? fmtUsd(estimateMicros(payload, ctx.aiApp.prices)) : null,
-          model: ctx.aiApp?.model ?? null,
+          clientKey, clientName: nameOf(clientKey), featureId, featureTitle: f.title, featureType: f.type, storyType: signals.storyType, childTypes: signals.childTypes ?? [signals.storyType], url: f.url,
+          item: { state: f.state, priority: f.priority, description: f.description },
+          parent: signals.epic ? { id: signals.epic.id, title: signals.epic.title, type: signals.epic.type, url: f.url.replace(/\/\d+$/, `/${signals.epic.id}`) } : null,
+          children: signals.children,
+          sent: sentSummary({ signals, examples: Math.min(ranked.length, EXEMPLAR_MAX), clientName: nameOf(clientKey), style }),
           ai: st, aiMessage: st === "on" ? null : AI_WORDS[st](nameOf(clientKey)),
           write, writeMessage: write ? null : NO_PAT(nameOf(clientKey)),
           latest: latest ? await view(latest) : null,

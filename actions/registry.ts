@@ -40,6 +40,8 @@ export type ActionSpec = {
   /** The key that does the same in the window, if any. */
   readonly shortcut?: string;
   readonly summary: string;
+  /** Older names the command menu still finds it by (BD-1: "Draft stories" for Break down). */
+  readonly aka?: readonly string[];
 };
 
 export const ACTIONS = [
@@ -160,15 +162,15 @@ export const ACTIONS = [
   { name: "promises.reopen", title: "Undo a promise's Done or Dismiss", group: "Requests", target: "promise", summary: "Open a done or dismissed promise again" },
   { name: "promises.followup", title: "Make a promise a follow-up", group: "Requests", target: "promise", summary: "A follow-up from a promise: who, what, Teams and the due date filled in; the promise closes when it's done" },
   { name: "promises.link", title: "Link a promise to a DevOps item", group: "Requests", target: "promise", summary: "The promise closes when the item is done in DevOps" },
-  { name: "stories.status", title: "Draft stories: AI and write access", group: "DevOps", target: "none", summary: "Whether Draft stories can run for each client (Use AI, Allow AI, DevOps write access)" },
-  { name: "stories.prepare", title: "Draft stories with AI", group: "DevOps", target: "portfolio", summary: "For a feature with no stories: the signals FocusTime found, examples from the same client, the house style and the cost, then Run" },
-  { name: "stories.run", title: "Run Draft stories", group: "DevOps", target: "portfolio", summary: "One AI request about one client's feature; its answer becomes cards to review, never written by itself" },
-  { name: "stories.regenerate", title: "Draft the stories again", group: "DevOps", target: "portfolio", summary: "Regenerate one card, or the whole set with a note, before it is published" },
-  { name: "stories.save", title: "Save the reviewed stories", group: "DevOps", target: "portfolio", summary: "Keep or Drop, order, titles, descriptions, acceptance criteria and sizes of the drafted cards" },
-  { name: "stories.publish_preview", title: "Preview publishing the stories", group: "DevOps", target: "devops", summary: "The exact batch to create under the feature: titles, type, parent link, sizes" },
-  { name: "stories.publish", title: "Publish the stories", group: "DevOps", target: "devops", summary: "Creates the previewed stories under the feature with your write PAT, reads each back, and records which card became which item" },
-  { name: "stories.retry", title: "Retry the stories that didn't publish", group: "DevOps", target: "devops", summary: "Retries each story whose create didn't confirm (it checks first and never makes a second one)" },
-  { name: "stories.house_style", title: "A client's house style", group: "Settings", target: "none", summary: "How this client writes stories, learned from its own features each week; used by Draft stories" },
+  { name: "stories.status", title: "Break down: AI and write access", group: "DevOps", target: "none", summary: "Whether Break down can run for each client (Use AI, Allow AI, DevOps write access)", aka: ["Draft stories"] },
+  { name: "stories.prepare", title: "Break down with AI", group: "DevOps", target: "portfolio", summary: "For an item that needs breaking down: the item, its description and existing children, then Run (what's sent is listed in plain words)", aka: ["Draft stories"] },
+  { name: "stories.run", title: "Run Break down", group: "DevOps", target: "portfolio", summary: "One AI request about one client's item; its answer becomes proposals to review, never written by itself", aka: ["Draft stories"] },
+  { name: "stories.regenerate", title: "Regenerate the proposals", group: "DevOps", target: "portfolio", summary: "Regenerate one proposal, or the whole set, with a note, before it is published" },
+  { name: "stories.save", title: "Save the reviewed proposals", group: "DevOps", target: "portfolio", summary: "Keep or Drop, order, titles, descriptions, acceptance criteria and sizes of the proposals" },
+  { name: "stories.publish_preview", title: "Preview creating the items", group: "DevOps", target: "devops", summary: "The exact batch to create under the parent: types, titles, sizes, parent link" },
+  { name: "stories.publish", title: "Create all", group: "DevOps", target: "devops", summary: "Creates the previewed items under the parent with your write PAT, reads each back, and records which proposal became which item" },
+  { name: "stories.retry", title: "Retry the items that weren't created", group: "DevOps", target: "devops", summary: "Retries each item whose create didn't confirm (it checks first and never makes a second one)" },
+  { name: "stories.house_style", title: "A client's house style", group: "Settings", target: "none", summary: "How this client writes stories, learned from its own features each week; used by Break down" },
   { name: "stories.house_style_save", title: "Edit a client's house style", group: "Settings", target: "none", summary: "Your own words for a client's house style, or back to the learned one" },
   { name: "conversations.list", title: "Conversations", group: "Conversations", target: "none", summary: "Inbox › Conversations: what your clients' registered chats are talking about, one card per topic, in Needs you, Handled by teammates and Closed" },
   { name: "conversations.refresh", title: "Refresh conversations", group: "Conversations", target: "none", summary: "Read your clients' registered chats now (only new messages), for everyone who follows them" },

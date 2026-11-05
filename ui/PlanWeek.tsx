@@ -31,7 +31,7 @@ import { clientColor } from "./labels.ts";
 import { copy } from "./FollowUps.tsx";
 import { MenuCtx } from "./Menus.tsx";
 import { WorkLink } from "./WorkLink.tsx";
-import { DraftStories, PanelShell } from "./DetailPanel.tsx";
+import { BreakDown, PanelShell } from "./DetailPanel.tsx";
 import { isTypingTarget, topOverlay } from "./keys.ts";
 import { PlanFrame } from "./plan/PlanFrame.tsx";
 import { PlanHeader } from "./plan/PlanHeader.tsx";
@@ -675,7 +675,7 @@ function FeaturePanel({ k, itemId, info, item, color, name, drafts, listed, clie
         )}
         {!past && (
           <span className="pw-pacts">
-            <DraftStories clientKey={k} item={{ id: itemId, title }} />
+            <BreakDown clientKey={k} item={{ id: itemId, title }} />
             <button type="button" className="link-btn" onClick={() => ops.brief(k, itemId)}>Coop brief</button>
             {drafts.length > 0 && <CreateInDevOps drafts={drafts.slice(0, 10)} label={`Create ${drafts.length === 1 ? "the draft" : `${Math.min(10, drafts.length)} drafts`} in DevOps`} />}
             {f && <WorkLink clientKey={k} url={f.url} className="mini">Open in DevOps</WorkLink>}
@@ -1153,7 +1153,7 @@ function ItemRow({ i, ptoPinned = false, first, last, past, info, drafts, places
             (needs ? (
               <span className="pw-needs">
                 <span className="pw-needs-word">Needs stories</span>
-                {!past && <DraftStories clientKey={k} item={{ id: i.itemId, title: i.title }} />}
+                {!past && <BreakDown clientKey={k} item={{ id: i.itemId, title: i.title }} />}
                 {!past && <button type="button" className="link-btn pw-brief-btn" onClick={() => ops.brief(k, i.itemId)}>Coop brief</button>}
               </span>
             ) : (

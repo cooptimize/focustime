@@ -50,7 +50,7 @@ import { updatedAgo } from "./refresh.ts";
 import { usePhone } from "./viewport.ts";
 import { PhoneFollowUps, PhoneNow } from "./Phone.tsx";
 import { VmCtx, VmToday, vmNeedsToday } from "./Account.tsx";
-import { DetailPanel, DraftStories, interactive } from "./DetailPanel.tsx";
+import { DetailPanel, BreakDown, interactive } from "./DetailPanel.tsx";
 import type { PanelFocus } from "./WeekGrid.tsx";
 import { userZone } from "../week/zone.ts";
 
@@ -760,7 +760,7 @@ function ThisWeek({ data, blocks, picks: _today, nameOf, onNotice, onError }: { 
               ) : (
                 <>
                   <span className="tw-needs">Needs stories</span>
-                  {item && <DraftStories clientKey={f.clientKey} item={item} />}
+                  {item && <BreakDown clientKey={f.clientKey} item={item} />}
                   <button type="button" className="link-btn tw-brief" onClick={() => void brief(f.clientKey, f.itemId)}>
                     Coop brief
                   </button>

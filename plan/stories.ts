@@ -377,3 +377,40 @@ export type StoryDraftBody = Omit<StoryDraft, "id" | "clientKey" | "featureId" |
 /** A client's house style: the computed one (cached a week) and the person's edit, which wins until reset. */
 export type HouseStyle = { clientKey: string; computed: string | null; computedAt: string | null; learned: boolean; edited: string | null; editedAt: string | null };
 export const styleText = (h: HouseStyle | null) => h?.edited ?? h?.computed ?? DEFAULT_STYLE;
+
+// ---------- BD-1: what's sent, in plain words ----------
+
+export type SentSummaryInput = {
+  signals: FeatureSignals;
+  /** How many of this client's examples go (the top ranked, at most EXEMPLAR_MAX). */
+  examples: number;
+  clientName: string;
+  style: Pick<HouseStyle, "learned" | "edited"> | null;
+};
+
+/**
+ * Break down's "What's sent to the AI": the inputs one request uses, read only, in plain words (BD-1). It describes
+ * draftInput's body; it never adds or changes what is sent.
+ */
+export function sentSummary(r: SentSummaryInput): string[] {
+  const f = r.signals.feature;
+  const fields = [
+    ["title", f.title], ["state", f.state], ["priority", f.priority === null ? "" : "x"], ["tags", f.tags.length ? "x" : ""],
+    ["area", f.areaPath], ["iteration", f.iterationPath], ["description", f.description], ["acceptance criteria", f.acceptance],
+  ].filter(([, v]) => v).map(([k]) => k!);
+  const list = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+  const c = trimComments(r.signals.comments);
+  const total = r.signals.comments.length;
+  const kids = r.signals.children.length;
+  const s = r.style;
+  return [
+    `The ${f.type}'s ${list(fields)}`,
+    ...(r.signals.epic ? [`Its parent #${r.signals.epic.id}: title and a short description`] : []),
+    total === 0 ? "No comments (there are none)" : `${c.kept.length} of ${total} ${total === 1 ? "comment" : "comments"}, newest first${c.coopBlocks ? `, Coop blocks as one line each` : ""}`,
+    kids === 0 ? "No existing children (there are none)" : `${kids} existing ${kids === 1 ? "child" : "children"}: titles and states, so they aren't proposed again`,
+    r.examples === 0 ? `No examples: too few of ${r.clientName}'s own items with children to learn from` : `${r.examples} ${r.examples === 1 ? "example" : "examples"} from ${r.clientName}'s own items, with their children`,
+    s?.edited ? `House style: written for ${r.clientName}` : s?.learned ? `House style: learned from ${r.clientName}'s own items` : "House style: the default",
+    "Your note, if you write one",
+    "Text only. Email addresses are left out, and everything goes as data, never as instructions",
+  ];
+}
