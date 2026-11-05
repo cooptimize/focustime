@@ -91,6 +91,7 @@ export const conversations: NamedMigration = {
      reminded_at TEXT,
      escalated_at TEXT,
      taken_by TEXT,
+     taken_from TEXT,
      taken_at TEXT,
      reason TEXT,
      draft_json TEXT,
@@ -151,6 +152,7 @@ export const conversations: NamedMigration = {
    ALTER TABLE devops_write_log ADD COLUMN conversation_id INTEGER;
    ALTER TABLE devops_write_log ADD COLUMN commitment_id INTEGER;
    ALTER TABLE devops_write_log ADD COLUMN suggestion_id INTEGER;
+   ALTER TABLE devops_write_log ADD COLUMN write_kind TEXT;
    ALTER TABLE promises ADD COLUMN moved_to INTEGER;`,
   sqlserver: `CREATE TABLE conversations (
   id int IDENTITY(1,1) NOT NULL PRIMARY KEY,
@@ -222,6 +224,7 @@ CREATE TABLE commitments (
   reminded_at datetime2(7) NULL,
   escalated_at datetime2(7) NULL,
   taken_by nvarchar(64) NULL,
+  taken_from nvarchar(64) NULL,
   taken_at datetime2(7) NULL,
   reason nvarchar(400) NULL,
   draft_json nvarchar(max) NULL,
@@ -279,6 +282,6 @@ CREATE TABLE conversation_views (
   PRIMARY KEY (user_id, conversation_id)
 );
 ALTER TABLE ai_requests ADD cap nvarchar(10) NOT NULL CONSTRAINT ai_requests_cap_default DEFAULT 'person';
-ALTER TABLE devops_write_log ADD conversation_id int NULL, commitment_id int NULL, suggestion_id int NULL;
+ALTER TABLE devops_write_log ADD conversation_id int NULL, commitment_id int NULL, suggestion_id int NULL, write_kind nvarchar(32) NULL;
 ALTER TABLE promises ADD moved_to int NULL;`,
 };

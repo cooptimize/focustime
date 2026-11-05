@@ -87,7 +87,9 @@ export type Commitment = {
   onToday: string | null;
   remindedAt: string | null;
   escalatedAt: string | null;
+  /** Take it over: who took it (now the committer) and from whom (told quietly, once). */
   takenBy: string | null;
+  takenFrom: string | null;
   takenAt: string | null;
   reason: string | null;
   /** The DevOps item drafted for the committer (when they opened it), until it is created or linked. */

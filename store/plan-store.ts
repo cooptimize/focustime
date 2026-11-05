@@ -1425,14 +1425,17 @@ const toDraft = (r: Row): DraftStory => ({ id: r.id as number, clientKey: r.clie
 export type DevOpsIdentityRow = { clientKey: string; org: string; id: string; name: string; email: string; validatedAt: string; expires: string | null };
 const toIdentity = (r: Row): DevOpsIdentityRow => ({ clientKey: r.client_key as string, org: r.org as string, id: r.identity_id as string, name: r.name as string, email: r.email as string, validatedAt: r.validated_at as string, expires: (r.expires as string | null) ?? null });
 const toDevopsWrite = (r: Row): DevOpsWriteEntry => ({
-  id: r.id as number, at: r.at as string, clientKey: r.client_key as string, org: r.org as string, project: r.project as string, op: r.op as DevOpsWriteEntry["op"],
+  id: r.id as number, at: r.at as string, clientKey: r.client_key as string, org: r.org as string, project: r.project as string, op: ((r.write_kind as string | null) ?? r.op) as DevOpsWriteEntry["op"],
   itemId: (r.item_id as number | null) ?? null, parentId: (r.parent_id as number | null) ?? null, title: r.title as string, identity: r.identity as string,
   before: json<Record<string, string | null>>(r.before) ?? {}, after: json<Record<string, string | null>>(r.after) ?? {}, ops: json<DevOpsWriteEntry["ops"]>(r.ops),
   revBefore: (r.rev_before as number | null) ?? null, revAfter: (r.rev_after as number | null) ?? null, commentId: (r.comment_id as number | null) ?? null, draftId: (r.draft_id as number | null) ?? null,
   pickIds: json<number[]>(r.pick_ids) ?? [], followUpId: (r.follow_up_id as number | null) ?? null, status: r.status as DevOpsWriteEntry["status"], message: (r.message as string | null) ?? null,
   undoOf: (r.undo_of as number | null) ?? null, undoneBy: (r.undone_by as number | null) ?? null, attempts: r.attempts as number, updatedAt: r.updated_at as string,
   ask: typeof r.ask_chat_id === "string" && typeof r.ask_message_id === "string" ? { chatId: r.ask_chat_id, messageId: r.ask_message_id } : null,
+  conv: typeof r.conversation_id === "number" ? { conversationId: r.conversation_id, commitmentId: (r.commitment_id as number | null) ?? null, suggestionId: (r.suggestion_id as number | null) ?? null } : null,
 });
+/** The write log's op CHECK (fixed before CV-1; newer ops go in write_kind). */
+const OLD_WRITE_OPS = ["state", "comment", "create", "target_date", "undo_state", "undo_comment", "undo_create", "undo_target_date"] as const;
 export type NewDevOpsWrite = Omit<DevOpsWriteEntry, "id" | "at" | "status" | "message" | "undoneBy" | "attempts" | "updatedAt" | "pickIds"> & { pickIds?: number[] };
 
 /** T-2: a stored client chat (its kind from T-2.1; null on rows from before). */
@@ -1894,8 +1897,11 @@ export function planStoreOn(conn: Conn, opts: { now: () => Temporal.ZonedDateTim
     async logDevopsWrite(w: NewDevOpsWrite): Promise<DevOpsWriteEntry> {
       return tx(async () => {
         const at = stamp();
-        const r = (await db.run(`INSERT INTO devops_write_log (at, client_key, org, project, op, item_id, parent_id, title, identity, before, after, ops, rev_before, rev_after, comment_id, draft_id, pick_ids, follow_up_id, status, message, undo_of, undone_by, attempts, updated_at, ask_chat_id, ask_message_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, NULL, 1, ?, ?, ?)`, at, w.clientKey, w.org, w.project, w.op, w.itemId, w.parentId, w.title, w.identity, JSON.stringify(w.before), JSON.stringify(w.after), w.ops ? JSON.stringify(w.ops) : null, w.revBefore, w.revAfter, w.commentId, w.draftId, JSON.stringify(w.pickIds ?? []), w.followUpId, w.undoOf, at, w.ask?.chatId ?? null, w.ask?.messageId ?? null));
+        // CV-1 (D-CV): ops newer than the column's CHECK (description, undo_description) are kept in write_kind, with
+        // "comment" in op: an older build reading the log refuses to undo a comment without a comment id (add-only).
+        const legacy = (OLD_WRITE_OPS as readonly string[]).includes(w.op);
+        const r = (await db.run(`INSERT INTO devops_write_log (at, client_key, org, project, op, item_id, parent_id, title, identity, before, after, ops, rev_before, rev_after, comment_id, draft_id, pick_ids, follow_up_id, status, message, undo_of, undone_by, attempts, updated_at, ask_chat_id, ask_message_id, conversation_id, commitment_id, suggestion_id, write_kind)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?, NULL, 1, ?, ?, ?, ?, ?, ?, ?)`, at, w.clientKey, w.org, w.project, legacy ? w.op : "comment", w.itemId, w.parentId, w.title, w.identity, JSON.stringify(w.before), JSON.stringify(w.after), w.ops ? JSON.stringify(w.ops) : null, w.revBefore, w.revAfter, w.commentId, w.draftId, JSON.stringify(w.pickIds ?? []), w.followUpId, w.undoOf, at, w.ask?.chatId ?? null, w.ask?.messageId ?? null, w.conv?.conversationId ?? null, w.conv?.commitmentId ?? null, w.conv?.suggestionId ?? null, legacy ? null : w.op));
         return (await this.devopsWrite(r.lastId!))!;
       });
     },

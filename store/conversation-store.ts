@@ -83,6 +83,7 @@ const toCommitment = (r: Row): Commitment => ({
   remindedAt: instant(r.reminded_at),
   escalatedAt: instant(r.escalated_at),
   takenBy: (r.taken_by as string | null) ?? null,
+  takenFrom: (r.taken_from as string | null) ?? null,
   takenAt: instant(r.taken_at),
   reason: (r.reason as string | null) ?? null,
   draft: json<Commitment["draft"]>(r.draft_json, null),
@@ -140,8 +141,8 @@ export type ConversationPatch = Partial<{
   likelyItem: number | null;
 }>;
 
-export type NewCommitment = Omit<Commitment, "id" | "createdAt" | "updatedAt" | "followUpId" | "itemId" | "itemUrl" | "itemTitle" | "onToday" | "remindedAt" | "escalatedAt" | "takenBy" | "takenAt" | "state" | "draft"> & { state?: CommitmentState; fromPromise?: string | null; createdAt?: string };
-export type CommitmentPatch = Partial<Pick<Commitment, "what" | "dueAt" | "dueDate" | "toId" | "toName" | "impliesItem" | "state" | "followUpId" | "itemId" | "itemUrl" | "itemTitle" | "onToday" | "remindedAt" | "escalatedAt" | "takenBy" | "takenAt" | "whoId" | "whoName" | "reason" | "messageIds" | "conversationId" | "draft">>;
+export type NewCommitment = Omit<Commitment, "id" | "createdAt" | "updatedAt" | "followUpId" | "itemId" | "itemUrl" | "itemTitle" | "onToday" | "remindedAt" | "escalatedAt" | "takenBy" | "takenFrom" | "takenAt" | "state" | "draft"> & { state?: CommitmentState; fromPromise?: string | null; createdAt?: string };
+export type CommitmentPatch = Partial<Pick<Commitment, "what" | "dueAt" | "dueDate" | "toId" | "toName" | "impliesItem" | "state" | "followUpId" | "itemId" | "itemUrl" | "itemTitle" | "onToday" | "remindedAt" | "escalatedAt" | "takenBy" | "takenFrom" | "takenAt" | "whoId" | "whoName" | "reason" | "messageIds" | "conversationId" | "draft">>;
 
 /** What ADM-1's Admin › Status shows (counts only, never text or ids). */
 export type ConversationCounts = {
@@ -286,7 +287,7 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         if (!(await commitmentById(id))) throw new PlanError("No such commitment");
         const cols: Record<keyof CommitmentPatch, string> = {
           what: "what", dueAt: "due_at", dueDate: "due_date", toId: "to_id", toName: "to_name", impliesItem: "implies_item", state: "state", followUpId: "follow_up_id", itemId: "item_id",
-          itemUrl: "item_url", itemTitle: "item_title", onToday: "on_today", remindedAt: "reminded_at", escalatedAt: "escalated_at", takenBy: "taken_by", takenAt: "taken_at", whoId: "who_id", whoName: "who_name",
+          itemUrl: "item_url", itemTitle: "item_title", onToday: "on_today", remindedAt: "reminded_at", escalatedAt: "escalated_at", takenBy: "taken_by", takenFrom: "taken_from", takenAt: "taken_at", whoId: "who_id", whoName: "who_name",
           reason: "reason", messageIds: "message_ids_json", conversationId: "conversation_id", draft: "draft_json",
         };
         const sets: string[] = [];
