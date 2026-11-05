@@ -11,7 +11,7 @@ import { conversationPeople, conversationAction, dayPromises, type ConversationC
 import { refreshStatus } from "./conversations-pipeline.ts";
 import type { ConversationsPort } from "./devops-write-actions.ts";
 import { isClientLead } from "./client-lead.ts";
-import { clientsOf, onlyClients } from "./client-accounts.ts";
+import { clientsOf, isInternalKey, onlyClients } from "./client-accounts.ts";
 import { requestAction, urgentRequests, visibleChats, type RequestContext, type RequestsPort } from "./request-actions.ts";
 import { aiAction, type AiActionName, type AiRuntime } from "./ai-actions.ts";
 import { createAi, type AiService } from "../ai/service.ts";
@@ -713,12 +713,13 @@ export async function aiFor(ctx: ActionContext, o: { cap?: "person" | "app" } = 
     app: rt.app,
     // ADM-1: the admins' rules only (applied to the config by the org runtime): no per-person switch.
     rules: async () => (await configured(ctx))?.aiRules ?? DEFAULT_AI_RULES,
-    guard: async () => {
+    guard: async (client: string) => {
       const cfg = await configured(ctx);
       if (!cfg) return { directory: [], homeDomains: [], forbidden: [] };
       const me = await storedIdentity(plan);
       const vm = me ? await plan.accountState<ChosenVm>(vmKey(me.oid)).catch(() => null) : null;
-      return { directory: await aiDirectory(ctx, cfg), homeDomains: inviteDomains(cfg), forbidden: vm ? [vm.name, vm.id] : [] };
+      // GD-1: Internal (clientAccounts()'s why "internal") may name clients; secrets, the VM and outside addresses still refuse.
+      return { directory: await aiDirectory(ctx, cfg), homeDomains: inviteDomains(cfg), forbidden: vm ? [vm.name, vm.id] : [], internal: await isInternalKey(ctx.org, client) };
     },
     log: appLog ?? { add: (e) => plan.addAiRequest(e), spentMicros: (a, b) => plan.aiSpentMicros(a, b), recent: (n) => plan.aiRequests(n) },
     appSpend: rt.appSpend,
@@ -744,6 +745,12 @@ async function devopsWriteContext(ctx: ActionContext): Promise<DevOpsWriteContex
     ...(ctx.takes ? { takes: ctx.takes } : {}),
     ...(ctx.devopsNotes ? { notes: ctx.devopsNotes } : {}),
     ...(ctx.plan ? { ahead: aheadPort(ctx, ctx.plan) } : {}),
+    // GD-1: text naming another client never goes into a client's DevOps (Internal may name clients).
+    boundary: async (clientKey) => {
+      if (await isInternalKey(ctx.org, clientKey)) return { internal: true, directory: [] };
+      const cfg = await configured(ctx);
+      return { internal: false, directory: cfg ? await aiDirectory(ctx, cfg) : [] };
+    },
     // CV-4: a conversation's images, read from Teams with my own token when I create the item (never stored).
     ...(ctx.requests ? { chatImages: async () => (await accountOf(ctx))?.chatMessages ?? null } : {}),
   };

@@ -15,7 +15,7 @@ const TASK = { name: "draft_title", client: "fabrikam", instructions: "Write a s
 const INPUT = "The export button does nothing on the March report";
 const ANSWER = { title: "Export button broken on March report", urgency: "now" };
 
-function setup(o: { person?: Partial<AiRules>; app?: Partial<AiAppSettings>; replies?: (string | ProviderReply)[]; noKey?: boolean; now?: string } = {}) {
+function setup(o: { internal?: string; person?: Partial<AiRules>; app?: Partial<AiAppSettings>; replies?: (string | ProviderReply)[]; noKey?: boolean; now?: string } = {}) {
   const log: AiLogEntry[] = [];
   const records: LogRecord[] = [];
   const spend = new Map<string, number>();
@@ -34,7 +34,7 @@ function setup(o: { person?: Partial<AiRules>; app?: Partial<AiAppSettings>; rep
     provider: async () => (o.noKey ? null : provider),
     app: anAiApp(o.app),
     rules: async () => person,
-    guard: async () => ({ directory: [aClientEntry({ key: "fabrikam", names: [], projects: [], itemIds: [] }), aClientEntry({ key: "northwind", names: ["Northwind Traders"], projects: [], itemIds: [5150] })], homeDomains: ["cooptimize.example"], forbidden: [] }),
+    guard: async (client) => ({ directory: [aClientEntry({ key: "fabrikam", names: [], projects: [], itemIds: [] }), aClientEntry({ key: "northwind", names: ["Northwind Traders"], projects: [], itemIds: [5150] })], homeDomains: ["cooptimize.example"], forbidden: [], ...(o.internal && client === o.internal ? { internal: true } : {}) }),
     log: {
       add: async (e) => void log.push(e),
       spentMicros: async (from, to) => log.filter((e) => e.at >= from && e.at < to).reduce((n, e) => n + e.costMicros, 0),
@@ -95,6 +95,37 @@ describe("guards in the service", () => {
     expect(s.calls).toHaveLength(0);
     expect(s.log).toEqual([expect.objectContaining({ outcome: "refused", detail: "refused_client", inputTokens: 0, costMicros: 0 })]);
   });
+  it("logs which rule refused and the matched client as its ref, never the text", async () => {
+    const s = setup();
+    await s.ai.run(TASK, `${INPUT}, same as Northwind Traders had`, SCHEMA);
+    expect(s.records).toContainEqual({ source: "ai", op: "guard", kind: "draft_title:input:client_name", status: "refused_client", client: "northwind" });
+    expect(JSON.stringify(s.records)).not.toContain("Traders");
+  });
+
+  // GD-1: the answer goes through the same guard.
+  it("an answer naming another client is refused after the call: logged as refused with its tokens, never shown", async () => {
+    const s = setup({ replies: [JSON.stringify({ title: "Same fix as Northwind Traders", urgency: "now" })] });
+    const r = await s.ai.run(TASK, INPUT, SCHEMA);
+    expect(r.ok ? null : [r.error.kind, r.error.message]).toEqual(["refused_client", "The AI's answer mentions another client, so nothing is shown"]);
+    expect(s.calls).toHaveLength(1);
+    expect(s.log).toEqual([expect.objectContaining({ outcome: "refused", detail: "refused_client" })]);
+    expect(s.records).toContainEqual(expect.objectContaining({ op: "guard", kind: "draft_title:output:client_name" }));
+  });
+
+  it("Internal: a request and an answer naming two clients are sent and accepted", async () => {
+    const s = setup({ internal: "coop", person: { allowedClients: ["coop"] }, replies: [JSON.stringify({ title: "Northwind Traders and fabrikam exports", urgency: "now" })] });
+    const r = await s.ai.run({ ...TASK, client: "coop" }, `${INPUT} for Northwind Traders, item 5150, and fabrikam`, SCHEMA);
+    expect(r.ok && r.value).toEqual({ title: "Northwind Traders and fabrikam exports", urgency: "now" });
+    expect(s.calls).toHaveLength(1);
+  });
+
+  it("Internal: secrets still refuse in the request", async () => {
+    const s = setup({ internal: "coop", person: { allowedClients: ["coop"] } });
+    const sent = await s.ai.run({ ...TASK, client: "coop" }, `${INPUT} sk-${"Ab3".repeat(10)}`, SCHEMA);
+    expect(sent.ok ? null : sent.error.kind).toBe("refused_secret");
+    expect(s.calls).toHaveLength(0);
+  });
+
   it("a token shape in the instructions refuses too", async () => {
     const s = setup();
     const r = await s.ai.run({ ...TASK, instructions: `Use key sk-${"Ab3".repeat(10)}` }, INPUT, SCHEMA);
@@ -199,7 +230,7 @@ describe("no prompt or answer text is kept or logged", () => {
     const kept = JSON.stringify([s.log, s.records, await s.ai.status()]);
     expect(s.log.map((e) => e.outcome)).toEqual(["ok", "invalid", "provider_error", "refused", "ok"]);
     for (const w of [secretish, answerWords, "Instructions", "Write a short title", "Reply with ok", "checking that FocusTime"]) expect(kept).not.toContain(w);
-    expect(s.records.every((r) => r.source === "ai" && r.op === "request")).toBe(true);
+    expect(s.records.every((r) => r.source === "ai" && (r.op === "request" || r.op === "guard"))).toBe(true);
   });
 });
 

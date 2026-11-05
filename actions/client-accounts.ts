@@ -4,7 +4,8 @@
 // other keys (standing blocks, Keep following). Without the team runtime (no org) everything counts, as before.
 // ADM-2 (D600): the same wrapper keeps teammates() (the help finder, Who suggestions, follow-up pickers) to
 // Cooptimizers: guests, people outside the Cooptimize domains and automation accounts never show in a picker.
-import type { ClientAccounts } from "../plan/client-accounts.ts";
+import { clientAccounts, type ClientAccounts } from "../plan/client-accounts.ts";
+import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { OrgRuntime } from "./org.ts";
 
 type Ctx<S> = { org?: OrgRuntime | undefined; makeDataverse: (cfg: never, timeZone: string) => S };
@@ -17,6 +18,15 @@ export async function clientsOf(org: OrgRuntime | undefined | null): Promise<Cli
 export async function isClientKey(org: OrgRuntime | undefined | null, key: string): Promise<boolean> {
   const ca = await clientsOf(org);
   return ca ? ca.isClient(key) : true;
+}
+
+/**
+ * GD-1: whether this key is Cooptimize Internal, by clientAccounts()'s why "internal" (the team's answer; without the
+ * team runtime, the same rule over no accounts). The AI guard lets an Internal request name clients.
+ */
+export async function isInternalKey(org: OrgRuntime | undefined | null, key: string): Promise<boolean> {
+  const ca = (await clientsOf(org)) ?? clientAccounts({ accounts: [], overrides: {}, internal: INTERNAL_CLIENT });
+  return ca.row(key)?.why === "internal";
 }
 
 /** The context with myClients() filtered to clients. */

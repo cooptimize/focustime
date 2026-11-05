@@ -2,6 +2,9 @@
 // per request: another client's name, nickname, DevOps project or work item id in the payload refuses it. Never sent:
 // tokens, keys, PATs, secrets, Authorization headers, VM details, or email addresses of people outside Cooptimize.
 // Deterministic and pure; a hit says only its kind, never the text that matched.
+// GD-1: a request for Cooptimize Internal (`internal`, set from clientAccounts()'s why "internal", never from a name) may
+// name clients, their projects and their items: Internal work is about them. Secrets, the VM and outside addresses still
+// refuse. Client keys compare without case (a key read as "Fabrikam" in one place and "fabrikam" in another is one client).
 import type { AiErrorKind } from "./types.ts";
 
 /** One client as the guard knows it: its key, the names people call it, its DevOps projects and work item ids. */
@@ -16,9 +19,16 @@ export type GuardInput = {
   homeDomains: readonly string[];
   /** Exact strings that must never go: the person's VM name and resource id. */
   forbidden: readonly string[];
+  /** GD-1: the task's client is Cooptimize Internal (clientAccounts() says why "internal"): the client rules don't apply. */
+  internal?: boolean;
 };
 
-export type GuardHit = { kind: Extract<AiErrorKind, "refused_client" | "refused_secret" | "refused_email">; rule: string };
+export type GuardHit = {
+  kind: Extract<AiErrorKind, "refused_client" | "refused_secret" | "refused_email">;
+  rule: string;
+  /** GD-1: for a client rule, the key of the client entry that matched (for the one-way client ref in a log; never shown). */
+  entry?: string;
+};
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** A whole word or phrase, any case, spaces flexible: "Fabrikam" in "for Fabrikam's" but not in "Fabrikamish". */
@@ -59,17 +69,30 @@ export function guard(text: string, g: GuardInput): GuardHit | null {
     if (!home.some((h) => d === h || d.endsWith(`.${h}`))) return { kind: "refused_email", rule: "external_email" };
   }
 
-  const mine = g.directory.find((c) => c.key === g.client);
-  const ownWords = new Set([...(mine?.names ?? []), ...(mine?.projects ?? []), g.client].map((w) => w.trim().toLowerCase()));
-  const ownIds = new Set(mine?.itemIds ?? []);
+  if (g.internal) return null;
+  const m = otherClientMatch(text, g.client, g.directory);
+  return m ? { kind: "refused_client", rule: m.rule, entry: m.key } : null;
+}
+
+/**
+ * GD-1: the first other client this text names (its name, nickname, DevOps project or a work item id known to be its),
+ * or null. `client` is the text's own client; its own words and ids never count. Used by the guard and by the DevOps
+ * preview before text is written into a client's DevOps. Callers must not log `name`.
+ */
+export function otherClientMatch(text: string, client: string, directory: readonly ClientEntry[]): { key: string; name: string; rule: "client_name" | "devops_project" | "work_item" } | null {
+  const own = (k: string) => k.trim().toLowerCase() === client.trim().toLowerCase();
+  const mine = directory.filter((c) => own(c.key));
+  const ownWords = new Set([...mine.flatMap((c) => [...c.names, ...c.projects]), client].map((w) => w.trim().toLowerCase()));
+  const ownIds = new Set(mine.flatMap((c) => c.itemIds));
   // Whole numbers that could be work item ids: not part of a date, time, amount, decimal or version (2026-11-06, 10:30,
   // $1,500, 1.5, 15%). Only ids known to be another client's refuse; any other number passes.
   const numbers = new Set([...text.matchAll(/(?<![\w.,$€£/:-])#?(\d{3,})(?![\w%]|[.,/:-]\d)/g)].map((m) => Number(m[1])));
-  for (const c of g.directory) {
-    if (c.key === g.client) continue;
-    for (const w of [c.key, ...c.names]) if (w.trim().length >= 3 && !ownWords.has(w.trim().toLowerCase()) && phrase(w).test(text)) return { kind: "refused_client", rule: "client_name" };
-    for (const p of c.projects) if (p.trim().length >= 3 && !ownWords.has(p.trim().toLowerCase()) && phrase(p).test(text)) return { kind: "refused_client", rule: "devops_project" };
-    for (const id of c.itemIds) if (!ownIds.has(id) && numbers.has(id)) return { kind: "refused_client", rule: "work_item" };
+  for (const c of directory) {
+    if (own(c.key)) continue;
+    const name = c.names[0] ?? c.key;
+    for (const w of [c.key, ...c.names]) if (w.trim().length >= 3 && !ownWords.has(w.trim().toLowerCase()) && phrase(w).test(text)) return { key: c.key, name, rule: "client_name" };
+    for (const p of c.projects) if (p.trim().length >= 3 && !ownWords.has(p.trim().toLowerCase()) && phrase(p).test(text)) return { key: c.key, name, rule: "devops_project" };
+    for (const id of c.itemIds) if (!ownIds.has(id) && numbers.has(id)) return { key: c.key, name, rule: "work_item" };
   }
   return null;
 }
