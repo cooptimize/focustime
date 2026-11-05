@@ -1,6 +1,6 @@
 // AS-1: everything the assistant may do, in one list. Each tool the model can call names the registry actions it uses
 // and whether it is a read (runs at once) or a proposal (a write: shown with the button's preview, run only on
-// confirm). Nothing else in the registry is reachable from the assistant; assistant/allowlist.test.ts checks every
+// confirm). Nothing else in the registry is reachable from the assistant; assistant/service.test.ts checks every
 // action here is registered and none is on the never list (secrets, settings, admin, sign-in, data, the VM, the timer).
 import type { ActionName } from "../actions/registry.ts";
 import type { JsonSchema, ToolSpec } from "../ai/types.ts";

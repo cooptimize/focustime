@@ -1062,20 +1062,28 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [cmdOpen, openCommands]);
 
-  // AS-1: Ctrl+J (or Cmd+J) toggles the assistant from anywhere but behind a dialog; / opens it when no text field has focus.
+  // AS-1: Ctrl+J (or Cmd+J) toggles the assistant from anywhere but behind a dialog; / opens it when no text field has
+  // focus and nothing else took it (in Plan today and Week › Plan, / is their Search: those handlers run first).
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const chord = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "j" || e.key === "J");
-      const slash = e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && !isTypingTarget(e.target as HTMLElement | null);
-      if (!chord && !slash) return;
+    const onChord = (e: KeyboardEvent) => {
+      if (!((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "j" || e.key === "J"))) return;
       if (topOverlay(document) === "modal") return;
-      if (slash && assistantAt) return;
       e.preventDefault();
-      setAssistantAt((a) => (chord && a ? null : { text: "" }));
+      setAssistantAt((a) => (a ? null : { text: "" }));
     };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [assistantAt]);
+    const onSlash = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target as HTMLElement | null)) return;
+      if (topOverlay(document) === "modal" || assistantAt || isPlanning(nav)) return;
+      e.preventDefault();
+      setAssistantAt({ text: "" });
+    };
+    window.addEventListener("keydown", onChord, true);
+    window.addEventListener("keydown", onSlash);
+    return () => {
+      window.removeEventListener("keydown", onChord, true);
+      window.removeEventListener("keydown", onSlash);
+    };
+  }, [assistantAt, nav]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

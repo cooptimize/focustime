@@ -55,6 +55,18 @@ It needs AI for FocusTime on and, when a client is in focus (`context.clientKey`
 that client's Allow AI ("Voice is off while <client> is in focus"). The text comes back to the person to edit; it is
 sent only by a `handle` call.
 
+## For the Teams bot
+
+`server/main.ts` exports `assistants` (`server/assistant.ts` `createAssistantHub`): this interface by the person's
+`userId`, channel `"teams"` by default (absolute links), `forChannel("panel")` for the panel's. TB-1's bot keeps its
+own small types and reaches it through `teamsAssistant()` in `server/teams/assistant.ts`.
+
 ## Changes
 
-None yet.
+- Nov 5: no change to the shape TB-1 coded against (handle, confirm, cancel, the statuses, 15-minute expiry,
+  absolute links in Teams). Additions only:
+  - The panel's `assistant.history` action also takes `context` and returns `gate`
+    (`{ assistant: "ok" | "off" | "not_set_up", voice: { on, message } }`), so the mic is off before anything is sent.
+    This is the panel's action, not part of `Assistant`.
+  - Ids are numbers in this interface; TB-1's bot holds them as strings and the adapter converts.
+  - A `#/commands` link is the command menu: the panel opens it; Teams shows it as a link into the app.
