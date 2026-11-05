@@ -831,9 +831,13 @@ function StoryBox({ clientKey, clientName, half, date, parent, parentTitle, act 
 
 /** Unfinished from earlier days: one "+" brings a pick into the selected block; ⋯ has the rest. */
 function CarryOver({ picks, date, to, act }: { picks: Pick[]; date: string; to: Half; act: PlanDayAct }) {
+  // UI-B: "From last week" only when every pick is from an earlier week.
+  const d = Temporal.PlainDate.from(date);
+  const monday = d.subtract({ days: d.dayOfWeek - 1 }).toString();
+  const label = picks.every((p) => p.date < monday) ? "From last week" : "Unfinished from earlier days";
   return (
-    <section className="pd2-carry" aria-label="From last week">
-      <PlanLabel>From last week</PlanLabel>
+    <section className="pd2-carry" aria-label={label}>
+      <PlanLabel>{label}</PlanLabel>
       <ul className="pd2-list">
         {picks.map((p) => (
           <MenuRow key={p.id} build={(env) => pickMenu(env, p)} label={`More for ${p.title}`} item={{ clientKey: p.clientKey, url: p.itemUrl }} className="pd2-add">

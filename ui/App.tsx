@@ -67,6 +67,7 @@ import { AboutDialog } from "./About.tsx";
 import { FeedbackDialog } from "./Feedback.tsx";
 import { BreakDownHost, CoopBriefHost } from "./BreakDownPanel.tsx";
 import { FromLastWeek } from "./FromLastWeek.tsx";
+import { CarryProvider, CarrySummary } from "./Carry.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { Settings, SETTINGS_SECTIONS, type SettingsSectionId } from "./Settings.tsx";
 import { useAdmin } from "./settings/Admin.tsx";
@@ -1776,7 +1777,9 @@ export function App() {
               {switches.week}
             </ModeArea>
           </header>
-      {data.weekStart === data.today.weekStart && <FromLastWeek version={data} colors={data.clients} nameOf={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} onPlanDay={(d) => openPlanDay(d)} weekStart={data.weekStart} week={week} today={data.planDay.date} onChanged={reloadQuiet} />}
+      <CarryProvider active={data.weekStart === data.today.weekStart} version={data} week={week} now={now ?? new Date(clock).toISOString()} onChanged={reloadQuiet}>
+      {data.weekStart === data.today.weekStart && <CarrySummary colors={data.clients} nameOf={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} />}
+      {data.weekStart === data.today.weekStart && <FromLastWeek version={data} colors={data.clients} nameOf={(k) => data.planClients.find((c) => c.clientKey === k)?.clientName ?? k} weekStart={data.weekStart} week={week} today={data.planDay.date} onChanged={reloadQuiet} />}
       <WeekGrid
         week={week}
         colors={data.clients}
@@ -1802,6 +1805,7 @@ export function App() {
           setDetailsOpen(true);
         }}
       />
+      </CarryProvider>
         </>
       )}
 

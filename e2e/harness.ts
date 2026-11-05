@@ -78,7 +78,8 @@ export type Harness = { url: string; browser: Browser; stop: () => Promise<void>
  * takes it before the server listens (the server then exits with "already running on port"), it starts again on a new
  * one (test/ports.ts). WebKit's TLS front gets its port the same way; the server's public URL names that front.
  */
-export async function startDemo(engine: "chromium" | "webkit" = "chromium", extraEnv: Record<string, string> = {}): Promise<Harness> {
+/** `clock` pins the server and the page to another instant than NOW (UI-B: a day mid-week). */
+export async function startDemo(engine: "chromium" | "webkit" = "chromium", extraEnv: Record<string, string> = {}, clock: string = NOW): Promise<Harness> {
   const dir = await mkdtemp(join(tmpdir(), "focustime-e2e-"));
   // A2: no sign-in is set up here; the sign-in page offers "Try the demo", which every test uses.
   await mkdir(join(dir, "data", "focustime"), { recursive: true });
@@ -89,7 +90,7 @@ export async function startDemo(engine: "chromium" | "webkit" = "chromium", extr
     // A UI built once for the whole run (test/e2e-build.ts) when there is one; Vite in the server otherwise.
     const built = process.env.FOCUSTIME_E2E_DIST && process.env.FOCUSTIME_E2E_DIST !== "dev" ? process.env.FOCUSTIME_E2E_DIST : null;
     if (built) Object.assign(env, { FOCUSTIME_DIST: built });
-    const child: ChildProcess = spawn(process.execPath, ["server/main.ts", ...(built ? [] : ["--dev"]), "--no-open", "--no-reopen", "--headless", "--port", String(port), "--clock", NOW], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+    const child: ChildProcess = spawn(process.execPath, ["server/main.ts", ...(built ? [] : ["--dev"]), "--no-open", "--no-reopen", "--headless", "--port", String(port), "--clock", clock], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     child.stdout?.on("data", (b) => (out += b));
     child.stderr?.on("data", (b) => (out += b));
@@ -121,7 +122,7 @@ export async function startDemo(engine: "chromium" | "webkit" = "chromium", extr
   const launched = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: CHROMIUM!, args: ["--disable-gpu"] });
   const browser = noServiceWorkers(launched);
   return {
-    url: `${server.url}?now=${encodeURIComponent(NOW)}`,
+    url: `${server.url}?now=${encodeURIComponent(clock)}`,
     browser,
     stop: async () => {
       await browser.close().catch(() => {});

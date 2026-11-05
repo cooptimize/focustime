@@ -4562,3 +4562,28 @@ button.ah-gap { cursor: pointer; }
 .bd-item-acts .muted { font-size: var(--fs-2); }
 /* AH-1 (D665): Send to… opens over Break down's side panel (both were z-index 60 and the panel came later). */
 .cap-backdrop:has(> .send-dialog) { z-index: 61; }
+
+/* UI-B: unfinished picks as suggested cards on Week's Board. */
+.suggested-cards { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.suggested-card { min-width: 0; }
+.suggested-card[draggable="true"] { cursor: grab; }
+.suggested-card .sc-open { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 3px 6px; border: 1px dashed var(--c, var(--border-strong)); border-radius: 6px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
+.suggested-card .sc-open:hover, .suggested-card .sc-open:focus-visible { color: var(--text); border-style: solid; }
+.suggested-card .sc-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggested-card .sc-from { flex: none; color: var(--text-faint); }
+.checklist .pick-origin { display: flex; align-items: center; gap: 6px; min-width: 0; opacity: 0.55; font-size: var(--fs-2); padding-left: 21px; }
+.pick-origin .po-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-origin .po-note { flex: none; color: var(--text-muted); white-space: nowrap; }
+.carry-summary { margin: 0 24px 10px; padding: 6px 12px; border: 1px dashed var(--border-strong); border-radius: 10px; display: grid; gap: 6px; font-size: var(--fs-3); }
+.carry-summary .cs-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.carry-summary .cs-sep { color: var(--text-faint); }
+.carry-summary .cs-hint { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: var(--fs-2); }
+.cs-groups { display: grid; gap: 8px; }
+.cs-client h3 { margin: 0 0 2px; display: flex; align-items: center; gap: 6px; font-size: var(--fs-2); font-weight: 600; }
+.cs-client .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--c); flex: none; }
+.cs-groups .flw-list { flex-direction: column; flex-wrap: nowrap; gap: 2px; }
+.cs-groups .card-feat { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: var(--fs-2); }
+.flw-row .link-btn { font-size: var(--fs-2); }
+.flw-row .link-btn.danger { color: var(--text-muted); }
+@media (max-width: 700px) { .carry-summary { margin: 0 16px 10px; } }
+

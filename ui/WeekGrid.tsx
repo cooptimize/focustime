@@ -31,6 +31,7 @@ import type { DayPromise } from "../plan/conversation-views.ts";
 import { cardGroups } from "../plan/blockstories.ts";
 import { TypeIcon } from "./TypeIcon.tsx";
 import { pickDragged, useDragSource, useDropTarget } from "./WeekStories.tsx";
+import { OriginPick, SuggestedCards, useIsOrigin } from "./Carry.tsx";
 
 export type Selection = { dayIndex: number; half: Half };
 /** U3: where the detail panel opens: the features list, one follow-up or one pick. */
@@ -413,7 +414,9 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
   const ticks = overflow && !eve && !cp.picks.length ? catchUp(plan.week, slot) : cp.picks;
   // U3: on days other than today, done picks collapse to "N done".
   const doneHidden = isToday ? [] : ticks.filter((p) => p.status === "done");
-  const shown = isToday ? ticks : ticks.filter((p) => p.status !== "done");
+  // UI-B: on a day that has passed, a pick kept or moved on from here stays as a dimmed "→ moved to Mon AM" line.
+  const movedOn = slot.date < (plan.today ?? "") ? (plan.week?.[slot.date]?.picks ?? []).filter((p) => p.half === slot.half && p.status === "moved" && p.carriedTo) : [];
+  const shown = [...(isToday ? ticks : ticks.filter((p) => p.status !== "done")), ...movedOn];
   const rc = useContext(RulerCtx);
   // P1: on the phone a card lists its meetings in words; no rail.
   const phone = usePhone();
@@ -491,6 +494,7 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
         </ul>
       )}
       {shown.length > 0 && <CardPicks picks={shown} label={`Plan for ${dayLabel} ${slot.half}`} tabIndex={selected ? 0 : -1} />}
+      {!eve && <SuggestedCards date={slot.date} half={slot.half} tabIndex={selected ? 0 : -1} />}
       {!eve && <CheckinChips date={slot.date} half={slot.half as "AM" | "PM"} tabIndex={selected ? 0 : -1} />}
       {doneHidden.length > 0 && <div className="card-done">{doneHidden.length} done</div>}
       {addWork && !phone && (
@@ -562,6 +566,8 @@ function HalfDay({ earlier, slot, colors, minFocusWindow, overflow, span, tz, se
  */
 function CardPicks({ picks, label, tabIndex }: { picks: readonly Pick[]; label: string; tabIndex: number }) {
   const allWork = useContext(DevOpsWork);
+  // UI-B: a pick suggested in a later block (or in the unfinished list) is a dimmed line here, never a second checkbox.
+  const isOrigin = useIsOrigin();
   const groups = cardGroups(picks, allWork.get(picks[0]!.clientKey));
   const headed = groups.some((g) => g.feature);
   return (
@@ -574,9 +580,7 @@ function CardPicks({ picks, label, tabIndex }: { picks: readonly Pick[]; label: 
               <span className="cf-title">{g.feature?.title ?? "No feature"}</span>
             </li>
           )}
-          {g.picks.map((p) => (
-            <CardPick key={p.id} pick={p} tabIndex={tabIndex} />
-          ))}
+          {g.picks.map((p) => (isOrigin(p) || p.status === "moved" ? <OriginPick key={p.id} pick={p} /> : <CardPick key={p.id} pick={p} tabIndex={tabIndex} />))}
         </Fragment>
       ))}
     </ul>
