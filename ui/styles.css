@@ -3907,6 +3907,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .ask-form label { display: grid; gap: 4px; flex: 1 1 280px; font-size: var(--fs-2); }
 .ask-hits { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; flex-basis: 100%; }
 .ask-hits .mini { text-align: left; white-space: normal; }
+.ask-hits li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+.ask-hits .ask-hit-why { font-size: var(--fs-1); }
 .dchat-asks { margin-top: 4px; font-size: var(--fs-3); font-weight: 500; }
 .dchat-card .set-hint { font-size: var(--fs-2); }
 .dchat > .dchat-purge { align-self: flex-start; }

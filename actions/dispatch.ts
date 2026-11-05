@@ -1301,6 +1301,7 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "my_promises.today":
     case "my_promises.followup":
     case "my_promises.link":
+    case "my_promises.search":
     case "my_promises.done":
     case "my_promises.not_needed":
     case "my_promises.reopen":
