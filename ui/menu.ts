@@ -1323,7 +1323,9 @@ export const BREAK_DOWN_EVENT = "focustime:break-down";
 export const PV_BREAKDOWN_EVENT = "focustime:breakdown";
 /** DS-1's event name, still heard so anything that sends it opens Break down. */
 export const DRAFT_STORIES_EVENT = "focustime:draft-stories";
-export type BreakDownTarget = { id: number; title: string; type?: string };
+/** AH-1 (D661): `actions` is the panel's action list for the item, given by the caller (Ahead adds Send to…); more go here. */
+export type PanelAction = { id: string; label: string; hint?: string; run: () => void };
+export type BreakDownTarget = { id: number; title: string; type?: string; actions?: PanelAction[] };
 export const openBreakDown = (clientKey: string, item: BreakDownTarget) => window.dispatchEvent(new CustomEvent(BREAK_DOWN_EVENT, { detail: { clientKey, item } }));
 /** NV-1: the Coop brief opens Break down's side panel, from every entry point; it copies at once. `weekStart` is the week whose plan the feature is on (default next week, as before). */
 export const COOP_BRIEF_EVENT = "focustime:coop-brief";

@@ -1,6 +1,6 @@
-// AH-1 (D630): Ahead is one model in three modes: Grid, Gantt and Fix next. This is the frame they share: the
-// filters (client, epic, owner, has gaps, dates, text; remembered per person, D631), my change set ("N changes
-// pending · Review", in every mode, surviving a reload, D634), the slim Fix next pane beside Grid and Gantt, and the
+// AH-1 (D649): Ahead is one model in three modes: Grid, Gantt and Fix next. This is the frame they share: the
+// filters (client, epic, owner, has gaps, dates, text; remembered per person, D650), my change set ("N changes
+// pending · Review", in every mode, surviving a reload, D653), the slim Fix next pane beside Grid and Gantt, and the
 // review that commits through the write framework (preview, confirm, read back, audit log, undo), one patch per item,
 // in batches of 10. Nothing is written to DevOps until Commit.
 import type React from "react";
@@ -11,7 +11,8 @@ import { byItem, pendingText, valueText, type ChangeField, type ChangeValue, typ
 import { fixQueue, type QueueEntry } from "../../plan/fixnext.ts";
 import { call } from "../api.ts";
 import { useDevOpsWrite } from "../DevOpsWrite.tsx";
-import { openBreakDown } from "../menu.ts";
+import { openBreakDown, type PanelAction } from "../menu.ts";
+import { openSend } from "../send-event.ts";
 import { clientColor } from "../labels.ts";
 import { ModeArea } from "../ModeSwitch.tsx";
 import type { AheadMode } from "../nav.ts";
@@ -94,7 +95,12 @@ export function Ahead({ data, mode, item, switcher, onChanged, readOnly }: { dat
     const res = await call<{ changes: StagedChange[] }>("ahead.unstage", { clientKey: r.clientKey, itemId: r.item.id, ...(field ? { field } : {}) }).catch(() => null);
     if (res) setLoad((l) => (l ? { ...l, changes: res.changes } : l));
   };
-  const breakDown = (r: Row) => openBreakDown(r.clientKey, { id: r.item.id, title: r.item.title, type: r.item.type });
+  // The side panel's action list (D661): Send to… for a feature, SW-1's one dialog and rules (an epic is sent through its features).
+  const panelActions = (r: Row): PanelAction[] =>
+    r.tier === "feature" && r.item.id > 0
+      ? [{ id: "send", label: "Send to…", hint: "a teammate's week", run: () => openSend({ clientKey: r.clientKey, clientName: load?.clients.find((c) => c.clientKey === r.clientKey)?.clientName ?? null, itemId: r.item.id, level: "feature", title: r.item.title, itemType: r.item.type, url: r.item.url, parentId: r.item.parentId }) }]
+      : [];
+  const breakDown = (r: Row) => openBreakDown(r.clientKey, { id: r.item.id, title: r.item.title, type: r.item.type, actions: panelActions(r) });
 
   const f = filters ?? DEFAULT_FILTERS;
   const shown: Group[] = useMemo(() => (load ? groups(load, f, { stories: mode !== "gantt" }) : []), [load, f, mode]);
@@ -223,8 +229,8 @@ export function changeText(c: Pick<StagedChange, "field" | "value" | "half">, si
 const FIELD_WORD: Record<ChangeField, string> = { start: "Start", target: "Target", size: "Size", assignee: "Assigned to" };
 
 /**
- * The review (D634): my changes grouped by item, before → after, each removable; a conflict shows DevOps's value now
- * with Keep mine or Take theirs (D635). Commit previews each client's items in batches of 10 through the write
+ * The review (D653): my changes grouped by item, before → after, each removable; a conflict shows DevOps's value now
+ * with Keep mine or Take theirs (D654). Commit previews each client's items in batches of 10 through the write
  * framework; what landed leaves the list, what didn't stays with its reason, and Retry is the preview's Try again.
  */
 function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {

@@ -179,12 +179,19 @@ describe.skipIf(!CHROMIUM)("Ahead (browser, demo mode)", () => {
     await page.close();
   }, T);
 
-  it("a click on a bar opens Break down's side panel", async () => {
+  it("a click on a bar opens Break down's side panel, whose action list has Send to… (SW-1's dialog)", async () => {
     const { page } = await open("#/ahead/gantt");
     const b = bar(page, "Supplier onboarding").or(bar(page, "Order history export")).first();
     await b.waitFor({ timeout: 30_000 });
     await b.locator(".pa-bar").click();
-    await page.locator(".bd-panel").waitFor({ timeout: 10_000 });
+    const panel = page.locator(".bd-panel");
+    await panel.waitFor({ timeout: 10_000 });
+    await shotBoth(page, "ahead-panel-send", panel);
+    await panel.locator(".bd-item-acts button", { hasText: "Send to…" }).click();
+    const dlg = page.getByRole("dialog", { name: /^Send to… / });
+    await dlg.waitFor({ timeout: 10_000 });
+    await page.mouse.click(4, 4);
+    await dlg.waitFor({ state: "hidden" });
     await page.close();
   }, T);
 

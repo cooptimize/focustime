@@ -4545,3 +4545,7 @@ button.ah-gap { cursor: pointer; }
   .ah-grid-box { overflow-x: auto; }
   .ah-grid { min-width: 900px; }
 }
+.bd-item-acts { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-3); }
+.bd-item-acts .muted { font-size: var(--fs-2); }
+/* AH-1 (D661): Send to… opens over Break down's side panel (both were z-index 60 and the panel came later). */
+.cap-backdrop:has(> .send-dialog) { z-index: 61; }
