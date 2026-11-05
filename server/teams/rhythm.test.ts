@@ -34,7 +34,7 @@ const BASE = STARTER_TOML.replace('my_email = ""', 'my_email = "me@example.com"'
 const ON = `\n[notify]\nteams_messages = true\nteams_brief = true\nteams_checkin = true\nteams_closeout = true\nteams_nudges = true\n`;
 const local = (t: string) => Temporal.ZonedDateTime.from(`${MON}T${t}[${NY}]`).toInstant();
 
-async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/conn.ts").Conn }> }, o: { toml?: string; takeovers?: Takeover[]; send?: Sender["send"] } = {}) {
+async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/conn.ts").Conn }> }, o: { toml?: string; takeovers?: Takeover[]; send?: Sender["send"]; inboxItems?: unknown[] } = {}) {
   const db = await d.open();
   await addUsers(db.conn, ANA);
   let now = local("09:05");
@@ -60,7 +60,12 @@ async function setup(d: { open: () => Promise<{ conn: import("../../store/sql/co
   };
   const runs: string[] = [];
   let confirms = 0;
-  const run = async (_u: string, action: string, input: unknown) => (runs.push(action), dispatch(ctx, { action: action as ActionName, input }));
+  const run = async (_u: string, action: string, input: unknown) => {
+    runs.push(action);
+    // IB-1's later slices (titles, snoozes) as inbox.list will return them.
+    if (action === "inbox.list" && o.inboxItems) return { ok: true as const, data: { today: MON, items: o.inboxItems, counts: {}, needsYou: 0 } };
+    return dispatch(ctx, { action: action as ActionName, input });
+  };
   const svc = async () => (await assistantFor(ctx, "teams", URL_))!.service;
   const hub: Pick<Assistant, "handle" | "confirm" | "cancel" | "propose"> = {
     handle: async (i) => (await svc()).handle(i.text, i.context ?? {}),
@@ -256,6 +261,30 @@ await forEachDriver("the bot's rhythm in Teams (TB-2)", (d) => {
     expect(t.sent).toHaveLength(2);
     expect(t.cardsSent()[1]).toContain("#4419");
     expect(t.cardsSent()[1]).not.toContain("#4417");
+  });
+
+  it("IB-1's items once they carry titles: promises and sends to me; never a snoozed one, nor my own sends (kind sent)", async () => {
+    const at = local("08:00").toString();
+    const item = (o: Record<string, unknown>) => ({ clientKey: "Adatum", at, views: ["needs_you"], who: "Dana", due: MON, done: false, ...o });
+    const t = await setup(d, {
+      toml: "\n[notify]\nteams_messages = true\nteams_nudges = true\n",
+      inboxItems: [
+        item({ key: "f1", kind: "promise", title: "Send the totals" }),
+        item({ key: "f2", kind: "promise", title: "Snoozed promise", snoozedUntil: local("18:00").toString(), views: [] }),
+        item({ key: "s3", kind: "send", title: "Export spec", sendState: "waiting" }),
+        item({ key: "s4", kind: "sent", title: "My own send", sendState: "waiting", views: ["waiting"] }),
+        item({ key: "c5", kind: "commitment", title: "Their commitment", views: ["waiting"] }),
+      ],
+    });
+    t.at("15:30");
+    await t.rhythm.tick(ANA, await t.facts());
+    expect(t.sent).toHaveLength(1);
+    const card = t.cardsSent()[0]!;
+    expect(card).toContain("Send the totals");
+    expect(card).toContain("Export spec");
+    expect(card).not.toContain("Snoozed promise");
+    expect(card).not.toContain("My own send");
+    expect(card).not.toContain("Their commitment");
   });
 
   it("a test goes now past the switches; a blocked chat turns Teams messages off", async () => {

@@ -167,17 +167,30 @@ export function createRhythm(d: RhythmDeps) {
   };
   const picksOn = (w: WeekLoadData, date: string) => (w.plan?.[date]?.picks ?? []).filter((p) => p.status === "planned" || p.status === "done" || p.status === "moved");
 
+  /** An IB-1 snooze (an instant, or a date) still running now. */
+  const snoozed = (until: string | null | undefined): boolean => {
+    if (!until) return false;
+    try {
+      return /^\d{4}-\d{2}-\d{2}$/.test(until) ? until > d.now().toString().slice(0, 10) : Temporal.Instant.compare(Temporal.Instant.from(until), d.now()) > 0;
+    } catch {
+      return false;
+    }
+  };
+
   /**
    * Promises and sends to me. IB-1's read model (inbox.list `items`: key, kind, clientKey, at, title, who, due, done,
    * sendState) once its items carry titles; until then (slice 1 has no titles) the week's own lists (follow-ups and
    * chat promises on week.load, sends from team.commit).
    */
   async function inbox(userId: string, w: WeekLoadData | null, today: string): Promise<Inbox> {
-    type Item = { key: string; kind: string; clientKey: string | null; at: string; title?: string | null; who?: string | null; due?: string | null; done?: boolean; sendState?: string };
+    type Item = { key: string; kind: string; clientKey: string | null; at: string; title?: string | null; who?: string | null; due?: string | null; done?: boolean; sendState?: string; snoozedUntil?: string | null };
     const r = dataOf<{ items?: Item[] }>(await d.run(userId, "inbox.list", {}).catch(() => ({ ok: false, error: "", status: 500 }) as ActionResponse));
     const name = w ? names(w) : (k: string) => k;
-    const mine = (r?.items ?? []).filter((x) => x.kind === "promise" || x.kind === "send");
-    if (mine.length && mine.every((x) => typeof x.title === "string" && x.title)) {
+    // Only promises and sends to me ("sent" is mine waiting on someone else, never one to answer).
+    const all = (r?.items ?? []).filter((x) => x.kind === "promise" || x.kind === "send");
+    if (all.length && all.every((x) => typeof x.title === "string" && x.title)) {
+      // Snoozed until later: I said not now, so no brief line and no nudge.
+      const mine = all.filter((x) => !snoozed(x.snoozedUntil));
       return {
         promises: mine.filter((x) => x.kind === "promise").map((x) => ({ key: x.key, title: x.title!, clientName: x.clientKey ? name(x.clientKey) : null, due: x.due ?? null, done: !!x.done })),
         sends: mine.filter((x) => x.kind === "send").map((x) => ({ key: x.key, title: x.title!, clientName: x.clientKey ? name(x.clientKey) : null, waiting: x.sendState === "waiting" && !x.done, at: x.at, from: x.who ?? null })),
