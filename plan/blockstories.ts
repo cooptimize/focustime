@@ -1,4 +1,4 @@
-// PV-1 (D564): the Week block panel's "Your stories for <client>". Only stories are planned into a day, so the panel
+// PV-1 (D569): the Week block panel's "Your stories for <client>". Only stories are planned into a day, so the panel
 // lists only child-level items (per the project's process) assigned to me for the block's client, open ones only,
 // grouped under their parent feature. Features and epics are only group headers, never plannable rows.
 // Order: features on this week's plan first (the plan's order: musts, then nice to haves, by hand, then stack rank),

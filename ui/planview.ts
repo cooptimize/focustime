@@ -96,7 +96,7 @@ export type CardPlan = {
 
 /**
  * A card's plan (step 6.1): its picks, their fit against the block's whole free time (step 15, D266: the same number
- * Plan the day uses), the DevOps list without items picked here, and that list collapsed. PV-1 (D569): committed or
+ * Plan the day uses), the DevOps list without items picked here, and that list collapsed. PV-1 (D574): committed or
  * not, since stories are dragged onto blocks on Week before the day is planned. With no picks: every item, collapsed
  * only on a committed day.
  */

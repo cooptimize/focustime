@@ -1,4 +1,4 @@
-// PV-1 (D566): dropping a story onto a Week block (drag and drop, or Add to… / Move to…). Which blocks take it and
+// PV-1 (D571): dropping a story onto a Week block (drag and drop, or Add to… / Move to…). Which blocks take it and
 // what the target shows while dragging: "2h of 3h free", or amber "1h over" (the block's whole free time after its
 // planned picks, as Plan the day's fit, D266). PTO, past half-days and another client's block refuse it. Pure.
 import { freeMinutes } from "../week/free.ts";

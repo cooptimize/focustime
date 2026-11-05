@@ -428,7 +428,7 @@ describe("undo of each kind", () => {
   });
 });
 
-describe("Take one (PV-1, D567)", () => {
+describe("Take one (PV-1, D572)", () => {
   let s: S;
   const DANA = "dana@cooptimize.example";
   beforeEach(async () => {

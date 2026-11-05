@@ -329,7 +329,7 @@ const ASSIGNED_FIELD = "System.AssignedTo";
     const missing = watch.filter((id) => Number.isInteger(id) && id > 0 && !seen.has(id));
     const watched = await fetchWatched(ctx, project, meta, missing);
     if (watched.length) log("watched", { count: watched.length });
-    // PV-1 (D565): the parents of my stories that no read above has (a feature that's neither mine nor committed), by
+    // PV-1 (D570): the parents of my stories that no read above has (a feature that's neither mine nor committed), by
     // id, so the Week panel can group every story under its feature.
     const known = new Set([...seen, ...watched.map((w) => w.id)]);
     const up = [...new Set([...items, ...children].filter((i) => i.assignedToMe && i.level === "story" && i.parentId !== null && !known.has(i.parentId)).map((i) => i.parentId!))].slice(0, BATCH_MAX);

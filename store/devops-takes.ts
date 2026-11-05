@@ -1,4 +1,4 @@
-// PV-1 (D568): Take one's notices. An app table (no person in it), read and written on the database itself, like
+// PV-1 (D573): Take one's notices. An app table (no person in it), read and written on the database itself, like
 // ai_app_spend: the taker's write records a take; the previous assignee's own scheduler pass reads the takes from them
 // (by their DevOps sign-in email) and sends one quiet notice each. Never a title, never a token.
 import type { Conn } from "./sql/conn.ts";

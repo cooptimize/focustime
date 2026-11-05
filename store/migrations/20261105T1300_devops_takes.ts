@@ -1,4 +1,4 @@
-// PV-1 (D568): Take one. Only adds (D468). devops_takes is an app table (no person in it): one row when someone takes
+// PV-1 (D573): Take one. Only adds (D468). devops_takes is an app table (no person in it): one row when someone takes
 // a teammate's DevOps story (assigns it to themselves through the write framework), so the teammate, if they use
 // FocusTime, gets one quiet notice "<name> took #<id>" from their own scheduler pass. It keeps the client, the org,
 // the item id, the previous assignee's DevOps sign-in email (lowercased, only to match them), the taker's display

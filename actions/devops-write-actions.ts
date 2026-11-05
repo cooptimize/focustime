@@ -378,7 +378,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
       return { ...base(env), ...none, op: "target_date", itemId: item.id, title: item.title, ops: targetDateOps(item.rev, field, date, tz, had(field)), rev: item.rev, before: { "Target date": cur }, after: { "Target date": date }, type: item.type, field };
     }
     case "assign": {
-      // PV-1 (D567): Take one: a teammate's open story (child level in the project's process) assigned to me.
+      // PV-1 (D572): Take one: a teammate's open story (child level in the project's process) assigned to me.
       const item = await writer.item(org, pat, project, posId(o.itemId, "itemId"));
       const pc = await writer.processConfig(org, pat, project);
       if (!levelsFromProcessConfig(pc).levels.child.includes(item.type)) throw new Refused(`#${item.id} is a ${item.type}: Take one is for stories`, 409);

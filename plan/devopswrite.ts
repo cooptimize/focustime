@@ -183,7 +183,7 @@ export function parentChoices<T extends { id: number; level: string; tier?: "fea
 }
 
 /**
- * PV-1 (D567): Take one: the assignee set to me (or, on undo, back to who had it; null clears it), behind the rev test.
+ * PV-1 (D572): Take one: the assignee set to me (or, on undo, back to who had it; null clears it), behind the rev test.
  * The value is the DevOps uniqueName (sign-in email), the way the DevOps web UI writes it.
  */
 export function assignOps(rev: number, uniqueName: string | null, had: boolean): PatchOp[] {

@@ -1,4 +1,4 @@
-// PV-1 (D564 to D569): Week plans stories into blocks.
+// PV-1 (D569 to D574): Week plans stories into blocks.
 // - The block panel's "Your stories for <client>": only my open stories for that client, grouped under their feature,
 //   ranked by this week's plan then DevOps backlog order (plan/blockstories.ts). Features are headers, never rows.
 // - A feature on this week's plan with no stories of mine: Add a story for me (a draft under it, planned here, then
