@@ -2,6 +2,7 @@
 // tokens, type scale and components. Every word is in ./content.ts; keys come from ui/keys.ts and the sizing sandbox
 // from the app's own math (./sandbox.ts). Example data only, labeled as such: never the person's own.
 // Lumen appears in the footer only (docs/design/brand.md lists the Guide among the places it may appear).
+import { CloseButton, useReturnFocus } from "../CloseButton.tsx";
 import { TypeIcon } from "../TypeIcon.tsx";
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Lumen, WeekMark } from "../brand/Brand.tsx";
@@ -556,6 +557,7 @@ function Questions() {
  */
 export function Guide({ chapter, onClose, closeLabel = TOUR.close, standalone = false }: { chapter: string | null; onClose: () => void; closeLabel?: string; standalone?: boolean }) {
   const scroller = useRef<HTMLElement>(null);
+  useReturnFocus();
   const [step, setStep] = useState(0);
   const [on, setOn] = useState<ChapterId | null>(null);
   const lit = useMemo(() => new Set(RHYTHM.steps[step]!.lit.map((l) => `${l.half}${l.day}`)), [step]);
@@ -594,9 +596,13 @@ export function Guide({ chapter, onClose, closeLabel = TOUR.close, standalone = 
               </button>
             ))}
           </nav>
-          <button type="button" className="quiet guide-close" onClick={onClose}>
-            {closeLabel} <kbd>Esc</kbd>
-          </button>
+          {standalone ? (
+            <button type="button" className="quiet guide-close" onClick={onClose} title={`${closeLabel} (Esc)`}>
+              {closeLabel}
+            </button>
+          ) : (
+            <CloseButton onClose={onClose} />
+          )}
         </div>
       </header>
       <div

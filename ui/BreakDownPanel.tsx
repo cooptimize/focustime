@@ -7,6 +7,7 @@
 // created and what wasn't, with Retry for the rest. Run never creates anything; nothing reaches DevOps before Create
 // all. With AI off for the client the panel says so; with no write PAT nothing is sent, not even the AI request.
 // Opened by focustime:break-down, DS-1's focustime:draft-stories, and PV-1's focustime:breakdown ({ clientKey, itemId }).
+import { CloseButton } from "./CloseButton.tsx";
 import { openSend } from "./send-event.ts";
 import { useCallback, useContext, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { breakdownLabel, moveCard, reviewTotal } from "../plan/breakdown.ts";
@@ -293,9 +294,7 @@ export function BreakDownPanel({ clientKey, item, onClose }: { clientKey: string
               </li>
             ))}
           </ol>
-          <button type="button" className="bd-x" aria-label="Close" disabled={!!busy} onClick={close}>
-            ✕
-          </button>
+          <CloseButton onClose={close} disabled={!!busy} />
         </header>
 
         <ItemPane clientKey={clientKey} id={item.id} title={title} type={type} prep={prep} actions={item.actions ?? []} />
@@ -920,9 +919,7 @@ export function CoopBriefPanel({ clientKey, item, weekStart, onClose }: { client
             {type && <TypeIcon clientKey={clientKey} type={type} decorative />}
             Coop brief
           </h2>
-          <button type="button" className="bd-x" aria-label="Close" onClick={onClose}>
-            ✕
-          </button>
+          <CloseButton onClose={onClose} />
         </header>
 
         <aside className="bd-item" aria-label="The item">

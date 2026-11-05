@@ -1,12 +1,14 @@
 // CV-2: a larger look at a chat's pasted images, one at a time, with Previous and Next (and the arrow keys) through
 // every image loaded in that conversation; Esc or the backdrop closes it. The images come only from FocusTime's own
 // address (the server checks the viewer is in the chat); nothing here downloads, shares or opens them elsewhere.
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef } from "react";
 
 export type ViewerImage = { id: number; src: string };
 
 export function ImageViewer({ images, at, onAt, onClose }: { images: readonly ViewerImage[]; at: number; onAt: (i: number) => void; onClose: () => void }) {
   const closeBtn = useRef<HTMLButtonElement>(null);
+  useReturnFocus();
   useEffect(() => closeBtn.current?.focus(), []);
   const n = images.length;
   const img = images[Math.min(Math.max(at, 0), n - 1)];
@@ -31,9 +33,7 @@ export function ImageViewer({ images, at, onAt, onClose }: { images: readonly Vi
           <span className="muted">
             Image {at + 1} of {n}
           </span>
-          <button ref={closeBtn} type="button" className="mini quiet" onClick={onClose}>
-            Close
-          </button>
+          <CloseButton buttonRef={closeBtn} onClose={onClose} />
         </div>
         <img className="image-viewer-img" src={img.src} alt={`Image ${at + 1} of ${n} from the chat`} />
         {n > 1 && (

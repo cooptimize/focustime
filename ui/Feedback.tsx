@@ -3,6 +3,7 @@
 // Preview: the exact title and description, and where it goes; Send or Back. Then "Sent. Thanks." with a link to the
 // new item, or a plain error with Copy text, so nothing typed is lost and nothing is retried on its own.
 // Keys: Enter in the text box goes to the preview (Shift+Enter is a new line); Ctrl+Enter sends from the preview.
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useEffect, useRef, useState } from "react";
 import { aboutLine, type Build } from "./About.tsx";
 import { ActionRefusal, call } from "./api.ts";
@@ -20,6 +21,7 @@ export function browserName(ua: string): string {
 type Step = { kind: "write" } | { kind: "preview"; p: FeedbackPreview } | { kind: "sent"; r: FeedbackSent } | { kind: "error"; message: string };
 
 export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: string; onClose: () => void }) {
+  useReturnFocus();
   const [kind, setKind] = useState<FeedbackKind>("idea");
   const [text, setText] = useState("");
   const [includeWhere, setIncludeWhere] = useState(true);
@@ -101,9 +103,7 @@ export function FeedbackDialog({ view, zone, onClose }: { view: string; zone: st
       >
         <div className="command-head">
           <span className="command-step-title">{step.kind === "preview" ? "Send feedback: preview" : "Send feedback"}</span>
-          <button type="button" className="mini" onClick={onClose} disabled={busy}>
-            Close <kbd>Esc</kbd>
-          </button>
+          <CloseButton onClose={onClose} disabled={busy} />
         </div>
 
         {step.kind === "write" && (

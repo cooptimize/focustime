@@ -7,6 +7,7 @@
 //                     priorities and the watched features. Read-only on the phone. Never day plans, focus, notes or hours
 //   Today's line      one line in the urgent strip when something waits for me ("Priya sent you Loyalty points (Must)")
 // Plain words; nothing here reads as anyone checking on anyone.
+import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { SentToday } from "../plan/urgent.ts";
 import type { PeoplePickerData, PickerPerson } from "../actions/people-picker.ts";
@@ -52,6 +53,7 @@ export function SendHost({ thisWeek, onSent }: { thisWeek: IsoDate; onSent: () =
 type People = { people: PickerPersonView[]; canSend: boolean; canMust: boolean; why: string | null };
 
 export function SendDialog({ target, thisWeek, onClose, onSent }: { target: SendTarget; thisWeek: IsoDate; onClose: () => void; onSent: () => void }) {
+  useReturnFocus();
   const next = Temporal.PlainDate.from(thisWeek).add({ days: 7 }).toString();
   const [people, setPeople] = useState<People | null>(null);
   const [who, setWho] = useState<PersonValue>({ who: "", whoRef: null });
@@ -117,6 +119,7 @@ export function SendDialog({ target, thisWeek, onClose, onSent }: { target: Send
             {target.itemType && <TypeIcon clientKey={target.clientKey} type={target.itemType} decorative />}
             <span className="muted">{client}:</span> {target.title}
           </span>
+          <CloseButton onClose={onClose} disabled={busy} />
         </div>
         {done ? (
           <>

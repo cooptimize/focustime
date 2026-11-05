@@ -3,6 +3,7 @@
 // pending · Review", in every mode, surviving a reload, D657), the slim Fix next pane beside Grid and Gantt, and the
 // review that commits through the write framework (preview, confirm, read back, audit log, undo), one patch per item,
 // in batches of 10. Nothing is written to DevOps until Commit.
+import { CloseButton, useReturnFocus } from "../CloseButton.tsx";
 import type React from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { AheadFilters, AheadOwner } from "../../plan/ahead-edit.ts";
@@ -241,6 +242,7 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
   const [landed, setLanded] = useState<DevOpsLogView["entries"]>([]);
   const [since] = useState(() => new Date().toISOString());
   const panel = useRef<HTMLDivElement>(null);
+  useReturnFocus();
   useEffect(() => panel.current?.focus(), []);
   const rowsByKey = useMemo(() => new Map(a.load.clients.flatMap((c) => buildRows(a.load, c).map((r) => [r.key, r] as const))), [a.load]);
   const items = byItem(a.load.changes);
@@ -296,9 +298,7 @@ function Review({ onClose, onDone }: { onClose: () => void; onDone: () => void }
       >
         <header className="ah-review-head">
           <h2>Review changes</h2>
-          <button type="button" className="mini quiet" onClick={onClose} disabled={busy} aria-label="Close the review">
-            Close
-          </button>
+          <CloseButton onClose={onClose} disabled={busy} />
         </header>
         <p className="muted">
           {pendingText(a.load.changes.length) ?? "Nothing pending."} {items.length ? `On ${plural(items.length, "item", "items")}; each item is one change in DevOps, written only if nobody changed those fields since you started.` : ""}
