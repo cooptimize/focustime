@@ -1097,6 +1097,11 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .command-head input { flex: 1; border: 0; background: transparent; font-size: var(--fs-4); padding: 4px 2px; outline: none; }
 .command-step-title { flex: 1; font-weight: 600; }
 .command-menu .menu-list { overflow: auto; padding: 4px; flex: 1; }
+/* UI-8: the dialog itself never scrolls (focus on a button at its foot used to scroll an overflow: hidden box and take
+   the header, with its ×, out of view). The header and footer stay; whatever is between them scrolls. */
+.command-menu { overflow: clip; }
+.command-menu > .command-head, .command-menu > .command-foot { flex: none; }
+.command-menu > :not(.command-head):not(.command-foot) { min-height: 0; overflow-y: auto; }
 .command-menu .menu-prompt { padding: 14px; }
 .command-foot { padding: 7px 14px; border-top: 1px solid var(--border); font-size: var(--fs-2); }
 
@@ -2855,6 +2860,12 @@ button.att-chip { cursor: pointer; }
   .half.card.has-ruler .card-body { margin-right: var(--ruler-w); }
   .ruler .r-ev span, .ruler .tbox-label, .ruler .r-free span { font-size: var(--fs-1); }
 }
+/* UI-8: too narrow for the rail (Week with its panel open at 1366, Plan the day beside the week): no rail and no blank
+   strip where it was. The 300 px rule above used to put the margin back after the earlier 230 px one removed it. */
+@container (max-width: 230px) {
+  .ruler { display: none; }
+  .half.card.has-ruler .card-body { margin-right: 0; }
+}
 
 /* Whole-day cells: PTO hatched, Friday's catch-up dashed. Span the AM and PM rows. */
 .half.whole { flex-direction: column; gap: 6px; padding: 10px 12px; flex: 1 1 0; cursor: default; box-shadow: none; }
@@ -2875,12 +2886,20 @@ button.att-chip { cursor: pointer; }
 
 /* ---------- U3: the shared detail panel (Week and Today) ---------- */
 .detail-panel {
-  position: fixed; top: 57px; right: 0; bottom: 32px; width: 440px; z-index: 20;
+  position: fixed; top: 57px; right: 0; bottom: 32px; width: var(--dp-w); z-index: 20;
   display: flex; flex-direction: column; box-sizing: border-box;
   background: var(--surface); border-left: 1px solid var(--border-strong); box-shadow: var(--shadow-panel);
   font-size: var(--fs-3);
 }
-@media (min-width: 3000px) { .detail-panel { width: 560px; } }
+/* UI-8: the panel's width, and the Week grid keeps clear of it while it is open, so Friday (the last column) is never
+   under the panel and stays a drop target. */
+:root { --dp-w: 440px; }
+@media (min-width: 3000px) { :root { --dp-w: 560px; } }
+.grid.with-panel:not(.narrow) { padding-right: calc(var(--dp-w) + 12px); }
+/* Narrower columns while it is open (1366): each day's header stays in its column; the date and the Today pill give
+   way (the panel names the day; today's weekday keeps its color). */
+.grid.with-panel .day-head { min-width: 0; overflow: hidden; }
+@media (max-width: 1599px) { .grid.with-panel.medium .day-head .date, .grid.with-panel.medium .day-head .today-pill { display: none; } }
 .dp-head { display: flex; align-items: flex-start; gap: 8px; padding: 14px 16px 10px 18px; border-bottom: 1px solid var(--border); }
 .dp-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dp-title h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-4); font-weight: 600; }
@@ -3345,10 +3364,13 @@ button.pw-cell:hover { border-color: var(--border-strong); border-left-color: va
 .guide-wrap { max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .guide-body { padding-bottom: 72px; }
 .guide-top { position: sticky; top: 0; z-index: 5; background: color-mix(in oklab, var(--bg) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-.guide-top .guide-wrap { display: flex; align-items: center; gap: 18px; padding-block: 10px; flex-wrap: wrap; }
+/* UI-8: the row never wraps; the chapters wrap inside their own box, so the × stays at the top right at any text size. */
+.guide-top .guide-wrap { display: flex; align-items: flex-start; gap: 18px; padding-block: 10px; flex-wrap: nowrap; }
+.guide-top .guide-brand, .guide-top .x-close, .guide-top .guide-close { flex: none; align-self: flex-start; }
+.guide-top .guide-brand { min-height: 44px; }
 .guide-brand { display: flex; align-items: center; gap: 9px; font-weight: 600; letter-spacing: -0.02em; }
 .guide-brand .muted { font-weight: 400; }
-.guide-chapters { display: flex; gap: 2px; flex-wrap: wrap; margin-left: auto; }
+.guide-chapters { display: flex; gap: 2px; flex-wrap: wrap; margin-left: auto; flex: 1 1 0; min-width: 0; justify-content: flex-end; align-self: center; }
 .guide-chapters button { border: 1px solid transparent; background: none; color: var(--text-muted); font-size: var(--fs-3); padding: 6px 10px; border-radius: 7px; }
 .guide-chapters button:hover { color: var(--text); background: var(--surface); }
 .guide-chapters button.on { color: var(--text); background: var(--surface); border-color: var(--border); }

@@ -1897,6 +1897,7 @@ export function App() {
           setDetailsOpen(false);
           setSettingsAt("hours");
         }}
+        panelOpen={detailsOpen && !planWeekAt && !pd}
         onSelect={(s) => setSel(s)}
         onOpen={(s, focus) => {
           setSel(s);

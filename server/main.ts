@@ -638,6 +638,7 @@ const feedbackService: FeedbackService = {
   env: build.env,
   demo: false,
   check: async (force) => (await currentFeedback()).check(force),
+  target: async () => (await currentFeedback()).target(),
   send: async (p) => (await currentFeedback()).send(p),
 };
 void feedbackService.check().catch(() => undefined);

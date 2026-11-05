@@ -70,6 +70,8 @@ type Props = {
   /** CV-1: my promises with a time, marked on the rail (overdue in amber). */
   promises?: readonly DayPromise[] | undefined;
   onPromise?: (() => void) | undefined;
+  /** UI-8: the detail panel is open beside the grid; the grid keeps clear of it, so Friday stays visible and droppable. */
+  panelOpen?: boolean | undefined;
 };
 
 export function WeekGrid(props: Props) {
@@ -87,7 +89,7 @@ export function WeekGrid(props: Props) {
   );
 }
 
-function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact, planDay, onPlanDay, onAddWork, onAddHours }: Props) {
+function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, onSelect, onOpen, layout, compact, planDay, onPlanDay, onAddWork, onAddHours, panelOpen }: Props) {
   const pv = useContext(PlanCtx);
   // U3: due badges, each follow-up once in the week (on its day, an overdue one on today).
   const badges = weekDueBadges(
@@ -181,7 +183,7 @@ function Grid({ week, colors, minFocusWindow, today, now, selection, cellRefs, o
   const hasEve = week.days.some((d) => d.eve);
   return (
     <main
-      className={`grid ${layout} ${planDay ? "planning" : ""} ${hasEve ? "has-eve" : ""}`}
+      className={`grid ${layout} ${planDay ? "planning" : ""} ${hasEve ? "has-eve" : ""}${panelOpen ? " with-panel" : ""}`}
       style={{ gridTemplateColumns: tracks }}
       role="group"
       aria-label="Week grid. Arrow keys move between half-days, Enter opens details."
