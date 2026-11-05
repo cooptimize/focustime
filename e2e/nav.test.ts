@@ -79,7 +79,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
     const { page } = await freshPage(h);
     await page.keyboard.press("2");
     await expect(page.locator(".week-head h2").textContent()).resolves.toMatch(/^Week of Nov 2/);
-    await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual([expect.stringMatching(/^Board/), "Commit", "Team"]);
+    await expect(page.locator(".mode-switch .ms-btn").allTextContents()).resolves.toEqual([expect.stringMatching(/^Board/), "Plan", "Team"]);
     await page.keyboard.press("p");
     await expect.poll(() => hash(page)).toBe("#/week/commit");
     await expect.poll(() => page.locator(".planweek h2").first().textContent()).toBe("Plan the week of Nov 9");
@@ -145,7 +145,7 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
       ["ahead", "#/ahead/gantt"],
       ["aheaditem:1113", "#/ahead/item/1113"],
       ["planweek:2026-11-09", "#/week/commit/2026-11-09"],
-      ["inbox", "#/inbox"],
+      ["inbox", "#/inbox/captures"],
       ["followup:1", "#/inbox/1"],
       ["settings:notifications", "#/settings/notifications"],
       ["focus", "#/focus"],

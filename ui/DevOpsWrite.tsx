@@ -6,9 +6,9 @@ import { whenText } from "./labels.ts";
 import { CloseButton } from "./CloseButton.tsx";
 import { categoryWord } from "../plan/process.ts";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { draftRowState, draftRowText } from "../plan/capture-prepare.ts";
+import { draftRowState, draftRowText, prepareAgain } from "../plan/capture-prepare.ts";
 import { CreateDraftCtx, WRITING_POLL_MS } from "./createdraft-ctx.ts";
-import type { DevOpsLogView, DevOpsPreview, DevOpsResult } from "../actions/types.ts";
+import type { DevOpsLogView, DevOpsPreview, DevOpsResult, DraftAiView } from "../actions/types.ts";
 import type { StateInfo } from "../plan/devopswrite.ts";
 import type { DraftStory } from "../plan/types.ts";
 import { parentChoices } from "../plan/devopswrite.ts";
@@ -494,26 +494,69 @@ export function DraftsToAdd({ drafts, clientName, onChanged }: { drafts: DraftSt
             ) : (
               <CreateInDevOps drafts={[d]} />
             )}
-            <button
-              type="button"
-              className="mini quiet"
-              title="Delete this local draft (DevOps isn't touched)"
-              onClick={async () => {
-                try {
-                  await call("draft.remove", { id: d.id });
-                  notify(`Draft deleted: ${d.title}`);
-                  onChanged();
-                } catch (e) {
-                  notify(errText(e));
-                }
-              }}
-            >
-              Delete
-            </button>
+            <DraftMenu d={d} writing={states[i] === "writing"} onChanged={onChanged} />
           </li>
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * UI-7: a draft row's ⋯: Prepare again (re-runs the AI version with the same caps and rules; shown once a prepare ran,
+ * with a write PAT and AI available for the client now; disabled while AI is writing) and Delete (DevOps isn't touched).
+ * Opening it reads the draft once for whether AI is available.
+ */
+function DraftMenu({ d, writing, onChanged }: { d: DraftStory; writing: boolean; onChanged: () => void }): ReactNode {
+  const [open, setOpen] = useState(false);
+  const [view, setView] = useState<DraftAiView | null>(null);
+  const [running, setRunning] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    call<DraftAiView>("draft.get", { id: d.id }).then((v) => live && setView(v), () => live && setView(null));
+    return () => void (live = false);
+  }, [open, d.id, d.ai?.state]);
+  const again = view ? prepareAgain(view.draft, { canWrite: view.canWrite, aiOn: view.aiOn, now: view.now }) : "hidden";
+  const runAgain = async () => {
+    setRunning(true);
+    setOpen(false);
+    // The row shows AI still writing… while it runs, then the new version.
+    const shown = setTimeout(onChanged, 300);
+    try {
+      await call<DraftAiView>("draft.prepare", { id: d.id, again: true });
+    } catch (e) {
+      notify(errText(e));
+    } finally {
+      clearTimeout(shown);
+      setRunning(false);
+      onChanged();
+    }
+  };
+  const remove = async () => {
+    setOpen(false);
+    try {
+      await call("draft.remove", { id: d.id });
+      notify(`Draft deleted: ${d.title}`);
+      onChanged();
+    } catch (e) {
+      notify(errText(e));
+    }
+  };
+  return (
+    <span className="fu-more">
+      <button type="button" className="mini quiet" aria-haspopup="menu" aria-expanded={open} aria-label={`More for: ${d.title}`} onClick={() => setOpen((v) => !v)}>⋯</button>
+      {open && (
+        <span className="fu-menu" role="menu" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setOpen(false))}>
+          {again !== "hidden" && (
+            <button type="button" role="menuitem" disabled={running || writing || again === "writing"} title={running || writing || again === "writing" ? "AI is writing" : "Ask the AI for its version again"} onClick={() => void runAgain()}>
+              Prepare again
+            </button>
+          )}
+          <button type="button" role="menuitem" autoFocus title="Delete this local draft (DevOps isn't touched)" onClick={() => void remove()}>Delete</button>
+        </span>
+      )}
+    </span>
   );
 }
 

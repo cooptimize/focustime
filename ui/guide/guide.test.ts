@@ -23,11 +23,11 @@ describe("the Guide's shortcuts are ui/keys.ts's", () => {
   it("the cards say what the keys do (the tabs are 1 2 3 4, capture N or C, midday check-in M, close out E, commit the week W)", () => {
     const shown = Object.fromEntries(C.SHORTCUTS.cards.map((c) => [c.label, keysFor(c.keys, c.all)]));
     expect(shown["Today, Week, Ahead, Inbox"]).toEqual(["1", "2", "3", "4"]);
-    expect(shown["Week: Board or Commit"]).toEqual(["P"]);
+    expect(shown["Week: Board or Plan"]).toEqual(["P"]);
     expect(shown["Capture a thought"]).toEqual(["N", "C"]);
     expect(shown["Midday check-in"]).toEqual(["M"]);
     expect(shown["Close out"]).toEqual(["E"]);
-    expect(shown["Commit the week"]).toEqual(["W"]);
+    expect(shown["Plan the week"]).toEqual(["W"]);
     expect(shown["Every action"]).toEqual(["Ctrl K"]);
     expect(shown["Next or previous client"]).toEqual(["J", "K"]);
     expect(shown["Text size"]).toEqual(KEYS.find((k) => k.command === "ui.set_text_size")!.keys);

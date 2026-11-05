@@ -5,7 +5,7 @@ import type { Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dispatch } from "../actions/dispatch.ts";
 import { DEMO_CLIENTS, DEMO_PEOPLE } from "../sources/demo/data.ts";
-import { CHROMIUM } from "./harness.ts";
+import { CHROMIUM, openCaptures } from "./harness.ts";
 import { liveBrowser, liveContext as live, T, type LiveBrowser, type LiveOptions } from "./live.ts";
 
 const liveContext = (o?: LiveOptions) => live(o);
@@ -43,7 +43,7 @@ const SCREENS: [string, string, string][] = [
   ["Plan the week", "#/week/plan/2026-11-02", ".pw-client, .pw-empty, .planweek"],
   ["Ahead › Grid", "#/ahead", ".ahead"],
   ["Ahead › Gantt", "#/ahead/gantt", ".ahead"],
-  ["Inbox", "#/inbox", "main"],
+  ["Inbox › Captures", "#/inbox/captures", "main"],
 ];
 
 describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)", () => {
@@ -96,7 +96,7 @@ describe.skipIf(!CHROMIUM)("a real session never shows demo data (no-demo-leak)"
       await page.keyboard.press("Escape");
       // The capture box's client picker.
       await page.evaluate(() => (location.hash = "#/today"));
-      await page.keyboard.press("4");
+      await openCaptures(page);
       await page.waitForTimeout(800);
       for (const w of await demoWordsOn(page)) found.push(`Capture: ${w}`);
       expect(found).toEqual([]);

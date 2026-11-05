@@ -51,7 +51,7 @@ export async function draftAiAction(ctx: PrepareContext, action: DraftAiAction, 
     const draft = await plan.getDraft(id);
     if (!draft) return bad("No such draft", 404);
     const canWrite = (await ctx.writeClients()).includes(draft.clientKey);
-    const view = (d: DraftStory): ActionResponse => ({ ok: true, data: { draft: d, canWrite, now: ctx.now() } satisfies DraftAiView });
+    const view = async (d: DraftStory): Promise<ActionResponse> => ({ ok: true, data: { draft: d, canWrite, aiOn: await aiOn(ctx, d.clientKey), now: ctx.now() } satisfies DraftAiView });
     if (action === "draft.get" || draft.devopsId) return view(draft);
     // No write PAT: nothing is sent. The row says to add one.
     if (!canWrite) return view(draft);
@@ -64,6 +64,13 @@ export async function draftAiAction(ctx: PrepareContext, action: DraftAiAction, 
     if (e instanceof PlanError) return bad(e.message, 409);
     throw e;
   }
+}
+
+/** UI-7: whether a prepare would reach the AI now: set up, AI for FocusTime on and this client's Allow AI on. Nothing is sent. */
+async function aiOn(ctx: PrepareContext, clientKey: string): Promise<boolean> {
+  const cfg = await ctx.config().catch(() => null);
+  if (!cfg?.aiRules.on || !cfg.aiRules.allowedClients.includes(clientKey)) return false;
+  return !!(await ctx.ai().catch(() => null));
 }
 
 const plain = (state: "off" | "failed", note: string, ranAt: string | null): DraftAi => ({ state, title: null, description: null, acceptance: null, type: null, parentId: null, parentReason: null, note, ranAt });

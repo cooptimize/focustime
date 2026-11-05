@@ -2,7 +2,7 @@
 // it, Delete), linked intentions and dragging right-pane rows onto the week's other days. Demo mode only.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
-import { CHROMIUM, freshPage, openPlanDay, selectBlock, startDemo, type Harness } from "./harness.ts";
+import { CHROMIUM, freshPage, openPlanDay, selectBlock, startDemo, type Harness, openCaptures } from "./harness.ts";
 
 let h: Harness;
 const T = 60_000;
@@ -30,7 +30,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
 
   it("Inbox: a prominent box, no explainer (U5: the kind chips say it), and no separate Add a follow-up button", async () => {
     const { page, errors } = await freshPage(h);
-    await page.keyboard.press("4");
+    await openCaptures(page);
     await page.locator(".inbox .cap-box").waitFor();
     await expect(page.locator(".inbox-explainer").count()).resolves.toBe(0);
     await expect(page.locator(".inbox .cap-box.large").count()).resolves.toBe(1);
@@ -41,7 +41,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
 
   it("the rules highlight a chip while typing; Tab and a click change it; Sort later is the default", async () => {
     const { page } = await freshPage(h);
-    await page.keyboard.press("4");
+    await openCaptures(page);
     await expect(checked(page)).resolves.toContain("Sort later");
     await box(page).fill("told Dana I'd send the export by Friday");
     await expect.poll(() => checked(page)).toContain("Follow-up");
@@ -59,7 +59,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
 
   it("Follow-up: who and due from the rules, channel and a linked item inline; Enter saves it as a follow-up", async () => {
     const { page, errors } = await freshPage(h);
-    await page.keyboard.press("4");
+    await openCaptures(page);
     await chooseClient(page, "Northwind");
     await box(page).fill("told Dana I'd send the export by Friday");
     await expect.poll(() => checked(page)).toContain("Follow-up");
@@ -84,7 +84,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
 
   it("Draft story: a parent feature from the lookup and a size; a draft needs a client first", async () => {
     const { page } = await freshPage(h);
-    await page.keyboard.press("4");
+    await openCaptures(page);
     await chooseClient(page, "No client");
     await box(page).fill("story: retry failed syncs");
     await expect.poll(() => checked(page)).toContain("Draft story");
@@ -107,7 +107,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
 
   it("Draft feature with a target date; Sort later keeps an unsorted capture", async () => {
     const { page } = await freshPage(h);
-    await page.keyboard.press("4");
+    await openCaptures(page);
     await chooseClient(page, "Atlas");
     await box(page).fill("feature: carrier rate cards");
     await expect.poll(() => checked(page)).toContain("Draft feature");
@@ -139,7 +139,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
   it("draft editor: edits round-trip; Create in DevOps asks to enable writes in demo; Delete removes it", async () => {
     const { page, errors } = await freshPage(h);
     await api(page, "draft.add_story", { clientKey: "Northwind", parentItemId: null, title: "Editor draft", size: "M" });
-    await page.keyboard.press("4");
+    await openCaptures(page);
     await page.locator(".dw-drafts-section .draft-title", { hasText: "Editor draft" }).click();
     const ed = page.locator(".draft-editor");
     await ed.getByLabel("Title").fill("Editor draft, edited");
@@ -170,7 +170,7 @@ describe.skipIf(!CHROMIUM)("One capture flow and the draft editor (browser, demo
   it("Plan it adds the draft to a block in the 15.2 order, and the same editor opens from Plan the day", async () => {
     const { page } = await freshPage(h);
     const r = await api<{ draft: { id: number } }>(page, "draft.add_story", { clientKey: "Northwind", parentItemId: null, title: "Plan-it draft", size: "M" });
-    await page.keyboard.press("4");
+    await openCaptures(page);
     await page.locator(".dw-drafts-section .draft-title", { hasText: "Plan-it draft" }).click();
     await page.locator(".draft-editor").getByRole("button", { name: "Plan it" }).click();
     const first = page.locator(".popup-menu [role=menuitem]:not([aria-disabled=true]):not([disabled])").first();

@@ -215,3 +215,10 @@ export async function weekRow(page: Page, text: string) {
   }
   throw new Error(`No row "${text}" in Plan the week`);
 }
+
+/** UI-7: Inbox › Captures (the capture box, follow-ups and drafts): 4, then its segment in the Inbox's mode switch. */
+export async function openCaptures(page: Page): Promise<void> {
+  await page.keyboard.press("4");
+  await page.getByRole("navigation", { name: "Inbox modes" }).getByRole("button", { name: /^Captures/ }).click();
+  await page.getByRole("main", { name: "Captures" }).waitFor();
+}
