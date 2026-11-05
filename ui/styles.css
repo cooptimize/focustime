@@ -4735,3 +4735,4 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 
 /* ---- UI-7: a planning mode's state beside its Done ---- */
 .mode-area .ma-note { font-size: var(--fs-2); color: var(--text-muted); white-space: nowrap; }
+.fu-menu button:disabled { color: var(--text-faint); cursor: default; background: transparent; }

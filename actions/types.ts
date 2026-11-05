@@ -316,7 +316,8 @@ export type FeatureChoice = { id: number; title: string; state: string; /** Step
 export type CaptureFeatures = { clientKey: string; status: "ok" | "unavailable"; message?: string; features: FeatureChoice[]; /** Step 13.5: open epics, for a draft feature. */ epics: FeatureChoice[]; /** Step 15.3: the story type has acceptance criteria (the draft editor shows the field only then). */ acceptanceField?: boolean };
 
 /** CP-1: what draft.prepare and draft.get answer: the draft (with its AI version), whether I can write to its client, the server's now. */
-export type DraftAiView = { draft: import("../plan/types.ts").DraftStory; canWrite: boolean; now: string };
+/** UI-7: `aiOn` says whether a prepare would reach the AI now (set up, AI for FocusTime on, the client's Allow AI on), for Prepare again. */
+export type DraftAiView = { draft: import("../plan/types.ts").DraftStory; canWrite: boolean; aiOn: boolean; now: string };
 
 // ---- Step 12: timeboxes and the write framework ----
 /** One field of a write preview: before and after (null where there is none), and whether it changes. */

@@ -51,6 +51,7 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
   it("capture, Undo, the AI version in the background, the side by side preview, and the create", async () => {
     const dv = fakeDevOpsWrite({ org: "contoso", identities: { [basic(WRITE_PAT)]: { id: "11111111-1111-4111-8111-111111111111", name: "Sam Tester", email: "me@contoso.example" } } });
     const pats = new Map([["Adatum", WRITE_PAT]]);
+    let prepares = 0;
     const team = liveTeam();
     await team.set("org", "ai.on", true);
     await team.set("client:Adatum", "allow_ai", true);
@@ -59,7 +60,7 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       extra: {
         devopsWriter: createDevOpsWriter({ fetch: dv.fetch, log: () => {} }),
         writePats: { get: async (k) => new Pat(pats.get(k) ?? ""), set: async (k, v) => void pats.set(k, v), clear: async (k) => void pats.delete(k) },
-        ai: { app: anAiApp(), provider: async () => stubProvider({ respond: (c) => answer(c.input) }), appSpend: { get: async () => 0, add: async () => {} } },
+        ai: { app: anAiApp(), provider: async () => stubProvider({ respond: (c) => (c.schemaName === "capture_prepare" && prepares++, answer(c.input)) }), appSpend: { get: async () => 0, add: async () => {} } },
       },
     });
     await ctx.plan!.setAccountState(IDENTITY_KEY, { oid: ME, tid: HOME, name: "Sam Tester", username: "me@contoso.example", email: "me@contoso.example", signedInAt: "2026-11-02T14:00:00Z", systemUserId: null, systemUserEmail: null });
@@ -111,6 +112,14 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       await expect(row.locator(".draft-title").textContent()).resolves.toContain("Invoice export for finance");
       await shotBoth(page, "cp1-capture-toast-drafts", page.locator(".inbox .cap-box"));
 
+      // UI-7: the row's ⋯ has Prepare again (one more request) and Delete.
+      expect(prepares).toBe(1);
+      await row.getByRole("button", { name: /^More for:/ }).click();
+      await expect(row.getByRole("menuitem", { name: "Delete" }).count()).resolves.toBe(1);
+      await row.getByRole("menuitem", { name: "Prepare again" }).click();
+      await expect.poll(() => prepares).toBe(2);
+      await expect.poll(() => row.locator(".dw-draft-state").textContent(), { timeout: 30_000 }).toBe("Ready to create");
+
       // A leftover @word that names no client never moves a capture: the chip decides.
       await page.locator(".inbox .cap-box .cap-kinds [role=radio]", { hasText: "Draft story" }).click();
       await box(page).fill("story: tidy @nobody headers");
@@ -132,6 +141,11 @@ describe.skipIf(!CHROMIUM)("Capture to DevOps (CP-1)", () => {
       await expect(mine.textContent()).resolves.toContain("Invoice export for finance");
       await expect(dialog.locator(".cd-why").textContent()).resolves.toContain("It belongs with the export work");
       await shotBoth(page, "cp1-preview-side-by-side", dialog);
+      // UI-7: Prepare again in the preview, once more.
+      await ai.getByRole("button", { name: "Prepare again" }).click();
+      await expect.poll(() => prepares).toBe(3);
+      await expect.poll(() => ai.getByRole("button", { name: "Prepare again" }).isEnabled()).toBe(true);
+      await expect(ai.getByLabel("Title").inputValue()).resolves.toMatch(/^Export invoices as CSV/);
       // Keep mine, then back to the AI version, and edit it.
       await mine.getByRole("button", { name: "Use this" }).click();
       await expect(mine.getByLabel("Title").inputValue()).resolves.toBe("Invoice export for finance as csv");

@@ -133,3 +133,13 @@ export function draftRowText(state: DraftRowState, d: Pick<DraftStory, "parentIt
       return d.ai?.state === "failed" ? `Plain draft: ${d.ai.note ?? "the AI couldn't help"}${d.parentItemId === null ? " · needs a parent" : ""}` : `AI off: plain draft${d.parentItemId === null ? " · needs a parent" : ""}`;
   }
 }
+
+/**
+ * UI-7: Prepare again on a draft whose AI version is ready, failed, or was off and AI is now available: hidden without
+ * a write PAT, with AI off for it now, once it is in DevOps, or before any prepare ran (the preview runs the first one);
+ * disabled while AI is writing. It re-runs the same prepare (`draft.prepare` with `again`), under the same caps.
+ */
+export function prepareAgain(d: Pick<DraftStory, "parentItemId" | "ai" | "devopsId">, o: { canWrite: boolean; aiOn: boolean; now: string }): "hidden" | "writing" | "ready" {
+  if (!o.canWrite || !o.aiOn || d.devopsId || !d.ai) return "hidden";
+  return draftRowState(d, o) === "writing" ? "writing" : "ready";
+}
