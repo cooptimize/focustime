@@ -9,6 +9,7 @@ import { parseItemRef } from "../plan/lookup.ts";
 import { DevOpsWork } from "./work.ts";
 import { WorkLink } from "./WorkLink.tsx";
 import type { FollowUpView, PeopleData } from "../actions/types.ts";
+import { PersonPicker, type PersonValue } from "./PersonPicker.tsx";
 import type { CaptureClient } from "../plan/capture.ts";
 import { CLOSE_HOW, type CloseHow } from "../plan/types.ts";
 import { INTERNAL_CLIENT } from "../week/follow.ts";
@@ -239,7 +240,8 @@ export function formClients(clients: readonly CaptureClient[]): CaptureClient[] 
 export function FollowUpForm({ clients, initial, defaultClient = null, onSaved, onCancel }: { clients: readonly CaptureClient[]; initial?: FollowUpView; defaultClient?: string | null; onSaved: () => void; onCancel: () => void }) {
   const all = formClients(clients);
   const [clientKey, setClient] = useState<string | null>(initial ? initial.clientKey : defaultClient && all.some((c) => c.clientKey === defaultClient) ? defaultClient : null);
-  const [who, setWho] = useState(initial?.hasWho && initial.who !== initial.clientName ? initial.who : "");
+  // CV-2: Who as a person from the PersonPicker, or a plain name; an older follow-up keeps its text.
+  const [who, setWho] = useState<PersonValue>({ who: initial?.hasWho && initial.who !== initial.clientName ? initial.who : "", whoRef: initial?.whoRef ?? null });
   const [what, setWhat] = useState(initial?.what ?? "");
   const [channel, setChannel] = useState<string>(initial?.channel ?? "");
   const [due, setDue] = useState(initial?.due ?? "");
@@ -252,7 +254,6 @@ export function FollowUpForm({ clients, initial, defaultClient = null, onSaved, 
     return { itemId: initial.itemId, title: w?.title ?? null, url: w?.url ?? null, text: "" };
   });
   const [error, setError] = useState<string | null>(null);
-  const formId = useRef(`fu-who-${Math.random().toString(36).slice(2, 8)}`);
   return (
     <form
       className="follow-up-add"
@@ -261,7 +262,7 @@ export function FollowUpForm({ clients, initial, defaultClient = null, onSaved, 
         const typed = item.itemId ?? (clientKey ? parseItemRef(item.text) : null);
         // Plain text that isn't an item stays with what I owe.
         const extra = !typed && item.text.trim() ? ` · ${item.text.trim()}` : "";
-        const input = { clientKey, who: who.trim() || null, what: `${what}${extra}`.slice(0, 200), channel: channel || null, due: due || null, ...(typed || initial ? { itemId: typed } : {}) };
+        const input = { clientKey, who: who.who.trim() || null, whoRef: who.who.trim() ? who.whoRef : null, what: `${what}${extra}`.slice(0, 200), channel: channel || null, due: due || null, ...(typed || initial ? { itemId: typed } : {}) };
         const err = await act(initial ? "followup.edit" : "followup.add", initial ? { id: initial.id, ...input } : input);
         setError(err);
         if (!err) onSaved();
@@ -275,7 +276,7 @@ export function FollowUpForm({ clients, initial, defaultClient = null, onSaved, 
         </select>
       </label>
       <label>
-        Who <WhoInput value={who} onChange={setWho} clientKey={clientKey} id={formId.current} />
+        Who <PersonPicker value={who} onChange={setWho} clientKey={clientKey} />
       </label>
       <label className="wide">
         What I owe <input autoFocus required maxLength={200} value={what} placeholder="e.g. Send the mapping notes" onChange={(e) => setWhat(e.target.value)} />

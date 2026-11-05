@@ -5,7 +5,9 @@ import { isClosed, isCompleted } from "../plan/process.ts";
 import { clearPhotos, photoAction } from "./photo-actions.ts";
 import { chatAction, type ChatContext } from "./chat-actions.ts";
 import { storyAction, type StoryContext } from "./story-actions.ts";
-import { conversationAction, dayPromises, type ConversationContext } from "./conversation-actions.ts";
+import { serveChatImage, type ServedImage } from "./chat-images.ts";
+import { peoplePicker, pickerPeopleOf } from "./people-picker.ts";
+import { conversationPeople, conversationAction, dayPromises, type ConversationContext } from "./conversation-actions.ts";
 import { refreshStatus } from "./conversations-pipeline.ts";
 import type { ConversationsPort } from "./devops-write-actions.ts";
 import { isClientLead } from "./client-lead.ts";
@@ -565,8 +567,15 @@ async function urgentFor(ctx: ActionContext, now: string, zone: string, name: (k
   const c = await chatContext(ctx);
   const me = await c.me();
   const open = await urgentRequests(me ? teams.viewer(me) : null, await c.clientKeys().catch(() => null));
+  // CV-2: each line opens its conversation (#/inbox/conversation/<id>) when its message is in one I see.
+  const convs = me && ctx.requests?.conversations ? ctx.requests.conversations.viewer(me) : null;
+  const urgent = [];
+  for (const a of open.filter((x) => x.sort!.urgency === "now")) {
+    const place = convs ? await convs.placeOf(a.chatId, a.messageId).catch(() => null) : null;
+    urgent.push({ chatId: a.chatId, messageId: a.messageId, clientKey: a.clientKey, clientName: name(a.clientKey), title: a.sort!.title, at: a.createdAt, conversationId: place?.conversationId ?? null });
+  }
   return {
-    urgent: open.filter((a) => a.sort!.urgency === "now").map((a) => ({ chatId: a.chatId, messageId: a.messageId, clientKey: a.clientKey, clientName: name(a.clientKey), title: a.sort!.title, at: a.createdAt })),
+    urgent,
     pastUrgency: open.filter((a) => pastUrgency(a.sort!.urgency, a.createdAt, now, zone)).length,
   };
 }
@@ -805,7 +814,41 @@ export async function requestContext(ctx: ActionContext): Promise<RequestContext
       const hit = w ? [...w.items, ...w.children, ...(w.watched ?? [])].find((i) => i.id === itemId) : undefined;
       return hit ? isCompleted(hit.stateCategory) : null;
     },
+    chatMessages: async () => (await accountOf(ctx))?.chatMessages ?? null,
   };
+}
+
+/** CV-2: the PersonPicker's people: the conversation's, the client's Account Workers, everyone at Cooptimize. */
+async function pickerAction(ctx: ActionContext, input: unknown): Promise<ActionResponse> {
+  const o = input === undefined || input === null ? {} : input;
+  if (typeof o !== "object" || Array.isArray(o)) return { ok: false, status: 400, error: "people.picker takes { clientKey?, conversationId?, commitmentId? }" };
+  const r = o as Record<string, unknown>;
+  const id = (v: unknown) => (v === undefined ? undefined : typeof v === "number" && Number.isSafeInteger(v) && v > 0 ? v : NaN);
+  const conversationId = id(r.conversationId);
+  const commitmentId = id(r.commitmentId);
+  const clientKey = r.clientKey === undefined || r.clientKey === null ? null : typeof r.clientKey === "string" && r.clientKey.length <= 100 ? r.clientKey : undefined;
+  if (Object.keys(r).some((k) => !["clientKey", "conversationId", "commitmentId"].includes(k)) || Number.isNaN(conversationId) || Number.isNaN(commitmentId) || clientKey === undefined)
+    return { ok: false, status: 400, error: "people.picker takes { clientKey?, conversationId?, commitmentId? }" };
+  const cc = await conversationContext(ctx);
+  const data = await peoplePicker(
+    {
+      me: cc.me,
+      people: async () => {
+        if (!ctx.org) return null;
+        const [lv, directory, peopleClients, users] = await Promise.all([ctx.org.levels(), ctx.org.store.directory(), ctx.org.store.peopleClients(), cc.users().catch(() => [])]);
+        return pickerPeopleOf({ levels: lv, directory, peopleClients, users });
+      },
+      conversation: (q) => conversationPeople(cc, q),
+      clientName: async (k) => (await configured(ctx))?.clientSettings[k]?.name ?? k,
+    },
+    { clientKey, ...(conversationId ? { conversationId } : {}), ...(commitmentId ? { commitmentId } : {}) },
+  );
+  return { ok: true, data };
+}
+
+/** CV-2: one chat image for FocusTime's own endpoint (server/app.ts), with the member and client checks. */
+export async function chatImage(ctx: ActionContext, id: number): Promise<ServedImage> {
+  return serveChatImage(await requestContext(ctx), id);
 }
 
 /** CV-1: Conversations and My promises: the Requests pieces, the conversation store, client leads, the pipeline's AI. */
@@ -1262,7 +1305,12 @@ export async function dispatch(ctx: ActionContext, req: ActionRequest): Promise<
     case "my_promises.not_needed":
     case "my_promises.reopen":
     case "suggestions.skip":
+    case "conversations.merge":
+    case "conversations.unmerge":
+    case "my_promises.start_draft":
       return conversationAction(await conversationContext(ctx), action, req.input);
+    case "people.picker":
+      return pickerAction(ctx, req.input);
     case "ai.status":
     case "ai.test":
       return aiAction(await aiFor(ctx), action as AiActionName);

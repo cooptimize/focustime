@@ -1792,11 +1792,24 @@ button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .due-badge.tomorrow { --due: var(--watch); }
 .due-badge.today { --due: color-mix(in oklab, var(--risk) 50%, var(--watch)); }
 .due-badge.overdue { --due: var(--risk); }
+/* CV-2: a promise's follow-up past due: amber, never red. */
+.due-badge.was_due { --due: var(--watch); }
+.follow-up.due-was_due { border-left: 3px solid var(--watch); }
 .follow-up.due-overdue { border-left: 3px solid var(--risk); }
 .follow-up.due-today { border-left: 3px solid color-mix(in oklab, var(--risk) 50%, var(--watch)); }
 .follow-up-origin { flex-basis: 100%; font-size: var(--fs-2); color: var(--text-muted); }
 .follow-up-add label.wide input { min-width: 280px; }
 .follow-up-add select { min-width: 140px; }
+/* CV-2: the PersonPicker: a combobox with grouped people, photos and the External mark. */
+.person-picker { position: relative; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--text); }
+.person-picker-note { font-size: var(--fs-1); }
+.person-picker-pop { position: absolute; z-index: 30; inset-block-start: calc(100% + 4px); inset-inline-start: 0; inline-size: max(260px, 100%); max-inline-size: min(360px, calc(100vw - 32px)); max-block-size: 320px; overflow: auto; padding: 4px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: var(--shadow-menu); }
+.person-picker-pop ul { list-style: none; margin: 0; padding: 0; }
+.person-picker-group { margin: 6px 8px 2px; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.person-picker-option { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: var(--fs-3); }
+.person-picker-option.active { background: color-mix(in oklab, var(--accent) 14%, var(--surface)); }
+.person-picker-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person-picker-free { margin: 6px 8px 4px; font-size: var(--fs-1); }
 .follow-up > .follow-up-add { flex-basis: 100%; margin-top: 6px; }
 .fu-more { position: relative; display: inline-flex; }
 .fu-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; display: grid; min-width: 150px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-dialog); }
@@ -2637,14 +2650,14 @@ button.att-chip { cursor: pointer; }
 .today-view .pn-pick { margin: 0; font-size: var(--fs-3); font-weight: 500; }
 .today-view .pn-acts, .today-view .pn-timer { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .today-view .pn-count { font: 600 var(--fs-4)/1 var(--font-mono); border: 0; background: none; color: var(--text); padding: 0 8px 0 0; cursor: pointer; }
-.urgent-strip ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-width: 760px; }
+.urgent-strip ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; max-width: 760px; }
 .us-item { display: flex; align-items: center; gap: 8px; }
-.us-line { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; padding: 6px 10px; border: 1px solid var(--border); border-left: 3px solid var(--risk); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); text-align: left; cursor: pointer; }
+.us-line { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 6px 10px; border: 1px solid var(--border); border-left: 3px solid var(--risk); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-3); text-align: left; cursor: pointer; }
 .us-promise .us-line { border-left-color: var(--watch); }
 .us-tag { flex: none; font-size: var(--fs-2); font-weight: 600; color: var(--risk); }
 .us-promise .us-tag { color: var(--watch); }
 .us-who { flex: none; font-weight: 600; }
-.us-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.us-what { flex: 1 1 10em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .us-go { flex: none; color: var(--text-faint); }
 .moment-card { max-width: 760px; display: flex; align-items: center; gap: 16px; padding: 12px 16px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); }
 .moment-card .mc-text { flex: 1; min-width: 0; }
@@ -4169,6 +4182,52 @@ button.ask-label { cursor: pointer; }
 .conv-msg-body .attached { color: var(--text-muted); font-style: italic; }
 .conv-msg-body table { border-collapse: collapse; margin: 4px 0; font-size: var(--fs-2); display: block; max-inline-size: 100%; overflow-x: auto; }
 .conv-msg-body td, .conv-msg-body th { border: 1px solid var(--border); padding: 2px 6px; text-align: start; vertical-align: top; }
+/* CV-2: Merge into…, Select, and a deep link's note. */
+.conv-pick { margin: 0; inline-size: 16px; block-size: 16px; flex: none; }
+.conv-merge-bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--raised); font-size: var(--fs-2); }
+.conv-merge-bar .mini { max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-form.conv-merge { display: grid; justify-items: start; gap: 4px; margin-top: 8px; }
+.conv-merge p { margin: 0; }
+.conv-merge .conv-merge-list { justify-self: stretch; }
+.conv-merge-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.conv-merge-list .mini { inline-size: 100%; text-align: start; white-space: normal; }
+.conv-link-note { margin: 8px 0 0; padding: 6px 10px; border-radius: 6px; background: var(--surface); font-size: var(--fs-2); color: var(--text-muted); }
+/* CV-2: Show messages like Teams (ui/MessageThread.tsx). */
+.tm-thread { display: grid; gap: 8px; min-width: 0; }
+.tm-earlier { justify-self: center; }
+.tm-groups { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; min-width: 0; }
+.tm-group { display: flex; align-items: flex-start; gap: 8px; min-width: 0; max-inline-size: min(100%, 720px); }
+.tm-group .avatar { margin: 2px 0 0; }
+.tm-group.mine { justify-self: end; flex-direction: row-reverse; }
+.tm-stack { display: grid; gap: 4px; min-width: 0; }
+.tm-group.mine .tm-stack { justify-items: end; }
+.tm-head { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: var(--fs-2); }
+.tm-name { font-weight: 600; }
+.tm-bubble { display: grid; gap: 4px; padding: 6px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); min-width: 0; max-inline-size: 100%; }
+.tm-group.mine .tm-bubble { background: color-mix(in oklab, var(--accent) 16%, var(--surface)); border-color: color-mix(in oklab, var(--accent) 30%, var(--border)); }
+.tm-bubble .conv-msg-body p:last-child { margin-bottom: 0; }
+.tm-bubble .conv-msg-body pre, .tm-bubble .conv-msg-body code { font-family: ui-monospace, monospace; font-size: var(--fs-2); }
+.tm-bubble .conv-msg-body pre { margin: 4px 0; padding: 6px 8px; border-radius: 6px; background: var(--raised); overflow-x: auto; white-space: pre; }
+.tm-bubble .conv-msg-body ul, .tm-bubble .conv-msg-body ol { margin: 2px 0 4px; padding-inline-start: 20px; }
+.tm-bubble .conv-msg-body .mention { padding: 0 4px; border-radius: 4px; background: var(--raised); }
+.tm-quote { margin: 0; padding: 4px 8px; border-inline-start: 3px solid var(--border-strong); border-radius: 4px; background: var(--raised); display: grid; gap: 1px; font-size: var(--fs-2); min-width: 0; }
+.tm-quote-who { font-weight: 600; }
+.tm-quote-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-reactions { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.tm-reaction { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--border); background: var(--raised); font-size: var(--fs-1); line-height: 1.6; }
+.tm-reaction-n { color: var(--text-muted); }
+/* CV-2: pasted images as thumbnails under their message, and the larger viewer. */
+.tm-images { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.tm-thumb { display: block; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); overflow: hidden; cursor: zoom-in; }
+.tm-thumb img { display: block; max-inline-size: 160px; max-block-size: 120px; inline-size: auto; block-size: auto; object-fit: cover; }
+.tm-thumb:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tm-image-note { font-size: var(--fs-1); }
+.conv-images { white-space: nowrap; }
+.image-viewer-backdrop { align-items: center; padding: 16px; }
+.image-viewer { display: grid; gap: 8px; max-inline-size: min(1200px, 100%); max-block-size: calc(100dvh - 32px); padding: 10px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: var(--shadow-command); }
+.image-viewer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--fs-2); }
+.image-viewer-img { display: block; max-inline-size: 100%; max-block-size: calc(100dvh - 140px); margin: 0 auto; object-fit: contain; border-radius: 6px; background: var(--raised); }
+.image-viewer-nav { display: flex; justify-content: center; gap: 8px; }
 .conv-unsorted, .conv-hidden { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-size: var(--fs-2); color: var(--text-muted); }
 .conv-chatter { margin: 12px 0 0; font-size: var(--fs-2); }
 .conv-chatter ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }

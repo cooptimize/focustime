@@ -3,6 +3,7 @@ declare module "mssql" {
   export type ISqlType = { type: unknown };
   export const NVarChar: ((length?: number) => ISqlType) & ISqlType;
   export const VarChar: ((length?: number) => ISqlType) & ISqlType;
+  export const VarBinary: ((length?: number) => ISqlType) & ISqlType;
   export const Int: ISqlType;
   export const BigInt: ISqlType;
   export const Float: ISqlType;
@@ -54,6 +55,7 @@ declare module "mssql" {
     Transaction: typeof Transaction;
     NVarChar: typeof NVarChar;
     VarChar: typeof VarChar;
+    VarBinary: typeof VarBinary;
     Int: typeof Int;
     BigInt: typeof BigInt;
     Float: typeof Float;

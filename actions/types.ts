@@ -100,7 +100,8 @@ export type WeekLoadData = {
 };
 
 /** AP-2: one urgent ask on Today (the AI's title, never the message). */
-export type UrgentAsk = { chatId: string; messageId: string; clientKey: string; clientName: string; title: string; at: string };
+/** CV-2: `conversationId`, the conversation its message is in now (the strip line opens it), when it is in one. */
+export type UrgentAsk = { chatId: string; messageId: string; clientKey: string; clientName: string; title: string; at: string; conversationId?: number | null };
 
 /** A value problem on one config field (Settings shows it next to the field). */
 export type FieldProblem = { field: string; message: string };
@@ -200,6 +201,8 @@ export type FollowUpView = {
   clientKey: string | null;
   /** Who it is owed to: the client's name, or what I typed for a manual follow-up. */
   who: string;
+  /** CV-2: the person Who names, when chosen in the PersonPicker; null: a plain name. */
+  whoRef: import("../plan/person-ref.ts").PersonRef | null;
   what: string;
   channel: string | null;
   due: string | null;

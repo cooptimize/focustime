@@ -9,7 +9,8 @@ import { extname, join, normalize, sep } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { currentOperation, newOperation, noteCurrent, runInOperation, type Operation } from "../log/operation.ts";
 import { isActionName } from "../actions/registry.ts";
-import { dispatch, type ActionContext } from "../actions/dispatch.ts";
+import { chatImage, dispatch, type ActionContext } from "../actions/dispatch.ts";
+import type { ServedImage } from "../actions/chat-images.ts";
 import type { Logger } from "../log/logger.ts";
 import type { AccountStore, Session } from "../store/accounts.ts";
 import { DEMO_SESSION_MS, SESSION_MAX_MS } from "../store/accounts.ts";
@@ -64,6 +65,8 @@ export type AppOptions = {
   onRequest?: (r: RequestRecord) => void;
   /** HK-1: an error behind a 500, or one an action threw (telemetry's exceptions; never shown to anyone). */
   onError?: (e: unknown, where: string) => void;
+  /** CV-2: one chat image for this person (the member and client checks); by default actions/dispatch.ts's. */
+  chatImage?: (ctx: ActionContext, id: number) => Promise<ServedImage>;
 };
 
 /** A4: liveness and readiness for the platform's probes (no session, no database call). */
@@ -84,6 +87,7 @@ export function routeClass(path: string): string {
   if (path.startsWith("/api/")) return path.replace(/[^a-z/-]/gi, "").slice(0, 40);
   if (path.startsWith("/auth/")) return path.split("/").slice(0, 4).join("/").replace(/[^a-z/-]/gi, "");
   if (path.startsWith("/assets/")) return "/assets";
+  if (path.startsWith(CHAT_IMAGE_PREFIX)) return "/media/chat-images";
   return "/ (page)";
 }
 
@@ -103,6 +107,12 @@ const TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
   ".webmanifest": "application/manifest+json",
 };
+
+/** CV-2: a chat image, only through here (never Graph's URL): `/media/chat-images/<id>`. */
+export const CHAT_IMAGE_PREFIX = "/media/chat-images/";
+const CHAT_IMAGE_PATH = /^\/media\/chat-images\/([1-9]\d{0,9})$/;
+/** An image is never a document: no script, no styles, nothing it can load, sandboxed if opened on its own. */
+export const IMAGE_CSP = "default-src 'none'; sandbox";
 
 export const CSP = "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
 
@@ -335,6 +345,33 @@ export function createApp(opts: AppOptions) {
       if (url.pathname === "/api/open-request") return json(res, 200, { view: (await opts.takeOpenRequest?.(s).catch(() => null)) ?? null });
       res.writeHead(404);
       return res.end();
+    }
+
+    // ---- CV-2: chat images, for a signed-in member of the chat who follows its client (403 for anyone else) ----
+    if (url.pathname.startsWith("/media/")) {
+      const m = CHAT_IMAGE_PATH.exec(url.pathname);
+      if (method !== "GET" && method !== "HEAD") {
+        res.writeHead(405, { allow: "GET, HEAD" });
+        return res.end();
+      }
+      if (!m) {
+        res.writeHead(404, { "cache-control": "no-store" });
+        return res.end();
+      }
+      const s = await session();
+      if (!s) {
+        res.writeHead(401, { "cache-control": "no-store" });
+        return res.end();
+      }
+      const r: ServedImage = await (opts.chatImage ?? chatImage)(await opts.ctx(s), Number(m[1])).catch((e: unknown) => (opts.onError?.(e, "chat_image"), { status: 404 as const }));
+      opts.log({ source: "server", op: "chat_image", status: r.status });
+      res.setHeader("Content-Security-Policy", IMAGE_CSP);
+      if (r.status !== 200) {
+        res.writeHead(r.status, { "cache-control": "no-store" });
+        return res.end();
+      }
+      res.writeHead(200, { "content-type": r.contentType, "content-length": r.bytes.length, "content-disposition": "inline", "cache-control": "private, max-age=3600", vary: "Cookie" });
+      return res.end(method === "HEAD" ? undefined : Buffer.from(r.bytes.buffer, r.bytes.byteOffset, r.bytes.byteLength));
     }
 
     if (opts.devMiddleware) {

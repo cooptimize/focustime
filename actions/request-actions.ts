@@ -16,6 +16,7 @@ import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
 import { POLL_MINUTES, type ClientChat, type FocusUser, type Request } from "../plan/requests.ts";
 import { PlanError, type PlanStore } from "../store/plan-store.ts";
 import type { TeamsStore, TeamsView } from "../store/teams-store.ts";
+import type { ChatMessagesClient } from "../sources/graph/chats.ts";
 import type { WorkItem } from "../week/types.ts";
 import { localToday } from "../week/dates.ts";
 import { userZone } from "../week/zone.ts";
@@ -58,6 +59,8 @@ export type RequestContext = {
   ai?: () => Promise<AiService | null>;
   /** AP-2: a client's items read by id, done ones included; null unknown. */
   itemDone?: (cfg: AppConfig, clientKey: string, itemId: number) => boolean | null;
+  /** CV-2: my own Chat.Read reader, for an image the poll hasn't fetched yet; null when I'm not signed in with Microsoft. */
+  chatMessages?: () => Promise<ChatMessagesClient | null>;
 };
 
 /** Resolved requests stay on the tab this long (with Undo), then only open ones show. */

@@ -2,10 +2,11 @@
 // Inbox order that puts what is late or close first. Pure: calendar days in the local date, no clock.
 import type { IsoDate } from "../week/types.ts";
 
-export type DueLevel = "overdue" | "today" | "tomorrow" | "later";
+/** CV-2: "was_due" is a promise (or a follow-up made from one) past its due: amber, never red. */
+export type DueLevel = "overdue" | "was_due" | "today" | "tomorrow" | "later";
 export type DueState = { level: DueLevel; text: string; days: number };
 
-const RANK: Record<DueLevel, number> = { overdue: 0, today: 1, tomorrow: 2, later: 3 };
+const RANK: Record<DueLevel, number> = { overdue: 0, was_due: 0, today: 1, tomorrow: 2, later: 3 };
 
 /** Overdue (red), Due today (orange), Due tomorrow (amber), or Due <day> (neutral). Null without a due date. */
 export function dueState(due: IsoDate | null | undefined, today: IsoDate): DueState | null {
@@ -15,6 +16,29 @@ export function dueState(due: IsoDate | null | undefined, today: IsoDate): DueSt
   if (days === 0) return { level: "today", text: "Due today", days };
   if (days === 1) return { level: "tomorrow", text: "Due tomorrow", days };
   return { level: "later", text: `Due ${Temporal.PlainDate.from(due).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" })}`, days };
+}
+
+const dayText = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+/**
+ * CV-2: a promise past its due, in words: "Was due 3:00 PM" earlier today, else "Was due Wed, Nov 4". Amber
+ * wherever it shows (My promises, Today, Week, a follow-up made from it), never red: a promise is a target.
+ */
+export function wasDueText(p: { dueAt: string | null; dueDate: string | null }, today: IsoDate, tz: string): string {
+  if (p.dueAt) {
+    const z = Temporal.Instant.from(p.dueAt).toZonedDateTimeISO(tz);
+    return z.toPlainDate().toString() === today ? `Was due ${z.toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}` : `Was due ${dayText(z.toPlainDate().toString())}`;
+  }
+  return p.dueDate ? `Was due ${dayText(p.dueDate)}` : "Was due";
+}
+
+/** The same for a promise on Today or Week, with today taken in that zone now. */
+export const wasDueNow = (p: { dueAt: string | null; dueDate: string | null }, tz: string) => wasDueText(p, Temporal.Now.plainDateISO(tz).toString(), tz);
+
+/** CV-2: a follow-up made from a promise: as dueState, but past due it says when it was due, in amber. */
+export function promiseDueState(due: IsoDate | null | undefined, today: IsoDate): DueState | null {
+  const s = dueState(due, today);
+  return s && s.level === "overdue" ? { level: "was_due", text: `Was due ${dayText(due!)}`, days: s.days } : s;
 }
 
 /** Overdue (most overdue first), due today, due tomorrow, later due dates (soonest first), then the rest newest first. */

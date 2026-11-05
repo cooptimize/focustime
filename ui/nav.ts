@@ -34,7 +34,7 @@ export type Nav =
   | { tab: "today"; flow: TodayFlow | null; date: IsoDate | null }
   | { tab: "week"; mode: WeekMode; week: IsoDate | null; focus: DayFocus | null }
   | { tab: "ahead"; mode: AheadMode }
-  | { tab: "inbox"; followUp: number | null; conversations?: boolean; myPromises?: boolean };
+  | { tab: "inbox"; followUp: number | null; conversations?: boolean; myPromises?: boolean; select?: number };
 
 /** G1: the Guide sits over a place like Settings; `chapter` is the one to scroll to (null: the top). */
 export type Overlay = { kind: "focus" } | { kind: "settings"; section: string } | { kind: "guide"; chapter: string | null } | null;
@@ -51,6 +51,10 @@ export const navOf = {
   conversations: (): Nav => ({ tab: "inbox", followUp: null, conversations: true }),
   /** CV-1: Inbox › My promises (was Promises). */
   myPromises: (): Nav => ({ tab: "inbox", followUp: null, myPromises: true }),
+  /** CV-2: one conversation, selected and scrolled to (#/inbox/conversation/<id>). */
+  conversation: (id: number): Nav => ({ tab: "inbox", followUp: null, conversations: true, select: id }),
+  /** CV-2: one of my promises, selected and scrolled to (#/inbox/promise/<id>). */
+  promise: (id: number): Nav => ({ tab: "inbox", followUp: null, myPromises: true, select: id }),
 };
 export const HOME: Loc = { nav: navOf.today(), overlay: null };
 
@@ -104,7 +108,9 @@ export function modeNav(tab: Tab, mode: ModeName): Nav {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HALF = /^(AM|PM|EVE)$/;
-const SECTION = /^[a-z]{2,20}$/;
+/** A Settings or Admin section: letters, with one hyphen between words (CV-2: "admin-audit", Q-ADM2-4). */
+const SECTION = /^[a-z]{2,20}(-[a-z]{2,20})?$/;
+const ID = /^[1-9]\d{0,9}$/;
 const validDate = (s: string) => {
   if (!DATE.test(s)) return false;
   try {
@@ -131,8 +137,8 @@ export function hashOf(l: Loc): string {
     return ["#/week", n.week].filter(Boolean).join("/");
   }
   if (n.tab === "ahead") return n.mode === "ahead" ? "#/ahead/plan" : "#/ahead";
-  if (n.conversations) return "#/inbox/conversations";
-  if (n.myPromises) return "#/inbox/my-promises";
+  if (n.conversations) return n.select ? `#/inbox/conversation/${n.select}` : "#/inbox/conversations";
+  if (n.myPromises) return n.select ? `#/inbox/promise/${n.select}` : "#/inbox/my-promises";
   return n.followUp ? `#/inbox/${n.followUp}` : "#/inbox";
 }
 
@@ -193,6 +199,7 @@ export function parseHash(hash: string): Loc | null {
     case "promises":
       return a === undefined ? plain(navOf.myPromises()) : null;
     case "inbox":
+      if (a === "conversation" || a === "promise") return c === undefined && b !== undefined && ID.test(b) ? plain(a === "conversation" ? navOf.conversation(Number(b)) : navOf.promise(Number(b))) : null;
       return b !== undefined ? null : a === undefined ? plain(navOf.inbox()) : a === "conversations" || a === "requests" || a === "asks" ? plain(navOf.conversations()) : a === "my-promises" || a === "promises" ? plain(navOf.myPromises()) : /^[1-9]\d{0,9}$/.test(a) ? plain(navOf.inbox(Number(a))) : null;
     default:
       return null;

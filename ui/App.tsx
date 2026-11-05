@@ -1625,9 +1625,9 @@ export function App() {
         <div className="inbox-page">
           <InboxTabs tab={asksOpen ? "conversations" : promisesOpen ? "my_promises" : "inbox"} inboxCount={data.openFollowUps + data.captures} count={askCount} promiseCount={promiseCount} onPick={(t) => goNav(t === "conversations" ? navOf.conversations() : t === "my_promises" ? navOf.myPromises() : navOf.inbox())} />
           {asksOpen ? (
-            <Conversations data={data} version={captureVersion} onCount={setAskCount} onPromiseCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
+            <Conversations select={nav.tab === "inbox" ? (nav.select ?? null) : null} data={data} version={captureVersion} onCount={setAskCount} onPromiseCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
           ) : promisesOpen ? (
-            <MyPromises data={data} version={captureVersion} onCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
+            <MyPromises select={nav.tab === "inbox" ? (nav.select ?? null) : null} data={data} version={captureVersion} onCount={setPromiseCount} onChanged={reloadQuiet} openSettings={(s) => openSettingsRef.current?.(s)} />
           ) : (
             <Inbox data={data} version={captureVersion} onChanged={reloadQuiet} defaultClient={env?.selection.clientKey ?? null} highlight={nav.tab === "inbox" ? (nav.followUp ?? highlightFollowUp) : null} />
           )}
@@ -1711,8 +1711,8 @@ export function App() {
           onPlanWeek={() => openPlanWeek(data.today.weekStart)}
           switcher={switches.today}
           onInbox={() => setView("inbox")}
-          onAsks={() => setView("conversations")}
-          onPromises={() => setView("my_promises")}
+          onAsks={(id) => (id ? goNav(navOf.conversation(id)) : setView("conversations"))}
+          onPromises={(id) => (id ? goNav(navOf.promise(id)) : setView("my_promises"))}
           onCaptures={() => setView("inbox")}
           onRetry={() => auto.trigger("button")}
           onFix={() => setSettingsAt("connections")}

@@ -6,7 +6,7 @@ import type { CalEvent, Day, Half, PlacedEvent, Slot, Week } from "../week/types
 import type { PtoDay } from "../week/pto.ts";
 import type { Pick } from "../plan/types.ts";
 import type { FollowUpView } from "../actions/types.ts";
-import { weekDueBadges } from "../plan/due.ts";
+import { wasDueNow, weekDueBadges } from "../plan/due.ts";
 import { canAddWork, planButton } from "../plan/days.ts";
 import { checkinMenu, dayMenu, eventMenu, slotMenu } from "./menu.ts";
 import { MenuRow, useMenu } from "./Menus.tsx";
@@ -730,8 +730,8 @@ function RulerPromises({ bounds, tz }: { bounds: { start: string; end: string };
         type="button"
         className={`r-promise${p.overdue ? " overdue" : ""}`}
         style={{ top: pct((ms(p.dueAt!) - ms(bounds.start)) / span) }}
-        title={`Promise · ${time} · ${p.what}${p.toName ? ` · to ${p.toName}` : ""}`}
-        aria-label={`Promise at ${time}: ${p.what}`}
+        title={`Promise · ${p.overdue ? wasDueNow(p, tz).replace(/^Was/, "was") : time} · ${p.what}${p.toName ? ` · to ${p.toName}` : ""}`}
+        aria-label={`${p.overdue ? `Promise, ${wasDueNow(p, tz).replace(/^Was/, "was")}` : `Promise at ${time}`}: ${p.what}`}
         onClick={(e) => (e.stopPropagation(), onPromise?.())}
       >
         <span>{p.what}</span>

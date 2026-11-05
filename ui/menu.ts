@@ -1077,12 +1077,15 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "conversations.search":
     case "conversations.draft":
     case "suggestions.skip":
+    case "conversations.merge":
+    case "conversations.unmerge":
       return { run: () => env.setView("conversations") };
     case "conversations.refresh": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.refresh", {})) };
     case "conversations.sort_unsorted": return { run: () => (env.setView("conversations"), void env.runPlan("conversations.sort_unsorted", {})) };
     case "my_promises.list":
     case "my_promises.today":
     case "my_promises.followup":
+    case "my_promises.start_draft":
     case "my_promises.link":
     case "my_promises.done":
     case "my_promises.not_needed":
@@ -1178,6 +1181,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "followup.snooze":
     case "followup.delete":
     case "followup.people":
+    case "people.picker":
     case "followups.review":
       return { run: env.openFollowUps };
     case "plan.reset": return { run: env.resetPlan };

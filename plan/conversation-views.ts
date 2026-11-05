@@ -40,6 +40,8 @@ export type ConversationCard = {
   primary: Primary | null;
   canCreate: boolean;
   link: string;
+  /** CV-2: images pasted into its messages ("2 images" on the card). */
+  images?: number;
 };
 
 export type FilteredMessage = { chatId: string; messageId: string; author: string; at: string; text: string };
@@ -57,14 +59,43 @@ export type ConversationsData = {
   /** ADM-2 (D604): the Rule, for "every N minutes in working hours". */
   pollMinutes?: number;
   writeClients: string[];
+  /** CV-2: a deep link's conversation: listed (and in which view), or not here any more (a plain note). */
+  selected?: { id: number; found: boolean; where: "needs" | "teammates" | "closed" | null };
 };
 
-export type ConversationMessage = { messageId: string; author: string; external: boolean; mine: boolean; at: string; html: string; text: string };
+/**
+ * One message under Show messages (CV-2: rendered like Teams). `authorKey` groups consecutive messages (an alias for
+ * this list, never an id); `email` only for a Cooptimizer, for their photo; `quote` the message it replies to (null
+ * fields: "Quoted an earlier message"); `reactions` as counts, never who.
+ */
+export type ConversationMessage = {
+  messageId: string;
+  author: string;
+  authorKey: string;
+  name: string;
+  email: string | null;
+  external: boolean;
+  mine: boolean;
+  at: string;
+  html: string;
+  text: string;
+  quote: { author: string | null; text: string | null } | null;
+  reactions: { emoji: string; count: number }[];
+  /** CV-2: its pasted images, in body order: FocusTime's own address for each (never Graph's), or why it isn't shown. */
+  images?: MessageImageView[];
+};
+export type MessageImageView = { id: number; src: string | null; note: string | null };
+/** CV-2: an image's address in FocusTime (the only one the page ever sees). */
+export const chatImageSrc = (id: number) => `/media/chat-images/${id}`;
+/** A page of Show messages: the latest first; `earlier` is the message id to ask "Show earlier" from (null: none). */
+export type ConversationMessages = { messages: ConversationMessage[]; chatLink: string; earlier: string | null; total: number };
 
 /** One of my promises (my own commitment), as My promises and Today show it. */
 export type PromiseCard = {
   id: number;
   conversationId: number | null;
+  /** CV-2: the one it was made to, for the PersonPicker (null: nobody known). */
+  toRef: import("./person-ref.ts").PersonRef | null;
   conversationTitle: string | null;
   clientKey: string;
   clientName: string;

@@ -15,19 +15,23 @@ import type { AppConfig } from "../config/schema.ts";
 import { askTitle, messageLink } from "../plan/asks.ts";
 import { CHAT_ID, isExternal, teamsLink } from "../plan/chats.ts";
 import { DRAFT_INSTRUCTIONS, DRAFT_SCHEMA, DRAFT_TASK, draftFrom, draftInput, draftWithoutAi, type DraftAnswer } from "../plan/conversation-draft.ts";
-import type { CardCommitment, CardItem, CardSuggestion, ConversationCard, ConversationMessage, ConversationsData, DayPromise, MyPromisesData, Primary, PromiseCard } from "../plan/conversation-views.ts";
+import { chatImageSrc, type CardCommitment, type CardItem, type CardSuggestion, type ConversationCard, type ConversationMessage, type ConversationsData, type DayPromise, type MessageImageView, type MyPromisesData, type Primary, type PromiseCard } from "../plan/conversation-views.ts";
 import { daysWaiting, oneLine, statusLine, unsortedText, type Commitment, type Conversation, type ItemDraft } from "../plan/conversations.ts";
 import type { ClientChat, FocusUser } from "../plan/requests.ts";
-import { sanitizeMessageHtml } from "../plan/sanitize.ts";
+import { hostedImageIds, sanitizeMessageHtml } from "../plan/sanitize.ts";
+import { IMAGE_ATTEMPTS, type MessageImage } from "../store/teams-store.ts";
+import { joinedSummary, MERGE_INSTRUCTIONS, MERGE_SCHEMA, MERGE_TASK, mergeFrom, mergeInput, type MergeAnswer } from "../plan/conversation-merge.ts";
 import type { ConversationStore, ConversationView } from "../store/conversation-store.ts";
 import { PlanError } from "../store/plan-store.ts";
 import type { TeamsView } from "../store/teams-store.ts";
 import { localToday } from "../week/dates.ts";
 import type { WorkItem } from "../week/types.ts";
 import { userZone } from "../week/zone.ts";
-import { batchOf, CHAT_DAILY_AI_CALLS, refreshStatus, runPipeline } from "./conversations-pipeline.ts";
+import { batchOf, CHAT_DAILY_AI_CALLS, participantOf, refreshStatus, runPipeline, withParticipants } from "./conversations-pipeline.ts";
 import { backfillPromises } from "./conversation-backfill.ts";
 import { visibleChats, type RequestContext } from "./request-actions.ts";
+import type { ConversationPerson } from "./people-picker.ts";
+import { personRef, type PersonRef } from "../plan/person-ref.ts";
 import { mapSeq } from "./seq.ts";
 import type { ActionResponse } from "./types.ts";
 
@@ -37,7 +41,7 @@ export const CONVERSATION_ACTIONS = [
   "conversations.list", "conversations.count", "conversations.refresh", "conversations.messages", "conversations.seen", "conversations.resolve", "conversations.not_request", "conversations.reopen",
   "conversations.hide", "conversations.move", "conversations.this_is_work", "conversations.link", "conversations.take_over", "conversations.sort_unsorted", "conversations.search",
   "conversations.draft", "my_promises.list", "my_promises.today", "my_promises.followup", "my_promises.link", "my_promises.done", "my_promises.not_needed", "my_promises.reopen",
-  "suggestions.skip",
+  "suggestions.skip", "conversations.merge", "conversations.unmerge", "my_promises.start_draft",
 ] as const;
 export type ConversationAction = (typeof CONVERSATION_ACTIONS)[number];
 
@@ -86,6 +90,40 @@ async function seen(ctx: ConversationContext): Promise<Seen | null> {
   return { teams, convs: store.viewer(me), me, chats, byId: new Map(chats.map((c) => [c.chatId, c])), store };
 }
 
+/**
+ * CV-2: the people of a conversation (or, for a promise with none, the people of its own messages and the one it was
+ * made to) for the PersonPicker, only from a chat I'm in and whose client I follow; null otherwise.
+ */
+export async function conversationPeople(ctx: ConversationContext, q: { conversationId?: number; commitmentId?: number }): Promise<ConversationPerson[] | null> {
+  const v = await seen(ctx);
+  if (!v) return null;
+  const home = await ctx.homeTenant();
+  let conversation: Conversation | null = null;
+  let around: { chatId: string; ids: string[] } | null = null;
+  if (q.commitmentId !== undefined) {
+    const k = await v.convs.commitment(q.commitmentId);
+    if (!k || !v.byId.has(k.chatId)) return null;
+    if (k.conversationId) conversation = await v.convs.conversation(k.conversationId);
+    else {
+      const senders = [];
+      for (const id of k.messageIds) senders.push((await v.teams.message(k.chatId, id))?.senderId ?? null);
+      around = { chatId: k.chatId, ids: [...senders, k.toId].filter((x): x is string => !!x) };
+    }
+  } else if (q.conversationId !== undefined) conversation = await v.convs.conversation(q.conversationId);
+  const chat = v.byId.get(conversation?.chatId ?? around?.chatId ?? "");
+  if (!chat) return null;
+  const member = (id: string) => chat.members?.find((m) => same(m.userId, id));
+  const out: ConversationPerson[] = conversation
+    ? conversation.participants.map((p) => ({ id: p.id, name: p.name, external: home ? p.external : false, email: p.external ? null : (member(p.id)?.email?.toLowerCase() ?? null) }))
+    : (around?.ids ?? []).flatMap((id) => {
+        const m = member(id);
+        if (!m?.displayName) return [];
+        const external = home ? isExternal(m, home) : false;
+        return [{ id, name: m.displayName, external, email: external ? null : (m.email?.toLowerCase() ?? null) }];
+      });
+  return out.filter((p) => !same(p.id, v.me));
+}
+
 /** A client's open items once per list (for Link and "Looks like"); null when DevOps couldn't be read. */
 function itemsOnce(ctx: ConversationContext, cfg: AppConfig) {
   const memo = new Map<string, Promise<WorkItem[] | null>>();
@@ -115,9 +153,11 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
     const view = views.get(c.id);
     // Mentions of me in its work messages.
     let mentionsMe = false;
+    let images = 0;
     for (const p of places.filter((x) => x.conversationId === c.id && x.role === "work")) {
       const m = await v.teams.message(p.chatId, p.messageId);
       if (m?.mentions.some((x) => same(x.id, v.me))) mentionsMe = true;
+      images += hostedImageIds(m?.html ?? null).length;
     }
     const wait = waitingOf(cs);
     const waiting = wait ? { name: first(wait.whoName), days: daysWaiting(wait.escalatedAt!, now) } : null;
@@ -149,6 +189,7 @@ async function cards(ctx: ConversationContext, v: Seen, cfg: AppConfig, list: re
       commitments: cs.map((k): CardCommitment => ({ id: k.id, whoName: k.whoName, mine: same(k.whoId, v.me), what: k.what, dueAt: k.dueAt, dueDate: k.dueDate, state: k.state, impliesItem: k.impliesItem, item: cardItem(k.itemId, null, k.itemUrl, k.itemTitle) })),
       suggestions: suggestions.filter((s) => s.conversationId === c.id && s.state === "open").map((s): CardSuggestion => ({ id: s.id, kind: s.kind, itemId: s.itemId, body: s.body, internal: s.internal, fromInternalChat: fromInternal, mine: same(s.forUser, v.me) })),
       closed, hidden: !!view?.hidden, primary, canCreate, link: chat ? teamsLink(chat) : messageLink(c.chatId, places.find((p) => p.conversationId === c.id)?.messageId ?? "0"),
+      ...(images ? { images } : {}),
     };
   });
 }
@@ -161,7 +202,7 @@ async function viewOf(ctx: ConversationContext, me: string, card: ConversationCa
   return "teammates";
 }
 
-async function list(ctx: ConversationContext, cfg: AppConfig): Promise<ConversationsData> {
+async function list(ctx: ConversationContext, cfg: AppConfig, select: number | null = null): Promise<ConversationsData> {
   const empty: ConversationsData = { needsYou: [], teammates: [], closed: [], hiddenCount: 0, unsorted: { count: 0, reasons: [] }, chatter: [], myPromisesOpen: 0, lastPoll: null, writeClients: [] };
   const v = await seen(ctx);
   if (!v) return empty;
@@ -202,6 +243,13 @@ async function list(ctx: ConversationContext, cfg: AppConfig): Promise<Conversat
   out.chatter = [...byClient.values()];
   out.myPromisesOpen = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => k.state === "open").length;
   out.pollMinutes = cfg.org?.rules.pollMinutes ?? 5;
+  // CV-2: a deep link (#/inbox/conversation/<id>): the one to select, following a merge to where it went now.
+  if (select !== null) {
+    let c = await v.convs.conversation(select);
+    for (let hops = 0; c?.mergedInto && hops < 5; hops++) c = await v.convs.conversation(c.mergedInto);
+    const listed = c && v.byId.has(c.chatId) ? [...out.needsYou, ...out.teammates, ...out.closed].find((x) => x.id === c!.id) : undefined;
+    out.selected = listed ? { id: listed.id, found: true, where: out.needsYou.includes(listed) ? "needs" : out.teammates.includes(listed) ? "teammates" : "closed" } : { id: select, found: false, where: null };
+  }
   out.lastPoll = v.chats.map((c) => c.polledAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
   return out;
 }
@@ -223,8 +271,17 @@ async function counts(ctx: ConversationContext, cfg: AppConfig): Promise<{ needs
 
 // ---- My promises ----
 
+/** CV-2: whom a promise was made to, as the PersonPicker refers to them (a Cooptimizer by Entra id, else a chat member). */
+function toRefOf(k: Commitment, chat: ClientChat | undefined, home: string | null): PersonRef | null {
+  if (!k.toId || !k.toName) return null;
+  const m = chat?.members?.find((x) => same(x.userId, k.toId));
+  const external = m ? (home ? isExternal(m, home) : false) : false;
+  return external ? { kind: "external", memberId: k.toId.toLowerCase(), name: k.toName } : { kind: "cooptimizer", id: k.toId.toLowerCase(), name: k.toName };
+}
+
 async function promiseCards(ctx: ConversationContext, v: Seen, cfg: AppConfig): Promise<PromiseCard[]> {
   const now = ctx.now();
+  const home = await ctx.homeTenant();
   const zone = userZone(cfg);
   const today = localToday(now, zone);
   const mine = (await v.convs.commitmentsBy(v.chats.map((c) => c.chatId))).filter((k) => !["done", "not_needed"].includes(k.state) || (k.updatedAt && Date.parse(now) - Date.parse(k.updatedAt) < DONE_SHOWN_MS));
@@ -249,8 +306,9 @@ async function promiseCards(ctx: ConversationContext, v: Seen, cfg: AppConfig): 
       if (hit) likely = { id: hit.id, title: hit.title, url: hit.url };
     }
     const due = k.dueDate ?? k.onToday;
+    const toRef = toRefOf(k, chat, home);
     return {
-      id: k.id, conversationId: k.conversationId, conversationTitle: c?.title ?? null, clientKey: k.clientKey, clientName: cfg.clientSettings[k.clientKey]?.name ?? k.clientKey, chatName: chat?.displayName ?? "A chat no longer registered",
+      id: k.id, conversationId: k.conversationId, toRef, conversationTitle: c?.title ?? null, clientKey: k.clientKey, clientName: cfg.clientSettings[k.clientKey]?.name ?? k.clientKey, chatName: chat?.displayName ?? "A chat no longer registered",
       what: k.what, toName: k.toName, dueAt: k.dueAt, dueDate: k.dueDate, overdue: k.state === "open" && (k.dueAt ? Date.parse(k.dueAt) < Date.parse(now) : !!due && due < today), state: k.state, onToday: k.onToday, followUpId: k.followUpId,
       item: k.itemId ? { id: k.itemId, title: k.itemTitle, url: k.itemUrl } : null, needsItem, draft: k.draft, likely,
       suggestions: suggestions.filter((s) => s.conversationId === k.conversationId).map((s) => ({ id: s.id, kind: s.kind, itemId: s.itemId, body: s.body, internal: s.internal, fromInternalChat: chat?.kind === "delivery", mine: true })),
@@ -331,6 +389,62 @@ async function draftFor(ctx: ConversationContext, v: Seen, cfg: AppConfig, c: Co
   return { draft: final, notSorted };
 }
 
+/** CV-2: Show messages loads this many at a time (the latest first). */
+export const MESSAGE_PAGE = 20;
+
+/**
+ * CV-2: one message as Show messages renders it, like Teams: who (a short alias per list for grouping, the email only
+ * for a Cooptimizer's photo), mine on the other side, the sanitized body, the quoted message (its author and first
+ * line, from the store by replyToId whatever its age, else "Quoted an earlier message"), and the reactions as counts.
+ */
+/** CV-2: an image as the page gets it: our own address while it is (or may still be) there, else a plain why. */
+function imageView(i: MessageImage): MessageImageView {
+  if (i.state === "skipped") return { id: i.id, src: null, note: i.reason === "too big" ? "Image not shown: over 10 MB" : "Image not shown: not a PNG, JPEG or GIF" };
+  if (i.state === "failed" && i.attempts >= IMAGE_ATTEMPTS) return { id: i.id, src: null, note: "Image couldn't be loaded from Teams" };
+  return { id: i.id, src: chatImageSrc(i.id), note: null };
+}
+
+async function messageView(m: import("../plan/requests.ts").TeamsMessage, x: { chat: ClientChat; home: string | null; me: string; teams: TeamsView; aliases: Map<string, string>; images?: readonly MessageImage[] }): Promise<ConversationMessage> {
+  const b = batchOf(m, x.chat, x.home);
+  const mine = same(m.senderId, x.me);
+  const key = (m.senderId ?? "?").toLowerCase();
+  if (!x.aliases.has(key)) x.aliases.set(key, `p${x.aliases.size + 1}`);
+  const member = x.chat.members?.find((y) => same(y.userId, m.senderId));
+  const byAt: { name: string | null }[] = [];
+  m.mentions.forEach((y, i) => (byAt[y.at ?? i] = { name: y.name }));
+  const images = (x.images ?? []).filter((i) => i.messageId === m.messageId).sort((a, b) => a.position - b.position);
+  let quote: ConversationMessage["quote"] = null;
+  if (m.replyToId) {
+    const q = await x.teams.message(m.chatId, m.replyToId);
+    if (q) {
+      const qb = batchOf(q, x.chat, x.home);
+      quote = { author: same(q.senderId, x.me) ? "You" : (qb.senderName ?? (qb.external ? "Someone outside Cooptimize" : "Someone at Cooptimize")), text: oneLine(q.text.split("\n").find((l) => l.trim()) ?? (q.hasImage ? "Image" : ""), 140) };
+    } else quote = { author: null, text: null };
+  }
+  return {
+    messageId: m.messageId, author: mine ? "You" : (b.senderName ?? (b.external ? "Someone outside Cooptimize" : "Someone at Cooptimize")), authorKey: x.aliases.get(key)!, name: b.senderName ?? "Someone",
+    email: !b.external && member?.email ? member.email.toLowerCase() : null, external: x.home ? b.external : false, mine, at: m.createdAt,
+    html: sanitizeMessageHtml(m.html ?? m.text, { contentType: m.html ? "html" : "text", mentions: byAt, ...(images.length ? { hostedImages: "drop" as const } : {}) }), text: m.text, quote, reactions: m.reactions ?? [],
+    ...(images.length ? { images: images.map(imageView) } : {}),
+  };
+}
+
+/** CV-2: the merged conversation's title and summary: AI (my own cap, that client only), else the two joined. */
+async function mergeSummary(ctx: ConversationContext, v: Seen, cfg: AppConfig, into: Conversation, from: Conversation): Promise<{ title: string; summary: string }> {
+  const ai = ctx.ai ? await ctx.ai().catch(() => null) : null;
+  if (!ai) return joinedSummary(into, from);
+  const side = async (c: Conversation) => {
+    const messages = [];
+    for (const p of (await v.convs.placesIn([c.id])).filter((x) => x.role === "work")) {
+      const m = await v.teams.message(p.chatId, p.messageId);
+      if (m) messages.push({ from: first(m.senderName), at: m.createdAt, text: m.text });
+    }
+    return { title: c.title, summary: c.summary, messages };
+  };
+  const r = await ai.run<MergeAnswer>({ name: MERGE_TASK, client: into.clientKey, instructions: MERGE_INSTRUCTIONS }, mergeInput({ clientName: cfg.clientSettings[into.clientKey]?.name ?? into.clientKey, into: await side(into), from: await side(from) }), MERGE_SCHEMA);
+  return (r.ok ? mergeFrom(r.value) : null) ?? joinedSummary(into, from);
+}
+
 // ---- actions ----
 
 export async function conversationAction(ctx: ConversationContext, action: ConversationAction, input: unknown): Promise<ActionResponse> {
@@ -360,9 +474,51 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
   }
   try {
     switch (action) {
-      case "conversations.list":
-        if (!only(input, [])) return bad("conversations.list takes {}");
+      case "conversations.list": {
+        const o = only(input, [], ["select"]);
+        if (!o || (o.select !== undefined && !posInt(o.select))) return bad("conversations.list takes { select? }");
+        return { ok: true as const, data: await list(ctx, cfg, posInt(o.select)) };
+      }
+      case "conversations.merge": {
+        // CV-2: Merge into… (one, or several picked in a client's list): everything moves into the target, one undo each.
+        const o = only(input, ["ids", "into"]);
+        const ids = o && Array.isArray(o.ids) && o.ids.length >= 1 && o.ids.length <= 20 ? o.ids.map(posInt) : null;
+        if (!o || !v || !ids || ids.some((x) => x === null)) return bad("conversations.merge takes { ids: [id, ...], into: id }");
+        const into = await conv(o.into);
+        if (!into) return bad("No such conversation", 404);
+        const froms = [];
+        for (const id of new Set(ids as number[])) {
+          const c = await conv(id);
+          if (!c) return bad("No such conversation", 404);
+          if (c.id === into.id) return bad("Pick another conversation to merge into", 409);
+          if (c.chatId !== into.chatId) return bad("Merge only conversations of the same chat", 409);
+          froms.push(c);
+        }
+        const merges: number[] = [];
+        let target = into;
+        for (const from of froms) {
+          const summary = await mergeSummary(ctx, v, cfg, target, from);
+          merges.push((await v.convs.merge(from.id, target.id, summary)).id);
+          target = (await v.convs.conversation(target.id))!;
+        }
+        await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() }, into.id);
+        ctx.log({ source: "plan", op: "conversation_merged", count: merges.length });
+        return { ok: true as const, data: { ...(await list(ctx, cfg, into.id)), merges } };
+      }
+      case "conversations.unmerge": {
+        const o = only(input, ["merges"]);
+        const ids = o && Array.isArray(o.merges) && o.merges.length >= 1 && o.merges.length <= 20 ? o.merges.map(posInt) : null;
+        if (!o || !v || !ids || ids.some((x) => x === null)) return bad("conversations.unmerge takes { merges: [id, ...] }");
+        const deps = { convs: v.store, teams: ctx.requests!.teams, homeTenant: await ctx.homeTenant() };
+        // The latest first, so a chain of merges comes apart in the order it was made.
+        for (const id of [...(ids as number[])].sort((a, b) => b - a)) {
+          const m = await v.convs.unmerge(id);
+          await refreshStatus(deps, m.fromId);
+          await refreshStatus(deps, m.intoId);
+        }
+        ctx.log({ source: "plan", op: "conversation_unmerged", count: ids.length });
         return respond();
+      }
       case "conversations.count":
         if (!only(input, [])) return bad("conversations.count takes {}");
         return { ok: true as const, data: await counts(ctx, cfg) };
@@ -371,22 +527,27 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         if (v?.chats.length && ctx.requests) await ctx.requests.refresh(v.chats.map((c) => c.chatId));
         return respond();
       case "conversations.messages": {
-        const o = only(input, ["id"]);
+        // CV-2: as Teams shows them, the latest MESSAGE_PAGE first and "Show earlier" for the page before `before`.
+        const o = only(input, ["id"], ["before"]);
         const c = o && (await conv(o.id));
-        if (!c || !v) return bad("No such conversation", 404);
+        if (!o || !c || !v) return bad("No such conversation", 404);
+        if (o.before !== undefined && (typeof o.before !== "string" || !MESSAGE_ID.test(o.before))) return bad("before is a message id");
         const chat = v.byId.get(c.chatId)!;
         const home = await ctx.homeTenant();
+        const places = (await v.convs.placesIn([c.id])).filter((x) => x.role === "work");
+        const end = typeof o.before === "string" ? places.findIndex((p) => p.messageId === o.before) : places.length;
+        const page = places.slice(Math.max(0, (end < 0 ? places.length : end) - MESSAGE_PAGE), end < 0 ? places.length : end);
         const out: ConversationMessage[] = [];
-        for (const p of (await v.convs.placesIn([c.id])).filter((x) => x.role === "work")) {
+        const aliases = new Map<string, string>();
+        // CV-2: the page's images (rows made now for messages stored before CV-2); bytes only through /media.
+        const images = await v.teams.images(chat.chatId, page.map((p) => p.messageId));
+        for (const p of page) {
           const m = await v.teams.message(p.chatId, p.messageId);
           if (!m) continue;
-          const b = batchOf(m, chat, home);
-          const byAt: { name: string | null }[] = [];
-          m.mentions.forEach((x, i) => (byAt[x.at ?? i] = { name: x.name }));
-          out.push({ messageId: m.messageId, author: same(m.senderId, v.me) ? "You" : (b.senderName ?? (b.external ? "Someone outside Cooptimize" : "Someone at Cooptimize")), external: home ? b.external : false, mine: same(m.senderId, v.me), at: m.createdAt, html: sanitizeMessageHtml(m.html ?? m.text, { contentType: m.html ? "html" : "text", mentions: byAt }), text: m.text });
+          out.push(await messageView(m, { chat, home, me: v.me, teams: v.teams, aliases, images }));
         }
-        if (ctx.plan) await ctx.plan.seeConversation(c.id, c.version);
-        return { ok: true, data: { messages: out, chatLink: teamsLink(chat) } };
+        if (ctx.plan && o.before === undefined) await ctx.plan.seeConversation(c.id, c.version);
+        return { ok: true, data: { messages: out, chatLink: teamsLink(chat), earlier: page.length ? (places.indexOf(page[0]!) > 0 ? page[0]!.messageId : null) : null, total: places.length } };
       }
       case "conversations.seen": {
         const o = only(input, ["id"]);
@@ -557,10 +718,46 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         await v.convs.updateCommitment(k.id, { onToday: o.on ? localToday(stamp, userZone(cfg)) : null });
         return promisesNow();
       }
-      case "my_promises.followup": {
-        const o = only(input, ["id"], ["who", "what", "due"]);
+      case "my_promises.start_draft": {
+        // CV-2: "Create the DevOps item?" for a promise the rules found with no conversation: one is made from the
+        // promise's own messages and the ones just before it in that chat (45 minutes, not in another conversation),
+        // so the draft has the context, then the usual draft flow runs on it.
+        const o = only(input, ["id"]);
         const k = o && (await mine(o.id));
-        if (!o || !k) return bad("my_promises.followup takes { id, who?, what?, due? }");
+        if (!o || !k) return bad("my_promises.start_draft takes { id }");
+        if (k.state !== "open") return bad("This promise is already handled", 409);
+        if (k.conversationId) return { ok: true, data: { conversationId: k.conversationId } };
+        const chat = v.byId.get(k.chatId)!;
+        const home = await ctx.homeTenant();
+        const own = (await mapSeq(k.messageIds, (id) => v.teams.message(k.chatId, id))).filter((m): m is NonNullable<typeof m> => !!m).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        if (!own.length) return bad("This promise's messages are no longer stored, so there's nothing to draft from. Link an item instead", 410);
+        const firstAt = own[0]!.createdAt;
+        const near = [];
+        for (const m of await v.teams.messagesBefore(k.chatId, firstAt, 12)) {
+          if ((Date.parse(firstAt) - Date.parse(m.createdAt)) / 60_000 > 45) continue;
+          const place = await v.convs.placeOf(k.chatId, m.messageId);
+          if (place?.conversationId || place?.role === "chatter" || place?.role === "ack") continue;
+          near.push(m);
+        }
+        const ms = [...near, ...own];
+        const batch = ms.map((m) => batchOf(m, chat, home));
+        const lastAt = ms.at(-1)!.createdAt;
+        const c = await v.store.addConversation({
+          chatId: k.chatId, clientKey: k.clientKey, title: oneLine(k.what, 80) || "A promise", summary: oneLine(`You said you'd ${k.what.replace(/^./, (x) => x.toLowerCase())}${k.toName ? ` (to ${first(k.toName)})` : ""}.`, 200),
+          participants: withParticipants([], batch.map(participantOf)), firstAt: ms[0]!.createdAt, lastAt, lastWorkAt: lastAt,
+        });
+        await v.store.place(ms.map((m) => ({ chatId: k.chatId, messageId: m.messageId, conversationId: c.id, role: "work" as const, reason: null, placedBy: "person" as const, at: m.createdAt })));
+        await v.store.updateCommitment(k.id, { conversationId: c.id });
+        await refreshStatus({ convs: v.store, teams: ctx.requests!.teams, homeTenant: home }, c.id);
+        ctx.log({ source: "plan", op: "promise_draft_started", count: ms.length });
+        return { ok: true, data: { conversationId: c.id } };
+      }
+      case "my_promises.followup": {
+        const o = only(input, ["id"], ["who", "whoRef", "what", "due"]);
+        const k = o && (await mine(o.id));
+        if (!o || !k) return bad("my_promises.followup takes { id, who?, whoRef?, what?, due? }");
+        const whoRef = o.whoRef === undefined || o.whoRef === null ? null : personRef(o.whoRef);
+        if (o.whoRef !== undefined && o.whoRef !== null && !whoRef) return bad("whoRef is a person from the picker, or null");
         if (!ctx.plan) return bad("The plan store isn't available", 503);
         if (k.state !== "open") return bad("This promise is already handled", 409);
         const text = (x: unknown, n: string, max: number) => (x === undefined || x === null ? undefined : typeof x === "string" && x.trim().length <= max ? x.trim() : (() => { throw new PlanError(`${n} is text of at most ${max} characters`); })());
@@ -569,7 +766,9 @@ export async function conversationAction(ctx: ConversationContext, action: Conve
         const who = text(o.who, "who", 200) ?? k.toName;
         const due = o.due === undefined ? (k.dueDate ?? k.onToday) : o.due === null || o.due === "" ? null : typeof o.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.due) ? o.due : null;
         if (o.due !== undefined && o.due !== null && o.due !== "" && !due) return bad("due is a date like 2026-11-06");
-        const f = await ctx.plan.addFollowUp({ who: who || null, what, due, clientKey: k.clientKey, channel: "teams" });
+        // CV-2: the person from the picker; given no Who, the one the promise was made to. It names its promise (amber past due).
+        const ref = o.who === undefined ? (whoRef ?? toRefOf(k, v.byId.get(k.chatId), await ctx.homeTenant())) : whoRef;
+        const f = await ctx.plan.addFollowUp({ who: who || null, whoRef: who ? ref : null, what, due, clientKey: k.clientKey, channel: "teams", source: { kind: "promise", id: k.id } });
         await v.convs.updateCommitment(k.id, { state: "followup", followUpId: f.id });
         ctx.log({ source: "plan", op: "promise_resolved", kind: "followup" });
         return { ok: true, data: { ...(await myPromises(ctx, cfg)), followUpId: f.id } };

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { LogRecord } from "../../log/logger.ts";
 import { CLIENT_TENANT, HOME_TENANT } from "../../test/builders/index.ts";
 import { HttpError } from "../calendar/http.ts";
-import { chatOf, createChatsClient, memberOf, messageOf, retryAfterOf } from "./chats.ts";
+import { chatOf, createChatsClient, memberOf, messageOf, reactionsOf, retryAfterOf } from "./chats.ts";
 
 const member = (o: Record<string, unknown> = {}) => ({ "@odata.type": "#microsoft.graph.aadUserConversationMember", id: "m1", roles: [], displayName: "Dana Client", userId: "00000000-0000-4000-8000-000000000001", email: "dana@fabrikam.example", tenantId: CLIENT_TENANT, visibleHistoryStartDateTime: "0001-01-01T00:00:00Z", ...o });
 
@@ -51,10 +51,11 @@ const gmsg = (o: Record<string, unknown> = {}) => ({
 });
 
 describe("Graph chat messages (AP-1)", () => {
-  it("keeps only the shared store's fields (D514): the sender's name and the raw body, no reactions, subjects or URLs", () => {
+  it("keeps only the shared store's fields (D514): the sender's name and the raw body, reactions as counts only (CV-2), no subjects or URLs", () => {
     const m = messageOf(gmsg({ mentions: [{ id: 0, mentionText: "Ana", mentioned: { user: { id: "00000000-0000-4000-8000-0000000000a1", displayName: "Ana Registrar" } } }] }), CHAT, "fabrikam")!;
-    expect(Object.keys(m).sort()).toEqual(["authorId", "authorName", "authorTenant", "chatId", "clientKey", "createdAt", "hasFile", "hasImage", "html", "mentionedUserIds", "mentions", "messageId", "modifiedAt", "replyToId", "text"]);
+    expect(Object.keys(m).sort()).toEqual(["authorId", "authorName", "authorTenant", "chatId", "clientKey", "createdAt", "hasFile", "hasImage", "html", "mentionedUserIds", "mentions", "messageId", "modifiedAt", "reactions", "replyToId", "text"]);
     expect(m.text).toBe("Can you check the totals?\nThanks & regards");
+    expect(m.reactions).toEqual([{ emoji: "👍", count: 1 }]);
     expect(m).toMatchObject({ authorName: "Dana Client", html: "<p>Can you <b>check</b> the totals?</p><p>Thanks &amp; regards</p>", mentions: [{ id: "00000000-0000-4000-8000-0000000000a1", name: "Ana Registrar" }] });
     expect(JSON.stringify(m)).not.toContain("Someone");
     expect(JSON.stringify(m)).not.toContain("like");
@@ -75,6 +76,17 @@ describe("Graph chat messages (AP-1)", () => {
     ["a quoted reply", { attachments: [{ contentType: "messageReference" }] }, false, false],
   ])("%s", (_why, o, image, file) => {
     expect(messageOf(gmsg(o), CHAT, "fabrikam")).toMatchObject({ hasImage: image, hasFile: file });
+  });
+
+  it("CV-2: counts reactions per emoji, never who gave them; custom ones are left out", () => {
+    const user = (n: string) => ({ user: { id: `id-${n}`, displayName: `Person ${n}` } });
+    const r = reactionsOf([
+      { reactionType: "like", user: user("a") }, { reactionType: "Like", user: user("b") }, { reactionType: "😂", user: user("c") }, { reactionType: "heart", user: user("d") },
+      { reactionType: "custom", reactionContentUrl: "https://graph.microsoft.com/x", user: user("e") }, { reactionType: "somethingNew", user: user("f") }, { nope: 1 },
+    ]);
+    expect(r).toEqual([{ emoji: "👍", count: 2 }, { emoji: "😂", count: 1 }, { emoji: "❤️", count: 1 }]);
+    expect(JSON.stringify(r)).not.toMatch(/Person|id-|graph/);
+    expect(reactionsOf(undefined)).toEqual([]);
   });
 
   it("reads the mentioned user ids", () => {
@@ -104,5 +116,36 @@ describe("Graph chat messages (AP-1)", () => {
     await client.messagesSince(CHAT, "fabrikam", "2026-11-04T15:00:00Z");
     expect(logs).toEqual([expect.objectContaining({ op: "chat_messages", status: 200, count: 1 })]);
     for (const x of ["totals", "fabrikam-secret", "Dana", "1730000000001", "00000000-0000-4000-8000-000000000001"]) expect(JSON.stringify(logs)).not.toContain(x);
+  });
+});
+
+describe("Graph hosted content (CV-2)", () => {
+  const client = (res: () => Response, urls: string[] = [], logs: LogRecord[] = []) =>
+    createChatsClient({ fetch: (async (u: string) => (urls.push(String(u)), res())) as typeof fetch, token: async () => "t", invalidate: () => {}, log: (r) => logs.push(r) });
+
+  it("reads one image's raw bytes from its $value, logging the op, status and count only", async () => {
+    const urls: string[] = [];
+    const logs: LogRecord[] = [];
+    const r = await client(() => new Response(Uint8Array.of(0xff, 0xd8, 0xff, 0xd9), { status: 200, headers: { "content-type": "image/jpeg" } }), urls, logs).hostedContent!(CHAT, "1730000000001", "aWQ9eF8w+/=");
+    expect(r).toEqual({ bytes: Uint8Array.of(0xff, 0xd8, 0xff, 0xd9) });
+    expect(urls).toEqual([`https://graph.microsoft.com/v1.0/chats/${encodeURIComponent(CHAT)}/messages/1730000000001/hostedContents/${encodeURIComponent("aWQ9eF8w+/=")}/$value`]);
+    expect(logs).toEqual([expect.objectContaining({ op: "chat_image", status: 200, count: 1 })]);
+    expect(JSON.stringify(logs)).not.toMatch(/aWQ9|1730000000001|19:/);
+  });
+
+  it("stops past 10 MB, by the declared length or while reading", async () => {
+    const big = new Uint8Array(10 * 1024 * 1024 + 1);
+    expect(await client(() => new Response(big, { status: 200, headers: { "content-length": String(big.length) } })).hostedContent!(CHAT, "1", "a")).toEqual({ tooBig: true });
+    const stream = new ReadableStream({ start: (c) => (c.enqueue(big.subarray(0, 6_000_000)), c.enqueue(big.subarray(6_000_000)), c.close()) });
+    expect(await client(() => new Response(stream, { status: 200 })).hostedContent!(CHAT, "1", "a")).toEqual({ tooBig: true });
+  });
+
+  it("refuses ids that aren't Graph's before sending anything, and passes Graph's refusals on", async () => {
+    const urls: string[] = [];
+    const c = client(() => new Response("", { status: 403 }), urls);
+    for (const [chat, message, hosted] of [["x", "1", "a"], [CHAT, "1/../2", "a"], [CHAT, "1", "a/../../me"], [CHAT, "1", "a?b"]] as const)
+      await expect(c.hostedContent!(chat, message, hosted)).rejects.toMatchObject({ status: 400 });
+    expect(urls).toEqual([]);
+    await expect(c.hostedContent!(CHAT, "1", "a")).rejects.toMatchObject({ status: 403 });
   });
 });

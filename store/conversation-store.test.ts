@@ -73,4 +73,29 @@ await forEachDriver("conversations (CV-1)", ({ open }) => {
     expect(await teams.message(CHAT.chatId, chatter.messageId)).toBeNull();
     expect(await convs.placeOf(CHAT.chatId, chatter.messageId)).toBeNull();
   });
+
+  it("CV-2: merges one into another and undoes it, on this driver", async () => {
+    const { teams, convs, m } = await setup();
+    const m2 = aTeamsMessage({ chatId: CHAT.chatId, senderId: ME.userId, createdAt: "2026-11-04T14:20:00Z" });
+    await teams.saveMessages([m2]);
+    const at = (x: typeof m) => ({ firstAt: x.createdAt, lastAt: x.createdAt, lastWorkAt: x.createdAt });
+    const a = await convs.addConversation({ chatId: CHAT.chatId, clientKey: "fabrikam", title: "Totals", summary: "One.", participants: [{ id: CLIENT.userId!, name: "Dana Client", external: true }], ...at(m) });
+    const b = await convs.addConversation({ chatId: CHAT.chatId, clientKey: "fabrikam", title: "Filter", summary: "Two.", participants: [{ id: ME.userId!, name: "Sam Tester", external: false }], ...at(m2), item: { id: 42, url: null, title: "Fix" } });
+    await convs.place([{ chatId: CHAT.chatId, messageId: m.messageId, conversationId: a.id, role: "work", reason: null, placedBy: "ai", at: m.createdAt }, { chatId: CHAT.chatId, messageId: m2.messageId, conversationId: b.id, role: "work", reason: null, placedBy: "ai", at: m2.createdAt }]);
+    const k = await convs.addCommitment({ conversationId: b.id, chatId: CHAT.chatId, clientKey: "fabrikam", whoId: ME.userId!, whoName: "Sam Tester", toId: null, toName: null, what: "Fix it", dueAt: null, dueDate: null, impliesItem: false, messageIds: [m2.messageId], reason: null });
+    const r = await convs.viewer(ME.userId!).merge(b.id, a.id, { title: "Totals", summary: "One.\nTwo." });
+    expect(r.moved).toEqual({ messageIds: [m2.messageId], commitmentIds: [k.id], suggestionIds: [] });
+    const into = (await convs.conversation(a.id))!;
+    expect(into).toMatchObject({ summary: "One.\nTwo.", itemId: 42, lastAt: m2.createdAt, version: 2, changeNote: 'Merged with "Filter"' });
+    expect(into.participants).toHaveLength(2);
+    expect((await convs.conversations([CHAT.chatId])).map((c) => c.id)).toEqual([a.id]);
+    // Someone not in the chat can't merge or undo.
+    await expect(convs.viewer(OTHER.userId!).unmerge(r.id)).rejects.toThrow(/No such conversation/);
+    await convs.viewer(ME.userId!).unmerge(r.id);
+    expect((await convs.conversation(a.id))).toMatchObject({ summary: "One.", itemId: null, lastAt: m.createdAt, mergedInto: null });
+    expect((await convs.conversation(b.id))).toMatchObject({ mergedInto: null, itemId: 42 });
+    expect((await convs.placesIn([b.id])).map((p) => p.messageId)).toEqual([m2.messageId]);
+    expect((await convs.commitment(k.id))!.conversationId).toBe(b.id);
+    expect((await convs.mergeRecord(r.id))!.undoneAt).not.toBeNull();
+  });
 });

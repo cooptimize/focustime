@@ -411,7 +411,7 @@ export function aDirectoryPerson(o: Partial<import("../../sources/dataverse/dire
 /** NV-1: an open follow-up as the week load shows it (due null: no due date). */
 export function aFollowUpView(o: Partial<import("../../actions/types.ts").FollowUpView> = {}): import("../../actions/types.ts").FollowUpView {
   return {
-    id: 1, kind: "manual", clientKey: "contoso", who: "Dana", what: "Send the summary", channel: null, due: null, itemId: null, itemUrl: null, draft: null,
+    id: 1, kind: "manual", clientKey: "contoso", who: "Dana", whoRef: null, what: "Send the summary", channel: null, due: null, itemId: null, itemUrl: null, draft: null,
     openedAt: "2026-11-02T14:00:00Z", isNew: false, closedAt: null, closeNote: null, closedBy: null, session: null, outcome: null, closeHow: null, snoozedUntil: null,
     origin: null, byHand: true, clientName: "Contoso", dueState: null, hasWho: true, ...o,
   };

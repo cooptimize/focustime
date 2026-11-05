@@ -13,6 +13,9 @@ import { DraftItem } from "./Conversations.tsx";
 import { useDevOpsWrite } from "./DevOpsWrite.tsx";
 import { Fading } from "./FollowUps.tsx";
 import { clientColor, whenText } from "./labels.ts";
+import { PersonPicker, type PersonValue } from "./PersonPicker.tsx";
+import type { PersonRef } from "../plan/person-ref.ts";
+import { wasDueText } from "../plan/due.ts";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : "That didn't work");
 
@@ -28,7 +31,7 @@ export function dueText(p: Pick<PromiseCard, "dueAt" | "dueDate">, today: string
   return null;
 }
 
-export function MyPromises({ data, version, onCount, onChanged }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onChanged: () => void; openSettings: (section: string) => void }) {
+export function MyPromises({ data, version, onCount, onChanged, select = null }: { data: WeekLoadData; version: number; onCount: (n: number) => void; onChanged: () => void; openSettings: (section: string) => void; select?: number | null }) {
   const [state, setState] = useState<MyPromisesData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<ReactNode>(null);
@@ -48,6 +51,17 @@ export function MyPromises({ data, version, onCount, onChanged }: { data: WeekLo
   }, [show]);
   useEffect(() => void load(), [load, version, writes?.version]);
   useEffect(() => head.current?.focus(), []);
+  // CV-2: a deep link (#/inbox/promise/<id>, the urgent strip): that promise outlined and scrolled to, or a plain note.
+  const scrolledTo = useRef<number | null>(null);
+  const missing = select !== null && !!state && !state.promises.some((p) => p.id === select);
+  useEffect(() => {
+    if (select === null || !state || scrolledTo.current === select) return;
+    const el = document.querySelector<HTMLElement>(`.my-promises [data-promise="${select}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center" });
+    el.focus({ preventScroll: true });
+    scrolledTo.current = select;
+  }, [select, state]);
   const run = async (action: string, input: Record<string, unknown>, done: ReactNode) => {
     try {
       show(await call<MyPromisesData>(action, input));
@@ -78,6 +92,7 @@ export function MyPromises({ data, version, onCount, onChanged }: { data: WeekLo
         </p>
       )}
       <Fading text={notice} onGone={clearNotice} ms={8000} />
+      {missing && <p className="conv-link-note" role="status">That promise isn't here any more: it was done or closed more than a day ago, or its chat is no longer registered.</p>}
       {state && state.promises.length === 0 && (
         <div className="asks-empty">
           <p>No promises</p>
@@ -89,6 +104,7 @@ export function MyPromises({ data, version, onCount, onChanged }: { data: WeekLo
           <Promise
             key={p.id}
             p={p}
+            selected={p.id === select}
             tz={tz}
             today={today}
             color={clientColor(p.clientKey, data.clients)}
@@ -107,7 +123,7 @@ export function MyPromises({ data, version, onCount, onChanged }: { data: WeekLo
 }
 
 function Promise(x: {
-  p: PromiseCard; tz: string; today: string; color: string; form: "followup" | "link" | "draft" | null; onForm: (k: "followup" | "link" | "draft" | null) => void;
+  p: PromiseCard; selected?: boolean; tz: string; today: string; color: string; form: "followup" | "link" | "draft" | null; onForm: (k: "followup" | "link" | "draft" | null) => void;
   canCreate: boolean; onRun: (action: string, input: Record<string, unknown>, done: ReactNode) => Promise<void>; undo: ReactNode;
   onCreate: (change: import("./DevOpsWrite.tsx").DevOpsChange) => void; onSuggestion: (s: PromiseCard["suggestions"][number], includeInternal: boolean) => void;
 }) {
@@ -115,15 +131,34 @@ function Promise(x: {
   const [menu, setMenu] = useState(false);
   const [why, setWhy] = useState(false);
   const open = p.state === "open";
+  // CV-2: a promise found by the rules has no conversation yet: one is made from its messages first, then the draft.
+  const [draftConv, setDraftConv] = useState<number | null>(p.conversationId);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  useEffect(() => setDraftConv(p.conversationId), [p.conversationId]);
+  const startDraft = async () => {
+    if (draftConv !== null) return x.onForm("draft");
+    setStarting(true);
+    setStartError(null);
+    try {
+      const r = await call<{ conversationId: number }>("my_promises.start_draft", { id: p.id });
+      setDraftConv(r.conversationId);
+      x.onForm("draft");
+    } catch (e) {
+      setStartError(errText(e));
+    } finally {
+      setStarting(false);
+    }
+  };
   const due = dueText(p, x.today, x.tz);
   const onToday = !!p.onToday && p.onToday === x.today;
   const primary = !p.dueDate && !onToday ? { label: "Add to Today", run: () => void x.onRun("my_promises.today", { id: p.id, on: true }, "On Today") } : { label: "Make it a follow-up", run: () => x.onForm(x.form === "followup" ? null : "followup") };
   return (
-    <li className={`conv-card promise${open ? "" : " resolved"}`} style={{ "--c": x.color } as CSSProperties} aria-label={`Promise: ${p.what}`}>
+    <li className={`conv-card promise${open ? "" : " resolved"}${x.selected ? " selected" : ""}`} style={{ "--c": x.color } as CSSProperties} aria-label={`Promise: ${p.what}`} data-promise={p.id} tabIndex={x.selected ? 0 : -1}>
       <div className="conv-head">
         <span className="swatch" aria-hidden="true" />
         <strong className="conv-title">{p.what}</strong>
-        {due && <span className={`conv-due${p.overdue ? " overdue" : ""}`}>{p.overdue ? `Overdue · ${due}` : `Due ${due}`}</span>}
+        {p.overdue ? <span className="conv-due overdue">{wasDueText({ dueAt: p.dueAt, dueDate: p.dueDate ?? p.onToday }, x.today, x.tz)}</span> : due && <span className="conv-due">Due {due}</span>}
         {p.waitingDays && <span className="conv-status waiting">Waiting on you · {p.waitingDays} {p.waitingDays === 1 ? "day" : "days"}</span>}
         <button type="button" className="mini quiet conv-why" aria-label="Why this is a promise" aria-expanded={why} onClick={() => setWhy((v) => !v)}>
           ⓘ
@@ -162,8 +197,8 @@ function Promise(x: {
             </p>
           )}
           <div className="ask-actions">
-            <button type="button" className="mini primary" disabled={!x.canCreate || p.conversationId === null} title={x.canCreate ? undefined : `Add DevOps write access for ${p.clientName} in Settings`} onClick={() => x.onForm("draft")}>
-              Create
+            <button type="button" className="mini primary" disabled={!x.canCreate || starting} title={x.canCreate ? undefined : `Add DevOps write access for ${p.clientName} in Settings`} onClick={() => void startDraft()}>
+              {starting ? "Getting the draft ready…" : "Create"}
             </button>
             <button type="button" className="mini" onClick={() => x.onForm(x.form === "link" ? null : "link")}>
               Link existing…
@@ -229,22 +264,23 @@ function Promise(x: {
           {(p.state === "done" || p.state === "not_needed" || p.state === "linked") && x.undo}
         </p>
       )}
+      {startError && <p className="set-problem">{startError}</p>}
       {x.form === "followup" && <FollowUpForm p={p} onSave={(v) => void x.onRun("my_promises.followup", { id: p.id, ...v }, "Follow-up added. The promise closes when it's done")} onCancel={() => x.onForm(null)} />}
       {x.form === "link" && <PromiseLink p={p} onPick={(id) => void x.onRun("my_promises.link", { id: p.id, itemId: id }, `Linked to #${id}`)} onCancel={() => x.onForm(null)} />}
-      {x.form === "draft" && p.conversationId !== null && <DraftItem c={{ id: p.conversationId, clientName: p.clientName, clientKey: p.clientKey }} commitmentId={p.id} onCreate={x.onCreate} onCancel={() => x.onForm(null)} />}
+      {x.form === "draft" && draftConv !== null && <DraftItem c={{ id: draftConv, clientName: p.clientName, clientKey: p.clientKey }} commitmentId={p.id} onCreate={x.onCreate} onCancel={() => x.onForm(null)} />}
     </li>
   );
 }
 
-function FollowUpForm({ p, onSave, onCancel }: { p: PromiseCard; onSave: (v: { who: string; what: string; due: string }) => void; onCancel: () => void }) {
-  const [who, setWho] = useState(p.toName ?? "");
+function FollowUpForm({ p, onSave, onCancel }: { p: PromiseCard; onSave: (v: { who: string; whoRef: PersonRef | null; what: string; due: string }) => void; onCancel: () => void }) {
+  // CV-2: Who starts as the one the promise was made to, as a person when they're known.
+  const [who, setWho] = useState<PersonValue>({ who: p.toName ?? "", whoRef: p.toName ? p.toRef : null });
   const [what, setWhat] = useState(p.what);
   const [due, setDue] = useState(p.dueDate ?? p.onToday ?? "");
   return (
-    <form className="ask-form" onSubmit={(e) => (e.preventDefault(), onSave({ who: who.trim(), what: what.trim(), due }))} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
+    <form className="ask-form" onSubmit={(e) => (e.preventDefault(), onSave({ who: who.who.trim(), whoRef: who.who.trim() ? who.whoRef : null, what: what.trim(), due }))} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
       <label>
-        Who
-        <input value={who} maxLength={200} onChange={(e) => setWho(e.target.value)} />
+        Who <PersonPicker value={who} onChange={setWho} clientKey={p.clientKey} conversationId={p.conversationId} commitmentId={p.id} />
       </label>
       <label>
         What

@@ -13,7 +13,7 @@ const PREFIX = "focustime-shell-";
 const CACHE = PREFIX + VERSION;
 const SHELL_SET = new Set(SHELL);
 /** Paths that are never the shell, whatever the list says. */
-const NEVER = /^\/(api|auth)\//;
+const NEVER = /^\/(api|auth|media)\//;
 
 /** What the worker does with a GET for this URL: "shell" (from the cache), "page" (network, else the cached shell) or "pass". */
 function routeOf(url, mode, origin) {
