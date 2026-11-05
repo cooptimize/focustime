@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "./harness.ts";
 
 let h: Harness;
-const box = ".cap-box input[aria-label='Quick capture']";
+const box = ".cap-box textarea[aria-label='Quick capture']";
 
 describe.skipIf(!CHROMIUM)("The capture address (browser, demo mode)", () => {
   beforeAll(async () => {

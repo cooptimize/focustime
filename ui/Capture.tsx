@@ -2,9 +2,9 @@
 // suggest a follow-up, a draft story or a draft feature (step 13.5); one click confirms, or change it first. Unsorted
 // captures wait in the Inbox.
 import { CloseButton } from "./CloseButton.tsx";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import type { CaptureFeatures, WeekLoadData } from "../actions/types.ts";
-import { boxKind, parseTag, suggest, tagCompletions, takeTag, type BoxKind, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
+import { boxKind, suggest, tagCompletions, takeTag, type BoxKind, type CaptureClient, type CaptureKind } from "../plan/capture.ts";
 import { CLOSE_HOW, type Capture, type Size } from "../plan/types.ts";
 import type { IsoDate } from "../week/types.ts";
 import { call } from "./api.ts";
@@ -12,6 +12,8 @@ import { Fading, formClients, HOW_LABEL } from "./FollowUps.tsx";
 import { PersonPicker, type PersonValue } from "./PersonPicker.tsx";
 import { ItemLookup, NO_ITEM, parentPool, type ItemValue } from "./ItemLookup.tsx";
 import { clientColor } from "./labels.ts";
+import { keyAction, onLastLine, savedText, TOAST_MS } from "./capturebox.ts";
+import { CreateDraftCtx } from "./createdraft-ctx.ts";
 
 const KIND_NAME: Record<CaptureKind, string> = { follow_up: "Follow-up", draft: "Draft story", draft_feature: "Draft feature" };
 const SAVE_AS: Record<CaptureKind, string> = { follow_up: "Save as follow-up", draft: "Save as draft story", draft_feature: "Save as draft feature" };
@@ -187,12 +189,15 @@ const BOX_KINDS: readonly BoxKind[] = ["later", "follow_up", "draft", "draft_fea
 const BOX_NAME: Record<BoxKind, string> = { later: "Sort later", ...KIND_NAME };
 
 /**
- * The capture box (step 15.3: the one way to add something new). Enter saves at once. One client chip (step 15.2):
- * pre-filled from the selected block, @nickname sets it, a click chooses another. Under the box, kind chips: the rules
- * highlight one while I type; a click or Tab picks another. Each kind's fields open inline, and Enter saves as that
- * kind. Sort later saves an unsorted capture for the Inbox.
+ * The capture box (step 15.3: the one way to add something new). Enter saves at once; Shift+Enter is a new line (CP-1:
+ * a small textarea that grows to about four lines); the ↵ button saves too. One client chip (step 15.2): filled from
+ * the selected block when the box opens, @nickname sets it, a click chooses another. CP-1: the chip is the client a
+ * capture is saved to, always; it never changes on its own after a save, and the Saved toast names it, with Undo.
+ * Under the box, kind chips: the rules highlight one while I type; a click or Tab picks another. Each kind's fields open
+ * inline, and Enter saves as that kind. Sort later saves an unsorted capture for the Inbox. A draft gets its AI version
+ * in the background; Ctrl or Cmd+Enter saves it and opens the create preview at once.
  */
-export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, initialKind = null, large = false }: { data: WeekLoadData; onChanged: () => void; autoFocus?: boolean; defaultClient?: string | null; initialKind?: BoxKind | null; large?: boolean }) {
+export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, initialKind = null, large = false, onOpenedDraft }: { data: WeekLoadData; onChanged: () => void; autoFocus?: boolean; defaultClient?: string | null; initialKind?: BoxKind | null; large?: boolean; /** CP-1: the create preview opened from here (the dialog closes itself). */ onOpenedDraft?: () => void }) {
   const clients = useMemo(() => captureClients(data), [data]);
   const known = (k: string | null) => (k && clients.some((c) => c.clientKey === k) ? k : null);
   const today = data.planDay.date;
@@ -210,10 +215,12 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   const [size, setSize] = useState<Size>("M");
   const [target, setTarget] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ captureId: number; text: string; body: string; client: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState(0);
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const openDraft = useContext(CreateDraftCtx);
   const fieldsRef = useRef<HTMLDivElement>(null);
   const done = useMemo(() => tagCompletions(text, clients), [text, clients]);
   const clearNotice = useMemo(() => () => setNotice(null), []);
@@ -226,6 +233,18 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     if (autoFocus) input.current?.focus();
   }, [autoFocus]);
   useEffect(() => setPick(0), [done.length]);
+  // CP-1: the box grows with its text up to its max height (CSS), then scrolls.
+  useLayoutEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
+  useEffect(() => {
+    if (!saved) return;
+    const t = setTimeout(() => setSaved(null), TOAST_MS);
+    return () => clearTimeout(t);
+  }, [saved]);
   // A parent belongs to one client and one kind.
   useEffect(() => setParent(NO_ITEM), [client, kind]);
 
@@ -250,9 +269,9 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
     }
   };
   const clientName = (k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k;
+  // CP-1: the client chip stays as it is after a save: what I see is where the next one goes.
   const reset = () => {
     setText("");
-    setClient(known(defaultClient));
     setChosen(initialKind);
     setWho(null);
     setDue(null);
@@ -267,17 +286,19 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
   const dueNow = due ?? s.due ?? "";
   const blocked = (kind === "draft" || kind === "draft_feature") && !client ? `A ${BOX_NAME[kind].toLowerCase()} needs a client: choose one with the client chip or type @` : null;
 
-  const submit = async () => {
-    const tagged = parseTag(text, clients);
-    const body = tagged.text.trim();
+  const submit = async (open = false) => {
+    const body = text.trim();
     if (!body || busy) return;
-    const key = tagged.clientKey ?? client;
-    if (blocked && !tagged.clientKey) return void setError(blocked);
+    // CP-1: the chip is the client, always (an @tag counts only once it is the chip).
+    const key = client;
+    if (blocked) return void setError(blocked);
     setBusy(true);
     setError(null);
     try {
       const r = await call<{ capture: Capture }>("capture.add", { text: body, ...(key ? { clientKey: key } : {}) });
-      let msg = "Saved to the inbox to sort later";
+      const cn = key ? clientName(key) : null;
+      let msg = savedText("later", cn);
+      let draftId: number | null = null;
       if (kind !== "later") {
         const sg = suggest(body, key, today, clients);
         const input =
@@ -285,26 +306,50 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
           kind === "draft" ? { clientKey: key, title: sg.title || body, size, ...(parent.itemId ? { parentItemId: parent.itemId } : {}) } :
           { clientKey: key, title: sg.title || body, ...(parent.itemId ? { parentItemId: parent.itemId } : {}), ...(target ? { targetDate: target } : {}) };
         try {
-          await call("capture.route", { id: r.capture.id, as: kind, ...input });
-          const cn = key ? clientName(key) : "";
-          msg = kind === "follow_up" ? `Follow-up saved${whoName ? `: owed to ${whoName}` : ""}${dueNow ? `, due ${plainDay(dueNow)}` : ""}` : `${BOX_NAME[kind]} saved for ${cn}`;
+          const routed = await call<{ capture: Capture }>("capture.route", { id: r.capture.id, as: kind, ...input });
+          msg = savedText(kind, cn, kind === "follow_up" ? `${whoName ? `, owed to ${whoName}` : ""}${dueNow ? `, due ${plainDay(dueNow)}` : ""}` : "");
+          if (kind !== "follow_up") draftId = routed.capture.routedId;
         } catch (e) {
           // The capture itself is saved; it waits in the Inbox to sort.
-          msg = `Saved to the inbox; not sorted: ${e instanceof Error ? e.message : "that didn't work"}`;
+          msg = `${savedText("later", cn)}; not sorted: ${e instanceof Error ? e.message : "that didn't work"}`;
         }
       }
       reset();
-      setNotice(msg);
+      setNotice(null);
+      setSaved({ captureId: r.capture.id, text: msg, body, client: key });
       onChanged();
-      input.current?.focus();
+      if (draftId !== null && open && openDraft) {
+        // The preview prepares it (once) and shows "AI still writing…" until it is ready.
+        openDraft(draftId);
+        onOpenedDraft?.();
+      } else {
+        if (draftId !== null) void call("draft.prepare", { id: draftId }).then(onChanged, () => undefined);
+        input.current?.focus();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
     } finally {
       setBusy(false);
     }
   };
+  /** CP-1: the toast's Undo: the capture and what it made go, and its text comes back into the box. */
+  const undo = async () => {
+    const sv = saved;
+    if (!sv) return;
+    setSaved(null);
+    try {
+      await call("capture.undo", { id: sv.captureId });
+      setText((t) => t || sv.body);
+      if (sv.client !== client) setClient(sv.client);
+      setNotice("Undone");
+      onChanged();
+      input.current?.focus();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not undo");
+    }
+  };
   const cycle = (dir: 1 | -1) => setChosen(BOX_KINDS[(BOX_KINDS.indexOf(kind) + dir + BOX_KINDS.length) % BOX_KINDS.length]!);
-  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+  const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (done.length && (e.key === "Tab" || (e.key === "Enter" && /@[^\s@]*$/.test(text)))) {
       e.preventDefault();
       complete(done[pick]!);
@@ -315,27 +360,31 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
       // Tab changes the kind while there is text; with an empty box it moves on as usual.
       e.preventDefault();
       cycle(1);
-    } else if (e.key === "ArrowDown" && kind !== "later") {
+    } else if (e.key === "ArrowDown" && kind !== "later" && onLastLine(text, e.currentTarget.selectionEnd)) {
       e.preventDefault();
       fieldsRef.current?.querySelector<HTMLElement>("input:not([disabled]), select, button")?.focus();
-    } else if (e.key === "Enter") {
+    } else {
+      const a = keyAction(e.nativeEvent);
+      if (!a) return;
       e.preventDefault();
-      void submit();
+      void submit(a === "save_open");
     }
   };
   // Enter in a one-line field saves too (not in the lookups' own lists, which handle Enter first).
   const onFieldKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const t = e.target as HTMLElement;
-    if (e.key === "Enter" && !e.defaultPrevented && (t.tagName === "INPUT" || t.tagName === "SELECT") && t.getAttribute("aria-expanded") !== "true") {
+    if (e.key === "Enter" && !e.shiftKey && !e.defaultPrevented && (t.tagName === "INPUT" || t.tagName === "SELECT") && t.getAttribute("aria-expanded") !== "true") {
       e.preventDefault();
-      void submit();
+      void submit(e.ctrlKey || e.metaKey);
     }
   };
   return (
     <div className={`cap-box${large ? " large" : ""}`}>
       <div className="cap-input">
-        <input
+        <div className="cap-field">
+        <textarea
           ref={input}
+          rows={1}
           value={text}
           onChange={(e) => (onText(e.target.value), setError(null))}
           onKeyDown={onKey}
@@ -346,6 +395,10 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
           aria-expanded={done.length > 0}
           aria-describedby="cap-kind-hint"
         />
+        <button type="button" className="cap-send" aria-label="Save" title="Save (Enter)" disabled={busy || !text.trim()} onMouseDown={(e) => e.preventDefault()} onClick={() => void submit()}>
+          ↵
+        </button>
+        </div>
         <button
           type="button"
           className={`chip-btn cap-client${client ? "" : " none"}`}
@@ -401,7 +454,7 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
           </button>
         ))}
         <span className="muted cap-kind-hint" id="cap-kind-hint">
-          {text.trim() ? `Tab changes the kind${kind !== "later" ? " · ↓ to its details" : ""} · Enter saves` : "Enter saves"}
+          {text.trim() ? `Tab changes the kind${kind !== "later" ? " · ↓ to its details" : ""} · Enter saves${kind === "draft" || kind === "draft_feature" ? " · Ctrl+Enter saves and opens the preview" : ""}` : "Enter saves · Shift+Enter for a new line"}
         </span>
       </div>
       {kind !== "later" && text.trim() && (
@@ -451,7 +504,15 @@ export function CaptureBox({ data, onChanged, autoFocus, defaultClient = null, i
         </p>
       )}
       {error && <p className="set-problem" role="alert">{error}</p>}
-      <Fading text={notice} onGone={clearNotice} />
+      {saved ? (
+        <p className="cap-toast" role="status">
+          <span>{saved.text}</span>
+          <span aria-hidden="true">·</span>
+          <button type="button" className="link-btn" onClick={() => void undo()}>Undo</button>
+        </p>
+      ) : (
+        <Fading text={notice} onGone={clearNotice} />
+      )}
     </div>
   );
 }
@@ -485,7 +546,7 @@ export function CaptureDialog({ data, onClose, onChanged, onOpenView, defaultCli
           </button>
           <CloseButton onClose={onClose} />
         </div>
-        <CaptureBox data={data} onChanged={onChanged} autoFocus defaultClient={defaultClient} initialKind={initialKind} />
+        <CaptureBox data={data} onChanged={onChanged} autoFocus defaultClient={defaultClient} initialKind={initialKind} onOpenedDraft={onClose} />
       </div>
     </div>
   );

@@ -45,7 +45,7 @@ try {
     await page.waitForSelector(demo ? ".demo-tag" : ".topbar", { timeout: 15000 });
     await page.waitForTimeout(800);
     const shot = (name) => page.screenshot({ path: `${out}/${w}-${scheme}-${name}.png` });
-    const box = page.locator(".cap-box input[aria-label='Quick capture']").first();
+    const box = page.locator(".cap-box textarea[aria-label='Quick capture']").first();
     const client = async (n) => {
       await page.locator(".cap-box .cap-client").first().click();
       await page.locator(".cap-choose .chip-btn", { hasText: n }).click();

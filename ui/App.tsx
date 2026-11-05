@@ -53,7 +53,8 @@ import { Today } from "./Today.tsx";
 import type { DraftStory, Pick } from "../plan/types.ts";
 import { PlanWeek } from "./PlanWeek.tsx";
 import { weekMusts } from "./WeekMusts.tsx";
-import { CaptureDialog } from "./Capture.tsx";
+import { CaptureDialog, captureClients } from "./Capture.tsx";
+import { CreateDraftCtx, CreateDraftDialog } from "./CreateDraft.tsx";
 import { DraftEditor, DraftEditorCtx } from "./DraftEditor.tsx";
 import type { BoxKind } from "../plan/capture.ts";
 import { borrowedSummary } from "../plan/borrow.ts";
@@ -256,6 +257,7 @@ export function App() {
   const [captureKind, setCaptureKind] = useState<BoxKind | null>(null);
   // Step 15.3: the draft open in the draft editor.
   const [draftEdit, setDraftEdit] = useState<DraftStory | null>(null);
+  const [createDraft, setCreateDraft] = useState<number | null>(null);
   const [captureVersion, setCaptureVersion] = useState(0);
   const [askCount, setAskCount, promiseCount, setPromiseCount] = useConversationCount(captureVersion);
   const [borrowMenuAt, setBorrowMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -504,7 +506,13 @@ export function App() {
   const writes = useWriteFlow(reloadQuiet);
   // Step 14: DevOps writes (preview, confirm, read back) and the way to Settings > Clients for a write PAT.
   const openSettingsRef = useRef<((section?: string) => void) | null>(null);
-  const devopsWrites = useDevOpsWriteFlow({ allowed: data?.devopsWrite ?? [], onDone: reloadQuiet, openSettings: () => openSettingsRef.current?.("clients") });
+  // CP-1: the preview names the client (and its color) it writes to.
+  const devopsWrites = useDevOpsWriteFlow({
+    allowed: data?.devopsWrite ?? [],
+    onDone: reloadQuiet,
+    openSettings: () => openSettingsRef.current?.("clients"),
+    client: { name: (k) => (data ? captureClients(data).find((c) => c.clientKey === k)?.clientName : undefined) ?? k, color: (k) => (data ? clientColor(k, data.clients) : undefined) },
+  });
   const connectWrite = useCallback(async () => {
     setNotice("Signing in to Microsoft to allow calendar changes");
     try {
@@ -1412,6 +1420,7 @@ export function App() {
     <MenuHost env={env}>
     <VmProvider onSettings={() => setSettingsAt("you")}>
     <DraftEditorCtx.Provider value={setDraftEdit}>
+    <CreateDraftCtx.Provider value={setCreateDraft}>
     <WeekDndProvider
       data={data}
       week={week}
@@ -1947,9 +1956,11 @@ export function App() {
         />
       )}
       {captureOpen && <CaptureDialog data={data} defaultClient={env?.selection.clientKey ?? null} initialKind={captureKind} onClose={() => (setCaptureOpen(false), setCaptureKind(null))} onOpenView={() => { setCaptureOpen(false); setView("inbox"); }} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
+      {createDraft !== null && <CreateDraftDialog key={createDraft} draftId={createDraft} data={data} onClose={() => setCreateDraft(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
       {draftEdit && <DraftEditor key={draftEdit.id} draft={draftEdit} data={data} onClose={() => setDraftEdit(null)} onChanged={() => { setCaptureVersion((n) => n + 1); setPlanWeekVersion((n) => n + 1); reloadQuiet(); }} />}
     </div>
     </WeekDndProvider>
+    </CreateDraftCtx.Provider>
     </DraftEditorCtx.Provider>
     </VmProvider>
     </MenuHost>

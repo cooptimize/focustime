@@ -13,7 +13,7 @@ const api = <R = unknown>(page: Page, action: string, input: unknown) =>
   ) as Promise<{ ok: boolean; data: R }>;
 const kindChip = (page: Page, name: string) => page.locator(".cap-box .cap-box-kinds [role=radio]", { hasText: name });
 const checked = (page: Page) => page.locator(".cap-box-kinds [role=radio][aria-checked=true]").first().textContent();
-const box = (page: Page) => page.locator(".cap-box input[aria-label='Quick capture']").first();
+const box = (page: Page) => page.locator(".cap-box textarea[aria-label='Quick capture']").first();
 async function chooseClient(page: Page, name: string) {
   await page.locator(".cap-box .cap-client").first().click();
   await page.locator(".cap-choose .chip-btn", { hasText: name }).click();

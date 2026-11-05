@@ -87,7 +87,7 @@ try {
     await page.keyboard.press("4");
     await page.locator(".cap-box .cap-client").first().click();
     await page.locator(".cap-choose .chip-btn", { hasText: "Northwind" }).click();
-    await page.locator(".cap-box input[aria-label='Quick capture']").fill("I'll send the export spec");
+    await page.locator(".cap-box textarea[aria-label='Quick capture']").fill("I'll send the export spec");
     await page.locator(".cap-box-kinds [role=radio]", { hasText: "Follow-up" }).click();
     await page.locator(".cap-box-fields .item-lookup input").fill("export");
     await page.waitForTimeout(300);
